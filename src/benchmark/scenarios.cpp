@@ -538,7 +538,7 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus)
     mt.reset();
 
     const auto all = corpus.allPaths();
-    // Warm: load all (exercises L2 Viewer eviction at 512MB cap).
+    // Warm: load all (Viewer 512MB + Preview mip 256MB; B6 budget ≥ sum).
     for (const auto &p : all)
         ImageRepository::instance().load(p);
 

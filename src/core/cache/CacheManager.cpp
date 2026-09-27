@@ -1,6 +1,8 @@
 #include "core/cache/CacheManager.h"
+#include "core/cache/MipmapPyramid.h"
 
 #include <limits>
+#include <utility>
 
 CacheManager &CacheManager::instance()
 {
@@ -58,11 +60,23 @@ ImageCache::Level CacheManager::toImageCacheLevel(CacheLevel level) const
     return ImageCache::Viewer;
 }
 
+std::string CacheManager::mipKey(const std::string &baseKey, int lod)
+{
+    return baseKey + "#mip:" + std::to_string(lod);
+}
+
 void CacheManager::putMemory(CacheLevel level, const std::string &key, const ImageData &img)
 {
     if (level == CacheLevel::Disk)
         return;
     ImageCache::instance().put(toImageCacheLevel(level), key, img);
+    // Eager mip build for FullImage puts (lod≥1 live in Preview pool).
+    // Replace path: drop prior chain so a new full raster cannot leave stale mips.
+    if (level == CacheLevel::FullImage && !key.empty() && !img.isNull())
+    {
+        eraseMips(key);
+        ensureMips(key, img);
+    }
 }
 
 bool CacheManager::getMemory(CacheLevel level, const std::string &key, ImageData &out)
@@ -138,10 +152,188 @@ CacheLevelStats CacheManager::levelStats(CacheLevel level) const
     return s;
 }
 
+void CacheManager::eraseMips(const std::string &baseKey)
+{
+    if (baseKey.empty())
+        return;
+    int maxLod = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        const auto it = m_mipMaxLod.find(baseKey);
+        if (it == m_mipMaxLod.end())
+            return;
+        maxLod = it->second;
+        m_mipMaxLod.erase(it);
+    }
+    for (int lod = 1; lod <= maxLod; ++lod)
+        ImageCache::instance().remove(ImageCache::Preview, mipKey(baseKey, lod));
+}
+
+void CacheManager::storeMipChain(const std::string &baseKey, const std::vector<ImageData> &levels)
+{
+    if (baseKey.empty() || levels.size() <= 1)
+        return;
+    const int maxLod = static_cast<int>(levels.size()) - 1;
+    for (int lod = 1; lod <= maxLod; ++lod)
+    {
+        const ImageData &img = levels[static_cast<size_t>(lod)];
+        if (img.isNull())
+            continue;
+        ImageCache::instance().put(ImageCache::Preview, mipKey(baseKey, lod), img);
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        m_mipMaxLod[baseKey] = maxLod;
+    }
+}
+
+int CacheManager::ensureMips(const std::string &baseKey, const ImageData &full, int minEdge)
+{
+    if (baseKey.empty() || full.isNull())
+        return 0;
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        if (m_mipMaxLod.count(baseKey) != 0)
+        {
+            // Already tracked — still count levels as 1 + maxLod.
+            return 1 + m_mipMaxLod[baseKey];
+        }
+    }
+    auto levels = mviewer::cache::buildMipChain(full, minEdge);
+    if (levels.empty())
+        return 0;
+    storeMipChain(baseKey, levels);
+    return static_cast<int>(levels.size());
+}
+
+void CacheManager::putMip(const std::string &baseKey, int lod, const ImageData &img)
+{
+    if (baseKey.empty() || img.isNull() || lod < 0)
+        return;
+    if (lod == 0)
+    {
+        ImageCache::instance().put(ImageCache::Viewer, baseKey, img);
+        return;
+    }
+    ImageCache::instance().put(ImageCache::Preview, mipKey(baseKey, lod), img);
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        const auto it = m_mipMaxLod.find(baseKey);
+        if (it == m_mipMaxLod.end() || lod > it->second)
+            m_mipMaxLod[baseKey] = lod;
+    }
+}
+
+bool CacheManager::getMip(const std::string &baseKey, int lod, ImageData &out)
+{
+    if (baseKey.empty() || lod < 0)
+        return false;
+    if (lod == 0)
+        return ImageCache::instance().get(ImageCache::Viewer, baseKey, out);
+    return ImageCache::instance().get(ImageCache::Preview, mipKey(baseKey, lod), out);
+}
+
+bool CacheManager::getBestMipExisting(const std::string &baseKey, int maxEdge, ImageData &out)
+{
+    if (baseKey.empty() || maxEdge <= 0)
+        return false;
+
+    int trackedMax = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        const auto it = m_mipMaxLod.find(baseKey);
+        if (it != m_mipMaxLod.end())
+            trackedMax = it->second;
+    }
+
+    // Prefer the largest level whose max edge ≤ maxEdge (coarse enough).
+    ImageData bestFit;
+    int bestFitEdge = -1;
+    ImageData nextLarger;
+    int nextLargerEdge = std::numeric_limits<int>::max();
+
+    auto consider = [&](const ImageData &img)
+    {
+        if (img.isNull())
+            return;
+        const int edge = mviewer::cache::imageMaxEdge(img);
+        if (edge <= maxEdge)
+        {
+            if (edge > bestFitEdge)
+            {
+                bestFit = img;
+                bestFitEdge = edge;
+            }
+        }
+        else if (edge < nextLargerEdge)
+        {
+            nextLarger = img;
+            nextLargerEdge = edge;
+        }
+    };
+
+    ImageData full;
+    if (ImageCache::instance().get(ImageCache::Viewer, baseKey, full))
+        consider(full);
+
+    for (int lod = 1; lod <= trackedMax; ++lod)
+    {
+        ImageData mip;
+        if (ImageCache::instance().get(ImageCache::Preview, mipKey(baseKey, lod), mip))
+            consider(mip);
+    }
+
+    if (!bestFit.isNull())
+    {
+        out = std::move(bestFit);
+        return true;
+    }
+    if (!nextLarger.isNull())
+    {
+        out = std::move(nextLarger);
+        return true;
+    }
+    return false;
+}
+
+bool CacheManager::getBestMip(const std::string &baseKey, int maxEdge, ImageData &out)
+{
+    if (baseKey.empty() || maxEdge <= 0)
+        return false;
+
+    int trackedMax = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        const auto it = m_mipMaxLod.find(baseKey);
+        if (it != m_mipMaxLod.end())
+            trackedMax = it->second;
+    }
+
+    ImageData full;
+    const bool haveFull =
+        ImageCache::instance().get(ImageCache::Viewer, baseKey, full) && !full.isNull();
+
+    // Lazy fill when we only have a too-large FullImage (no smaller mips yet).
+    if (trackedMax == 0 && haveFull && mviewer::cache::imageMaxEdge(full) > maxEdge)
+        ensureMips(baseKey, full);
+
+    if (getBestMipExisting(baseKey, maxEdge, out))
+        return true;
+
+    // Still nothing: if FullImage exists but was never considered (edge==0 etc.)
+    if (haveFull)
+    {
+        out = std::move(full);
+        return true;
+    }
+    return false;
+}
+
 void CacheManager::erase(const std::string &key)
 {
     if (key.empty())
         return;
+    eraseMips(key);
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
     ImageCache::instance().remove(ImageCache::Preview, key);
@@ -181,6 +373,10 @@ void CacheManager::clearMemory()
         m_raw16Store.clear();
         m_raw16Order.clear();
         m_raw16Bytes = 0;
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        m_mipMaxLod.clear();
     }
 }
 
@@ -304,6 +500,7 @@ void CacheManager::invalidate(const std::string &key)
 {
     if (key.empty())
         return;
+    eraseMips(key);
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
     ImageCache::instance().remove(ImageCache::Preview, key);

@@ -5,6 +5,7 @@
 #include "core/image/SourceImage.h"
 
 #include "core/image/Decoder.h"
+#include "core/image/DisplayMip.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/decoder/DecoderRegistry.h"
 
@@ -142,6 +143,22 @@ SourceImage::RasterResult SourceImage::decodeLod(int maxEdge)
     RasterResult r;
     r.space = SourceCoordinateSpace::Raw;
     r.coveredRect = {0, 0, m_rawW, m_rawH};
+
+    // Prefer CacheManager in-memory mip chain before any decode/scale.
+    if (maxEdge > 0)
+    {
+        ImageData mip = tryBestMip(m_path, maxEdge);
+        if (!mip.isNull())
+        {
+            // Cache hit — no decode counters; path label matches "client LOD".
+            r.pixels = std::move(mip);
+            r.decodePath = SourceDecodePath::FullDecodeScaled;
+            m_lastPath = SourceDecodePath::FullDecodeScaled;
+            r.metadata = std::move(meta);
+            r.ok = true;
+            return r;
+        }
+    }
 
     if (m_caps != nullptr)
     {

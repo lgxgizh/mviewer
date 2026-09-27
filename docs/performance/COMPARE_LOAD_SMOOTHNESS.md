@@ -52,7 +52,12 @@
 
 ## Deferred
 
-- True mipmap/tile pyramid inside CacheManager / DecoderRegistry.
+- ~~True mipmap/tile pyramid inside CacheManager / DecoderRegistry.~~
+  **Landed (in-memory)**: `MipmapPyramid` + `CacheManager::{putMip,getMip,getBestMip,ensureMips}` —
+  FullImage put (or lazy getBestMip) builds a power-of-two chain (lod0=full, higher=coarser);
+  Compare materialization prefers `getBestMip` before re-scale / `decodeLod`.
+  Still deferred: decoder-native disk-LOD (JPEG progressive / RAW multi-size / libraw half)
+  and a full TileCache↔viewer paint rewrite that consumes decoder-emitted reduced bitmaps.
 - Viewport-tiled region decode beyond existing region LOD.
 - Low-precision live diff raster (currently defer-only until settle).
 

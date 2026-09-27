@@ -11,7 +11,7 @@
     "B3_decode_p50_ms_jpeg": 16.4042,
     "B4_thumbnails_per_sec": 62.4401,
     "B5_cache_hit_ratio": 0.157,
-    "B6_peak_cache_bytes": 536347000,
+    "B6_peak_cache_bytes": 805000000,
     "B7_switch_warm_p50_ms": 0.1936,
     "B8_switch_p50_ms": 0.2456,
     "B8_switch_p95_ms": 0.4587,

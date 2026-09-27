@@ -25,12 +25,14 @@ add_library(mviewer_core SHARED
     core/image/ImageRepository_load.cpp
     core/image/ImageRepository_frames.cpp
     core/image/SourceImage.cpp
+    core/image/DisplayMip.cpp
     core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
     core/image/RawMetadata.cpp
     core/image/ImageCache.cpp
     core/image/DiskCache.cpp
     core/cache/CacheManager.cpp
+    core/cache/MipmapPyramid.cpp
     core/image/Encoder.cpp
     core/image/ImageFormats.cpp
     core/image/FrameSequence.cpp
@@ -434,7 +436,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1265,6 +1267,7 @@ add_test(NAME ui_models_tests  COMMAND test_ui_models)
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)
+add_test(NAME mipmap_pyramid_tests COMMAND test_mipmap_pyramid)
 add_test(NAME repository_tests COMMAND test_repository)
 add_test(NAME scheduler_tests  COMMAND test_scheduler)
 add_test(NAME m26_scheduler_tests COMMAND test_m26_scheduler)

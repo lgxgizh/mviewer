@@ -70,3 +70,41 @@ Similar to the full-image cache, the Thumbnail tier (`ThumbnailPipeline` memory 
 - ✅ Constant-time $O(1)$ thumbnail pixmap eviction during high-speed gallery scrolling.
 - ✅ Complete immunity against cache blowout when handling pathological or corrupt thumbnails.
 - ✅ Accelerated cold startup indexing over large persistent thumbnail caches.
+
+## Amendment (2026-09-27) — True in-memory mipmap chain
+
+### Context
+
+Compare already keeps an app-side display pyramid and a session frame pool, but
+`CacheManager` only stored Metadata / Thumbnail / Preview / FullImage by path.
+Consumers repeatedly re-scaled from full rasters for cheap LOD edges. TileCache
+keys by `lod`, yet tiles were still built by scaling an already-decoded frame;
+decoder-native disk-LOD remains a later milestone.
+
+### Decision
+
+- Add a **power-of-two in-memory mipmap chain** owned by `CacheManager`:
+  - Helper: `MipmapPyramid::{buildMipChain,downscaleHalfBox}` (Qt-free box average).
+  - LOD convention matches TileCache: **lod 0 = full / finest**; higher = coarser.
+  - Key scheme: `baseKey + "#mip:" + lod` for lod≥1 (Preview pool budget); lod 0 is
+    the FullImage entry under `baseKey`.
+  - APIs: `putMip` / `getMip` / `getBestMip` / `ensureMips`.
+  - FullImage `put`/`putMemory` eagerly builds lod≥1; `getBestMip` lazy-fills when
+    only a too-large FullImage is present.
+  - `erase` / `invalidate` / `clearMemory` wipe the whole chain for a base key.
+- Wire Compare materialization to prefer `getBestMip` before `decodeLod` /
+  `scaleBoundedStatic`.
+
+### Consequences
+
+- ✅ Cheap LOD / Compare first paint can reuse cached half/quarter rasters
+- ✅ Mip bytes share the existing Preview budget (no unbounded growth)
+- ✅ Invalidation stays coherent with path-keyed FullImage
+- ❌ Decoder-native disk-LOD and TileCache paint rewrite still deferred
+- ❌ Eager FullImage put pays a small CPU cost to build the chain
+- ❌ B6 `peak_cache_bytes` hard gate raised to 896 MiB (Viewer+Preview)
+
+### Related
+
+- `docs/performance/COMPARE_LOAD_SMOOTHNESS.md` (Deferred → in-memory landed)
+- ADR-006 original hierarchical levels
