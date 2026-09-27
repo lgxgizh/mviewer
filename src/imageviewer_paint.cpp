@@ -36,6 +36,7 @@
 #include <QWheelEvent>
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 void ImageViewer::paintEvent(QPaintEvent *event)
 {
@@ -331,6 +332,14 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
     if (!useGpu)
         return;
     const QRect viewportRect(0, 0, width(), height());
+    std::vector<TileKey> pinned;
+    pinned.reserve(ready.size());
+    for (const auto &rt : ready)
+    {
+        if (!rt.data.isNull())
+            pinned.push_back(rt.key);
+    }
+    m_gpu.pinVisible(pinned.data(), pinned.size());
     painter.beginNativePainting();
     for (const auto &rt : ready)
     {

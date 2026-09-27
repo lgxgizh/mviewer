@@ -4,6 +4,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QSettings>
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 
@@ -51,6 +52,55 @@ bool GpuTileUploader::enabled()
     return gpuEnabledBySettings();
 }
 
+namespace
+{
+uint64_t fingerprintPixels(const uint8_t *pixels, int w, int h, int channels)
+{
+    if (!pixels || w <= 0 || h <= 0 || channels <= 0)
+        return 0;
+    const size_t n =
+        static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(channels);
+    uint64_t hash = 14695981039346656037ull;
+    const size_t step = std::max<size_t>(1, n / 32);
+    for (size_t i = 0; i < n; i += step)
+    {
+        hash ^= pixels[i];
+        hash *= 1099511628211ull;
+    }
+    hash ^= n;
+    return hash == 0 ? 1 : hash;
+}
+
+size_t tileBytes(int w, int h, int channels)
+{
+    if (w <= 0 || h <= 0 || channels <= 0)
+        return 0;
+    return static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(channels);
+}
+} // namespace
+
+void GpuTileUploader::ensureBudgetLoaded()
+{
+    if (m_budgetLoaded)
+        return;
+    m_budgetLoaded = true;
+    // Injected uploaders (unit tests) own maxBytes/maxResident directly.
+    if (m_upload)
+        return;
+    int mb = 256;
+    const char *env = std::getenv("MVIEWER_GPU_BUDGET_MB");
+    if (env && env[0] != '\0')
+        mb = std::atoi(env);
+    else
+    {
+        QSettings s;
+        if (s.contains(QStringLiteral("gpuTileBudgetMb")))
+            mb = s.value(QStringLiteral("gpuTileBudgetMb")).toInt();
+    }
+    if (mb > 0)
+        maxBytes = static_cast<size_t>(mb) * 1024ull * 1024ull;
+}
+
 // ─── residency ───────────────────────────────────────────────────────────────
 
 bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, int h, int channels)
@@ -60,12 +110,28 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
     const bool useInjected = static_cast<bool>(m_upload);
     if (!useInjected && !enabled())
         return false;
+    ensureBudgetLoaded();
 
+    const uint64_t fp = fingerprintPixels(pixels, w, h, channels);
+    const size_t bytes = tileBytes(w, h, channels);
     auto it = m_map.find(key);
     if (it != m_map.end())
     {
-        touch(key);
-        return it->second.handle != 0;
+        const bool sameSize =
+            it->second.w == w && it->second.h == h && it->second.channels == channels;
+        // Null pixels or a matching sample: already resident, do not re-upload.
+        if (sameSize && (pixels == nullptr || fp == it->second.fingerprint))
+        {
+            touch(key);
+            return it->second.handle != 0;
+        }
+        if (sameSize && pixels && doReplace(it->second.handle, pixels, w, h, channels))
+        {
+            it->second.fingerprint = fp;
+            touch(key);
+            return true;
+        }
+        eraseEntry(it);
     }
 
     if (w <= 0 || h <= 0 || channels <= 0)
@@ -81,10 +147,28 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
     m_lru.push_back(key);
     Entry e;
     e.handle = hnd;
+    e.w = w;
+    e.h = h;
+    e.channels = channels;
+    e.bytes = bytes;
+    e.fingerprint = fp == 0 ? 1 : fp;
     e.lruIt = std::prev(m_lru.end());
+    m_bytes += e.bytes;
     m_map.emplace(key, e);
     evictIfNeeded();
-    return true;
+    return m_map.find(key) != m_map.end();
+}
+
+void GpuTileUploader::pinVisible(const TileKey *keys, size_t count)
+{
+    m_pinned.clear();
+    if (!keys || count == 0)
+        return;
+    for (size_t i = 0; i < count; ++i)
+    {
+        m_pinned.insert(keys[i]);
+        touch(keys[i]);
+    }
 }
 
 bool GpuTileUploader::isResident(const TileKey &key) const
@@ -104,6 +188,22 @@ void GpuTileUploader::clear()
         doFree(kv.second.handle);
     m_map.clear();
     m_lru.clear();
+    m_pinned.clear();
+    m_bytes = 0;
+}
+
+void GpuTileUploader::eraseEntry(std::unordered_map<TileKey, Entry, TileKeyHash>::iterator it)
+{
+    if (it == m_map.end())
+        return;
+    if (m_bytes >= it->second.bytes)
+        m_bytes -= it->second.bytes;
+    else
+        m_bytes = 0;
+    m_lru.erase(it->second.lruIt);
+    doFree(it->second.handle);
+    m_pinned.erase(it->first);
+    m_map.erase(it);
 }
 
 void GpuTileUploader::touch(const TileKey &key)
@@ -118,21 +218,45 @@ void GpuTileUploader::touch(const TileKey &key)
 
 void GpuTileUploader::evictIfNeeded()
 {
-    while (static_cast<int>(m_map.size()) > maxResident && !m_lru.empty())
+    auto overBudget = [this]()
+    { return static_cast<int>(m_map.size()) > maxResident || m_bytes > maxBytes; };
+    // Pass 1: drop tiles that are not on screen this frame.
+    for (auto lruIt = m_lru.begin(); overBudget() && lruIt != m_lru.end();)
     {
-        const TileKey oldest = m_lru.front();
-        m_lru.pop_front();
-        auto it = m_map.find(oldest);
+        if (m_pinned.find(*lruIt) != m_pinned.end())
+        {
+            ++lruIt;
+            continue;
+        }
+        auto it = m_map.find(*lruIt);
+        lruIt = m_lru.erase(lruIt);
         if (it == m_map.end())
             continue;
+        if (m_bytes >= it->second.bytes)
+            m_bytes -= it->second.bytes;
+        else
+            m_bytes = 0;
         doFree(it->second.handle);
         m_map.erase(it);
+    }
+    // Pass 2: still over budget (every resident tile is pinned) — drop oldest.
+    while (overBudget() && !m_lru.empty())
+    {
+        const TileKey oldest = m_lru.front();
+        auto it = m_map.find(oldest);
+        if (it == m_map.end())
+        {
+            m_lru.pop_front();
+            continue;
+        }
+        eraseEntry(it);
     }
 }
 
 uintptr_t GpuTileUploader::doUpload(const TileKey &key, const uint8_t *pixels, int w, int h,
                                     int channels)
 {
+    ++m_uploads;
     if (m_upload)
         return m_upload(key, pixels, w, h, channels);
 
@@ -181,6 +305,35 @@ uintptr_t GpuTileUploader::doUpload(const TileKey &key, const uint8_t *pixels, i
                      GL_UNSIGNED_BYTE, pixels);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     return static_cast<uintptr_t>(tex);
+}
+
+bool GpuTileUploader::doReplace(uintptr_t handle, const uint8_t *pixels, int w, int h, int channels)
+{
+    if (handle == 0 || !pixels || w <= 0 || h <= 0 || channels <= 0)
+        return false;
+    // Same-size content change keeps the texture object. Injected tests have
+    // no pixel store; skipping the upload callback is the "no re-upload" path.
+    if (m_upload)
+        return true;
+
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (!ctx || !ctx->isValid())
+        return false;
+    QOpenGLFunctions *gl = ctx->functions();
+    if (!gl)
+        return false;
+    GLenum format = GL_RGBA;
+    if (channels == 1)
+        format = GL_RED;
+    else if (channels == 3)
+        format = GL_RGB;
+    else if (channels != 4)
+        return false;
+    gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(handle));
+    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, format, GL_UNSIGNED_BYTE, pixels);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    return true;
 }
 
 void GpuTileUploader::doFree(uintptr_t handle)
