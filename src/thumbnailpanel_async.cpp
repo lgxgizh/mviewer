@@ -5,6 +5,8 @@
 // supersession/cancellation machinery stays cohesive.
 #include "thumbnailpanel_p.h"
 
+#include "core/metadata/MetadataIndexer.h"
+
 #include <QtConcurrent/QtConcurrent>
 
 #include <QStorageInfo>
@@ -224,6 +226,14 @@ void ThumbnailPanel::setDirectory(const QString &path)
     ++m_dirGen;
     const int gen = m_dirGen;
     m_scanGenToken->store(static_cast<uint64_t>(gen), std::memory_order_release);
+    // This panel's metadata index only. Search re-index is a different
+    // MetadataIndexer request and must keep running until it is superseded.
+    if (m_metaRequestId != 0)
+    {
+        mviewer::core::MetadataIndexer::instance().cancelRequest(m_metaRequestId);
+        m_metaRequestId = 0;
+    }
+    m_metaIndexing = false;
     m_dimsResolved = false;
     m_highLatencyDir = isHighLatencyBrowsePath(path);
     ThumbnailCache::instance().clearSourceIdentityHints();

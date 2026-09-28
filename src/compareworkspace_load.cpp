@@ -99,7 +99,11 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
     };
 
     // M47: capability probe on DecodePool; huge sources become metadata placeholders.
+    // Claim neighbor preloads that match this pair first, then cancel the rest
+    // so leftover Background decodes are not still running when Decode starts.
     m_comparePaths = paths;
+    std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle> promoted;
+    claimPromotedPrefetch(paths, frameIndices, promoted);
     for (size_t i = 0; i < paths.size(); ++i)
     {
         auto *request = batch->requests[i].get();
@@ -121,9 +125,9 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
         }
 
         // Promote warm neighbor preload into this batch when available.
-        if (frameIndex == 0)
+        if (i < promoted.size() && promoted[i])
         {
-            auto prefetch = takePrefetchHandle(path);
+            auto prefetch = std::move(promoted[i]);
             if (prefetch)
             {
                 mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
@@ -189,7 +193,6 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                 finish();
         }
     }
-    cancelPairPrefetch();
 }
 
 bool CompareWorkspace::accountLoadRequest(

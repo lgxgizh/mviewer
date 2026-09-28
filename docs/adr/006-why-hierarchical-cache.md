@@ -108,3 +108,29 @@ decoder-native disk-LOD remains a later milestone.
 
 - `docs/performance/COMPARE_LOAD_SMOOTHNESS.md` (Deferred → in-memory landed)
 - ADR-006 original hierarchical levels
+
+## Amendment (2026-09-28) — Targeted Preview mip release
+
+### Context
+
+Leaving a large viewer image, or closing Compare, kept lod≥1 Preview mips
+resident for the rest of the session. `clearMemory` would also drop Thumbnail
+and Metadata, which Browse still needs on the next folder.
+
+### Decision
+
+- Add `CacheManager::dropMips(baseKey)`: erase lod≥1 Preview entries for one
+  base key. Lod 0 FullImage, Thumbnail, Metadata, and non-mip Preview keys stay.
+- Add `CacheManager::trimMipsToBudget(maxBytes, keepBaseKeys)`: release cold
+  lod≥1 chains, largest first, until tracked mip bytes fit the budget. Keys in
+  `keepBaseKeys` stay. This is not a global `clearMemory`.
+- Viewer replace/close and Compare session teardown call these for keys that
+  are no longer on screen. UI reaches them through `core/image/DisplayMip.h`
+  so product TUs do not include `CacheManager` directly.
+
+### Consequences
+
+- ✅ Leaving a large image frees Preview mip bytes without blanking the gallery
+- ✅ The open image (or an explicit keep list) is not trimmed
+- ✅ Thumbnail and Metadata caches survive the release
+- ❌ FullImage lod 0 stays until ordinary FullImage eviction

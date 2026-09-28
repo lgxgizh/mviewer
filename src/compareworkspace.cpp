@@ -1,5 +1,6 @@
 #include "compareworkspace_p.h"
 
+#include "core/image/DisplayMip.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/SourceImage.h"
 
@@ -108,8 +109,43 @@ void CompareWorkspace::applyCompareSafeInsets()
         root->setContentsMargins(next);
 }
 
+void CompareWorkspace::releaseSessionMemory()
+{
+    std::vector<std::string> mipKeys = m_comparePaths;
+    if (m_session)
+    {
+        for (const auto &slot : m_session->panePyramids)
+        {
+            if (!slot.path.empty())
+                mipKeys.push_back(slot.path);
+        }
+        m_session->framePool.clear();
+        m_session->panePyramids.clear();
+        m_session->forceDecodePriority = false;
+    }
+    m_pendingWarmSeeds.clear();
+    m_engine.setFrames({});
+    for (const std::string &key : mipKeys)
+    {
+        if (!key.empty())
+            mviewer::core::dropMips(key);
+    }
+    mviewer::core::trimMipsToBudget(96ull * 1024ull * 1024ull, {});
+}
+
 CompareWorkspace::~CompareWorkspace()
 {
+    // Settle timers and blink must not touch widgets while cancel waits.
+    ++m_interactionGen;
+    m_interactionBusy = false;
+    m_deferredDiffRefresh = false;
+    m_deferredHistRefresh = false;
+    if (m_blinkTimer)
+        m_blinkTimer->stop();
+    // Drop shared ImageFrames before cancelAsync waits out in-flight
+    // deliveries, so the ~384 MiB session retain is not held for that drain.
+    releaseSessionMemory();
+
     // M46: invalidate the consumer-lifetime token first so the repository
     // suppresses every not-yet-started client delivery for this workspace.
     // The batch cancellation below then also waits for any delivery that
@@ -155,6 +191,8 @@ CompareWorkspace::~CompareWorkspace()
         TaskScheduler::cancel(m_roiTask);
     m_roiTask.reset();
     ++m_roiGen;
+    // A delivery that landed during the cancel wait must not keep the pool.
+    releaseSessionMemory();
 }
 
 void CompareWorkspace::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)

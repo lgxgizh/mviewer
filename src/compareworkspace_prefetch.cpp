@@ -5,6 +5,26 @@
 
 #include <utility>
 
+void CompareWorkspace::claimPromotedPrefetch(
+    const std::vector<std::string> &paths, const std::vector<int> &frameIndices,
+    std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle> &out)
+{
+    out.clear();
+    out.resize(paths.size());
+    for (size_t i = 0; i < paths.size(); ++i)
+    {
+        const int frameIndex = i < frameIndices.size() && frameIndices[i] > 0 ? frameIndices[i] : 0;
+        if (frameIndex != 0)
+            continue;
+        if (m_session && m_session->framePool.tryGet(paths[i], frameIndex))
+            continue;
+        out[i] = takePrefetchHandle(paths[i]);
+    }
+    // Drop leftovers before focused panes submit Decode work. Promoted handles
+    // were already taken out of m_pairPrefetch.
+    cancelPairPrefetch();
+}
+
 void CompareWorkspace::cancelPairPrefetch()
 {
     auto &svc = mviewer::application::ImageLoadingService::instance();

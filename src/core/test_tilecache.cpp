@@ -287,6 +287,64 @@ static void testAsyncTileManager()
           "M40: retry teardown does not resubmit stale tiles after reset/destruction");
 }
 
+static void testVisibleBeforeRingAndShutdown()
+{
+    printf("\n[AsyncTileRequestManager visible-before-ring]\n");
+    fflush(stdout);
+    auto &scheduler = TaskScheduler::instance();
+    scheduler.resume(TaskScheduler::MetadataPool);
+    scheduler.resume(TaskScheduler::DecodePool);
+    TileCache cache;
+    AsyncTileRequestManager manager(cache);
+    manager.reset(1);
+    // 256px tile, 256px viewport at 1:1 → one on-screen tile, ring around it.
+    TileGrid grid(2048, 2048, 256);
+    const Viewport vp(256, 256, 1.0, 0.0, 0.0);
+    std::atomic<int> decodeCalls{0};
+    std::mutex decodeMu;
+    std::condition_variable decodeCv;
+    auto decode = [&](const std::string &, int, int, int, int, int tw, int th) -> ImageData
+    {
+        ++decodeCalls;
+        decodeCv.notify_all();
+        return makeImageData(tw, th, PixelFormat::RGB24);
+    };
+
+    scheduler.pause(TaskScheduler::MetadataPool);
+    const auto first = manager.requestVisibleRegion("ring", vp, grid, 100, 1, decode, nullptr);
+    CHECK(first.pending >= 1 && first.ready.empty(), "on-screen tile is requested");
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
+    const int visibleDecodes = decodeCalls.load();
+    CHECK(visibleDecodes == static_cast<int>(first.pending),
+          "ring stays off Decode while Background is paused");
+    CHECK(manager.pendingCount() > 0 && manager.pendingCount() <= 8,
+          "ring prefetch remains pending at Background");
+
+    scheduler.resume(TaskScheduler::MetadataPool);
+    {
+        std::unique_lock<std::mutex> lk(decodeMu);
+        CHECK(decodeCv.wait_for(lk, std::chrono::seconds(3),
+                                [&]() { return decodeCalls.load() > visibleDecodes; }),
+              "ring decodes after Background resumes");
+    }
+    scheduler.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5));
+
+    std::atomic<int> lateReady{0};
+    manager.reset(2);
+    scheduler.pause(TaskScheduler::DecodePool);
+    manager.requestVisible("late", vp, grid, 100, 2, decode, [&](const TileKey &) { ++lateReady; });
+    manager.shutdown();
+    CHECK(manager.pendingCount() == 0, "shutdown drops pending tiles");
+    scheduler.resume(TaskScheduler::DecodePool);
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
+    const auto rejected = manager.requestVisible("late", vp, grid, 100, 2, decode, nullptr);
+    CHECK(rejected.pending == 0 && rejected.ready.empty(), "shutdown stops accepting");
+    CHECK(lateReady.load() == 0, "shutdown suppresses a late tile callback");
+    manager.reset(3);
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(2));
+    scheduler.drain(TaskScheduler::MetadataPool, std::chrono::seconds(2));
+}
+
 static void test100MpVisibleOnly()
 {
     printf("\n[TileCache 100MP visible-only decode (M16)]\n");
@@ -409,6 +467,7 @@ int main(int argc, char **argv)
     testByteBudget();
     testCanonicalIdentity();
     testAsyncTileManager();
+    testVisibleBeforeRingAndShutdown();
     test100MpVisibleOnly();
     testAsyncTileManagerEvictionAndBounds();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

@@ -114,6 +114,14 @@ class CacheManager
     // including lod 0 (1 = full only / too small to pyramid).
     int ensureMips(const std::string &baseKey, const ImageData &full, int minEdge = 256);
 
+    // Drop lod≥1 Preview-pool mip entries for one base key. Thumbnail,
+    // Metadata, FullImage (lod 0) and non-mip Preview entries are left alone.
+    void dropMips(const std::string &baseKey);
+
+    // Drop cold lod≥1 chains (keys absent from keepBaseKeys), largest first,
+    // until tracked mip bytes are within maxBytes. Does not wipe other pools.
+    size_t trimMipsToBudget(size_t maxBytes, const std::vector<std::string> &keepBaseKeys = {});
+
     // 管理
     void clear();
     void clearMemory();
@@ -175,10 +183,15 @@ class CacheManager
     size_t m_raw16Bytes = 0;
     size_t m_raw16BudgetBytes = 256 * 1024 * 1024;
 
-    // Tracks highest lod≥1 stored per baseKey so erase/invalidate can wipe the
-    // whole chain without scanning ImageCache (no prefix API).
+    // Tracks lod≥1 chains so erase/invalidate/trim can wipe them without
+    // scanning ImageCache (no prefix API). `bytes` is lod≥1 payload only.
+    struct MipChainInfo
+    {
+        int maxLod = 0;
+        size_t bytes = 0;
+    };
     mutable std::mutex m_mipMutex;
-    std::unordered_map<std::string, int> m_mipMaxLod;
+    std::unordered_map<std::string, MipChainInfo> m_mipChains;
 
     void eraseRaw16Locked(const std::string &key);
     void trimRaw16Locked();

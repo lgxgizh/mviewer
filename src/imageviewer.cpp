@@ -5,6 +5,7 @@
 #include "application/ImageLoadingService.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/image/DisplayMip.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
@@ -76,6 +77,17 @@ ImageViewer::ImageViewer(QWidget *parent)
             });
 }
 
+void ImageViewer::releaseColdMips(const QString &previousPath)
+{
+    if (previousPath.isEmpty() || previousPath == m_currentPath)
+        return;
+    mviewer::core::dropMips(previousPath.toUtf8().toStdString());
+    std::vector<std::string> keep;
+    if (!m_currentPath.isEmpty())
+        keep.push_back(m_currentPath.toUtf8().toStdString());
+    mviewer::core::trimMipsToBudget(96ull * 1024ull * 1024ull, keep);
+}
+
 ImageViewer::~ImageViewer()
 {
     // M46: invalidate the consumer-lifetime token FIRST. Every request this
@@ -85,6 +97,11 @@ ImageViewer::~ImageViewer()
     // started, so after this destructor returns no callback is running or will
     // run against this viewer.
     m_lifetime->invalidate();
+    m_tileRequests.shutdown();
+    m_overlayRequests.shutdown();
+    const QString dyingPath = m_currentPath;
+    m_currentPath.clear();
+    releaseColdMips(dyingPath);
     // M29: drop any in-flight foreground decode / neighbor preload before
     // tearing down the GL context. A worker callback that lands after teardown
     // is harmless (the QPointer/path/generation guards suppress delivery), but
@@ -123,9 +140,14 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
 {
     if (path.isEmpty() || image.isNull())
         return;
-    if (m_currentPath != path)
+    const QString previousPath = m_currentPath;
+    if (previousPath != path)
+    {
         beginImageGeneration();
+        clearLoadedGpu();
+    }
     m_currentPath = path;
+    releaseColdMips(previousPath);
     m_provisionalPath = path;
     const QImage shown = mviewer::ui::photoFromSquareThumb(image);
     m_provisionalImage = shown;
@@ -173,6 +195,14 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     cancelDisplayRasterPreloads();
     cancelDisplayRequest();
     cancelExportJob();
+    clearLoadedGpu();
+    {
+        const QString closingPath = m_currentPath;
+        m_currentPath.clear();
+        releaseColdMips(closingPath);
+    }
+    m_tileCache.clear();
+    m_overlayCache.clear();
     // Browse rotate uses SelectionModel, but a leftover path here used to make
     // a closed Viewer the write target. "No open file" after close.
     m_currentPath.clear();

@@ -68,6 +68,11 @@ public:
     bool getRaw16(const std::string& key, std::shared_ptr<std::vector<uint16_t>>& out,
                   int& channels, uint16_t& maxSample) const;
 
+    // lod≥1 Preview mips only. Thumbnail / Metadata / FullImage stay.
+    void dropMips(const std::string& baseKey);
+    size_t trimMipsToBudget(size_t maxBytes,
+                            const std::vector<std::string>& keepBaseKeys = {});
+
     // Management
     void clear();
     void clearMemory();

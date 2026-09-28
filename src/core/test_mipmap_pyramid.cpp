@@ -165,6 +165,57 @@ static void testEnsureMipsIdempotent()
     CHECK(mgr.getMip(key, 1, lod1) && !lod1.isNull(), "ensureMips stored lod1");
 }
 
+static void testDropAndTrimMips()
+{
+    printf("\n[CacheManager::dropMips / trimMipsToBudget]\n");
+    CacheManager &mgr = CacheManager::instance();
+    mgr.clearMemory();
+
+    ImageData thumb = makeRgbRamp(16, 16);
+    ImageData preview = makeRgbRamp(32, 32);
+    mgr.put(CacheLevel::Thumbnail, "gallery-thumb", thumb);
+    mgr.put(CacheLevel::Preview, "gallery-preview", preview);
+    mviewer::domain::ImageMetadata meta;
+    meta.filePath = "meta-keep";
+    meta.width = 8;
+    meta.height = 8;
+    mgr.putMetadata("meta-keep", meta);
+
+    const std::string keep = "mip-keep";
+    const std::string cold = "mip-cold";
+    ImageData full = makeRgbRamp(640, 480);
+    CHECK(mgr.ensureMips(keep, full) >= 2, "keep chain built");
+    CHECK(mgr.ensureMips(cold, full) >= 2, "cold chain built");
+    mgr.putMip(keep, 0, full);
+    mgr.putMip(cold, 0, full);
+
+    const size_t released = mgr.trimMipsToBudget(0, {keep});
+    ImageData lod1;
+    ImageData coldLod;
+    ImageData fullOut;
+    CHECK(released > 0, "trim releases cold mip bytes");
+    CHECK(mgr.getMip(keep, 1, lod1) && !lod1.isNull(), "kept mip lod1 survives trim");
+    CHECK(!mgr.getMip(cold, 1, coldLod), "cold mip lod1 dropped");
+    CHECK(mgr.getMip(cold, 0, fullOut) && !fullOut.isNull(), "lod0 FullImage is not a mip drop");
+
+    mgr.dropMips(keep);
+    ImageData dropped;
+    CHECK(!mgr.getMip(keep, 1, dropped), "dropMips removes lod1");
+    ImageData keepFull;
+    CHECK(mgr.getMip(keep, 0, keepFull) && !keepFull.isNull(), "dropMips leaves lod0");
+
+    ImageData thumbOut;
+    ImageData previewOut;
+    mviewer::domain::ImageMetadata metaOut;
+    CHECK(mgr.get(CacheLevel::Thumbnail, "gallery-thumb", thumbOut) && !thumbOut.isNull(),
+          "thumbnail pool survives mip trim");
+    CHECK(mgr.get(CacheLevel::Preview, "gallery-preview", previewOut) && !previewOut.isNull(),
+          "non-mip preview survives mip trim");
+    CHECK(mgr.getMetadata("meta-keep", metaOut) && metaOut.filePath == "meta-keep",
+          "metadata pool survives mip trim");
+    mgr.clearMemory();
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -173,6 +224,7 @@ int main(int argc, char **argv)
     testCacheManagerMips();
     testLazyBuildAndEviction();
     testEnsureMipsIdempotent();
+    testDropAndTrimMips();
     printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

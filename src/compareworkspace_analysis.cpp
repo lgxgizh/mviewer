@@ -672,7 +672,7 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
     QPointer<CompareWorkspace> guard(this);
 
     auto handle = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Analysis,
+        deferredAnalysisPriority(),
         [pixels = std::move(pixels), adjusts = std::move(adjusts), roiEnabled, roi,
          unionIdx = plan.unionIdx, mainIndices = plan.mainIndices, panes = plan.panes, paneCount,
          updateMain = plan.updateMain, gen, guard](const TaskScheduler::TaskContext &ctx)
