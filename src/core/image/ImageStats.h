@@ -30,11 +30,19 @@ struct PreviewStats
 // channel means (equivalently channel sums), never from per-pixel ratios.
 // ratiosValid is false when mean G is zero, allowing the UI to display an
 // explicit unavailable value instead of NaN/Inf.
+//
+// hMean is the circular mean of PixelInspector 8-bit hue (degrees, 0..360)
+// over chromatic pixels only (saturation > 0). An achromatic ROI reports 0,
+// the same hue PixelInspector assigns to gray. sMean is the arithmetic mean
+// of that saturation (0..100), including achromatic pixels. vMean stays the
+// mean of max(R,G,B) in 0..255, matching AnalysisEngine.
 struct ROIChannelStats
 {
     double rMean = 0.0;
     double gMean = 0.0;
     double bMean = 0.0;
+    double hMean = 0.0;
+    double sMean = 0.0;
     double vMean = 0.0;
     double rOverG = 0.0;
     double bOverG = 0.0;

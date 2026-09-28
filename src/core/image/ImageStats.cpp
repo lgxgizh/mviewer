@@ -1,6 +1,7 @@
 #include "core/image/ImageStats.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace mviewer::core
 {
@@ -8,11 +9,9 @@ namespace mviewer::core
 namespace
 {
 
-template <PixelFormat Fmt>
-struct PixelReader;
+template <PixelFormat Fmt> struct PixelReader;
 
-template <>
-struct PixelReader<PixelFormat::Grayscale8>
+template <> struct PixelReader<PixelFormat::Grayscale8>
 {
     static constexpr int cpp = 1;
     static inline void read(const uint8_t *p, uint8_t &r, uint8_t &g, uint8_t &b)
@@ -21,8 +20,7 @@ struct PixelReader<PixelFormat::Grayscale8>
     }
 };
 
-template <>
-struct PixelReader<PixelFormat::RGB24>
+template <> struct PixelReader<PixelFormat::RGB24>
 {
     static constexpr int cpp = 3;
     static inline void read(const uint8_t *p, uint8_t &r, uint8_t &g, uint8_t &b)
@@ -33,8 +31,7 @@ struct PixelReader<PixelFormat::RGB24>
     }
 };
 
-template <>
-struct PixelReader<PixelFormat::RGBA32>
+template <> struct PixelReader<PixelFormat::RGBA32>
 {
     static constexpr int cpp = 4;
     static inline void read(const uint8_t *p, uint8_t &r, uint8_t &g, uint8_t &b)
@@ -45,8 +42,7 @@ struct PixelReader<PixelFormat::RGBA32>
     }
 };
 
-template <>
-struct PixelReader<PixelFormat::BGR24>
+template <> struct PixelReader<PixelFormat::BGR24>
 {
     static constexpr int cpp = 3;
     static inline void read(const uint8_t *p, uint8_t &r, uint8_t &g, uint8_t &b)
@@ -57,8 +53,7 @@ struct PixelReader<PixelFormat::BGR24>
     }
 };
 
-template <>
-struct PixelReader<PixelFormat::BGRA32>
+template <> struct PixelReader<PixelFormat::BGRA32>
 {
     static constexpr int cpp = 4;
     static inline void read(const uint8_t *p, uint8_t &r, uint8_t &g, uint8_t &b)
@@ -70,9 +65,8 @@ struct PixelReader<PixelFormat::BGRA32>
 };
 
 template <PixelFormat Fmt>
-void accumulatePreview(const ImageBuffer &view, int x0, int x1, int y0, int y1,
-                       int64_t &sumR, int64_t &sumG, int64_t &sumB, int64_t &sumL, int64_t &sumV,
-                       int64_t &count)
+void accumulatePreview(const ImageBuffer &view, int x0, int x1, int y0, int y1, int64_t &sumR,
+                       int64_t &sumG, int64_t &sumB, int64_t &sumL, int64_t &sumV, int64_t &count)
 {
     const ptrdiff_t stride = view.stride();
     if constexpr (Fmt == PixelFormat::Grayscale8)
@@ -112,11 +106,64 @@ void accumulatePreview(const ImageBuffer &view, int x0, int x1, int y0, int y1,
     }
 }
 
+// Same 8-bit hue/saturation as PixelInspector::toColorSpace(..., HSV):
+// H is degrees in 0..360 (0 when achromatic), S is 0..100. V is not returned;
+// callers keep AnalysisEngine's max(R,G,B) in 0..255.
+void pixelHueSat(uint8_t r8, uint8_t g8, uint8_t b8, double &hue, double &sat)
+{
+    const int r = static_cast<int>(r8);
+    const int g = static_cast<int>(g8);
+    const int b = static_cast<int>(b8);
+    const int mx = std::max({r, g, b});
+    const int mn = std::min({r, g, b});
+    const int d = mx - mn;
+    hue = 0.0;
+    if (d > 0)
+    {
+        if (mx == r)
+            hue = std::fmod(60.0 * (static_cast<double>(g - b) / d), 360.0);
+        else if (mx == g)
+            hue = 60.0 * (static_cast<double>(b - r) / d + 2.0);
+        else
+            hue = 60.0 * (static_cast<double>(r - g) / d + 4.0);
+        if (hue < 0.0)
+            hue += 360.0;
+    }
+    sat = mx > 0 ? (static_cast<double>(d) / static_cast<double>(mx)) * 100.0 : 0.0;
+}
+
+struct RoiAccum
+{
+    uint64_t sumR = 0;
+    uint64_t sumG = 0;
+    uint64_t sumB = 0;
+    uint64_t sumV = 0;
+    double sumS = 0.0;
+    double sumSin = 0.0;
+    double sumCos = 0.0;
+    int64_t hueCount = 0;
+    int64_t pixelCount = 0;
+    bool cancelled = false;
+};
+
+constexpr double kDegToRad = 0.017453292519943295; // pi / 180
+constexpr double kRadToDeg = 57.29577951308232;    // 180 / pi
+
+double circularHueMean(double sumSin, double sumCos, int64_t hueCount)
+{
+    if (hueCount <= 0)
+        return 0.0;
+    double hue = std::atan2(sumSin, sumCos) * kRadToDeg;
+    if (hue < 0.0)
+        hue += 360.0;
+    if (hue >= 360.0)
+        hue = 0.0;
+    return hue;
+}
+
 template <PixelFormat Fmt>
 void accumulateROI(const ImageBuffer &view, int x0, int x1, int y0, int y1,
-                   const std::function<bool()> &isCancelled,
-                   uint64_t &sumR, uint64_t &sumG, uint64_t &sumB, uint64_t &sumV,
-                   int64_t &pixelCount, bool &cancelled)
+                   const std::function<bool()> &isCancelled, RoiAccum &accum)
 {
     const ptrdiff_t stride = view.stride();
     if constexpr (Fmt == PixelFormat::Grayscale8)
@@ -125,19 +172,18 @@ void accumulateROI(const ImageBuffer &view, int x0, int x1, int y0, int y1,
         {
             if (isCancelled && isCancelled())
             {
-                cancelled = true;
+                accum.cancelled = true;
                 return;
             }
             const uint8_t *row = view.data + static_cast<size_t>(y) * stride;
             uint64_t rowSum = 0;
             for (int x = x0; x < x1; ++x)
-            {
                 rowSum += row[x];
-            }
-            sumG += rowSum;
-            pixelCount += (x1 - x0);
+            accum.sumG += rowSum;
+            accum.pixelCount += (x1 - x0);
         }
-        sumR = sumB = sumV = sumG;
+        // Replicated gray is achromatic: H = 0, S = 0, V = the gray value.
+        accum.sumR = accum.sumB = accum.sumV = accum.sumG;
     }
     else
     {
@@ -146,7 +192,7 @@ void accumulateROI(const ImageBuffer &view, int x0, int x1, int y0, int y1,
         {
             if (isCancelled && isCancelled())
             {
-                cancelled = true;
+                accum.cancelled = true;
                 return;
             }
             const uint8_t *p =
@@ -155,11 +201,22 @@ void accumulateROI(const ImageBuffer &view, int x0, int x1, int y0, int y1,
             {
                 uint8_t r, g, b;
                 PixelReader<Fmt>::read(p, r, g, b);
-                sumR += r;
-                sumG += g;
-                sumB += b;
-                sumV += std::max({r, g, b});
-                ++pixelCount;
+                accum.sumR += r;
+                accum.sumG += g;
+                accum.sumB += b;
+                accum.sumV += std::max({r, g, b});
+                double hue = 0.0;
+                double sat = 0.0;
+                pixelHueSat(r, g, b, hue, sat);
+                accum.sumS += sat;
+                if (sat > 0.0)
+                {
+                    const double rad = hue * kDegToRad;
+                    accum.sumSin += std::sin(rad);
+                    accum.sumCos += std::cos(rad);
+                    ++accum.hueCount;
+                }
+                ++accum.pixelCount;
             }
         }
     }
@@ -192,20 +249,25 @@ PreviewStats computePreviewStatsROI(const ImageData &img, const mviewer::domain:
     switch (view.format)
     {
     case PixelFormat::BGR24:
-        accumulatePreview<PixelFormat::BGR24>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV, count);
+        accumulatePreview<PixelFormat::BGR24>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV,
+                                              count);
         break;
     case PixelFormat::BGRA32:
-        accumulatePreview<PixelFormat::BGRA32>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV, count);
+        accumulatePreview<PixelFormat::BGRA32>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV,
+                                               count);
         break;
     case PixelFormat::Grayscale8:
-        accumulatePreview<PixelFormat::Grayscale8>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV, count);
+        accumulatePreview<PixelFormat::Grayscale8>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL,
+                                                   sumV, count);
         break;
     case PixelFormat::RGBA32:
-        accumulatePreview<PixelFormat::RGBA32>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV, count);
+        accumulatePreview<PixelFormat::RGBA32>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV,
+                                               count);
         break;
     case PixelFormat::RGB24:
     default:
-        accumulatePreview<PixelFormat::RGB24>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV, count);
+        accumulatePreview<PixelFormat::RGB24>(view, x0, x1, y0, y1, sumR, sumG, sumB, sumL, sumV,
+                                              count);
         break;
     }
 
@@ -248,57 +310,51 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
     if (x1 <= x0 || y1 <= y0)
         return out;
 
-    uint64_t sumR = 0;
-    uint64_t sumG = 0;
-    uint64_t sumB = 0;
-    uint64_t sumV = 0;
-    bool cancelled = false;
+    RoiAccum accum;
     const ImageBuffer view = img.view();
 
     switch (view.format)
     {
     case PixelFormat::BGR24:
-        accumulateROI<PixelFormat::BGR24>(view, x0, x1, y0, y1, isCancelled,
-                                          sumR, sumG, sumB, sumV, out.pixelCount, cancelled);
+        accumulateROI<PixelFormat::BGR24>(view, x0, x1, y0, y1, isCancelled, accum);
         break;
     case PixelFormat::BGRA32:
-        accumulateROI<PixelFormat::BGRA32>(view, x0, x1, y0, y1, isCancelled,
-                                          sumR, sumG, sumB, sumV, out.pixelCount, cancelled);
+        accumulateROI<PixelFormat::BGRA32>(view, x0, x1, y0, y1, isCancelled, accum);
         break;
     case PixelFormat::Grayscale8:
-        accumulateROI<PixelFormat::Grayscale8>(view, x0, x1, y0, y1, isCancelled,
-                                              sumR, sumG, sumB, sumV, out.pixelCount, cancelled);
+        accumulateROI<PixelFormat::Grayscale8>(view, x0, x1, y0, y1, isCancelled, accum);
         break;
     case PixelFormat::RGBA32:
-        accumulateROI<PixelFormat::RGBA32>(view, x0, x1, y0, y1, isCancelled,
-                                          sumR, sumG, sumB, sumV, out.pixelCount, cancelled);
+        accumulateROI<PixelFormat::RGBA32>(view, x0, x1, y0, y1, isCancelled, accum);
         break;
     case PixelFormat::RGB24:
     default:
-        accumulateROI<PixelFormat::RGB24>(view, x0, x1, y0, y1, isCancelled,
-                                          sumR, sumG, sumB, sumV, out.pixelCount, cancelled);
+        accumulateROI<PixelFormat::RGB24>(view, x0, x1, y0, y1, isCancelled, accum);
         break;
     }
 
-    if (cancelled)
+    if (accum.cancelled)
     {
         out = {};
         out.cancelled = true;
         return out;
     }
-    if (out.pixelCount <= 0)
+    if (accum.pixelCount <= 0)
         return out;
 
-    const double count = static_cast<double>(out.pixelCount);
-    out.rMean = static_cast<double>(sumR) / count;
-    out.gMean = static_cast<double>(sumG) / count;
-    out.bMean = static_cast<double>(sumB) / count;
-    out.vMean = static_cast<double>(sumV) / count;
+    out.pixelCount = accum.pixelCount;
+    const double count = static_cast<double>(accum.pixelCount);
+    out.rMean = static_cast<double>(accum.sumR) / count;
+    out.gMean = static_cast<double>(accum.sumG) / count;
+    out.bMean = static_cast<double>(accum.sumB) / count;
+    out.vMean = static_cast<double>(accum.sumV) / count;
+    out.sMean = accum.sumS / count;
+    out.hMean = circularHueMean(accum.sumSin, accum.sumCos, accum.hueCount);
     out.valid = true;
-    if (sumG != 0)
+    if (accum.sumG != 0)
     {
-        out.rOverG = static_cast<double>(sumR) / static_cast<double>(sumG);
-        out.bOverG = static_cast<double>(sumB) / static_cast<double>(sumG);
+        out.rOverG = static_cast<double>(accum.sumR) / static_cast<double>(accum.sumG);
+        out.bOverG = static_cast<double>(accum.sumB) / static_cast<double>(accum.sumG);
         out.ratiosValid = true;
     }
     return out;

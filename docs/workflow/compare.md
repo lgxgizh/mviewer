@@ -23,7 +23,8 @@
 - Synchronized zoom/pan/selection is honored across cells.
 - The difference map for a 2+ image compare is produced with source dimensions.
 - Grid, Split, Overlay, Swipe, and Checkerboard show the same source-coordinate
-  ROI. Source RGB results remain available in the panel or compact viewport HUD.
+  ROI. Per-pane chips show R/G, B/G, and H/S/V as soon as the box is drawn;
+  the analysis table keeps those values plus RGB means.
 
 ## 3. Acceptance criteria
 

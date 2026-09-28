@@ -30,9 +30,21 @@ without depending on Qt or on a viewport-sized display image.
   raster. A metadata-only/placeholder frame with no full-resolution pixels is
   reported as invalid and never falls back to the visible display raster.
 
+## ROI hue and saturation
+
+`ROIChannelStats::hMean` and `sMean` (`computeROIChannelStats`) use the same
+8-bit HSV conversion as `toColorSpace(..., ColorSpace::HSV)`: hue in degrees
+over 0..360, saturation over 0..100. Hue is the circular mean of chromatic
+pixels only; an all-gray ROI reports hue 0. Saturation is the arithmetic mean
+of every pixel, including gray. `vMean` is unchanged: the mean of
+`max(R, G, B)` on the 0..255 scale used by AnalysisEngine, not the 0..100
+Pixel Inspector value channel.
+
 ## Verification
 
-`src/core/test_pixelinspector.cpp` covers identity, crop, all four rotations,
+`src/test_m60_linked_roi.cpp` checks ROI H/S means against `toColorSpace`,
+including a hue that wraps through 0° and an achromatic pixel excluded from
+the hue mean. `src/core/test_pixelinspector.cpp` covers identity, crop, all four rotations,
 adjustment equivalence, grayscale behavior, all four Inspector kernels, and
 edge clipping. `src/test_compare_acceptance.cpp` covers source-vs-LOD
 adversarial sampling and LOD replacement stability. `src/test_workflow_ux.cpp`

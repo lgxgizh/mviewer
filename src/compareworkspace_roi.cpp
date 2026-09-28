@@ -26,6 +26,35 @@ QString meanText(double value)
     return QString::number(value, 'f', 2);
 }
 
+// Shortest signed hue step in degrees, so a shift across 0° stays near zero.
+QString signedHueDelta(double later, double earlier)
+{
+    double delta = later - earlier;
+    if (delta > 180.0)
+        delta -= 360.0;
+    else if (delta < -180.0)
+        delta += 360.0;
+    return QString::number(delta, 'f', 2);
+}
+
+QString roiDeltaMetrics(const mviewer::core::ROIChannelStats &base,
+                        const mviewer::core::ROIChannelStats &other)
+{
+    const QString redGreen = (base.ratiosValid && other.ratiosValid)
+                                 ? QString::number(other.rOverG - base.rOverG, 'f', 4)
+                                 : QStringLiteral("—");
+    const QString blueGreen = (base.ratiosValid && other.ratiosValid)
+                                  ? QString::number(other.bOverG - base.bOverG, 'f', 4)
+                                  : QStringLiteral("—");
+    return CompareWorkspace::tr("ΔH %1  ΔS %2  ΔV %3  ΔR %4  ΔG %5  ΔB %6  ΔR/G %7  ΔB/G %8")
+        .arg(signedHueDelta(other.hMean, base.hMean),
+             QString::number(other.sMean - base.sMean, 'f', 2),
+             QString::number(other.vMean - base.vMean, 'f', 2),
+             QString::number(other.rMean - base.rMean, 'f', 2),
+             QString::number(other.gMean - base.gMean, 'f', 2),
+             QString::number(other.bMean - base.bMean, 'f', 2), redGreen, blueGreen);
+}
+
 QString measurementStateText(mviewer::ui::ROIMeasurementState state)
 {
     using State = mviewer::ui::ROIMeasurementState;
@@ -75,7 +104,7 @@ QString paneName(const mviewer::domain::ImageMetadata &metadata, int index)
 void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
 {
     auto *roiHeader = new QHBoxLayout();
-    auto *roiTitle = new QLabel(tr("ROI Measurement — Source RGB"), this);
+    auto *roiTitle = new QLabel(tr("ROI Measurement — Source RGB / HSV"), this);
     roiTitle->setObjectName("roiMeasurementTitle");
     roiHeader->addWidget(roiTitle);
     roiHeader->addStretch(1);
@@ -103,19 +132,19 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
 
     m_roiTable = new QTableWidget(this);
     m_roiTable->setObjectName("roiMeasurementTable");
-    m_roiTable->setColumnCount(9);
-    m_roiTable->setHorizontalHeaderLabels({tr("Image"), QStringLiteral("V Mean"),
-                                           QStringLiteral("R Mean"), QStringLiteral("G Mean"),
-                                           QStringLiteral("B Mean"), QStringLiteral("R/G"),
-                                           QStringLiteral("B/G"), tr("Pixels"), tr("Status")});
+    m_roiTable->setColumnCount(11);
+    m_roiTable->setHorizontalHeaderLabels(
+        {tr("Image"), QStringLiteral("H Mean"), QStringLiteral("S Mean"), QStringLiteral("V Mean"),
+         QStringLiteral("R Mean"), QStringLiteral("G Mean"), QStringLiteral("B Mean"),
+         QStringLiteral("R/G"), QStringLiteral("B/G"), tr("Pixels"), tr("Status")});
     m_roiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_roiTable->setSelectionMode(QAbstractItemView::NoSelection);
     m_roiTable->setTextElideMode(Qt::ElideMiddle);
     m_roiTable->verticalHeader()->setVisible(false);
     m_roiTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int column = 1; column < 8; ++column)
+    for (int column = 1; column < 10; ++column)
         m_roiTable->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
-    m_roiTable->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Stretch);
+    m_roiTable->horizontalHeader()->setSectionResizeMode(10, QHeaderView::Stretch);
     m_roiTable->setMinimumHeight(90);
     m_roiTable->setMaximumHeight(200);
     sideLay->addWidget(m_roiTable);
@@ -366,6 +395,8 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
             frame ? frame->metadata() : mviewer::domain::ImageMetadata{};
         const QStringList cells = {
             paneName(metadata, row),
+            pane.stats.valid ? meanText(pane.stats.hMean) : QStringLiteral("—"),
+            pane.stats.valid ? meanText(pane.stats.sMean) : QStringLiteral("—"),
             pane.stats.valid ? meanText(pane.stats.vMean) : QStringLiteral("—"),
             pane.stats.valid ? meanText(pane.stats.rMean) : QStringLiteral("—"),
             pane.stats.valid ? meanText(pane.stats.gMean) : QStringLiteral("—"),
@@ -377,11 +408,11 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         for (int column = 0; column < cells.size(); ++column)
         {
             auto *item = new QTableWidgetItem(cells[column]);
-            if (column > 0 && column < 8)
+            if (column > 0 && column < 10)
                 item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             if (column == 0)
                 item->setToolTip(QString::fromStdString(metadata.filePath));
-            if (column == 8)
+            if (column == 10)
                 item->setToolTip(cells[column]);
             m_roiTable->setItem(row, column, item);
         }
@@ -395,25 +426,8 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         if (result.panes.size() == 2)
         {
             const auto &b = result.panes[1].stats;
-            if (b.valid)
-            {
-                const QString redGreen = (a.ratiosValid && b.ratiosValid)
-                                             ? QString::number(b.rOverG - a.rOverG, 'f', 4)
-                                             : QStringLiteral("—");
-                const QString blueGreen = (a.ratiosValid && b.ratiosValid)
-                                              ? QString::number(b.bOverG - a.bOverG, 'f', 4)
-                                              : QStringLiteral("—");
-                m_roiDeltaLabel->setText(
-                    tr("Delta (B − A): ΔV %1  ΔR %2  ΔG %3  ΔB %4  ΔR/G %5  ΔB/G %6")
-                        .arg(QString::number(b.vMean - a.vMean, 'f', 2),
-                             QString::number(b.rMean - a.rMean, 'f', 2),
-                             QString::number(b.gMean - a.gMean, 'f', 2),
-                             QString::number(b.bMean - a.bMean, 'f', 2), redGreen, blueGreen));
-            }
-            else
-            {
-                m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
-            }
+            m_roiDeltaLabel->setText(b.valid ? tr("Delta (B − A): %1").arg(roiDeltaMetrics(a, b))
+                                             : tr("Delta (B − A): —"));
         }
         else
         {
@@ -423,26 +437,10 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
             {
                 const auto &p = result.panes[static_cast<size_t>(i)];
                 const QChar paneChar('A' + i);
-                if (p.stats.valid)
-                {
-                    const QString rg = (a.ratiosValid && p.stats.ratiosValid)
-                                           ? QString::number(p.stats.rOverG - a.rOverG, 'f', 4)
-                                           : QStringLiteral("—");
-                    const QString bg = (a.ratiosValid && p.stats.ratiosValid)
-                                           ? QString::number(p.stats.bOverG - a.bOverG, 'f', 4)
-                                           : QStringLiteral("—");
-                    deltaLines << tr("Δ(%1−A): ΔV %2  ΔR %3  ΔG %4  ΔB %5  ΔR/G %6  ΔB/G %7")
-                                      .arg(paneChar)
-                                      .arg(QString::number(p.stats.vMean - a.vMean, 'f', 2),
-                                           QString::number(p.stats.rMean - a.rMean, 'f', 2),
-                                           QString::number(p.stats.gMean - a.gMean, 'f', 2),
-                                           QString::number(p.stats.bMean - a.bMean, 'f', 2), rg,
-                                           bg);
-                }
-                else
-                {
-                    deltaLines << tr("Δ(%1−A): —").arg(paneChar);
-                }
+                deltaLines
+                    << (p.stats.valid
+                            ? tr("Δ(%1−A): %2").arg(QString(paneChar), roiDeltaMetrics(a, p.stats))
+                            : tr("Δ(%1−A): —").arg(paneChar));
             }
             m_roiDeltaLabel->setText(deltaLines.join('\n'));
         }
