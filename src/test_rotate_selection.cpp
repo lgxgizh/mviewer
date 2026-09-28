@@ -16,11 +16,13 @@
 #include <QColor>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEvent>
 #include <QEventLoop>
 #include <QFile>
 #include <QImage>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QProgressDialog>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -130,6 +132,60 @@ void dismissMessageBoxes()
     }
 }
 
+// Observe the batch dialog through show/layout events. Do not click its Cancel
+// button: offscreen Qt re-enters QProgressDialog's private button connection.
+struct ProgressDialogSpy : QObject
+{
+    bool seen = false;
+    bool sawCount = false;
+    QString lastLabel;
+
+    void reset()
+    {
+        seen = false;
+        sawCount = false;
+        lastLabel.clear();
+    }
+
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        auto *widget = qobject_cast<QWidget *>(watched);
+        if (!widget || !event)
+            return false;
+        auto *dialog = qobject_cast<QProgressDialog *>(widget);
+        if (!dialog)
+            dialog = qobject_cast<QProgressDialog *>(widget->window());
+        if (!dialog || dialog->objectName() != QLatin1String("batchRotateFlipProgress"))
+            return false;
+        switch (event->type())
+        {
+        case QEvent::Show:
+        case QEvent::LayoutRequest:
+        case QEvent::Resize:
+        case QEvent::Paint:
+        case QEvent::UpdateRequest:
+            break;
+        default:
+            return false;
+        }
+        seen = true;
+        lastLabel = dialog->labelText();
+        if (lastLabel.contains(QLatin1Char('/')))
+            sawCount = true;
+        return false;
+    }
+};
+
+bool batchProgressLeft(QWidget *root)
+{
+    for (QProgressDialog *dlg : root->findChildren<QProgressDialog *>())
+    {
+        if (dlg && dlg->objectName() == QLatin1String("batchRotateFlipProgress"))
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -215,11 +271,14 @@ int main(int argc, char **argv)
     QTimer dismiss;
     dismiss.setInterval(20);
     QObject::connect(&dismiss, &QTimer::timeout, &app, [] { dismissMessageBoxes(); });
+    ProgressDialogSpy progressSpy;
+    app.installEventFilter(&progressSpy);
     dismiss.start();
     rotateCw->trigger();
     pump(50);
     dismiss.stop();
     dismissMessageBoxes();
+    CHECK(!progressSpy.seen, "single-image rotate does not show a progress dialog");
 
     QImage afterA(pathA);
     QImage afterB(pathB);
@@ -248,11 +307,13 @@ int main(int argc, char **argv)
     CHECK(flipH && flipH->isEnabled(), "flip action enabled for gallery current");
     if (flipH)
     {
+        progressSpy.reset();
         dismiss.start();
         flipH->trigger();
         pump(50);
         dismiss.stop();
         dismissMessageBoxes();
+        CHECK(!progressSpy.seen, "single-image flip does not show a progress dialog");
     }
 
     QImage afterC(pathC);
@@ -273,11 +334,17 @@ int main(int argc, char **argv)
     panel->selectPaths({pathD1, pathD2});
     CHECK(waitFor([&] { return selection->selection().size() == 2 && rotateCw->isEnabled(); }),
           "SelectionModel has 2 paths and rotate is enabled");
+    progressSpy.reset();
     dismiss.start();
     rotateCw->trigger();
     pump(50);
     dismiss.stop();
     dismissMessageBoxes();
+    CHECK(progressSpy.seen, "multi-select rotate shows a progress dialog");
+    CHECK(progressSpy.lastLabel.contains(QStringLiteral("旋转")),
+          "rotate progress label describes rotate");
+    CHECK(progressSpy.sawCount, "rotate progress label reports finished/total");
+    CHECK(!batchProgressLeft(&window), "rotate progress dialog is closed after the batch");
 
     QImage afterD1(pathD1);
     QImage afterD2(pathD2);
@@ -299,6 +366,51 @@ int main(int argc, char **argv)
                          gallery.contains(pathD2);
               }),
           "multi-select persists in SelectionModel and gallery after batch rotate");
+
+    const QString pathE1 = writeSplitPng(directory, "e1_flip.png", 8, 4);
+    const QString pathE2 = writeSplitPng(directory, "e2_flip.png", 10, 4);
+    panel->setDirectory(directory.absolutePath());
+    CHECK(waitFor(
+              [&]
+              { return panel->pathList().contains(pathE1) && panel->pathList().contains(pathE2); }),
+          "gallery published multi-select flip fixtures");
+    panel->selectPaths({pathE1, pathE2});
+    CHECK(
+        waitFor([&] { return selection->selection().size() == 2 && flipH && flipH->isEnabled(); }),
+        "SelectionModel has 2 paths and flip is enabled");
+    progressSpy.reset();
+    dismiss.start();
+    if (flipH)
+        flipH->trigger();
+    pump(50);
+    dismiss.stop();
+    dismissMessageBoxes();
+    CHECK(progressSpy.seen, "multi-select flip shows a progress dialog");
+    CHECK(progressSpy.lastLabel.contains(QStringLiteral("翻转")),
+          "flip progress label describes flip");
+    CHECK(progressSpy.sawCount, "flip progress label reports finished/total");
+    CHECK(!batchProgressLeft(&window), "flip progress dialog is closed after the batch");
+
+    QImage afterE1(pathE1);
+    QImage afterE2(pathE2);
+    CHECK(!afterE1.isNull() && afterE1.pixelColor(0, 0) == QColor(0, 0, 200) &&
+              afterE1.pixelColor(7, 0) == QColor(200, 0, 0),
+          "batch flip mirrored E1");
+    CHECK(!afterE2.isNull() && afterE2.pixelColor(0, 0) == QColor(0, 0, 200) &&
+              afterE2.pixelColor(9, 0) == QColor(200, 0, 0),
+          "batch flip mirrored E2");
+    pump(200);
+    CHECK(waitFor(
+              [&]
+              {
+                  const QStringList ssot = selection->selection();
+                  const QStringList gallery = panel->selectedPaths();
+                  return ssot.size() == 2 && gallery.size() == 2 && ssot.contains(pathE1) &&
+                         ssot.contains(pathE2) && gallery.contains(pathE1) &&
+                         gallery.contains(pathE2);
+              }),
+          "multi-select persists in SelectionModel and gallery after batch flip");
+    app.removeEventFilter(&progressSpy);
 
     // Compare hover and explicit targeting
     {
