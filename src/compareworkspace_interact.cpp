@@ -9,7 +9,7 @@ void CompareWorkspace::showShortcutHelp()
     // Lightweight status-bar style tip via window title flash — no modal dialog
     // so day-long keyboard work is not interrupted.
     const QString tip =
-        tr("比较窗口快捷键: B 闪烁 · Space 两图按住临时切换（鼠标一侧不动） · "
+        tr("比较窗口快捷键: B 闪烁 · Space 两图按住临时切换（鼠标所在一侧显示另一侧） · "
            "超过 2 张时按住 1–N 在鼠标窗格临时换图 · Ctrl+2/4/8 布局 · S 分割 · W 滑动 · "
            "O 叠加 · K 棋盘 · H Diff高亮 · Shift+1…5 通道 · Z/D 同步缩放/拖动 · R 准星 · "
            "L 像素连线 · P 上一对 · N 下一对 · PgUp 上一对 · ← 上一对 · "

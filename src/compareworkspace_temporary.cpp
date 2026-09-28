@@ -182,8 +182,7 @@ void CompareWorkspace::updateTemporaryCompareAvailability()
         else
         {
             m_temporaryCompareButton->setToolTip(
-                tr("按住：鼠标所在一侧保持不动，另一侧临时显示这一侧的图像；松开恢复。"
-                   "快捷键 Space。鼠标不在窗格上时不会切换。"));
+                tr("按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。"));
         }
     }
     updatePaneIndexBadges();

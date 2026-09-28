@@ -20,7 +20,8 @@ struct TemporaryKeyDecision
     int sourcePane = -1;
 };
 
-// Two panes: the hovered side stays put; the other pane shows that image.
+// Two panes: the pane under the mouse temporarily shows the other pane.
+// Off the panes, classic A<-B still puts B onto pane 0.
 inline TemporaryKeyDecision decidePairHold(int imageCount, int hoveredPane)
 {
     TemporaryKeyDecision decision;
@@ -31,13 +32,13 @@ inline TemporaryKeyDecision decidePairHold(int imageCount, int hoveredPane)
     }
     if (imageCount != 2)
         return decision;
-    // Hovered side stays; the other side shows that image.
-    // No hover: classic A<-B (put B onto pane 0) so toolbar/Space still work.
+    // Hovered pane is the target; the other pane is the source.
+    // No hover: classic A<-B (put B onto pane 0) so toolbar/Space off-pane still work.
     decision.action = TemporaryAction::ShowPair;
     if (hoveredPane == 0 || hoveredPane == 1)
     {
-        decision.sourcePane = hoveredPane;
-        decision.targetPane = 1 - hoveredPane;
+        decision.targetPane = hoveredPane;
+        decision.sourcePane = 1 - hoveredPane;
     }
     else
     {
