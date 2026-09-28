@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.78] - 2026-09-28
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.78**.
+- **Stability / memory / feel (#60)**: early session frame-pool release, targeted Preview mip drop, visible-tile-first scheduling, Browse cancel on directory change, Viewer tile/GPU generation harden; Analysis priority kept for load/threshold diff batches.
+
 ### 稳定性 / 内存 / 体感
 
 - 比较窗口析构时，在取消等待之前清空会话 frame pool 与窗格金字塔，关闭后不再留着约 384 MiB 的会话图。
