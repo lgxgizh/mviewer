@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.79] - 2026-09-28
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.79**.
+- **Compare Space target pane (#62)**: with exactly two images, Space hold temporarily shows the other pane's image on the mouse-hovered pane (was inverted).
+
 ### 比较
 
 - 恰好两张图时，按住 Space：鼠标所在一侧临时显示另一侧的图，松开恢复。此前方向反了，会把鼠标所在的图换到另一侧。鼠标不在窗格上，以及工具栏「临时切换」，仍把右侧图临时显示到左侧。
