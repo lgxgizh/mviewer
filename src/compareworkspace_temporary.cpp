@@ -43,6 +43,16 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
         m_cellViews[m_temporaryTargetPane])
         m_cellViews[m_temporaryTargetPane]->clearTransientDisplay();
     target->setTransientDisplay(source->displayImage(), source->sourceSize(), source->sourceRect());
+    // The target pane's scale matches its own source. A different-resolution
+    // stand-in must use the scale that keeps the same on-screen footprint.
+    // Uniform pixel scale keeps the target's absolute scale (render scale 0).
+    if (!m_uniformScale && m_syncZoom)
+    {
+        const QSize src = source->sourceSize();
+        const double render = scaleForPaneSource(targetPane, src.width(), src.height());
+        if (render > 0.0)
+            target->setTransientRenderScale(render);
+    }
     m_temporaryCompareActive = true;
     m_temporaryTargetPane = targetPane;
     if (m_temporaryCompareButton && m_temporaryDigit == 0)

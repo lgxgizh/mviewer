@@ -104,7 +104,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     bestFitBtn->setObjectName("bestFitButton");
     bestFitBtn->setToolTip(
         tr("最适合：各窗格按自身分辨率适配窗口，相同视野/宽高比的图显示为相近大小"
-           "（关闭统一像素倍率）"));
+           "（关闭统一像素倍率）。临时切换、闪烁或换图后仍保持该屏幕大小"));
     connect(bestFitBtn, &QPushButton::clicked, this, &CompareWorkspace::bestFitAll);
     viewLayout->addWidget(bestFitBtn);
 

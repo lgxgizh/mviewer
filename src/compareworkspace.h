@@ -213,6 +213,14 @@ class CompareWorkspace : public QWidget
     void buildCompareCells(int count, int columns);
     void fitAll();
     void bestFitAll();
+    // Fit of `sourceW×sourceH` in this pane, times the shared zoom ratio.
+    // Uniform pixel scale returns that pane's current absolute scale instead.
+    double scaleForPaneSource(int pane, int sourceW, int sourceH) const;
+    // When the pane's source or geometry no longer matches m_fitScales, adopt
+    // fit × sharedZoomRatio. Uniform / unsynced zoom keep the engine scale.
+    double scaleKeepingFit(int pane, double engineScale);
+    void reapplyFitPreservingRatio();
+    void schedulePreserveFit();
     void applySelectionToAll(const mviewer::domain::Selection &sel);
     void applySelectionFromView(RawImageView *view, const mviewer::domain::Selection &sel);
     void applySelectionPreviewFromView(RawImageView *view, const mviewer::domain::Selection &sel);
@@ -279,6 +287,7 @@ class CompareWorkspace : public QWidget
     QVector<double> m_fitScales;
     double m_sharedZoomRatio = 1.0;
     bool m_postLayoutFitPending = false;
+    bool m_preserveFitPending = false;
     void schedulePostLayoutFit();
     QWidget *m_grid = nullptr;
     QGridLayout *m_layout = nullptr;

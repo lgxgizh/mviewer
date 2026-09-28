@@ -99,7 +99,13 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
     const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
     const bool normalGrid =
         m_pageStack && m_compareGridPage && m_pageStack->currentWidget() == m_compareGridPage;
-    if (!blinkActive && normalGrid)
+    if (blinkActive)
+    {
+        // The active cell stretches across the grid. Refit that geometry but
+        // keep the shared zoom ratio — fitAll() would snap it back to 1.
+        reapplyFitPreservingRatio();
+    }
+    else if (normalGrid)
     {
         // Coalesce ordinary-grid resize bursts through the same post-layout
         // path used by mode transitions. It refits Fit-state panes to the new
@@ -108,9 +114,8 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
     }
     else
     {
-        // Canvas, Blink, and loading-page resize behavior remains the legacy
-        // immediate fit path; the scheduled grid callback intentionally skips
-        // those hidden or detached panes.
+        // Canvas and loading-page resize behavior remains the legacy immediate
+        // fit path; the scheduled grid callback skips those hidden panes.
         fitAll();
     }
     positionCellHists();

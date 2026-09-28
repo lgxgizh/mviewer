@@ -11,6 +11,7 @@
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QTemporaryDir>
 #include <QVBoxLayout>
@@ -87,6 +88,39 @@ bool waitForPaneSize(CompareWorkspace *ws, int timeoutMs)
         pump(25);
     }
     return false;
+}
+
+bool waitForDisplayed(CompareWorkspace *ws, int timeoutMs)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs)
+    {
+        const RawImageView *low = paneView(ws, "comparePane0");
+        const RawImageView *high = paneView(ws, "comparePane1");
+        if (low && high && !low->displayImage().isNull() && !high->displayImage().isNull() &&
+            low->sourceSize().width() > 0 && high->sourceSize().width() > 0 &&
+            low->sourceSize().height() > 0 && high->sourceSize().height() > 0)
+            return true;
+        pump(25);
+    }
+    return false;
+}
+
+void holdPress(QWidget *widget)
+{
+    const QPointF local(10, 10);
+    QMouseEvent press(QEvent::MouseButtonPress, local, widget->mapToGlobal(local), Qt::LeftButton,
+                      Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(widget, &press);
+}
+
+void holdRelease(QWidget *widget)
+{
+    const QPointF local(10, 10);
+    QMouseEvent release(QEvent::MouseButtonRelease, local, widget->mapToGlobal(local),
+                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(widget, &release);
 }
 } // namespace
 
@@ -182,6 +216,178 @@ int main(int argc, char **argv)
     auto *status = ws->findChild<QLabel *>(QStringLiteral("compareStatusLabel"));
     check(status && status->text() == QStringLiteral("最适合：已按视野对齐并适配窗口"),
           "status toast reports FOV-matched fit");
+
+    check(waitForDisplayed(ws, 20000), "both panes have a display raster");
+    button->click();
+    pump(40);
+    lowView = paneView(ws, "comparePane0");
+    highView = paneView(ws, "comparePane1");
+    if (!lowView || !highView)
+        return 1;
+
+    auto *hold = ws->findChild<QPushButton *>(QStringLiteral("temporaryCompareButton"));
+    check(hold && hold->isEnabled(), "temporary switch is available after best fit");
+    if (hold && hold->isEnabled())
+    {
+        const double ownedScale = lowView->scale();
+        const double otherScale = highView->scale();
+        const double ownedW = ownedScale * lowView->sourceSize().width();
+        const double ownedH = ownedScale * lowView->sourceSize().height();
+        holdPress(hold);
+        pump(30);
+        const double presented = lowView->presentedScale();
+        const double shownW = presented * highView->sourceSize().width();
+        const double shownH = presented * highView->sourceSize().height();
+        std::printf(
+            "temporary footprint owned %.1fx%.1f shown %.1fx%.1f presented %.4f ownedScale %.4f\n",
+            ownedW, ownedH, shownW, shownH, presented, ownedScale);
+        check(lowView->hasTransientDisplay(), "hold shows the other image on pane 0");
+        check(ownedW > 1.0 && std::abs(shownW - ownedW) / ownedW < 0.08,
+              "temporary image keeps the fitted on-screen width");
+        check(ownedH > 1.0 && std::abs(shownH - ownedH) / ownedH < 0.08,
+              "temporary image keeps the fitted on-screen height");
+        check(std::abs(presented - ownedScale) / ownedScale > 0.25,
+              "temporary render scale is not the target pane raw scale");
+        check(std::abs(presented - 1.0) > 0.05, "temporary scale is not raw 100%");
+        check(std::abs(lowView->scale() - ownedScale) < 1e-6, "owned scale stays during the hold");
+        check(std::abs(highView->scale() - otherScale) < 1e-6,
+              "source pane scale stays during the hold");
+        holdRelease(hold);
+        pump(30);
+        check(!lowView->hasTransientDisplay(), "release restores the pane image");
+        check(std::abs(lowView->scale() - ownedScale) < 1e-4, "low pane scale restored after hold");
+        check(std::abs(highView->scale() - otherScale) < 1e-4,
+              "high pane scale restored after hold");
+        check(std::abs(lowView->presentedScale() - lowView->scale()) < 1e-9,
+              "presented scale matches the owned scale after the hold");
+    }
+
+    // 统一像素倍率 stays pixel-aligned across the same hold.
+    uniform->setChecked(true);
+    pump(40);
+    const double uniformHeld = lowView->scale();
+    if (hold && hold->isEnabled())
+    {
+        holdPress(hold);
+        pump(20);
+        check(lowView->hasTransientDisplay(), "uniform mode can still hold");
+        check(std::abs(lowView->presentedScale() - uniformHeld) < 1e-6,
+              "uniform pixel scale is unchanged during temporary switch");
+        holdRelease(hold);
+        pump(20);
+    }
+    button->click();
+    pump(30);
+    check(!uniform->isChecked(), "最适合 again turns 统一像素倍率 off");
+
+    // Tall window: each half pane is width-limited, blink's full-width cell is not.
+    host.setMinimumSize(400, 400);
+    host.resize(980, 1500);
+    pump(120);
+    button->click();
+    pump(40);
+    lowView = paneView(ws, "comparePane0");
+    highView = paneView(ws, "comparePane1");
+    check(lowView && highView && waitForPaneSize(ws, 3000), "narrow panes have a size");
+    if (lowView && highView)
+    {
+        const double halfLow = ws->engine().cellScale(0);
+        const double halfHigh = ws->engine().cellScale(1);
+        std::printf("narrow scales %.4f %.4f panes %dx%d %dx%d\n", halfLow, halfHigh,
+                    lowView->width(), lowView->height(), highView->width(), highView->height());
+        check(halfHigh > 0.0 && std::abs(halfLow / halfHigh - 2.0) < 0.2,
+              "narrow layout still FOV-matches");
+        auto *blink = ws->findChild<QCheckBox *>(QStringLiteral("blinkCompareToggle"));
+        check(blink && blink->isEnabled(), "blink toggle is available");
+        if (blink && blink->isEnabled())
+        {
+            blink->setChecked(true);
+            pump(60);
+            lowView = paneView(ws, "comparePane0");
+            highView = paneView(ws, "comparePane1");
+            RawImageView *visible = nullptr;
+            int shown = -1;
+            if (lowView && lowView->isVisible())
+            {
+                visible = lowView;
+                shown = 0;
+            }
+            else if (highView && highView->isVisible())
+            {
+                visible = highView;
+                shown = 1;
+            }
+            check(visible != nullptr, "blink shows one pane");
+            if (visible && visible->sourceSize().width() > 0)
+            {
+                const double expect =
+                    fitScale(visible->width(), visible->height(), visible->sourceSize().width(),
+                             visible->sourceSize().height());
+                const double actual = ws->engine().cellScale(shown);
+                const double halfScale = shown == 0 ? halfLow : halfHigh;
+                std::printf("blink pane %d %dx%d src %dx%d scale %.4f fit %.4f half %.4f\n", shown,
+                            visible->width(), visible->height(), visible->sourceSize().width(),
+                            visible->sourceSize().height(), actual, expect, halfScale);
+                check(expect > 0.0 && std::abs(actual - expect) / expect < 0.08,
+                      "blink keeps the visible pane at its FOV fit");
+                check(std::abs(actual - 1.0) > 0.05 || std::abs(expect - 1.0) < 0.05,
+                      "blink did not snap the visible pane to 100%");
+                check(halfScale > 0.0 && std::abs(expect - halfScale) / halfScale > 0.12,
+                      "blink cell is large enough that the fit must change");
+                check(std::abs(actual - halfScale) / halfScale > 0.1,
+                      "blink refits when the stretched cell changes the fit");
+                const int hidden = shown == 0 ? 1 : 0;
+                const double hiddenBefore = hidden == 0 ? halfLow : halfHigh;
+                const double hiddenNow = ws->engine().cellScale(hidden);
+                if (hiddenBefore > 0.0 && std::abs(hiddenBefore - 1.0) > 0.08)
+                {
+                    check(std::abs(hiddenNow - 1.0) > 0.05,
+                          "hidden pane scale did not collapse to 100%");
+                }
+            }
+            blink->setChecked(false);
+            pump(150);
+            check(waitForPaneSize(ws, 3000), "grid restored after blink");
+            const double backLow = ws->engine().cellScale(0);
+            const double backHigh = ws->engine().cellScale(1);
+            std::printf("after blink scales %.4f %.4f\n", backLow, backHigh);
+            check(backHigh > 0.0 && std::abs(backLow / backHigh - 2.0) < 0.2,
+                  "leaving blink restores the FOV scale ratio");
+            check(std::abs(backLow - 1.0) > 0.05,
+                  "leaving blink did not leave the low pane at 100%");
+        }
+    }
+
+    lowView = paneView(ws, "comparePane0");
+    highView = paneView(ws, "comparePane1");
+    check(waitForDisplayed(ws, 10000), "rasters back after blink");
+    button->click();
+    pump(40);
+    if (lowView && highView && lowView->sourceSize().width() > 1 && lowView->width() > 32)
+    {
+        const double before = ws->engine().cellScale(0);
+        const double highBefore = ws->engine().cellScale(1);
+        const int viewW = lowView->width();
+        const int viewH = lowView->height();
+        const QSize half(std::max(1, lowView->sourceSize().width() / 2),
+                         std::max(1, lowView->sourceSize().height() / 2));
+        QImage quarter(half, QImage::Format_RGB32);
+        quarter.fill(QColor(20, 200, 40));
+        lowView->setImage(quarter, half);
+        ws->repaint();
+        const double after = ws->engine().cellScale(0);
+        const double expect = fitScale(viewW, viewH, half.width(), half.height());
+        std::printf("replace before %.4f after %.4f expect %.4f high %.4f\n", before, after, expect,
+                    ws->engine().cellScale(1));
+        check(expect > 0.0 && std::abs(after - expect) / expect < 0.08,
+              "same-aspect replace keeps the FOV fit");
+        check(before > 0.0 && std::abs(after / before - 2.0) < 0.15,
+              "half linear size about doubles the fit scale");
+        check(std::abs(after - 1.0) > 0.05, "replace did not snap to 100%");
+        check(std::abs(ws->engine().cellScale(1) - highBefore) < 1e-4,
+              "the other pane keeps its fit scale");
+        check(std::abs(lowView->scale() - after) < 1e-4, "view scale follows the refit");
+    }
 
     if (g_failures > 0)
     {
