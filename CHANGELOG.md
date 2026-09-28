@@ -8,6 +8,7 @@
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.80**.
 - **Batch rotate/flip progress (#65)**: multi-select rotate/flip shows progress (and cancel) instead of freezing the UI; single-select stays silent.
+- **Compare best-fit + persist FOV scale (#66)**: toolbar「最适合」FOV-matches pane scales to the window; Space/blink/same-FOV image switch keep that matched size (not raw ~100%).
 
 ### 浏览
 
