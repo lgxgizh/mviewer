@@ -165,9 +165,10 @@ int main(int argc, char **argv)
             uniform = box;
     }
     auto *button = ws->findChild<QPushButton *>(QStringLiteral("bestFitButton"));
-    auto *viewBar = ws->findChild<QWidget *>(QStringLiteral("compareViewToolbar"));
+    auto *toolBar = ws->findChild<QWidget *>(QStringLiteral("compareToolToolbar"));
     check(button && button->text() == QStringLiteral("最适合"), "toolbar button「最适合」");
-    check(button && viewBar && viewBar->isAncestorOf(button), "button sits on the view toolbar");
+    check(button && button->isVisible() && toolBar && toolBar->isAncestorOf(button),
+          "button sits on the tool actions toolbar");
     check(button && button->toolTip().contains(QStringLiteral("统一像素倍率")),
           "tooltip contrasts FOV fit with uniform pixel scale");
     check(uniform && !uniform->isChecked(), "uniform pixel scale starts off");

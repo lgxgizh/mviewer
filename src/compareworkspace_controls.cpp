@@ -98,16 +98,6 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             });
     viewLayout->addWidget(m_uniformScaleChk);
 
-    // FOV-matched screen fit: opposite of 「统一像素倍率」. Same field of view
-    // (same aspect, different resolution) lands at a similar on-screen size.
-    auto *bestFitBtn = new QPushButton(tr("最适合"), this);
-    bestFitBtn->setObjectName("bestFitButton");
-    bestFitBtn->setToolTip(
-        tr("最适合：各窗格按自身分辨率适配窗口，相同视野/宽高比的图显示为相近大小"
-           "（关闭统一像素倍率）。临时切换、闪烁或换图后仍保持该屏幕大小"));
-    connect(bestFitBtn, &QPushButton::clicked, this, &CompareWorkspace::bestFitAll);
-    viewLayout->addWidget(bestFitBtn);
-
     // M14-3: blink (flicker) compare — rapid toggle between base and target.
     // Click the button (or press B) to start/stop rapid blinking.
     m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
@@ -505,6 +495,16 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     if (auto *w = window())
         w->installEventFilter(this);
     toolLayout->addWidget(m_temporaryCompareButton);
+
+    // FOV-matched screen fit. The view row is already at the 1100px sizeHint
+    // budget, so this stays on the actions row beside 分析 / 导出报告.
+    auto *bestFitBtn = new QPushButton(tr("最适合"), this);
+    bestFitBtn->setObjectName("bestFitButton");
+    bestFitBtn->setToolTip(
+        tr("最适合：各窗格按自身分辨率适配窗口，相同视野/宽高比的图显示为相近大小"
+           "（关闭统一像素倍率）。临时切换、闪烁或换图后仍保持该屏幕大小"));
+    connect(bestFitBtn, &QPushButton::clicked, this, &CompareWorkspace::bestFitAll);
+    toolLayout->addWidget(bestFitBtn);
 
     // P1 #④: Analyze & export buttons in the compare toolbar.
     m_analyzeBtn = new QPushButton(tr("分析"), this);
