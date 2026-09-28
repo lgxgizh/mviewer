@@ -2,20 +2,18 @@
 
 ## [Unreleased]
 
-### 比较
-
-- 框选后，各窗格旁的 ROI chip 直接显示 **R/G**、**B/G** 以及 **H / S / V** 均值（两行）。绿通道接近 0 时比值显示为 —。侧栏测量表和 Δ 增加 H Mean、S Mean，原有 V / R / G / B / R/G / B/G 保留。H 为色相的圆周均值（度），S 为饱和度均值（0–100），V 仍是 max(R,G,B) 均值。
-
 ## [1.0.79] - 2026-09-28
 
 ### Release
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.79**.
 - **Compare Space target pane (#62)**: with exactly two images, Space hold temporarily shows the other pane's image on the mouse-hovered pane (was inverted).
+- **Compare ROI chip stats (#64)**: linked ROI chips/table show R/G, B/G, and H/S/V means (not RGB means alone).
 
 ### 比较
 
 - 恰好两张图时，按住 Space：鼠标所在一侧临时显示另一侧的图，松开恢复。此前方向反了，会把鼠标所在的图换到另一侧。鼠标不在窗格上，以及工具栏「临时切换」，仍把右侧图临时显示到左侧。
+- 框选后，各窗格旁的 ROI chip 直接显示 **R/G**、**B/G** 以及 **H / S / V** 均值（两行）。绿通道接近 0 时比值显示为 —。侧栏测量表和 Δ 增加 H Mean、S Mean，原有 V / R / G / B / R/G / B/G 保留。H 为色相的圆周均值（度），S 为饱和度均值（0–100），V 仍是 max(R,G,B) 均值。
 
 ## [1.0.78] - 2026-09-28
 
