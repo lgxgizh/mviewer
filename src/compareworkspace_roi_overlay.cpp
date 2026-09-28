@@ -6,16 +6,24 @@
 
 namespace
 {
+QString ratioChip(double value, bool valid)
+{
+    return valid ? QString::number(value, 'f', 4) : QStringLiteral("—");
+}
+
 QString roiChipText(const std::optional<mviewer::ui::ROIStatsBatchResult> &result, int index)
 {
     if (!result || index < 0 || index >= static_cast<int>(result->panes.size()))
-        return QStringLiteral("V …");
+        return QStringLiteral("R/G …\nH …  S …  V …");
     const auto &pane = result->panes[static_cast<size_t>(index)];
     if (!pane.stats.valid)
-        return QStringLiteral("V —");
-    return QStringLiteral("V %1  R %2  G %3  B %4")
-        .arg(QString::number(pane.stats.vMean, 'f', 1), QString::number(pane.stats.rMean, 'f', 1),
-             QString::number(pane.stats.gMean, 'f', 1), QString::number(pane.stats.bMean, 'f', 1));
+        return QStringLiteral("R/G —\nH —  S —  V —");
+    const auto &stats = pane.stats;
+    return QStringLiteral("R/G %1  B/G %2\nH %3  S %4  V %5  R %6  G %7  B %8")
+        .arg(ratioChip(stats.rOverG, stats.ratiosValid), ratioChip(stats.bOverG, stats.ratiosValid),
+             QString::number(stats.hMean, 'f', 1), QString::number(stats.sMean, 'f', 1),
+             QString::number(stats.vMean, 'f', 1), QString::number(stats.rMean, 'f', 1),
+             QString::number(stats.gMean, 'f', 1), QString::number(stats.bMean, 'f', 1));
 }
 
 QLabel *roiChip(QWidget *owner, int index)
@@ -45,7 +53,7 @@ void CompareWorkspace::updateROISurfaces()
     if (m_roiHud)
     {
         m_roiHud->setVisible(false);
-        m_roiHud->setToolTip(tr("完整统计在检视面板；各窗格选区旁显示 V 与 RGB 均值"));
+        m_roiHud->setToolTip(tr("完整统计在检视面板；各窗格选区旁显示 R/G、B/G 与 H/S/V"));
     }
     positionROIHud();
 }

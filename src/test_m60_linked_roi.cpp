@@ -4,6 +4,7 @@
 // canonical half-open rectangle contract and the format-aware statistics used
 // by CompareWorkspace's asynchronous measurement path.
 
+#include "core/analysis/PixelInspector.h"
 #include "core/analyzer/RGBMeanAnalyzer.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageStats.h"
@@ -11,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>
 #include <memory>
 
 namespace
@@ -27,14 +29,22 @@ int g_failures = 0;
         }                                                                                          \
     } while (false)
 
-void checkNear(double actual, double expected, const char *message)
+void checkNearTol(double actual, double expected, double tolerance, const char *message)
 {
-    if (std::abs(actual - expected) > 1e-9)
+    if (std::abs(actual - expected) > tolerance)
     {
         std::printf("FAIL: %s (actual %.12f expected %.12f)\n", message, actual, expected);
         ++g_failures;
     }
 }
+
+void checkNear(double actual, double expected, const char *message)
+{
+    checkNearTol(actual, expected, 1e-9, message);
+}
+
+constexpr double kDegToRad = 0.017453292519943295;
+constexpr double kRadToDeg = 57.29577951308232;
 
 struct RGB
 {
@@ -42,6 +52,40 @@ struct RGB
     uint8_t g;
     uint8_t b;
 };
+
+void checkInspectorHsv(const mviewer::core::ROIChannelStats &stats,
+                       std::initializer_list<RGB> pixels, const char *label)
+{
+    double sumSin = 0.0;
+    double sumCos = 0.0;
+    double sumS = 0.0;
+    int hueCount = 0;
+    for (const RGB &pixel : pixels)
+    {
+        const auto hsv =
+            mviewer::core::toColorSpace(pixel.r, pixel.g, pixel.b, mviewer::core::ColorSpace::HSV);
+        sumS += hsv.c2;
+        if (hsv.c2 > 0.0)
+        {
+            const double rad = hsv.c1 * kDegToRad;
+            sumSin += std::sin(rad);
+            sumCos += std::cos(rad);
+            ++hueCount;
+        }
+    }
+    const double count = static_cast<double>(pixels.size());
+    checkNearTol(stats.sMean, sumS / count, 1e-9, label);
+    double hue = 0.0;
+    if (hueCount > 0)
+    {
+        hue = std::atan2(sumSin, sumCos) * kRadToDeg;
+        if (hue < 0.0)
+            hue += 360.0;
+        if (hue >= 360.0)
+            hue = 0.0;
+    }
+    checkNearTol(stats.hMean, hue, 1e-6, label);
+}
 
 ImageData makePattern(PixelFormat format)
 {
@@ -112,6 +156,9 @@ void formatTests()
         checkNear(stats.rOverG, 0.8, "R/G uses channel means");
         checkNear(stats.bOverG, 1.2, "B/G uses channel means");
         CHECK(stats.ratiosValid, "non-zero green marks ratios valid");
+        checkNear(stats.vMean, 60.0, "V mean is max(R,G,B)");
+        checkInspectorHsv(stats, {{10, 20, 30}, {30, 40, 50}, {50, 60, 70}, {70, 80, 90}},
+                          "H/S means match PixelInspector HSV");
     }
 
     const auto gray = mviewer::core::computeROIChannelStats(makePattern(PixelFormat::Grayscale8),
@@ -122,6 +169,9 @@ void formatTests()
     checkNear(gray.bMean, 40.0, "grayscale B mean is replicated");
     checkNear(gray.rOverG, 1.0, "grayscale R/G is one");
     checkNear(gray.bOverG, 1.0, "grayscale B/G is one");
+    checkNear(gray.hMean, 0.0, "grayscale hue mean is achromatic");
+    checkNear(gray.sMean, 0.0, "grayscale saturation mean is zero");
+    checkNear(gray.vMean, 40.0, "grayscale V mean replicates the sample");
 
     auto zeroGreen = makeImageData(1, 1, PixelFormat::RGB24);
     (*zeroGreen.buffer)[0] = 10;
@@ -130,6 +180,34 @@ void formatTests()
     const auto zeroStats =
         mviewer::core::computeROIChannelStats(zeroGreen, mviewer::domain::Selection{0, 0, 1, 1});
     CHECK(zeroStats.valid && !zeroStats.ratiosValid, "zero-green ROI exposes unavailable ratios");
+    checkInspectorHsv(zeroStats, {{10, 0, 20}}, "zero-green ROI still reports HSV");
+
+    auto wrap = makeImageData(2, 1, PixelFormat::RGB24);
+    (*wrap.buffer)[0] = 255;
+    (*wrap.buffer)[1] = 0;
+    (*wrap.buffer)[2] = 0;
+    (*wrap.buffer)[3] = 255;
+    (*wrap.buffer)[4] = 0;
+    (*wrap.buffer)[5] = 43;
+    const auto wrapped =
+        mviewer::core::computeROIChannelStats(wrap, mviewer::domain::Selection{0, 0, 2, 1});
+    checkInspectorHsv(wrapped, {{255, 0, 0}, {255, 0, 43}},
+                      "hue mean is circular across 0 degrees");
+    CHECK(wrapped.hMean < 20.0 || wrapped.hMean > 340.0,
+          "red hues on either side of 0 do not average to cyan");
+
+    auto grayMix = makeImageData(2, 1, PixelFormat::RGB24);
+    (*grayMix.buffer)[0] = 255;
+    (*grayMix.buffer)[1] = 0;
+    (*grayMix.buffer)[2] = 0;
+    (*grayMix.buffer)[3] = 40;
+    (*grayMix.buffer)[4] = 40;
+    (*grayMix.buffer)[5] = 40;
+    const auto mixed =
+        mviewer::core::computeROIChannelStats(grayMix, mviewer::domain::Selection{0, 0, 2, 1});
+    checkInspectorHsv(mixed, {{255, 0, 0}, {40, 40, 40}},
+                      "achromatic pixels stay out of the hue mean");
+    checkNear(mixed.hMean, 0.0, "a red pixel beside gray keeps hue 0");
 }
 
 void analyzerTests()
@@ -170,6 +248,11 @@ void largeRegionTest()
     checkNear(stats.rMean, 11.0, "large source R mean remains stable");
     checkNear(stats.gMean, 22.0, "large source G mean remains stable");
     checkNear(stats.bMean, 33.0, "large source B mean remains stable");
+    checkNear(stats.vMean, 33.0, "large source V mean remains stable");
+    const auto hsv = mviewer::core::toColorSpace(11, 22, 33, mviewer::core::ColorSpace::HSV);
+    // Millions of identical samples; the summed mean stays well inside one display digit.
+    checkNearTol(stats.hMean, hsv.c1, 1e-3, "large uniform ROI hue matches PixelInspector");
+    checkNearTol(stats.sMean, hsv.c2, 1e-3, "large uniform ROI saturation matches PixelInspector");
 }
 
 } // namespace

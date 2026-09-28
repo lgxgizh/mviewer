@@ -206,6 +206,8 @@ void domainAndCoreTests()
         large, {0, 0, large.width, large.height}, [&]() { return ++checkpoints >= 5; });
     CHECK(cancelled.cancelled && !cancelled.valid && checkpoints == 5,
           "large ROI scan exits cooperatively at a row checkpoint");
+    CHECK(cancelled.hMean == 0.0 && cancelled.sMean == 0.0 && cancelled.vMean == 0.0,
+          "cancelled ROI scan publishes no partial HSV means");
 }
 
 } // namespace
@@ -275,10 +277,28 @@ int main(int argc, char **argv)
     }
     auto *chipA = workspace->findChild<QLabel *>("roiPaneChip0");
     auto *chipB = workspace->findChild<QLabel *>("roiPaneChip1");
-    CHECK(chipA && chipA->isVisible() && chipA->text().contains(QLatin1Char('V')),
-          "side-panel-hidden HUD immediately exposes ready results");
-    CHECK(chipB && chipB->isVisible() && chipB->text().contains(QLatin1Char('V')),
-          "ROI HUD lists pane A and pane B on separate lines");
+    CHECK(chipA && chipA->isVisible() && !chipA->text().contains(QStringLiteral("…")) &&
+              chipA->text().contains(QStringLiteral("R/G")) &&
+              chipA->text().contains(QStringLiteral("B/G")) &&
+              chipA->text().contains(QStringLiteral("H ")) &&
+              chipA->text().contains(QStringLiteral("S ")) &&
+              chipA->text().contains(QStringLiteral("V ")),
+          "pane chip shows numeric R/G, B/G, and H/S/V");
+    CHECK(chipB && chipB->isVisible() && chipB->text().contains(QStringLiteral("R/G")) &&
+              chipB->text().contains(QStringLiteral("B/G")),
+          "ROI chip lists pane A and pane B ratios");
+    CHECK(table->horizontalHeaderItem(1) &&
+              table->horizontalHeaderItem(1)->text() == QStringLiteral("H Mean") &&
+              table->horizontalHeaderItem(2) &&
+              table->horizontalHeaderItem(2)->text() == QStringLiteral("S Mean"),
+          "ROI table exposes H Mean and S Mean");
+    auto *delta = workspace->findChild<QLabel *>("roiDeltaLabel");
+    CHECK(delta && delta->text().contains(QStringLiteral("ΔH")) &&
+              delta->text().contains(QStringLiteral("ΔS")) &&
+              delta->text().contains(QStringLiteral("ΔV")) &&
+              delta->text().contains(QStringLiteral("ΔR/G")) &&
+              delta->text().contains(QStringLiteral("ΔB/G")),
+          "delta line keeps V/RGB/ratios and adds H/S");
     if (chipA)
     {
         const QRect chipInWs(chipA->mapTo(workspace, QPoint(0, 0)), chipA->size());
