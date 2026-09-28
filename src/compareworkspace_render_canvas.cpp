@@ -151,6 +151,7 @@ void CompareWorkspace::applyBlink(bool state)
             }
         }
         QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
+        schedulePreserveFit();
     }
     else
     {
@@ -167,6 +168,7 @@ void CompareWorkspace::applyBlink(bool state)
             else
                 pane->setVisible(state);
         }
+        schedulePreserveFit();
     }
 }
 
@@ -182,7 +184,7 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         if (i >= m_cellViews.size() || !m_cellViews[i])
             continue;
         const auto &ct = m_engine.cellTransform(i);
-        const double sc = ct.scale;
+        const double sc = scaleKeepingFit(i, ct.scale);
         const QPointF off = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
                                                  m_engine.syncTransform().offset.y)
                                        : QPointF(ct.offset.x, ct.offset.y);

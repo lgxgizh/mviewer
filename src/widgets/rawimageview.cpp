@@ -89,18 +89,31 @@ void RawImageView::setTransientDisplay(const QImage &img, const QSize &sourceSiz
     m_transientImage = img;
     m_transientSourceSize = fullSize;
     m_transientSourceRect = covered;
+    m_transientRenderScale = 0.0;
     rebuildFilteredDisplay();
+    releaseBaseSurface();
+    update();
+}
+
+void RawImageView::setTransientRenderScale(double scale)
+{
+    if (!std::isfinite(scale) || !(scale > 0.0))
+        scale = 0.0;
+    if (m_transientRenderScale == scale)
+        return;
+    m_transientRenderScale = scale;
     releaseBaseSurface();
     update();
 }
 
 void RawImageView::clearTransientDisplay()
 {
-    if (m_transientImage.isNull())
+    if (m_transientImage.isNull() && !(m_transientRenderScale > 0.0))
         return;
     m_transientImage = QImage();
     m_transientSourceSize = {};
     m_transientSourceRect = {};
+    m_transientRenderScale = 0.0;
     rebuildFilteredDisplay();
     releaseBaseSurface();
     update();
@@ -271,12 +284,13 @@ void RawImageView::paintEvent(QPaintEvent *)
 
     // Geometry for the live annotation layer below (same transform as the image).
     const QSize sourceSize = renderSourceSize();
+    const double presented = presentedScale();
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    const int dw = qRound(sourceSize.width() * m_scale);
-    const int dh = qRound(sourceSize.height() * m_scale);
+    const int dw = qRound(sourceSize.width() * presented);
+    const int dh = qRound(sourceSize.height() * presented);
 
-    if (mviewer::pixelGridVisible(m_scale) && sourceSize.width() > 0 && sourceSize.height() > 0)
+    if (mviewer::pixelGridVisible(presented) && sourceSize.width() > 0 && sourceSize.height() > 0)
     {
         mviewer::ui::drawPixelGrid(
             p,
@@ -377,8 +391,9 @@ void RawImageView::ensureBaseSurface()
 
     // Cache key: image/overlay content (cheap unique buffer ids, never a pixel
     // compare), overlay opacity, scale, pan offset, viewport, and device ratio.
+    const double presented = presentedScale();
     if (m_baseSurfaceValid && imageKey == m_cachedImageKey && overlayKey == m_cachedOverlayKey &&
-        m_overlayAlpha == m_cachedOverlayAlpha && m_scale == m_cachedScale &&
+        m_overlayAlpha == m_cachedOverlayAlpha && presented == m_cachedScale &&
         m_offset == m_cachedOffset && viewport == m_cachedViewport && dpr == m_cachedDpr &&
         sourceRect == m_cachedSourceRect)
         return;
@@ -421,7 +436,7 @@ void RawImageView::ensureBaseSurface()
     m_cachedImageKey = imageKey;
     m_cachedOverlayKey = overlayKey;
     m_cachedOverlayAlpha = m_overlayAlpha;
-    m_cachedScale = m_scale;
+    m_cachedScale = presentedScale();
     m_cachedOffset = m_offset;
     m_cachedViewport = viewport;
     m_cachedDpr = dpr;
@@ -442,20 +457,21 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const QImage &image = presentationImage();
     const QSize sourceSize = renderSourceSize();
     const QRect sourceRect = renderSourceRect();
+    const double scale = presentedScale();
     // Skip smooth filtering while the user is actively dragging — nearest is
     // cheaper and the final release paint restores smooth when needed.
-    p.setRenderHint(QPainter::SmoothPixmapTransform, !m_dragging && m_scale < 4.0);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, !m_dragging && scale < 4.0);
 
     // Center in widget, then apply pan offset, then scale.
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    const int dw = qRound(sourceSize.width() * m_scale);
-    const int dh = qRound(sourceSize.height() * m_scale);
+    const int dw = qRound(sourceSize.width() * scale);
+    const int dh = qRound(sourceSize.height() * scale);
     const double sourceLeft = cx - dw / 2.0;
     const double sourceTop = cy - dh / 2.0;
-    const QRectF coveredDest(sourceLeft + sourceRect.x() * m_scale,
-                             sourceTop + sourceRect.y() * m_scale, sourceRect.width() * m_scale,
-                             sourceRect.height() * m_scale);
+    const QRectF coveredDest(sourceLeft + sourceRect.x() * scale,
+                             sourceTop + sourceRect.y() * scale, sourceRect.width() * scale,
+                             sourceRect.height() * scale);
     p.drawImage(coveredDest, image);
 
     // Difference/heatmap overlay (compare mode): same transform as the base image

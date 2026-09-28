@@ -90,10 +90,18 @@ class RawImageView : public QWidget
     // Momentary Compare changes presentation only. It deliberately leaves the
     // owned image, transform, ROI, overlays, and all CompareEngine state intact.
     void setTransientDisplay(const QImage &img, const QSize &sourceSize, const QRect &sourceRect);
+    // Paint-only scale for the transient raster. <= 0 keeps m_scale (pixel align).
+    void setTransientRenderScale(double scale);
     void clearTransientDisplay();
     bool hasTransientDisplay() const
     {
         return !m_transientImage.isNull();
+    }
+    // Scale used to draw the presented raster (transient render scale, else m_scale).
+    double presentedScale() const
+    {
+        return (!m_transientImage.isNull() && m_transientRenderScale > 0.0) ? m_transientRenderScale
+                                                                            : m_scale;
     }
 
     // Difference/heatmap overlay (compare mode). The workspace computes the overlay
@@ -293,6 +301,7 @@ class RawImageView : public QWidget
     QImage m_transientImage;
     QSize m_transientSourceSize;
     QRect m_transientSourceRect;
+    double m_transientRenderScale = 0.0;
     double m_scale = 1.0;
     double m_fitScale = 1.0;
     QPointF m_offset;

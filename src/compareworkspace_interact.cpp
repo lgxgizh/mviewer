@@ -47,6 +47,8 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 
     auto *view = qobject_cast<RawImageView *>(obj);
     const int idx = view ? view->cellIndex() : -1;
+    if (view && event && event->type() == QEvent::Resize && m_blinkChk && m_blinkChk->isChecked())
+        schedulePreserveFit();
     if (idx < 0 || idx >= m_cellViews.size())
         return QWidget::eventFilter(obj, event);
 

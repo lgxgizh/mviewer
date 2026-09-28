@@ -10,6 +10,26 @@ namespace
 {
 constexpr double kDisplayLodBucketSteps = 16.0;
 constexpr double kDisplayLodOverscan = 1.25;
+// Ignore sub-4% fit drift (scrollbar, rounding). A resolution or cell-geometry
+// change that matters for FOV match is much larger.
+constexpr double kStaleFitRatio = 0.04;
+
+double sharedZoomRatio(double ratio)
+{
+    return (ratio > 0.0 && std::isfinite(ratio)) ? ratio : 1.0;
+}
+
+QSize fallbackFrameSize(const ImageFrame *img)
+{
+    if (!img)
+        return {};
+    if (!img->pixels().isNull() && img->width() > 0 && img->height() > 0)
+        return QSize(img->width(), img->height());
+    const auto &meta = img->metadata();
+    if (meta.width > 0 && meta.height > 0)
+        return QSize(meta.width, meta.height);
+    return {};
+}
 
 } // namespace
 
@@ -345,6 +365,137 @@ void CompareWorkspace::fitAll()
             if (i < m_cellViews.size() && m_cellViews[i])
                 m_engine.setCellOffset(i, 0.0, 0.0);
     }
+}
+
+void CompareWorkspace::bestFitAll()
+{
+    // The checkbox slot also calls fitAll(). Block it so unchecking fits once.
+    if (m_uniformScaleChk)
+    {
+        const QSignalBlocker blocker(m_uniformScaleChk);
+        m_uniformScaleChk->setChecked(false);
+    }
+    m_uniformScale = false;
+    fitAll();
+    showCompareStatus(tr("最适合：已按视野对齐并适配窗口"));
+    if (m_compareCanvas)
+        m_compareCanvas->update();
+    update();
+}
+
+double CompareWorkspace::scaleForPaneSource(int pane, int sourceW, int sourceH) const
+{
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        return 0.0;
+    if (sourceW <= 0 || sourceH <= 0)
+        return 0.0;
+    const QSize viewSize = m_cellViews[pane]->size();
+    if (viewSize.width() <= 0 || viewSize.height() <= 0)
+        return 0.0;
+    const double fit = std::min(static_cast<double>(viewSize.width()) / sourceW,
+                                static_cast<double>(viewSize.height()) / sourceH);
+    if (!(fit > 0.0) || !std::isfinite(fit))
+        return 0.0;
+    if (m_uniformScale)
+    {
+        const double cell = pane < m_engine.imageCount() ? m_engine.cellTransform(pane).scale : fit;
+        return (cell > 0.0 && std::isfinite(cell)) ? cell : fit;
+    }
+    return fit * sharedZoomRatio(m_sharedZoomRatio);
+}
+
+double CompareWorkspace::scaleKeepingFit(int pane, double engineScale)
+{
+    if (m_uniformScale || !m_syncZoom)
+        return engineScale;
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        return engineScale;
+    RawImageView *view = m_cellViews[pane];
+    if (view->hasTransientDisplay() || !view->isVisible())
+        return engineScale;
+    if (pane >= m_fitScales.size() || !(m_fitScales[pane] > 0.0))
+        return engineScale;
+    const QSize src = view->sourceSize();
+    const QSize vs = view->size();
+    if (src.width() <= 0 || src.height() <= 0 || vs.width() <= 32 || vs.height() <= 32)
+        return engineScale;
+    const double fitNow = std::min(static_cast<double>(vs.width()) / src.width(),
+                                   static_cast<double>(vs.height()) / src.height());
+    if (!(fitNow > 0.0) || !std::isfinite(fitNow))
+        return engineScale;
+    const double rel = fitNow / m_fitScales[pane];
+    if (!std::isfinite(rel) || std::abs(rel - 1.0) <= kStaleFitRatio)
+        return engineScale;
+    const double scale = fitNow * sharedZoomRatio(m_sharedZoomRatio);
+    m_fitScales[pane] = fitNow;
+    m_engine.setCellScale(pane, scale);
+    return scale;
+}
+
+void CompareWorkspace::reapplyFitPreservingRatio()
+{
+    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    if (!m_syncZoom && !blinkActive)
+        return;
+    const int n = m_engine.imageCount();
+    if (n <= 0)
+        return;
+    if (m_fitScales.size() < n)
+        m_fitScales.resize(n, 1.0);
+    const double ratio = sharedZoomRatio(m_sharedZoomRatio);
+    double sharedFit = 0.0;
+    QVector<int> live;
+    live.reserve(n);
+    for (int i = 0; i < n; ++i)
+    {
+        if (i >= m_cellViews.size() || !m_cellViews[i] || !m_cellViews[i]->isVisible())
+            continue;
+        RawImageView *view = m_cellViews[i];
+        const QSize vs = view->size();
+        QSize src = view->sourceSize();
+        if (src.width() <= 0 || src.height() <= 0)
+            src = fallbackFrameSize(m_engine.imageAt(i));
+        if (src.width() <= 0 || src.height() <= 0 || vs.width() <= 0 || vs.height() <= 0)
+            continue;
+        const double fit = std::min(static_cast<double>(vs.width()) / src.width(),
+                                    static_cast<double>(vs.height()) / src.height());
+        if (!(fit > 0.0) || !std::isfinite(fit))
+            continue;
+        m_fitScales[i] = fit;
+        if (!(sharedFit > 0.0) || fit < sharedFit)
+            sharedFit = fit;
+        live.push_back(i);
+    }
+    if (live.isEmpty() || !(sharedFit > 0.0))
+        return;
+    for (int i : live)
+    {
+        // Unsynced blink has no shared ratio; fit the stretched cell on its own.
+        const double base =
+            (!m_syncZoom) ? m_fitScales.at(i) : (m_uniformScale ? sharedFit : m_fitScales.at(i));
+        const double applied = m_syncZoom ? ratio : 1.0;
+        m_engine.setCellScale(i, base * applied);
+    }
+    update();
+}
+
+void CompareWorkspace::schedulePreserveFit()
+{
+    if (m_preserveFitPending)
+        return;
+    m_preserveFitPending = true;
+    QPointer<CompareWorkspace> guard(this);
+    QTimer::singleShot(0, this,
+                       [guard]()
+                       {
+                           CompareWorkspace *ws = guard.data();
+                           if (!ws)
+                               return;
+                           ws->m_preserveFitPending = false;
+                           if (!(ws->m_blinkChk && ws->m_blinkChk->isChecked()))
+                               return;
+                           ws->reapplyFitPreservingRatio();
+                       });
 }
 
 void CompareWorkspace::schedulePostLayoutFit()

@@ -753,6 +753,25 @@ target_include_directories(compare_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOUR
 add_test(NAME compare_acceptance_tests COMMAND compare_acceptance_tests)
 set_tests_properties(compare_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
+# 「最适合」: same-aspect, different-resolution panes scale inversely to size.
+add_executable(compare_best_fit_tests
+    test_compare_best_fit.cpp
+)
+
+target_link_libraries(compare_best_fit_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(compare_best_fit_tests PRIVATE cxx_std_20)
+target_include_directories(compare_best_fit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_best_fit_tests COMMAND compare_best_fit_tests)
+set_tests_properties(compare_best_fit_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # ─── M24: Analyze workflow acceptance (throwing-analyzer isolation, result
 # currency per image, history/pin persistence) ───────────────────────────────
 add_executable(analyze_acceptance_tests
