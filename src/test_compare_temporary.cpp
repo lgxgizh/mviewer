@@ -23,16 +23,20 @@ void expect(bool cond, const char *message)
 int main()
 {
     const auto left = decidePairHold(2, 0);
-    expect(left.action == TemporaryAction::ShowPair && left.targetPane == 1 && left.sourcePane == 0,
-           "hover left shows left image on the right");
+    expect(left.action == TemporaryAction::ShowPair && left.targetPane == 0 && left.sourcePane == 1,
+           "hover left shows the right image on the left");
     const auto right = decidePairHold(2, 1);
-    expect(right.action == TemporaryAction::ShowPair && right.targetPane == 0 &&
-               right.sourcePane == 1,
-           "hover right shows right image on the left");
+    expect(right.action == TemporaryAction::ShowPair && right.targetPane == 1 &&
+               right.sourcePane == 0,
+           "hover right shows the left image on the right");
     const auto noHover = decidePairHold(2, -1);
     expect(noHover.action == TemporaryAction::ShowPair && noHover.targetPane == 0 &&
                noHover.sourcePane == 1,
            "no hover keeps classic A<-B");
+    const auto offPane = decidePairHold(2, 2);
+    expect(offPane.action == TemporaryAction::ShowPair && offPane.targetPane == 0 &&
+               offPane.sourcePane == 1,
+           "cursor off the panes keeps classic A<-B");
     expect(decidePairHold(3, 0).action == TemporaryAction::HintUseDigits, "space unused above 2");
     expect(decidePairHold(1, 0).action == TemporaryAction::None, "single image has no hold");
 

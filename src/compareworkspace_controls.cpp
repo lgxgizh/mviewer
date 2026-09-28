@@ -484,7 +484,7 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_temporaryCompareButton = new QPushButton(tr("临时切换"), this);
     m_temporaryCompareButton->setObjectName("temporaryCompareButton");
     m_temporaryCompareButton->setToolTip(
-        tr("两张图：按住 Space 或此按钮，鼠标所在一侧不动，另一侧临时显示这一侧。"
+        tr("两张图：按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。"
            "超过两张：改用数字键 1–N。"));
     m_temporaryCompareButton->setEnabled(false);
     connect(m_temporaryCompareButton, &QPushButton::pressed, this,

@@ -215,7 +215,7 @@ above is the main window only.
 | Key | Action |
 | ----- | -------- |
 | `Z` / `D` | Sync zoom / sync drag |
-| `Space` (hold) | Blink: show B while held |
+| `Space` (hold) | Pane under the pointer temporarily shows the other pane; release restores |
 | `B` / `S` / `W` / `O` / `K` | Blink / split / swipe / overlay / checkerboard (2 images) |
 | `H` | Difference highlight |
 | `R` / `L` | Sync crosshair / pixel link |
