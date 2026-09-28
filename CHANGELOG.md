@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.80] - 2026-09-28
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.80**.
+- **Batch rotate/flip progress (#65)**: multi-select rotate/flip shows progress (and cancel) instead of freezing the UI; single-select stays silent.
+
 ### 浏览
 
 - 多选两张及以上图片后旋转或翻转时，会立刻显示进度（「正在旋转…」/「已旋转 3 / 15」，翻转同理），可以取消尚未处理的文件；只选一张时不弹出进度框。
