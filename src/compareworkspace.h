@@ -212,6 +212,7 @@ class CompareWorkspace : public QWidget
     void rebuildCells();
     void buildCompareCells(int count, int columns);
     void fitAll();
+    void bestFitAll();
     void applySelectionToAll(const mviewer::domain::Selection &sel);
     void applySelectionFromView(RawImageView *view, const mviewer::domain::Selection &sel);
     void applySelectionPreviewFromView(RawImageView *view, const mviewer::domain::Selection &sel);

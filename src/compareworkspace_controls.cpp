@@ -98,6 +98,16 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             });
     viewLayout->addWidget(m_uniformScaleChk);
 
+    // FOV-matched screen fit: opposite of 「统一像素倍率」. Same field of view
+    // (same aspect, different resolution) lands at a similar on-screen size.
+    auto *bestFitBtn = new QPushButton(tr("最适合"), this);
+    bestFitBtn->setObjectName("bestFitButton");
+    bestFitBtn->setToolTip(
+        tr("最适合：各窗格按自身分辨率适配窗口，相同视野/宽高比的图显示为相近大小"
+           "（关闭统一像素倍率）"));
+    connect(bestFitBtn, &QPushButton::clicked, this, &CompareWorkspace::bestFitAll);
+    viewLayout->addWidget(bestFitBtn);
+
     // M14-3: blink (flicker) compare — rapid toggle between base and target.
     // Click the button (or press B) to start/stop rapid blinking.
     m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
