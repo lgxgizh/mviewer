@@ -576,9 +576,10 @@ class ThumbnailPanel : public QListView
     std::shared_ptr<std::atomic<bool>> m_filterCancel;
     TaskScheduler::TaskHandle m_filterTask;
     uint64_t m_filterGeneration = 0;
-    // Small directories clear their stale projection immediately while the
-    // debounced query is pending. Keep the path identity so the eventual
-    // result can restore selection/current-image exactly.
+    // Recursive tiny-directory search parks path identity while the walk is
+    // still in flight. In-memory tiny queries publish synchronously and leave
+    // this empty; takePendingFilterRestore applies it only for the same
+    // generation.
     QStringList m_pendingFilterSelection;
     QString m_pendingFilterCurrent;
     uint64_t m_pendingFilterGeneration = 0;

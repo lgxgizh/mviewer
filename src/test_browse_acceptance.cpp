@@ -70,6 +70,21 @@ void pump(int ms = 30)
     } while (t.elapsed() < ms);
 }
 
+// Wait until the gallery selection/model has settled. A fixed pump(50) races
+// the async directory scan and any leftover filter generation under CI load.
+template <typename Pred> bool pumpUntil(Pred pred, int timeoutMs)
+{
+    QElapsedTimer t;
+    t.start();
+    while (t.elapsed() < timeoutMs)
+    {
+        if (pred())
+            return true;
+        pump(10);
+    }
+    return pred();
+}
+
 QString writePng(const QDir &dir, const QString &name, QColor color)
 {
     const QString path = dir.filePath(name);
@@ -167,15 +182,26 @@ void testViewModeAndSelection(const QString &dirPath)
 
     // Filename search narrows without destroying the selection semantics. When
     // the selected image is filtered out but rows remain, promote the first
-    // visible image through the shared selection.
+    // visible image through the shared selection. Wait for the filtered model,
+    // not a fixed pump: selection must be that image and the other rows gone.
     panel.selectPath(paths[2]);
     panel.setFilter("ba_c");
-    pump(50);
-    CHECK(panel.selectedPaths() == QStringList{paths[2]},
+    CHECK(pumpUntil(
+              [&]
+              {
+                  return panel.entries().size() == 1 &&
+                         panel.selectedPaths() == QStringList{paths[2]};
+              },
+              2000),
           "A#7: search keeps the selected image when it stays visible");
     panel.setFilter("ba_a"); // selected image filtered out; ba_a remains visible
-    pump(50);
-    CHECK(panel.selectedPaths() == QStringList{paths[0]},
+    CHECK(pumpUntil(
+              [&]
+              {
+                  return panel.entries().size() == 1 &&
+                         panel.selectedPaths() == QStringList{paths[0]};
+              },
+              2000),
           "A#7: search promotes the first visible image when selection is filtered out");
     CHECK(sel.currentImage() == paths[0],
           "A#7: search keeps SelectionModel current on the first visible image");

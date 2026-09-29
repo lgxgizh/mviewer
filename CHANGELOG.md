@@ -5,6 +5,7 @@
 ### 浏览
 
 - 首次打开或恢复图片目录时，如果目录里的图全部加载不出来（失败、卡住、网络盘或空扫描），界面不再卡死。根因是主线程在 `DirectoryTree::navigateTo` 里同步调用 `QFileSystemModel::index` / `QFileInfo::exists`，并在 `ThumbnailPanel::setDirectory` 里同步调用 `isHighLatencyBrowsePath`（`QStorageInfo` / `GetDriveTypeW`）；扫描中断时忙碌光标不释放，失败缩略图还会被反复解码。现在目录确认和延迟探测都在后台进行，扫描可被新目录取代，失败或超时会结束忙碌状态并提示「目录加载失败」或「暂无图片」。
+- 小目录（不超过 256 张）按文件名筛选时，结果和选中在同一次操作里更新。仍在列表里的图片保持选中，不再先被清空再等防抖定时器恢复。递归子目录搜索仍异步进行。
 
 ### 比较
 
