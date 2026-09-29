@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.81] - 2026-09-29
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.81**.
+- **First-open stall fix (#69)**: opening/restoring a directory whose images never load no longer freezes the UI; FS probes and latency checks run off the GUI thread; busy cursor and failed-thumb loops are bounded; status shows「目录加载失败」/「暂无图片」.
+- **Small-directory filter selection (#69)**: filename filter on ≤256 images updates selection synchronously so still-visible images stay selected.
+- **Compare filename overlay (#68)**: pane filenames stay above the image (default on); long names wrap instead of eliding.
+
 ### 浏览
 
 - 首次打开或恢复图片目录时，如果目录里的图全部加载不出来（失败、卡住、网络盘或空扫描），界面不再卡死。根因是主线程在 `DirectoryTree::navigateTo` 里同步调用 `QFileSystemModel::index` / `QFileInfo::exists`，并在 `ThumbnailPanel::setDirectory` 里同步调用 `isHighLatencyBrowsePath`（`QStorageInfo` / `GetDriveTypeW`）；扫描中断时忙碌光标不释放，失败缩略图还会被反复解码。现在目录确认和延迟探测都在后台进行，扫描可被新目录取代，失败或超时会结束忙碌状态并提示「目录加载失败」或「暂无图片」。
