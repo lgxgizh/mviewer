@@ -1,6 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.82] - 2026-09-29
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.82**.
+- **Browse first paint**: Opening a folder shows the first gallery rows, the image list, and the bottom-left preview as soon as the first images are found. A small folder no longer stays blank until every file has been scanned and every thumbnail has started decoding. A thumbnail that fails to decode no longer freezes the gallery.
+
+### 浏览
+
+- 打开文件夹后，找到第一张图就显示画廊行、图片列表和左下角预览。小文件夹不再等到全部文件扫完、全部缩略图开始解码才出画面。解码失败的缩略图不再把画廊卡住。
 
 ## [1.0.81] - 2026-09-29
 

@@ -175,6 +175,24 @@ void MainWindow::connectGallerySignals()
                 m_autoSelectFirstPending = false;
                 m_selection->setCurrentImage(first);
             });
+    connect(m_thumbnailPanel, &ThumbnailPanel::currentThumbnailReady, this,
+            [this](const QString &path)
+            {
+                if (!m_previewPanel || !m_thumbnailPanel || !m_selection ||
+                    m_selection->currentImage() != path)
+                    return;
+                const QPixmap warm = m_thumbnailPanel->thumbReady(path);
+                if (warm.isNull())
+                    return;
+                QSize knownSourceSize;
+                qint64 knownFileSize = -1;
+                if (const auto *entry = m_thumbnailPanel->entryForPath(path))
+                {
+                    knownSourceSize = QSize(entry->width, entry->height);
+                    knownFileSize = entry->size;
+                }
+                m_previewPanel->offerWarmThumbnail(path, warm, knownSourceSize, knownFileSize);
+            });
 }
 
 void MainWindow::connectSelectionSignals()

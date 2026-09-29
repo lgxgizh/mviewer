@@ -154,18 +154,23 @@ void ThumbnailPanel::wireThumbnailPipeline()
                     const QString cacheKey = panel->thumbCacheKey(qp, size);
                     if (img.isNull())
                     {
-                        QMutexLocker l(&panel->m_thumbMtx);
-                        panel->m_thumbFailed.insert(cacheKey);
-                        panel->m_thumbPending.remove(cacheKey);
+                        {
+                            QMutexLocker l(&panel->m_thumbMtx);
+                            panel->m_thumbFailed.insert(cacheKey);
+                            panel->m_thumbPending.remove(cacheKey);
+                        }
+                        // onThumbReady reads the ready map under the same mutex.
                         panel->onThumbReady(qp);
                         return;
                     }
                     const QImage q = mvcore::toQImage(img);
                     if (q.isNull())
                     {
-                        QMutexLocker l(&panel->m_thumbMtx);
-                        panel->m_thumbFailed.insert(cacheKey);
-                        panel->m_thumbPending.remove(cacheKey);
+                        {
+                            QMutexLocker l(&panel->m_thumbMtx);
+                            panel->m_thumbFailed.insert(cacheKey);
+                            panel->m_thumbPending.remove(cacheKey);
+                        }
                         panel->onThumbReady(qp);
                         return;
                     }

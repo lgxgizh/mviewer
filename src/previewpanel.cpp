@@ -291,6 +291,16 @@ void PreviewPanel::decodePreviewWorker(
                               });
 }
 
+void PreviewPanel::offerWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
+                                      const QSize &knownSourceSize, qint64 knownFileSize)
+{
+    if (path.isEmpty() || warmThumbnail.isNull() || path != m_requestedPath)
+        return;
+    if (m_quality == PresentationQuality::Preview && m_presentedPath == path)
+        return;
+    presentWarmThumbnail(path, warmThumbnail, knownSourceSize, knownFileSize);
+}
+
 void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                             const QSize &knownSourceSize, qint64 knownFileSize)
 {

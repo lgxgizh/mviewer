@@ -172,6 +172,10 @@ void ThumbnailPanel::onThumbReady(const QString &path)
         QTimer::singleShot(0, this, [this]() { flushThumbUpdates(); });
     }
     m_thumbDirtyPaths.insert(path);
+    // The host matches this against the current selection. A null delivery is
+    // a failed cell, not a preview frame.
+    if (!thumbReady(path).isNull())
+        emit currentThumbnailReady(path);
 }
 
 void ThumbnailPanel::flushThumbUpdates()

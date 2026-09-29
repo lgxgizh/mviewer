@@ -124,7 +124,13 @@ int main()
         fflush(stdout);
         ThumbnailPipeline bytePipe;
         bytePipe.setThumbSize(64);
-        bytePipe.setDecodeFn([](const std::string &, int size) { return fakeThumb(size); });
+        std::atomic<int> decodes{0};
+        bytePipe.setDecodeFn(
+            [&](const std::string &, int size)
+            {
+                decodes.fetch_add(1, std::memory_order_relaxed);
+                return fakeThumb(size);
+            });
         const size_t oneThumbBytes = size_t{64} * 64 * 3;
         bytePipe.setMemCacheMaxBytes(oneThumbBytes * 2);
         std::vector<std::string> bSrc = {"b0.jpg", "b1.jpg", "b2.jpg"};
@@ -136,6 +142,8 @@ int main()
         CHECK(bytePipe.memCacheBytes() <= oneThumbBytes * 2,
               "memCacheBytes respects memCacheMaxBytes");
         CHECK(bytePipe.memCacheSize() == 2, "oldest thumbnail evicted when byte budget exceeded");
+        CHECK(decodes.load(std::memory_order_relaxed) == 3,
+              "evicted thumbnails are not decoded again");
     }
 
     // clear empties the cache.
