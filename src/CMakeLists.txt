@@ -173,6 +173,7 @@ add_library(mviewer_ui STATIC
     imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp
     directorytree.cpp
+    directorytree_navigate.cpp
     directorymonitor.cpp
     breadcrumbbar.cpp
     metadataoverlay.cpp

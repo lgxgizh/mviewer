@@ -428,6 +428,9 @@ class ThumbnailPanel : public QListView
     // Non-modal browse feedback when a scan fails, stalls, or finds nothing.
     // Empty messages are ignored by the host so a scan status is not cleared.
     void browseStatusChanged(const QString &message);
+    // First progressive batch is in the model, or the scan settled (including
+    // empty). DirectoryTree uses this to start its highlight after first paint.
+    void galleryModelReady();
 
   private slots:
     void onThumbReady(const QString &path);
@@ -688,6 +691,9 @@ class ThumbnailPanel : public QListView
     // reported as failed. The watchdog only fires when the serial is unchanged.
     uint64_t m_scanWatchSerial = 0;
     bool m_scanStallAnnounced = false;
+    // One galleryModelReady per setDirectory(). The first progressive batch
+    // wins; an empty or non-progressive scan emits from the terminal result.
+    bool m_galleryModelReadyEmitted = false;
 
     // P0-4: column-title header row shown only in the Details view. Positioned in
     // the reserved viewport top margin so it lines up with the delegate columns.

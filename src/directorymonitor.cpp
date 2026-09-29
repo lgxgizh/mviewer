@@ -253,8 +253,12 @@ void DirectoryMonitor::commitSnapshot(const mviewer::core::DirectorySnapshot &sn
 
 void DirectoryMonitor::ensureActivePathWatched()
 {
-    if (m_activePath.isEmpty() || !QDir(m_activePath).exists())
+    // Best-effort. QDir::exists on the GUI thread is what stalls the
+    // directoryChanged stack on a slow or disconnected volume. addPath fails
+    // quietly when the path is missing and a later snapshot retries.
+    if (m_activePath.isEmpty())
         return;
-    if (!m_watcher->directories().contains(m_activePath))
-        m_watcher->addPath(m_activePath);
+    if (m_watcher->directories().contains(m_activePath))
+        return;
+    m_watcher->addPath(m_activePath);
 }

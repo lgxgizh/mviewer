@@ -84,6 +84,7 @@ struct HookGuard
     ~HookGuard()
     {
         ThumbnailPanel::setHighLatencyProbeHook({});
+        DirectoryTree::setNavigationIndexProbeHook({});
     }
 };
 
@@ -233,6 +234,81 @@ void testNavigateEmitsBeforeStat(Results &results)
     check(results, highlighted, "tree highlight catches up after the background stat");
 }
 
+void testNavigationIndexDoesNotBlockGallery(Results &results)
+{
+    std::cout << "\n[navigation index does not block the first gallery paint]\n";
+    HookGuard guard;
+    QTemporaryDir tmp;
+    check(results, tmp.isValid(), "gallery/tree temp dir created");
+    if (!tmp.isValid())
+        return;
+    const QString dir = QDir(tmp.path()).filePath(QStringLiteral("相册"));
+    QDir().mkpath(dir);
+    const QString image = writePng(dir);
+
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto release = std::make_shared<std::atomic<bool>>(false);
+    auto hookThread = std::make_shared<QThread *>(nullptr);
+    DirectoryTree::setNavigationIndexProbeHook(
+        [entered, release, hookThread]()
+        {
+            *hookThread = QThread::currentThread();
+            entered->store(true, std::memory_order_release);
+            while (!release->load(std::memory_order_acquire))
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        });
+
+    SelectionModel sel;
+    ThumbnailPanel panel;
+    panel.setSelectionModel(&sel);
+    panel.resize(640, 480);
+    panel.show();
+    DirectoryTree tree;
+    tree.resize(320, 480);
+    tree.show();
+    pump(30);
+
+    int cursorAtFirstListing = -1;
+    QObject::connect(&panel, &ThumbnailPanel::statsChanged, &panel,
+                     [&](int total, qint64, int, qint64)
+                     {
+                         if (total > 0 && cursorAtFirstListing < 0)
+                             cursorAtFirstListing =
+                                 QApplication::overrideCursor() == nullptr ? 1 : 0;
+                     });
+    QObject::connect(&tree, &DirectoryTree::directoryChanged, &panel,
+                     &ThumbnailPanel::setDirectory);
+    QObject::connect(&panel, &ThumbnailPanel::galleryModelReady, &tree,
+                     &DirectoryTree::nudgeDeferredHighlight);
+
+    const QString want = QDir::cleanPath(dir);
+    tree.navigateTo(dir, true);
+    check(results, waitTrue([&] { return entered->load(); }, 5000),
+          "navigation index probe entered while the gallery scan can still run");
+    auto uiPumped = std::make_shared<std::atomic<bool>>(false);
+    QTimer::singleShot(0, &panel, [uiPumped]() { uiPumped->store(true); });
+    check(results, waitTrue([&] { return uiPumped->load(); }, 2000),
+          "GUI timer runs while the navigation index probe is blocked");
+    check(results, *hookThread != nullptr && *hookThread != QThread::currentThread(),
+          "navigation index probe runs off the GUI thread");
+    check(results, waitTrue([&] { return panel.entries().size() == 1; }, 5000),
+          "gallery lists the image while the navigation index probe is blocked");
+    check(results, panel.entries().value(0).path == image || !panel.pathList().isEmpty(),
+          "listed path is the image written into the directory");
+    check(results, cursorAtFirstListing == 1,
+          "busy cursor is released on the first non-empty gallery batch");
+    check(results, QDir::cleanPath(tree.currentPath()) != want,
+          "tree highlight has not finished while the index probe is blocked");
+
+    release->store(true, std::memory_order_release);
+    const bool highlighted =
+        waitTrue([&] { return QDir::cleanPath(tree.currentPath()) == want; }, 8000);
+    check(results, highlighted, "tree highlight catches up after the index probe returns");
+    check(results, QApplication::overrideCursor() == nullptr,
+          "busy cursor stays released after the blocked index probe");
+    (void)guard;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -245,10 +321,12 @@ int main(int argc, char **argv)
     testMissingDirectory(results);
     testFailedThumbsAreNotRetried(results);
     testNavigateEmitsBeforeStat(results);
+    testNavigationIndexDoesNotBlockGallery(results);
     pump(200);
     while (QApplication::overrideCursor() != nullptr)
         QApplication::restoreOverrideCursor();
     ThumbnailPanel::setHighLatencyProbeHook({});
+    DirectoryTree::setNavigationIndexProbeHook({});
     ThumbnailPipeline::instance().clear();
     std::cout << "\n=== Results: " << results.pass << " passed, " << results.fail
               << " failed ===\n";

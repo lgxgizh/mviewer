@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <QLineEdit>
 #include <QListView>
 #include <QSortFilterProxyModel>
@@ -71,6 +73,14 @@ class DirectoryTree : public QTreeView
     // F5 refresh. Re-reads the currently selected folder from disk and sends a
     // contents hint. It does not masquerade as a directory navigation.
     void refresh();
+    // Gallery listed its first batch, or the scan settled empty. Highlight work
+    // stays queued until this so QFileSystemModel::index cannot sit in front of
+    // the first paint. Tree-only callers fall through on a timer.
+    void nudgeDeferredHighlight();
+    // Test seam. Invoked on the navigation worker after isDir succeeds and
+    // before any GUI index(). Empty in production. A blocking hook must not
+    // freeze the gallery.
+    static void setNavigationIndexProbeHook(const std::function<void()> &hook);
 
   signals:
     // A committed A -> B navigation. MainWindow owns navigation side effects.
@@ -96,14 +106,19 @@ class DirectoryTree : public QTreeView
     void onExpanded(const QModelIndex &index);
 
   private:
+    static bool equivalentPath(const QString &left, const QString &right);
     void watchPath(const QString &path);
     void setLoading(bool on);
     void applyCurrentHighlight(const QModelIndex &proxyIdx);
     QModelIndex sourceIndexForPath(const QString &path) const;
     void expandAncestors(const QModelIndex &sourceIdx);
     void tryNavigateToPending(quint64 requestId);
+    void finishPendingNavigation(quint64 requestId);
+    void scheduleDeferredNavigation(quint64 requestId);
+    void armHighlightFallback(quint64 requestId);
     void scheduleNavigationRetry(quint64 requestId);
     void resolvePendingNavigation(quint64 requestId);
+    void acceptNavigationStat(quint64 requestId, bool isDir);
     void cancelPendingNavigation();
     // A-1.5: progressive fetchMore for large directories (yields to event loop).
     void scheduleFetchMore(const QModelIndex &sourceIdx);
@@ -125,7 +140,16 @@ class DirectoryTree : public QTreeView
     bool m_pendingNavigationEmitSignal = false;
     quint64 m_navigationRequestId = 0;
     int m_navigationRetryCount = 0;
-    // True only after a worker QFileInfo::isDir() succeeded. QFileSystemModel
-    // index() stays off the GUI thread until then.
+    // True only after a worker QFileInfo::isDir() succeeded. The GUI indexes one
+    // path prefix per event-loop turn after that, and only once the gallery has
+    // had a chance to paint (or the tree-only fallback fires).
     bool m_navigationStatReady = false;
+    // emitSignal navigations own a gallery scan. Hold the expensive model index
+    // until that scan nudges, so the first paint is not stuck behind it.
+    bool m_holdHighlightForGallery = false;
+    bool m_highlightStarted = false;
+    bool m_highlightNudgePending = false;
+    bool m_deferredNavigationQueued = false;
+    int m_navigationSegment = 0;
+    QStringList m_navigationPrefixes;
 };

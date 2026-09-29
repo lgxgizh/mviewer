@@ -5,6 +5,7 @@
 
 #include <QtConcurrent/QtConcurrent>
 
+#include <QThread>
 #include <QTimer>
 
 namespace
@@ -41,7 +42,13 @@ void ThumbnailPanel::releaseScanCursor(const std::shared_ptr<std::atomic<int>> &
     bool expected = false;
     if (!released->compare_exchange_strong(expected, true, std::memory_order_acq_rel))
         return;
-    marshalBusyRestore(refs);
+    // First-batch release already runs on the GUI thread. Restoring here lets
+    // the busy cursor drop in the same turn as the rows, instead of one event
+    // later at scan completion.
+    if (qApp && QThread::currentThread() == qApp->thread())
+        restoreBusyCursorOnce(refs);
+    else
+        marshalBusyRestore(refs);
 }
 
 void ThumbnailPanel::scheduleHighLatencyProbe(const QString &path, int gen)

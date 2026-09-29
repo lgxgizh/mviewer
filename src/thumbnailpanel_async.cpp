@@ -259,6 +259,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_scanCursorReleased = std::make_shared<std::atomic<bool>>(false);
     ThumbnailCache::instance().clearSourceIdentityHints();
     m_scanComplete = false;
+    m_galleryModelReadyEmitted = false;
     m_scanProgressive = m_sortMode == SortName && m_sortAscending && m_typeFilter.isEmpty();
 
     // M23 P2 (first-screen): paint the (empty) directory shell immediately so a
@@ -431,7 +432,15 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
     for (const Entry &entry : batch)
         paths.append(entry.path);
     ThumbnailPipeline::instance().appendSources(toStdPaths(paths));
+    // Drop the busy cursor with the first rows, not when the rest of the
+    // directory finishes. releaseScanCursor is once-per-scan.
+    releaseScanCursor(m_busyCursorRefs, m_scanCursorReleased);
     emit statsChanged(m_paths.size(), m_totalBytes, 0, 0);
+    if (!m_galleryModelReadyEmitted)
+    {
+        m_galleryModelReadyEmitted = true;
+        emit galleryModelReady();
+    }
 
     // Coalesce viewport demand to one event-loop turn per group of scanner
     // batches. This keeps the first screen current without posting one timer
@@ -485,6 +494,11 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     // first viewport decode owns the link on high-latency folders.
     if (m_viewMode == Details || m_sortMode == SortResolution)
         ensureDimensions();
+    if (!m_galleryModelReadyEmitted)
+    {
+        m_galleryModelReadyEmitted = true;
+        emit galleryModelReady();
+    }
 }
 
 // ---- M46: cooperative dimension probe (viewport-first) ----------------------

@@ -22,6 +22,10 @@ void MainWindow::connectNavigationSignals()
             &DirectoryMonitor::setActiveDirectory);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
             &ThumbnailPanel::setDirectory);
+    // Tree highlight waits for this so the first gallery batch is not queued
+    // behind QFileSystemModel::index.
+    connect(m_thumbnailPanel, &ThumbnailPanel::galleryModelReady, m_directoryTree,
+            &DirectoryTree::nudgeDeferredHighlight);
     connect(m_directoryTree, &DirectoryTree::directoryContentsChanged, m_directoryMonitor,
             &DirectoryMonitor::notifyDirectoryChanged);
     connect(m_thumbnailPanel, &ThumbnailPanel::directoryContentsChanged, m_directoryMonitor,
