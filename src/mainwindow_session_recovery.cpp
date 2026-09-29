@@ -56,12 +56,14 @@ void MainWindow::restoreLastSession()
                 m_actToggleSearch->setChecked(searchVisible);
 
             const QString dir = m_appState.lastDir;
-            if (dir.isEmpty() || !QDir(dir).exists())
+            if (dir.isEmpty())
                 return;
+            // Do not QDir::exists() here. A disconnected lastDir blocks the
+            // GUI thread before changeDirectory can start the async scan.
             changeDirectory(dir);
 
             const QString img = m_appState.lastImage;
-            if (!img.isEmpty() && QFile::exists(img))
+            if (!img.isEmpty())
             {
                 pushHistory(img);
                 m_selection->setCurrentImage(img);
@@ -74,10 +76,11 @@ void MainWindow::restoreLastSession()
 
             // P1-3: restore the full navigation history stack (browser back/forward
             // + History sidebar) so reopening lands the user mid-browse, not just
-            // on the last image. Drop entries whose files no longer exist.
+            // on the last image. Skip per-file exists() — a stale path blocks
+            // the GUI thread, and opening a missing file fails asynchronously.
             QStringList restoredHist;
             for (const QString &p : m_appState.navHistory)
-                if (QFile::exists(p))
+                if (!p.isEmpty())
                     restoredHist.append(p);
             if (!restoredHist.isEmpty())
             {
@@ -123,7 +126,7 @@ void MainWindow::restoreLastSession()
                     for (const auto &v2 : cmpImgs)
                     {
                         const QString p = v2.toString();
-                        if (!p.isEmpty() && QFile::exists(p))
+                        if (!p.isEmpty())
                             cmpPaths.append(p);
                     }
                     if (cmpPaths.size() >= 2 && !cmpSession.isEmpty())
@@ -344,7 +347,7 @@ void MainWindow::restoreSessionRecovery()
     for (const auto &v : compareImages)
     {
         const QString p = v.toString();
-        if (!p.isEmpty() && QFile::exists(p))
+        if (!p.isEmpty())
             cmpImgs.append(p);
     }
     const bool restoreCompare = cmpImgs.size() >= 2 && !compareSession.isEmpty();
@@ -354,13 +357,13 @@ void MainWindow::restoreSessionRecovery()
         100, this,
         [this, lastDir, lastImage, lastThumbScroll, cmpImgs, compareSession, restoreCompare]()
         {
-            if (!lastDir.isEmpty() && QDir(lastDir).exists())
+            if (!lastDir.isEmpty())
             {
                 changeDirectory(lastDir);
                 if (lastThumbScroll > 0)
                     m_thumbnailPanel->verticalScrollBar()->setValue(lastThumbScroll);
             }
-            if (!lastImage.isEmpty() && QFile::exists(lastImage))
+            if (!lastImage.isEmpty())
             {
                 m_selection->setCurrentImage(lastImage);
                 onImageOpen(lastImage);

@@ -2,8 +2,8 @@
 
 #include <QLineEdit>
 #include <QListView>
-#include <QStringList>
 #include <QSortFilterProxyModel>
+#include <QStringList>
 #include <QTreeView>
 
 class QFileSystemModel;
@@ -103,6 +103,7 @@ class DirectoryTree : public QTreeView
     void expandAncestors(const QModelIndex &sourceIdx);
     void tryNavigateToPending(quint64 requestId);
     void scheduleNavigationRetry(quint64 requestId);
+    void resolvePendingNavigation(quint64 requestId);
     void cancelPendingNavigation();
     // A-1.5: progressive fetchMore for large directories (yields to event loop).
     void scheduleFetchMore(const QModelIndex &sourceIdx);
@@ -124,4 +125,7 @@ class DirectoryTree : public QTreeView
     bool m_pendingNavigationEmitSignal = false;
     quint64 m_navigationRequestId = 0;
     int m_navigationRetryCount = 0;
+    // True only after a worker QFileInfo::isDir() succeeded. QFileSystemModel
+    // index() stays off the GUI thread until then.
+    bool m_navigationStatReady = false;
 };

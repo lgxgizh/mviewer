@@ -96,6 +96,7 @@ struct ThumbnailPipeline
         m_sources = paths;
         m_pending.clear();
         m_pathRevisions.clear();
+        m_failed.clear();
     }
 
     // M54: publish discovered batches without superseding already decoded
@@ -163,6 +164,15 @@ struct ThumbnailPipeline
             }
             it = m_pending.erase(it);
         }
+        for (auto it = m_failed.begin(); it != m_failed.end();)
+        {
+            if (it->rfind(prefix, 0) != 0)
+            {
+                ++it;
+                continue;
+            }
+            it = m_failed.erase(it);
+        }
     }
 
     // The currently visible item range [begin, end). Visible items are decoded
@@ -224,6 +234,7 @@ struct ThumbnailPipeline
         m_memCache.clear();
         m_lru.clear();
         m_pending.clear();
+        m_failed.clear();
         m_memCacheBytes = 0;
     }
 
@@ -260,6 +271,7 @@ struct ThumbnailPipeline
         m_sources.clear();
         m_pending.clear();
         m_pathRevisions.clear();
+        m_failed.clear();
         m_memCacheBytes = 0;
     }
 
@@ -386,7 +398,7 @@ struct ThumbnailPipeline
     {
         const int size = thumbSize;
         const std::string k = key(path, size);
-        if (m_memCache.count(k))
+        if (m_memCache.count(k) || m_failed.count(k))
             return;
         auto pit = m_pending.find(k);
         if (pit != m_pending.end())
@@ -450,10 +462,11 @@ struct ThumbnailPipeline
                     }
                     else
                     {
-                        // M24: surface decode FAILURES to the consumer (null
-                        // thumb) so the UI can mark the cell as failed instead
-                        // of showing an eternal loading state. The consumer
-                        // decides whether/how to cache the failure.
+                        // Remember the failure for this generation so a later
+                        // setVisibleRange does not re-decode a thumb that
+                        // already failed. setSources()/clear()/setThumbSize()
+                        // drop the set; replaceSources() keeps it.
+                        m_failed.insert(k);
                         deliver = ImageData{};
                         cb = result;
                     }
@@ -599,6 +612,10 @@ struct ThumbnailPipeline
     // Pending keys: (path, size) -> unique request owner. An obsolete request
     // can never block or erase a later same-key request in the same generation.
     std::unordered_map<std::string, PendingEntry> m_pending;
+    // Keys whose decode returned null in the current generation. Not consulted
+    // by replaceSources()/updateSources(), so a same-generation retry after
+    // setSources() (which clears this set) still works.
+    std::unordered_set<std::string> m_failed;
     std::unordered_map<std::string, uint64_t> m_pathRevisions;
     uint64_t m_nextOwner = 0;
 };

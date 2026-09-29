@@ -137,6 +137,13 @@ void MainWindow::connectNavigationSignals()
 
 void MainWindow::connectGallerySignals()
 {
+    connect(m_thumbnailPanel, &ThumbnailPanel::browseStatusChanged, this,
+            [this](const QString &message)
+            {
+                if (message.isEmpty() || !statusBar())
+                    return;
+                statusBar()->showMessage(message);
+            });
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64, int, qint64)
             {

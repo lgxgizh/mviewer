@@ -179,6 +179,7 @@ add_library(mviewer_ui STATIC
     thumbnailpanel.cpp
     thumbnailpanel_live.cpp
     thumbnailpanel_async.cpp
+    thumbnailpanel_scan_guard.cpp
     thumbnailpanel_selection.cpp
     thumbnailpanel_pipeline.cpp
     thumbnailpanel_filters.cpp
@@ -1971,6 +1972,25 @@ target_include_directories(m46_browse_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(m46_browse_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m46_browse_tests COMMAND m46_browse_tests)
 set_tests_properties(m46_browse_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
+# First-open stall: GUI stays responsive when a directory probe blocks and
+# when every thumbnail decode fails.
+add_executable(first_open_stall_tests
+    test_first_open_stall.cpp
+)
+target_link_libraries(first_open_stall_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(first_open_stall_tests PRIVATE cxx_std_20)
+target_include_directories(first_open_stall_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(first_open_stall_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME first_open_stall_tests COMMAND first_open_stall_tests)
+set_tests_properties(first_open_stall_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
 # ─── M46: crash-safe persistence (atomic replace + fault injection) ─────────
 add_executable(m46_persistence_tests
