@@ -120,13 +120,14 @@ bool passesTypeFilter(const QString &typeFilter, const QString &suffixRaw)
     return false;
 }
 
-void scanProgressiveDirectory(
+// Returns true when the walk was superseded. The caller publishes only a
+// finished walk; cursor release is owned by the single completion path.
+bool scanProgressiveDirectory(
     const QString &path, const std::shared_ptr<std::atomic<bool>> &alive,
     const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen,
     QList<ThumbnailPanel::Entry> &entries,
     const std::shared_ptr<const std::function<void()>> &probe,
-    const std::function<void(const QList<ThumbnailPanel::Entry> &)> &publishBatch,
-    const std::function<void()> &onAbort)
+    const std::function<void(const QList<ThumbnailPanel::Entry> &)> &publishBatch)
 {
     QList<ThumbnailPanel::Entry> batch;
     const auto supportedVec = mviewer::core::ImageFormats::supportedSuffixes();
@@ -143,10 +144,7 @@ void scanProgressiveDirectory(
         // directory is known, so the view can start painting and decoding.
         if (!alive->load() ||
             genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
-        {
-            onAbort();
-            return;
-        }
+            return true;
         if (probe)
         {
             try
@@ -177,6 +175,25 @@ void scanProgressiveDirectory(
     std::sort(entries.begin(), entries.end(),
               [](const ThumbnailPanel::Entry &a, const ThumbnailPanel::Entry &b)
               { return QString::compare(a.path, b.path, Qt::CaseSensitive) < 0; });
+    return false;
+}
+
+void callProbe(const std::shared_ptr<const std::function<void()>> &probe)
+{
+    if (!probe)
+        return;
+    try
+    {
+        (*probe)();
+    }
+    catch (const std::exception &)
+    {
+        return;
+    }
+    catch (...)
+    {
+        return;
+    }
 }
 } // namespace
 
@@ -235,7 +252,11 @@ void ThumbnailPanel::setDirectory(const QString &path)
     }
     m_metaIndexing = false;
     m_dimsResolved = false;
-    m_highLatencyDir = isHighLatencyBrowsePath(path);
+    // Lexical UNC hint only. QStorageInfo / GetDriveTypeW run on a worker so a
+    // stale volume cannot freeze this call before the scan starts.
+    m_highLatencyDir = lexicalHighLatencyHint(path);
+    m_scanStallAnnounced = false;
+    m_scanCursorReleased = std::make_shared<std::atomic<bool>>(false);
     ThumbnailCache::instance().clearSourceIdentityHints();
     m_scanComplete = false;
     m_scanProgressive = m_sortMode == SortName && m_sortAscending && m_typeFilter.isEmpty();
@@ -277,6 +298,8 @@ void ThumbnailPanel::setDirectory(const QString &path)
     // leave the whole application with a stuck override cursor.
     startDirectoryScan(path, gen, typeFilter, sortMode, sortAscending, alive, genToken, busyRefs,
                        self);
+    scheduleHighLatencyProbe(path, gen);
+    armScanWatchdog(gen);
 }
 
 void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
@@ -286,76 +309,86 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
                                         const std::shared_ptr<std::atomic<int>> &busyRefs,
                                         const QPointer<ThumbnailPanel> &self)
 {
+    // Captured now: a newer setDirectory() replaces the panel's ticket.
+    const auto cursorReleased = m_scanCursorReleased;
     (void)QtConcurrent::run(
         &m_scanPool,
-        [self, alive, gen, genToken, busyRefs, path, typeFilter, sortMode, sortAscending]()
+        [self, alive, gen, genToken, busyRefs, cursorReleased, path, typeFilter, sortMode,
+         sortAscending]()
         {
             QList<Entry> entries;
-            QDir dir(path);
-            const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
-            if (dir.exists())
+            bool publish = false;
+            bool directoryReadable = true;
+            try
             {
-                const bool progressive =
-                    sortMode == SortName && sortAscending && typeFilter.isEmpty();
-                if (progressive)
+                if (path.isEmpty())
                 {
-                    scanProgressiveDirectory(
-                        path, alive, genToken, gen, entries, probe,
-                        [self, alive, gen](const QList<Entry> &batch)
-                        {
-                            QMetaObject::invokeMethod(qApp,
-                                                      [self, alive, gen, batch]()
-                                                      {
-                                                          if (alive->load() && self &&
-                                                              self->m_dirGen == gen)
-                                                              self->applyScanBatch(gen, batch);
-                                                      });
-                        },
-                        [busyRefs] { ThumbnailPanel::marshalBusyRestore(busyRefs); });
+                    publish = true;
                 }
                 else
                 {
-                    const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
-                    for (int i = 0; i < list.size(); ++i)
+                    QDir dir(path);
+                    const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
+                    if (!dir.exists())
                     {
-                        // M46: cooperative stop — the panel died OR a newer
-                        // directory superseded this generation (A → B → C while
-                        // walking A). The completion below drops this scan, but
-                        // aborting here bounds the wasted work.
-                        if (!alive->load() ||
-                            genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
-                        {
-                            marshalBusyRestore(busyRefs);
-                            return;
-                        }
-                        if (probe)
-                        {
-                            try
+                        publish = true;
+                        directoryReadable = false;
+                    }
+                    else if (sortMode == SortName && sortAscending && typeFilter.isEmpty())
+                    {
+                        const bool aborted = scanProgressiveDirectory(
+                            path, alive, genToken, gen, entries, probe,
+                            [self, alive, gen](const QList<Entry> &batch)
                             {
-                                (*probe)();
-                            }
-                            catch (...)
-                            {
-                            }
+                                if (!qApp)
+                                    return;
+                                QMetaObject::invokeMethod(qApp,
+                                                          [self, alive, gen, batch]()
+                                                          {
+                                                              if (alive->load() && self &&
+                                                                  self->m_dirGen == gen)
+                                                                  self->applyScanBatch(gen, batch);
+                                                          });
+                            });
+                        publish = !aborted;
+                    }
+                    else
+                    {
+                        const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
+                        const uint64_t generation = static_cast<uint64_t>(gen);
+                        for (const QFileInfo &fi : list)
+                        {
+                            if (!alive->load() ||
+                                genToken->load(std::memory_order_acquire) != generation)
+                                break;
+                            callProbe(probe);
+                            if (fi.suffix().isEmpty())
+                                continue;
+                            entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
+                                            fi.lastModified()});
                         }
-                        const QFileInfo &fi = list.at(i);
-                        if (fi.suffix().isEmpty())
-                            continue;
-                        entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
-                                        fi.lastModified()});
+                        publish = alive->load() &&
+                                  genToken->load(std::memory_order_acquire) == generation;
                     }
                 }
             }
-            QMetaObject::invokeMethod(qApp,
-                                      [self, alive, gen, busyRefs, entries]() mutable
-                                      {
-                                          // Always drop the busy cursor, even if
-                                          // superseded/destroyed.
-                                          restoreBusyCursorOnce(busyRefs);
-                                          if (!alive->load() || !self)
-                                              return;
-                                          self.data()->applyScanResult(gen, entries);
-                                      });
+            catch (...)
+            {
+                entries.clear();
+                publish = true;
+                directoryReadable = false;
+            }
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [self, alive, gen, busyRefs, cursorReleased, entries, publish, directoryReadable]()
+                {
+                    releaseScanCursor(busyRefs, cursorReleased);
+                    if (!alive->load() || !self || !publish)
+                        return;
+                    self->applyScanResult(gen, entries, directoryReadable);
+                });
         });
 }
 
@@ -363,6 +396,7 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
 {
     if (gen != m_dirGen || batch.isEmpty())
         return;
+    noteScanProgress(gen);
 
     const int sourceRow = m_allEntries.size();
     m_allEntries.append(batch);
@@ -417,11 +451,13 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
 // Publish a completed scan's entries on the UI thread. Runs inside the
 // qApp-marshaled completion lambda (never on the scan worker); the generation
 // guard makes a superseded scan a no-op.
-void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries)
+void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool directoryReadable)
 {
     if (gen != m_dirGen) // a newer folder superseded this scan
         return;
+    ++m_scanWatchSerial;
     m_scanComplete = true;
+    m_scanStallAnnounced = false;
     m_allEntries = entries;
     m_sourceRowByPath.clear();
     m_sourceRowByPath.reserve(m_allEntries.size());
@@ -434,6 +470,12 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries)
         ThumbnailCache::instance().hintSourceIdentity(
             e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
     applyFilter();
+    // sequenceChanged (inside the filter rebuild) publishes "Browse: N images".
+    // A failure or empty result must win over that line.
+    if (!directoryReadable)
+        emit browseStatusChanged(QStringLiteral("目录加载失败"));
+    else if (entries.isEmpty() && !m_currentDir.isEmpty())
+        emit browseStatusChanged(QStringLiteral("暂无图片"));
     // Progressive batches used replaceSources for convergence; later filter /
     // sort rebuilds must not keep that mode or every keystroke cancels
     // in-flight thumbnail handles (m46 B2 paint-cache flake after clear).

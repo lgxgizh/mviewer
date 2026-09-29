@@ -229,6 +229,9 @@ class ThumbnailPanel : public QListView
     // scan/dimension iteration. Empty in production; tests install it to prove
     // a superseded scan aborts after a bounded number of iterations.
     static void setScanIterationProbe(const std::function<void()> &probe);
+    // Test seam for the background latency probe. Empty in production. The
+    // hook runs on the probe worker, never inside isHighLatencyBrowsePath().
+    static void setHighLatencyProbeHook(const std::function<void()> &hook);
     // M46 test observability: the shared scan-generation token. Tests read it
     // from the iteration probe to attribute iterations to a directory
     // generation. Production code never needs it.
@@ -254,6 +257,14 @@ class ThumbnailPanel : public QListView
     static std::shared_ptr<const std::function<void()>> scanIterationProbeSnapshot();
     static void restoreBusyCursorOnce(const std::shared_ptr<std::atomic<int>> &refs);
     static void marshalBusyRestore(const std::shared_ptr<std::atomic<int>> &refs);
+    // UNC prefixes only — no syscalls. The full probe runs off the GUI thread.
+    static bool lexicalHighLatencyHint(const QString &path);
+    // Drop this scan's busy-cursor ref exactly once (watchdog, completion, abort).
+    static void releaseScanCursor(const std::shared_ptr<std::atomic<int>> &refs,
+                                  const std::shared_ptr<std::atomic<bool>> &released);
+    void scheduleHighLatencyProbe(const QString &path, int gen);
+    void armScanWatchdog(int gen);
+    void noteScanProgress(int gen);
     void startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
                             SortMode sortMode, bool sortAscending,
                             const std::shared_ptr<std::atomic<bool>> &alive,
@@ -265,7 +276,7 @@ class ThumbnailPanel : public QListView
     // M46: publish a completed scan's entries on the UI thread (extracted from
     // setDirectory's completion lambda so the scanning TU stays under the
     // function-length gate). Runs on the GUI thread; re-checks the generation.
-    void applyScanResult(int gen, const QList<Entry> &entries);
+    void applyScanResult(int gen, const QList<Entry> &entries, bool directoryReadable);
     // Keep decoded thumbnail state for the current directory across
     // filter/sort rebuilds; implementation lives with pipeline delivery.
     void pruneThumbnailState();
@@ -414,6 +425,9 @@ class ThumbnailPanel : public QListView
     // M56: explicit watcher/F5 hint for the active directory. The host routes
     // it to DirectoryMonitor; this is not a navigation signal.
     void directoryContentsChanged(const QString &path);
+    // Non-modal browse feedback when a scan fails, stalls, or finds nothing.
+    // Empty messages are ignored by the host so a scan status is not cleared.
+    void browseStatusChanged(const QString &message);
 
   private slots:
     void onThumbReady(const QString &path);
@@ -562,9 +576,10 @@ class ThumbnailPanel : public QListView
     std::shared_ptr<std::atomic<bool>> m_filterCancel;
     TaskScheduler::TaskHandle m_filterTask;
     uint64_t m_filterGeneration = 0;
-    // Small directories clear their stale projection immediately while the
-    // debounced query is pending. Keep the path identity so the eventual
-    // result can restore selection/current-image exactly.
+    // Recursive tiny-directory search parks path identity while the walk is
+    // still in flight. In-memory tiny queries publish synchronously and leave
+    // this empty; takePendingFilterRestore applies it only for the same
+    // generation.
     QStringList m_pendingFilterSelection;
     QString m_pendingFilterCurrent;
     uint64_t m_pendingFilterGeneration = 0;
@@ -667,6 +682,12 @@ class ThumbnailPanel : public QListView
     // setOverrideCursor()/restoreOverrideCursor() provably balanced: no queued
     // job being cleared/cancelled can strand the whole app with a busy cursor.
     std::shared_ptr<std::atomic<int>> m_busyCursorRefs;
+    // Per-scan once-flag. A superseded scan must not pop the newer scan's cursor.
+    std::shared_ptr<std::atomic<bool>> m_scanCursorReleased;
+    // Bumped on each batch and on completion so a progressing scan is not
+    // reported as failed. The watchdog only fires when the serial is unchanged.
+    uint64_t m_scanWatchSerial = 0;
+    bool m_scanStallAnnounced = false;
 
     // P0-4: column-title header row shown only in the Details view. Positioned in
     // the reserved viewport top margin so it lines up with the delegate columns.

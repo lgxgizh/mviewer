@@ -582,8 +582,8 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     syncGalleryFromSelection();
 
     // P0: Auto-locate the directory tree to the image's parent folder. The tree
-    // itself short-circuits an already-selected directory before QFileInfo or
-    // QFileSystemModel work, so rapid same-folder selection is memory-only.
+    // short-circuits an already-selected directory in memory. A new folder is
+    // confirmed off the GUI thread so a stale volume cannot freeze selection.
     const int slash = path.lastIndexOf(QChar('/'));
     const int backslash = path.lastIndexOf(QChar('\\'));
     const int separator = qMax(slash, backslash);
@@ -649,14 +649,14 @@ void MainWindow::onCurrentImageChanged(const QString &path)
 
 void MainWindow::openDirectory(const QString &dir)
 {
-    if (dir.isEmpty() || !QFileInfo(dir).isDir())
+    if (dir.isEmpty())
         return;
     m_directoryTree->navigateTo(dir);
 }
 
 void MainWindow::changeDirectory(const QString &dir)
 {
-    if (dir.isEmpty() || !QDir(dir).exists())
+    if (dir.isEmpty())
         return;
 
     // DirectoryTree::directoryChanged is the committed-transition boundary.

@@ -55,40 +55,44 @@ void ThumbnailPanel::setFilter(const QString &text, bool recursive)
     m_filterRecursive = recursive;
     const bool tinyDir = m_allEntries.size() <= 256;
     const QString trimmed = m_filterText.trimmed();
-    // Clearing the filter on a tiny directory must restore rows in this call.
-    // Debouncing only the clear path raced short event pumps (m46 B2) under
-    // load: the model stayed empty past pump(50) while the 25ms timer lagged.
-    if (tinyDir && trimmed.isEmpty())
+    // A recursive query still walks subdirectories off the UI thread, so the
+    // stale rows have to come down immediately and the selection is parked
+    // until that result lands. Every other tiny-directory query is an in-memory
+    // filter and must publish before return. Debouncing it blanked the model
+    // and cleared selection until a 25ms timer, which under load misses
+    // pump(50) — the same race already closed for the clear path (m46 B2).
+    // A still-visible file therefore keeps its selection. Large directories
+    // stay debounced and keep the previous rows until the worker result.
+    const bool asyncRecursive = tinyDir && m_filterRecursive && !trimmed.isEmpty();
+    if (tinyDir && !asyncRecursive)
     {
+        // scheduleFilter() bumps the generation before the rebuild. A recursive
+        // walk may already have blanked the rows and parked the real selection;
+        // point that identity at the generation this call is about to publish.
+        if (m_pendingFilterGeneration != 0)
+            m_pendingFilterGeneration = m_filterGeneration + 1;
         scheduleFilter(false);
         return;
     }
     scheduleFilter(true);
-    // Reflect a pending non-empty query immediately so a stale directory
-    // result is never presented as the answer to the new filter. The actual
-    // evaluation remains debounced and latest-wins in runFilterQuery().
-    // Tiny directories can clear their stale projection immediately without
-    // creating a meaningful UI slice; the actual query still runs on the
-    // debounce timer. Large directories keep the previous model until the
-    // guarded worker result arrives, avoiding a 50K-row synchronous reset.
-    if (!trimmed.isEmpty() && tinyDir)
+    if (!asyncRecursive)
+        return;
+
+    QStringList previousSelection = selectedPaths();
+    QString previousCurrent =
+        currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString();
+    // A second keystroke can arrive before the first debounced query
+    // publishes. In that case the native model is already empty; retain
+    // the original identity captured by the pending query.
+    if (m_pendingFilterGeneration != 0)
     {
-        QStringList previousSelection = selectedPaths();
-        QString previousCurrent =
-            currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString();
-        // A second keystroke can arrive before the first debounced query
-        // publishes. In that case the native model is already empty; retain
-        // the original identity captured by the pending query.
-        if (m_pendingFilterGeneration != 0)
-        {
-            previousSelection = m_pendingFilterSelection;
-            previousCurrent = m_pendingFilterCurrent;
-        }
-        buildModel({});
-        m_pendingFilterSelection = previousSelection;
-        m_pendingFilterCurrent = previousCurrent;
-        m_pendingFilterGeneration = m_filterGeneration;
+        previousSelection = m_pendingFilterSelection;
+        previousCurrent = m_pendingFilterCurrent;
     }
+    buildModel({});
+    m_pendingFilterSelection = previousSelection;
+    m_pendingFilterCurrent = previousCurrent;
+    m_pendingFilterGeneration = m_filterGeneration;
 }
 
 void ThumbnailPanel::setMetaSearch(bool on)
