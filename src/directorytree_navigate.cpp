@@ -107,31 +107,37 @@ void DirectoryTree::scheduleDeferredNavigation(quint64 requestId)
     // Two turns: the gallery's rowsInserted posts a 0ms layout timer before
     // this one. That layout posts the paint. The second timer runs after that
     // paint, so index() cannot sit in the same timer batch.
-    QTimer::singleShot(0, this, [this, requestId]() {
-        if (requestId != m_navigationRequestId)
-        {
-            m_deferredNavigationQueued = false;
-            return;
-        }
-        QTimer::singleShot(0, this, [this, requestId]() {
-            m_deferredNavigationQueued = false;
-            if (requestId != m_navigationRequestId)
-                return;
-            tryNavigateToPending(requestId);
-        });
-    });
+    QTimer::singleShot(0, this,
+                       [this, requestId]()
+                       {
+                           if (requestId != m_navigationRequestId)
+                           {
+                               m_deferredNavigationQueued = false;
+                               return;
+                           }
+                           QTimer::singleShot(0, this,
+                                              [this, requestId]()
+                                              {
+                                                  m_deferredNavigationQueued = false;
+                                                  if (requestId != m_navigationRequestId)
+                                                      return;
+                                                  tryNavigateToPending(requestId);
+                                              });
+                       });
 }
 
 void DirectoryTree::armHighlightFallback(quint64 requestId)
 {
-    QTimer::singleShot(kHighlightFallbackMs, this, [this, requestId]() {
-        if (requestId != m_navigationRequestId || m_highlightStarted)
-            return;
-        if (!m_navigationStatReady || m_pendingNavigationPath.isEmpty())
-            return;
-        m_highlightStarted = true;
-        scheduleDeferredNavigation(requestId);
-    });
+    QTimer::singleShot(kHighlightFallbackMs, this,
+                       [this, requestId]()
+                       {
+                           if (requestId != m_navigationRequestId || m_highlightStarted)
+                               return;
+                           if (!m_navigationStatReady || m_pendingNavigationPath.isEmpty())
+                               return;
+                           m_highlightStarted = true;
+                           scheduleDeferredNavigation(requestId);
+                       });
 }
 
 void DirectoryTree::nudgeDeferredHighlight()
@@ -292,10 +298,12 @@ void DirectoryTree::resolvePendingNavigation(quint64 requestId)
                 invokeNavigationIndexProbe();
             if (!qApp)
                 return;
-            QMetaObject::invokeMethod(qApp, [self, requestId, isDir]() {
-                if (!self)
-                    return;
-                self->acceptNavigationStat(requestId, isDir);
-            });
+            QMetaObject::invokeMethod(qApp,
+                                      [self, requestId, isDir]()
+                                      {
+                                          if (!self)
+                                              return;
+                                          self->acceptNavigationStat(requestId, isDir);
+                                      });
         });
 }
