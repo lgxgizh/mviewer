@@ -93,8 +93,13 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
         const bool samePath = i < static_cast<int>(m_comparePaths.size()) &&
                               m_comparePaths[static_cast<size_t>(i)] == path;
 
+        const QString name = basenameOfPath(path);
         if (i < m_cellLabels.size())
-            setComparePaneCaptionText(m_cellLabels[i], basenameOfPath(path));
+        {
+            setComparePaneCaptionText(m_cellLabels[i], name);
+            clearComparePaneCaptionStatus(m_cellLabels[i]);
+        }
+        view->setFilenameOverlay(name, m_filenameOverlay);
 
         view->setSoftLoading(true);
         if (samePath)
@@ -134,19 +139,21 @@ void CompareWorkspace::applyFramesToExistingPanes()
     for (int i = 0; i < n && i < m_cellViews.size(); ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
+        QString name;
+        if (img)
+            name = QString::fromUtf8(img->metadata().fileName.data(),
+                                     static_cast<int>(img->metadata().fileName.size()));
         if (i < m_cellLabels.size() && img)
         {
-            setComparePaneCaptionText(
-                m_cellLabels[i],
-                QString::fromUtf8(img->metadata().fileName.data(),
-                                  static_cast<int>(img->metadata().fileName.size())));
+            setComparePaneCaptionText(m_cellLabels[i], name);
+            clearComparePaneCaptionStatus(m_cellLabels[i]);
         }
         if (RawImageView *view = m_cellViews[i])
         {
             view->setSoftLoading(false);
             view->setPaneTag(QString(QChar('A' + i)));
-            if (img && m_filenameOverlay)
-                view->setFilenameOverlay(QString::fromStdString(img->metadata().fileName), true);
+            if (img)
+                view->setFilenameOverlay(name, m_filenameOverlay);
         }
     }
 

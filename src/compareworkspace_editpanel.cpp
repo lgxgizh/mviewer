@@ -739,11 +739,9 @@ void CompareWorkspace::onSwapPanes()
         setComparePaneCaptionText(m_cellLabels[a], nameOf(fa));
         setComparePaneCaptionText(m_cellLabels[b], nameOf(fb));
         if (va)
-            va->setFilenameOverlay(m_cellLabels[a] ? m_cellLabels[a]->toolTip() : QString(),
-                                   m_filenameOverlay);
+            va->setFilenameOverlay(comparePaneCaptionFullText(m_cellLabels[a]), m_filenameOverlay);
         if (vb)
-            vb->setFilenameOverlay(m_cellLabels[b] ? m_cellLabels[b]->toolTip() : QString(),
-                                   m_filenameOverlay);
+            vb->setFilenameOverlay(comparePaneCaptionFullText(m_cellLabels[b]), m_filenameOverlay);
     }
 
     if (m_focusIndex == a)

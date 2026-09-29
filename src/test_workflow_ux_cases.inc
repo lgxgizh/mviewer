@@ -1787,15 +1787,20 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(histOverlayChk && filenameOverlayChk,
           "compare exposes histogram and filename overlay toggles");
     CHECK(histOverlayChk && !histOverlayChk->isChecked(), "histogram overlay is off by default");
-    CHECK(filenameOverlayChk && !filenameOverlayChk->isChecked(),
-          "filename overlay is off by default");
-    if (filenameOverlayChk)
-        filenameOverlayChk->setChecked(true);
+    CHECK(filenameOverlayChk && filenameOverlayChk->isChecked(),
+          "filename overlay is on by default");
+    CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("隐藏")) &&
+              filenameOverlayChk->toolTip().contains(QStringLiteral("换行")),
+          "filename checkbox tooltip describes show/hide and wrapping");
     CHECK(ws->filenameOverlayVisible(), "filename overlay checkbox enables the overlay");
     auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
     auto *view0 = pane0 ? pane0->findChild<RawImageView *>() : nullptr;
-    CHECK(view0 && view0->filenameOverlayVisible() && !view0->filenameOverlayText().isEmpty(),
+    auto *caption0 = ws->findChild<QLabel *>(QStringLiteral("paneCaption0"));
+    CHECK(view0 && view0->filenameOverlayVisible() && !view0->filenameOverlayText().isEmpty() &&
+              !view0->filenameOverlayText().contains(QChar(0x2026)),
           "filename overlay is painted from the current pane filename");
+    CHECK(caption0 && !caption0->isVisible(),
+          "below-pane filename caption stays hidden while the overlay is on");
     QFont wrapFont;
     wrapFont.setBold(true);
     wrapFont.setPointSize(9);
@@ -1822,6 +1827,9 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     }
     if (filenameOverlayChk)
         filenameOverlayChk->setChecked(false);
+    CHECK(view0 && !view0->filenameOverlayVisible(), "filename checkbox hides the top overlay");
+    CHECK(caption0 && !caption0->isVisible(),
+          "hiding the filename overlay does not show a below-pane caption");
     if (histOverlayChk)
         histOverlayChk->setChecked(false);
 

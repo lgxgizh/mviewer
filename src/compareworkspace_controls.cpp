@@ -1,6 +1,7 @@
 // CompareWorkspace control construction split from the lifecycle constructor.
 #include "compareworkspace_p.h"
 
+#include "compareworkspace_caption.h"
 #include "core/image/ImageFrame.h"
 
 #include <QSettings>
@@ -403,8 +404,8 @@ void CompareWorkspace::applyFilenameOverlays()
         if (!view)
             continue;
         QString name;
-        if (i < m_cellLabels.size() && m_cellLabels[i])
-            name = m_cellLabels[i]->toolTip();
+        if (i < m_cellLabels.size())
+            name = comparePaneCaptionFullText(m_cellLabels[i]);
         if (name.isEmpty())
         {
             const ImageFrame *img = m_engine.imageAt(i);
@@ -412,8 +413,11 @@ void CompareWorkspace::applyFilenameOverlays()
                 name = QString::fromStdString(img->metadata().fileName);
         }
         view->setFilenameOverlay(name, m_filenameOverlay);
-        if (i < m_cellLabels.size() && m_cellLabels[i])
-            m_cellLabels[i]->setVisible(!m_filenameOverlay);
+        // Filename visibility is the top overlay only. A display-error status
+        // is the one reason the below-pane label stays on screen.
+        if (i < m_cellLabels.size() && m_cellLabels[i] &&
+            !comparePaneCaptionHasStatus(m_cellLabels[i]))
+            m_cellLabels[i]->setVisible(false);
     }
 }
 
@@ -430,7 +434,7 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_filenameOverlayChk = new QCheckBox(tr("文件名"), this);
     m_filenameOverlayChk->setObjectName("compareFilenameOverlayToggle");
     m_filenameOverlayChk->setChecked(m_filenameOverlay);
-    m_filenameOverlayChk->setToolTip(tr("在每张比较图上方叠加显示文件名，过长时换行"));
+    m_filenameOverlayChk->setToolTip(tr("显示或隐藏每张比较图上方的文件名，过长时换行"));
     connect(m_filenameOverlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {

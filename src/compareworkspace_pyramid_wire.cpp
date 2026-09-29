@@ -1,3 +1,4 @@
+#include "compareworkspace_caption.h"
 #include "compareworkspace_display_planner.h"
 #include "compareworkspace_display_pyramid.h"
 #include "compareworkspace_p.h"
@@ -274,12 +275,8 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         {
             const QString message = tr("无法显示此源：%1").arg(cell.errorText);
             view->setToolTip(message);
-            if (view->image().isNull() && cell.index < m_cellLabels.size() &&
-                m_cellLabels[cell.index])
-            {
-                m_cellLabels[cell.index]->setText(message);
-                m_cellLabels[cell.index]->setToolTip(message);
-            }
+            if (view->image().isNull() && cell.index < m_cellLabels.size())
+                setComparePaneCaptionStatus(m_cellLabels[cell.index], message);
             continue;
         }
         const QSize oldSize = view->image().size();
@@ -292,6 +289,8 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
             continue; // do not downgrade a full pane with late provisional
         view->setSoftLoading(false);
         view->setImage(cell.image, cell.sourceSize, cell.sourceRect);
+        if (cell.index < m_cellLabels.size())
+            clearComparePaneCaptionStatus(m_cellLabels[cell.index]);
         if (!oldSize.isEmpty() && view->sourceSize() == oldSourceSize)
             view->setTransform(oldScale, oldOffset);
         if (cell.sourceRect != QRect(QPoint(0, 0), cell.sourceSize))
