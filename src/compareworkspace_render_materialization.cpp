@@ -67,8 +67,7 @@ HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool
     return histogram;
 }
 
-ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFrame *img,
-                                      bool filenameOverlay)
+ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFrame *img)
 {
     auto *caption = new ComparePaneCaption(cellWidget);
     caption->setObjectName(QString("paneCaption%1").arg(index));
@@ -81,10 +80,10 @@ ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const Imag
     caption->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     caption->setMinimumWidth(0);
     caption->setMinimumHeight(28);
+    caption->setVisible(false);
     if (img)
         caption->setFullText(QString::fromUtf8(img->metadata().fileName.data(),
                                                static_cast<int>(img->metadata().fileName.size())));
-    caption->setVisible(!filenameOverlay);
     return caption;
 }
 } // namespace
@@ -365,7 +364,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
 {
     for (int i = 0; i < n; ++i)
     {
-        // Each cell: a RawImageView for the image + a QLabel caption below
+        // Image view plus a hidden filename store; visible names use the top overlay.
         auto *cellWidget = new QWidget(m_grid);
         cellWidget->setObjectName(QString("comparePane%1").arg(i));
         cellWidget->setMinimumSize(0, 0);
@@ -437,10 +436,10 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         if (!m_linkPoints.isEmpty())
             view->setLinkMarkers(m_linkPoints);
 
-        auto *caption = createPaneCaption(cellWidget, i, img, m_filenameOverlay);
+        auto *caption = createPaneCaption(cellWidget, i, img);
         cellLay->addWidget(caption);
         m_cellLabels.push_back(caption);
-        view->setFilenameOverlay(caption->toolTip(), m_filenameOverlay);
+        view->setFilenameOverlay(caption->fullText(), m_filenameOverlay);
 
         const int row = i / columns;
         const int col = i % columns;

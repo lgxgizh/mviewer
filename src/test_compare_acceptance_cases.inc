@@ -149,10 +149,10 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
                   r1.right() == grid->width() - 1,
               "M49: default two-pane grid is an exact 50/50 split");
     }
-    CHECK(caption && caption->toolTip().contains(QStringLiteral("中文 filename")),
-          "M49: long caption keeps the full filename in its tooltip");
-    CHECK(caption && caption->text().size() < QFileInfo(longA).fileName().size(),
-          "M49: long caption is elided inside the pane");
+    const QString fullName = QFileInfo(longA).fileName();
+    CHECK(caption && !caption->isVisible() && caption->toolTip().contains(fullName) &&
+              caption->text() == caption->toolTip() && !caption->text().contains(QChar(0x2026)),
+          "M49: below-pane caption stays hidden and stores the full filename");
 
     auto *button = ws->findChild<QPushButton *>(QStringLiteral("temporaryCompareButton"));
     auto *view0 = pane0 ? pane0->findChild<RawImageView *>() : nullptr;
@@ -161,6 +161,10 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
           "M49: momentary Compare control is visible and enabled for two loaded panes");
     CHECK(view0 && view1 && !view0->image().isNull() && !view1->image().isNull(),
           "M49: both pane display rasters are materialized");
+    CHECK(view0 && caption && view0->filenameOverlayVisible() &&
+              view0->filenameOverlayText() == caption->toolTip() &&
+              view0->filenameOverlayText().contains(fullName),
+          "M49: top overlay shows the full filename without elision");
     if (!button || !view0 || !view1 || view0->image().isNull() || view1->image().isNull())
         return;
 
@@ -491,19 +495,19 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
           "P1: Blink shows only the active pane container");
     CHECK(frame0 && frame1 && frame0->isVisible() && !frame1->isVisible(),
           "P1: Blink hides the inactive pane histogram frame");
-    CHECK(caption0 && caption1 && caption0->isVisible() && !caption1->isVisible(),
-          "P1: Blink hides the inactive pane caption");
+    CHECK(caption0 && caption1 && !caption0->isVisible() && !caption1->isVisible(),
+          "P1: filename captions stay hidden; names use the top overlay");
 
     // Exercise a timer tick too: exactly one whole pane remains visible when the
-    // active image flips, and its overlay/caption visibility follows the pane.
+    // active image flips, and histogram frames follow that pane. Filename
+    // captions stay hidden either way.
     pump(170);
     CHECK(pane0->isVisible() != pane1->isVisible(),
           "P1: repeated Blink ticks keep exactly one pane container visible");
     CHECK(frame0->isVisible() == pane0->isVisible() && frame1->isVisible() == pane1->isVisible(),
           "P1: pane histogram frames follow the active Blink pane");
-    CHECK(caption0->isVisible() == pane0->isVisible() &&
-              caption1->isVisible() == pane1->isVisible(),
-          "P1: pane captions follow the active Blink pane");
+    CHECK(caption0 && caption1 && !caption0->isVisible() && !caption1->isVisible(),
+          "P1: filename captions stay hidden across Blink ticks");
 
     // A rebuild while Blink has detached one pane must delete both old panes,
     // preserve Blink visibility, and populate the new overlay widgets.

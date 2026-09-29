@@ -459,7 +459,7 @@ class CompareWorkspace : public QWidget
         bool syncDrag = true;
         bool crosshair = false;
         bool pixelLink = false;
-        bool filenameOverlay = false;
+        bool filenameOverlay = true;
         int overlayMode = 0;
         int overlayAlpha = 45;
         uint8_t threshold = 0;
@@ -758,7 +758,7 @@ class CompareWorkspace : public QWidget
     TaskScheduler::TaskHandle m_histTask;
     QCheckBox *m_paneHistOverlayChk = nullptr;
     QCheckBox *m_filenameOverlayChk = nullptr;
-    bool m_filenameOverlay = false;
+    bool m_filenameOverlay = true; // checkbox shows or hides the top name; default visible
     void applyFilenameOverlays();
     std::vector<HistogramWidget *> m_cellHists;
 

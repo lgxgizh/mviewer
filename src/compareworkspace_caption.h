@@ -1,24 +1,48 @@
 #pragma once
 
 #include <QLabel>
-#include <QResizeEvent>
 #include <QString>
-#include <algorithm>
 
-// Compact eliding caption under each compare pane. Full text stays in the
-// tooltip; resize re-elides from the stored full string.
+// Hidden filename store under each compare pane. The visible name is the top
+// overlay (wrap, no elision). This label stays hidden unless a display error
+// needs a status line under the image.
 class ComparePaneCaption final : public QLabel
 {
   public:
     explicit ComparePaneCaption(QWidget *parent) : QLabel(parent)
     {
+        setWordWrap(true);
     }
 
     void setFullText(const QString &text)
     {
         m_fullText = text;
+        if (m_statusText.isEmpty())
+        {
+            setToolTip(text);
+            QLabel::setText(text);
+        }
+    }
+
+    void setStatusText(const QString &text)
+    {
+        m_statusText = text;
+        if (text.isEmpty())
+        {
+            clearStatus();
+            return;
+        }
+        QLabel::setText(text);
         setToolTip(text);
-        updateText();
+        setVisible(true);
+    }
+
+    void clearStatus()
+    {
+        m_statusText.clear();
+        QLabel::setText(m_fullText);
+        setToolTip(m_fullText);
+        setVisible(false);
     }
 
     QString fullText() const
@@ -26,34 +50,56 @@ class ComparePaneCaption final : public QLabel
         return m_fullText;
     }
 
-  protected:
-    void resizeEvent(QResizeEvent *event) override
+    bool hasStatus() const
     {
-        QLabel::resizeEvent(event);
-        updateText();
+        return !m_statusText.isEmpty();
     }
 
   private:
-    void updateText()
-    {
-        constexpr int kMaxCaptionPixels = 320;
-        const int available = std::min(kMaxCaptionPixels, std::max(0, contentsRect().width() - 8));
-        QLabel::setText(fontMetrics().elidedText(m_fullText, Qt::ElideMiddle, available));
-    }
-
     QString m_fullText;
+    QString m_statusText;
 };
 
 inline void setComparePaneCaptionText(QLabel *caption, const QString &fullText)
 {
     if (!caption)
         return;
-    if (auto *elided = dynamic_cast<ComparePaneCaption *>(caption))
+    if (auto *stored = dynamic_cast<ComparePaneCaption *>(caption))
     {
-        elided->setFullText(fullText);
+        stored->setFullText(fullText);
         return;
     }
     caption->setToolTip(fullText);
-    const QFontMetrics fm(caption->font());
-    caption->setText(fm.elidedText(fullText, Qt::ElideMiddle, 320));
+    caption->setText(fullText);
+    caption->setVisible(false);
+}
+
+inline void setComparePaneCaptionStatus(QLabel *caption, const QString &status)
+{
+    if (auto *stored = dynamic_cast<ComparePaneCaption *>(caption))
+        stored->setStatusText(status);
+}
+
+inline void clearComparePaneCaptionStatus(QLabel *caption)
+{
+    if (auto *stored = dynamic_cast<ComparePaneCaption *>(caption))
+        stored->clearStatus();
+}
+
+inline QString comparePaneCaptionFullText(const QLabel *caption)
+{
+    if (!caption)
+        return {};
+    if (const auto *stored = dynamic_cast<const ComparePaneCaption *>(caption))
+    {
+        if (!stored->fullText().isEmpty())
+            return stored->fullText();
+    }
+    return caption->toolTip();
+}
+
+inline bool comparePaneCaptionHasStatus(const QLabel *caption)
+{
+    const auto *stored = dynamic_cast<const ComparePaneCaption *>(caption);
+    return stored && stored->hasStatus();
 }
