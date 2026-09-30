@@ -304,6 +304,26 @@ int main(int argc, char **argv)
         const QRect chipInWs(chipA->mapTo(workspace, QPoint(0, 0)), chipA->size());
         CHECK(workspace->contentsRect().contains(chipInWs),
               "ROI HUD stays fully inside the Compare workspace");
+
+        const QPoint chipBeforePan = chipA->pos();
+        const QPoint panStart = first->rect().center();
+        const QPoint panEnd = panStart + QPoint(30, 20);
+        QMouseEvent panPress(QEvent::MouseButtonPress, QPointF(panStart),
+                             first->mapToGlobal(panStart), Qt::LeftButton, Qt::LeftButton,
+                             Qt::NoModifier);
+        QApplication::sendEvent(first, &panPress);
+        QMouseEvent panMove(QEvent::MouseMove, QPointF(panEnd), first->mapToGlobal(panEnd),
+                            Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(first, &panMove);
+        pump(20);
+        const QPoint chipDuringPan = chipA->pos();
+        CHECK(chipDuringPan != chipBeforePan,
+              "ROI statistics chip moves along with viewport pan");
+        QMouseEvent panRelease(QEvent::MouseButtonRelease, QPointF(panEnd),
+                               first->mapToGlobal(panEnd), Qt::LeftButton, Qt::NoButton,
+                               Qt::NoModifier);
+        QApplication::sendEvent(first, &panRelease);
+        pump(20);
     }
 
     const auto beforePreview = TaskScheduler::instance().metrics(TaskScheduler::AnalysisPool);
@@ -463,6 +483,58 @@ int main(int argc, char **argv)
             CHECK(unequalB->selection().isEmpty() && unequalStatus &&
                       unequalStatus->text().contains(QStringLiteral("image dimensions differ")),
                   "unequal dimensions never fabricate linked measurement");
+        }
+    }
+
+    {
+        const QString vertPath =
+            writePattern(dir, QStringLiteral("vert-mismatched.png"), 72, 96, 90);
+        QDialog mismatchDialog;
+        auto *mismatchLayout = new QVBoxLayout(&mismatchDialog);
+        auto *mismatch = new CompareWorkspace(&mismatchDialog);
+        mismatchLayout->addWidget(mismatch);
+        mismatch->setImages({a, vertPath});
+        mismatchDialog.resize(800, 600);
+        mismatchDialog.show();
+        CHECK(waitFor([&]() { return mismatch->comparedImageCount() == 2; }),
+              "mismatched horizontal/vertical pair loads");
+        RawImageView *pane0 = pane(mismatch, 0);
+        RawImageView *pane1 = pane(mismatch, 1);
+        if (pane0 && pane1)
+        {
+            // Initially pane 0 is 96x72 and pane 1 is 72x96: dimensions differ
+            sendRightDrag(pane0, pane0->sourcePointToWidget(QPointF(5, 5)).toPoint(),
+                          pane0->sourcePointToWidget(QPointF(30, 25)).toPoint());
+            QLabel *statusLabel = mismatch->findChild<QLabel *>("roiStatusLabel");
+            CHECK(pane1->selection().isEmpty() && statusLabel &&
+                      statusLabel->text().contains(QStringLiteral("image dimensions differ")),
+                  "mismatched horizontal/vertical pair initially reports differing dimensions");
+
+            // Click pane 1 and rotate it 90 degrees clockwise -> effective dimensions become 96x72
+            QMouseEvent clickPane1(QEvent::MouseButtonPress, QPointF(20, 20),
+                                   pane1->mapToGlobal(QPoint(20, 20)), Qt::LeftButton,
+                                   Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(pane1, &clickPane1);
+            mismatch->rotateCurrentCell(90);
+            pump(100);
+
+            // Now draw ROI on pane 0 -> should synchronize to pane 1 and calculate stats
+            sendRightDrag(pane0, pane0->sourcePointToWidget(QPointF(10, 10)).toPoint(),
+                          pane0->sourcePointToWidget(QPointF(40, 35)).toPoint());
+            CHECK(!pane1->selection().isEmpty(),
+                  "drawing ROI after rotating pane 1 synchronizes selection to rotated pane");
+            CHECK(pane1->selection().x == pane0->selection().x &&
+                      pane1->selection().y == pane0->selection().y &&
+                      pane1->selection().width == pane0->selection().width &&
+                      pane1->selection().height == pane0->selection().height,
+                  "synchronized ROI geometry matches display selection");
+            CHECK(statusLabel &&
+                      waitFor([&]() { return statusLabel->text().contains(QStringLiteral("Ready")); }),
+                  "rotated pane ROI measurement reaches Ready state");
+            QTableWidget *measurementTable =
+                mismatch->findChild<QTableWidget *>("roiMeasurementTable");
+            CHECK(measurementTable && waitFor([&]() { return measurementTable->rowCount() == 2; }),
+                  "measurement table contains results for both panes including rotated image");
         }
     }
 

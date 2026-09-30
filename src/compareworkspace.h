@@ -226,6 +226,7 @@ class CompareWorkspace : public QWidget
     void applySelectionPreviewFromView(RawImageView *view, const mviewer::domain::Selection &sel);
     void clearROI();
     bool linkedROIAvailable() const;
+    QSize paneEffectiveSize(int pane) const;
     void updateROIAvailabilityStatus();
 
     CompareEngine m_engine;
@@ -686,6 +687,7 @@ class CompareWorkspace : public QWidget
     // is a bounded display LOD; this conversion feeds the Qt-free source
     // sampler with the current adjusted-pane coordinate space.
     static mviewer::core::AnalysisAdjustment analysisAdjustment(const CellAdjust &adjust);
+    static QSize transformedSourceDims(const QSize &sourceDims, const CellAdjust &displayAdjust);
 
     // Edit panel widgets (inside side panel)
     QWidget *m_editPanel = nullptr;

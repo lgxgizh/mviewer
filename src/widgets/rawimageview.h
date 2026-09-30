@@ -239,6 +239,7 @@ class RawImageView : public QWidget
 
   signals:
     void scaleChanged(double scale);
+    void transformChanged();
     // Emitted on hover with the image-space pixel under the cursor (RGB + validity).
     // Mirrors ImageViewer::pixelInfo so the compare grid feeds the same inspector.
     void pixelInfo(int x, int y, int r, int g, int b, bool valid);

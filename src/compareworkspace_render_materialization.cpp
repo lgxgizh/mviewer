@@ -1,6 +1,7 @@
 #include "compareworkspace_display_pyramid.h"
 #include "compareworkspace_p.h"
 
+#include "core/analysis/PixelInspector.h"
 #include "core/image/DisplayMip.h"
 #include "core/image/SourceImage.h"
 #include "display/DisplayColorContextProvider.h"
@@ -385,6 +386,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         m_cellViews.push_back(view);
         connect(view, &RawImageView::scaleChanged, this,
                 [this, view](double) { scheduleDisplayLodRefresh(view->cellIndex()); });
+        connect(view, &RawImageView::transformChanged, this, &CompareWorkspace::positionROIHud);
 
         // M28 P1-01: panes start BLANK. ImageData -> QImage materialization is
         // one async Analysis batch scheduled below, never a synchronous
@@ -531,6 +533,16 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
     return result;
 }
 
+QSize CompareWorkspace::transformedSourceDims(const QSize &sourceDims,
+                                             const CellAdjust &displayAdjust)
+{
+    const auto crop = mviewer::core::analysisCropBounds(
+        sourceDims.width(), sourceDims.height(), analysisAdjustment(displayAdjust));
+    const int rot = std::abs(displayAdjust.rotation % 360);
+    const bool swap = (rot == 90 || rot == 270);
+    return QSize(swap ? crop.height : crop.width, swap ? crop.width : crop.height);
+}
+
 CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
     const std::vector<ImageData> &pixels,
     const std::vector<mviewer::domain::ImageMetadata> &metadata,
@@ -632,8 +644,18 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
         cell.image = mvcore::toDisplayQImage(adjusted, convMeta, target);
         const bool transformed = displayAdjust.hasCrop || displayAdjust.rotation != 0 ||
                                  displayAdjust.flipH || displayAdjust.flipV;
-        cell.sourceSize = transformed ? QSize(adjusted.width, adjusted.height) : sourceDims;
-        cell.sourceRect = transformed ? QRect(QPoint(0, 0), cell.sourceSize) : coveredRect;
+        if (transformed)
+        {
+            const QSize transformedDims =
+                transformedSourceDims(sourceDims, displayAdjust);
+            cell.sourceSize = transformedDims;
+            cell.sourceRect = QRect(QPoint(0, 0), transformedDims);
+        }
+        else
+        {
+            cell.sourceSize = sourceDims;
+            cell.sourceRect = coveredRect;
+        }
         if (context.isCancelled())
             return {};
         if (cell.image.isNull())

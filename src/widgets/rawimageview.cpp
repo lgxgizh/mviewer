@@ -186,6 +186,7 @@ void RawImageView::setTransform(double scale, const QPointF &offset)
     if (m_scale == prevScale && m_offset == prevOffset)
         return;
     update();
+    emit transformChanged();
 }
 
 void RawImageView::clampOffset()
@@ -219,6 +220,7 @@ void RawImageView::zoom(double factor, const QPointF &anchor)
     m_scale = newScale;
     clampOffset();
     emit scaleChanged(m_scale);
+    emit transformChanged();
     update();
 }
 
@@ -229,6 +231,7 @@ void RawImageView::resetFit()
     if (!m_image.isNull())
         computeFit();
     update();
+    emit transformChanged();
 }
 
 void RawImageView::computeFit()
@@ -591,6 +594,7 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
     m_offset += QPointF(delta);
     clampOffset();
     update();
+    emit transformChanged();
 }
 
 void RawImageView::mouseReleaseEvent(QMouseEvent *ev)

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/analysis/PixelInspector.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageStats.h"
 #include "core/image/SourceImage.h"
@@ -36,6 +37,7 @@ struct ROIInput
     ImageData pixels;
     mviewer::domain::ImageMetadata metadata;
     std::string path;
+    mviewer::core::AnalysisAdjustment adjustment;
 };
 
 struct ROIPaneMeasurement

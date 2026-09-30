@@ -119,8 +119,11 @@ void CompareWorkspace::positionROIHud()
                        std::max(bounds.left() + 2, bounds.right() - size.width()));
         y = std::clamp(y, bounds.top() + 2,
                        std::max(bounds.top() + 2, bounds.bottom() - size.height()));
-        chip->setGeometry(x, y, size.width(), size.height());
-        chip->show();
+        const QRect targetGeom(x, y, size.width(), size.height());
+        if (chip->geometry() != targetGeom)
+            chip->setGeometry(targetGeom);
+        if (!chip->isVisible())
+            chip->show();
         chip->raise();
     }
 }

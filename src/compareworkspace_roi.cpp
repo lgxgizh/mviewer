@@ -1,5 +1,6 @@
 #include "compareworkspace_p.h"
 
+#include "core/analysis/PixelInspector.h"
 #include "core/image/ExifOrientation.h"
 #include "core/image/SourceImage.h"
 #include "widgets/roioverlay.h"
@@ -171,25 +172,42 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
             });
 }
 
+QSize CompareWorkspace::paneEffectiveSize(int pane) const
+{
+    if (pane < 0 || pane >= m_engine.imageCount())
+        return {};
+    const ImageFrame *frame = m_engine.imageAt(pane);
+    if (!frame)
+        return {};
+    const int rawW = frame->metadata().width > 0 ? frame->metadata().width : frame->width();
+    const int rawH = frame->metadata().height > 0 ? frame->metadata().height : frame->height();
+    if (rawW <= 0 || rawH <= 0)
+        return {};
+    const CellAdjust adjust = (pane >= 0 && pane < static_cast<int>(m_cellAdjusts.size()))
+                                  ? m_cellAdjusts[static_cast<size_t>(pane)]
+                                  : CellAdjust{};
+    const auto crop =
+        mviewer::core::analysisCropBounds(rawW, rawH, analysisAdjustment(adjust));
+    const int rot = std::abs(adjust.rotation % 360);
+    const int effW = (rot == 90 || rot == 270) ? crop.height : crop.width;
+    const int effH = (rot == 90 || rot == 270) ? crop.width : crop.height;
+    return QSize(effW, effH);
+}
+
 bool CompareWorkspace::linkedROIAvailable() const
 {
     const int count = m_engine.imageCount();
     if (count < 2)
         return false;
-    QSize common;
-    for (int i = 0; i < count; ++i)
+    const QSize common = paneEffectiveSize(0);
+    if (!common.isValid())
+        return false;
+    for (int i = 1; i < count; ++i)
     {
-        const ImageFrame *frame = m_engine.imageAt(i);
-        if (!frame)
+        if (paneEffectiveSize(i) != common)
             return false;
-        const QSize dimensions(
-            frame->metadata().width > 0 ? frame->metadata().width : frame->width(),
-            frame->metadata().height > 0 ? frame->metadata().height : frame->height());
-        if (!dimensions.isValid() || (i > 0 && dimensions != common))
-            return false;
-        common = dimensions;
     }
-    return common.isValid();
+    return true;
 }
 
 mviewer::ui::ROIPaneMeasurement
@@ -198,9 +216,15 @@ CompareWorkspace::computeSourceROI(const ROIInput &input, const mviewer::domain:
 {
     mviewer::ui::ROIPaneMeasurement result;
     const auto cancelled = [&context]() { return context.isCancelled(); };
+
+    const int srcW = input.metadata.width > 0 ? input.metadata.width : input.pixels.width;
+    const int srcH = input.metadata.height > 0 ? input.metadata.height : input.pixels.height;
+    const auto sourceRoi = mviewer::core::mapDisplaySelectionToSource(
+        roi, input.adjustment, srcW, srcH);
+
     if (!input.pixels.isNull())
     {
-        result.stats = mviewer::core::computeROIChannelStats(input.pixels, roi, cancelled);
+        result.stats = mviewer::core::computeROIChannelStats(input.pixels, sourceRoi, cancelled);
         if (result.stats.cancelled)
         {
             result.state = mviewer::ui::ROIPaneState::Cancelled;
@@ -212,7 +236,7 @@ CompareWorkspace::computeSourceROI(const ROIInput &input, const mviewer::domain:
             result.reason = "ROI does not intersect source pixels";
         return result;
     }
-    if (input.path.empty() || roi.isEmpty())
+    if (input.path.empty() || sourceRoi.isEmpty())
     {
         result.reason = "source pixels are unavailable";
         return result;
@@ -232,15 +256,15 @@ CompareWorkspace::computeSourceROI(const ROIInput &input, const mviewer::domain:
             return result;
         }
         const QSize displaySize(source->metadata().width, source->metadata().height);
-        const long long right = static_cast<long long>(roi.x) + roi.width;
-        const long long bottom = static_cast<long long>(roi.y) + roi.height;
-        if (!displaySize.isValid() || roi.x < 0 || roi.y < 0 || right > displaySize.width() ||
-            bottom > displaySize.height())
+        const long long right = static_cast<long long>(sourceRoi.x) + sourceRoi.width;
+        const long long bottom = static_cast<long long>(sourceRoi.y) + sourceRoi.height;
+        if (!displaySize.isValid() || sourceRoi.x < 0 || sourceRoi.y < 0 ||
+            right > displaySize.width() || bottom > displaySize.height())
         {
             result.reason = "ROI is outside the source";
             return result;
         }
-        const mviewer::core::SourceRect displayed{roi.x, roi.y, roi.width, roi.height};
+        const mviewer::core::SourceRect displayed{sourceRoi.x, sourceRoi.y, sourceRoi.width, sourceRoi.height};
         const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
             displayed, source->rawWidth(), source->rawHeight(), source->orientation());
         result.decodePath = source->regionDecodePath();
@@ -363,6 +387,8 @@ void CompareWorkspace::scheduleROIMeasurement()
             input.metadata = frame->metadata();
             input.path = frame->metadata().filePath;
         }
+        if (i < static_cast<int>(m_cellAdjusts.size()))
+            input.adjustment = analysisAdjustment(m_cellAdjusts[static_cast<size_t>(i)]);
         inputs.push_back(std::move(input));
     }
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Measuring,

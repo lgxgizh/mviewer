@@ -88,6 +88,19 @@ struct AnalysisAdjustment
     int cropH = 0;
 };
 
+struct CropBounds
+{
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
+// Compute effective cropped bounds from source dimensions and an AnalysisAdjustment.
+CropBounds analysisCropBounds(int sourceWidth, int sourceHeight,
+                              const AnalysisAdjustment &adjustment);
+CropBounds analysisCropBounds(const ImageData &source, const AnalysisAdjustment &adjustment);
+
 struct AnalysisPixel
 {
     int r = 0;

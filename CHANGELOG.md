@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.84] - 2026-09-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.84**.
+- **Compare ROI orientation alignment**: Images with mismatched orientations (e.g. horizontal 4096×3072 vs vertical 3072×4096) correctly enable synchronized ROI selection and statistics after rotating to align viewports.
+- **Compare ROI HUD viewport tracking**: Floating ROI statistics chips dynamically follow selection boxes during viewport panning and dragging.
+
+### 比较
+
+- **旋转与跨方向图像选区统计同步**：修复横竖不同方向（如左图 4096×3072 横向、右图 3072×4096 竖向）图片对比时，旋转竖向图片对齐方向后，框选选区无法联动同步到对侧且无统计结果的问题。联动判定采用旋转与裁剪后的窗格有效尺寸，计算统计时各窗格根据各自的调整参数逆向映射至源像素坐标系进行采样。
+- **选区统计悬浮条平移实时跟随**：修复在比较模式下框选 ROI 后左右拖动画布平移时，统计结果悬浮标签（ROI HUD Chip）停留在原位未跟随画面框选位置移动的问题。视口平移与拖拽过程中实时重算并更新浮动标签位置。
+
 ## [1.0.83] - 2026-09-30
 
 ### Release

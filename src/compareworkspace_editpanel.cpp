@@ -366,6 +366,9 @@ void CompareWorkspace::onAdjEditFinished()
     else if (m_paneHistOverlay)
         refreshCellHist(m_editIdx);
     refreshAllDiffOverlays();
+    updateROISurfaces();
+    if (m_roiLinked && linkedROIAvailable())
+        scheduleROIMeasurement();
 }
 
 void CompareWorkspace::refreshCellHist(int idx)
