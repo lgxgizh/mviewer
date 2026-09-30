@@ -159,6 +159,7 @@ class CompareWorkspace : public QWidget
     void prevPair();
     void rotateCurrentCell(int degrees);
     void flipCurrentCell(bool horizontal);
+    void fitAll();
     int editCellIndex() const
     {
         return m_editIdx;
@@ -211,7 +212,6 @@ class CompareWorkspace : public QWidget
     bool handleAdvancedCompareKey(QKeyEvent *event);
     void rebuildCells();
     void buildCompareCells(int count, int columns);
-    void fitAll();
     void bestFitAll();
     // Fit of `sourceW×sourceH` in this pane, times the shared zoom ratio.
     // Uniform pixel scale returns that pane's current absolute scale instead.

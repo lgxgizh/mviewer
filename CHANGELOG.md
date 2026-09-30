@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.0.86] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.86**.
+- **Asynchronous XMP sidecar persistence**: Batch rating, color labeling, and flag operations now write XMP sidecar files asynchronously on background threads, preventing main GUI thread freezes.
+- **Directory tree filter recursion fix**: Fixed redundant double-recursive subtree traversal in `DirectoryProxyModel::hasAcceptedDescendant`, significantly accelerating directory search in large directory hierarchies.
+- **Gallery format filter acceleration**: Pre-parsed type query candidates and replaced per-item `QFileInfo` parsing with zero-allocation `QStringView` suffix comparisons in `ThumbnailPanel::evaluateFilterSnapshot`.
+- **Live difference threshold slider**: Added a debounced 35ms preview timer to the difference threshold slider so users see real-time diff heatmap updates while actively dragging.
+- **Status bar image index indicator**: The permanent status bar image count label now shows the current viewing index (e.g. `图片 12 / 100`) across browsing, filtering, and keyboard navigation.
+- **Status bar zoom integration for Compare Mode**: Compare mode now fully integrates with the status bar zoom label (`m_lblZoom`), supporting double-click fit (`fitAll()`) and contextual comparison zoom menus.
+- **Pixel Inspector localization & polish**: Localized neighborhood statistics and English prompts in `AnalysisPanel`, and cleaned up single-image vs dual-image comparative labels (eliminating unconditional "Left" prefixes).
+- **Pixel inspector cursor leave cleanup**: Clears sticky "Cursor outside image" text from the status bar when the mouse leaves the viewer canvas, preserving existing operational status.
+- **Contextual pixel coordinate copying**: Added a "坐标 (x, y)" copy action to the image viewer context menu for convenient coordinate export into Python/OpenCV workflows.
+- **Compare keyboard ergonomics**: Added standard `F1` shortcut help trigger and single-key `0` view fit (`fitAll()`) parity with single image mode.
+
+### 性能与体验优化
+
+- **批量评级 XMP Sidecar 异步持久化**：批量设置星级、颜色标签与排除标记时，将循环写盘与原子重命名的 I/O 操作移入后台工作线程执行，内存与 UI 瞬间响应，彻底解决多图评级卡死界面的问题。
+- **目录树过滤遍历算法优化**：修复 `DirectoryProxyModel` 在向下递归检索匹配目录时对每个子节点重复调用双重递归的问题，大幅降低深层目录树过滤时的 CPU 开销与交互延迟。
+- **画廊文件格式过滤加速**：在 `ThumbnailPanel::evaluateFilterSnapshot` 中预解析多类型候选列表，并在逐条记录比对时采用零堆分配的 `QStringView` 提取后缀，避免千图大目录下每次过滤重复切分字符串和解析 `QFileInfo`。
+- **差异阈值滑动条实时响应**：在比较模式下为差异阈值滑块增加 35ms 轻量防抖预览定时器，拖动滑块时可流畅实时预览差异热力图变化，告别松开鼠标才能看效果的滞后感。
+- **状态栏图片定位索引显示**：状态栏常驻图片统计标签全面升级为 `图片 X / Y` 格式（如 `图片 15 / 120`），选图、切图、翻页、过滤时实时联动，文件夹浏览位置一目了然。
+- **比较模式状态栏缩放联动**：状态栏缩放指示标签支持比较模式，双击直接调用比较全屏自适应（`fitAll()`），点击弹出比较专属自适应菜单，打通单图与对比工作流体验。
+- **像素检视器本地化与单图规范**：规范像素检视器在单图模式下的文本标识（去除不适用的 "Left" 前缀），统一将邻域统计指标（均值、标准差、最小、最大、方差、采样数）及提示信息全面中文化。
+- **像素探针光标移出清理**：光标离开图像边界时自动清理状态栏临时像素读数，消除驻留并遮挡其他系统通知的“光标不在图像上”多余提示。
+- **右键复制像素坐标 (x, y)**：单图查看器右键“复制像素值”菜单中新增“坐标 (x, y)”选项，方便图像算法工程师一键提取像素坐标至算法脚本。
+- **比较快捷键体验统一**：比较模式支持通过标准 `F1` 键查看快捷键帮助条，并支持按单键 `0` 直接触发视图自适应，与单图浏览模式的操作习惯保持高度一致。
+
 ## [1.0.85] - 2026-09-30
 
 ### Release

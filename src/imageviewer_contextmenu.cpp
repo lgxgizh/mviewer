@@ -113,7 +113,7 @@ void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QAction
 
 void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAction *&reveal,
                            QMenu *&colorMenu, QAction *&copyHex, QAction *&copyRgb,
-                           QAction *&copyFloat, QAction *&copyHsv)
+                           QAction *&copyFloat, QAction *&copyHsv, QAction *&copyCoord)
 {
     copy = menu.addAction("复制图片 (Ctrl+C)");
     copyPath = menu.addAction("复制路径 (Ctrl+Shift+C)");
@@ -121,17 +121,22 @@ void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAct
     colorMenu = menu.addMenu("复制像素值");
     copyHex = colorMenu->addAction("十六进制 (#RRGGBB) (Shift+C)");
     copyRgb = colorMenu->addAction("RGB 值 RGB(r, g, b)");
+    copyCoord = colorMenu->addAction("坐标 (x, y)");
     copyFloat = colorMenu->addAction("归一化浮点 (0.xxx, 0.yyy, 0.zzz)");
     copyHsv = colorMenu->addAction("HSV 值 HSV(h°, s%, v%)");
 }
 
-QString copyPixelValue(const PixelRGBA &px, int format)
+QString copyPixelValue(const PixelRGBA &px, int format, int x = -1, int y = -1)
 {
-    if (!px.valid)
+    if (!px.valid && format != 4)
         return QString();
     QString text;
     switch (format)
     {
+    case 4:
+        if (x >= 0 && y >= 0)
+            text = QString("(%1, %2)").arg(x).arg(y);
+        break;
     case 0:
         if (px.a < 255)
         {
@@ -226,8 +231,9 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aCopyRgb = nullptr;
     QAction *aCopyFloat = nullptr;
     QAction *aCopyHsv = nullptr;
+    QAction *aCopyCoord = nullptr;
     addCopyContextActions(menu, aCopy, aCopyPath, aReveal, mCopyColor, aCopyHex, aCopyRgb,
-                          aCopyFloat, aCopyHsv);
+                          aCopyFloat, aCopyHsv, aCopyCoord);
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
     QAction *aRotateCW = menu.addAction("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)");
@@ -320,7 +326,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     }
     if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV) ||
         handleContextCopyAction(chosen, aCopy, aCopyPath, aReveal, aCopyHex, aCopyRgb, aCopyFloat,
-                                aCopyHsv, event) ||
+                                aCopyHsv, event, aCopyCoord) ||
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                  aSelectRegion))
         return;
@@ -331,7 +337,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
                                           QAction *reveal, QAction *copyHex, QAction *copyRgb,
                                           QAction *copyFloat, QAction *copyHsv,
-                                          QContextMenuEvent *event)
+                                          QContextMenuEvent *event, QAction *copyCoord)
 {
     if (chosen == copy)
     {
@@ -359,21 +365,24 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
         format = 2;
     else if (chosen == copyHsv)
         format = 3;
+    else if (chosen == copyCoord)
+        format = 4;
 
     if (format >= 0)
     {
         PixelRGBA px{};
         const QPoint pos = event->pos();
+        int ix = -1, iy = -1;
         if (m_frame && m_frame->isValid())
         {
-            const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
-            const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
+            ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
+            iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
             if (ix >= 0 && ix < m_frame->width() && iy >= 0 && iy < m_frame->height())
                 px = samplePixel(m_frame->pixels(), ix, iy);
         }
         if (!px.valid)
             px = m_lastHoverPixel;
-        const QString copied = copyPixelValue(px, format);
+        const QString copied = copyPixelValue(px, format, ix, iy);
         if (!copied.isEmpty())
             emit statusMessageRequested(tr("已复制像素值: %1").arg(copied));
         return true;

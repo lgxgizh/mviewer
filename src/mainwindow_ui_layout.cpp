@@ -696,7 +696,11 @@ void MainWindow::buildStatusBarUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
             {
-                m_lblCount->setText(QString("图片 %1").arg(total));
+                const int idx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
+                if (total > 0 && idx >= 0)
+                    m_lblCount->setText(QString("图片 %1 / %2").arg(idx + 1).arg(total));
+                else
+                    m_lblCount->setText(QString("图片 %1").arg(total));
                 if (selected > 0)
                     m_lblSize->setText(
                         QString("已选 %1 · %2").arg(selected).arg(formatBytes(selBytes)));

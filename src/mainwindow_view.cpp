@@ -539,6 +539,13 @@ void MainWindow::zoomViewer(int op)
 
 void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
 {
+    if (m_compareView && !m_compareView->isHidden())
+    {
+        QMenu menu(this);
+        menu.addAction("适应窗口 (Fit / 0)", this, [this]() { m_compareView->fitAll(); });
+        menu.exec(globalPos);
+        return;
+    }
     if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
         return;
     QMenu menu(this);
@@ -652,10 +659,10 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         if (watched == m_imageViewer)
         {
             // Only forward keys the viewer doesn't handle itself.
-            static const QSet<int> viewerOwns = {
-                Qt::Key_Left,  Qt::Key_Right,  Qt::Key_Plus,      Qt::Key_Equal,
-                Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,         Qt::Key_F,
-                Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
+            static const QSet<int> viewerOwns = {Qt::Key_Left,   Qt::Key_Right,     Qt::Key_Plus,
+                                                 Qt::Key_Equal,  Qt::Key_Minus,     Qt::Key_0,
+                                                 Qt::Key_1,      Qt::Key_F,         Qt::Key_F11,
+                                                 Qt::Key_Escape, Qt::Key_Underscore};
             if (viewerOwns.contains(ke->key()))
                 return false; // let the viewer handle it
         }
@@ -679,6 +686,11 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     {
         if (event->type() == QEvent::MouseButtonDblClick)
         {
+            if (m_compareView && !m_compareView->isHidden())
+            {
+                m_compareView->fitAll();
+                return true;
+            }
             if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
             {
                 if (m_imageViewer->isFitMode())

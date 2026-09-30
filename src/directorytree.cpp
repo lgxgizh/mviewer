@@ -65,9 +65,8 @@ bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent)
         const QModelIndex child = fsModel->index(r, 0, sourceParent);
         if (!child.isValid() || !fsModel->isDir(child))
             continue;
-        if (filterAcceptsRow(r, sourceParent))
-            return true;
-        if (hasAcceptedDescendant(child))
+        const QString name = fsModel->fileName(child);
+        if (name.contains(m_filterText, Qt::CaseInsensitive) || hasAcceptedDescendant(child))
             return true;
     }
     return false;

@@ -298,7 +298,7 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
         return;
     if (!valid)
     {
-        sb->showMessage(QStringLiteral("光标不在图像上"));
+        sb->clearMessage();
         return;
     }
     const QString hex = QString("#%1%2%3")

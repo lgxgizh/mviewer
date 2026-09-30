@@ -442,7 +442,8 @@ class ImageViewer : public QOpenGLWidget
     bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath, QAction *reveal,
                                  QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
-                                 QAction *copyHsv, QContextMenuEvent *event);
+                                 QAction *copyHsv, QContextMenuEvent *event,
+                                 QAction *copyCoord = nullptr);
     bool handleContextTransformAction(QAction *chosen, QAction *rotateCWAct, QAction *rotateCCWAct,
                                       QAction *flipHAct, QAction *flipVAct);
     bool handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,

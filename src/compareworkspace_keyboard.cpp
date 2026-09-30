@@ -289,8 +289,8 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
 
-    // Ctrl+0 -> Fit, Ctrl+1 -> 100% actual size.
-    if (ctrl && key == Qt::Key_0)
+    // Ctrl+0 or 0 -> Fit, Ctrl+1 -> 100% actual size.
+    if ((ctrl || plain) && key == Qt::Key_0)
     {
         fitAll();
         showCompareStatus(tr("视图自适应窗口 (Fit)"));
@@ -392,8 +392,8 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // ? → shortcut help (title bar tip).
-    if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash))
+    // ? / F1 → shortcut help (title bar tip).
+    if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash || key == Qt::Key_F1))
     {
         showShortcutHelp();
         event->accept();

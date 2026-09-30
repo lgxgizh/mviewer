@@ -184,15 +184,25 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_thresholdSlider->setMaximumWidth(120);
     m_thresholdSlider->setToolTip("差异阈值: 低于此值的像素将被隐藏");
     m_thresholdSlider->setEnabled(false);
+    auto *sliderTimer = new QTimer(this);
+    sliderTimer->setSingleShot(true);
+    sliderTimer->setInterval(35);
+    connect(sliderTimer, &QTimer::timeout, this, &CompareWorkspace::refreshAllDiffOverlays);
     connect(m_thresholdSlider, &QSlider::valueChanged, this,
-            [this](int value)
+            [this, sliderTimer](int value)
             {
                 m_thresholdValue = static_cast<uint8_t>(value);
                 if (!m_thresholdSlider->isSliderDown())
                     refreshAllDiffOverlays();
+                else
+                    sliderTimer->start();
             });
     connect(m_thresholdSlider, &QSlider::sliderReleased, this,
-            &CompareWorkspace::refreshAllDiffOverlays);
+            [this, sliderTimer]()
+            {
+                sliderTimer->stop();
+                refreshAllDiffOverlays();
+            });
     toolLayout->addWidget(m_thresholdSlider);
     m_thresholdLabel = new QLabel("0", this);
     m_thresholdLabel->setObjectName("diffThresholdValueLabel");
