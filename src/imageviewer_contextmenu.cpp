@@ -11,10 +11,8 @@
 #include "gpu/GpuTileUploader.h"
 #include "thumbnailprovider.h"
 
-#include <QtConcurrent/QtConcurrent>
 #include <QApplication>
 #include <QClipboard>
-#include <QThread>
 #include <QCloseEvent>
 #include <QContextMenuEvent>
 #include <QDir>
@@ -34,9 +32,11 @@
 #include <QRect>
 #include <QResizeEvent>
 #include <QSettings>
+#include <QThread>
 #include <QTimer>
 #include <QTransform>
 #include <QWheelEvent>
+#include <QtConcurrent/QtConcurrent>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -678,9 +678,8 @@ bool ImageViewer::rotateImage(int angle)
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
     const std::string utf8 = path.toUtf8().toStdString();
-    auto future = QtConcurrent::run([utf8, normAngle]() {
-        return mviewer::core::rotateImageFile(utf8, normAngle);
-    });
+    auto future = QtConcurrent::run([utf8, normAngle]()
+                                    { return mviewer::core::rotateImageFile(utf8, normAngle); });
     while (!future.isFinished())
     {
         QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
@@ -725,9 +724,8 @@ bool ImageViewer::flipImage(bool horizontal)
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
     const std::string utf8 = path.toUtf8().toStdString();
-    auto future = QtConcurrent::run([utf8, horizontal]() {
-        return mviewer::core::flipImageFile(utf8, horizontal);
-    });
+    auto future = QtConcurrent::run([utf8, horizontal]()
+                                    { return mviewer::core::flipImageFile(utf8, horizontal); });
     while (!future.isFinished())
     {
         QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);

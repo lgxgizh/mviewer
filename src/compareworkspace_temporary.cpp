@@ -215,8 +215,7 @@ void CompareWorkspace::updateTemporaryCompareAvailability()
         }
         else if (!available)
         {
-            m_temporaryCompareButton->setToolTip(
-                tr("闪烁开启时不能临时切换"));
+            m_temporaryCompareButton->setToolTip(tr("闪烁开启时不能临时切换"));
         }
         else
         {

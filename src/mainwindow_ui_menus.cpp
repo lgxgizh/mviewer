@@ -6,7 +6,6 @@
 #include "display/DisplayColorContextProvider.h"
 #include "thumbnailprovider.h"
 
-#include <QtConcurrent/QtConcurrent>
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QIcon>
@@ -14,6 +13,7 @@
 #include <QProgressDialog>
 #include <QStatusBar>
 #include <QThread>
+#include <QtConcurrent/QtConcurrent>
 
 #include <cstdint>
 #include <memory>
@@ -209,7 +209,10 @@ class ShownProgressDialog final : public QProgressDialog
 {
   public:
     using QProgressDialog::QProgressDialog;
-    void reveal() { forceShow(); }
+    void reveal()
+    {
+        forceShow();
+    }
 };
 
 class BatchFileProgress
@@ -234,11 +237,17 @@ class BatchFileProgress
         QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
     }
 
-    ~BatchFileProgress() { dismiss(); }
+    ~BatchFileProgress()
+    {
+        dismiss();
+    }
     BatchFileProgress(const BatchFileProgress &) = delete;
     BatchFileProgress &operator=(const BatchFileProgress &) = delete;
 
-    bool wasCanceled() const { return m_dialog && m_dialog->wasCanceled(); }
+    bool wasCanceled() const
+    {
+        return m_dialog && m_dialog->wasCanceled();
+    }
 
     void advance(int finished)
     {
@@ -263,8 +272,8 @@ class BatchFileProgress
     QString finishedLabel(int finished) const
     {
         return (m_kind == FileTransformKind::Rotate)
-            ? MainWindow::tr("已旋转 %1 / %2").arg(finished).arg(m_total)
-            : MainWindow::tr("已翻转 %1 / %2").arg(finished).arg(m_total);
+                   ? MainWindow::tr("已旋转 %1 / %2").arg(finished).arg(m_total)
+                   : MainWindow::tr("已翻转 %1 / %2").arg(finished).arg(m_total);
     }
 
     std::unique_ptr<ShownProgressDialog> m_dialog;
@@ -328,7 +337,7 @@ void restoreMultiSelection(ThumbnailPanel *panel, SelectionModel *selection,
         selection->setSelection(paths, focus);
 }
 
-void showStatus(QStatusBar *bar, const QString &text, int ms)
+inline void showStatus(QStatusBar *bar, const QString &text, int ms)
 {
     if (bar)
         bar->showMessage(text, ms);
