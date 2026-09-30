@@ -455,7 +455,14 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
                                   metaIso, metaCamera, metaLens))
             out.append(entry);
     }
-    const auto less = [&query, &ratings, &metaCamera, &metaLens](const Entry &a, const Entry &b)
+    QHash<QString, int> ratingCache;
+    if (query.sort == mviewer::core::BrowseSortField::Rating)
+    {
+        ratingCache.reserve(out.size());
+        for (const auto &entry : out)
+            ratingCache.insert(entry.path, ratings.rating(entry.path.toStdString()));
+    }
+    const auto less = [&query, &ratingCache, &metaCamera, &metaLens](const Entry &a, const Entry &b)
     {
         int cmp = 0;
         switch (query.sort)
@@ -477,11 +484,16 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
             break;
         }
         case mviewer::core::BrowseSortField::Type:
-            cmp = QString::compare(QFileInfo(a.path).suffix(), QFileInfo(b.path).suffix(),
-                                   Qt::CaseInsensitive);
+        {
+            const int dotA = a.name.lastIndexOf(QLatin1Char('.'));
+            const int dotB = b.name.lastIndexOf(QLatin1Char('.'));
+            const QStringView sa = (dotA >= 0) ? QStringView(a.name).mid(dotA + 1) : QStringView();
+            const QStringView sb = (dotB >= 0) ? QStringView(b.name).mid(dotB + 1) : QStringView();
+            cmp = sa.compare(sb, Qt::CaseInsensitive);
             break;
+        }
         case mviewer::core::BrowseSortField::Rating:
-            cmp = ratings.rating(a.path.toStdString()) - ratings.rating(b.path.toStdString());
+            cmp = ratingCache.value(a.path) - ratingCache.value(b.path);
             break;
         case mviewer::core::BrowseSortField::Camera:
             cmp = QString::compare(metaCamera.value(a.path), metaCamera.value(b.path),

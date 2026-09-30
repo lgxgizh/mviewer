@@ -22,7 +22,7 @@ int CompareWorkspace::paneIndexAtGlobalPos(const QPoint &globalPos) const
 
 bool CompareWorkspace::temporaryHoldBlocked() const
 {
-    return anyCanvasCompareMode() || (m_blinkChk && m_blinkChk->isChecked());
+    return (m_blinkChk && m_blinkChk->isChecked());
 }
 
 void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
@@ -70,6 +70,17 @@ void CompareWorkspace::beginClassicTemporaryCompare()
         return;
     }
     m_temporaryDigit = 0;
+    if (anyCanvasCompareMode())
+    {
+        m_canvasTemporaryPane = 1;
+        m_temporaryCompareActive = true;
+        if (m_temporaryCompareButton)
+            m_temporaryCompareButton->setDown(true);
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        update();
+        return;
+    }
     applyTemporaryDisplay(0, 1);
 }
 
@@ -91,10 +102,21 @@ void CompareWorkspace::beginTemporaryCompare()
         return;
     if (temporaryHoldBlocked())
     {
-        showCompareStatus(tr("分割、滑动、叠加、棋盘或闪烁时不能临时切换"));
+        showCompareStatus(tr("闪烁开启时不能临时切换"));
         return;
     }
     m_temporaryDigit = 0;
+    if (anyCanvasCompareMode())
+    {
+        m_canvasTemporaryPane = decision.sourcePane;
+        m_temporaryCompareActive = true;
+        if (m_temporaryCompareButton)
+            m_temporaryCompareButton->setDown(true);
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        update();
+        return;
+    }
     applyTemporaryDisplay(decision.targetPane, decision.sourcePane);
 }
 
@@ -120,6 +142,12 @@ void CompareWorkspace::endTemporaryCompare()
 {
     if (!m_temporaryCompareActive)
         return;
+    if (m_canvasTemporaryPane >= 0)
+    {
+        m_canvasTemporaryPane = -1;
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+    }
     if (m_temporaryTargetPane >= 0 && m_temporaryTargetPane < m_cellViews.size() &&
         m_cellViews[m_temporaryTargetPane])
         m_cellViews[m_temporaryTargetPane]->clearTransientDisplay();
@@ -188,7 +216,7 @@ void CompareWorkspace::updateTemporaryCompareAvailability()
         else if (!available)
         {
             m_temporaryCompareButton->setToolTip(
-                tr("分割、滑动、叠加、棋盘或闪烁开启时不能临时切换"));
+                tr("闪烁开启时不能临时切换"));
         }
         else
         {

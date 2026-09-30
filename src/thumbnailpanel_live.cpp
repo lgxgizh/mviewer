@@ -245,7 +245,16 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
 
 void ThumbnailPanel::sortDirectoryDeltaEntries(QList<Entry> &entries) const
 {
-    auto compareEntries = [this](const Entry &a, const Entry &b)
+    QHash<QString, int> ratingCache;
+    if (m_sortMode == SortRating)
+    {
+        ratingCache.reserve(entries.size());
+        auto &rs = mviewer::core::RatingStore::instance();
+        for (const auto &e : entries)
+            ratingCache.insert(e.path, rs.rating(e.path.toStdString()));
+    }
+
+    auto compareEntries = [this, &ratingCache](const Entry &a, const Entry &b)
     {
         int order = 0;
         switch (m_sortMode)
@@ -271,15 +280,17 @@ void ThumbnailPanel::sortDirectoryDeltaEntries(QList<Entry> &entries) const
         }
         case SortType:
         {
-            const QString ae = QFileInfo(a.path).suffix().toLower();
-            const QString be = QFileInfo(b.path).suffix().toLower();
-            order = QString::compare(ae, be, Qt::CaseInsensitive);
+            const int dotA = a.name.lastIndexOf(QLatin1Char('.'));
+            const int dotB = b.name.lastIndexOf(QLatin1Char('.'));
+            const QStringView sa = (dotA >= 0) ? QStringView(a.name).mid(dotA + 1) : QStringView();
+            const QStringView sb = (dotB >= 0) ? QStringView(b.name).mid(dotB + 1) : QStringView();
+            order = sa.compare(sb, Qt::CaseInsensitive);
             break;
         }
         case SortRating:
         {
-            const int ar = mviewer::core::RatingStore::instance().rating(a.path.toStdString());
-            const int br = mviewer::core::RatingStore::instance().rating(b.path.toStdString());
+            const int ar = ratingCache.value(a.path);
+            const int br = ratingCache.value(b.path);
             if (ar != br)
                 order = ar < br ? -1 : 1;
             break;

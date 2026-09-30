@@ -139,7 +139,7 @@ void CompareWorkspace::paintCompareCanvas()
     stream << cv->size() << cv->devicePixelRatioF() << m_splitPos << m_overlayAlpha << m_checkerSize
            << static_cast<int>(m_displayOverlay) << (m_splitChk && m_splitChk->isChecked())
            << (m_swipeChk && m_swipeChk->isChecked()) << (m_overlayChk && m_overlayChk->isChecked())
-           << (m_checkerChk && m_checkerChk->isChecked());
+           << (m_checkerChk && m_checkerChk->isChecked()) << m_canvasTemporaryPane;
     for (int index = 0; index < 2; ++index)
     {
         const RawImageView *view = m_cellViews[index];
@@ -161,7 +161,9 @@ void CompareWorkspace::paintCompareCanvas()
         m_canvasBaseSurface.fill(palette().color(QPalette::Dark));
         QPainter base(&m_canvasBaseSurface);
         base.setRenderHint(QPainter::SmoothPixmapTransform, !(m_dragging || m_interactionBusy));
-        if (m_splitChk && m_splitChk->isChecked())
+        if (m_canvasTemporaryPane >= 0)
+            drawCellCompare(base, m_canvasTemporaryPane, r, QRectF(r));
+        else if (m_splitChk && m_splitChk->isChecked())
             drawSplitCompare(base);
         else if (m_swipeChk && m_swipeChk->isChecked())
             drawSwipeCompare(base, int(r.width() * m_splitPos));

@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.85] - 2026-09-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.85**.
+- **Asynchronous image transforms (P0)**: Single-image and batch rotate/flip operations are offloaded to background worker threads, eliminating UI thread freezing and OS "Not Responding" stalls on high-resolution images.
+- **Gallery sorting performance (P1)**: Custom file type sorting uses zero-allocation string views and ratings are pre-cached, eliminating repetitive `QFileInfo` filesystem queries and string allocations in $O(N \log N)$ sort loops.
+- **Batch file operation completion async (P1)**: File existence checks after batch deletes and moves run in the background worker, preventing main thread I/O latency.
+- **Rename selection polish (P2)**: Rename dialog preselects the filename stem only, preventing accidental erasure of file extensions.
+- **Non-blocking copy feedback (P2)**: Replaced modal success dialog on file copy with non-intrusive status bar notifications.
+- **Canvas comparison Space hold support (P2)**: Enabled hold-to-compare (Space key) in canvas modes (Split, Swipe, Overlay, Checkerboard), allowing instantaneous single-image inspection and seamless restoration.
+
+### 性能与体验优化
+
+- **旋转与翻转异步化（防卡顿）**：单图及批量旋转/翻转操作的文件编解码与原子写盘全面移至后台工作线程，主线程在等待期间显示等待光标并持续泵送事件，彻底消除大图处理时的界面冻结和系统“未响应”现象。
+- **画廊排序算法优化**：按扩展名排序改用零内存分配的 `QStringView`，按评分排序预先建立 $O(N)$ 评分映射，杜绝排序比较器在循环中数万次构造 `QFileInfo` 及重复堆分配。
+- **批量文件操作收尾异步化**：删除与移动完成后的文件存在性磁盘 stat 扫描移至后台任务收尾阶段完成，主线程仅接收纯内存结果，消除批量操作完成时的瞬时卡顿。
+- **重命名文件名主干选中**：弹窗重命名时默认仅高亮选中主文件名（stem），光标停在扩展名前，避免打字误删后缀。
+- **复制文件成功通知轻量化**：文件复制成功后由非模态状态栏提示替代强制点击的模态对话框，保持看图操作连续性。
+- **画布模式临时对比**：在分割（Split）、滑动（Swipe）、叠加（Overlay）、棋盘（Checkerboard）模式下支持按住空格键临时切回单侧完整原图，松开即刻恢复分割视图。
+
 ## [1.0.84] - 2026-09-30
 
 ### Release

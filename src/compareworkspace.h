@@ -344,6 +344,7 @@ class CompareWorkspace : public QWidget
     bool m_temporaryCompareActive = false;
     int m_temporaryTargetPane = -1;
     int m_temporaryDigit = 0;
+    int m_canvasTemporaryPane = -1;
     void toggleBlink();
     void applyBlink(bool state);
     void startBlink(int intervalMs);
