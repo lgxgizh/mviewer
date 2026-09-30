@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.83] - 2026-09-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.83**.
+- **Compare Space hold scale fix**: Momentary compare (holding Space) on images of the same resolution preserves the target pane's current scale directly instead of recalculating a tight fit without deadband, eliminating image shrinkage during flicker compare.
+
+### 比较
+
+- 修复同分辨率图片按住空格进行临时比较（Hold-to-Compare）时画面出现微缩抖动的问题。当对比双方分辨率相同时直接保持目标窗格的当前缩放比例，实现 1:1 无缝原位闪烁对比。
+
 ## [1.0.82] - 2026-09-29
 
 ### Release

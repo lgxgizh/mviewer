@@ -46,7 +46,8 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
     // The target pane's scale matches its own source. A different-resolution
     // stand-in must use the scale that keeps the same on-screen footprint.
     // Uniform pixel scale keeps the target's absolute scale (render scale 0).
-    if (!m_uniformScale && m_syncZoom)
+    // Same-resolution images preserve target pane scale directly without re-fitting.
+    if (!m_uniformScale && m_syncZoom && source->sourceSize() != target->sourceSize())
     {
         const QSize src = source->sourceSize();
         const double render = scaleForPaneSource(targetPane, src.width(), src.height());

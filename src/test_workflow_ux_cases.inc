@@ -2079,10 +2079,14 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     const QPoint cursorBefore = QCursor::pos();
     if (temporaryCompare)
         QCursor::setPos(temporaryCompare->mapToGlobal(temporaryCompare->rect().center()));
+    const double scaleBeforeHold = temporaryView0 ? temporaryView0->scale() : 0.0;
     sendKeyPressOnly(ws, Qt::Key_Space);
     CHECK(temporaryCompare && temporaryCompare->isDown() && temporaryView0 &&
               temporaryView0->hasTransientDisplay() && !blink->isChecked(),
           "holding Space starts momentary Compare without starting continuous Blink");
+    CHECK(temporaryView0 && scaleBeforeHold > 0.0 &&
+              std::abs(temporaryView0->presentedScale() - scaleBeforeHold) < 1e-9,
+          "holding Space preserves identical scale for same-resolution images without shrinkage");
     sendKeyReleaseOnly(ws, Qt::Key_Space);
     CHECK(temporaryView0 && !temporaryView0->hasTransientDisplay() && !temporaryCompare->isDown(),
           "releasing Space stops momentary Compare (no stuck state)");
