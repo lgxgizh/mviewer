@@ -685,6 +685,7 @@ void MainWindow::buildStatusBarUi()
     m_lblSize = new QLabel("大小 0 B", this);
     m_lblZoom = new QLabel("缩放 —", this);
     m_lblCache = new QLabel("命中率 —", this);
+    m_lblCache->setToolTip(tr("缓存命中率: 提升连续大图切换与缩略图加载性能"));
     for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
         l->setContentsMargins(8, 0, 8, 0);
     statusBar()->addPermanentWidget(m_lblImage);

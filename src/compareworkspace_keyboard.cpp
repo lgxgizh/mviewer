@@ -300,7 +300,7 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    if (ctrl && key == Qt::Key_1)
+    if ((ctrl || plain) && key == Qt::Key_1)
     {
         const double currentScale = m_engine.cellTransform(0).scale;
         if (currentScale > 0.0)
@@ -339,6 +339,15 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
     const auto mods = event->modifiers();
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
+
+    // Ctrl+C or Ctrl+Shift+C: copy comparison view to clipboard.
+    if (ctrl && key == Qt::Key_C)
+    {
+        copyComparisonViewToClipboard();
+        event->accept();
+        return true;
+    }
+
     // Diff threshold ± ( [ / ] ).
     if (plain && (key == Qt::Key_BracketLeft || key == Qt::Key_BracketRight) && m_thresholdSlider)
     {
@@ -363,9 +372,9 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // Plain 1–8: with more than two images and the pointer on a pane, hold the
+    // Plain 2–8: with more than two images and the pointer on a pane, hold the
     // digit to preview that image. Otherwise keep the N-up layout preset.
-    if (plain && (key >= Qt::Key_1 && key <= Qt::Key_8))
+    if (plain && (key >= Qt::Key_2 && key <= Qt::Key_8))
     {
         const int n = key - Qt::Key_0;
         if (event->isAutoRepeat())

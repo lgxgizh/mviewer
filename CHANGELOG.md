@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.0.88] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.88**.
+- **Multi-selection compare shortcut in Gallery (`ThumbnailPanel.cpp`)**: Pressing `Return` / `Enter` when 2 to 8 images are selected in the thumbnail gallery directly opens the Compare workspace, providing intuitive transition from selection to comparison.
+- **Unified 100% zoom shortcut (`CompareWorkspace_keyboard.cpp`)**: Pressing `1` (or `Ctrl+1`) in Compare mode now zooms all panes to 100% actual size (matching `0` for Fit), while layout presets are consistently accessed via `2` through `8`.
+- **One-click comparison viewport copy (`CompareWorkspace_interact.cpp`, `CompareWorkspace.h`)**: Added `Ctrl+C` shortcut and `copyComparisonViewToClipboard()` in Compare mode to grab the current comparison viewport directly into the clipboard for rapid sharing.
+- **Compact comparison toolbar layout (`CompareWorkspace_controls.cpp`)**: Tightened vertical margins and layout spacing across comparison mode, view, and tool toolbars, maximizing visual comparison area on standard 1080p and high-DPI displays.
+- **Prioritized Pixel Inspector in Analysis panel (`AnalysisPanel_buildui.cpp`)**: Placed the Pixel Inspector tab immediately after the Histogram tab (position 2), preventing it from being pushed off-screen into overflow on narrow sidebars, and localized copy actions to Chinese.
+- **Markdown table export in Pixel Inspector (`CompareWorkspace_analysis.cpp`)**: Added "复制为 Markdown 表格" (Copy as Markdown Table) to the pixel inspector context menu in Compare mode for direct pasting into PRs, issues, and technical documentation.
+- **Detailed cache hit-rate status tooltip (`MainWindow_ui_layout.cpp`, `MainWindow_view.cpp`)**: Added informative tooltips and exact hit/request count breakdowns (`命中率: X% (命中 A / 请求 B)`) to the permanent status bar cache indicator.
+
+### 用户体验优化
+
+- **画廊多选一键对比（`ThumbnailPanel.cpp`）**：在缩略图网格中选中 2 至 8 张图片后直接按下回车键（`Enter` / `Return`）立即进入多图对比工作区，符合用户直觉操作习惯。
+- **100% 缩放快捷键全局对齐（`CompareWorkspace_keyboard.cpp`）**：对比模式下快捷键 `1`（及 `Ctrl+1`）统一映射为 100% 原始像素大小（与 `0` 适应窗口对齐），窗格预设切换统一映射至 `2` 至 `8`，消除单图与多图模式下的认知冲突。
+- **对比视口一键截图复制（`CompareWorkspace_interact.cpp` / `.h`）**：对比模式支持快捷键 `Ctrl+C` 直接将当前对比画布（网格/分割/滑动/热力图视口）渲染并复制到系统剪贴板，方便算法评测快速分享与汇报。
+- **对比模式工具栏高度紧凑化（`CompareWorkspace_controls.cpp`）**：优化模式栏、视图栏与分析工具栏的内边距与垂直间距，在 1080p 与高分屏上释放更多垂直图像对比视野。
+- **分析面板像素检视标签前置与本地化（`AnalysisPanel_buildui.cpp`）**：将「像素检视」标签页提升至第 2 位（紧跟「直方图」），解决窄边栏折叠隐藏的问题；同时完善复制操作按钮本地化（复制 RGB/HEX/XYZ）。
+- **像素检视表格 Markdown 格式复制（`CompareWorkspace_analysis.cpp`）**：对比工作区像素检视表格右键菜单新增「复制为 Markdown 表格」，便于算法工程师直接将对比数值表格粘贴至 GitHub PR、GitLab Issue 或周报文档中。
+- **状态栏缓存命中率详细统计与提示（`MainWindow_ui_layout.cpp` / `MainWindow_view.cpp`）**：状态栏常驻命中率指标增加详细悬停说明与精准计数（命中数 / 总请求数），为算法排查与大图浏览性能分析提供明确上下文。
+
 ## [1.0.87] - 2026-10-01
 
 ### Release

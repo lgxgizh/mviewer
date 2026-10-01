@@ -610,9 +610,17 @@ void MainWindow::updateCacheStat()
         misses += s.misses;
     }
     if (hits + misses == 0)
+    {
         m_lblCache->setText("命中率 —");
+        m_lblCache->setToolTip(tr("缓存命中率: 尚无请求记录"));
+    }
     else
-        m_lblCache->setText(QString("命中率 %1%").arg(int(100.0 * hits / (hits + misses))));
+    {
+        const int pct = static_cast<int>(100.0 * hits / (hits + misses));
+        m_lblCache->setText(QString("命中率 %1%").arg(pct));
+        m_lblCache->setToolTip(
+            tr("缓存命中率: %1% (命中 %2 / 请求 %3)").arg(pct).arg(hits).arg(hits + misses));
+    }
 }
 
 bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)

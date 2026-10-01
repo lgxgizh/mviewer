@@ -40,14 +40,14 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolbarContainer->setAttribute(Qt::WA_AlwaysShowToolTips, true);
     auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
     toolbarLayout->setContentsMargins(0, 0, 0, 0);
-    toolbarLayout->setSpacing(4);
+    toolbarLayout->setSpacing(2);
     auto makeToolbar = [toolbarContainer](const char *name)
     {
         auto *bar = new QWidget(toolbarContainer);
         bar->setObjectName(name);
         auto *layout = new QHBoxLayout(bar);
-        layout->setContentsMargins(8, 0, 8, 0);
-        layout->setSpacing(6);
+        layout->setContentsMargins(6, 1, 6, 1);
+        layout->setSpacing(4);
         return std::pair{bar, layout};
     };
     auto [modeBar, modeLayoutLocal] = makeToolbar("compareModeToolbar");
@@ -56,13 +56,13 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolBar->setObjectName("compareToolToolbar");
     auto *toolRows = new QVBoxLayout(toolBar);
     toolRows->setContentsMargins(0, 0, 0, 0);
-    toolRows->setSpacing(4);
+    toolRows->setSpacing(2);
     auto makeToolRow = [toolBar]()
     {
         auto *row = new QWidget(toolBar);
         auto *layout = new QHBoxLayout(row);
-        layout->setContentsMargins(8, 0, 8, 0);
-        layout->setSpacing(6);
+        layout->setContentsMargins(6, 1, 6, 1);
+        layout->setSpacing(4);
         return std::pair{row, layout};
     };
     auto [toolDiffBar, toolLayoutLocal] = makeToolRow();

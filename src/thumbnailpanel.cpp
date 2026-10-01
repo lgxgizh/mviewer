@@ -558,6 +558,13 @@ void ThumbnailPanel::keyPressEvent(QKeyEvent *event)
     if ((key == Qt::Key_Return || key == Qt::Key_Enter) &&
         (mods == Qt::NoModifier || mods == Qt::KeypadModifier))
     {
+        const QStringList sel = selectedPaths();
+        if (sel.size() >= 2 && sel.size() <= 8)
+        {
+            emit compareRequested(sel);
+            event->accept();
+            return;
+        }
         const QModelIndex idx = currentIndex();
         if (idx.isValid() && idx.row() >= 0 && idx.row() < m_paths.size())
         {

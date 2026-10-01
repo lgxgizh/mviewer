@@ -160,6 +160,7 @@ class CompareWorkspace : public QWidget
     void rotateCurrentCell(int degrees);
     void flipCurrentCell(bool horizontal);
     void fitAll();
+    void copyComparisonViewToClipboard();
     int editCellIndex() const
     {
         return m_editIdx;

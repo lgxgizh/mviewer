@@ -207,7 +207,7 @@ void AnalysisPanel::buildInspectorTab()
     m_inspectorLabel->setText(tr("将鼠标移到图像上检视像素。"));
     layout->addWidget(m_inspectorLabel, 1);
     buildInspectorActions(*layout);
-    m_tabs->addTab(page, tr("像素检视"));
+    m_tabs->insertTab(1, page, tr("像素检视"));
 
     connect(colorSpace, QOverload<int>::of(&QComboBox::activated), this,
             [this, colorSpace](int)
@@ -233,12 +233,12 @@ void AnalysisPanel::buildInspectorTab()
 void AnalysisPanel::buildInspectorActions(QVBoxLayout &layout)
 {
     auto *bar = new QHBoxLayout;
-    auto *copyRgb = new QPushButton(tr("Copy RGB"));
-    auto *copyHex = new QPushButton(tr("Copy HEX"));
-    auto *copyXyz = new QPushButton(tr("Copy XYZ"));
-    copyRgb->setToolTip(tr("Copy current pixel RGB to clipboard"));
-    copyHex->setToolTip(tr("Copy current pixel HEX color to clipboard"));
-    copyXyz->setToolTip(tr("Copy current pixel XYZ to clipboard"));
+    auto *copyRgb = new QPushButton(tr("复制 RGB"));
+    auto *copyHex = new QPushButton(tr("复制 HEX"));
+    auto *copyXyz = new QPushButton(tr("复制 XYZ"));
+    copyRgb->setToolTip(tr("复制当前像素 RGB 到剪贴板"));
+    copyHex->setToolTip(tr("复制当前像素 HEX 颜色到剪贴板"));
+    copyXyz->setToolTip(tr("复制当前像素 XYZ 到剪贴板"));
     bar->addWidget(copyRgb);
     bar->addWidget(copyHex);
     bar->addWidget(copyXyz);
