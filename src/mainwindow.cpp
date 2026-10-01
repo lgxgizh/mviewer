@@ -656,9 +656,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
 
 void MainWindow::openDirectory(const QString &dir)
 {
-    if (dir.isEmpty())
-        return;
-    m_directoryTree->navigateTo(dir);
+    changeDirectory(dir);
 }
 
 void MainWindow::changeDirectory(const QString &dir)

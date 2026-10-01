@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.0.90] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.90**.
+- **Fix tree subfolder and sibling auto-expansion (`directorytree.cpp`)**: Resolved unwanted auto-expansion of current folders and sibling folders when navigating directories. `expandAncestors` now strictly unfolds parent ancestors to reveal the target node, leaving the target directory collapsed and unexpanded until explicitly opened by the user. Removed redundant `scheduleFetchMore` and `expand(proxyIdx)` calls during navigation, eliminating tree unrolling and stopping background `QFileSystemModel` I/O contention.
+- **Direct navigation delegation for `openDirectory` (`mainwindow.cpp`)**: Routed `MainWindow::openDirectory(dir)` directly to `changeDirectory(dir)`, ensuring all folder opens cleanly trigger the committed directory transition and thumbnail pipeline.
+- **Accelerate initial directory thumbnail decoding (`ThumbnailPipeline.h`)**: Increased `kVisibleFirstWave` from `4` to `16`. When entering a directory for the first time, all visible screen cells are immediately dispatched in parallel across available CPU worker threads instead of being throttled in 4-task sequential ripples, dramatically cutting perceived wait time for the first screen of thumbnails.
+
+### 性能优化与目录树稳定性修复
+
+- **消除目录树子文件夹及平级文件夹强制展开（`directorytree.cpp`）**：修复了在进入或切换目录时，当前目录及平级目录被强制调用 `expand` 展开的问题。`expandAncestors` 规范为仅向上展开父级祖先链以确保目标可见，目标节点自身保持折叠未展开状态，彻底避免目录树层级被全部铺开、平级文件夹残留展开的视觉混乱；移除了导航时的多余 `scheduleFetchMore` 调用，消除与画廊扫描之间的文件系统 I/O 争抢。
+- **首屏可见缩略图并发解码提速（`ThumbnailPipeline.h`）**：将首波可见缩略图调度并发上限 `kVisibleFirstWave` 由 4 提升至 16。初次进入包含数十张图片的目录时，首屏视野内的所有缩略图能够立刻全量分发至多核 CPU 线程池并发解码，终结此前 4 张一批轮询排队等待的卡顿感，大幅提升首屏加载流畅度。
+- **文件夹打开动作统一化（`mainwindow.cpp`）**：将 `MainWindow::openDirectory` 统一委托至 `changeDirectory`，确保任何方式打开目录均完整走通画廊重置与缩略图加载链路。
+
 ## [1.0.89] - 2026-10-01
 
 ### Release

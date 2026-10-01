@@ -649,7 +649,7 @@ struct ThumbnailPipeline
     size_t m_predictive = 16;
     // In-flight cap until the visible window is cached or failed. The pool
     // would otherwise run the whole folder beside the first cells.
-    static constexpr size_t kVisibleFirstWave = 4;
+    static constexpr size_t kVisibleFirstWave = 16;
     uint64_t m_gen = 0;
     DecodeFn m_decode = [](const std::string &path, int size)
     { return Decoder::decodeScaled(path, size); };

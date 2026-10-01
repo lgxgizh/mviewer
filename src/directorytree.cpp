@@ -339,15 +339,6 @@ void DirectoryTree::tryNavigateToPending(quint64 requestId)
     m_navigationRetryTimer->stop();
     expandAncestors(sourceIdx);
 
-    const int rowCount = m_model->rowCount(sourceIdx);
-    const bool needsFetch =
-        rowCount >= kLargeDirThreshold || (rowCount == 0 && m_model->canFetchMore(sourceIdx));
-    if (needsFetch)
-    {
-        setLoading(true);
-        scheduleFetchMore(sourceIdx);
-    }
-
     m_currentPath = targetPath;
     watchPath(targetPath);
 
@@ -356,7 +347,6 @@ void DirectoryTree::tryNavigateToPending(quint64 requestId)
     QSignalBlocker selectionBlocker(selectionModel());
     setCurrentIndex(proxyIdx);
     scrollTo(proxyIdx, PositionAtCenter);
-    expand(proxyIdx);
     selectionBlocker.unblock();
     applyCurrentHighlight(proxyIdx);
 
@@ -366,8 +356,7 @@ void DirectoryTree::tryNavigateToPending(quint64 requestId)
     if (shouldEmit)
         emit directoryChanged(targetPath);
 
-    if (!needsFetch)
-        setLoading(false);
+    setLoading(false);
 }
 
 void DirectoryTree::resolvePendingNavigation(quint64 requestId)
@@ -607,11 +596,6 @@ void DirectoryTree::expandAncestors(const QModelIndex &sourceIdx)
             expand(proxyAnc);
         anc = anc.parent();
     }
-    // Also expand the target itself.
-    m_model->fetchMore(sourceIdx);
-    const QModelIndex proxyTarget = m_proxy->mapFromSource(sourceIdx);
-    if (proxyTarget.isValid())
-        expand(proxyTarget);
 }
 
 void DirectoryTree::drawRow(QPainter *painter, const QStyleOptionViewItem &option,
