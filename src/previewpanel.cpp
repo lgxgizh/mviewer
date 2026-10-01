@@ -399,14 +399,14 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     const QColor base = pal.color(QPalette::Base);
     const QColor well = pal.color(QPalette::AlternateBase);
     const QColor text = pal.color(QPalette::Text);
-    const QColor secondary = pal.color(QPalette::Mid);
+    const QColor secondary = QColor(161, 161, 170);
     painter.fillRect(rect(), base);
 
     if (!m_hasImage)
     {
         painter.setPen(secondary);
         QFont f = font();
-        f.setItalic(true);
+        f.setPointSize(9);
         painter.setFont(f);
         painter.drawText(rect(), Qt::AlignCenter, "拖放图片或文件夹到此处\n或按 Ctrl+O 打开目录");
         return;

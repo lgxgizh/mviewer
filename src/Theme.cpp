@@ -153,10 +153,20 @@ constexpr const char s_darkStyleSheet[] = R"(
             margin: 4px 6px;
         }
         QToolBar {
-            background: #1e1e20;
-            border: none;
+            background: #18181b;
+            border-bottom: 1px solid #27272a;
             spacing: 3px;
-            padding: 2px 4px;
+            padding: 3px 6px;
+        }
+        QLabel[sectionHeader="true"], QLabel#foldersSectionLabel, QLabel#previewSectionLabel {
+            background: #202024;
+            color: #d4d4d8;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 8px;
+            border-top: 1px solid #333338;
+            border-bottom: 1px solid #2d2d32;
+            letter-spacing: 0.5px;
         }
         QToolButton {
             border: 1px solid transparent;
@@ -222,12 +232,17 @@ constexpr const char s_darkStyleSheet[] = R"(
             background: #3b82f6;
         }
         QStatusBar {
-            background: #18181b;
+            background: #141416;
             color: #a1a1aa;
             border-top: 1px solid #27272a;
+            font-size: 12px;
         }
         QStatusBar::item {
             border: none;
+        }
+        QStatusBar QLabel {
+            padding: 1px 8px;
+            color: #a1a1aa;
         }
         QToolTip {
             background: #27272a;
@@ -324,23 +339,6 @@ constexpr const char s_darkStyleSheet[] = R"(
         QCheckBox, QRadioButton {
             spacing: 6px;
             color: #e4e4e7;
-        }
-        QCheckBox::indicator, QRadioButton::indicator {
-            width: 16px;
-            height: 16px;
-            border: 1px solid #4a4a54;
-            border-radius: 3px;
-            background: #18181b;
-        }
-        QRadioButton::indicator {
-            border-radius: 8px;
-        }
-        QCheckBox::indicator:hover, QRadioButton::indicator:hover {
-            border-color: #3b82f6;
-        }
-        QCheckBox::indicator:checked, QRadioButton::indicator:checked {
-            background-color: #2563eb;
-            border-color: #3b82f6;
         }
     )";
 
