@@ -567,6 +567,38 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
     return 10.0 * std::log10(65025.0 / mse);
 }
 
+static ImageData toGrayscale8(const ImageData &src)
+{
+    if (src.isNull() || src.format == PixelFormat::Grayscale8)
+        return src;
+    ImageData gray = makeImageData(src.width, src.height, PixelFormat::Grayscale8);
+    if (gray.isNull())
+        return ImageData();
+    const ImageBuffer sv = src.view();
+    const ImageBuffer gv = gray.view();
+    const int cpp = src.channelsPerPixel();
+    const bool isBgr = (src.format == PixelFormat::BGR24 || src.format == PixelFormat::BGRA32);
+    const int rOff = isBgr ? 2 : 0;
+    const int bOff = isBgr ? 0 : 2;
+
+    for (int y = 0; y < src.height; ++y)
+    {
+        const uint8_t *sl = sv.data + static_cast<size_t>(y) * sv.stride();
+        uint8_t *dl = gv.data + static_cast<size_t>(y) * gv.stride();
+        for (int x = 0; x < src.width; ++x)
+        {
+            const uint8_t r = sl[x * cpp + rOff];
+            const uint8_t g = sl[x * cpp + 1];
+            const uint8_t b = sl[x * cpp + bOff];
+            dl[x] = static_cast<uint8_t>(
+                (static_cast<unsigned>(r) * 11u + static_cast<unsigned>(g) * 16u +
+                 static_cast<unsigned>(b) * 5u) >>
+                5);
+        }
+    }
+    return gray;
+}
+
 double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
 {
     if (aData.isNull() || bData.isNull())
@@ -576,20 +608,16 @@ double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
     if (w < 8 || h < 8)
         return 0.0;
 
-    if (aData.format == PixelFormat::Grayscale8 && bData.format == PixelFormat::Grayscale8)
-    {
-        const ImageBuffer va = aData.view();
-        const ImageBuffer vb = bData.view();
-        return computeSSIMCore(
-            w, h, [&va](int y) { return va.data + static_cast<size_t>(y) * va.stride(); },
-            [&vb](int y) { return vb.data + static_cast<size_t>(y) * vb.stride(); });
-    }
+    ImageData ga = (aData.format == PixelFormat::Grayscale8) ? aData : toGrayscale8(aData);
+    ImageData gb = (bData.format == PixelFormat::Grayscale8) ? bData : toGrayscale8(bData);
+    if (ga.isNull() || gb.isNull())
+        return 0.0;
 
-    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_Grayscale8);
-    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_Grayscale8);
+    const ImageBuffer va = ga.view();
+    const ImageBuffer vb = gb.view();
     return computeSSIMCore(
-        w, h, [&aa](int y) { return aa.constScanLine(y); },
-        [&bb](int y) { return bb.constScanLine(y); });
+        w, h, [&va](int y) { return va.data + static_cast<size_t>(y) * va.stride(); },
+        [&vb](int y) { return vb.data + static_cast<size_t>(y) * vb.stride(); });
 }
 
 double AnalysisEngine::noiseEstimate(const ImageData &imgData)
@@ -601,13 +629,11 @@ double AnalysisEngine::noiseEstimate(const ImageData &imgData)
     if (w < 3 || h < 3)
         return 0.0;
 
-    if (imgData.format == PixelFormat::Grayscale8)
-    {
-        const ImageBuffer v = imgData.view();
-        return calcLaplacianCore(w, h, [&v](int y)
-                                 { return v.data + static_cast<size_t>(y) * v.stride(); });
-    }
+    ImageData g = (imgData.format == PixelFormat::Grayscale8) ? imgData : toGrayscale8(imgData);
+    if (g.isNull())
+        return 0.0;
 
-    QImage img = mvcore::toQImage(imgData).convertToFormat(QImage::Format_Grayscale8);
-    return calcLaplacianCore(w, h, [&img](int y) { return img.constScanLine(y); });
+    const ImageBuffer v = g.view();
+    return calcLaplacianCore(w, h, [&v](int y)
+                             { return v.data + static_cast<size_t>(y) * v.stride(); });
 }

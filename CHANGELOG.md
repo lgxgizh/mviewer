@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.0.87] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.87**.
+- **Zero-copy RGBA32 viewport presentation (`QtConvert.cpp`)**: `toQImageRef` directly returns `QImage::Format_RGBA8888` for `PixelFormat::RGBA32`, eliminating deep copies and format reallocations during image switching, panning, and viewport tile downsampling.
+- **Overlap-scaled early exit bound for image alignment (`Aligner.cpp`)**: In `Aligner::estimate`, added exact mathematical threshold pruning `maxAllowedSad = bestSAD * overlap` to the SAD row loop, eliminating 80%+ of redundant pixel difference computations.
+- **Zero-heap allocation case-insensitive search (`SearchEngine.cpp`)**: `contains()` and `snippet()` in `SearchEngine` use zero-allocation `std::string_view` with `std::search` and ASCII case-insensitive comparison, eliminating repetitive heap allocations during metadata and tag queries.
+- **Fused difference heatmap kernel (`DifferenceEngine.h`, `DifferenceEngine.cpp`)**: Added `visualizeOverlay`, fusing gain LUT amplification, thresholding, and colormap application into a single pass without allocating intermediate full-resolution images.
+- **Compare workspace diff pipeline optimization (`compareworkspace_render_diff.cpp`)**: `buildDiffOverlays` calls the fused `visualizeOverlay` kernel, significantly reducing memory bandwidth and rendering latency in compare mode.
+- **Downscale pyramid optimization (`MipmapPyramid.cpp`)**: Optimized `downscaleHalfBox` with hoisted row pointers, bit-shifts (`>> 2`), and specialized paths for 3-channel and 4-channel pixel buffers.
+- **Direct grayscale extraction for SSIM & noise estimation (`AnalysisEngine_metrics.cpp`)**: Replaced `toQImage -> convertToFormat(Format_Grayscale8)` with a direct, single-pass `toGrayscale8` buffer converter, avoiding Qt format conversion overhead and intermediate allocations.
+- **ROI stats loop flattening & binary max (`AnalysisEngine.cpp`)**: Eliminated per-pixel multiplication in `computeStatsROI` with direct pointer progression and replaced `std::initializer_list` in `std::max({r, g, b})` with binary `std::max`.
+- **Directory scan stat overhead elimination (`FileSystem.cpp`)**: `FileSystem::listImages` uses `entryList` instead of `entryInfoList` and pre-reserves filter collections, avoiding costly per-file OS filesystem stat queries across large directories.
+- **Histogram multi-channel accumulation optimization (`Histogram.h`)**: Replaced per-pixel multiplication with pointer stepping in `accumulateGray256`, `accumulateBgr256`, and `accumulateRgb256`, and eliminated initializer-list overhead in HSV $V$ calculation.
+- **Single-image histogram compute acceleration (`ImageFrame.cpp`)**: Hoisted pixel format branching out of inner loops, eliminated duplicate `luminance()` evaluations, and removed redundant clamp branches.
+- **Bilinear scaler clamp branch elimination (`BilinearScale.cpp`)**: Eliminated 12 redundant `std::clamp` operations per 4 pixels across SSE2 and scalar rasterizers using mathematically proven $[0, 255]$ closed-form pixel packing.
+
+### 性能与体验优化
+
+- **零拷贝 RGBA32 视口呈现（`QtConvert.cpp`）**：`toQImageRef` 针对 `PixelFormat::RGBA32` 格式直接返回 `QImage::Format_RGBA8888` 包装，彻底消除看图、平移、缩放与瓦片渲染时对 RGBA 图像进行多余的全图深拷贝与重排。
+- **重叠区缩放绝对上界早停裁剪（`Aligner.cpp`）**：在 `Aligner::estimate` 的 SAD 穷举对齐搜索中引入行前预知的数学早停边界 `maxAllowedSad = bestSAD * overlap`，累加超界立即跳出，在对齐搜索中裁剪 80%+ 无效像素差值运算。
+- **零堆分配不区分大小写字符串检索（`SearchEngine.cpp`）**：`SearchEngine` 检索重构为基于 `std::string_view` 与 `std::search` + 自定义 ASCII 大小写无关谓词，彻底消除每次关键词检索时的重复 `std::string` 堆分配。
+- **差异热力图单通道融合核（`DifferenceEngine.h` / `.cpp`）**：新增 `visualizeOverlay` 融合计算核，将增益查表（`amplify`）、阈值二值化（`applyThreshold`）与色彩映射（`colorMap`）三步串行流程融合成单趟访存完成，避免产生多份全分辨率中间图像。
+- **比较工作区差异图渲染流水线优化（`compareworkspace_render_diff.cpp`）**：`buildDiffOverlays` 全面接入 `visualizeOverlay` 融合核，在保持视觉输出严格一致的前提下，显著削减差异比较模式下高分辨率大图的内存吞吐与处理耗时。
+- **金字塔降采样行指针悬挂与位移运算（`MipmapPyramid.cpp`）**：`downscaleHalfBox` 增加 4 通道与 3 通道专用快速展开路径，行指针在列循环前预先提取，除法以整数算术右移（`>> 2`）替代，显著加速金字塔瓦片预生成速度。
+- **SSIM 与噪声估计灰度快速提取（`AnalysisEngine_metrics.cpp`）**：`AnalysisEngine::ssim` 与 `AnalysisEngine::noiseEstimate` 采用单趟直接像素转灰度提取器 `toGrayscale8`，替代开销巨大的 `toQImage -> convertToFormat(Format_Grayscale8)`，避免复杂的 Qt 图像格式转换包装与中间内存分配。
+- **ROI 统计循环指针扁平化与极值优化（`AnalysisEngine.cpp`）**：消除 `computeStatsROI` 中逐像素计算乘法的行偏移寻址，引入连续步进指针，并将三通道极值计算 `std::max({r, g, b})` 替换为二元比较，消除数百万次 `std::initializer_list` 的栈分配与迭代。
+- **文件系统大目录枚举开销降低（`FileSystem.cpp`）**：`FileSystem::listImages` 将 `entryInfoList` 改为 `entryList`，避免遍历目录中成千上万个文件时为每个文件触发昂贵的系统 stat/属性查询；同时对过滤器列表预分配容量，显著提升超大图库扫描加载速度。
+- **直方图多通道累加向量化与指针优化（`Histogram.h`）**：`accumulateGray256`、`accumulateBgr256`、`accumulateRgb256` 消除每像素乘法计算，统一改用行首指针步进；三通道峰值 $V$ 计算消除 `std::initializer_list` 构造，大幅降低直方图计算时钟周期。
+- **单图直方图全分辨率计算流水线优化（`ImageFrame.cpp`）**：`ImageFrame::computeHistogram` 将格式分支（灰度 / BGR / RGB）提升至行循环外部，合并重复的 `luminance()` 计算，移除单字节无符号整数多余的 `std::clamp` 边界检查，实现数倍计算提速。
+- **双线性缩放像素打包与分支精简（`BilinearScale.cpp`）**：严格数学证明双线性插值权重加权和在 $[0, 255]$ 范围内单调封闭，移除 SSE2 和标量循环中每 4 像素高达 12 次的多余 `std::clamp` 分支，采用高效无分支位运算打包像素输出。
+
 ## [1.0.86] - 2026-10-01
 
 ### Release

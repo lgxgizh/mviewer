@@ -770,3 +770,170 @@ ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageD
     }
     return out;
 }
+
+ImageData DifferenceEngine::visualizeOverlay(const ImageData &grayDiff, const ImageData &base,
+                                             uint8_t threshold, double gain, bool highlight)
+{
+    if (grayDiff.isNull())
+        return ImageData();
+
+    alignas(16) uint8_t valLut[256];
+    for (int i = 0; i < 256; ++i)
+    {
+        int v = i;
+        if (gain > 1.0)
+            v = std::min(255, static_cast<int>(std::round(i * gain)));
+        valLut[i] = (v >= threshold) ? static_cast<uint8_t>(v) : 0;
+    }
+
+    const int w = grayDiff.width;
+    const int h = grayDiff.height;
+    const int cppD = grayDiff.channelsPerPixel();
+    const int roD = channelOffset(grayDiff.format, 0);
+
+    ImageData out = makeImageData(w, h, PixelFormat::RGB24);
+    if (out.isNull())
+        return ImageData();
+
+    const bool isDirectDiff = (cppD == 1 && roD == 0);
+
+    if (!highlight)
+    {
+        const auto &lut = heatLUT();
+        if (isDirectDiff)
+        {
+            if (grayDiff.stride() == static_cast<ptrdiff_t>(w) &&
+                out.stride() == static_cast<ptrdiff_t>(w) * 3)
+            {
+                const size_t total = static_cast<size_t>(w) * h;
+                const uint8_t *src = grayDiff.buffer->data();
+                auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data());
+                for (size_t i = 0; i < total; ++i)
+                    dst[i] = lut[valLut[src[i]]];
+            }
+            else
+            {
+                for (int y = 0; y < h; ++y)
+                {
+                    const uint8_t *src =
+                        grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+                    auto *dst = reinterpret_cast<HeatRGB *>(
+                        out.buffer->data() + static_cast<size_t>(y) * out.stride());
+                    for (int x = 0; x < w; ++x)
+                        dst[x] = lut[valLut[src[x]]];
+                }
+            }
+            return out;
+        }
+
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *src =
+                grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+            auto *dst = reinterpret_cast<HeatRGB *>(
+                out.buffer->data() + static_cast<size_t>(y) * out.stride());
+            for (int x = 0; x < w; ++x)
+                dst[x] = lut[valLut[src[x * cppD + roD]]];
+        }
+        return out;
+    }
+
+    const bool hasBase =
+        !base.isNull() && base.width >= w && base.height >= h &&
+        (base.format == PixelFormat::RGB24 || base.format == PixelFormat::BGR24 ||
+         base.format == PixelFormat::RGBA32 || base.format == PixelFormat::BGRA32 ||
+         base.format == PixelFormat::Grayscale8);
+    const int cppB = hasBase ? base.channelsPerPixel() : 0;
+    const int minDiff = std::max<int>(threshold, 1);
+    const auto &intLUT = highlightIntensityLUT();
+
+    if (!hasBase)
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *src =
+                grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            for (int x = 0; x < w; ++x)
+            {
+                const uint8_t rawV = isDirectDiff ? src[x] : src[x * cppD + roD];
+                const uint8_t v = valLut[rawV];
+                if (v >= minDiff)
+                {
+                    dst[x * 3 + 0] = intLUT[v];
+                    dst[x * 3 + 1] = 0;
+                    dst[x * 3 + 2] = 0;
+                }
+                else
+                {
+                    dst[x * 3 + 0] = 128;
+                    dst[x * 3 + 1] = 128;
+                    dst[x * 3 + 2] = 128;
+                }
+            }
+        }
+        return out;
+    }
+
+    if (base.format == PixelFormat::Grayscale8)
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *src =
+                grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+            const uint8_t *bs = base.buffer->data() + static_cast<size_t>(y) * base.stride();
+            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            for (int x = 0; x < w; ++x)
+            {
+                const uint8_t rawV = isDirectDiff ? src[x] : src[x * cppD + roD];
+                const uint8_t v = valLut[rawV];
+                if (v >= minDiff)
+                {
+                    dst[x * 3 + 0] = intLUT[v];
+                    dst[x * 3 + 1] = 0;
+                    dst[x * 3 + 2] = 0;
+                }
+                else
+                {
+                    const uint8_t g = bs[x];
+                    dst[x * 3 + 0] = g;
+                    dst[x * 3 + 1] = g;
+                    dst[x * 3 + 2] = g;
+                }
+            }
+        }
+        return out;
+    }
+
+    const bool isBGR = (base.format == PixelFormat::BGR24 || base.format == PixelFormat::BGRA32);
+    for (int y = 0; y < h; ++y)
+    {
+        const uint8_t *src =
+            grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+        const uint8_t *bs = base.buffer->data() + static_cast<size_t>(y) * base.stride();
+        uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+        const uint8_t *bp = bs;
+        for (int x = 0; x < w; ++x, dst += 3, bp += cppB)
+        {
+            const uint8_t rawV = isDirectDiff ? src[x] : src[x * cppD + roD];
+            const uint8_t v = valLut[rawV];
+            if (v >= minDiff)
+            {
+                dst[0] = intLUT[v];
+                dst[1] = 0;
+                dst[2] = 0;
+            }
+            else
+            {
+                const int r = isBGR ? bp[2] : bp[0];
+                const int g = bp[1];
+                const int b = isBGR ? bp[0] : bp[2];
+                const uint8_t gray = static_cast<uint8_t>((r * 30 + g * 59 + b * 11) / 100);
+                dst[0] = gray;
+                dst[1] = gray;
+                dst[2] = gray;
+            }
+        }
+    }
+    return out;
+}

@@ -116,8 +116,8 @@ int fillBilinearRowSse2(QRgb *line, int tw, int w0y, int w1y, const QRgb *sl0, c
         _mm_store_si128(reinterpret_cast<__m128i *>(bb),
                         bilinearBlendChannelSse2(vw00, vw10, vw01, vw11, b00, b10, b01, b11));
         for (int k = 0; k < 4; ++k)
-            line[x + k] = qRgb(std::clamp(rr[k], 0, 255), std::clamp(gg[k], 0, 255),
-                               std::clamp(bb[k], 0, 255));
+            line[x + k] = 0xff000000u | (static_cast<uint32_t>(rr[k]) << 16) |
+                          (static_cast<uint32_t>(gg[k]) << 8) | static_cast<uint32_t>(bb[k]);
     }
     return x;
 }
@@ -147,7 +147,8 @@ void fillBilinearRowScalar(QRgb *line, int x0, int tw, int w0y, int w1y, const Q
             8;
         const int b =
             (w00 * qBlue(p00) + w10 * qBlue(p10) + w01 * qBlue(p01) + w11 * qBlue(p11) + 128) >> 8;
-        line[x] = qRgb(std::clamp(r, 0, 255), std::clamp(g, 0, 255), std::clamp(b, 0, 255));
+        line[x] = 0xff000000u | (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(g) << 8) |
+                  static_cast<uint32_t>(b);
     }
 }
 

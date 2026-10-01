@@ -23,23 +23,37 @@ std::string toLower(const std::string &s)
     return r;
 }
 
+size_t findCaseInsensitive(std::string_view haystack, std::string_view needle)
+{
+    if (needle.empty())
+        return 0;
+    if (needle.size() > haystack.size())
+        return std::string_view::npos;
+    auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+                          [](char ch1, char ch2) {
+                              return std::tolower(static_cast<unsigned char>(ch1)) ==
+                                     std::tolower(static_cast<unsigned char>(ch2));
+                          });
+    if (it != haystack.end())
+        return static_cast<size_t>(std::distance(haystack.begin(), it));
+    return std::string_view::npos;
+}
+
 bool contains(const std::string &haystack, const std::string &needle, bool caseSensitive)
 {
     if (needle.empty())
         return true;
     if (caseSensitive)
         return haystack.find(needle) != std::string::npos;
-    return toLower(haystack).find(toLower(needle)) != std::string::npos;
+    return findCaseInsensitive(haystack, needle) != std::string_view::npos;
 }
 
 std::string snippet(const std::string &haystack, const std::string &needle, size_t radius = 40)
 {
     if (needle.empty() || haystack.empty())
         return {};
-    const auto hs = toLower(haystack);
-    const auto nd = toLower(needle);
-    const auto pos = hs.find(nd);
-    if (pos == std::string::npos)
+    const size_t pos = findCaseInsensitive(haystack, needle);
+    if (pos == std::string_view::npos)
         return {};
     const size_t start = (pos > radius) ? (pos - radius) : 0;
     const size_t end = std::min(pos + needle.size() + radius, haystack.size());

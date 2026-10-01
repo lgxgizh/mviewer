@@ -4,9 +4,9 @@
 #include "core/image/ImageFormats.h"
 
 #include <QDir>
-#include <QFileInfo>
 #include <QString>
 #include <QStringList>
+#include <algorithm>
 
 std::vector<std::string> FileSystem::imageFilters()
 {
@@ -20,19 +20,21 @@ std::vector<std::string> FileSystem::listImages(const std::string &dir, int max)
     QDir d(QString::fromUtf8(dir.data(), static_cast<int>(dir.size())));
     if (!d.exists())
         return {};
-    const QStringList filters = [&]()
-    {
-        QStringList f;
-        for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
-            f << QString::fromUtf8(w.data(), static_cast<int>(w.size()));
-        return f;
-    }();
-    QFileInfoList entries = d.entryInfoList(filters, QDir::Files, QDir::Name);
+    const auto wildcards = mviewer::core::ImageFormats::wildcardFilters();
+    QStringList filters;
+    filters.reserve(static_cast<int>(wildcards.size()));
+    for (const auto &w : wildcards)
+        filters.append(QString::fromUtf8(w.data(), static_cast<int>(w.size())));
+
+    const QStringList entries = d.entryList(filters, QDir::Files, QDir::Name);
     std::vector<std::string> result;
-    result.reserve(std::min(static_cast<int>(entries.size()), max));
-    for (const QFileInfo &fi : entries)
+    const size_t limit = (max > 0) ? std::min(static_cast<size_t>(entries.size()),
+                                              static_cast<size_t>(max))
+                                   : static_cast<size_t>(entries.size());
+    result.reserve(limit);
+    for (const QString &name : entries)
     {
-        result.push_back(fi.absoluteFilePath().toUtf8().toStdString());
+        result.push_back(d.absoluteFilePath(name).toUtf8().toStdString());
         // max <= 0 means "no limit" (used by large-corpus scans).
         if (max > 0 && result.size() >= static_cast<size_t>(max))
             break;

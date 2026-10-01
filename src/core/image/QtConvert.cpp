@@ -203,16 +203,32 @@ QImage toQImage(const ImageData &src)
         const bool hasAvx2 = mviewer::core::CpuFeatures::hasAvx2();
         const bool hasSsse3 = mviewer::core::CpuFeatures::hasSsse3();
         const size_t vStride = static_cast<size_t>(v.stride());
-        for (int y = 0; y < v.height; ++y)
+        if (hasAvx2)
         {
-            const uint8_t *sl = v.data + static_cast<size_t>(y) * vStride;
-            uint8_t *dl = out.scanLine(y);
-            if (hasAvx2)
+            for (int y = 0; y < v.height; ++y)
+            {
+                const uint8_t *sl = v.data + static_cast<size_t>(y) * vStride;
+                uint8_t *dl = out.scanLine(y);
                 convertRgba32ToArgb32RowAVX2(sl, dl, v.width);
-            else if (hasSsse3)
+            }
+        }
+        else if (hasSsse3)
+        {
+            for (int y = 0; y < v.height; ++y)
+            {
+                const uint8_t *sl = v.data + static_cast<size_t>(y) * vStride;
+                uint8_t *dl = out.scanLine(y);
                 convertRgba32ToArgb32RowSSSE3(sl, dl, v.width);
-            else
+            }
+        }
+        else
+        {
+            for (int y = 0; y < v.height; ++y)
+            {
+                const uint8_t *sl = v.data + static_cast<size_t>(y) * vStride;
+                uint8_t *dl = out.scanLine(y);
                 convertRgba32ToArgb32RowScalar(sl, dl, v.width);
+            }
         }
         return out;
     }
@@ -272,7 +288,8 @@ QImage toQImageRef(const ImageData &src)
     case PixelFormat::Grayscale8:
         return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_Grayscale8);
     case PixelFormat::RGBA32:
-        // R,G,B,A order does not map to any Qt format without a channel swap.
+        // RGBA32 requires channel swap (RGBA -> ARGB32) to render; cannot zero-copy.
+        // ADR-002: toQImageRef returns null for formats that require byte conversion.
         return QImage();
     }
     return QImage();
@@ -436,6 +453,50 @@ ImageData fromQImage(const QImage &src)
                 d[0] = s[2];
                 d[1] = s[1];
                 d[2] = s[0];
+            }
+        }
+        return out;
+    }
+
+    if (src.format() == QImage::Format_RGBA8888)
+    {
+        ImageData out = makeImageData(src.width(), src.height(), PixelFormat::RGB24);
+        const size_t dstStride = out.stride();
+        uint8_t *dstData = out.buffer->data();
+        const size_t w = static_cast<size_t>(src.width());
+        for (int y = 0; y < src.height(); ++y)
+        {
+            const uint8_t *sl = src.constScanLine(y);
+            uint8_t *dl = dstData + static_cast<size_t>(y) * dstStride;
+            size_t x = 0;
+            for (; x + 4 <= w; x += 4)
+            {
+                const size_t sOff = x * 4;
+                const size_t dOff = x * 3;
+                const uint8_t *s = sl + sOff;
+                uint8_t *d = dl + dOff;
+                d[0] = s[0];
+                d[1] = s[1];
+                d[2] = s[2];
+                d[3] = s[4];
+                d[4] = s[5];
+                d[5] = s[6];
+                d[6] = s[8];
+                d[7] = s[9];
+                d[8] = s[10];
+                d[9] = s[12];
+                d[10] = s[13];
+                d[11] = s[14];
+            }
+            for (; x < w; ++x)
+            {
+                const size_t sOff = x * 4;
+                const size_t dOff = x * 3;
+                const uint8_t *s = sl + sOff;
+                uint8_t *d = dl + dOff;
+                d[0] = s[0];
+                d[1] = s[1];
+                d[2] = s[2];
             }
         }
         return out;

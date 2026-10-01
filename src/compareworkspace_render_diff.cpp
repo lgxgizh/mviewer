@@ -78,12 +78,8 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
         }
         if (visualize)
         {
-            const ImageData diffToView =
-                (gain > 1.0) ? DifferenceEngine::amplify(diff, gain) : diff;
-            const ImageData thresholded = DifferenceEngine::applyThreshold(diffToView, threshold);
             const ImageData overlayImage =
-                highlight ? DifferenceEngine::highlightMap(thresholded, basePixels, threshold)
-                          : DifferenceEngine::heatMap(thresholded);
+                DifferenceEngine::visualizeOverlay(diff, basePixels, threshold, gain, highlight);
             if (context.isCancelled())
                 return sources;
             if (!overlayImage.isNull())

@@ -22,6 +22,11 @@ class DifferenceEngine
     static ImageData highlightMap(const ImageData &grayDiff, const ImageData &base,
                                   uint8_t threshold = 0);
 
+    // Fused visualization: computes gain, thresholding, and colormap (heat/highlight)
+    // in a single pass without intermediate image allocations.
+    static ImageData visualizeOverlay(const ImageData &grayDiff, const ImageData &base,
+                                      uint8_t threshold, double gain, bool highlight);
+
     // Apply threshold to a grayscale image: pixels below threshold become 0 (black).
     static ImageData applyThreshold(const ImageData &gray, uint8_t threshold);
 
