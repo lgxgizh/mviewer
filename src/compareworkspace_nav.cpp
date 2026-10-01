@@ -539,7 +539,6 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
             view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
                 m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
         }
-        clearROIStatsDisplay();
         if (m_roiGeometryLabel)
             m_roiGeometryLabel->setText(m_lastSelection.isEmpty()
                                             ? tr("ROI: —")
@@ -550,8 +549,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
                                                   .arg(m_lastSelection.height));
         if (m_roiHistChk && m_roiHistChk->isChecked())
             refreshHistograms();
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                               tr("Linked ROI unavailable — image dimensions differ"));
+        scheduleROIMeasurement();
         update();
         return;
     }
@@ -608,19 +606,24 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
         return;
     if (!linkedROIAvailable())
     {
-        // Keep a useful active-pane preview for unequal dimensions, but never
-        // mirror it or present it as a linked measurement.
         m_roiLinked = false;
-        m_lastSelection = {};
-        for (RawImageView *other : m_cellViews)
-            if (other && other != view)
-                other->clearSelection();
-        view->setSelection(sel);
-        clearROIStatsDisplay();
+        const QSize srcSize = view->sourceSize();
+        const int w = srcSize.isValid() ? srcSize.width() : 0;
+        const int h = srcSize.isValid() ? srcSize.height() : 0;
+        const auto norm = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
+                                                              sel.y + sel.height, w, h);
+        view->setSelection(norm);
+        m_lastSelection = norm;
         if (m_roiGeometryLabel)
-            m_roiGeometryLabel->setText(tr("ROI: —"));
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                               tr("Linked ROI unavailable — image dimensions differ"));
+            m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
+                                                      : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                            .arg(norm.x)
+                                                            .arg(norm.y)
+                                                            .arg(norm.width)
+                                                            .arg(norm.height));
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle,
+                               tr("Release ROI to measure Source RGB"));
+        update();
         return;
     }
 
@@ -661,20 +664,24 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
         return;
     }
 
-    // Unequal-size comparisons retain only the active pane's local ROI. It is
-    // deliberately not persisted as a linked ROI and cannot feed comparison
-    // statistics, avoiding any implicit proportional coordinate mapping.
     m_roiLinked = false;
-    for (RawImageView *other : m_cellViews)
-        if (other && other != view)
-            other->clearSelection();
-    view->setSelection(sel);
-    m_lastSelection = {};
-    clearROIStatsDisplay();
+    const QSize srcSize = view->sourceSize();
+    const int w = srcSize.isValid() ? srcSize.width() : 0;
+    const int h = srcSize.isValid() ? srcSize.height() : 0;
+    const auto norm = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
+                                                          sel.y + sel.height, w, h);
+    view->setSelection(norm);
+    m_lastSelection = norm;
     if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(tr("ROI: —"));
-    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                           tr("Linked ROI unavailable — image dimensions differ"));
+        m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
+                                                  : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                        .arg(norm.x)
+                                                        .arg(norm.y)
+                                                        .arg(norm.width)
+                                                        .arg(norm.height));
+    if (m_roiHistChk && m_roiHistChk->isChecked())
+        refreshHistograms();
+    scheduleROIMeasurement();
     update();
 }
 

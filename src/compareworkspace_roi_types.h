@@ -38,6 +38,7 @@ struct ROIInput
     mviewer::domain::ImageMetadata metadata;
     std::string path;
     mviewer::core::AnalysisAdjustment adjustment;
+    mviewer::domain::Selection roi;
 };
 
 struct ROIPaneMeasurement

@@ -321,13 +321,20 @@ CompareWorkspace::ROIStatsBatchResult CompareWorkspace::computeROIStatsBatch(
     result.linked = linked;
     result.roi = roi;
     result.panes.reserve(inputs.size());
-    if (!linked || roi.isEmpty())
-        return result;
     for (const ROIInput &input : inputs)
     {
         if (context.isCancelled())
             return {};
-        result.panes.push_back(computeSourceROI(input, roi, context));
+        const mviewer::domain::Selection targetRoi = linked ? roi : input.roi;
+        if (targetRoi.isEmpty())
+        {
+            mviewer::ui::ROIPaneMeasurement unmeasured;
+            unmeasured.state = mviewer::ui::ROIPaneState::Unsupported;
+            unmeasured.reason = "No ROI on this pane";
+            result.panes.push_back(std::move(unmeasured));
+            continue;
+        }
+        result.panes.push_back(computeSourceROI(input, targetRoi, context));
     }
     return result;
 }
@@ -366,18 +373,11 @@ void CompareWorkspace::scheduleROIMeasurement()
     ++m_roiGen;
     m_roiResult.reset();
 
-    if (!m_roiLinked || m_lastSelection.isEmpty() || !linkedROIAvailable())
-    {
-        clearROIStatsDisplay();
-        setROIMeasurementState(linkedROIAvailable()
-                                   ? mviewer::ui::ROIMeasurementState::Idle
-                                   : mviewer::ui::ROIMeasurementState::Unsupported);
-        return;
-    }
-
-    std::vector<ROIInput> inputs;
+    const bool linked = linkedROIAvailable() && m_roiLinked;
     const int paneCount = m_engine.imageCount();
+    std::vector<ROIInput> inputs;
     inputs.reserve(static_cast<size_t>(paneCount));
+    bool hasAnyRoi = false;
     for (int i = 0; i < paneCount; ++i)
     {
         ROIInput input;
@@ -389,11 +389,26 @@ void CompareWorkspace::scheduleROIMeasurement()
         }
         if (i < static_cast<int>(m_cellAdjusts.size()))
             input.adjustment = analysisAdjustment(m_cellAdjusts[static_cast<size_t>(i)]);
+        if (linked)
+            input.roi = m_lastSelection;
+        else if (i < static_cast<int>(m_cellViews.size()) && m_cellViews[i])
+            input.roi = m_cellViews[i]->selection();
+        if (!input.roi.isEmpty())
+            hasAnyRoi = true;
         inputs.push_back(std::move(input));
     }
+
+    if (!hasAnyRoi)
+    {
+        clearROIStatsDisplay();
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
+        return;
+    }
+
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Measuring,
-                           tr("Source RGB · 8-bit analysis"));
-    m_roiTask = startROIStatsBatch(inputs, m_lastSelection, true, m_roiGen, QPointer(this));
+                           linked ? tr("Source RGB · 8-bit analysis")
+                                  : tr("独立选区 · 源像素 RGB 分析"));
+    m_roiTask = startROIStatsBatch(inputs, m_lastSelection, linked, m_roiGen, QPointer(this));
     if (!m_roiTask)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Backpressured,
                                tr("Analysis queue busy — adjust or release ROI to retry"));
@@ -401,11 +416,15 @@ void CompareWorkspace::scheduleROIMeasurement()
 
 void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &result)
 {
-    if (result.generation != m_roiGen || result.paneCount != m_engine.imageCount() ||
-        result.roi.x != m_lastSelection.x || result.roi.y != m_lastSelection.y ||
-        result.roi.width != m_lastSelection.width || result.roi.height != m_lastSelection.height ||
-        !m_roiLinked || !linkedROIAvailable())
+    if (result.generation != m_roiGen || result.paneCount != m_engine.imageCount())
         return;
+    if (result.linked)
+    {
+        if (result.roi.x != m_lastSelection.x || result.roi.y != m_lastSelection.y ||
+            result.roi.width != m_lastSelection.width ||
+            result.roi.height != m_lastSelection.height || !m_roiLinked || !linkedROIAvailable())
+            return;
+    }
     m_roiTask.reset();
     m_roiResult = result;
     if (!m_roiTable)
@@ -413,12 +432,16 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
     m_roiTable->setRowCount(static_cast<int>(result.panes.size()));
     bool unsupported = false;
     bool failed = false;
+    bool hasAnyValid = false;
     for (int row = 0; row < static_cast<int>(result.panes.size()); ++row)
     {
         const auto &pane = result.panes[static_cast<size_t>(row)];
         const ImageFrame *frame = m_engine.imageAt(row);
         const mviewer::domain::ImageMetadata metadata =
             frame ? frame->metadata() : mviewer::domain::ImageMetadata{};
+        const QString stateText = (!result.linked && !pane.stats.valid)
+                                      ? tr("未框选")
+                                      : paneStateText(pane);
         const QStringList cells = {
             paneName(metadata, row),
             pane.stats.valid ? meanText(pane.stats.hMean) : QStringLiteral("—"),
@@ -430,7 +453,7 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
             pane.stats.valid ? ratioText(pane.stats, true) : QStringLiteral("—"),
             pane.stats.valid ? ratioText(pane.stats, false) : QStringLiteral("—"),
             pane.stats.valid ? QString::number(pane.stats.pixelCount) : QStringLiteral("—"),
-            paneStateText(pane)};
+            stateText};
         for (int column = 0; column < cells.size(); ++column)
         {
             auto *item = new QTableWidgetItem(cells[column]);
@@ -442,8 +465,17 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
                 item->setToolTip(cells[column]);
             m_roiTable->setItem(row, column, item);
         }
-        unsupported = unsupported || pane.state == mviewer::ui::ROIPaneState::Unsupported;
-        failed = failed || pane.state == mviewer::ui::ROIPaneState::Failed;
+        if (pane.stats.valid)
+            hasAnyValid = true;
+        if (result.linked)
+        {
+            unsupported = unsupported || pane.state == mviewer::ui::ROIPaneState::Unsupported;
+            failed = failed || pane.state == mviewer::ui::ROIPaneState::Failed;
+        }
+        else
+        {
+            failed = failed || pane.state == mviewer::ui::ROIPaneState::Failed;
+        }
     }
 
     if (m_roiDeltaLabel && result.panes.size() >= 2 && result.panes[0].stats.valid)
@@ -472,7 +504,9 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         }
     }
     else if (m_roiDeltaLabel)
+    {
         m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
+    }
 
     if (failed)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Failed,
@@ -480,9 +514,14 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
     else if (unsupported)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
                                tr("A bounded source-accurate region is unavailable"));
-    else
+    else if (hasAnyValid)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Ready,
-                               tr("Source RGB · full-resolution coordinates · 8-bit analysis"));
+                               result.linked ? tr("Source RGB · full-resolution coordinates · 8-bit analysis")
+                                             : tr("独立选区 · 源像素 RGB 分析"));
+    else
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
+
+    updateROISurfaces();
 }
 
 void CompareWorkspace::clearROIStatsDisplay()
@@ -507,6 +546,11 @@ void CompareWorkspace::setROIMeasurementState(mviewer::ui::ROIMeasurementState s
 void CompareWorkspace::updateROIAvailabilityStatus()
 {
     QString detail = m_roiStateDetail;
+    const bool hasAnyRoi = m_roiLinked ? !m_lastSelection.isEmpty()
+                                       : std::any_of(m_cellViews.begin(), m_cellViews.end(),
+                                                     [](RawImageView *v) {
+                                                         return v && !v->selection().isEmpty();
+                                                     });
     if (m_engine.imageCount() < 2)
         detail = tr("Linked ROI unavailable — at least two images required");
     else if (!linkedROIAvailable())
@@ -519,7 +563,7 @@ void CompareWorkspace::updateROIAvailabilityStatus()
         m_roiStatusLabel->setText(
             QStringLiteral("%1 — %2").arg(measurementStateText(m_roiState), detail));
     if (m_clearRoiBtn)
-        m_clearRoiBtn->setEnabled(!m_lastSelection.isEmpty());
+        m_clearRoiBtn->setEnabled(hasAnyRoi || !m_lastSelection.isEmpty());
 }
 
 void CompareWorkspace::copyROIMeasurements()

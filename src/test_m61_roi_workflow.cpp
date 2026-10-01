@@ -509,6 +509,15 @@ int main(int argc, char **argv)
             CHECK(pane1->selection().isEmpty() && statusLabel &&
                       statusLabel->text().contains(QStringLiteral("image dimensions differ")),
                   "mismatched horizontal/vertical pair initially reports differing dimensions");
+            QTableWidget *initialTable = mismatch->findChild<QTableWidget *>("roiMeasurementTable");
+            CHECK(initialTable && waitFor([&]() {
+                      return initialTable->rowCount() == 2 &&
+                             initialTable->item(0, 1) && initialTable->item(0, 1)->text() != QStringLiteral("—");
+                  }),
+                  "drawing ROI on unequal pair computes valid statistics for the drawn pane");
+            CHECK(initialTable->item(1, 10) &&
+                      initialTable->item(1, 10)->text() == QStringLiteral("未框选"),
+                  "undrawn pane in unequal pair is marked as unselected");
 
             // Click pane 1 and rotate it 90 degrees clockwise -> effective dimensions become 96x72
             QMouseEvent clickPane1(QEvent::MouseButtonPress, QPointF(20, 20),
