@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.89] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.89**.
+- **Procedural vector icon system for main toolbar (`mainwindow_ui_layout.cpp`)**: Replaced missing resource file fallbacks with lightweight, high-DPI antialiased procedural QPainter vector icons (`open`, `back`, `forward`, `up`, `refresh`, `favorite`, `compare`, `analysis`, `search`, `browse`, `rotate_ccw`, `rotate_cw`), ensuring uniform stroke weight, crisp rendering across all resolutions, and zero external resource bundle dependencies.
+- **Enhanced sidebar section headers (`Theme.cpp`)**: Added `#202024` surface background, `#333338` top highlight border, `#2d2d32` bottom border, and 11px semi-bold `#d4d4d8` typography to `QLabel[sectionHeader="true"]`, `foldersSectionLabel`, and `previewSectionLabel`, delivering clean visual hierarchy between folders and preview panels.
+- **High-contrast Preview Panel metadata and statistics (`previewpanel.cpp`)**: Replaced low-contrast palette midtones with `#a1a1aa` (WCAG AAA compliant) for luminance/RGB sample statistics and empty guidance text on `#141416` base.
+- **Elevated Gallery empty-state card guidance (`mainwindow_ui_layout.cpp`)**: Replaced flat gray text in `m_emptyState` and `m_emptyFolderLabel` with a centered card table layout (`#1c1c1f` surface, `#333338` border, 8px radius) and keyboard badge styling (`Ctrl+O`).
+- **Modern HUD badge styling for Diff metrics in Compare workspace (`compareworkspace_controls.cpp`)**: Upgraded `diffMetricsLabel` with sky-blue `#38bdf8` monospace font inside an `#18181b` framed badge and refined `compareStatusStrip` top border separator.
+- **Native dark indicators for CheckBox and RadioButton (`Theme.cpp`)**: Removed CSS overrides that suppressed checkmarks and radio dots, restoring Qt Fusion's antialiased indicators with dark theme highlight palette.
+- **Release tag trigger alignment**: Explicitly documented and tagged `v1.0.89` to properly trigger GitHub Actions Tier 3 Release pipeline (`release.yml`).
+
+### 用户体验与UI审美优化
+
+- **主工具栏矢量图标系统（`mainwindow_ui_layout.cpp`）**：全量重塑主工具栏动作图标，采用纯矢量抗锯齿绘制规范（1.5px 线宽，优雅银白 `#dcdcdc`），彻底终结无资源时的文本回退割裂，全 DPI 缩放与深色主题下极致清晰。
+- **左侧导航栏分类标题条层级增强（`Theme.cpp`）**：为「文件夹」与「预览」标题栏定制 `#202024` 质感底色与立体分割线（上边框 `#333338`、下边框 `#2d2d32`），显著强化侧边栏各功能区的视觉分割。
+- **预览面板样本数据对比度提升（`previewpanel.cpp`）**：将底部样本亮度与 RGB 均值数据提升至高对比浅灰 `#a1a1aa`（满足 WCAG AAA 严苛对比度标准），暗光环境下数据阅读轻松自如。
+- **画廊空状态居中卡片化（`mainwindow_ui_layout.cpp`）**：将画廊首屏空白提示与空文件夹提示重构为现代居中拟态卡片（`#1c1c1f` 背景、微边框、8px 圆角），快捷键附带键帽高亮标签，提供舒适的引导感知。
+- **多图对比差异指标 HUD 科技感面板（`compareworkspace_controls.cpp`）**：将 PSNR/SSIM 及统计数值升级为天蓝色 `#38bdf8` 等宽字体与 `#18181b` 微边框胶囊面板，对比状态栏顶部增加精致分割线。
+- **复选框与单选框勾选标记恢复（`Theme.cpp`）**：移除了破坏原生指示符的 QSS 覆写，完全保留 Qt 6 Fusion 风格原生细腻白色勾选对勾与居中圆点。
+
 ## [1.0.88] - 2026-10-01
 
 ### Release
