@@ -499,6 +499,45 @@ void CompareWorkspace::syncEditCellAfterLoad()
 
 void CompareWorkspace::rotateCurrentCell(int degrees)
 {
+    const int count = m_engine.imageCount();
+    if (count <= 0)
+        return;
+
+    if (m_syncRotate)
+    {
+        const size_t needed = static_cast<size_t>(count);
+        if (m_cellAdjusts.size() < needed)
+            m_cellAdjusts.resize(needed);
+
+        std::vector<int> dirty;
+        dirty.reserve(needed);
+        for (int i = 0; i < count; ++i)
+        {
+            int rot = (m_cellAdjusts[static_cast<size_t>(i)].rotation + degrees) % 360;
+            if (rot < 0)
+                rot += 360;
+            m_cellAdjusts[static_cast<size_t>(i)].rotation = rot;
+            dirty.push_back(i);
+        }
+
+        const int targetIdx = resolveEditCell();
+        int displayRot = m_cellAdjusts[0].rotation;
+        if (targetIdx >= 0 && targetIdx < count)
+        {
+            m_editIdx = targetIdx;
+            m_explicitEditIdx = targetIdx;
+            displayRot = m_cellAdjusts[static_cast<size_t>(targetIdx)].rotation;
+        }
+        if (m_rotVal)
+            m_rotVal->setText(QString::number(displayRot) + "°");
+
+        scheduleDisplayMaterialization(dirty);
+        onAdjEditFinished();
+        update();
+        showCompareStatus(tr("已同步旋转所有比较图（未写入文件）"));
+        return;
+    }
+
     const int idx = resolveEditCell();
     if (idx < 0)
     {
@@ -528,6 +567,44 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
 
 void CompareWorkspace::flipCurrentCell(bool horizontal)
 {
+    const int count = m_engine.imageCount();
+    if (count <= 0)
+        return;
+
+    if (m_syncRotate)
+    {
+        const size_t needed = static_cast<size_t>(count);
+        if (m_cellAdjusts.size() < needed)
+            m_cellAdjusts.resize(needed);
+
+        std::vector<int> dirty;
+        dirty.reserve(needed);
+        for (int i = 0; i < count; ++i)
+        {
+            if (horizontal)
+                m_cellAdjusts[static_cast<size_t>(i)].flipH =
+                    !m_cellAdjusts[static_cast<size_t>(i)].flipH;
+            else
+                m_cellAdjusts[static_cast<size_t>(i)].flipV =
+                    !m_cellAdjusts[static_cast<size_t>(i)].flipV;
+            dirty.push_back(i);
+        }
+
+        const int targetIdx = resolveEditCell();
+        if (targetIdx >= 0 && targetIdx < count)
+        {
+            m_editIdx = targetIdx;
+            m_explicitEditIdx = targetIdx;
+        }
+
+        scheduleDisplayMaterialization(dirty);
+        onAdjEditFinished();
+        update();
+        showCompareStatus(horizontal ? tr("已同步水平翻转所有比较图（未写入文件）")
+                                     : tr("已同步垂直翻转所有比较图（未写入文件）"));
+        return;
+    }
+
     const int idx = resolveEditCell();
     if (idx < 0)
     {

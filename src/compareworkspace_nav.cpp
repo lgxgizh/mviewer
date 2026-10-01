@@ -206,6 +206,7 @@ CompareWorkspace::NavState CompareWorkspace::captureNavState() const
     s.diffGainIndex = m_diffGainCombo ? m_diffGainCombo->currentIndex() : 0;
     s.syncZoom = m_syncZoomChk ? m_syncZoomChk->isChecked() : true;
     s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
+    s.syncRotate = m_syncRotate;
     s.crosshair = m_crosshairChk && m_crosshairChk->isChecked();
     s.pixelLink = m_pixelLinkChk && m_pixelLinkChk->isChecked();
     s.filenameOverlay = m_filenameOverlay;
@@ -224,6 +225,7 @@ void CompareWorkspace::restoreNavState(const NavState &s)
         m_syncZoomChk->setChecked(s.syncZoom);
     if (m_syncDragChk)
         m_syncDragChk->setChecked(s.syncDrag);
+    setSyncRotate(s.syncRotate);
     if (m_crosshairChk)
         m_crosshairChk->setChecked(s.crosshair);
     if (m_pixelLinkChk)

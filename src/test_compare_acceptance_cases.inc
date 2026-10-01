@@ -1381,5 +1381,69 @@ void testCanvasDoubleClickGestures(const QString &a, const QString &b)
           "Canvas double-click: double clicking again restores fit");
 }
 
+void testSyncRotate(const QString &img0, const QString &img1)
+{
+    std::cout << "── Compare: Synchronized rotation across cells ──\n";
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImages({img0, img1});
+    dlg.resize(900, 600);
+    dlg.show();
+    waitForCompareCount(ws, 2);
+
+    CHECK(!ws->syncRotate(), "Sync rotate is initially off by default");
+    CHECK(ws->cellRotation(0) == 0 && ws->cellRotation(1) == 0,
+          "Initial cell rotations are 0");
+
+    // Unsynchronized: rotating pane 0 only rotates pane 0.
+    ws->setEditCellIndex(0);
+    ws->rotateCurrentCell(90);
+    pump(30);
+    CHECK(ws->cellRotation(0) == 90 && ws->cellRotation(1) == 0,
+          "Single-pane rotate only modifies the active pane when syncRotate is off");
+
+    // Turn on sync rotate via API / checkbox.
+    ws->setSyncRotate(true);
+    CHECK(ws->syncRotate(), "Sync rotate is now on");
+    auto *tbChk = ws->findChild<QCheckBox *>("syncRotateCheck");
+    CHECK(tbChk && tbChk->isChecked(), "Toolbar sync rotate checkbox is checked");
+    auto *pnlChk = ws->findChild<QCheckBox *>("syncRotatePanelCheck");
+    CHECK(pnlChk && pnlChk->isChecked(), "Edit panel sync rotate checkbox is checked");
+
+    // Rotating by 90 synchronously rotates all panes.
+    ws->rotateCurrentCell(90);
+    pump(30);
+    CHECK(ws->cellRotation(0) == 180 && ws->cellRotation(1) == 90,
+          "Both panes rotate synchronously by 90 degrees when syncRotate is on");
+
+    // Rotating by -90 synchronously rotates all panes.
+    ws->rotateCurrentCell(-90);
+    pump(30);
+    CHECK(ws->cellRotation(0) == 90 && ws->cellRotation(1) == 0,
+          "Both panes rotate synchronously by -90 degrees");
+
+    // Synchronous flip.
+    CHECK(!ws->cellFlipH(0) && !ws->cellFlipH(1), "Initial flipH is false");
+    ws->flipCurrentCell(true);
+    pump(30);
+    CHECK(ws->cellFlipH(0) && ws->cellFlipH(1), "Both panes flip horizontally together");
+
+    // Turn off sync rotate via panel checkbox.
+    pnlChk->setChecked(false);
+    pump(30);
+    CHECK(!ws->syncRotate(), "Unchecking panel checkbox turns off sync rotate");
+    CHECK(tbChk && !tbChk->isChecked(), "Toolbar checkbox synchronizes to unchecked");
+
+    ws->setEditCellIndex(1);
+    ws->rotateCurrentCell(90);
+    pump(30);
+    CHECK(ws->cellRotation(0) == 90 && ws->cellRotation(1) == 90,
+          "Rotating pane 1 only modifies pane 1 when syncRotate is off");
+}
+
 } // namespace
 

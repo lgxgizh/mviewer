@@ -244,6 +244,7 @@ int main(int argc, char **argv)
     testCompareLoadCancellation(dir);
     testInspectorCoalescing(paths8[0], paths8[1]);
     testCanvasDoubleClickGestures(paths8[0], paths8[1]);
+    testSyncRotate(paths8[0], paths8[1]);
 
     if (g_failures > 0)
     {

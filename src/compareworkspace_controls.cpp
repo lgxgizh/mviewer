@@ -7,6 +7,52 @@
 #include <QSettings>
 #include <QTimer>
 
+void CompareWorkspace::setSyncRotate(bool on)
+{
+    if (m_syncRotate == on)
+        return;
+    m_syncRotate = on;
+    if (m_syncRotateChk && m_syncRotateChk->isChecked() != on)
+    {
+        const QSignalBlocker blocker(m_syncRotateChk);
+        m_syncRotateChk->setChecked(on);
+    }
+    if (m_syncRotatePanelChk && m_syncRotatePanelChk->isChecked() != on)
+    {
+        const QSignalBlocker blocker(m_syncRotatePanelChk);
+        m_syncRotatePanelChk->setChecked(on);
+    }
+    showCompareStatus(on ? tr("已开启同步旋转：旋转将同时作用于所有图像")
+                         : tr("已关闭同步旋转：旋转仅对选中的图像生效"));
+}
+
+void CompareWorkspace::setEditCellIndex(int cellIdx)
+{
+    m_explicitEditIdx = cellIdx;
+    onEditCellSelected(cellIdx);
+}
+
+int CompareWorkspace::cellRotation(int cellIdx) const
+{
+    if (cellIdx >= 0 && cellIdx < static_cast<int>(m_cellAdjusts.size()))
+        return m_cellAdjusts[static_cast<size_t>(cellIdx)].rotation;
+    return 0;
+}
+
+bool CompareWorkspace::cellFlipH(int cellIdx) const
+{
+    if (cellIdx >= 0 && cellIdx < static_cast<int>(m_cellAdjusts.size()))
+        return m_cellAdjusts[static_cast<size_t>(cellIdx)].flipH;
+    return false;
+}
+
+bool CompareWorkspace::cellFlipV(int cellIdx) const
+{
+    if (cellIdx >= 0 && cellIdx < static_cast<int>(m_cellAdjusts.size()))
+        return m_cellAdjusts[static_cast<size_t>(cellIdx)].flipV;
+    return false;
+}
+
 void CompareWorkspace::buildSyncControls()
 {
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
@@ -14,6 +60,10 @@ void CompareWorkspace::buildSyncControls()
     m_syncZoomChk->setChecked(true);
     m_syncDragChk = new QCheckBox("同步拖动(&D)", this);
     m_syncDragChk->setChecked(true);
+    m_syncRotateChk = new QCheckBox(tr("同步旋转"), this);
+    m_syncRotateChk->setObjectName("syncRotateCheck");
+    m_syncRotateChk->setToolTip(tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像"));
+    m_syncRotateChk->setChecked(m_syncRotate);
 
     auto applySync = [this](bool) { update(); };
     connect(m_syncZoomChk, &QCheckBox::toggled, this,
@@ -30,6 +80,7 @@ void CompareWorkspace::buildSyncControls()
                 m_engine.setSyncMode(m_syncZoom, m_syncDrag);
                 applySync(on);
             });
+    connect(m_syncRotateChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
 }
 
 QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
@@ -74,6 +125,7 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolbarLayout->addWidget(toolBar);
     viewLayoutLocal->addWidget(m_syncZoomChk);
     viewLayoutLocal->addWidget(m_syncDragChk);
+    viewLayoutLocal->addWidget(m_syncRotateChk);
 
     modeLayout = modeLayoutLocal;
     viewLayout = viewLayoutLocal;
