@@ -673,57 +673,17 @@ void CompareWorkspace::finishPresetRestore(uint64_t displayGenBeforeRestore)
 
 // ─── M16.6: Swap panes ───────────────────────────────────────────────────────
 
-void CompareWorkspace::onSwapPanes()
+static void swapPaneViewsAndCaptions(RawImageView *va, RawImageView *vb, QLabel *ca,
+                                     QLabel *cb, const ImageFrame *fa,
+                                     const ImageFrame *fb, bool filenameOverlay)
 {
-    const int n = m_cellViews.size();
-    if (n < 2)
-        return;
-
-    // Swap pane 0 and pane 1 by default; if editIdx is set, swap that with adjacent
-    const int a = (m_editIdx >= 0 && m_editIdx < n) ? m_editIdx : 0;
-    const int b = (a == 0) ? 1 : 0;
-
-    if (a == b || a >= n || b >= n)
-        return;
-
-    endTemporaryCompare();
-
-    // Blink detaches panes from the grid — fall back to a full rebuild so the
-    // inactive pane is reattached rather than orphaned after an in-place swap.
-    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
-    if (blinkActive)
-    {
-        m_engine.swapFrames(a, b);
-        if (static_cast<size_t>(std::max(a, b)) < m_cellAdjusts.size())
-            std::swap(m_cellAdjusts[static_cast<size_t>(a)], m_cellAdjusts[static_cast<size_t>(b)]);
-        rebuildCells();
-        schedulePostLayoutFit();
-        update();
-        if (m_sidePanel && m_sidePanel->isVisible())
-            refreshHistograms();
-        return;
-    }
-
-    m_engine.swapFrames(a, b);
-    if (static_cast<size_t>(std::max(a, b)) < m_cellAdjusts.size())
-        std::swap(m_cellAdjusts[static_cast<size_t>(a)], m_cellAdjusts[static_cast<size_t>(b)]);
-    if (a < static_cast<int>(m_comparePaths.size()) && b < static_cast<int>(m_comparePaths.size()))
-        std::swap(m_comparePaths[static_cast<size_t>(a)], m_comparePaths[static_cast<size_t>(b)]);
-
-    RawImageView *va = m_cellViews[a];
-    RawImageView *vb = m_cellViews[b];
     if (va && vb)
     {
-        const QImage ia = va->displayImage();
-        const QSize sa = va->sourceSize();
-        const QRect ra = va->sourceRect();
-        const QImage oa = va->overlay();
-        const double aa = va->overlayOpacity();
-        const QImage ib = vb->displayImage();
-        const QSize sb = vb->sourceSize();
-        const QRect rb = vb->sourceRect();
-        const QImage ob = vb->overlay();
-        const double ab = vb->overlayOpacity();
+        const QImage ia = va->displayImage(), oa = va->overlay();
+        const QImage ib = vb->displayImage(), ob = vb->overlay();
+        const QSize sa = va->sourceSize(), sb = vb->sourceSize();
+        const QRect ra = va->sourceRect(), rb = vb->sourceRect();
+        const double aa = va->overlayOpacity(), ab = vb->overlayOpacity();
         va->setImage(ib, sb, rb);
         vb->setImage(ia, sa, ra);
         va->setOverlay(ob, ab);
@@ -732,11 +692,8 @@ void CompareWorkspace::onSwapPanes()
         va->setPaneTag(vb->paneTag());
         vb->setPaneTag(tagA);
     }
-
-    if (a < m_cellLabels.size() && b < m_cellLabels.size())
+    if (ca && cb)
     {
-        const ImageFrame *fa = m_engine.imageAt(a);
-        const ImageFrame *fb = m_engine.imageAt(b);
         auto nameOf = [](const ImageFrame *img) -> QString
         {
             if (!img)
@@ -744,28 +701,75 @@ void CompareWorkspace::onSwapPanes()
             return QString::fromUtf8(img->metadata().fileName.data(),
                                      static_cast<int>(img->metadata().fileName.size()));
         };
-        setComparePaneCaptionText(m_cellLabels[a], nameOf(fa));
-        setComparePaneCaptionText(m_cellLabels[b], nameOf(fb));
+        setComparePaneCaptionText(ca, nameOf(fa));
+        setComparePaneCaptionText(cb, nameOf(fb));
         if (va)
-            va->setFilenameOverlay(comparePaneCaptionFullText(m_cellLabels[a]), m_filenameOverlay);
+            va->setFilenameOverlay(comparePaneCaptionFullText(ca), filenameOverlay);
         if (vb)
-            vb->setFilenameOverlay(comparePaneCaptionFullText(m_cellLabels[b]), m_filenameOverlay);
+            vb->setFilenameOverlay(comparePaneCaptionFullText(cb), filenameOverlay);
+    }
+}
+
+static int resolveSwapTarget(int focusIdx, int editIdx, int count)
+{
+    if (focusIdx > 0 && focusIdx < count)
+        return focusIdx;
+    return (editIdx > 0 && editIdx < count) ? editIdx : 1;
+}
+
+static void swapIndexIfMatch(int &val, int a, int b)
+{
+    if (val == a)
+        val = b;
+    else if (val == b)
+        val = a;
+}
+
+void CompareWorkspace::onSwapPanes()
+{
+    const int n = m_cellViews.size();
+    if (n < 2)
+        return;
+
+    const int a = 0;
+    const int b = resolveSwapTarget(m_focusIndex, m_editIdx, n);
+    if (b <= 0 || b >= n)
+        return;
+
+    endTemporaryCompare();
+
+    m_engine.swapFrames(a, b);
+    if (static_cast<size_t>(b) < m_cellAdjusts.size())
+        std::swap(m_cellAdjusts[0], m_cellAdjusts[static_cast<size_t>(b)]);
+
+    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    if (blinkActive)
+    {
+        rebuildCells();
+        schedulePostLayoutFit();
+    }
+    else
+    {
+        if (static_cast<size_t>(b) < m_comparePaths.size())
+            std::swap(m_comparePaths[0], m_comparePaths[static_cast<size_t>(b)]);
+
+        RawImageView *va = m_cellViews.value(a, nullptr);
+        RawImageView *vb = m_cellViews.value(b, nullptr);
+        QLabel *ca = m_cellLabels.value(a, nullptr);
+        QLabel *cb = m_cellLabels.value(b, nullptr);
+        swapPaneViewsAndCaptions(va, vb, ca, cb, m_engine.imageAt(a), m_engine.imageAt(b),
+                                 m_filenameOverlay);
+
+        swapIndexIfMatch(m_focusIndex, a, b);
+        swapIndexIfMatch(m_editIdx, a, b);
+
+        scheduleDisplayMaterialization({a, b});
+        refreshAllDiffOverlays();
+        updateTemporaryCompareAvailability();
     }
 
-    if (m_focusIndex == a)
-        m_focusIndex = b;
-    else if (m_focusIndex == b)
-        m_focusIndex = a;
-    if (m_editIdx == a)
-        m_editIdx = b;
-    else if (m_editIdx == b)
-        m_editIdx = a;
-
-    scheduleDisplayMaterialization({a, b});
-    refreshAllDiffOverlays();
     if (m_sidePanel && m_sidePanel->isVisible())
         refreshHistograms();
-    updateTemporaryCompareAvailability();
     update();
 }
 

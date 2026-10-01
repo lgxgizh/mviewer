@@ -30,7 +30,7 @@ class DirectoryProxyModel : public QSortFilterProxyModel
   protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
     // Check whether any descendant of sourceParent matches the current filter text.
-    bool hasAcceptedDescendant(const QModelIndex &sourceParent) const;
+    bool hasAcceptedDescendant(const QModelIndex &sourceParent, int depth = 0) const;
 
   private:
     QString m_filterText;

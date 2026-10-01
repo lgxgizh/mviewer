@@ -139,7 +139,14 @@ bool CompareWorkspace::handleROIKeyboardNudge(QKeyEvent *event)
     }
 
     applySelectionToAll(sel);
-    showCompareStatus(tr("微调 ROI: X=%1 Y=%2 W=%3 H=%4")
+    const QString paneInfo =
+        m_roiLinked ? QString()
+                    : tr(" (窗格 %1)")
+                          .arg(((m_focusIndex >= 0 && m_focusIndex < static_cast<int>(m_cellViews.size()))
+                                    ? m_focusIndex
+                                    : 0) + 1);
+    showCompareStatus(tr("微调 ROI%1: X=%2 Y=%3 W=%4 H=%5")
+                          .arg(paneInfo)
                           .arg(m_lastSelection.x)
                           .arg(m_lastSelection.y)
                           .arg(m_lastSelection.width)
@@ -639,6 +646,14 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
     const auto mods = event->modifiers();
     const bool ctrl = (mods == Qt::ControlModifier);
     const bool shiftCtrl = (mods == (Qt::ControlModifier | Qt::ShiftModifier));
+    const bool alt = (mods == Qt::AltModifier);
+    if (alt && key == Qt::Key_R)
+    {
+        setSyncRotate(!m_syncRotate);
+        showCompareStatus(m_syncRotate ? tr("已开启同步旋转/翻转") : tr("已关闭同步旋转/翻转"));
+        event->accept();
+        return true;
+    }
     if (ctrl && key == Qt::Key_R)
     {
         rotateCurrentCell(90);

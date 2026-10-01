@@ -773,7 +773,13 @@ void MainWindow::buildStatusBarUi()
                     m_lblSize->setText(QString("大小 %1").arg(formatBytes(totalBytes)));
             });
     connect(m_imageViewer, &ImageViewer::zoomChanged, this,
-            [this](int pct) { m_lblZoom->setText(QString("缩放 %1%").arg(pct)); });
+            [this](int pct)
+            {
+                if (m_imageViewer && m_imageViewer->isFitMode())
+                    m_lblZoom->setText(QString("缩放 %1% (自适应)").arg(pct));
+                else
+                    m_lblZoom->setText(QString("缩放 %1%").arg(pct));
+            });
 
     m_statTimer = new QTimer(this);
     connect(m_statTimer, &QTimer::timeout, this, &MainWindow::updateCacheStat);

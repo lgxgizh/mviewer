@@ -93,10 +93,28 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
             const int row = item ? item->row() : inspector->currentRow();
             if (row >= 0 && row < inspector->rowCount())
             {
-                const QString rowText = rowCells(row).join('\t');
+                const auto cells = rowCells(row);
+                const QString rowText = cells.join('\t');
                 QAction *actCopyRow = menu.addAction(QObject::tr("复制该行数据"));
                 QObject::connect(actCopyRow, &QAction::triggered,
                                  [rowText]() { QApplication::clipboard()->setText(rowText); });
+                if (cells.size() >= 5)
+                {
+                    bool okR = false, okG = false, okB = false;
+                    const int r = cells[2].toInt(&okR), g = cells[3].toInt(&okG), b = cells[4].toInt(&okB);
+                    if (okR && okG && okB)
+                    {
+                        const QString hex = QString("#%1%2%3")
+                            .arg(std::clamp(r, 0, 255), 2, 16, QLatin1Char('0'))
+                            .arg(std::clamp(g, 0, 255), 2, 16, QLatin1Char('0'))
+                            .arg(std::clamp(b, 0, 255), 2, 16, QLatin1Char('0')).toUpper();
+                        const QString rgb = QString("rgb(%1, %2, %3)").arg(r).arg(g).arg(b);
+                        auto *actHex = menu.addAction(QObject::tr("复制 HEX 颜色 (%1)").arg(hex));
+                        QObject::connect(actHex, &QAction::triggered, [hex]() { QApplication::clipboard()->setText(hex); });
+                        auto *actRgb = menu.addAction(QObject::tr("复制 RGB 颜色 (%1)").arg(rgb));
+                        QObject::connect(actRgb, &QAction::triggered, [rgb]() { QApplication::clipboard()->setText(rgb); });
+                    }
+                }
             }
             if (inspector->rowCount() > 0)
             {
@@ -109,12 +127,10 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                     {
                         auto *h = inspector->horizontalHeaderItem(c);
                         headers << (h ? h->text() : QString());
-                        if (md)
-                            seps << "---";
+                        if (md) seps << "---";
                     }
                     lines << (md ? "| " + headers.join(" | ") + " |" : headers.join('\t'));
-                    if (md)
-                        lines << "| " + seps.join(" | ") + " |";
+                    if (md) lines << "| " + seps.join(" | ") + " |";
                     for (int r = 0; r < inspector->rowCount(); ++r)
                     {
                         const auto c = rowCells(r);

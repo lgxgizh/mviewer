@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.0.91] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.91**.
+- **Compare Multi-Image Quality Metrics HUD (`compareworkspace_render_diff.cpp`, `rawimageview.h/.cpp`)**: Computed and rendered per-pane PSNR and SSIM metrics directly on non-base comparison cells in multi-image comparison mode (3+ images). Added HUD corner badge (`P: XX dB | S: 0.XXX`) and rich tooltips indicating comparison against reference base pane 0.
+- **Sync Rotate Keyboard Shortcut `Alt+R` (`compareworkspace_keyboard.cpp`)**: Added `Alt+R` hotkey to quickly toggle synchronized rotation and flipping across all compared images, paired with status bar announcements.
+- **Pixel Inspector Pro One-Click Color Copy (`compareworkspace_analysis.cpp`)**: Added one-click copy options for HEX (`#RRGGBB`) and RGB (`rgb(r,g,b)`) color codes directly to the table row right-click context menu in the Pixel Inspector side panel.
+- **ThumbnailProvider Fast Path for Square Dimensions (`thumbnailprovider.cpp`)**: Optimized `ThumbnailProvider::squareFitImage` when scaled dimensions already match target square bounding boxes, directly reusing/converting format and skipping redundant image allocations and QPainter fill/composition.
+- **Interactive ROI Resize/Move Cursor Feedback (`rawimageview.cpp`)**: Added contextual hover mouse cursors (`SizeAllCursor`, `SizeHorCursor`, `SizeVerCursor`, `SizeFDiagCursor`, `SizeBDiagCursor`) when hovering over ROI borders and resize handles, providing immediate interactive tactile feedback.
+- **Directory Tree Search Traversal Depth Limiter (`directorytree.h/.cpp`)**: Added a 4-level recursion depth bound in `DirectoryProxyModel::hasAcceptedDescendant` to prevent deep recursion freezes when typing folder name search filters on deep or network drive folder hierarchies.
+- **Quick Swap Focused Pane with Reference in Multi-Compare (`compareworkspace_editpanel.cpp`)**: Pressing `X` in multi-image comparisons (3+ images) now intelligently swaps the currently focused pane with reference pane 0 (or pane 1 if pane 0 is focused), enabling rapid reference comparison against any image.
+- **Image Scaling & Zoom Level Readout in StatusBar (`mainwindow_ui_layout.cpp`)**: Enhanced status bar zoom readout in single-image browsing mode to explicitly indicate `(自适应)` when in fit-to-window mode.
+- **ROI Keyboard Nudge Active Pane Indicator (`compareworkspace_keyboard.cpp`)**: Enhanced keyboard arrow nudging (`Alt+Arrow` / `Shift+Alt+Arrow`) when unlinked ROI mode is active, correctly targeting the active/focused pane and displaying pane index indicators in status feedback.
+- **Shortcut Cheat Sheet & User Guide Modernization (`mainwindow_commands.cpp`)**: Documented `Alt+R` (Sync Rotate), `Alt+Arrow` (ROI nudge), `X` (multi-image swap), and Pixel Inspector right-click color copy in the F1 shortcut dialog and user guide.
+
+### 性能优化与产品力增强（10 项优化）
+
+1. **多图对比独立指标角标与浮窗提示（`compareworkspace_render_diff.cpp` / `rawimageview.cpp`）**：针对 3 张及以上多图对比场景，各非基准窗格现均独立并行计算相对于基准图（图 1）的 PSNR 与 SSIM，并在各窗格右上角展示优雅紧凑的指标角标 HUD（`P: xx dB | S: 0.xxx`）及悬停详细信息，彻底解决此前多图模式下仅底部栏显示一对指标、用户无法获知其余图片质量评分的问题。
+2. **同步旋转/翻转全局快捷键 `Alt+R`（`compareworkspace_keyboard.cpp`）**：在比较模式下引入 `Alt+R` 一键切换「同步所有图」旋转状态，结合原有的 `Ctrl+R`（顺时针）与 `Ctrl+Shift+R`（逆时针），无需频繁点击右侧面板复选框即可快速完成全部图片的同向校正。
+3. **像素检视器一键复制 HEX / RGB 颜色代码（`compareworkspace_analysis.cpp`）**：算法工程师在右侧像素检视器表格中右键单击任意行时，新增「复制 HEX 颜色 (#RRGGBB)」和「复制 RGB 格式 (rgb(r,g,b))」菜单项，大幅提高图像调色、色彩空间分析与标注提取的生产力。
+4. **正方形缩略图加速直通路径（`thumbnailprovider.cpp`）**：在 `ThumbnailProvider::squareFitImage` 中，若图像等比缩放后已恰好符合目标正方形尺寸，直接转换为目标格式返回，避免无谓的二次内存分配、透明底色填充及 QPainter 绘制重采样开销。
+5. **ROI 交互光标动态反馈（`rawimageview.cpp`）**：鼠标悬停在 ROI 选区各边缘与四角调节手柄以及选区内部时，动态切换为对应的调整尺寸光标（水平、垂直、对角线双向及全向移动光标），提供明确细腻的交互指引。
+6. **目录树过滤遍历深度限制（`directorytree.cpp` / `directorytree.h`）**：为 `DirectoryProxyModel::hasAcceptedDescendant` 增加深度上限限制（最深 4 层），彻底根治在深层嵌套目录或 NAS 网络磁盘下键入目录过滤词时发生的 UI 线程深度递归卡顿。
+7. **多图对比聚焦窗格一键交换为基准图 `X`（`compareworkspace_editpanel.cpp`）**：在 3~8 张图片同时对比时，按键盘 `X` 键即可将当前点击聚焦的任意窗格直接与图 1（基准图）互换位置，极大方便在多张生成图或曝光序列中轮流以某一张为参照物进行对比。
+8. **状态栏自适应缩放模式状态指示（`mainwindow_ui_layout.cpp`）**：单图浏览模式下，状态栏缩放读数在适应窗口状态下动态显示为 `缩放 XX% (自适应)`，与手动定比缩放清晰区分。
+9. **独立 ROI 键盘微调与窗格标识（`compareworkspace_keyboard.cpp`）**：当用户取消勾选 ROI 同步联动时，通过 `Alt+方向键`（1px）或 `Shift+Alt+方向键`（10px）微调选区将智能作用于当前选中的单格，并在状态栏明确提示微调的目标窗格编号。
+10. **F1 快捷键速查表与用户指南全面同步（`mainwindow_commands.cpp`）**：全面更新了 F1 帮助对话框与帮助说明，补充完整了 `Alt+R` 同步旋转、鼠标侧键目录历史回退/前进、多图 X 交换以及 ROI 键盘微调说明。
+
 ## [1.0.90] - 2026-10-01
 
 ### Release

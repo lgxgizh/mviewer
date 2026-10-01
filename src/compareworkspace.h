@@ -576,6 +576,9 @@ class CompareWorkspace : public QWidget
             bool sizeMismatch = false;
             QImage overlay;
             double opacity = 0.5;
+            double psnr = 0.0;
+            double ssim = 0.0;
+            bool hasMetrics = false;
         };
         std::vector<CellOverlay> overlays;
     };

@@ -22,9 +22,12 @@ QImage ThumbnailProvider::squareFitImage(const QImage &q, int size)
         (q.width() == size && q.height() <= size) || (q.height() == size && q.width() <= size);
     const QImage scaled =
         alreadyFitted ? q : q.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    if (scaled.width() == size && scaled.height() == size &&
-        (scaled.format() == QImage::Format_ARGB32 || scaled.format() == QImage::Format_RGB32))
-        return scaled;
+    if (scaled.width() == size && scaled.height() == size)
+    {
+        return (scaled.format() == QImage::Format_ARGB32 || scaled.format() == QImage::Format_RGB32)
+                   ? scaled
+                   : scaled.convertToFormat(QImage::Format_ARGB32);
+    }
 
     QImage pm(size, size, QImage::Format_ARGB32);
     pm.fill(Qt::transparent);

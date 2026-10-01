@@ -71,6 +71,9 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
             result.overlays.push_back(std::move(overlay));
             continue;
         }
+        overlay.psnr = AnalysisEngine::psnr(basePixels, target);
+        overlay.ssim = AnalysisEngine::ssim(basePixels, target);
+        overlay.hasMetrics = true;
         if (sources.targetIndex == i)
         {
             sources.target = target;
@@ -257,6 +260,7 @@ void CompareWorkspace::refreshAllDiffOverlays()
                 continue;
             view->setSizeMismatch(false);
             view->setOverlay(QImage(), 0.0);
+            view->setMetricBadge(QString());
         }
         if (m_metricLabel)
             m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
@@ -323,6 +327,19 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
             continue;
         view->setSizeMismatch(ov.sizeMismatch);
         view->setOverlay(ov.overlay, ov.opacity);
+        if (ov.hasMetrics && m_cellViews.size() > 2)
+        {
+            view->setMetricBadge(
+                QString("P: %1 dB | S: %2").arg(ov.psnr, 0, 'f', 2).arg(ov.ssim, 0, 'f', 3));
+            view->setToolTip(tr("对比基准: 图 %1\nPSNR: %2 dB\nSSIM: %3")
+                                 .arg(r.baseIdx + 1)
+                                 .arg(ov.psnr, 0, 'f', 2)
+                                 .arg(ov.ssim, 0, 'f', 4));
+        }
+        else
+        {
+            view->setMetricBadge(QString());
+        }
     }
 
     // Provisional live diff only updates the overlay; keep prior metrics until

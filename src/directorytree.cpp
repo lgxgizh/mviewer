@@ -53,8 +53,10 @@ void DirectoryProxyModel::setFilterText(const QString &text)
     invalidateFilter();
 }
 
-bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent) const
+bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent, int depth) const
 {
+    if (depth >= 4)
+        return false;
     QFileSystemModel *fsModel = qobject_cast<QFileSystemModel *>(sourceModel());
     if (!fsModel)
         return false;
@@ -66,7 +68,8 @@ bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent)
         if (!child.isValid() || !fsModel->isDir(child))
             continue;
         const QString name = fsModel->fileName(child);
-        if (name.contains(m_filterText, Qt::CaseInsensitive) || hasAcceptedDescendant(child))
+        if (name.contains(m_filterText, Qt::CaseInsensitive) ||
+            hasAcceptedDescendant(child, depth + 1))
             return true;
     }
     return false;
