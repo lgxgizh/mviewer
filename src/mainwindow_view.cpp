@@ -690,6 +690,21 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true;
     }
 
+    if (event->type() == QEvent::MouseButtonPress)
+    {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::BackButton)
+        {
+            goDirBack();
+            return true;
+        }
+        if (me->button() == Qt::ForwardButton)
+        {
+            goDirForward();
+            return true;
+        }
+    }
+
     if (watched == m_lblZoom)
     {
         if (event->type() == QEvent::MouseButtonDblClick)

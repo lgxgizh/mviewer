@@ -247,6 +247,8 @@ class ImageViewer : public QOpenGLWidget
     void selectionChanged(const QRect &sel); // image coords (may be null rect)
     void requestPrev();
     void requestNext();
+    void requestDirBack();
+    void requestDirForward();
 
     // Pixel Inspector (P1 #6): emitted on mouse move with the pixel under the
     // cursor, read directly from the ImageFrame (not QImage). x/y are image

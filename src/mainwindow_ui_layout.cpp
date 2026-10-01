@@ -279,10 +279,10 @@ QWidget *MainWindow::buildNavigationPanel()
     foldersLabel->setFixedHeight(24);
     foldersLayout->addWidget(foldersLabel);
 
-    // Directory tree only — the old 「搜索目录」 filter is removed; path jumps
-    // go through the gallery address bar (pathEdit) above the sort strip.
     m_directoryTree = new DirectoryTree(foldersSection);
     m_directoryTree->installEventFilter(this);
+    if (m_directoryTree->viewport())
+        m_directoryTree->viewport()->installEventFilter(this);
     foldersLayout->addWidget(m_directoryTree, 1);
     leftWidget->addWidget(foldersSection);
 
@@ -570,14 +570,11 @@ QWidget *MainWindow::buildGalleryPanel()
     m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
     m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
     m_thumbnailPanel->installEventFilter(this);
+    if (m_thumbnailPanel->viewport())
+        m_thumbnailPanel->viewport()->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
 
-    // NOTE: clang-format 22.1.8 mis-parses the HTML '>" at a line break; the
-    // text blocks below are format-guarded.
-    // Empty-state hint: friendly call-to-action shown until the first
-    // directory is opened (first-run guidance; hidden as soon as browsing
-    // starts). Pure overlay: transparent for mouse events, so the gallery
-    // beneath stays fully interactive.
+    // Empty-state hint overlay: shown until the first directory is opened.
     m_emptyState = new QLabel(m_thumbnailPanel);
     m_emptyState->setObjectName(QStringLiteral("emptyStateLabel"));
     m_emptyState->setAlignment(Qt::AlignCenter);

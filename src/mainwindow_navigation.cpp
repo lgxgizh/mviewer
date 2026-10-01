@@ -265,13 +265,22 @@ void MainWindow::pushDirHistory(const QString &dir)
 
 void MainWindow::goDirBack()
 {
-    if (m_dirHistoryIndex <= 0)
+    if (m_dirHistoryIndex > 0)
+    {
+        --m_dirHistoryIndex;
+        const QString dir = m_dirHistory.at(m_dirHistoryIndex);
+        // Navigate without pushing to history (changeDirectory->pushDirHistory is guarded
+        // by duplicate check). Use emitSignal=true to trigger the full update chain.
+        m_directoryTree->navigateTo(dir, true);
         return;
-    --m_dirHistoryIndex;
-    const QString dir = m_dirHistory.at(m_dirHistoryIndex);
-    // Navigate without pushing to history (changeDirectory->pushDirHistory is guarded
-    // by duplicate check). Use emitSignal=true to trigger the full update chain.
-    m_directoryTree->navigateTo(dir, true);
+    }
+    // Fallback: if no back history exists in session, ascend to parent directory
+    if (m_dirHistory.size() <= 1)
+    {
+        QDir parent(currentDir());
+        if (!currentDir().isEmpty() && parent.cdUp())
+            changeDirectory(parent.absolutePath());
+    }
 }
 
 void MainWindow::goDirForward()

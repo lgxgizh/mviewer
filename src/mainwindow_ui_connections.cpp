@@ -207,6 +207,8 @@ void MainWindow::connectSelectionSignals()
             {
                 if (!path.isEmpty())
                     return;
+                if (m_imageViewer && !m_imageViewer->isHidden())
+                    m_imageViewer->setImage({});
                 if (m_previewPanel)
                     m_previewPanel->setImage({});
                 if (m_metadataPanel)
@@ -381,12 +383,12 @@ void MainWindow::connectViewerSignals()
             });
     connect(m_imageViewer, &ImageViewer::requestPrev, this, [this]() { navigate(-1); });
     connect(m_imageViewer, &ImageViewer::requestNext, this, [this]() { navigate(1); });
+    connect(m_imageViewer, &ImageViewer::requestDirBack, this, &MainWindow::goDirBack);
+    connect(m_imageViewer, &ImageViewer::requestDirForward, this, &MainWindow::goDirForward);
     connect(m_imageViewer, &ImageViewer::viewerClosed, this,
             [this]()
             {
-                // closeEvent emits before Qt finishes hiding the top-level
-                // widget; defer the state refresh so menu zoom actions observe
-                // the final hidden state.
+                // Defer state refresh so menu zoom actions observe the final hidden state.
                 QTimer::singleShot(0, this, &MainWindow::updateSelectionActions);
                 if (!isVisible())
                     return;
@@ -551,7 +553,6 @@ void MainWindow::connectMenuSignals()
                 else
                 {
                     statusBar()->showMessage(QString("路径不存在: %1").arg(text), 5000);
-                    // Restore the current path in the edit.
                     if (!currentDir().isEmpty())
                         m_pathEdit->setText(QDir::toNativeSeparators(currentDir()));
                 }
@@ -559,8 +560,6 @@ void MainWindow::connectMenuSignals()
     connect(m_actOpenFile, &QAction::triggered, this,
             [this]()
             {
-                // M25: the Open File filter is built from the format SSOT so it
-                // can never drift from what the gallery/navigation list.
                 QString filter = "图片文件 (";
                 for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
                     filter += QString::fromStdString(w) + " ";
