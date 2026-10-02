@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Compare Mode Pixel Rendering Consistency (`rawimageview.cpp`, `compareworkspace_render_canvas.cpp`, `compareworkspace_render_materialization.cpp`)**:
+  - Fixed an issue where zooming in during compare mode caused images to alternate between blurry (bilinear interpolation) and pixelated (nearest-neighbor), and clicking/holding on a specific pane caused only that pane to appear pixelated while others remained blurred.
+  - Replaced dragging/interaction-state-dependent interpolation toggling (`!m_dragging && scale < 4.0` and `!(m_dragging || m_interactionBusy)`) with deterministic, scale-based interpolation (`effectiveScale < 0.999`):
+    - When magnified ($\ge 100\%$, `scale >= 1.0`), all compare panes consistently use Nearest-Neighbor filtering for exact pixel inspection without bilinear blurring, regardless of mouse clicking, hovering, or dragging.
+    - When downscaled ($< 100\%$, `scale < 1.0`), all panes use Smooth Bilinear filtering to prevent aliasing and moire artifacts without jitter or flickers on click/drag.
+
 ## [1.0.93] - 2026-10-02
 
 ### Release

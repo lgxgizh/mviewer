@@ -498,9 +498,15 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const QSize sourceSize = renderSourceSize();
     const QRect sourceRect = renderSourceRect();
     const double scale = presentedScale();
-    // Skip smooth filtering while the user is actively dragging — nearest is
-    // cheaper and the final release paint restores smooth when needed.
-    p.setRenderHint(QPainter::SmoothPixmapTransform, !m_dragging && scale < 4.0);
+    // Consistent interpolation: when magnified (scale >= 1.0), use nearest-neighbor
+    // so engineers can inspect exact pixels; when downscaled (scale < 1.0),
+    // use smooth bilinear to prevent downsample aliasing.
+    // Crucially, interpolation must never depend on dragging/clicking state.
+    const double effectiveScale =
+        (image.width() > 0 && sourceRect.width() > 0)
+            ? (static_cast<double>(sourceRect.width()) * scale / image.width())
+            : scale;
+    p.setRenderHint(QPainter::SmoothPixmapTransform, effectiveScale < 0.999);
 
     // Center in widget, then apply pan offset, then scale.
     const double cx = width() / 2.0 + m_offset.x();
@@ -678,7 +684,7 @@ void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
     {
         m_dragging = false;
         setCursor(Qt::OpenHandCursor);
-        update(); // restore SmoothPixmapTransform after nearest-during-drag
+        update();
     }
 }
 

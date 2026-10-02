@@ -160,7 +160,7 @@ void CompareWorkspace::paintCompareCanvas()
         m_canvasBaseSurface.setDevicePixelRatio(dpr);
         m_canvasBaseSurface.fill(palette().color(QPalette::Dark));
         QPainter base(&m_canvasBaseSurface);
-        base.setRenderHint(QPainter::SmoothPixmapTransform, !(m_dragging || m_interactionBusy));
+        base.setRenderHint(QPainter::SmoothPixmapTransform, true);
         if (m_canvasTemporaryPane >= 0)
             drawCellCompare(base, m_canvasTemporaryPane, r, QRectF(r));
         else if (m_splitChk && m_splitChk->isChecked())
