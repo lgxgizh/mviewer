@@ -317,8 +317,7 @@ int main(int argc, char **argv)
         QApplication::sendEvent(first, &panMove);
         pump(20);
         const QPoint chipDuringPan = chipA->pos();
-        CHECK(chipDuringPan != chipBeforePan,
-              "ROI statistics chip moves along with viewport pan");
+        CHECK(chipDuringPan != chipBeforePan, "ROI statistics chip moves along with viewport pan");
         QMouseEvent panRelease(QEvent::MouseButtonRelease, QPointF(panEnd),
                                first->mapToGlobal(panEnd), Qt::LeftButton, Qt::NoButton,
                                Qt::NoModifier);
@@ -510,10 +509,13 @@ int main(int argc, char **argv)
                       statusLabel->text().contains(QStringLiteral("image dimensions differ")),
                   "mismatched horizontal/vertical pair initially reports differing dimensions");
             QTableWidget *initialTable = mismatch->findChild<QTableWidget *>("roiMeasurementTable");
-            CHECK(initialTable && waitFor([&]() {
-                      return initialTable->rowCount() == 2 &&
-                             initialTable->item(0, 1) && initialTable->item(0, 1)->text() != QStringLiteral("—");
-                  }),
+            CHECK(initialTable &&
+                      waitFor(
+                          [&]()
+                          {
+                              return initialTable->rowCount() == 2 && initialTable->item(0, 1) &&
+                                     initialTable->item(0, 1)->text() != QStringLiteral("—");
+                          }),
                   "drawing ROI on unequal pair computes valid statistics for the drawn pane");
             CHECK(initialTable->item(1, 10) &&
                       initialTable->item(1, 10)->text() == QStringLiteral("未框选"),
@@ -538,7 +540,8 @@ int main(int argc, char **argv)
                       pane1->selection().height == pane0->selection().height,
                   "synchronized ROI geometry matches display selection");
             CHECK(statusLabel &&
-                      waitFor([&]() { return statusLabel->text().contains(QStringLiteral("Ready")); }),
+                      waitFor([&]()
+                              { return statusLabel->text().contains(QStringLiteral("Ready")); }),
                   "rotated pane ROI measurement reaches Ready state");
             QTableWidget *measurementTable =
                 mismatch->findChild<QTableWidget *>("roiMeasurementTable");

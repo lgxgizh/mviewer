@@ -1396,8 +1396,7 @@ void testSyncRotate(const QString &img0, const QString &img1)
     waitForCompareCount(ws, 2);
 
     CHECK(!ws->syncRotate(), "Sync rotate is initially off by default");
-    CHECK(ws->cellRotation(0) == 0 && ws->cellRotation(1) == 0,
-          "Initial cell rotations are 0");
+    CHECK(ws->cellRotation(0) == 0 && ws->cellRotation(1) == 0, "Initial cell rotations are 0");
 
     // Unsynchronized: rotating pane 0 only rotates pane 0.
     ws->setEditCellIndex(0);

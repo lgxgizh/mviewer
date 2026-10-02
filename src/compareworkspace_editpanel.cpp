@@ -673,9 +673,9 @@ void CompareWorkspace::finishPresetRestore(uint64_t displayGenBeforeRestore)
 
 // ─── M16.6: Swap panes ───────────────────────────────────────────────────────
 
-static void swapPaneViewsAndCaptions(RawImageView *va, RawImageView *vb, QLabel *ca,
-                                     QLabel *cb, const ImageFrame *fa,
-                                     const ImageFrame *fb, bool filenameOverlay)
+static void swapPaneViewsAndCaptions(RawImageView *va, RawImageView *vb, QLabel *ca, QLabel *cb,
+                                     const ImageFrame *fa, const ImageFrame *fb,
+                                     bool filenameOverlay)
 {
     if (va && vb)
     {

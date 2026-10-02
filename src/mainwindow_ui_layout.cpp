@@ -23,9 +23,12 @@ void drawNavIcon(QPainter &p, std::string_view name, const QColor &fg)
         const QPointF p2 = b ? QPointF(4, 9) : (f ? QPointF(14, 9) : QPointF(9, 4));
         p.drawLine(p1, p2);
         QPolygonF h;
-        if (b) h << QPointF(8, 5) << QPointF(4, 9) << QPointF(8, 13);
-        else if (f) h << QPointF(10, 5) << QPointF(14, 9) << QPointF(10, 13);
-        else h << QPointF(5, 8) << QPointF(9, 4) << QPointF(13, 8);
+        if (b)
+            h << QPointF(8, 5) << QPointF(4, 9) << QPointF(8, 13);
+        else if (f)
+            h << QPointF(10, 5) << QPointF(14, 9) << QPointF(10, 13);
+        else
+            h << QPointF(5, 8) << QPointF(9, 4) << QPointF(13, 8);
         p.drawPolyline(h);
     }
     else if (name == "refresh" || name == "rotate_ccw" || name == "rotate_cw")
@@ -35,8 +38,10 @@ void drawNavIcon(QPainter &p, std::string_view name, const QColor &fg)
         p.setBrush(fg);
         p.setPen(Qt::NoPen);
         QPolygonF h;
-        if (cw) h << QPointF(14.5, 5.5) << QPointF(11.5, 4.0) << QPointF(12.8, 7.2);
-        else h << QPointF(3.5, 5.5) << QPointF(6.5, 4.0) << QPointF(5.2, 7.2);
+        if (cw)
+            h << QPointF(14.5, 5.5) << QPointF(11.5, 4.0) << QPointF(12.8, 7.2);
+        else
+            h << QPointF(3.5, 5.5) << QPointF(6.5, 4.0) << QPointF(5.2, 7.2);
         p.drawPolygon(h);
     }
 }
@@ -46,8 +51,8 @@ void drawAppIcon(QPainter &p, std::string_view name, const QColor &fg)
     if (name == "open")
     {
         QPolygonF f;
-        f << QPointF(2.5, 4.5) << QPointF(7, 4.5) << QPointF(8.5, 6.5)
-          << QPointF(15.5, 6.5) << QPointF(15.5, 14.5) << QPointF(2.5, 14.5);
+        f << QPointF(2.5, 4.5) << QPointF(7, 4.5) << QPointF(8.5, 6.5) << QPointF(15.5, 6.5)
+          << QPointF(15.5, 14.5) << QPointF(2.5, 14.5);
         p.drawPolygon(f);
         p.drawLine(QPointF(2.5, 8.5), QPointF(15.5, 8.5));
     }

@@ -600,7 +600,8 @@ QWidget *CompareWorkspace::buildStatusStrip()
 {
     auto *strip = new QWidget(this);
     strip->setObjectName("compareStatusStrip");
-    strip->setStyleSheet("QWidget#compareStatusStrip{background:#141416; border-top:1px solid #27272a;}");
+    strip->setStyleSheet(
+        "QWidget#compareStatusStrip{background:#141416; border-top:1px solid #27272a;}");
     auto *lay = new QHBoxLayout(strip);
     lay->setContentsMargins(8, 2, 8, 2);
     lay->setSpacing(8);

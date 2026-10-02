@@ -131,10 +131,9 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
             if (overlap <= 0)
                 continue;
 
-            const long long maxAllowedSad =
-                (bestSAD == std::numeric_limits<long long>::max())
-                    ? std::numeric_limits<long long>::max()
-                    : bestSAD * overlap;
+            const long long maxAllowedSad = (bestSAD == std::numeric_limits<long long>::max())
+                                                ? std::numeric_limits<long long>::max()
+                                                : bestSAD * overlap;
 
             long long sad = 0;
             const int len = colHi - colLo;

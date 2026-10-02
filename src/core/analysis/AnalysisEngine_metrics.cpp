@@ -590,10 +590,10 @@ static ImageData toGrayscale8(const ImageData &src)
             const uint8_t r = sl[x * cpp + rOff];
             const uint8_t g = sl[x * cpp + 1];
             const uint8_t b = sl[x * cpp + bOff];
-            dl[x] = static_cast<uint8_t>(
-                (static_cast<unsigned>(r) * 11u + static_cast<unsigned>(g) * 16u +
-                 static_cast<unsigned>(b) * 5u) >>
-                5);
+            dl[x] = static_cast<uint8_t>((static_cast<unsigned>(r) * 11u +
+                                          static_cast<unsigned>(g) * 16u +
+                                          static_cast<unsigned>(b) * 5u) >>
+                                         5);
         }
     }
     return gray;
@@ -634,6 +634,6 @@ double AnalysisEngine::noiseEstimate(const ImageData &imgData)
         return 0.0;
 
     const ImageBuffer v = g.view();
-    return calcLaplacianCore(w, h, [&v](int y)
-                             { return v.data + static_cast<size_t>(y) * v.stride(); });
+    return calcLaplacianCore(w, h,
+                             [&v](int y) { return v.data + static_cast<size_t>(y) * v.stride(); });
 }

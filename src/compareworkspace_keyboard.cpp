@@ -140,11 +140,13 @@ bool CompareWorkspace::handleROIKeyboardNudge(QKeyEvent *event)
 
     applySelectionToAll(sel);
     const QString paneInfo =
-        m_roiLinked ? QString()
-                    : tr(" (窗格 %1)")
-                          .arg(((m_focusIndex >= 0 && m_focusIndex < static_cast<int>(m_cellViews.size()))
-                                    ? m_focusIndex
-                                    : 0) + 1);
+        m_roiLinked
+            ? QString()
+            : tr(" (窗格 %1)")
+                  .arg(((m_focusIndex >= 0 && m_focusIndex < static_cast<int>(m_cellViews.size()))
+                            ? m_focusIndex
+                            : 0) +
+                       1);
     showCompareStatus(tr("微调 ROI%1: X=%2 Y=%3 W=%4 H=%5")
                           .arg(paneInfo)
                           .arg(m_lastSelection.x)

@@ -101,18 +101,22 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                 if (cells.size() >= 5)
                 {
                     bool okR = false, okG = false, okB = false;
-                    const int r = cells[2].toInt(&okR), g = cells[3].toInt(&okG), b = cells[4].toInt(&okB);
+                    const int r = cells[2].toInt(&okR), g = cells[3].toInt(&okG),
+                              b = cells[4].toInt(&okB);
                     if (okR && okG && okB)
                     {
                         const QString hex = QString("#%1%2%3")
-                            .arg(std::clamp(r, 0, 255), 2, 16, QLatin1Char('0'))
-                            .arg(std::clamp(g, 0, 255), 2, 16, QLatin1Char('0'))
-                            .arg(std::clamp(b, 0, 255), 2, 16, QLatin1Char('0')).toUpper();
+                                                .arg(std::clamp(r, 0, 255), 2, 16, QLatin1Char('0'))
+                                                .arg(std::clamp(g, 0, 255), 2, 16, QLatin1Char('0'))
+                                                .arg(std::clamp(b, 0, 255), 2, 16, QLatin1Char('0'))
+                                                .toUpper();
                         const QString rgb = QString("rgb(%1, %2, %3)").arg(r).arg(g).arg(b);
                         auto *actHex = menu.addAction(QObject::tr("复制 HEX 颜色 (%1)").arg(hex));
-                        QObject::connect(actHex, &QAction::triggered, [hex]() { QApplication::clipboard()->setText(hex); });
+                        QObject::connect(actHex, &QAction::triggered,
+                                         [hex]() { QApplication::clipboard()->setText(hex); });
                         auto *actRgb = menu.addAction(QObject::tr("复制 RGB 颜色 (%1)").arg(rgb));
-                        QObject::connect(actRgb, &QAction::triggered, [rgb]() { QApplication::clipboard()->setText(rgb); });
+                        QObject::connect(actRgb, &QAction::triggered,
+                                         [rgb]() { QApplication::clipboard()->setText(rgb); });
                     }
                 }
             }
@@ -127,10 +131,12 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                     {
                         auto *h = inspector->horizontalHeaderItem(c);
                         headers << (h ? h->text() : QString());
-                        if (md) seps << "---";
+                        if (md)
+                            seps << "---";
                     }
                     lines << (md ? "| " + headers.join(" | ") + " |" : headers.join('\t'));
-                    if (md) lines << "| " + seps.join(" | ") + " |";
+                    if (md)
+                        lines << "| " + seps.join(" | ") + " |";
                     for (int r = 0; r < inspector->rowCount(); ++r)
                     {
                         const auto c = rowCells(r);
@@ -138,7 +144,8 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                     }
                     QApplication::clipboard()->setText(lines.join('\n'));
                 };
-                QObject::connect(actCopyTable, &QAction::triggered, [=]() { copyFormatted(false); });
+                QObject::connect(actCopyTable, &QAction::triggered,
+                                 [=]() { copyFormatted(false); });
                 QObject::connect(actCopyMd, &QAction::triggered, [=]() { copyFormatted(true); });
             }
             if (!menu.isEmpty())

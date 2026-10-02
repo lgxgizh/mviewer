@@ -616,11 +616,11 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
         m_lastSelection = norm;
         if (m_roiGeometryLabel)
             m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
-                                                      : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
-                                                            .arg(norm.x)
-                                                            .arg(norm.y)
-                                                            .arg(norm.width)
-                                                            .arg(norm.height));
+                                                       : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                             .arg(norm.x)
+                                                             .arg(norm.y)
+                                                             .arg(norm.width)
+                                                             .arg(norm.height));
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle,
                                tr("Release ROI to measure Source RGB"));
         update();
@@ -630,9 +630,8 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
     const QSize common = paneEffectiveSize(0);
     const int width = common.isValid() ? common.width() : 0;
     const int height = common.isValid() ? common.height() : 0;
-    m_lastSelection =
-        mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
-                                            sel.y + sel.height, width, height);
+    m_lastSelection = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
+                                                          sel.y + sel.height, width, height);
     m_roiLinked = !m_lastSelection.isEmpty();
     for (RawImageView *other : m_cellViews)
     {
@@ -674,11 +673,11 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
     m_lastSelection = norm;
     if (m_roiGeometryLabel)
         m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
-                                                  : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
-                                                        .arg(norm.x)
-                                                        .arg(norm.y)
-                                                        .arg(norm.width)
-                                                        .arg(norm.height));
+                                                   : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                         .arg(norm.x)
+                                                         .arg(norm.y)
+                                                         .arg(norm.width)
+                                                         .arg(norm.height));
     if (m_roiHistChk && m_roiHistChk->isChecked())
         refreshHistograms();
     scheduleROIMeasurement();

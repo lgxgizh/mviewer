@@ -66,10 +66,9 @@ void CompareWorkspace::positionROIHud()
     for (int index = 0; index < 8; ++index)
     {
         QLabel *chip = roiChip(this, index);
-        RawImageView *view =
-            (index < paneCount && index < static_cast<int>(m_cellViews.size()))
-                ? m_cellViews[static_cast<size_t>(index)]
-                : nullptr;
+        RawImageView *view = (index < paneCount && index < static_cast<int>(m_cellViews.size()))
+                                 ? m_cellViews[static_cast<size_t>(index)]
+                                 : nullptr;
         const mviewer::domain::Selection paneSel =
             view ? (m_roiLinked ? m_lastSelection : view->selection())
                  : mviewer::domain::Selection{};
@@ -95,11 +94,9 @@ void CompareWorkspace::positionROIHud()
         }
         else
         {
-            const QPointF a =
-                view->sourcePointToWidget(QPointF(paneSel.x, paneSel.y));
-            const QPointF b =
-                view->sourcePointToWidget(QPointF(paneSel.x + paneSel.width,
-                                                  paneSel.y + paneSel.height));
+            const QPointF a = view->sourcePointToWidget(QPointF(paneSel.x, paneSel.y));
+            const QPointF b = view->sourcePointToWidget(
+                QPointF(paneSel.x + paneSel.width, paneSel.y + paneSel.height));
             if (!std::isfinite(a.x()) || !std::isfinite(b.x()))
             {
                 chip->hide();

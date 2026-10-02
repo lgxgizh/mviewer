@@ -30,7 +30,8 @@ size_t findCaseInsensitive(std::string_view haystack, std::string_view needle)
     if (needle.size() > haystack.size())
         return std::string_view::npos;
     auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
-                          [](char ch1, char ch2) {
+                          [](char ch1, char ch2)
+                          {
                               return std::tolower(static_cast<unsigned char>(ch1)) ==
                                      std::tolower(static_cast<unsigned char>(ch2));
                           });

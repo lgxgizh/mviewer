@@ -186,8 +186,7 @@ QSize CompareWorkspace::paneEffectiveSize(int pane) const
     const CellAdjust adjust = (pane >= 0 && pane < static_cast<int>(m_cellAdjusts.size()))
                                   ? m_cellAdjusts[static_cast<size_t>(pane)]
                                   : CellAdjust{};
-    const auto crop =
-        mviewer::core::analysisCropBounds(rawW, rawH, analysisAdjustment(adjust));
+    const auto crop = mviewer::core::analysisCropBounds(rawW, rawH, analysisAdjustment(adjust));
     const int rot = std::abs(adjust.rotation % 360);
     const int effW = (rot == 90 || rot == 270) ? crop.height : crop.width;
     const int effH = (rot == 90 || rot == 270) ? crop.width : crop.height;
@@ -219,8 +218,8 @@ CompareWorkspace::computeSourceROI(const ROIInput &input, const mviewer::domain:
 
     const int srcW = input.metadata.width > 0 ? input.metadata.width : input.pixels.width;
     const int srcH = input.metadata.height > 0 ? input.metadata.height : input.pixels.height;
-    const auto sourceRoi = mviewer::core::mapDisplaySelectionToSource(
-        roi, input.adjustment, srcW, srcH);
+    const auto sourceRoi =
+        mviewer::core::mapDisplaySelectionToSource(roi, input.adjustment, srcW, srcH);
 
     if (!input.pixels.isNull())
     {
@@ -264,7 +263,8 @@ CompareWorkspace::computeSourceROI(const ROIInput &input, const mviewer::domain:
             result.reason = "ROI is outside the source";
             return result;
         }
-        const mviewer::core::SourceRect displayed{sourceRoi.x, sourceRoi.y, sourceRoi.width, sourceRoi.height};
+        const mviewer::core::SourceRect displayed{sourceRoi.x, sourceRoi.y, sourceRoi.width,
+                                                  sourceRoi.height};
         const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
             displayed, source->rawWidth(), source->rawHeight(), source->orientation());
         result.decodePath = source->regionDecodePath();
@@ -439,9 +439,8 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         const ImageFrame *frame = m_engine.imageAt(row);
         const mviewer::domain::ImageMetadata metadata =
             frame ? frame->metadata() : mviewer::domain::ImageMetadata{};
-        const QString stateText = (!result.linked && !pane.stats.valid)
-                                      ? tr("未框选")
-                                      : paneStateText(pane);
+        const QString stateText =
+            (!result.linked && !pane.stats.valid) ? tr("未框选") : paneStateText(pane);
         const QStringList cells = {
             paneName(metadata, row),
             pane.stats.valid ? meanText(pane.stats.hMean) : QStringLiteral("—"),
@@ -516,8 +515,9 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
                                tr("A bounded source-accurate region is unavailable"));
     else if (hasAnyValid)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Ready,
-                               result.linked ? tr("Source RGB · full-resolution coordinates · 8-bit analysis")
-                                             : tr("独立选区 · 源像素 RGB 分析"));
+                               result.linked
+                                   ? tr("Source RGB · full-resolution coordinates · 8-bit analysis")
+                                   : tr("独立选区 · 源像素 RGB 分析"));
     else
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
 
@@ -546,11 +546,10 @@ void CompareWorkspace::setROIMeasurementState(mviewer::ui::ROIMeasurementState s
 void CompareWorkspace::updateROIAvailabilityStatus()
 {
     QString detail = m_roiStateDetail;
-    const bool hasAnyRoi = m_roiLinked ? !m_lastSelection.isEmpty()
-                                       : std::any_of(m_cellViews.begin(), m_cellViews.end(),
-                                                     [](RawImageView *v) {
-                                                         return v && !v->selection().isEmpty();
-                                                     });
+    const bool hasAnyRoi =
+        m_roiLinked ? !m_lastSelection.isEmpty()
+                    : std::any_of(m_cellViews.begin(), m_cellViews.end(),
+                                  [](RawImageView *v) { return v && !v->selection().isEmpty(); });
     if (m_engine.imageCount() < 2)
         detail = tr("Linked ROI unavailable — at least two images required");
     else if (!linkedROIAvailable())

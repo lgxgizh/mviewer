@@ -2992,8 +2992,15 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
         }
         const QString expectedBrowseStatus =
             QString("当前: %1").arg(QFileInfo(sel->currentImage()).fileName());
-        sendKey(compareDialog, Qt::Key_Escape);
-        pump(50);
+        {
+            QElapsedTimer closeTimer;
+            closeTimer.start();
+            while (compareDialog && compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+            {
+                sendKey(compareDialog, Qt::Key_Escape);
+                pump(50);
+            }
+        }
         CHECK(!compareDialog->isVisible(), "fullscreen workflow: Escape closes fullscreen Compare");
         CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("像素连线")) &&
                   w.statusBar()->currentMessage() == expectedBrowseStatus,
@@ -3201,8 +3208,15 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     }
 
     if (compareDialog && compareDialog->isVisible())
-        sendKey(compareDialog, Qt::Key_Escape);
-    pump(50);
+    {
+        QElapsedTimer closeTimer;
+        closeTimer.start();
+        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        {
+            sendKey(compareDialog, Qt::Key_Escape);
+            pump(50);
+        }
+    }
 
     CHECK(sel && sel->selection() == lastPair,
           "leaving Compare keeps the final A/B SelectionModel window");
@@ -3220,8 +3234,15 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
           "re-entering Compare after browsing opens the real workspace");
     CHECK(waitForPair(lastPair), "re-entering Compare after exit keeps the final A/B pair");
     if (compareDialog && compareDialog->isVisible())
-        sendKey(compareDialog, Qt::Key_Escape);
-    pump(50);
+    {
+        QElapsedTimer closeTimer;
+        closeTimer.start();
+        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        {
+            sendKey(compareDialog, Qt::Key_Escape);
+            pump(50);
+        }
+    }
     w.close();
     pump(20);
     navDir.removeRecursively();

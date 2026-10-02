@@ -4,8 +4,8 @@
 //
 // Build: CMake target `ui_screenshot` (links mviewer_ui + mviewer_core).
 // Usage: ui_screenshot <out.png> [sample.png]
-#include "mainwindow.h"
 #include "Theme.h"
+#include "mainwindow.h"
 
 #include <QApplication>
 #include <QFont>

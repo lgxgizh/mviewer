@@ -604,11 +604,11 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
     if (!m_dragging)
     {
         const double tol = m_scale > 0.0 ? 8.0 / m_scale : 0.0;
-        const auto handle = (!m_selection.isEmpty() && tol > 0.0)
-                                ? mviewer::domain::hitTestSelection(
-                                      m_selection, widgetToImage(ev->pos()).x(),
-                                      widgetToImage(ev->pos()).y(), tol, tol)
-                                : mviewer::domain::SelectionHandle::None;
+        const auto handle =
+            (!m_selection.isEmpty() && tol > 0.0)
+                ? mviewer::domain::hitTestSelection(m_selection, widgetToImage(ev->pos()).x(),
+                                                    widgetToImage(ev->pos()).y(), tol, tol)
+                : mviewer::domain::SelectionHandle::None;
         const Qt::CursorShape shape = cursorForSelectionHandle(handle);
         if (cursor().shape() != shape)
             setCursor(shape);

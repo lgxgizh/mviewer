@@ -147,11 +147,17 @@ class CompareWorkspace : public QWidget
     void rotateCurrentCell(int degrees);
     void flipCurrentCell(bool horizontal);
     void setSyncRotate(bool on);
-    bool syncRotate() const { return m_syncRotate; }
+    bool syncRotate() const
+    {
+        return m_syncRotate;
+    }
     void fitAll();
     void copyComparisonViewToClipboard();
     void setEditCellIndex(int cellIdx);
-    int editCellIndex() const { return m_editIdx; }
+    int editCellIndex() const
+    {
+        return m_editIdx;
+    }
     int cellRotation(int cellIdx) const;
     bool cellFlipH(int cellIdx) const;
     bool cellFlipV(int cellIdx) const;

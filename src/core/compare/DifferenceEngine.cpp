@@ -644,8 +644,8 @@ static ImageData renderHeatOverlay(const ImageData &grayDiff, const uint8_t *val
             {
                 const uint8_t *src =
                     grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
-                auto *dst = reinterpret_cast<HeatRGB *>(
-                    out.buffer->data() + static_cast<size_t>(y) * out.stride());
+                auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data() +
+                                                        static_cast<size_t>(y) * out.stride());
                 for (int x = 0; x < w; ++x)
                     dst[x] = lut[valLut[src[x]]];
             }
@@ -740,8 +740,7 @@ static ImageData renderHighlightOverlay(const ImageData &grayDiff, const ImageDa
     const bool isBGR = (base.format == PixelFormat::BGR24 || base.format == PixelFormat::BGRA32);
     for (int y = 0; y < h; ++y)
     {
-        const uint8_t *src =
-            grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+        const uint8_t *src = grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
         const uint8_t *bs = base.buffer->data() + static_cast<size_t>(y) * base.stride();
         uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
         const uint8_t *bp = bs;
@@ -793,6 +792,5 @@ ImageData DifferenceEngine::visualizeOverlay(const ImageData &grayDiff, const Im
 
     if (!highlight)
         return renderHeatOverlay(grayDiff, valLut, w, h, cppD, roD, isDirectDiff);
-    return renderHighlightOverlay(grayDiff, base, valLut, threshold, w, h, cppD, roD,
-                                  isDirectDiff);
+    return renderHighlightOverlay(grayDiff, base, valLut, threshold, w, h, cppD, roD, isDirectDiff);
 }

@@ -536,10 +536,10 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
 }
 
 QSize CompareWorkspace::transformedSourceDims(const QSize &sourceDims,
-                                             const CellAdjust &displayAdjust)
+                                              const CellAdjust &displayAdjust)
 {
-    const auto crop = mviewer::core::analysisCropBounds(
-        sourceDims.width(), sourceDims.height(), analysisAdjustment(displayAdjust));
+    const auto crop = mviewer::core::analysisCropBounds(sourceDims.width(), sourceDims.height(),
+                                                        analysisAdjustment(displayAdjust));
     const int rot = std::abs(displayAdjust.rotation % 360);
     const bool swap = (rot == 90 || rot == 270);
     return QSize(swap ? crop.height : crop.width, swap ? crop.width : crop.height);
@@ -648,8 +648,7 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
                                  displayAdjust.flipH || displayAdjust.flipV;
         if (transformed)
         {
-            const QSize transformedDims =
-                transformedSourceDims(sourceDims, displayAdjust);
+            const QSize transformedDims = transformedSourceDims(sourceDims, displayAdjust);
             cell.sourceSize = transformedDims;
             cell.sourceRect = QRect(QPoint(0, 0), transformedDims);
         }

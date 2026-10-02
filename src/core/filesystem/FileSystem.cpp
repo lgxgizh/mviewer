@@ -28,9 +28,9 @@ std::vector<std::string> FileSystem::listImages(const std::string &dir, int max)
 
     const QStringList entries = d.entryList(filters, QDir::Files, QDir::Name);
     std::vector<std::string> result;
-    const size_t limit = (max > 0) ? std::min(static_cast<size_t>(entries.size()),
-                                              static_cast<size_t>(max))
-                                   : static_cast<size_t>(entries.size());
+    const size_t limit =
+        (max > 0) ? std::min(static_cast<size_t>(entries.size()), static_cast<size_t>(max))
+                  : static_cast<size_t>(entries.size());
     result.reserve(limit);
     for (const QString &name : entries)
     {
