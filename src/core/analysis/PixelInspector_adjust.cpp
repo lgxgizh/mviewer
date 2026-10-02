@@ -22,6 +22,11 @@ inline double luma(double r, double g, double b)
 {
     return 0.2126 * r + 0.7152 * g + 0.0722 * b; // r,g,b in 0..1
 }
+
+inline int lumaFast(int r, int g, int b)
+{
+    return (13933 * r + 46871 * g + 4732 * b + 32768) >> 16;
+}
 } // namespace
 
 CropBounds analysisCropBounds(int sourceWidth, int sourceHeight,
@@ -418,7 +423,7 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
             const int pg = lut.isIdentity ? sourcePixel.g : lut.g[sourcePixel.g];
             const int pb = lut.isIdentity ? sourcePixel.b : lut.b[sourcePixel.b];
 
-            const int luminance = static_cast<int>(0.2126 * pr + 0.7152 * pg + 0.0722 * pb + 0.5);
+            const int luminance = lumaFast(pr, pg, pb);
             sum += luminance;
             sumSq += static_cast<int64_t>(luminance) * luminance;
             rSum += pr;
@@ -500,8 +505,7 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
                 gSum += g;
                 bSum += b;
                 vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
-                const double lum = luma(r, g, b);
-                const int v = static_cast<int>(lum + 0.5);
+                const int v = lumaFast(r, g, b);
                 sum += v;
                 sumSq += static_cast<int64_t>(v) * v;
                 if (v < mn)
@@ -526,8 +530,7 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
                 gSum += g;
                 bSum += b;
                 vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
-                const double lum = luma(r, g, b);
-                const int v = static_cast<int>(lum + 0.5);
+                const int v = lumaFast(r, g, b);
                 sum += v;
                 sumSq += static_cast<int64_t>(v) * v;
                 if (v < mn)

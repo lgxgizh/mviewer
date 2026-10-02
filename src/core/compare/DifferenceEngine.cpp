@@ -314,16 +314,7 @@ ImageData DifferenceEngine::amplify(const ImageData &gray, double gain)
     if (gray.isNull())
         return ImageData();
     if (gain <= 1.0)
-    {
-        ImageData copy = makeImageData(gray.width, gray.height, gray.format);
-        if (copy.isNull())
-            return ImageData();
-        for (int y = 0; y < gray.height; ++y)
-            std::memcpy(copy.buffer->data() + static_cast<size_t>(y) * copy.stride(),
-                        gray.buffer->data() + static_cast<size_t>(y) * gray.stride(),
-                        static_cast<size_t>(gray.width) * gray.channelsPerPixel());
-        return copy;
-    }
+        return gray;
 
     ImageData out = makeImageData(gray.width, gray.height, gray.format);
     if (out.isNull())

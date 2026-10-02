@@ -388,7 +388,8 @@ int main(int argc, char **argv)
             continue;
         clearROI(workspace);
         mode->setChecked(true);
-        pump(30);
+        pump(50);
+        canvas->repaint();
         const QPoint from(canvas->width() / 3, canvas->height() / 3);
         const QPoint to(from + QPoint(55, 45));
         const qulonglong renderCount = canvas->property("baseSurfaceRenderCount").toULongLong();
@@ -495,7 +496,15 @@ int main(int argc, char **argv)
         mismatch->setImages({a, vertPath});
         mismatchDialog.resize(800, 600);
         mismatchDialog.show();
-        CHECK(waitFor([&]() { return mismatch->comparedImageCount() == 2; }),
+        CHECK(waitFor(
+                  [&]()
+                  {
+                      RawImageView *p0 = pane(mismatch, 0);
+                      RawImageView *p1 = pane(mismatch, 1);
+                      return mismatch->comparedImageCount() == 2 && p0 &&
+                             p0->sourceSize() == QSize(96, 72) && p1 &&
+                             p1->sourceSize() == QSize(72, 96);
+                  }),
               "mismatched horizontal/vertical pair loads");
         RawImageView *pane0 = pane(mismatch, 0);
         RawImageView *pane1 = pane(mismatch, 1);

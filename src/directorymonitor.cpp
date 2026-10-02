@@ -58,6 +58,11 @@ DirectoryMonitor::~DirectoryMonitor()
 
 void DirectoryMonitor::setActiveDirectory(const QString &path)
 {
+    if (path == m_activePath && !m_activePath.isEmpty())
+    {
+        ensureActivePathWatched();
+        return;
+    }
     const QString next = normalized(path);
     if (next == m_activePath && !m_activePath.isEmpty())
     {
@@ -88,7 +93,9 @@ void DirectoryMonitor::setActiveDirectory(const QString &path)
 
 void DirectoryMonitor::notifyDirectoryChanged(const QString &path)
 {
-    if (m_activePath.isEmpty() || normalized(path) != m_activePath)
+    if (m_activePath.isEmpty())
+        return;
+    if (path != m_activePath && normalized(path) != m_activePath)
         return;
     ++m_watcherHintCount;
     scheduleReconcile(kDebounceMs);

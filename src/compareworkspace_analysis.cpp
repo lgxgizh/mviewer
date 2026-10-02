@@ -405,11 +405,15 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
     const int n = static_cast<int>(samples.size());
     for (int i = 0; i < n; ++i)
     {
-        const ImageFrame *img = m_engine.imageAt(i);
-        const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
         const InspectorSample &sample = samples[static_cast<size_t>(i)];
-        setCellText(m_inspector, i, 0, QString::number(i + 1));
-        setCellText(m_inspector, i, 1, name);
+        const ImageFrame *img = nullptr;
+        if (!m_inspector->item(i, 0) || !m_inspector->item(i, 1))
+        {
+            img = m_engine.imageAt(i);
+            const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
+            setCellText(m_inspector, i, 0, QString::number(i + 1));
+            setCellText(m_inspector, i, 1, name);
+        }
 
         if (!sample.valid)
         {
@@ -480,14 +484,27 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             const bool identity = i >= static_cast<int>(m_cellAdjusts.size()) ||
                                   m_cellAdjusts[static_cast<size_t>(i)].isIdentity();
             uint16_t r16 = 0, g16 = 0, b16 = 0;
-            if (identity && img && img->hasRaw16() && img->raw16At(x, y, r16, g16, b16))
-                raw16 = QString("%1,%2,%3").arg(r16).arg(g16).arg(b16);
+            if (identity)
+            {
+                if (!img)
+                    img = m_engine.imageAt(i);
+                if (img && img->hasRaw16() && img->raw16At(x, y, r16, g16, b16))
+                    raw16 = QString("%1,%2,%3").arg(r16).arg(g16).arg(b16);
+                else
+                    raw16 = QString("%1,%2,%3 (%4)")
+                                .arg(sample.r)
+                                .arg(sample.g)
+                                .arg(sample.b)
+                                .arg(QStringLiteral("预览"));
+            }
             else
+            {
                 raw16 = QString("%1,%2,%3 (%4)")
                             .arg(sample.r)
                             .arg(sample.g)
                             .arg(sample.b)
-                            .arg(identity ? QStringLiteral("预览") : QStringLiteral("已调整预览"));
+                            .arg(QStringLiteral("已调整预览"));
+            }
         }
         setCellText(m_inspector, i, 6, raw16);
     }

@@ -630,6 +630,8 @@ class ImageViewer : public QOpenGLWidget
     bool m_selectMode = false;
     QPoint m_selStart, m_selEnd;
     PixelRGBA m_lastHoverPixel{};
+    int m_lastHoverX = -1;
+    int m_lastHoverY = -1;
 
     // Auto-hide cursor in fullscreen after inactivity.
     QTimer *m_cursorHideTimer = nullptr;

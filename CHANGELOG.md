@@ -2,9 +2,39 @@
 
 ## [Unreleased]
 
-### 浏览
+## [1.0.92] - 2026-10-02
 
-- 打开本地文件夹时，缩略图不再等目录树把整条路径一次索引完。确认是文件夹之后，目录树按路径逐段让出事件循环，并等画廊先列出文件（没有画廊时再超时继续）才高亮；只展开上级目录，当前文件夹保持折叠。目录监视改为直接 `addPath`，不再在界面线程调用 `QDir::exists`。忙碌光标在第一批缩略图出现时就恢复，不必等整个目录扫完。
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.92**.
+- **Performance & Product Polish (12 Optimizations)**:
+  1. **Diff metrics reuse in CompareWorkspace (`compareworkspace_render_diff.cpp`)**: Avoided duplicate PSNR and SSIM computation on base and target image pairs across multi-pane diff builds.
+  2. **Zero-copy fast bypass on <= 1.0 gain in DifferenceEngine (`DifferenceEngine.cpp`)**: Eliminated unnecessary whole-image buffer allocations and pixel loops when amplification gain is neutral.
+  3. **Row-level memcpy and zero-shift early exit in Image Aligner (`Aligner.cpp`)**: Added immediate return on zero delta and replaced per-pixel assignments with bulk `memcpy` and `memset`.
+  4. **Histogram sum calculation hoisted out of inner pixel loop (`AnalysisEngine.cpp`)**: Replaced 5 inner-loop additions with post-histogram bin accumulation and added linear contiguous-memory iteration fast-path.
+  5. **SSSE3 SIMD acceleration for grayscale conversion (`AnalysisEngine_metrics.cpp`)**: Vectorized `toGrayscale8` Rec. 601 weighting processing 4 pixels per loop using `_mm_maddubs_epi16` and `_mm_hadd_epi16`.
+  6. **Zero-allocation `string_view` filename matching (`SearchEngine.cpp`)**: Replaced intermediate `std::string` allocations with `string_view` and pre-lowercased search needle.
+  7. **High-frequency hover deduplication (`rawimageview.cpp`, `imageviewer.cpp`)**: Tracked mouse hover pixel coordinates to skip redundant pixel color lookups, inspector updates, and viewport crosshair events when moving within the same pixel.
+  8. **Thumbnail delegate MRU cache & slice suffix extraction (`thumbnailpanel_delegates.cpp`)**: Added O(1) front MRU hit optimization for thumbnail pixmaps and zero-copy string slice parsing in `fileSuffixFromPath`.
+  9. **Pixel Inspector static column string formatting deduplication (`compareworkspace_analysis.cpp`)**: Reused static row index and filename items across mouse-move hover updates.
+  10. **Integer fixed-point Rec. 709 luma in neighborhood stats (`PixelInspector_adjust.cpp`)**: Replaced floating-point conversions with 32-bit fixed-point arithmetic `(13933*r + 46871*g + 4732*b + 32768) >> 16`.
+  11. **Directory monitor path normalization fast-path (`directorymonitor.cpp`)**: Added fast-path equality checks to skip redundant path normalization and monitor resets when the target directory hasn't changed.
+  12. **Test suite resilience & decode pool drain alignment (`test_m47_viewer_lod.cpp`, `test_m61_roi_workflow.cpp`)**: Explicitly checked decode pool convergence distinct from background tile prefetching and stabilized asynchronous frame loading in ROI workflow tests.
+
+### 性能优化与产品力增强（12 项优化）
+
+1. **多图对比指标去重复用（`compareworkspace_render_diff.cpp`）**：在 `computeDiffMetrics` 中复用 `buildDiffOverlays` 已计算的 PSNR/SSIM 缓存结果，消除每帧重绘时底图与各对比图之间重复的图像全分辨率差值矩阵遍历与指标重复核算。
+2. **差分图低增益零拷贝旁路（`DifferenceEngine.cpp`）**：在 `amplify()` 增益 <= 1.0 时直接返回原图引用，省去整张全分辨率图像逐像素的额外内存分配、拷贝和遍历。
+3. **图像对齐批量快速行复制与零位移短路（`Aligner.cpp`）**：在图像对齐逻辑中增加 `dx == 0 && dy == 0` 零位移零耗时直接返回；对于平移操作，由原本逐像素赋值重构为整行 `std::memcpy` 与边缘批量 `std::memset`，对齐吞吐效率大幅提升。
+4. **直方图统计加法循环外提与线性内存加速（`AnalysisEngine.cpp`）**：将原每像素循环内的 5 次浮点/整数累加求和提至 256 桶直方图生成后的外层轻量统计；针对内存连续对齐图像提供单层平铺循环快速路径，大幅降低缓存颠簸。
+5. **灰度转换 SSSE3 SIMD 向量化加速（`AnalysisEngine_metrics.cpp`）**：在 `toGrayscale8` 中引入 SSSE3 `_mm_maddubs_epi16` 与 `_mm_hadd_epi16` 指令级向量化处理，单次并行吞吐 4 像素定点 Rec. 601 亮度加权，大幅加速 PSNR/SSIM 指标计算前置的灰度转换开销。
+6. **文件名搜索无分配 `string_view` 与预转小写（`SearchEngine.cpp`）**：将每轮过滤遍历中的堆分配 `std::string fname` 替换为零拷贝 `std::string_view`，并预先小写化搜索词，避免每次匹配对搜索目标反复执行内存分配与小写化转换。
+7. **高频鼠标悬停像素去重与视口广播节流（`rawimageview.cpp`, `imageviewer.cpp`）**：在像素检视器与图像视图鼠标移动事件中记录上一次悬停像素坐标（`m_lastHoverPixelX/Y` 与 `m_lastHoverX/Y`），当鼠标在同一像素内微幅移动时直接跳过重复的颜色采样、表格刷新与十字线视口广播，彻底消除高频鼠标移动时的 UI 线程微卡顿。
+8. **缩略图缓存 MRU 命中加速与后缀提取零分配（`thumbnailpanel_delegates.cpp`）**：在 `displayPhoto` 与 `cachedScaledPixmap` 列表中增加头部快速命中检测与向首位交换机制，将最常访问的缩略图查询复杂度降至 $O(1)$；重构 `fileSuffixFromPath`，改用直接索引切片取代临时 `QString` 子串构造。
+9. **检视器静态列文本格式化与分配消除（`compareworkspace_analysis.cpp`）**：像素检视器表格渲染时，仅在行数改变或初次加载时填充序号列与文件名列，避免每次鼠标悬停取样时对全部对比图重复执行字符串构造与路径提取。
+10. **像素邻域统计定点整数运算（`PixelInspector_adjust.cpp`）**：在 `neighborhoodStats` 亮度统计核心循环中，将原浮点 Rec. 709 亮度系数计算全面替换为 `(13933*r + 46871*g + 4732*b + 32768) >> 16` 32位定点整数运算，彻底消除热点分析代码中的浮点乘法与类型转换。
+11. **目录监视路径快速全等短路（`directorymonitor.cpp`）**：在 `setActiveDirectory` 与 `notifyDirectoryChanged` 入口处先进行字符串直接比较，避免相同路径重复触发耗时的路径规范化、斜杠清理与冗余系统监视重建。
+12. **LOD 测试调度池精准排空与测试流程稳定性强化（`test_m47_viewer_lod.cpp`, `test_m61_roi_workflow.cpp`）**：精准对齐 `test_m47_viewer_lod` 对解码池排空检测的语义，区分解码专用池与后台背景瓦片预取池，消除长耗时瓦片等待；为 ROI 画布与异步尺寸加载添加前置状态就绪等待与事件泵送，确保测试套件 100% 稳定高可靠运行。
 
 ## [1.0.91] - 2026-10-01
 

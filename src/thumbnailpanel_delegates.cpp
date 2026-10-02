@@ -46,16 +46,20 @@ QPixmap displayPhoto(const QPixmap &pm)
         return pm;
 
     const qint64 key = pm.cacheKey();
+    if (!g_photoCache.empty() && g_photoCache[0].sourceKey == key)
+    {
+        g_photoCache[0].clock = ++g_photoClock;
+        return g_photoCache[0].photo;
+    }
     ++g_photoClock;
-    for (size_t i = 0; i < g_photoCache.size(); ++i)
+    for (size_t i = 1; i < g_photoCache.size(); ++i)
     {
         auto &entry = g_photoCache[i];
         if (entry.sourceKey != key)
             continue;
         entry.clock = g_photoClock;
-        if (i > 0)
-            std::swap(g_photoCache[i], g_photoCache[i - 1]);
-        return (i > 0) ? g_photoCache[i - 1].photo : entry.photo;
+        std::swap(g_photoCache[i], g_photoCache[0]);
+        return g_photoCache[0].photo;
     }
 
     const QImage cropped = mviewer::ui::cropSquareLetterbox(pm.toImage());
@@ -83,18 +87,24 @@ QPixmap cachedScaledPixmap(const QPixmap &pm, const QSize &targetSize)
     const qint64 key = pm.cacheKey();
     const int tw = targetSize.width();
     const int th = targetSize.height();
-    ++g_scaledClock;
 
-    for (size_t i = 0; i < g_scaledCache.size(); ++i)
+    if (!g_scaledCache.empty() && g_scaledCache[0].pixmapKey == key &&
+        g_scaledCache[0].targetW == tw && g_scaledCache[0].targetH == th)
+    {
+        ++g_scaledCacheHits;
+        g_scaledCache[0].clock = ++g_scaledClock;
+        return g_scaledCache[0].scaled;
+    }
+    ++g_scaledClock;
+    for (size_t i = 1; i < g_scaledCache.size(); ++i)
     {
         auto &entry = g_scaledCache[i];
         if (entry.pixmapKey == key && entry.targetW == tw && entry.targetH == th)
         {
             ++g_scaledCacheHits;
             entry.clock = g_scaledClock;
-            if (i > 0)
-                std::swap(g_scaledCache[i], g_scaledCache[i - 1]);
-            return (i > 0) ? g_scaledCache[i - 1].scaled : entry.scaled;
+            std::swap(g_scaledCache[i], g_scaledCache[0]);
+            return g_scaledCache[0].scaled;
         }
     }
 
@@ -141,11 +151,11 @@ QColor blended(const QColor &base, const QColor &accent, int alpha)
 QString fileSuffixFromPath(const QString &path)
 {
     const int slash = qMax(path.lastIndexOf('/'), path.lastIndexOf('\\'));
-    const QString base = slash >= 0 ? path.mid(slash + 1) : path;
-    const int dot = base.lastIndexOf('.');
-    if (dot <= 0 || dot == base.size() - 1)
+    const int start = slash >= 0 ? slash + 1 : 0;
+    const int dot = path.lastIndexOf('.');
+    if (dot <= start || dot == path.size() - 1)
         return QString();
-    return base.mid(dot + 1);
+    return path.mid(dot + 1);
 }
 
 QString fileNameFromPath(const QString &path)

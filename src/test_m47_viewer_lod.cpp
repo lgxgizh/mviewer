@@ -126,6 +126,20 @@ SchedSample sampleScheduler()
     return s;
 }
 
+SchedSample sampleDecodePools()
+{
+    SchedSample s;
+    for (auto p : {TaskScheduler::DecodePool, TaskScheduler::ThumbnailPool})
+    {
+        const auto m = TaskScheduler::instance().metrics(p);
+        s.pending += m.pending;
+        s.active += m.active_tasks;
+        s.queue += m.queue_depth;
+        s.waiting += m.waiting;
+    }
+    return s;
+}
+
 QString writeSmallJpeg(const QTemporaryDir &dir)
 {
     const QString p = dir.path() + "/small.jpg";
@@ -159,6 +173,7 @@ int main(int argc, char **argv)
         ImageViewer viewer;
         viewer.resize(1280, 800);
         viewer.show();
+        pump(100);
         // Sample after the widget/GL context exists: the measured delta covers
         // the DISPLAY path only (decode workers + rasters).
         const double rssBefore = rssMB();
@@ -196,7 +211,7 @@ int main(int argc, char **argv)
         CHECK(rssDelta < 100.0,
               "V1: display-path RSS stays bounded (< 100 MB; a full 100MP "
               "materialization would be ~286 MB and is rejected by Qt anyway)");
-        CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },
+        CHECK(waitTrue([&] { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
                        15000),
               "V1: decode pools drain after display");
     }
@@ -230,7 +245,7 @@ int main(int argc, char **argv)
         CHECK(c.fullDecodeScaled.load() == 0 && c.fullDecodeCrop.load() == 0,
               "V2: no full-decode fallback ran");
         pump(300);
-        CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },
+        CHECK(waitTrue([&] { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
                        15000),
               "V2: decode pools drain after the region upgrade");
     }
@@ -264,7 +279,7 @@ int main(int argc, char **argv)
         CHECK(lastReady == QSize(12000, 8333),
               "V3: the FINAL A generation owns the display (no stale overwrite)");
         CHECK(viewer.isLodDisplay(), "V3: viewer still in LOD display mode");
-        CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },
+        CHECK(waitTrue([&] { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
                        15000),
               "V3: decode pools drain after A->B->A");
     }

@@ -345,6 +345,8 @@ class RawImageView : public QWidget
     // M16.1 sync crosshair state (image-space position)
     bool m_crosshairOn = false;
     QPointF m_crosshair;
+    int m_lastHoverPixelX = -1;
+    int m_lastHoverPixelY = -1;
     // M16.1 focus-lock (reference) flag
     bool m_focused = false;
 

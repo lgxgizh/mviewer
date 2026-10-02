@@ -78,6 +78,9 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
         {
             sources.target = target;
             sources.diff = diff;
+            sources.psnr = overlay.psnr;
+            sources.ssim = overlay.ssim;
+            sources.hasMetrics = true;
         }
         if (visualize)
         {
@@ -129,11 +132,20 @@ void CompareWorkspace::computeDiffMetrics(DiffBatchResult &result, const DiffSou
         return;
     if (context.isCancelled())
         return;
-    result.psnr = AnalysisEngine::psnr(basePixels, sources.target);
-    if (context.isCancelled())
-        return;
-    result.ssim = AnalysisEngine::ssim(basePixels, sources.target);
-    result.metricsValid = true;
+    if (sources.hasMetrics)
+    {
+        result.psnr = sources.psnr;
+        result.ssim = sources.ssim;
+        result.metricsValid = true;
+    }
+    else
+    {
+        result.psnr = AnalysisEngine::psnr(basePixels, sources.target);
+        if (context.isCancelled())
+            return;
+        result.ssim = AnalysisEngine::ssim(basePixels, sources.target);
+        result.metricsValid = true;
+    }
     if (context.isCancelled())
         return;
     result.stats = DifferenceEngine::computeStats(sources.diff, threshold);

@@ -23,42 +23,44 @@ std::string toLower(const std::string &s)
     return r;
 }
 
-size_t findCaseInsensitive(std::string_view haystack, std::string_view needle)
+size_t findCaseInsensitive(std::string_view haystack, std::string_view needleLower)
 {
-    if (needle.empty())
+    if (needleLower.empty())
         return 0;
-    if (needle.size() > haystack.size())
+    if (needleLower.size() > haystack.size())
         return std::string_view::npos;
-    auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(),
+    auto it = std::search(haystack.begin(), haystack.end(), needleLower.begin(), needleLower.end(),
                           [](char ch1, char ch2)
                           {
-                              return std::tolower(static_cast<unsigned char>(ch1)) ==
-                                     std::tolower(static_cast<unsigned char>(ch2));
+                              return static_cast<char>(std::tolower(static_cast<unsigned char>(ch1))) ==
+                                     ch2;
                           });
     if (it != haystack.end())
         return static_cast<size_t>(std::distance(haystack.begin(), it));
     return std::string_view::npos;
 }
 
-bool contains(const std::string &haystack, const std::string &needle, bool caseSensitive)
+bool contains(std::string_view haystack, std::string_view needle, std::string_view needleLower,
+              bool caseSensitive)
 {
     if (needle.empty())
         return true;
     if (caseSensitive)
-        return haystack.find(needle) != std::string::npos;
-    return findCaseInsensitive(haystack, needle) != std::string_view::npos;
+        return haystack.find(needle) != std::string_view::npos;
+    return findCaseInsensitive(haystack, needleLower) != std::string_view::npos;
 }
 
-std::string snippet(const std::string &haystack, const std::string &needle, size_t radius = 40)
+std::string snippet(std::string_view haystack, std::string_view needle,
+                    std::string_view needleLower, size_t radius = 40)
 {
     if (needle.empty() || haystack.empty())
         return {};
-    const size_t pos = findCaseInsensitive(haystack, needle);
+    const size_t pos = findCaseInsensitive(haystack, needleLower);
     if (pos == std::string_view::npos)
         return {};
     const size_t start = (pos > radius) ? (pos - radius) : 0;
     const size_t end = std::min(pos + needle.size() + radius, haystack.size());
-    std::string snip = haystack.substr(start, end - start);
+    std::string snip(haystack.substr(start, end - start));
     if (start > 0)
         snip = "..." + snip;
     if (end < haystack.size())
@@ -186,18 +188,21 @@ SearchIndex::search(const domain::SearchQuery &query,
         std::vector<domain::SearchMatch> matches;
 
         // Filename match (extract just the filename part).
-        const auto sep = entry.path.find_last_of("/\\");
-        const std::string fname =
-            (sep != std::string::npos) ? entry.path.substr(sep + 1) : entry.path;
-        if (query.searchFilenames && contains(fname, term, query.caseSensitive))
+        const std::string_view pathView(entry.path);
+        const auto sep = pathView.find_last_of("/\\");
+        const std::string_view fname =
+            (sep != std::string_view::npos) ? pathView.substr(sep + 1) : pathView;
+        if (query.searchFilenames && contains(fname, term, termLower, query.caseSensitive))
         {
-            matches.push_back({domain::SearchMatch::Type::Filename, "", snippet(fname, term)});
+            matches.push_back(
+                {domain::SearchMatch::Type::Filename, "", snippet(fname, term, termLower)});
         }
 
         // Path match.
-        if (query.searchPaths && contains(entry.path, term, query.caseSensitive))
+        if (query.searchPaths && contains(pathView, term, termLower, query.caseSensitive))
         {
-            matches.push_back({domain::SearchMatch::Type::Path, "", snippet(entry.path, term)});
+            matches.push_back(
+                {domain::SearchMatch::Type::Path, "", snippet(pathView, term, termLower)});
         }
 
         // Blob (metadata + analysis) match.
@@ -209,11 +214,11 @@ SearchIndex::search(const domain::SearchQuery &query,
             if (matched)
             {
                 if (query.searchMetadata)
-                    matches.push_back(
-                        {domain::SearchMatch::Type::Metadata, "", snippet(entry.blob, term)});
+                    matches.push_back({domain::SearchMatch::Type::Metadata, "",
+                                       snippet(entry.blob, term, termLower)});
                 if (query.searchAnalysis)
-                    matches.push_back(
-                        {domain::SearchMatch::Type::Analysis, "", snippet(entry.blob, term)});
+                    matches.push_back({domain::SearchMatch::Type::Analysis, "",
+                                       snippet(entry.blob, term, termLower)});
             }
         }
 

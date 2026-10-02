@@ -581,11 +581,31 @@ static ImageData toGrayscale8(const ImageData &src)
     const int rOff = isBgr ? 2 : 0;
     const int bOff = isBgr ? 0 : 2;
 
+    const bool useSsse3 = (cpp == 4) && mviewer::core::CpuFeatures::hasSsse3();
+    const __m128i weights = isBgr
+                                ? _mm_setr_epi8(5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0)
+                                : _mm_setr_epi8(11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0);
+    const __m128i vzero = _mm_setzero_si128();
+
     for (int y = 0; y < src.height; ++y)
     {
         const uint8_t *sl = sv.data + static_cast<size_t>(y) * sv.stride();
         uint8_t *dl = gv.data + static_cast<size_t>(y) * gv.stride();
-        for (int x = 0; x < src.width; ++x)
+        int x = 0;
+        if (useSsse3)
+        {
+            for (; x + 4 <= src.width; x += 4)
+            {
+                const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(sl + x * 4));
+                const __m128i pairs = _mm_maddubs_epi16(v, weights);
+                const __m128i sums = _mm_hadd_epi16(pairs, pairs);
+                const __m128i scaled = _mm_srli_epi16(sums, 5);
+                const __m128i packed = _mm_packus_epi16(scaled, vzero);
+                const uint32_t out4 = static_cast<uint32_t>(_mm_cvtsi128_si32(packed));
+                std::memcpy(dl + x, &out4, 4);
+            }
+        }
+        for (; x < src.width; ++x)
         {
             const uint8_t r = sl[x * cpp + rOff];
             const uint8_t g = sl[x * cpp + 1];

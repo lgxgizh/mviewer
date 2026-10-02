@@ -594,6 +594,8 @@ class CompareWorkspace : public QWidget
         ImageData target;
         ImageData diff;
         bool sizeMismatch = false;
+        double psnr = 0.0, ssim = 0.0;
+        bool hasMetrics = false;
     };
     static DiffSources
     buildDiffOverlays(DiffBatchResult &result, const std::vector<ImageData> &pixels,

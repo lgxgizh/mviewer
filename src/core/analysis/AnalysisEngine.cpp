@@ -30,16 +30,13 @@ namespace
 ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw, int rh)
 {
     ImageStats s;
-    long long sum = 0;
     if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<ptrdiff_t>(rw))
     {
         const uint8_t *p = vbuf.data + static_cast<size_t>(ry) * rw;
         const size_t total = static_cast<size_t>(rw) * rh;
         for (size_t i = 0; i < total; ++i)
         {
-            const uint8_t val = p[i];
-            sum += val;
-            ++s.histLum[val];
+            ++s.histLum[p[i]];
         }
     }
     else
@@ -49,18 +46,19 @@ ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw
             const uint8_t *line = vbuf.data + static_cast<size_t>(y) * vbuf.stride();
             for (int x = rx; x < rx + rw; ++x)
             {
-                const uint8_t val = line[x];
-                sum += val;
-                ++s.histLum[val];
+                ++s.histLum[line[x]];
             }
         }
     }
+    long long sum = 0;
     for (int i = 0; i < 256; ++i)
     {
-        s.histV[i] = s.histLum[i];
-        s.histR[i] = s.histLum[i];
-        s.histG[i] = s.histLum[i];
-        s.histB[i] = s.histLum[i];
+        const int cnt = s.histLum[i];
+        sum += static_cast<long long>(i) * cnt;
+        s.histV[i] = cnt;
+        s.histR[i] = cnt;
+        s.histG[i] = cnt;
+        s.histB[i] = cnt;
     }
     const int count = rw * rh;
     s.pixelCount = count;
@@ -159,24 +157,17 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
         const bool isBGR = (isBgr24 || isBgra32);
         const int rIdx = isBGR ? 2 : 0;
         const int bIdx = isBGR ? 0 : 2;
-        long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
-        int count = 0;
-        for (int y = ry; y < ry + rh; ++y)
+        if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<ptrdiff_t>(rw) * cpp)
         {
-            const uint8_t *p =
-                vbuf.data + static_cast<size_t>(y) * vbuf.stride() + static_cast<size_t>(rx) * cpp;
-            for (int x = 0; x < rw; ++x, p += cpp)
+            const uint8_t *p = vbuf.data + static_cast<size_t>(ry) * vbuf.stride();
+            const size_t total = static_cast<size_t>(rw) * rh;
+            for (size_t i = 0; i < total; ++i, p += cpp)
             {
                 const int r = p[rIdx];
                 const int g = p[1];
                 const int b = p[bIdx];
-                sumR += r;
-                sumG += g;
-                sumB += b;
                 const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
-                sumL += lum;
                 const int v = std::max(r, std::max(g, b));
-                sumV += v;
                 ++s.histLum[lum];
                 ++s.histV[v];
                 ++s.histR[r];
@@ -184,10 +175,40 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
                 ++s.histB[b];
             }
         }
-        count = rw * rh;
+        else
+        {
+            for (int y = ry; y < ry + rh; ++y)
+            {
+                const uint8_t *p =
+                    vbuf.data + static_cast<size_t>(y) * vbuf.stride() + static_cast<size_t>(rx) * cpp;
+                for (int x = 0; x < rw; ++x, p += cpp)
+                {
+                    const int r = p[rIdx];
+                    const int g = p[1];
+                    const int b = p[bIdx];
+                    const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
+                    const int v = std::max(r, std::max(g, b));
+                    ++s.histLum[lum];
+                    ++s.histV[v];
+                    ++s.histR[r];
+                    ++s.histG[g];
+                    ++s.histB[b];
+                }
+            }
+        }
+        const int count = rw * rh;
         s.pixelCount = count;
         if (count > 0)
         {
+            long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
+            for (int i = 0; i < 256; ++i)
+            {
+                sumL += static_cast<long long>(i) * s.histLum[i];
+                sumV += static_cast<long long>(i) * s.histV[i];
+                sumR += static_cast<long long>(i) * s.histR[i];
+                sumG += static_cast<long long>(i) * s.histG[i];
+                sumB += static_cast<long long>(i) * s.histB[i];
+            }
             s.lumMean = static_cast<double>(sumL) / count;
             s.vMean = static_cast<double>(sumV) / count;
             s.rMean = static_cast<double>(sumR) / count;

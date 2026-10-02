@@ -225,6 +225,8 @@ void ImageViewer::leaveEvent(QEvent *event)
 void ImageViewer::clearPixelInfo()
 {
     m_lastHoverPixel = PixelRGBA{};
+    m_lastHoverX = -1;
+    m_lastHoverY = -1;
     emit pixelInfo(-1, -1, 0, 0, 0, 0, 0, 0, 0, 0, false);
 }
 
@@ -599,8 +601,7 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
     // Viewport transform. samplePixel canonicalises RGB/RGBA/BGR/BGRA/grayscale
     // to RGBA and reports invalid (never an out-of-bounds read) for out-of-range
     // or truncated buffers.
-    int ix = -1, iy = -1, r = 0, g = 0, b = 0, a = 255;
-    bool valid = false;
+    int ix = -1, iy = -1;
     if (m_frame && m_frame->isValid())
     {
         m_view.screenW = width();
@@ -609,6 +610,18 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         const double imgY = (event->pos().y() - m_view.offsetY) / m_view.scale;
         ix = static_cast<int>(std::floor(imgX));
         iy = static_cast<int>(std::floor(imgY));
+    }
+    if (ix == m_lastHoverX && iy == m_lastHoverY)
+    {
+        return;
+    }
+    m_lastHoverX = ix;
+    m_lastHoverY = iy;
+
+    int r = 0, g = 0, b = 0, a = 255;
+    bool valid = false;
+    if (m_frame && m_frame->isValid())
+    {
         const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
         r = px.r;
         g = px.g;

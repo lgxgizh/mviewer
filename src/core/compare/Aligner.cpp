@@ -181,33 +181,41 @@ ImageData Aligner::shift(const ImageData &src, int dx, int dy, uint8_t fill)
 {
     if (src.isNull())
         return ImageData{};
+    if (dx == 0 && dy == 0)
+        return src;
     const int w = src.width, h = src.height;
     ImageData out = makeImageData(w, h, src.format);
+    if (out.isNull())
+        return ImageData{};
     const ImageBuffer v = src.view();
     const ImageBuffer ov = out.view();
     const int cpp = src.channelsPerPixel();
+    const size_t rowBytes = static_cast<size_t>(w) * cpp;
+
+    const int srcX0 = std::max(0, -dx);
+    const int srcX1 = std::min(w, w - dx);
+    const int dstX0 = srcX0 + dx;
+    const int copyPixels = std::max(0, srcX1 - srcX0);
+    const size_t copyBytes = static_cast<size_t>(copyPixels) * cpp;
+
     for (int y = 0; y < h; ++y)
     {
         uint8_t *dst = ov.data + static_cast<size_t>(y) * ov.stride();
         const int sy = y - dy;
-        const bool yInBounds = (sy >= 0 && sy < h);
-        const uint8_t *srcRow =
-            yInBounds ? (v.data + static_cast<size_t>(sy) * v.stride()) : nullptr;
-        for (int x = 0; x < w; ++x, dst += cpp)
+        if (sy < 0 || sy >= h || copyPixels <= 0)
         {
-            const int sx = x - dx;
-            if (yInBounds && sx >= 0 && sx < w)
-            {
-                const uint8_t *p = srcRow + static_cast<size_t>(sx) * cpp;
-                for (int c = 0; c < cpp; ++c)
-                    dst[c] = p[c];
-            }
-            else
-            {
-                for (int c = 0; c < cpp; ++c)
-                    dst[c] = fill;
-            }
+            std::memset(dst, fill, rowBytes);
+            continue;
         }
+        const uint8_t *srcRow = v.data + static_cast<size_t>(sy) * v.stride();
+        if (dstX0 > 0)
+            std::memset(dst, fill, static_cast<size_t>(dstX0) * cpp);
+        std::memcpy(dst + static_cast<size_t>(dstX0) * cpp,
+                    srcRow + static_cast<size_t>(srcX0) * cpp, copyBytes);
+        const int dstX1 = dstX0 + copyPixels;
+        if (dstX1 < w)
+            std::memset(dst + static_cast<size_t>(dstX1) * cpp, fill,
+                        static_cast<size_t>(w - dstX1) * cpp);
     }
     return out;
 }
