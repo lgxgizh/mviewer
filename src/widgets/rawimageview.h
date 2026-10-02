@@ -138,6 +138,19 @@ class RawImageView : public QWidget
         return m_paneTag;
     }
 
+    void setDragging(bool dragging)
+    {
+        if (m_dragging == dragging)
+            return;
+        m_dragging = dragging;
+        if (!m_dragging)
+            update();
+    }
+    bool isDragging() const
+    {
+        return m_dragging;
+    }
+
     // ROI selection in image coordinates. The widget renders it on top of the
     // fit/pan transform. CompareWorkspace drives this through the SelectionController
     // so a box drawn on one cell is mirrored across the grid.
@@ -290,6 +303,8 @@ class RawImageView : public QWidget
     // cached surface and by the direct-draw fallback (allocation failure or
     // pathological geometry).
     void drawBaseLayer(QPainter &p);
+    void drawLiveOverlays(QPainter &p, double cx, double cy, int dw, int dh,
+                          const QSize &sourceSize, double presented);
     void drawCornerBadge(QPainter &p, const QString &txt, const QColor &bg, bool right);
     void releaseBaseSurface();
     QSize renderSourceSize() const;

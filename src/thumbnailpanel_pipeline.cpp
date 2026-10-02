@@ -115,7 +115,7 @@ void ThumbnailPanel::updateVisibleRange()
             qMax(1, (offset % kDetailsItemHeight + viewportHeight + kDetailsItemHeight - 1) /
                         kDetailsItemHeight);
         first = offset / kDetailsItemHeight;
-        last = first + visibleRows - 1;
+        last = first + visibleRows;
     }
     else if (m_viewMode == ViewMode::Filmstrip)
     {
@@ -183,20 +183,20 @@ void ThumbnailPanel::flushThumbUpdates()
     m_thumbDirty = false;
     const int rows = m_model->rowCount();
     if (rows <= 0)
-    {
-        m_thumbDirtyPaths.clear();
         return;
-    }
 
     QVector<int> dirtyRows;
     dirtyRows.reserve(m_thumbDirtyPaths.size());
+    QSet<QString> remaining;
     for (const QString &path : m_thumbDirtyPaths)
     {
         const int row = m_rowByPath.value(path, -1);
         if (row >= 0 && row < rows)
             dirtyRows.append(row);
+        else
+            remaining.insert(path);
     }
-    m_thumbDirtyPaths.clear();
+    m_thumbDirtyPaths = remaining;
     if (dirtyRows.isEmpty())
         return;
     std::sort(dirtyRows.begin(), dirtyRows.end());
@@ -209,23 +209,33 @@ void ThumbnailPanel::flushThumbUpdates()
             spanEnd = dirtyRows.at(i);
             continue;
         }
-        emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0),
-                         {Qt::DecorationRole});
+        emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0));
         spanStart = spanEnd = dirtyRows.at(i);
     }
-    emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0),
-                     {Qt::DecorationRole});
+    emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0));
+    viewport()->update();
 }
 
 QPixmap ThumbnailPanel::thumbReady(const QString &path) const
 {
     QMutexLocker lk(&m_thumbMtx);
     auto it = m_thumbReady.find(thumbCacheKey(path, m_thumbSize));
-    if (it == m_thumbReady.end())
-        return QPixmap();
-    it->lastUse = ++m_thumbReadyClock;
-    m_thumbReadyLru.splice(m_thumbReadyLru.begin(), m_thumbReadyLru, it->lruIt);
-    return it->pixmap;
+    if (it != m_thumbReady.end())
+    {
+        it->lastUse = ++m_thumbReadyClock;
+        m_thumbReadyLru.splice(m_thumbReadyLru.begin(), m_thumbReadyLru, it->lruIt);
+        return it->pixmap;
+    }
+    // Fallback: if this path was decoded at any other size in memory, reuse it
+    // instead of showing a blank placeholder (particularly in Details mode where
+    // any thumbnail can be scaled to 48x48).
+    const QString prefix = path + QChar(0x1f);
+    for (auto alt = m_thumbReady.begin(); alt != m_thumbReady.end(); ++alt)
+    {
+        if (alt.key().startsWith(prefix) && !alt.value().pixmap.isNull())
+            return alt.value().pixmap;
+    }
+    return QPixmap();
 }
 
 bool ThumbnailPanel::thumbFailed(const QString &path) const

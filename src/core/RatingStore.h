@@ -52,6 +52,15 @@ class RatingStore
     static RatingStore &instance();
     ~RatingStore();
 
+    struct FileFlags
+    {
+        int rating = 0;
+        int colorLabel = 0;
+        bool rejected = false;
+        bool picked = false;
+    };
+    FileFlags fileFlags(const std::string &path) const;
+
     // ---- star rating: 0 = unrated; 1..5 = stars ----
     int rating(const std::string &path) const;
     bool hasRating(const std::string &path) const;

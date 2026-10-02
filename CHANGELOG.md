@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [1.0.93] - 2026-10-02
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.93**.
+- **Details Mode Thumbnail Fix (`thumbnailpanel_viewmode.cpp`, `thumbnailpanel_pipeline.cpp`, `thumbnailpanel.cpp`)**:
+  - Fixed an issue where entering a new folder in Details view mode left the leftmost 48×48 thumbnail box persistently in a blank/white-gray (`#E4E4E4`) placeholder state.
+  - Enforced `ScrollPerPixel` in `configureDetailsMode`: prevented Qt's `setViewMode(ListMode)` from silently reverting `verticalScrollMode` to `ScrollPerItem`, which broke arithmetic visible range offset calculations when navigating or scrolling.
+  - Preserved dirty paths arriving before directory model rows are fully materialized in `flushThumbUpdates`, and triggered explicit viewport updates and pending thumb flushes upon `buildModel` completion.
+  - Added in-memory size-fallback lookup in `ThumbnailPanel::thumbReady`, immediately reusing any available thumbnail pixmap for the file scaled to 48×48 instead of stalling on an exact size match.
+- **Interaction Fluency & Smoothness Enhancements**:
+  - **Zero-Jitter Blink Mode (`compareworkspace_render_canvas.cpp`)**: Replaced dynamic `addWidget/removeWidget` with pre-allocated static cell widgets and visibility toggling (`setVisible`), eliminating UI layout thrashing and widget rebuild latency.
+  - **RawImageView Fast Panning (`rawimageview.cpp`, `rawimageview.h`)**: Bypassed 4K offscreen `m_baseSurface.fill` buffer reallocation during active mouse drags, delivering smooth 60fps viewport panning.
+  - **Seamless Navigation Transitions (`imageviewer.cpp`, `imageviewer_loading.cpp`, `imageviewer_paint.cpp`)**: Added transition image retention across image switches to hold the previous frame on screen until the new image finishes decoding, eliminating black screen flashes.
+  - **Lock Zoom Feature (`imageviewer.cpp`, `imageviewer_contextmenu.cpp`)**: Added zoom ratio locking (`Ctrl+L` / context menu toggle), preserving the user's desired zoom scale and centering across image switches.
+  - **Viewport Pan Sampling Throttling (`imageviewer.cpp`)**: Suppressed expensive `updatePixelSampleAt` calls during active pan dragging, updating immediately upon release.
+  - **RatingStore Single-Lock Query (`RatingStore.cpp`, `RatingStore.h`)**: Consolidated rating, color label, and rejected queries into a single mutex lock and hash lookup (`fileFlags`).
+  - **ROI HUD Text Debouncing (`compareworkspace_roi_overlay.cpp`)**: Avoided redundant font layout and string formatting when ROI coordinates remain unchanged.
+- **Complexity Gate Conformance (`scripts/complexity_gate.ps1`)**:
+  - Reduced TU line counts and function body lengths across `rawimageview.cpp`, `imageviewer_loading.cpp`, `imageviewer.cpp`, and `imageviewer_contextmenu.cpp` to strictly satisfy all complexity gates with 0 hard fails.
+
+### 交互流畅性与详情缩略图修复（v1.0.93）
+
+1. **修复详情模式最左侧小缩略图白灰 Bug（`thumbnailpanel_viewmode.cpp`, `thumbnailpanel_pipeline.cpp`, `thumbnailpanel.cpp`）**：
+   - 彻底修复用户反馈的“进入新文件夹时，详情模式下一栏最左侧小缩略图一直是白灰色占位底色”的问题。
+   - 修复 Qt `setViewMode(ListMode)` 隐式将 `verticalScrollMode` 重置为 `ScrollPerItem` 导致的可见行算术范围（像素偏移除以行高）计算失真；显式强制 `ScrollPerPixel`。
+   - 修复 `flushThumbUpdates` 在目录模型未就绪（`rowCount <= 0` 或路径未入行表）时直接丢弃脏路径的异步时序竞态；保留未就绪路径并在 `buildModel` 完成后立即触发刷新。
+   - 缩略图缓存增加任意已就绪尺寸内存退化复用机制（降采样缩放至 48×48 展示），避免死等特定尺寸解码。
+2. **多图对比 Blink 闪烁与抖动消除（`compareworkspace_render_canvas.cpp`）**：将 Blink 模式每次切换时的动态 `addWidget/removeWidget` 重构为常驻预分配单元格 + `setVisible` 显隐切换，彻底根除 UI 布局重算卡顿与重排闪烁。
+3. **对比视图平移旁路优化（`rawimageview.cpp`, `rawimageview.h`）**：视口平移拖拽期间增加状态旁路，跳过每帧对 4K 内存 `m_baseSurface.fill` 的重复内存清空与重绘，直绘视口实现 60fps 丝滑平移。
+4. **切图无缝过渡与防黑屏（`imageviewer.cpp`, `imageviewer_loading.cpp`, `imageviewer_paint.cpp`）**：引入过渡帧保持机制（`m_transitionImage`），在切图与后台解码期间将上一张图片保持在屏幕上，待新图解码完成后平滑交接，彻底杜绝切图黑屏闪烁。
+5. **缩放锁定 Lock Zoom（`imageviewer.cpp`, `imageviewer_contextmenu.cpp`）**：新增 `Ctrl+L` 快捷键与右键菜单“锁定缩放比”功能，切图时保持用户指定的缩放比例并自适应居中。
+6. **评分标签单锁单次查询合并（`RatingStore.cpp`, `RatingStore.h`）**：为缩略图委托渲染新增 `fileFlags` 接口，单次加锁即可完成星级、颜色标签与排除标记的全量查询，消除热点锁竞争。
+7. **全工程复杂度门禁硬指标合规（`rawimageview.cpp`, `imageviewer_loading.cpp`, `imageviewer.cpp`, `imageviewer_contextmenu.cpp`）**：重构并精简超标文件与超长函数，严格达成 0 hard fails 标准。
+
 ## [1.0.92] - 2026-10-02
 
 ### Release

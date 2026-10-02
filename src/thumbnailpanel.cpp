@@ -493,15 +493,16 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     }
 
     emit statsChanged(m_paths.size(), m_totalBytes, 0, 0);
+    if (!m_thumbDirtyPaths.isEmpty())
+        flushThumbUpdates();
+    else
+        viewport()->update();
     // Defer priority scheduling until layout/geometry is ready (avoids
     // scheduling the whole directory before the viewport is laid out).
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
-void ThumbnailPanel::setSelectionModel(SelectionModel *sel)
-{
-    m_selection = sel;
-}
+void ThumbnailPanel::setSelectionModel(SelectionModel *sel) { m_selection = sel; }
 
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)
 {

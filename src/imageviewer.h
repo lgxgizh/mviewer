@@ -211,6 +211,11 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_fitMode;
     }
+    void setLockZoom(bool lock);
+    bool isLockZoom() const
+    {
+        return m_lockZoom;
+    }
     void play();
     void pause();
     void restart();
@@ -426,6 +431,8 @@ class ImageViewer : public QOpenGLWidget
     void drawPixelGridOverlay(QPainter &painter);
     void drawOverlayBadge(QPainter &painter);
     void drawProvisional(QPainter &painter) const;
+    void drawTransition(QPainter &painter) const;
+    void updatePixelSampleAt(const QPoint &pos);
     AsyncTileRequestManager::VisibleTiles requestVisibleTiles();
     // Large-source zoomed-in pans: per-tile decodeRegion, no full frame.
     bool lodRegionTilesActive() const;
@@ -528,6 +535,9 @@ class ImageViewer : public QOpenGLWidget
     QString m_provisionalPath;
     QImage m_provisionalImage;
     QSize m_provisionalSourceSize;
+    bool m_lockZoom = false;
+    QImage m_transitionImage;
+    QSize m_transitionSourceSize;
     bool m_tileRepaintQueued = false;
     bool m_loading = false;
     bool m_preserveViewOnReload = false;

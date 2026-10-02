@@ -149,6 +149,8 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
     m_currentPath = path;
     releaseColdMips(previousPath);
     m_provisionalPath = path;
+    m_transitionImage = QImage();
+    m_transitionSourceSize = QSize();
     const QImage shown = mviewer::ui::photoFromSquareThumb(image);
     m_provisionalImage = shown;
     const bool known = sourceSize.width() > 0 && sourceSize.height() > 0;
@@ -208,6 +210,10 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     m_currentPath.clear();
     m_currentIndex = -1;
     m_provisionalPath.clear();
+    m_provisionalImage = QImage();
+    m_provisionalSourceSize = QSize();
+    m_transitionImage = QImage();
+    m_transitionSourceSize = QSize();
     QSettings settings;
     settings.setValue("viewerGeometry", saveGeometry());
     event->accept();
@@ -481,6 +487,13 @@ void ImageViewer::zoomActual()
     update();
 }
 
+void ImageViewer::setLockZoom(bool lock)
+{
+    m_lockZoom = lock;
+    emit statusMessageRequested(
+        lock ? tr("已开启缩放锁定 (切图保持缩放比)") : tr("已关闭缩放锁定"), 2000);
+}
+
 void ImageViewer::computeHistogram()
 {
     std::fill(std::begin(m_histogram), std::end(m_histogram), 0);
@@ -594,8 +607,14 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         advanceViewportRevision();
         m_lastMousePos = event->pos();
         update();
+        return;
     }
 
+    updatePixelSampleAt(event->pos());
+}
+
+void ImageViewer::updatePixelSampleAt(const QPoint &pos)
+{
     // Pixel Inspector (P1 #6): read the pixel under the cursor from the shared
     // format-aware sampler (core/image/ImageBuffer.h), using the inverse of the
     // Viewport transform. samplePixel canonicalises RGB/RGBA/BGR/BGRA/grayscale
@@ -606,8 +625,8 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
     {
         m_view.screenW = width();
         m_view.screenH = height();
-        const double imgX = (event->pos().x() - m_view.offsetX) / m_view.scale;
-        const double imgY = (event->pos().y() - m_view.offsetY) / m_view.scale;
+        const double imgX = (pos.x() - m_view.offsetX) / m_view.scale;
+        const double imgY = (pos.y() - m_view.offsetY) / m_view.scale;
         ix = static_cast<int>(std::floor(imgX));
         iy = static_cast<int>(std::floor(imgY));
     }
@@ -712,6 +731,7 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
         {
             m_dragging = false;
             setCursor(Qt::OpenHandCursor);
+            updatePixelSampleAt(event->pos());
         }
     }
 }
@@ -740,10 +760,7 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
     }
 }
 
-QRect ImageViewer::selectedRegion() const
-{
-    return QRect(m_selStart, m_selEnd).normalized();
-}
+QRect ImageViewer::selectedRegion() const { return QRect(m_selStart, m_selEnd).normalized(); }
 
 void ImageViewer::setSelectMode(bool on)
 {

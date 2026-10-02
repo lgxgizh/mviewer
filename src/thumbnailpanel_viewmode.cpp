@@ -58,6 +58,8 @@ void ThumbnailPanel::configureDetailsMode()
         // allow horizontal scrolling rather than overlapping columns.
         setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+        setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
         // Reserve space for and show the column header.
         if (!m_detailsHeader)
             m_detailsHeader = new DetailsHeader(this);
@@ -67,7 +69,6 @@ void ThumbnailPanel::configureDetailsMode()
         // Details is the only view that shows the resolution column, so this is
         // where we pay the (deferred, background) header-read cost.
         ensureDimensions();
-
 }
 
 void ThumbnailPanel::configureFilmstripMode()

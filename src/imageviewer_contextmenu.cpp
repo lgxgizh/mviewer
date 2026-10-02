@@ -89,25 +89,32 @@ void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&
     channelV->setChecked(mode == mviewer::OverlayMode::ChannelV);
 }
 
-void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QAction *reveal,
-                                       QMenu *copyColorMenu, QAction *saveAs, QAction *zoomIn,
-                                       QAction *zoomOut, QAction *zoomFit, QAction *zoomActual,
-                                       QMenu *zoomPresetsMenu, QAction *selectRegion, bool hasPath,
-                                       bool hasFrame, bool hasDisplay)
+void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode, bool hasDisplay,
+                                    QAction *&zoomIn, QAction *&zoomOut, QAction *&zoomFit,
+                                    QAction *&zoomActual, QAction *&lockZoomAction,
+                                    QAction *&selectRegion)
 {
-    copy->setEnabled(hasPath);
-    copyPath->setEnabled(hasPath);
-    if (reveal)
-        reveal->setEnabled(hasPath);
-    if (copyColorMenu)
-        copyColorMenu->menuAction()->setEnabled(hasFrame);
-    saveAs->setEnabled(hasFrame);
-    zoomIn->setEnabled(hasDisplay);
-    zoomOut->setEnabled(hasDisplay);
-    zoomFit->setEnabled(hasDisplay);
-    zoomActual->setEnabled(hasDisplay);
-    if (zoomPresetsMenu)
-        zoomPresetsMenu->menuAction()->setEnabled(hasDisplay);
+    menu.addSeparator();
+    zoomIn = menu.addAction("放大 (+)");
+    zoomOut = menu.addAction("缩小 (-)");
+    zoomFit = menu.addAction("适应窗口 (0)");
+    zoomActual = menu.addAction("实际大小 (1)");
+    lockZoomAction = menu.addAction("锁定缩放比 (Ctrl+L)");
+    lockZoomAction->setCheckable(true);
+    lockZoomAction->setChecked(lockZoom);
+    lockZoomAction->setEnabled(hasDisplay);
+    for (QAction *a : {zoomIn, zoomOut, zoomFit, zoomActual})
+        a->setEnabled(hasDisplay);
+    QMenu *mZoomPresets = menu.addMenu("缩放预设");
+    mZoomPresets->menuAction()->setEnabled(hasDisplay);
+    for (const auto &p : {std::make_pair("50%", 0.5), std::make_pair("100% (实际大小)", 1.0),
+                          std::make_pair("200%", 2.0), std::make_pair("400%", 4.0),
+                          std::make_pair("800% (像素网格)", 8.0)})
+        mZoomPresets->addAction(p.first)->setData(p.second);
+    menu.addSeparator();
+    selectRegion = menu.addAction("框选区域 (R)");
+    selectRegion->setCheckable(true);
+    selectRegion->setChecked(selectMode);
     selectRegion->setEnabled(hasDisplay);
 }
 
@@ -240,39 +247,24 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aRotateCCW = menu.addAction("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)");
     QAction *aFlipH = menu.addAction("水平翻转并覆盖原文件 (Ctrl+Shift+H)");
     QAction *aFlipV = menu.addAction("垂直翻转并覆盖原文件 (Ctrl+Shift+V)");
-    aRotateCW->setEnabled(!m_currentPath.isEmpty());
-    aRotateCCW->setEnabled(!m_currentPath.isEmpty());
-    aFlipH->setEnabled(!m_currentPath.isEmpty());
-    aFlipV->setEnabled(!m_currentPath.isEmpty());
-    QAction *aPlay = nullptr;
-    QAction *aRestart = nullptr;
-    QAction *aPrevFrame = nullptr;
-    QAction *aNextFrame = nullptr;
+    const bool hasPath = !m_currentPath.isEmpty();
+    for (QAction *a : {aRotateCW, aRotateCCW, aFlipH, aFlipV, aCopy, aCopyPath, aReveal})
+        a->setEnabled(hasPath);
+    const bool hasFrame = m_frame && m_frame->isValid();
+    if (mCopyColor)
+        mCopyColor->menuAction()->setEnabled(hasFrame);
+    aSaveAs->setEnabled(hasFrame);
+    QAction *aPlay = nullptr, *aRestart = nullptr, *aPrevFrame = nullptr, *aNextFrame = nullptr;
     if (isMultiFrame())
     {
         menu.addSeparator();
         addFrameContextActions(menu, m_sequence.animated, isPlaying(), m_frameIndex, frameCount(),
                                aPlay, aRestart, aPrevFrame, aNextFrame);
     }
-    menu.addSeparator();
-    QAction *aZoomIn = menu.addAction("放大 (+)");
-    QAction *aZoomOut = menu.addAction("缩小 (-)");
-    QAction *aZoomFit = menu.addAction("适应窗口 (0)");
-    QAction *aZoomActual = menu.addAction("实际大小 (1)");
-    QMenu *mZoomPresets = menu.addMenu("缩放预设");
-    mZoomPresets->addAction("50%")->setData(0.5);
-    mZoomPresets->addAction("100% (实际大小)")->setData(1.0);
-    mZoomPresets->addAction("200%")->setData(2.0);
-    mZoomPresets->addAction("400%")->setData(4.0);
-    mZoomPresets->addAction("800% (像素网格)")->setData(8.0);
-    menu.addSeparator();
-    QAction *aSelectRegion = menu.addAction("框选区域 (R)");
-    aSelectRegion->setCheckable(true);
-    aSelectRegion->setChecked(m_selectMode);
-    setContextImageActionAvailability(aCopy, aCopyPath, aReveal, mCopyColor, aSaveAs, aZoomIn,
-                                      aZoomOut, aZoomFit, aZoomActual, mZoomPresets, aSelectRegion,
-                                      !m_currentPath.isEmpty(), m_frame && m_frame->isValid(),
-                                      hasDisplayImage());
+    QAction *aZoomIn = nullptr, *aZoomOut = nullptr, *aZoomFit = nullptr, *aZoomActual = nullptr;
+    QAction *aLockZoom = nullptr, *aSelectRegion = nullptr;
+    addZoomAndSelectContextActions(menu, m_lockZoom, m_selectMode, hasDisplayImage(), aZoomIn,
+                                   aZoomOut, aZoomFit, aZoomActual, aLockZoom, aSelectRegion);
     menu.addSeparator();
     QAction *aOvNone = nullptr, *aOvZebra = nullptr, *aOvFalse = nullptr;
     QAction *aOvR = nullptr, *aOvG = nullptr, *aOvB = nullptr, *aOvY = nullptr, *aOvV = nullptr;
@@ -322,6 +314,11 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     if (chosen == aNextFrame)
     {
         nextFrame();
+        return;
+    }
+    if (chosen == aLockZoom)
+    {
+        setLockZoom(!m_lockZoom);
         return;
     }
     if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV) ||
@@ -483,6 +480,12 @@ bool ImageViewer::handleNavigationKey(int key)
 
 bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
 {
+    if (((modifiers & Qt::ControlModifier) && key == Qt::Key_L) ||
+        (!modifiers && key == Qt::Key_L))
+    {
+        setLockZoom(!m_lockZoom);
+        return true;
+    }
     if (key == Qt::Key_Plus || key == Qt::Key_Equal)
         zoomIn();
     else if (key == Qt::Key_Minus || key == Qt::Key_Underscore)
@@ -495,7 +498,6 @@ bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
         zoomTo(2.0);
     else
         return false;
-    Q_UNUSED(modifiers); // Ctrl+0/Ctrl+1 intentionally share the same zoom action.
     return true;
 }
 

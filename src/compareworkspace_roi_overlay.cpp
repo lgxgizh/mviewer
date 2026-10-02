@@ -106,9 +106,15 @@ void CompareWorkspace::positionROIHud()
             roi = QRectF(a, b).normalized().translated(origin).toAlignedRect();
             bounds = QRect(origin, view->size());
         }
-        chip->setText(roiChipText(m_roiResult, index));
-        chip->adjustSize();
-        QSize size = chip->sizeHint();
+        const QString text = roiChipText(m_roiResult, index);
+        if (chip->text() != text)
+        {
+            chip->setText(text);
+            chip->adjustSize();
+        }
+        QSize size = chip->size();
+        if (size.isEmpty())
+            size = chip->sizeHint();
         size.setWidth(std::min(size.width(), std::max(40, bounds.width() - 8)));
         int x = roi.right() + 6;
         int y = roi.top() + (canvas && !split ? index * (size.height() + 2) : 0);

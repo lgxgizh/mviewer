@@ -197,6 +197,22 @@ void RatingStore::clearColorLabel(const std::string &path)
     setColorLabel(path, 0);
 }
 
+RatingStore::FileFlags RatingStore::fileFlags(const std::string &path) const
+{
+    const std::string key = normalize(path);
+    std::lock_guard<std::mutex> lk(m_mutex);
+    FileFlags out;
+    auto rit = m_ratings.find(key);
+    if (rit != m_ratings.end())
+        out.rating = rit->second;
+    auto lit = m_colorLabels.find(key);
+    if (lit != m_colorLabels.end())
+        out.colorLabel = lit->second;
+    out.rejected = (m_rejected.count(key) > 0);
+    out.picked = (m_picked.count(key) > 0);
+    return out;
+}
+
 bool RatingStore::rejected(const std::string &path) const
 {
     std::lock_guard<std::mutex> lk(m_mutex);

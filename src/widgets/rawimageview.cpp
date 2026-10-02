@@ -55,10 +55,7 @@ RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
     setCursor(Qt::OpenHandCursor);
 }
 
-void RawImageView::setImage(const QImage &img)
-{
-    setImage(img, {});
-}
+void RawImageView::setImage(const QImage &img) { setImage(img, {}); }
 
 void RawImageView::setImage(const QImage &img, const QSize &sourceSize)
 {
@@ -308,13 +305,24 @@ void RawImageView::paintEvent(QPaintEvent *)
     if (displayImage().isNull())
         return;
 
-    // Rasterize the static base image + diff overlay once per input change into
-    // a viewport-bounded surface, then blit it; live annotations draw on top.
-    ensureBaseSurface();
-    if (m_baseSurfaceValid)
-        p.drawImage(rect(), m_baseSurface);
-    else
+    // During active dragging/panning, bypass the offscreen baseSurface buffer
+    // (allocating/clearing a 4K surface on every mouse move frame wastes tens of MB of memory memset).
+    // Direct drawing to the viewport is faster and smoother.
+    if (m_dragging)
+    {
+        m_baseSurfaceValid = false;
         drawBaseLayer(p);
+    }
+    else
+    {
+        // Rasterize the static base image + diff overlay once per input change into
+        // a viewport-bounded surface, then blit it; live annotations draw on top.
+        ensureBaseSurface();
+        if (m_baseSurfaceValid)
+            p.drawImage(rect(), m_baseSurface);
+        else
+            drawBaseLayer(p);
+    }
 
     // Geometry for the live annotation layer below (same transform as the image).
     const QSize sourceSize = renderSourceSize();
@@ -323,7 +331,12 @@ void RawImageView::paintEvent(QPaintEvent *)
     const double cy = height() / 2.0 + m_offset.y();
     const int dw = qRound(sourceSize.width() * presented);
     const int dh = qRound(sourceSize.height() * presented);
+    drawLiveOverlays(p, cx, cy, dw, dh, sourceSize, presented);
+}
 
+void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, int dh,
+                                   const QSize &sourceSize, double presented)
+{
     if (mviewer::pixelGridVisible(presented) && sourceSize.width() > 0 && sourceSize.height() > 0)
     {
         mviewer::ui::drawPixelGrid(
@@ -332,61 +345,48 @@ void RawImageView::paintEvent(QPaintEvent *)
             0, 0, sourceSize.width(), sourceSize.height(), QRectF(rect()));
     }
 
-    // ROI selection box (image coords -> widget coords, same transform as the image)
-    if (!m_transientImage.isNull())
+    if (m_transientImage.isNull())
     {
-        // A is still the editing/analysis target. Do not paint A's annotations
-        // over B's transient raster or let the temporary view become editable.
-    }
-    else
         mviewer::ui::drawROIOverlay(
             p, m_selection, m_sourceSize,
             QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw), static_cast<double>(dh)),
             true, m_paneTag);
 
-    // M16.1: synced crosshair at the shared image-space position (n/n compare).
-    if (m_transientImage.isNull() && m_crosshairOn)
-        drawCrosshair(p, cx, cy, dw, dh);
+        if (m_crosshairOn)
+            drawCrosshair(p, cx, cy, dw, dh);
 
-    // M16.1: focus-lock highlight — draw a thick accent border when this cell
-    // is the locked reference.
-    if (m_transientImage.isNull() && m_focused)
-    {
-        QPen pen(QColor(0xFF, 0xB0, 0x20), 3);
-        pen.setCosmetic(true);
-        p.setPen(pen);
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(QRectF(1.5, 1.5, width() - 3.0, height() - 3.0));
-    }
-
-    // A-4.3: Pixel Link markers — numbered dots at image-space points.
-    if (m_transientImage.isNull() && !m_linkMarkers.isEmpty() && m_scale > 0.0)
-    {
-        for (int i = 0; i < m_linkMarkers.size(); ++i)
+        if (m_focused)
         {
-            const QPointF &pt = m_linkMarkers[i];
-            const QPointF widgetPoint = sourcePointToWidget(pt);
-            if (!std::isfinite(widgetPoint.x()) || !std::isfinite(widgetPoint.y()))
-                continue;
-            const double wx = widgetPoint.x();
-            const double wy = widgetPoint.y();
-            // Outer ring
-            p.setPen(QPen(QColor(255, 255, 255), 2));
-            p.setBrush(QColor(0xFF, 0x44, 0x44));
-            p.drawEllipse(QPointF(wx, wy), 6, 6);
-            // Index label
-            p.setPen(Qt::white);
-            QFont f = p.font();
-            f.setBold(true);
-            f.setPointSize(8);
-            p.setFont(f);
-            p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter, QString::number(i + 1));
+            QPen pen(QColor(0xFF, 0xB0, 0x20), 3);
+            pen.setCosmetic(true);
+            p.setPen(pen);
+            p.setBrush(Qt::NoBrush);
+            p.drawRect(QRectF(1.5, 1.5, width() - 3.0, height() - 3.0));
+        }
+
+        if (!m_linkMarkers.isEmpty() && m_scale > 0.0)
+        {
+            for (int i = 0; i < m_linkMarkers.size(); ++i)
+            {
+                const QPointF &pt = m_linkMarkers[i];
+                const QPointF widgetPoint = sourcePointToWidget(pt);
+                if (!std::isfinite(widgetPoint.x()) || !std::isfinite(widgetPoint.y()))
+                    continue;
+                const double wx = widgetPoint.x();
+                const double wy = widgetPoint.y();
+                p.setPen(QPen(QColor(255, 255, 255), 2));
+                p.setBrush(QColor(0xFF, 0x44, 0x44));
+                p.drawEllipse(QPointF(wx, wy), 6, 6);
+                p.setPen(Qt::white);
+                QFont f = p.font();
+                f.setBold(true);
+                f.setPointSize(8);
+                p.setFont(f);
+                p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter, QString::number(i + 1));
+            }
         }
     }
 
-    // H1: visible corner badge when the diff for this cell was skipped because its
-    // size does not match the base image. Without this the diff overlay silently
-    // disappears and the user may misread it as "no difference".
     if (m_sizeMismatch)
     {
         p.save();

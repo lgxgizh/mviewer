@@ -208,6 +208,45 @@ void ImageViewer::drawProvisional(QPainter &painter) const
     painter.restore();
 }
 
+void ImageViewer::drawTransition(QPainter &painter) const
+{
+    if (m_transitionImage.isNull())
+        return;
+    const int sourceW = m_transitionSourceSize.width() > 0 ? m_transitionSourceSize.width()
+                                                           : m_transitionImage.width();
+    const int sourceH = m_transitionSourceSize.height() > 0 ? m_transitionSourceSize.height()
+                                                            : m_transitionImage.height();
+    int sx = 0;
+    int sy = 0;
+    int sw = 0;
+    int sh = 0;
+    m_view.imageRectToScreen(0, 0, sourceW, sourceH, sx, sy, sw, sh);
+    if (sw <= 0 || sh <= 0)
+        return;
+    const QRect targetRect(sx, sy, sw, sh);
+    const QRect viewportRect(0, 0, m_view.screenW, m_view.screenH);
+    if (!targetRect.intersects(viewportRect))
+        return;
+
+    const QRect visibleTarget = targetRect.intersected(viewportRect);
+    painter.save();
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    if (visibleTarget == targetRect)
+    {
+        painter.drawImage(targetRect, m_transitionImage);
+    }
+    else
+    {
+        const double scaleX = static_cast<double>(m_transitionImage.width()) / sw;
+        const double scaleY = static_cast<double>(m_transitionImage.height()) / sh;
+        const QRectF sourceSubRect((visibleTarget.left() - sx) * scaleX,
+                                   (visibleTarget.top() - sy) * scaleY,
+                                   visibleTarget.width() * scaleX, visibleTarget.height() * scaleY);
+        painter.drawImage(visibleTarget, m_transitionImage, sourceSubRect);
+    }
+    painter.restore();
+}
+
 AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
 {
     MV_TRACE_SCOPED("ImageViewer::paint");
@@ -418,6 +457,13 @@ void ImageViewer::drawEmptyState(QPainter &painter)
     }
     if (m_loading)
     {
+        if (!m_transitionImage.isNull())
+        {
+            m_view.screenW = width();
+            m_view.screenH = height();
+            drawTransition(painter);
+            return;
+        }
         painter.setPen(QColor(180, 180, 180));
         painter.drawText(rect(), Qt::AlignCenter, "加载中…");
         return;

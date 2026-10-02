@@ -291,9 +291,8 @@ void drawThumbFooter(QPainter *painter, const QRect &card, const QRect &thumbRec
 void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const QString &path)
 {
     const auto &rs = mviewer::core::RatingStore::instance();
-    const std::string ep = path.toStdString();
-    const int stars = rs.rating(ep);
-    if (stars > 0)
+    const auto flags = rs.fileFlags(path.toStdString());
+    if (flags.rating > 0)
     {
         QFont sf = painter->font();
         sf.setPixelSize(15);
@@ -302,7 +301,7 @@ void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const 
         QString starStr;
         starStr.reserve(5);
         for (int s = 0; s < 5; ++s)
-            starStr += (s < stars ? QStringLiteral("★") : QStringLiteral("☆"));
+            starStr += (s < flags.rating ? QStringLiteral("★") : QStringLiteral("☆"));
         painter->drawText(overlayRect.adjusted(4, 2, -4, -2),
                           Qt::AlignLeft | Qt::AlignTop | Qt::TextSingleLine, starStr);
     }
@@ -314,11 +313,10 @@ void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const 
                                       QColor(67, 160, 71),
                                       QColor(30, 136, 229),
                                       QColor(142, 36, 170)};
-    const int label = rs.colorLabel(ep);
-    if (label > 0)
+    if (flags.colorLabel > 0)
         painter->fillRect(QRect(overlayRect.left(), overlayRect.top(), 4, overlayRect.height()),
-                          kColors[label]);
-    if (rs.rejected(ep))
+                          kColors[flags.colorLabel]);
+    if (flags.rejected)
     {
         painter->fillRect(overlayRect, QColor(200, 30, 30, 90));
         QFont rf = painter->font();
@@ -328,7 +326,7 @@ void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const 
         painter->setPen(QColor(255, 255, 255));
         painter->drawText(overlayRect, Qt::AlignCenter, QStringLiteral("✕"));
     }
-    if (rs.picked(ep))
+    if (flags.picked)
     {
         QFont pf = painter->font();
         pf.setPixelSize(15);

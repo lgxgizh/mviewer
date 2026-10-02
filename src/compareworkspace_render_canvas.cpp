@@ -122,6 +122,32 @@ void CompareWorkspace::applyBlink(bool state)
     {
         const int other = (base == 0) ? 1 : 0;
         const int activeIdx = state ? other : base;
+
+        // Position both panes overlapping at (0, 0) spanning the entire grid once,
+        // avoiding destructive layout churn (removeWidget / addWidget) on every single timer tick.
+        bool needsLayoutSetup = (m_layout->count() != 2);
+        if (!needsLayoutSetup)
+        {
+            int r0 = -1, c0 = -1, rs0 = -1, cs0 = -1;
+            int r1 = -1, c1 = -1, rs1 = -1, cs1 = -1;
+            m_layout->getItemPosition(0, &r0, &c0, &rs0, &cs0);
+            m_layout->getItemPosition(1, &r1, &c1, &rs1, &cs1);
+            if (r0 != 0 || c0 != 0 || r1 != 0 || c1 != 0)
+                needsLayoutSetup = true;
+        }
+        if (needsLayoutSetup)
+        {
+            while (m_layout->takeAt(0))
+            {
+            }
+            QWidget *pane0 = m_cellViews[0] ? m_cellViews[0]->parentWidget() : nullptr;
+            QWidget *pane1 = m_cellViews[1] ? m_cellViews[1]->parentWidget() : nullptr;
+            if (pane0)
+                m_layout->addWidget(pane0, 0, 0, -1, -1);
+            if (pane1)
+                m_layout->addWidget(pane1, 0, 0, -1, -1);
+        }
+
         for (int i = 0; i < n; ++i)
         {
             if (!m_cellViews[i])
@@ -129,26 +155,6 @@ void CompareWorkspace::applyBlink(bool state)
             QWidget *pane = m_cellViews[i]->parentWidget();
             if (pane)
                 pane->setVisible(i == activeIdx);
-        }
-        // Reposition the active cell to span the entire grid area.
-        for (int i = 0; i < m_layout->count(); ++i)
-        {
-            QLayoutItem *item = m_layout->itemAt(i);
-            if (item && item->widget())
-            {
-                m_layout->removeWidget(item->widget());
-                --i;
-            }
-        }
-        // Re-add the active cell's parent widget spanning the full grid.
-        if (activeIdx < m_cellViews.size() && m_cellViews[activeIdx])
-        {
-            auto *cellWidget = m_cellViews[activeIdx]->parentWidget();
-            if (cellWidget)
-            {
-                cellWidget->setVisible(true);
-                m_layout->addWidget(cellWidget, 0, 0, -1, -1);
-            }
         }
         QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
         schedulePreserveFit();

@@ -460,6 +460,8 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
 
     if (failed)
     {
+        m_transitionImage = QImage();
+        m_transitionSourceSize = QSize();
         // M48 Phase 2 terminal: a probe/LOD/region decode threw or returned
         // nothing usable. Reach an observable failed state (loadFailed), keep
         // any current good raster, and mark the display DEGRADED so the
@@ -490,17 +492,29 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
     m_raster = DisplayRaster{std::move(image), sourceRect, sourceSize, density};
     if (firstRaster)
     {
+        m_transitionImage = QImage();
+        m_transitionSourceSize = QSize();
         m_lodMode = true;
         m_loading = false; // the display is usable now
         // Fit the full source into the widget (the provisional/full-frame
         // paths never ran their fit for this image).
         m_view.screenW = width();
         m_view.screenH = height();
-        const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
-                                        ? FitPolicy::MaximizeClient
-                                        : FitPolicy::Comfortable;
-        m_view.fit(m_raster.sourceSize.width(), m_raster.sourceSize.height(), fitPolicy);
-        m_fitMode = true;
+        if (m_lockZoom && !m_fitMode && m_view.scale > 0.0)
+        {
+            const int sw = m_raster.sourceSize.width();
+            const int sh = m_raster.sourceSize.height();
+            m_view.offsetX = (m_view.screenW - sw * m_view.scale) / 2.0;
+            m_view.offsetY = (m_view.screenH - sh * m_view.scale) / 2.0;
+        }
+        else
+        {
+            const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
+                                            ? FitPolicy::MaximizeClient
+                                            : FitPolicy::Comfortable;
+            m_view.fit(m_raster.sourceSize.width(), m_raster.sourceSize.height(), fitPolicy);
+            m_fitMode = true;
+        }
         advanceViewportRevision();
         emitZoom();
         const QFileInfo info(m_currentPath);
