@@ -49,7 +49,7 @@ void ThumbnailPanel::invalidateSourceImage(const QString &path)
     ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
     invalidateThumbnailCacheFor(path);
     // Force a re-request for visible cells that reference this path.
-    const int row = m_rowByPath.value(path, -1);
+    const int row = m_rowByPath.value(galleryPathKey(path), -1);
     if (row >= 0)
     {
         const QModelIndex idx = model()->index(row, 0);
@@ -190,7 +190,7 @@ void ThumbnailPanel::flushThumbUpdates()
     QSet<QString> remaining;
     for (const QString &path : m_thumbDirtyPaths)
     {
-        const int row = m_rowByPath.value(path, -1);
+        const int row = m_rowByPath.value(galleryPathKey(path), -1);
         if (row >= 0 && row < rows)
             dirtyRows.append(row);
         else

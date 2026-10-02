@@ -18,6 +18,8 @@
 #include "core/SidecarStore.h"
 #include "core/scheduler/TaskScheduler.h"
 
+#include "widgets/rawimageview.h"
+
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
@@ -27,6 +29,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QLabel>
 #include <QLineEdit>
 #include <QSettings>
 #include <QStandardPaths>
@@ -291,6 +294,24 @@ int main(int argc, char **argv)
             CHECK(applied.x == roi.x && applied.y == roi.y && applied.width == roi.width &&
                       applied.height == roi.height,
                   "ROI state remains attached to the active Compare workspace");
+
+            auto *metricLabel = compare->findChild<QLabel *>(QStringLiteral("diffMetricsLabel"));
+            const auto panes = compare->findChildren<RawImageView *>();
+            CHECK(!panes.isEmpty(), "compare panes exist before a pair switch");
+            for (RawImageView *view : panes)
+                view->setMetricBadge(QStringLiteral("P: 48.00 dB | S: 0.990"));
+            if (metricLabel)
+                metricLabel->setText(QStringLiteral("PSNR: 48.00 dB    SSIM: 0.9900"));
+            compare->setImages({imageB, imageC2});
+            bool badgesCleared = !panes.isEmpty();
+            for (RawImageView *view : panes)
+            {
+                if (!view->metricBadge().isEmpty())
+                    badgesCleared = false;
+            }
+            CHECK(badgesCleared, "soft pair switch clears stale per-pane PSNR/SSIM badges");
+            CHECK(!metricLabel || !metricLabel->text().contains(QStringLiteral("48.00")),
+                  "soft pair switch clears the stale PSNR/SSIM readout");
 
             const QStringList finalCompare{imageC2, imageC1};
             compare->setImages({imageB, imageC1});

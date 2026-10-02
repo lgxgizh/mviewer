@@ -421,9 +421,10 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     for (int i = 0; i < entries.size(); ++i)
     {
         m_paths.append(entries.at(i).path);
-        m_rowByPath.insert(entries.at(i).path, i);
-        m_displayEntryRow.insert(entries.at(i).path, i);
-        m_sizeByPath.insert(entries.at(i).path, entries.at(i).size);
+        const QString key = galleryPathKey(entries.at(i).path);
+        m_rowByPath.insert(key, i);
+        m_displayEntryRow.insert(key, i);
+        m_sizeByPath.insert(key, entries.at(i).size);
         names.append(entries.at(i).name);
         total += entries.at(i).size;
     }
@@ -435,7 +436,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     QItemSelection selToRestore;
     for (const QString &p : prevSelected)
     {
-        auto it = m_rowByPath.constFind(p);
+        auto it = m_rowByPath.constFind(galleryPathKey(p));
         if (it != m_rowByPath.constEnd())
             selToRestore.select(m_model->index(it.value(), 0), m_model->index(it.value(), 0));
     }
@@ -443,7 +444,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         selectionModel()->select(selToRestore, QItemSelectionModel::ClearAndSelect);
     if (!prevCurrent.isEmpty())
     {
-        auto it = m_rowByPath.constFind(prevCurrent);
+        auto it = m_rowByPath.constFind(galleryPathKey(prevCurrent));
         if (it != m_rowByPath.constEnd())
         {
             // NoUpdate: QAbstractItemView::setCurrentIndex would ClearAndSelect
@@ -478,7 +479,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
 
     // M24 (A#8): apply a selection that was requested while this model was
     // still being rebuilt (e.g. rename -> async rescan -> re-select new name).
-    if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(m_pendingSelect))
+    if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(galleryPathKey(m_pendingSelect)))
     {
         selectPath(m_pendingSelect);
         m_pendingSelect.clear();
@@ -663,7 +664,7 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
             const QString path = m_paths.value(idx.row());
             if (mods & Qt::ShiftModifier)
             {
-                int anchorRow = m_rowByPath.value(m_selectionAnchorPath, -1);
+                int anchorRow = m_rowByPath.value(galleryPathKey(m_selectionAnchorPath), -1);
                 if (anchorRow < 0 && currentIndex().isValid())
                     anchorRow = currentIndex().row();
                 if (anchorRow < 0)

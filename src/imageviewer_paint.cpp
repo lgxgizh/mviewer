@@ -36,7 +36,38 @@
 #include <QWheelEvent>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <vector>
+
+void ImageViewer::resamplePixelUnderCursor()
+{
+    if (!isVisible())
+        return;
+    const QPoint local = mapFromGlobal(QCursor::pos());
+    if (!rect().contains(local))
+        return;
+    // Same cursor coordinates must not dedup away a sample of the new frame.
+    m_lastHoverX = std::numeric_limits<int>::min();
+    m_lastHoverY = std::numeric_limits<int>::min();
+    updatePixelSampleAt(local);
+}
+
+void ImageViewer::noteDisplayedFrameForPixelReadout()
+{
+    const ImageFrame *frame = m_frame.get();
+    if (frame == m_pixelReadoutFrame)
+        return;
+    m_pixelReadoutFrame = frame;
+    QPointer<ImageViewer> guard(this);
+    QTimer::singleShot(0, this,
+                       [guard, frame]()
+                       {
+                           ImageViewer *viewer = guard.data();
+                           if (!viewer || viewer->m_frame.get() != frame)
+                               return;
+                           viewer->resamplePixelUnderCursor();
+                       });
+}
 
 void ImageViewer::paintEvent(QPaintEvent *event)
 {
@@ -99,6 +130,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     drawOverlayBadge(painter);
     drawSelection(painter);
     drawFrameStatus(painter);
+    noteDisplayedFrameForPixelReadout();
 }
 
 void ImageViewer::drawPixelGridOverlay(QPainter &painter)

@@ -13,7 +13,7 @@ void ThumbnailPanel::onSelectionChanged()
     const QModelIndexList sel = selectionModel()->selectedIndexes();
     qint64 selBytes = 0;
     for (const QModelIndex &idx : sel)
-        selBytes += m_sizeByPath.value(m_paths.value(idx.row()), 0);
+        selBytes += m_sizeByPath.value(galleryPathKey(m_paths.value(idx.row())), 0);
     const int n = sel.size();
 
     // M23 P2 / Code-Review #5: keep the app-wide SelectionModel (the single
@@ -83,7 +83,7 @@ void ThumbnailPanel::scrollTo(const QModelIndex &index, ScrollHint hint)
 
 void ThumbnailPanel::scrollToPath(const QString &path)
 {
-    const int row = m_rowByPath.value(path, -1);
+    const int row = m_rowByPath.value(galleryPathKey(path), -1);
     if (row < 0)
         return;
     const QModelIndex idx = m_model->index(row, 0);
@@ -93,7 +93,7 @@ void ThumbnailPanel::scrollToPath(const QString &path)
 
 void ThumbnailPanel::selectPath(const QString &path)
 {
-    const int row = m_rowByPath.value(path, -1);
+    const int row = m_rowByPath.value(galleryPathKey(path), -1);
     if (row < 0)
     {
         // M24 (A#8): the path may belong to an async directory rescan that has
@@ -137,7 +137,7 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
     QItemSelection sel;
     for (const QString &p : paths)
     {
-        const int row = m_rowByPath.value(p, -1);
+        const int row = m_rowByPath.value(galleryPathKey(p), -1);
         if (row < 0)
             continue;
         const QModelIndex idx = m_model->index(row, 0);
@@ -151,7 +151,7 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
         !current.isEmpty() ? current : (paths.isEmpty() ? QString() : paths.first());
     if (!focus.isEmpty())
     {
-        const int row = m_rowByPath.value(focus, -1);
+        const int row = m_rowByPath.value(galleryPathKey(focus), -1);
         if (row >= 0)
         {
             const QModelIndex idx = m_model->index(row, 0);

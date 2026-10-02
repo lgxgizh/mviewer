@@ -62,6 +62,10 @@ class DirectoryTree : public QTreeView
     // The directory currently selected in the tree (empty if none).
     QString currentPath() const;
 
+    // Same folder after separator and clean-path normalization. Windows
+    // compares case-insensitively so C:\Photos and C:/Photos collapse.
+    static bool equivalentPath(const QString &left, const QString &right);
+
     // Access the filter line-edit so callers can place it in a layout.
     /// Hidden; retained for clear-on-navigate and tests. Prefer pathEdit.
     QLineEdit *filterEdit() const
@@ -106,7 +110,6 @@ class DirectoryTree : public QTreeView
     void onExpanded(const QModelIndex &index);
 
   private:
-    static bool equivalentPath(const QString &left, const QString &right);
     void watchPath(const QString &path);
     void setLoading(bool on);
     void applyCurrentHighlight(const QModelIndex &proxyIdx);
