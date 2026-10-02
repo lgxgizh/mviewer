@@ -417,10 +417,9 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
     const auto mod = event->modifiers();
     // Shift+C / Shift+B belong to ImageViewer (copy hex / RGB). Do not treat
     // them as the plain-key compare or browse shortcuts.
-    const auto shiftBare = mod & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier |
-                                  Qt::MetaModifier);
-    if (shiftBare == Qt::ShiftModifier &&
-        (event->key() == Qt::Key_C || event->key() == Qt::Key_B))
+    const auto shiftBare =
+        mod & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    if (shiftBare == Qt::ShiftModifier && (event->key() == Qt::Key_C || event->key() == Qt::Key_B))
     {
         if (m_imageViewer && QApplication::focusWidget() != m_imageViewer)
             QApplication::sendEvent(m_imageViewer, event);

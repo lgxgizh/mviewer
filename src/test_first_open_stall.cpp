@@ -351,8 +351,7 @@ void testGalleryPathSlashKey(Results &results)
     flipped.replace(QLatin1Char('/'), QLatin1Char('\\'));
     check(results, panel.rowForPath(flipped) == 0, "backslash path resolves to the same row");
     panel.selectPath(flipped);
-    check(results, panel.currentIndex().row() == 0,
-          "selectPath accepts the other slash style");
+    check(results, panel.currentIndex().row() == 0, "selectPath accepts the other slash style");
     panel.scrollToPath(flipped);
     check(results, panel.currentIndex().row() == 0, "scrollToPath accepts the other slash style");
 }

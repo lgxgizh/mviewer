@@ -646,7 +646,7 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
     // is compare and plain B is a browse-mode key; those modifiers must reach
     // ImageViewer instead of being consumed as global shortcuts.
     const auto shiftBare = ke->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier |
-                                               Qt::AltModifier | Qt::MetaModifier);
+                                              Qt::AltModifier | Qt::MetaModifier);
     if (shiftBare == Qt::ShiftModifier && (ke->key() == Qt::Key_C || ke->key() == Qt::Key_B))
     {
         if (watched == m_imageViewer)
