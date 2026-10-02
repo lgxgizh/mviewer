@@ -214,7 +214,7 @@ namespace
 {
 void asyncWriteSidecars(std::vector<std::string> paths)
 {
-    QtConcurrent::run(
+    (void)QtConcurrent::run(
         [paths = std::move(paths)]()
         {
             auto &sidecar = mviewer::core::SidecarStore::instance();
