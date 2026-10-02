@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.94] - 2026-10-02
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.94**.
+
 ### Fixed
 - **Compare Mode Pixel Rendering Consistency (`rawimageview.cpp`, `compareworkspace_render_canvas.cpp`, `compareworkspace_render_materialization.cpp`)**:
   - Fixed an issue where zooming in during compare mode caused images to alternate between blurry (bilinear interpolation) and pixelated (nearest-neighbor), and clicking/holding on a specific pane caused only that pane to appear pixelated while others remained blurred.
