@@ -430,22 +430,42 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
 {
     QList<Entry> out;
     out.reserve(source.size());
-    const auto passesType = [&query](const QString &path)
+    QStringList typeCandidates;
+    bool filterRaw = false;
+    bool filterTiff = false;
+    if (!query.type.empty())
+    {
+        for (const QString &c : QString::fromStdString(query.type).split(',', Qt::SkipEmptyParts))
+        {
+            const QString t = c.trimmed().toLower();
+            if (t == QLatin1String("raw"))
+                filterRaw = true;
+            else if (t == QLatin1String("tiff"))
+                filterTiff = true;
+            else
+                typeCandidates.append(t);
+        }
+    }
+    static const QSet<QStringView> rawExts = {
+        u"cr2", u"cr3", u"nef", u"arw", u"dng", u"raf", u"rw2", u"orf", u"sr2", u"srw",
+        u"pef", u"3fr", u"mef", u"erf", u"mrw", u"dcr", u"kdc", u"mos", u"raw", u"iiq"};
+    const auto passesType = [&](const QString &path)
     {
         if (query.type.empty())
             return true;
-        const QString suffix = QFileInfo(path).suffix().toLower();
-        static const QStringList rawExts = {"cr2", "cr3", "nef", "arw", "dng", "raf", "rw2",
-                                            "orf", "sr2", "srw", "pef", "3fr", "mef", "erf",
-                                            "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
-        for (const QString &candidate :
-             QString::fromStdString(query.type).split(',', Qt::SkipEmptyParts))
-        {
-            const QString type = candidate.trimmed().toLower();
-            if (type == suffix || (type == "tiff" && (suffix == "tif" || suffix == "tiff")) ||
-                (type == "raw" && rawExts.contains(suffix)))
+        const int dot = path.lastIndexOf('.');
+        if (dot < 0 || dot + 1 >= path.length())
+            return false;
+        const QStringView suffix = QStringView(path).mid(dot + 1);
+        if (filterTiff && (suffix.compare(u"tif", Qt::CaseInsensitive) == 0 ||
+                           suffix.compare(u"tiff", Qt::CaseInsensitive) == 0))
+            return true;
+        const QString lowerSuffix = suffix.toString().toLower();
+        if (filterRaw && rawExts.contains(lowerSuffix))
+            return true;
+        for (const QString &type : typeCandidates)
+            if (lowerSuffix == type)
                 return true;
-        }
         return false;
     };
     for (const Entry &entry : source)
@@ -455,7 +475,14 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
                                   metaIso, metaCamera, metaLens))
             out.append(entry);
     }
-    const auto less = [&query, &ratings, &metaCamera, &metaLens](const Entry &a, const Entry &b)
+    QHash<QString, int> ratingCache;
+    if (query.sort == mviewer::core::BrowseSortField::Rating)
+    {
+        ratingCache.reserve(out.size());
+        for (const auto &entry : out)
+            ratingCache.insert(entry.path, ratings.rating(entry.path.toStdString()));
+    }
+    const auto less = [&query, &ratingCache, &metaCamera, &metaLens](const Entry &a, const Entry &b)
     {
         int cmp = 0;
         switch (query.sort)
@@ -477,11 +504,16 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
             break;
         }
         case mviewer::core::BrowseSortField::Type:
-            cmp = QString::compare(QFileInfo(a.path).suffix(), QFileInfo(b.path).suffix(),
-                                   Qt::CaseInsensitive);
+        {
+            const int dotA = a.name.lastIndexOf(QLatin1Char('.'));
+            const int dotB = b.name.lastIndexOf(QLatin1Char('.'));
+            const QStringView sa = (dotA >= 0) ? QStringView(a.name).mid(dotA + 1) : QStringView();
+            const QStringView sb = (dotB >= 0) ? QStringView(b.name).mid(dotB + 1) : QStringView();
+            cmp = sa.compare(sb, Qt::CaseInsensitive);
             break;
+        }
         case mviewer::core::BrowseSortField::Rating:
-            cmp = ratings.rating(a.path.toStdString()) - ratings.rating(b.path.toStdString());
+            cmp = ratingCache.value(a.path) - ratingCache.value(b.path);
             break;
         case mviewer::core::BrowseSortField::Camera:
             cmp = QString::compare(metaCamera.value(a.path), metaCamera.value(b.path),

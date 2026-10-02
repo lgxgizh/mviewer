@@ -7,6 +7,52 @@
 #include <QSettings>
 #include <QTimer>
 
+void CompareWorkspace::setSyncRotate(bool on)
+{
+    if (m_syncRotate == on)
+        return;
+    m_syncRotate = on;
+    if (m_syncRotateChk && m_syncRotateChk->isChecked() != on)
+    {
+        const QSignalBlocker blocker(m_syncRotateChk);
+        m_syncRotateChk->setChecked(on);
+    }
+    if (m_syncRotatePanelChk && m_syncRotatePanelChk->isChecked() != on)
+    {
+        const QSignalBlocker blocker(m_syncRotatePanelChk);
+        m_syncRotatePanelChk->setChecked(on);
+    }
+    showCompareStatus(on ? tr("已开启同步旋转：旋转将同时作用于所有图像")
+                         : tr("已关闭同步旋转：旋转仅对选中的图像生效"));
+}
+
+void CompareWorkspace::setEditCellIndex(int cellIdx)
+{
+    m_explicitEditIdx = cellIdx;
+    onEditCellSelected(cellIdx);
+}
+
+int CompareWorkspace::cellRotation(int cellIdx) const
+{
+    if (cellIdx >= 0 && cellIdx < static_cast<int>(m_cellAdjusts.size()))
+        return m_cellAdjusts[static_cast<size_t>(cellIdx)].rotation;
+    return 0;
+}
+
+bool CompareWorkspace::cellFlipH(int cellIdx) const
+{
+    if (cellIdx >= 0 && cellIdx < static_cast<int>(m_cellAdjusts.size()))
+        return m_cellAdjusts[static_cast<size_t>(cellIdx)].flipH;
+    return false;
+}
+
+bool CompareWorkspace::cellFlipV(int cellIdx) const
+{
+    if (cellIdx >= 0 && cellIdx < static_cast<int>(m_cellAdjusts.size()))
+        return m_cellAdjusts[static_cast<size_t>(cellIdx)].flipV;
+    return false;
+}
+
 void CompareWorkspace::buildSyncControls()
 {
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
@@ -14,6 +60,10 @@ void CompareWorkspace::buildSyncControls()
     m_syncZoomChk->setChecked(true);
     m_syncDragChk = new QCheckBox("同步拖动(&D)", this);
     m_syncDragChk->setChecked(true);
+    m_syncRotateChk = new QCheckBox(tr("同步旋转"), this);
+    m_syncRotateChk->setObjectName("syncRotateCheck");
+    m_syncRotateChk->setToolTip(tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像"));
+    m_syncRotateChk->setChecked(m_syncRotate);
 
     auto applySync = [this](bool) { update(); };
     connect(m_syncZoomChk, &QCheckBox::toggled, this,
@@ -30,6 +80,7 @@ void CompareWorkspace::buildSyncControls()
                 m_engine.setSyncMode(m_syncZoom, m_syncDrag);
                 applySync(on);
             });
+    connect(m_syncRotateChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
 }
 
 QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
@@ -40,14 +91,14 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolbarContainer->setAttribute(Qt::WA_AlwaysShowToolTips, true);
     auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
     toolbarLayout->setContentsMargins(0, 0, 0, 0);
-    toolbarLayout->setSpacing(4);
+    toolbarLayout->setSpacing(2);
     auto makeToolbar = [toolbarContainer](const char *name)
     {
         auto *bar = new QWidget(toolbarContainer);
         bar->setObjectName(name);
         auto *layout = new QHBoxLayout(bar);
-        layout->setContentsMargins(8, 0, 8, 0);
-        layout->setSpacing(6);
+        layout->setContentsMargins(6, 1, 6, 1);
+        layout->setSpacing(4);
         return std::pair{bar, layout};
     };
     auto [modeBar, modeLayoutLocal] = makeToolbar("compareModeToolbar");
@@ -56,13 +107,13 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolBar->setObjectName("compareToolToolbar");
     auto *toolRows = new QVBoxLayout(toolBar);
     toolRows->setContentsMargins(0, 0, 0, 0);
-    toolRows->setSpacing(4);
+    toolRows->setSpacing(2);
     auto makeToolRow = [toolBar]()
     {
         auto *row = new QWidget(toolBar);
         auto *layout = new QHBoxLayout(row);
-        layout->setContentsMargins(8, 0, 8, 0);
-        layout->setSpacing(6);
+        layout->setContentsMargins(6, 1, 6, 1);
+        layout->setSpacing(4);
         return std::pair{row, layout};
     };
     auto [toolDiffBar, toolLayoutLocal] = makeToolRow();
@@ -74,6 +125,7 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolbarLayout->addWidget(toolBar);
     viewLayoutLocal->addWidget(m_syncZoomChk);
     viewLayoutLocal->addWidget(m_syncDragChk);
+    viewLayoutLocal->addWidget(m_syncRotateChk);
 
     modeLayout = modeLayoutLocal;
     viewLayout = viewLayoutLocal;
@@ -184,15 +236,25 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_thresholdSlider->setMaximumWidth(120);
     m_thresholdSlider->setToolTip("差异阈值: 低于此值的像素将被隐藏");
     m_thresholdSlider->setEnabled(false);
+    auto *sliderTimer = new QTimer(this);
+    sliderTimer->setSingleShot(true);
+    sliderTimer->setInterval(35);
+    connect(sliderTimer, &QTimer::timeout, this, &CompareWorkspace::refreshAllDiffOverlays);
     connect(m_thresholdSlider, &QSlider::valueChanged, this,
-            [this](int value)
+            [this, sliderTimer](int value)
             {
                 m_thresholdValue = static_cast<uint8_t>(value);
                 if (!m_thresholdSlider->isSliderDown())
                     refreshAllDiffOverlays();
+                else
+                    sliderTimer->start();
             });
     connect(m_thresholdSlider, &QSlider::sliderReleased, this,
-            &CompareWorkspace::refreshAllDiffOverlays);
+            [this, sliderTimer]()
+            {
+                sliderTimer->stop();
+                refreshAllDiffOverlays();
+            });
     toolLayout->addWidget(m_thresholdSlider);
     m_thresholdLabel = new QLabel("0", this);
     m_thresholdLabel->setObjectName("diffThresholdValueLabel");
@@ -538,7 +600,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
 {
     auto *strip = new QWidget(this);
     strip->setObjectName("compareStatusStrip");
-    strip->setStyleSheet("QWidget#compareStatusStrip{background:#1f1f1f;}");
+    strip->setStyleSheet("QWidget#compareStatusStrip{background:#141416; border-top:1px solid #27272a;}");
     auto *lay = new QHBoxLayout(strip);
     lay->setContentsMargins(8, 2, 8, 2);
     lay->setSpacing(8);
@@ -548,12 +610,14 @@ QWidget *CompareWorkspace::buildStatusStrip()
     m_metricLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_metricLabel->setWordWrap(true);
     m_metricLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
-    m_metricLabel->setStyleSheet("color:#ffffff;font-weight:700;padding:2px 6px;");
+    m_metricLabel->setStyleSheet(
+        "color:#38bdf8; font-family:monospace; font-weight:700; padding:2px 8px; "
+        "background:#18181b; border:1px solid #27272a; border-radius:4px;");
     lay->addWidget(m_metricLabel, 0);
 
     m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
-    m_autoAlignChk->setStyleSheet("color:#ffffff;");
+    m_autoAlignChk->setStyleSheet("color:#e4e4e7;");
     m_autoAlignChk->setToolTip(tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
     m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
@@ -566,7 +630,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
     m_compareStatusLabel = new QLabel(strip);
     m_compareStatusLabel->setObjectName("compareStatusLabel");
-    m_compareStatusLabel->setStyleSheet("color:#f0f0f0;");
+    m_compareStatusLabel->setStyleSheet("color:#a1a1aa;");
     lay->addWidget(m_compareStatusLabel, 1);
 
     m_exitBtn = new QPushButton(tr("退出比较"), strip);

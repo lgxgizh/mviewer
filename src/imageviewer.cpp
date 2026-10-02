@@ -540,15 +540,15 @@ void ImageViewer::mouseDoubleClickEvent(QMouseEvent *event)
 
 void ImageViewer::mousePressEvent(QMouseEvent *event)
 {
-    // Mouse back/forward buttons (XButton1/2) navigate prev/next image.
+    // Mouse back/forward buttons (XButton1/2) navigate directory history.
     if (event->button() == Qt::BackButton)
     {
-        emit requestPrev();
+        emit requestDirBack();
         return;
     }
     if (event->button() == Qt::ForwardButton)
     {
-        emit requestNext();
+        emit requestDirForward();
         return;
     }
     if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&

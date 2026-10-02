@@ -539,6 +539,13 @@ void MainWindow::zoomViewer(int op)
 
 void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
 {
+    if (m_compareView && !m_compareView->isHidden())
+    {
+        QMenu menu(this);
+        menu.addAction("适应窗口 (Fit / 0)", this, [this]() { m_compareView->fitAll(); });
+        menu.exec(globalPos);
+        return;
+    }
     if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
         return;
     QMenu menu(this);
@@ -603,9 +610,17 @@ void MainWindow::updateCacheStat()
         misses += s.misses;
     }
     if (hits + misses == 0)
+    {
         m_lblCache->setText("命中率 —");
+        m_lblCache->setToolTip(tr("缓存命中率: 尚无请求记录"));
+    }
     else
-        m_lblCache->setText(QString("命中率 %1%").arg(int(100.0 * hits / (hits + misses))));
+    {
+        const int pct = static_cast<int>(100.0 * hits / (hits + misses));
+        m_lblCache->setText(QString("命中率 %1%").arg(pct));
+        m_lblCache->setToolTip(
+            tr("缓存命中率: %1% (命中 %2 / 请求 %3)").arg(pct).arg(hits).arg(hits + misses));
+    }
 }
 
 bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
@@ -652,10 +667,10 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         if (watched == m_imageViewer)
         {
             // Only forward keys the viewer doesn't handle itself.
-            static const QSet<int> viewerOwns = {
-                Qt::Key_Left,  Qt::Key_Right,  Qt::Key_Plus,      Qt::Key_Equal,
-                Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,         Qt::Key_F,
-                Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
+            static const QSet<int> viewerOwns = {Qt::Key_Left,   Qt::Key_Right,     Qt::Key_Plus,
+                                                 Qt::Key_Equal,  Qt::Key_Minus,     Qt::Key_0,
+                                                 Qt::Key_1,      Qt::Key_F,         Qt::Key_F11,
+                                                 Qt::Key_Escape, Qt::Key_Underscore};
             if (viewerOwns.contains(ke->key()))
                 return false; // let the viewer handle it
         }
@@ -675,10 +690,30 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true;
     }
 
+    if (event->type() == QEvent::MouseButtonPress)
+    {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::BackButton)
+        {
+            goDirBack();
+            return true;
+        }
+        if (me->button() == Qt::ForwardButton)
+        {
+            goDirForward();
+            return true;
+        }
+    }
+
     if (watched == m_lblZoom)
     {
         if (event->type() == QEvent::MouseButtonDblClick)
         {
+            if (m_compareView && !m_compareView->isHidden())
+            {
+                m_compareView->fitAll();
+                return true;
+            }
             if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
             {
                 if (m_imageViewer->isFitMode())

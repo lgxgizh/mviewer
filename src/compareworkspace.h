@@ -29,15 +29,12 @@
 #include <QHBoxLayout>
 #include <QImage>
 #include <QLabel>
-#include <QMap>
 #include <QMouseEvent>
 #include <QPair>
-#include <QPixmap>
 #include <QPointF>
 #include <QPushButton>
 #include <QRect>
 #include <QResizeEvent>
-#include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
 #include <QStringList>
@@ -52,10 +49,8 @@
 #include <string>
 #include <vector>
 
-class QScrollArea;
 class QStackedLayout;
 class QTableWidget;
-class QComboBox;
 class HistogramWidget;
 class RawImageView;
 class QProgressBar;
@@ -70,10 +65,7 @@ class CompareWorkspace : public QWidget
     explicit CompareWorkspace(QWidget *parent = nullptr);
     ~CompareWorkspace();
 
-    // M34: deterministic split geometry contract — the canvas divides into two
-    // adjacent rects (left = [0, midX), right = [midX, width)) that cover it
-    // exactly, with no right-edge or seam gap. Stateless; drawSplitCompare and
-    // the workflow test both consume this exact helper.
+    // M34: deterministic split geometry contract: two adjacent rects covering canvas.
     static QPair<QRect, QRect> splitRects(const QRect &canvas);
 
     // The default frame/page is zero. A caller restoring a persisted compare
@@ -144,14 +136,9 @@ class CompareWorkspace : public QWidget
     // P1: Get the current focus image path (for triggering external analysis).
     QString focusImagePath() const;
 
-    // Capture only value-owned report inputs from every currently compared pane.
-    // ImageData copies retain shared published pixels; no full-resolution work
-    // is performed here. The report worker consumes this snapshot later.
+    // Capture value-owned report inputs from every compared pane.
     mviewer::core::CompareReportInput captureReportInput() const;
-
-    // Build one immutable report snapshot synchronously for existing workflow
-    // callers/tests. Production report export captures inputs and builds on a
-    // TaskScheduler worker instead.
+    // Build one immutable report snapshot synchronously for callers/tests.
     mviewer::core::CompareReportBundle buildReportBundle() const;
 
   public slots:
@@ -159,10 +146,15 @@ class CompareWorkspace : public QWidget
     void prevPair();
     void rotateCurrentCell(int degrees);
     void flipCurrentCell(bool horizontal);
-    int editCellIndex() const
-    {
-        return m_editIdx;
-    }
+    void setSyncRotate(bool on);
+    bool syncRotate() const { return m_syncRotate; }
+    void fitAll();
+    void copyComparisonViewToClipboard();
+    void setEditCellIndex(int cellIdx);
+    int editCellIndex() const { return m_editIdx; }
+    int cellRotation(int cellIdx) const;
+    bool cellFlipH(int cellIdx) const;
+    bool cellFlipV(int cellIdx) const;
 
   signals:
     void syncToggled(bool on);
@@ -211,7 +203,6 @@ class CompareWorkspace : public QWidget
     bool handleAdvancedCompareKey(QKeyEvent *event);
     void rebuildCells();
     void buildCompareCells(int count, int columns);
-    void fitAll();
     void bestFitAll();
     // Fit of `sourceW×sourceH` in this pane, times the shared zoom ratio.
     // Uniform pixel scale returns that pane's current absolute scale instead.
@@ -226,6 +217,7 @@ class CompareWorkspace : public QWidget
     void applySelectionPreviewFromView(RawImageView *view, const mviewer::domain::Selection &sel);
     void clearROI();
     bool linkedROIAvailable() const;
+    QSize paneEffectiveSize(int pane) const;
     void updateROIAvailabilityStatus();
 
     CompareEngine m_engine;
@@ -280,9 +272,12 @@ class CompareWorkspace : public QWidget
     takePrefetchHandle(const std::string &path);
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
+    QCheckBox *m_syncRotateChk = nullptr;
+    QCheckBox *m_syncRotatePanelChk = nullptr;
     QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率
     bool m_syncZoom = true;
     bool m_syncDrag = true;
+    bool m_syncRotate = false;
     bool m_uniformScale = false; // H5: force all panes to one shared zoom
     QVector<double> m_fitScales;
     double m_sharedZoomRatio = 1.0;
@@ -343,6 +338,7 @@ class CompareWorkspace : public QWidget
     bool m_temporaryCompareActive = false;
     int m_temporaryTargetPane = -1;
     int m_temporaryDigit = 0;
+    int m_canvasTemporaryPane = -1;
     void toggleBlink();
     void applyBlink(bool state);
     void startBlink(int intervalMs);
@@ -457,6 +453,7 @@ class CompareWorkspace : public QWidget
         int diffGainIndex = 0;
         bool syncZoom = true;
         bool syncDrag = true;
+        bool syncRotate = false;
         bool crosshair = false;
         bool pixelLink = false;
         bool filenameOverlay = true;
@@ -579,6 +576,9 @@ class CompareWorkspace : public QWidget
             bool sizeMismatch = false;
             QImage overlay;
             double opacity = 0.5;
+            double psnr = 0.0;
+            double ssim = 0.0;
+            bool hasMetrics = false;
         };
         std::vector<CellOverlay> overlays;
     };
@@ -686,6 +686,7 @@ class CompareWorkspace : public QWidget
     // is a bounded display LOD; this conversion feeds the Qt-free source
     // sampler with the current adjusted-pane coordinate space.
     static mviewer::core::AnalysisAdjustment analysisAdjustment(const CellAdjust &adjust);
+    static QSize transformedSourceDims(const QSize &sourceDims, const CellAdjust &displayAdjust);
 
     // Edit panel widgets (inside side panel)
     QWidget *m_editPanel = nullptr;
@@ -718,9 +719,7 @@ class CompareWorkspace : public QWidget
         uint64_t generation = 0;
         int paneCount = 0;
         bool updateMain = false;
-        // M23: value-only main-title state captured at schedule time, so the
-        // title and the histogram data are delivered as one coherent pair —
-        // a pending/rejected batch can never show a new ROI title over old data.
+        // M23: coherent title and histogram data delivered as one pair.
         bool roiEnabled = false;
         mviewer::domain::Selection roi;
         std::vector<mviewer::core::Histogram> main; // main surface, in main order

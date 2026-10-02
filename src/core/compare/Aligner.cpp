@@ -127,8 +127,16 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
             const int colHi = std::min(W, W + dx);
             if (colHi <= colLo)
                 continue;
-            long long sad = 0;
             const int overlap = (colHi - colLo) * (rowHi - rowLo);
+            if (overlap <= 0)
+                continue;
+
+            const long long maxAllowedSad =
+                (bestSAD == std::numeric_limits<long long>::max())
+                    ? std::numeric_limits<long long>::max()
+                    : bestSAD * overlap;
+
+            long long sad = 0;
             const int len = colHi - colLo;
             for (int y = rowLo; y < rowHi; ++y)
             {
@@ -153,6 +161,9 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
                     const int d = static_cast<int>(rp[x]) - static_cast<int>(mp[x]);
                     sad += (d < 0 ? -d : d);
                 }
+
+                if (sad >= maxAllowedSad)
+                    break;
             }
             const long long avg = sad / overlap;
             if (avg < bestSAD)

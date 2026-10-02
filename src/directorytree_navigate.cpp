@@ -22,7 +22,6 @@
 
 namespace
 {
-constexpr int kLargeDirThreshold = 500;
 // Tree-only callers have no gallery nudge. A real open() nudges from the first
 // batch long before this, so the model index stays behind that paint.
 constexpr int kHighlightFallbackMs = 1500;
@@ -203,9 +202,15 @@ void DirectoryTree::tryNavigateToPending(quint64 requestId)
             return;
         }
         ++m_navigationSegment;
-        const QModelIndex proxyIdx = m_proxy->mapFromSource(sourceIdx);
-        if (proxyIdx.isValid())
-            expand(proxyIdx);
+        // Expand ancestors only. Expanding the target itself unrolls its
+        // children; 1.0.90 keeps that node collapsed until the user opens it.
+        const bool leaf = m_navigationSegment >= m_navigationPrefixes.size();
+        if (!leaf)
+        {
+            const QModelIndex proxyIdx = m_proxy->mapFromSource(sourceIdx);
+            if (proxyIdx.isValid())
+                expand(proxyIdx);
+        }
         scheduleDeferredNavigation(requestId);
         return;
     }
@@ -241,24 +246,15 @@ void DirectoryTree::finishPendingNavigation(quint64 requestId)
     m_navigationRetryTimer->stop();
     expandAncestors(sourceIdx);
 
-    const int rowCount = m_model->rowCount(sourceIdx);
-    const bool needsFetch =
-        rowCount >= kLargeDirThreshold || (rowCount == 0 && m_model->canFetchMore(sourceIdx));
-    if (needsFetch)
-    {
-        setLoading(true);
-        scheduleFetchMore(sourceIdx);
-    }
-
     m_currentPath = targetPath;
     watchPath(targetPath);
 
     // setCurrentIndex is signal-blocked to avoid turning programmatic sync
-    // into a second directoryChanged/navigation cycle.
+    // into a second directoryChanged/navigation cycle. The target stays
+    // collapsed; expandAncestors only opens its parents.
     QSignalBlocker selectionBlocker(selectionModel());
     setCurrentIndex(proxyIdx);
     scrollTo(proxyIdx, PositionAtCenter);
-    expand(proxyIdx);
     selectionBlocker.unblock();
     applyCurrentHighlight(proxyIdx);
 
@@ -270,8 +266,7 @@ void DirectoryTree::finishPendingNavigation(quint64 requestId)
     if (shouldEmit)
         emit directoryChanged(targetPath);
 
-    if (!needsFetch)
-        setLoading(false);
+    setLoading(false);
 }
 
 void DirectoryTree::resolvePendingNavigation(quint64 requestId)

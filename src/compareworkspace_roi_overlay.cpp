@@ -61,21 +61,26 @@ void CompareWorkspace::updateROISurfaces()
 void CompareWorkspace::positionROIHud()
 {
     const int paneCount = m_engine.imageCount();
-    const bool show = !m_lastSelection.isEmpty() && m_roiLinked && paneCount >= 1;
     const bool canvas = m_compareCanvas && m_compareCanvas->isVisible();
     const bool split = canvas && m_splitChk && m_splitChk->isChecked();
     for (int index = 0; index < 8; ++index)
     {
         QLabel *chip = roiChip(this, index);
+        RawImageView *view =
+            (index < paneCount && index < static_cast<int>(m_cellViews.size()))
+                ? m_cellViews[static_cast<size_t>(index)]
+                : nullptr;
+        const mviewer::domain::Selection paneSel =
+            view ? (m_roiLinked ? m_lastSelection : view->selection())
+                 : mviewer::domain::Selection{};
+        const bool hasRoi = !paneSel.isEmpty();
         const bool paneVisible =
-            show && index < paneCount && index < m_cellViews.size() && m_cellViews[index] &&
-            (canvas ? (split ? index < 2 : true) : m_cellViews[index]->isVisible());
+            hasRoi && view && (canvas ? (split ? index < 2 : true) : view->isVisible());
         if (!paneVisible)
         {
             chip->hide();
             continue;
         }
-        RawImageView *view = m_cellViews[index];
         QRect roi;
         QRect bounds;
         if (canvas)
@@ -83,7 +88,7 @@ void CompareWorkspace::positionROIHud()
             const int geomPane = split ? index : 0;
             const QRectF destination = cellFullDestRect(geomPane, canvasPaneGeometry(geomPane));
             QRectF mapped =
-                mviewer::ui::roiPresentationRect(m_lastSelection, view->sourceSize(), destination);
+                mviewer::ui::roiPresentationRect(paneSel, view->sourceSize(), destination);
             const QPoint origin = m_compareCanvas->mapTo(this, QPoint(0, 0));
             roi = mapped.translated(origin).toAlignedRect();
             bounds = QRect(origin, m_compareCanvas->size());
@@ -91,10 +96,10 @@ void CompareWorkspace::positionROIHud()
         else
         {
             const QPointF a =
-                view->sourcePointToWidget(QPointF(m_lastSelection.x, m_lastSelection.y));
+                view->sourcePointToWidget(QPointF(paneSel.x, paneSel.y));
             const QPointF b =
-                view->sourcePointToWidget(QPointF(m_lastSelection.x + m_lastSelection.width,
-                                                  m_lastSelection.y + m_lastSelection.height));
+                view->sourcePointToWidget(QPointF(paneSel.x + paneSel.width,
+                                                  paneSel.y + paneSel.height));
             if (!std::isfinite(a.x()) || !std::isfinite(b.x()))
             {
                 chip->hide();
@@ -119,8 +124,11 @@ void CompareWorkspace::positionROIHud()
                        std::max(bounds.left() + 2, bounds.right() - size.width()));
         y = std::clamp(y, bounds.top() + 2,
                        std::max(bounds.top() + 2, bounds.bottom() - size.height()));
-        chip->setGeometry(x, y, size.width(), size.height());
-        chip->show();
+        const QRect targetGeom(x, y, size.width(), size.height());
+        if (chip->geometry() != targetGeom)
+            chip->setGeometry(targetGeom);
+        if (!chip->isVisible())
+            chip->show();
         chip->raise();
     }
 }

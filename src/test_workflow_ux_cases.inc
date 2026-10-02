@@ -1105,24 +1105,39 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                       "second double-click restores Fit");
             }
 
-            // Mouse side buttons navigate prev/next (cheat sheet
-            // "← / → / 鼠标侧键").
+            // Mouse side buttons navigate directory history (cheat sheet
+            // "鼠标侧键：上一个 / 下一个目录").
             {
-                const QString beforeNav = sel->currentImage();
+                const QString origDir = directoryTree->currentPath();
+                QDir subQDir(origDir);
+                subQDir.mkdir("sub_ux_test");
+                const QString subDirPath = QDir::cleanPath(subQDir.filePath("sub_ux_test"));
+                directoryTree->navigateTo(subDirPath, true);
+                pump(100);
+                CHECK(directoryTree->currentPath() == subDirPath, "navigated to subfolder in test");
+
+                // Mouse back button navigates back to original directory.
                 QMouseEvent back(QEvent::MouseButtonPress, QPointF(10, 10),
                                  viewer->mapToGlobal(QPoint(10, 10)), Qt::BackButton,
                                  Qt::BackButton, Qt::NoModifier);
                 QApplication::sendEvent(viewer, &back);
                 pump(100);
-                CHECK(!sel->currentImage().isEmpty() && sel->currentImage() != beforeNav,
-                      "mouse back button navigates to the previous image");
+                CHECK(directoryTree->currentPath() == origDir,
+                      "mouse back button navigates to the previous directory");
+
+                // Mouse forward button navigates forward to subfolder.
                 QMouseEvent fwd(QEvent::MouseButtonPress, QPointF(10, 10),
                                 viewer->mapToGlobal(QPoint(10, 10)), Qt::ForwardButton,
                                 Qt::ForwardButton, Qt::NoModifier);
                 QApplication::sendEvent(viewer, &fwd);
                 pump(100);
-                CHECK(sel->currentImage() == beforeNav,
-                      "mouse forward button navigates back to the original image");
+                CHECK(directoryTree->currentPath() == subDirPath,
+                      "mouse forward button navigates back to the forward directory");
+
+                // Return to original directory for the remainder of the workflow test.
+                directoryTree->navigateTo(origDir, true);
+                pump(100);
+                QDir(subDirPath).removeRecursively();
             }
 
             // I toggles the metadata overlay for the current image; ESC
@@ -2079,10 +2094,14 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     const QPoint cursorBefore = QCursor::pos();
     if (temporaryCompare)
         QCursor::setPos(temporaryCompare->mapToGlobal(temporaryCompare->rect().center()));
+    const double scaleBeforeHold = temporaryView0 ? temporaryView0->scale() : 0.0;
     sendKeyPressOnly(ws, Qt::Key_Space);
     CHECK(temporaryCompare && temporaryCompare->isDown() && temporaryView0 &&
               temporaryView0->hasTransientDisplay() && !blink->isChecked(),
           "holding Space starts momentary Compare without starting continuous Blink");
+    CHECK(temporaryView0 && scaleBeforeHold > 0.0 &&
+              std::abs(temporaryView0->presentedScale() - scaleBeforeHold) < 1e-9,
+          "holding Space preserves identical scale for same-resolution images without shrinkage");
     sendKeyReleaseOnly(ws, Qt::Key_Space);
     CHECK(temporaryView0 && !temporaryView0->hasTransientDisplay() && !temporaryCompare->isDown(),
           "releasing Space stops momentary Compare (no stuck state)");

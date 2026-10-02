@@ -4,17 +4,20 @@
 
 #include "core/analysis/PixelInspector.h"
 
+#include <QApplication>
+#include <QClipboard>
+
 void CompareWorkspace::showShortcutHelp()
 {
     // Lightweight status-bar style tip via window title flash — no modal dialog
     // so day-long keyboard work is not interrupted.
     const QString tip =
-        tr("比较窗口快捷键: B 闪烁 · Space 两图按住临时切换（鼠标所在一侧显示另一侧） · "
-           "超过 2 张时按住 1–N 在鼠标窗格临时换图 · Ctrl+2/4/8 布局 · S 分割 · W 滑动 · "
+        tr("比较窗口快捷键: B 闪烁 · Space 两图按住临时切换 · "
+           "超过 2 张时按住 2–N 在鼠标窗格临时换图 · Ctrl+2/4/8 布局 · S 分割 · W 滑动 · "
            "O 叠加 · K 棋盘 · H Diff高亮 · Shift+1…5 通道 · Z/D 同步缩放/拖动 · R 准星 · "
            "L 像素连线 · P 上一对 · N 下一对 · PgUp 上一对 · ← 上一对 · "
-           "PgDn 下一对 · → 下一对 · F/Ctrl+0 Fit · Ctrl+1 100% · +/- 缩放 · X 交换 · "
-           "Alt/Shift+方向键 微调ROI · ? 帮助 · Esc 先结束临时切换或清除选区，否则退出 · "
+           "PgDn 下一对 · → 下一对 · F/0/Ctrl+0 Fit · 1/Ctrl+1 100% · +/- 缩放 · X 交换 · "
+           "Ctrl+C 复制视图 · Alt/Shift+方向键 微调ROI · ? 帮助 · Esc 退出 · "
            "Ctrl+Shift+A 取消选择 · Ctrl+Alt+A 批量分析导出");
     showCompareStatus(tip, 8000);
 }
@@ -135,6 +138,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
                 m_engine.setCellOffset(m_dragIdx, oldOff.x + delta.x(), oldOff.y + delta.y());
             }
             update();
+            positionROIHud();
         }
         return false;
     }
@@ -192,6 +196,7 @@ bool CompareWorkspace::handleCanvasWheel(QEvent *event)
     if (m_compareCanvas)
         m_compareCanvas->update();
     update();
+    positionROIHud();
     return true;
 }
 
@@ -205,23 +210,7 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
         m_canvasSelectionPress = me->pos();
         m_canvasSelectionPane = canvasRefCellAt(me->pos());
         m_canvasSelectionStart = canvasSourcePoint(me->pos(), m_canvasSelectionPane);
-        const ImageFrame *pressFrame = m_engine.imageAt(m_canvasSelectionPane);
-        const int pressW = pressFrame
-                               ? (pressFrame->metadata().width > 0 ? pressFrame->metadata().width
-                                                                   : pressFrame->width())
-                               : 0;
-        const int pressH = pressFrame
-                               ? (pressFrame->metadata().height > 0 ? pressFrame->metadata().height
-                                                                    : pressFrame->height())
-                               : 0;
-        const CellAdjust pressAdjust =
-            m_canvasSelectionPane >= 0 &&
-                    m_canvasSelectionPane < static_cast<int>(m_cellAdjusts.size())
-                ? m_cellAdjusts[static_cast<size_t>(m_canvasSelectionPane)]
-                : CellAdjust{};
-        const auto displayOrigin = mviewer::core::mapSourceSelectionToDisplay(
-            m_lastSelection, analysisAdjustment(pressAdjust), pressW, pressH);
-        m_canvasSelectionOrigin = displayOrigin;
+        m_canvasSelectionOrigin = m_lastSelection;
         const QRectF destination =
             cellFullDestRect(m_canvasSelectionPane, canvasPaneGeometry(m_canvasSelectionPane));
         const QSize source =
@@ -233,7 +222,7 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
         const double toleranceY =
             destination.height() > 0.0 ? 8.0 * source.height() / destination.height() : 0.0;
         m_canvasSelectionHandle =
-            mviewer::domain::hitTestSelection(displayOrigin, m_canvasSelectionStart.x(),
+            mviewer::domain::hitTestSelection(m_lastSelection, m_canvasSelectionStart.x(),
                                               m_canvasSelectionStart.y(), toleranceX, toleranceY);
         if (m_canvasSelectionHandle == mviewer::domain::SelectionHandle::None)
             m_canvasSelectionHandle = mviewer::domain::SelectionHandle::Create;
@@ -318,6 +307,7 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
             m_compareCanvas->update();
         else
             update();
+        positionROIHud();
     }
     return true;
 }
@@ -328,27 +318,7 @@ bool CompareWorkspace::handleCanvasRelease(QEvent *event)
     if (me->button() == Qt::RightButton && m_canvasSelecting)
     {
         m_canvasSelecting = false;
-        if (!m_canvasSelectionMoved)
-        {
-            const ImageFrame *releaseFrame = m_engine.imageAt(m_canvasSelectionPane);
-            const int srcW =
-                releaseFrame ? (releaseFrame->metadata().width > 0 ? releaseFrame->metadata().width
-                                                                   : releaseFrame->width())
-                             : 0;
-            const int srcH = releaseFrame ? (releaseFrame->metadata().height > 0
-                                                 ? releaseFrame->metadata().height
-                                                 : releaseFrame->height())
-                                          : 0;
-            const CellAdjust releaseAdjust =
-                m_canvasSelectionPane >= 0 &&
-                        m_canvasSelectionPane < static_cast<int>(m_cellAdjusts.size())
-                    ? m_cellAdjusts[static_cast<size_t>(m_canvasSelectionPane)]
-                    : CellAdjust{};
-            applySelectionToAll(mviewer::core::mapDisplaySelectionToSource(
-                m_canvasSelectionOrigin, analysisAdjustment(releaseAdjust), srcW, srcH));
-        }
-        else
-            applySelectionToAll(m_lastSelection);
+        applySelectionToAll(!m_canvasSelectionMoved ? m_canvasSelectionOrigin : m_lastSelection);
         m_canvasSelectionHandle = mviewer::domain::SelectionHandle::None;
         me->accept();
         return true;
@@ -538,6 +508,7 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
     if (m_session)
         m_session->forceDecodePriority = true;
     noteCompareInteraction();
+    positionROIHud();
 }
 
 QRectF CompareWorkspace::canvasPaneGeometry(int pane) const
@@ -749,5 +720,19 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
         if (a.isNull() || b.isNull())
             continue;
         p.drawLine(a, b);
+    }
+}
+
+void CompareWorkspace::copyComparisonViewToClipboard()
+{
+    QWidget *target =
+        (m_compareCanvas && m_compareCanvas->isVisible()) ? m_compareCanvas : m_compareGridPage;
+    if (!target)
+        target = this;
+    const QPixmap pm = target->grab();
+    if (!pm.isNull())
+    {
+        QApplication::clipboard()->setPixmap(pm);
+        showCompareStatus(tr("已将当前对比视图复制到剪贴板"));
     }
 }

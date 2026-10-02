@@ -23,15 +23,6 @@ inline double luma(double r, double g, double b)
     return 0.2126 * r + 0.7152 * g + 0.0722 * b; // r,g,b in 0..1
 }
 } // namespace
-namespace
-{
-struct CropBounds
-{
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
-};
 
 CropBounds analysisCropBounds(int sourceWidth, int sourceHeight,
                               const AnalysisAdjustment &adjustment)
@@ -58,6 +49,8 @@ CropBounds analysisCropBounds(const ImageData &source, const AnalysisAdjustment 
     return analysisCropBounds(source.width, source.height, adjustment);
 }
 
+namespace
+{
 void rotateDisplayToCropped(int rotation, int cropWidth, int cropHeight, int displayX, int displayY,
                             int &croppedX, int &croppedY)
 {

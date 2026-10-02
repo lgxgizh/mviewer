@@ -10,8 +10,101 @@
 #include <QTimer>
 #include <QToolBar>
 
+#include <string_view>
+
 namespace
 {
+void drawNavIcon(QPainter &p, std::string_view name, const QColor &fg)
+{
+    if (name == "back" || name == "forward" || name == "up")
+    {
+        const bool b = (name == "back"), f = (name == "forward");
+        const QPointF p1 = b ? QPointF(14, 9) : (f ? QPointF(4, 9) : QPointF(9, 14));
+        const QPointF p2 = b ? QPointF(4, 9) : (f ? QPointF(14, 9) : QPointF(9, 4));
+        p.drawLine(p1, p2);
+        QPolygonF h;
+        if (b) h << QPointF(8, 5) << QPointF(4, 9) << QPointF(8, 13);
+        else if (f) h << QPointF(10, 5) << QPointF(14, 9) << QPointF(10, 13);
+        else h << QPointF(5, 8) << QPointF(9, 4) << QPointF(13, 8);
+        p.drawPolyline(h);
+    }
+    else if (name == "refresh" || name == "rotate_ccw" || name == "rotate_cw")
+    {
+        const bool cw = (name != "rotate_ccw");
+        p.drawArc(QRectF(3.5, 3.5, 11, 11), cw ? 40 * 16 : 140 * 16, cw ? -270 * 16 : 270 * 16);
+        p.setBrush(fg);
+        p.setPen(Qt::NoPen);
+        QPolygonF h;
+        if (cw) h << QPointF(14.5, 5.5) << QPointF(11.5, 4.0) << QPointF(12.8, 7.2);
+        else h << QPointF(3.5, 5.5) << QPointF(6.5, 4.0) << QPointF(5.2, 7.2);
+        p.drawPolygon(h);
+    }
+}
+
+void drawAppIcon(QPainter &p, std::string_view name, const QColor &fg)
+{
+    if (name == "open")
+    {
+        QPolygonF f;
+        f << QPointF(2.5, 4.5) << QPointF(7, 4.5) << QPointF(8.5, 6.5)
+          << QPointF(15.5, 6.5) << QPointF(15.5, 14.5) << QPointF(2.5, 14.5);
+        p.drawPolygon(f);
+        p.drawLine(QPointF(2.5, 8.5), QPointF(15.5, 8.5));
+    }
+    else if (name == "favorite")
+    {
+        p.setBrush(fg);
+        p.setPen(Qt::NoPen);
+        QPolygonF s;
+        s << QPointF(9, 2.5) << QPointF(11, 6.8) << QPointF(15.5, 7.2) << QPointF(12.1, 10.3)
+          << QPointF(13, 15) << QPointF(9, 12.6) << QPointF(5, 15) << QPointF(5.9, 10.3)
+          << QPointF(2.5, 7.2) << QPointF(7, 6.8);
+        p.drawPolygon(s);
+    }
+    else if (name == "compare")
+    {
+        p.drawRoundedRect(QRectF(2.5, 3.5, 13, 11), 1.5, 1.5);
+        p.drawLine(QPointF(9, 3.5), QPointF(9, 14.5));
+    }
+    else if (name == "analysis")
+    {
+        p.setBrush(fg);
+        p.setPen(Qt::NoPen);
+        p.drawRect(QRectF(3, 9, 3, 6));
+        p.drawRect(QRectF(7.5, 4.5, 3, 10.5));
+        p.drawRect(QRectF(12, 7, 3, 8));
+    }
+    else if (name == "search")
+    {
+        p.drawEllipse(QRectF(3, 3, 8, 8));
+        p.drawLine(QPointF(9.5, 9.5), QPointF(14.5, 14.5));
+    }
+    else if (name == "browse")
+    {
+        p.setBrush(fg);
+        p.setPen(Qt::NoPen);
+        p.drawRect(QRectF(3, 3, 4.5, 4.5));
+        p.drawRect(QRectF(10.5, 3, 4.5, 4.5));
+        p.drawRect(QRectF(3, 10.5, 4.5, 4.5));
+        p.drawRect(QRectF(10.5, 10.5, 4.5, 4.5));
+    }
+}
+
+// Procedural crisp vector icons for toolbar actions.
+QIcon makeToolbarIcon(std::string_view name)
+{
+    QPixmap pm(18, 18);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    const QColor fg(220, 220, 220);
+    p.setPen(QPen(fg, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(Qt::NoBrush);
+    drawNavIcon(p, name, fg);
+    drawAppIcon(p, name, fg);
+    return QIcon(pm);
+}
+
 // Address bar: first click / focus selects all (Ctrl+A look) so the user can
 // immediately type a new path or copy. Later clicks while focused keep the
 // caret so partial edits still work.
@@ -70,9 +163,9 @@ void MainWindow::buildBrowserShell()
     browserToolBar->setFloatable(false);
     browserToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     browserToolBar->setIconSize(QSize(18, 18));
-    auto addBrowserAction = [browserToolBar](QAction *action, const char *iconFile)
+    auto addBrowserAction = [browserToolBar](QAction *action, const char *iconName)
     {
-        action->setIcon(QIcon(QStringLiteral(":/app/toolbar/%1.png").arg(QLatin1String(iconFile))));
+        action->setIcon(makeToolbarIcon(iconName));
         browserToolBar->addAction(action);
     };
     addBrowserAction(m_actOpenDir, "open");
@@ -88,49 +181,17 @@ void MainWindow::buildBrowserShell()
     browserToolBar->addSeparator();
     addBrowserAction(m_actBrowseWorkspace, "browse");
     browserToolBar->addSeparator();
-    // Rotate actions share the Edit-menu QActions (stable objectNames for tests).
+    if (m_actRotateCCW)
     {
-        auto makeRotateIcon = [](bool clockwise)
-        {
-            QPixmap pm(18, 18);
-            pm.fill(Qt::transparent);
-            QPainter p(&pm);
-            p.setRenderHint(QPainter::Antialiasing, true);
-            p.setPen(QPen(QColor(220, 220, 220), 1.6));
-            p.setBrush(Qt::NoBrush);
-            const QRectF arc(3.5, 3.5, 11.0, 11.0);
-            if (clockwise)
-                p.drawArc(arc, 40 * 16, -270 * 16);
-            else
-                p.drawArc(arc, 140 * 16, 270 * 16);
-            p.setBrush(QColor(220, 220, 220));
-            p.setPen(Qt::NoPen);
-            if (clockwise)
-            {
-                QPolygonF head;
-                head << QPointF(14.5, 5.5) << QPointF(11.5, 4.0) << QPointF(12.8, 7.2);
-                p.drawPolygon(head);
-            }
-            else
-            {
-                QPolygonF head;
-                head << QPointF(3.5, 5.5) << QPointF(6.5, 4.0) << QPointF(5.2, 7.2);
-                p.drawPolygon(head);
-            }
-            return QIcon(pm);
-        };
-        if (m_actRotateCCW)
-        {
-            m_actRotateCCW->setIcon(makeRotateIcon(false));
-            m_actRotateCCW->setToolTip(tr("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)"));
-            browserToolBar->addAction(m_actRotateCCW);
-        }
-        if (m_actRotateCW)
-        {
-            m_actRotateCW->setIcon(makeRotateIcon(true));
-            m_actRotateCW->setToolTip(tr("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)"));
-            browserToolBar->addAction(m_actRotateCW);
-        }
+        m_actRotateCCW->setIcon(makeToolbarIcon("rotate_ccw"));
+        m_actRotateCCW->setToolTip(tr("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)"));
+        browserToolBar->addAction(m_actRotateCCW);
+    }
+    if (m_actRotateCW)
+    {
+        m_actRotateCW->setIcon(makeToolbarIcon("rotate_cw"));
+        m_actRotateCW->setToolTip(tr("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)"));
+        browserToolBar->addAction(m_actRotateCW);
     }
 
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
@@ -218,10 +279,10 @@ QWidget *MainWindow::buildNavigationPanel()
     foldersLabel->setFixedHeight(24);
     foldersLayout->addWidget(foldersLabel);
 
-    // Directory tree only — the old 「搜索目录」 filter is removed; path jumps
-    // go through the gallery address bar (pathEdit) above the sort strip.
     m_directoryTree = new DirectoryTree(foldersSection);
     m_directoryTree->installEventFilter(this);
+    if (m_directoryTree->viewport())
+        m_directoryTree->viewport()->installEventFilter(this);
     foldersLayout->addWidget(m_directoryTree, 1);
     leftWidget->addWidget(foldersSection);
 
@@ -509,22 +570,23 @@ QWidget *MainWindow::buildGalleryPanel()
     m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
     m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
     m_thumbnailPanel->installEventFilter(this);
+    if (m_thumbnailPanel->viewport())
+        m_thumbnailPanel->viewport()->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
 
-    // NOTE: clang-format 22.1.8 mis-parses the HTML '>" at a line break; the
-    // text blocks below are format-guarded.
-    // Empty-state hint: friendly call-to-action shown until the first
-    // directory is opened (first-run guidance; hidden as soon as browsing
-    // starts). Pure overlay: transparent for mouse events, so the gallery
-    // beneath stays fully interactive.
+    // Empty-state hint overlay: shown until the first directory is opened.
     m_emptyState = new QLabel(m_thumbnailPanel);
     m_emptyState->setObjectName(QStringLiteral("emptyStateLabel"));
     m_emptyState->setAlignment(Qt::AlignCenter);
     m_emptyState->setWordWrap(true);
     m_emptyState->setTextFormat(Qt::RichText);
     // clang-format off
-    m_emptyState->setText(tr("<div style='color:#9aa0a6; font-size:16px;'>\u6253\u5f00\u4e00\u4e2a\u6587\u4ef6\u5939\u4ee5\u5f00\u59cb\u6d4f\u89c8</div>"
-                             "<div style='color:#b0b4b8; font-size:12px; margin-top:8px;'>Ctrl+O \u6253\u5f00\u76ee\u5f55 \u00b7 \u4e5f\u53ef\u5c06\u56fe\u7247\u6216\u6587\u4ef6\u5939\u62d6\u5165\u7a97\u53e3</div>"));
+    m_emptyState->setText(tr("<table align='center'><tr><td bgcolor='#1c1c1f' align='center' style='padding:22px 32px; border:1px solid #333338; border-radius:8px;'>"
+                             "<div style='color:#f4f4f5; font-size:15px; font-weight:600; margin-bottom:8px;'>\u6253\u5f00\u4e00\u4e2a\u6587\u4ef6\u5939\u4ee5\u5f00\u59cb\u6d4f\u89c8</div>"
+                             "<div style='color:#a1a1aa; font-size:12px;'>"
+                             "<span style='background-color:#2a2b30; color:#e4e4e7;'>&nbsp;Ctrl+O&nbsp;</span> "
+                             "\u6253\u5f00\u76ee\u5f55 &nbsp;\u00b7&nbsp; \u4e5f\u53ef\u5c06\u56fe\u7247\u6216\u6587\u4ef6\u5939\u62d6\u5165\u7a97\u53e3</div>"
+                             "</td></tr></table>"));
     // clang-format on
     m_emptyState->setAttribute(Qt::WA_TransparentForMouseEvents);
     m_emptyState->show();
@@ -539,8 +601,10 @@ QWidget *MainWindow::buildGalleryPanel()
     m_emptyFolderLabel->setWordWrap(true);
     m_emptyFolderLabel->setTextFormat(Qt::RichText);
     // clang-format off
-    m_emptyFolderLabel->setText(tr("<div style='color:#9aa0a6; font-size:15px;'>\u6b64\u6587\u4ef6\u5939\u4e2d\u6ca1\u6709\u53ef\u663e\u793a\u7684\u56fe\u7247</div>"
-                                 "<div style='color:#b0b4b8; font-size:12px; margin-top:8px;'>\u5c1d\u8bd5\u6e05\u9664\u7b5b\u9009\u6216\u6362\u4e00\u4e2a\u6587\u4ef6\u5939</div>"));
+    m_emptyFolderLabel->setText(tr("<table align='center'><tr><td bgcolor='#1c1c1f' align='center' style='padding:22px 32px; border:1px solid #333338; border-radius:8px;'>"
+                                   "<div style='color:#f4f4f5; font-size:15px; font-weight:600; margin-bottom:8px;'>\u6b64\u6587\u4ef6\u5939\u4e2d\u6ca1\u6709\u53ef\u663e\u793a\u7684\u56fe\u7247</div>"
+                                   "<div style='color:#a1a1aa; font-size:12px;'>\u5c1d\u8bd5\u6e05\u9664\u7b5b\u9009\u6216\u6362\u4e00\u4e2a\u6587\u4ef6\u5939</div>"
+                                   "</td></tr></table>"));
     // clang-format on
     m_emptyFolderLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
     m_emptyFolderLabel->hide();
@@ -685,6 +749,7 @@ void MainWindow::buildStatusBarUi()
     m_lblSize = new QLabel("大小 0 B", this);
     m_lblZoom = new QLabel("缩放 —", this);
     m_lblCache = new QLabel("命中率 —", this);
+    m_lblCache->setToolTip(tr("缓存命中率: 提升连续大图切换与缩略图加载性能"));
     for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
         l->setContentsMargins(8, 0, 8, 0);
     statusBar()->addPermanentWidget(m_lblImage);
@@ -696,7 +761,11 @@ void MainWindow::buildStatusBarUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
             {
-                m_lblCount->setText(QString("图片 %1").arg(total));
+                const int idx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
+                if (total > 0 && idx >= 0)
+                    m_lblCount->setText(QString("图片 %1 / %2").arg(idx + 1).arg(total));
+                else
+                    m_lblCount->setText(QString("图片 %1").arg(total));
                 if (selected > 0)
                     m_lblSize->setText(
                         QString("已选 %1 · %2").arg(selected).arg(formatBytes(selBytes)));
@@ -704,7 +773,13 @@ void MainWindow::buildStatusBarUi()
                     m_lblSize->setText(QString("大小 %1").arg(formatBytes(totalBytes)));
             });
     connect(m_imageViewer, &ImageViewer::zoomChanged, this,
-            [this](int pct) { m_lblZoom->setText(QString("缩放 %1%").arg(pct)); });
+            [this](int pct)
+            {
+                if (m_imageViewer && m_imageViewer->isFitMode())
+                    m_lblZoom->setText(QString("缩放 %1% (自适应)").arg(pct));
+                else
+                    m_lblZoom->setText(QString("缩放 %1%").arg(pct));
+            });
 
     m_statTimer = new QTimer(this);
     connect(m_statTimer, &QTimer::timeout, this, &MainWindow::updateCacheStat);

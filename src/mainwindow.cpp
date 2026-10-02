@@ -600,6 +600,13 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     setWindowTitle(QString("%1 - MViewer").arg(fileName));
     m_lblImage->setText(fileName);
     statusBar()->showMessage(QString("当前: %1").arg(fileName));
+    if (m_lblCount && m_imageList && m_imageList->count() > 0)
+    {
+        const int idx = m_imageList->indexOf(path);
+        m_lblCount->setText(idx >= 0
+                                ? QString("图片 %1 / %2").arg(idx + 1).arg(m_imageList->count())
+                                : QString("图片 %1").arg(m_imageList->count()));
+    }
 
     ++m_statusMetadataGeneration;
     const uint64_t generation = m_statusMetadataGeneration;
@@ -649,9 +656,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
 
 void MainWindow::openDirectory(const QString &dir)
 {
-    if (dir.isEmpty())
-        return;
-    m_directoryTree->navigateTo(dir);
+    changeDirectory(dir);
 }
 
 void MainWindow::changeDirectory(const QString &dir)

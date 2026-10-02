@@ -80,7 +80,7 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                 QObject::connect(actCopyCell, &QAction::triggered,
                                  [cellText]() { QApplication::clipboard()->setText(cellText); });
             }
-            auto rowToTsv = [inspector](int r) -> QString
+            auto rowCells = [inspector](int r) -> QStringList
             {
                 QStringList cells;
                 for (int c = 0; c < inspector->columnCount(); ++c)
@@ -88,33 +88,58 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                     auto *it = inspector->item(r, c);
                     cells << (it ? it->text() : QString());
                 }
-                return cells.join('\t');
+                return cells;
             };
             const int row = item ? item->row() : inspector->currentRow();
             if (row >= 0 && row < inspector->rowCount())
             {
-                const QString rowText = rowToTsv(row);
+                const auto cells = rowCells(row);
+                const QString rowText = cells.join('\t');
                 QAction *actCopyRow = menu.addAction(QObject::tr("复制该行数据"));
                 QObject::connect(actCopyRow, &QAction::triggered,
                                  [rowText]() { QApplication::clipboard()->setText(rowText); });
+                if (cells.size() >= 5)
+                {
+                    bool okR = false, okG = false, okB = false;
+                    const int r = cells[2].toInt(&okR), g = cells[3].toInt(&okG), b = cells[4].toInt(&okB);
+                    if (okR && okG && okB)
+                    {
+                        const QString hex = QString("#%1%2%3")
+                            .arg(std::clamp(r, 0, 255), 2, 16, QLatin1Char('0'))
+                            .arg(std::clamp(g, 0, 255), 2, 16, QLatin1Char('0'))
+                            .arg(std::clamp(b, 0, 255), 2, 16, QLatin1Char('0')).toUpper();
+                        const QString rgb = QString("rgb(%1, %2, %3)").arg(r).arg(g).arg(b);
+                        auto *actHex = menu.addAction(QObject::tr("复制 HEX 颜色 (%1)").arg(hex));
+                        QObject::connect(actHex, &QAction::triggered, [hex]() { QApplication::clipboard()->setText(hex); });
+                        auto *actRgb = menu.addAction(QObject::tr("复制 RGB 颜色 (%1)").arg(rgb));
+                        QObject::connect(actRgb, &QAction::triggered, [rgb]() { QApplication::clipboard()->setText(rgb); });
+                    }
+                }
             }
             if (inspector->rowCount() > 0)
             {
-                QAction *actCopyTable = menu.addAction(QObject::tr("复制全部表格数据"));
-                QObject::connect(actCopyTable, &QAction::triggered,
-                                 [inspector, rowToTsv]()
-                                 {
-                                     QStringList lines, headers;
-                                     for (int c = 0; c < inspector->columnCount(); ++c)
-                                     {
-                                         auto *h = inspector->horizontalHeaderItem(c);
-                                         headers << (h ? h->text() : QString());
-                                     }
-                                     lines << headers.join('\t');
-                                     for (int r = 0; r < inspector->rowCount(); ++r)
-                                         lines << rowToTsv(r);
-                                     QApplication::clipboard()->setText(lines.join('\n'));
-                                 });
+                auto *actCopyTable = menu.addAction(QObject::tr("复制全部表格数据"));
+                auto *actCopyMd = menu.addAction(QObject::tr("复制为 Markdown 表格"));
+                auto copyFormatted = [inspector, rowCells](bool md)
+                {
+                    QStringList lines, headers, seps;
+                    for (int c = 0; c < inspector->columnCount(); ++c)
+                    {
+                        auto *h = inspector->horizontalHeaderItem(c);
+                        headers << (h ? h->text() : QString());
+                        if (md) seps << "---";
+                    }
+                    lines << (md ? "| " + headers.join(" | ") + " |" : headers.join('\t'));
+                    if (md) lines << "| " + seps.join(" | ") + " |";
+                    for (int r = 0; r < inspector->rowCount(); ++r)
+                    {
+                        const auto c = rowCells(r);
+                        lines << (md ? "| " + c.join(" | ") + " |" : c.join('\t'));
+                    }
+                    QApplication::clipboard()->setText(lines.join('\n'));
+                };
+                QObject::connect(actCopyTable, &QAction::triggered, [=]() { copyFormatted(false); });
+                QObject::connect(actCopyMd, &QAction::triggered, [=]() { copyFormatted(true); });
             }
             if (!menu.isEmpty())
                 menu.exec(inspector->viewport()->mapToGlobal(pos));

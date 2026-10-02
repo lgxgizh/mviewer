@@ -51,9 +51,11 @@ inline long accumulateGray256(const uint8_t *data, int64_t stride, int64_t x0, i
     for (int64_t y = y0; y < y1; y += sy)
     {
         const uint8_t *row = data + static_cast<size_t>(y) * static_cast<size_t>(stride);
-        for (int64_t x = x0; x < x1; x += sx)
+        const uint8_t *p = row + x0;
+        const uint8_t *end = row + x1;
+        for (; p < end; p += sx)
         {
-            const uint8_t gVal = row[x];
+            const uint8_t gVal = *p;
             rAcc[gVal]++;
             gAcc[gVal]++;
             bAcc[gVal]++;
@@ -70,12 +72,14 @@ inline long accumulateBgr256(const uint8_t *data, int64_t stride, int cpp, int64
                              long *bAcc, long *lumaAcc, long *vAcc)
 {
     long samples = 0;
+    const size_t step = static_cast<size_t>(sx) * static_cast<size_t>(cpp);
     for (int64_t y = y0; y < y1; y += sy)
     {
         const uint8_t *row = data + static_cast<size_t>(y) * static_cast<size_t>(stride);
-        for (int64_t x = x0; x < x1; x += sx)
+        const uint8_t *p = row + static_cast<size_t>(x0) * static_cast<size_t>(cpp);
+        const uint8_t *end = row + static_cast<size_t>(x1) * static_cast<size_t>(cpp);
+        for (; p < end; p += step)
         {
-            const uint8_t *p = row + static_cast<size_t>(x) * static_cast<size_t>(cpp);
             const uint8_t B = p[0];
             const uint8_t G = p[1];
             const uint8_t R = p[2];
@@ -84,7 +88,7 @@ inline long accumulateBgr256(const uint8_t *data, int64_t stride, int cpp, int64
             bAcc[B]++;
             const int Y = luminance(R, G, B);
             lumaAcc[Y]++;
-            const uint8_t V = std::max({R, G, B});
+            const uint8_t V = std::max(std::max(R, G), B);
             vAcc[V]++;
             ++samples;
         }
@@ -97,12 +101,14 @@ inline long accumulateRgb256(const uint8_t *data, int64_t stride, int cpp, int64
                              long *bAcc, long *lumaAcc, long *vAcc)
 {
     long samples = 0;
+    const size_t step = static_cast<size_t>(sx) * static_cast<size_t>(cpp);
     for (int64_t y = y0; y < y1; y += sy)
     {
         const uint8_t *row = data + static_cast<size_t>(y) * static_cast<size_t>(stride);
-        for (int64_t x = x0; x < x1; x += sx)
+        const uint8_t *p = row + static_cast<size_t>(x0) * static_cast<size_t>(cpp);
+        const uint8_t *end = row + static_cast<size_t>(x1) * static_cast<size_t>(cpp);
+        for (; p < end; p += step)
         {
-            const uint8_t *p = row + static_cast<size_t>(x) * static_cast<size_t>(cpp);
             const uint8_t R = p[0];
             const uint8_t G = p[1];
             const uint8_t B = p[2];
@@ -111,7 +117,7 @@ inline long accumulateRgb256(const uint8_t *data, int64_t stride, int cpp, int64
             bAcc[B]++;
             const int Y = luminance(R, G, B);
             lumaAcc[Y]++;
-            const uint8_t V = std::max({R, G, B});
+            const uint8_t V = std::max(std::max(R, G), B);
             vAcc[V]++;
             ++samples;
         }
@@ -184,7 +190,7 @@ inline Histogram accumulateNBins(const ImageBuffer &v, int64_t x0, int64_t y0, i
             const int Y = luminance(static_cast<uint8_t>(R), static_cast<uint8_t>(G),
                                     static_cast<uint8_t>(B));
             h.luma[std::min(Y, maxBin)]++;
-            const int V = std::max({R, G, B});
+            const int V = std::max(std::max(R, G), B);
             h.v[std::min(V, maxBin)]++;
             ++samples;
         }

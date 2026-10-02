@@ -95,8 +95,9 @@ struct ThumbnailPipeline
         cancelHandlesLocked();
         m_sources = paths;
         m_pending.clear();
-        m_pathRevisions.clear();
         m_failed.clear();
+        m_attemptedKeys.clear();
+        m_pathRevisions.clear();
     }
 
     // M54: publish discovered batches without superseding already decoded
@@ -126,7 +127,7 @@ struct ThumbnailPipeline
         std::lock_guard<std::mutex> lk(m_mtx);
         m_sources = paths;
         cancelObsoleteHandlesLocked();
-        scheduleLocked();
+        scheduleLocked(false);
     }
 
     // M56: invalidate one source without resetting the directory generation or
@@ -148,6 +149,15 @@ struct ThumbnailPipeline
             m_memCacheBytes -= it->second.data.byteSize();
             m_lru.erase(it->second.lruIt);
             it = m_memCache.erase(it);
+        }
+        for (auto it = m_attemptedKeys.begin(); it != m_attemptedKeys.end();)
+        {
+            if (it->rfind(prefix, 0) != 0)
+            {
+                ++it;
+                continue;
+            }
+            it = m_attemptedKeys.erase(it);
         }
         for (auto it = m_pending.begin(); it != m_pending.end();)
         {
@@ -189,7 +199,7 @@ struct ThumbnailPipeline
         // with the per-enqueue owner token below, closes the same-generation
         // ABA window when a running decoder outlives cancellation.
         cancelObsoleteHandlesLocked();
-        scheduleLocked();
+        scheduleLocked(false);
     }
 
     // Number of neighbors beyond the visible range to pre-decode at Background
@@ -235,6 +245,7 @@ struct ThumbnailPipeline
         m_lru.clear();
         m_pending.clear();
         m_failed.clear();
+        m_attemptedKeys.clear();
         m_memCacheBytes = 0;
     }
 
@@ -255,7 +266,7 @@ struct ThumbnailPipeline
         }
         ++m_misses;
         // Kick scheduling in case this path is newly visible.
-        scheduleLocked();
+        scheduleLocked(false);
         return ImageData{};
     }
 
@@ -270,8 +281,9 @@ struct ThumbnailPipeline
         m_lru.clear();
         m_sources.clear();
         m_pending.clear();
-        m_pathRevisions.clear();
         m_failed.clear();
+        m_attemptedKeys.clear();
+        m_pathRevisions.clear();
         m_memCacheBytes = 0;
     }
 
@@ -363,38 +375,70 @@ struct ThumbnailPipeline
         return k + "\x1e" + std::to_string(gen) + "\x1f" + std::to_string(owner);
     }
 
-    // Must hold m_mtx. Enqueues visible items (Thumbnail prio) then predictive
-    // neighbors (also Thumbnail prio, enqueued AFTER visible).
+    // Must hold m_mtx. Until every visible key is cached or has failed, keep
+    // only a few decodes in flight and do not start the predictive window.
+    // The thumbnail pool has one thread per core, so queueing the whole
+    // folder at once lets off-screen work run beside the first cells.
     //
-    // Priority note (M10 P1 fix): neighbors were previously submitted at
-    // Background priority, which maps to a SEPARATE QThreadPool that runs
-    // concurrently with the Thumbnail pool. Under many cores the Background
-    // pool finished neighbor decodes BEFORE some visible decodes still queued
-    // in the Thumbnail pool -> tier_ordering=VIOLATED (visible not strictly
-    // ahead). Submitting both to the SAME Thumbnail pool with visible enqueued
-    // first gives FIFO ordering: visible tasks occupy the front of the queue
-    // and drain before any neighbor starts, so background never preempts
-    // visible. No Scheduler redesign -- just correct pool usage.
-    void scheduleLocked()
+    // refillOnly is the completion path. It must not submit a key again:
+    // a thumbnail that was just evicted to stay inside the byte budget would
+    // otherwise be decoded forever, and the pipeline would still be running
+    // after its owner was destroyed. A viewport or cache-miss schedule passes
+    // false and may retry those keys.
+    //
+    // Both tiers still use the Thumbnail pool (M10): a separate Background
+    // pool finished neighbors before visible cells. Predictive work starts
+    // only after the visible set is settled, still behind that set.
+    void scheduleLocked(bool refillOnly)
     {
         if (!m_decode)
             return;
         const size_t n = m_sources.size();
-        // Visible range (clamped) -- enqueued FIRST so it leads the queue.
         const size_t vb = std::min(m_visibleBegin, n);
         const size_t ve = std::min(m_visibleEnd, n);
+        if (!visibleDemandSatisfiedLocked(vb, ve))
+        {
+            size_t inFlight = 0;
+            for (size_t i = vb; i < ve; ++i)
+            {
+                if (m_pending.count(key(m_sources[i], thumbSize)) != 0)
+                    ++inFlight;
+            }
+            for (size_t i = vb; i < ve && inFlight < kVisibleFirstWave; ++i)
+            {
+                const std::string k = key(m_sources[i], thumbSize);
+                if (m_memCache.count(k) != 0 || m_failed.count(k) != 0 || m_pending.count(k) != 0)
+                    continue;
+                enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail, refillOnly);
+                if (m_pending.count(k) != 0)
+                    ++inFlight;
+            }
+            return;
+        }
         for (size_t i = vb; i < ve; ++i)
-            enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail);
-        // Predictive neighbors after the visible range -- same pool, behind
-        // visible in FIFO order, so they never preempt visible work.
+            enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail, refillOnly);
+        // Predictive neighbors after the visible range. Reverse prefetch is
+        // omitted: the user scrolls forward.
         const size_t pe = std::min(ve + m_predictive, n);
         for (size_t i = ve; i < pe; ++i)
-            enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail);
-        // (Predictive *before* the visible range is intentionally omitted: the
-        // user scrolls forward; reverse prefetch can be added later.)
+            enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail, refillOnly);
     }
 
-    void enqueueLocked(const std::string &path, TaskScheduler::Priority prio)
+    // Must hold m_mtx. A visible key is settled when its thumbnail is cached
+    // or that decode already failed. Failures are not retried from completion,
+    // or a null thumb would reschedule itself forever.
+    bool visibleDemandSatisfiedLocked(size_t vb, size_t ve) const
+    {
+        for (size_t i = vb; i < ve; ++i)
+        {
+            const std::string k = key(m_sources[i], thumbSize);
+            if (m_memCache.count(k) == 0 && m_failed.count(k) == 0)
+                return false;
+        }
+        return true;
+    }
+
+    void enqueueLocked(const std::string &path, TaskScheduler::Priority prio, bool refillOnly)
     {
         const int size = thumbSize;
         const std::string k = key(path, size);
@@ -403,6 +447,11 @@ struct ThumbnailPipeline
         auto pit = m_pending.find(k);
         if (pit != m_pending.end())
             return; // already owned by the current demand window
+        // Completion refill must not re-decode a key that already ran. Eviction
+        // and an oversized reject both leave the key uncached; retrying here
+        // never settles. Viewport scheduling passes refillOnly == false.
+        if (refillOnly && m_attemptedKeys.count(k) != 0)
+            return;
         const uint64_t owner = ++m_nextOwner;
         const std::string ownerKey = handleKey(k, m_gen, owner);
         m_pending[k] = PendingEntry{owner, ownerKey};
@@ -410,6 +459,7 @@ struct ThumbnailPipeline
         ResultFn result = m_result;
         const uint64_t gen = m_gen;
         const uint64_t pathRevision = m_pathRevisions[path];
+        m_attemptedKeys.insert(k);
         auto handle = TaskScheduler::instance().submit(
             prio,
             [this, path, size, k, gen, owner, ownerKey, decode, result,
@@ -458,7 +508,6 @@ struct ThumbnailPipeline
                         // mutex. The state mutations above are done; only the
                         // user-visible delivery remains.
                         deliver = thumb;
-                        cb = result;
                     }
                     else
                     {
@@ -468,8 +517,9 @@ struct ThumbnailPipeline
                         // drop the set; replaceSources() keeps it.
                         m_failed.insert(k);
                         deliver = ImageData{};
-                        cb = result;
                     }
+                    cb = result;
+                    scheduleLocked(true);
                 }
                 if (cb)
                 {
@@ -499,6 +549,7 @@ struct ThumbnailPipeline
             auto pendIt = m_pending.find(k);
             if (pendIt != m_pending.end() && pendIt->second.owner == owner)
                 m_pending.erase(pendIt);
+            m_attemptedKeys.erase(k);
         }
     }
 
@@ -596,6 +647,9 @@ struct ThumbnailPipeline
     size_t m_visibleBegin = 0;
     size_t m_visibleEnd = 0;
     size_t m_predictive = 16;
+    // In-flight cap until the visible window is cached or failed. The pool
+    // would otherwise run the whole folder beside the first cells.
+    static constexpr size_t kVisibleFirstWave = 16;
     uint64_t m_gen = 0;
     DecodeFn m_decode = [](const std::string &path, int size)
     { return Decoder::decodeScaled(path, size); };
@@ -616,6 +670,9 @@ struct ThumbnailPipeline
     // by replaceSources()/updateSources(), so a same-generation retry after
     // setSources() (which clears this set) still works.
     std::unordered_set<std::string> m_failed;
+    // Keys submitted for this generation. Completion refill will not submit
+    // them again; setVisibleRange() and request() may.
+    std::unordered_set<std::string> m_attemptedKeys;
     std::unordered_map<std::string, uint64_t> m_pathRevisions;
     uint64_t m_nextOwner = 0;
 };

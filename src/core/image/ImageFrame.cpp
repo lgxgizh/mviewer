@@ -145,23 +145,70 @@ void ImageFrame::computeHistogram()
     const bool bgr =
         (m_pixels.format == PixelFormat::BGR24 || m_pixels.format == PixelFormat::BGRA32);
     int64_t sumL = 0, sumR = 0, sumG = 0, sumB = 0;
-    for (int y = 0; y < h; ++y)
+    if (gray)
     {
-        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-        for (int x = 0; x < w; ++x)
+        for (int y = 0; y < h; ++y)
         {
-            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            const int r = gray ? p[0] : (bgr ? p[2] : p[0]);
-            const int g = gray ? p[0] : p[1];
-            const int b = gray ? p[0] : (bgr ? p[0] : p[2]);
-            ++m_histogram.luminance[std::clamp(luminance(r, g, b), 0, 255)];
-            ++m_histogram.red[std::clamp(r, 0, 255)];
-            ++m_histogram.green[std::clamp(g, 0, 255)];
-            ++m_histogram.blue[std::clamp(b, 0, 255)];
-            sumR += r;
-            sumG += g;
-            sumB += b;
-            sumL += luminance(r, g, b);
+            const uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *end = p + w;
+            for (; p < end; ++p)
+            {
+                const uint8_t gVal = *p;
+                ++m_histogram.luminance[gVal];
+                ++m_histogram.red[gVal];
+                ++m_histogram.green[gVal];
+                ++m_histogram.blue[gVal];
+                sumR += gVal;
+                sumG += gVal;
+                sumB += gVal;
+                sumL += gVal;
+            }
+        }
+    }
+    else if (bgr)
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *end = p + static_cast<size_t>(w) * static_cast<size_t>(cpp);
+            for (; p < end; p += cpp)
+            {
+                const uint8_t bVal = p[0];
+                const uint8_t gVal = p[1];
+                const uint8_t rVal = p[2];
+                const int lum = luminance(rVal, gVal, bVal);
+                ++m_histogram.luminance[lum];
+                ++m_histogram.red[rVal];
+                ++m_histogram.green[gVal];
+                ++m_histogram.blue[bVal];
+                sumR += rVal;
+                sumG += gVal;
+                sumB += bVal;
+                sumL += lum;
+            }
+        }
+    }
+    else
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *end = p + static_cast<size_t>(w) * static_cast<size_t>(cpp);
+            for (; p < end; p += cpp)
+            {
+                const uint8_t rVal = p[0];
+                const uint8_t gVal = p[1];
+                const uint8_t bVal = p[2];
+                const int lum = luminance(rVal, gVal, bVal);
+                ++m_histogram.luminance[lum];
+                ++m_histogram.red[rVal];
+                ++m_histogram.green[gVal];
+                ++m_histogram.blue[bVal];
+                sumR += rVal;
+                sumG += gVal;
+                sumB += bVal;
+                sumL += lum;
+            }
         }
     }
     m_histogram.lumMean = static_cast<double>(sumL) / n;

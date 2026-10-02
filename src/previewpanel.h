@@ -51,6 +51,10 @@ class PreviewPanel : public QWidget
   public slots:
     void setImage(const QString &path, const QPixmap &warmThumbnail = QPixmap(),
                   const QSize &knownSourceSize = QSize(), qint64 knownFileSize = -1);
+    // A gallery thumbnail that arrives after setImage(). Shows it at once and
+    // leaves the in-flight sharp preview decode running.
+    void offerWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
+                            const QSize &knownSourceSize = QSize(), qint64 knownFileSize = -1);
 
     // Test/embedding observability: whether a preview is currently shown.
     bool hasImage() const

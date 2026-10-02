@@ -206,6 +206,7 @@ CompareWorkspace::NavState CompareWorkspace::captureNavState() const
     s.diffGainIndex = m_diffGainCombo ? m_diffGainCombo->currentIndex() : 0;
     s.syncZoom = m_syncZoomChk ? m_syncZoomChk->isChecked() : true;
     s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
+    s.syncRotate = m_syncRotate;
     s.crosshair = m_crosshairChk && m_crosshairChk->isChecked();
     s.pixelLink = m_pixelLinkChk && m_pixelLinkChk->isChecked();
     s.filenameOverlay = m_filenameOverlay;
@@ -224,6 +225,7 @@ void CompareWorkspace::restoreNavState(const NavState &s)
         m_syncZoomChk->setChecked(s.syncZoom);
     if (m_syncDragChk)
         m_syncDragChk->setChecked(s.syncDrag);
+    setSyncRotate(s.syncRotate);
     if (m_crosshairChk)
         m_crosshairChk->setChecked(s.crosshair);
     if (m_pixelLinkChk)
@@ -537,7 +539,6 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
             view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
                 m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
         }
-        clearROIStatsDisplay();
         if (m_roiGeometryLabel)
             m_roiGeometryLabel->setText(m_lastSelection.isEmpty()
                                             ? tr("ROI: —")
@@ -548,17 +549,14 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
                                                   .arg(m_lastSelection.height));
         if (m_roiHistChk && m_roiHistChk->isChecked())
             refreshHistograms();
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                               tr("Linked ROI unavailable — image dimensions differ"));
+        scheduleROIMeasurement();
         update();
         return;
     }
 
-    const ImageFrame *first = m_engine.imageAt(0);
-    const int width =
-        first ? (first->metadata().width > 0 ? first->metadata().width : first->width()) : 0;
-    const int height =
-        first ? (first->metadata().height > 0 ? first->metadata().height : first->height()) : 0;
+    const QSize common = paneEffectiveSize(0);
+    const int width = common.isValid() ? common.width() : 0;
+    const int height = common.isValid() ? common.height() : 0;
     m_lastSelection = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
                                                           sel.y + sel.height, width, height);
     m_roiLinked = !m_lastSelection.isEmpty();
@@ -577,16 +575,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
             m_cellViews[i]->clearSelection();
             continue;
         }
-        const ImageFrame *frame = m_engine.imageAt(i);
-        const int srcW =
-            frame ? (frame->metadata().width > 0 ? frame->metadata().width : frame->width()) : 0;
-        const int srcH =
-            frame ? (frame->metadata().height > 0 ? frame->metadata().height : frame->height()) : 0;
-        const CellAdjust adjust = i < static_cast<int>(m_cellAdjusts.size())
-                                      ? m_cellAdjusts[static_cast<size_t>(i)]
-                                      : CellAdjust{};
-        m_cellViews[i]->setSelection(mviewer::core::mapSourceSelectionToDisplay(
-            m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
+        m_cellViews[i]->setSelection(m_lastSelection);
     }
     // M23: ROI + Histogram 联动 — histogram surfaces keep their ROI scope
     // even when the analysis side panel is collapsed.
@@ -615,65 +604,41 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
 {
     if (!view)
         return;
-    const int pane = view->cellIndex();
-    const ImageFrame *paneFrame = m_engine.imageAt(pane);
-    const int paneW = paneFrame ? (paneFrame->metadata().width > 0 ? paneFrame->metadata().width
-                                                                   : paneFrame->width())
-                                : 0;
-    const int paneH = paneFrame ? (paneFrame->metadata().height > 0 ? paneFrame->metadata().height
-                                                                    : paneFrame->height())
-                                : 0;
-    const CellAdjust paneAdjust = pane >= 0 && pane < static_cast<int>(m_cellAdjusts.size())
-                                      ? m_cellAdjusts[static_cast<size_t>(pane)]
-                                      : CellAdjust{};
-    const auto sourceSel = mviewer::core::mapDisplaySelectionToSource(
-        sel, analysisAdjustment(paneAdjust), paneW, paneH);
     if (!linkedROIAvailable())
     {
-        // Keep a useful active-pane preview for unequal dimensions, but never
-        // mirror it or present it as a linked measurement.
         m_roiLinked = false;
-        m_lastSelection = {};
-        for (RawImageView *other : m_cellViews)
-            if (other)
-                other->clearSelection();
-        if (paneFrame)
-        {
-            view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
-                sourceSel, analysisAdjustment(paneAdjust), paneW, paneH));
-        }
-        clearROIStatsDisplay();
+        const QSize srcSize = view->sourceSize();
+        const int w = srcSize.isValid() ? srcSize.width() : 0;
+        const int h = srcSize.isValid() ? srcSize.height() : 0;
+        const auto norm = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
+                                                              sel.y + sel.height, w, h);
+        view->setSelection(norm);
+        m_lastSelection = norm;
         if (m_roiGeometryLabel)
-            m_roiGeometryLabel->setText(tr("ROI: —"));
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                               tr("Linked ROI unavailable — image dimensions differ"));
+            m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
+                                                      : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                            .arg(norm.x)
+                                                            .arg(norm.y)
+                                                            .arg(norm.width)
+                                                            .arg(norm.height));
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle,
+                               tr("Release ROI to measure Source RGB"));
+        update();
         return;
     }
 
-    const ImageFrame *first = m_engine.imageAt(0);
-    const int width =
-        first ? (first->metadata().width > 0 ? first->metadata().width : first->width()) : 0;
-    const int height =
-        first ? (first->metadata().height > 0 ? first->metadata().height : first->height()) : 0;
+    const QSize common = paneEffectiveSize(0);
+    const int width = common.isValid() ? common.width() : 0;
+    const int height = common.isValid() ? common.height() : 0;
     m_lastSelection =
-        mviewer::domain::normalizeSelection(sourceSel.x, sourceSel.y, sourceSel.x + sourceSel.width,
-                                            sourceSel.y + sourceSel.height, width, height);
+        mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
+                                            sel.y + sel.height, width, height);
     m_roiLinked = !m_lastSelection.isEmpty();
     for (RawImageView *other : m_cellViews)
     {
         if (!other)
             continue;
-        const int idx = other->cellIndex();
-        const ImageFrame *frame = m_engine.imageAt(idx);
-        const int srcW =
-            frame ? (frame->metadata().width > 0 ? frame->metadata().width : frame->width()) : 0;
-        const int srcH =
-            frame ? (frame->metadata().height > 0 ? frame->metadata().height : frame->height()) : 0;
-        const CellAdjust adjust = idx >= 0 && idx < static_cast<int>(m_cellAdjusts.size())
-                                      ? m_cellAdjusts[static_cast<size_t>(idx)]
-                                      : CellAdjust{};
-        other->setSelection(mviewer::core::mapSourceSelectionToDisplay(
-            m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
+        other->setSelection(m_lastSelection);
     }
     clearROIStatsDisplay();
     if (m_roiGeometryLabel)
@@ -693,48 +658,30 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
 {
     if (!view)
         return;
-    const int pane = view->cellIndex();
-    const ImageFrame *paneFrame = m_engine.imageAt(pane);
-    const int paneW = paneFrame ? (paneFrame->metadata().width > 0 ? paneFrame->metadata().width
-                                                                   : paneFrame->width())
-                                : 0;
-    const int paneH = paneFrame ? (paneFrame->metadata().height > 0 ? paneFrame->metadata().height
-                                                                    : paneFrame->height())
-                                : 0;
-    const CellAdjust paneAdjust = pane >= 0 && pane < static_cast<int>(m_cellAdjusts.size())
-                                      ? m_cellAdjusts[static_cast<size_t>(pane)]
-                                      : CellAdjust{};
-    const auto sourceSel = mviewer::core::mapDisplaySelectionToSource(
-        sel, analysisAdjustment(paneAdjust), paneW, paneH);
     if (linkedROIAvailable())
     {
-        applySelectionToAll(sourceSel);
+        applySelectionToAll(sel);
         return;
     }
 
-    // Unequal-size comparisons retain only the active pane's local ROI. It is
-    // deliberately not persisted as a linked ROI and cannot feed comparison
-    // statistics, avoiding any implicit proportional coordinate mapping.
     m_roiLinked = false;
-    for (RawImageView *other : m_cellViews)
-        if (other)
-            other->clearSelection();
-    if (paneFrame)
-    {
-        m_lastSelection = mviewer::domain::normalizeSelection(
-            sourceSel.x, sourceSel.y, sourceSel.x + sourceSel.width, sourceSel.y + sourceSel.height,
-            paneW, paneH);
-        view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
-            m_lastSelection, analysisAdjustment(paneAdjust), paneW, paneH));
-        m_engine.selection().setSelection(m_lastSelection);
-    }
-    else
-        m_lastSelection = {};
-    clearROIStatsDisplay();
+    const QSize srcSize = view->sourceSize();
+    const int w = srcSize.isValid() ? srcSize.width() : 0;
+    const int h = srcSize.isValid() ? srcSize.height() : 0;
+    const auto norm = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
+                                                          sel.y + sel.height, w, h);
+    view->setSelection(norm);
+    m_lastSelection = norm;
     if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(tr("ROI: —"));
-    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                           tr("Linked ROI unavailable — image dimensions differ"));
+        m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
+                                                  : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                        .arg(norm.x)
+                                                        .arg(norm.y)
+                                                        .arg(norm.width)
+                                                        .arg(norm.height));
+    if (m_roiHistChk && m_roiHistChk->isChecked())
+        refreshHistograms();
+    scheduleROIMeasurement();
     update();
 }
 

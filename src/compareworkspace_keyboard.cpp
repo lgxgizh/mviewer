@@ -139,7 +139,14 @@ bool CompareWorkspace::handleROIKeyboardNudge(QKeyEvent *event)
     }
 
     applySelectionToAll(sel);
-    showCompareStatus(tr("微调 ROI: X=%1 Y=%2 W=%3 H=%4")
+    const QString paneInfo =
+        m_roiLinked ? QString()
+                    : tr(" (窗格 %1)")
+                          .arg(((m_focusIndex >= 0 && m_focusIndex < static_cast<int>(m_cellViews.size()))
+                                    ? m_focusIndex
+                                    : 0) + 1);
+    showCompareStatus(tr("微调 ROI%1: X=%2 Y=%3 W=%4 H=%5")
+                          .arg(paneInfo)
                           .arg(m_lastSelection.x)
                           .arg(m_lastSelection.y)
                           .arg(m_lastSelection.width)
@@ -289,8 +296,8 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
 
-    // Ctrl+0 -> Fit, Ctrl+1 -> 100% actual size.
-    if (ctrl && key == Qt::Key_0)
+    // Ctrl+0 or 0 -> Fit, Ctrl+1 -> 100% actual size.
+    if ((ctrl || plain) && key == Qt::Key_0)
     {
         fitAll();
         showCompareStatus(tr("视图自适应窗口 (Fit)"));
@@ -300,7 +307,7 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    if (ctrl && key == Qt::Key_1)
+    if ((ctrl || plain) && key == Qt::Key_1)
     {
         const double currentScale = m_engine.cellTransform(0).scale;
         if (currentScale > 0.0)
@@ -339,6 +346,15 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
     const auto mods = event->modifiers();
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
+
+    // Ctrl+C or Ctrl+Shift+C: copy comparison view to clipboard.
+    if (ctrl && key == Qt::Key_C)
+    {
+        copyComparisonViewToClipboard();
+        event->accept();
+        return true;
+    }
+
     // Diff threshold ± ( [ / ] ).
     if (plain && (key == Qt::Key_BracketLeft || key == Qt::Key_BracketRight) && m_thresholdSlider)
     {
@@ -363,9 +379,9 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // Plain 1–8: with more than two images and the pointer on a pane, hold the
+    // Plain 2–8: with more than two images and the pointer on a pane, hold the
     // digit to preview that image. Otherwise keep the N-up layout preset.
-    if (plain && (key >= Qt::Key_1 && key <= Qt::Key_8))
+    if (plain && (key >= Qt::Key_2 && key <= Qt::Key_8))
     {
         const int n = key - Qt::Key_0;
         if (event->isAutoRepeat())
@@ -392,8 +408,8 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // ? → shortcut help (title bar tip).
-    if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash))
+    // ? / F1 → shortcut help (title bar tip).
+    if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash || key == Qt::Key_F1))
     {
         showShortcutHelp();
         event->accept();
@@ -490,6 +506,45 @@ void CompareWorkspace::syncEditCellAfterLoad()
 
 void CompareWorkspace::rotateCurrentCell(int degrees)
 {
+    const int count = m_engine.imageCount();
+    if (count <= 0)
+        return;
+
+    if (m_syncRotate)
+    {
+        const size_t needed = static_cast<size_t>(count);
+        if (m_cellAdjusts.size() < needed)
+            m_cellAdjusts.resize(needed);
+
+        std::vector<int> dirty;
+        dirty.reserve(needed);
+        for (int i = 0; i < count; ++i)
+        {
+            int rot = (m_cellAdjusts[static_cast<size_t>(i)].rotation + degrees) % 360;
+            if (rot < 0)
+                rot += 360;
+            m_cellAdjusts[static_cast<size_t>(i)].rotation = rot;
+            dirty.push_back(i);
+        }
+
+        const int targetIdx = resolveEditCell();
+        int displayRot = m_cellAdjusts[0].rotation;
+        if (targetIdx >= 0 && targetIdx < count)
+        {
+            m_editIdx = targetIdx;
+            m_explicitEditIdx = targetIdx;
+            displayRot = m_cellAdjusts[static_cast<size_t>(targetIdx)].rotation;
+        }
+        if (m_rotVal)
+            m_rotVal->setText(QString::number(displayRot) + "°");
+
+        scheduleDisplayMaterialization(dirty);
+        onAdjEditFinished();
+        update();
+        showCompareStatus(tr("已同步旋转所有比较图（未写入文件）"));
+        return;
+    }
+
     const int idx = resolveEditCell();
     if (idx < 0)
     {
@@ -519,6 +574,44 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
 
 void CompareWorkspace::flipCurrentCell(bool horizontal)
 {
+    const int count = m_engine.imageCount();
+    if (count <= 0)
+        return;
+
+    if (m_syncRotate)
+    {
+        const size_t needed = static_cast<size_t>(count);
+        if (m_cellAdjusts.size() < needed)
+            m_cellAdjusts.resize(needed);
+
+        std::vector<int> dirty;
+        dirty.reserve(needed);
+        for (int i = 0; i < count; ++i)
+        {
+            if (horizontal)
+                m_cellAdjusts[static_cast<size_t>(i)].flipH =
+                    !m_cellAdjusts[static_cast<size_t>(i)].flipH;
+            else
+                m_cellAdjusts[static_cast<size_t>(i)].flipV =
+                    !m_cellAdjusts[static_cast<size_t>(i)].flipV;
+            dirty.push_back(i);
+        }
+
+        const int targetIdx = resolveEditCell();
+        if (targetIdx >= 0 && targetIdx < count)
+        {
+            m_editIdx = targetIdx;
+            m_explicitEditIdx = targetIdx;
+        }
+
+        scheduleDisplayMaterialization(dirty);
+        onAdjEditFinished();
+        update();
+        showCompareStatus(horizontal ? tr("已同步水平翻转所有比较图（未写入文件）")
+                                     : tr("已同步垂直翻转所有比较图（未写入文件）"));
+        return;
+    }
+
     const int idx = resolveEditCell();
     if (idx < 0)
     {
@@ -553,6 +646,14 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
     const auto mods = event->modifiers();
     const bool ctrl = (mods == Qt::ControlModifier);
     const bool shiftCtrl = (mods == (Qt::ControlModifier | Qt::ShiftModifier));
+    const bool alt = (mods == Qt::AltModifier);
+    if (alt && key == Qt::Key_R)
+    {
+        setSyncRotate(!m_syncRotate);
+        showCompareStatus(m_syncRotate ? tr("已开启同步旋转/翻转") : tr("已关闭同步旋转/翻转"));
+        event->accept();
+        return true;
+    }
     if (ctrl && key == Qt::Key_R)
     {
         rotateCurrentCell(90);

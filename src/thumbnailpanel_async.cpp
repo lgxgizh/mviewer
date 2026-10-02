@@ -19,6 +19,7 @@
 #endif
 
 #include <QSet>
+#include <QThread>
 #include <functional>
 namespace
 {
@@ -120,6 +121,11 @@ bool passesTypeFilter(const QString &typeFilter, const QString &suffixRaw)
     return false;
 }
 
+// The first screen is published one file at a time so a small folder can paint
+// before the walk finishes. After that, keep the large-directory batch size.
+constexpr int kFirstScreenEntries = 16;
+constexpr int kScanBatchEntries = 128;
+
 // Returns true when the walk was superseded. The caller publishes only a
 // finished walk; cursor release is owned by the single completion path.
 bool scanProgressiveDirectory(
@@ -164,10 +170,15 @@ bool scanProgressiveDirectory(
                                           fi.lastModified()};
         entries.append(entry);
         batch.append(entry);
-        if (batch.size() >= 128)
+        const int batchLimit = entries.size() <= kFirstScreenEntries ? 1 : kScanBatchEntries;
+        if (batch.size() >= batchLimit)
         {
             publishBatch(batch);
             batch.clear();
+            // The UI thread is what paints this first row. Yield once so a
+            // tight local walk does not finish the whole folder first.
+            if (entries.size() == 1)
+                QThread::yieldCurrentThread();
         }
     }
     if (!batch.isEmpty())
@@ -432,6 +443,9 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
     for (const Entry &entry : batch)
         paths.append(entry.path);
     ThumbnailPipeline::instance().appendSources(toStdPaths(paths));
+    // Navigation reads this list. Publish it with the rows, not only when the
+    // sorted rebuild lands at the end of the scan.
+    emit sequenceChanged(m_currentDir, m_paths);
     // Drop the busy cursor with the first rows, not when the rest of the
     // directory finishes. releaseScanCursor is once-per-scan.
     releaseScanCursor(m_busyCursorRefs, m_scanCursorReleased);

@@ -48,8 +48,10 @@ void DirectoryProxyModel::setFilterText(const QString &text)
     invalidateFilter();
 }
 
-bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent) const
+bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent, int depth) const
 {
+    if (depth >= 4)
+        return false;
     QFileSystemModel *fsModel = qobject_cast<QFileSystemModel *>(sourceModel());
     if (!fsModel)
         return false;
@@ -60,9 +62,9 @@ bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent)
         const QModelIndex child = fsModel->index(r, 0, sourceParent);
         if (!child.isValid() || !fsModel->isDir(child))
             continue;
-        if (filterAcceptsRow(r, sourceParent))
-            return true;
-        if (hasAcceptedDescendant(child))
+        const QString name = fsModel->fileName(child);
+        if (name.contains(m_filterText, Qt::CaseInsensitive) ||
+            hasAcceptedDescendant(child, depth + 1))
             return true;
     }
     return false;
@@ -512,11 +514,6 @@ void DirectoryTree::expandAncestors(const QModelIndex &sourceIdx)
             expand(proxyAnc);
         anc = anc.parent();
     }
-    // Also expand the target itself.
-    m_model->fetchMore(sourceIdx);
-    const QModelIndex proxyTarget = m_proxy->mapFromSource(sourceIdx);
-    if (proxyTarget.isValid())
-        expand(proxyTarget);
 }
 
 void DirectoryTree::drawRow(QPainter *painter, const QStyleOptionViewItem &option,

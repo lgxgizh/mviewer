@@ -4,7 +4,214 @@
 
 ### 浏览
 
-- 打开本地文件夹时，缩略图不再等目录树定位完才出现。后台确认「这是文件夹」之后，主线程仍会一次性做 `QFileSystemModel::index`、展开上级目录和 `fetchMore`，第一次在空根路径上索引大约要 1–2 秒，画廊的第一批结果排在它后面。现在目录树按路径逐段让出事件循环，并等画廊先列出文件（没有画廊时再超时继续）才高亮。目录监视改为直接 `addPath`，不再在界面线程调用 `QDir::exists`。忙碌光标在第一批缩略图出现时就恢复，不必等整个目录扫完。
+- 打开本地文件夹时，缩略图不再等目录树把整条路径一次索引完。确认是文件夹之后，目录树按路径逐段让出事件循环，并等画廊先列出文件（没有画廊时再超时继续）才高亮；只展开上级目录，当前文件夹保持折叠。目录监视改为直接 `addPath`，不再在界面线程调用 `QDir::exists`。忙碌光标在第一批缩略图出现时就恢复，不必等整个目录扫完。
+
+## [1.0.91] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.91**.
+- **Compare Multi-Image Quality Metrics HUD (`compareworkspace_render_diff.cpp`, `rawimageview.h/.cpp`)**: Computed and rendered per-pane PSNR and SSIM metrics directly on non-base comparison cells in multi-image comparison mode (3+ images). Added HUD corner badge (`P: XX dB | S: 0.XXX`) and rich tooltips indicating comparison against reference base pane 0.
+- **Sync Rotate Keyboard Shortcut `Alt+R` (`compareworkspace_keyboard.cpp`)**: Added `Alt+R` hotkey to quickly toggle synchronized rotation and flipping across all compared images, paired with status bar announcements.
+- **Pixel Inspector Pro One-Click Color Copy (`compareworkspace_analysis.cpp`)**: Added one-click copy options for HEX (`#RRGGBB`) and RGB (`rgb(r,g,b)`) color codes directly to the table row right-click context menu in the Pixel Inspector side panel.
+- **ThumbnailProvider Fast Path for Square Dimensions (`thumbnailprovider.cpp`)**: Optimized `ThumbnailProvider::squareFitImage` when scaled dimensions already match target square bounding boxes, directly reusing/converting format and skipping redundant image allocations and QPainter fill/composition.
+- **Interactive ROI Resize/Move Cursor Feedback (`rawimageview.cpp`)**: Added contextual hover mouse cursors (`SizeAllCursor`, `SizeHorCursor`, `SizeVerCursor`, `SizeFDiagCursor`, `SizeBDiagCursor`) when hovering over ROI borders and resize handles, providing immediate interactive tactile feedback.
+- **Directory Tree Search Traversal Depth Limiter (`directorytree.h/.cpp`)**: Added a 4-level recursion depth bound in `DirectoryProxyModel::hasAcceptedDescendant` to prevent deep recursion freezes when typing folder name search filters on deep or network drive folder hierarchies.
+- **Quick Swap Focused Pane with Reference in Multi-Compare (`compareworkspace_editpanel.cpp`)**: Pressing `X` in multi-image comparisons (3+ images) now intelligently swaps the currently focused pane with reference pane 0 (or pane 1 if pane 0 is focused), enabling rapid reference comparison against any image.
+- **Image Scaling & Zoom Level Readout in StatusBar (`mainwindow_ui_layout.cpp`)**: Enhanced status bar zoom readout in single-image browsing mode to explicitly indicate `(自适应)` when in fit-to-window mode.
+- **ROI Keyboard Nudge Active Pane Indicator (`compareworkspace_keyboard.cpp`)**: Enhanced keyboard arrow nudging (`Alt+Arrow` / `Shift+Alt+Arrow`) when unlinked ROI mode is active, correctly targeting the active/focused pane and displaying pane index indicators in status feedback.
+- **Shortcut Cheat Sheet & User Guide Modernization (`mainwindow_commands.cpp`)**: Documented `Alt+R` (Sync Rotate), `Alt+Arrow` (ROI nudge), `X` (multi-image swap), and Pixel Inspector right-click color copy in the F1 shortcut dialog and user guide.
+
+### 性能优化与产品力增强（10 项优化）
+
+1. **多图对比独立指标角标与浮窗提示（`compareworkspace_render_diff.cpp` / `rawimageview.cpp`）**：针对 3 张及以上多图对比场景，各非基准窗格现均独立并行计算相对于基准图（图 1）的 PSNR 与 SSIM，并在各窗格右上角展示优雅紧凑的指标角标 HUD（`P: xx dB | S: 0.xxx`）及悬停详细信息，彻底解决此前多图模式下仅底部栏显示一对指标、用户无法获知其余图片质量评分的问题。
+2. **同步旋转/翻转全局快捷键 `Alt+R`（`compareworkspace_keyboard.cpp`）**：在比较模式下引入 `Alt+R` 一键切换「同步所有图」旋转状态，结合原有的 `Ctrl+R`（顺时针）与 `Ctrl+Shift+R`（逆时针），无需频繁点击右侧面板复选框即可快速完成全部图片的同向校正。
+3. **像素检视器一键复制 HEX / RGB 颜色代码（`compareworkspace_analysis.cpp`）**：算法工程师在右侧像素检视器表格中右键单击任意行时，新增「复制 HEX 颜色 (#RRGGBB)」和「复制 RGB 格式 (rgb(r,g,b))」菜单项，大幅提高图像调色、色彩空间分析与标注提取的生产力。
+4. **正方形缩略图加速直通路径（`thumbnailprovider.cpp`）**：在 `ThumbnailProvider::squareFitImage` 中，若图像等比缩放后已恰好符合目标正方形尺寸，直接转换为目标格式返回，避免无谓的二次内存分配、透明底色填充及 QPainter 绘制重采样开销。
+5. **ROI 交互光标动态反馈（`rawimageview.cpp`）**：鼠标悬停在 ROI 选区各边缘与四角调节手柄以及选区内部时，动态切换为对应的调整尺寸光标（水平、垂直、对角线双向及全向移动光标），提供明确细腻的交互指引。
+6. **目录树过滤遍历深度限制（`directorytree.cpp` / `directorytree.h`）**：为 `DirectoryProxyModel::hasAcceptedDescendant` 增加深度上限限制（最深 4 层），彻底根治在深层嵌套目录或 NAS 网络磁盘下键入目录过滤词时发生的 UI 线程深度递归卡顿。
+7. **多图对比聚焦窗格一键交换为基准图 `X`（`compareworkspace_editpanel.cpp`）**：在 3~8 张图片同时对比时，按键盘 `X` 键即可将当前点击聚焦的任意窗格直接与图 1（基准图）互换位置，极大方便在多张生成图或曝光序列中轮流以某一张为参照物进行对比。
+8. **状态栏自适应缩放模式状态指示（`mainwindow_ui_layout.cpp`）**：单图浏览模式下，状态栏缩放读数在适应窗口状态下动态显示为 `缩放 XX% (自适应)`，与手动定比缩放清晰区分。
+9. **独立 ROI 键盘微调与窗格标识（`compareworkspace_keyboard.cpp`）**：当用户取消勾选 ROI 同步联动时，通过 `Alt+方向键`（1px）或 `Shift+Alt+方向键`（10px）微调选区将智能作用于当前选中的单格，并在状态栏明确提示微调的目标窗格编号。
+10. **F1 快捷键速查表与用户指南全面同步（`mainwindow_commands.cpp`）**：全面更新了 F1 帮助对话框与帮助说明，补充完整了 `Alt+R` 同步旋转、鼠标侧键目录历史回退/前进、多图 X 交换以及 ROI 键盘微调说明。
+
+## [1.0.90] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.90**.
+- **Fix tree subfolder and sibling auto-expansion (`directorytree.cpp`)**: Resolved unwanted auto-expansion of current folders and sibling folders when navigating directories. `expandAncestors` now strictly unfolds parent ancestors to reveal the target node, leaving the target directory collapsed and unexpanded until explicitly opened by the user. Removed redundant `scheduleFetchMore` and `expand(proxyIdx)` calls during navigation, eliminating tree unrolling and stopping background `QFileSystemModel` I/O contention.
+- **Direct navigation delegation for `openDirectory` (`mainwindow.cpp`)**: Routed `MainWindow::openDirectory(dir)` directly to `changeDirectory(dir)`, ensuring all folder opens cleanly trigger the committed directory transition and thumbnail pipeline.
+- **Accelerate initial directory thumbnail decoding (`ThumbnailPipeline.h`)**: Increased `kVisibleFirstWave` from `4` to `16`. When entering a directory for the first time, all visible screen cells are immediately dispatched in parallel across available CPU worker threads instead of being throttled in 4-task sequential ripples, dramatically cutting perceived wait time for the first screen of thumbnails.
+
+### 性能优化与目录树稳定性修复
+
+- **消除目录树子文件夹及平级文件夹强制展开（`directorytree.cpp`）**：修复了在进入或切换目录时，当前目录及平级目录被强制调用 `expand` 展开的问题。`expandAncestors` 规范为仅向上展开父级祖先链以确保目标可见，目标节点自身保持折叠未展开状态，彻底避免目录树层级被全部铺开、平级文件夹残留展开的视觉混乱；移除了导航时的多余 `scheduleFetchMore` 调用，消除与画廊扫描之间的文件系统 I/O 争抢。
+- **首屏可见缩略图并发解码提速（`ThumbnailPipeline.h`）**：将首波可见缩略图调度并发上限 `kVisibleFirstWave` 由 4 提升至 16。初次进入包含数十张图片的目录时，首屏视野内的所有缩略图能够立刻全量分发至多核 CPU 线程池并发解码，终结此前 4 张一批轮询排队等待的卡顿感，大幅提升首屏加载流畅度。
+- **文件夹打开动作统一化（`mainwindow.cpp`）**：将 `MainWindow::openDirectory` 统一委托至 `changeDirectory`，确保任何方式打开目录均完整走通画廊重置与缩略图加载链路。
+
+## [1.0.89] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.89**.
+- **Procedural vector icon system for main toolbar (`mainwindow_ui_layout.cpp`)**: Replaced missing resource file fallbacks with lightweight, high-DPI antialiased procedural QPainter vector icons (`open`, `back`, `forward`, `up`, `refresh`, `favorite`, `compare`, `analysis`, `search`, `browse`, `rotate_ccw`, `rotate_cw`), ensuring uniform stroke weight, crisp rendering across all resolutions, and zero external resource bundle dependencies.
+- **Enhanced sidebar section headers (`Theme.cpp`)**: Added `#202024` surface background, `#333338` top highlight border, `#2d2d32` bottom border, and 11px semi-bold `#d4d4d8` typography to `QLabel[sectionHeader="true"]`, `foldersSectionLabel`, and `previewSectionLabel`, delivering clean visual hierarchy between folders and preview panels.
+- **High-contrast Preview Panel metadata and statistics (`previewpanel.cpp`)**: Replaced low-contrast palette midtones with `#a1a1aa` (WCAG AAA compliant) for luminance/RGB sample statistics and empty guidance text on `#141416` base.
+- **Elevated Gallery empty-state card guidance (`mainwindow_ui_layout.cpp`)**: Replaced flat gray text in `m_emptyState` and `m_emptyFolderLabel` with a centered card table layout (`#1c1c1f` surface, `#333338` border, 8px radius) and keyboard badge styling (`Ctrl+O`).
+- **Modern HUD badge styling for Diff metrics in Compare workspace (`compareworkspace_controls.cpp`)**: Upgraded `diffMetricsLabel` with sky-blue `#38bdf8` monospace font inside an `#18181b` framed badge and refined `compareStatusStrip` top border separator.
+- **Native dark indicators for CheckBox and RadioButton (`Theme.cpp`)**: Removed CSS overrides that suppressed checkmarks and radio dots, restoring Qt Fusion's antialiased indicators with dark theme highlight palette.
+- **Release tag trigger alignment**: Explicitly documented and tagged `v1.0.89` to properly trigger GitHub Actions Tier 3 Release pipeline (`release.yml`).
+
+### 用户体验与UI审美优化
+
+- **主工具栏矢量图标系统（`mainwindow_ui_layout.cpp`）**：全量重塑主工具栏动作图标，采用纯矢量抗锯齿绘制规范（1.5px 线宽，优雅银白 `#dcdcdc`），彻底终结无资源时的文本回退割裂，全 DPI 缩放与深色主题下极致清晰。
+- **左侧导航栏分类标题条层级增强（`Theme.cpp`）**：为「文件夹」与「预览」标题栏定制 `#202024` 质感底色与立体分割线（上边框 `#333338`、下边框 `#2d2d32`），显著强化侧边栏各功能区的视觉分割。
+- **预览面板样本数据对比度提升（`previewpanel.cpp`）**：将底部样本亮度与 RGB 均值数据提升至高对比浅灰 `#a1a1aa`（满足 WCAG AAA 严苛对比度标准），暗光环境下数据阅读轻松自如。
+- **画廊空状态居中卡片化（`mainwindow_ui_layout.cpp`）**：将画廊首屏空白提示与空文件夹提示重构为现代居中拟态卡片（`#1c1c1f` 背景、微边框、8px 圆角），快捷键附带键帽高亮标签，提供舒适的引导感知。
+- **多图对比差异指标 HUD 科技感面板（`compareworkspace_controls.cpp`）**：将 PSNR/SSIM 及统计数值升级为天蓝色 `#38bdf8` 等宽字体与 `#18181b` 微边框胶囊面板，对比状态栏顶部增加精致分割线。
+- **复选框与单选框勾选标记恢复（`Theme.cpp`）**：移除了破坏原生指示符的 QSS 覆写，完全保留 Qt 6 Fusion 风格原生细腻白色勾选对勾与居中圆点。
+
+## [1.0.88] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.88**.
+- **Multi-selection compare shortcut in Gallery (`ThumbnailPanel.cpp`)**: Pressing `Return` / `Enter` when 2 to 8 images are selected in the thumbnail gallery directly opens the Compare workspace, providing intuitive transition from selection to comparison.
+- **Unified 100% zoom shortcut (`CompareWorkspace_keyboard.cpp`)**: Pressing `1` (or `Ctrl+1`) in Compare mode now zooms all panes to 100% actual size (matching `0` for Fit), while layout presets are consistently accessed via `2` through `8`.
+- **One-click comparison viewport copy (`CompareWorkspace_interact.cpp`, `CompareWorkspace.h`)**: Added `Ctrl+C` shortcut and `copyComparisonViewToClipboard()` in Compare mode to grab the current comparison viewport directly into the clipboard for rapid sharing.
+- **Compact comparison toolbar layout (`CompareWorkspace_controls.cpp`)**: Tightened vertical margins and layout spacing across comparison mode, view, and tool toolbars, maximizing visual comparison area on standard 1080p and high-DPI displays.
+- **Prioritized Pixel Inspector in Analysis panel (`AnalysisPanel_buildui.cpp`)**: Placed the Pixel Inspector tab immediately after the Histogram tab (position 2), preventing it from being pushed off-screen into overflow on narrow sidebars, and localized copy actions to Chinese.
+- **Markdown table export in Pixel Inspector (`CompareWorkspace_analysis.cpp`)**: Added "复制为 Markdown 表格" (Copy as Markdown Table) to the pixel inspector context menu in Compare mode for direct pasting into PRs, issues, and technical documentation.
+- **Detailed cache hit-rate status tooltip (`MainWindow_ui_layout.cpp`, `MainWindow_view.cpp`)**: Added informative tooltips and exact hit/request count breakdowns (`命中率: X% (命中 A / 请求 B)`) to the permanent status bar cache indicator.
+
+### 用户体验优化
+
+- **画廊多选一键对比（`ThumbnailPanel.cpp`）**：在缩略图网格中选中 2 至 8 张图片后直接按下回车键（`Enter` / `Return`）立即进入多图对比工作区，符合用户直觉操作习惯。
+- **100% 缩放快捷键全局对齐（`CompareWorkspace_keyboard.cpp`）**：对比模式下快捷键 `1`（及 `Ctrl+1`）统一映射为 100% 原始像素大小（与 `0` 适应窗口对齐），窗格预设切换统一映射至 `2` 至 `8`，消除单图与多图模式下的认知冲突。
+- **对比视口一键截图复制（`CompareWorkspace_interact.cpp` / `.h`）**：对比模式支持快捷键 `Ctrl+C` 直接将当前对比画布（网格/分割/滑动/热力图视口）渲染并复制到系统剪贴板，方便算法评测快速分享与汇报。
+- **对比模式工具栏高度紧凑化（`CompareWorkspace_controls.cpp`）**：优化模式栏、视图栏与分析工具栏的内边距与垂直间距，在 1080p 与高分屏上释放更多垂直图像对比视野。
+- **分析面板像素检视标签前置与本地化（`AnalysisPanel_buildui.cpp`）**：将「像素检视」标签页提升至第 2 位（紧跟「直方图」），解决窄边栏折叠隐藏的问题；同时完善复制操作按钮本地化（复制 RGB/HEX/XYZ）。
+- **像素检视表格 Markdown 格式复制（`CompareWorkspace_analysis.cpp`）**：对比工作区像素检视表格右键菜单新增「复制为 Markdown 表格」，便于算法工程师直接将对比数值表格粘贴至 GitHub PR、GitLab Issue 或周报文档中。
+- **状态栏缓存命中率详细统计与提示（`MainWindow_ui_layout.cpp` / `MainWindow_view.cpp`）**：状态栏常驻命中率指标增加详细悬停说明与精准计数（命中数 / 总请求数），为算法排查与大图浏览性能分析提供明确上下文。
+
+## [1.0.87] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.87**.
+- **Zero-copy RGBA32 viewport presentation (`QtConvert.cpp`)**: `toQImageRef` directly returns `QImage::Format_RGBA8888` for `PixelFormat::RGBA32`, eliminating deep copies and format reallocations during image switching, panning, and viewport tile downsampling.
+- **Overlap-scaled early exit bound for image alignment (`Aligner.cpp`)**: In `Aligner::estimate`, added exact mathematical threshold pruning `maxAllowedSad = bestSAD * overlap` to the SAD row loop, eliminating 80%+ of redundant pixel difference computations.
+- **Zero-heap allocation case-insensitive search (`SearchEngine.cpp`)**: `contains()` and `snippet()` in `SearchEngine` use zero-allocation `std::string_view` with `std::search` and ASCII case-insensitive comparison, eliminating repetitive heap allocations during metadata and tag queries.
+- **Fused difference heatmap kernel (`DifferenceEngine.h`, `DifferenceEngine.cpp`)**: Added `visualizeOverlay`, fusing gain LUT amplification, thresholding, and colormap application into a single pass without allocating intermediate full-resolution images.
+- **Compare workspace diff pipeline optimization (`compareworkspace_render_diff.cpp`)**: `buildDiffOverlays` calls the fused `visualizeOverlay` kernel, significantly reducing memory bandwidth and rendering latency in compare mode.
+- **Downscale pyramid optimization (`MipmapPyramid.cpp`)**: Optimized `downscaleHalfBox` with hoisted row pointers, bit-shifts (`>> 2`), and specialized paths for 3-channel and 4-channel pixel buffers.
+- **Direct grayscale extraction for SSIM & noise estimation (`AnalysisEngine_metrics.cpp`)**: Replaced `toQImage -> convertToFormat(Format_Grayscale8)` with a direct, single-pass `toGrayscale8` buffer converter, avoiding Qt format conversion overhead and intermediate allocations.
+- **ROI stats loop flattening & binary max (`AnalysisEngine.cpp`)**: Eliminated per-pixel multiplication in `computeStatsROI` with direct pointer progression and replaced `std::initializer_list` in `std::max({r, g, b})` with binary `std::max`.
+- **Directory scan stat overhead elimination (`FileSystem.cpp`)**: `FileSystem::listImages` uses `entryList` instead of `entryInfoList` and pre-reserves filter collections, avoiding costly per-file OS filesystem stat queries across large directories.
+- **Histogram multi-channel accumulation optimization (`Histogram.h`)**: Replaced per-pixel multiplication with pointer stepping in `accumulateGray256`, `accumulateBgr256`, and `accumulateRgb256`, and eliminated initializer-list overhead in HSV $V$ calculation.
+- **Single-image histogram compute acceleration (`ImageFrame.cpp`)**: Hoisted pixel format branching out of inner loops, eliminated duplicate `luminance()` evaluations, and removed redundant clamp branches.
+- **Bilinear scaler clamp branch elimination (`BilinearScale.cpp`)**: Eliminated 12 redundant `std::clamp` operations per 4 pixels across SSE2 and scalar rasterizers using mathematically proven $[0, 255]$ closed-form pixel packing.
+
+### 性能与体验优化
+
+- **零拷贝 RGBA32 视口呈现（`QtConvert.cpp`）**：`toQImageRef` 针对 `PixelFormat::RGBA32` 格式直接返回 `QImage::Format_RGBA8888` 包装，彻底消除看图、平移、缩放与瓦片渲染时对 RGBA 图像进行多余的全图深拷贝与重排。
+- **重叠区缩放绝对上界早停裁剪（`Aligner.cpp`）**：在 `Aligner::estimate` 的 SAD 穷举对齐搜索中引入行前预知的数学早停边界 `maxAllowedSad = bestSAD * overlap`，累加超界立即跳出，在对齐搜索中裁剪 80%+ 无效像素差值运算。
+- **零堆分配不区分大小写字符串检索（`SearchEngine.cpp`）**：`SearchEngine` 检索重构为基于 `std::string_view` 与 `std::search` + 自定义 ASCII 大小写无关谓词，彻底消除每次关键词检索时的重复 `std::string` 堆分配。
+- **差异热力图单通道融合核（`DifferenceEngine.h` / `.cpp`）**：新增 `visualizeOverlay` 融合计算核，将增益查表（`amplify`）、阈值二值化（`applyThreshold`）与色彩映射（`colorMap`）三步串行流程融合成单趟访存完成，避免产生多份全分辨率中间图像。
+- **比较工作区差异图渲染流水线优化（`compareworkspace_render_diff.cpp`）**：`buildDiffOverlays` 全面接入 `visualizeOverlay` 融合核，在保持视觉输出严格一致的前提下，显著削减差异比较模式下高分辨率大图的内存吞吐与处理耗时。
+- **金字塔降采样行指针悬挂与位移运算（`MipmapPyramid.cpp`）**：`downscaleHalfBox` 增加 4 通道与 3 通道专用快速展开路径，行指针在列循环前预先提取，除法以整数算术右移（`>> 2`）替代，显著加速金字塔瓦片预生成速度。
+- **SSIM 与噪声估计灰度快速提取（`AnalysisEngine_metrics.cpp`）**：`AnalysisEngine::ssim` 与 `AnalysisEngine::noiseEstimate` 采用单趟直接像素转灰度提取器 `toGrayscale8`，替代开销巨大的 `toQImage -> convertToFormat(Format_Grayscale8)`，避免复杂的 Qt 图像格式转换包装与中间内存分配。
+- **ROI 统计循环指针扁平化与极值优化（`AnalysisEngine.cpp`）**：消除 `computeStatsROI` 中逐像素计算乘法的行偏移寻址，引入连续步进指针，并将三通道极值计算 `std::max({r, g, b})` 替换为二元比较，消除数百万次 `std::initializer_list` 的栈分配与迭代。
+- **文件系统大目录枚举开销降低（`FileSystem.cpp`）**：`FileSystem::listImages` 将 `entryInfoList` 改为 `entryList`，避免遍历目录中成千上万个文件时为每个文件触发昂贵的系统 stat/属性查询；同时对过滤器列表预分配容量，显著提升超大图库扫描加载速度。
+- **直方图多通道累加向量化与指针优化（`Histogram.h`）**：`accumulateGray256`、`accumulateBgr256`、`accumulateRgb256` 消除每像素乘法计算，统一改用行首指针步进；三通道峰值 $V$ 计算消除 `std::initializer_list` 构造，大幅降低直方图计算时钟周期。
+- **单图直方图全分辨率计算流水线优化（`ImageFrame.cpp`）**：`ImageFrame::computeHistogram` 将格式分支（灰度 / BGR / RGB）提升至行循环外部，合并重复的 `luminance()` 计算，移除单字节无符号整数多余的 `std::clamp` 边界检查，实现数倍计算提速。
+- **双线性缩放像素打包与分支精简（`BilinearScale.cpp`）**：严格数学证明双线性插值权重加权和在 $[0, 255]$ 范围内单调封闭，移除 SSE2 和标量循环中每 4 像素高达 12 次的多余 `std::clamp` 分支，采用高效无分支位运算打包像素输出。
+
+## [1.0.86] - 2026-10-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.86**.
+- **Asynchronous XMP sidecar persistence**: Batch rating, color labeling, and flag operations now write XMP sidecar files asynchronously on background threads, preventing main GUI thread freezes.
+- **Directory tree filter recursion fix**: Fixed redundant double-recursive subtree traversal in `DirectoryProxyModel::hasAcceptedDescendant`, significantly accelerating directory search in large directory hierarchies.
+- **Gallery format filter acceleration**: Pre-parsed type query candidates and replaced per-item `QFileInfo` parsing with zero-allocation `QStringView` suffix comparisons in `ThumbnailPanel::evaluateFilterSnapshot`.
+- **Live difference threshold slider**: Added a debounced 35ms preview timer to the difference threshold slider so users see real-time diff heatmap updates while actively dragging.
+- **Status bar image index indicator**: The permanent status bar image count label now shows the current viewing index (e.g. `图片 12 / 100`) across browsing, filtering, and keyboard navigation.
+- **Status bar zoom integration for Compare Mode**: Compare mode now fully integrates with the status bar zoom label (`m_lblZoom`), supporting double-click fit (`fitAll()`) and contextual comparison zoom menus.
+- **Pixel Inspector localization & polish**: Localized neighborhood statistics and English prompts in `AnalysisPanel`, and cleaned up single-image vs dual-image comparative labels (eliminating unconditional "Left" prefixes).
+- **Pixel inspector cursor leave cleanup**: Clears sticky "Cursor outside image" text from the status bar when the mouse leaves the viewer canvas, preserving existing operational status.
+- **Contextual pixel coordinate copying**: Added a "坐标 (x, y)" copy action to the image viewer context menu for convenient coordinate export into Python/OpenCV workflows.
+- **Compare keyboard ergonomics**: Added standard `F1` shortcut help trigger and single-key `0` view fit (`fitAll()`) parity with single image mode.
+
+### 性能与体验优化
+
+- **批量评级 XMP Sidecar 异步持久化**：批量设置星级、颜色标签与排除标记时，将循环写盘与原子重命名的 I/O 操作移入后台工作线程执行，内存与 UI 瞬间响应，彻底解决多图评级卡死界面的问题。
+- **目录树过滤遍历算法优化**：修复 `DirectoryProxyModel` 在向下递归检索匹配目录时对每个子节点重复调用双重递归的问题，大幅降低深层目录树过滤时的 CPU 开销与交互延迟。
+- **画廊文件格式过滤加速**：在 `ThumbnailPanel::evaluateFilterSnapshot` 中预解析多类型候选列表，并在逐条记录比对时采用零堆分配的 `QStringView` 提取后缀，避免千图大目录下每次过滤重复切分字符串和解析 `QFileInfo`。
+- **差异阈值滑动条实时响应**：在比较模式下为差异阈值滑块增加 35ms 轻量防抖预览定时器，拖动滑块时可流畅实时预览差异热力图变化，告别松开鼠标才能看效果的滞后感。
+- **状态栏图片定位索引显示**：状态栏常驻图片统计标签全面升级为 `图片 X / Y` 格式（如 `图片 15 / 120`），选图、切图、翻页、过滤时实时联动，文件夹浏览位置一目了然。
+- **比较模式状态栏缩放联动**：状态栏缩放指示标签支持比较模式，双击直接调用比较全屏自适应（`fitAll()`），点击弹出比较专属自适应菜单，打通单图与对比工作流体验。
+- **像素检视器本地化与单图规范**：规范像素检视器在单图模式下的文本标识（去除不适用的 "Left" 前缀），统一将邻域统计指标（均值、标准差、最小、最大、方差、采样数）及提示信息全面中文化。
+- **像素探针光标移出清理**：光标离开图像边界时自动清理状态栏临时像素读数，消除驻留并遮挡其他系统通知的“光标不在图像上”多余提示。
+- **右键复制像素坐标 (x, y)**：单图查看器右键“复制像素值”菜单中新增“坐标 (x, y)”选项，方便图像算法工程师一键提取像素坐标至算法脚本。
+- **比较快捷键体验统一**：比较模式支持通过标准 `F1` 键查看快捷键帮助条，并支持按单键 `0` 直接触发视图自适应，与单图浏览模式的操作习惯保持高度一致。
+
+## [1.0.85] - 2026-09-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.85**.
+- **Asynchronous image transforms (P0)**: Single-image and batch rotate/flip operations are offloaded to background worker threads, eliminating UI thread freezing and OS "Not Responding" stalls on high-resolution images.
+- **Gallery sorting performance (P1)**: Custom file type sorting uses zero-allocation string views and ratings are pre-cached, eliminating repetitive `QFileInfo` filesystem queries and string allocations in $O(N \log N)$ sort loops.
+- **Batch file operation completion async (P1)**: File existence checks after batch deletes and moves run in the background worker, preventing main thread I/O latency.
+- **Rename selection polish (P2)**: Rename dialog preselects the filename stem only, preventing accidental erasure of file extensions.
+- **Non-blocking copy feedback (P2)**: Replaced modal success dialog on file copy with non-intrusive status bar notifications.
+- **Canvas comparison Space hold support (P2)**: Enabled hold-to-compare (Space key) in canvas modes (Split, Swipe, Overlay, Checkerboard), allowing instantaneous single-image inspection and seamless restoration.
+
+### 性能与体验优化
+
+- **旋转与翻转异步化（防卡顿）**：单图及批量旋转/翻转操作的文件编解码与原子写盘全面移至后台工作线程，主线程在等待期间显示等待光标并持续泵送事件，彻底消除大图处理时的界面冻结和系统“未响应”现象。
+- **画廊排序算法优化**：按扩展名排序改用零内存分配的 `QStringView`，按评分排序预先建立 $O(N)$ 评分映射，杜绝排序比较器在循环中数万次构造 `QFileInfo` 及重复堆分配。
+- **批量文件操作收尾异步化**：删除与移动完成后的文件存在性磁盘 stat 扫描移至后台任务收尾阶段完成，主线程仅接收纯内存结果，消除批量操作完成时的瞬时卡顿。
+- **重命名文件名主干选中**：弹窗重命名时默认仅高亮选中主文件名（stem），光标停在扩展名前，避免打字误删后缀。
+- **复制文件成功通知轻量化**：文件复制成功后由非模态状态栏提示替代强制点击的模态对话框，保持看图操作连续性。
+- **画布模式临时对比**：在分割（Split）、滑动（Swipe）、叠加（Overlay）、棋盘（Checkerboard）模式下支持按住空格键临时切回单侧完整原图，松开即刻恢复分割视图。
+
+## [1.0.84] - 2026-09-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.84**.
+- **Compare ROI orientation alignment**: Images with mismatched orientations (e.g. horizontal 4096×3072 vs vertical 3072×4096) correctly enable synchronized ROI selection and statistics after rotating to align viewports.
+- **Compare ROI HUD viewport tracking**: Floating ROI statistics chips dynamically follow selection boxes during viewport panning and dragging.
+
+### 比较
+
+- **旋转与跨方向图像选区统计同步**：修复横竖不同方向（如左图 4096×3072 横向、右图 3072×4096 竖向）图片对比时，旋转竖向图片对齐方向后，框选选区无法联动同步到对侧且无统计结果的问题。联动判定采用旋转与裁剪后的窗格有效尺寸，计算统计时各窗格根据各自的调整参数逆向映射至源像素坐标系进行采样。
+- **选区统计悬浮条平移实时跟随**：修复在比较模式下框选 ROI 后左右拖动画布平移时，统计结果悬浮标签（ROI HUD Chip）停留在原位未跟随画面框选位置移动的问题。视口平移与拖拽过程中实时重算并更新浮动标签位置。
+
+## [1.0.83] - 2026-09-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.83**.
+- **Compare Space hold scale fix**: Momentary compare (holding Space) on images of the same resolution preserves the target pane's current scale directly instead of recalculating a tight fit without deadband, eliminating image shrinkage during flicker compare.
+
+### 比较
+
+- 修复同分辨率图片按住空格进行临时比较（Hold-to-Compare）时画面出现微缩抖动的问题。当对比双方分辨率相同时直接保持目标窗格的当前缩放比例，实现 1:1 无缝原位闪烁对比。
+
+## [1.0.82] - 2026-09-29
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.82**.
+- **Browse first paint**: Opening a folder shows the first gallery rows, the image list, and the bottom-left preview as soon as the first images are found. A small folder no longer stays blank until every file has been scanned and every thumbnail has started decoding. A thumbnail that fails to decode no longer freezes the gallery.
+
+### 浏览
+
+- 打开文件夹后，找到第一张图就显示画廊行、图片列表和左下角预览。小文件夹不再等到全部文件扫完、全部缩略图开始解码才出画面。解码失败的缩略图不再把画廊卡住。
 
 ## [1.0.81] - 2026-09-29
 

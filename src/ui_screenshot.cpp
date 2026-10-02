@@ -5,6 +5,7 @@
 // Build: CMake target `ui_screenshot` (links mviewer_ui + mviewer_core).
 // Usage: ui_screenshot <out.png> [sample.png]
 #include "mainwindow.h"
+#include "Theme.h"
 
 #include <QApplication>
 #include <QFont>
@@ -43,6 +44,7 @@ static std::string makeSample(const std::filesystem::path &p)
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    mviewer::ui::Theme::initTheme();
 
     const std::string out =
         (argc > 1) ? argv[1]

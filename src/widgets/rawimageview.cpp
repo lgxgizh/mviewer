@@ -24,6 +24,28 @@ namespace
 constexpr qint64 kMaxCacheDim = 16384;
 constexpr qint64 kMaxSurfacePixels = qint64(64) * 1024 * 1024; // 64M px
 
+Qt::CursorShape cursorForSelectionHandle(mviewer::domain::SelectionHandle handle)
+{
+    switch (handle)
+    {
+    case mviewer::domain::SelectionHandle::Move:
+        return Qt::SizeAllCursor;
+    case mviewer::domain::SelectionHandle::Left:
+    case mviewer::domain::SelectionHandle::Right:
+        return Qt::SizeHorCursor;
+    case mviewer::domain::SelectionHandle::Top:
+    case mviewer::domain::SelectionHandle::Bottom:
+        return Qt::SizeVerCursor;
+    case mviewer::domain::SelectionHandle::TopLeft:
+    case mviewer::domain::SelectionHandle::BottomRight:
+        return Qt::SizeFDiagCursor;
+    case mviewer::domain::SelectionHandle::TopRight:
+    case mviewer::domain::SelectionHandle::BottomLeft:
+        return Qt::SizeBDiagCursor;
+    default:
+        return Qt::OpenHandCursor;
+    }
+}
 } // namespace
 
 RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
@@ -65,11 +87,20 @@ void RawImageView::clear()
     clearTransientDisplay();
     m_image = QImage();
     m_filteredDisplay = QImage();
+    m_metricBadge.clear();
     m_sourceSize = {};
     m_sourceRect = {};
     m_scale = m_fitScale = 1.0;
     m_offset = {};
     releaseBaseSurface();
+    update();
+}
+
+void RawImageView::setMetricBadge(const QString &text)
+{
+    if (m_metricBadge == text)
+        return;
+    m_metricBadge = text;
     update();
 }
 
@@ -186,6 +217,7 @@ void RawImageView::setTransform(double scale, const QPointF &offset)
     if (m_scale == prevScale && m_offset == prevOffset)
         return;
     update();
+    emit transformChanged();
 }
 
 void RawImageView::clampOffset()
@@ -219,6 +251,7 @@ void RawImageView::zoom(double factor, const QPointF &anchor)
     m_scale = newScale;
     clampOffset();
     emit scaleChanged(m_scale);
+    emit transformChanged();
     update();
 }
 
@@ -229,6 +262,7 @@ void RawImageView::resetFit()
     if (!m_image.isNull())
         computeFit();
     update();
+    emit transformChanged();
 }
 
 void RawImageView::computeFit()
@@ -367,6 +401,12 @@ void RawImageView::paintEvent(QPaintEvent *)
         p.setBrush(QColor(0, 0, 0, 28));
         p.drawRect(rect());
         drawCornerBadge(p, tr("加载中"), QColor(30, 90, 180, 210), true);
+        p.restore();
+    }
+    else if (!m_metricBadge.isEmpty())
+    {
+        p.save();
+        drawCornerBadge(p, m_metricBadge, QColor(20, 40, 60, 215), true);
         p.restore();
     }
 
@@ -563,6 +603,16 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
     }
     if (!m_dragging)
     {
+        const double tol = m_scale > 0.0 ? 8.0 / m_scale : 0.0;
+        const auto handle = (!m_selection.isEmpty() && tol > 0.0)
+                                ? mviewer::domain::hitTestSelection(
+                                      m_selection, widgetToImage(ev->pos()).x(),
+                                      widgetToImage(ev->pos()).y(), tol, tol)
+                                : mviewer::domain::SelectionHandle::None;
+        const Qt::CursorShape shape = cursorForSelectionHandle(handle);
+        if (cursor().shape() != shape)
+            setCursor(shape);
+
         // Hover: report the image-space pixel under the cursor for the inspector.
         if (!m_image.isNull() && m_scale > 0.0)
         {
@@ -591,6 +641,7 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
     m_offset += QPointF(delta);
     clampOffset();
     update();
+    emit transformChanged();
 }
 
 void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
@@ -606,6 +657,7 @@ void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
     if (ev->button() == Qt::RightButton && m_selecting)
     {
         m_selecting = false;
+        setCursor(Qt::OpenHandCursor);
         if (m_selectionMoved)
             emit selectionChanged(m_selection);
         m_selectHandle = mviewer::domain::SelectionHandle::None;
@@ -635,6 +687,7 @@ void RawImageView::mouseDoubleClickEvent(QMouseEvent *ev)
 void RawImageView::leaveEvent(QEvent *ev)
 {
     QWidget::leaveEvent(ev);
+    setCursor(Qt::OpenHandCursor);
     // Cursor left the cell: clear the synced crosshair everywhere.
     emit crosshairMoved(QPointF(-1, -1));
 }

@@ -247,6 +247,8 @@ class ImageViewer : public QOpenGLWidget
     void selectionChanged(const QRect &sel); // image coords (may be null rect)
     void requestPrev();
     void requestNext();
+    void requestDirBack();
+    void requestDirForward();
 
     // Pixel Inspector (P1 #6): emitted on mouse move with the pixel under the
     // cursor, read directly from the ImageFrame (not QImage). x/y are image
@@ -442,7 +444,8 @@ class ImageViewer : public QOpenGLWidget
     bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath, QAction *reveal,
                                  QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
-                                 QAction *copyHsv, QContextMenuEvent *event);
+                                 QAction *copyHsv, QContextMenuEvent *event,
+                                 QAction *copyCoord = nullptr);
     bool handleContextTransformAction(QAction *chosen, QAction *rotateCWAct, QAction *rotateCCWAct,
                                       QAction *flipHAct, QAction *flipVAct);
     bool handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,

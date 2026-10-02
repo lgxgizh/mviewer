@@ -163,10 +163,10 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
         int count = 0;
         for (int y = ry; y < ry + rh; ++y)
         {
-            const uint8_t *line = vbuf.data + static_cast<size_t>(y) * vbuf.stride();
-            for (int x = rx; x < rx + rw; ++x)
+            const uint8_t *p =
+                vbuf.data + static_cast<size_t>(y) * vbuf.stride() + static_cast<size_t>(rx) * cpp;
+            for (int x = 0; x < rw; ++x, p += cpp)
             {
-                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
                 const int r = p[rIdx];
                 const int g = p[1];
                 const int b = p[bIdx];
@@ -175,16 +175,16 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
                 sumB += b;
                 const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
                 sumL += lum;
-                const int v = std::max({r, g, b});
+                const int v = std::max(r, std::max(g, b));
                 sumV += v;
                 ++s.histLum[lum];
                 ++s.histV[v];
                 ++s.histR[r];
                 ++s.histG[g];
                 ++s.histB[b];
-                ++count;
             }
         }
+        count = rw * rh;
         s.pixelCount = count;
         if (count > 0)
         {

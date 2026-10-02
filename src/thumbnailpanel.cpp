@@ -154,18 +154,23 @@ void ThumbnailPanel::wireThumbnailPipeline()
                     const QString cacheKey = panel->thumbCacheKey(qp, size);
                     if (img.isNull())
                     {
-                        QMutexLocker l(&panel->m_thumbMtx);
-                        panel->m_thumbFailed.insert(cacheKey);
-                        panel->m_thumbPending.remove(cacheKey);
+                        {
+                            QMutexLocker l(&panel->m_thumbMtx);
+                            panel->m_thumbFailed.insert(cacheKey);
+                            panel->m_thumbPending.remove(cacheKey);
+                        }
+                        // onThumbReady reads the ready map under the same mutex.
                         panel->onThumbReady(qp);
                         return;
                     }
                     const QImage q = mvcore::toQImage(img);
                     if (q.isNull())
                     {
-                        QMutexLocker l(&panel->m_thumbMtx);
-                        panel->m_thumbFailed.insert(cacheKey);
-                        panel->m_thumbPending.remove(cacheKey);
+                        {
+                            QMutexLocker l(&panel->m_thumbMtx);
+                            panel->m_thumbFailed.insert(cacheKey);
+                            panel->m_thumbPending.remove(cacheKey);
+                        }
                         panel->onThumbReady(qp);
                         return;
                     }
@@ -553,6 +558,13 @@ void ThumbnailPanel::keyPressEvent(QKeyEvent *event)
     if ((key == Qt::Key_Return || key == Qt::Key_Enter) &&
         (mods == Qt::NoModifier || mods == Qt::KeypadModifier))
     {
+        const QStringList sel = selectedPaths();
+        if (sel.size() >= 2 && sel.size() <= 8)
+        {
+            emit compareRequested(sel);
+            event->accept();
+            return;
+        }
         const QModelIndex idx = currentIndex();
         if (idx.isValid() && idx.row() >= 0 && idx.row() < m_paths.size())
         {

@@ -12,6 +12,8 @@
 #include <QMenuBar>
 #include <QProgressDialog>
 #include <QStatusBar>
+#include <QThread>
+#include <QtConcurrent/QtConcurrent>
 
 #include <cstdint>
 #include <memory>
@@ -207,7 +209,6 @@ class ShownProgressDialog final : public QProgressDialog
 {
   public:
     using QProgressDialog::QProgressDialog;
-
     void reveal()
     {
         forceShow();
@@ -240,7 +241,6 @@ class BatchFileProgress
     {
         dismiss();
     }
-
     BatchFileProgress(const BatchFileProgress &) = delete;
     BatchFileProgress &operator=(const BatchFileProgress &) = delete;
 
@@ -254,8 +254,6 @@ class BatchFileProgress
         if (!m_dialog || m_dialog->wasCanceled())
             return;
         m_dialog->setLabelText(finishedLabel(finished));
-        // Modal setValue() delivers the queued Cancel click. Do not pump user
-        // input again on top of that.
         m_dialog->setValue(finished);
         if (!m_dialog || m_dialog->wasCanceled())
             return;
@@ -273,9 +271,9 @@ class BatchFileProgress
   private:
     QString finishedLabel(int finished) const
     {
-        if (m_kind == FileTransformKind::Rotate)
-            return MainWindow::tr("已旋转 %1 / %2").arg(finished).arg(m_total);
-        return MainWindow::tr("已翻转 %1 / %2").arg(finished).arg(m_total);
+        return (m_kind == FileTransformKind::Rotate)
+                   ? MainWindow::tr("已旋转 %1 / %2").arg(finished).arg(m_total)
+                   : MainWindow::tr("已翻转 %1 / %2").arg(finished).arg(m_total);
     }
 
     std::unique_ptr<ShownProgressDialog> m_dialog;
@@ -339,7 +337,7 @@ void restoreMultiSelection(ThumbnailPanel *panel, SelectionModel *selection,
         selection->setSelection(paths, focus);
 }
 
-void showStatus(QStatusBar *bar, const QString &text, int ms)
+inline void showStatus(QStatusBar *bar, const QString &text, int ms)
 {
     if (bar)
         bar->showMessage(text, ms);
@@ -365,6 +363,7 @@ FileTransformBatch runTransformBatch(QWidget *parent, ImageViewer *viewer, Previ
     BatchFileProgress progress(parent, static_cast<int>(paths.size()), kind);
     FileTransformBatch batch;
     const int total = static_cast<int>(paths.size());
+    QApplication::setOverrideCursor(Qt::WaitCursor);
     for (int i = 0; i < total; ++i)
     {
         if (progress.wasCanceled())
@@ -372,7 +371,17 @@ FileTransformBatch runTransformBatch(QWidget *parent, ImageViewer *viewer, Previ
         const QString &path = paths.at(i);
         const std::string utf8 = path.toUtf8().toStdString();
         releaseSourceForRewrite(viewer, preview, path, utf8);
-        const auto result = transform(utf8);
+        auto future = QtConcurrent::run([&transform, utf8]() { return transform(utf8); });
+        while (!future.isFinished())
+        {
+            if (progress.wasCanceled())
+                break;
+            QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
+            QThread::msleep(5);
+        }
+        if (!future.isFinished())
+            future.waitForFinished();
+        const auto result = future.result();
         if (!result.ok)
         {
             batch.failedPaths.append(path);
@@ -385,6 +394,7 @@ FileTransformBatch runTransformBatch(QWidget *parent, ImageViewer *viewer, Previ
         }
         progress.advance(i + 1);
     }
+    QApplication::restoreOverrideCursor();
     const int attempted = batch.successCount + static_cast<int>(batch.failedPaths.size());
     // A cancel that arrives while painting the last item has nothing left to skip.
     batch.canceled = progress.wasCanceled() && attempted < total;

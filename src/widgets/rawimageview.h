@@ -113,6 +113,11 @@ class RawImageView : public QWidget
         m_overlay = QImage();
         update();
     }
+    void setMetricBadge(const QString &text);
+    QString metricBadge() const
+    {
+        return m_metricBadge;
+    }
 
     // 0-based grid index (set by CompareWorkspace so the inspector can label the cell).
     void setCellIndex(int idx)
@@ -239,6 +244,7 @@ class RawImageView : public QWidget
 
   signals:
     void scaleChanged(double scale);
+    void transformChanged();
     // Emitted on hover with the image-space pixel under the cursor (RGB + validity).
     // Mirrors ImageViewer::pixelInfo so the compare grid feeds the same inspector.
     void pixelInfo(int x, int y, int r, int g, int b, bool valid);
@@ -348,4 +354,5 @@ class RawImageView : public QWidget
     // H1: size-mismatch badge flag (set by CompareWorkspace::refreshCellDiff).
     bool m_sizeMismatch = false;
     bool m_softLoading = false;
+    QString m_metricBadge;
 };

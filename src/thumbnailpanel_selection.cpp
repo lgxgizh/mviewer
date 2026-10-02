@@ -1,5 +1,5 @@
-#include "thumbnailpanel_p.h"
 #include "selectionmodel.h"
+#include "thumbnailpanel_p.h"
 
 #include "core/SidecarStore.h"
 
@@ -208,19 +208,37 @@ void ThumbnailPanel::copySelectedPaths()
     QApplication::clipboard()->setText(nativePaths.join(QStringLiteral("\n")));
 }
 
+#include <QtConcurrent/QtConcurrent>
+
+namespace
+{
+void asyncWriteSidecars(std::vector<std::string> paths)
+{
+    QtConcurrent::run(
+        [paths = std::move(paths)]()
+        {
+            auto &sidecar = mviewer::core::SidecarStore::instance();
+            for (const auto &sp : paths)
+                sidecar.writeSidecar(sp);
+        });
+}
+} // namespace
+
 void ThumbnailPanel::batchRateSelected(int stars)
 {
     const QStringList paths = selectedPaths();
     if (paths.isEmpty())
         return;
     auto &rs = mviewer::core::RatingStore::instance();
-    auto &sidecar = mviewer::core::SidecarStore::instance();
+    std::vector<std::string> toWrite;
+    toWrite.reserve(paths.size());
     for (const QString &p : paths)
     {
         const std::string sp = p.toUtf8().toStdString();
         rs.setRating(sp, stars);
-        sidecar.writeSidecar(sp);
+        toWrite.push_back(sp);
     }
+    asyncWriteSidecars(std::move(toWrite));
     invalidateRatings();
 }
 
@@ -230,13 +248,15 @@ void ThumbnailPanel::batchSetColorLabelSelected(int label)
     if (paths.isEmpty())
         return;
     auto &rs = mviewer::core::RatingStore::instance();
-    auto &sidecar = mviewer::core::SidecarStore::instance();
+    std::vector<std::string> toWrite;
+    toWrite.reserve(paths.size());
     for (const QString &p : paths)
     {
         const std::string sp = p.toUtf8().toStdString();
         rs.setColorLabel(sp, label);
-        sidecar.writeSidecar(sp);
+        toWrite.push_back(sp);
     }
+    asyncWriteSidecars(std::move(toWrite));
     invalidateRatings();
 }
 
@@ -246,14 +266,16 @@ void ThumbnailPanel::batchSetFlagSelected(bool reject, bool pick)
     if (paths.isEmpty())
         return;
     auto &rs = mviewer::core::RatingStore::instance();
-    auto &sidecar = mviewer::core::SidecarStore::instance();
+    std::vector<std::string> toWrite;
+    toWrite.reserve(paths.size());
     for (const QString &p : paths)
     {
         const std::string sp = p.toUtf8().toStdString();
         rs.setRejected(sp, reject);
         rs.setPicked(sp, pick);
-        sidecar.writeSidecar(sp);
+        toWrite.push_back(sp);
     }
+    asyncWriteSidecars(std::move(toWrite));
     invalidateRatings();
 }
 
@@ -297,5 +319,6 @@ void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)
     QAction *actReject = flagMenu->addAction(tr("标记为排除 (Reject)"));
     connect(actReject, &QAction::triggered, this, [this]() { batchSetFlagSelected(true, false); });
     QAction *actClearFlag = flagMenu->addAction(tr("清除标记"));
-    connect(actClearFlag, &QAction::triggered, this, [this]() { batchSetFlagSelected(false, false); });
+    connect(actClearFlag, &QAction::triggered, this,
+            [this]() { batchSetFlagSelected(false, false); });
 }

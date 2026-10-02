@@ -14,12 +14,13 @@
 #include <QImageWriter>
 #include <QTemporaryDir>
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -138,7 +139,21 @@ Metrics measureDirectory(const QString &directory, int expected)
     metrics.firstGalleryRowMs = timer.elapsed();
     recordScanComplete();
 
-    const QStringList screenPaths = panel.pathList().first(firstScreenCount(panel));
+    // A progressive scan publishes the first rows before the folder is fully
+    // listed. QList::first(n) is undefined when n exceeds the current length,
+    // so wait until the viewport is filled or the listing is complete.
+    const int screenWant = std::max(1, firstScreenCount(panel));
+    waitUntil(
+        [&]
+        {
+            recordScanComplete();
+            const int n = panel.pathList().size();
+            return n >= screenWant || n >= expected;
+        },
+        60000);
+    const int listed = panel.pathList().size();
+    const QStringList screenPaths =
+        listed > 0 ? panel.pathList().first(std::min(screenWant, listed)) : QStringList();
     waitUntil(
         [&]
         {
@@ -229,8 +244,7 @@ Metrics measureDirectory(const QString &directory, int expected)
                    ThumbnailPipeline::instance().handlesCount() == 0;
         },
         60000);
-    TaskScheduler::instance().drain(TaskScheduler::PoolType::DecodePool,
-                                    std::chrono::seconds(60));
+    TaskScheduler::instance().drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(60));
     return metrics;
 }
 
@@ -255,7 +269,8 @@ void checkMetrics(const char *label, const Metrics &metrics, int expected)
     const bool allRecorded = metrics.firstGalleryRowMs >= 0 && metrics.firstThumbnailMs >= 0 &&
                              metrics.firstScreen50Ms >= 0 && metrics.firstScreen90Ms >= 0 &&
                              metrics.firstSelectedPreviewMs >= 0 &&
-                             metrics.selectedPreviewP50Ms >= 0 && metrics.selectedPreviewP95Ms >= 0 &&
+                             metrics.selectedPreviewP50Ms >= 0 &&
+                             metrics.selectedPreviewP95Ms >= 0 &&
                              metrics.directoryScanCompleteMs >= 0 && metrics.galleryStableMs >= 0;
     if (!allRecorded)
     {
@@ -286,8 +301,8 @@ void testPngEncodingBenchmark()
     {
         auto *scanline = reinterpret_cast<QRgb *>(image.scanLine(y));
         for (int x = 0; x < image.width(); ++x)
-            scanline[x] = qRgb((x * 17 + y * 3) % 256, (x * 5 + y * 11) % 256,
-                               (x * 13 + y * 7) % 256);
+            scanline[x] =
+                qRgb((x * 17 + y * 3) % 256, (x * 5 + y * 11) % 256, (x * 13 + y * 7) % 256);
     }
 
     const auto measure = [&](int compression)
@@ -384,8 +399,7 @@ void testViewportLatestWins()
     // predictive window stays bounded; this phase isolates latest-wins
     // delivery of the requested visible item.
     pipeline.setPredictiveCount(0);
-    const std::array<size_t, 10> jumps = {500, 5000, 9000, 1200, 4800,
-                                          8800, 240, 7600, 3200, 960};
+    const std::array<size_t, 10> jumps = {500, 5000, 9000, 1200, 4800, 8800, 240, 7600, 3200, 960};
     for (const size_t begin : jumps)
     {
         {
@@ -438,6 +452,114 @@ void testViewportLatestWins()
                                     std::chrono::seconds(30));
 }
 
+void testWarmPreviewSurvivesSharpDecode(const QString &seed)
+{
+    PreviewPanel preview;
+    QImage image(8, 4, QImage::Format_RGB32);
+    image.fill(qRgb(20, 40, 60));
+    const QPixmap warm = QPixmap::fromImage(image);
+    preview.offerWarmThumbnail(seed, warm, QSize(2, 2), 10);
+    if (preview.hasImage())
+    {
+        std::printf("FAIL warm preview: offer before setImage painted a frame\n");
+        ++g_failures;
+    }
+    preview.setImage(seed);
+    preview.offerWarmThumbnail(seed, warm, QSize(2, 2), 10);
+    if (!preview.hasImage() ||
+        preview.presentationQuality() != PreviewPanel::PresentationQuality::Thumbnail)
+    {
+        std::printf("FAIL warm preview: gallery thumb did not show before the sharp decode\n");
+        ++g_failures;
+    }
+    const bool sharp = waitUntil(
+        [&] { return preview.presentationQuality() == PreviewPanel::PresentationQuality::Preview; },
+        15000);
+    if (!sharp)
+    {
+        std::printf("FAIL warm preview: sharp preview did not replace the gallery thumb\n");
+        ++g_failures;
+    }
+    preview.offerWarmThumbnail(seed, warm, QSize(2, 2), 10);
+    if (preview.presentationQuality() != PreviewPanel::PresentationQuality::Preview ||
+        preview.presentedPath() != seed)
+    {
+        std::printf("FAIL warm preview: later gallery thumb replaced the sharp preview\n");
+        ++g_failures;
+    }
+}
+
+void testEighteenImageFolderPublishesFirstRow(const QString &root, const QString &seed)
+{
+    const QString directory = QDir(root).filePath(QStringLiteral("images_18"));
+    if (!createImages(directory, 18, seed))
+    {
+        std::printf("FAIL 18-image folder: could not create fixture\n");
+        ++g_failures;
+        return;
+    }
+
+    struct Hold
+    {
+        std::atomic<int> iteration{0};
+        std::atomic<bool> release{false};
+    };
+    auto hold = std::make_shared<Hold>();
+    struct Guard
+    {
+        std::shared_ptr<Hold> hold;
+        ~Guard()
+        {
+            if (hold)
+                hold->release.store(true, std::memory_order_release);
+            ThumbnailPanel::setScanIterationProbe({});
+        }
+    };
+
+    ThumbnailPanel panel;
+    panel.resize(900, 620);
+    panel.show();
+    QApplication::processEvents(QEventLoop::AllEvents, 5);
+    Guard guard{hold};
+
+    int published = 0;
+    QObject::connect(&panel, &ThumbnailPanel::sequenceChanged, &panel,
+                     [&](const QString &path, const QStringList &paths)
+                     {
+                         if (path == directory && !paths.isEmpty())
+                             published = static_cast<int>(paths.size());
+                     });
+    ThumbnailPanel::setScanIterationProbe(
+        [hold]()
+        {
+            const int n = hold->iteration.fetch_add(1, std::memory_order_acq_rel);
+            if (n == 1)
+            {
+                while (!hold->release.load(std::memory_order_acquire))
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        });
+    panel.setDirectory(directory);
+    const bool firstRow = waitUntil([&] { return panel.pathList().size() >= 1; }, 15000);
+    const int shown = static_cast<int>(panel.pathList().size());
+    const int listed = published;
+    hold->release.store(true, std::memory_order_release);
+    if (!firstRow || shown <= 0 || shown >= 18 || listed <= 0 || listed >= 18)
+    {
+        std::printf("FAIL 18-image folder: first row before scan end row=%d list=%d\n", shown,
+                    listed);
+        ++g_failures;
+    }
+    const bool done = waitUntil([&] { return panel.pathList().size() == 18; }, 15000);
+    if (!done)
+    {
+        std::printf("FAIL 18-image folder: scan did not finish, rows=%d\n",
+                    static_cast<int>(panel.pathList().size()));
+        ++g_failures;
+    }
+    panel.hide();
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -450,6 +572,8 @@ int main(int argc, char **argv)
     const QString seed = QDir(fixture.path()).filePath(QStringLiteral("seed.png"));
     writeSeed(seed);
     const QString root = fixture.path();
+    testWarmPreviewSurvivesSharpDecode(seed);
+    testEighteenImageFolderPublishesFirstRow(root, seed);
     const QString dir100 = QDir(root).filePath(QStringLiteral("images_100"));
     const QString dir1000 = QDir(root).filePath(QStringLiteral("images_1000"));
     const QString dir10000 = QDir(root).filePath(QStringLiteral("images_10000"));
@@ -459,11 +583,11 @@ int main(int argc, char **argv)
         return 2;
 
     std::printf("M54 perceived browse benchmark (ms; cold then warm disk/cache)\n");
-    for (const auto &caseInfo : {
-             std::pair<const char *, std::pair<QString, int>>{"100", {dir100, 100}},
-             std::pair<const char *, std::pair<QString, int>>{"1000", {dir1000, 1000}},
-             std::pair<const char *, std::pair<QString, int>>{"10000", {dir10000, 10000}},
-             std::pair<const char *, std::pair<QString, int>>{"50000 entries", {dir50000, 50000}}})
+    for (const auto &caseInfo :
+         {std::pair<const char *, std::pair<QString, int>>{"100", {dir100, 100}},
+          std::pair<const char *, std::pair<QString, int>>{"1000", {dir1000, 1000}},
+          std::pair<const char *, std::pair<QString, int>>{"10000", {dir10000, 10000}},
+          std::pair<const char *, std::pair<QString, int>>{"50000 entries", {dir50000, 50000}}})
     {
         const Metrics cold = measureDirectory(caseInfo.second.first, caseInfo.second.second);
         const std::string coldLabel = std::string(caseInfo.first) + " cold";

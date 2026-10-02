@@ -157,9 +157,16 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
         {}, std::chrono::steady_clock::time_point::max(),
         [guard, alive, generation, state, paths, label]() mutable
         {
+            QStringList removed;
+            for (const QString &path : paths)
+            {
+                if (!QFileInfo::exists(path))
+                    removed.append(path);
+            }
+
             QMetaObject::invokeMethod(
                 qApp,
-                [guard, alive, generation, state, paths, label]() mutable
+                [guard, alive, generation, state, removed = std::move(removed), label]() mutable
                 {
                     if (!alive->load(std::memory_order_relaxed) || !guard ||
                         generation != guard->m_fileOperationGeneration)
@@ -198,12 +205,6 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                             panel->refresh();
                     }
 
-                    QStringList removed;
-                    for (const QString &path : paths)
-                    {
-                        if (!QFileInfo::exists(path))
-                            removed.append(path);
-                    }
                     if (!removed.isEmpty())
                         emit panel->pathsRemoved(removed);
 
@@ -317,7 +318,8 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                         QMessageBox::warning(panel, QStringLiteral("复制"),
                                              QStringLiteral("复制已取消。\n") + summary);
                     else if (state->failures.isEmpty())
-                        QMessageBox::information(panel, QStringLiteral("复制"), summary);
+                        emit panel->browseStatusChanged(
+                            QStringLiteral("已成功复制 %1 个文件").arg(state->copied));
                     else
                         QMessageBox::warning(panel, QStringLiteral("复制"), summary);
                 },
@@ -337,10 +339,19 @@ void ThumbnailPanel::renameSelected()
         return;
     const QString oldPath = paths.first();
     const QFileInfo fi(oldPath);
-    bool ok = false;
-    const QString newName =
-        QInputDialog::getText(this, "重命名", "新文件名:", QLineEdit::Normal, fi.fileName(), &ok);
-    if (!ok || newName.isEmpty() || newName == fi.fileName())
+    QInputDialog dialog(this);
+    dialog.setWindowTitle(tr("重命名"));
+    dialog.setLabelText(tr("新文件名:"));
+    dialog.setTextValue(fi.fileName());
+    if (auto *lineEdit = dialog.findChild<QLineEdit *>())
+    {
+        const QString base = fi.completeBaseName();
+        lineEdit->setSelection(0, static_cast<int>(base.length()));
+    }
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    const QString newName = dialog.textValue();
+    if (newName.isEmpty() || newName == fi.fileName())
         return;
     if (newName.contains(QLatin1Char('/')) || newName.contains(QLatin1Char('\\')) ||
         QFileInfo(newName).fileName() != newName)
