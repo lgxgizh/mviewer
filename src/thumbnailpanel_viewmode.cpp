@@ -155,16 +155,25 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         if (m_detailsHeader)
             m_detailsHeader->hide();
     }
+    const auto publish = [this]()
+    {
+        // QListView::setViewMode(ListMode) resets both bars to ScrollPerItem.
+        // List, Filmstrip-after-List, and every other mode measure cells with
+        // pixel offsets, so put ScrollPerPixel back after the mode change.
+        setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+        setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
+        emit viewModeChanged(m_viewMode);
+    };
     if (mode == LargeIcon)
     {
         configureLargeIconMode();
-        emit viewModeChanged(m_viewMode);
+        publish();
         return;
     }
     if (mode == SmallIcon)
     {
         configureSmallIconMode();
-        emit viewModeChanged(m_viewMode);
+        publish();
         return;
     }
     if (mode == Details)
@@ -179,7 +188,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         configureThumbnailMode();
     if (mode == Thumbnail)
         setThumbSize(m_gridThumbSize);
-    emit viewModeChanged(m_viewMode);
+    publish();
 }
 
 // ---- Details column widths + interactive header ------------------------------

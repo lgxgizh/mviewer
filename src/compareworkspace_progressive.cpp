@@ -82,6 +82,18 @@ TaskScheduler::Priority CompareWorkspace::deferredAnalysisPriority() const
 void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string> &paths)
 {
     const int n = std::min(static_cast<int>(paths.size()), static_cast<int>(m_cellViews.size()));
+    // The pair (or a preview of it) is changing now. Drop PSNR/SSIM until a
+    // diff batch for this pair lands; a soft reload must not keep the previous
+    // badge on a pane whose path or bitmap already moved.
+    for (RawImageView *view : m_cellViews)
+    {
+        if (!view)
+            continue;
+        view->setMetricBadge(QString());
+        view->setToolTip(QString());
+    }
+    if (m_metricLabel)
+        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
     auto &svc = mviewer::application::ImageLoadingService::instance();
     for (int i = 0; i < n; ++i)
     {
@@ -228,7 +240,10 @@ void CompareWorkspace::applyPendingWarmSeeds()
             const QSize oldSource = view->sourceSize();
             // QImage is implicit-shared — no forced deep copy. Keep softLoading
             // so cheap→full / pyramid upgrade still runs after the warm paint.
+            // The bitmap is about to change; the previous pair's badge is not
+            // this image's PSNR/SSIM.
             view->setSoftLoading(true);
+            view->setMetricBadge(QString());
             view->setImage(seed.image, seed.sourceSize, seed.sourceRect);
             if (oldSource.isValid() && oldSource == seed.sourceSize)
                 view->setTransform(oldScale, oldOffset);

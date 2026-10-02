@@ -8,6 +8,7 @@
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 
+#include <QAbstractItemView>
 #include <QApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -309,6 +310,53 @@ void testNavigationIndexDoesNotBlockGallery(Results &results)
     (void)guard;
 }
 
+void testListFilmstripScrollPerPixel(Results &results)
+{
+    std::cout << "\n[list and filmstrip scroll per pixel]\n";
+    ThumbnailPanel panel;
+    const auto perPixel = QAbstractItemView::ScrollPerPixel;
+    panel.setViewMode(ThumbnailPanel::List);
+    check(results,
+          panel.verticalScrollMode() == perPixel && panel.horizontalScrollMode() == perPixel,
+          "List mode keeps ScrollPerPixel");
+    panel.setViewMode(ThumbnailPanel::Filmstrip);
+    check(results,
+          panel.verticalScrollMode() == perPixel && panel.horizontalScrollMode() == perPixel,
+          "Filmstrip after List keeps ScrollPerPixel");
+    panel.setViewMode(ThumbnailPanel::Details);
+    panel.setViewMode(ThumbnailPanel::List);
+    check(results,
+          panel.verticalScrollMode() == perPixel && panel.horizontalScrollMode() == perPixel,
+          "List after Details keeps ScrollPerPixel");
+}
+
+void testGalleryPathSlashKey(Results &results)
+{
+    std::cout << "\n[gallery path slash key]\n";
+    QTemporaryDir tmp;
+    check(results, tmp.isValid(), "path-key temp dir created");
+    if (!tmp.isValid())
+        return;
+    const QString image = writePng(tmp.path());
+    SelectionModel sel;
+    ThumbnailPanel panel;
+    panel.setSelectionModel(&sel);
+    panel.resize(640, 480);
+    panel.show();
+    pump(30);
+    panel.setDirectory(tmp.path());
+    check(results, waitTrue([&] { return panel.rowForPath(image) == 0; }, 5000),
+          "forward-slash path resolves to the gallery row");
+    QString flipped = image;
+    flipped.replace(QLatin1Char('/'), QLatin1Char('\\'));
+    check(results, panel.rowForPath(flipped) == 0, "backslash path resolves to the same row");
+    panel.selectPath(flipped);
+    check(results, panel.currentIndex().row() == 0,
+          "selectPath accepts the other slash style");
+    panel.scrollToPath(flipped);
+    check(results, panel.currentIndex().row() == 0, "scrollToPath accepts the other slash style");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -322,6 +370,8 @@ int main(int argc, char **argv)
     testFailedThumbsAreNotRetried(results);
     testNavigateEmitsBeforeStat(results);
     testNavigationIndexDoesNotBlockGallery(results);
+    testListFilmstripScrollPerPixel(results);
+    testGalleryPathSlashKey(results);
     pump(200);
     while (QApplication::overrideCursor() != nullptr)
         QApplication::restoreOverrideCursor();

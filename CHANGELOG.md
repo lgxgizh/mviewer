@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+- **Pixel copy shortcuts**: Shift+C (hex) and Shift+B (RGB) reach the image viewer. Plain C still opens compare; the shifted keys are no longer consumed as global shortcuts.
+- **Pixel readout after image switch**: the sample under the cursor is taken again when the new frame is shown, without waiting for the mouse to move.
+- **List and Filmstrip scrolling**: view-mode changes force ScrollPerPixel so visible-range decode uses pixel offsets after List mode (and Filmstrip after List).
+- **Gallery path slashes**: select, scroll, and restore treat `/` and `\` as the same file.
+- **Directory Back/Forward**: history compares folders with `DirectoryTree::equivalentPath`, so `C:\Photos` and `C:/Photos` do not form a duplicate entry that makes Back a no-op.
+- **Compare metrics**: a pair change or soft reload clears the PSNR/SSIM badge and readout until the numbers match the current pair.
+
 ## [1.0.94] - 2026-10-02
 
 ### Release

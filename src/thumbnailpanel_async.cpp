@@ -415,7 +415,7 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
     for (int i = 0; i < batch.size(); ++i)
     {
         const Entry &e = batch.at(i);
-        m_sourceRowByPath.insert(e.path, sourceRow + i);
+        m_sourceRowByPath.insert(galleryPathKey(e.path), sourceRow + i);
         ThumbnailCache::instance().hintSourceIdentity(
             e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
     }
@@ -432,9 +432,10 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
         const Entry &entry = batch.at(i);
         const int row = firstRow + i;
         m_paths.append(entry.path);
-        m_rowByPath.insert(entry.path, row);
-        m_displayEntryRow.insert(entry.path, row);
-        m_sizeByPath.insert(entry.path, entry.size);
+        const QString key = galleryPathKey(entry.path);
+        m_rowByPath.insert(key, row);
+        m_displayEntryRow.insert(key, row);
+        m_sizeByPath.insert(key, entry.size);
         m_model->setData(m_model->index(row, 0), entry.name);
         m_totalBytes += entry.size;
     }
@@ -485,7 +486,7 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     m_sourceRowByPath.clear();
     m_sourceRowByPath.reserve(m_allEntries.size());
     for (int i = 0; i < m_allEntries.size(); ++i)
-        m_sourceRowByPath.insert(m_allEntries.at(i).path, i);
+        m_sourceRowByPath.insert(galleryPathKey(m_allEntries.at(i).path), i);
     m_metaIndex.clear();
     // Seed disk-cache identity from the scan so thumbnail get()/put() reuse
     // listing mtime/size instead of re-statting every source on network paths.
@@ -644,7 +645,7 @@ QVector<int> ThumbnailPanel::dimensionProbeOrder() const
         last = qBound(first, last, visibleRows - 1);
         for (int row = first; row <= last; ++row)
         {
-            const int src = m_sourceRowByPath.value(m_paths.at(row), -1);
+            const int src = m_sourceRowByPath.value(galleryPathKey(m_paths.at(row)), -1);
             if (src >= 0 && !seen.contains(src))
             {
                 order.append(src);
@@ -673,7 +674,7 @@ void ThumbnailPanel::applyDimensionBatch(const QVector<int> &idx, const QVector<
         m_allEntries[i].frameCount = frames.at(b);
         m_allEntries[i].animated = animated.at(b);
         const QString &path = m_allEntries.at(i).path;
-        const int drow = m_displayEntryRow.value(path, -1);
+        const int drow = m_displayEntryRow.value(galleryPathKey(path), -1);
         if (drow >= 0 && drow < m_displayEntries.size())
         {
             m_displayEntries[drow].width = sizes.at(b).width();

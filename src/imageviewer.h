@@ -433,6 +433,11 @@ class ImageViewer : public QOpenGLWidget
     void drawProvisional(QPainter &painter) const;
     void drawTransition(QPainter &painter) const;
     void updatePixelSampleAt(const QPoint &pos);
+    // After setImage / a frame swap the cursor has not moved, so the last
+    // sample coordinates still match. Force one read when the pointer is over
+    // this widget; leaveEvent stays cleared.
+    void resamplePixelUnderCursor();
+    void noteDisplayedFrameForPixelReadout();
     AsyncTileRequestManager::VisibleTiles requestVisibleTiles();
     // Large-source zoomed-in pans: per-tile decodeRegion, no full frame.
     bool lodRegionTilesActive() const;
@@ -642,6 +647,7 @@ class ImageViewer : public QOpenGLWidget
     PixelRGBA m_lastHoverPixel{};
     int m_lastHoverX = -1;
     int m_lastHoverY = -1;
+    const ImageFrame *m_pixelReadoutFrame = nullptr;
 
     // Auto-hide cursor in fullscreen after inactivity.
     QTimer *m_cursorHideTimer = nullptr;

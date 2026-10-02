@@ -642,6 +642,26 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
             return true;
         }
     }
+    // Shift+C / Shift+B copy the pixel under the cursor (hex / RGB). Plain C
+    // is compare and plain B is a browse-mode key; those modifiers must reach
+    // ImageViewer instead of being consumed as global shortcuts.
+    const auto shiftBare = ke->modifiers() & (Qt::ShiftModifier | Qt::ControlModifier |
+                                               Qt::AltModifier | Qt::MetaModifier);
+    if (shiftBare == Qt::ShiftModifier && (ke->key() == Qt::Key_C || ke->key() == Qt::Key_B))
+    {
+        if (watched == m_imageViewer)
+            return false;
+        auto *editor = qobject_cast<QWidget *>(watched);
+        if (editor && (editor->inherits("QLineEdit") || editor->inherits("QTextEdit") ||
+                       editor->inherits("QPlainTextEdit") || editor->inherits("QAbstractSpinBox")))
+            return false;
+        if (m_imageViewer)
+        {
+            QApplication::sendEvent(m_imageViewer, ke);
+            return true;
+        }
+        return false;
+    }
     // While the viewer window has focus (e.g. slideshow fullscreen), 'S'
     // still toggles the slideshow; the viewer itself has no such binding.
     if (watched == m_imageViewer && ke->key() == Qt::Key_S && !ke->modifiers())

@@ -507,6 +507,8 @@ void ImageViewer::scheduleLoadedRefit(const QString &path, uint64_t generation,
             if (viewer->property("mviewerFullscreenRequested").toBool() && viewer->m_fitMode)
                 viewer->fitToWidget();
             viewer->update();
+            // Fit can move the pixel under a stationary cursor after setImage.
+            viewer->resamplePixelUnderCursor();
         });
 }
 

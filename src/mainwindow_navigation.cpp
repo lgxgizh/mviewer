@@ -243,13 +243,14 @@ void MainWindow::pushDirHistory(const QString &dir)
     // branch, otherwise a Back operation destroys the very Forward entry it
     // should restore.
     if (m_dirHistoryIndex >= 0 && m_dirHistoryIndex < m_dirHistory.size() &&
-        m_dirHistory.at(m_dirHistoryIndex) == dir)
+        DirectoryTree::equivalentPath(m_dirHistory.at(m_dirHistoryIndex), dir))
         return;
     // Prune forward entries when branching.
     if (m_dirHistoryIndex >= 0 && m_dirHistoryIndex + 1 < m_dirHistory.size())
         m_dirHistory.erase(m_dirHistory.begin() + m_dirHistoryIndex + 1, m_dirHistory.end());
-    // Suppress consecutive duplicates.
-    if (!m_dirHistory.isEmpty() && m_dirHistory.last() == dir)
+    // Suppress consecutive duplicates. Tree context menus and navigateTo can
+    // disagree on '\' vs '/'; raw equality made Back a no-op on the twin entry.
+    if (!m_dirHistory.isEmpty() && DirectoryTree::equivalentPath(m_dirHistory.last(), dir))
         return;
     m_dirHistory.append(dir);
     m_dirHistoryIndex = m_dirHistory.size() - 1;

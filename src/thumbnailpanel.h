@@ -354,11 +354,22 @@ class ThumbnailPanel : public QListView
                                       metaIndex, metaIso, metaCamera, metaLens);
     }
 
+    // Slash-stable key for m_rowByPath and the other gallery path hashes.
+    // absoluteFilePath, history, and paste can disagree on '/' vs '\\'.
+    static QString galleryPathKey(const QString &path)
+    {
+        if (path.isEmpty())
+            return path;
+        QString normalized = path;
+        normalized.replace(QLatin1Char('\\'), QLatin1Char('/'));
+        return QDir::cleanPath(normalized);
+    }
+
     // Resolve a path to the current filtered model row (scroll / repaint).
     // This row must never be used to index m_allEntries.
     int rowForPath(const QString &path) const
     {
-        return m_rowByPath.value(path, -1);
+        return m_rowByPath.value(galleryPathKey(path), -1);
     }
     // Read-only path lookup for delegates. The gallery model may be filtered,
     // so a model row is not necessarily the same as the row in m_allEntries.
@@ -369,10 +380,11 @@ class ThumbnailPanel : public QListView
     // during one paint call.
     const Entry *entryForPath(const QString &path) const
     {
-        const int row = m_displayEntryRow.value(path, -1);
+        const QString key = galleryPathKey(path);
+        const int row = m_displayEntryRow.value(key, -1);
         if (row >= 0 && row < m_displayEntries.size())
             return &m_displayEntries.at(row);
-        const int srcRow = m_sourceRowByPath.value(path, -1);
+        const int srcRow = m_sourceRowByPath.value(key, -1);
         return srcRow >= 0 && srcRow < m_allEntries.size() ? &m_allEntries.at(srcRow) : nullptr;
     }
     // P0 #①: EXIF accessors for the Details view columns (camera / lens / ISO).

@@ -127,7 +127,7 @@ void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAct
     reveal = menu.addAction("在资源管理器中显示 (Ctrl+E)");
     colorMenu = menu.addMenu("复制像素值");
     copyHex = colorMenu->addAction("十六进制 (#RRGGBB) (Shift+C)");
-    copyRgb = colorMenu->addAction("RGB 值 RGB(r, g, b)");
+    copyRgb = colorMenu->addAction("RGB 值 RGB(r, g, b) (Shift+B)");
     copyCoord = colorMenu->addAction("坐标 (x, y)");
     copyFloat = colorMenu->addAction("归一化浮点 (0.xxx, 0.yyy, 0.zzz)");
     copyHsv = colorMenu->addAction("HSV 值 HSV(h°, s%, v%)");
@@ -415,7 +415,7 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         return flipHorizontal();
     if (shiftCtrl && key == Qt::Key_V)
         return flipVertical();
-    if (shift && key == Qt::Key_C)
+    if (shift && (key == Qt::Key_C || key == Qt::Key_B))
     {
         PixelRGBA px = m_lastHoverPixel;
         if (!px.valid && m_frame && m_frame->isValid())
@@ -428,7 +428,8 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         }
         if (px.valid)
         {
-            const QString copied = copyPixelValue(px, 0);
+            const int format = key == Qt::Key_B ? 1 : 0;
+            const QString copied = copyPixelValue(px, format);
             if (!copied.isEmpty())
                 emit statusMessageRequested(tr("已复制像素值: %1").arg(copied));
             return true;

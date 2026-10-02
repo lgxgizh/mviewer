@@ -415,6 +415,18 @@ void MainWindow::cleanupClipboardPasteTemps()
 bool MainWindow::handleViewerKey(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
+    // Shift+C / Shift+B belong to ImageViewer (copy hex / RGB). Do not treat
+    // them as the plain-key compare or browse shortcuts.
+    const auto shiftBare = mod & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier |
+                                  Qt::MetaModifier);
+    if (shiftBare == Qt::ShiftModifier &&
+        (event->key() == Qt::Key_C || event->key() == Qt::Key_B))
+    {
+        if (m_imageViewer && QApplication::focusWidget() != m_imageViewer)
+            QApplication::sendEvent(m_imageViewer, event);
+        event->accept();
+        return true;
+    }
     // P0-4 / P1-4: Space triggers compare for the current + next image.
     if (event->key() == Qt::Key_Space && !mod)
     {

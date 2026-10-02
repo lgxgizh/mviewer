@@ -78,7 +78,7 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
     m_sourceRowByPath.clear();
     m_sourceRowByPath.reserve(m_allEntries.size());
     for (int i = 0; i < m_allEntries.size(); ++i)
-        m_sourceRowByPath.insert(m_allEntries.at(i).path, i);
+        m_sourceRowByPath.insert(galleryPathKey(m_allEntries.at(i).path), i);
 
     // Rename is an identity migration, not a selection loss. Rewrite the
     // saved view selection before the row-local model mutation so both the
@@ -435,9 +435,10 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
     {
         const Entry &entry = entries.at(i);
         m_paths.append(entry.path);
-        m_rowByPath.insert(entry.path, i);
-        m_displayEntryRow.insert(entry.path, i);
-        m_sizeByPath.insert(entry.path, entry.size);
+        const QString key = galleryPathKey(entry.path);
+        m_rowByPath.insert(key, i);
+        m_displayEntryRow.insert(key, i);
+        m_sizeByPath.insert(key, entry.size);
         names.append(entry.name);
         m_totalBytes += entry.size;
     }
@@ -446,7 +447,7 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
     QItemSelection restored;
     for (const QString &path : previousSelection)
     {
-        const int row = m_rowByPath.value(path, -1);
+        const int row = m_rowByPath.value(galleryPathKey(path), -1);
         if (row >= 0)
             restored.select(m_model->index(row, 0), m_model->index(row, 0));
     }
@@ -454,7 +455,7 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
         selectionModel()->select(restored, QItemSelectionModel::ClearAndSelect);
 
     QString nextCurrent = previousCurrent;
-    if (!m_rowByPath.contains(nextCurrent))
+    if (!m_rowByPath.contains(galleryPathKey(nextCurrent)))
     {
         const int candidate = m_paths.isEmpty()
                                   ? -1
@@ -464,16 +465,16 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
         {
             QStringList validSelection;
             for (const QString &path : previousSelection)
-                if (m_rowByPath.contains(path))
+                if (m_rowByPath.contains(galleryPathKey(path)))
                     validSelection.append(path);
             m_selection->setSelection(validSelection, nextCurrent);
         }
     }
-    if (!nextCurrent.isEmpty() && m_rowByPath.contains(nextCurrent))
+    if (!nextCurrent.isEmpty() && m_rowByPath.contains(galleryPathKey(nextCurrent)))
     {
         // NoUpdate preserves multi-select restored above; plain setCurrentIndex
         // would ClearAndSelect and leave only the current path selected.
-        const QModelIndex idx = m_model->index(m_rowByPath.value(nextCurrent), 0);
+        const QModelIndex idx = m_model->index(m_rowByPath.value(galleryPathKey(nextCurrent)), 0);
         selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
     }
     else
@@ -497,7 +498,7 @@ void ThumbnailPanel::preserveScrollAnchor(const QString &anchorPath, int anchorO
 {
     if (anchorPath.isEmpty())
         return;
-    const int row = m_rowByPath.value(anchorPath, -1);
+    const int row = m_rowByPath.value(galleryPathKey(anchorPath), -1);
     if (row < 0)
         return;
     const QModelIndex index = m_model->index(row, 0);
