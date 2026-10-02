@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.95] - 2026-10-03
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.95**.
+
 ### Fixed
 - **Pixel copy shortcuts**: Shift+C (hex) and Shift+B (RGB) reach the image viewer. Plain C still opens compare; the shifted keys are no longer consumed as global shortcuts.
 - **Pixel readout after image switch**: the sample under the cursor is taken again when the new frame is shown, without waiting for the mouse to move.
