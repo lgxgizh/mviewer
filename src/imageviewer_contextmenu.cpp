@@ -524,8 +524,7 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
         toggleFullscreen();
     else if (key == Qt::Key_Escape)
     {
-        const QRect sel = selectedRegion();
-        if (m_selecting || (sel.width() > 0 && sel.height() > 0))
+        if (m_selecting || m_selectMode || m_selStart != m_selEnd)
         {
             m_selecting = false;
             m_selStart = m_selEnd = QPoint();

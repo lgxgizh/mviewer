@@ -70,6 +70,7 @@ void ImageViewer::showBrowseFullscreen()
     // managers. The browse entry point must finish with the Viewer focused so
     // the first ESC always closes it and viewer-owned keys respond immediately.
     setFocus(Qt::OtherFocusReason);
+    QApplication::setActiveWindow(this);
     QTimer::singleShot(0, this,
                        [this]
                        {
@@ -78,6 +79,7 @@ void ImageViewer::showBrowseFullscreen()
                            raise();
                            activateWindow();
                            setFocus(Qt::OtherFocusReason);
+                           QApplication::setActiveWindow(this);
                        });
 }
 
