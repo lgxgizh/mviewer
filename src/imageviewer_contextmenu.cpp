@@ -481,8 +481,10 @@ bool ImageViewer::handleNavigationKey(int key)
 
 bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
 {
-    if (((modifiers & Qt::ControlModifier) && key == Qt::Key_L) ||
-        (!modifiers && key == Qt::Key_L))
+    // Shift+0…6 are channel overlays (handleModeKey), not zoom.
+    if (modifiers == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6)
+        return false;
+    if (((modifiers & Qt::ControlModifier) && key == Qt::Key_L) || (!modifiers && key == Qt::Key_L))
     {
         setLockZoom(!m_lockZoom);
         return true;
@@ -504,13 +506,14 @@ bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
 
 bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
 {
-    if (modifiers == Qt::ShiftModifier && key >= Qt::Key_1 && key <= Qt::Key_6)
+    if (modifiers == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6)
     {
         static const mviewer::OverlayMode kChannelKeys[] = {
             mviewer::OverlayMode::None,     mviewer::OverlayMode::ChannelR,
             mviewer::OverlayMode::ChannelG, mviewer::OverlayMode::ChannelB,
             mviewer::OverlayMode::ChannelY, mviewer::OverlayMode::ChannelV};
-        setOverlayMode(kChannelKeys[key - Qt::Key_1]);
+        setOverlayMode(key == Qt::Key_0 ? mviewer::OverlayMode::None
+                                        : kChannelKeys[key - Qt::Key_1]);
         return true;
     }
     if (handleTransformKey(key, modifiers))
@@ -520,7 +523,24 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
     else if (key == Qt::Key_F11)
         toggleFullscreen();
     else if (key == Qt::Key_Escape)
+    {
+        const QRect sel = selectedRegion();
+        if (m_selecting || (sel.width() > 0 && sel.height() > 0))
+        {
+            m_selecting = false;
+            m_selStart = m_selEnd = QPoint();
+            if (m_selectMode)
+                setSelectMode(false);
+            update();
+            return true;
+        }
+        if (property("mviewerFullscreenRequested").toBool())
+        {
+            setFullscreenRequested(false);
+            return true;
+        }
         close();
+    }
     else
         return false;
     return true;

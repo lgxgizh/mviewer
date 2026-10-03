@@ -668,7 +668,6 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
     m_actZoomActual = new QAction("实际大小(&A)", this);
     m_actZoomActual->setObjectName("zoomActualAction");
-    m_actZoomActual->setShortcut(QKeySequence("Ctrl+1"));
     m_actFullscreen = new QAction("全屏(&U)", this);
     m_actFullscreen->setShortcut(QKeySequence("F11"));
     viewMenu->addAction(m_actZoomIn);
