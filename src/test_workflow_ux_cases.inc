@@ -1313,8 +1313,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 }
             }
 
-            // F toggles fullscreen: the visible viewer, or the main window
-            // when the viewer is hidden (cheat sheet “F / F11 → 全屏切换”).
+            // F fits the window. F11 toggles fullscreen: the visible viewer,
+            // or the main window when the viewer is hidden.
             {
                 // The offscreen QPA used by headless CI does not always expose
                 // the native WindowFullScreen bit through QWidget::isFullScreen().
@@ -1322,30 +1322,37 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 // native state remains a best-effort side effect on real screens.
                 const auto viewerFullscreenRequested = [&]()
                 { return viewer->property("mviewerFullscreenRequested").toBool(); };
-                if (viewerFullscreenRequested() || viewer->isFullScreen())
-                {
-                    sendKey(&w, Qt::Key_F);
-                    pump(20);
-                }
-                CHECK(!viewerFullscreenRequested() && !viewer->isFullScreen(),
-                      "F exits the default Browse fullscreen state");
+                const bool startedFullscreen =
+                    viewerFullscreenRequested() || viewer->isFullScreen();
                 sendKey(&w, Qt::Key_F);
+                pump(20);
+                CHECK((viewerFullscreenRequested() || viewer->isFullScreen()) == startedFullscreen,
+                      "F fits the window and does not toggle fullscreen");
+                if (startedFullscreen)
+                {
+                    sendKey(&w, Qt::Key_F11);
+                    pump(50);
+                    CHECK(!viewerFullscreenRequested() && !viewer->isFullScreen(),
+                          "F11 exits the default Browse fullscreen state");
+                }
+                sendKey(&w, Qt::Key_F11);
                 pump(50);
                 CHECK(viewerFullscreenRequested() || viewer->isFullScreen(),
-                      "F fullscreens the visible viewer");
-                sendKey(&w, Qt::Key_F);
+                      "F11 fullscreens the visible viewer");
+                sendKey(&w, Qt::Key_F11);
                 pump(50);
                 CHECK(!viewerFullscreenRequested() && !viewer->isFullScreen(),
-                      "F again exits fullscreen");
+                      "F11 again exits fullscreen");
 
                 viewer->hide();
                 pump(20);
-                sendKey(&w, Qt::Key_F);
+                sendKey(&w, Qt::Key_F11);
                 pump(50);
-                CHECK(w.isFullScreen(), "F fullscreens the main window when the viewer is hidden");
-                sendKey(&w, Qt::Key_F);
+                CHECK(w.isFullScreen(),
+                      "F11 fullscreens the main window when the viewer is hidden");
+                sendKey(&w, Qt::Key_F11);
                 pump(50);
-                CHECK(!w.isFullScreen(), "F again exits the main-window fullscreen");
+                CHECK(!w.isFullScreen(), "F11 again exits the main-window fullscreen");
                 viewer->show();
                 pump(20);
             }
@@ -4622,7 +4629,7 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
               !emptyMenu.enabledLabels.contains(QStringLiteral("适应窗口 (0)")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("实际大小 (1)")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("框选区域 (R)")) &&
-              emptyMenu.enabledLabels.contains(QStringLiteral("全屏 (F)")),
+              emptyMenu.enabledLabels.contains(QStringLiteral("全屏 (F11)")),
           "empty viewer disables image-dependent context actions but keeps fullscreen available");
     viewer.setImage(path);
     {

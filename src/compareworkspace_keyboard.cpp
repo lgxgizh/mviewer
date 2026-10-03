@@ -6,6 +6,8 @@
 #include <QKeyEvent>
 #include <QTimer>
 
+#include <algorithm>
+
 // P0-4 / M20: keyboard-first compare — day-long work without the mouse.
 void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 {
@@ -87,66 +89,140 @@ bool CompareWorkspace::handleBasicCompareNavigation(QKeyEvent *event)
     return true;
 }
 
+namespace
+{
+
+int focusedUnlinkedPane(int focusIndex, const QList<RawImageView *> &views)
+{
+    const int count = static_cast<int>(views.size());
+    if (focusIndex >= 0 && focusIndex < count)
+        return focusIndex;
+    for (int i = 0; i < count; ++i)
+    {
+        RawImageView *view = views.at(i);
+        if (view && !view->selection().isEmpty())
+            return i;
+    }
+    return count > 0 ? 0 : -1;
+}
+
+struct UnlinkedRoiTarget
+{
+    RawImageView *view = nullptr;
+    mviewer::domain::Selection selection;
+    int paneIndex = 0;
+    int width = 0;
+    int height = 0;
+    bool ok = false;
+};
+
+UnlinkedRoiTarget unlinkedRoiTarget(int focusIndex, const QList<RawImageView *> &views)
+{
+    UnlinkedRoiTarget result;
+    result.paneIndex = focusedUnlinkedPane(focusIndex, views);
+    const int count = static_cast<int>(views.size());
+    if (result.paneIndex < 0 || result.paneIndex >= count)
+        return result;
+    result.view = views.at(result.paneIndex);
+    if (!result.view)
+        return result;
+    result.selection = result.view->selection();
+    if (result.selection.isEmpty())
+        return result;
+    const QSize src = result.view->sourceSize();
+    result.width = src.width();
+    result.height = src.height();
+    result.ok = result.width > 0 && result.height > 0;
+    return result;
+}
+
+void linkedImageSize(const ImageFrame *first, int &imgW, int &imgH)
+{
+    imgW = 0;
+    imgH = 0;
+    if (!first)
+        return;
+    imgW = first->metadata().width > 0 ? first->metadata().width : first->width();
+    imgH = first->metadata().height > 0 ? first->metadata().height : first->height();
+}
+
+void stepRoiSelection(mviewer::domain::Selection &sel, int key, bool shift, bool resize, int imgW,
+                      int imgH)
+{
+    const int step = shift ? 10 : 1;
+    if (resize)
+    {
+        if (key == Qt::Key_Right)
+            sel.width = std::clamp(sel.width + step, 1, imgW - sel.x);
+        else if (key == Qt::Key_Left)
+            sel.width = (std::max)(1, sel.width - step);
+        else if (key == Qt::Key_Down)
+            sel.height = std::clamp(sel.height + step, 1, imgH - sel.y);
+        else if (key == Qt::Key_Up)
+            sel.height = (std::max)(1, sel.height - step);
+        return;
+    }
+    if (key == Qt::Key_Left)
+        sel.x = std::clamp(sel.x - step, 0, (std::max)(0, imgW - sel.width));
+    else if (key == Qt::Key_Right)
+        sel.x = std::clamp(sel.x + step, 0, (std::max)(0, imgW - sel.width));
+    else if (key == Qt::Key_Up)
+        sel.y = std::clamp(sel.y - step, 0, (std::max)(0, imgH - sel.height));
+    else if (key == Qt::Key_Down)
+        sel.y = std::clamp(sel.y + step, 0, (std::max)(0, imgH - sel.height));
+}
+
+} // namespace
+
 bool CompareWorkspace::handleROIKeyboardNudge(QKeyEvent *event)
 {
-    if (m_lastSelection.isEmpty() || !m_roiLinked)
-        return false;
-
     const int key = event->key();
     if (key != Qt::Key_Left && key != Qt::Key_Right && key != Qt::Key_Up && key != Qt::Key_Down)
         return false;
 
     const auto mods = event->modifiers();
-    const bool shift = (mods & Qt::ShiftModifier);
-    const bool alt = (mods & Qt::AltModifier);
-    const bool ctrl = (mods & Qt::ControlModifier);
-
+    const bool shift = (mods & Qt::ShiftModifier) != 0;
+    const bool alt = (mods & Qt::AltModifier) != 0;
+    const bool ctrl = (mods & Qt::ControlModifier) != 0;
     if (!alt && !shift)
         return false;
 
-    const ImageFrame *first = m_engine.imageAt(0);
-    const int imgW =
-        first ? (first->metadata().width > 0 ? first->metadata().width : first->width()) : 0;
-    const int imgH =
-        first ? (first->metadata().height > 0 ? first->metadata().height : first->height()) : 0;
-    if (imgW <= 0 || imgH <= 0)
-        return false;
+    RawImageView *focusedView = nullptr;
+    int paneIndex = 0;
+    int imgW = 0;
+    int imgH = 0;
+    mviewer::domain::Selection sel;
 
-    const int step = shift ? 10 : 1;
-    mviewer::domain::Selection sel = m_lastSelection;
-
-    if (ctrl && alt)
+    if (!m_roiLinked)
     {
-        if (key == Qt::Key_Right)
-            sel.width = std::clamp(sel.width + step, 1, imgW - sel.x);
-        else if (key == Qt::Key_Left)
-            sel.width = std::max(1, sel.width - step);
-        else if (key == Qt::Key_Down)
-            sel.height = std::clamp(sel.height + step, 1, imgH - sel.y);
-        else if (key == Qt::Key_Up)
-            sel.height = std::max(1, sel.height - step);
+        const UnlinkedRoiTarget target = unlinkedRoiTarget(m_focusIndex, m_cellViews);
+        if (!target.ok)
+            return false;
+        focusedView = target.view;
+        paneIndex = target.paneIndex;
+        sel = target.selection;
+        imgW = target.width;
+        imgH = target.height;
+    }
+    else if (m_lastSelection.isEmpty())
+    {
+        return false;
     }
     else
     {
-        if (key == Qt::Key_Left)
-            sel.x = std::clamp(sel.x - step, 0, std::max(0, imgW - sel.width));
-        else if (key == Qt::Key_Right)
-            sel.x = std::clamp(sel.x + step, 0, std::max(0, imgW - sel.width));
-        else if (key == Qt::Key_Up)
-            sel.y = std::clamp(sel.y - step, 0, std::max(0, imgH - sel.height));
-        else if (key == Qt::Key_Down)
-            sel.y = std::clamp(sel.y + step, 0, std::max(0, imgH - sel.height));
+        sel = m_lastSelection;
+        linkedImageSize(m_engine.imageAt(0), imgW, imgH);
+        if (imgW <= 0 || imgH <= 0)
+            return false;
     }
 
-    applySelectionToAll(sel);
-    const QString paneInfo =
-        m_roiLinked
-            ? QString()
-            : tr(" (窗格 %1)")
-                  .arg(((m_focusIndex >= 0 && m_focusIndex < static_cast<int>(m_cellViews.size()))
-                            ? m_focusIndex
-                            : 0) +
-                       1);
+    stepRoiSelection(sel, key, shift, ctrl && alt, imgW, imgH);
+    if (focusedView)
+        applySelectionFromView(focusedView, sel);
+    else
+        applySelectionToAll(sel);
+
+    const QString paneInfo = m_roiLinked ? QString() : tr(" (窗格 %1)").arg(paneIndex + 1);
     showCompareStatus(tr("微调 ROI%1: X=%2 Y=%3 W=%4 H=%5")
                           .arg(paneInfo)
                           .arg(m_lastSelection.x)

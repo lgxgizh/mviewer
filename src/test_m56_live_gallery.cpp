@@ -173,6 +173,29 @@ int main(int argc, char **argv)
     check(panel.pathList().size() == 3 && !panel.pathList().contains(renamed),
           "directory recovery replaces stale rows with the authoritative snapshot");
 
+    const QString slashTarget = panel.pathList().value(0);
+    panel.selectPath(slashTarget);
+    check(waitUntil([&] { return selection.currentImage() == slashTarget; }),
+          "focus a row before the opposite-slash removal");
+    QString opposite = slashTarget;
+    if (opposite.contains(QLatin1Char('\\')))
+        opposite.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    else
+        opposite.replace(QLatin1Char('/'), QLatin1Char('\\'));
+    mviewer::core::DirectoryEntry removedEntry;
+    removedEntry.path = opposite.toUtf8().toStdString();
+    removedEntry.filename = QFileInfo(slashTarget).fileName().toUtf8().toStdString();
+    mviewer::core::DirectoryDelta slashDelta;
+    QString deltaDir = panel.currentDir();
+    deltaDir.replace(QLatin1Char('/'), QLatin1Char('\\'));
+    slashDelta.path = deltaDir.toUtf8().toStdString();
+    slashDelta.removed.push_back(removedEntry);
+    const int slashCount = panel.pathList().size();
+    panel.applyDirectoryDelta(slashDelta);
+    check(panel.pathList().size() == slashCount - 1 && !panel.pathList().contains(slashTarget) &&
+              panel.pathList().contains(selection.currentImage()),
+          "opposite-slash removal drops the row and advances selection");
+
     ThumbnailPipeline::instance().clear();
     TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(30));
     std::printf("M56 live gallery tests: %s\n", failures == 0 ? "PASS" : "FAIL");

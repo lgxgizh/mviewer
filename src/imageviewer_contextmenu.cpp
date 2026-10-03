@@ -281,7 +281,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     aNext->setEnabled(hasBrowsePosition && m_currentIndex + 1 < m_fileList.size());
     aPrev->setEnabled(hasBrowsePosition && m_currentIndex > 0);
     menu.addSeparator();
-    QAction *aFullscreen = menu.addAction("全屏 (F)");
+    QAction *aFullscreen = menu.addAction("全屏 (F11)");
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
@@ -517,7 +517,7 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
         return true;
     if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
-    else if ((key == Qt::Key_F && !modifiers) || key == Qt::Key_F11)
+    else if (key == Qt::Key_F11)
         toggleFullscreen();
     else if (key == Qt::Key_Escape)
         close();

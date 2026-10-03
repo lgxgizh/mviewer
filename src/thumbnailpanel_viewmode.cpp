@@ -4,8 +4,42 @@
 // delegates (all visible via thumbnailpanel_p.h), so it is safe to define here.
 #include "thumbnailpanel_p.h"
 
+#include <QScrollBar>
 #include <QSettings>
+#include <QWheelEvent>
+
 #include <optional>
+
+void ThumbnailPanel::wheelEvent(QWheelEvent *event)
+{
+    // Ctrl+wheel resizes thumbnails (Windows Explorer / FastStone parity).
+    if (event->modifiers() & Qt::ControlModifier)
+    {
+        const int delta = event->angleDelta().y();
+        if (delta != 0)
+        {
+            const int step = (delta > 0 ? 1 : -1) * 16;
+            setThumbSize(qBound(kMinThumbSize, m_thumbSize + step, kMaxThumbSize));
+            event->accept();
+            return;
+        }
+    }
+    // Filmstrip lays cells in one horizontal row and hides the vertical bar,
+    // so a plain wheel must move the horizontal scrollbar.
+    if (m_viewMode == Filmstrip && !(event->modifiers() & Qt::ControlModifier))
+    {
+        QScrollBar *bar = horizontalScrollBar();
+        const QPoint angle = event->angleDelta();
+        int delta = angle.y();
+        if (angle.x() != 0)
+            delta += angle.x();
+        if (bar)
+            bar->setValue(bar->value() - delta);
+        event->accept();
+        return;
+    }
+    QListView::wheelEvent(event);
+}
 
 void ThumbnailPanel::replaceDelegate(QStyledItemDelegate *delegate)
 {
