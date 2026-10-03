@@ -1,8 +1,20 @@
 #include "imagelistmodel.h"
 
-#include "directorytree.h"
-
 #include <QDir>
+
+namespace
+{
+bool equivalentListPath(const QString &left, const QString &right)
+{
+    const QString normalizedLeft = QDir::cleanPath(QDir::fromNativeSeparators(left));
+    const QString normalizedRight = QDir::cleanPath(QDir::fromNativeSeparators(right));
+#ifdef Q_OS_WIN
+    return normalizedLeft.compare(normalizedRight, Qt::CaseInsensitive) == 0;
+#else
+    return normalizedLeft == normalizedRight;
+#endif
+}
+} // namespace
 
 ImageListModel::ImageListModel(QObject *parent) : QObject(parent)
 {
@@ -31,7 +43,7 @@ int ImageListModel::indexOf(const QString &path) const
 {
     for (int i = 0; i < m_paths.size(); ++i)
     {
-        if (DirectoryTree::equivalentPath(m_paths.at(i), path))
+        if (equivalentListPath(m_paths.at(i), path))
             return i;
     }
     return -1;
@@ -46,7 +58,7 @@ void ImageListModel::removePaths(const QStringList &paths)
     {
         for (const QString &p : paths)
         {
-            if (DirectoryTree::equivalentPath(m_paths.at(i), p))
+            if (equivalentListPath(m_paths.at(i), p))
             {
                 m_paths.removeAt(i);
                 changed = true;
