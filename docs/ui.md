@@ -225,7 +225,7 @@ above is the main window only.
 | `Ctrl+Shift+H` / `Ctrl+Shift+V` | Preview-flip the edit/hover/focus pane (does not write files) |
 | `P` / `PageUp` / `Left` | Previous pair |
 | `N` / `PageDown` / `Right` | Next pair |
-| `Shift+1`…`Shift+5` | Channel: RGB / R / G / B / Y |
+| `Shift+1`…`Shift+6` | Channel: none / R / G / B / Y / V |
 | `?` | Shortcut hints |
 | `Esc` | Clear the ROI, then exit Compare |
 

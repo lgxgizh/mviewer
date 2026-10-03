@@ -503,62 +503,6 @@ void MainWindow::stopSlideshow()
     statusBar()->showMessage("幻灯片放映已停止", 2000);
 }
 
-void MainWindow::zoomViewer(int op)
-{
-    // Zoom commands only make sense while the viewer is on screen.
-    if (m_imageViewer->isHidden())
-        return;
-    switch (op)
-    {
-    case 0:
-        m_imageViewer->zoomIn();
-        break;
-    case 1:
-        m_imageViewer->zoomOut();
-        break;
-    case 2:
-        m_imageViewer->zoomFit();
-        break;
-    case 3:
-        m_imageViewer->zoomActual();
-        break;
-    case 4:
-        m_imageViewer->zoomTo(0.5);
-        break;
-    case 5:
-        m_imageViewer->zoomTo(2.0);
-        break;
-    case 6:
-        m_imageViewer->zoomTo(4.0);
-        break;
-    case 7:
-        m_imageViewer->zoomTo(8.0);
-        break;
-    }
-}
-
-void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
-{
-    if (m_compareView && !m_compareView->isHidden())
-    {
-        QMenu menu(this);
-        menu.addAction("适应窗口 (Fit / 0)", this, [this]() { m_compareView->fitAll(); });
-        menu.exec(globalPos);
-        return;
-    }
-    if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
-        return;
-    QMenu menu(this);
-    menu.addAction("适应窗口 (0)", this, [this]() { m_imageViewer->zoomFit(); });
-    menu.addAction("实际大小 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
-    menu.addSeparator();
-    menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
-    menu.addAction("200%", this, [this]() { m_imageViewer->zoomTo(2.0); });
-    menu.addAction("400%", this, [this]() { m_imageViewer->zoomTo(4.0); });
-    menu.addAction("800% (像素网格)", this, [this]() { m_imageViewer->zoomTo(8.0); });
-    menu.exec(globalPos);
-}
-
 void MainWindow::openQuickCompare()
 {
     const QStringList selected = resolveSelectedPaths(true);
@@ -641,7 +585,15 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
                 m_thumbnailPanel->setFocus();
             return true;
         }
+        // Letters, digits, and Space are filter text, not shortcuts.
+        return false;
     }
+    // Animated sequences own bare Space (play/pause). Still images keep
+    // Space = quick compare via the global forward below.
+    const auto mods = ke->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
+    if (watched == m_imageViewer && ke->key() == Qt::Key_Space && mods == Qt::NoModifier &&
+        m_imageViewer->sequenceInfo().animated)
+        return false;
     // Shift+C / Shift+B copy the pixel under the cursor (hex / RGB). Plain C
     // is compare and plain B is a browse-mode key; those modifiers must reach
     // ImageViewer instead of being consumed as global shortcuts.
@@ -669,13 +621,49 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         toggleSlideshow();
         return true;
     }
+    // Gallery Ctrl+L locks viewer zoom. Plain L stays a normal key, and text
+    // editors keep Ctrl+L.
+    if (mods == Qt::ControlModifier && ke->key() == Qt::Key_L && watched != m_imageViewer)
+    {
+        auto *editor = qobject_cast<QWidget *>(watched);
+        const bool textEditor =
+            editor && (editor->inherits("QLineEdit") || editor->inherits("QTextEdit") ||
+                       editor->inherits("QPlainTextEdit") || editor->inherits("QAbstractSpinBox"));
+        if (!textEditor && m_imageViewer)
+        {
+            QApplication::sendEvent(m_imageViewer, ke);
+            return true;
+        }
+    }
+    // Bare digit 2 (200%) stays with the viewer. Modified 0–2 still reach
+    // MainWindow for ratings and color labels.
+    static const QSet<int> viewerOwns = {Qt::Key_Left,  Qt::Key_Right,  Qt::Key_Plus,
+                                         Qt::Key_Equal, Qt::Key_Minus,  Qt::Key_0,
+                                         Qt::Key_1,     Qt::Key_2,      Qt::Key_F,
+                                         Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
+    // Viewer focus: rename, delete, ratings, color labels, pick, and reject.
+    if (watched == m_imageViewer)
+    {
+        const int key = ke->key();
+        const bool ctrlShift = mods == (Qt::ControlModifier | Qt::ShiftModifier);
+        const bool altOnly = mods == Qt::AltModifier;
+        const bool fileOp = mods == Qt::NoModifier && (key == Qt::Key_F2 || key == Qt::Key_Delete);
+        const bool rateOrFlag = ctrlShift && ((key >= Qt::Key_0 && key <= Qt::Key_5) ||
+                                              key == Qt::Key_P || key == Qt::Key_X);
+        const bool colorLabel = altOnly && key >= Qt::Key_0 && key <= Qt::Key_6;
+        if (fileOp || rateOrFlag || colorLabel)
+        {
+            keyPressEvent(ke);
+            return true;
+        }
+    }
     // Forward navigation / workflow shortcuts from child widgets so they work
     // regardless of which panel has focus.
     static const QList<int> globalKeys = {
-        Qt::Key_Space, Qt::Key_M,     Qt::Key_G,      Qt::Key_D,       Qt::Key_F,
-        Qt::Key_Tab,   Qt::Key_C,     Qt::Key_P,      Qt::Key_S,       Qt::Key_Plus,
-        Qt::Key_Equal, Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,       Qt::Key_F11,
-        Qt::Key_Home,  Qt::Key_End,   Qt::Key_PageUp, Qt::Key_PageDown};
+        Qt::Key_Space, Qt::Key_M,      Qt::Key_I,       Qt::Key_G, Qt::Key_D,    Qt::Key_F,
+        Qt::Key_Tab,   Qt::Key_C,      Qt::Key_P,       Qt::Key_S, Qt::Key_Plus, Qt::Key_Equal,
+        Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,       Qt::Key_2, Qt::Key_F11,  Qt::Key_Home,
+        Qt::Key_End,   Qt::Key_PageUp, Qt::Key_PageDown};
     const bool isGlobalKey =
         globalKeys.contains(ke->key()) ||
         ((ke->modifiers() & Qt::ControlModifier) &&
@@ -688,10 +676,6 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         if (watched == m_imageViewer)
         {
             // Only forward keys the viewer doesn't handle itself.
-            static const QSet<int> viewerOwns = {Qt::Key_Left,   Qt::Key_Right,     Qt::Key_Plus,
-                                                 Qt::Key_Equal,  Qt::Key_Minus,     Qt::Key_0,
-                                                 Qt::Key_1,      Qt::Key_F,         Qt::Key_F11,
-                                                 Qt::Key_Escape, Qt::Key_Underscore};
             if (viewerOwns.contains(ke->key()))
                 return false; // let the viewer handle it
         }

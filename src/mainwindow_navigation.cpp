@@ -1,4 +1,5 @@
 // MainWindow navigation: history, recent items, favorites, breadcrumb (M20 P0#1).
+#include "directorytree.h"
 #include "mainwindow_p.h"
 
 void MainWindow::scheduleSidecarImport(const QString &dir)
@@ -116,7 +117,7 @@ void MainWindow::navigate(int delta)
     if (list.isEmpty())
         return;
 
-    const int idx = list.indexOf(currentImagePath());
+    const int idx = m_imageList->indexOf(currentImagePath());
     // Wrap around at both ends (FastStone/ImageGlass parity; also keeps the
     // slideshow advancing past the last image).
     // A filter may remove the currently displayed image. The next navigation
@@ -170,7 +171,7 @@ void MainWindow::navigatePage(int key)
     if (list.isEmpty())
         return;
 
-    int idx = list.indexOf(currentImagePath());
+    int idx = m_imageList->indexOf(currentImagePath());
     if (idx < 0)
         idx = 0;
     constexpr int kPage = 10; // images per PageUp/PageDown step
@@ -210,7 +211,7 @@ void MainWindow::pushHistory(const QString &path)
     // Drop any "forward" entries when a new navigation occurs (browser semantics).
     if (m_historyIndex >= 0 && m_historyIndex + 1 < m_history.size())
         m_history.erase(m_history.begin() + m_historyIndex + 1, m_history.end());
-    if (!m_history.isEmpty() && m_history.last() == path)
+    if (!m_history.isEmpty() && DirectoryTree::equivalentPath(m_history.last(), path))
         return; // no duplicate of the current tip
     m_history.append(path);
     m_historyIndex = m_history.size() - 1;

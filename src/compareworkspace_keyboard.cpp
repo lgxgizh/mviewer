@@ -2,7 +2,10 @@
 #include "compareworkspace_p.h"
 #include "compareworkspace_temporary.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QCursor>
+#include <QDir>
 #include <QKeyEvent>
 #include <QTimer>
 
@@ -425,7 +428,25 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
 
-    // Ctrl+C or Ctrl+Shift+C: copy comparison view to clipboard.
+    // Ctrl+Shift+C copies the focused image path. Exact Ctrl+C copies the view.
+    if (key == Qt::Key_C && mods == (Qt::ControlModifier | Qt::ShiftModifier))
+    {
+        const QString path = focusImagePath();
+        if (!path.isEmpty())
+        {
+            const QString native = QDir::toNativeSeparators(path);
+            QApplication::clipboard()->setText(native);
+            showCompareStatus(tr("已复制路径: %1").arg(native));
+        }
+        else
+        {
+            showCompareStatus(tr("没有可复制的路径"));
+        }
+        event->accept();
+        return true;
+    }
+
+    // Ctrl+C: copy comparison view to clipboard.
     if (ctrl && key == Qt::Key_C)
     {
         copyComparisonViewToClipboard();

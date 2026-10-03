@@ -37,10 +37,7 @@ class ImageListModel : public QObject
     {
         return m_dirty;
     }
-    int indexOf(const QString &path) const
-    {
-        return m_paths.indexOf(path);
-    }
+    int indexOf(const QString &path) const;
     QString pathAt(int index) const
     {
         return m_paths.value(index);
