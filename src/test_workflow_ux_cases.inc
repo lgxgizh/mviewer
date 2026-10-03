@@ -630,13 +630,25 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(sel->currentImage() == paths[0],
           "launch open keeps SelectionModel.currentImage synchronized");
 
-    // Return in the editable path field must navigate without invoking the
-    // window-level quick-preview command or reopening the old image.
+    // Browse open is fullscreen-requested. The first Esc leaves the Viewer
+    // visible and clears that request; the second Esc closes it. Return in
+    // the path field is checked only after that close, so it must navigate
+    // without quick-previewing the image that was just dismissed.
     if (viewer)
     {
         sendKey(viewer, Qt::Key_Escape);
         pump(20);
-        CHECK(!viewer->isVisible(), "Escape closes the default fullscreen Viewer in one step");
+        CHECK(viewer->isVisible(), "first Escape leaves the default fullscreen Viewer visible");
+        CHECK(!viewer->property("mviewerFullscreenRequested").toBool(),
+              "first Escape clears the fullscreen request without closing the Viewer");
+        CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
+                  zoomInAction->isEnabled() && zoomOutAction->isEnabled() &&
+                  zoomFitAction->isEnabled() && zoomActualAction->isEnabled(),
+              "first Escape keeps menu zoom commands enabled");
+        CHECK(sel->currentImage() == paths[0], "first Escape keeps the current Browse selection");
+        sendKey(viewer, Qt::Key_Escape);
+        pump(20);
+        CHECK(!viewer->isVisible(), "second Escape closes the Viewer after fullscreen was cleared");
         CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
                   !zoomInAction->isEnabled() && !zoomOutAction->isEnabled() &&
                   !zoomFitAction->isEnabled() && !zoomActualAction->isEnabled(),
@@ -762,8 +774,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
 
     // Regression: opening a distant thumbnail through the real QListView
     // double-click path must activate the standalone Viewer and give it the
-    // keyboard focus. Otherwise the image appears to stop responding and ESC
-    // is delivered to the gallery instead of closing the Viewer.
+    // keyboard focus. Otherwise the image appears to stop responding and the
+    // first ESC is delivered to the gallery instead of the Viewer's ladder.
     if (thumbnailPanel && viewer && thumbnailPanel->pathList().size() >= 2)
     {
         viewer->hide();
@@ -794,9 +806,17 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             CHECK(viewer->isVisible(), "real thumbnail double-click opens the Viewer");
             CHECK(QApplication::focusWidget() == viewer,
                   "real thumbnail double-click transfers keyboard focus to the Viewer");
+            // The open above is fullscreen-requested, so the focused Esc only
+            // clears fullscreen. Deliver the second Esc straight to the Viewer:
+            // showNormal() can move QApplication focus without leaving the ladder.
             sendFocusedKey(Qt::Key_Escape);
+            CHECK(viewer->isVisible(),
+                  "first Escape leaves a double-click fullscreen Viewer visible");
+            CHECK(!viewer->property("mviewerFullscreenRequested").toBool(),
+                  "first Escape clears fullscreen on a double-click Viewer");
+            sendKey(viewer, Qt::Key_Escape);
             CHECK(!viewer->isVisible(),
-                  "ESC closes a Viewer opened by a real distant-thumbnail double-click");
+                  "second Escape closes a Viewer opened by a distant-thumbnail double-click");
 
             // Continue the canonical Browse workflow with the Viewer open.
             // Closing above intentionally cancels an in-flight decode; on a
