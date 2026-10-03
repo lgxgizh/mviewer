@@ -485,6 +485,13 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
         event->accept();
         return true;
     }
+    if (!mod && event->key() == Qt::Key_2)
+    {
+        if (!currentImagePath().isEmpty())
+            zoomViewer(5);
+        event->accept();
+        return true;
+    }
     return false;
 }
 
@@ -527,6 +534,9 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>0</kbd> / <kbd>1</kbd> / <kbd>2</kbd></td><td>适应窗口 / 实际大小(100%) / "
         "200%</td></tr>"
         "<tr><td><kbd>F</kbd></td><td>适应窗口</td></tr>"
+        "<tr><td><kbd>Ctrl+L</kbd></td><td>锁定缩放比</td></tr>"
+        "<tr><td><kbd>Shift+C</kbd> / <kbd>Shift+B</kbd></td><td>复制光标处颜色（HEX / "
+        "RGB）</td></tr>"
         "<tr><td>双击</td><td>适应窗口 ↔ 100% 切换</td></tr>"
         "<tr><td><kbd>F11</kbd></td><td>全屏切换</td></tr>"
         "<tr><td><kbd>S</kbd></td><td>幻灯片放映（3 秒/张，循环）</td></tr>"
@@ -654,7 +664,7 @@ QString MainWindow::userGuideHtml()
         "<tr><td><kbd>N</kbd> 下一对 · <kbd>PgDn</kbd> 下一对 · "
         "<kbd>→</kbd> 下一对</td><td>下一对</td></tr>"
         "<tr><td><kbd>?</kbd></td><td>底部快捷键提示（不改窗口标题）</td></tr>"
-        "<tr><td><kbd>Shift+1</kbd>…<kbd>5</kbd></td><td>通道 RGB / R / G / B / Y</td></tr>"
+        "<tr><td><kbd>Shift+1</kbd>…<kbd>6</kbd></td><td>无叠加 / R / G / B / Y / V</td></tr>"
         "</table>"
         "<h3>4. 浏览窗口常用键</h3>"
         "<table border='1' cellpadding='4' cellspacing='0'>"
@@ -687,4 +697,60 @@ void MainWindow::showUserGuide()
     connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     lay->addWidget(box);
     dlg.exec();
+}
+
+void MainWindow::zoomViewer(int op)
+{
+    // Zoom commands only make sense while the viewer is on screen.
+    if (m_imageViewer->isHidden())
+        return;
+    switch (op)
+    {
+    case 0:
+        m_imageViewer->zoomIn();
+        break;
+    case 1:
+        m_imageViewer->zoomOut();
+        break;
+    case 2:
+        m_imageViewer->zoomFit();
+        break;
+    case 3:
+        m_imageViewer->zoomActual();
+        break;
+    case 4:
+        m_imageViewer->zoomTo(0.5);
+        break;
+    case 5:
+        m_imageViewer->zoomTo(2.0);
+        break;
+    case 6:
+        m_imageViewer->zoomTo(4.0);
+        break;
+    case 7:
+        m_imageViewer->zoomTo(8.0);
+        break;
+    }
+}
+
+void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
+{
+    if (m_compareView && !m_compareView->isHidden())
+    {
+        QMenu menu(this);
+        menu.addAction("适应窗口 (Fit / 0)", this, [this]() { m_compareView->fitAll(); });
+        menu.exec(globalPos);
+        return;
+    }
+    if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
+        return;
+    QMenu menu(this);
+    menu.addAction("适应窗口 (0)", this, [this]() { m_imageViewer->zoomFit(); });
+    menu.addAction("实际大小 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
+    menu.addSeparator();
+    menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
+    menu.addAction("200%", this, [this]() { m_imageViewer->zoomTo(2.0); });
+    menu.addAction("400%", this, [this]() { m_imageViewer->zoomTo(4.0); });
+    menu.addAction("800% (像素网格)", this, [this]() { m_imageViewer->zoomTo(8.0); });
+    menu.exec(globalPos);
 }

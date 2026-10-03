@@ -106,6 +106,10 @@ int main(int argc, char **argv)
         CHECK(list.isDirty(), "ImageListModel markDirty");
         list.removePaths({"a.jpg"});
         CHECK(list.count() == 1, "ImageListModel removePaths");
+        list.setPaths({"C:/photos/a.jpg", "C:/photos/b.jpg"}, "/dir");
+        CHECK(list.indexOf("C:\\photos\\b.jpg") == 1, "ImageListModel indexOf ignores slashes");
+        list.removePaths({"C:\\photos\\a.jpg"});
+        CHECK(list.count() == 1, "ImageListModel removePaths ignores slashes");
     }
 
     // ---- WorkspaceModel ----

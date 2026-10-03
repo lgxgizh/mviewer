@@ -1,5 +1,7 @@
 #include "imagelistmodel.h"
 
+#include "directorytree.h"
+
 #include <QDir>
 
 ImageListModel::ImageListModel(QObject *parent) : QObject(parent)
@@ -25,15 +27,32 @@ void ImageListModel::markDirty()
     m_dirty = true;
 }
 
+int ImageListModel::indexOf(const QString &path) const
+{
+    for (int i = 0; i < m_paths.size(); ++i)
+    {
+        if (DirectoryTree::equivalentPath(m_paths.at(i), path))
+            return i;
+    }
+    return -1;
+}
+
 void ImageListModel::removePaths(const QStringList &paths)
 {
     if (paths.isEmpty() || m_paths.isEmpty())
         return;
     bool changed = false;
-    for (const QString &p : paths)
+    for (int i = m_paths.size() - 1; i >= 0; --i)
     {
-        if (m_paths.removeAll(p) > 0)
-            changed = true;
+        for (const QString &p : paths)
+        {
+            if (DirectoryTree::equivalentPath(m_paths.at(i), p))
+            {
+                m_paths.removeAt(i);
+                changed = true;
+                break;
+            }
+        }
     }
     if (changed)
         emit pathsChanged(m_paths);
