@@ -517,7 +517,7 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
         return true;
     if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
-    else if ((key == Qt::Key_F && !modifiers) || key == Qt::Key_F11)
+    else if (key == Qt::Key_F11)
         toggleFullscreen();
     else if (key == Qt::Key_Escape)
         close();
