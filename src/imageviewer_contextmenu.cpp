@@ -281,7 +281,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     aNext->setEnabled(hasBrowsePosition && m_currentIndex + 1 < m_fileList.size());
     aPrev->setEnabled(hasBrowsePosition && m_currentIndex > 0);
     menu.addSeparator();
-    QAction *aFullscreen = menu.addAction("全屏 (F)");
+    QAction *aFullscreen = menu.addAction("全屏 (F11)");
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;

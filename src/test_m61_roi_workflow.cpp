@@ -483,6 +483,16 @@ int main(int argc, char **argv)
             CHECK(unequalB->selection().isEmpty() && unequalStatus &&
                       unequalStatus->text().contains(QStringLiteral("image dimensions differ")),
                   "unequal dimensions never fabricate linked measurement");
+            const auto beforeNudge = unequalA->selection();
+            CHECK(!beforeNudge.isEmpty(), "unequal pane 0 keeps its own ROI");
+            QKeyEvent unequalAltRight(QEvent::KeyPress, Qt::Key_Right, Qt::AltModifier);
+            QApplication::sendEvent(unequal, &unequalAltRight);
+            pump(10);
+            const auto afterNudge = unequalA->selection();
+            CHECK(afterNudge.x == beforeNudge.x + 1 && afterNudge.y == beforeNudge.y &&
+                      afterNudge.width == beforeNudge.width &&
+                      afterNudge.height == beforeNudge.height && unequalB->selection().isEmpty(),
+                  "Alt+Right nudges only the unlinked pane by +1 x");
         }
     }
 

@@ -43,8 +43,8 @@ void MainWindow::setupCommands()
         },
         std::vector<CommandShortcut>{{Qt::Key_Return, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "fullscreen", "全屏 (F)", [this]() { toggleFullscreen(); },
-        std::vector<CommandShortcut>{{Qt::Key_F, 0}}));
+        "fullscreen", "全屏 (F11)", [this]() { toggleFullscreen(); },
+        std::vector<CommandShortcut>{{Qt::Key_F11, 0}}));
 
     // M18: file-management shortcuts for the selected gallery items.
     reg.registerCommand(std::make_unique<CallbackCommand>(
@@ -470,6 +470,15 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
         event->accept();
         return true;
     }
+    // Cheat sheet: F fits the window. F11 is fullscreen. Accept F with no
+    // image so it cannot fall through to the fullscreen command.
+    if (!mod && event->key() == Qt::Key_F)
+    {
+        if (!currentImagePath().isEmpty())
+            zoomViewer(2);
+        event->accept();
+        return true;
+    }
     if (!mod && event->key() == Qt::Key_1)
     {
         zoomViewer(3);
@@ -493,7 +502,7 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>Ctrl+V</kbd></td><td>从剪贴板粘贴图片（截图后直接查看）</td></tr>"
         "<tr><td><kbd>Ctrl+D</kbd></td><td>收藏当前目录</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+F</kbd></td><td>全局搜索</td></tr>"
-        "<tr><td><kbd>Ctrl+F</kbd></td><td>聚焦目录树过滤框（快速查找文件夹）</td></tr>"
+        "<tr><td><kbd>Ctrl+F</kbd></td><td>聚焦地址栏</td></tr>"
         "<tr><td><kbd>F1</kbd></td><td>快捷键帮助</td></tr>"
         "<tr><td><kbd>Ctrl+Q</kbd></td><td>退出</td></tr>"
         "<tr><th colspan='2'>浏览与选择</th></tr>"

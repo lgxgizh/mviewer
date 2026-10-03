@@ -18,12 +18,27 @@ QString qpath(const std::string &path)
     return QString::fromUtf8(path.data(), static_cast<int>(path.size()));
 }
 
+// Snapshot paths are forward-slash normalized. Gallery rows keep
+// QFileInfo::absoluteFilePath(), which uses '\\' on Windows. galleryPathKey
+// makes those the same key; Windows equality stays case-insensitive.
+QString galleryIndexKey(const QString &path)
+{
+    const QString key = ThumbnailPanel::galleryPathKey(path);
+#ifdef Q_OS_WIN
+    return key.toCaseFolded();
+#else
+    return key;
+#endif
+}
+
 bool pathEqual(const QString &a, const QString &b)
 {
+    const QString left = ThumbnailPanel::galleryPathKey(a);
+    const QString right = ThumbnailPanel::galleryPathKey(b);
 #ifdef Q_OS_WIN
-    return a.compare(b, Qt::CaseInsensitive) == 0;
+    return left.compare(right, Qt::CaseInsensitive) == 0;
 #else
-    return a == b;
+    return left == right;
 #endif
 }
 
@@ -125,14 +140,14 @@ static void applyDeltaRemovalsAndModifications(
     QHash<QString, int> nextIndex;
     nextIndex.reserve(next.size());
     for (int i = 0; i < next.size(); ++i)
-        nextIndex.insert(next[i].path, i);
+        nextIndex.insert(galleryIndexKey(next[i].path), i);
 
     QList<int> removeIndices;
     removeIndices.reserve(delta.removed.size());
     for (const auto &entry : delta.removed)
     {
         const QString path = qpath(entry.path);
-        auto idxIt = nextIndex.find(path);
+        auto idxIt = nextIndex.find(galleryIndexKey(path));
         if (idxIt != nextIndex.end())
             removeIndices.append(idxIt.value());
         removedPaths.append(path);
@@ -141,19 +156,19 @@ static void applyDeltaRemovalsAndModifications(
     std::sort(removeIndices.begin(), removeIndices.end(), std::greater<int>());
     for (int idx : removeIndices)
     {
-        nextIndex.remove(next[idx].path);
+        nextIndex.remove(galleryIndexKey(next[idx].path));
         next.removeAt(idx);
     }
     nextIndex.clear();
     nextIndex.reserve(next.size());
     for (int i = 0; i < next.size(); ++i)
-        nextIndex.insert(next[i].path, i);
+        nextIndex.insert(galleryIndexKey(next[i].path), i);
 
     for (const auto &rename : delta.renamed)
     {
         const QString oldPath = qpath(rename.before.path);
         const QString newPath = qpath(rename.after.path);
-        auto idxIt = nextIndex.find(oldPath);
+        auto idxIt = nextIndex.find(galleryIndexKey(oldPath));
         if (idxIt != nextIndex.end())
         {
             const int idx = idxIt.value();
@@ -161,13 +176,13 @@ static void applyDeltaRemovalsAndModifications(
             replacement.width = next[idx].width;
             replacement.height = next[idx].height;
             next[idx] = replacement;
-            nextIndex.remove(oldPath);
-            nextIndex.insert(newPath, idx);
+            nextIndex.remove(galleryIndexKey(oldPath));
+            nextIndex.insert(galleryIndexKey(newPath), idx);
         }
         else
         {
             next.append(toPanelEntry(rename.after));
-            nextIndex.insert(newPath, next.size() - 1);
+            nextIndex.insert(galleryIndexKey(newPath), next.size() - 1);
         }
         renamedFrom.append(oldPath);
         renamedTo.append(newPath);
@@ -177,7 +192,7 @@ static void applyDeltaRemovalsAndModifications(
     for (const auto &entry : delta.modified)
     {
         const QString path = qpath(entry.path);
-        auto idxIt = nextIndex.find(path);
+        auto idxIt = nextIndex.find(galleryIndexKey(path));
         if (idxIt != nextIndex.end())
         {
             const int idx = idxIt.value();
@@ -189,7 +204,7 @@ static void applyDeltaRemovalsAndModifications(
         else
         {
             next.append(toPanelEntry(entry));
-            nextIndex.insert(path, next.size() - 1);
+            nextIndex.insert(galleryIndexKey(path), next.size() - 1);
         }
         invalidate(path);
     }

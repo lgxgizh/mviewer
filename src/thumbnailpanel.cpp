@@ -514,24 +514,6 @@ void ThumbnailPanel::resizeEvent(QResizeEvent *event)
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
-void ThumbnailPanel::wheelEvent(QWheelEvent *event)
-{
-    // Ctrl+wheel resizes thumbnails (Windows Explorer / FastStone parity);
-    // plain wheel scrolls as usual.
-    if (event->modifiers() & Qt::ControlModifier)
-    {
-        const int delta = event->angleDelta().y();
-        if (delta != 0)
-        {
-            const int step = (delta > 0 ? 1 : -1) * 16;
-            setThumbSize(qBound(kMinThumbSize, m_thumbSize + step, kMaxThumbSize));
-            event->accept();
-            return;
-        }
-    }
-    QListView::wheelEvent(event);
-}
-
 void ThumbnailPanel::keyPressEvent(QKeyEvent *event)
 {
     const auto mods = event->modifiers();
