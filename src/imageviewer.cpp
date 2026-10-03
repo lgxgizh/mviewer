@@ -183,9 +183,12 @@ void ImageViewer::initializeGL()
 
 void ImageViewer::closeEvent(QCloseEvent *event)
 {
-    // Pixel Inspector lifecycle: drop any stale sample before the decode work
-    // is cancelled and the window goes away.
+    // Drop the hover sample and any sticky select mode before decode teardown.
     clearPixelInfo();
+    if (m_selectMode)
+        setSelectMode(false);
+    m_selecting = false;
+    m_selStart = m_selEnd = QPoint();
     // M29: stop stale decode/preload work before persisting geometry — a decode
     // callback already in flight must not repopulate preloads after close. The
     // QPointer/path/generation guards would still suppress UI delivery, but the

@@ -211,11 +211,11 @@ void MainWindow::buildBrowserShell()
     m_pathEdit->setObjectName("pathEdit");
     m_pathEdit->setPlaceholderText("输入目录路径并按 Enter 切换...");
     m_pathEdit->setToolTip(
-        "输入或粘贴目录路径，按 Enter 键进入该目录（快捷键: Ctrl+L / Alt+D 聚焦）。");
+        "输入或粘贴目录路径，按 Enter 键进入该目录（快捷键: Ctrl+F / Alt+D 聚焦）。");
     m_pathEdit->setClearButtonEnabled(true);
     auto *actFocusPath = new QAction(this);
     actFocusPath->setObjectName("focusPathAction");
-    actFocusPath->setShortcuts({QKeySequence("Ctrl+L"), QKeySequence("Alt+D")});
+    actFocusPath->setShortcuts({QKeySequence("Alt+D")});
     connect(actFocusPath, &QAction::triggered, this,
             [this]()
             {

@@ -641,17 +641,18 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
                                          Qt::Key_Equal, Qt::Key_Minus,  Qt::Key_0,
                                          Qt::Key_1,     Qt::Key_2,      Qt::Key_F,
                                          Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
-    // Viewer focus: rename, delete, ratings, color labels, pick, and reject.
+    // Viewer focus: rename, delete, refresh, ratings, color labels, pick, reject.
     if (watched == m_imageViewer)
     {
         const int key = ke->key();
         const bool ctrlShift = mods == (Qt::ControlModifier | Qt::ShiftModifier);
         const bool altOnly = mods == Qt::AltModifier;
+        const bool refresh = mods == Qt::NoModifier && key == Qt::Key_F5;
         const bool fileOp = mods == Qt::NoModifier && (key == Qt::Key_F2 || key == Qt::Key_Delete);
         const bool rateOrFlag = ctrlShift && ((key >= Qt::Key_0 && key <= Qt::Key_5) ||
                                               key == Qt::Key_P || key == Qt::Key_X);
         const bool colorLabel = altOnly && key >= Qt::Key_0 && key <= Qt::Key_6;
-        if (fileOp || rateOrFlag || colorLabel)
+        if (fileOp || rateOrFlag || colorLabel || refresh)
         {
             keyPressEvent(ke);
             return true;
