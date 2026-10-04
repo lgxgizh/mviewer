@@ -32,6 +32,24 @@
 - **F 与 F11**：F 适应窗口，F11 切换全屏，与快捷键表一致。画廊拥有焦点时 F11 仍能全屏；没有当前图片时 F 不会误进全屏。
 - **快捷键说明**：Ctrl+F 的说明改为聚焦地址栏。
 
+## [1.0.100] - 2026-10-04
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.100**.
+
+### Fixed
+
+- Delete asks when confirm-before-delete is on.
+- Ctrl+C shows copying, then success or failure when the copy finishes.
+- Esc stops the slideshow first; an empty selection is not a selection.
+- With viewer focus, Ctrl+F still focuses the address bar; Ctrl+1/2 stay view modes; digit 1/2 stay zoom; Ctrl+L stays zoom lock.
+- Unmodified I and M still toggle the metadata overlay even after Ctrl+F focused the address bar; I/M typed into the address bar or search box still insert the letter.
+- Multi-select tag add/remove applies to the whole selection.
+- Images above about 60 megapixels still get hover readout, ROI stats, and color sample via a downscaled raster.
+- Rotate and flip encode off the UI thread; slideshow waits while a transform is busy.
+- Compare wheel zoom reuses the offscreen surface across notches.
+
 ## [1.0.99] - 2026-10-04
 
 ### Release
