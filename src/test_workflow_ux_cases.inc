@@ -522,22 +522,30 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             filmstripBar->setRange(0, 800);
             filmstripBar->setValue(400);
             const QPointF wheelPos(24, 24);
-            const QPoint wheelGlobal = thumbnailPanel->mapToGlobal(wheelPos.toPoint());
+            QWidget *wheelTarget = thumbnailPanel->viewport()
+                                       ? thumbnailPanel->viewport()
+                                       : static_cast<QWidget *>(thumbnailPanel);
+            const QPoint wheelGlobal = wheelTarget->mapToGlobal(wheelPos.toPoint());
+            auto expectValue = [&](int want, const char *label)
+            {
+                const QByteArray detail = QString("%1 (got %2)")
+                                              .arg(QString::fromUtf8(label))
+                                              .arg(filmstripBar->value())
+                                              .toUtf8();
+                CHECK(filmstripBar->value() == want, detail.constData());
+            };
             QWheelEvent pixels(wheelPos, wheelGlobal, QPoint(0, 48), QPoint(0, 0), Qt::NoButton,
                                Qt::NoModifier, Qt::NoScrollPhase, false);
-            QApplication::sendEvent(thumbnailPanel, &pixels);
-            CHECK(filmstripBar->value() == 352,
-                  "filmstrip wheel scrolls by pixelDelta when angleDelta is zero");
+            QApplication::sendEvent(wheelTarget, &pixels);
+            expectValue(352, "filmstrip wheel scrolls by pixelDelta when angleDelta is zero");
             QWheelEvent angles(wheelPos, wheelGlobal, QPoint(0, 0), QPoint(0, 120), Qt::NoButton,
                                Qt::NoModifier, Qt::NoScrollPhase, false);
-            QApplication::sendEvent(thumbnailPanel, &angles);
-            CHECK(filmstripBar->value() == 232,
-                  "filmstrip wheel still scrolls by angleDelta when pixelDelta is zero");
+            QApplication::sendEvent(wheelTarget, &angles);
+            expectValue(232, "filmstrip wheel still scrolls by angleDelta when pixelDelta is zero");
             QWheelEvent both(wheelPos, wheelGlobal, QPoint(-30, 0), QPoint(0, 120), Qt::NoButton,
                              Qt::NoModifier, Qt::NoScrollPhase, false);
-            QApplication::sendEvent(thumbnailPanel, &both);
-            CHECK(filmstripBar->value() == 262,
-                  "filmstrip wheel prefers pixelDelta and does not also add angleDelta");
+            QApplication::sendEvent(wheelTarget, &both);
+            expectValue(262, "filmstrip wheel prefers pixelDelta and does not also add angleDelta");
             filmstripBar->blockSignals(false);
         }
         setViewModeFromCombo(ThumbnailPanel::Thumbnail);
