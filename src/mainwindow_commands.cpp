@@ -91,15 +91,7 @@ void MainWindow::setupCommands()
         std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
     // Ctrl+F focuses the gallery address bar (pathEdit).
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "dir_filter", "地址栏 (Ctrl+F)",
-        [this]()
-        {
-            if (m_pathEdit)
-            {
-                m_pathEdit->setFocus();
-                m_pathEdit->selectAll();
-            }
-        },
+        "dir_filter", "地址栏 (Ctrl+F)", [this]() { focusAddressBar(); },
         std::vector<CommandShortcut>{{Qt::Key_F, Qt::ControlModifier}}));
 }
 

@@ -384,8 +384,9 @@ void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool c
                     if (clipboard)
                     {
                         emit viewer->statusMessageRequested(
-                            clipboardOk ? viewer->tr("已复制图片到剪贴板")
-                                        : (detail.isEmpty() ? viewer->tr("复制到剪贴板失败") : detail),
+                            clipboardOk
+                                ? viewer->tr("已复制图片到剪贴板")
+                                : (detail.isEmpty() ? viewer->tr("复制到剪贴板失败") : detail),
                             clipboardOk ? 2000 : 4000);
                     }
                     Q_UNUSED(destination);
@@ -694,10 +695,10 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                           static_cast<int>(std::round(r.height() / m_view.scale)))
                         .normalized();
                 const QSize bounds = displaySize();
-                const QRect valid = bounds.isEmpty()
-                                        ? QRect()
-                                        : imgRect.intersected(
-                                              QRect(0, 0, bounds.width(), bounds.height()));
+                const QRect valid =
+                    bounds.isEmpty()
+                        ? QRect()
+                        : imgRect.intersected(QRect(0, 0, bounds.width(), bounds.height()));
                 if (!valid.isEmpty())
                 {
                     scheduleRoiStats(valid);

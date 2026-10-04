@@ -639,7 +639,6 @@ void ImageViewer::releaseSourceHandles(const QString &path)
     cancelDisplayRasterPreloads();
 }
 
-
 void ImageViewer::zoomTo(double targetScale)
 {
     if (!hasDisplayImage() || targetScale <= 0.0)

@@ -18,8 +18,8 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
-#include <QKeyEvent>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QKeySequence>
 #include <QMessageBox>
 #include <QSettings>

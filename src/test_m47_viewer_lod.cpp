@@ -25,8 +25,8 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QMouseEvent>
-#include <QTimer>
 #include <QTemporaryDir>
+#include <QTimer>
 
 #include <atomic>
 #include <cstdio>

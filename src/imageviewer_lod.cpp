@@ -580,10 +580,9 @@ PixelRGBA ImageViewer::sampleAnalysisPixel(int ix, int iy) const
     const int rh = m_raster.image.height();
     if (rw <= 0 || rh <= 0)
         return px;
-    const int sx = static_cast<int>((static_cast<qint64>(ix - covered.x()) * rw) /
-                                   covered.width());
-    const int sy = static_cast<int>((static_cast<qint64>(iy - covered.y()) * rh) /
-                                   covered.height());
+    const int sx = static_cast<int>((static_cast<qint64>(ix - covered.x()) * rw) / covered.width());
+    const int sy =
+        static_cast<int>((static_cast<qint64>(iy - covered.y()) * rh) / covered.height());
     const int cx = (std::max)(0, (std::min)(rw - 1, sx));
     const int cy = (std::max)(0, (std::min)(rh - 1, sy));
     const QColor color = m_raster.image.pixelColor(cx, cy);
@@ -607,16 +606,21 @@ void ImageViewer::scheduleRasterRoiStats(const QRect &selection)
     const int rh = m_raster.image.height();
     if (rw <= 0 || rh <= 0)
         return;
-    const int x0 = (std::max)(0, static_cast<int>(
-        (static_cast<qint64>(src.x() - covered.x()) * rw) / covered.width()));
-    const int y0 = (std::max)(0, static_cast<int>(
-        (static_cast<qint64>(src.y() - covered.y()) * rh) / covered.height()));
-    const int x1 = (std::min)(rw, static_cast<int>(
-        ((static_cast<qint64>(src.right() - covered.x()) + 1) * rw + covered.width() - 1) /
-        covered.width()));
-    const int y1 = (std::min)(rh, static_cast<int>(
-        ((static_cast<qint64>(src.bottom() - covered.y()) + 1) * rh + covered.height() - 1) /
-        covered.height()));
+    const int x0 =
+        (std::max)(0, static_cast<int>((static_cast<qint64>(src.x() - covered.x()) * rw) /
+                                       covered.width()));
+    const int y0 =
+        (std::max)(0, static_cast<int>((static_cast<qint64>(src.y() - covered.y()) * rh) /
+                                       covered.height()));
+    const int x1 =
+        (std::min)(rw, static_cast<int>(((static_cast<qint64>(src.right() - covered.x()) + 1) * rw +
+                                         covered.width() - 1) /
+                                        covered.width()));
+    const int y1 =
+        (std::min)(rh,
+                   static_cast<int>(((static_cast<qint64>(src.bottom() - covered.y()) + 1) * rh +
+                                     covered.height() - 1) /
+                                    covered.height()));
     if (x1 <= x0 || y1 <= y0)
         return;
     const QImage crop = m_raster.image.copy(x0, y0, x1 - x0, y1 - y0);
@@ -648,17 +652,16 @@ void ImageViewer::scheduleRasterRoiStats(const QRect &selection)
                     if (!viewer || viewer->m_roiRevision != revision ||
                         viewer->m_currentPath != path || !result->valid)
                         return;
-                    const QString text =
-                        QString("ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9")
-                            .arg(region.x)
-                            .arg(region.y)
-                            .arg(region.width)
-                            .arg(region.height)
-                            .arg(result->lumMean, 0, 'f', 1)
-                            .arg(result->vMean, 0, 'f', 1)
-                            .arg(result->rMean)
-                            .arg(result->gMean)
-                            .arg(result->bMean);
+                    const QString text = QString("ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9")
+                                             .arg(region.x)
+                                             .arg(region.y)
+                                             .arg(region.width)
+                                             .arg(region.height)
+                                             .arg(result->lumMean, 0, 'f', 1)
+                                             .arg(result->vMean, 0, 'f', 1)
+                                             .arg(result->rMean)
+                                             .arg(result->gMean)
+                                             .arg(result->bMean);
                     emit viewer->regionStats(text);
                 },
                 Qt::QueuedConnection);

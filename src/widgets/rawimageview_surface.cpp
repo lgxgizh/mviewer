@@ -27,6 +27,47 @@ qint64 surfaceNowMs()
     return duration_cast<milliseconds>(steady_clock::now() - kStart).count();
 }
 
+qint64 surfaceImageKey(const QImage &image)
+{
+    return image.isNull() ? -1 : image.cacheKey();
+}
+
+struct SurfacePixelKey
+{
+    qint64 imageKey = -1;
+    qint64 overlayKey = -1;
+    double overlayAlpha = 0.0;
+    QSize viewport;
+    qreal dpr = 0.0;
+    QRect sourceRect;
+};
+
+bool sameSurfacePixels(const SurfacePixelKey &current, const SurfacePixelKey &cached)
+{
+    return current.imageKey == cached.imageKey && current.overlayKey == cached.overlayKey &&
+           current.overlayAlpha == cached.overlayAlpha && current.viewport == cached.viewport &&
+           current.dpr == cached.dpr && current.sourceRect == cached.sourceRect;
+}
+
+bool sameSurfaceTransform(double presented, double cachedScale, const QPointF &offset,
+                          const QPointF &cachedOffset)
+{
+    return presented == cachedScale && offset == cachedOffset;
+}
+
+bool surfaceExceedsBudget(int width, int height, qint64 pixels)
+{
+    return width <= 0 || height <= 0 || width > kMaxCacheDim || height > kMaxCacheDim ||
+           pixels > kMaxSurfacePixels;
+}
+
+bool surfaceNeedsAllocation(const QImage &surface, int width, int height, qreal dpr)
+{
+    return surface.isNull() || surface.width() != width || surface.height() != height ||
+           surface.format() != QImage::Format_ARGB32_Premultiplied ||
+           surface.devicePixelRatio() != dpr;
+}
+
 } // namespace
 
 bool RawImageView::paintBaseSurface(QPainter &p)
@@ -82,14 +123,15 @@ void RawImageView::ensureBaseSurface()
     const QSize viewport = size();
     const QImage &image = presentationImage();
     const QRect sourceRect = renderSourceRect();
-    const qint64 imageKey = image.isNull() ? -1 : image.cacheKey();
-    const qint64 overlayKey = m_overlay.isNull() ? -1 : m_overlay.cacheKey();
+    const qint64 imageKey = surfaceImageKey(image);
+    const qint64 overlayKey = surfaceImageKey(m_overlay);
     const double presented = presentedScale();
-    const bool samePixels = imageKey == m_cachedImageKey && overlayKey == m_cachedOverlayKey &&
-                            m_overlayAlpha == m_cachedOverlayAlpha &&
-                            viewport == m_cachedViewport && dpr == m_cachedDpr &&
-                            sourceRect == m_cachedSourceRect;
-    const bool sameTransform = presented == m_cachedScale && m_offset == m_cachedOffset;
+    const SurfacePixelKey pixels{imageKey, overlayKey, m_overlayAlpha, viewport, dpr, sourceRect};
+    const SurfacePixelKey cached{m_cachedImageKey, m_cachedOverlayKey, m_cachedOverlayAlpha,
+                                 m_cachedViewport, m_cachedDpr,        m_cachedSourceRect};
+    const bool samePixels = sameSurfacePixels(pixels, cached);
+    const bool sameTransform =
+        sameSurfaceTransform(presented, m_cachedScale, m_offset, m_cachedOffset);
     if (m_baseSurfaceValid && samePixels && sameTransform)
     {
         m_deferSurfaceRebuild = false;
@@ -110,15 +152,13 @@ void RawImageView::ensureBaseSurface()
     const int w = static_cast<int>(std::ceil(width() * static_cast<double>(dpr)));
     const int h = static_cast<int>(std::ceil(height() * static_cast<double>(dpr)));
     const qint64 pixels = static_cast<qint64>(w) * h;
-    if (w <= 0 || h <= 0 || w > kMaxCacheDim || h > kMaxCacheDim || pixels > kMaxSurfacePixels)
+    if (surfaceExceedsBudget(w, h, pixels))
     {
         releaseBaseSurface();
         return;
     }
 
-    if (m_baseSurface.isNull() || m_baseSurface.width() != w || m_baseSurface.height() != h ||
-        m_baseSurface.format() != QImage::Format_ARGB32_Premultiplied ||
-        m_baseSurface.devicePixelRatio() != dpr)
+    if (surfaceNeedsAllocation(m_baseSurface, w, h, dpr))
     {
         m_baseSurface = QImage(w, h, QImage::Format_ARGB32_Premultiplied);
         m_baseSurface.setDevicePixelRatio(dpr);

@@ -1309,8 +1309,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 pump(800);
                 CHECK(slideshowAction && !slideshowAction->isChecked(),
                       "Esc stops the slideshow before leaving fullscreen");
-                CHECK(viewer->isVisible(),
-                      "Esc that stops the slideshow leaves the viewer open");
+                CHECK(viewer->isVisible(), "Esc that stops the slideshow leaves the viewer open");
                 CHECK(sel->currentImage() == beforeEsc,
                       "Esc stops the slideshow before the next image");
                 CHECK(viewer->property("mviewerFullscreenRequested").toBool(),

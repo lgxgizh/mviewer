@@ -429,9 +429,8 @@ void ThumbnailPanel::moveToTrashSelected()
         const QString prompt = paths.size() == 1
                                    ? tr("确定将此文件移到 MViewer 回收站？")
                                    : tr("确定将 %1 个文件移到 MViewer 回收站？").arg(paths.size());
-        const auto answer = QMessageBox::question(this, tr("删除确认"), prompt,
-                                                  QMessageBox::Yes | QMessageBox::No,
-                                                  QMessageBox::No);
+        const auto answer = QMessageBox::question(
+            this, tr("删除确认"), prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
     }

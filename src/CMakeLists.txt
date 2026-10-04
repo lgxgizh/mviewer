@@ -159,6 +159,7 @@ add_library(mviewer_ui STATIC
     mainwindow_session_notifications.cpp
     mainwindow_export.cpp
     mainwindow_view.cpp
+    mainwindow_keys.cpp
     selectionmodel.cpp
     directorymodel.cpp
     imagelistmodel.cpp

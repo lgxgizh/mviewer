@@ -123,16 +123,17 @@ QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRota
 }
 
 void ImageViewer::completeFileTransform(const QString &path,
-                                       const mviewer::core::ImageFileRotateResult &result,
-                                       const QString &failureTitle, const QString &successText)
+                                        const mviewer::core::ImageFileRotateResult &result,
+                                        const QString &failureTitle, const QString &successText)
 {
     if (QApplication::overrideCursor())
         QApplication::restoreOverrideCursor();
     setProperty("mviewerFileTransformBusy", false);
     if (!result.ok)
     {
-        QMessageBox::warning(this, failureTitle,
-                             tr("无法改写图片：%1\n%2").arg(path, rotateFailureUserMessage(result)));
+        QMessageBox::warning(
+            this, failureTitle,
+            tr("无法改写图片：%1\n%2").arg(path, rotateFailureUserMessage(result)));
         if (m_currentPath == path)
             refreshSource(path);
         return;
@@ -174,8 +175,7 @@ bool ImageViewer::rotateImage(int angle)
         return true;
     emit statusMessageRequested(tr("正在旋转…"));
     const std::string utf8 = path.toUtf8().toStdString();
-    submitFileTransform(this, path, tr("旋转失败"),
-                        tr("已旋转并覆盖原文件 (%1°)").arg(normAngle),
+    submitFileTransform(this, path, tr("旋转失败"), tr("已旋转并覆盖原文件 (%1°)").arg(normAngle),
                         [utf8, normAngle]()
                         { return mviewer::core::rotateImageFile(utf8, normAngle); });
     return true;
@@ -203,9 +203,9 @@ bool ImageViewer::flipImage(bool horizontal)
         return true;
     emit statusMessageRequested(tr("正在翻转…"));
     const std::string utf8 = path.toUtf8().toStdString();
-    const QString success = horizontal ? tr("已水平翻转并覆盖原文件") : tr("已垂直翻转并覆盖原文件");
-    submitFileTransform(this, path, tr("翻转失败"), success,
-                        [utf8, horizontal]()
+    const QString success =
+        horizontal ? tr("已水平翻转并覆盖原文件") : tr("已垂直翻转并覆盖原文件");
+    submitFileTransform(this, path, tr("翻转失败"), success, [utf8, horizontal]()
                         { return mviewer::core::flipImageFile(utf8, horizontal); });
     return true;
 }
