@@ -13,6 +13,8 @@ struct ClipboardPasteState
 
 namespace mviewer_keys
 {
+bool yieldPrintableToFocusedEntry(const QKeyEvent *key);
+
 QWidget *textEntryWidget(QWidget *widget)
 {
     for (; widget; widget = widget->parentWidget())
@@ -98,9 +100,11 @@ void MainWindow::setupCommands()
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
     // Line edits own typed characters and Ctrl+C; forward those keys back.
+    // Unmodified I/M stay here and toggle metadata despite a focused editor.
     if (QWidget *entry = mviewer_keys::textEntryWidget(QApplication::focusWidget()))
     {
-        if (mviewer_keys::textEntryOwnsKey(entry, event) && entry != this)
+        if (mviewer_keys::textEntryOwnsKey(entry, event) && entry != this &&
+            mviewer_keys::yieldPrintableToFocusedEntry(event))
         {
             static bool yielding = false;
             if (!yielding)

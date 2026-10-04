@@ -5,6 +5,21 @@ namespace mviewer_keys
 {
 QWidget *textEntryWidget(QWidget *widget);
 bool textEntryOwnsKey(QWidget *widget, const QKeyEvent *key);
+
+// keyPressEvent yields printable keys to a focused editor. Unmodified I and M
+// are the exception: they toggle the metadata overlay even when focusAddressBar
+// left the address bar focused. textEntryOwnsKey stays true so an event whose
+// target is the editor still inserts the letter.
+bool yieldPrintableToFocusedEntry(const QKeyEvent *key)
+{
+    if (!key)
+        return false;
+    const auto mods = key->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
+    if (mods != Qt::NoModifier)
+        return true;
+    const int code = key->key();
+    return code != Qt::Key_I && code != Qt::Key_M;
+}
 } // namespace mviewer_keys
 
 void MainWindow::focusAddressBar()
