@@ -3,25 +3,22 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/PixelInspector.h"
 #include "core/analyzer/Analyzer.h"
-#include "core/image/ImageFileRotate.h"
-#include "core/image/ImageLoadingFacade.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
-#include "thumbnailprovider.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QContextMenuEvent>
+#include <QCursor>
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QKeyEvent>
 #include <QMatrix4x4>
 #include <QMenu>
-#include <QMessageBox>
 #include <QMouseEvent>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
@@ -32,11 +29,8 @@
 #include <QRect>
 #include <QResizeEvent>
 #include <QSettings>
-#include <QThread>
 #include <QTimer>
-#include <QTransform>
 #include <QWheelEvent>
-#include <QtConcurrent/QtConcurrent>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -367,16 +361,10 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
 
     if (format >= 0)
     {
-        PixelRGBA px{};
         const QPoint pos = event->pos();
-        int ix = -1, iy = -1;
-        if (m_frame && m_frame->isValid())
-        {
-            ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
-            iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
-            if (ix >= 0 && ix < m_frame->width() && iy >= 0 && iy < m_frame->height())
-                px = samplePixel(m_frame->pixels(), ix, iy);
-        }
+        const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
+        const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
+        PixelRGBA px = sampleAnalysisPixel(ix, iy);
         if (!px.valid)
             px = m_lastHoverPixel;
         const QString copied = copyPixelValue(px, format, ix, iy);
@@ -418,13 +406,12 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
     if (shift && (key == Qt::Key_C || key == Qt::Key_B))
     {
         PixelRGBA px = m_lastHoverPixel;
-        if (!px.valid && m_frame && m_frame->isValid())
+        if (!px.valid)
         {
             const QPoint pos = mapFromGlobal(QCursor::pos());
             const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
             const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
-            if (ix >= 0 && ix < m_frame->width() && iy >= 0 && iy < m_frame->height())
-                px = samplePixel(m_frame->pixels(), ix, iy);
+            px = sampleAnalysisPixel(ix, iy);
         }
         if (px.valid)
         {
@@ -481,10 +468,18 @@ bool ImageViewer::handleNavigationKey(int key)
 
 bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
 {
+    const auto mods = modifiers & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
     // Shift+0…6 are channel overlays (handleModeKey), not zoom.
-    if (modifiers == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6)
+    if (mods == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6)
         return false;
-    if (((modifiers & Qt::ControlModifier) && key == Qt::Key_L) || (!modifiers && key == Qt::Key_L))
+    // Ctrl+F focuses the address bar. Ctrl+1…6 are gallery view modes.
+    // Unmodified 1 is 100%, unmodified 2 is 200%. Ctrl+L still locks zoom.
+    if ((mods & Qt::ControlModifier) &&
+        (key == Qt::Key_F || (key >= Qt::Key_1 && key <= Qt::Key_6)))
+        return false;
+    const bool lockZoom = ((mods & Qt::ControlModifier) && key == Qt::Key_L) ||
+                          (mods == Qt::NoModifier && key == Qt::Key_L);
+    if (lockZoom)
     {
         setLockZoom(!m_lockZoom);
         return true;
@@ -644,143 +639,6 @@ void ImageViewer::releaseSourceHandles(const QString &path)
     cancelDisplayRasterPreloads();
 }
 
-bool ImageViewer::rotateCW()
-{
-    return rotateImage(90);
-}
-
-bool ImageViewer::rotateCCW()
-{
-    return rotateImage(-90);
-}
-
-QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRotateResult &result)
-{
-    using mviewer::core::ImageRotateError;
-    switch (result.errorCode)
-    {
-    case ImageRotateError::NotWritable:
-    case ImageRotateError::AccessDenied:
-        return tr("文件或所在文件夹没有写入权限");
-    case ImageRotateError::SharingViolation:
-        return tr("文件正在被使用（含本程序解码），无法覆盖");
-    case ImageRotateError::UnsupportedFormat:
-    {
-        std::string suffix = result.error;
-        const auto pos = suffix.rfind(": ");
-        if (pos != std::string::npos)
-            suffix = suffix.substr(pos + 2);
-        if (suffix.empty() || suffix == "(none)")
-            suffix = "?";
-        return tr("暂不支持改写 .%1（当前仅 PNG/JPEG/BMP/WebP）")
-            .arg(QString::fromStdString(suffix));
-    }
-    case ImageRotateError::NotFound:
-    case ImageRotateError::EmptyPath:
-        return tr("找不到文件");
-    case ImageRotateError::None:
-    case ImageRotateError::InvalidAngle:
-    case ImageRotateError::ReadFailed:
-    case ImageRotateError::ConvertFailed:
-    case ImageRotateError::RotateFailed:
-    case ImageRotateError::EncodeFailed:
-    case ImageRotateError::ShortWrite:
-    case ImageRotateError::WriteFailed:
-        if (result.error.empty())
-            return tr("未知错误");
-        return QString::fromStdString(result.error);
-    }
-    return tr("未知错误");
-}
-
-bool ImageViewer::rotateImage(int angle)
-{
-    if (m_currentPath.isEmpty())
-        return false;
-
-    int normAngle = angle % 360;
-    if (normAngle < 0)
-        normAngle += 360;
-    if (normAngle == 0)
-        return true;
-
-    const QString path = m_currentPath;
-    releaseSourceHandles(path);
-
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    const std::string utf8 = path.toUtf8().toStdString();
-    auto future = QtConcurrent::run([utf8, normAngle]()
-                                    { return mviewer::core::rotateImageFile(utf8, normAngle); });
-    while (!future.isFinished())
-    {
-        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
-        QThread::msleep(5);
-    }
-    QApplication::restoreOverrideCursor();
-    const auto result = future.result();
-    if (!result.ok)
-    {
-        QMessageBox::warning(
-            this, tr("旋转失败"),
-            tr("无法旋转图片：%1\n%2").arg(path, rotateFailureUserMessage(result)));
-        return false;
-    }
-
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(path.toUtf8().toStdString());
-    ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
-
-    emit fileRotated(path);
-    emit statusMessageRequested(tr("已旋转并覆盖原文件 (%1°)").arg(normAngle));
-    refreshSource(path);
-    return true;
-}
-
-bool ImageViewer::flipHorizontal()
-{
-    return flipImage(true);
-}
-
-bool ImageViewer::flipVertical()
-{
-    return flipImage(false);
-}
-
-bool ImageViewer::flipImage(bool horizontal)
-{
-    if (m_currentPath.isEmpty())
-        return false;
-
-    const QString path = m_currentPath;
-    releaseSourceHandles(path);
-
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    const std::string utf8 = path.toUtf8().toStdString();
-    auto future = QtConcurrent::run([utf8, horizontal]()
-                                    { return mviewer::core::flipImageFile(utf8, horizontal); });
-    while (!future.isFinished())
-    {
-        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 20);
-        QThread::msleep(5);
-    }
-    QApplication::restoreOverrideCursor();
-    const auto result = future.result();
-    if (!result.ok)
-    {
-        QMessageBox::warning(
-            this, tr("翻转失败"),
-            tr("无法翻转图片：%1\n%2").arg(path, rotateFailureUserMessage(result)));
-        return false;
-    }
-
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(path.toUtf8().toStdString());
-    ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
-
-    emit fileRotated(path);
-    emit statusMessageRequested(horizontal ? tr("已水平翻转并覆盖原文件")
-                                           : tr("已垂直翻转并覆盖原文件"));
-    refreshSource(path);
-    return true;
-}
 
 void ImageViewer::zoomTo(double targetScale)
 {

@@ -19,6 +19,8 @@
 #include "imageviewer.h"
 
 #include "core/analysis/ImageOverlay.h"
+#include "core/image/ImageBuffer.h"
+#include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/image/SourceImage.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -530,18 +532,19 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
         // The first raster made this a LARGE source: decide the analysis load.
         runAnalysisLoadDecision(sourceValid, sourceSize);
     }
+    // Region upgrades change the pixels under a stationary cursor.
+    resamplePixelUnderCursor();
     update();
 }
 
-// ── Analysis-support full-frame load decision ───────────────────────────────
-// Runs on the first raster-path verdict (probe-only small source, probe
-// failure, or the first raster) and issues at most ONE load per image:
-//   * probe failed / small source        -> issue the load (the fast path
-//     owns small images; a failed probe surfaces through the load error);
-//   * large, analysis-feasible           -> issue the load (analysis
-//     consumers get the full frame);
-//   * large, NOT feasible (e.g. 100 MP, > Qt's allocation limit) -> skip
-//     (the load could never succeed; Phase 4 adds explicit materialization).
+// ── Analysis-support load decision ──────────────────────────────────────────
+// Runs on the first raster-path verdict and issues at most ONE full-frame
+// load per image:
+//   * probe failed / small source -> full load (fast path owns small images);
+//   * large but within kAnalysisFeasiblePixels -> full load for exact samples;
+//   * larger than that (about 60 MP) -> do NOT materialize a full frame.
+//     Hover, ROI stats, and color sample use the bounded display raster so
+//     the inspector stays available without a UI-thread full-res decode.
 void ImageViewer::runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize)
 {
     if (m_analysisLoadIssued)
@@ -549,18 +552,117 @@ void ImageViewer::runAnalysisLoadDecision(bool sourceValid, const QSize &sourceS
     bool issueLoad = true;
     if (sourceValid && m_lodMode)
     {
-        issueLoad = static_cast<qint64>(sourceSize.width()) * sourceSize.height() <=
-                    kAnalysisFeasiblePixels;
+        const qint64 pixels = static_cast<qint64>(sourceSize.width()) * sourceSize.height();
+        issueLoad = pixels <= kAnalysisFeasiblePixels;
     }
+    m_analysisLoadIssued = true;
     if (issueLoad)
     {
-        m_analysisLoadIssued = true;
         issueAnalysisLoad(m_currentPath, m_requestGen);
+        return;
     }
-    else
-    {
-        m_pendingAnalysisPreload.reset();
-    }
+    m_pendingAnalysisPreload.reset();
+    resamplePixelUnderCursor();
+}
+
+PixelRGBA ImageViewer::sampleAnalysisPixel(int ix, int iy) const
+{
+    if (m_frame && m_frame->isValid())
+        return samplePixel(m_frame->pixels(), ix, iy);
+
+    PixelRGBA px;
+    if (ix < 0 || iy < 0 || m_raster.image.isNull())
+        return px;
+    const QRect &covered = m_raster.sourceRect;
+    if (covered.width() <= 0 || covered.height() <= 0 || !covered.contains(ix, iy))
+        return px;
+    const int rw = m_raster.image.width();
+    const int rh = m_raster.image.height();
+    if (rw <= 0 || rh <= 0)
+        return px;
+    const int sx = static_cast<int>((static_cast<qint64>(ix - covered.x()) * rw) /
+                                   covered.width());
+    const int sy = static_cast<int>((static_cast<qint64>(iy - covered.y()) * rh) /
+                                   covered.height());
+    const int cx = (std::max)(0, (std::min)(rw - 1, sx));
+    const int cy = (std::max)(0, (std::min)(rh - 1, sy));
+    const QColor color = m_raster.image.pixelColor(cx, cy);
+    px.r = static_cast<uint8_t>(color.red());
+    px.g = static_cast<uint8_t>(color.green());
+    px.b = static_cast<uint8_t>(color.blue());
+    px.a = static_cast<uint8_t>(color.alpha());
+    px.valid = true;
+    return px;
+}
+
+void ImageViewer::scheduleRasterRoiStats(const QRect &selection)
+{
+    if (selection.isEmpty() || m_raster.image.isNull())
+        return;
+    const QRect src = selection.intersected(m_raster.sourceRect);
+    if (src.isEmpty() || m_raster.sourceRect.width() <= 0 || m_raster.sourceRect.height() <= 0)
+        return;
+    const QRect &covered = m_raster.sourceRect;
+    const int rw = m_raster.image.width();
+    const int rh = m_raster.image.height();
+    if (rw <= 0 || rh <= 0)
+        return;
+    const int x0 = (std::max)(0, static_cast<int>(
+        (static_cast<qint64>(src.x() - covered.x()) * rw) / covered.width()));
+    const int y0 = (std::max)(0, static_cast<int>(
+        (static_cast<qint64>(src.y() - covered.y()) * rh) / covered.height()));
+    const int x1 = (std::min)(rw, static_cast<int>(
+        ((static_cast<qint64>(src.right() - covered.x()) + 1) * rw + covered.width() - 1) /
+        covered.width()));
+    const int y1 = (std::min)(rh, static_cast<int>(
+        ((static_cast<qint64>(src.bottom() - covered.y()) + 1) * rh + covered.height() - 1) /
+        covered.height()));
+    if (x1 <= x0 || y1 <= y0)
+        return;
+    const QImage crop = m_raster.image.copy(x0, y0, x1 - x0, y1 - y0);
+    const mviewer::domain::Selection region{src.x(), src.y(), src.width(), src.height()};
+    const auto result = std::make_shared<mviewer::core::PreviewStats>();
+    const uint64_t revision = m_roiRevision;
+    const QString path = m_currentPath;
+    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
+    m_roiStatsRequest = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Analysis,
+        [crop, result](const TaskScheduler::TaskContext &ctx)
+        {
+            if (ctx.isCancelled())
+                return;
+            const ImageData data = mvcore::fromQImage(crop);
+            if (!data.isNull())
+                *result = mviewer::core::computePreviewStats(data);
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, path, region, revision, result]()
+        {
+            if (!guard || !qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, path, region, revision, result]()
+                {
+                    ImageViewer *viewer = guard->data();
+                    if (!viewer || viewer->m_roiRevision != revision ||
+                        viewer->m_currentPath != path || !result->valid)
+                        return;
+                    const QString text =
+                        QString("ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9")
+                            .arg(region.x)
+                            .arg(region.y)
+                            .arg(region.width)
+                            .arg(region.height)
+                            .arg(result->lumMean, 0, 'f', 1)
+                            .arg(result->vMean, 0, 'f', 1)
+                            .arg(result->rMean)
+                            .arg(result->gMean)
+                            .arg(result->bMean);
+                    emit viewer->regionStats(text);
+                },
+                Qt::QueuedConnection);
+        });
 }
 void ImageViewer::drawDisplayRaster(QPainter &painter) const
 {

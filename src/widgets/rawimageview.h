@@ -14,6 +14,8 @@
 
 #include <cstdint>
 
+class QTimer;
+
 // RawImageView holds a QImage and renders it scaled to fit the widget
 // size.  Supports zoom/pan via QPainter transforms in paintEvent:
 //   wheel  -> zoom around cursor
@@ -299,6 +301,10 @@ class RawImageView : public QWidget
     // never re-scale the full source image. Bounded by widget viewport pixels,
     // never by scaled source dimensions (50x zoom still allocates viewport size).
     void ensureBaseSurface();
+    // Draws the cached surface, or a scaled reuse of it during a zoom burst.
+    bool paintBaseSurface(QPainter &p);
+    void drawCoalescedSurface(QPainter &p) const;
+    void scheduleSurfaceRebuild();
     // Single source of truth for base image + diff overlay geometry; used by the
     // cached surface and by the direct-draw fallback (allocation failure or
     // pathological geometry).
@@ -343,6 +349,11 @@ class RawImageView : public QWidget
     // Cached base surface: rebuilt only when its rendering inputs change.
     QImage m_baseSurface;
     bool m_baseSurfaceValid = false;
+    // True while a zoom/pan burst is reusing m_baseSurface instead of
+    // rasterizing a new one. Cleared by the trailing rebuild.
+    bool m_deferSurfaceRebuild = false;
+    qint64 m_lastSurfaceRebuildMs = -100000;
+    QTimer *m_surfaceRebuildTimer = nullptr;
     // Diagnostic (dynamic QObject property baseSurfaceRenderCount) incremented
     // whenever the cached surface is actually re-rasterized. Tests distinguish
     // annotation repaints from source rasterization through it.

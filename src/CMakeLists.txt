@@ -172,6 +172,7 @@ add_library(mviewer_ui STATIC
     imageviewer_paint.cpp
     imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp
+    imageviewer_transform.cpp
     directorytree.cpp
     directorytree_navigate.cpp
     directorymonitor.cpp
@@ -228,6 +229,7 @@ add_library(mviewer_ui STATIC
     searchpanel.cpp
     batchdialog.cpp
     widgets/rawimageview.cpp
+    widgets/rawimageview_surface.cpp
     widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
     pluginsettings.cpp

@@ -50,9 +50,7 @@ void MainWindow::setupCommands()
         std::make_unique<ToggleHistogramCommand>([this]() { m_actToggleAnalysis->trigger(); }));
     reg.registerCommand(std::make_unique<ExportCommand>(this));
 
-    // M9 keyboard shortcuts (per product review P2.2): Left/Right navigate,
-    // Space quick-preview current image, F toggles fullscreen. These delegate
-    // to existing MainWindow handlers via CallbackCommand.
+    // M9: Left/Right navigate, Enter opens the viewer, F11 toggles fullscreen.
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "navigate_prev", "上一张 (Left)", [this]() { navigate(-1); },
         std::vector<CommandShortcut>{{Qt::Key_Left, 0}}));
@@ -91,8 +89,7 @@ void MainWindow::setupCommands()
         "file_reveal", "在资源管理器中显示 (Ctrl+E)",
         [this]() { m_thumbnailPanel->revealSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
-    // Ctrl+F focuses the gallery address bar (pathEdit). The left-tree
-    // 「搜索目录」 field was removed as redundant with path navigation.
+    // Ctrl+F focuses the gallery address bar (pathEdit).
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "dir_filter", "地址栏 (Ctrl+F)",
         [this]()
@@ -108,8 +105,7 @@ void MainWindow::setupCommands()
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
-    // Line edits, text edits, and spin boxes own typed characters and Ctrl+C.
-    // Forward the key back to that widget instead of running a gallery shortcut.
+    // Line edits own typed characters and Ctrl+C; forward those keys back.
     if (QWidget *entry = mviewer_keys::textEntryWidget(QApplication::focusWidget()))
     {
         if (mviewer_keys::textEntryOwnsKey(entry, event) && entry != this)
@@ -142,9 +138,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 bool MainWindow::handleWindowKey(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
-    // Return is a text-editing/navigation key when an editor owns focus. Do
-    // not let the window-level quick-preview command open the previous image
-    // while the user is committing a path, search query, or text field.
+    // Return stays with a focused editor. Do not reopen the previous image
+    // while the user is committing a path or search query.
     if (!mod && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter))
     {
         QWidget *focus = QApplication::focusWidget();
@@ -155,8 +150,7 @@ bool MainWindow::handleWindowKey(QKeyEvent *event)
             return true;
         }
     }
-    // M56: F5 refreshes the tree and asks the active-directory monitor for an
-    // incremental reconcile; it never re-enters directory navigation.
+    // M56: F5 refreshes the tree and reconciles; it does not re-enter navigation.
     if (event->key() == Qt::Key_F5 && !mod)
     {
         m_directoryTree->refresh();
@@ -165,8 +159,14 @@ bool MainWindow::handleWindowKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // P0-3 / A-5: ESC dismisses the metadata overlay AND the floating panel
-    // (keeps the image area maximal for browsing).
+    // A running slideshow takes the first Esc. Metadata and fullscreen follow.
+    if (event->key() == Qt::Key_Escape && !mod && m_slideshowTimer && m_slideshowTimer->isActive())
+    {
+        stopSlideshow();
+        event->accept();
+        return true;
+    }
+    // P0-3 / A-5: ESC dismisses the metadata overlay AND the floating panel.
     if (event->key() == Qt::Key_Escape && !mod)
     {
         bool dismissed = false;
@@ -297,7 +297,7 @@ bool MainWindow::handleViewModeKey(QKeyEvent *event)
 bool MainWindow::handleClipboardKey(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
-    // P1-4: Ctrl+C copies the current image to clipboard; Ctrl+Shift+C copies its path.
+    // Ctrl+C copies the current image; Ctrl+Shift+C copies its path.
     if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_C)
     {
         if ((mod & Qt::ShiftModifier))
@@ -312,15 +312,18 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
         }
         else
         {
-            copyCurrentImageToClipboard();
+            const bool copying = !currentImagePath().isEmpty() && m_imageViewer;
+            if (copying)
+                copyCurrentImageToClipboard();
             if (statusBar())
-                statusBar()->showMessage(tr("已复制图片到剪贴板"), 2000);
+                statusBar()->showMessage(copying ? tr("正在复制图片到剪贴板...")
+                                                 : tr("没有可复制的图片"),
+                                         copying ? 0 : 2000);
         }
         event->accept();
         return true;
     }
-    // Ctrl+V: paste an image from the clipboard (e.g. after a screenshot) and
-    // view it directly — common screenshot-to-viewer workflow.
+    // Ctrl+V pastes a clipboard image and opens it in the viewer.
     if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_V && !(mod & Qt::ShiftModifier))
     {
         const QClipboard *cb = QApplication::clipboard();
@@ -343,8 +346,7 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
 
 void MainWindow::startClipboardPaste(const QImage &img)
 {
-    // Persist to a temp file so ImageViewer can load it via its normal async
-    // path (keeps decode/histogram consistent).
+    // Persist to a temp file so ImageViewer loads it on its normal async path.
     const QString tempRoot = mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
     if (tempRoot.isEmpty())
     {

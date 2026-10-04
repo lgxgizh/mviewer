@@ -483,6 +483,10 @@ void MainWindow::toggleSlideshow()
                         stopSlideshow();
                         return;
                     }
+                    // Rotate/flip encode runs off the UI thread. Ignore ticks
+                    // until that write finishes so the show cannot skip ahead.
+                    if (m_imageViewer->property("mviewerFileTransformBusy").toBool())
+                        return;
                     navigate(1); // wraps at the end of the folder
                 });
     }
@@ -620,6 +624,15 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         }
         return false;
     }
+    // Esc stops a running slideshow before the viewer's own ladder (clear a
+    // real selection, else leave fullscreen, else close). An empty default
+    // selection is not something to clear; that stays in ImageViewer.
+    if (ke->key() == Qt::Key_Escape && mods == Qt::NoModifier && m_slideshowTimer &&
+        m_slideshowTimer->isActive())
+    {
+        stopSlideshow();
+        return true;
+    }
     // While the viewer window has focus (e.g. slideshow fullscreen), 'S'
     // still toggles the slideshow; the viewer itself has no such binding.
     if (watched == m_imageViewer && ke->key() == Qt::Key_S && !ke->modifiers())
@@ -678,8 +691,11 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         // workflow keys like C/S/Space should still reach MainWindow).
         if (watched == m_imageViewer)
         {
-            // Only forward keys the viewer doesn't handle itself.
-            if (viewerOwns.contains(ke->key()))
+            // Ctrl+F is the address bar. Ctrl+1..6 are view modes, not zoom.
+            const bool ctrlGallery =
+                (mods & Qt::ControlModifier) &&
+                (ke->key() == Qt::Key_F || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6));
+            if (viewerOwns.contains(ke->key()) && !ctrlGallery)
                 return false; // let the viewer handle it
         }
         keyPressEvent(ke);
