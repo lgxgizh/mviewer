@@ -151,8 +151,8 @@ void RawImageView::ensureBaseSurface()
 
     const int w = static_cast<int>(std::ceil(width() * static_cast<double>(dpr)));
     const int h = static_cast<int>(std::ceil(height() * static_cast<double>(dpr)));
-    const qint64 pixels = static_cast<qint64>(w) * h;
-    if (surfaceExceedsBudget(w, h, pixels))
+    const qint64 pixelCount = static_cast<qint64>(w) * h;
+    if (surfaceExceedsBudget(w, h, pixelCount))
     {
         releaseBaseSurface();
         return;
