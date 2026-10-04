@@ -29,11 +29,15 @@ void ThumbnailPanel::wheelEvent(QWheelEvent *event)
     if (m_viewMode == Filmstrip && !(event->modifiers() & Qt::ControlModifier))
     {
         QScrollBar *bar = horizontalScrollBar();
+        // Trackpads report pixelDelta and often a zero angleDelta. Prefer the
+        // pixel distance when either axis is set; otherwise use the wheel angle.
+        const QPoint pixels = event->pixelDelta();
         const QPoint angle = event->angleDelta();
-        int delta = angle.y();
-        if (angle.x() != 0)
-            delta += angle.x();
-        if (bar)
+        const QPoint deltaPoint = (pixels.x() != 0 || pixels.y() != 0) ? pixels : angle;
+        int delta = deltaPoint.y();
+        if (deltaPoint.x() != 0)
+            delta += deltaPoint.x();
+        if (bar && delta != 0)
             bar->setValue(bar->value() - delta);
         event->accept();
         return;

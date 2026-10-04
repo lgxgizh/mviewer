@@ -80,11 +80,13 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QMouseEvent>
+#include <QPlainTextEdit>
 #include <QPointer>
 #include <QProgressBar>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QRect>
+#include <QScrollBar>
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
@@ -92,6 +94,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableWidget>
+#include <QTextCursor>
 #include <QTextEdit>
 #include <QThread>
 #include <QTimer>

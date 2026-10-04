@@ -11,6 +11,31 @@ struct ClipboardPasteState
 };
 } // namespace
 
+namespace mviewer_keys
+{
+QWidget *textEntryWidget(QWidget *widget)
+{
+    for (; widget; widget = widget->parentWidget())
+        if (widget->inherits("QLineEdit") || widget->inherits("QTextEdit") ||
+            widget->inherits("QPlainTextEdit") || widget->inherits("QAbstractSpinBox"))
+            return widget;
+    return nullptr;
+}
+bool textEntryOwnsKey(QWidget *widget, const QKeyEvent *key)
+{
+    if (!textEntryWidget(widget) || !key)
+        return false;
+    const auto mods = key->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
+    // Copy stays with the editor. Ctrl+Shift+C still copies the image path.
+    if (mods == Qt::ControlModifier && key->key() == Qt::Key_C)
+        return true;
+    if (mods != Qt::NoModifier && mods != Qt::ShiftModifier)
+        return false;
+    const int code = key->key();
+    return code == Qt::Key_Space || (code >= Qt::Key_Exclam && code <= Qt::Key_AsciiTilde);
+}
+} // namespace mviewer_keys
+
 void MainWindow::setupCommands()
 {
     auto &reg = CommandRegistry::instance();
@@ -83,6 +108,23 @@ void MainWindow::setupCommands()
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
+    // Line edits, text edits, and spin boxes own typed characters and Ctrl+C.
+    // Forward the key back to that widget instead of running a gallery shortcut.
+    if (QWidget *entry = mviewer_keys::textEntryWidget(QApplication::focusWidget()))
+    {
+        if (mviewer_keys::textEntryOwnsKey(entry, event) && entry != this)
+        {
+            static bool yielding = false;
+            if (!yielding)
+            {
+                yielding = true;
+                QApplication::sendEvent(entry, event);
+                event->accept();
+                yielding = false;
+            }
+            return;
+        }
+    }
     if (handleWindowKey(event) || handleMetadataKey(event) || handleViewModeKey(event) ||
         handleClipboardKey(event) || handleViewerKey(event))
         return;
