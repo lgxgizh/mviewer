@@ -512,6 +512,43 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         setViewModeFromCombo(ThumbnailPanel::Thumbnail);
         CHECK(thumbnailPanel->thumbSize() == 196,
               "Thumbnail restores the size remembered while Details was active");
+
+        thumbnailPanel->setViewMode(ThumbnailPanel::Filmstrip);
+        QScrollBar *filmstripBar = thumbnailPanel->horizontalScrollBar();
+        CHECK(filmstripBar != nullptr, "filmstrip exposes a horizontal scrollbar");
+        if (filmstripBar)
+        {
+            filmstripBar->blockSignals(true);
+            filmstripBar->setRange(0, 800);
+            filmstripBar->setValue(400);
+            const QPointF wheelPos(24, 24);
+            QWidget *wheelTarget = thumbnailPanel->viewport()
+                                       ? thumbnailPanel->viewport()
+                                       : static_cast<QWidget *>(thumbnailPanel);
+            const QPoint wheelGlobal = wheelTarget->mapToGlobal(wheelPos.toPoint());
+            auto expectValue = [&](int want, const char *label)
+            {
+                const QByteArray detail = QString("%1 (got %2)")
+                                              .arg(QString::fromUtf8(label))
+                                              .arg(filmstripBar->value())
+                                              .toUtf8();
+                CHECK(filmstripBar->value() == want, detail.constData());
+            };
+            QWheelEvent pixels(wheelPos, wheelGlobal, QPoint(0, 48), QPoint(0, 0), Qt::NoButton,
+                               Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(wheelTarget, &pixels);
+            expectValue(352, "filmstrip wheel scrolls by pixelDelta when angleDelta is zero");
+            QWheelEvent angles(wheelPos, wheelGlobal, QPoint(0, 0), QPoint(0, 120), Qt::NoButton,
+                               Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(wheelTarget, &angles);
+            expectValue(232, "filmstrip wheel still scrolls by angleDelta when pixelDelta is zero");
+            QWheelEvent both(wheelPos, wheelGlobal, QPoint(-30, 0), QPoint(0, 120), Qt::NoButton,
+                             Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(wheelTarget, &both);
+            expectValue(262, "filmstrip wheel prefers pixelDelta and does not also add angleDelta");
+            filmstripBar->blockSignals(false);
+        }
+        setViewModeFromCombo(ThumbnailPanel::Thumbnail);
     }
 
     if (browseWorkspaceAction)
@@ -663,6 +700,141 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         sendFocusedKey(Qt::Key_Return);
         CHECK(viewer && !viewer->isVisible(),
               "Return with a path editor focused does not quick-preview the old image");
+    }
+
+    // Typing and Ctrl+C stay in the focused editor. Window dispatch and the
+    // key filter must not turn them into Compare or image-copy shortcuts.
+    if (pathEdit && gallerySearchEdit && thumbnailPanel)
+    {
+        const QString savedPathText = pathEdit->text();
+        const QString savedSearchText = gallerySearchEdit->text();
+        auto focusEditor = [&](QWidget *entry)
+        {
+            entry->show();
+            entry->setFocus(Qt::OtherFocusReason);
+            pump(20);
+            if (QWidget *focus = QApplication::focusWidget())
+                focus->installEventFilter(&w);
+            entry->installEventFilter(&w);
+            w.statusBar()->clearMessage();
+        };
+        auto typeC = [&](QWidget *entry, bool viaWindow)
+        {
+            QKeyEvent typed(QEvent::KeyPress, Qt::Key_C, Qt::NoModifier, QStringLiteral("c"));
+            QApplication::sendEvent(viaWindow ? static_cast<QWidget *>(&w) : entry, &typed);
+        };
+        auto copySelection = [&](QWidget *entry, bool viaWindow)
+        {
+            QApplication::clipboard()->clear();
+            QKeyEvent copy(QEvent::KeyPress, Qt::Key_C, Qt::ControlModifier);
+            QApplication::sendEvent(viaWindow ? static_cast<QWidget *>(&w) : entry, &copy);
+        };
+
+        pathEdit->setText(QStringLiteral("ab"));
+        focusEditor(pathEdit);
+        pathEdit->deselect();
+        pathEdit->setCursorPosition(pathEdit->text().size());
+        typeC(pathEdit, true);
+        CHECK(pathEdit->text() == QStringLiteral("abc"),
+              "typing C in the path editor is not a Compare shortcut");
+        CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("需要选择")),
+              "path editor typing does not run the Compare shortcut");
+        pathEdit->setText(QStringLiteral("ab"));
+        pathEdit->setCursorPosition(pathEdit->text().size());
+        typeC(pathEdit, false);
+        CHECK(pathEdit->text() == QStringLiteral("abc"),
+              "path editor keeps C when its key filter sees the event");
+        pathEdit->setText(QStringLiteral("copy-path"));
+        pathEdit->selectAll();
+        copySelection(pathEdit, true);
+        CHECK(QApplication::clipboard()->text() == QStringLiteral("copy-path"),
+              "Ctrl+C copies path editor text instead of the image");
+        pathEdit->selectAll();
+        copySelection(pathEdit, false);
+        CHECK(QApplication::clipboard()->text() == QStringLiteral("copy-path") &&
+                  QApplication::clipboard()->image().isNull(),
+              "Ctrl+C on the path editor does not copy the current image");
+
+        gallerySearchEdit->setText(QStringLiteral("ab"));
+        focusEditor(gallerySearchEdit);
+        gallerySearchEdit->deselect();
+        gallerySearchEdit->setCursorPosition(gallerySearchEdit->text().size());
+        typeC(gallerySearchEdit, true);
+        CHECK(gallerySearchEdit->text() == QStringLiteral("abc"),
+              "typing C in the gallery search box is not a Compare shortcut");
+        gallerySearchEdit->setText(QStringLiteral("copy-search"));
+        gallerySearchEdit->selectAll();
+        copySelection(gallerySearchEdit, false);
+        CHECK(QApplication::clipboard()->text() == QStringLiteral("copy-search"),
+              "Ctrl+C copies gallery search text");
+
+        auto *plain = new QPlainTextEdit(&w);
+        plain->setGeometry(8, 8, 180, 48);
+        plain->setPlainText(QStringLiteral("ab"));
+        focusEditor(plain);
+        {
+            QTextCursor cursor = plain->textCursor();
+            cursor.movePosition(QTextCursor::End);
+            plain->setTextCursor(cursor);
+        }
+        typeC(plain, true);
+        CHECK(plain->toPlainText() == QStringLiteral("abc"),
+              "typing C in a plain text editor is not a gallery shortcut");
+        plain->selectAll();
+        copySelection(plain, true);
+        CHECK(QApplication::clipboard()->text().trimmed() == QStringLiteral("abc"),
+              "Ctrl+C copies plain text editor selection");
+        thumbnailPanel->setFocus(Qt::OtherFocusReason);
+        delete plain;
+
+        auto *multi = new QTextEdit(&w);
+        multi->setGeometry(8, 8, 180, 48);
+        multi->setPlainText(QStringLiteral("ab"));
+        focusEditor(multi);
+        {
+            QTextCursor cursor = multi->textCursor();
+            cursor.movePosition(QTextCursor::End);
+            multi->setTextCursor(cursor);
+        }
+        typeC(multi, false);
+        CHECK(multi->toPlainText() == QStringLiteral("abc"),
+              "a text editor keeps C when the window filter sees the event");
+        multi->selectAll();
+        copySelection(multi, false);
+        CHECK(QApplication::clipboard()->text().trimmed() == QStringLiteral("abc"),
+              "Ctrl+C copies text editor selection");
+        thumbnailPanel->setFocus(Qt::OtherFocusReason);
+        delete multi;
+
+        auto *spin = new QSpinBox(&w);
+        spin->setGeometry(8, 8, 80, 28);
+        spin->setRange(0, 1000);
+        spin->setValue(20);
+        focusEditor(spin);
+        auto *spinEdit = spin->findChild<QLineEdit *>();
+        CHECK(spinEdit != nullptr, "spin box exposes its line edit");
+        if (spinEdit)
+        {
+            const QString spinText = spinEdit->text();
+            spinEdit->selectAll();
+            copySelection(spin, true);
+            CHECK(!spinText.isEmpty() && QApplication::clipboard()->text() == spinText,
+                  "Ctrl+C copies spin box text instead of the image");
+            spinEdit->selectAll();
+            QKeyEvent digit(QEvent::KeyPress, Qt::Key_1, Qt::NoModifier, QStringLiteral("1"));
+            QApplication::sendEvent(&w, &digit);
+            CHECK(spinEdit->text() == QStringLiteral("1"),
+                  "typing a digit in a spin box is not the 100% zoom shortcut");
+        }
+        thumbnailPanel->setFocus(Qt::OtherFocusReason);
+        delete spin;
+
+        pathEdit->removeEventFilter(&w);
+        gallerySearchEdit->removeEventFilter(&w);
+        pathEdit->setText(savedPathText);
+        gallerySearchEdit->setText(savedSearchText);
+        thumbnailPanel->setFocus(Qt::OtherFocusReason);
+        pump(30);
     }
 
     // Directory switch: clear stale SSOT selection synchronously, then select
@@ -986,6 +1158,34 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(sel->currentImage() == paths.first(), "PageUp at first image does not underflow");
     sendKey(&w, Qt::Key_PageDown);
     CHECK(paths.contains(sel->currentImage()), "PageDown stays within the folder");
+    if (imageList && directoryTree)
+    {
+        const QStringList full = imageList->paths();
+        const QString afterPaging = sel->currentImage();
+        const QStringList visible{paths[1], paths[2], paths[3], paths[4]};
+        imageList->setPaths(visible, directoryTree->currentPath());
+        sel->setCurrentImage(paths[0]);
+        CHECK(imageList->indexOf(sel->currentImage()) < 0,
+              "fixture current image is outside the visible page");
+        sendKey(&w, Qt::Key_PageDown);
+        CHECK(sel->currentImage() == paths[1],
+              "PageDown enters the first visible image when the current one is filtered out");
+        sel->setCurrentImage(paths[0]);
+        sendKey(&w, Qt::Key_PageUp);
+        CHECK(sel->currentImage() == paths[1],
+              "PageUp enters the first visible image when the current one is filtered out");
+        sel->setCurrentImage(paths[0]);
+        sendKey(&w, Qt::Key_Home);
+        CHECK(sel->currentImage() == paths[1],
+              "Home enters the first visible image when the current one is filtered out");
+        sel->setCurrentImage(paths[0]);
+        sendKey(&w, Qt::Key_End);
+        CHECK(sel->currentImage() == visible.last(),
+              "End jumps to the last visible image when the current one is filtered out");
+        imageList->setPaths(full, directoryTree->currentPath());
+        if (!afterPaging.isEmpty())
+            sel->setCurrentImage(afterPaging);
+    }
 
     // 快速切图后视图不能卡在空白/旧帧（评审"快速切图"稳定性检查）。
     if (viewer)

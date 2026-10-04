@@ -171,11 +171,13 @@ void MainWindow::navigatePage(int key)
     if (list.isEmpty())
         return;
 
-    int idx = m_imageList->indexOf(currentImagePath());
-    if (idx < 0)
-        idx = 0;
+    const int idx = m_imageList->indexOf(currentImagePath());
+    // A filter may remove the current image. Pretending it was row zero and
+    // then stepping a page skips the first visible page. Enter that page
+    // (Home / PageUp / PageDown) or the last image (End) instead.
+    const bool visible = idx >= 0;
     constexpr int kPage = 10; // images per PageUp/PageDown step
-    int target = idx;
+    int target = 0;
     switch (key)
     {
     case Qt::Key_Home:
@@ -185,15 +187,15 @@ void MainWindow::navigatePage(int key)
         target = list.size() - 1;
         break;
     case Qt::Key_PageUp:
-        target = qMax(0, idx - kPage);
+        target = visible ? qMax(0, idx - kPage) : 0;
         break;
     case Qt::Key_PageDown:
-        target = qMin(list.size() - 1, idx + kPage);
+        target = visible ? qMin(list.size() - 1, idx + kPage) : 0;
         break;
     default:
         return;
     }
-    if (target != idx || currentImagePath().isEmpty())
+    if (!visible || target != idx)
         m_selection->setCurrentImage(list.at(target));
 }
 

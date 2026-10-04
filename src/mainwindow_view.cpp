@@ -567,8 +567,18 @@ void MainWindow::updateCacheStat()
     }
 }
 
+namespace mviewer_keys
+{
+QWidget *textEntryWidget(QWidget *widget);
+bool textEntryOwnsKey(QWidget *widget, const QKeyEvent *key);
+} // namespace mviewer_keys
+
 bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
 {
+    // Editors keep printable keys and Ctrl+C. Returning false lets the widget
+    // that owns the event insert the character or copy its own selection.
+    if (mviewer_keys::textEntryOwnsKey(qobject_cast<QWidget *>(watched), ke))
+        return false;
     if (watched == m_searchEdit)
     {
         if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter)
@@ -603,10 +613,6 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
     {
         if (watched == m_imageViewer)
             return false;
-        auto *editor = qobject_cast<QWidget *>(watched);
-        if (editor && (editor->inherits("QLineEdit") || editor->inherits("QTextEdit") ||
-                       editor->inherits("QPlainTextEdit") || editor->inherits("QAbstractSpinBox")))
-            return false;
         if (m_imageViewer)
         {
             QApplication::sendEvent(m_imageViewer, ke);
@@ -625,11 +631,7 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
     // editors keep Ctrl+L.
     if (mods == Qt::ControlModifier && ke->key() == Qt::Key_L && watched != m_imageViewer)
     {
-        auto *editor = qobject_cast<QWidget *>(watched);
-        const bool textEditor =
-            editor && (editor->inherits("QLineEdit") || editor->inherits("QTextEdit") ||
-                       editor->inherits("QPlainTextEdit") || editor->inherits("QAbstractSpinBox"));
-        if (!textEditor && m_imageViewer)
+        if (!mviewer_keys::textEntryWidget(qobject_cast<QWidget *>(watched)) && m_imageViewer)
         {
             QApplication::sendEvent(m_imageViewer, ke);
             return true;
