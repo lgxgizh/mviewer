@@ -1294,6 +1294,55 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                       "S again stops slideshow (no further advance)");
             }
 
+            // Esc stops a running slideshow before the fullscreen/close ladder.
+            {
+                QSettings escShow;
+                escShow.setValue("slideshowInterval", 2000);
+                escShow.sync();
+                const QString beforeEsc = sel->currentImage();
+                sendKey(&w, Qt::Key_S);
+                pump(40);
+                CHECK(slideshowAction && slideshowAction->isChecked(),
+                      "S starts the slideshow before Esc");
+                viewer->setFocus(Qt::OtherFocusReason);
+                sendKey(viewer, Qt::Key_Escape);
+                pump(800);
+                CHECK(slideshowAction && !slideshowAction->isChecked(),
+                      "Esc stops the slideshow before leaving fullscreen");
+                CHECK(viewer->isVisible(), "Esc that stops the slideshow leaves the viewer open");
+                CHECK(sel->currentImage() == beforeEsc,
+                      "Esc stops the slideshow before the next image");
+                CHECK(viewer->property("mviewerFullscreenRequested").toBool(),
+                      "stopping the slideshow does not consume the fullscreen Esc");
+            }
+
+            // Viewer focus must not turn gallery shortcuts into zoom.
+            if (pathEdit && thumbnailPanel)
+            {
+                viewer->setFocus(Qt::OtherFocusReason);
+                sendKey(viewer, Qt::Key_F, Qt::ControlModifier);
+                CHECK(QApplication::focusWidget() == pathEdit,
+                      "Ctrl+F from the viewer focuses the address bar");
+                thumbnailPanel->setViewMode(ThumbnailPanel::List);
+                viewer->zoomFit();
+                pump(20);
+                const double heldScale = viewer->viewTransform().scale;
+                viewer->setFocus(Qt::OtherFocusReason);
+                sendKey(viewer, Qt::Key_1, Qt::ControlModifier);
+                CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::Thumbnail,
+                      "Ctrl+1 from the viewer selects thumbnail view");
+                CHECK(qAbs(viewer->viewTransform().scale - heldScale) < 1e-6,
+                      "Ctrl+1 from the viewer does not zoom");
+                sendKey(viewer, Qt::Key_2, Qt::ControlModifier);
+                CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::List,
+                      "Ctrl+2 from the viewer selects list view");
+                CHECK(qAbs(viewer->viewTransform().scale - heldScale) < 1e-6,
+                      "Ctrl+2 from the viewer does not zoom");
+                sendKey(viewer, Qt::Key_1);
+                CHECK(qAbs(viewer->viewTransform().scale - 1.0) < 1e-6,
+                      "plain 1 from the viewer is still 100% zoom");
+            }
+
             // Double-click toggles fit <-> 100% at the cursor (beta
             // checklist "双击放大 -> 恢复"). A preceding left press must not
             // open the metadata overlay and steal the gesture.

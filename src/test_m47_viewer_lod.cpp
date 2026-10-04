@@ -24,8 +24,9 @@
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QImage>
-#include <QTimer>
+#include <QMouseEvent>
 #include <QTemporaryDir>
+#include <QTimer>
 
 #include <atomic>
 #include <cstdio>
@@ -214,6 +215,46 @@ int main(int argc, char **argv)
         CHECK(waitTrue([&] { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
                        15000),
               "V1: decode pools drain after display");
+        if (ready && viewer.isLodDisplay())
+        {
+            bool sawPixel = false;
+            QObject::connect(&viewer, &ImageViewer::pixelInfo, &viewer,
+                             [&](int, int, int, int, int, int, int, int, int, int, bool valid)
+                             {
+                                 if (valid)
+                                     sawPixel = true;
+                             });
+            const QPoint mid(viewer.width() / 2, viewer.height() / 2);
+            QMouseEvent hover(QEvent::MouseMove, QPointF(mid), viewer.mapToGlobal(mid),
+                              Qt::NoButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(&viewer, &hover);
+            pump(30);
+            CHECK(sawPixel, "V1: hover readout samples the display raster above 60MP");
+            CHECK(!viewer.frame(), "V1: hover readout does not load a full analysis frame");
+
+            bool sawRoi = false;
+            QObject::connect(&viewer, &ImageViewer::regionStats, &viewer,
+                             [&](const QString &text)
+                             {
+                                 if (text.startsWith(QStringLiteral("ROI [")))
+                                     sawRoi = true;
+                             });
+            viewer.setSelectMode(true);
+            const QPoint a(viewer.width() / 4, viewer.height() / 4);
+            const QPoint b(viewer.width() * 3 / 4, viewer.height() * 3 / 4);
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(a), viewer.mapToGlobal(a),
+                              Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent drag(QEvent::MouseMove, QPointF(b), viewer.mapToGlobal(b), Qt::NoButton,
+                             Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(b), viewer.mapToGlobal(b),
+                                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(&viewer, &press);
+            QApplication::sendEvent(&viewer, &drag);
+            QApplication::sendEvent(&viewer, &release);
+            CHECK(waitTrue([&] { return sawRoi; }, 8000),
+                  "V1: ROI stats use the display raster above 60MP");
+            CHECK(!viewer.frame(), "V1: ROI stats do not load a full analysis frame");
+        }
     }
 
     // ── V2: zoom-in past the LOD density requests a bounded region ──────────

@@ -113,9 +113,10 @@ class ImageViewer : public QOpenGLWidget
         return m_lodMode && !m_raster.image.isNull();
     }
 
-    // M48: the currently displayed LOD/region raster (display-only — analysis
-    // consumers never use it). Null when the raster path is inactive. Public
-    // so tests and display-inspection callers can verify what is painted.
+    // M48: the LOD/region raster currently on screen. Full-frame analysis still
+    // prefers m_frame. Sources above the analysis pixel budget sample this
+    // bounded raster for hover, ROI stats, and color. Null when the raster
+    // path is inactive. Public so tests can verify what is painted.
     QImage displayRaster() const
     {
         return m_raster.image;
@@ -235,6 +236,10 @@ class ImageViewer : public QOpenGLWidget
     // same-path overwrite (rotate) can replace the file on Windows.
     void releaseSourceHandles(const QString &path);
     static QString rotateFailureUserMessage(const mviewer::core::ImageFileRotateResult &result);
+    // UI-thread completion for an encode started on the scheduler.
+    void completeFileTransform(const QString &path,
+                               const mviewer::core::ImageFileRotateResult &result,
+                               const QString &failureTitle, const QString &successText);
     bool flipHorizontal();
     bool flipVertical();
     bool flipImage(bool horizontal);
@@ -427,6 +432,9 @@ class ImageViewer : public QOpenGLWidget
     void storeWarmDisplayRaster(DisplayRasterPreloadResult result);
     void enforceDisplayRasterWarmBudget();
     void runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize);
+    // Full frame when one is loaded; otherwise the bounded display raster.
+    PixelRGBA sampleAnalysisPixel(int ix, int iy) const;
+    void scheduleRasterRoiStats(const QRect &selection);
     void drawDisplayRaster(QPainter &painter) const;
     void drawPixelGridOverlay(QPainter &painter);
     void drawOverlayBadge(QPainter &painter);

@@ -216,15 +216,7 @@ void MainWindow::buildBrowserShell()
     auto *actFocusPath = new QAction(this);
     actFocusPath->setObjectName("focusPathAction");
     actFocusPath->setShortcuts({QKeySequence("Alt+D")});
-    connect(actFocusPath, &QAction::triggered, this,
-            [this]()
-            {
-                if (m_pathEdit)
-                {
-                    m_pathEdit->setFocus();
-                    m_pathEdit->selectAll();
-                }
-            });
+    connect(actFocusPath, &QAction::triggered, this, [this]() { focusAddressBar(); });
     addAction(actFocusPath);
 }
 

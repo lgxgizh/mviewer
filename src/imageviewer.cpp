@@ -249,8 +249,13 @@ void ImageViewer::cancelRoiStats()
 void ImageViewer::scheduleRoiStats(const QRect &selection)
 {
     cancelRoiStats();
-    if (!m_frame || selection.isEmpty())
+    if (selection.isEmpty() || !hasDisplayImage())
         return;
+    if (!m_frame || !m_frame->isValid())
+    {
+        scheduleRasterRoiStats(selection);
+        return;
+    }
 
     const auto frame = m_frame;
     const auto path = m_currentPath;
@@ -360,6 +365,7 @@ void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool c
                         return;
                     viewer->m_exportTask.reset();
                     viewer->m_exportCancel.reset();
+                    bool clipboardOk = false;
                     if (clipboard && result->done > 0 && !result->clipboardImage.isNull())
                     {
                         // Owning conversion is required here: the clipboard
@@ -367,10 +373,22 @@ void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool c
                         // non-owning alias whose buffer dies with `result`.
                         QImage image = mvcore::toQImage(result->clipboardImage);
                         if (!image.isNull())
+                        {
                             QApplication::clipboard()->setImage(image);
+                            clipboardOk = true;
+                        }
                     }
-                    emit viewer->exportFinished(result->failed == 0 && result->done > 0,
-                                                QString::fromStdString(result->message));
+                    const bool jobOk = result->failed == 0 && result->done > 0;
+                    const QString detail = QString::fromStdString(result->message);
+                    emit viewer->exportFinished(clipboard ? clipboardOk : jobOk, detail);
+                    if (clipboard)
+                    {
+                        emit viewer->statusMessageRequested(
+                            clipboardOk
+                                ? viewer->tr("已复制图片到剪贴板")
+                                : (detail.isEmpty() ? viewer->tr("复制到剪贴板失败") : detail),
+                            clipboardOk ? 2000 : 4000);
+                    }
                     Q_UNUSED(destination);
                 },
                 Qt::QueuedConnection);
@@ -618,52 +636,30 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
 
 void ImageViewer::updatePixelSampleAt(const QPoint &pos)
 {
-    // Pixel Inspector (P1 #6): read the pixel under the cursor from the shared
-    // format-aware sampler (core/image/ImageBuffer.h), using the inverse of the
-    // Viewport transform. samplePixel canonicalises RGB/RGBA/BGR/BGRA/grayscale
-    // to RGBA and reports invalid (never an out-of-bounds read) for out-of-range
-    // or truncated buffers.
+    // Pixel Inspector reads the full frame when one exists. Above the analysis
+    // budget the bounded display raster supplies hover, ROI, and color samples.
     int ix = -1, iy = -1;
-    if (m_frame && m_frame->isValid())
+    if (hasDisplayImage() && m_view.scale > 0.0)
     {
         m_view.screenW = width();
         m_view.screenH = height();
-        const double imgX = (pos.x() - m_view.offsetX) / m_view.scale;
-        const double imgY = (pos.y() - m_view.offsetY) / m_view.scale;
-        ix = static_cast<int>(std::floor(imgX));
-        iy = static_cast<int>(std::floor(imgY));
+        ix = static_cast<int>(std::floor((pos.x() - m_view.offsetX) / m_view.scale));
+        iy = static_cast<int>(std::floor((pos.y() - m_view.offsetY) / m_view.scale));
     }
     if (ix == m_lastHoverX && iy == m_lastHoverY)
-    {
         return;
-    }
     m_lastHoverX = ix;
     m_lastHoverY = iy;
 
-    int r = 0, g = 0, b = 0, a = 255;
-    bool valid = false;
-    if (m_frame && m_frame->isValid())
-    {
-        const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
-        r = px.r;
-        g = px.g;
-        b = px.b;
-        a = px.a;
-        valid = px.valid;
-        m_lastHoverPixel = px;
-    }
-    // P0-2/PixelInspector: also surface the original high-bit-depth sample when
-    // available. rawKind: 0 = 8-bit only, 1 = RAW preview (demosaic 8-bit),
-    // 2 = true 16-bit integer samples present.
+    const PixelRGBA px = sampleAnalysisPixel(ix, iy);
+    m_lastHoverPixel = px;
     int r16 = 0, g16 = 0, b16 = 0, rawKind = 0;
-    if (m_frame)
+    if (m_frame && px.valid)
     {
         const auto &meta = m_frame->metadata();
         if (meta.format == "RAW")
-        {
             rawKind = 1;
-        }
-        else if (m_frame->hasRaw16() && valid)
+        else if (m_frame->hasRaw16())
         {
             uint16_t vr = 0, vg = 0, vb = 0;
             if (m_frame->raw16At(ix, iy, vr, vg, vb))
@@ -675,7 +671,8 @@ void ImageViewer::updatePixelSampleAt(const QPoint &pos)
             }
         }
     }
-    emit pixelInfo(ix, iy, r, g, b, a, r16, g16, b16, rawKind, valid);
+    emit pixelInfo(ix, iy, px.r, px.g, px.b, px.valid ? px.a : 255, r16, g16, b16, rawKind,
+                   px.valid);
 }
 
 void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
@@ -697,29 +694,13 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                           static_cast<int>(std::round(r.width() / m_view.scale)),
                           static_cast<int>(std::round(r.height() / m_view.scale)))
                         .normalized();
+                const QSize bounds = displaySize();
                 const QRect valid =
-                    m_frame ? imgRect.intersected(QRect(0, 0, m_frame->width(), m_frame->height()))
-                            : QRect();
-                if (!valid.isEmpty() && m_frame)
+                    bounds.isEmpty()
+                        ? QRect()
+                        : imgRect.intersected(QRect(0, 0, bounds.width(), bounds.height()));
+                if (!valid.isEmpty())
                 {
-#if 0
-                    const mviewer::domain::Selection sel{valid.x(), valid.y(), valid.width(),
-                                                         valid.height()};
-                    const auto stats =
-                        mviewer::core::computePreviewStats(cropRegion(m_frame->pixels(), sel));
-                    const QString text = QString("框选 [%1,%2,%3,%4]: 亮度=%5, R=%6,G=%7,B=%8")
-                                             .arg(valid.x())
-                                             .arg(valid.y())
-                                             .arg(valid.width())
-                                             .arg(valid.height())
-                                             .arg(stats.lumMean, 0, 'f', 1)
-                                             .arg(static_cast<double>(stats.rMean), 0, 'f', 1)
-                                             .arg(static_cast<double>(stats.gMean), 0, 'f', 1)
-                                             .arg(static_cast<double>(stats.bMean), 0, 'f', 1);
-                    emit regionStats(text);
-                    emit selectionChanged(valid); // new: live ROI stats
-                }
-#endif
                     scheduleRoiStats(valid);
                     emit selectionChanged(valid);
                 }

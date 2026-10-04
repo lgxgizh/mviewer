@@ -21,9 +21,6 @@ namespace
 // Defensive bounds for the viewport-bounded base surface. A pane larger than
 // this is beyond any real display (16384 px per side, 64M device pixels ≈
 // 256 MiB of ARGB); the cache simply falls back to direct paint.
-constexpr qint64 kMaxCacheDim = 16384;
-constexpr qint64 kMaxSurfacePixels = qint64(64) * 1024 * 1024; // 64M px
-
 Qt::CursorShape cursorForSelectionHandle(mviewer::domain::SelectionHandle handle)
 {
     switch (handle)
@@ -315,12 +312,9 @@ void RawImageView::paintEvent(QPaintEvent *)
     }
     else
     {
-        // Rasterize the static base image + diff overlay once per input change into
-        // a viewport-bounded surface, then blit it; live annotations draw on top.
-        ensureBaseSurface();
-        if (m_baseSurfaceValid)
-            p.drawImage(rect(), m_baseSurface);
-        else
+        // Rasterize the static base once per input change. A wheel burst reuses
+        // that surface (scaled) instead of rebuilding it on every notch.
+        if (!paintBaseSurface(p))
             drawBaseLayer(p);
     }
 
@@ -416,77 +410,10 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
 
 void RawImageView::wheelEvent(QWheelEvent *ev)
 {
+    // Compare mode usually consumes the wheel in CompareWorkspace and reaches
+    // the same coalesce via setTransform. Direct wheels share ensureBaseSurface.
     const double factor = ev->angleDelta().y() > 0 ? 1.25 : 1.0 / 1.25;
     zoom(factor, ev->position());
-}
-
-void RawImageView::ensureBaseSurface()
-{
-    const qreal dpr = devicePixelRatioF();
-    const QSize viewport = size();
-    const QImage &image = presentationImage();
-    const QRect sourceRect = renderSourceRect();
-    const qint64 imageKey = image.isNull() ? -1 : image.cacheKey();
-    const qint64 overlayKey = m_overlay.isNull() ? -1 : m_overlay.cacheKey();
-
-    // Cache key: image/overlay content (cheap unique buffer ids, never a pixel
-    // compare), overlay opacity, scale, pan offset, viewport, and device ratio.
-    const double presented = presentedScale();
-    if (m_baseSurfaceValid && imageKey == m_cachedImageKey && overlayKey == m_cachedOverlayKey &&
-        m_overlayAlpha == m_cachedOverlayAlpha && presented == m_cachedScale &&
-        m_offset == m_cachedOffset && viewport == m_cachedViewport && dpr == m_cachedDpr &&
-        sourceRect == m_cachedSourceRect)
-        return;
-
-    // Bounded by widget viewport device pixels (never by scaled source dims:
-    // 50x zoom still allocates viewport size). A defensive cap guards
-    // pathological widget geometry; on any failure the caller falls back to the
-    // direct draw path instead of showing a blank pane.
-    const int w = qCeil(width() * dpr);
-    const int h = qCeil(height() * dpr);
-    const qint64 pixels = static_cast<qint64>(w) * h;
-    if (w <= 0 || h <= 0 || w > kMaxCacheDim || h > kMaxCacheDim || pixels > kMaxSurfacePixels)
-    {
-        releaseBaseSurface();
-        return;
-    }
-
-    // Reuse the existing allocation when its physical size, format, and DPR are
-    // still compatible; reallocate only when the viewport geometry requires it,
-    // so pan/zoom repaints never churn the heap. Clear and repaint in place.
-    if (m_baseSurface.isNull() || m_baseSurface.width() != w || m_baseSurface.height() != h ||
-        m_baseSurface.format() != QImage::Format_ARGB32_Premultiplied ||
-        m_baseSurface.devicePixelRatio() != dpr)
-    {
-        m_baseSurface = QImage(w, h, QImage::Format_ARGB32_Premultiplied);
-        m_baseSurface.setDevicePixelRatio(dpr);
-        if (m_baseSurface.isNull())
-        {
-            releaseBaseSurface();
-            return;
-        }
-    }
-
-    m_baseSurface.fill(Qt::transparent);
-    QPainter p(&m_baseSurface);
-    drawBaseLayer(p);
-    p.end();
-
-    m_baseSurfaceValid = true;
-    m_cachedImageKey = imageKey;
-    m_cachedOverlayKey = overlayKey;
-    m_cachedOverlayAlpha = m_overlayAlpha;
-    m_cachedScale = presentedScale();
-    m_cachedOffset = m_offset;
-    m_cachedViewport = viewport;
-    m_cachedDpr = dpr;
-    m_cachedSourceRect = sourceRect;
-
-    ++m_baseSurfaceRenderCount;
-    // Diagnostic only: lets tests distinguish annotation repaints from source
-    // rasterization without widening the public API.
-    setProperty("baseSurfaceRenderCount",
-                QVariant::fromValue<qulonglong>(m_baseSurfaceRenderCount));
 }
 
 void RawImageView::drawBaseLayer(QPainter &p)
@@ -533,20 +460,6 @@ void RawImageView::drawBaseLayer(QPainter &p)
         p.drawImage(QRectF(cx - dw / 2.0, cy - dh / 2.0, dw, dh), m_overlay);
         p.restore();
     }
-}
-
-void RawImageView::releaseBaseSurface()
-{
-    m_baseSurface = QImage();
-    m_baseSurfaceValid = false;
-    m_cachedImageKey = -1;
-    m_cachedOverlayKey = -1;
-    m_cachedOverlayAlpha = -1.0;
-    m_cachedScale = 0.0;
-    m_cachedOffset = {};
-    m_cachedViewport = {};
-    m_cachedDpr = 0.0;
-    m_cachedSourceRect = {};
 }
 
 void RawImageView::mousePressEvent(QMouseEvent *ev)

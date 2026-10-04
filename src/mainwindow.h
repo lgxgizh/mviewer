@@ -142,6 +142,10 @@ class MainWindow : public QMainWindow
     void buildStatusBarUi();
 
     void setupCommands();
+    // Ctrl+F / Alt+D. Activates this window so the address bar becomes
+    // QApplication::focusWidget() even when the viewer window has the key.
+    void focusAddressBar();
+    bool forwardGlobalShortcut(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods);
     bool handleWindowKey(QKeyEvent *event);
     bool handleMetadataKey(QKeyEvent *event);
     bool handleViewModeKey(QKeyEvent *event);

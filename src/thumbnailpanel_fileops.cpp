@@ -3,6 +3,8 @@
 
 #include "runtime_storage.h"
 
+#include <QSettings>
+
 namespace
 {
 mviewer::core::DirectoryEntry directoryEntryForPath(const QString &path)
@@ -422,10 +424,17 @@ void ThumbnailPanel::moveToTrashSelected()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    // Qt6 removed QStandardPaths::TrashLocation. Until a native Windows
-    // Shell recycle-bin adapter is available, use and label an explicit
-    // per-user MViewer trash staging area so users are not promised native
-    // Recycle Bin semantics.
+    if (QSettings().value(QStringLiteral("confirmDelete"), true).toBool())
+    {
+        const QString prompt = paths.size() == 1
+                                   ? tr("确定将此文件移到 MViewer 回收站？")
+                                   : tr("确定将 %1 个文件移到 MViewer 回收站？").arg(paths.size());
+        const auto answer = QMessageBox::question(
+            this, tr("删除确认"), prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+    }
+    // App-private trash until a native recycle-bin adapter exists.
     const QString dataDir =
         mviewer::runtime::writableDirectory(QStandardPaths::GenericDataLocation);
     const QString trashDir = dataDir.isEmpty() ? QString() : QDir(dataDir).filePath("trash");
@@ -724,12 +733,22 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     QAction *aAnalyze = menu.addAction("批量分析导出");
     menu.addSeparator();
     QAction *aAddTag = menu.addAction("添加标签…");
-    QMenu *rmTagMenu = menu.addMenu("移除标签");
+    QMenu *rmTagMenu = menu.addMenu("移除所选标签");
     {
-        const auto myTags = mviewer::core::TagStore::instance().tags(path.toStdString());
-        for (const auto &tg : myTags)
-            rmTagMenu->addAction(QString::fromStdString(tg));
-        rmTagMenu->setEnabled(!myTags.empty());
+        QStringList tags;
+        for (const QString &sp : selectedPaths())
+        {
+            for (const auto &tg : mviewer::core::TagStore::instance().tags(sp.toStdString()))
+            {
+                const QString text = QString::fromStdString(tg);
+                if (!tags.contains(text))
+                    tags.append(text);
+            }
+        }
+        tags.sort();
+        for (const QString &tg : tags)
+            rmTagMenu->addAction(tg);
+        rmTagMenu->setEnabled(!tags.isEmpty());
     }
     populateRatingContextMenu(&menu);
     QAction *chosen = menu.exec(event->globalPos());
@@ -760,16 +779,18 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
                                                   QLineEdit::Normal, QString(), &ok);
         if (ok && !tag.trimmed().isEmpty())
         {
-            mviewer::core::TagStore::instance().addTag(path.toStdString(),
-                                                       tag.trimmed().toStdString());
+            const std::string tagStd = tag.trimmed().toStdString();
+            for (const QString &sp : selectedPaths())
+                mviewer::core::TagStore::instance().addTag(sp.toStdString(), tagStd);
             applyFilter();
             viewport()->update();
         }
     }
     else if (rmTagMenu->actions().contains(chosen))
     {
-        mviewer::core::TagStore::instance().removeTag(path.toStdString(),
-                                                      chosen->text().toStdString());
+        const std::string tagStd = chosen->text().toStdString();
+        for (const QString &sp : selectedPaths())
+            mviewer::core::TagStore::instance().removeTag(sp.toStdString(), tagStd);
         applyFilter();
         viewport()->update();
     }

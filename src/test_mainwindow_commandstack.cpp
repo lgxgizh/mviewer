@@ -10,6 +10,7 @@
 #include "runtime_storage.h"
 #include "thumbnailpanel.h"
 
+#include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
 #include <QClipboard>
@@ -17,9 +18,10 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
-#include <QKeyEvent>
 #include <QInputDialog>
+#include <QKeyEvent>
 #include <QKeySequence>
+#include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -201,7 +203,32 @@ int main(int argc, char **argv)
     // queued UI history commit by issuing Undo immediately after the worker
     // removes the source.
     panel->selectPath(renamed);
+    QSettings().setValue(QStringLiteral("confirmDelete"), true);
+    auto dismissTrashConfirm = [](QMessageBox::StandardButton which)
+    {
+        for (QWidget *top : QApplication::topLevelWidgets())
+        {
+            auto *box = qobject_cast<QMessageBox *>(top);
+            if (!box || !box->isVisible())
+                continue;
+            if (QAbstractButton *button = box->button(which))
+                button->click();
+        }
+    };
+    QTimer noPoller;
+    noPoller.setInterval(10);
+    QObject::connect(&noPoller, &QTimer::timeout, [&] { dismissTrashConfirm(QMessageBox::No); });
+    noPoller.start();
     panel->moveToTrashSelected();
+    noPoller.stop();
+    CHECK(QFile::exists(renamed), "M45: confirm-before-delete No keeps the file");
+
+    QTimer yesPoller;
+    yesPoller.setInterval(10);
+    QObject::connect(&yesPoller, &QTimer::timeout, [&] { dismissTrashConfirm(QMessageBox::Yes); });
+    yesPoller.start();
+    panel->moveToTrashSelected();
+    yesPoller.stop();
     CHECK(waitFor([&]
                   {
                       return !QFile::exists(renamed) && undo->text().contains("Delete");
