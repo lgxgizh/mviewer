@@ -652,6 +652,7 @@ class CompareWorkspace : public QWidget
     DisplayRequest buildPaneDisplayRequest(int pane, bool preferCheap) const;
     void scheduleDisplayLodRefresh(int idx = -1);
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
+    void reapplyPinnedCellTransforms(bool clearPins = false);
     // M47: bounded per-pane display-target edge for a source-backed pane (no
     // full frame): pane viewport x dpr x pane scale x overscan, capped.
     TaskScheduler::TaskHandle startDisplayMaterialization(

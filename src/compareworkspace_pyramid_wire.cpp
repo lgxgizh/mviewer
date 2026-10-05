@@ -198,6 +198,9 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
         if (desired.target.isValid())
             tryPaintFromPyramid(m_session.get(), m_cellViews, idx, desired);
     }
+    // tryPaintFromPyramid -> setImage() fits the raster. A swap has already
+    // stored the destination scale; put it back on the view before paint.
+    reapplyPinnedCellTransforms();
 
     std::vector<ImageData> pixels;
     std::vector<mviewer::domain::ImageMetadata> metadata;
@@ -307,6 +310,12 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
                                     cell.sourceSize, remembered, !r.provisional);
         }
     }
+
+    // setImage() above fitted whatever raster just arrived. Pinned panes are
+    // mid-swap: the engine already holds the swapped scale and pan, and the
+    // view has to show those even when the source size changed. A provisional
+    // delivery stays pinned until the full raster follows.
+    reapplyPinnedCellTransforms(!r.provisional);
 
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
