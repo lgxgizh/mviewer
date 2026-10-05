@@ -95,6 +95,18 @@ int main(int argc, char **argv)
         auto r = run(cfg);
         CHECK(r.done == 1, "convert done=1");
         CHECK(r.failed == 0, "convert failed=0");
+
+        const fs::path missing = tmp / "missing-source.png";
+        ExportJobConfig partialCfg;
+        partialCfg.mode = Mode::Convert;
+        partialCfg.sources = {missing.string(), src.string()};
+        partialCfg.outDir = out.string();
+        partialCfg.format = "png";
+        partialCfg.renamePattern = "{name}_partial";
+        const auto partial = run(partialCfg);
+        CHECK(partial.done == 1 && partial.failed == 1, "partial convert counts the failed source");
+        CHECK(partial.message.find("missing-source.png") != std::string::npos,
+              "partial convert names the source that failed");
         // Dotted base name must be preserved (photo.v2_exp.jpg, not photo_exp.jpg).
         CHECK(fs::exists(out / "photo.v2_exp.jpg") ||
                   r.primaryOutput.find("photo.v2_exp") != std::string::npos,

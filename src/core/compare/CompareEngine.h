@@ -78,6 +78,9 @@ class SyncController
     }
 
   private:
+    void zoomIndependentPanes(double viewX, double viewY, double factor, int exceptIndex);
+    void zoomDragSyncedPane(double viewX, double viewY, double factor, int exceptIndex);
+
     SyncTransform m_sync;
     std::vector<CellState> m_cells;
 };

@@ -67,6 +67,8 @@ class DirectoryMonitor : public QObject
     void commitSnapshot(const mviewer::core::DirectorySnapshot &snapshot,
                         const mviewer::core::DirectoryDelta &delta);
     void ensureActivePathWatched();
+    void armFallbackWatch();
+    void dropFallbackWatch();
 
     QFileSystemWatcher *m_watcher = nullptr;
     QTimer *m_debounce = nullptr;
@@ -76,6 +78,10 @@ class DirectoryMonitor : public QObject
     std::shared_ptr<std::atomic<uint64_t>> m_generation;
 
     QString m_activePath;
+    // Watched only while m_activePath itself cannot be watched (deleted).
+    // Recreation is a change in the parent, which QFileSystemWatcher would
+    // otherwise never report for the dropped child path.
+    QString m_fallbackWatch;
     mviewer::core::DirectorySnapshot m_committed;
     mviewer::core::DirectorySnapshot m_stabilityCandidate;
     mviewer::core::DirectoryDelta m_stabilityDelta;

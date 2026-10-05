@@ -88,6 +88,23 @@ class ImageRepository::AsyncRequestState
     std::condition_variable deliveryCv;
 };
 
+// An empty weak_ptr means "no consumer restriction". expired() is true for
+// both that and a token whose shared_ptr was destroyed, so owner_before is
+// what tells them apart: a destroyed token still owns its control block.
+static bool lifetimeTokenSupplied(const std::weak_ptr<mviewer::core::AsyncLifetimeToken> &lifetime)
+{
+    const std::weak_ptr<mviewer::core::AsyncLifetimeToken> empty;
+    return lifetime.owner_before(empty) || empty.owner_before(lifetime);
+}
+
+static bool lifetimeTokenAllows(const std::weak_ptr<mviewer::core::AsyncLifetimeToken> &lifetime)
+{
+    if (!lifetimeTokenSupplied(lifetime))
+        return true;
+    const auto token = lifetime.lock();
+    return token && token->isAlive();
+}
+
 // M46: terminal-delivery helper shared by every async request kind. Runs on
 // the worker thread. Returns true when the caller must invoke `cb(res)`; the
 // delivery-gate protocol guarantees the client callback is invoked at most
@@ -100,15 +117,10 @@ static bool beginClientDelivery(const std::shared_ptr<ImageRepository::AsyncRequ
     std::unique_lock<std::mutex> gk(state->deliveryMtx);
     if (state->cancelled.load(std::memory_order_acquire))
         return false;
-    // The lifetime token is OPTIONAL: an empty weak_ptr (no token supplied)
-    // means the caller takes no lifetime restriction. Only a supplied token
-    // that is expired (consumer destroyed) or invalidated suppresses delivery.
-    if (!state->lifetime.expired())
-    {
-        const std::shared_ptr<mviewer::core::AsyncLifetimeToken> token = state->lifetime.lock();
-        if (token && !token->isAlive())
-            return false;
-    }
+    // The lifetime token is OPTIONAL. A supplied token that was invalidated
+    // or whose owner was destroyed suppresses delivery before the callback.
+    if (!lifetimeTokenAllows(state->lifetime))
+        return false;
     if (state->deliveryStarted || state->deliveryDone)
         return false; // defensive: exactly-once even under re-entrancy
     state->deliveryStarted = true;
@@ -317,16 +329,10 @@ ImageRepository::loadAsyncCancellable(const std::string &filePath,
             std::lock_guard<std::mutex> lk(state->mtx);
             cb = std::move(state->callback);
         }
-        // M46: a dead consumer token (expired OR invalidated) suppresses even
+        // M46: a dead consumer token (destroyed OR invalidated) suppresses even
         // the synchronous rejection callback - no client callback may start
         // once the consumer is gone.
-        bool tokenAlive = true;
-        if (!state->lifetime.expired())
-        {
-            const auto tok = state->lifetime.lock();
-            tokenAlive = tok && tok->isAlive();
-        }
-        if (tokenAlive)
+        if (lifetimeTokenAllows(state->lifetime))
         {
             Result err;
             err.error = "scheduler rejected submission for: " + filePath;
@@ -430,13 +436,7 @@ ImageRepository::AsyncRequestHandle ImageRepository::loadFrameAsync(
             std::lock_guard<std::mutex> lk(state->mtx);
             rejected = std::move(state->callback);
         }
-        bool tokenAlive = true;
-        if (!state->lifetime.expired())
-        {
-            const auto token = state->lifetime.lock();
-            tokenAlive = token && token->isAlive();
-        }
-        if (tokenAlive)
+        if (lifetimeTokenAllows(state->lifetime))
         {
             try
             {
@@ -577,7 +577,9 @@ ImageRepository::promotePreloadAsync(AsyncRequestHandle &preload,
             // only after the mutex guard is released.
             preload->kind = AsyncRequestState::Kind::Foreground;
             preload->callback = std::move(callback);
-            if (!lifetime.expired())
+            // Store a destroyed token too. expired() cannot tell that apart
+            // from "no token", and dropping it would deliver to a dead consumer.
+            if (lifetimeTokenSupplied(lifetime))
                 preload->lifetime = std::move(lifetime);
             promoted = preload;
         }

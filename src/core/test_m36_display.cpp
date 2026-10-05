@@ -12,7 +12,9 @@
 #include <QTemporaryDir>
 
 #include <atomic>
+#include <cmath>
 #include <cstdio>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -70,6 +72,39 @@ static void checkSyncAxes()
     sync.zoomAt(0.0, 0.0, 2.0, 0);
     CHECK(sync.cell(0).scale == 6.0 && sync.cell(1).scale == 3.0,
           "Off keeps zoom independent per pane");
+
+    // Zoom sync on, drag sync off: each pane scales from its own fit and the
+    // point under the cursor stays put. A shared offset would slide the other
+    // pane instead of anchoring it.
+    sync.setZoomEnabled(true);
+    sync.setDragEnabled(false);
+    sync.setCellScale(0, 2.0);
+    sync.setCellOffset(0, 40.0, 10.0);
+    sync.setCellScale(1, 4.0);
+    sync.setCellOffset(1, 80.0, 20.0);
+    sync.zoomAt(20.0, 0.0, 2.0, -1);
+    CHECK(sync.cell(0).scale == 4.0 && sync.cell(1).scale == 8.0,
+          "Zoom-only multiplies each pane scale");
+    CHECK(std::abs(sync.cell(0).offset.x - 60.0) < 1e-9 &&
+              std::abs(sync.cell(1).offset.x - 140.0) < 1e-9,
+          "Zoom-only anchors each pane under the cursor");
+
+    // Drag sync on, zoom sync off: only the reference pane zooms. Both panes
+    // keep one pan so a later drag still lines them up.
+    sync.setZoomEnabled(false);
+    sync.setDragEnabled(true);
+    sync.setCellScale(1, 5.0);
+    sync.setOffset(10.0, 5.0);
+    sync.zoomAt(0.0, 0.0, 2.0, 0);
+    CHECK(sync.cell(0).scale == 8.0 && sync.cell(1).scale == 5.0,
+          "Drag-only zooms the reference pane");
+    CHECK(sync.cell(0).offset.x == 20.0 && sync.cell(1).offset.x == 20.0 &&
+              sync.cell(0).offset.y == 10.0 && sync.cell(1).offset.y == 10.0,
+          "Drag-only keeps one shared pan");
+
+    const double scaleBeforeNaN = sync.cell(0).scale;
+    sync.zoomAt(1.0, 1.0, std::numeric_limits<double>::quiet_NaN(), 0);
+    CHECK(sync.cell(0).scale == scaleBeforeNaN, "Non-finite zoom does not change scale");
 }
 
 static void checkMetadataSingleFlight(int argc, char **argv)

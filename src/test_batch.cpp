@@ -194,6 +194,41 @@ int main(int argc, char *argv[])
         // Should have processed at most 2 files (cancel after first).
         CHECK(result.fileResults.size() <= 2, "Cancellation should stop after at most 2 files");
         CHECK(processor.isCancelled(), "Cancelled flag should be true");
+        CHECK(result.cancelled, "Cancellation is recorded on the batch result");
+        CHECK(result.totalSucceeded + result.totalFailed + result.totalSkipped == 3,
+              "Cancel accounting covers every input");
+        CHECK(result.totalSkipped >= 1, "Unstarted files are reported as skipped");
+    }
+
+    // ── Test 7b: cancel before execute, and cancel before the first file ──
+    {
+        mviewer::domain::BatchJobConfig config;
+        config.inputPaths = {p1.toStdString(), p2.toStdString(), p3.toStdString()};
+        config.operations = {mviewer::domain::BatchOp::Export};
+        config.exportFormat = "png";
+        config.outputDir = outDir.toStdString();
+
+        mviewer::core::BatchProcessor early;
+        early.requestCancel();
+        const auto earlyResult = early.execute(config);
+        CHECK(earlyResult.cancelled, "Cancel before execute stays cancelled");
+        CHECK(earlyResult.totalSucceeded == 0 && earlyResult.totalFailed == 0,
+              "Cancel before execute processes nothing");
+        CHECK(earlyResult.totalSkipped == 3 && earlyResult.fileResults.empty(),
+              "Cancel before execute skips every file");
+
+        mviewer::core::BatchProcessor atStart;
+        atStart.setProgressCallback(
+            [&atStart](int current, int, const std::string &)
+            {
+                if (current == 0)
+                    atStart.requestCancel();
+            });
+        const auto startResult = atStart.execute(config);
+        CHECK(startResult.cancelled && startResult.fileResults.empty(),
+              "Cancel from the first progress callback skips that file");
+        CHECK(startResult.totalSkipped == 3 && startResult.totalSucceeded == 0,
+              "No file is reported successful when cancel wins before it starts");
     }
 
     // ── Test 7: BatchJobConfig defaults ───────────────────────────

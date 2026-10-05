@@ -22,6 +22,20 @@ bool sameSnapshot(const mviewer::core::DirectorySnapshot &a,
     return a.path == b.path && a.available == b.available && a.entries == b.entries &&
            a.sidecars == b.sidecars;
 }
+
+QString parentDirectory(const QString &normalizedPath)
+{
+    const int slash = normalizedPath.lastIndexOf(QLatin1Char('/'));
+    if (slash < 0)
+        return {};
+    if (slash == 0)
+        return QStringLiteral("/");
+    QString parent = normalizedPath.left(slash);
+    // "C:/photos" -> "C:/", which QFileSystemWatcher can monitor.
+    if (parent.size() == 2 && parent.at(1) == QLatin1Char(':'))
+        parent += QLatin1Char('/');
+    return parent;
+}
 } // namespace
 
 DirectoryMonitor::DirectoryMonitor(QObject *parent) : QObject(parent)
@@ -83,6 +97,7 @@ void DirectoryMonitor::setActiveDirectory(const QString &path)
     m_stabilityRetries = 0;
     m_debounce->stop();
     m_stabilityTimer->stop();
+    m_fallbackWatch.clear();
     const QStringList watchedDirectories = m_watcher->directories();
     if (!watchedDirectories.isEmpty())
         m_watcher->removePaths(watchedDirectories);
@@ -97,6 +112,9 @@ void DirectoryMonitor::notifyDirectoryChanged(const QString &path)
         return;
     if (path != m_activePath && normalized(path) != m_activePath)
         return;
+    // A deletion hint has to arm the parent watch before the snapshot returns,
+    // or the folder can be recreated during that window with nobody watching.
+    ensureActivePathWatched();
     ++m_watcherHintCount;
     scheduleReconcile(kDebounceMs);
 }
@@ -112,10 +130,20 @@ void DirectoryMonitor::reconcileNow()
 
 void DirectoryMonitor::onWatcherDirectoryChanged(const QString &path)
 {
-    // QFileSystemWatcher can drop a directory after it disappears. Re-add it
-    // when it comes back, while the snapshot path remains the source of truth.
+    // QFileSystemWatcher drops a directory after it disappears. Re-add it when
+    // it comes back. While it is gone, a parent hint means the child may have
+    // been recreated; capture that before ensureActivePathWatched drops the
+    // fallback watch on a successful re-add.
+    const QString hinted = normalized(path);
+    const bool parentHint = !m_fallbackWatch.isEmpty() && hinted == m_fallbackWatch;
     ensureActivePathWatched();
-    notifyDirectoryChanged(path);
+    if (hinted == m_activePath)
+    {
+        notifyDirectoryChanged(path);
+        return;
+    }
+    if (parentHint)
+        scheduleReconcile(kDebounceMs);
 }
 
 void DirectoryMonitor::scheduleReconcile(int delayMs)
@@ -183,6 +211,10 @@ void DirectoryMonitor::handleSnapshot(mviewer::core::DirectorySnapshot snapshot,
     m_scanInFlight = false;
     ++m_snapshotScanCount;
     ensureActivePathWatched();
+    // addPath can still list a directory Qt has already dropped. Arm the
+    // parent from the snapshot, which is the source of truth.
+    if (!snapshot.available)
+        armFallbackWatch();
 
     if (m_committed.path.empty())
         m_committed.path = snapshot.path;
@@ -258,14 +290,44 @@ void DirectoryMonitor::commitSnapshot(const mviewer::core::DirectorySnapshot &sn
         emit directoryDeltaReady(delta);
 }
 
+void DirectoryMonitor::dropFallbackWatch()
+{
+    if (m_fallbackWatch.isEmpty() || !m_watcher)
+        return;
+    const QString parent = m_fallbackWatch;
+    m_fallbackWatch.clear();
+    if (m_watcher->directories().contains(parent))
+        m_watcher->removePath(parent);
+}
+
+void DirectoryMonitor::armFallbackWatch()
+{
+    if (m_activePath.isEmpty() || !m_watcher)
+        return;
+    const QString parent = parentDirectory(m_activePath);
+    if (parent.isEmpty() || parent == m_activePath)
+        return;
+    if (m_fallbackWatch != parent)
+        dropFallbackWatch();
+    m_fallbackWatch = parent;
+    if (!m_watcher->directories().contains(parent))
+        m_watcher->addPath(parent);
+}
+
 void DirectoryMonitor::ensureActivePathWatched()
 {
     // Best-effort. QDir::exists on the GUI thread is what stalls the
     // directoryChanged stack on a slow or disconnected volume. addPath fails
-    // quietly when the path is missing and a later snapshot retries.
-    if (m_activePath.isEmpty())
+    // quietly when the path is missing. Watch the parent in that case so
+    // recreating the folder is visible without a manual refresh.
+    if (m_activePath.isEmpty() || !m_watcher)
         return;
+    if (!m_watcher->directories().contains(m_activePath))
+        m_watcher->addPath(m_activePath);
     if (m_watcher->directories().contains(m_activePath))
+    {
+        dropFallbackWatch();
         return;
-    m_watcher->addPath(m_activePath);
+    }
+    armFallbackWatch();
 }
