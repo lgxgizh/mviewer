@@ -11,6 +11,7 @@
 #include "core/image/ImageStats.h"
 
 #include <chrono>
+#include <climits>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -127,6 +128,35 @@ void testRegionDoesNotCopy()
                 d, mviewer::domain::Selection{100, 100, 4, 4})
                 .valid,
           "fully outside ROI returns an invalid result");
+
+    CHECK(!mviewer::core::computePreviewStatsROI(d, mviewer::domain::Selection{0, 0, 0, 4}).valid,
+          "zero-width ROI stays empty");
+    CHECK(
+        !mviewer::core::computePreviewStatsROI(d, mviewer::domain::Selection{INT_MAX - 5, 0, 20, 1})
+             .valid,
+        "ROI past INT_MAX clamps without wrapping");
+
+    ImageData wide = makeImageData(4, 1, PixelFormat::RGB24);
+    fill(wide, 10, 20, 30);
+    const auto wrapped =
+        mviewer::core::computePreviewStatsROI(wide, mviewer::domain::Selection{-2, 0, INT_MAX, 1});
+    CHECK(wrapped.valid && wrapped.rMean == 10 && wrapped.gMean == 20 && wrapped.bMean == 30,
+          "negative origin plus huge width clips to the image");
+
+    ImageData rgba = makeImageData(2, 1, PixelFormat::RGBA32);
+    fill(rgba, 200, 10, 10);
+    rgba.view().data[7] = 0;
+    const auto clear = mviewer::core::computePreviewStats(rgba);
+    CHECK(clear.valid && clear.rMean == 200 && clear.gMean == 10 && clear.bMean == 10,
+          "fully transparent pixels are left out of the mean");
+
+    rgba.view().data[3] = 0;
+    CHECK(!mviewer::core::computePreviewStats(rgba).valid, "all-transparent ROI has no samples");
+
+    mviewer::domain::Selection edge{INT_MAX - 2, 0, 10, 1};
+    CHECK(edge.contains(INT_MAX - 2, 0) && edge.contains(INT_MAX - 1, 0),
+          "contains uses a 64-bit right edge");
+    CHECK(!edge.contains(INT_MAX - 3, 0), "contains still rejects pixels left of the origin");
 }
 
 void test24MpBudget()

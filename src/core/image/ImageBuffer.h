@@ -281,13 +281,19 @@ inline ImageData cropRegion(const ImageData &src, const mviewer::domain::Selecti
     const int sw = src.width;
     const int sh = src.height;
 
-    // Clamp selection to source bounds.
-    const int x0 = std::max(0, sel.x);
-    const int y0 = std::max(0, sel.y);
-    const int x1 = std::min(sw, sel.x + sel.width);
-    const int y1 = std::min(sh, sel.y + sel.height);
-    const int cw = x1 - x0;
-    const int ch = y1 - y0;
+    // Clamp selection to source bounds. Sum in 64-bit so x+width cannot wrap.
+    const long long x0ll = (std::max)(0LL, static_cast<long long>(sel.x));
+    const long long y0ll = (std::max)(0LL, static_cast<long long>(sel.y));
+    const long long x1ll =
+        (std::min)(static_cast<long long>(sw), static_cast<long long>(sel.x) + sel.width);
+    const long long y1ll =
+        (std::min)(static_cast<long long>(sh), static_cast<long long>(sel.y) + sel.height);
+    if (x1ll <= x0ll || y1ll <= y0ll)
+        return ImageData{};
+    const int x0 = static_cast<int>(x0ll);
+    const int y0 = static_cast<int>(y0ll);
+    const int cw = static_cast<int>(x1ll - x0ll);
+    const int ch = static_cast<int>(y1ll - y0ll);
     if (cw <= 0 || ch <= 0)
         return ImageData{};
 

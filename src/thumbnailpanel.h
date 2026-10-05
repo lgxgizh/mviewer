@@ -479,6 +479,7 @@ class ThumbnailPanel : public QListView
     // Ctrl+wheel adjusts the thumbnail size (Explorer/FastStone parity).
     void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    bool event(QEvent *event) override;
     // Filmstrip is one horizontal row. Up/Down and PageUp/PageDown follow that
     // row; the base view would look above and below the cells and stay put.
     QModelIndex moveCursor(CursorAction cursorAction, Qt::KeyboardModifiers modifiers) override;
