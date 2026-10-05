@@ -28,7 +28,8 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     auto *gl = new QFormLayout(general);
 
     m_uiTheme = new QComboBox;
-    m_uiTheme->addItem(tr("深色模式 (专业 / 推荐)"), static_cast<int>(mviewer::ui::ThemeMode::Dark));
+    m_uiTheme->addItem(tr("深色模式 (专业 / 推荐)"),
+                       static_cast<int>(mviewer::ui::ThemeMode::Dark));
     m_uiTheme->addItem(tr("系统默认 (亮色)"), static_cast<int>(mviewer::ui::ThemeMode::System));
     m_uiTheme->setCurrentIndex(
         m_uiTheme->findData(static_cast<int>(mviewer::ui::Theme::currentTheme())));
@@ -78,6 +79,10 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     m_slideshowInterval->setSingleStep(500);
     m_slideshowInterval->setValue(s.value("slideshowInterval", 3000).toInt());
     gl->addRow(tr("幻灯片间隔(ms)"), m_slideshowInterval);
+
+    m_slideshowWrap = new QCheckBox(tr("幻灯片循环播放"));
+    m_slideshowWrap->setChecked(s.value("slideshowWrap", true).toBool());
+    gl->addRow(m_slideshowWrap);
 
     m_confirmDelete = new QCheckBox(tr("删除前确认"));
     m_confirmDelete->setChecked(s.value("confirmDelete", true).toBool());
@@ -148,6 +153,7 @@ void PreferencesDialog::accept()
     s.setValue("thumbSortMode", m_sortMode->currentData().toInt());
     s.setValue("thumbSize", m_thumbSize->value());
     s.setValue("slideshowInterval", m_slideshowInterval->value());
+    s.setValue("slideshowWrap", m_slideshowWrap->isChecked());
     s.setValue("confirmDelete", m_confirmDelete->isChecked());
     s.setValue("gpuAcceleration", m_gpuAcceleration->isChecked());
     s.setValue("autoAlignBeforeDiff", m_autoAlign->isChecked());

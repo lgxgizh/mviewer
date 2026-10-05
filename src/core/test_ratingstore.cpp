@@ -6,6 +6,7 @@
 //
 #include "core/RatingStore.h"
 #include "core/SidecarStore.h"
+#include "core/TagStore.h"
 #include "core/filesystem/Utf8Path.h"
 
 #include <QDir>
@@ -163,6 +164,50 @@ int main()
 
     std::filesystem::remove(recentRatings, recentEc);
     std::filesystem::remove(recentFlags, recentEc);
+
+    // Prune missing entries for RatingStore and TagStore
+    {
+        QTemporaryDir pruneTmp;
+        const QString existFile = pruneTmp.filePath("real_image.png");
+        QImage dummy(4, 4, QImage::Format_RGB32);
+        dummy.fill(Qt::red);
+        CHECK(dummy.save(existFile, "PNG"), "Created real image for prune test");
+        const std::string existPath = existFile.toUtf8().toStdString();
+        const std::string missingPath =
+            pruneTmp.filePath("no_such_file.png").toUtf8().toStdString();
+
+        s.setRating(existPath, 4);
+        s.setColorLabel(existPath, 2);
+        s.setPicked(existPath, true);
+        s.setRating(missingPath, 3);
+        s.setColorLabel(missingPath, 1);
+        s.setPicked(missingPath, true);
+
+        CHECK(s.hasRating(missingPath), "missingPath has rating before prune");
+        CHECK(s.hasColorLabel(missingPath), "missingPath has label before prune");
+        CHECK(s.picked(missingPath), "missingPath is picked before prune");
+
+        size_t pruned = s.pruneMissing();
+        CHECK(pruned >= 3, "pruneMissing removed missingPath entries");
+        CHECK(!s.hasRating(missingPath), "missingPath rating pruned");
+        CHECK(!s.hasColorLabel(missingPath), "missingPath label pruned");
+        CHECK(!s.picked(missingPath), "missingPath picked flag pruned");
+        CHECK(s.rating(existPath) == 4, "existPath rating preserved");
+        CHECK(s.colorLabel(existPath) == 2, "existPath label preserved");
+        CHECK(s.picked(existPath), "existPath picked preserved");
+
+        // TagStore pruning
+        auto &ts = TagStore::instance();
+        ts.setFilePath(pruneTmp.path().toUtf8().toStdString() + "/test_tags.txt");
+        ts.addTag(existPath, "landscape");
+        ts.addTag(missingPath, "ghost");
+        CHECK(ts.hasTag(missingPath, "ghost"), "TagStore has tag for missingPath before prune");
+        size_t tagsPruned = ts.pruneMissing();
+        CHECK(tagsPruned >= 1, "TagStore pruneMissing pruned ghost tag");
+        CHECK(!ts.hasTag(missingPath, "ghost"), "TagStore ghost tag gone");
+        CHECK(ts.hasTag(existPath, "landscape"), "TagStore landscape tag preserved");
+    }
+
     printf("\nratingstore_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

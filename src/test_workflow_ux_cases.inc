@@ -1316,6 +1316,29 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                       "stopping the slideshow does not consume the fullscreen Esc");
             }
 
+            // Slideshow wrap option: if wrap is disabled, stopping at the end of folder.
+            {
+                QSettings noWrapSettings;
+                noWrapSettings.setValue("slideshowInterval", 500);
+                noWrapSettings.setValue("slideshowWrap", false);
+                noWrapSettings.sync();
+                auto *listModel = w.findChild<ImageListModel *>();
+                if (listModel && !listModel->isEmpty())
+                {
+                    sel->setCurrentImage(listModel->paths().last());
+                    pump(50);
+                    sendKey(&w, Qt::Key_S);
+                    pump(40);
+                    CHECK(slideshowAction && slideshowAction->isChecked(),
+                          "slideshow starts at last image with no-wrap");
+                    pump(1200);
+                    CHECK(slideshowAction && !slideshowAction->isChecked(),
+                          "slideshow automatically stops at end of folder when wrap is disabled");
+                }
+                noWrapSettings.setValue("slideshowWrap", true);
+                noWrapSettings.sync();
+            }
+
             // Viewer focus must not turn gallery shortcuts into zoom.
             if (pathEdit && thumbnailPanel)
             {

@@ -171,6 +171,43 @@ std::vector<std::string> TagStore::allTags() const
     return {all.begin(), all.end()};
 }
 
+size_t TagStore::pruneMissing()
+{
+    size_t removed = 0;
+    auto missing = [](const std::string &p)
+    {
+        std::error_code ec;
+        return !std::filesystem::exists(utf8ToPath(p), ec);
+    };
+
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        for (auto it = m_tags.begin(); it != m_tags.end();)
+        {
+            if (missing(it->first))
+            {
+                removed += it->second.size();
+                it = m_tags.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    if (removed > 0)
+    {
+        {
+            std::lock_guard<std::mutex> workerLock(m_workerMutex);
+            m_dirty = true;
+            ++m_changeSerial;
+        }
+        scheduleSave();
+    }
+    return removed;
+}
+
 void TagStore::setFilePath(const std::string &path)
 {
     flushSave();

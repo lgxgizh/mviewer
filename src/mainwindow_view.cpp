@@ -487,15 +487,44 @@ void MainWindow::toggleSlideshow()
                     // until that write finishes so the show cannot skip ahead.
                     if (m_imageViewer->property("mviewerFileTransformBusy").toBool())
                         return;
+                    ensureImageList();
+                    const bool wrap = QSettings().value("slideshowWrap", true).toBool();
+                    if (!wrap && m_imageList && !m_imageList->isEmpty())
+                    {
+                        const int idx = m_imageList->indexOf(currentImagePath());
+                        if (idx >= 0 && idx + 1 >= m_imageList->count())
+                        {
+                            stopSlideshow();
+                            statusBar()->showMessage("幻灯片放映已结束（已播至末尾）", 3000);
+                            return;
+                        }
+                    }
                     navigate(1); // wraps at the end of the folder
+                    const int curIdx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
+                    const int total = m_imageList ? m_imageList->count() : 0;
+                    const QString progress = (curIdx >= 0 && total > 0)
+                                                 ? QString(" [%1/%2]").arg(curIdx + 1).arg(total)
+                                                 : QString();
+                    statusBar()->showMessage(
+                        QString("幻灯片放映中%1 — 按 S 或 ESC 停止 (间隔 %2 秒)")
+                            .arg(progress)
+                            .arg(interval / 1000.0, 0, 'f', 1),
+                        3000);
                 });
     }
     m_slideshowTimer->start(interval);
     if (m_actSlideshow)
         m_actSlideshow->setChecked(true);
-    statusBar()->showMessage(
-        QString("幻灯片放映中 — 按 S 或 ESC 停止 (间隔 %1 秒)").arg(interval / 1000.0, 0, 'f', 1),
-        3000);
+    ensureImageList();
+    const int startIdx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
+    const int startTotal = m_imageList ? m_imageList->count() : 0;
+    const QString startProg = (startIdx >= 0 && startTotal > 0)
+                                  ? QString(" [%1/%2]").arg(startIdx + 1).arg(startTotal)
+                                  : QString();
+    statusBar()->showMessage(QString("幻灯片放映中%1 — 按 S 或 ESC 停止 (间隔 %2 秒)")
+                                 .arg(startProg)
+                                 .arg(interval / 1000.0, 0, 'f', 1),
+                             3000);
 }
 
 void MainWindow::stopSlideshow()

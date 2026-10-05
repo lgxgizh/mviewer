@@ -290,6 +290,100 @@ std::vector<std::string> RatingStore::favorites() const
     return std::vector<std::string>(m_picked.begin(), m_picked.end());
 }
 
+size_t RatingStore::pruneMissing()
+{
+    size_t removed = 0;
+    bool flagsChanged = false;
+    bool ratingsChanged = false;
+    auto missing = [](const std::string &p)
+    {
+        std::error_code ec;
+        return !std::filesystem::exists(utf8ToPath(p), ec);
+    };
+
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        for (auto it = m_ratings.begin(); it != m_ratings.end();)
+        {
+            if (missing(it->first))
+            {
+                it = m_ratings.erase(it);
+                ratingsChanged = true;
+                ++removed;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        for (auto it = m_colorLabels.begin(); it != m_colorLabels.end();)
+        {
+            if (missing(it->first))
+            {
+                it = m_colorLabels.erase(it);
+                flagsChanged = true;
+                ++removed;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        for (auto it = m_rejected.begin(); it != m_rejected.end();)
+        {
+            if (missing(*it))
+            {
+                it = m_rejected.erase(it);
+                flagsChanged = true;
+                ++removed;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        for (auto it = m_picked.begin(); it != m_picked.end();)
+        {
+            if (missing(*it))
+            {
+                it = m_picked.erase(it);
+                flagsChanged = true;
+                ++removed;
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        const auto origRecents = m_recents.size();
+        m_recents.erase(std::remove_if(m_recents.begin(), m_recents.end(), missing),
+                        m_recents.end());
+        if (m_recents.size() != origRecents)
+        {
+            flagsChanged = true;
+            removed += (origRecents - m_recents.size());
+        }
+    }
+
+    if (flagsChanged)
+    {
+        {
+            std::lock_guard<std::mutex> workerLock(m_flagsWorkerMutex);
+            m_flagsDirty = true;
+            ++m_flagsChangeSerial;
+        }
+        scheduleSave();
+    }
+    if (ratingsChanged || flagsChanged)
+        save();
+
+    return removed;
+}
+
 void RatingStore::setFilePath(const std::string &path)
 {
     flushSave();
