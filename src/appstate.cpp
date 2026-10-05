@@ -9,6 +9,29 @@
 namespace
 {
 
+QString canonicalPath(QString path)
+{
+    if (path.isEmpty())
+        return path;
+    path.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    return QDir::cleanPath(path);
+}
+
+QString pathIdentity(const QString &path)
+{
+    const QString cleaned = canonicalPath(path);
+#ifdef Q_OS_WIN
+    return cleaned.toCaseFolded();
+#else
+    return cleaned;
+#endif
+}
+
+bool samePath(const QString &left, const QString &right)
+{
+    return pathIdentity(left) == pathIdentity(right);
+}
+
 QString configPath()
 {
     // Per-user, non-roaming config dir (e.g. %AppData%/mviewer on Windows).
@@ -122,29 +145,46 @@ bool AppState::save() const
 
 void AppState::addFavorite(const QString &dir)
 {
-    if (dir.isEmpty() || favorites.contains(dir))
+    const QString cleaned = canonicalPath(dir);
+    if (cleaned.isEmpty() || isFavorite(cleaned))
         return;
-    favorites.append(dir);
+    favorites.append(cleaned);
 }
 
 bool AppState::removeFavorite(const QString &dir)
 {
-    return favorites.removeAll(dir) > 0;
+    const int before = favorites.size();
+    QStringList kept;
+    kept.reserve(favorites.size());
+    for (const QString &item : favorites)
+        if (!samePath(item, dir))
+            kept.append(item);
+    favorites = kept;
+    return favorites.size() != before;
 }
 
 bool AppState::isFavorite(const QString &dir) const
 {
-    return favorites.contains(dir);
+    for (const QString &item : favorites)
+        if (samePath(item, dir))
+            return true;
+    return false;
 }
 
 void AppState::addRecentFolder(const QString &dir)
 {
-    if (dir.isEmpty())
+    const QString cleaned = canonicalPath(dir);
+    if (cleaned.isEmpty())
         return;
-    recentFolders.removeAll(dir);
-    recentFolders.prepend(dir);
-    while (recentFolders.size() > 15)
-        recentFolders.removeLast();
+    QStringList kept;
+    kept.reserve(recentFolders.size());
+    for (const QString &item : recentFolders)
+        if (!samePath(item, cleaned))
+            kept.append(item);
+    kept.prepend(cleaned);
+    while (kept.size() > 15)
+        kept.removeLast();
+    recentFolders = kept;
 }
 
 void AppState::clearRecentFolders()
@@ -154,12 +194,18 @@ void AppState::clearRecentFolders()
 
 void AppState::addHistory(const QString &imagePath)
 {
-    if (imagePath.isEmpty())
+    const QString cleaned = canonicalPath(imagePath);
+    if (cleaned.isEmpty())
         return;
-    history.removeAll(imagePath);
-    history.prepend(imagePath);
-    while (history.size() > 50)
-        history.removeLast();
+    QStringList kept;
+    kept.reserve(history.size());
+    for (const QString &item : history)
+        if (!samePath(item, cleaned))
+            kept.append(item);
+    kept.prepend(cleaned);
+    while (kept.size() > 50)
+        kept.removeLast();
+    history = kept;
 }
 
 void AppState::clearHistory()

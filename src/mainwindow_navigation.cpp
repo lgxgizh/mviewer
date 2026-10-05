@@ -95,7 +95,7 @@ void MainWindow::scheduleSidecarImportPaths(const QStringList &imagePaths)
                 [guard, alive, expectedDir, imagePaths]()
                 {
                     if (!guard || !alive->load(std::memory_order_acquire) ||
-                        guard->currentDir() != expectedDir)
+                        !DirectoryTree::equivalentPath(guard->currentDir(), expectedDir))
                         return;
                     if (guard->m_thumbnailPanel)
                         guard->m_thumbnailPanel->refreshSidecarPaths(imagePaths);
@@ -132,6 +132,10 @@ void MainWindow::navigate(int delta)
     // thumbnail-grid highlight in sync with keyboard navigation — previously the
     // grid selection lagged behind the viewer when using the arrow keys.
     m_selection->setCurrentImage(path);
+    // A manual step during a show should dwell for a full interval. The
+    // slideshow's own tick also lands here; restarting only resets that dwell.
+    if (m_slideshowTimer && m_slideshowTimer->isActive())
+        m_slideshowTimer->start();
 }
 
 void MainWindow::updateNavigationActions()
@@ -155,7 +159,7 @@ void MainWindow::updateNavigationActions()
     }
     if (m_actRefresh)
         m_actRefresh->setEnabled(hasDirectory);
-    const bool isFavorite = m_directory && m_directory->favorites().contains(activeDir);
+    const bool isFavorite = m_directory && m_directory->hasFavorite(activeDir);
     if (m_actAddFavorite)
         m_actAddFavorite->setEnabled(hasDirectory && !isFavorite);
     if (m_actRemoveFavorite)
@@ -196,7 +200,11 @@ void MainWindow::navigatePage(int key)
         return;
     }
     if (!visible || target != idx)
+    {
         m_selection->setCurrentImage(list.at(target));
+        if (m_slideshowTimer && m_slideshowTimer->isActive())
+            m_slideshowTimer->start();
+    }
 }
 
 void MainWindow::onBreadcrumbPath(const QString &path)

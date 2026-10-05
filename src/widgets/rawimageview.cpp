@@ -412,7 +412,14 @@ void RawImageView::wheelEvent(QWheelEvent *ev)
 {
     // Compare mode usually consumes the wheel in CompareWorkspace and reaches
     // the same coalesce via setTransform. Direct wheels share ensureBaseSurface.
-    const double factor = ev->angleDelta().y() > 0 ? 1.25 : 1.0 / 1.25;
+    // Prefer angleDelta, then pixelDelta, so a zero angle does not zoom out.
+    const int delta = ev->angleDelta().y() != 0 ? ev->angleDelta().y() : ev->pixelDelta().y();
+    if (delta == 0)
+    {
+        ev->accept();
+        return;
+    }
+    const double factor = delta > 0 ? 1.25 : 1.0 / 1.25;
     zoom(factor, ev->position());
 }
 

@@ -230,8 +230,8 @@ void ThumbnailPanel::ensureMetaIndex()
                         return;
                     for (const auto &e : batch)
                     {
-                        const QString p =
-                            QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
+                        const QString p = galleryPathKey(
+                            QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size())));
                         panel->m_metaIndex.insert(
                             p, QString::fromUtf8(e.searchBlob.data(),
                                                  static_cast<int>(e.searchBlob.size())));
@@ -516,16 +516,17 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
             cmp = ratingCache.value(a.path) - ratingCache.value(b.path);
             break;
         case mviewer::core::BrowseSortField::Camera:
-            cmp = QString::compare(metaCamera.value(a.path), metaCamera.value(b.path),
-                                   Qt::CaseInsensitive);
+            cmp = QString::compare(metaCamera.value(galleryPathKey(a.path)),
+                                   metaCamera.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
             break;
         case mviewer::core::BrowseSortField::Lens:
-            cmp = QString::compare(metaLens.value(a.path), metaLens.value(b.path),
-                                   Qt::CaseInsensitive);
+            cmp = QString::compare(metaLens.value(galleryPathKey(a.path)),
+                                   metaLens.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
             break;
         }
         if (cmp == 0)
-            cmp = QString::compare(a.path, b.path, Qt::CaseSensitive);
+            cmp =
+                QString::compare(galleryPathKey(a.path), galleryPathKey(b.path), Qt::CaseSensitive);
         return query.ascending ? cmp < 0 : cmp > 0;
     };
     std::stable_sort(out.begin(), out.end(), less);
@@ -632,6 +633,7 @@ bool ThumbnailPanel::matchesFilterSnapshot(
     const QHash<QString, int> &metaIso, const QHash<QString, QString> &metaCamera,
     const QHash<QString, QString> &metaLens)
 {
+    const QString pathKey = galleryPathKey(e.path);
     const std::string ep = e.path.toStdString();
     if (query.ratingMinimum > 0 && ratings.rating(ep) < query.ratingMinimum)
         return false;
@@ -644,19 +646,19 @@ bool ThumbnailPanel::matchesFilterSnapshot(
     if (query.recentOnly && !ratings.isRecent(ep))
         return false;
     if (!query.camera.empty() &&
-        !metaCamera.value(e.path).toLower().contains(QString::fromStdString(query.camera)))
+        !metaCamera.value(pathKey).toLower().contains(QString::fromStdString(query.camera)))
         return false;
     if (!query.lens.empty() &&
-        !metaLens.value(e.path).toLower().contains(QString::fromStdString(query.lens)))
+        !metaLens.value(pathKey).toLower().contains(QString::fromStdString(query.lens)))
         return false;
-    if (query.iso > 0 && metaIso.value(e.path, -1) != query.iso)
+    if (query.iso > 0 && metaIso.value(pathKey, -1) != query.iso)
         return false;
     if (!query.tag.empty() && !tags.hasTag(ep, query.tag))
         return false;
     if (t.isEmpty())
         return true;
     if (query.metadata)
-        return metaIndex.value(e.path).contains(t);
+        return metaIndex.value(pathKey).contains(t);
     if (useFuzzy)
         return fuzzy.match(e.name).hasMatch();
     return e.name.toLower().contains(t);

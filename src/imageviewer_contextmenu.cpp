@@ -625,7 +625,8 @@ void ImageViewer::releaseSourceHandles(const QString &path)
 {
     if (path.isEmpty())
         return;
-    const bool current = (m_currentPath == path || m_provisionalPath == path);
+    const bool current =
+        browsePathEquals(m_currentPath, path) || browsePathEquals(m_provisionalPath, path);
     if (current)
     {
         ++m_requestGen;

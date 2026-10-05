@@ -2,14 +2,58 @@
 
 #include <QDir>
 
+namespace
+{
+QString canonicalFolder(QString path)
+{
+    if (path.isEmpty())
+        return path;
+    path.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    return QDir::cleanPath(path);
+}
+
+QString folderKey(const QString &path)
+{
+    const QString cleaned = canonicalFolder(path);
+#ifdef Q_OS_WIN
+    return cleaned.toCaseFolded();
+#else
+    return cleaned;
+#endif
+}
+
+bool sameFolder(const QString &left, const QString &right)
+{
+    return folderKey(left) == folderKey(right);
+}
+
+QStringList uniqueFolders(const QStringList &dirs)
+{
+    QStringList cleaned;
+    cleaned.reserve(dirs.size());
+    for (const QString &dir : dirs)
+    {
+        const QString stored = canonicalFolder(dir);
+        if (stored.isEmpty())
+            continue;
+        bool seen = false;
+        for (const QString &have : cleaned)
+            seen = seen || sameFolder(have, stored);
+        if (!seen)
+            cleaned.append(stored);
+    }
+    return cleaned;
+}
+} // namespace
+
 DirectoryModel::DirectoryModel(QObject *parent) : QObject(parent)
 {
 }
 
 void DirectoryModel::setCurrentDirectory(const QString &path)
 {
-    const QString cleaned = path.isEmpty() ? QString() : QDir::cleanPath(path);
-    if (m_current == cleaned)
+    const QString cleaned = canonicalFolder(path);
+    if (sameFolder(m_current, cleaned))
         return;
     m_current = cleaned;
     emit currentDirectoryChanged(m_current);
@@ -17,26 +61,26 @@ void DirectoryModel::setCurrentDirectory(const QString &path)
 
 void DirectoryModel::setFavorites(const QStringList &dirs)
 {
-    if (m_favorites == dirs)
+    const QStringList cleaned = uniqueFolders(dirs);
+    if (m_favorites == cleaned)
         return;
-    m_favorites = dirs;
+    m_favorites = cleaned;
     emit favoritesChanged(m_favorites);
 }
 
 void DirectoryModel::setRecentFolders(const QStringList &dirs)
 {
-    if (m_recent == dirs)
+    const QStringList cleaned = uniqueFolders(dirs);
+    if (m_recent == cleaned)
         return;
-    m_recent = dirs;
+    m_recent = cleaned;
     emit recentFoldersChanged(m_recent);
 }
 
 void DirectoryModel::addFavorite(const QString &dir)
 {
-    if (dir.isEmpty())
-        return;
-    const QString cleaned = QDir::cleanPath(dir);
-    if (m_favorites.contains(cleaned))
+    const QString cleaned = canonicalFolder(dir);
+    if (cleaned.isEmpty() || hasFavorite(cleaned))
         return;
     m_favorites.append(cleaned);
     emit favoritesChanged(m_favorites);
@@ -44,21 +88,42 @@ void DirectoryModel::addFavorite(const QString &dir)
 
 void DirectoryModel::removeFavorite(const QString &dir)
 {
-    const QString cleaned = QDir::cleanPath(dir);
-    if (!m_favorites.removeOne(cleaned))
+    const int before = m_favorites.size();
+    QStringList kept;
+    kept.reserve(m_favorites.size());
+    for (const QString &item : m_favorites)
+        if (!sameFolder(item, dir))
+            kept.append(item);
+    if (kept.size() == before)
         return;
+    m_favorites = kept;
     emit favoritesChanged(m_favorites);
+}
+
+bool DirectoryModel::hasFavorite(const QString &dir) const
+{
+    for (const QString &item : m_favorites)
+        if (sameFolder(item, dir))
+            return true;
+    return false;
 }
 
 void DirectoryModel::addRecentFolder(const QString &dir)
 {
-    if (dir.isEmpty())
+    const QString cleaned = canonicalFolder(dir);
+    if (cleaned.isEmpty())
         return;
-    const QString cleaned = QDir::cleanPath(dir);
-    m_recent.removeAll(cleaned);
-    m_recent.prepend(cleaned);
-    while (m_recent.size() > 15)
-        m_recent.removeLast();
+    QStringList kept;
+    kept.reserve(m_recent.size());
+    for (const QString &item : m_recent)
+        if (!sameFolder(item, cleaned))
+            kept.append(item);
+    kept.prepend(cleaned);
+    while (kept.size() > 15)
+        kept.removeLast();
+    if (m_recent == kept)
+        return;
+    m_recent = kept;
     emit recentFoldersChanged(m_recent);
 }
 

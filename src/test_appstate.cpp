@@ -53,6 +53,17 @@ int main(int argc, char **argv)
         CHECK(b.lastImage == "C:/imgs/a/001.jpg", "lastImage round-trips");
         CHECK(b.lastThumbScroll == 432, "lastThumbScroll round-trips");
         CHECK(b.isFavorite("C:/imgs/b"), "isFavorite true after reload");
+        CHECK(b.isFavorite("C:\\imgs\\b"), "isFavorite matches the other slash style");
+        b.addFavorite("C:\\imgs\\b");
+        CHECK(b.favorites.size() == 2, "favorite add does not duplicate the other slash style");
+        CHECK(b.removeFavorite("C:/imgs/b"), "removeFavorite matches the other slash style");
+        CHECK(!b.isFavorite("C:\\imgs\\b"), "removed favorite stays removed");
+        b.addRecentFolder("C:/recent");
+        b.addRecentFolder("C:\\recent");
+        CHECK(b.recentFolders.size() == 1, "recent folder ignores slash style");
+        b.addHistory("C:/imgs/a/001.jpg");
+        b.addHistory("C:\\imgs\\a\\001.jpg");
+        CHECK(b.history.size() == 1, "image history ignores slash style");
     }
 
     // ---- RecentFiles round-trip (core) ----

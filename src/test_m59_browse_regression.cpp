@@ -121,6 +121,25 @@ int main(int argc, char **argv)
     CHECK(exact.size() == 1 && exact.first().path == focus,
           "production evaluator combines rating/tag/camera/lens/ISO filters");
 
+    ThumbnailPanel::Entry mixed;
+    mixed.path = QStringLiteral("C:\\photos\\mixed.jpg");
+    mixed.name = QStringLiteral("mixed.jpg");
+    mixed.size = 10;
+    QHash<QString, QString> mixedCamera;
+    mixedCamera.insert(ThumbnailPanel::galleryPathKey(QStringLiteral("C:/photos/mixed.jpg")),
+                       QStringLiteral("Canon EOS"));
+    QHash<QString, QString> mixedIndex;
+    mixedIndex.insert(ThumbnailPanel::galleryPathKey(QStringLiteral("C:/photos/mixed.jpg")),
+                      QStringLiteral("canon portrait"));
+    mviewer::core::BrowseQuery mixedQuery;
+    mixedQuery.camera = "canon";
+    mixedQuery.metadata = true;
+    const auto mixedKept = ThumbnailPanel::evaluateQuerySnapshotForTest(
+        {mixed}, QStringLiteral("portrait"), false, QRegularExpression(), mixedQuery, ratings,
+        emptyTags, mixedIndex, {}, mixedCamera, {});
+    CHECK(mixedKept.size() == 1 && mixedKept.first().path == mixed.path,
+          "camera and metadata filters match the other slash style");
+
     // Drive a real panel over >256 files so A -> B -> C uses the cancellable,
     // debounced worker path.  Only C may become visible after quiescence.
     QTemporaryDir directory;

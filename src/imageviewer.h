@@ -66,6 +66,10 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_currentIndex;
     }
+    // Gallery rows and the open path can disagree on '/' vs '\\' (and, on
+    // Windows, on case). Identity for the browse sequence uses one key.
+    static bool browsePathEquals(const QString &left, const QString &right);
+    int indexInBrowseSequence(const QString &path) const;
     // Open from Browse with the first native presentation already fullscreen.
     void showBrowseFullscreen();
     // Display-only warm thumbnail used while the full frame and first visible

@@ -31,7 +31,7 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
         m_displayRasterWarmBytes = 0;
     }
     m_fileList = paths;
-    m_currentIndex = m_fileList.indexOf(m_currentPath);
+    m_currentIndex = indexInBrowseSequence(m_currentPath);
 
     if (m_currentPath.isEmpty())
         return;
@@ -143,7 +143,7 @@ void ImageViewer::setImage(const QString &path)
 
 void ImageViewer::refreshSource(const QString &path)
 {
-    if (path.isEmpty() || path != m_currentPath)
+    if (path.isEmpty() || !browsePathEquals(path, m_currentPath))
         return;
     // The source/cache invalidation is owned by the caller. Re-enter the
     // normal cancellable load path while retaining the user's zoom/pan.
@@ -160,15 +160,15 @@ void ImageViewer::renameBrowsePaths(const QStringList &oldPaths, const QStringLi
         const QString &oldPath = oldPaths.at(i);
         const QString &newPath = newPaths.at(i);
         for (QString &path : m_fileList)
-            if (path == oldPath)
+            if (browsePathEquals(path, oldPath))
                 path = newPath;
-        if (m_currentPath == oldPath)
+        if (browsePathEquals(m_currentPath, oldPath))
         {
             m_currentPath = newPath;
             m_provisionalPath = newPath;
         }
     }
-    m_currentIndex = m_fileList.indexOf(m_currentPath);
+    m_currentIndex = indexInBrowseSequence(m_currentPath);
     if (!m_currentPath.isEmpty())
     {
         const QString position =
@@ -188,8 +188,8 @@ void ImageViewer::setImageImpl(const QString &path)
     const QString previousPath = m_currentPath;
     const std::optional<Viewport> reloadView =
         m_preserveViewOnReload ? std::optional<Viewport>(m_view) : std::nullopt;
-    const bool keepProvisional =
-        !path.isEmpty() && path == m_provisionalPath && !m_provisionalImage.isNull();
+    const bool keepProvisional = !path.isEmpty() && browsePathEquals(path, m_provisionalPath) &&
+                                 !m_provisionalImage.isNull();
 
     // UX Fluency: capture previous frame to transition image during switch,
     // avoiding black flash while decoding the new image.
@@ -222,13 +222,9 @@ void ImageViewer::setImageImpl(const QString &path)
 
     m_currentPath = path;
     releaseColdMips(previousPath);
-    m_currentIndex = m_fileList.indexOf(path);
-    // M29: drop the prior foreground decode BEFORE scheduling the new load, and
-    // consume any neighbor preload that already targets `path` so it can be
-    // promoted to the foreground decode below. Every nonmatching preload is
-    // soft-cancelled here too, so obsolete queued Background work from the
-    // previous navigation is skipped before it wastes CPU/I/O or re-warms the
-    // cache for a superseded image.
+    m_currentIndex = indexInBrowseSequence(path);
+    // Drop the prior foreground decode, then promote a neighbor preload for this
+    // path. Every other preload is cancelled so superseded work does not run.
     cancelCurrentLoad();
     auto matchingPreload = takeMatchingPreload(path);
     auto matchingDisplayPreload = takeMatchingDisplayRasterPreload(path);
@@ -412,7 +408,7 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
 
     computeHistogram();
     const QFileInfo info(path);
-    m_currentIndex = static_cast<int>(m_fileList.indexOf(path));
+    m_currentIndex = indexInBrowseSequence(path);
     m_tiles = TileGrid(m_frame->width(), m_frame->height(), 256);
     // M47: in LOD-first display the full frame is the analysis/Inspector
     // source only — the display keeps the bounded raster (no re-fit that would
@@ -529,7 +525,7 @@ void ImageViewer::preloadNeighbors(const QString &path)
     for (int delta = -1; delta <= 1; ++delta)
     {
         const int i = m_currentIndex + delta;
-        if (i < 0 || i >= m_fileList.size() || m_fileList[i] == path)
+        if (i < 0 || i >= m_fileList.size() || browsePathEquals(m_fileList.at(i), path))
             continue;
         auto h = mviewer::application::ImageLoadingService::instance().preloadAsync(
             m_fileList[i].toUtf8().toStdString(), m_lifetime);
@@ -546,7 +542,7 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
     for (int delta = -1; delta <= 1; ++delta)
     {
         const int i = m_currentIndex + delta;
-        if (i < 0 || i >= m_fileList.size() || m_fileList[i] == path)
+        if (i < 0 || i >= m_fileList.size() || browsePathEquals(m_fileList.at(i), path))
             continue;
         const QString neighbor = m_fileList[i];
         if (std::any_of(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
@@ -608,7 +604,8 @@ ImageViewer::takeMatchingPreload(const QString &path)
     mviewer::application::ImageLoadingService::AsyncRequestHandle match;
     for (auto &p : m_neighborPreloads)
     {
-        if (!match && p.path == path) match = std::move(p.handle);
+        if (!match && browsePathEquals(p.path, path))
+            match = std::move(p.handle);
         else mviewer::application::ImageLoadingService::instance().cancelAsync(p.handle);
     }
     m_neighborPreloads.clear();
@@ -620,7 +617,8 @@ ImageViewer::DisplayRasterPreload ImageViewer::takeMatchingDisplayRasterPreload(
     DisplayRasterPreload match;
     for (auto &preload : m_displayRasterPreloads)
     {
-        if (!match.handle && preload.path == path) match = std::move(preload);
+        if (!match.handle && browsePathEquals(preload.path, path))
+            match = std::move(preload);
         else TaskScheduler::cancel(preload.handle);
     }
     m_displayRasterPreloads.clear();
@@ -631,7 +629,8 @@ std::optional<ImageViewer::DisplayRasterWarm>
 ImageViewer::takeWarmDisplayRaster(const QString &path)
 {
     const auto it = std::find_if(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
-                                 [&](const DisplayRasterWarm &warm) { return warm.path == path; });
+                                 [&](const DisplayRasterWarm &warm)
+                                 { return browsePathEquals(warm.path, path); });
     if (it == m_displayRasterWarm.end())
         return std::nullopt;
     DisplayRasterWarm warm = std::move(*it);
@@ -772,7 +771,7 @@ void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult res
         result.state ? result.state->promotedGeneration.load(std::memory_order_acquire) : 0;
     if (promotedGeneration != 0)
     {
-        if (result.path != m_currentPath || promotedGeneration != m_requestGen ||
+        if (!browsePathEquals(result.path, m_currentPath) || promotedGeneration != m_requestGen ||
             result.target.cacheKey() != m_displayColorTarget.cacheKey())
             return;
         m_displayRequest.reset();
@@ -794,7 +793,7 @@ void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult res
         result.target.cacheKey() != m_displayColorTarget.cacheKey() || result.failed ||
         result.image.isNull())
         return;
-    const bool stillListed = m_fileList.contains(result.path);
+    const bool stillListed = indexInBrowseSequence(result.path) >= 0;
     if (stillListed)
         storeWarmDisplayRaster(std::move(result));
 }
