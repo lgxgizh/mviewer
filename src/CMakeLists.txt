@@ -392,6 +392,7 @@ add_executable(test_ui_models
     workspacemodel.cpp
     analyzermodel.cpp
     Theme.cpp
+    breadcrumbbar.cpp
 )
 target_link_libraries(test_ui_models
     PRIVATE
