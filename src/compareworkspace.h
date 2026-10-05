@@ -186,6 +186,8 @@ class CompareWorkspace : public QWidget
     bool forwardFocusedCompareKey(QEvent *event);
 
   private:
+    void bindDisplayColorScreen();
+    void onDisplayScreenChanged();
     void buildSyncControls();
     QWidget *buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
                                    QHBoxLayout *&toolLayout, QHBoxLayout *&toolActionsLayout);

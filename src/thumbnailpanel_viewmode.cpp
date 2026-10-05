@@ -10,6 +10,63 @@
 
 #include <optional>
 
+QModelIndex ThumbnailPanel::moveCursor(QAbstractItemView::CursorAction cursorAction,
+                                       Qt::KeyboardModifiers modifiers)
+{
+    if (m_viewMode != Filmstrip || !m_model)
+        return QListView::moveCursor(cursorAction, modifiers);
+
+    const int rows = m_model->rowCount();
+    if (rows <= 0)
+        return {};
+    if (!currentIndex().isValid())
+        return m_model->index(0, 0);
+
+    CursorAction action = cursorAction;
+    if (isRightToLeft())
+    {
+        if (action == MoveLeft)
+            action = MoveRight;
+        else if (action == MoveRight)
+            action = MoveLeft;
+    }
+
+    const int row = currentIndex().row();
+    int target = row;
+    switch (action)
+    {
+    case MoveLeft:
+    case MoveUp:
+    case MovePrevious:
+        target = row - 1;
+        break;
+    case MoveRight:
+    case MoveDown:
+    case MoveNext:
+        target = row + 1;
+        break;
+    case MoveHome:
+        target = 0;
+        break;
+    case MoveEnd:
+        target = rows - 1;
+        break;
+    case MovePageUp:
+    case MovePageDown:
+    {
+        const int cell = qMax(1, gridSize().width());
+        const int visible = viewport() ? viewport()->width() / cell : 1;
+        const int page = qMax(1, visible);
+        target = action == MovePageUp ? row - page : row + page;
+        break;
+    }
+    default:
+        return QListView::moveCursor(cursorAction, modifiers);
+    }
+    target = qBound(0, target, rows - 1);
+    return m_model->index(target, 0);
+}
+
 void ThumbnailPanel::wheelEvent(QWheelEvent *event)
 {
     // Ctrl+wheel resizes thumbnails (Windows Explorer / FastStone parity).

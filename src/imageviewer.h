@@ -316,6 +316,10 @@ class ImageViewer : public QOpenGLWidget
     // until Phase 4's explicit source materialization.
     void issueAnalysisLoad(const QString &path, uint64_t generation);
     void fitToWidget();
+    // Terminal open failure: drop the warm thumbnail, retitle, and clear zoom.
+    void presentLoadFailure();
+    void bindDisplayColorScreen();
+    void onDisplayScreenChanged();
     void preloadNeighbors(const QString &path);
     void preloadDisplayRasterNeighbors(const QString &path);
     void cancelDisplayRasterPreloads();

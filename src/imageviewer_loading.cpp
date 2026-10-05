@@ -353,10 +353,7 @@ void ImageViewer::queueImageLoadFailure(const QString &path, uint64_t generation
                 viewer->update();
                 return;
             }
-            viewer->setWindowTitle(
-                QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
-            viewer->update();
-            emit viewer->loadFailed(path);
+            viewer->presentLoadFailure();
         });
 }
 
@@ -392,9 +389,7 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
             update();
             return;
         }
-        setWindowTitle(QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
-        update();
-        emit loadFailed(path);
+        presentLoadFailure();
         return;
     }
 

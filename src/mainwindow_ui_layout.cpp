@@ -772,6 +772,14 @@ void MainWindow::buildStatusBarUi()
     connect(m_imageViewer, &ImageViewer::zoomChanged, this,
             [this](int pct)
             {
+                if (!m_lblZoom)
+                    return;
+                // presentLoadFailure() publishes -1 when nothing is on screen.
+                if (pct < 0)
+                {
+                    m_lblZoom->setText(QStringLiteral("缩放 —"));
+                    return;
+                }
                 if (m_imageViewer && m_imageViewer->isFitMode())
                     m_lblZoom->setText(QString("缩放 %1% (自适应)").arg(pct));
                 else

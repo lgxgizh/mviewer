@@ -13,6 +13,7 @@
 #include <QResizeEvent>
 #include <QTimer>
 #include <QVariant>
+#include <QWindow>
 #include <algorithm>
 #include <cmath>
 
@@ -88,14 +89,46 @@ ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const Imag
     return caption;
 }
 } // namespace
+namespace
+{
+
+QWindow *compareHostWindow(const QWidget *widget)
+{
+    if (!widget)
+        return nullptr;
+    if (QWindow *own = widget->windowHandle())
+        return own;
+    // CompareWorkspace is a child of the compare dialog, so the monitor
+    // profile lives on the dialog window, not on this widget.
+    const QWidget *host = widget->window();
+    return host ? host->windowHandle() : nullptr;
+}
+
+} // namespace
+
+void CompareWorkspace::onDisplayScreenChanged()
+{
+    if (QWindow *handle = compareHostWindow(this))
+        setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+}
+
+void CompareWorkspace::bindDisplayColorScreen()
+{
+    QWindow *handle = compareHostWindow(this);
+    if (!handle)
+        return;
+    connect(handle, &QWindow::screenChanged, this, &CompareWorkspace::onDisplayScreenChanged,
+            Qt::UniqueConnection);
+    setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+}
+
 void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     const Qt::WindowStates state = window() ? window()->windowState() : windowState();
     if (state.testFlag(Qt::WindowFullScreen) || state.testFlag(Qt::WindowMaximized))
         applyCompareSafeInsets();
-    if (windowHandle())
-        setDisplayColorContext(DisplayColorContextProvider::forWindow(windowHandle()));
+    bindDisplayColorScreen();
     const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
     const bool normalGrid =
         m_pageStack && m_compareGridPage && m_pageStack->currentWidget() == m_compareGridPage;
