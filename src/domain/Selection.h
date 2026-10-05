@@ -19,7 +19,10 @@ struct Selection
     }
     bool contains(int px, int py) const noexcept
     {
-        return px >= x && px < x + width && py >= y && py < y + height;
+        const long long right = static_cast<long long>(x) + width;
+        const long long bottom = static_cast<long long>(y) + height;
+        return px >= x && static_cast<long long>(px) < right && py >= y &&
+               static_cast<long long>(py) < bottom;
     }
     int area() const noexcept
     {

@@ -1,9 +1,11 @@
 #include "core/analysis/PixelInspector.h"
+#include "core/image/ExifOrientation.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageStats.h"
 #include <cassert>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -485,6 +487,54 @@ static void test_image_adjustments()
     CHECK(wbGray.buffer == gray.buffer);
 }
 
+static void test_display_orientation_and_alpha()
+{
+    const uint16_t row[2] = {10, 20};
+    const auto mirrored = orientSampleGrid(row, 2, 1, 1, 2);
+    CHECK(mirrored.size() == 2);
+    CHECK(mirrored[0] == 20 && mirrored[1] == 10);
+
+    const auto turned = orientSampleGrid(row, 2, 1, 1, 6);
+    CHECK(turned.size() == 2);
+    CHECK(turned[0] == 10 && turned[1] == 20);
+
+    CHECK(embeddedThumbFollowsRawAspect(6, 4000, 3000, 160, 120));
+    CHECK(!embeddedThumbFollowsRawAspect(6, 4000, 3000, 120, 160));
+    CHECK(!embeddedThumbFollowsRawAspect(1, 4000, 3000, 160, 120));
+    CHECK(!embeddedThumbFollowsRawAspect(6, 1000, 980, 100, 98));
+
+    const auto labLow =
+        displayedColorSpace(128, 128, 128, true, 32768, 32768, 32768, 0, ColorSpace::Lab);
+    const auto labHigh =
+        displayedColorSpace(128, 128, 128, true, 33024, 33024, 33024, 0, ColorSpace::Lab);
+    CHECK(std::abs(labLow.c1 - labHigh.c1) > 0.05);
+    const auto rgb = displayedColorSpace(128, 9, 8, true, 40000, 1, 2, 65535, ColorSpace::RGB);
+    CHECK(std::abs(rgb.c1 - 128.0) < 1e-6);
+    CHECK(std::abs(rgb.c2 - 9.0) < 1e-6);
+
+    std::vector<uint8_t> bgra(8, 0);
+    bgra[2] = 255;
+    bgra[3] = 255;
+    const auto clear = neighborhoodStats(bgra.data(), 8, 2, 1, 0, 0, 3, 4);
+    CHECK(clear.count == 1);
+    CHECK(std::abs(clear.rMean - 255.0) < 1e-6);
+
+    ImageData img = makeImageData(1, 1, PixelFormat::RGBA32);
+    img.buffer->at(0) = 9;
+    img.buffer->at(1) = 8;
+    img.buffer->at(2) = 7;
+    img.buffer->at(3) = 0;
+    const AnalysisPixel px = sampleAnalysisPixel(img, AnalysisAdjustment{}, 0, 0);
+    CHECK(px.valid);
+    CHECK(px.a == 0);
+    CHECK(px.r == 9 && px.g == 8 && px.b == 7);
+
+    mviewer::domain::Selection huge{INT_MAX - 2, 0, 10, 1};
+    CHECK(huge.contains(INT_MAX - 2, 0));
+    CHECK(huge.contains(INT_MAX - 1, 0));
+    CHECK(!huge.contains(INT_MAX - 3, 0));
+}
+
 int main()
 {
     test_color_spaces();
@@ -493,6 +543,7 @@ int main()
     test_raw16At();
     test_color_spaces_16bit();
     test_image_adjustments();
+    test_display_orientation_and_alpha();
     if (g_failures == 0)
     {
         std::printf("PASS: pixelinspector_tests (%d checks)\n", 0);

@@ -11,6 +11,8 @@
 HistogramWidget::HistogramWidget(QWidget *parent) : QWidget(parent)
 {
     setMinimumHeight(160);
+    setAccessibleName(tr("直方图"));
+    setAccessibleDescription(tr("RGB、亮度与 V 通道分布"));
 }
 
 void HistogramWidget::setHistograms(const std::vector<mviewer::core::Histogram> &hists)

@@ -93,6 +93,11 @@ void accumulatePreview(const ImageBuffer &view, int x0, int x1, int y0, int y1, 
                 view.data + static_cast<size_t>(y) * stride + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p += cpp)
             {
+                if constexpr (Fmt == PixelFormat::RGBA32 || Fmt == PixelFormat::BGRA32)
+                {
+                    if (p[3] == 0)
+                        continue;
+                }
                 uint8_t r, g, b;
                 PixelReader<Fmt>::read(p, r, g, b);
                 sumR += r;
@@ -199,6 +204,11 @@ void accumulateROI(const ImageBuffer &view, int x0, int x1, int y0, int y1,
                 view.data + static_cast<size_t>(y) * stride + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p += cpp)
             {
+                if constexpr (Fmt == PixelFormat::RGBA32 || Fmt == PixelFormat::BGRA32)
+                {
+                    if (p[3] == 0)
+                        continue;
+                }
                 uint8_t r, g, b;
                 PixelReader<Fmt>::read(p, r, g, b);
                 accum.sumR += r;
@@ -235,10 +245,16 @@ PreviewStats computePreviewStatsROI(const ImageData &img, const mviewer::domain:
     if (img.isNull() || region.isEmpty())
         return out;
 
-    const int x0 = std::max(0, region.x);
-    const int y0 = std::max(0, region.y);
-    const int x1 = std::min(img.width, region.x + region.width);
-    const int y1 = std::min(img.height, region.y + region.height);
+    const long long x0ll = std::clamp<long long>(region.x, 0, img.width);
+    const long long y0ll = std::clamp<long long>(region.y, 0, img.height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, img.width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, img.height);
+    const int x0 = static_cast<int>((std::min)(x0ll, x1ll));
+    const int y0 = static_cast<int>((std::min)(y0ll, y1ll));
+    const int x1 = static_cast<int>((std::max)(x0ll, x1ll));
+    const int y1 = static_cast<int>((std::max)(y0ll, y1ll));
     if (x1 <= x0 || y1 <= y0)
         return out;
 

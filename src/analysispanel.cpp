@@ -43,7 +43,13 @@ void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, int
     m_g16 = g16;
     m_b16 = b16;
     m_rawKind = rawKind;
-    m_rawMax = (rawKind == 2) ? 65535 : 0;
+    m_rawMax = 0;
+    if (rawKind == 2)
+    {
+        m_rawMax = 65535;
+        if (m_frameA && m_frameA->hasRaw16() && m_frameA->raw16Max() > 0)
+            m_rawMax = m_frameA->raw16Max();
+    }
     m_pValid = valid;
     // P0/P1 #⑥: draw a crosshair on the panel image at the inspected pixel so an
     // ISP engineer can screenshot the exact inspection point (Pixel Inspector).

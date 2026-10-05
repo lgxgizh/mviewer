@@ -4,6 +4,8 @@
 // delegates (all visible via thumbnailpanel_p.h), so it is safe to define here.
 #include "thumbnailpanel_p.h"
 
+#include <QEvent>
+#include <QKeyEvent>
 #include <QScrollBar>
 #include <QSettings>
 #include <QWheelEvent>
@@ -65,6 +67,23 @@ QModelIndex ThumbnailPanel::moveCursor(QAbstractItemView::CursorAction cursorAct
     }
     target = qBound(0, target, rows - 1);
     return m_model->index(target, 0);
+}
+
+bool ThumbnailPanel::event(QEvent *event)
+{
+    if (event && event->type() == QEvent::ShortcutOverride)
+    {
+        const auto *keyEvent = static_cast<const QKeyEvent *>(event);
+        const int key = keyEvent->key();
+        const bool thumbKey = key == Qt::Key_Plus || key == Qt::Key_Equal || key == Qt::Key_Minus ||
+                              key == Qt::Key_Underscore || key == Qt::Key_0;
+        if (keyEvent->modifiers() == Qt::ControlModifier && thumbKey)
+        {
+            event->accept();
+            return true;
+        }
+    }
+    return QListView::event(event);
 }
 
 void ThumbnailPanel::wheelEvent(QWheelEvent *event)

@@ -15,6 +15,10 @@
 
 #include "core/image/ImageBuffer.h"
 
+#include <cmath>
+#include <cstring>
+#include <vector>
+
 namespace mviewer::core
 {
 
@@ -166,6 +170,80 @@ inline SourceRect rawRectToOriented(const SourceRect &raw, int rawW, int rawH, i
     r.w = (x0 < x1 ? x1 - x0 : x0 - x1) + 1;
     r.h = (y0 < y1 ? y1 - y0 : y0 - y1) + 1;
     return r;
+}
+
+// |log(a/b)|. Non-positive inputs are treated as unrelated.
+inline double absLogRatio(double a, double b)
+{
+    if (!(a > 0.0) || !(b > 0.0))
+        return 1.0e9;
+    const double ratio = std::log(a / b);
+    return ratio < 0.0 ? -ratio : ratio;
+}
+
+// True when an embedded JPEG thumb should take the main IFD orientation.
+// Orientations 2-4 do not change aspect, and a near-square frame is ambiguous.
+// A thumb whose aspect is closer to the stored sensor than to the display is
+// still raw; a thumb already matching the display is left alone.
+inline bool embeddedThumbFollowsRawAspect(int orientation, int rawW, int rawH, int thumbW,
+                                          int thumbH)
+{
+    if (orientation < 5 || orientation > 8)
+        return false;
+    if (rawW <= 0 || rawH <= 0 || thumbW <= 0 || thumbH <= 0)
+        return false;
+    const double rawAspect = static_cast<double>(rawW) / static_cast<double>(rawH);
+    const double displayAspect = static_cast<double>(rawH) / static_cast<double>(rawW);
+    if (absLogRatio(rawAspect, displayAspect) < 0.15)
+        return false;
+    const double thumbAspect = static_cast<double>(thumbW) / static_cast<double>(thumbH);
+    return absLogRatio(thumbAspect, rawAspect) + 0.05 < absLogRatio(thumbAspect, displayAspect);
+}
+
+// Copy a tightly packed 1- or 3-channel uint16 grid into display orientation.
+// Orientation 1 (and out of range) returns a straight copy. Empty on bad input.
+inline std::vector<uint16_t> orientSampleGrid(const uint16_t *samples, int rawW, int rawH,
+                                              int channels, int orientation)
+{
+    std::vector<uint16_t> empty;
+    if (samples == nullptr || rawW <= 0 || rawH <= 0)
+        return empty;
+    if (channels != 1 && channels != 3)
+        return empty;
+    const size_t count =
+        static_cast<size_t>(rawW) * static_cast<size_t>(rawH) * static_cast<size_t>(channels);
+    if (orientation <= 1 || orientation > 8)
+    {
+        std::vector<uint16_t> copy(count);
+        std::memcpy(copy.data(), samples, count * sizeof(uint16_t));
+        return copy;
+    }
+    int displayW = 0;
+    int displayH = 0;
+    orientedSize(rawW, rawH, orientation, displayW, displayH);
+    std::vector<uint16_t> oriented(static_cast<size_t>(displayW) * static_cast<size_t>(displayH) *
+                                   static_cast<size_t>(channels));
+    for (int oy = 0; oy < displayH; ++oy)
+    {
+        for (int ox = 0; ox < displayW; ++ox)
+        {
+            int rx = 0;
+            int ry = 0;
+            displayToRaw(ox, oy, rawW, rawH, orientation, rx, ry);
+            if (rx < 0 || ry < 0 || rx >= rawW || ry >= rawH)
+                continue;
+            const size_t srcIndex =
+                (static_cast<size_t>(ry) * static_cast<size_t>(rawW) + static_cast<size_t>(rx)) *
+                static_cast<size_t>(channels);
+            const size_t dstIndex = (static_cast<size_t>(oy) * static_cast<size_t>(displayW) +
+                                     static_cast<size_t>(ox)) *
+                                    static_cast<size_t>(channels);
+            for (int channel = 0; channel < channels; ++channel)
+                oriented[dstIndex + static_cast<size_t>(channel)] =
+                    samples[srcIndex + static_cast<size_t>(channel)];
+        }
+    }
+    return oriented;
 }
 
 } // namespace mviewer::core

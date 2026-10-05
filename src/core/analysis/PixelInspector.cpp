@@ -199,6 +199,17 @@ ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, Co
     return toColorSpaceNorm(double(r) / maxVal, double(g) / maxVal, double(b) / maxVal, space);
 }
 
+ColorTriple displayedColorSpace(uint8_t r, uint8_t g, uint8_t b, bool raw16, uint16_t r16,
+                                uint16_t g16, uint16_t b16, uint16_t maxVal, ColorSpace space)
+{
+    if (raw16 && space != ColorSpace::RGB && space != ColorSpace::HEX)
+    {
+        const uint16_t scale = maxVal == 0 ? static_cast<uint16_t>(65535) : maxVal;
+        return toColorSpace(r16, g16, b16, scale, space);
+    }
+    return toColorSpace(r, g, b, space);
+}
+
 const char *colorSpaceLabel(ColorSpace space)
 {
     switch (space)

@@ -21,12 +21,32 @@
 
 #include <cmath>
 
+static uint8_t clampByte(int value)
+{
+    if (value < 0)
+        return 0;
+    if (value > 255)
+        return 255;
+    return static_cast<uint8_t>(value);
+}
+
+static uint16_t clampSample16(int value)
+{
+    if (value < 0)
+        return 0;
+    if (value > 65535)
+        return 65535;
+    return static_cast<uint16_t>(value);
+}
+
 static QString formatPixelValues(mviewer::core::ColorSpace cs, int r, int g, int b,
-                                 bool hasTwoImages)
+                                 bool hasTwoImages, bool raw16, int r16, int g16, int b16,
+                                 int rawMax)
 {
     const char *csLabel = mviewer::core::colorSpaceLabel(cs);
-    const mviewer::core::ColorTriple px = mviewer::core::toColorSpace(
-        static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b), cs);
+    const mviewer::core::ColorTriple px = mviewer::core::displayedColorSpace(
+        clampByte(r), clampByte(g), clampByte(b), raw16, clampSample16(r16), clampSample16(g16),
+        clampSample16(b16), clampSample16(rawMax), cs);
     const QString prefix = hasTwoImages ? QStringLiteral("左图 ") : QString();
     if (cs == mviewer::core::ColorSpace::HEX)
     {
@@ -61,7 +81,10 @@ void AnalysisPanel::updateInspectorPage()
     const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
     QString txt = QString("<h3>%1 — %2</h3>").arg(tr("像素检视"), csLabel);
     txt += QString("坐标: (%1, %2)<br>").arg(m_px).arg(m_py);
-    txt += formatPixelValues(m_colorSpace, m_pR, m_pG, m_pB, m_hasB && !m_imageB.isNull());
+    txt += formatPixelValues(m_colorSpace, m_pR, m_pG, m_pB, m_hasB && !m_imageB.isNull(),
+                             m_rawKind == 2, m_r16, m_g16, m_b16, m_rawMax);
+    if (m_pA >= 0 && m_pA < 255)
+        txt += QString("Alpha: %1<br>").arg(m_pA);
 
     // P0-2/PixelInspector: original high-bit-depth readout.
     txt += QString("<br><b>原始采样</b> ");

@@ -53,6 +53,12 @@ ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space);
 // computed from the normalized (0..1) sample and share the 8-bit output ranges.
 ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, ColorSpace space);
 
+// Inspector readout. RGB and HEX stay on the 8-bit display sample so the
+// number next to the separate raw-16 line remains 0..255. HSV/Lab/YUV/YCbCr/XYZ
+// use the 16-bit sample when raw16 is set. maxVal 0 means full-scale 65535.
+ColorTriple displayedColorSpace(uint8_t r, uint8_t g, uint8_t b, bool raw16, uint16_t r16,
+                                uint16_t g16, uint16_t b16, uint16_t maxVal, ColorSpace space);
+
 struct NeighborhoodStats
 {
     double mean = 0;     // mean of luminance over the kernel
@@ -106,6 +112,7 @@ struct AnalysisPixel
     int r = 0;
     int g = 0;
     int b = 0;
+    int a = 255;
     bool valid = false;
 };
 

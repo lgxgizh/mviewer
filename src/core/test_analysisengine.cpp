@@ -2,6 +2,7 @@
 #include "core/analysis/PixelInspector.h"
 #include "core/image/ImageBuffer.h"
 
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -282,6 +283,33 @@ void test_stats_roi_bounds()
         mviewer::domain::Selection roi{200, 200, 50, 50};
         ImageStats s = AnalysisEngine::computeStatsROI(img, roi);
         CHECK(s.pixelCount == 0);
+    }
+
+    // x+width must not wrap through a 32-bit add.
+    {
+        mviewer::domain::Selection roi{INT_MAX - 5, 0, 20, 1};
+        ImageStats s = AnalysisEngine::computeStatsROI(img, roi);
+        CHECK(s.pixelCount == 0);
+    }
+
+    // Alpha 0 is not a sample. Opaque alpha 255 still matches the color.
+    {
+        ImageData rgba = makeImageData(2, 1, PixelFormat::RGBA32);
+        uint8_t *p = rgba.buffer->data();
+        p[0] = 200;
+        p[1] = 10;
+        p[2] = 10;
+        p[3] = 255;
+        p[4] = 0;
+        p[5] = 0;
+        p[6] = 0;
+        p[7] = 0;
+        const mviewer::domain::Selection full{0, 0, 2, 1};
+        ImageStats s = AnalysisEngine::computeStatsROI(rgba, full);
+        CHECK(s.pixelCount == 1);
+        CHECK_NEAR(s.rMean, 200.0, 1e-6);
+        CHECK(s.histR[200] == 1);
+        CHECK(s.histR[0] == 0);
     }
 }
 

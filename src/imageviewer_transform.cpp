@@ -24,6 +24,44 @@ namespace
 
 using RotateResult = mviewer::core::ImageFileRotateResult;
 
+enum class LooseIo
+{
+    None,
+    PathTooLong,
+    Network
+};
+
+bool transformDialogAllowed(const QWidget *viewer)
+{
+    return qApp && !qApp->closingDown() && viewer && viewer->isVisible();
+}
+
+QString elidePathMiddle(const QString &path)
+{
+    if (path.size() <= 160)
+        return path;
+    return path.left(72) + QStringLiteral("…") + path.right(72);
+}
+
+bool containsIoToken(const QString &text, const char *token)
+{
+    return text.contains(QLatin1String(token));
+}
+
+LooseIo classifyLooseIo(const QString &error)
+{
+    const QString lower = error.toLower();
+    if (containsIoToken(lower, "enametoolong") || containsIoToken(lower, "too long") ||
+        error.contains(QString::fromUtf8("路径过长")) ||
+        error.contains(QString::fromUtf8("文件名过长")))
+        return LooseIo::PathTooLong;
+    if (containsIoToken(lower, "network") || containsIoToken(lower, "unreachable") ||
+        containsIoToken(lower, "timed out") || error.contains(QString::fromUtf8("网络")) ||
+        error.contains(QString::fromUtf8("主机")) || error.contains(QLatin1String("\\\\")))
+        return LooseIo::Network;
+    return LooseIo::None;
+}
+
 struct TransformState
 {
     RotateResult result;
@@ -62,7 +100,8 @@ void submitFileTransform(ImageViewer *viewer, const QString &path, const QString
         viewer->setProperty("mviewerFileTransformBusy", false);
         if (QApplication::overrideCursor())
             QApplication::restoreOverrideCursor();
-        QMessageBox::warning(viewer, failureTitle, viewer->tr("后台任务被调度器拒绝。"));
+        if (transformDialogAllowed(viewer))
+            QMessageBox::warning(viewer, failureTitle, viewer->tr("后台任务被调度器拒绝。"));
         if (viewer->currentPath() == path)
             viewer->refreshSource(path);
     }
@@ -116,9 +155,17 @@ QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRota
     case ImageRotateError::EncodeFailed:
     case ImageRotateError::ShortWrite:
     case ImageRotateError::WriteFailed:
-        if (result.error.empty())
+    {
+        const QString error = QString::fromStdString(result.error);
+        const LooseIo loose = classifyLooseIo(error);
+        if (loose == LooseIo::PathTooLong)
+            return tr("路径过长，系统无法打开或写入");
+        if (loose == LooseIo::Network)
+            return tr("网络路径不可达或超时");
+        if (error.isEmpty())
             return tr("未知错误");
-        return QString::fromStdString(result.error);
+        return error;
+    }
     }
     return tr("未知错误");
 }
@@ -132,9 +179,19 @@ void ImageViewer::completeFileTransform(const QString &path,
     setProperty("mviewerFileTransformBusy", false);
     if (!result.ok)
     {
-        QMessageBox::warning(
-            this, failureTitle,
-            tr("无法改写图片：%1\n%2").arg(path, rotateFailureUserMessage(result)));
+        QString detail = rotateFailureUserMessage(result);
+        const QString rawError = QString::fromStdString(result.error);
+        const QString rawLower = rawError.toLower();
+        const bool permission = rawLower.contains(QLatin1String("denied")) ||
+                                rawLower.contains(QLatin1String("permission")) ||
+                                rawLower.contains(QString::fromUtf8("拒绝"));
+        if (path.size() >= 260 && !permission && (detail == rawError || detail == tr("未知错误")))
+            detail = tr("路径过长，系统无法打开或写入");
+        if (transformDialogAllowed(this))
+        {
+            QMessageBox::warning(this, failureTitle,
+                                 tr("无法改写图片：%1\n%2").arg(elidePathMiddle(path), detail));
+        }
         if (m_currentPath == path)
             refreshSource(path);
         return;
