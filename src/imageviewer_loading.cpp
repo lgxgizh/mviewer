@@ -227,6 +227,9 @@ void ImageViewer::setImageImpl(const QString &path)
         update();
         return;
     }
+    // Close suppresses raster work so teardown cannot queue another decode.
+    // The same viewer is shown again after Esc, so the next image must load.
+    setProperty("mviewerClosing", false);
     // M47: the raster-path verdict decides the full-frame load. The probe
     // worker reports small-vs-large; small sources keep the existing fast
     // path, large feasible sources get the analysis-support full load, and
