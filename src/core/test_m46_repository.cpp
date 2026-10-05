@@ -33,8 +33,8 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QThread>
 #include <QTemporaryDir>
+#include <QThread>
 
 #include <atomic>
 #include <chrono>
@@ -216,8 +216,7 @@ void testDestroyedBeforeDecodeDone()
     auto token = AsyncLifetimeToken::create();
     std::atomic<int> callbacks{0};
     auto handle = repo.loadAsyncCancellable(
-        path,
-        [&](const ImageRepository::Result &) { callbacks.fetch_add(1); },
+        path, [&](const ImageRepository::Result &) { callbacks.fetch_add(1); },
         ImageRepository::kDefaultLoadOptions, token);
     CHECK(handle != nullptr, "request accepted");
     CHECK(waitFlag(ctl->entered, 5000), "decode entered (worker running)");
@@ -265,16 +264,15 @@ void testCancelBeforeDelivery()
     auto token = AsyncLifetimeToken::create();
     std::atomic<int> callbacks{0};
     auto handle = repo.loadAsyncCancellable(
-        path,
-        [&](const ImageRepository::Result &) { callbacks.fetch_add(1); },
+        path, [&](const ImageRepository::Result &) { callbacks.fetch_add(1); },
         ImageRepository::kDefaultLoadOptions, token);
     CHECK(handle != nullptr, "request accepted while Decode is gated");
 
     const auto t0 = std::chrono::steady_clock::now();
     repo.cancelAsync(handle);
-    const auto waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::steady_clock::now() - t0)
-                            .count();
+    const auto waitMs =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
     CHECK(waitMs < 500, "cancelAsync returns promptly when no delivery started");
     CHECK(handle == nullptr, "caller's handle cleared by cancelAsync");
 
@@ -331,7 +329,8 @@ void testCancelDuringTerminalDelivery()
         while (!latches->releaseDelivery.load(std::memory_order_acquire))
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
     };
-    hooks.onAfterDelivery = [latches]() { latches->afterDeliveryDone.store(true, std::memory_order_release); };
+    hooks.onAfterDelivery = [latches]()
+    { latches->afterDeliveryDone.store(true, std::memory_order_release); };
 
     auto handle = repo.loadAsyncCancellable(
         path,
@@ -353,11 +352,12 @@ void testCancelDuringTerminalDelivery()
     // here is what would freeze the GUI thread on a slow callback.
     std::atomic<bool> cancelReturned{false};
     const auto cancelStart = std::chrono::steady_clock::now();
-    std::thread canceller([&]()
-                          {
-                              repo.cancelAsync(handle);
-                              cancelReturned.store(true, std::memory_order_release);
-                          });
+    std::thread canceller(
+        [&]()
+        {
+            repo.cancelAsync(handle);
+            cancelReturned.store(true, std::memory_order_release);
+        });
     CHECK(waitFlag(cancelReturned, 5000), "cancelAsync returns while a delivery is blocked");
     const auto cancelMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                               std::chrono::steady_clock::now() - cancelStart)
@@ -455,8 +455,7 @@ void testSupersedeSamePath()
     std::atomic<int> firstCallbacks{0};
     std::atomic<int> lastCallbacks{0};
     auto first = repo.loadAsyncCancellable(
-        path,
-        [&](const ImageRepository::Result &) { firstCallbacks.fetch_add(1); },
+        path, [&](const ImageRepository::Result &) { firstCallbacks.fetch_add(1); },
         ImageRepository::kDefaultLoadOptions, token);
     CHECK(first != nullptr, "request A accepted");
     CHECK(waitFlag(ctl->entered, 5000), "decode A running");
@@ -473,8 +472,7 @@ void testSupersedeSamePath()
 
     repo.cancelAsync(first); // supersede A
     ctl->release.store(true, std::memory_order_release);
-    CHECK(waitTrue([&] { return lastCallbacks.load() == 1; }, 5000),
-          "latest request delivered");
+    CHECK(waitTrue([&] { return lastCallbacks.load() == 1; }, 5000), "latest request delivered");
     CHECK(firstCallbacks.load() == 0, "superseded request A never delivered");
     // A ran to completion (a running QImage decode is non-interruptible) and
     // warmed the FullImage cache; the latest request C is therefore served
@@ -501,13 +499,64 @@ void testRejectionWithDeadToken()
     token->invalidate(); // consumer already gone
     std::atomic<int> callbacks{0};
     auto handle = repo.loadAsyncCancellable(
-        "some/missing.mvtest",
-        [&](const ImageRepository::Result &) { callbacks.fetch_add(1); },
+        "some/missing.mvtest", [&](const ImageRepository::Result &) { callbacks.fetch_add(1); },
         ImageRepository::kDefaultLoadOptions, token);
     CHECK(handle == nullptr, "rejected submission returns nullptr");
     CHECK(callbacks.load() == 0, "rejection callback suppressed for a dead consumer");
 
     sched.resume(PoolType::DecodePool);
+    CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(5)), "DecodePool drains");
+}
+
+// ─── 6b. token destroyed (not merely invalidated) before delivery ───────────
+void testDestroyedTokenBeforeDelivery()
+{
+    printf("\n[6b. destroyed lifetime token suppresses delivery and rejection]\n");
+    auto &sched = TaskScheduler::instance();
+    auto &repo = ImageRepository::instance();
+    sched.pause(PoolType::DecodePool);
+
+    std::atomic<int> rejected{0};
+    {
+        auto token = AsyncLifetimeToken::create();
+        std::weak_ptr<AsyncLifetimeToken> dead = token;
+        token.reset();
+        auto handle = repo.loadAsyncCancellable(
+            "some/missing.mvtest", [&](const ImageRepository::Result &) { rejected.fetch_add(1); },
+            ImageRepository::kDefaultLoadOptions, dead);
+        CHECK(handle == nullptr, "destroyed token still rejects a paused submission");
+    }
+    CHECK(rejected.load() == 0, "destroyed token suppresses the rejection callback");
+    sched.resume(PoolType::DecodePool);
+
+    CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(15)),
+          "DecodePool drained before destroyed-token decode");
+    auto ctl = std::make_shared<DecodeControl>();
+    DecoderRegistry::instance().registerDecoder(std::make_shared<BlockingCountingDecoder>(ctl));
+
+    QTemporaryDir tmp;
+    tmp.setAutoRemove(false);
+    const std::string path = tmp.path().toStdString() + "/img_dead.mvtest";
+    writeDummyFile(path);
+
+    std::atomic<int> callbacks{0};
+    {
+        auto token = AsyncLifetimeToken::create();
+        std::weak_ptr<AsyncLifetimeToken> dead = token;
+        auto handle = repo.loadAsyncCancellable(
+            path, [&](const ImageRepository::Result &) { callbacks.fetch_add(1); },
+            ImageRepository::kDefaultLoadOptions, dead);
+        CHECK(handle != nullptr, "request accepted before the token is destroyed");
+        CHECK(waitFlag(ctl->entered, 5000), "decode entered before the token is destroyed");
+        token.reset();
+    }
+    ctl->release.store(true, std::memory_order_release);
+    CHECK(waitTrue([&] { return ctl->calls.load() == 1 && poolsConverged(); }, 5000),
+          "decode finished after the token was destroyed");
+    CHECK(callbacks.load() == 0, "destroyed token never receives the client callback");
+
+    DecoderRegistry::instance().unregister("BlockingCountingTestDecoder");
+    cleanupDir(tmp.path().toStdString());
     CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(5)), "DecodePool drains");
 }
 
@@ -583,6 +632,7 @@ int main(int argc, char **argv)
     testReentrantCancelFromCallback();
     testSupersedeSamePath();
     testRejectionWithDeadToken();
+    testDestroyedTokenBeforeDelivery();
     testStressChurn();
 
     // Leave the scheduler clean.

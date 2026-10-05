@@ -506,6 +506,35 @@ static std::optional<ConvertPlan> makeConvertPlan(const ExportJobConfig &cfg,
     return plan;
 }
 
+struct NamedFailures
+{
+    std::string listed;
+    int named = 0;
+    int hidden = 0;
+};
+
+static void rememberFailure(NamedFailures &failures, const std::string &path)
+{
+    if (failures.named >= 3)
+    {
+        ++failures.hidden;
+        return;
+    }
+    if (!failures.listed.empty())
+        failures.listed.push_back(';');
+    failures.listed += path;
+    ++failures.named;
+}
+
+static void appendNamedFailures(std::ostream &out, const NamedFailures &failures)
+{
+    if (failures.listed.empty())
+        return;
+    out << ": " << failures.listed;
+    if (failures.hidden > 0)
+        out << " (+" << failures.hidden << " more)";
+}
+
 static ExportJobResult runConvert(const ExportJobConfig &cfg,
                                   const std::vector<std::string> &sources,
                                   const fs::path &outputDirectory, ProgressFn progress,
@@ -518,6 +547,7 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
     Encoder::Params params;
     params.quality = cfg.quality;
     std::error_code ec;
+    NamedFailures failedPaths;
     for (int i = 0; i < r.total; ++i)
     {
         const std::string &src = sources[static_cast<size_t>(i)];
@@ -534,6 +564,7 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
         if (data.isNull())
         {
             ++r.failed;
+            rememberFailure(failedPaths, src);
             continue;
         }
         data = maybeResize(data, cfg);
@@ -552,6 +583,7 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
                 std::error_code cleanupError;
                 fs::remove(tmp, cleanupError);
                 ++r.failed;
+                rememberFailure(failedPaths, src);
             }
             else
             {
@@ -564,6 +596,7 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
         {
             fs::remove(tmp, ec);
             ++r.failed;
+            rememberFailure(failedPaths, src);
         }
     }
 
@@ -572,7 +605,10 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
     std::ostringstream oss;
     oss << "done " << r.done << " / " << r.total;
     if (r.failed)
+    {
         oss << " (failed " << r.failed << ")";
+        appendNamedFailures(oss, failedPaths);
+    }
     r.message = oss.str();
     return r;
 }

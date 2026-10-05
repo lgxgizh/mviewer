@@ -241,8 +241,19 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     domain::BatchFileResult result;
     result.inputPath = inputPath;
 
+    if (m_cancelled.load())
+    {
+        result.errorMessage = "Cancelled";
+        return result;
+    }
+
     // ── Decode ──────────────────────────────────────────────────────
     ImageData img = Decoder::decodeFull(inputPath);
+    if (m_cancelled.load())
+    {
+        result.errorMessage = "Cancelled";
+        return result;
+    }
     if (img.isNull())
     {
         result.errorMessage = "Failed to decode image";
@@ -256,7 +267,10 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     for (domain::BatchOp op : config.operations)
     {
         if (m_cancelled.load())
-            break;
+        {
+            result.errorMessage = "Cancelled";
+            return result;
+        }
 
         switch (op)
         {
@@ -293,16 +307,23 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
 
 domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &config)
 {
-    m_cancelled.store(false);
-    m_paused.store(false);
     domain::BatchJobResult aggregate;
 
     // Expand directory inputs. recursiveScan walks subfolders; otherwise only
     // the directory's own image files are collected so "添加目录" still works.
     const std::vector<std::string> expandedPaths = expandInputPaths(config);
-
     const int total = static_cast<int>(expandedPaths.size());
-    aggregate.fileResults.reserve(total);
+
+    // Do not clear a cancel that won the race against worker startup. A fresh
+    // processor starts uncancelled; reuse after a finished cancel stays stopped.
+    if (m_cancelled.load())
+    {
+        aggregate.cancelled = true;
+        aggregate.totalSkipped = total;
+        return aggregate;
+    }
+    m_paused.store(false);
+    aggregate.fileResults.reserve(static_cast<size_t>(total));
 
     // P2 #⑦: retry counter (config.retryCount, default 0 = no retry).
     for (int i = 0; i < total; ++i)
@@ -314,6 +335,10 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
 
         if (m_progressCb)
             m_progressCb(i, total, expandedPaths[static_cast<size_t>(i)]);
+        // The progress callback is the UI's chance to cancel before this file
+        // starts. Honour it here so the file is skipped, not reported as done.
+        if (m_cancelled.load())
+            break;
 
         domain::BatchFileResult fileResult;
         bool succeeded = false;
@@ -325,6 +350,8 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
                 succeeded = true;
                 break;
             }
+            if (m_cancelled.load())
+                break;
             if (attempt < config.retryCount && config.retryDelayMs > 0)
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(config.retryDelayMs));
@@ -339,6 +366,13 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
         if (m_fileResultCb)
             m_fileResultCb(fileResult);
         aggregate.fileResults.push_back(std::move(fileResult));
+    }
+
+    if (m_cancelled.load())
+    {
+        aggregate.cancelled = true;
+        const int finished = static_cast<int>(aggregate.fileResults.size());
+        aggregate.totalSkipped = total > finished ? total - finished : 0;
     }
 
     // Final progress notification.

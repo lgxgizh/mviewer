@@ -44,8 +44,11 @@ class BatchProcessor
     }
 
     // Execute the batch job synchronously. Returns aggregated results.
-    // If cancelled (via requestCancel()), stops after the current file.
-    // If paused (via requestPause()), waits between files until resume().
+    // If cancelled (via requestCancel()), stops before the next file. A cancel
+    // that arrives before execute() starts is kept, so a click during worker
+    // startup cannot be cleared by the run itself. A file interrupted between
+    // operations is a failure, not a success. If paused (via requestPause()),
+    // waits between files until resume().
     domain::BatchJobResult execute(const domain::BatchJobConfig &config);
 
     // Request cancellation (thread-safe). The current file finishes, then

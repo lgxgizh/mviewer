@@ -11,6 +11,7 @@
 
 #include <cstdio>
 #include <functional>
+#include <string>
 
 namespace
 {
@@ -137,6 +138,23 @@ int main(int argc, char **argv)
     check(monitor.watcherHintCount() >= 1102 && monitor.snapshotScanCount() < 20,
           "monitor counters expose hints separately from bounded physical scans");
     check(unavailableSignals >= 2, "availability changes are observable at the boundary");
+
+    check(QFile::remove(QDir(folder).filePath("restored.png")), "remove the restored image");
+    check(QDir().rmdir(folder), "remove the active directory again");
+    monitor.notifyDirectoryChanged(folder);
+    check(waitUntil([&] { return !monitor.snapshot().available; }),
+          "second disappearance is reported");
+    const QString reborn = QDir(folder).filePath("reborn.png");
+    check(QDir().mkpath(folder) && writeImage(reborn, 20, 20, qRgb(3, 4, 5)),
+          "recreate the directory without notifying the monitor");
+    check(waitUntil(
+              [&]
+              {
+                  const auto &entries = monitor.snapshot().entries;
+                  return monitor.snapshot().available && entries.size() == 1 &&
+                         entries.front().path.find("reborn.png") != std::string::npos;
+              }),
+          "parent watch publishes the recreated directory without an explicit notify");
 
     std::printf("M56 directory monitor tests: %s\n", failures == 0 ? "PASS" : "FAIL");
     return failures == 0 ? 0 : 1;

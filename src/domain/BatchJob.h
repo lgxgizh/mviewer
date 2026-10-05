@@ -37,6 +37,10 @@ struct BatchJobResult
     std::vector<BatchFileResult> fileResults;
     int totalSucceeded = 0;
     int totalFailed = 0;
+    // Files never started because the run was cancelled. A file that was
+    // interrupted after it started is counted in totalFailed instead.
+    int totalSkipped = 0;
+    bool cancelled = false;
 };
 
 // Full configuration for a batch job.

@@ -30,6 +30,45 @@
 namespace
 {
 
+QString batchFinishText(const mviewer::domain::BatchJobResult &result)
+{
+    const QString counts =
+        QStringLiteral("%1 成功, %2 失败").arg(result.totalSucceeded).arg(result.totalFailed);
+    if (!result.cancelled && result.totalFailed <= 0)
+        return QStringLiteral("完成: %1").arg(counts);
+
+    QString names;
+    int shown = 0;
+    for (const auto &file : result.fileResults)
+    {
+        if (file.success || file.inputPath.empty())
+            continue;
+        if (shown >= 3)
+        {
+            names += QStringLiteral("…");
+            break;
+        }
+        if (!names.isEmpty())
+            names += QStringLiteral(", ");
+        const QString full =
+            QString::fromUtf8(file.inputPath.data(), static_cast<int>(file.inputPath.size()));
+        const int slash = full.lastIndexOf(QLatin1Char('/'));
+        const int back = full.lastIndexOf(QLatin1Char('\\'));
+        const int cut = slash > back ? slash : back;
+        names += cut >= 0 ? full.mid(cut + 1) : full;
+        ++shown;
+    }
+
+    if (result.cancelled)
+    {
+        QString text = QStringLiteral("已取消: %1, %2 未处理").arg(counts).arg(result.totalSkipped);
+        if (!names.isEmpty())
+            text += QStringLiteral("（%1）").arg(names);
+        return text;
+    }
+    return QStringLiteral("完成: %1（%2）").arg(counts, names);
+}
+
 int addSupportedImages(QListWidget *list, const QString &dir, bool recursive)
 {
     const auto flags = recursive ? QDirIterator::Subdirectories : QDirIterator::NoIteratorFlags;
@@ -584,8 +623,11 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     }
 
     m_progress->setValue(m_progress->maximum());
-    m_statusLabel->setText(
-        QString("完成: %1 成功, %2 失败").arg(result.totalSucceeded).arg(result.totalFailed));
+    m_statusLabel->setText(batchFinishText(result));
+    if (result.cancelled)
+        m_log->append(QStringLiteral("[CANCEL] 未处理 %1 个文件").arg(result.totalSkipped));
+    else if (result.totalFailed > 0)
+        m_log->append(QStringLiteral("[SUMMARY] %1 个文件失败").arg(result.totalFailed));
 
     // Enable "open output dir" if any files were produced and the output
     // directory is known (empty = same-as-source per file).
