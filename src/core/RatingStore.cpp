@@ -298,7 +298,7 @@ size_t RatingStore::pruneMissing()
     auto missing = [](const std::string &p)
     {
         std::error_code ec;
-        return !std::filesystem::exists(utf8ToPath(p), ec);
+        return !std::filesystem::exists(pathFromUtf8(p), ec);
     };
 
     {
