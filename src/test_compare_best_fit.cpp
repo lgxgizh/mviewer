@@ -390,6 +390,32 @@ int main(int argc, char **argv)
         check(std::abs(lowView->scale() - after) < 1e-4, "view scale follows the refit");
     }
 
+    auto *swap = ws->findChild<QPushButton *>(QStringLiteral("compareSwapPanesButton"));
+    check(swap && swap->isEnabled(), "swap panes control is available");
+    if (auto *syncZoom = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck")))
+        syncZoom->setChecked(false);
+    const auto dragBoxes = ws->findChildren<QCheckBox *>();
+    for (QCheckBox *box : dragBoxes)
+    {
+        if (box->text().contains(QStringLiteral("同步拖动")))
+            box->setChecked(false);
+    }
+    ws->engine().setCellScale(0, 2.25);
+    ws->engine().setCellOffset(0, 10.0, -4.0);
+    ws->engine().setCellScale(1, 0.35);
+    ws->engine().setCellOffset(1, -6.0, 8.0);
+    if (swap && swap->isEnabled())
+        swap->click();
+    check(std::abs(ws->engine().cellScale(0) - 0.35) < 1e-9, "swap moves pane B scale to A");
+    check(std::abs(ws->engine().cellScale(1) - 2.25) < 1e-9, "swap moves pane A scale to B");
+    lowView = paneView(ws, "comparePane0");
+    highView = paneView(ws, "comparePane1");
+    if (lowView && highView)
+    {
+        check(std::abs(lowView->scale() - 0.35) < 1e-6, "pane A view keeps the swapped scale");
+        check(std::abs(highView->scale() - 2.25) < 1e-6, "pane B view keeps the swapped scale");
+    }
+
     if (g_failures > 0)
     {
         std::printf("compare_best_fit_tests: FAIL (%d)\n", g_failures);

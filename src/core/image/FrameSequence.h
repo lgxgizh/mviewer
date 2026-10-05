@@ -102,6 +102,12 @@ class FrameSequenceReader
 
     static FrameInfo frameInfo(const std::string &path, int frameIndex);
     static bool isSequencePath(const std::string &path);
+
+    // Close a sequential animation reader held open so the next frame does not
+    // restart at frame 0. An empty path releases whatever is cached. Safe to
+    // call from the UI thread while a decode is in progress: the in-flight
+    // read finishes, then the file handle is dropped.
+    static void releaseFile(const std::string &path);
 };
 
 } // namespace mviewer::core

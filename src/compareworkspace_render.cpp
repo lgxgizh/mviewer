@@ -501,17 +501,33 @@ void CompareWorkspace::schedulePreserveFit()
 void CompareWorkspace::schedulePostLayoutFit()
 {
     if (m_postLayoutFitPending)
+    {
+        if (m_session)
+            m_session->postLayoutFitAgain = true;
         return;
+    }
     m_postLayoutFitPending = true;
+    const uint64_t fitEpoch = m_session ? m_session->cellTransformEpoch : 0;
     QPointer<CompareWorkspace> guard(this);
     QTimer::singleShot(
         0, this,
-        [guard]()
+        [guard, fitEpoch]()
         {
             CompareWorkspace *ws = guard.data();
             if (!ws)
                 return;
             ws->m_postLayoutFitPending = false;
+            const bool again = ws->m_session && ws->m_session->postLayoutFitAgain;
+            if (ws->m_session)
+                ws->m_session->postLayoutFitAgain = false;
+            // A swap committed per-pane scale and pan after this fit was
+            // queued. Fitting now would put both panes back at window-fit.
+            if (ws->m_session && ws->m_session->cellTransformEpoch != fitEpoch)
+            {
+                if (again)
+                    ws->schedulePostLayoutFit();
+                return;
+            }
             // A canvas toggle can cancel Blink before its
             // 0-ms fit callback runs. In that transition the
             // grid is already hidden, so fitting it here would

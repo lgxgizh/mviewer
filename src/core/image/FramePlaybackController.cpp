@@ -25,6 +25,7 @@ void FramePlaybackController::configure(const FrameSequenceInfo &sequence,
     m_elapsedAtPause = elapsedForFrame(m_currentFrame);
     m_startedAt = Clock::now();
     m_playing = false;
+    m_suspended = false;
 }
 
 void FramePlaybackController::setFrameInfo(const FrameInfo &frame)
@@ -42,6 +43,7 @@ void FramePlaybackController::start(TimePoint now)
     m_currentFrame = std::clamp(m_currentFrame, 0, m_sequence.frameCount - 1);
     m_elapsedAtPause = elapsedForFrame(m_currentFrame);
     m_startedAt = now - m_elapsedAtPause;
+    m_suspended = false;
     m_playing = true;
 }
 
@@ -49,10 +51,31 @@ void FramePlaybackController::pause(TimePoint now)
 {
     if (!m_playing)
         return;
-    m_elapsedAtPause = elapsedNow(now);
+    if (!m_suspended)
+        m_elapsedAtPause = elapsedNow(now);
     bool ignored = false;
     m_currentFrame = frameAt(m_elapsedAtPause, &ignored);
     m_playing = false;
+    m_suspended = false;
+}
+
+void FramePlaybackController::suspend(TimePoint now)
+{
+    if (!m_playing || m_suspended)
+        return;
+    m_elapsedAtPause = elapsedNow(now);
+    bool ignored = false;
+    m_currentFrame = frameAt(m_elapsedAtPause, &ignored);
+    m_suspended = true;
+}
+
+void FramePlaybackController::unsuspend(TimePoint now)
+{
+    if (!m_suspended)
+        return;
+    m_suspended = false;
+    if (m_playing)
+        m_startedAt = now - m_elapsedAtPause;
 }
 
 void FramePlaybackController::resume(TimePoint now)
@@ -138,7 +161,7 @@ FramePlaybackController::Milliseconds FramePlaybackController::elapsedForFrame(i
 
 FramePlaybackController::Milliseconds FramePlaybackController::elapsedNow(TimePoint now) const
 {
-    if (!m_playing)
+    if (!m_playing || m_suspended)
         return m_elapsedAtPause;
     if (now <= m_startedAt)
         return Milliseconds(0);
@@ -155,22 +178,31 @@ FramePlaybackController::Tick FramePlaybackController::tick(TimePoint now)
 {
     Tick result;
     result.frameIndex = m_currentFrame;
-    if (!m_playing || m_sequence.frameCount <= 1)
+    if (!m_playing || m_suspended || m_sequence.frameCount <= 1)
     {
         result.nextDelay = delayUntilNext(now);
         return result;
     }
 
+    const auto previousElapsed = m_elapsedAtPause;
     const auto elapsed = elapsedNow(now);
-    bool looped = false;
-    const int next = frameAt(elapsed, &looped);
+    const auto total = sequenceDuration();
+    // duration/duration is a scalar count of loops, not another duration.
+    const auto cycles = total.count() > 0 ? elapsed.count() / total.count() : 0;
+    const auto previousCycles = total.count() > 0 ? previousElapsed.count() / total.count() : 0;
+    const int next = frameAt(elapsed, nullptr);
     const int previous = m_currentFrame;
-    result.looped = looped;
-    result.due = next != previous;
-    result.skipped = result.due &&
-                     (looped || next > previous + 1 ||
-                      (previous == m_sequence.frameCount - 1 && next == 0));
+    const int count = m_sequence.frameCount;
+    result.finished = m_sequence.loopCount >= 0 && cycles > m_sequence.loopCount;
+    result.looped = cycles > previousCycles;
     result.frameIndex = next;
+    result.due = next != previous;
+    int forward = next - previous;
+    if (forward < 0)
+        forward += count;
+    // A normal wrap (last frame to the first) advances one frame. skipped
+    // means the clock jumped over frames, not that a loop boundary was crossed.
+    result.skipped = result.due && forward > 1;
     m_currentFrame = next;
     m_elapsedAtPause = elapsed;
     result.nextDelay = delayUntilNext(now);

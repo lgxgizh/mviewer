@@ -352,6 +352,7 @@ void PreviewPanel::releaseSourceHandles(const QString &path)
 {
     if (path.isEmpty())
         return;
+    mviewer::core::FrameSequenceReader::releaseFile(path.toUtf8().toStdString());
     if (m_requestedPath == path || m_presentedPath == path)
         cancelPending();
 }

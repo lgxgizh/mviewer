@@ -24,6 +24,8 @@ class FramePlaybackController
         bool due = false;
         bool skipped = false;
         bool looped = false;
+        // Finite loopCount exhausted. The frame index is the last frame.
+        bool finished = false;
         int frameIndex = 0;
         Milliseconds nextDelay{100};
     };
@@ -34,6 +36,11 @@ class FramePlaybackController
     void start(TimePoint now = Clock::now());
     void pause(TimePoint now = Clock::now());
     void resume(TimePoint now = Clock::now());
+    // Freeze the clock while the viewer is hidden or minimized. playing()
+    // stays true so show restores the same frame instead of fast-forwarding
+    // through the time the widget was occluded.
+    void suspend(TimePoint now = Clock::now());
+    void unsuspend(TimePoint now = Clock::now());
     void restart(TimePoint now = Clock::now())
     {
         start(now);
@@ -42,6 +49,10 @@ class FramePlaybackController
     bool playing() const
     {
         return m_playing;
+    }
+    bool suspended() const
+    {
+        return m_suspended;
     }
     int currentFrame() const
     {
@@ -75,6 +86,7 @@ class FramePlaybackController
     std::vector<int> m_durations;
     int m_currentFrame = 0;
     bool m_playing = false;
+    bool m_suspended = false;
     TimePoint m_startedAt = Clock::now();
     Milliseconds m_elapsedAtPause{0};
 };

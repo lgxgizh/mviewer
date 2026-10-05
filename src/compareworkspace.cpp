@@ -121,6 +121,7 @@ void CompareWorkspace::releaseSessionMemory()
         }
         m_session->framePool.clear();
         m_session->panePyramids.clear();
+        m_session->reapplyCellTransform.clear();
         m_session->forceDecodePriority = false;
     }
     m_pendingWarmSeeds.clear();
@@ -263,7 +264,10 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     m_diffTask.reset();
     ++m_diffGen;
     if (m_session)
+    {
         m_session->forceDecodePriority = true;
+        m_session->reapplyCellTransform.clear();
+    }
     clearROIStatsDisplay();
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
     if (!m_roiLinked)
@@ -368,6 +372,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
         }
         m_session->panePyramids.clear();
         m_session->panePyramids.resize(static_cast<size_t>(m_engine.imageCount()));
+        m_session->reapplyCellTransform.clear();
         m_session->forceDecodePriority = true;
     }
     if (m_compareLoadingProgress)
