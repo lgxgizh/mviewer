@@ -2,6 +2,7 @@
 #include "thumbnailpanel_p.h"
 #include "selectionmodel.h"
 
+#include "core/image/ImageSortKeys.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "thumbnailprovider.h"
@@ -271,61 +272,12 @@ void ThumbnailPanel::sortDirectoryDeltaEntries(QList<Entry> &entries) const
             ratingCache.insert(e.path, rs.rating(e.path.toStdString()));
     }
 
-    auto compareEntries = [this, &ratingCache](const Entry &a, const Entry &b)
+    const auto field = static_cast<mviewer::core::BrowseSortField>(m_sortMode);
+    auto compareEntries = [this, &ratingCache, field](const Entry &a, const Entry &b)
     {
-        int order = 0;
-        switch (m_sortMode)
-        {
-        case SortName:
-            order = QString::compare(a.name, b.name, Qt::CaseInsensitive);
-            break;
-        case SortDate:
-            if (a.date != b.date)
-                order = a.date > b.date ? -1 : 1;
-            break;
-        case SortSize:
-            if (a.size != b.size)
-                order = a.size > b.size ? -1 : 1;
-            break;
-        case SortResolution:
-        {
-            const qint64 ar = static_cast<qint64>(a.width) * a.height;
-            const qint64 br = static_cast<qint64>(b.width) * b.height;
-            if (ar != br)
-                order = ar > br ? -1 : 1;
-            break;
-        }
-        case SortType:
-        {
-            const int dotA = a.name.lastIndexOf(QLatin1Char('.'));
-            const int dotB = b.name.lastIndexOf(QLatin1Char('.'));
-            const QStringView sa = (dotA >= 0) ? QStringView(a.name).mid(dotA + 1) : QStringView();
-            const QStringView sb = (dotB >= 0) ? QStringView(b.name).mid(dotB + 1) : QStringView();
-            order = sa.compare(sb, Qt::CaseInsensitive);
-            break;
-        }
-        case SortRating:
-        {
-            const int ar = ratingCache.value(a.path);
-            const int br = ratingCache.value(b.path);
-            if (ar != br)
-                order = ar < br ? -1 : 1;
-            break;
-        }
-        case SortCamera:
-            order =
-                QString::compare(m_metaCamera.value(galleryPathKey(a.path)),
-                                 m_metaCamera.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
-            break;
-        case SortLens:
-            order = QString::compare(m_metaLens.value(galleryPathKey(a.path)),
-                                     m_metaLens.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
-            break;
-        }
-        if (order == 0)
-            order =
-                QString::compare(galleryPathKey(a.path), galleryPathKey(b.path), Qt::CaseSensitive);
-        return m_sortAscending ? order < 0 : order > 0;
+        const int primary =
+            browsePrimaryCompare(field, a, b, ratingCache, m_metaCamera, m_metaLens);
+        return browseOrderedLess(primary, a.name, b.name, a.path, b.path, m_sortAscending);
     };
     std::stable_sort(entries.begin(), entries.end(), compareEntries);
 }
@@ -527,4 +479,228 @@ void ThumbnailPanel::preserveScrollAnchor(const QString &anchorPath, int anchorO
         const int currentTop = visualRect(index).top() - viewport()->rect().top();
         bar->setValue(bar->value() + currentTop - anchorOffset);
     }
+}
+
+namespace
+{
+
+int endOfDigits(QStringView text, int start)
+{
+    int end = start;
+    while (end < text.size() && text.at(end).isDigit())
+        ++end;
+    return end;
+}
+
+int compareDigitRun(QStringView left, QStringView right)
+{
+    int i = 0;
+    int j = 0;
+    while (i + 1 < left.size() && left.at(i) == QLatin1Char('0'))
+        ++i;
+    while (j + 1 < right.size() && right.at(j) == QLatin1Char('0'))
+        ++j;
+    const int lenLeft = left.size() - i;
+    const int lenRight = right.size() - j;
+    if (lenLeft != lenRight)
+        return lenLeft < lenRight ? -1 : 1;
+    const int cmp = left.mid(i).compare(right.mid(j));
+    if (cmp != 0)
+        return cmp < 0 ? -1 : 1;
+    if (left.size() != right.size())
+        return left.size() < right.size() ? -1 : 1;
+    return 0;
+}
+
+bool reservedWindowsStem(const QString &fileName)
+{
+    const int dot = fileName.indexOf(QLatin1Char('.'));
+    if (dot == 0)
+        return false;
+    const QString stem = (dot > 0 ? fileName.left(dot) : fileName).toUpper();
+    if (stem == QLatin1String("CON") || stem == QLatin1String("PRN") ||
+        stem == QLatin1String("AUX") || stem == QLatin1String("NUL"))
+        return true;
+    if (stem.size() != 4)
+        return false;
+    if (!stem.startsWith(QLatin1String("COM")) && !stem.startsWith(QLatin1String("LPT")))
+        return false;
+    return stem.at(3).isDigit();
+}
+
+QStringView nameExtension(const QString &name)
+{
+    const int dot = name.lastIndexOf(QLatin1Char('.'));
+    return dot >= 0 ? QStringView(name).mid(dot + 1) : QStringView();
+}
+
+} // namespace
+
+int compareNaturalName(QStringView left, QStringView right)
+{
+    int i = 0;
+    int j = 0;
+    while (i < left.size() && j < right.size())
+    {
+        const bool leftDigit = left.at(i).isDigit();
+        const bool rightDigit = right.at(j).isDigit();
+        if (leftDigit || rightDigit)
+        {
+            if (leftDigit != rightDigit)
+                return leftDigit ? -1 : 1;
+            const int endLeft = endOfDigits(left, i);
+            const int endRight = endOfDigits(right, j);
+            const int cmp = compareDigitRun(left.mid(i, endLeft - i), right.mid(j, endRight - j));
+            if (cmp != 0)
+                return cmp;
+            i = endLeft;
+            j = endRight;
+            continue;
+        }
+        int endLeft = i;
+        while (endLeft < left.size() && !left.at(endLeft).isDigit())
+            ++endLeft;
+        int endRight = j;
+        while (endRight < right.size() && !right.at(endRight).isDigit())
+            ++endRight;
+        const int cmp =
+            left.mid(i, endLeft - i).compare(right.mid(j, endRight - j), Qt::CaseInsensitive);
+        if (cmp != 0)
+            return cmp < 0 ? -1 : 1;
+        i = endLeft;
+        j = endRight;
+    }
+    if (i == left.size() && j == right.size())
+        return 0;
+    return i == left.size() ? -1 : 1;
+}
+
+bool browseOrderedLess(int primary, QStringView nameA, QStringView nameB, const QString &pathA,
+                       const QString &pathB, bool ascending)
+{
+    if (primary != 0)
+        return ascending ? primary < 0 : primary > 0;
+    const int byName = compareNaturalName(nameA, nameB);
+    if (byName != 0)
+        return byName < 0;
+    return QString::compare(ThumbnailPanel::galleryPathKey(pathA),
+                            ThumbnailPanel::galleryPathKey(pathB), Qt::CaseSensitive) < 0;
+}
+
+int browsePrimaryCompare(mviewer::core::BrowseSortField field, const ThumbnailPanel::Entry &a,
+                         const ThumbnailPanel::Entry &b, const QHash<QString, int> &ratingCache,
+                         const QHash<QString, QString> &metaCamera,
+                         const QHash<QString, QString> &metaLens)
+{
+    switch (field)
+    {
+    case mviewer::core::BrowseSortField::Name:
+        return compareNaturalName(a.name, b.name);
+    case mviewer::core::BrowseSortField::Date:
+        if (a.date == b.date)
+            return 0;
+        return a.date < b.date ? -1 : 1;
+    case mviewer::core::BrowseSortField::Size:
+        if (a.size == b.size)
+            return 0;
+        return a.size < b.size ? -1 : 1;
+    case mviewer::core::BrowseSortField::Resolution:
+    {
+        const qint64 left = static_cast<qint64>(a.width) * a.height;
+        const qint64 right = static_cast<qint64>(b.width) * b.height;
+        if (left == right)
+            return 0;
+        return left < right ? -1 : 1;
+    }
+    case mviewer::core::BrowseSortField::Type:
+        return nameExtension(a.name).compare(nameExtension(b.name), Qt::CaseInsensitive);
+    case mviewer::core::BrowseSortField::Rating:
+        return ratingCache.value(a.path) - ratingCache.value(b.path);
+    case mviewer::core::BrowseSortField::Camera:
+        return QString::compare(metaCamera.value(ThumbnailPanel::galleryPathKey(a.path)),
+                                metaCamera.value(ThumbnailPanel::galleryPathKey(b.path)),
+                                Qt::CaseInsensitive);
+    case mviewer::core::BrowseSortField::Lens:
+        return QString::compare(metaLens.value(ThumbnailPanel::galleryPathKey(a.path)),
+                                metaLens.value(ThumbnailPanel::galleryPathKey(b.path)),
+                                Qt::CaseInsensitive);
+    }
+    return 0;
+}
+
+bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString &nameA,
+                    const mviewer::core::ImageSortKey &keyA, const QString &nameB,
+                    const mviewer::core::ImageSortKey &keyB)
+{
+    int primary = 0;
+    switch (mode)
+    {
+    case ThumbnailPanel::SortName:
+        primary = compareNaturalName(nameA, nameB);
+        break;
+    case ThumbnailPanel::SortDate:
+        if (keyA.mtimeSec != keyB.mtimeSec)
+            primary = keyA.mtimeSec < keyB.mtimeSec ? -1 : 1;
+        break;
+    case ThumbnailPanel::SortSize:
+        if (keyA.size != keyB.size)
+            primary = keyA.size < keyB.size ? -1 : 1;
+        break;
+    case ThumbnailPanel::SortResolution:
+        if (keyA.resolution != keyB.resolution)
+            primary = keyA.resolution < keyB.resolution ? -1 : 1;
+        break;
+    case ThumbnailPanel::SortType:
+        if (keyA.suffix != keyB.suffix)
+            primary = keyA.suffix < keyB.suffix ? -1 : 1;
+        break;
+    case ThumbnailPanel::SortRating:
+        if (keyA.rating != keyB.rating)
+            primary = keyA.rating < keyB.rating ? -1 : 1;
+        break;
+    case ThumbnailPanel::SortCamera:
+        if (keyA.camera != keyB.camera)
+            primary = keyA.camera < keyB.camera ? -1 : 1;
+        break;
+    case ThumbnailPanel::SortLens:
+        if (keyA.lens != keyB.lens)
+            primary = keyA.lens < keyB.lens ? -1 : 1;
+        break;
+    }
+    const QString pathA = QString::fromUtf8(keyA.path.data(), static_cast<int>(keyA.path.size()));
+    const QString pathB = QString::fromUtf8(keyB.path.data(), static_cast<int>(keyB.path.size()));
+    return browseOrderedLess(primary, nameA, nameB, pathA, pathB, ascending);
+}
+
+QString renameBlockedReason(const QString &directory, const QString &oldName,
+                            const QString &newName)
+{
+    if (newName.isEmpty() || newName == QLatin1String(".") || newName == QLatin1String(".."))
+        return QStringLiteral("文件名不能为空。");
+    if (newName.size() > 255)
+        return QStringLiteral("文件名不能超过 255 个字符。");
+    if (newName != newName.trimmed() || newName.endsWith(QLatin1Char('.')) ||
+        newName.endsWith(QLatin1Char(' ')))
+        return QStringLiteral("文件名不能以空格或句点开头或结尾。");
+    for (const QChar ch : newName)
+    {
+        const char16_t code = ch.unicode();
+        if (code < 32 || QStringLiteral("<>:\"|?*\\/").contains(ch))
+            return QStringLiteral("文件名包含 Windows 不允许的字符（\\ / : * ? \" < > |）。");
+    }
+    if (reservedWindowsStem(newName))
+        return QStringLiteral("文件名是 Windows 保留设备名。");
+    if (QFileInfo(newName).fileName() != newName)
+        return QStringLiteral("文件名不能包含路径。");
+
+    const QString oldPath = QDir(directory).filePath(oldName);
+    const QString newPath = QDir(directory).filePath(newName);
+    const QFileInfo destination(newPath);
+    if (!destination.exists())
+        return {};
+    const QString oldCanonical = QFileInfo(oldPath).canonicalFilePath();
+    const QString newCanonical = destination.canonicalFilePath();
+    if (!oldCanonical.isEmpty() && oldCanonical == newCanonical)
+        return {};
+    return QStringLiteral("同名文件已存在。");
 }

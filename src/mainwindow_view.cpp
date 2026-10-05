@@ -97,7 +97,7 @@ void MainWindow::openExternalTargets(const QStringList &paths)
     if (!plan.isValid())
     {
         const QString message = plan.error.isEmpty() ? QStringLiteral("无法打开目标") : plan.error;
-        statusBar()->showMessage(message);
+        statusBar()->showMessage(message, 5000);
         qWarning().noquote() << message;
         return;
     }

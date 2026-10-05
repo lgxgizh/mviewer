@@ -83,51 +83,6 @@ void ImageViewer::showBrowseFullscreen()
                        });
 }
 
-void ImageViewer::setFullscreenRequested(bool requested)
-{
-    // This property is authoritative even when the offscreen platform cannot
-    // report a reliable native isFullScreen() value.
-    setProperty("mviewerFullscreenRequested", requested);
-    if (requested)
-    {
-        setWindowState(windowState() | Qt::WindowFullScreen);
-        showFullScreen();
-    }
-    else
-    {
-        setWindowState(windowState() & ~Qt::WindowFullScreen);
-        showNormal();
-    }
-
-    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
-    QTimer::singleShot(0, this,
-                       [guard, requested]()
-                       {
-                           ImageViewer *viewer = guard ? guard->data() : nullptr;
-                           if (!viewer)
-                               return;
-                           if (viewer->m_fitMode)
-                           {
-                               if (viewer->m_frame && viewer->m_frame->isValid())
-                                   viewer->fitToWidget();
-                               else if (!viewer->m_provisionalImage.isNull())
-                               {
-                                   viewer->m_view.screenW = viewer->width();
-                                   viewer->m_view.screenH = viewer->height();
-                                   const QSize source = viewer->m_provisionalSourceSize.isValid()
-                                                            ? viewer->m_provisionalSourceSize
-                                                            : viewer->m_provisionalImage.size();
-                                   viewer->m_view.fit(source.width(), source.height(),
-                                                      requested ? FitPolicy::MaximizeClient
-                                                                : FitPolicy::Comfortable);
-                                   viewer->advanceViewportRevision();
-                                   viewer->emitZoom();
-                               }
-                           }
-                           viewer->update();
-                       });
-}
-
 void ImageViewer::setImage(const QString &path)
 {
     try

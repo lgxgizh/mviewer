@@ -484,50 +484,9 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
     }
     const auto less = [&query, &ratingCache, &metaCamera, &metaLens](const Entry &a, const Entry &b)
     {
-        int cmp = 0;
-        switch (query.sort)
-        {
-        case mviewer::core::BrowseSortField::Name:
-            cmp = QString::compare(a.name, b.name, Qt::CaseInsensitive);
-            break;
-        case mviewer::core::BrowseSortField::Date:
-            cmp = a.date < b.date ? -1 : (a.date > b.date ? 1 : 0);
-            break;
-        case mviewer::core::BrowseSortField::Size:
-            cmp = a.size < b.size ? -1 : (a.size > b.size ? 1 : 0);
-            break;
-        case mviewer::core::BrowseSortField::Resolution:
-        {
-            const qint64 ar = static_cast<qint64>(a.width) * a.height;
-            const qint64 br = static_cast<qint64>(b.width) * b.height;
-            cmp = ar < br ? -1 : (ar > br ? 1 : 0);
-            break;
-        }
-        case mviewer::core::BrowseSortField::Type:
-        {
-            const int dotA = a.name.lastIndexOf(QLatin1Char('.'));
-            const int dotB = b.name.lastIndexOf(QLatin1Char('.'));
-            const QStringView sa = (dotA >= 0) ? QStringView(a.name).mid(dotA + 1) : QStringView();
-            const QStringView sb = (dotB >= 0) ? QStringView(b.name).mid(dotB + 1) : QStringView();
-            cmp = sa.compare(sb, Qt::CaseInsensitive);
-            break;
-        }
-        case mviewer::core::BrowseSortField::Rating:
-            cmp = ratingCache.value(a.path) - ratingCache.value(b.path);
-            break;
-        case mviewer::core::BrowseSortField::Camera:
-            cmp = QString::compare(metaCamera.value(galleryPathKey(a.path)),
-                                   metaCamera.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
-            break;
-        case mviewer::core::BrowseSortField::Lens:
-            cmp = QString::compare(metaLens.value(galleryPathKey(a.path)),
-                                   metaLens.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
-            break;
-        }
-        if (cmp == 0)
-            cmp =
-                QString::compare(galleryPathKey(a.path), galleryPathKey(b.path), Qt::CaseSensitive);
-        return query.ascending ? cmp < 0 : cmp > 0;
+        const int primary =
+            browsePrimaryCompare(query.sort, a, b, ratingCache, metaCamera, metaLens);
+        return browseOrderedLess(primary, a.name, b.name, a.path, b.path, query.ascending);
     };
     std::stable_sort(out.begin(), out.end(), less);
     return out;
@@ -723,57 +682,22 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool
 
     const auto keys = mviewer::core::computeSortKeys(paths, field);
 
-    // Pure-memory sort over precomputed keys.
+    // Same order as the gallery filter: ascending is low-to-high, and ties keep
+    // natural name then path. Reversing the whole list used to flip ties.
     std::vector<int> order(static_cast<size_t>(out.size()));
     for (size_t i = 0; i < order.size(); ++i)
         order[i] = static_cast<int>(i);
-    std::sort(order.begin(), order.end(),
-              [&](int a, int b)
-              {
-                  const auto &ka = keys[static_cast<size_t>(a)];
-                  const auto &kb = keys[static_cast<size_t>(b)];
-                  switch (mode)
-                  {
-                  case SortName:
-                      return ka.path < kb.path;
-                  case SortDate:
-                      if (ka.mtimeSec != kb.mtimeSec)
-                          return ka.mtimeSec > kb.mtimeSec;
-                      return ka.path < kb.path;
-                  case SortSize:
-                      if (ka.size != kb.size)
-                          return ka.size > kb.size;
-                      return ka.path < kb.path;
-                  case SortResolution:
-                      if (ka.resolution != kb.resolution)
-                          return ka.resolution > kb.resolution;
-                      return ka.path < kb.path;
-                  case SortType:
-                      if (ka.suffix != kb.suffix)
-                          return ka.suffix < kb.suffix;
-                      return ka.path < kb.path;
-                  case SortRating:
-                      if (ka.rating != kb.rating)
-                          return ka.rating < kb.rating;
-                      return ka.path < kb.path;
-                  case SortCamera:
-                      if (ka.camera != kb.camera)
-                          return ka.camera < kb.camera;
-                      return ka.path < kb.path;
-                  case SortLens:
-                      if (ka.lens != kb.lens)
-                          return ka.lens < kb.lens;
-                      return ka.path < kb.path;
-                  }
-                  return ka.path < kb.path;
-              });
+    std::stable_sort(order.begin(), order.end(),
+                     [&](int ia, int ib)
+                     {
+                         return sortedFileLess(mode, ascending, out.at(ia).fileName(),
+                                               keys[static_cast<size_t>(ia)], out.at(ib).fileName(),
+                                               keys[static_cast<size_t>(ib)]);
+                     });
 
     QFileInfoList sorted;
     sorted.reserve(out.size());
     for (int i : order)
         sorted.append(out.at(i));
-    // A-2.2: apply sort direction (reverse if descending).
-    if (!ascending)
-        std::reverse(sorted.begin(), sorted.end());
     return sorted;
 }

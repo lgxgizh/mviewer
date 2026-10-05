@@ -355,20 +355,20 @@ void ThumbnailPanel::renameSelected()
     const QString newName = dialog.textValue();
     if (newName.isEmpty() || newName == fi.fileName())
         return;
-    if (newName.contains(QLatin1Char('/')) || newName.contains(QLatin1Char('\\')) ||
-        QFileInfo(newName).fileName() != newName)
+    const QString blocked = renameBlockedReason(fi.absolutePath(), fi.fileName(), newName);
+    if (!blocked.isEmpty())
     {
-        QMessageBox::warning(this, QStringLiteral("重命名失败"),
-                             QStringLiteral("文件名不能包含路径。"));
+        QMessageBox::warning(this, QStringLiteral("重命名失败"), blocked);
         return;
     }
-    const QString newPath = fi.absolutePath() + "/" + newName;
-    if (QFileInfo(newPath).absolutePath() != fi.absolutePath())
-    {
-        QMessageBox::warning(this, QStringLiteral("重命名失败"),
-                             QStringLiteral("文件名不能包含路径。"));
+    const QString newSuffix = QFileInfo(newName).suffix();
+    if (fi.suffix().compare(newSuffix, Qt::CaseInsensitive) != 0 &&
+        QMessageBox::question(this, QStringLiteral("重命名"),
+                              QStringLiteral("更改扩展名可能导致文件无法打开。仍要继续吗？"),
+                              QMessageBox::Yes | QMessageBox::No,
+                              QMessageBox::No) != QMessageBox::Yes)
         return;
-    }
+    const QString newPath = QDir(fi.absolutePath()).filePath(newName);
 
     // A-10: reversible rename via CommandStack when available.
     if (m_cmdStack)
