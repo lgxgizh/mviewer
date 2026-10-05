@@ -7,6 +7,7 @@ class QComboBox;
 class QSpinBox;
 class QCheckBox;
 class QSlider;
+class QSettings;
 
 // F1 (M22): centralized Preferences dialog. Reads/writes the existing QSettings
 // keys plus the new toggles introduced by F2/F3/F4 (autoAlignBeforeDiff,
@@ -26,6 +27,10 @@ class PreferencesDialog : public QDialog
     void accept() override;
 
   private:
+    QWidget *buildGeneralTab(QSettings &s);
+    QWidget *buildCompareTab(QSettings &s);
+    QWidget *buildAnalysisTab(QSettings &s);
+
     QComboBox *m_uiTheme = nullptr;
     QComboBox *m_viewMode = nullptr;
     QComboBox *m_sortMode = nullptr;
