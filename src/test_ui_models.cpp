@@ -93,7 +93,7 @@ int main(int argc, char **argv)
         int recentChanges = 0;
         QObject::connect(&dir, &DirectoryModel::recentFoldersChanged,
                          [&](const QStringList &) { ++recentChanges; });
-        dir.removeRecentFolder(QStringLiteral("\r1"));
+        dir.removeRecentFolder(QStringLiteral("\\r1"));
         CHECK(dir.recentFolders().size() == 1,
               "DirectoryModel removeRecentFolder matches the other slash");
         CHECK(dir.recentFolders().front() == "/r2",
