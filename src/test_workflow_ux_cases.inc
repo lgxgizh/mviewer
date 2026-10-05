@@ -4917,6 +4917,7 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
     const ContextMenuSnapshot emptyMenu = contextMenuSnapshot(viewer);
     CHECK(!emptyMenu.enabledLabels.contains(QStringLiteral("复制图片")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("复制路径")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("复制文件名")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("复制像素颜色 (#RRGGBB)")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("另存为...")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("放大 (+)")) &&

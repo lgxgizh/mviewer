@@ -67,6 +67,7 @@ class SearchPanel : public QWidget
 
   protected:
     void keyPressEvent(QKeyEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
   private:
     void buildQuery(mviewer::domain::SearchQuery &q) const;

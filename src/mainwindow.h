@@ -394,6 +394,7 @@ class MainWindow : public QMainWindow
     void toggleCurrentPick();
     void toggleCurrentReject();
     void clearAllFilters();
+    void resetFiltersOnFolderChange();
 
     // M19: UI models — single source of truth for Current / Selection /
     // Directory / ImageList / Workspace / Analyzer. Widgets listen; they do not

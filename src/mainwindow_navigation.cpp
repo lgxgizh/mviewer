@@ -312,13 +312,57 @@ void MainWindow::rebuildRecentMenu()
     for (const auto &p : m_recent.items())
     {
         const QString qs = QString::fromStdString(p);
-        auto *act = m_recentMenu->addAction(QFileInfo(qs).fileName());
+        const QString fn = QFileInfo(qs).fileName();
+        const QString label = fn.isEmpty() ? QDir::toNativeSeparators(qs) : fn;
+        auto *act = m_recentMenu->addAction(label);
         act->setToolTip(qs);
-        connect(act, &QAction::triggered, this, [this, qs]() { changeDirectory(qs); });
+        connect(act, &QAction::triggered, this,
+                [this, qs]()
+                {
+                    if (!QDir(qs).exists())
+                    {
+                        m_recent.remove(qs.toStdString());
+                        m_appState.recentFolders.removeAll(qs);
+                        if (m_directory)
+                            m_directory->removeRecentFolder(qs);
+                        m_appState.save();
+                        rebuildRecentMenu();
+                        if (statusBar())
+                            statusBar()->showMessage(
+                                tr("目录不存在，已从最近记录中移除: %1").arg(qs), 3000);
+                        return;
+                    }
+                    changeDirectory(qs);
+                });
     }
     if (!m_recent.items().empty())
     {
         m_recentMenu->addSeparator();
+        auto *pruneAct = m_recentMenu->addAction(tr("清理失效目录"));
+        connect(pruneAct, &QAction::triggered, this,
+                [this]()
+                {
+                    int pruned = 0;
+                    for (const auto &p : m_recent.items())
+                    {
+                        const QString qs = QString::fromStdString(p);
+                        if (!QDir(qs).exists())
+                        {
+                            m_recent.remove(p);
+                            m_appState.recentFolders.removeAll(qs);
+                            if (m_directory)
+                                m_directory->removeRecentFolder(qs);
+                            ++pruned;
+                        }
+                    }
+                    if (pruned > 0)
+                    {
+                        m_appState.save();
+                        rebuildRecentMenu();
+                    }
+                    if (statusBar())
+                        statusBar()->showMessage(tr("已清理 %1 条失效目录记录").arg(pruned), 2000);
+                });
         auto *clearAct = m_recentMenu->addAction(tr("清空最近目录"));
         connect(clearAct, &QAction::triggered, this,
                 [this]()
@@ -352,18 +396,59 @@ void MainWindow::rebuildRecentFilesMenu()
     for (const auto &p : m_recentFiles.items())
     {
         const QString qs = QString::fromStdString(p);
-        auto *act = m_recentFileMenu->addAction(QFileInfo(qs).fileName());
+        const QString fn = QFileInfo(qs).fileName();
+        const QString label = fn.isEmpty() ? QDir::toNativeSeparators(qs) : fn;
+        auto *act = m_recentFileMenu->addAction(label);
         act->setToolTip(qs);
-        connect(act, &QAction::triggered, this, [this, qs]() { onImageOpen(qs); });
+        connect(act, &QAction::triggered, this,
+                [this, qs]()
+                {
+                    if (!QFile::exists(qs))
+                    {
+                        m_recentFiles.remove(qs.toUtf8().toStdString());
+                        m_appState.history.removeAll(qs);
+                        m_appState.save();
+                        rebuildRecentFilesMenu();
+                        if (statusBar())
+                            statusBar()->showMessage(
+                                tr("文件不存在，已从最近记录中移除: %1").arg(qs), 3000);
+                        return;
+                    }
+                    onImageOpen(qs);
+                });
     }
     if (!m_recentFiles.items().empty())
     {
         m_recentFileMenu->addSeparator();
+        auto *pruneAct = m_recentFileMenu->addAction(tr("清理失效文件"));
+        connect(pruneAct, &QAction::triggered, this,
+                [this]()
+                {
+                    int pruned = 0;
+                    for (const auto &p : m_recentFiles.items())
+                    {
+                        const QString qs = QString::fromStdString(p);
+                        if (!QFile::exists(qs))
+                        {
+                            m_recentFiles.remove(p);
+                            m_appState.history.removeAll(qs);
+                            ++pruned;
+                        }
+                    }
+                    if (pruned > 0)
+                    {
+                        m_appState.save();
+                        rebuildRecentFilesMenu();
+                    }
+                    if (statusBar())
+                        statusBar()->showMessage(tr("已清理 %1 条失效文件记录").arg(pruned), 2000);
+                });
         auto *clearAct = m_recentFileMenu->addAction(tr("清空最近文件"));
         connect(clearAct, &QAction::triggered, this,
                 [this]()
                 {
                     m_recentFiles.clear();
+                    m_appState.clearHistory();
                     rebuildRecentFilesMenu();
                     if (statusBar())
                         statusBar()->showMessage(tr("已清空最近文件记录"), 2000);
@@ -447,4 +532,23 @@ void MainWindow::clearAllFilters()
         m_thumbnailPanel->setFilter(QString(), false);
     }
     statusBar()->showMessage(tr("已清除所有筛选条件"), 2000);
+}
+
+void MainWindow::resetFiltersOnFolderChange()
+{
+    const QSignalBlocker b1(m_searchEdit);
+    const QSignalBlocker b2(m_ratingFilter);
+    const QSignalBlocker b3(m_flagFilter);
+    if (m_searchEdit)
+        m_searchEdit->clear();
+    if (m_ratingFilter)
+        m_ratingFilter->setCurrentIndex(0);
+    if (m_flagFilter)
+        m_flagFilter->setCurrentIndex(0);
+    if (m_thumbnailPanel)
+    {
+        m_thumbnailPanel->clearFlagFilters();
+        m_thumbnailPanel->setRatingFilter(0);
+        m_thumbnailPanel->setFilter(QString(), false);
+    }
 }

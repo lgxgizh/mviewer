@@ -729,6 +729,7 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     aReveal->setShortcut(QKeySequence("Ctrl+E"));
     QAction *aCopyPath = menu.addAction("复制路径");
     aCopyPath->setShortcut(QKeySequence("Ctrl+Shift+C"));
+    QAction *aCopyName = menu.addAction("复制文件名");
     QAction *aCompare = menu.addAction("比较");
     QAction *aAnalyze = menu.addAction("批量分析导出");
     menu.addSeparator();
@@ -737,14 +738,12 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     {
         QStringList tags;
         for (const QString &sp : selectedPaths())
-        {
             for (const auto &tg : mviewer::core::TagStore::instance().tags(sp.toStdString()))
             {
                 const QString text = QString::fromStdString(tg);
                 if (!tags.contains(text))
                     tags.append(text);
             }
-        }
         tags.sort();
         for (const QString &tg : tags)
             rmTagMenu->addAction(tg);
@@ -768,6 +767,8 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
         revealSelected();
     else if (chosen == aCopyPath)
         copySelectedPaths();
+    else if (chosen == aCopyName)
+        copySelectedFileNames();
     else if (chosen == aCompare)
         onCompareClicked();
     else if (chosen == aAnalyze)

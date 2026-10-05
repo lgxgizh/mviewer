@@ -208,6 +208,18 @@ void ThumbnailPanel::copySelectedPaths()
     QApplication::clipboard()->setText(nativePaths.join(QStringLiteral("\n")));
 }
 
+void ThumbnailPanel::copySelectedFileNames()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    QStringList names;
+    names.reserve(paths.size());
+    for (const QString &p : paths)
+        names.append(QFileInfo(p).fileName());
+    QApplication::clipboard()->setText(names.join(QStringLiteral("\n")));
+}
+
 #include <QtConcurrent/QtConcurrent>
 
 namespace

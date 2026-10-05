@@ -672,6 +672,8 @@ bool parseWorkspace(const std::string &text, mviewer::domain::Workspace &out)
 
 void RecentFiles::add(const std::string &path)
 {
+    if (path.empty())
+        return;
     for (size_t i = 0; i < m_items.size(); ++i)
     {
         if (m_items[i] == path)
@@ -684,6 +686,24 @@ void RecentFiles::add(const std::string &path)
         }
     }
     m_items.insert(m_items.begin(), path);
+    while (m_items.size() > m_max)
+        m_items.pop_back();
+}
+
+bool RecentFiles::remove(const std::string &path)
+{
+    auto it = std::find(m_items.begin(), m_items.end(), path);
+    if (it != m_items.end())
+    {
+        m_items.erase(it);
+        return true;
+    }
+    return false;
+}
+
+void RecentFiles::setMaxEntries(size_t maxEntries)
+{
+    m_max = maxEntries;
     while (m_items.size() > m_max)
         m_items.pop_back();
 }
@@ -721,6 +741,8 @@ bool RecentFiles::deserialize(const std::string &text)
         if (p.i == before || m_items.size() > kMaxArrayElements)
             return false;
     }
+    while (m_items.size() > m_max)
+        m_items.pop_back();
     return true;
 }
 

@@ -268,6 +268,23 @@ int main(int argc, char **argv)
         CHECK(false, "deserialized recent list is non-empty");
     }
 
+    // Empty path is ignored.
+    recent.add("");
+    CHECK(recent.items().size() == 3, "empty path not added to recent list");
+
+    // Remove existing item.
+    CHECK(recent.remove("D:/x/2.png"), "remove existing item returns true");
+    CHECK(recent.items().size() == 2, "item count reduced after removal");
+    CHECK(!recent.remove("D:/x/nonexistent.png"), "remove nonexistent item returns false");
+
+    // Deserializing JSON with more items than maxEntries clamps to maxEntries.
+    mviewer::core::RecentFiles recentSmall(2);
+    const std::string oversizedJson = "{\"recent\":[\"a\",\"b\",\"c\",\"d\"]}";
+    CHECK(recentSmall.deserialize(oversizedJson), "deserialize oversized JSON succeeds");
+    CHECK(recentSmall.items().size() == 2, "deserialize clamps to maxEntries");
+    CHECK(recentSmall.items()[0] == "a" && recentSmall.items()[1] == "b",
+          "first maxEntries preserved");
+
     printf("\n=== M9-5 Workspace acceptance: %d passed, %d failed ===\n", g_pass, g_fail);
 
     // ─── M15: CompareSession snapshot round-trip ─────────────────────────────
