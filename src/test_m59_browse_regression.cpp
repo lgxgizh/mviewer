@@ -175,6 +175,46 @@ int main(int argc, char **argv)
               10000),
           "real ThumbnailPanel latest-wins projection publishes only C");
 
+    QList<ThumbnailPanel::Entry> ties = {
+        {QStringLiteral("sort/b.png"), QStringLiteral("b.png"), 10, 8, 8,
+         QDateTime::fromSecsSinceEpoch(50)},
+        {QStringLiteral("sort/a.png"), QStringLiteral("a.png"), 10, 8, 8,
+         QDateTime::fromSecsSinceEpoch(50)},
+        {QStringLiteral("sort/img10.png"), QStringLiteral("img10.png"), 3, 1, 1,
+         QDateTime::fromSecsSinceEpoch(10)},
+        {QStringLiteral("sort/img2.png"), QStringLiteral("img2.png"), 3, 1, 1,
+         QDateTime::fromSecsSinceEpoch(10)},
+        {QStringLiteral("sort/img02.png"), QStringLiteral("img02.png"), 3, 2, 2,
+         QDateTime::fromSecsSinceEpoch(20)},
+    };
+    const auto namesOf = [](const QList<ThumbnailPanel::Entry> &rows)
+    {
+        QStringList names;
+        for (const auto &row : rows)
+            names.append(row.name);
+        return names.join(QLatin1Char(','));
+    };
+    mviewer::core::BrowseQuery sizeDesc;
+    sizeDesc.sort = mviewer::core::BrowseSortField::Size;
+    sizeDesc.ascending = false;
+    const auto bySize = ThumbnailPanel::evaluateQuerySnapshotForTest(
+        ties, QString(), false, QRegularExpression(), sizeDesc, ratings, emptyTags, {}, {}, {}, {});
+    CHECK(namesOf(bySize) == QStringLiteral("a.png,b.png,img2.png,img02.png,img10.png"),
+          "descending size keeps natural name order for equal sizes");
+    mviewer::core::BrowseQuery byName;
+    byName.sort = mviewer::core::BrowseSortField::Name;
+    const auto named = ThumbnailPanel::evaluateQuerySnapshotForTest(
+        ties, QString(), false, QRegularExpression(), byName, ratings, emptyTags, {}, {}, {}, {});
+    CHECK(namesOf(named) == QStringLiteral("a.png,b.png,img2.png,img02.png,img10.png"),
+          "natural names put img2 before img10 and a shorter zero-run first");
+    mviewer::core::BrowseQuery dateDesc;
+    dateDesc.sort = mviewer::core::BrowseSortField::Date;
+    dateDesc.ascending = false;
+    const auto byDate = ThumbnailPanel::evaluateQuerySnapshotForTest(
+        ties, QString(), false, QRegularExpression(), dateDesc, ratings, emptyTags, {}, {}, {}, {});
+    CHECK(namesOf(byDate) == QStringLiteral("a.png,b.png,img02.png,img2.png,img10.png"),
+          "descending date keeps name order when timestamps match");
+
     std::printf("M59 Browse regression failures: %d\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }

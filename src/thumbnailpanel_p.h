@@ -39,7 +39,9 @@
 
 #include <memory>
 
+#include <QHash>
 #include <QPointer>
+#include <QStringView>
 #include <algorithm>
 #include <limits>
 #include <unordered_map>
@@ -230,3 +232,24 @@ class DetailsHeader : public QWidget
     int m_dragOriginX = 0;
     int m_dragOriginW = 0;
 };
+
+namespace mviewer::core
+{
+struct ImageSortKey;
+}
+
+// Natural name order (img2 before img10). Text chunks stay case-insensitive.
+int compareNaturalName(QStringView left, QStringView right);
+// Primary key follows `ascending`. Equal keys stay name-then-path, A→Z.
+bool browseOrderedLess(int primary, QStringView nameA, QStringView nameB, const QString &pathA,
+                       const QString &pathB, bool ascending);
+int browsePrimaryCompare(mviewer::core::BrowseSortField field, const ThumbnailPanel::Entry &a,
+                         const ThumbnailPanel::Entry &b, const QHash<QString, int> &ratingCache,
+                         const QHash<QString, QString> &metaCamera,
+                         const QHash<QString, QString> &metaLens);
+bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString &nameA,
+                    const mviewer::core::ImageSortKey &keyA, const QString &nameB,
+                    const mviewer::core::ImageSortKey &keyB);
+// Empty when `newName` may replace `oldName` in `directory`.
+QString renameBlockedReason(const QString &directory, const QString &oldName,
+                            const QString &newName);

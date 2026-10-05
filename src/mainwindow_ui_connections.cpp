@@ -1,6 +1,8 @@
 // MainWindow signal wiring split by workflow responsibility.
 #include "mainwindow_p.h"
 
+#include <QDateTime>
+
 void MainWindow::connectUiSignals()
 {
     connectNavigationSignals();
@@ -69,7 +71,7 @@ void MainWindow::connectNavigationSignals()
                     return;
                 if (!available)
                     statusBar()->showMessage(QStringLiteral("目录暂不可用: %1").arg(path));
-                else
+                else if (statusBar()->currentMessage().startsWith(QStringLiteral("目录暂不可用")))
                     statusBar()->clearMessage();
             });
     // M37: the asynchronous gallery scan publishes the final visible sequence
@@ -81,10 +83,10 @@ void MainWindow::connectNavigationSignals()
                 if (!m_imageList)
                     return;
                 m_imageList->setPaths(paths, directory);
-                if (m_directory &&
+                if (!paths.isEmpty() && m_directory &&
                     DirectoryTree::equivalentPath(m_directory->currentDirectory(), directory))
-                    statusBar()->showMessage(
-                        QStringLiteral("Browse: %1, %2 images").arg(directory).arg(paths.size()));
+                    statusBar()->showMessage(QStringLiteral("已载入 %1 张").arg(paths.size()),
+                                             2500);
             });
     connect(m_imageList, &ImageListModel::pathsChanged, m_imageViewer,
             &ImageViewer::setBrowseSequence);
@@ -121,7 +123,7 @@ void MainWindow::connectNavigationSignals()
                 // import for every navigation entry point, including tree
                 // clicks/Enter, breadcrumb, Back/Forward, refresh, and restore.
                 scheduleSidecarImport(path);
-                statusBar()->showMessage(QStringLiteral("Browse: %1, scanning…").arg(path));
+                statusBar()->showMessage(QStringLiteral("正在扫描…"), 8000);
                 // With no image selected yet, the title carries the folder.
                 if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
@@ -146,7 +148,7 @@ void MainWindow::connectGallerySignals()
             {
                 if (message.isEmpty() || !statusBar())
                     return;
-                statusBar()->showMessage(message);
+                statusBar()->showMessage(message, 4000);
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64, int, qint64)
@@ -290,59 +292,63 @@ void MainWindow::connectSelectionSignals()
                     }
                 }
             });
-
-    // M27: the previous EventBus subscriptions ("image.open" / "compare.requested")
-    // had NO publishers anywhere in the codebase — dead code. Removed; the
-    // UI signals (thumbnail double-click, menu actions) drive these paths
-    // directly via MainWindow's own slots.
 }
 
 static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, int b, int a,
                                     int r16, int g16, int b16, int rawKind, bool valid)
 {
-    if (!sb)
+    if (!sb || (sb->window() && !sb->window()->isVisible()))
         return;
     if (!valid)
     {
-        sb->clearMessage();
+        // Leaving the image restores the previous message; it does not clear it.
+        if (!sb->currentMessage().startsWith(QLatin1String("像素 [")))
+            return;
+        const QString base = sb->property("statusBase").toString();
+        const qint64 until = sb->property("statusBaseUntil").toLongLong();
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (base.isEmpty() || (until > 0 && now >= until))
+            sb->clearMessage();
+        else if (until > 0)
+        {
+            const qint64 remain = until - now > 600000 ? 600000 : until - now;
+            sb->showMessage(base, static_cast<int>(remain));
+        }
+        else
+            sb->showMessage(base);
         return;
     }
-    const QString hex = QString("#%1%2%3")
+    if (!sb->currentMessage().startsWith(QLatin1String("像素 [")))
+    {
+        const QString current = sb->currentMessage();
+        sb->setProperty("statusBase", current);
+        const bool sticky = current.startsWith(QStringLiteral("目录暂不可用"));
+        const qint64 untilMs =
+            current.isEmpty() || sticky ? qint64{0} : QDateTime::currentMSecsSinceEpoch() + 4000;
+        sb->setProperty("statusBaseUntil", untilMs);
+    }
+    const QString hex = QStringLiteral("#%1%2%3")
                             .arg(r, 2, 16, QChar('0'))
                             .arg(g, 2, 16, QChar('0'))
                             .arg(b, 2, 16, QChar('0'))
                             .toUpper();
+    QString text = QStringLiteral("像素 [%1,%2]  ").arg(x).arg(y);
     if (rawKind == 2)
-        sb->showMessage(QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)  %9")
-                            .arg(x)
-                            .arg(y)
-                            .arg(r)
-                            .arg(g)
-                            .arg(b)
-                            .arg(r16)
-                            .arg(g16)
-                            .arg(b16)
-                            .arg(hex));
+        text += QStringLiteral("RGB(%1,%2,%3)  16bit(%4,%5,%6)  %7")
+                    .arg(r)
+                    .arg(g)
+                    .arg(b)
+                    .arg(r16)
+                    .arg(g16)
+                    .arg(b16)
+                    .arg(hex);
     else if (rawKind == 1)
-        sb->showMessage(QString("像素 [%1,%2]  RGB(%3,%4,%5)  (RAW)  %6")
-                            .arg(x)
-                            .arg(y)
-                            .arg(r)
-                            .arg(g)
-                            .arg(b)
-                            .arg(hex));
+        text += QStringLiteral("RGB(%1,%2,%3)  (RAW)  %4").arg(r).arg(g).arg(b).arg(hex);
     else if (a < 255)
-        sb->showMessage(QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  %7")
-                            .arg(x)
-                            .arg(y)
-                            .arg(r)
-                            .arg(g)
-                            .arg(b)
-                            .arg(a)
-                            .arg(hex));
+        text += QStringLiteral("RGBA(%1,%2,%3,%4)  %5").arg(r).arg(g).arg(b).arg(a).arg(hex);
     else
-        sb->showMessage(
-            QString("像素 [%1,%2]  RGB(%3,%4,%5)  %6").arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
+        text += QStringLiteral("RGB(%1,%2,%3)  %4").arg(r).arg(g).arg(b).arg(hex);
+    sb->showMessage(text);
 }
 
 void MainWindow::connectViewerSignals()
@@ -588,7 +594,11 @@ void MainWindow::connectMenuSignals()
             });
     connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
             [this](const QString &msg, int timeoutMs)
-            { statusBar()->showMessage(msg, timeoutMs); });
+            {
+                if (!isVisible() || !statusBar())
+                    return;
+                statusBar()->showMessage(msg, timeoutMs);
+            });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
     connect(m_actSaveProject, &QAction::triggered, this, &MainWindow::saveProject);

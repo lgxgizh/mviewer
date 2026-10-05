@@ -17,30 +17,40 @@
 // CommandStack) plus a REAL MainWindow for the metadata-overlay check.
 
 #include "appstate.h"
+#include "core/SettingsIO.h"
 #include "core/command/CommandStack.h"
 #include "core/command/FileDeleteCommand.h"
 #include "core/command/FileRenameCommand.h"
+#include "imageviewer.h"
 #include "mainwindow.h"
 #include "metadataoverlay.h"
 #include "runtime_storage.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QHelpEvent>
 #include <QImage>
 #include <QInputDialog>
+#include <QMessageBox>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QScreen>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QToolTip>
+#include <QUrl>
 
 #include <iostream>
 
@@ -294,6 +304,46 @@ void testCompareSelectionAffordance(const QString &dirPath)
           "Compare selection affordance: disabled oversized selection emits no request");
 }
 
+void driveRename(ThumbnailPanel &panel, const QString &typed, QMessageBox::StandardButton choice)
+{
+    QTimer poller;
+    poller.setInterval(10);
+    QObject::connect(&poller, &QTimer::timeout,
+                     [&]()
+                     {
+                         const auto dismiss = [&](QWidget *top) -> bool
+                         {
+                             if (!top || !top->isVisible())
+                                 return false;
+                             if (auto *dlg = qobject_cast<QInputDialog *>(top))
+                             {
+                                 dlg->setTextValue(typed);
+                                 dlg->accept();
+                                 return true;
+                             }
+                             if (auto *box = qobject_cast<QMessageBox *>(top))
+                             {
+                                 QAbstractButton *btn = box->button(choice);
+                                 if (!btn)
+                                     btn = box->button(QMessageBox::Ok);
+                                 if (!btn)
+                                     return false;
+                                 btn->click();
+                                 return true;
+                             }
+                             return false;
+                         };
+                         for (QWidget *top : QApplication::topLevelWidgets())
+                             if (dismiss(top))
+                                 return;
+                         dismiss(QApplication::activeModalWidget());
+                     });
+    poller.start();
+    panel.renameSelected();
+    poller.stop();
+    pump(200);
+}
+
 // ─── A#8: rename / delete / undo consistency ────────────────────────────────
 void testFileOpsUndo(const QString &dirPath)
 {
@@ -310,9 +360,37 @@ void testFileOpsUndo(const QString &dirPath)
     panel.setDirectory(dirPath);
     QElapsedTimer t;
     t.start();
-    while (panel.entries().size() < 2 && t.elapsed() < 8000)
+    while (t.elapsed() < 8000)
+    {
+        bool hasOp = false;
+        for (const auto &entry : panel.entries())
+            if (entry.name == QStringLiteral("ba_op1.png"))
+                hasOp = true;
+        if (panel.entries().size() >= 2 && hasOp)
+            break;
         pump(10);
+    }
     CHECK(panel.entries().size() >= 2, "A#8: initial scan complete");
+
+    panel.selectPath(p1);
+    driveRename(panel, QStringLiteral("CON.png"), QMessageBox::Ok);
+    CHECK(QFile::exists(p1), "A#8: reserved device name is rejected");
+    driveRename(panel, QStringLiteral("ba:op.png"), QMessageBox::Ok);
+    CHECK(QFile::exists(p1), "A#8: illegal Windows characters are rejected");
+    driveRename(panel, QStringLiteral("ba_op2.png"), QMessageBox::Ok);
+    CHECK(QFile::exists(p1) && QFile::exists(p2), "A#8: existing name is not overwritten");
+    driveRename(panel, QStringLiteral("ba_op1.jpg"), QMessageBox::No);
+    CHECK(QFile::exists(p1) && !QFile::exists(dir.filePath(QStringLiteral("ba_op1.jpg"))),
+          "A#8: declining an extension change keeps the file");
+    panel.selectPath(p1);
+    driveRename(panel, QStringLiteral("ba_op1.jpg"), QMessageBox::Yes);
+    const QString jpg = dir.filePath(QStringLiteral("ba_op1.jpg"));
+    CHECK(QFile::exists(jpg) && !QFile::exists(p1), "A#8: confirming an extension change renames");
+    CHECK(stack.undo(), "A#8: extension rename undo executes");
+    panel.refresh();
+    pump(300);
+    CHECK(QFile::exists(p1) && !QFile::exists(jpg), "A#8: undo restores the original extension");
+    panel.selectPath(p1);
 
     // Rename through the panel's REAL flow (QInputDialog + CommandStack). The
     // dialog is modal, so intercept it and type the new name.
@@ -580,6 +658,81 @@ void testDetailsColumnResize()
     QSettings().remove(QStringLiteral("ui/detailsColumnWidths"));
 }
 
+void testViewerDropAndWindowFit()
+{
+    std::cout << "── Browse: viewer drop and window fit ──\n";
+    QSettings().remove(QStringLiteral("viewerGeometry"));
+    ImageViewer viewer;
+    viewer.resize(640, 480);
+    viewer.show();
+    pump(30);
+
+    QStringList dropped;
+    QObject::connect(&viewer, &ImageViewer::filesDropped, &viewer,
+                     [&](const QStringList &paths) { dropped = paths; });
+    QMimeData mime;
+    mime.setUrls({QUrl::fromLocalFile(QStringLiteral("/tmp/mviewer-drop.png"))});
+    // Qt delivers Drop only to the widget that accepted DragEnter. A lone
+    // QDropEvent is discarded in QApplication::notify and never reaches dropEvent.
+    QDragEnterEvent enter(QPoint(8, 8), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&viewer, &enter);
+    QDropEvent drop(QPointF(8, 8), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&viewer, &drop);
+    CHECK(dropped.size() == 1 && dropped.first().endsWith(QStringLiteral("mviewer-drop.png")),
+          "viewer drop emits the local file");
+
+    const QSize windowed = viewer.size();
+    viewer.setFullscreenRequested(true);
+    viewer.setFullscreenRequested(false);
+    pump(20);
+    CHECK(qAbs(viewer.width() - windowed.width()) < 80 &&
+              qAbs(viewer.height() - windowed.height()) < 80,
+          "leaving fullscreen restores the windowed size");
+    viewer.setFullscreenRequested(true);
+    viewer.close();
+
+    ImageViewer again;
+    again.show();
+    pump(20);
+    QScreen *screen = QGuiApplication::primaryScreen();
+    CHECK(screen != nullptr, "primary screen exists");
+    const QRect avail = screen ? screen->availableGeometry() : QRect();
+    CHECK(!again.isFullScreen() && avail.intersects(again.frameGeometry()) &&
+              again.width() <= avail.width() && again.height() <= avail.height(),
+          "a viewer opened after a fullscreen close fits the screen");
+
+    QWidget parked;
+    parked.resize(4000, 3000);
+    parked.move(-20000, -20000);
+    ImageViewer::clampWidgetToAvailableScreens(&parked);
+    CHECK(avail.intersects(parked.frameGeometry()) && parked.width() <= avail.width() &&
+              parked.height() <= avail.height(),
+          "an off-screen window is pulled onto the available screen");
+    QSettings().remove(QStringLiteral("viewerGeometry"));
+    QSettings().remove(QStringLiteral("viewerScreen"));
+}
+
+void testSettingsPersistence(const QString &directory)
+{
+    std::cout << "── Browse: settings persistence ──\n";
+    QSettings settings;
+    settings.setValue(QStringLiteral("uxPass10"), 42);
+    settings.sync();
+    const QString file = QDir(directory).filePath(QStringLiteral("roundtrip.mvs"));
+    std::string err;
+    CHECK(mviewer::core::exportSettings(file.toStdString(), &err), "settings export writes a file");
+    settings.setValue(QStringLiteral("uxPass10"), 7);
+    settings.sync();
+    CHECK(mviewer::core::importSettings(file.toStdString(), &err),
+          "settings import applies the file");
+    CHECK(QSettings().value(QStringLiteral("uxPass10")).toInt() == 42,
+          "settings round-trip keeps the integer value");
+    err.clear();
+    CHECK(!mviewer::core::exportSettings(directory.toStdString(), &err) && !err.empty(),
+          "settings export to a directory reports an error");
+    QSettings().remove(QStringLiteral("uxPass10"));
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -617,6 +770,8 @@ int main(int argc, char **argv)
         };
         testMetadataOverlayCurrent(dirPath, paths);
     }
+    testViewerDropAndWindowFit();
+    testSettingsPersistence(tmp.path());
 
     if (g_failures > 0)
     {

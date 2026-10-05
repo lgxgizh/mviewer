@@ -240,7 +240,7 @@ void MainWindow::navigateHistory(int delta)
     m_selection->setCurrentImage(path);
     m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
     m_previewPanel->setImage(path); // async; off UI thread
-    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()), 3000);
     updateSelectionActions();
 }
 
@@ -392,7 +392,7 @@ void MainWindow::addFavoriteCurrent()
 {
     if (currentDir().isEmpty())
     {
-        statusBar()->showMessage("没有可收藏的目录");
+        statusBar()->showMessage("没有可收藏的目录", 3000);
         return;
     }
     m_appState.addFavorite(currentDir());
@@ -401,7 +401,7 @@ void MainWindow::addFavoriteCurrent()
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     updateSelectionActions();
-    statusBar()->showMessage(QString("已收藏: %1").arg(currentDir()));
+    statusBar()->showMessage(QString("已收藏: %1").arg(QFileInfo(currentDir()).fileName()), 3000);
 }
 
 void MainWindow::removeFavorite(const QString &dir)
@@ -415,7 +415,7 @@ void MainWindow::removeFavorite(const QString &dir)
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     updateSelectionActions();
-    statusBar()->showMessage(QString("已取消收藏: %1").arg(QFileInfo(target).fileName()));
+    statusBar()->showMessage(QString("已取消收藏: %1").arg(QFileInfo(target).fileName()), 3000);
 }
 
 void MainWindow::rebuildFavoritesBar()

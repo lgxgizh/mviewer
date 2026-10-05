@@ -48,6 +48,7 @@ ImageViewer::ImageViewer(QWidget *parent)
     // keyboard focus so ESC and the viewer's navigation/zoom keys are not left
     // with the thumbnail list after a double-click open.
     setFocusPolicy(Qt::StrongFocus);
+    setAcceptDrops(true);
     setMinimumSize(200, 200);
     // Stage A: QPainter over GL FBO for overlays (histogram / selection).
     setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
@@ -56,11 +57,7 @@ ImageViewer::ImageViewer(QWidget *parent)
     m_overlayMode =
         static_cast<mviewer::OverlayMode>(settings.value("defaultAnalysisOverlay", 0).toInt());
     m_zebraThreshold = settings.value("zebraThreshold", 2).toInt();
-    const QByteArray geom = settings.value("viewerGeometry").toByteArray();
-    if (!geom.isEmpty())
-        restoreGeometry(geom);
-    else
-        resize(900, 700);
+    restoreWindowGeometry();
     // Auto-hide cursor in fullscreen after 2.5s of inactivity.
     m_cursorHideTimer = new QTimer(this);
     m_cursorHideTimer->setSingleShot(true);
@@ -89,7 +86,8 @@ void ImageViewer::releaseColdMips(const QString &previousPath)
 
 ImageViewer::~ImageViewer()
 {
-    // M46: invalidate the consumer-lifetime token FIRST. Every request this
+    markClosing();
+    // M46: invalidate the consumer-lifetime token before cancelling work. Every request this
     // viewer owns holds only a weak_ptr to it; once invalidated, the
     // repository suppresses any late client delivery before it can start. The
     // cancels below then also wait (bounded) for a delivery that already
@@ -193,6 +191,7 @@ void ImageViewer::initializeGL()
 
 void ImageViewer::closeEvent(QCloseEvent *event)
 {
+    markClosing();
     // Drop the hover sample and any sticky select mode before decode teardown.
     clearPixelInfo();
     if (m_selectMode)
@@ -227,8 +226,7 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     m_provisionalSourceSize = QSize();
     m_transitionImage = QImage();
     m_transitionSourceSize = QSize();
-    QSettings settings;
-    settings.setValue("viewerGeometry", saveGeometry());
+    persistWindowGeometry();
     event->accept();
     emit viewerClosed();
 }

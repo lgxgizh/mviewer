@@ -46,6 +46,8 @@ void MainWindow::checkForUpdates(bool silent)
 
 void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent)
 {
+    if (!isVisible() || sessionPromptsSuppressed())
+        return;
     if (!info.error.empty())
     {
         if (!silent)
@@ -79,6 +81,8 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
 
 void MainWindow::maybeShowCrashReport()
 {
+    if (!isVisible() || sessionPromptsSuppressed())
+        return;
     const QString base = mviewer::runtime::writableDirectory(QStandardPaths::AppDataLocation);
     if (base.isEmpty())
         return;

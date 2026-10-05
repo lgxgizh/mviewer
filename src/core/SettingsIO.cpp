@@ -1,5 +1,6 @@
 #include "core/SettingsIO.h"
 
+#include <QDebug>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -37,6 +38,13 @@ QJsonObject dumpGroup(QSettings &s)
                 arr.append(item);
             obj[key] = arr;
         }
+        else if (v.typeId() == QMetaType::Bool)
+            obj.insert(key, v.toBool());
+        else if (v.typeId() == QMetaType::Int || v.typeId() == QMetaType::UInt)
+            obj.insert(key, v.toInt());
+        else if (v.typeId() == QMetaType::LongLong || v.typeId() == QMetaType::ULongLong ||
+                 v.typeId() == QMetaType::Double)
+            obj.insert(key, v.toDouble());
         else if (v.canConvert<QString>())
         {
             obj[key] = v.toString();
@@ -128,7 +136,19 @@ bool exportSettings(const std::string &path, std::string *errorOut)
             *errorOut = "cannot open file for writing: " + path;
         return false;
     }
-    return f.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) >= 0 && f.commit();
+    if (f.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0)
+    {
+        if (errorOut)
+            *errorOut = "cannot write settings file: " + path;
+        return false;
+    }
+    if (!f.commit())
+    {
+        if (errorOut)
+            *errorOut = "cannot commit settings file: " + path;
+        return false;
+    }
+    return true;
 }
 
 bool importSettings(const std::string &path, std::string *errorOut)
@@ -168,6 +188,12 @@ bool importSettings(const std::string &path, std::string *errorOut)
     QSettings s;
     restoreGroup(s, root);
     s.sync();
+    if (s.status() != QSettings::NoError)
+    {
+        if (errorOut)
+            *errorOut = "settings could not be saved";
+        return false;
+    }
     return true;
 }
 
@@ -183,6 +209,8 @@ void migrateSettingsIfNeeded()
     // schema evolves (e.g. rename keys, convert value formats).
     s.setValue(QStringLiteral("settingsSchemaVersion"), kSettingsSchemaVersion);
     s.sync();
+    if (s.status() != QSettings::NoError)
+        qWarning("MViewer settings migration could not be saved");
 }
 
 } // namespace mviewer::core

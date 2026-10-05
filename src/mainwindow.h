@@ -324,6 +324,9 @@ class MainWindow : public QMainWindow
     // M15: crash recovery
     QTimer *m_autosaveTimer = nullptr;
     bool m_autosaveLoaded = false;
+    // Set for the rest of close/teardown so a queued autosave cannot rewrite
+    // the recovery file after a normal exit deleted it.
+    bool m_sessionClosing = false;
 
     // P0-3: hover-activated metadata overlay.
     QTimer *m_metadataHoverTimer = nullptr;
@@ -456,6 +459,8 @@ class MainWindow : public QMainWindow
     // M15: crash recovery
     void autosaveSession();
     void restoreSessionRecovery();
+    void stopCloseTimers();
+    void persistWindowLayoutOnClose(bool inBrowseWorkspace, QStringList &failures);
     void checkForUpdates(bool silent = false);
     void onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent);
     void maybeShowCrashReport();

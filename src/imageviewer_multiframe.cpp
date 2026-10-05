@@ -4,13 +4,22 @@
 #include "core/image/FrameSequence.h"
 
 #include <QApplication>
+#include <QDragEnterEvent>
+#include <QDragMoveEvent>
+#include <QDropEvent>
 #include <QEvent>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QHideEvent>
 #include <QMetaObject>
+#include <QMimeData>
 #include <QPointer>
+#include <QScreen>
+#include <QSettings>
 #include <QShowEvent>
 #include <QTimer>
+#include <QUrl>
+#include <QWindow>
 
 #include <algorithm>
 
@@ -364,4 +373,229 @@ void ImageViewer::changeEvent(QEvent *event)
         suspendPlaybackClock();
     else
         resumePlaybackClock();
+}
+
+namespace
+{
+
+QScreen *screenOverlapping(const QRect &frame, int *areaOut)
+{
+    QScreen *best = nullptr;
+    int bestArea = 0;
+    for (QScreen *screen : QGuiApplication::screens())
+    {
+        if (!screen)
+            continue;
+        const QRect overlap = screen->availableGeometry().intersected(frame);
+        const int area = overlap.isValid() ? overlap.width() * overlap.height() : 0;
+        if (area > bestArea)
+        {
+            bestArea = area;
+            best = screen;
+        }
+    }
+    if (areaOut)
+        *areaOut = bestArea;
+    return best ? best : QGuiApplication::primaryScreen();
+}
+
+void placeWindowed(QWidget *window, const QRect &avail, bool offScreen)
+{
+    QSize size = window->size();
+    if (size.width() < 200)
+        size.setWidth(200);
+    if (size.height() < 150)
+        size.setHeight(150);
+    size.setWidth((std::min)(size.width(), avail.width()));
+    size.setHeight((std::min)(size.height(), avail.height()));
+    if (offScreen)
+    {
+        const int widthCap = avail.width() > 320 ? avail.width() * 3 / 4 : avail.width();
+        const int heightCap = avail.height() > 240 ? avail.height() * 3 / 4 : avail.height();
+        size.setWidth((std::min)(size.width(), widthCap));
+        size.setHeight((std::min)(size.height(), heightCap));
+    }
+    window->resize(size);
+    int x = offScreen ? avail.center().x() - size.width() / 2 : window->x();
+    int y = offScreen ? avail.center().y() - size.height() / 2 : window->y();
+    if (x < avail.left())
+        x = avail.left();
+    if (y < avail.top())
+        y = avail.top();
+    if (x + size.width() > avail.right() + 1)
+        x = avail.right() - size.width() + 1;
+    if (y + size.height() > avail.bottom() + 1)
+        y = avail.bottom() - size.height() + 1;
+    window->move(x, y);
+}
+
+bool mimeHasLocalFile(const QMimeData *mime)
+{
+    if (!mime || !mime->hasUrls())
+        return false;
+    for (const QUrl &url : mime->urls())
+    {
+        if (!url.toLocalFile().isEmpty())
+            return true;
+    }
+    return false;
+}
+
+} // namespace
+
+void ImageViewer::clampWidgetToAvailableScreens(QWidget *window)
+{
+    if (!window)
+        return;
+    int overlapArea = 0;
+    QScreen *screen = screenOverlapping(window->frameGeometry(), &overlapArea);
+    if (!screen || !screen->availableGeometry().isValid())
+        return;
+    const QRect avail = screen->availableGeometry();
+    const Qt::WindowStates state = window->windowState();
+    const bool fullscreen = state.testFlag(Qt::WindowFullScreen) || window->isFullScreen();
+    const bool maximized = state.testFlag(Qt::WindowMaximized) || window->isMaximized();
+    if ((fullscreen || maximized) && overlapArea > 0)
+    {
+        if (QWindow *handle = window->windowHandle())
+        {
+            if (handle->screen() != screen)
+                handle->setScreen(screen);
+        }
+        return;
+    }
+    if (fullscreen || maximized)
+        window->setWindowState(state & ~(Qt::WindowFullScreen | Qt::WindowMaximized));
+    const QRect frame = window->frameGeometry();
+    if (!fullscreen && !maximized && overlapArea > 0 && avail.contains(frame))
+        return;
+    placeWindowed(window, avail, overlapArea == 0);
+}
+
+void ImageViewer::restoreWindowGeometry()
+{
+    QSettings settings;
+    const QByteArray geom = settings.value(QStringLiteral("viewerGeometry")).toByteArray();
+    if (geom.isEmpty())
+    {
+        resize(900, 700);
+        clampWidgetToAvailableScreens(this);
+        return;
+    }
+    restoreGeometry(geom);
+    clampWidgetToAvailableScreens(this);
+}
+
+void ImageViewer::markClosing()
+{
+    setProperty("mviewerClosing", true);
+    if (m_cursorHideTimer)
+        m_cursorHideTimer->stop();
+    if (m_playbackTimer)
+        m_playbackTimer->stop();
+}
+
+void ImageViewer::persistWindowGeometry()
+{
+    QSettings settings;
+    const bool fullscreen = property("mviewerFullscreenRequested").toBool();
+    const QByteArray geom =
+        (fullscreen && !m_windowedGeometry.isEmpty()) ? m_windowedGeometry : saveGeometry();
+    settings.setValue(QStringLiteral("viewerGeometry"), geom);
+    if (QScreen *screen = this->screen())
+        settings.setValue(QStringLiteral("viewerScreen"), screen->name());
+    settings.sync();
+    if (settings.status() != QSettings::NoError && !property("mviewerClosing").toBool())
+        emit statusMessageRequested(QStringLiteral("查看器窗口位置未能保存"), 5000);
+}
+
+void ImageViewer::setFullscreenRequested(bool requested)
+{
+    // The property is authoritative when offscreen Qt cannot report fullscreen.
+    // Keep the windowed frame so leave/close does not store the monitor rect.
+    if (requested && !property("mviewerFullscreenRequested").toBool())
+        m_windowedGeometry = saveGeometry();
+    setProperty("mviewerFullscreenRequested", requested);
+    if (requested)
+    {
+        setWindowState(windowState() | Qt::WindowFullScreen);
+        showFullScreen();
+    }
+    else
+    {
+        setWindowState(windowState() & ~Qt::WindowFullScreen);
+        showNormal();
+        if (!m_windowedGeometry.isEmpty())
+            restoreGeometry(m_windowedGeometry);
+        clampWidgetToAvailableScreens(this);
+    }
+
+    if (property("mviewerClosing").toBool())
+        return;
+    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
+    QTimer::singleShot(
+        0, this,
+        [guard, requested]()
+        {
+            ImageViewer *viewer = guard ? guard->data() : nullptr;
+            if (!viewer || !viewer->isVisible() || viewer->property("mviewerClosing").toBool())
+                return;
+            if (!viewer->m_fitMode)
+            {
+                viewer->update();
+                return;
+            }
+            if (viewer->m_frame && viewer->m_frame->isValid())
+                viewer->fitToWidget();
+            else if (!viewer->m_provisionalImage.isNull())
+            {
+                viewer->m_view.screenW = viewer->width();
+                viewer->m_view.screenH = viewer->height();
+                const QSize source = viewer->m_provisionalSourceSize.isValid()
+                                         ? viewer->m_provisionalSourceSize
+                                         : viewer->m_provisionalImage.size();
+                viewer->m_view.fit(source.width(), source.height(),
+                                   requested ? FitPolicy::MaximizeClient : FitPolicy::Comfortable);
+                viewer->advanceViewportRevision();
+                viewer->emitZoom();
+            }
+            viewer->update();
+        });
+}
+
+void ImageViewer::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (mimeHasLocalFile(event->mimeData()))
+        event->acceptProposedAction();
+    else
+        QOpenGLWidget::dragEnterEvent(event);
+}
+
+void ImageViewer::dragMoveEvent(QDragMoveEvent *event)
+{
+    if (mimeHasLocalFile(event->mimeData()))
+        event->acceptProposedAction();
+    else
+        QOpenGLWidget::dragMoveEvent(event);
+}
+
+void ImageViewer::dropEvent(QDropEvent *event)
+{
+    QStringList paths;
+    if (const QMimeData *mime = event->mimeData())
+    {
+        for (const QUrl &url : mime->urls())
+        {
+            const QString local = url.toLocalFile();
+            if (!local.isEmpty())
+                paths.append(local);
+        }
+    }
+    if (paths.isEmpty())
+    {
+        QOpenGLWidget::dropEvent(event);
+        return;
+    }
+    event->acceptProposedAction();
+    emit filesDropped(paths);
 }

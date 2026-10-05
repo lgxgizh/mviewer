@@ -3,7 +3,17 @@
 
 #include "runtime_storage.h"
 
+#include <QGuiApplication>
 #include <QSaveFile>
+
+bool sessionPromptsSuppressed()
+{
+    if (qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
+        return true;
+    const QString platform = QGuiApplication::platformName();
+    return platform.compare(QLatin1String("offscreen"), Qt::CaseInsensitive) == 0 ||
+           platform.compare(QLatin1String("minimal"), Qt::CaseInsensitive) == 0;
+}
 
 namespace
 {
@@ -11,6 +21,31 @@ namespace
 QString appConfigFile(const QString &name)
 {
     return mviewer::runtime::filePath(QStandardPaths::AppConfigLocation, name);
+}
+
+bool commitNamedState(const mviewer::core::RecentFiles &recent, const QString &fileName)
+{
+    const QString path = appConfigFile(fileName);
+    QSaveFile file(path);
+    if (path.isEmpty() || !file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    return file.write(QByteArray::fromStdString(recent.serialize())) >= 0 && file.commit();
+}
+
+void reportPersistFailures(QWidget *parent, const QStringList &failures)
+{
+    if (failures.isEmpty())
+        return;
+    // closeEvent still has the window visible. A modal here nests an event loop
+    // until a click that headless runs never deliver.
+    if (sessionPromptsSuppressed() || !parent || !parent->isVisible())
+    {
+        qWarning("MViewer could not save: %s", qUtf8Printable(failures.join(QStringLiteral(", "))));
+        return;
+    }
+    QMessageBox::warning(parent, QStringLiteral("设置未保存"),
+                         QStringLiteral("以下内容未能写入磁盘，下次启动可能丢失：\n%1")
+                             .arg(failures.join(QStringLiteral("、"))));
 }
 
 } // namespace
@@ -137,8 +172,92 @@ void MainWindow::restoreLastSession()
         Qt::QueuedConnection);
 }
 
+void MainWindow::stopCloseTimers()
+{
+    // A closing window must not re-arm autosave, reindex, hover, or slideshow.
+    // The flag also drops a timeout that was already queued before stop().
+    m_sessionClosing = true;
+    if (m_autosaveTimer)
+        m_autosaveTimer->stop();
+    if (m_reindexTimer)
+        m_reindexTimer->stop();
+    if (m_metadataHoverTimer)
+        m_metadataHoverTimer->stop();
+    if (m_slideshowTimer)
+        m_slideshowTimer->stop();
+}
+
+void MainWindow::persistWindowLayoutOnClose(bool inBrowseWorkspace, QStringList &failures)
+{
+    QSettings settings;
+    settings.setValue("geometry", saveGeometry());
+    settings.setValue("windowState", saveState());
+    // P1-3: persist thumbnail view mode and splitter geometry.
+    if (m_thumbnailPanel)
+        settings.setValue("thumbViewMode", m_thumbnailPanel->viewMode());
+    if (m_thumbnailPanel)
+        settings.setValue("thumbSize", m_thumbnailPanel->thumbSize());
+    if (m_sortCombo)
+        settings.setValue("thumbSortMode", m_sortCombo->currentData().toInt());
+    if (m_thumbnailPanel)
+        settings.setValue("thumbSortAscending", m_thumbnailPanel->sortAscending());
+    if (m_mainSplitter)
+        settings.setValue("splitterState", m_mainSplitter->saveState());
+    if (m_searchPanel && m_actToggleSearch)
+    {
+        const bool searchVisible =
+            inBrowseWorkspace ? m_browseSearchVisible
+                              : (m_focusBrowse ? m_focusSearchVisible : m_searchPanel->isVisible());
+        settings.setValue("searchVisible", searchVisible);
+    }
+    // P1-7: persist the main viewer's zoom level + pan position so a session
+    // that ended with the viewer open restores identically (scale/offset are
+    // screen-space, so the viewer must have been visible to be meaningful).
+    if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
+    {
+        const auto v = m_imageViewer->viewTransform();
+        settings.setValue("viewerPath", currentImagePath());
+        settings.setValue("viewerScale", v.scale);
+        settings.setValue("viewerOffX", v.offsetX);
+        settings.setValue("viewerOffY", v.offsetY);
+    }
+    // A-6.1: persist Compare session for normal startup restore (not just
+    // crash recovery). Same format as autosaveSession().
+    if (m_compareView && m_compareView->comparedImageCount() >= 2)
+    {
+        const auto cs = m_compareView->compareSession();
+        QJsonArray cmpImg;
+        for (const auto &id : cs.imageIds)
+            cmpImg.append(QString::fromUtf8(id.data(), static_cast<int>(id.size())));
+        settings.setValue("compareImages", cmpImg);
+        settings.setValue("compareSession",
+                          QString::fromStdString(mviewer::core::serializeCompareSession(cs)));
+    }
+    else
+    {
+        settings.remove("compareImages");
+        settings.remove("compareSession");
+    }
+    // A-6.4: persist left-column width (main splitter index 0) as a plain
+    // int so it can be restored even when analysis/search visibility changes.
+    if (m_mainSplitter)
+    {
+        const QList<int> sizes = m_mainSplitter->sizes();
+        if (!sizes.isEmpty())
+            settings.setValue("navSidebarWidth", sizes[0]);
+    }
+    // A-6.4: persist vertical proportions of the left sidebar independently.
+    if (m_leftSplitter)
+        settings.setValue("leftSplitterState", m_leftSplitter->saveState());
+    settings.sync();
+    if (settings.status() != QSettings::NoError)
+        failures.append(QStringLiteral("界面设置"));
+}
+
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    stopCloseTimers();
+
     // Persist browse position for next launch (P0 cross-session restore).
     m_appState.lastDir = currentDir();
     m_appState.lastImage = currentImagePath();
@@ -161,7 +280,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // panel) so reopening restores exactly where the user was browsing.
     m_appState.navHistory = m_history;
     m_appState.navHistoryIndex = m_historyIndex;
-    m_appState.save();
+    QStringList persistFailures;
+    if (!m_appState.save())
+        persistFailures.append(QStringLiteral("会话状态"));
 
     // M16: persist analysis history / pinned results so they survive restart.
     if (m_analyzer)
@@ -175,79 +296,13 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 
     // Persist the recent-folders LRU alongside app state.
-    const QString recentPath = appConfigFile(QStringLiteral("recent.json"));
-    QSaveFile rf(recentPath);
-    if (!recentPath.isEmpty() && rf.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        if (rf.write(QByteArray::fromStdString(m_recent.serialize())) >= 0)
-            (void)rf.commit();
-    }
+    if (!commitNamedState(m_recent, QStringLiteral("recent.json")))
+        persistFailures.append(QStringLiteral("最近文件夹"));
 
     // M13.5 / P1-3: persist window geometry/layout (QSettings, independent of workspace).
-    {
-        QSettings settings;
-        settings.setValue("geometry", saveGeometry());
-        settings.setValue("windowState", saveState());
-        // P1-3: persist thumbnail view mode and splitter geometry.
-        if (m_thumbnailPanel)
-            settings.setValue("thumbViewMode", m_thumbnailPanel->viewMode());
-        if (m_thumbnailPanel)
-            settings.setValue("thumbSize", m_thumbnailPanel->thumbSize());
-        if (m_sortCombo)
-            settings.setValue("thumbSortMode", m_sortCombo->currentData().toInt());
-        if (m_thumbnailPanel)
-            settings.setValue("thumbSortAscending", m_thumbnailPanel->sortAscending());
-        if (m_mainSplitter)
-            settings.setValue("splitterState", m_mainSplitter->saveState());
-        if (m_searchPanel && m_actToggleSearch)
-        {
-            const bool searchVisible =
-                inBrowseWorkspace
-                    ? m_browseSearchVisible
-                    : (m_focusBrowse ? m_focusSearchVisible : m_searchPanel->isVisible());
-            settings.setValue("searchVisible", searchVisible);
-        }
-        // P1-7: persist the main viewer's zoom level + pan position so a session
-        // that ended with the viewer open restores identically (scale/offset are
-        // screen-space, so the viewer must have been visible to be meaningful).
-        if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
-        {
-            const auto v = m_imageViewer->viewTransform();
-            settings.setValue("viewerPath", currentImagePath());
-            settings.setValue("viewerScale", v.scale);
-            settings.setValue("viewerOffX", v.offsetX);
-            settings.setValue("viewerOffY", v.offsetY);
-        }
-        // A-6.1: persist Compare session for normal startup restore (not just
-        // crash recovery). Same format as autosaveSession().
-        if (m_compareView && m_compareView->comparedImageCount() >= 2)
-        {
-            const auto cs = m_compareView->compareSession();
-            QJsonArray cmpImg;
-            for (const auto &id : cs.imageIds)
-                cmpImg.append(QString::fromUtf8(id.data(), static_cast<int>(id.size())));
-            settings.setValue("compareImages", cmpImg);
-            settings.setValue("compareSession",
-                              QString::fromStdString(mviewer::core::serializeCompareSession(cs)));
-        }
-        else
-        {
-            settings.remove("compareImages");
-            settings.remove("compareSession");
-        }
-        // A-6.4: persist left-column width (main splitter index 0) as a plain
-        // int so it can be restored even when analysis/search visibility changes.
-        if (m_mainSplitter)
-        {
-            const QList<int> sizes = m_mainSplitter->sizes();
-            if (!sizes.isEmpty())
-                settings.setValue("navSidebarWidth", sizes[0]);
-        }
-        // A-6.4: persist vertical proportions of the left sidebar independently.
-        if (m_leftSplitter)
-            settings.setValue("leftSplitterState", m_leftSplitter->saveState());
-        settings.sync();
-    }
+    persistWindowLayoutOnClose(inBrowseWorkspace, persistFailures);
+
+    reportPersistFailures(this, persistFailures);
 
     QMainWindow::closeEvent(event);
 }
@@ -255,6 +310,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
 // M15: crash recovery — autosave current session to a recovery file.
 void MainWindow::autosaveSession()
 {
+    // close() hides the window before the destructor. A queued timeout must not
+    // write recovery.json after closeEvent removed it, or the next launch asks
+    // to restore a session that exited normally.
+    if (m_sessionClosing || !isVisible())
+        return;
     if (currentDir().isEmpty() && currentImagePath().isEmpty())
         return;
     const QString recoveryPath = appConfigFile(QStringLiteral("recovery.json"));
@@ -317,7 +377,14 @@ void MainWindow::restoreSessionRecovery()
 
     // Ask the user whether to restore the previous session. The recovery file
     // is a crash-recovery artifact; a normal exit clears it (see closeEvent),
-    // so its presence implies an unclean shutdown.
+    // so its presence implies an unclean shutdown. The question is deferred
+    // until the window is shown. Skip it only when a test opts out, or when
+    // this window is already closing — not merely because the platform is
+    // offscreen. Close-time save failures stay non-modal (reportPersistFailures).
+    if (m_sessionClosing || !isVisible())
+        return;
+    if (qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
+        return;
     const auto answer = QMessageBox::question(
         this, tr("恢复上次会话"), tr("检测到上次会话未正常关闭。\n是否恢复上次浏览的图片和目录？"),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
