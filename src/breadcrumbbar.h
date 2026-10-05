@@ -29,6 +29,13 @@ class BreadcrumbBar : public QWidget
     {
         return m_currentPath;
     }
+    /// Return the parsed path segments.
+    QStringList segments() const
+    {
+        return m_segments;
+    }
+    /// Return the reconstructed directory path for the given segment index.
+    QString pathForIndex(int index) const;
 
   signals:
     /// Emitted when the user clicks a breadcrumb segment.

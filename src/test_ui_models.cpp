@@ -1,5 +1,6 @@
 #include "Theme.h"
 #include "analyzermodel.h"
+#include "breadcrumbbar.h"
 #include "directorymodel.h"
 #include "imagelistmodel.h"
 #include "selectionmodel.h"
@@ -92,7 +93,7 @@ int main(int argc, char **argv)
         int recentChanges = 0;
         QObject::connect(&dir, &DirectoryModel::recentFoldersChanged,
                          [&](const QStringList &) { ++recentChanges; });
-        dir.removeRecentFolder(QStringLiteral("\\r1"));
+        dir.removeRecentFolder(QStringLiteral("\r1"));
         CHECK(dir.recentFolders().size() == 1,
               "DirectoryModel removeRecentFolder matches the other slash");
         CHECK(dir.recentFolders().front() == "/r2",
@@ -180,6 +181,40 @@ int main(int argc, char **argv)
               "ThemeModeName not empty for Dark");
         CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::System).isEmpty(),
               "ThemeModeName not empty for System");
+    }
+
+    // ---- BreadcrumbBar ----
+    {
+        BreadcrumbBar bar;
+        bar.setPath("C:/Users/Box/Photos");
+        CHECK(bar.currentPath() == "C:/Users/Box/Photos", "BreadcrumbBar currentPath matches");
+        QStringList segs = bar.segments();
+        CHECK(segs.size() == 4, "BreadcrumbBar has 4 segments for C:/Users/Box/Photos");
+        CHECK(bar.pathForIndex(0) == "C:/", "BreadcrumbBar drive segment maps to drive root C:/");
+        CHECK(bar.pathForIndex(1) == "C:/Users", "BreadcrumbBar index 1 maps to C:/Users");
+        CHECK(bar.pathForIndex(2) == "C:/Users/Box", "BreadcrumbBar index 2 maps to C:/Users/Box");
+        CHECK(bar.pathForIndex(3) == "C:/Users/Box/Photos",
+              "BreadcrumbBar index 3 maps to full path");
+
+        // Drive root alone
+        bar.setPath("D:/");
+        CHECK(bar.segments().size() == 1, "BreadcrumbBar single segment for D:/");
+        CHECK(bar.pathForIndex(0) == "D:/", "BreadcrumbBar single drive root gives D:/");
+
+        // Unix path
+        bar.setPath("/home/user/pictures");
+        CHECK(bar.pathForIndex(0) == "/", "BreadcrumbBar Unix root gives /");
+        CHECK(bar.pathForIndex(1) == "/home", "BreadcrumbBar Unix index 1 gives /home");
+        CHECK(bar.pathForIndex(2) == "/home/user", "BreadcrumbBar Unix index 2 gives /home/user");
+        CHECK(bar.pathForIndex(3) == "/home/user/pictures",
+              "BreadcrumbBar Unix index 3 gives /home/user/pictures");
+
+        // Path selection signal
+        QString selectedPath;
+        QObject::connect(&bar, &BreadcrumbBar::pathSelected,
+                         [&selectedPath](const QString &p) { selectedPath = p; });
+        emit bar.pathSelected(bar.pathForIndex(1));
+        CHECK(selectedPath == "/home", "BreadcrumbBar signal emitted with segment path");
     }
 
     std::printf("\n%s (%d failures)\n", g_failures == 0 ? "ALL PASS" : "HAS FAILURES", g_failures);

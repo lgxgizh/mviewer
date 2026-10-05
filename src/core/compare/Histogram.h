@@ -184,14 +184,19 @@ inline Histogram accumulateNBins(const ImageBuffer &v, int64_t x0, int64_t y0, i
                 G = p[1];
                 B = p[2];
             }
-            h.r[std::min(R, maxBin)]++;
-            h.g[std::min(G, maxBin)]++;
-            h.b[std::min(B, maxBin)]++;
+            const int binR = std::min(maxBin, (R * bins) / 256);
+            const int binG = std::min(maxBin, (G * bins) / 256);
+            const int binB = std::min(maxBin, (B * bins) / 256);
+            h.r[binR]++;
+            h.g[binG]++;
+            h.b[binB]++;
             const int Y = luminance(static_cast<uint8_t>(R), static_cast<uint8_t>(G),
                                     static_cast<uint8_t>(B));
-            h.luma[std::min(Y, maxBin)]++;
+            const int binY = std::min(maxBin, (Y * bins) / 256);
+            h.luma[binY]++;
             const int V = std::max(std::max(R, G), B);
-            h.v[std::min(V, maxBin)]++;
+            const int binV = std::min(maxBin, (V * bins) / 256);
+            h.v[binV]++;
             ++samples;
         }
     }

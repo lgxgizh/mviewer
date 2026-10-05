@@ -85,6 +85,7 @@ void AnalysisPanel::updateHistogramPage()
     if (!m_hasA)
     {
         m_statsLabel->setText(tr("No image selected"));
+        m_histogramLabel->clear();
         return;
     }
     QString title = m_hasROI ? tr("ROI Stats") : tr("Full Image Stats");
@@ -121,14 +122,12 @@ void AnalysisPanel::renderHistogramPixmap()
     QPainter p(&pix);
     const int pad = 4;
     const QRect bg(pad, pad, W - pad * 2, H - pad * 2);
-    // Overlaid 4 channels
-    auto drawChannel = [&bg, &p](const int *hist, const QColor &color)
+    constexpr int srcBins = 256;
+    constexpr int drawBins = 64;
+    const double binW = static_cast<double>(bg.width()) / drawBins;
+
+    auto aggChannel = [](const int *hist, long long *agg, long long &maxVal)
     {
-        constexpr int srcBins = 256;
-        constexpr int drawBins = 64;
-        const double binW = static_cast<double>(bg.width()) / drawBins;
-        long long agg[drawBins] = {0};
-        long long maxV = 1;
         for (int i = 0; i < drawBins; ++i)
         {
             long long sum = 0;
@@ -137,9 +136,23 @@ void AnalysisPanel::renderHistogramPixmap()
             for (int j = lo; j < hi && j < srcBins; ++j)
                 sum += hist[j];
             agg[i] = sum;
-            if (sum > maxV)
-                maxV = sum;
+            if (sum > maxVal)
+                maxVal = sum;
         }
+    };
+
+    long long aggLum[drawBins] = {0};
+    long long aggR[drawBins] = {0};
+    long long aggG[drawBins] = {0};
+    long long aggB[drawBins] = {0};
+    long long maxV = 1;
+    aggChannel(m_statsA.histLum, aggLum, maxV);
+    aggChannel(m_statsA.histR, aggR, maxV);
+    aggChannel(m_statsA.histG, aggG, maxV);
+    aggChannel(m_statsA.histB, aggB, maxV);
+
+    auto drawAgg = [&bg, &p, binW, maxV](const long long *agg, const QColor &color)
+    {
         p.setPen(color);
         for (int i = 0; i < drawBins; ++i)
         {
@@ -149,10 +162,10 @@ void AnalysisPanel::renderHistogramPixmap()
             p.drawLine(x, bg.bottom(), x, bg.bottom() - hh);
         }
     };
-    drawChannel(m_statsA.histLum, QColor(220, 220, 220));
-    drawChannel(m_statsA.histR, QColor(230, 70, 70));
-    drawChannel(m_statsA.histG, QColor(70, 220, 70));
-    drawChannel(m_statsA.histB, QColor(70, 130, 230));
+    drawAgg(aggLum, QColor(220, 220, 220, 180));
+    drawAgg(aggR, QColor(230, 70, 70, 200));
+    drawAgg(aggG, QColor(70, 220, 70, 200));
+    drawAgg(aggB, QColor(70, 130, 230, 200));
     m_histogramLabel->setPixmap(pix);
 }
 
@@ -189,13 +202,12 @@ void AnalysisPanel::updateRgbPage()
     QPainter p(&pix);
     const int pad = 4;
     const QRect bg(pad, pad, W - pad * 2, H - pad * 2);
-    auto drawChannel = [&bg, &p](const int *hist, const QColor &color)
+    constexpr int srcBins = 256;
+    constexpr int drawBins = 64;
+    const double binW = static_cast<double>(bg.width()) / drawBins;
+
+    auto aggChannel = [](const int *hist, long long *agg, long long &maxVal)
     {
-        constexpr int srcBins = 256;
-        constexpr int drawBins = 64;
-        const double binW = static_cast<double>(bg.width()) / drawBins;
-        long long agg[drawBins] = {0};
-        long long maxV = 1;
         for (int i = 0; i < drawBins; ++i)
         {
             long long sum = 0;
@@ -204,9 +216,21 @@ void AnalysisPanel::updateRgbPage()
             for (int j = lo; j < hi && j < srcBins; ++j)
                 sum += hist[j];
             agg[i] = sum;
-            if (sum > maxV)
-                maxV = sum;
+            if (sum > maxVal)
+                maxVal = sum;
         }
+    };
+
+    long long aggR[drawBins] = {0};
+    long long aggG[drawBins] = {0};
+    long long aggB[drawBins] = {0};
+    long long maxV = 1;
+    aggChannel(m_statsA.histR, aggR, maxV);
+    aggChannel(m_statsA.histG, aggG, maxV);
+    aggChannel(m_statsA.histB, aggB, maxV);
+
+    auto drawAgg = [&bg, &p, binW, maxV](const long long *agg, const QColor &color)
+    {
         p.setPen(color);
         for (int i = 0; i < drawBins; ++i)
         {
@@ -216,9 +240,9 @@ void AnalysisPanel::updateRgbPage()
             p.drawLine(x, bg.bottom(), x, bg.bottom() - hh);
         }
     };
-    drawChannel(m_statsA.histR, QColor(230, 70, 70));
-    drawChannel(m_statsA.histG, QColor(70, 220, 70));
-    drawChannel(m_statsA.histB, QColor(70, 130, 230));
+    drawAgg(aggR, QColor(230, 70, 70));
+    drawAgg(aggG, QColor(70, 220, 70));
+    drawAgg(aggB, QColor(70, 130, 230));
     m_rgbLabel->setPixmap(pix);
 }
 

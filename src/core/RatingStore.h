@@ -89,6 +89,10 @@ class RatingStore
 
     Snapshot snapshot() const;
 
+    // Prune stale records for files that no longer exist on disk.
+    // Returns total number of pruned entries across ratings, labels, flags, and recents.
+    size_t pruneMissing();
+
     // Persistence. M46: user edits are coalesced on an owned worker thread
     // (reads stay immediate); save() is the explicit flush boundary — it
     // cancels pending debounce, waits out any in-flight worker write, and

@@ -186,6 +186,15 @@ int main()
         Histogram h64 = computeHistogram(img, 64);
         CHECK(h64.bins == 64, "custom bins count is 64");
         CHECK(h64.total == 100, "custom bins total is 100");
+        CHECK(h64.luma[25] == 100, "pixel value 100 maps to bin 25 in 64-bin histogram");
+        CHECK(h64.luma[63] == 0, "bin 63 is empty when values are 100");
+
+        // Edge values
+        std::memset(img.buffer->data(), 0, 50);
+        std::memset(img.buffer->data() + 50, 255, 50);
+        Histogram hEdges = computeHistogram(img, 64);
+        CHECK(hEdges.luma[0] == 50, "pixel value 0 maps to bin 0");
+        CHECK(hEdges.luma[63] == 50, "pixel value 255 maps to bin 63");
     }
 
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);

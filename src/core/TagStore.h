@@ -48,6 +48,10 @@ class TagStore
 
     Snapshot snapshot() const;
 
+    // Prune stale records for files that no longer exist on disk.
+    // Returns the number of pruned tag associations.
+    size_t pruneMissing();
+
     // Persistence: edits update memory immediately and are coalesced on the
     // owned worker. save()/flushSave() are explicit synchronous boundaries
     // used by tests, file switches and shutdown.

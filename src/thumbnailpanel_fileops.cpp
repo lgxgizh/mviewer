@@ -730,20 +730,21 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     QAction *aCopyPath = menu.addAction("复制路径");
     aCopyPath->setShortcut(QKeySequence("Ctrl+Shift+C"));
     QAction *aCopyName = menu.addAction("复制文件名");
+    const QStringList selPaths = selectedPaths();
     QAction *aCompare = menu.addAction("比较");
+    aCompare->setEnabled(selPaths.size() >= 2 && selPaths.size() <= 8);
     QAction *aAnalyze = menu.addAction("批量分析导出");
+    aAnalyze->setEnabled(!selPaths.isEmpty());
     menu.addSeparator();
     QAction *aAddTag = menu.addAction("添加标签…");
+    aAddTag->setEnabled(!selPaths.isEmpty());
     QMenu *rmTagMenu = menu.addMenu("移除所选标签");
     {
         QStringList tags;
-        for (const QString &sp : selectedPaths())
+        for (const QString &sp : selPaths)
             for (const auto &tg : mviewer::core::TagStore::instance().tags(sp.toStdString()))
-            {
-                const QString text = QString::fromStdString(tg);
-                if (!tags.contains(text))
+                if (const QString text = QString::fromStdString(tg); !tags.contains(text))
                     tags.append(text);
-            }
         tags.sort();
         for (const QString &tg : tags)
             rmTagMenu->addAction(tg);

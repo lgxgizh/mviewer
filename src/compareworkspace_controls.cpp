@@ -58,8 +58,11 @@ void CompareWorkspace::buildSyncControls()
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
     m_syncZoomChk->setObjectName("syncZoomCheck");
     m_syncZoomChk->setChecked(true);
+    m_syncZoomChk->setToolTip(tr("同步所有窗格的缩放倍率 (Z)"));
     m_syncDragChk = new QCheckBox("同步拖动(&D)", this);
+    m_syncDragChk->setObjectName("syncDragCheck");
     m_syncDragChk->setChecked(true);
+    m_syncDragChk->setToolTip(tr("同步所有窗格的平移拖动 (D)"));
     m_syncRotateChk = new QCheckBox(tr("同步旋转"), this);
     m_syncRotateChk->setObjectName("syncRotateCheck");
     m_syncRotateChk->setToolTip(tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像"));

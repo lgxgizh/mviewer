@@ -119,6 +119,7 @@ void AnalysisPanel::clear()
     invalidateAnalysis();
     m_frameDirty = false;
     setReportAnalysisState(ReportAnalysisState::Unset);
+    m_frameA = nullptr;
     m_imageA = m_imageB = QImage();
     m_hasA = m_hasB = false;
     m_statsA = m_statsB = ImageStats();
@@ -130,6 +131,21 @@ void AnalysisPanel::clear()
     m_diffPreview->clear();
     m_pluginResult->clear();
     m_histogramLabel->clear();
+    if (m_rgbLabel)
+        m_rgbLabel->clear();
+    if (m_rgbStatsLabel)
+        m_rgbStatsLabel->clear();
+    if (m_exposureLabel)
+        m_exposureLabel->clear();
+    if (m_focusLabel)
+        m_focusLabel->clear();
+    if (m_metaLabel)
+        m_metaLabel->clear();
+    if (m_imageView)
+    {
+        m_imageView->setImage(QImage());
+        m_imageView->clearCrosshair();
+    }
 }
 
 void AnalysisPanel::setROI(const mviewer::domain::Selection &roi)

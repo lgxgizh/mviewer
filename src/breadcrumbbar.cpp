@@ -59,23 +59,80 @@ void BreadcrumbBar::clearButtons()
 void BreadcrumbBar::parseSegments()
 {
     m_segments.clear();
-#ifdef Q_OS_WIN
-    QString path = QDir::toNativeSeparators(m_currentPath);
+    QString path = m_currentPath;
     path.replace('\\', '/');
-#else
-    const QString path = m_currentPath;
-#endif
+    while (path.endsWith('/') && path.size() > 1 && !(path.size() == 3 && path.at(1) == ':'))
+        path.chop(1);
+
+    const bool isUnc = path.startsWith("//");
     const QStringList parts = path.split('/', Qt::SkipEmptyParts);
+    if (parts.isEmpty())
+    {
+        if (path.startsWith('/'))
+            m_segments << "/";
+        return;
+    }
+
     int segmentStart = 0;
-    if (!parts.isEmpty() && parts.first().endsWith(':'))
+    if (isUnc && parts.size() >= 2)
+    {
+        m_segments << QString("//%1/%2").arg(parts.at(0), parts.at(1));
+        segmentStart = 2;
+    }
+    else if (parts.first().endsWith(':'))
     {
         m_segments << parts.first();
         segmentStart = 1;
     }
     else if (path.startsWith('/'))
+    {
         m_segments << "/";
+    }
+
     for (int i = segmentStart; i < parts.size(); ++i)
         m_segments << parts.at(i);
+}
+
+QString BreadcrumbBar::pathForIndex(int index) const
+{
+    if (index < 0 || index >= m_segments.size())
+        return QString();
+
+    const QString &first = m_segments.first();
+    if (first == "/")
+    {
+        if (index == 0)
+            return "/";
+        QString res;
+        for (int i = 1; i <= index; ++i)
+            res += "/" + m_segments.at(i);
+        return res;
+    }
+
+    if (first.endsWith(':'))
+    {
+        QString res = first + "/";
+        if (index == 0)
+            return res;
+        for (int i = 1; i <= index; ++i)
+        {
+            if (i > 1)
+                res += "/";
+            res += m_segments.at(i);
+        }
+        return res;
+    }
+
+    if (first.startsWith("//"))
+    {
+        QString res = first;
+        for (int i = 1; i <= index; ++i)
+            res += "/" + m_segments.at(i);
+        return res;
+    }
+
+    QStringList sub = m_segments.mid(0, index + 1);
+    return sub.join('/');
 }
 
 void BreadcrumbBar::addOverflowButton(int firstVisible)
@@ -90,7 +147,7 @@ void BreadcrumbBar::addOverflowButton(int firstVisible)
     auto *menu = new QMenu(button);
     for (int i = 0; i < firstVisible; ++i)
     {
-        const QString partialPath = m_segments.mid(0, i + 1).join('/');
+        const QString partialPath = pathForIndex(i);
         QAction *action = menu->addAction(m_segments.at(i));
         action->setData(partialPath);
         connect(action, &QAction::triggered, this,
@@ -107,19 +164,16 @@ void BreadcrumbBar::addOverflowButton(int firstVisible)
 
 void BreadcrumbBar::addVisibleSegments(int firstVisible)
 {
-    QString built = m_overflow ? m_segments.mid(0, firstVisible).join('/') : QString();
     for (int i = firstVisible; i < m_segments.size(); ++i)
     {
-        if (!built.isEmpty())
-            built += '/';
-        built += m_segments.at(i);
+        const QString segmentPath = pathForIndex(i);
         auto *button = new QToolButton(this);
         button->setText(m_segments.at(i));
         button->setAutoRaise(true);
-        button->setToolTip(built);
+        button->setToolTip(segmentPath);
         button->setMaximumWidth(kMaxButtonWidth);
         button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        button->setProperty("breadcrumbPath", built);
+        button->setProperty("breadcrumbPath", segmentPath);
         connect(button, &QToolButton::clicked, this, &BreadcrumbBar::onSegmentClicked);
         button->setStyleSheet("QToolButton { border: 1px solid transparent; border-radius: 3px;"
                               " padding: 1px 4px; color: #444; font-size: 11px; }"
