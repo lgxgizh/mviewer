@@ -16,12 +16,12 @@
     {                                                                                              \
         if (!(cond))                                                                               \
         {                                                                                          \
-            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            std::cerr << "FAIL: " << msg << '\n';                                                  \
             return 1;                                                                              \
         }                                                                                          \
         else                                                                                       \
         {                                                                                          \
-            std::cout << "PASS: " << msg << std::endl;                                             \
+            std::cout << "PASS: " << msg << '\n';                                                  \
         }                                                                                          \
     } while (0)
 
