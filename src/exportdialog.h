@@ -68,6 +68,7 @@ class ExportDialog : public QDialog
     void buildModeSection(QVBoxLayout *root);
     void buildFormatSection(QVBoxLayout *root);
     void buildResizeSection(QVBoxLayout *root);
+    void syncResizeControls();
     void buildWatermarkSection(QVBoxLayout *root);
     void buildCropSection(QVBoxLayout *root);
     void buildMetadataSection(QVBoxLayout *root);

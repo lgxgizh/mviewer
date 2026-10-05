@@ -6,16 +6,25 @@
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
+#include "core/render/Viewport.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "exportdialog.h"
 #include "imageviewer.h"
 
 #include <QApplication>
+#include <QComboBox>
 #include <QDialog>
+#include <QDir>
 #include <QFileInfo>
+#include <QImage>
+#include <QSpinBox>
+#include <QTemporaryDir>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <memory>
@@ -70,6 +79,15 @@ void pump(int ms)
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
     while (std::chrono::steady_clock::now() < deadline)
         QApplication::processEvents(QEventLoop::AllEvents, 1);
+}
+
+QString writeSolidPng(const QTemporaryDir &dir, const char *name, int w, int h)
+{
+    QImage image(w, h, QImage::Format_RGB32);
+    image.fill(Qt::blue);
+    const QString path = dir.filePath(QString::fromLatin1(name));
+    image.save(path, "PNG");
+    return path;
 }
 
 bool schedulerIdle()
@@ -320,6 +338,173 @@ int main(int argc, char **argv)
         CHECK(dialog.windowHandle() != nullptr, "F4: the compare dialog has a window");
         CHECK(workspace->displayColorContext().fingerprint != "injected-monitor",
               "F4: resize rebinds compare color to the host window profile");
+    }
+
+    // F5: a failed load must not clear fit mode. With zoom lock on, the next
+    // successful image would otherwise keep the pre-failure scale.
+    {
+        MARK("F5 start");
+        installDefaults();
+        QTemporaryDir dir;
+        CHECK(dir.isValid(), "F5: temp dir");
+        const QString smallPath = writeSolidPng(dir, "small.png", 200, 100);
+        CHECK(QFileInfo::exists(smallPath), "F5: small image written");
+
+        ImageViewer viewer;
+        viewer.setFixedSize(800, 600);
+        viewer.show();
+        pump(30);
+        viewer.setLockZoom(true);
+        QImage warm(16, 16, QImage::Format_RGB32);
+        warm.fill(Qt::red);
+        viewer.setProvisionalImage(throwingPath, warm, QSize(4000, 200));
+        CHECK(viewer.isFitMode() && viewer.isLockZoom(), "F5: starts fitted with zoom lock");
+        const double stuckScale = viewer.viewTransform().scale;
+
+        installThrowing(ThrowingM48Decoder::Mode::Lod);
+        bool failed = false;
+        int lastZoom = 0;
+        QObject::connect(&viewer, &ImageViewer::loadFailed, &viewer,
+                         [&](const QString &) { failed = true; });
+        QObject::connect(&viewer, &ImageViewer::zoomChanged, &viewer,
+                         [&](int pct) { lastZoom = pct; });
+        viewer.setBrowseSequence({throwingPath});
+        viewer.setImage(throwingPath);
+        CHECK(waitTrue([&] { return failed; }, 15000), "F5: failed load reaches the terminal");
+        CHECK(viewer.provisionalScreenRect().isEmpty(), "F5: warm thumbnail is dropped");
+        CHECK(lastZoom < 0, "F5: zoom readout clears");
+        CHECK(viewer.windowTitle().contains(QStringLiteral("无法加载")), "F5: failure title");
+        CHECK(viewer.isFitMode(), "F5: failed load keeps fit mode");
+
+        installDefaults();
+        bool ready = false;
+        QObject::connect(&viewer, &ImageViewer::imageReady, &viewer,
+                         [&](std::shared_ptr<ImageFrame>) { ready = true; });
+        viewer.setBrowseSequence({smallPath});
+        viewer.setImage(smallPath);
+        CHECK(waitTrue([&] { return ready; }, 20000), "F5: the next image loads");
+        Viewport expect;
+        expect.screenW = viewer.viewTransform().screenW;
+        expect.screenH = viewer.viewTransform().screenH;
+        expect.fit(200, 100, FitPolicy::Comfortable);
+        const double got = viewer.viewTransform().scale;
+        CHECK(viewer.isFitMode(), "F5: the next image stays fitted");
+        CHECK(std::abs(got - expect.scale) < 0.02, "F5: the next image uses its own fit scale");
+        CHECK(std::abs(got - stuckScale) > 0.2, "F5: the pre-failure scale was not reused");
+        const int expectPct = static_cast<int>(expect.scale * 100.0 + 0.5);
+        CHECK(std::abs(lastZoom - expectPct) <= 1,
+              "F5: zoom readout returns at the fitted percent");
+    }
+
+    // F6: an explicit locked zoom survives a warm thumbnail and a failed load.
+    {
+        MARK("F6 start");
+        installDefaults();
+        QTemporaryDir dir;
+        CHECK(dir.isValid(), "F6: temp dir");
+        const QString first = writeSolidPng(dir, "first.png", 200, 100);
+        const QString second = writeSolidPng(dir, "second.png", 40, 40);
+        CHECK(QFileInfo::exists(first) && QFileInfo::exists(second), "F6: images written");
+
+        ImageViewer viewer;
+        viewer.setFixedSize(800, 600);
+        viewer.show();
+        pump(30);
+        bool ready = false;
+        int lastZoom = 0;
+        QObject::connect(&viewer, &ImageViewer::imageReady, &viewer,
+                         [&](std::shared_ptr<ImageFrame>) { ready = true; });
+        QObject::connect(&viewer, &ImageViewer::zoomChanged, &viewer,
+                         [&](int pct) { lastZoom = pct; });
+        viewer.setImage(first);
+        CHECK(waitTrue([&] { return ready; }, 20000), "F6: first image loads");
+        viewer.setLockZoom(true);
+        viewer.zoomActual();
+        CHECK(!viewer.isFitMode(), "F6: 100% leaves fit mode");
+        const double locked = viewer.viewTransform().scale;
+
+        QImage warm(8, 8, QImage::Format_RGB32);
+        warm.fill(Qt::red);
+        viewer.setProvisionalImage(second, warm, QSize(4000, 100));
+        CHECK(!viewer.isFitMode(), "F6: warm thumbnail keeps the explicit zoom");
+        CHECK(std::abs(viewer.viewTransform().scale - locked) < 1e-6,
+              "F6: warm thumbnail does not change the locked scale");
+
+        installThrowing(ThrowingM48Decoder::Mode::Lod);
+        bool failed = false;
+        QObject::connect(&viewer, &ImageViewer::loadFailed, &viewer,
+                         [&](const QString &) { failed = true; });
+        viewer.setBrowseSequence({throwingPath});
+        viewer.setImage(throwingPath);
+        CHECK(waitTrue([&] { return failed; }, 15000), "F6: failed load reaches the terminal");
+        CHECK(!viewer.isFitMode(), "F6: failed load keeps the explicit zoom");
+        CHECK(lastZoom < 0, "F6: zoom readout clears");
+        CHECK(viewer.windowTitle().contains(QStringLiteral("无法加载")), "F6: failure title");
+        CHECK(viewer.provisionalScreenRect().isEmpty(), "F6: warm thumbnail is dropped");
+
+        installDefaults();
+        ready = false;
+        viewer.setBrowseSequence({second});
+        viewer.setImage(second);
+        CHECK(waitTrue([&] { return ready; }, 20000), "F6: the next image loads");
+        CHECK(!viewer.isFitMode(), "F6: the next image keeps the locked zoom");
+        CHECK(std::abs(viewer.viewTransform().scale - locked) < 1e-6, "F6: locked scale sticks");
+        CHECK(lastZoom > 0 && lastZoom < 150, "F6: zoom readout returns at the locked zoom");
+    }
+
+    // F7: switching images must not keep a non-owning full-frame alias.
+    {
+        MARK("F7 start");
+        installDefaults();
+        QTemporaryDir dir;
+        CHECK(dir.isValid(), "F7: temp dir");
+        const QString big = writeSolidPng(dir, "big.png", 800, 600);
+        CHECK(QFileInfo::exists(big), "F7: image written");
+
+        ImageViewer viewer;
+        viewer.setFixedSize(320, 240);
+        viewer.show();
+        pump(30);
+        bool ready = false;
+        QObject::connect(&viewer, &ImageViewer::imageReady, &viewer,
+                         [&](std::shared_ptr<ImageFrame>) { ready = true; });
+        viewer.setImage(big);
+        CHECK(waitTrue([&] { return ready; }, 20000), "F7: source image loads");
+        CHECK(viewer.width() > 0 && viewer.width() < 800, "F7: window is narrower than the source");
+        CHECK(viewer.frame() && viewer.frame()->width() == 800,
+              "F7: source is wider than the window");
+        viewer.setImage(dir.filePath("next.png"));
+        const QSize snap = viewer.transitionSnapshotSize();
+        const int edge = std::max(64, std::max(viewer.width(), viewer.height()));
+        CHECK(!snap.isEmpty(), "F7: a switch keeps a transition snapshot");
+        CHECK(snap.width() <= edge && snap.height() <= edge,
+              "F7: the snapshot is bounded by the window");
+    }
+
+    // F8: percent resize must not inherit the 1920 px long-edge default.
+    {
+        MARK("F8 start");
+        ExportDialog dialog;
+        auto *mode = dialog.findChild<QComboBox *>(QStringLiteral("exportResizeModeCombo"));
+        auto *spin = dialog.findChild<QSpinBox *>(QStringLiteral("exportResizeValueSpin"));
+        CHECK(mode && spin, "F8: resize controls exist");
+        if (mode && spin)
+        {
+            CHECK(!spin->isEnabled(), "F8: resize value is disabled until a mode is chosen");
+            mode->setCurrentIndex(mode->findData(QStringLiteral("scale")));
+            CHECK(spin->isEnabled(), "F8: percent mode enables the value");
+            CHECK(spin->value() == 100, "F8: percent mode starts at 100, not 1920");
+            CHECK(spin->maximum() <= 800, "F8: percent mode rejects a pixel-sized value");
+            CHECK(spin->suffix().contains(QLatin1Char('%')), "F8: percent mode labels the value");
+            mode->setCurrentIndex(mode->findData(QStringLiteral("fit")));
+            CHECK(spin->value() == 1920, "F8: long-edge mode restores a pixel default");
+            CHECK(spin->suffix().contains(QStringLiteral("px")),
+                  "F8: long-edge mode labels pixels");
+            mode->setCurrentIndex(mode->findData(QStringLiteral("scale")));
+            CHECK(spin->value() == 100, "F8: returning to percent does not keep 1920");
+            mode->setCurrentIndex(mode->findData(QStringLiteral("none")));
+            CHECK(!spin->isEnabled(), "F8: none disables the value again");
+        }
     }
 
     std::printf("=== M48 async failure regression gate: %s ===\n",

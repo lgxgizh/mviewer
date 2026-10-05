@@ -150,6 +150,12 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_view;
     }
+    // Window-sized owned snapshot shown while the next frame decodes.
+    // Empty when the viewer is not mid-switch.
+    QSize transitionSnapshotSize() const
+    {
+        return m_transitionImage.size();
+    }
     void setViewTransform(const Viewport &v);
 
     // Returns the ImageFrame backing the current view (null if none loaded).
@@ -318,6 +324,7 @@ class ImageViewer : public QOpenGLWidget
     void fitToWidget();
     // Terminal open failure: drop the warm thumbnail, retitle, and clear zoom.
     void presentLoadFailure();
+    QImage ownedTransitionSnapshot(const QImage &view) const;
     void bindDisplayColorScreen();
     void onDisplayScreenChanged();
     void preloadNeighbors(const QString &path);

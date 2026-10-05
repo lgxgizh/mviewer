@@ -122,15 +122,48 @@ void ExportDialog::buildResizeSection(QVBoxLayout *root)
     auto *rsBox = new QGroupBox(tr("缩放"));
     auto *rsLay = new QFormLayout(rsBox);
     m_resizeCombo = new QComboBox(this);
+    m_resizeCombo->setObjectName(QStringLiteral("exportResizeModeCombo"));
     m_resizeCombo->addItem(tr("无"), "none");
     m_resizeCombo->addItem(tr("适应长边 (px)"), "fit");
     m_resizeCombo->addItem(tr("按比例 (%)"), "scale");
     m_resizeSpin = new QSpinBox(this);
+    m_resizeSpin->setObjectName(QStringLiteral("exportResizeValueSpin"));
     m_resizeSpin->setRange(1, 100000);
     m_resizeSpin->setValue(1920);
     rsLay->addRow(tr("方式:"), m_resizeCombo);
     rsLay->addRow(tr("数值:"), m_resizeSpin);
     root->addWidget(rsBox);
+    connect(m_resizeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &ExportDialog::syncResizeControls);
+    syncResizeControls();
+}
+
+void ExportDialog::syncResizeControls()
+{
+    const QString mode = m_resizeCombo->currentData().toString();
+    const bool wasPercent = m_resizeSpin->suffix().contains(QLatin1Char('%'));
+    const int current = m_resizeSpin->value();
+    if (mode == "scale")
+    {
+        // The spin boots at the fit-mode long edge (1920). Leaving that number
+        // in place would export at 1920%.
+        m_resizeSpin->setRange(1, 800);
+        m_resizeSpin->setSuffix(QStringLiteral(" %"));
+        if (!wasPercent)
+            m_resizeSpin->setValue(current > 100 ? 100 : current);
+        m_resizeSpin->setEnabled(true);
+        return;
+    }
+    if (mode == "fit")
+    {
+        m_resizeSpin->setRange(1, 100000);
+        m_resizeSpin->setSuffix(QStringLiteral(" px"));
+        if (wasPercent)
+            m_resizeSpin->setValue(1920);
+        m_resizeSpin->setEnabled(true);
+        return;
+    }
+    m_resizeSpin->setEnabled(false);
 }
 
 void ExportDialog::buildWatermarkSection(QVBoxLayout *root)

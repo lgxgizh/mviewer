@@ -191,8 +191,8 @@ void ImageViewer::setImageImpl(const QString &path)
     const bool keepProvisional = !path.isEmpty() && browsePathEquals(path, m_provisionalPath) &&
                                  !m_provisionalImage.isNull();
 
-    // UX Fluency: capture previous frame to transition image during switch,
-    // avoiding black flash while decoding the new image.
+    // Window-sized owned snapshot so the switch does not flash black. A
+    // full-frame toQImageRef() alias dangles once this frame is released.
     if (!path.isEmpty() && !keepProvisional)
     {
         if (m_lodMode && !m_raster.image.isNull())
@@ -205,7 +205,7 @@ void ImageViewer::setImageImpl(const QString &path)
             QImage img = mvcore::toQImageRef(m_frame->pixels());
             if (img.isNull())
                 img = mvcore::toQImage(m_frame->pixels());
-            m_transitionImage = img;
+            m_transitionImage = ownedTransitionSnapshot(img);
             m_transitionSourceSize = QSize(m_frame->width(), m_frame->height());
         }
         else if (!m_provisionalImage.isNull())
@@ -424,7 +424,6 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
         m_view.offsetX = (m_view.screenW - sw * m_view.scale) / 2.0;
         m_view.offsetY = (m_view.screenH - sh * m_view.scale) / 2.0;
         advanceViewportRevision();
-        emitZoom();
     }
     else
     {
@@ -447,6 +446,7 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     else
         updateFramePresentationStatus();
     applyPendingView();
+    emitZoom();
     m_overlayCache.clear();
     clearLoadedGpu();
     preloadNeighbors(path);
