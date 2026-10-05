@@ -382,7 +382,8 @@ void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLay
     m_sortDirBtn->setObjectName("sortDirBtn");
     m_sortDirBtn->setFixedWidth(28);
     m_sortDirBtn->setCheckable(true);
-    m_sortDirBtn->setToolTip("切换升序/降序");
+    m_sortDirBtn->setToolTip(
+        "↑升序：A→Z（数字按大小）、从早到晚、从小到大；↓相反。相同项仍按文件名");
     sortLayout->addWidget(m_sortDirBtn);
     connect(m_sortDirBtn, &QPushButton::toggled, this,
             [this](bool descending)
@@ -714,11 +715,7 @@ void MainWindow::buildImageViewerUi()
     // P0-3: metadata overlay on the image viewer (toggle with I / M / 图片信息)
     m_metadataOverlay = new MetadataOverlay(m_imageViewer);
     m_metadataOverlay->hide();
-    // P0-3: the overlay can close itself (ESC / I / M / click). Mirror any
-    // visibility change back into the "图片信息" menu toggle so all entry points
-    // stay consistent and a closed overlay does not silently re-open on the next
-    // image selection. Every show/hide also drives the async histogram task:
-    // showing schedules (once, latest-wins), hiding cancels the in-flight work.
+    // Overlay visibility stays aligned with the View menu and the histogram task.
     connect(m_metadataOverlay, &MetadataOverlay::visibilityChanged, this,
             [this](bool visible)
             {
@@ -730,6 +727,7 @@ void MainWindow::buildImageViewerUi()
                     m_actToggleMetadata->setChecked(visible);
             });
 
+    connect(m_imageViewer, &ImageViewer::filesDropped, this, &MainWindow::handleDroppedPaths);
     m_imageViewer->installEventFilter(this);
     m_imageViewer->setMouseTracking(true);
     m_metadataHoverTimer = new QTimer(this);
@@ -793,5 +791,5 @@ void MainWindow::buildStatusBarUi()
     // A-3.4: initial enablement for selection-dependent actions.
     updateSelectionActions();
 
-    statusBar()->showMessage("就绪");
+    statusBar()->showMessage("就绪", 2000);
 }

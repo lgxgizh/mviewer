@@ -13,6 +13,24 @@ QString appConfigFile(const QString &name)
     return mviewer::runtime::filePath(QStandardPaths::AppConfigLocation, name);
 }
 
+bool commitNamedState(const mviewer::core::RecentFiles &recent, const QString &fileName)
+{
+    const QString path = appConfigFile(fileName);
+    QSaveFile file(path);
+    if (path.isEmpty() || !file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return false;
+    return file.write(QByteArray::fromStdString(recent.serialize())) >= 0 && file.commit();
+}
+
+void reportPersistFailures(QWidget *parent, const QStringList &failures)
+{
+    if (failures.isEmpty() || qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
+        return;
+    QMessageBox::warning(parent, QStringLiteral("设置未保存"),
+                         QStringLiteral("以下内容未能写入磁盘，下次启动可能丢失：\n%1")
+                             .arg(failures.join(QStringLiteral("、"))));
+}
+
 } // namespace
 
 void MainWindow::restoreLastSession()
@@ -161,7 +179,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // panel) so reopening restores exactly where the user was browsing.
     m_appState.navHistory = m_history;
     m_appState.navHistoryIndex = m_historyIndex;
-    m_appState.save();
+    QStringList persistFailures;
+    if (!m_appState.save())
+        persistFailures.append(QStringLiteral("会话状态"));
 
     // M16: persist analysis history / pinned results so they survive restart.
     if (m_analyzer)
@@ -175,13 +195,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 
     // Persist the recent-folders LRU alongside app state.
-    const QString recentPath = appConfigFile(QStringLiteral("recent.json"));
-    QSaveFile rf(recentPath);
-    if (!recentPath.isEmpty() && rf.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        if (rf.write(QByteArray::fromStdString(m_recent.serialize())) >= 0)
-            (void)rf.commit();
-    }
+    if (!commitNamedState(m_recent, QStringLiteral("recent.json")))
+        persistFailures.append(QStringLiteral("最近文件夹"));
 
     // M13.5 / P1-3: persist window geometry/layout (QSettings, independent of workspace).
     {
@@ -247,7 +262,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (m_leftSplitter)
             settings.setValue("leftSplitterState", m_leftSplitter->saveState());
         settings.sync();
+        if (settings.status() != QSettings::NoError)
+            persistFailures.append(QStringLiteral("界面设置"));
     }
+
+    reportPersistFailures(this, persistFailures);
 
     QMainWindow::closeEvent(event);
 }

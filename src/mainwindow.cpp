@@ -149,26 +149,11 @@ void MainWindow::restoreWindowSettings()
 {
     QSettings settings;
     if (settings.contains("geometry"))
-    {
         restoreGeometry(settings.value("geometry").toByteArray());
-        const QRect wr = frameGeometry();
-        bool onAnyScreen = false;
-        for (QScreen *screen : QGuiApplication::screens())
-        {
-            if (screen->availableGeometry().intersects(wr))
-            {
-                onAnyScreen = true;
-                break;
-            }
-        }
-        if (!onAnyScreen)
-        {
-            const QRect available = QGuiApplication::primaryScreen()->availableGeometry();
-            move(available.center() - QPoint(width() / 2, height() / 2));
-        }
-    }
     if (settings.contains("windowState"))
         restoreState(settings.value("windowState").toByteArray());
+    // restoreState can reapply fullscreen after the old on-screen check.
+    ImageViewer::clampWidgetToAvailableScreens(this);
     if (m_mainSplitter && settings.contains("splitterState"))
         m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
     restoreNavigationSettings(settings);
@@ -364,7 +349,8 @@ void MainWindow::rateCurrentImage(int stars)
     m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
     mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     statusBar()->showMessage(
-        QString("已为 %1 评分: %2 星").arg(QFileInfo(currentImagePath()).fileName()).arg(stars));
+        QString("已为 %1 评分: %2 星").arg(QFileInfo(currentImagePath()).fileName()).arg(stars),
+        3000);
 }
 
 void MainWindow::onFlagFilterChanged(int)
@@ -428,7 +414,8 @@ void MainWindow::setCurrentColorLabel(int label)
     mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     const QString name = QFileInfo(currentImagePath()).fileName();
     statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
-                                        : QString("已为 %1 设置色标 %2").arg(name).arg(label));
+                                        : QString("已为 %1 设置色标 %2").arg(name).arg(label),
+                             3000);
 }
 
 void MainWindow::toggleCurrentPick()
@@ -443,7 +430,8 @@ void MainWindow::toggleCurrentPick()
     mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     statusBar()->showMessage(
         v ? QString("已收藏 %1").arg(QFileInfo(currentImagePath()).fileName())
-          : QString("已取消收藏 %1").arg(QFileInfo(currentImagePath()).fileName()));
+          : QString("已取消收藏 %1").arg(QFileInfo(currentImagePath()).fileName()),
+        3000);
 }
 
 void MainWindow::toggleCurrentReject()
@@ -458,7 +446,8 @@ void MainWindow::toggleCurrentReject()
     mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     statusBar()->showMessage(
         v ? QString("已拒绝 %1").arg(QFileInfo(currentImagePath()).fileName())
-          : QString("已取消拒绝 %1").arg(QFileInfo(currentImagePath()).fileName()));
+          : QString("已取消拒绝 %1").arg(QFileInfo(currentImagePath()).fileName()),
+        3000);
 }
 
 void MainWindow::setOpenOnLaunch(const QString &path)
@@ -604,7 +593,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     const QString fileName = separator >= 0 ? path.mid(separator + 1) : path;
     setWindowTitle(QString("%1 - MViewer").arg(fileName));
     m_lblImage->setText(fileName);
-    statusBar()->showMessage(QString("当前: %1").arg(fileName));
+    statusBar()->showMessage(QString("当前: %1").arg(fileName), 3000);
     if (m_lblCount && m_imageList && m_imageList->count() > 0)
     {
         const int idx = m_imageList->indexOf(path);
@@ -747,14 +736,13 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                     QObject::disconnect(viewGuard.data(), nullptr, this, nullptr);
                 const QString current = currentImagePath();
                 if (!current.isEmpty())
+                    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(current).fileName()),
+                                             3000);
+                else if (m_imageList && m_imageList->count() > 0)
                     statusBar()->showMessage(
-                        QString("当前: %1").arg(QFileInfo(current).fileName()));
-                else if (m_imageList && !m_imageList->directory().isEmpty())
-                    statusBar()->showMessage(QStringLiteral("Browse: %1, %2 images")
-                                                 .arg(m_imageList->directory())
-                                                 .arg(m_imageList->count()));
+                        QStringLiteral("已载入 %1 张").arg(m_imageList->count()), 2500);
                 else
-                    statusBar()->showMessage(tr("就绪"));
+                    statusBar()->showMessage(tr("就绪"), 2000);
             });
     // P1 #④: Compare → Analyze workflow (Analyze button in Compare toolbar).
     connect(

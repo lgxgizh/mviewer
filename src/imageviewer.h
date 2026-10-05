@@ -14,6 +14,7 @@
 #include "core/render/Viewport.h"
 #include "gpu/GpuTileUploader.h"
 
+#include <QByteArray>
 #include <QImage>
 #include <QOpenGLTextureBlitter>
 #include <QOpenGLWidget>
@@ -30,6 +31,9 @@
 class QEvent;
 class QAction;
 class QContextMenuEvent;
+class QDragEnterEvent;
+class QDragMoveEvent;
+class QDropEvent;
 class QPainter;
 class QTimer;
 
@@ -205,6 +209,8 @@ class ImageViewer : public QOpenGLWidget
     // native window state is updated as a side effect, never independently.
     void setFullscreenRequested(bool requested);
     void toggleFullscreen();
+    // Pull a restored or fullscreen window back onto a screen that exists.
+    static void clampWidgetToAvailableScreens(QWidget *window);
     // Copy/save dispatch the worker-side ExportJob. The GUI thread only starts
     // the job and receives the final clipboard/result presentation.
     void copyToClipboard(const QString &path = {});
@@ -286,6 +292,9 @@ class ImageViewer : public QOpenGLWidget
     void analysisRequested(const QString &analyzerId);
     void frameChanged(int index, int count, bool playing);
     void playbackStateChanged(bool playing);
+    // Files dropped on the viewer window (it is top-level, so the gallery does
+    // not see the drop).
+    void filesDropped(const QStringList &paths);
 
   protected:
     void initializeGL() override;
@@ -300,6 +309,9 @@ class ImageViewer : public QOpenGLWidget
     void contextMenuEvent(QContextMenuEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     void leaveEvent(QEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
   private:
     using ImageLoadResult = mviewer::application::ImageLoadingService::Result;
@@ -675,6 +687,11 @@ class ImageViewer : public QOpenGLWidget
     // Auto-hide cursor in fullscreen after inactivity.
     QTimer *m_cursorHideTimer = nullptr;
     bool m_cursorHidden = false;
+    // Geometry from before fullscreen, so leave/close does not persist the
+    // monitor-sized frame (and a missing monitor cannot reopen off-screen).
+    QByteArray m_windowedGeometry;
+    void restoreWindowGeometry();
+    void persistWindowGeometry();
 
     QRect selectedRegion() const;
 };
