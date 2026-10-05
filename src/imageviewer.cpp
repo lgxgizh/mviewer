@@ -156,12 +156,23 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
     m_provisionalSourceSize = known ? sourceSize : shown.size();
     m_view.screenW = width();
     m_view.screenH = height();
-    const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
-                                    ? FitPolicy::MaximizeClient
-                                    : FitPolicy::Comfortable;
-    m_view.fit(m_provisionalSourceSize.width(), m_provisionalSourceSize.height(), fitPolicy);
+    // A warm thumbnail must not clear an explicit zoom while zoom lock is on.
+    if (m_lockZoom && !m_fitMode && m_view.scale > 0.0)
+    {
+        const double sw = m_provisionalSourceSize.width();
+        const double sh = m_provisionalSourceSize.height();
+        m_view.offsetX = (m_view.screenW - sw * m_view.scale) / 2.0;
+        m_view.offsetY = (m_view.screenH - sh * m_view.scale) / 2.0;
+    }
+    else
+    {
+        const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
+                                        ? FitPolicy::MaximizeClient
+                                        : FitPolicy::Comfortable;
+        m_view.fit(m_provisionalSourceSize.width(), m_provisionalSourceSize.height(), fitPolicy);
+        m_fitMode = true;
+    }
     advanceViewportRevision();
-    m_fitMode = true;
     emitZoom();
     update();
 }

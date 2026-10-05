@@ -240,6 +240,21 @@ void ImageViewer::drawProvisional(QPainter &painter) const
     painter.restore();
 }
 
+QImage ImageViewer::ownedTransitionSnapshot(const QImage &view) const
+{
+    if (view.isNull())
+        return {};
+    // toQImageRef() does not own its buffer, and the frame is released as soon
+    // as this load replaces it. A window-sized copy stays valid after that and
+    // does not memcpy a full photo on the UI thread while the user flips.
+    int edge = width() > height() ? width() : height();
+    if (edge < 64)
+        edge = 64;
+    if (view.width() <= edge && view.height() <= edge)
+        return view.copy();
+    return view.scaled(edge, edge, Qt::KeepAspectRatio, Qt::FastTransformation);
+}
+
 void ImageViewer::drawTransition(QPainter &painter) const
 {
     if (m_transitionImage.isNull())
