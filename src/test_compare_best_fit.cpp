@@ -394,8 +394,8 @@ int main(int argc, char **argv)
     check(swap && swap->isEnabled(), "swap panes control is available");
     if (auto *syncZoom = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck")))
         syncZoom->setChecked(false);
-    const auto boxes = ws->findChildren<QCheckBox *>();
-    for (QCheckBox *box : boxes)
+    const auto dragBoxes = ws->findChildren<QCheckBox *>();
+    for (QCheckBox *box : dragBoxes)
     {
         if (box->text().contains(QStringLiteral("同步拖动")))
             box->setChecked(false);
