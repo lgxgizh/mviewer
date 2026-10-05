@@ -6,6 +6,7 @@
 #include "domain/Selection.h"
 
 #include <cassert>
+#include <climits>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -103,6 +104,20 @@ int main()
         CHECK(frame->width() == 8 && frame->height() == 8, "stack undo restores 8x8");
         stack.redo();
         CHECK(frame->width() == 3 && frame->height() == 3, "stack redo crops to 3x3 again");
+    }
+
+    // 5) x+width past INT_MAX still crops the on-image intersection.
+    {
+        auto frame = std::make_shared<ImageFrame>();
+        frame->setPixels(makeGradient(10, 10));
+        mviewer::domain::Selection sel{-3, 1, INT_MAX, 4};
+        CropCommand cmd(frame, sel);
+        CHECK(cmd.canExecute(), "overflowing selection still intersects the image");
+        cmd.execute();
+        CHECK(frame->width() == 10 && frame->height() == 4, "overflow crop is 10x4");
+        const uint8_t *origin = frame->pixels().buffer->data();
+        CHECK(origin[0] == 0 && origin[1] == 1 && origin[2] == 128,
+              "overflow crop origin is source (0,1)");
     }
 
     std::cout << "CropCommand tests done\n";

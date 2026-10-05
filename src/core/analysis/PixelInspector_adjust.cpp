@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters,bugprone-incorrect-roundings,cppcoreguidelines-pro-type-vararg)
 
@@ -26,6 +27,22 @@ inline double luma(double r, double g, double b)
 inline int lumaFast(int r, int g, int b)
 {
     return (13933 * r + 46871 * g + 4732 * b + 32768) >> 16;
+}
+
+inline int clampToInt(long long value)
+{
+    if (value > std::numeric_limits<int>::max())
+        return std::numeric_limits<int>::max();
+    if (value < std::numeric_limits<int>::min())
+        return std::numeric_limits<int>::min();
+    return static_cast<int>(value);
+}
+
+inline bool sampleInside(long long x, long long y, int width, int height)
+{
+    if (x < 0 || y < 0)
+        return false;
+    return x < width && y < height;
 }
 } // namespace
 
@@ -239,7 +256,12 @@ AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustm
     if (adjustment.flipV)
         croppedY = crop.height - 1 - croppedY;
 
-    const PixelRGBA sourcePixel = samplePixel(source, crop.x + croppedX, crop.y + croppedY);
+    const long long sampleX = static_cast<long long>(crop.x) + croppedX;
+    const long long sampleY = static_cast<long long>(crop.y) + croppedY;
+    if (!sampleInside(sampleX, sampleY, source.width, source.height))
+        return result;
+    const PixelRGBA sourcePixel =
+        samplePixel(source, static_cast<int>(sampleX), static_cast<int>(sampleY));
     if (!sourcePixel.valid)
         return result;
 
@@ -253,6 +275,7 @@ AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustm
         result.r = sourcePixel.r;
         result.g = sourcePixel.g;
         result.b = sourcePixel.b;
+        result.a = sourcePixel.a;
         result.valid = true;
         return result;
     }
@@ -273,6 +296,7 @@ AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustm
                                       std::max(static_cast<float>(adjustment.blueGain), 0.01f))),
                                   0, 255);
     }
+    result.a = sourcePixel.a;
     result.valid = true;
     return result;
 }
@@ -290,12 +314,13 @@ mviewer::domain::Selection mapDisplaySelectionToSource(const mviewer::domain::Se
     const int displayWidth = (rotation == 90 || rotation == 270) ? crop.height : crop.width;
     const int displayHeight = (rotation == 90 || rotation == 270) ? crop.width : crop.height;
     const auto clipped = mviewer::domain::normalizeSelection(
-        display.x, display.y, display.x + display.width, display.y + display.height, displayWidth,
+        display.x, display.y, clampToInt(static_cast<long long>(display.x) + display.width),
+        clampToInt(static_cast<long long>(display.y) + display.height), displayWidth,
         displayHeight);
     if (clipped.isEmpty())
         return {};
-    const int x1 = clipped.x + clipped.width - 1;
-    const int y1 = clipped.y + clipped.height - 1;
+    const int x1 = clampToInt(static_cast<long long>(clipped.x) + clipped.width - 1);
+    const int y1 = clampToInt(static_cast<long long>(clipped.y) + clipped.height - 1);
     const int dx[4] = {clipped.x, x1, clipped.x, x1};
     const int dy[4] = {clipped.y, clipped.y, y1, y1};
     int sx[4] = {};
@@ -309,8 +334,8 @@ mviewer::domain::Selection mapDisplaySelectionToSource(const mviewer::domain::Se
             croppedX = crop.width - 1 - croppedX;
         if (adjustment.flipV)
             croppedY = crop.height - 1 - croppedY;
-        sx[i] = crop.x + croppedX;
-        sy[i] = crop.y + croppedY;
+        sx[i] = clampToInt(static_cast<long long>(crop.x) + croppedX);
+        sy[i] = clampToInt(static_cast<long long>(crop.y) + croppedY);
     }
     return boundsFromInclusiveCorners(sx, sy, sourceWidth, sourceHeight);
 }
@@ -325,17 +350,21 @@ mviewer::domain::Selection mapSourceSelectionToDisplay(const mviewer::domain::Se
     if (crop.width <= 0 || crop.height <= 0)
         return {};
     const auto clipped = mviewer::domain::normalizeSelection(
-        source.x, source.y, source.x + source.width, source.y + source.height, crop.x + crop.width,
-        crop.y + crop.height);
-    const auto inCrop =
-        mviewer::domain::normalizeSelection(clipped.x, clipped.y, clipped.x + clipped.width,
-                                            clipped.y + clipped.height, sourceWidth, sourceHeight);
+        source.x, source.y, clampToInt(static_cast<long long>(source.x) + source.width),
+        clampToInt(static_cast<long long>(source.y) + source.height),
+        clampToInt(static_cast<long long>(crop.x) + crop.width),
+        clampToInt(static_cast<long long>(crop.y) + crop.height));
+    const auto inCrop = mviewer::domain::normalizeSelection(
+        clipped.x, clipped.y, clampToInt(static_cast<long long>(clipped.x) + clipped.width),
+        clampToInt(static_cast<long long>(clipped.y) + clipped.height), sourceWidth, sourceHeight);
     if (inCrop.isEmpty())
         return {};
     const int left = std::max(inCrop.x, crop.x);
     const int top = std::max(inCrop.y, crop.y);
-    const int right = std::min(inCrop.x + inCrop.width, crop.x + crop.width);
-    const int bottom = std::min(inCrop.y + inCrop.height, crop.y + crop.height);
+    const int right = clampToInt((std::min)(static_cast<long long>(inCrop.x) + inCrop.width,
+                                            static_cast<long long>(crop.x) + crop.width));
+    const int bottom = clampToInt((std::min)(static_cast<long long>(inCrop.y) + inCrop.height,
+                                             static_cast<long long>(crop.y) + crop.height));
     if (right <= left || bottom <= top)
         return {};
     const int rotation = normalizedRotation(adjustment.rotation);
@@ -470,7 +499,8 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     int64_t sum = 0, sumSq = 0;
     int64_t rSum = 0, gSum = 0, bSum = 0, vSum = 0;
     int mn = 255, mx = 0;
-    const int count = (yEnd - yStart + 1) * (xEnd - xStart + 1);
+    int count = (yEnd - yStart + 1) * (xEnd - xStart + 1);
+    int skipped = 0;
 
     if (channels == 1)
     {
@@ -498,6 +528,11 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
             for (int xx = xStart; xx <= xEnd; ++xx)
             {
                 const uint8_t *p = row + static_cast<size_t>(xx) * 4;
+                if (p[3] == 0)
+                {
+                    ++skipped;
+                    continue;
+                }
                 const uint8_t b = p[0];
                 const uint8_t g = p[1];
                 const uint8_t r = p[2];
@@ -541,7 +576,9 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
         }
     }
 
-    if (count == 0)
+    if (channels == 4)
+        count -= skipped;
+    if (count <= 0)
         return s;
     const double mean = static_cast<double>(sum) / count;
     const double var = static_cast<double>(sumSq) / count - mean * mean;

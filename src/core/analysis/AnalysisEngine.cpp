@@ -157,46 +157,54 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
         const bool isBGR = (isBgr24 || isBgra32);
         const int rIdx = isBGR ? 2 : 0;
         const int bIdx = isBGR ? 0 : 2;
+        const bool skipClear = isRgba32 || isBgra32;
+        int counted = 0;
         if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<ptrdiff_t>(rw) * cpp)
         {
             const uint8_t *p = vbuf.data + static_cast<size_t>(ry) * vbuf.stride();
             const size_t total = static_cast<size_t>(rw) * rh;
             for (size_t i = 0; i < total; ++i, p += cpp)
             {
+                if (skipClear && p[3] == 0)
+                    continue;
                 const int r = p[rIdx];
                 const int g = p[1];
                 const int b = p[bIdx];
                 const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
-                const int v = std::max(r, std::max(g, b));
+                const int v = (std::max)(r, (std::max)(g, b));
                 ++s.histLum[lum];
                 ++s.histV[v];
                 ++s.histR[r];
                 ++s.histG[g];
                 ++s.histB[b];
+                ++counted;
             }
         }
         else
         {
             for (int y = ry; y < ry + rh; ++y)
             {
-                const uint8_t *p =
-                    vbuf.data + static_cast<size_t>(y) * vbuf.stride() + static_cast<size_t>(rx) * cpp;
+                const uint8_t *p = vbuf.data + static_cast<size_t>(y) * vbuf.stride() +
+                                   static_cast<size_t>(rx) * cpp;
                 for (int x = 0; x < rw; ++x, p += cpp)
                 {
+                    if (skipClear && p[3] == 0)
+                        continue;
                     const int r = p[rIdx];
                     const int g = p[1];
                     const int b = p[bIdx];
                     const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
-                    const int v = std::max(r, std::max(g, b));
+                    const int v = (std::max)(r, (std::max)(g, b));
                     ++s.histLum[lum];
                     ++s.histV[v];
                     ++s.histR[r];
                     ++s.histG[g];
                     ++s.histB[b];
+                    ++counted;
                 }
             }
         }
-        const int count = rw * rh;
+        const int count = counted;
         s.pixelCount = count;
         if (count > 0)
         {

@@ -17,6 +17,7 @@
 
 ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 {
+    setAccessibleName(tr("图片画廊"));
     m_liveDirectoryMonitoring = false;
     m_scanGenToken = std::make_shared<std::atomic<uint64_t>>(0);
     m_busyCursorRefs = std::make_shared<std::atomic<int>>(0);
