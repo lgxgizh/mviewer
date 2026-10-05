@@ -57,10 +57,11 @@ bool writeBytes(const QString &path, const QByteArray &bytes)
     return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size();
 }
 
-QByteArray makeAnimatedGif()
+QByteArray makeAnimatedGifDelays(const std::vector<int> &centiseconds)
 {
-    // A tiny deterministic three-frame GIF.  The per-frame local palettes
-    // deliberately exercise palette changes as well as frame timing in qgif.
+    // A tiny deterministic GIF.  The per-frame local palettes deliberately
+    // exercise palette changes as well as frame timing in qgif. Delays are
+    // centiseconds, which qgif reports as milliseconds.
     QByteArray gif("GIF89a", 6);
     gif.append("\x04\x00\x04\x00\x80\x00\x00", 7);
     const char globalPalette[] = {char(0xff), 0, 0, 0, 0, 0};
@@ -69,11 +70,13 @@ QByteArray makeAnimatedGif()
 
     const char colors[][3] = {{char(0xff), 0, 0}, {0, char(0xff), 0},
                               {0, 0, char(0xff)}};
-    for (int frame = 0; frame < 3; ++frame)
+    for (int frame = 0; frame < static_cast<int>(centiseconds.size()); ++frame)
     {
+        const int cs = centiseconds[static_cast<size_t>(frame)];
         gif.append("\x21\xf9\x04\x00", 4);
-        gif.append(static_cast<char>((frame + 1) * 10));
-        gif.append("\x00\x00\x00", 3);
+        gif.append(static_cast<char>(cs & 0xff));
+        gif.append(static_cast<char>((cs >> 8) & 0xff));
+        gif.append("\x00\x00", 2);
         gif.append('\x2c');
         gif.append("\x00\x00\x00\x00\x04\x00\x04\x00", 8);
         gif.append(frame == 0 ? '\x00' : '\x80');
@@ -87,6 +90,11 @@ QByteArray makeAnimatedGif()
     }
     gif.append('\x3b');
     return gif;
+}
+
+QByteArray makeAnimatedGif()
+{
+    return makeAnimatedGifDelays({10, 20, 30});
 }
 
 QByteArray makeAnimatedWebp()
@@ -207,6 +215,152 @@ bool checkColor(const ImageData &data, int r, int g, int b, const std::string &l
     return check(px.valid && px.r == r && px.g == g && px.b == b, label);
 }
 
+mviewer::core::FrameSequenceInfo animationSequence(int frameCount, int loopCount)
+{
+    mviewer::core::FrameSequenceInfo sequence;
+    sequence.valid = true;
+    sequence.animated = true;
+    sequence.kind = FrameSequenceKind::Animation;
+    sequence.frameCount = frameCount;
+    sequence.loopCount = loopCount;
+    return sequence;
+}
+
+bool checkGifTiming(const QString &root, const QString &gif)
+{
+    using mviewer::core::FrameSequenceReader;
+    const std::string gifPath = gif.toUtf8().toStdString();
+    const auto probed = FrameSequenceReader::probe(gifPath);
+    bool ok = check(probed.durationKnown && probed.totalDurationMs == 600,
+                    "GIF probe keeps 100/200/300 ms delays");
+    for (int i = 0; i < 3; ++i)
+    {
+        const auto info = FrameSequenceReader::frameInfo(gifPath, i);
+        ok = check(info.durationMs == (i + 1) * 100,
+                   "GIF frame " + std::to_string(i) + " keeps its authored delay") &&
+             ok;
+    }
+
+    // 1 centisecond is 10 ms; 0 is the "as fast as possible" sentinel. Both
+    // must play at the browser floor of 100 ms, including a 0 that follows a
+    // 10 ms frame (the reader would otherwise repeat that 10 ms).
+    const QString fast = root + "/fast.gif";
+    ok =
+        check(writeBytes(fast, makeAnimatedGifDelays({1, 0})), "short-delay GIF was written") && ok;
+    const std::string fastPath = fast.toUtf8().toStdString();
+    const auto fastProbe = FrameSequenceReader::probe(fastPath);
+    ok = check(fastProbe.valid && fastProbe.frameCount == 2 && fastProbe.durationKnown &&
+                   fastProbe.totalDurationMs == 200,
+               "delays of 0-10 ms count as 100 ms in the probe total") &&
+         ok;
+    const auto fast0 = FrameSequenceReader::frameInfo(fastPath, 0);
+    const auto fast1 = FrameSequenceReader::frameInfo(fastPath, 1);
+    const auto decoded0 = FrameSequenceReader::decodeFull(fastPath, 0);
+    const auto decoded1 = FrameSequenceReader::decodeFull(fastPath, 1);
+    ok = check(fast0.durationMs == 100 && fast1.durationMs == 100 && decoded0.ok &&
+                   decoded0.frame.durationMs == 100 && decoded1.ok &&
+                   decoded1.frame.durationMs == 100 &&
+                   checkColor(decoded0.pixels, 255, 0, 0, "fast frame 0") &&
+                   checkColor(decoded1.pixels, 0, 255, 0, "fast frame 1"),
+               "10 ms and 0 ms frames play for 100 ms") &&
+         ok;
+    FrameSequenceReader::releaseFile({});
+    return ok;
+}
+
+bool checkSequentialCursor(const QString &gif)
+{
+    using mviewer::core::FrameSequenceReader;
+    const std::string path = gif.toUtf8().toStdString();
+    FrameSequenceReader::releaseFile({});
+    const auto frame0 = FrameSequenceReader::decodeFull(path, 0);
+    const auto frame2 = FrameSequenceReader::decodeFull(path, 2);
+    const auto again = FrameSequenceReader::decodeFull(path, 2);
+    bool ok = check(frame0.ok && checkColor(frame0.pixels, 255, 0, 0, "cursor frame 0") &&
+                        frame2.ok && checkColor(frame2.pixels, 0, 0, 255, "cursor frame 2") &&
+                        again.ok && checkColor(again.pixels, 0, 0, 255, "cached frame 2"),
+                    "sequential decode walks forward to the requested frame");
+    FrameSequenceReader::releaseFile(path);
+    const auto reopened = FrameSequenceReader::decodeFull(path, 2);
+    const auto rewound = FrameSequenceReader::decodeFull(path, 0);
+    ok = check(reopened.ok && checkColor(reopened.pixels, 0, 0, 255, "reopened frame 2") &&
+                   rewound.ok && checkColor(rewound.pixels, 255, 0, 0, "rewound frame 0"),
+               "releaseFile drops the cursor so a later frame still decodes") &&
+         ok;
+    FrameSequenceReader::releaseFile({});
+    return ok;
+}
+
+bool checkPlaybackSuspension()
+{
+    using Controller = mviewer::core::FramePlaybackController;
+    Controller timeline;
+    timeline.configure(animationSequence(3, -1), {{0, 100, 4, 4}, {1, 100, 4, 4}, {2, 100, 4, 4}});
+    const auto epoch = Controller::TimePoint{};
+    timeline.start(epoch);
+    const auto first = timeline.tick(epoch + std::chrono::milliseconds(100));
+    bool ok = check(first.due && !first.skipped && !first.looped && !first.finished &&
+                        first.frameIndex == 1 && timeline.playing(),
+                    "100 ms step advances one frame");
+    timeline.suspend(epoch + std::chrono::milliseconds(150));
+    ok = check(timeline.playing() && timeline.suspended() && timeline.currentFrame() == 1,
+               "suspend freezes the playing timeline") &&
+         ok;
+    const auto hidden = timeline.tick(epoch + std::chrono::milliseconds(10000));
+    ok = check(!hidden.due && !hidden.skipped && hidden.frameIndex == 1 &&
+                   timeline.currentFrame() == 1,
+               "ticks while suspended do not catch up") &&
+         ok;
+    timeline.unsuspend(epoch + std::chrono::milliseconds(10000));
+    ok = check(timeline.playing() && !timeline.suspended(), "unsuspend keeps playback running") &&
+         ok;
+    const auto still = timeline.tick(epoch + std::chrono::milliseconds(10049));
+    ok = check(!still.due && still.frameIndex == 1, "resume stays on the frozen frame") && ok;
+    const auto advanced = timeline.tick(epoch + std::chrono::milliseconds(10050));
+    ok = check(advanced.due && !advanced.skipped && !advanced.finished && advanced.frameIndex == 2,
+               "playback resumes from the frozen elapsed time") &&
+         ok;
+    return ok;
+}
+
+bool checkPlaybackLoopEdges()
+{
+    using Controller = mviewer::core::FramePlaybackController;
+    Controller timeline;
+    const auto epoch = Controller::TimePoint{};
+    timeline.configure(animationSequence(3, -1), {{0, 100, 4, 4}, {1, 100, 4, 4}, {2, 100, 4, 4}});
+    timeline.start(epoch);
+    timeline.tick(epoch + std::chrono::milliseconds(100));
+    timeline.tick(epoch + std::chrono::milliseconds(200));
+    const auto wrapped = timeline.tick(epoch + std::chrono::milliseconds(300));
+    bool ok = check(wrapped.due && wrapped.looped && !wrapped.skipped && !wrapped.finished &&
+                        wrapped.frameIndex == 0,
+                    "a normal loop wrap is not a skipped frame");
+
+    timeline.configure(animationSequence(2, 0), {{0, 100, 4, 4}, {1, 100, 4, 4}});
+    timeline.start(epoch);
+    const auto last = timeline.tick(epoch + std::chrono::milliseconds(100));
+    ok = check(last.due && last.frameIndex == 1 && !last.finished,
+               "loopCount 0 still shows the last frame") &&
+         ok;
+    const auto done = timeline.tick(epoch + std::chrono::milliseconds(200));
+    ok = check(done.finished && !done.due && done.frameIndex == 1,
+               "loopCount 0 finishes on the last frame after one pass") &&
+         ok;
+
+    timeline.configure(animationSequence(2, 1), {{0, 100, 4, 4}, {1, 100, 4, 4}});
+    timeline.start(epoch);
+    const auto second = timeline.tick(epoch + std::chrono::milliseconds(200));
+    ok = check(!second.finished && second.looped && second.frameIndex == 0,
+               "loopCount 1 starts a second pass") &&
+         ok;
+    const auto ended = timeline.tick(epoch + std::chrono::milliseconds(400));
+    ok = check(ended.finished && ended.frameIndex == 1 && !ended.skipped,
+               "loopCount 1 finishes after the second pass") &&
+         ok;
+    return ok;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -317,6 +471,12 @@ int main(int argc, char **argv)
     ok = check(catchup.frameIndex == 100 && catchup.skipped,
                "long decode stalls catch up to the monotonic timeline") &&
          ok;
+
+    ok = checkGifTiming(root, gif) && ok;
+    ok = checkSequentialCursor(gif) && ok;
+    ok = checkPlaybackSuspension() && ok;
+    ok = checkPlaybackLoopEdges() && ok;
+    mviewer::core::FrameSequenceReader::releaseFile({});
 
     mviewer::domain::Workspace workspace;
     workspace.rootPath = "C:/fixtures";

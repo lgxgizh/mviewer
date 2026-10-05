@@ -1,11 +1,15 @@
 #include "imageviewer.h"
 
 #include "application/ImageLoadingService.h"
+#include "core/image/FrameSequence.h"
 
 #include <QApplication>
+#include <QEvent>
 #include <QFileInfo>
+#include <QHideEvent>
 #include <QMetaObject>
 #include <QPointer>
+#include <QShowEvent>
 #include <QTimer>
 
 #include <algorithm>
@@ -14,8 +18,7 @@ namespace
 {
 
 constexpr int kPlaybackTimerIntervalMs = 10;
-constexpr int kPrefetchCount = 2;
-constexpr int kPrefetchMaxEdge = 512;
+constexpr int kPrefetchCount = 1;
 
 QString sequenceLabel(const mviewer::core::FrameSequenceInfo &sequence)
 {
@@ -45,7 +48,15 @@ void ImageViewer::play()
         m_playback.start();
         emit playbackStateChanged(true);
     }
-    m_playbackTimer->start();
+    else
+        m_playback.unsuspend();
+    if (playbackOccluded())
+    {
+        m_playback.suspend();
+        m_playbackTimer->stop();
+    }
+    else
+        m_playbackTimer->start();
     updateFramePresentationStatus();
     emit frameChanged(m_frameIndex, frameCount(), true);
 }
@@ -196,6 +207,8 @@ void ImageViewer::onPlaybackTick()
     const auto decision = m_playback.tick();
     if (decision.due)
         requestFrame(decision.frameIndex);
+    if (decision.finished)
+        pause();
 }
 
 void ImageViewer::cancelFrameRequests()
@@ -208,6 +221,9 @@ void ImageViewer::cancelFrameRequests()
     m_framePrefetchRequests.clear();
     if (m_playbackTimer)
         m_playbackTimer->stop();
+    // Navigation and overwrite both come through here. Drop the sequential
+    // animation reader so the next file does not keep the previous one open.
+    mviewer::core::FrameSequenceReader::releaseFile({});
 }
 
 void ImageViewer::prefetchFrames(int currentIndex)
@@ -221,7 +237,9 @@ void ImageViewer::prefetchFrames(int currentIndex)
     ImageLoadOptions options;
     options.useDiskCache = true;
     options.generateHistogram = false;
-    options.frameMaxEdge = kPrefetchMaxEdge;
+    // Same decode variant as playback so the repository cache satisfies the
+    // next tick instead of walking the container from frame 0 again.
+    options.frameMaxEdge = 0;
     const QString path = m_currentPath;
     for (int offset = 1; offset <= kPrefetchCount; ++offset)
     {
@@ -291,4 +309,59 @@ bool ImageViewer::handleFrameKey(int key, Qt::KeyboardModifiers modifiers)
     else
         return false;
     return true;
+}
+
+bool ImageViewer::playbackOccluded() const
+{
+    if (!isVisible())
+        return true;
+    const QWidget *host = window();
+    return host && host->isMinimized();
+}
+
+void ImageViewer::suspendPlaybackClock()
+{
+    if (!m_playback.playing())
+        return;
+    m_playback.suspend();
+    if (m_playbackTimer)
+        m_playbackTimer->stop();
+    for (auto &request : m_framePrefetchRequests)
+        mviewer::application::ImageLoadingService::instance().cancelAsync(request);
+    m_framePrefetchRequests.clear();
+}
+
+void ImageViewer::resumePlaybackClock()
+{
+    if (!m_playback.playing() || !m_sequence.animated || frameCount() <= 1)
+        return;
+    if (playbackOccluded())
+        return;
+    m_playback.unsuspend();
+    ensurePlaybackTimer();
+    if (!m_playbackTimer->isActive())
+        m_playbackTimer->start();
+}
+
+void ImageViewer::hideEvent(QHideEvent *event)
+{
+    QOpenGLWidget::hideEvent(event);
+    suspendPlaybackClock();
+}
+
+void ImageViewer::showEvent(QShowEvent *event)
+{
+    QOpenGLWidget::showEvent(event);
+    resumePlaybackClock();
+}
+
+void ImageViewer::changeEvent(QEvent *event)
+{
+    QOpenGLWidget::changeEvent(event);
+    if (!event || event->type() != QEvent::WindowStateChange)
+        return;
+    if (playbackOccluded())
+        suspendPlaybackClock();
+    else
+        resumePlaybackClock();
 }

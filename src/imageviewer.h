@@ -28,6 +28,8 @@
 #include <vector>
 
 class QEvent;
+class QHideEvent;
+class QShowEvent;
 class QAction;
 class QContextMenuEvent;
 class QPainter;
@@ -300,6 +302,9 @@ class ImageViewer : public QOpenGLWidget
     void contextMenuEvent(QContextMenuEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
     void leaveEvent(QEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
   private:
     using ImageLoadResult = mviewer::application::ImageLoadingService::Result;
@@ -366,6 +371,9 @@ class ImageViewer : public QOpenGLWidget
     void onPlaybackTick();
     void ensurePlaybackTimer();
     void cancelFrameRequests();
+    bool playbackOccluded() const;
+    void suspendPlaybackClock();
+    void resumePlaybackClock();
     void prefetchFrames(int currentIndex);
     void updateFramePresentationStatus();
     void drawFrameStatus(QPainter &painter) const;

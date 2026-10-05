@@ -759,6 +759,24 @@ void CompareWorkspace::onSwapPanes()
         QLabel *cb = m_cellLabels.value(b, nullptr);
         swapPaneViewsAndCaptions(va, vb, ca, cb, m_engine.imageAt(a), m_engine.imageAt(b),
                                  m_filenameOverlay);
+        // setImage() fits the incoming raster. The engine already swapped each
+        // cell's scale and pan; push that back before the next paint so the
+        // swap does not snap both panes to fit.
+        if (a < m_fitScales.size() && b < m_fitScales.size())
+            std::swap(m_fitScales[a], m_fitScales[b]);
+        auto pushCell = [this](int index)
+        {
+            RawImageView *view = m_cellViews.value(index, nullptr);
+            if (!view)
+                return;
+            const auto cell = m_engine.cellTransform(index);
+            const QPointF offset = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
+                                                        m_engine.syncTransform().offset.y)
+                                              : QPointF(cell.offset.x, cell.offset.y);
+            view->setTransform(cell.scale, offset);
+        };
+        pushCell(a);
+        pushCell(b);
 
         swapIndexIfMatch(m_focusIndex, a, b);
         swapIndexIfMatch(m_editIdx, a, b);
