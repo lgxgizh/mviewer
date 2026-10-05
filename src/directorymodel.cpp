@@ -127,6 +127,20 @@ void DirectoryModel::addRecentFolder(const QString &dir)
     emit recentFoldersChanged(m_recent);
 }
 
+void DirectoryModel::removeRecentFolder(const QString &dir)
+{
+    const int before = m_recent.size();
+    QStringList kept;
+    kept.reserve(m_recent.size());
+    for (const QString &item : m_recent)
+        if (!sameFolder(item, dir))
+            kept.append(item);
+    if (kept.size() == before)
+        return;
+    m_recent = kept;
+    emit recentFoldersChanged(m_recent);
+}
+
 void DirectoryModel::clear()
 {
     const bool hadCurrent = !m_current.isEmpty();
