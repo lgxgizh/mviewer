@@ -304,8 +304,8 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
         // Leaving the image restores the previous message; it does not clear it.
         if (!sb->currentMessage().startsWith(QLatin1String("像素 [")))
             return;
-        const QString base = sb->property(QStringLiteral("statusBase")).toString();
-        const qint64 until = sb->property(QStringLiteral("statusBaseUntil")).toLongLong();
+        const QString base = sb->property("statusBase").toString();
+        const qint64 until = sb->property("statusBaseUntil").toLongLong();
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         if (base.isEmpty() || (until > 0 && now >= until))
             sb->clearMessage();
@@ -321,11 +321,11 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
     if (!sb->currentMessage().startsWith(QLatin1String("像素 [")))
     {
         const QString current = sb->currentMessage();
-        sb->setProperty(QStringLiteral("statusBase"), current);
+        sb->setProperty("statusBase", current);
         const bool sticky = current.startsWith(QStringLiteral("目录暂不可用"));
         const qint64 untilMs =
             current.isEmpty() || sticky ? qint64{0} : QDateTime::currentMSecsSinceEpoch() + 4000;
-        sb->setProperty(QStringLiteral("statusBaseUntil"), untilMs);
+        sb->setProperty("statusBaseUntil", untilMs);
     }
     const QString hex = QStringLiteral("#%1%2%3")
                             .arg(r, 2, 16, QChar('0'))
