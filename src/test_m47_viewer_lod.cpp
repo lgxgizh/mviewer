@@ -254,6 +254,14 @@ int main(int argc, char **argv)
             CHECK(waitTrue([&] { return sawRoi; }, 8000),
                   "V1: ROI stats use the display raster above 60MP");
             CHECK(!viewer.frame(), "V1: ROI stats do not load a full analysis frame");
+
+            const double fitted = viewer.viewTransform().scale;
+            viewer.resize(640, 400);
+            pump(30);
+            CHECK(viewer.isFitMode() && viewer.isLodDisplay(),
+                  "V1: a fitted LOD image stays in fit mode after resize");
+            CHECK(viewer.viewTransform().scale > 0.0 && viewer.viewTransform().scale < fitted,
+                  "V1: fitted LOD display refits when the window shrinks");
         }
     }
 

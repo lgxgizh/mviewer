@@ -10,7 +10,9 @@
 #include "imageviewer.h"
 
 #include <QApplication>
+#include <QDialog>
 #include <QFileInfo>
+#include <QVBoxLayout>
 
 #include <atomic>
 #include <chrono>
@@ -231,12 +233,23 @@ int main(int argc, char **argv)
         viewer.resize(1280, 800);
         viewer.show();
         bool failed = false;
+        int lastZoom = 0;
         QObject::connect(&viewer, &ImageViewer::loadFailed, &viewer,
                          [&](const QString &) { failed = true; });
+        QObject::connect(&viewer, &ImageViewer::zoomChanged, &viewer,
+                         [&](int pct) { lastZoom = pct; });
+        QImage warm(16, 16, QImage::Format_RGB32);
+        warm.fill(Qt::red);
+        viewer.setProvisionalImage(throwingPath, warm, QSize(100, 80));
+        CHECK(!viewer.provisionalScreenRect().isEmpty(), "F2: warm thumbnail is on screen");
         viewer.setBrowseSequence({throwingPath});
         viewer.setImage(throwingPath);
         CHECK(waitTrue([&] { return failed; }, 15000),
               "F2: a failed LOD decode reaches the loadFailed terminal");
+        CHECK(viewer.provisionalScreenRect().isEmpty(), "F2: failed load drops the warm thumbnail");
+        CHECK(lastZoom < 0, "F2: failed load clears the zoom readout");
+        CHECK(viewer.windowTitle().contains(QStringLiteral("无法加载")),
+              "F2: failed load retitles the viewer");
         CHECK(waitTrue(schedulerIdle, 20000), "F2: pools drain after the terminal");
         installDefaults();
         bool ready = false;
@@ -281,6 +294,32 @@ int main(int argc, char **argv)
         CHECK(waitTrue(schedulerIdle, 20000), "F3: pools drain");
         CHECK(g_throwing->regionCalls.load() == regionCallsAfterFailure,
               "F3: a degraded display does not retry region upgrades");
+    }
+
+    // F4: a compare child must follow the dialog window's display profile.
+    // The workspace itself is not a native window, so a resize that only
+    // looked at its own QWindow used to leave an injected target in place.
+    {
+        MARK("F4 start");
+        installDefaults();
+        QDialog dialog;
+        auto *layout = new QVBoxLayout(&dialog);
+        auto *workspace = new CompareWorkspace(&dialog);
+        layout->addWidget(workspace);
+        dialog.resize(800, 600);
+        dialog.show();
+        pump(50);
+        std::vector<uint8_t> bytes{1, 2, 3, 4};
+        const auto injected = mviewer::core::DisplayColorContext::fromIccProfile(
+            std::move(bytes), 3, "injected-monitor");
+        workspace->setDisplayColorContext(injected);
+        CHECK(workspace->displayColorContext().fingerprint == "injected-monitor",
+              "F4: an explicit display target is accepted");
+        dialog.resize(900, 700);
+        pump(50);
+        CHECK(dialog.windowHandle() != nullptr, "F4: the compare dialog has a window");
+        CHECK(workspace->displayColorContext().fingerprint != "injected-monitor",
+              "F4: resize rebinds compare color to the host window profile");
     }
 
     std::printf("=== M48 async failure regression gate: %s ===\n",

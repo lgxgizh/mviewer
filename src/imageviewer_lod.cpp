@@ -24,11 +24,13 @@
 #include "core/image/QtConvert.h"
 #include "core/image/SourceImage.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "display/DisplayColorContextProvider.h"
 
 #include <QApplication>
 #include <QFileInfo>
 #include <QPainter>
 #include <QTimer>
+#include <QWindow>
 
 #include <algorithm>
 #include <cmath>
@@ -58,6 +60,52 @@ struct RasterRequest
     int rx = 0, ry = 0, rw = 0, rh = 0; // region source rect
     int tw = 0, th = 0;                 // region raster target size
 };
+
+namespace
+{
+
+QWindow *hostWindowHandle(const QWidget *widget)
+{
+    if (!widget)
+        return nullptr;
+    if (QWindow *own = widget->windowHandle())
+        return own;
+    const QWidget *host = widget->window();
+    return host ? host->windowHandle() : nullptr;
+}
+
+} // namespace
+
+void ImageViewer::presentLoadFailure()
+{
+    m_provisionalPath.clear();
+    m_provisionalImage = QImage();
+    m_provisionalSourceSize = QSize();
+    m_transitionImage = QImage();
+    m_transitionSourceSize = QSize();
+    m_loading = false;
+    m_fitMode = false;
+    setWindowTitle(QString("无法加载 - %1 - MViewer").arg(QFileInfo(m_currentPath).fileName()));
+    emit zoomChanged(-1); // status bar treats a negative percent as "no image"
+    update();
+    emit loadFailed(m_currentPath);
+}
+
+void ImageViewer::onDisplayScreenChanged()
+{
+    if (QWindow *handle = hostWindowHandle(this))
+        setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+}
+
+void ImageViewer::bindDisplayColorScreen()
+{
+    QWindow *handle = hostWindowHandle(this);
+    if (!handle)
+        return;
+    connect(handle, &QWindow::screenChanged, this, &ImageViewer::onDisplayScreenChanged,
+            Qt::UniqueConnection);
+    setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+}
 
 void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)
 {
@@ -472,7 +520,8 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
         if (firstRaster)
         {
             m_largeSourcePending = false;
-            m_loading = false;
+            presentLoadFailure();
+            return;
         }
         emit loadFailed(m_currentPath);
         update();

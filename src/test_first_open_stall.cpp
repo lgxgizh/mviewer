@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QKeyEvent>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
@@ -330,6 +331,55 @@ void testListFilmstripScrollPerPixel(Results &results)
           "List after Details keeps ScrollPerPixel");
 }
 
+void testFilmstripArrowKeys(Results &results)
+{
+    std::cout << "\n[filmstrip keyboard]\n";
+    QTemporaryDir tmp;
+    check(results, tmp.isValid(), "filmstrip temp dir created");
+    if (!tmp.isValid())
+        return;
+    for (const char *name : {"a.png", "b.png", "c.png", "d.png"})
+    {
+        QImage img(8, 8, QImage::Format_RGB32);
+        img.fill(QColor(20, 40, 60));
+        const QString path = tmp.path() + QLatin1Char('/') + QString::fromLatin1(name);
+        check(results, img.save(path, "PNG"), "filmstrip fixture saved");
+    }
+    ThumbnailPanel panel;
+    panel.resize(180, 160);
+    panel.setViewMode(ThumbnailPanel::Filmstrip);
+    panel.show();
+    pump(30);
+    panel.setDirectory(tmp.path());
+    check(results, waitTrue([&] { return panel.model() && panel.model()->rowCount() == 4; }, 5000),
+          "filmstrip lists four images");
+    if (!panel.model() || panel.model()->rowCount() != 4)
+        return;
+    panel.setCurrentIndex(panel.model()->index(2, 0));
+    auto press = [&](Qt::Key key)
+    {
+        QKeyEvent event(QEvent::KeyPress, key, Qt::NoModifier);
+        QApplication::sendEvent(&panel, &event);
+        pump(10);
+    };
+    press(Qt::Key_Up);
+    check(results, panel.currentIndex().row() == 1, "filmstrip Up moves to the previous cell");
+    press(Qt::Key_Down);
+    check(results, panel.currentIndex().row() == 2, "filmstrip Down moves to the next cell");
+    press(Qt::Key_Left);
+    check(results, panel.currentIndex().row() == 1, "filmstrip Left moves to the previous cell");
+    press(Qt::Key_Right);
+    check(results, panel.currentIndex().row() == 2, "filmstrip Right moves to the next cell");
+    press(Qt::Key_PageDown);
+    check(results, panel.currentIndex().row() > 2, "filmstrip PageDown advances along the strip");
+    press(Qt::Key_Home);
+    check(results, panel.currentIndex().row() == 0, "filmstrip Home goes to the first cell");
+    press(Qt::Key_End);
+    check(results, panel.currentIndex().row() == 3, "filmstrip End goes to the last cell");
+    press(Qt::Key_PageUp);
+    check(results, panel.currentIndex().row() < 3, "filmstrip PageUp moves back along the strip");
+}
+
 void testGalleryPathSlashKey(Results &results)
 {
     std::cout << "\n[gallery path slash key]\n";
@@ -370,6 +420,7 @@ int main(int argc, char **argv)
     testNavigateEmitsBeforeStat(results);
     testNavigationIndexDoesNotBlockGallery(results);
     testListFilmstripScrollPerPixel(results);
+    testFilmstripArrowKeys(results);
     testGalleryPathSlashKey(results);
     pump(200);
     while (QApplication::overrideCursor() != nullptr)
