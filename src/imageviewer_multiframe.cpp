@@ -486,6 +486,15 @@ void ImageViewer::restoreWindowGeometry()
     clampWidgetToAvailableScreens(this);
 }
 
+void ImageViewer::markClosing()
+{
+    setProperty("mviewerClosing", true);
+    if (m_cursorHideTimer)
+        m_cursorHideTimer->stop();
+    if (m_playbackTimer)
+        m_playbackTimer->stop();
+}
+
 void ImageViewer::persistWindowGeometry()
 {
     QSettings settings;
@@ -496,7 +505,7 @@ void ImageViewer::persistWindowGeometry()
     if (QScreen *screen = this->screen())
         settings.setValue(QStringLiteral("viewerScreen"), screen->name());
     settings.sync();
-    if (settings.status() != QSettings::NoError)
+    if (settings.status() != QSettings::NoError && !property("mviewerClosing").toBool())
         emit statusMessageRequested(QStringLiteral("查看器窗口位置未能保存"), 5000);
 }
 
@@ -521,35 +530,37 @@ void ImageViewer::setFullscreenRequested(bool requested)
         clampWidgetToAvailableScreens(this);
     }
 
+    if (property("mviewerClosing").toBool())
+        return;
     auto guard = std::make_shared<QPointer<ImageViewer>>(this);
-    QTimer::singleShot(0, this,
-                       [guard, requested]()
-                       {
-                           ImageViewer *viewer = guard ? guard->data() : nullptr;
-                           if (!viewer)
-                               return;
-                           if (!viewer->m_fitMode)
-                           {
-                               viewer->update();
-                               return;
-                           }
-                           if (viewer->m_frame && viewer->m_frame->isValid())
-                               viewer->fitToWidget();
-                           else if (!viewer->m_provisionalImage.isNull())
-                           {
-                               viewer->m_view.screenW = viewer->width();
-                               viewer->m_view.screenH = viewer->height();
-                               const QSize source = viewer->m_provisionalSourceSize.isValid()
-                                                        ? viewer->m_provisionalSourceSize
-                                                        : viewer->m_provisionalImage.size();
-                               viewer->m_view.fit(source.width(), source.height(),
-                                                  requested ? FitPolicy::MaximizeClient
-                                                            : FitPolicy::Comfortable);
-                               viewer->advanceViewportRevision();
-                               viewer->emitZoom();
-                           }
-                           viewer->update();
-                       });
+    QTimer::singleShot(
+        0, this,
+        [guard, requested]()
+        {
+            ImageViewer *viewer = guard ? guard->data() : nullptr;
+            if (!viewer || !viewer->isVisible() || viewer->property("mviewerClosing").toBool())
+                return;
+            if (!viewer->m_fitMode)
+            {
+                viewer->update();
+                return;
+            }
+            if (viewer->m_frame && viewer->m_frame->isValid())
+                viewer->fitToWidget();
+            else if (!viewer->m_provisionalImage.isNull())
+            {
+                viewer->m_view.screenW = viewer->width();
+                viewer->m_view.screenH = viewer->height();
+                const QSize source = viewer->m_provisionalSourceSize.isValid()
+                                         ? viewer->m_provisionalSourceSize
+                                         : viewer->m_provisionalImage.size();
+                viewer->m_view.fit(source.width(), source.height(),
+                                   requested ? FitPolicy::MaximizeClient : FitPolicy::Comfortable);
+                viewer->advanceViewportRevision();
+                viewer->emitZoom();
+            }
+            viewer->update();
+        });
 }
 
 void ImageViewer::dragEnterEvent(QDragEnterEvent *event)

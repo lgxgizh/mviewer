@@ -86,7 +86,8 @@ void ImageViewer::releaseColdMips(const QString &previousPath)
 
 ImageViewer::~ImageViewer()
 {
-    // M46: invalidate the consumer-lifetime token FIRST. Every request this
+    markClosing();
+    // M46: invalidate the consumer-lifetime token before cancelling work. Every request this
     // viewer owns holds only a weak_ptr to it; once invalidated, the
     // repository suppresses any late client delivery before it can start. The
     // cancels below then also wait (bounded) for a delivery that already
@@ -190,6 +191,7 @@ void ImageViewer::initializeGL()
 
 void ImageViewer::closeEvent(QCloseEvent *event)
 {
+    markClosing();
     // Drop the hover sample and any sticky select mode before decode teardown.
     clearPixelInfo();
     if (m_selectMode)

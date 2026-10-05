@@ -700,6 +700,7 @@ class ImageViewer : public QOpenGLWidget
     QByteArray m_windowedGeometry;
     void restoreWindowGeometry();
     void persistWindowGeometry();
+    void markClosing();
 
     QRect selectedRegion() const;
 };

@@ -3,7 +3,17 @@
 
 #include "runtime_storage.h"
 
+#include <QGuiApplication>
 #include <QSaveFile>
+
+bool sessionPromptsSuppressed()
+{
+    if (qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
+        return true;
+    const QString platform = QGuiApplication::platformName();
+    return platform.compare(QLatin1String("offscreen"), Qt::CaseInsensitive) == 0 ||
+           platform.compare(QLatin1String("minimal"), Qt::CaseInsensitive) == 0;
+}
 
 namespace
 {
@@ -24,8 +34,15 @@ bool commitNamedState(const mviewer::core::RecentFiles &recent, const QString &f
 
 void reportPersistFailures(QWidget *parent, const QStringList &failures)
 {
-    if (failures.isEmpty() || qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
+    if (failures.isEmpty())
         return;
+    // closeEvent still has the window visible. A modal here nests an event loop
+    // until a click that headless runs never deliver.
+    if (sessionPromptsSuppressed() || !parent || !parent->isVisible())
+    {
+        qWarning("MViewer could not save: %s", qUtf8Printable(failures.join(QStringLiteral(", "))));
+        return;
+    }
     QMessageBox::warning(parent, QStringLiteral("设置未保存"),
                          QStringLiteral("以下内容未能写入磁盘，下次启动可能丢失：\n%1")
                              .arg(failures.join(QStringLiteral("、"))));
@@ -157,6 +174,17 @@ void MainWindow::restoreLastSession()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    // Stop repeating timers before any nested loop. A closing window must not
+    // re-arm autosave, reindex, hover, or slideshow work.
+    if (m_autosaveTimer)
+        m_autosaveTimer->stop();
+    if (m_reindexTimer)
+        m_reindexTimer->stop();
+    if (m_metadataHoverTimer)
+        m_metadataHoverTimer->stop();
+    if (m_slideshowTimer)
+        m_slideshowTimer->stop();
+
     // Persist browse position for next launch (P0 cross-session restore).
     m_appState.lastDir = currentDir();
     m_appState.lastImage = currentImagePath();
@@ -336,7 +364,9 @@ void MainWindow::restoreSessionRecovery()
 
     // Ask the user whether to restore the previous session. The recovery file
     // is a crash-recovery artifact; a normal exit clears it (see closeEvent),
-    // so its presence implies an unclean shutdown.
+    // so its presence implies an unclean shutdown. Headless runs cannot answer.
+    if (sessionPromptsSuppressed())
+        return;
     const auto answer = QMessageBox::question(
         this, tr("恢复上次会话"), tr("检测到上次会话未正常关闭。\n是否恢复上次浏览的图片和目录？"),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
