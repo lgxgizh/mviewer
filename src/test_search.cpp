@@ -343,6 +343,25 @@ int main(int argc, char *argv[])
         CHECK(resultsAfterRemove.empty(), "Removed file should no longer be found");
     }
 
+    // ── Edge cases: empty query, special characters ─────────────────────
+    {
+        mviewer::core::SearchIndex edgeIdx;
+        edgeIdx.indexBlob("/photos/2026-03/sample.raw", "name=sample.raw tag=hero_shot");
+
+        mviewer::domain::SearchQuery q;
+        q.text = "";
+        q.searchFilenames = true;
+        CHECK(edgeIdx.search(q).empty(), "Empty query returns no results");
+
+        q.text = "hero_shot";
+        q.searchMetadata = true;
+        CHECK(edgeIdx.search(q).size() == 1, "Underscore and tags match");
+
+        q.text = ".raw";
+        q.searchFilenames = true;
+        CHECK(edgeIdx.search(q).size() == 1, "Extension search matches filename");
+    }
+
     std::fprintf(stderr, "%s: %d failures\n", g_fail == 0 ? "All tests passed" : "Tests failed",
                  g_fail);
     return g_fail == 0 ? 0 : 1;

@@ -297,6 +297,7 @@ class ThumbnailPanel : public QListView
     void revealSelected();
     void invertSelection();
     void copySelectedPaths();
+    void copySelectedFileNames();
     void batchRateSelected(int stars);
     void batchSetColorLabelSelected(int label);
     void batchSetFlagSelected(bool reject, bool pick);

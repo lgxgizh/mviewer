@@ -102,6 +102,7 @@ void MainWindow::connectNavigationSignals()
                 m_autoSelectFirstPending = true;
                 if (m_selection)
                     m_selection->clear();
+                resetFiltersOnFolderChange();
                 m_breadcrumb->setPath(path); // M15: update breadcrumb bar
                 if (m_pathEdit)
                     m_pathEdit->setText(QDir::toNativeSeparators(path));
@@ -788,7 +789,6 @@ void MainWindow::connectSettingsSignals()
                         .arg(QStringLiteral(MVIEWER_VERSION_STRING),
                              QStringLiteral(MVIEWER_VERSION_FULL)));
             });
-
     // P0: recent / favorites / history wiring.
     connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);
     connect(m_actRemoveFavorite, &QAction::triggered, this, [this]() { removeFavorite(); });

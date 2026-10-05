@@ -34,6 +34,12 @@ class RecentFiles
     }
 
     void add(const std::string &path);
+    bool remove(const std::string &path);
+    size_t maxEntries() const
+    {
+        return m_max;
+    }
+    void setMaxEntries(size_t maxEntries);
     const std::vector<std::string> &items() const
     {
         return m_items;

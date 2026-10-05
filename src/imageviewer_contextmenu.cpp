@@ -112,12 +112,14 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
     selectRegion->setEnabled(hasDisplay);
 }
 
-void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAction *&reveal,
-                           QMenu *&colorMenu, QAction *&copyHex, QAction *&copyRgb,
-                           QAction *&copyFloat, QAction *&copyHsv, QAction *&copyCoord)
+void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAction *&copyName,
+                           QAction *&reveal, QMenu *&colorMenu, QAction *&copyHex,
+                           QAction *&copyRgb, QAction *&copyFloat, QAction *&copyHsv,
+                           QAction *&copyCoord)
 {
     copy = menu.addAction("复制图片 (Ctrl+C)");
     copyPath = menu.addAction("复制路径 (Ctrl+Shift+C)");
+    copyName = menu.addAction("复制文件名");
     reveal = menu.addAction("在资源管理器中显示 (Ctrl+E)");
     colorMenu = menu.addMenu("复制像素值");
     copyHex = colorMenu->addAction("十六进制 (#RRGGBB) (Shift+C)");
@@ -226,6 +228,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     QAction *aCopy = nullptr;
     QAction *aCopyPath = nullptr;
+    QAction *aCopyName = nullptr;
     QAction *aReveal = nullptr;
     QMenu *mCopyColor = nullptr;
     QAction *aCopyHex = nullptr;
@@ -233,8 +236,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aCopyFloat = nullptr;
     QAction *aCopyHsv = nullptr;
     QAction *aCopyCoord = nullptr;
-    addCopyContextActions(menu, aCopy, aCopyPath, aReveal, mCopyColor, aCopyHex, aCopyRgb,
-                          aCopyFloat, aCopyHsv, aCopyCoord);
+    addCopyContextActions(menu, aCopy, aCopyPath, aCopyName, aReveal, mCopyColor, aCopyHex,
+                          aCopyRgb, aCopyFloat, aCopyHsv, aCopyCoord);
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
     QAction *aRotateCW = menu.addAction("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)");
@@ -242,7 +245,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aFlipH = menu.addAction("水平翻转并覆盖原文件 (Ctrl+Shift+H)");
     QAction *aFlipV = menu.addAction("垂直翻转并覆盖原文件 (Ctrl+Shift+V)");
     const bool hasPath = !m_currentPath.isEmpty();
-    for (QAction *a : {aRotateCW, aRotateCCW, aFlipH, aFlipV, aCopy, aCopyPath, aReveal})
+    for (QAction *a : {aRotateCW, aRotateCCW, aFlipH, aFlipV, aCopy, aCopyPath, aCopyName, aReveal})
         a->setEnabled(hasPath);
     const bool hasFrame = m_frame && m_frame->isValid();
     if (mCopyColor)
@@ -317,7 +320,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     }
     if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV) ||
         handleContextCopyAction(chosen, aCopy, aCopyPath, aReveal, aCopyHex, aCopyRgb, aCopyFloat,
-                                aCopyHsv, event, aCopyCoord) ||
+                                aCopyHsv, event, aCopyCoord, aCopyName) ||
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                  aSelectRegion))
         return;
@@ -328,7 +331,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
                                           QAction *reveal, QAction *copyHex, QAction *copyRgb,
                                           QAction *copyFloat, QAction *copyHsv,
-                                          QContextMenuEvent *event, QAction *copyCoord)
+                                          QContextMenuEvent *event, QAction *copyCoord,
+                                          QAction *copyName)
 {
     if (chosen == copy)
     {
@@ -338,8 +342,14 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
     }
     if (chosen == copyPath)
     {
-        QApplication::clipboard()->setText(m_currentPath);
+        QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
         emit statusMessageRequested(tr("已复制图片完整路径到剪贴板"));
+        return true;
+    }
+    if (chosen == copyName)
+    {
+        QApplication::clipboard()->setText(QFileInfo(m_currentPath).fileName());
+        emit statusMessageRequested(tr("已复制图片文件名到剪贴板"));
         return true;
     }
     if (chosen == reveal)
@@ -437,7 +447,7 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
     {
         if (!m_currentPath.isEmpty())
         {
-            QApplication::clipboard()->setText(m_currentPath);
+            QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
             emit statusMessageRequested(tr("已复制图片完整路径到剪贴板"));
             return true;
         }

@@ -75,13 +75,21 @@ SearchPanel::SearchPanel(QWidget *parent)
     mainLayout->addWidget(m_table);
 
     // ── connections ─────────────────────────────────────────────────
+    m_searchEdit->installEventFilter(this);
     m_debounceTimer = new QTimer(this);
     m_debounceTimer->setSingleShot(true);
     m_debounceTimer->setInterval(250);
     connect(m_debounceTimer, &QTimer::timeout, this, &SearchPanel::performSearch);
 
     connect(m_searchEdit, &QLineEdit::textChanged, this, &SearchPanel::onSearchTextChanged);
+    connect(m_searchEdit, &QLineEdit::returnPressed, this,
+            [this]()
+            {
+                m_debounceTimer->stop();
+                performSearch();
+            });
     connect(m_table, &QTableWidget::doubleClicked, this, &SearchPanel::onResultDoubleClicked);
+    connect(m_table, &QTableWidget::activated, this, &SearchPanel::onResultDoubleClicked);
     connect(m_chkFilename, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
     connect(m_chkMetadata, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
     connect(m_chkAnalysis, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
@@ -101,6 +109,32 @@ void SearchPanel::setEngine(std::shared_ptr<mviewer::core::SearchEngine> engine)
 {
     m_engine = std::move(engine);
     onSearchTextChanged();
+}
+
+bool SearchPanel::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == m_searchEdit && event->type() == QEvent::KeyPress)
+    {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        if (ke->key() == Qt::Key_Escape)
+        {
+            if (!m_searchEdit->text().isEmpty())
+            {
+                m_searchEdit->clear();
+                ke->accept();
+                return true;
+            }
+        }
+        else if (ke->key() == Qt::Key_Down && m_table && m_table->rowCount() > 0)
+        {
+            m_table->setFocus();
+            if (m_table->currentRow() < 0)
+                m_table->selectRow(0);
+            ke->accept();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void SearchPanel::keyPressEvent(QKeyEvent *event)
