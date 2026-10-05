@@ -31,6 +31,7 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
+#include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QElapsedTimer>
 #include <QFile>
@@ -671,6 +672,10 @@ void testViewerDropAndWindowFit()
                      [&](const QStringList &paths) { dropped = paths; });
     QMimeData mime;
     mime.setUrls({QUrl::fromLocalFile(QStringLiteral("/tmp/mviewer-drop.png"))});
+    // Qt delivers Drop only to the widget that accepted DragEnter. A lone
+    // QDropEvent is discarded in QApplication::notify and never reaches dropEvent.
+    QDragEnterEvent enter(QPoint(8, 8), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(&viewer, &enter);
     QDropEvent drop(QPointF(8, 8), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
     QApplication::sendEvent(&viewer, &drop);
     CHECK(dropped.size() == 1 && dropped.first().endsWith(QStringLiteral("mviewer-drop.png")),

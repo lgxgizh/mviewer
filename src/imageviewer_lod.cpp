@@ -315,7 +315,8 @@ void ImageViewer::cancelDisplayRequest()
 
 void ImageViewer::scheduleDisplayUpgrade()
 {
-    if (m_displayUpgradeScheduled || !m_lodMode || m_displayDegraded)
+    if (m_displayUpgradeScheduled || !m_lodMode || m_displayDegraded ||
+        property("mviewerClosing").toBool())
         return;
     m_displayUpgradeScheduled = true;
     QTimer::singleShot(0, this, &ImageViewer::requestDisplayRaster);
@@ -355,7 +356,7 @@ void ImageViewer::requestDisplayRaster()
     // A queued singleShot may outlive the request that scheduled it. Once a
     // decode has reached the terminal degraded state, discard that callback as
     // well as future viewport-triggered upgrades until setImage() resets it.
-    if (m_displayDegraded)
+    if (m_displayDegraded || property("mviewerClosing").toBool())
     {
         m_displayUpgradeScheduled = false;
         return;

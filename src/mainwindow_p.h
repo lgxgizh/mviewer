@@ -140,6 +140,10 @@ inline std::optional<mviewer::domain::CompareSession> decodeCompareSession(const
 inline constexpr qint64 kMaxPersistedStateBytes = 64LL * 1024 * 1024;
 inline constexpr qint64 kMaxRecoveryStateBytes = 16LL * 1024 * 1024;
 
+// Offscreen and explicit test runs cannot dismiss a modal. Defined in
+// mainwindow_session_recovery.cpp.
+bool sessionPromptsSuppressed();
+
 // Read a whole persisted state file within `maxBytes`. Returns false (filling
 // `error` when provided) if the file is missing, unreadable or too large.
 inline bool readBoundedStateFile(QFile &file, const QString &path, qint64 maxBytes, QByteArray &out,

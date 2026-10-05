@@ -297,7 +297,7 @@ void MainWindow::connectSelectionSignals()
 static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, int b, int a,
                                     int r16, int g16, int b16, int rawKind, bool valid)
 {
-    if (!sb)
+    if (!sb || (sb->window() && !sb->window()->isVisible()))
         return;
     if (!valid)
     {
@@ -594,7 +594,11 @@ void MainWindow::connectMenuSignals()
             });
     connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
             [this](const QString &msg, int timeoutMs)
-            { statusBar()->showMessage(msg, timeoutMs); });
+            {
+                if (!isVisible() || !statusBar())
+                    return;
+                statusBar()->showMessage(msg, timeoutMs);
+            });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
     connect(m_actSaveProject, &QAction::triggered, this, &MainWindow::saveProject);
