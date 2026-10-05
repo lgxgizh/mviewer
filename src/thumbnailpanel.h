@@ -391,15 +391,15 @@ class ThumbnailPanel : public QListView
     // Backed by the metadata index built lazily in ensureMetaIndex().
     QString metaCameraForPath(const QString &path) const
     {
-        return m_metaCamera.value(path);
+        return m_metaCamera.value(galleryPathKey(path));
     }
     QString metaLensForPath(const QString &path) const
     {
-        return m_metaLens.value(path);
+        return m_metaLens.value(galleryPathKey(path));
     }
     int metaIsoForPath(const QString &path) const
     {
-        return m_metaIso.value(path, -1);
+        return m_metaIso.value(galleryPathKey(path), -1);
     }
 
     // P1: repaint the gallery to reflect a rating change made elsewhere.

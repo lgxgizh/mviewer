@@ -236,6 +236,10 @@ void testTagAndSidecarAtomicity()
     ts.setFilePath(tagsPath);
     ts.clearTags("a.png");
     ts.addTag("a.png", "keep");
+    ts.addTag("C:\\photos\\tagged.png", "keep");
+    CHECK(ts.snapshot().hasTag("C:/photos/tagged.png", "keep"),
+          "tag snapshot matches the other slash style");
+    ts.clearTags("C:/photos/tagged.png");
     CHECK(ts.save(), "tags initial save succeeds");
     const std::string before = readAll(tagsPath);
 

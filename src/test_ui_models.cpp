@@ -91,6 +91,22 @@ int main(int argc, char **argv)
         CHECK(dir.recentFolders().front() == "/r1", "DirectoryModel recent LRU dedupe");
         dir.setCurrentDirectory("/work");
         CHECK(dir.currentDirectory() == "/work", "DirectoryModel current");
+        dir.addFavorite(QStringLiteral("C:/photos"));
+        dir.addFavorite(QStringLiteral("C:\\photos"));
+        CHECK(dir.favorites().size() == 3, "DirectoryModel favorite ignores slashes");
+        CHECK(dir.hasFavorite(QStringLiteral("C:\\photos")),
+              "DirectoryModel hasFavorite matches the other slash");
+        dir.removeFavorite(QStringLiteral("C:/photos"));
+        CHECK(!dir.hasFavorite(QStringLiteral("C:\\photos")),
+              "DirectoryModel removeFavorite matches the other slash");
+        int directoryChanges = 0;
+        QObject::connect(&dir, &DirectoryModel::currentDirectoryChanged,
+                         [&](const QString &) { ++directoryChanges; });
+        dir.setCurrentDirectory(QStringLiteral("C:\\Photos"));
+        dir.setCurrentDirectory(QStringLiteral("C:/Photos"));
+        CHECK(dir.currentDirectory() == QStringLiteral("C:/Photos"),
+              "DirectoryModel stores a forward-slash folder");
+        CHECK(directoryChanges == 1, "slash-only folder change does not navigate again");
     }
 
     // ---- ImageListModel ----

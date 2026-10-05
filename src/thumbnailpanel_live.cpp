@@ -237,11 +237,13 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
     {
         const QString oldPath = qpath(rename.before.path);
         const QString newPath = qpath(rename.after.path);
-        m_metaIndex.insert(newPath, m_metaIndex.take(oldPath));
-        m_metaIso.insert(newPath, m_metaIso.take(oldPath));
-        m_metaCamera.insert(newPath, m_metaCamera.take(oldPath));
-        m_metaLens.insert(newPath, m_metaLens.take(oldPath));
-        if (m_pendingSelect == oldPath)
+        const QString oldKey = galleryPathKey(oldPath);
+        const QString newKey = galleryPathKey(newPath);
+        m_metaIndex.insert(newKey, m_metaIndex.take(oldKey));
+        m_metaIso.insert(newKey, m_metaIso.take(oldKey));
+        m_metaCamera.insert(newKey, m_metaCamera.take(oldKey));
+        m_metaLens.insert(newKey, m_metaLens.take(oldKey));
+        if (pathEqual(m_pendingSelect, oldPath))
             m_pendingSelect = newPath;
     }
 
@@ -275,7 +277,7 @@ void ThumbnailPanel::sortDirectoryDeltaEntries(QList<Entry> &entries) const
         switch (m_sortMode)
         {
         case SortName:
-            order = QString::compare(a.path, b.path, Qt::CaseSensitive);
+            order = QString::compare(a.name, b.name, Qt::CaseInsensitive);
             break;
         case SortDate:
             if (a.date != b.date)
@@ -311,16 +313,18 @@ void ThumbnailPanel::sortDirectoryDeltaEntries(QList<Entry> &entries) const
             break;
         }
         case SortCamera:
-            order = QString::compare(m_metaCamera.value(a.path), m_metaCamera.value(b.path),
-                                     Qt::CaseInsensitive);
+            order =
+                QString::compare(m_metaCamera.value(galleryPathKey(a.path)),
+                                 m_metaCamera.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
             break;
         case SortLens:
-            order = QString::compare(m_metaLens.value(a.path), m_metaLens.value(b.path),
-                                     Qt::CaseInsensitive);
+            order = QString::compare(m_metaLens.value(galleryPathKey(a.path)),
+                                     m_metaLens.value(galleryPathKey(b.path)), Qt::CaseInsensitive);
             break;
         }
         if (order == 0)
-            order = QString::compare(a.path, b.path, Qt::CaseSensitive);
+            order =
+                QString::compare(galleryPathKey(a.path), galleryPathKey(b.path), Qt::CaseSensitive);
         return m_sortAscending ? order < 0 : order > 0;
     };
     std::stable_sort(entries.begin(), entries.end(), compareEntries);

@@ -60,31 +60,44 @@ RatingStore &RatingStore::instance()
     return s;
 }
 
+namespace
+{
+// Same slash rule as RatingStore::normalize. Snapshot lookups are what the
+// gallery filter uses, and Windows paths there still contain '\\'.
+std::string slashKey(std::string path)
+{
+    for (char &c : path)
+        if (c == '\\')
+            c = '/';
+    return path;
+}
+} // namespace
+
 int RatingStore::Snapshot::rating(const std::string &path) const
 {
-    auto it = ratings.find(path);
+    auto it = ratings.find(slashKey(path));
     return it == ratings.end() ? 0 : it->second;
 }
 
 int RatingStore::Snapshot::colorLabel(const std::string &path) const
 {
-    auto it = colorLabels.find(path);
+    auto it = colorLabels.find(slashKey(path));
     return it == colorLabels.end() ? 0 : it->second;
 }
 
 bool RatingStore::Snapshot::isRejected(const std::string &path) const
 {
-    return rejected.count(path) != 0;
+    return rejected.count(slashKey(path)) != 0;
 }
 
 bool RatingStore::Snapshot::isPicked(const std::string &path) const
 {
-    return picked.count(path) != 0;
+    return picked.count(slashKey(path)) != 0;
 }
 
 bool RatingStore::Snapshot::isRecent(const std::string &path) const
 {
-    return recentSet.count(path) != 0;
+    return recentSet.count(slashKey(path)) != 0;
 }
 
 RatingStore::Snapshot RatingStore::snapshot() const
@@ -124,11 +137,7 @@ std::string RatingStore::flagsPath() const
 
 std::string RatingStore::normalize(const std::string &path) const
 {
-    std::string out = path;
-    for (char &c : out)
-        if (c == '\\')
-            c = '/';
-    return out;
+    return slashKey(path);
 }
 
 int RatingStore::rating(const std::string &path) const

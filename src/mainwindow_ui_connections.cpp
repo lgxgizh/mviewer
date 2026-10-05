@@ -17,7 +17,6 @@ void MainWindow::connectUiSignals()
 void MainWindow::connectNavigationSignals()
 {
     m_thumbnailPanel->setLiveDirectoryMonitoring(true);
-    // ----- Signals -----
     connect(m_thumbnailPanel, &ThumbnailPanel::directorySourceChanged, m_directoryMonitor,
             &DirectoryMonitor::setActiveDirectory);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
@@ -65,7 +64,8 @@ void MainWindow::connectNavigationSignals()
     connect(m_directoryMonitor, &DirectoryMonitor::directoryAvailabilityChanged, this,
             [this](const QString &path, bool available)
             {
-                if (!m_directory || m_directory->currentDirectory() != path)
+                if (!m_directory ||
+                    !DirectoryTree::equivalentPath(m_directory->currentDirectory(), path))
                     return;
                 if (!available)
                     statusBar()->showMessage(QStringLiteral("目录暂不可用: %1").arg(path));
@@ -81,7 +81,8 @@ void MainWindow::connectNavigationSignals()
                 if (!m_imageList)
                     return;
                 m_imageList->setPaths(paths, directory);
-                if (m_directory && m_directory->currentDirectory() == directory)
+                if (m_directory &&
+                    DirectoryTree::equivalentPath(m_directory->currentDirectory(), directory))
                     statusBar()->showMessage(
                         QStringLiteral("Browse: %1, %2 images").arg(directory).arg(paths.size()));
             });
@@ -102,7 +103,6 @@ void MainWindow::connectNavigationSignals()
                 m_breadcrumb->setPath(path); // M15: update breadcrumb bar
                 if (m_pathEdit)
                     m_pathEdit->setText(QDir::toNativeSeparators(path));
-                // M19: DirectoryModel + ImageListModel are the SSOT.
                 m_directory->setCurrentDirectory(path);
                 if (m_directoryMonitor)
                     m_directoryMonitor->setActiveDirectory(path);

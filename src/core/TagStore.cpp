@@ -74,13 +74,20 @@ std::string TagStore::defaultPath() const
     return "tags.txt";
 }
 
-std::string TagStore::normalize(const std::string &path) const
+namespace
 {
-    std::string out = path;
-    for (char &c : out)
+std::string slashKey(std::string path)
+{
+    for (char &c : path)
         if (c == '\\')
             c = '/';
-    return out;
+    return path;
+}
+} // namespace
+
+std::string TagStore::normalize(const std::string &path) const
+{
+    return slashKey(path);
 }
 
 std::vector<std::string> TagStore::tags(const std::string &path) const
@@ -181,7 +188,7 @@ void TagStore::setFilePath(const std::string &path)
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool TagStore::Snapshot::hasTag(const std::string &path, const std::string &tag) const
 {
-    auto it = tags.find(path);
+    auto it = tags.find(slashKey(path));
     return it != tags.end() && it->second.count(tag) != 0;
 }
 

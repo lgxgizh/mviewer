@@ -4107,6 +4107,16 @@ void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
     const Vec2 zoomedOffset = ws->engine().syncTransform().offset;
     CHECK(zoomedScale > baseScale, "canvas workflow: wheel on the canvas zooms in");
     {
+        const double beforePixel = ws->engine().syncTransform().scale;
+        QWheelEvent pixelWheel(QPointF(cursor), canvas->mapToGlobal(cursor), QPoint(0, 48),
+                               QPoint(0, 0), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase,
+                               false);
+        QApplication::sendEvent(canvas, &pixelWheel);
+        pump(20);
+        CHECK(ws->engine().syncTransform().scale > beforePixel,
+              "canvas workflow: a pixelDelta wheel zooms when angleDelta is zero");
+    }
+    {
         const double factor = zoomedScale / baseScale;
         const double expectX = anchorX - (anchorX - baseOffset.x) * factor;
         const double expectY = anchorY - (anchorY - baseOffset.y) * factor;
@@ -4211,6 +4221,22 @@ void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
         pump(20);
         CHECK(ws->engine().syncTransform().scale > swipeScale,
               "canvas workflow: wheel still zooms on the same canvas in swipe mode");
+
+        QCheckBox *diffHi = ws->findChild<QCheckBox *>(QStringLiteral("diffHighlightToggle"));
+        CHECK(diffHi != nullptr, "canvas workflow: diff highlight toggle exists");
+        if (diffHi)
+        {
+            const bool wasChecked = diffHi->isChecked();
+            canvas->setFocus(Qt::OtherFocusReason);
+            sendKey(canvas, Qt::Key_H);
+            pump(20);
+            CHECK(diffHi->isChecked() != wasChecked,
+                  "canvas workflow: a mode key delivered to the canvas still reaches Compare");
+            sendKey(canvas, Qt::Key_H);
+            pump(20);
+            CHECK(diffHi->isChecked() == wasChecked,
+                  "canvas workflow: the same canvas key toggles the mode back");
+        }
     }
 
     // Exit every canvas mode → the grid page returns.
@@ -4977,6 +5003,19 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
     CHECK(middleFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
               middleFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
           "browse sequence enables both file directions in the middle");
+
+    QString otherSlash = path;
+    if (otherSlash.contains(QLatin1Char('\\')))
+        otherSlash.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    else
+        otherSlash.replace(QLatin1Char('/'), QLatin1Char('\\'));
+    viewer.setBrowseSequence(
+        {path + QStringLiteral(".first"), otherSlash, path + QStringLiteral(".last")});
+    CHECK(viewer.browseIndex() == 1, "browse sequence index matches the other slash style");
+    const ContextMenuSnapshot slashMenu = contextMenuSnapshot(viewer);
+    CHECK(slashMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
+              slashMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+          "browse sequence keeps both directions when the path slash style differs");
 
     viewer.setBrowseSequence(
         {path + QStringLiteral(".first"), path + QStringLiteral(".middle"), path});

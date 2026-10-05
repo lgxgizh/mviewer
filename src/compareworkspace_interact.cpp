@@ -6,6 +6,44 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QKeyEvent>
+#include <QWheelEvent>
+
+namespace
+{
+// angleDelta is zero for many precision trackpads; pixelDelta still has a sign.
+int verticalWheelDelta(const QWheelEvent *event)
+{
+    if (!event)
+        return 0;
+    if (event->angleDelta().y() != 0)
+        return event->angleDelta().y();
+    return event->pixelDelta().y();
+}
+} // namespace
+
+bool CompareWorkspace::forwardFocusedCompareKey(QEvent *event)
+{
+    // Tab stays with the focused widget so focus can leave the pane. Overlay
+    // remains on O. Unhandled keys are accepted again so the target sees a
+    // normal event instead of one Compare already ignored.
+    if (!event)
+        return false;
+    const QEvent::Type type = event->type();
+    if (type != QEvent::KeyPress && type != QEvent::KeyRelease)
+        return false;
+    auto *key = static_cast<QKeyEvent *>(event);
+    if (key->key() == Qt::Key_Tab || key->key() == Qt::Key_Backtab)
+        return false;
+    if (type == QEvent::KeyPress)
+        keyPressEvent(key);
+    else
+        keyReleaseEvent(key);
+    if (event->isAccepted())
+        return true;
+    event->accept();
+    return false;
+}
 
 void CompareWorkspace::showShortcutHelp()
 {
@@ -49,6 +87,8 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         return canvasEventFilter(event);
 
     auto *view = qobject_cast<RawImageView *>(obj);
+    if (view && forwardFocusedCompareKey(event))
+        return true;
     const int idx = view ? view->cellIndex() : -1;
     if (view && event && event->type() == QEvent::Resize && m_blinkChk && m_blinkChk->isChecked())
         schedulePreserveFit();
@@ -75,7 +115,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
     if (event->type() == QEvent::Wheel)
     {
         auto *we = static_cast<QWheelEvent *>(event);
-        const int wheelDelta = we->angleDelta().y();
+        const int wheelDelta = verticalWheelDelta(we);
         if (wheelDelta == 0)
             return true; // horizontal-only wheel: consume without zooming
         noteCompareInteraction();
@@ -181,7 +221,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
 bool CompareWorkspace::handleCanvasWheel(QEvent *event)
 {
     auto *we = static_cast<QWheelEvent *>(event);
-    const int delta = we->angleDelta().y();
+    const int delta = verticalWheelDelta(we);
     if (delta == 0)
         return true;
     const double factor = delta > 0 ? 1.15 : 1.0 / 1.15;
@@ -414,6 +454,9 @@ bool CompareWorkspace::handleCanvasLeave(QEvent *)
 
 bool CompareWorkspace::canvasEventFilter(QEvent *event)
 {
+    // The canvas takes StrongFocus. Mode, zoom, and Esc must still run here.
+    if (forwardFocusedCompareKey(event))
+        return true;
     if (event->type() == QEvent::Paint)
     {
         paintCompareCanvas();

@@ -81,6 +81,24 @@ int main()
 
     s.setRating("a.jpg", 3);
     CHECK(s.rating("a.jpg") == 3, "rating set to 3");
+    s.setRating("C:\\photos\\rated.png", 4);
+    s.setColorLabel("C:\\photos\\rated.png", 2);
+    s.setRejected("C:\\photos\\rated.png", true);
+    s.setPicked("C:/photos/picked.png", true);
+    s.addRecent("C:\\photos\\recent.png");
+    {
+        const RatingStore::Snapshot snap = s.snapshot();
+        CHECK(snap.rating("C:/photos/rated.png") == 4, "snapshot rating ignores slash style");
+        CHECK(snap.colorLabel("C:/photos/rated.png") == 2,
+              "snapshot color label ignores slash style");
+        CHECK(snap.isRejected("C:/photos/rated.png"), "snapshot reject ignores slash style");
+        CHECK(snap.isPicked("C:\\photos\\picked.png"), "snapshot pick ignores slash style");
+        CHECK(snap.isRecent("C:/photos/recent.png"), "snapshot recent ignores slash style");
+    }
+    s.clearRating("C:\\photos\\rated.png");
+    s.clearColorLabel("C:/photos/rated.png");
+    s.setRejected("C:/photos/rated.png", false);
+    s.setPicked("C:\\photos\\picked.png", false);
     CHECK(s.hasRating("a.jpg"), "hasRating true after set");
 
     s.setRating("a.jpg", 9); // clamps to 5

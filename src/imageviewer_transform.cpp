@@ -11,6 +11,7 @@
 #include "thumbnailprovider.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QMessageBox>
 #include <QPointer>
 
@@ -208,4 +209,30 @@ bool ImageViewer::flipImage(bool horizontal)
     submitFileTransform(this, path, tr("翻转失败"), success, [utf8, horizontal]()
                         { return mviewer::core::flipImageFile(utf8, horizontal); });
     return true;
+}
+
+bool ImageViewer::browsePathEquals(const QString &left, const QString &right)
+{
+    const auto key = [](QString path)
+    {
+        path.replace(QLatin1Char('\\'), QLatin1Char('/'));
+        return QDir::cleanPath(path);
+    };
+    const QString a = key(left);
+    const QString b = key(right);
+#ifdef Q_OS_WIN
+    return a.compare(b, Qt::CaseInsensitive) == 0;
+#else
+    return a == b;
+#endif
+}
+
+int ImageViewer::indexInBrowseSequence(const QString &path) const
+{
+    for (int i = 0; i < m_fileList.size(); ++i)
+    {
+        if (browsePathEquals(m_fileList.at(i), path))
+            return i;
+    }
+    return -1;
 }

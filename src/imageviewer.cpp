@@ -141,7 +141,7 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
     if (path.isEmpty() || image.isNull())
         return;
     const QString previousPath = m_currentPath;
-    if (previousPath != path)
+    if (!browsePathEquals(previousPath, path))
     {
         beginImageGeneration();
         clearLoadedGpu();
@@ -540,7 +540,13 @@ void ImageViewer::wheelEvent(QWheelEvent *event)
     m_view.screenW = width();
     m_view.screenH = height();
     const QPointF mouse = event->position();
-    const double factor = event->angleDelta().y() > 0 ? kZoomStep : 1.0 / kZoomStep;
+    // A precision trackpad often reports pixelDelta with a zero angleDelta.
+    // Treating that as "not positive" zoomed out on every tick.
+    const int delta =
+        event->angleDelta().y() != 0 ? event->angleDelta().y() : event->pixelDelta().y();
+    if (delta == 0)
+        return;
+    const double factor = delta > 0 ? kZoomStep : 1.0 / kZoomStep;
     m_view.zoomAt(mouse.x(), mouse.y(), factor);
     advanceViewportRevision();
     m_fitMode = false;

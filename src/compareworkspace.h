@@ -183,6 +183,7 @@ class CompareWorkspace : public QWidget
     void resizeEvent(QResizeEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
+    bool forwardFocusedCompareKey(QEvent *event);
 
   private:
     void buildSyncControls();

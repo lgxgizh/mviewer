@@ -15,7 +15,8 @@ void ThumbnailPanel::wheelEvent(QWheelEvent *event)
     // Ctrl+wheel resizes thumbnails (Windows Explorer / FastStone parity).
     if (event->modifiers() & Qt::ControlModifier)
     {
-        const int delta = event->angleDelta().y();
+        const int delta =
+            event->angleDelta().y() != 0 ? event->angleDelta().y() : event->pixelDelta().y();
         if (delta != 0)
         {
             const int step = (delta > 0 ? 1 : -1) * 16;

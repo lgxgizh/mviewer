@@ -29,7 +29,10 @@ void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const
     if (!compare || !viewer)
         return;
     const QString viewerPath = viewer->currentPath();
-    if (!viewerPath.isEmpty() && imgs.contains(viewerPath) && viewer->isLodDisplay())
+    bool viewerListed = false;
+    for (const QString &image : imgs)
+        viewerListed = viewerListed || ImageViewer::browsePathEquals(image, viewerPath);
+    if (!viewerPath.isEmpty() && viewerListed && viewer->isLodDisplay())
     {
         const QImage warm = viewer->displayRaster(); // shared bits; no deep copy
         if (!warm.isNull())
@@ -45,7 +48,7 @@ void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const
     // Neighbor warm rasters: move ownership into Compare to avoid re-decode.
     for (const QString &path : imgs)
     {
-        if (path.isEmpty() || path == viewerPath)
+        if (path.isEmpty() || ImageViewer::browsePathEquals(path, viewerPath))
             continue;
         QImage image;
         QSize srcSize;
@@ -504,7 +507,9 @@ void MainWindow::onImageOpen(const QString &path)
         // direct recent-file open may not, so keep that standalone viewer
         // request navigable without touching the Browse SSOT or scanning disk.
         QStringList sequence = m_imageList ? m_imageList->paths() : QStringList();
-        if (!sequence.contains(path))
+        // indexOf matches '/' and '\\'. QStringList::contains does not, and a
+        // miss used to replace the folder sequence with a one-image list.
+        if (!m_imageList || m_imageList->indexOf(path) < 0)
             sequence = {path};
         m_imageViewer->setBrowseSequence(sequence);
         if (m_thumbnailPanel)
