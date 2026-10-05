@@ -89,6 +89,17 @@ int main(int argc, char **argv)
         // duplicate -> move to front
         dir.addRecentFolder("/r1");
         CHECK(dir.recentFolders().front() == "/r1", "DirectoryModel recent LRU dedupe");
+        int recentChanges = 0;
+        QObject::connect(&dir, &DirectoryModel::recentFoldersChanged,
+                         [&](const QStringList &) { ++recentChanges; });
+        dir.removeRecentFolder(QStringLiteral("\\r1"));
+        CHECK(dir.recentFolders().size() == 1,
+              "DirectoryModel removeRecentFolder matches the other slash");
+        CHECK(dir.recentFolders().front() == "/r2",
+              "DirectoryModel removeRecentFolder kept remaining");
+        CHECK(recentChanges == 1, "DirectoryModel removeRecentFolder emits change signal");
+        dir.removeRecentFolder("/nonexistent");
+        CHECK(recentChanges == 1, "DirectoryModel removeRecentFolder no-op does not emit signal");
         dir.setCurrentDirectory("/work");
         CHECK(dir.currentDirectory() == "/work", "DirectoryModel current");
         dir.addFavorite(QStringLiteral("C:/photos"));

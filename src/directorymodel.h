@@ -47,6 +47,7 @@ class DirectoryModel : public QObject
     // Slash-insensitive, and case-insensitive on Windows.
     bool hasFavorite(const QString &dir) const;
     void addRecentFolder(const QString &dir);
+    void removeRecentFolder(const QString &dir);
     void clear();
 
   signals:
