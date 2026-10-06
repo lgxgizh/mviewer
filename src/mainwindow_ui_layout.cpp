@@ -168,21 +168,25 @@ void MainWindow::buildBrowserShell()
     browserToolBar->setFloatable(false);
     browserToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     browserToolBar->setIconSize(QSize(18, 18));
-    auto addBrowserAction = [browserToolBar](QAction *action, const char *iconName)
+    auto addBrowserAction =
+        [browserToolBar](QAction *action, const char *iconName, const QString &tip = {})
     {
+        if (!action)
+            return;
         action->setIcon(makeToolbarIcon(iconName));
+        if (!tip.isEmpty())
+            action->setToolTip(tip);
         browserToolBar->addAction(action);
     };
-    addBrowserAction(m_actOpenDir, "open");
-    addBrowserAction(m_actDirBack, "back");
-    addBrowserAction(m_actDirForward, "forward");
+    addBrowserAction(m_actOpenDir, "open", tr("打开目录 (Ctrl+O)"));
+    addBrowserAction(m_actDirBack, "back", tr("上一个目录 (Ctrl+Alt+Left)"));
+    addBrowserAction(m_actDirForward, "forward", tr("下一个目录 (Ctrl+Alt+Right)"));
     addBrowserAction(m_actDirUp, "up");
     addBrowserAction(m_actRefresh, "refresh");
     browserToolBar->addSeparator();
-    addBrowserAction(m_actAddFavorite, "favorite");
-    addBrowserAction(m_actCompare, "compare");
-    addBrowserAction(m_actToggleAnalysis, "analysis");
-    addBrowserAction(m_actToggleSearch, "search");
+    addBrowserAction(m_actAddFavorite, "favorite", tr("收藏当前目录 (Ctrl+D)"));
+    addBrowserAction(m_actToggleAnalysis, "analysis", tr("分析面板 (Alt+H)"));
+    addBrowserAction(m_actToggleSearch, "search", tr("全局搜索 (Ctrl+Shift+F)"));
     browserToolBar->addSeparator();
     addBrowserAction(m_actBrowseWorkspace, "browse");
     browserToolBar->addSeparator();
@@ -197,6 +201,13 @@ void MainWindow::buildBrowserShell()
         m_actRotateCW->setIcon(makeToolbarIcon("rotate_cw"));
         m_actRotateCW->setToolTip(tr("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)"));
         browserToolBar->addAction(m_actRotateCW);
+    }
+    if (m_actCompare)
+    {
+        m_actCompare->setIcon(makeToolbarIcon("compare"));
+        m_actCompare->setObjectName("compareAction");
+        m_actCompare->setToolTip(tr("选择 2–8 张图片进行比较"));
+        browserToolBar->addAction(m_actCompare);
     }
 
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
@@ -371,10 +382,10 @@ void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLay
     m_sortCombo->addItem("日期", ThumbnailPanel::SortDate);
     m_sortCombo->addItem("大小", ThumbnailPanel::SortSize);
     m_sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
-    m_sortCombo->addItem("类型", ThumbnailPanel::SortType);   // A-2.2
-    m_sortCombo->addItem("评分", ThumbnailPanel::SortRating); // A-2.2
-    m_sortCombo->addItem("相机", ThumbnailPanel::SortCamera); // P0 #①
-    m_sortCombo->addItem("镜头", ThumbnailPanel::SortLens);   // P0 #①
+    m_sortCombo->addItem("类型", ThumbnailPanel::SortType);
+    m_sortCombo->addItem("评分", ThumbnailPanel::SortRating);
+    m_sortCombo->addItem("相机", ThumbnailPanel::SortCamera);
+    m_sortCombo->addItem("镜头", ThumbnailPanel::SortLens);
     sortLayout->addWidget(m_sortCombo);
 
     // A-2.2: sort direction toggle (ascending / descending).
@@ -485,21 +496,20 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     // P0-2: View mode switcher (Grid / Large / Small / Detail / Filmstrip / Compact)
     m_viewModeCombo = new QComboBox(sortBar);
     m_viewModeCombo->setObjectName("thumbnailViewModeCombo");
-    m_viewModeCombo->addItem("网格", ThumbnailPanel::Thumbnail);
+    m_viewModeCombo->addItem("网格 (Ctrl+1)", ThumbnailPanel::Thumbnail);
     m_viewModeCombo->addItem("大图标", ThumbnailPanel::LargeIcon);
-    m_viewModeCombo->addItem("小图标", ThumbnailPanel::SmallIcon);
-    m_viewModeCombo->addItem("列表", ThumbnailPanel::List);
-    m_viewModeCombo->addItem("详情", ThumbnailPanel::Details);
-    m_viewModeCombo->addItem("胶片条", ThumbnailPanel::Filmstrip);
-    m_viewModeCombo->addItem("紧凑", ThumbnailPanel::Compact);
+    m_viewModeCombo->addItem("小图标 (Ctrl+5)", ThumbnailPanel::SmallIcon);
+    m_viewModeCombo->addItem("列表 (Ctrl+2)", ThumbnailPanel::List);
+    m_viewModeCombo->addItem("详情 (Ctrl+3)", ThumbnailPanel::Details);
+    m_viewModeCombo->addItem("胶片条 (Ctrl+4)", ThumbnailPanel::Filmstrip);
+    m_viewModeCombo->addItem("紧凑 (Ctrl+6)", ThumbnailPanel::Compact);
     m_viewModeCombo->setToolTip("切换缩略图视图模式（常用模式 Ctrl+1..6）");
     sortLayout->addWidget(m_viewModeCombo);
     connect(m_viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this]()
             {
-                auto mode =
-                    static_cast<ThumbnailPanel::ViewMode>(m_viewModeCombo->currentData().toInt());
-                m_thumbnailPanel->setViewMode(mode);
+                m_thumbnailPanel->setViewMode(
+                    static_cast<ThumbnailPanel::ViewMode>(m_viewModeCombo->currentData().toInt()));
             });
 
     // M18: live search bar.
@@ -719,10 +729,7 @@ void MainWindow::buildImageViewerUi()
     connect(m_metadataOverlay, &MetadataOverlay::visibilityChanged, this,
             [this](bool visible)
             {
-                if (visible)
-                    scheduleMetadataHistogram();
-                else
-                    cancelMetadataHistogram();
+                visible ? scheduleMetadataHistogram() : cancelMetadataHistogram();
                 if (m_actToggleMetadata)
                     m_actToggleMetadata->setChecked(visible);
             });
@@ -746,12 +753,10 @@ void MainWindow::buildStatusBarUi()
     m_lblCache = new QLabel("命中率 —", this);
     m_lblCache->setToolTip(tr("缓存命中率: 提升连续大图切换与缩略图加载性能"));
     for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
+    {
         l->setContentsMargins(8, 0, 8, 0);
-    statusBar()->addPermanentWidget(m_lblImage);
-    statusBar()->addPermanentWidget(m_lblCount);
-    statusBar()->addPermanentWidget(m_lblSize);
-    statusBar()->addPermanentWidget(m_lblZoom);
-    statusBar()->addPermanentWidget(m_lblCache);
+        statusBar()->addPermanentWidget(l);
+    }
 
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
@@ -761,27 +766,23 @@ void MainWindow::buildStatusBarUi()
                     m_lblCount->setText(QString("图片 %1 / %2").arg(idx + 1).arg(total));
                 else
                     m_lblCount->setText(QString("图片 %1").arg(total));
-                if (selected > 0)
-                    m_lblSize->setText(
-                        QString("已选 %1 · %2").arg(selected).arg(formatBytes(selBytes)));
-                else
-                    m_lblSize->setText(QString("大小 %1").arg(formatBytes(totalBytes)));
+                m_lblSize->setText(
+                    selected > 0 ? QString("已选 %1 · %2").arg(selected).arg(formatBytes(selBytes))
+                                 : QString("大小 %1").arg(formatBytes(totalBytes)));
             });
     connect(m_imageViewer, &ImageViewer::zoomChanged, this,
             [this](int pct)
             {
                 if (!m_lblZoom)
                     return;
-                // presentLoadFailure() publishes -1 when nothing is on screen.
                 if (pct < 0)
                 {
                     m_lblZoom->setText(QStringLiteral("缩放 —"));
                     return;
                 }
-                if (m_imageViewer && m_imageViewer->isFitMode())
-                    m_lblZoom->setText(QString("缩放 %1% (自适应)").arg(pct));
-                else
-                    m_lblZoom->setText(QString("缩放 %1%").arg(pct));
+                const bool fit = m_imageViewer && m_imageViewer->isFitMode();
+                m_lblZoom->setText(fit ? QString("缩放 %1% (自适应)").arg(pct)
+                                       : QString("缩放 %1%").arg(pct));
             });
 
     m_statTimer = new QTimer(this);

@@ -845,7 +845,11 @@ void MainWindow::updateSelectionActions()
     const bool hasCurrent = !currentImagePath().isEmpty();
     const bool viewerVisible = m_imageViewer && m_imageViewer->isVisible();
     if (m_actCompare)
-        m_actCompare->setEnabled(n >= 2 && n <= 8);
+    {
+        const bool canCompare = (n >= 2 && n <= 8);
+        m_actCompare->setEnabled(canCompare);
+        m_actCompare->setToolTip(canCompare ? tr("比较 (P)") : tr("选择 2–8 张图片进行比较"));
+    }
     if (m_actExportImages)
         m_actExportImages->setEnabled(n >= 1 || hasImages);
     if (m_actBatch)

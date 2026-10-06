@@ -383,6 +383,19 @@ void CompareWorkspace::bestFitAll()
     update();
 }
 
+void CompareWorkspace::zoomActual()
+{
+    const double currentScale = m_engine.cellTransform(0).scale;
+    if (currentScale > 0.0)
+    {
+        applyAnchorZoom(0, 0.0, 0.0, 1.0 / currentScale);
+        showCompareStatus(tr("视图缩放: 100% (原始大小)"));
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        update();
+    }
+}
+
 double CompareWorkspace::scaleForPaneSource(int pane, int sourceW, int sourceH) const
 {
     if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])

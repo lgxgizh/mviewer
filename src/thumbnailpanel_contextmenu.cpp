@@ -58,8 +58,10 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCopyPath->setShortcut(QKeySequence("Ctrl+Shift+C"));
     acts.aCopyName = menu.addAction("复制文件名");
     acts.aCompare = menu.addAction("比较");
+    acts.aCompare->setShortcut(QKeySequence("P"));
     acts.aCompare->setEnabled(selPaths.size() >= 2 && selPaths.size() <= 8);
     acts.aAnalyze = menu.addAction("批量分析导出");
+    acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     acts.aAnalyze->setEnabled(!selPaths.isEmpty());
     menu.addSeparator();
     acts.aAddTag = menu.addAction("添加标签…");

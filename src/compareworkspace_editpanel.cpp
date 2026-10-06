@@ -146,17 +146,18 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
     {
         auto *row = new QHBoxLayout;
         row->addWidget(new QLabel(tr("旋转"), m_editPanel));
-        auto *btnCCW = new QPushButton(tr("↺ 逆时针"), m_editPanel);
+        auto *btnCCW = new QPushButton(tr("↺ 逆时针 (Ctrl+Shift+R)"), m_editPanel);
         btnCCW->setObjectName("rotateCCWButton");
         btnCCW->setToolTip(tr("逆时针旋转 90°（仅预览，不修改原文件）"));
-        auto *btnCW = new QPushButton(tr("↻ 顺时针"), m_editPanel);
+        auto *btnCW = new QPushButton(tr("↻ 顺时针 (Ctrl+R)"), m_editPanel);
         btnCW->setObjectName("rotateCWButton");
         btnCW->setToolTip(tr("顺时针旋转 90°（仅预览，不修改原文件）"));
         m_rotVal = new QLabel("0°", m_editPanel);
         m_rotVal->setMinimumWidth(30);
-        m_syncRotatePanelChk = new QCheckBox(tr("同步所有图"), m_editPanel);
+        m_syncRotatePanelChk = new QCheckBox(tr("同步所有图 (Alt+R)"), m_editPanel);
         m_syncRotatePanelChk->setObjectName("syncRotatePanelCheck");
-        m_syncRotatePanelChk->setToolTip(tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像"));
+        m_syncRotatePanelChk->setToolTip(
+            tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像 (Alt+R)"));
         m_syncRotatePanelChk->setChecked(m_syncRotate);
         connect(m_syncRotatePanelChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
         row->addWidget(btnCCW);
@@ -170,10 +171,10 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
     {
         auto *row = new QHBoxLayout;
         row->addWidget(new QLabel(tr("翻转"), m_editPanel));
-        auto *btnFlipH = new QPushButton(tr("⇄ 水平"), m_editPanel);
+        auto *btnFlipH = new QPushButton(tr("⇄ 水平 (Ctrl+Shift+H)"), m_editPanel);
         btnFlipH->setObjectName("flipHButton");
         btnFlipH->setToolTip(tr("水平翻转当前窗格 (Ctrl+Shift+H，仅预览，不修改原文件)"));
-        auto *btnFlipV = new QPushButton(tr("⇅ 垂直"), m_editPanel);
+        auto *btnFlipV = new QPushButton(tr("⇅ 垂直 (Ctrl+Shift+V)"), m_editPanel);
         btnFlipV->setObjectName("flipVButton");
         btnFlipV->setToolTip(tr("垂直翻转当前窗格 (Ctrl+Shift+V，仅预览，不修改原文件)"));
         row->addWidget(btnFlipH);

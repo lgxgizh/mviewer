@@ -600,6 +600,8 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     // ----- 视图(&V) -----
     auto *viewMenu = menuBar->addMenu("视图(&V)");
     m_actCompare = new QAction("比较模式(&C)", this);
+    m_actCompare->setObjectName("compareAction");
+    m_actCompare->setShortcut(QKeySequence("P"));
     m_actCompare->setToolTip(tr("选中 2–8 张图片后按 P 或 C 打开比较"));
     m_actToggleAnalysis = new QAction("分析面板(&H)", this);
     m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");

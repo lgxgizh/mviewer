@@ -462,6 +462,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "empty Browse disables favorite commands without an active folder");
     CHECK(compareAction && !compareAction->isEnabled(),
           "empty Browse disables Compare until at least two images are available");
+    CHECK(browserToolBar && browserToolBar->actions().contains(compareAction),
+          "compare action is located on browser toolbar");
+    CHECK(compareAction && compareAction->toolTip().contains(QStringLiteral("2–8")),
+          "compare action tooltip explains 2–8 selection requirement when disabled");
 
     if (viewModeCombo && thumbnailPanel)
     {
@@ -1061,6 +1065,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
               "M49: Ctrl+click toggles a second image into the SSOT selection");
         CHECK(compareAction && compareAction->isEnabled(),
               "selecting two images enables the Compare command");
+        CHECK(compareAction->toolTip().contains(QStringLiteral("(P)")),
+              "compare action tooltip shows (P) shortcut hint when enabled");
         sendKey(&w, Qt::Key_P);
         pump(200);
         QDialog *compareFromP = nullptr;
@@ -1941,6 +1947,12 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         return;
     CHECK(split->isEnabled() && overlay->isEnabled(),
           "2-image modes are enabled for exactly two images");
+    CHECK(blink->text().contains(QStringLiteral("(B)")), "blink checkbox displays (B) shortcut hint");
+    CHECK(split->text().contains(QStringLiteral("(S)")), "split checkbox displays (S) shortcut hint");
+    CHECK(swipe->text().contains(QStringLiteral("(W)")), "swipe checkbox displays (W) shortcut hint");
+    CHECK(overlay->text().contains(QStringLiteral("(O)")), "overlay checkbox displays (O) shortcut hint");
+    CHECK(checker->text().contains(QStringLiteral("(K)")),
+          "checkerboard checkbox displays (K) shortcut hint");
     CHECK(analyzeButton && exportReportButton && blink->isEnabled() && analyzeButton->isEnabled() &&
               exportReportButton->isEnabled(),
           "loaded two-image Compare enables image-dependent actions");
@@ -2656,6 +2668,10 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             QCheckBox *dragSyncChk = findChk(ws, QStringLiteral("同步拖动"));
             CHECK(zoomSyncChk != nullptr && dragSyncChk != nullptr,
                   "wheel gate: both per-axis sync controls must exist for the mixed-mode gate");
+            CHECK(zoomSyncChk && zoomSyncChk->text().contains(QStringLiteral("(Z)")),
+                  "zoom sync checkbox displays (Z) shortcut hint");
+            CHECK(dragSyncChk && dragSyncChk->text().contains(QStringLiteral("(D)")),
+                  "drag sync checkbox displays (D) shortcut hint");
             if (zoomSyncChk && dragSyncChk)
             {
                 // Zoom sync ON, drag sync OFF: every pane scales together through
