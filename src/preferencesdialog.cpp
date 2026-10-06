@@ -14,17 +14,9 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
-// F1 (M22) Preferences dialog.
-PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
+QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
 {
-    setWindowTitle(tr("首选项"));
-    resize(440, 380);
-    QSettings s;
-
-    auto *tabs = new QTabWidget(this);
-
-    // --- 常规 ---
-    QWidget *general = new QWidget;
+    auto *general = new QWidget;
     auto *gl = new QFormLayout(general);
 
     m_uiTheme = new QComboBox;
@@ -92,15 +84,22 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     m_gpuAcceleration->setChecked(s.value("gpuAcceleration", true).toBool());
     gl->addRow(m_gpuAcceleration);
 
-    // --- 对比 ---
-    QWidget *compare = new QWidget;
+    return general;
+}
+
+QWidget *PreferencesDialog::buildCompareTab(QSettings &s)
+{
+    auto *compare = new QWidget;
     auto *cl = new QFormLayout(compare);
     m_autoAlign = new QCheckBox(tr("对比前按整数像素平移自动对齐（消除平移错位）"));
     m_autoAlign->setChecked(s.value("autoAlignBeforeDiff", false).toBool());
     cl->addRow(m_autoAlign);
+    return compare;
+}
 
-    // --- 分析 ---
-    QWidget *analysis = new QWidget;
+QWidget *PreferencesDialog::buildAnalysisTab(QSettings &s)
+{
+    auto *analysis = new QWidget;
     auto *al = new QFormLayout(analysis);
     m_analysisOverlay = new QComboBox;
     m_analysisOverlay->addItem(tr("无"), 0);
@@ -128,9 +127,20 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
             [zbVal](int v) { zbVal->setText(QString::number(v)); });
     al->addRow(tr("斑马线阈值（1–40）"), zbBox);
 
-    tabs->addTab(general, tr("常规"));
-    tabs->addTab(compare, tr("对比"));
-    tabs->addTab(analysis, tr("分析"));
+    return analysis;
+}
+
+// F1 (M22) Preferences dialog.
+PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
+{
+    setWindowTitle(tr("首选项"));
+    resize(440, 380);
+    QSettings s;
+
+    auto *tabs = new QTabWidget(this);
+    tabs->addTab(buildGeneralTab(s), tr("常规"));
+    tabs->addTab(buildCompareTab(s), tr("对比"));
+    tabs->addTab(buildAnalysisTab(s), tr("分析"));
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &PreferencesDialog::accept);

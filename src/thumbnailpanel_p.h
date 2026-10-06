@@ -12,6 +12,7 @@
 //   thumbnailpanel_pipeline.cpp    visible-range scheduling / delivery     219
 //   thumbnailpanel_selection.cpp   selection / path navigation             274
 //   thumbnailpanel_viewmode.cpp    view-mode configuration + Details header 362
+//   thumbnailpanel_contextmenu.cpp context menu and tag operations
 // Only ThumbnailPanel TUs may include this header.
 #pragma once
 

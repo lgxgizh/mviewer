@@ -475,7 +475,7 @@ void MainWindow::toggleSlideshow()
     {
         m_slideshowTimer = new QTimer(this);
         connect(m_slideshowTimer, &QTimer::timeout, this,
-                [this]()
+                [this, interval]()
                 {
                     // Closing the viewer (ESC) ends the show.
                     if (m_imageViewer->isHidden())

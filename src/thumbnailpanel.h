@@ -468,9 +468,14 @@ class ThumbnailPanel : public QListView
     void onCompareClicked();
     QString thumbCacheKey(const QString &path, int size) const;
     void enforceThumbPixmapBudgetLocked();
-
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
+    struct ContextMenuActions;
+    ContextMenuActions buildContextMenu(QMenu &menu, const QStringList &selPaths);
     void contextMenuEvent(QContextMenuEvent *event) override;
+    void handleContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
+                                 const QString &path);
+    void addTagToSelected();
+    void removeTagFromSelected(const QString &tag);
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;

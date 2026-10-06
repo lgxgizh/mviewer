@@ -189,6 +189,7 @@ add_library(mviewer_ui STATIC
     thumbnailpanel_fileops.cpp
     thumbnailpanel_delegates.cpp
     thumbnailpanel_viewmode.cpp
+    thumbnailpanel_contextmenu.cpp
     thumbnailprovider.cpp
     display/DisplayColorContextProvider.cpp
     previewpanel.cpp
@@ -392,6 +393,7 @@ add_executable(test_ui_models
     workspacemodel.cpp
     analyzermodel.cpp
     Theme.cpp
+    breadcrumbbar.cpp
 )
 target_link_libraries(test_ui_models
     PRIVATE
