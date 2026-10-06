@@ -607,7 +607,7 @@ void MainWindow::connectMenuSignals()
     connect(m_actExportImages, &QAction::triggered, this, &MainWindow::exportImages);
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
     connect(m_actCompare, &QAction::triggered, this,
-            [this]() { m_thumbnailPanel ? m_thumbnailPanel->onCompareClicked() : openCompare(); });
+            [this]() { m_thumbnailPanel ? m_thumbnailPanel->requestCompare() : openCompare(); });
 }
 
 void MainWindow::connectWorkspaceSignals()

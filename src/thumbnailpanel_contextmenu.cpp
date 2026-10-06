@@ -115,7 +115,7 @@ void ThumbnailPanel::handleContextMenuAction(const ContextMenuActions &actions, 
     else if (chosen == actions.aCopyName)
         copySelectedFileNames();
     else if (chosen == actions.aCompare)
-        onCompareClicked();
+        requestCompare();
     else if (chosen == actions.aAnalyze)
         batchAnalyzeExport();
     else if (chosen == actions.aAddTag)

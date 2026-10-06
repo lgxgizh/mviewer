@@ -696,7 +696,7 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
     }
 }
 
-void ThumbnailPanel::onCompareClicked()
+void ThumbnailPanel::requestCompare()
 {
     const QStringList sel = selectedPaths();
     if (sel.size() >= 2 && sel.size() <= 8)

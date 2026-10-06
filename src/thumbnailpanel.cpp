@@ -64,7 +64,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     m_compareBtn = new QPushButton(QStringLiteral("比较选中"), this);
     m_compareBtn->setObjectName(QStringLiteral("compareSelectionButton"));
     m_compareBtn->setVisible(false);
-    connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::onCompareClicked);
+    connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::requestCompare);
 
     connect(selectionModel(), &QItemSelectionModel::selectionChanged, this,
             &ThumbnailPanel::onSelectionChanged);

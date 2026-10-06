@@ -1947,10 +1947,14 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         return;
     CHECK(split->isEnabled() && overlay->isEnabled(),
           "2-image modes are enabled for exactly two images");
-    CHECK(blink->text().contains(QStringLiteral("(B)")), "blink checkbox displays (B) shortcut hint");
-    CHECK(split->text().contains(QStringLiteral("(S)")), "split checkbox displays (S) shortcut hint");
-    CHECK(swipe->text().contains(QStringLiteral("(W)")), "swipe checkbox displays (W) shortcut hint");
-    CHECK(overlay->text().contains(QStringLiteral("(O)")), "overlay checkbox displays (O) shortcut hint");
+    CHECK(blink->text().contains(QStringLiteral("(B)")),
+          "blink checkbox displays (B) shortcut hint");
+    CHECK(split->text().contains(QStringLiteral("(S)")),
+          "split checkbox displays (S) shortcut hint");
+    CHECK(swipe->text().contains(QStringLiteral("(W)")),
+          "swipe checkbox displays (W) shortcut hint");
+    CHECK(overlay->text().contains(QStringLiteral("(O)")),
+          "overlay checkbox displays (O) shortcut hint");
     CHECK(checker->text().contains(QStringLiteral("(K)")),
           "checkerboard checkbox displays (K) shortcut hint");
     CHECK(analyzeButton && exportReportButton && blink->isEnabled() && analyzeButton->isEnabled() &&
