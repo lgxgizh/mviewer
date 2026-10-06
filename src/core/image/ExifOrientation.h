@@ -79,8 +79,8 @@ inline void displayToRaw(int ox, int oy, int rawW, int rawH, int orientation, in
         ry = rawH - 1 - ox;
         break;
     case 7: // transverse
-        rx = rawH - 1 - oy;
-        ry = rawW - 1 - ox;
+        rx = rawW - 1 - oy;
+        ry = rawH - 1 - ox;
         break;
     case 8: // rotate 270 CW
         rx = rawW - 1 - oy;
@@ -119,8 +119,8 @@ inline void rawToDisplay(int rx, int ry, int rawW, int rawH, int orientation, in
         oy = rx;
         break;
     case 7: // transverse
-        ox = rawW - 1 - ry;
-        oy = rawH - 1 - rx;
+        ox = rawH - 1 - ry;
+        oy = rawW - 1 - rx;
         break;
     case 8: // rotate 270 CW
         ox = ry;
