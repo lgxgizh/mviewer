@@ -162,15 +162,6 @@ static bool fits(size_t offset, size_t need, size_t size)
     return offset <= size && need <= size - offset;
 }
 
-double MetadataReader::exifToDecimal(const unsigned char *buf, int offset, bool isLittle)
-{
-    if (!buf || offset < 0)
-        return 0.0;
-    const uint32_t num = readU32(buf + offset, isLittle);
-    const uint32_t den = readU32(buf + offset + 4, isLittle);
-    return den == 0 ? 0.0 : static_cast<double>(num) / static_cast<double>(den);
-}
-
 namespace
 {
 // Upper bound for the non-JPEG EXIF payload. TIFF-based containers must be read
@@ -317,10 +308,8 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
             for (int component = 0; component < 3; ++component)
             {
                 const size_t base = static_cast<size_t>(value) + static_cast<size_t>(component) * 8;
-                const uint32_t numerator = readU32(data + base, little);
                 const uint32_t denominator = readU32(data + base + 4, little);
-                target[component] =
-                    denominator == 0 ? 0.0 : static_cast<double>(numerator) / denominator;
+                target[component] = detail::exifToDecimal(data, static_cast<int>(base), little);
                 if (component == 0 && denominator > 0)
                     validRational = true;
             }

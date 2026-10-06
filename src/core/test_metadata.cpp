@@ -291,9 +291,9 @@ static void testMetadataHostileOffsets()
     // (i) Zero denominator in exifToDecimal must return 0.0 safely
     {
         const unsigned char zeroDenBuf[8] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-        const double val = mviewer::core::MetadataReader::exifToDecimal(zeroDenBuf, 0, true);
+        const double val = mviewer::core::detail::exifToDecimal(zeroDenBuf, 0, true);
         CHECK(val == 0.0, "zero denominator in exifToDecimal safely returns 0.0");
-        CHECK(mviewer::core::MetadataReader::exifToDecimal(nullptr, 0, true) == 0.0,
+        CHECK(mviewer::core::detail::exifToDecimal(nullptr, 0, true) == 0.0,
               "null buffer in exifToDecimal safely returns 0.0");
     }
 
