@@ -470,6 +470,7 @@ class ThumbnailPanel : public QListView
     void enforceThumbPixmapBudgetLocked();
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
     struct ContextMenuActions;
+    ContextMenuActions buildContextMenu(QMenu &menu, const QStringList &selPaths);
     void contextMenuEvent(QContextMenuEvent *event) override;
     void handleContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
                                  const QString &path);

@@ -33,11 +33,12 @@ void populateRemoveTagMenu(QMenu *rmTagMenu, const QStringList &selPaths)
     for (const QString &tg : tags)
         rmTagMenu->addAction(tg);
     rmTagMenu->setEnabled(!tags.isEmpty());
-}
+} // namespace
 
-ThumbnailPanel::ContextMenuActions buildContextMenu(QMenu &menu, const QStringList &selPaths)
+ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
+                                                                    const QStringList &selPaths)
 {
-    ThumbnailPanel::ContextMenuActions acts;
+    ContextMenuActions acts;
     acts.aOpen = menu.addAction("打开");
     acts.aOpen->setShortcut(QKeySequence(Qt::Key_Return));
     acts.aRename = menu.addAction("重命名");
@@ -66,7 +67,6 @@ ThumbnailPanel::ContextMenuActions buildContextMenu(QMenu &menu, const QStringLi
     populateRemoveTagMenu(acts.rmTagMenu, selPaths);
     return acts;
 }
-} // namespace
 
 void ThumbnailPanel::addTagToSelected()
 {
