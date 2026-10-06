@@ -313,11 +313,14 @@ static bool parseCompareCollections(Parser &p, const std::string &key,
             if (!p.eat('['))
                 return false;
             mviewer::domain::CellTransform ct;
-            ct.scale = static_cast<double>(p.parseDouble());
+            const double sc = static_cast<double>(p.parseDouble());
+            ct.scale = (std::isfinite(sc) && sc > 0.0) ? sc : 1.0;
             p.eat(',');
-            ct.offsetX = static_cast<double>(p.parseDouble());
+            const double ox = static_cast<double>(p.parseDouble());
+            ct.offsetX = std::isfinite(ox) ? ox : 0.0;
             p.eat(',');
-            ct.offsetY = static_cast<double>(p.parseDouble());
+            const double oy = static_cast<double>(p.parseDouble());
+            ct.offsetY = std::isfinite(oy) ? oy : 0.0;
             if (!p.eat(']'))
                 return false;
             out.cells.push_back(ct);
@@ -401,20 +404,25 @@ static bool parseComparePresentation(Parser &p, const std::string &key,
 static void applyCompareParseState(const CompareParseState &state,
                                    mviewer::domain::CompareSession &out)
 {
-    out.syncMode = static_cast<mviewer::domain::SyncMode>(state.syncMode);
-    out.blinkIndex = static_cast<int>(state.blink);
-    out.sharedScale = state.sharedScale;
-    out.sharedOffsetX = state.sharedOffsetX;
-    out.sharedOffsetY = state.sharedOffsetY;
-    out.cols = static_cast<int>(state.cols);
-    out.rows = static_cast<int>(state.rows);
-    out.selection = {state.sx, state.sy, state.sw, state.sh,
-                     (state.sw > 0 && state.sh > 0), state.ssync != 0};
-    out.threshold = static_cast<uint8_t>(state.threshold);
-    out.blinkIntervalMs = static_cast<int>(state.blinkIntervalMs);
+    const long long sm = state.syncMode;
+    out.syncMode = (sm >= 0 && sm <= 3) ? static_cast<mviewer::domain::SyncMode>(sm)
+                                        : mviewer::domain::SyncMode::All;
+    const int blink = static_cast<int>(state.blink);
+    out.blinkIndex = (blink >= -1 && blink < static_cast<int>(out.imageIds.size())) ? blink : -1;
+    out.sharedScale =
+        (std::isfinite(state.sharedScale) && state.sharedScale > 0.0) ? state.sharedScale : 1.0;
+    out.sharedOffsetX = std::isfinite(state.sharedOffsetX) ? state.sharedOffsetX : 0.0;
+    out.sharedOffsetY = std::isfinite(state.sharedOffsetY) ? state.sharedOffsetY : 0.0;
+    out.cols = (std::max)(0, static_cast<int>(state.cols));
+    out.rows = (std::max)(0, static_cast<int>(state.rows));
+    const int sw = (std::max)(0, state.sw);
+    const int sh = (std::max)(0, state.sh);
+    out.selection = {state.sx, state.sy, sw, sh, (sw > 0 && sh > 0), state.ssync != 0};
+    out.threshold = static_cast<uint8_t>(std::clamp(state.threshold, 0LL, 255LL));
+    out.blinkIntervalMs = static_cast<int>(std::clamp(state.blinkIntervalMs, 50LL, 10000LL));
     out.sidePanelVisible = (state.sidePanel != 0);
-    out.layoutIndex = static_cast<int>(state.layoutIndex);
-    out.customColumns = static_cast<int>(state.customColumns);
+    out.layoutIndex = static_cast<int>(std::clamp(state.layoutIndex, 0LL, 6LL));
+    out.customColumns = static_cast<int>(std::clamp(state.customColumns, 1LL, 8LL));
     out.uniformScale = (state.uniformScale != 0);
 }
 
@@ -527,20 +535,20 @@ static bool parseWorkspaceImage(Parser &p, mviewer::domain::Folder &folder)
     long long h = 0;
     if (!p.memberNum("width", w) || !p.eat(',') || !p.memberNum("height", h))
         return false;
-    m.width = static_cast<int>(w);
-    m.height = static_cast<int>(h);
+    m.width = (std::max)(0, static_cast<int>(w));
+    m.height = (std::max)(0, static_cast<int>(h));
     if (p.peek(','))
     {
         p.eat(',');
         if (p.parseString() != "roi" || !p.eat(':') || !p.eat('['))
             return false;
-        m.roiX = static_cast<int>(p.parseNumber());
+        m.roiX = (std::max)(0, static_cast<int>(p.parseNumber()));
         p.eat(',');
-        m.roiY = static_cast<int>(p.parseNumber());
+        m.roiY = (std::max)(0, static_cast<int>(p.parseNumber()));
         p.eat(',');
-        m.roiW = static_cast<int>(p.parseNumber());
+        m.roiW = (std::max)(0, static_cast<int>(p.parseNumber()));
         p.eat(',');
-        m.roiH = static_cast<int>(p.parseNumber());
+        m.roiH = (std::max)(0, static_cast<int>(p.parseNumber()));
         if (!p.eat(']') || !p.eat(',') || p.parseString() != "analysis" || !p.eat(':'))
             return false;
         m.analysis = p.parseString();

@@ -3,6 +3,7 @@
 
 #include "application/ExternalOpen.h"
 #include "core/analysis/ImageOverlay.h"
+#include <algorithm>
 
 // M15: drag & drop — accept files/folders dropped onto the window.
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -329,11 +330,21 @@ void MainWindow::copyCurrentImageToClipboard()
 void MainWindow::toggleFullscreen()
 {
     if (m_imageViewer && m_imageViewer->isVisible())
+    {
         m_imageViewer->toggleFullscreen();
+    }
     else if (isFullScreen())
+    {
         showNormal();
+        if (m_actFullscreen)
+            m_actFullscreen->setText(tr("全屏(&U)"));
+    }
     else
+    {
         showFullScreen();
+        if (m_actFullscreen)
+            m_actFullscreen->setText(tr("退出全屏(&U)"));
+    }
 }
 
 void MainWindow::toggleFocusBrowse()
@@ -380,7 +391,11 @@ void MainWindow::applyPreferences()
     QSettings s;
     const int vm = s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt();
     if (m_thumbnailPanel)
-        m_thumbnailPanel->setViewMode(static_cast<ThumbnailPanel::ViewMode>(vm));
+    {
+        const auto mode = (vm >= 0 && vm <= 4) ? static_cast<ThumbnailPanel::ViewMode>(vm)
+                                               : ThumbnailPanel::Thumbnail;
+        m_thumbnailPanel->setViewMode(mode);
+    }
     const int sm = s.value("thumbSortMode", ThumbnailPanel::SortName).toInt();
     if (m_sortCombo)
     {
@@ -405,19 +420,26 @@ void MainWindow::applyPreferences()
         }
     }
     if (m_thumbnailPanel)
-        m_thumbnailPanel->setThumbSize(s.value("thumbSize", 160).toInt());
+    {
+        const int size = std::clamp(s.value("thumbSize", 160).toInt(), 64, 512);
+        m_thumbnailPanel->setThumbSize(size);
+    }
     if (m_slideshowTimer)
     {
-        const int interval = s.value("slideshowInterval", 3000).toInt();
+        const int interval = std::clamp(s.value("slideshowInterval", 3000).toInt(), 500, 30000);
         m_slideshowTimer->setInterval(interval);
         if (m_slideshowTimer->isActive())
             m_slideshowTimer->start(interval);
     }
     if (m_imageViewer)
     {
-        m_imageViewer->setZebraThreshold(s.value("zebraThreshold", 2).toInt());
-        m_imageViewer->setOverlayMode(
-            static_cast<mviewer::OverlayMode>(s.value("defaultAnalysisOverlay", 0).toInt()));
+        const int zebra = std::clamp(s.value("zebraThreshold", 2).toInt(), 1, 40);
+        m_imageViewer->setZebraThreshold(zebra);
+        const int overlay = s.value("defaultAnalysisOverlay", 0).toInt();
+        const auto mode = (overlay >= 0 && overlay <= 7)
+                              ? static_cast<mviewer::OverlayMode>(overlay)
+                              : mviewer::OverlayMode::None;
+        m_imageViewer->setOverlayMode(mode);
     }
 }
 

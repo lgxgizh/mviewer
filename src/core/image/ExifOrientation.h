@@ -137,6 +137,8 @@ inline void rawToDisplay(int rx, int ry, int rawW, int rawH, int orientation, in
 inline SourceRect orientedRectToRaw(const SourceRect &oriented, int rawW, int rawH,
                                     int orientation)
 {
+    if (oriented.isNull() || rawW <= 0 || rawH <= 0)
+        return {};
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
     displayToRaw(oriented.x, oriented.y, rawW, rawH, orientation, x0, y0);
     displayToRaw(oriented.x + oriented.w - 1, oriented.y + oriented.h - 1, rawW, rawH, orientation,
@@ -161,6 +163,8 @@ inline SourceRect orientedRectToRaw(const SourceRect &oriented, int rawW, int ra
 // Map a RAW rect to the DISPLAYED rect it covers.
 inline SourceRect rawRectToOriented(const SourceRect &raw, int rawW, int rawH, int orientation)
 {
+    if (raw.isNull() || rawW <= 0 || rawH <= 0)
+        return {};
     int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
     rawToDisplay(raw.x, raw.y, rawW, rawH, orientation, x0, y0);
     rawToDisplay(raw.x + raw.w - 1, raw.y + raw.h - 1, rawW, rawH, orientation, x1, y1);
@@ -169,6 +173,16 @@ inline SourceRect rawRectToOriented(const SourceRect &raw, int rawW, int rawH, i
     r.y = y0 < y1 ? y0 : y1;
     r.w = (x0 < x1 ? x1 - x0 : x0 - x1) + 1;
     r.h = (y0 < y1 ? y1 - y0 : y0 - y1) + 1;
+    int dw = 0, dh = 0;
+    orientedSize(rawW, rawH, orientation, dw, dh);
+    if (r.x + r.w > dw)
+        r.w = dw - r.x;
+    if (r.y + r.h > dh)
+        r.h = dh - r.y;
+    if (r.w < 0)
+        r.w = 0;
+    if (r.h < 0)
+        r.h = 0;
     return r;
 }
 

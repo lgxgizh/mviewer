@@ -647,6 +647,12 @@ int main(int argc, char **argv)
                   "B4: EXIF oriented<->raw rect round-trips for every orientation");
         }
 
+        const mviewer::core::SourceRect emptyRect{0, 0, 0, 0};
+        CHECK(mviewer::core::orientedRectToRaw(emptyRect, 100, 100, 1).isNull(),
+              "B4: empty orientedRectToRaw returns null rect");
+        CHECK(mviewer::core::rawRectToOriented(emptyRect, 100, 100, 1).isNull(),
+              "B4: empty rawRectToOriented returns null rect");
+
         // The decode result carries COMPLETE authoritative metadata (ICC etc.)
         // and decoding never mutates the probe metadata (M48 atomic contract).
         const std::string adobe100p = fixture("icc_adobe_100mp.jpg");

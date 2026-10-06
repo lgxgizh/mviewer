@@ -353,6 +353,34 @@ int main(int argc, char **argv)
 
     testTruncatedJsonTerminates();
 
+    // Out-of-range values in serialized CompareSession must be safely clamped
+    {
+        const std::string hostileJson = "{\"imageIds\":[\"a.png\",\"b.png\"],"
+                                        "\"syncMode\":99,"
+                                        "\"sharedScale\":-1.5,"
+                                        "\"threshold\":-10,"
+                                        "\"blinkIntervalMs\":-500,"
+                                        "\"layoutIndex\":10,"
+                                        "\"customColumns\":-3,"
+                                        "\"blink\":99,"
+                                        "\"selection\":[0,0,-10,-20,0]}";
+        auto maybeCs = mviewer::core::deserializeCompareSession(hostileJson);
+        CHECK(maybeCs.has_value(), "hostile compare session deserializes");
+        if (maybeCs)
+        {
+            CHECK(maybeCs->syncMode == mviewer::domain::SyncMode::All,
+                  "out-of-range syncMode clamped to All");
+            CHECK(maybeCs->sharedScale == 1.0, "negative sharedScale clamped to 1.0");
+            CHECK(maybeCs->threshold == 0, "negative threshold clamped to 0");
+            CHECK(maybeCs->blinkIntervalMs == 50, "negative blinkIntervalMs clamped to 50");
+            CHECK(maybeCs->layoutIndex == 6, "out-of-range layoutIndex clamped to 6");
+            CHECK(maybeCs->customColumns == 1, "negative customColumns clamped to 1");
+            CHECK(maybeCs->blinkIndex == -1, "out-of-range blinkIndex reset to -1");
+            CHECK(maybeCs->selection.w == 0 && maybeCs->selection.h == 0,
+                  "negative selection dims clamped to 0");
+        }
+    }
+
     printf("\n=== M15-5 acceptance: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;
