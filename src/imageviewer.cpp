@@ -129,7 +129,7 @@ ImageViewer::~ImageViewer()
 
 void ImageViewer::toggleFullscreen()
 {
-    setFullscreenRequested(!property("mviewerFullscreenRequested").toBool());
+    setFullscreenRequested(!(property("mviewerFullscreenRequested").toBool() || isFullScreen()));
 }
 
 void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,

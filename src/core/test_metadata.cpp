@@ -287,6 +287,25 @@ static void testMetadataHostileOffsets()
         const auto thumb = mviewer::core::MetadataReader::extractExifThumbnail(p);
         CHECK(thumb.empty(), "hostile 2GB thumbnail length safely rejected without allocation");
     }
+
+    // (i) Zero denominator in exifToDecimal must return 0.0 safely
+    {
+        const unsigned char zeroDenBuf[8] = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        const double val = mviewer::core::detail::exifToDecimal(zeroDenBuf, 0, true);
+        CHECK(val == 0.0, "zero denominator in exifToDecimal safely returns 0.0");
+        CHECK(mviewer::core::detail::exifToDecimal(nullptr, 0, true) == 0.0,
+              "null buffer in exifToDecimal safely returns 0.0");
+    }
+
+    // (j) Invalid TIFF endian header bytes safely rejected
+    {
+        const std::string p = (dir.path() + "/invalid-endian.tif").toStdString();
+        writeBytes(p, "58592a0008000000000000000000"); // "XY*\0"
+        const auto thumb = mviewer::core::MetadataReader::extractExifThumbnail(p);
+        CHECK(thumb.empty(), "invalid TIFF byte-order header rejected");
+        const auto m = mviewer::core::MetadataReader::read(p);
+        CHECK(!m.hasGps, "invalid TIFF byte-order header produces no GPS");
+    }
 }
 
 int main(int argc, char **argv)

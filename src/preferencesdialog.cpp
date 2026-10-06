@@ -13,6 +13,7 @@
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
+#include <algorithm>
 
 QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
 {
@@ -40,8 +41,9 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
                              {"胶片", ThumbnailPanel::Filmstrip}};
     for (const auto &e : kVM)
         m_viewMode->addItem(tr(e.name), static_cast<int>(e.v));
-    m_viewMode->setCurrentIndex(
-        m_viewMode->findData(s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt()));
+    const int vmIdx =
+        m_viewMode->findData(s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt());
+    m_viewMode->setCurrentIndex(vmIdx >= 0 ? vmIdx : 0);
     gl->addRow(tr("默认视图模式"), m_viewMode);
 
     m_sortMode = new QComboBox;
@@ -57,19 +59,21 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         {"相机", ThumbnailPanel::SortCamera}, {"镜头", ThumbnailPanel::SortLens}};
     for (const auto &e : kSM)
         m_sortMode->addItem(tr(e.name), static_cast<int>(e.v));
-    m_sortMode->setCurrentIndex(
-        m_sortMode->findData(s.value("thumbSortMode", ThumbnailPanel::SortName).toInt()));
+    const int smIdx =
+        m_sortMode->findData(s.value("thumbSortMode", ThumbnailPanel::SortName).toInt());
+    m_sortMode->setCurrentIndex(smIdx >= 0 ? smIdx : 0);
     gl->addRow(tr("默认排序"), m_sortMode);
 
     m_thumbSize = new QSpinBox;
     m_thumbSize->setRange(64, 512);
-    m_thumbSize->setValue(s.value("thumbSize", 160).toInt());
+    m_thumbSize->setValue(std::clamp(s.value("thumbSize", 160).toInt(), 64, 512));
     gl->addRow(tr("缩略图尺寸"), m_thumbSize);
 
     m_slideshowInterval = new QSpinBox;
     m_slideshowInterval->setRange(500, 30000);
     m_slideshowInterval->setSingleStep(500);
-    m_slideshowInterval->setValue(s.value("slideshowInterval", 3000).toInt());
+    m_slideshowInterval->setValue(
+        std::clamp(s.value("slideshowInterval", 3000).toInt(), 500, 30000));
     gl->addRow(tr("幻灯片间隔(ms)"), m_slideshowInterval);
 
     m_slideshowWrap = new QCheckBox(tr("幻灯片循环播放"));
@@ -109,14 +113,14 @@ QWidget *PreferencesDialog::buildAnalysisTab(QSettings &s)
     m_analysisOverlay->addItem(tr("G 通道"), 4);
     m_analysisOverlay->addItem(tr("B 通道"), 5);
     m_analysisOverlay->addItem(tr("Y 亮度"), 6);
-    m_analysisOverlay->setCurrentIndex(
-        m_analysisOverlay->findData(s.value("defaultAnalysisOverlay", 0).toInt()));
+    const int ovIdx = m_analysisOverlay->findData(s.value("defaultAnalysisOverlay", 0).toInt());
+    m_analysisOverlay->setCurrentIndex(ovIdx >= 0 ? ovIdx : 0);
     al->addRow(tr("默认分析叠加层"), m_analysisOverlay);
 
     // F4 (M22): shared zebra threshold (1–40), persisted as "zebraThreshold".
     m_zebraThreshold = new QSlider(Qt::Horizontal);
     m_zebraThreshold->setRange(1, 40);
-    m_zebraThreshold->setValue(s.value("zebraThreshold", 2).toInt());
+    m_zebraThreshold->setValue(std::clamp(s.value("zebraThreshold", 2).toInt(), 1, 40));
     auto *zbBox = new QWidget;
     auto *zbL = new QHBoxLayout(zbBox);
     zbL->setContentsMargins(0, 0, 0, 0);

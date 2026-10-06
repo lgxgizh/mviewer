@@ -206,12 +206,27 @@ void MetadataOverlay::requestMetadata()
 
 void MetadataOverlay::appendFileInfo(const mviewer::domain::ImageMetadata &meta)
 {
-    m_lines << QString("文件: %1").arg(m_shortName);
-    m_lines << QString("路径: %1")
-                   .arg(QString::fromUtf8(meta.filePath.data(),
-                                          static_cast<int>(meta.filePath.size())));
-    m_lines << QString("尺寸: %1").arg(formatFileSize(meta.fileSize));
-    m_lines << QString("格式: %1").arg(QString::fromStdString(meta.format));
+    if (!m_shortName.isEmpty())
+        m_lines << QString("文件: %1").arg(m_shortName);
+
+    QString pathStr =
+        QString::fromUtf8(meta.filePath.data(), static_cast<int>(meta.filePath.size()));
+    if (pathStr.isEmpty())
+        pathStr = m_requestedPath;
+    if (!pathStr.isEmpty())
+        m_lines << QString("路径: %1").arg(pathStr);
+
+    if (meta.fileSize > 0)
+        m_lines << QString("尺寸: %1").arg(formatFileSize(meta.fileSize));
+
+    QString fmt = QString::fromStdString(meta.format);
+    if (fmt.isEmpty() && !pathStr.isEmpty())
+    {
+        const QString ext = QFileInfo(pathStr).suffix().toUpper();
+        fmt = (ext == "JPG") ? "JPEG" : ext;
+    }
+    if (!fmt.isEmpty())
+        m_lines << QString("格式: %1").arg(fmt);
 
     if (meta.width > 0 && meta.height > 0)
         m_lines << QString("分辨率: %1 × %2").arg(meta.width).arg(meta.height);
@@ -343,6 +358,14 @@ void MetadataOverlay::buildContent(
 
     const auto &meta = snapshot.metadata;
     m_shortName = QString::fromUtf8(meta.fileName.data(), static_cast<int>(meta.fileName.size()));
+    if (m_shortName.isEmpty() && !meta.filePath.empty())
+    {
+        m_shortName = QFileInfo(QString::fromUtf8(meta.filePath.data(),
+                                                  static_cast<int>(meta.filePath.size())))
+                          .fileName();
+    }
+    if (m_shortName.isEmpty() && !m_requestedPath.isEmpty())
+        m_shortName = QFileInfo(m_requestedPath).fileName();
 
     appendFileInfo(meta);
     appendExifInfo(meta);

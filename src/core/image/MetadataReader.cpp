@@ -37,7 +37,8 @@ void populateFileIdentity(mviewer::domain::ImageMetadata &meta, const std::strin
     meta.modifiedEpochSec = fileInfo.lastModified().toSecsSinceEpoch();
 }
 
-void populateImageInfo(mviewer::domain::ImageMetadata &meta, QImageReader &reader)
+void populateImageInfo(mviewer::domain::ImageMetadata &meta, QImageReader &reader,
+                       const QFileInfo &fileInfo)
 {
     const QSize s = reader.size();
     meta.width = s.width();
@@ -45,7 +46,15 @@ void populateImageInfo(mviewer::domain::ImageMetadata &meta, QImageReader &reade
 
     // ── M18: richer metadata (no extra deps; QImageReader exposes what we need).
     const QString fmt = reader.format();
-    meta.format = fmt.toUpper().toStdString();
+    if (!fmt.isEmpty())
+    {
+        meta.format = fmt.toUpper().toStdString();
+    }
+    else
+    {
+        const QString ext = fileInfo.suffix().toUpper();
+        meta.format = (ext == "JPG") ? "JPEG" : ext.toStdString();
+    }
     // Number of color channels and bits per channel.  QImage::depth() is
     // packed storage (RGB32 is 32 bits for three 8-bit channels), so it must
     // never be exposed as the per-channel metadata value.
@@ -115,7 +124,7 @@ mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
         return meta;
     populateFileIdentity(meta, filePath, fi);
     QImageReader reader(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
-    populateImageInfo(meta, reader);
+    populateImageInfo(meta, reader, fi);
     populateDisplayMetadata(meta, filePath);
     populateTextMetadata(meta, reader);
     readGps(meta, filePath);
@@ -151,13 +160,6 @@ static uint32_t readU32(const unsigned char *buf, bool little)
 static bool fits(size_t offset, size_t need, size_t size)
 {
     return offset <= size && need <= size - offset;
-}
-
-double MetadataReader::exifToDecimal(const unsigned char *buf, int offset, bool isLittle)
-{
-    const uint32_t num = readU32(buf + offset, isLittle);
-    const uint32_t den = readU32(buf + offset + 4, isLittle);
-    return den == 0 ? 0.0 : static_cast<double>(num) / static_cast<double>(den);
 }
 
 namespace
@@ -302,18 +304,22 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
             if (value == 0 || !fits(value, 24, total))
                 continue;
             double *target = tag == 0x0002 ? lat : lon;
+            bool validRational = false;
             for (int component = 0; component < 3; ++component)
             {
                 const size_t base = static_cast<size_t>(value) + static_cast<size_t>(component) * 8;
-                const uint32_t numerator = readU32(data + base, little);
                 const uint32_t denominator = readU32(data + base + 4, little);
-                target[component] =
-                    denominator == 0 ? 0.0 : static_cast<double>(numerator) / denominator;
+                target[component] = detail::exifToDecimal(data, static_cast<int>(base), little);
+                if (component == 0 && denominator > 0)
+                    validRational = true;
             }
-            if (tag == 0x0002)
-                values.hasLat = true;
-            else
-                values.hasLon = true;
+            if (validRational)
+            {
+                if (tag == 0x0002)
+                    values.hasLat = true;
+                else
+                    values.hasLon = true;
+            }
         }
         else if (tag == 0x0006)
         {
@@ -322,9 +328,11 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
             {
                 const uint32_t numerator = readU32(data + value, little);
                 const uint32_t denominator = readU32(data + value + 4, little);
-                values.altitude =
-                    denominator == 0 ? 0.0 : static_cast<double>(numerator) / denominator;
-                values.hasAlt = true;
+                if (denominator > 0)
+                {
+                    values.altitude = static_cast<double>(numerator) / denominator;
+                    values.hasAlt = true;
+                }
             }
         }
     }
@@ -390,6 +398,9 @@ void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta, const std::st
     const auto *data = reinterpret_cast<const unsigned char *>(exif.constData());
     const int size = static_cast<int>(exif.size());
     const bool little = data[0] == 0x49 && data[1] == 0x49;
+    const bool big = data[0] == 0x4D && data[1] == 0x4D;
+    if (!little && !big)
+        return;
     if (readU16(data + 2, little) != 0x002A)
         return;
     const uint32_t gpsIfd = findGpsIfd(data, size, little);
@@ -429,6 +440,9 @@ std::vector<uint8_t> MetadataReader::extractExifThumbnail(const std::string &fil
     const auto *data = reinterpret_cast<const unsigned char *>(exif.constData());
     const int size = static_cast<int>(exif.size());
     const bool little = data[0] == 0x49 && data[1] == 0x49;
+    const bool big = data[0] == 0x4D && data[1] == 0x4D;
+    if (!little && !big)
+        return {};
     if (readU16(data + 2, little) != 0x002A)
         return {};
 

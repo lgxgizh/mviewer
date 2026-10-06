@@ -14,6 +14,27 @@
 namespace mviewer::core
 {
 
+namespace detail
+{
+// Helper: convert EXIF rational (num, denom) to double degrees.
+inline double exifToDecimal(const unsigned char *buf, int offset, bool isLittle)
+{
+    if (!buf || offset < 0)
+        return 0.0;
+    auto read32 = [](const unsigned char *b, bool little) -> uint32_t
+    {
+        if (little)
+            return static_cast<uint32_t>(b[0]) | (static_cast<uint32_t>(b[1]) << 8) |
+                   (static_cast<uint32_t>(b[2]) << 16) | (static_cast<uint32_t>(b[3]) << 24);
+        return (static_cast<uint32_t>(b[0]) << 24) | (static_cast<uint32_t>(b[1]) << 16) |
+               (static_cast<uint32_t>(b[2]) << 8) | static_cast<uint32_t>(b[3]);
+    };
+    const uint32_t num = read32(buf + offset, isLittle);
+    const uint32_t den = read32(buf + offset + 4, isLittle);
+    return den == 0 ? 0.0 : static_cast<double>(num) / static_cast<double>(den);
+}
+} // namespace detail
+
 class MetadataReader
 {
   public:
@@ -33,8 +54,6 @@ class MetadataReader
     // P0: parse GPS IFD from a JPEG file buffer. Populates hasGps, gpsLatitude,
     // gpsLongitude, gpsAltitude on the metadata struct in-place.
     static void readGps(mviewer::domain::ImageMetadata &meta, const std::string &filePath);
-    // Helper: convert EXIF rational (num, denom) to double degrees.
-    static double exifToDecimal(const unsigned char *buf, int offset, bool isLittle);
 };
 
 } // namespace mviewer::core
