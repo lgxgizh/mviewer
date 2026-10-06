@@ -33,6 +33,7 @@ void populateRemoveTagMenu(QMenu *rmTagMenu, const QStringList &selPaths)
     for (const QString &tg : tags)
         rmTagMenu->addAction(tg);
     rmTagMenu->setEnabled(!tags.isEmpty());
+}
 } // namespace
 
 ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
