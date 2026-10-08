@@ -2,6 +2,7 @@
 #include "core/export/ExportJobInternal.h"
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/batch/BatchRename.h"
 #include "core/image/Decoder.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
@@ -285,7 +286,11 @@ bool writeTextAtomically(const fs::path &destination, const std::string &content
 std::string outputBaseName(const ExportJobConfig &cfg, const fs::path &source, int index,
                                   int total)
 {
-    const std::string baseName = mviewer::core::pathToUtf8(source.stem());
+    const std::string sourceStem = mviewer::core::pathToUtf8(source.stem());
+    std::string baseName = mviewer::core::applyFindReplace(
+        sourceStem, cfg.renameFind, cfg.renameReplace, cfg.renameUseRegex, cfg.renameCaseSensitive);
+    if (baseName.empty())
+        baseName = sourceStem;
     std::string sourceExtension = mviewer::core::pathToUtf8(source.extension());
     if (!sourceExtension.empty() && sourceExtension.front() == '.')
         sourceExtension.erase(sourceExtension.begin());
