@@ -608,7 +608,7 @@ void CompareWorkspace::updateLayoutStatus()
     if (!m_layoutStatusLabel)
         return;
     const auto layout = m_engine.layout();
-    m_layoutStatusLabel->setText(tr("网格: %1 行 × %2 列").arg(layout.rows).arg(layout.cols));
+    m_layoutStatusLabel->setText(tr("%1 行×%2 列").arg(layout.rows).arg(layout.cols));
 }
 
 void CompareWorkspace::onSideToggled(bool on)

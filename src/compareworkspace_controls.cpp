@@ -136,6 +136,8 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolbarLayout->addWidget(modeBar);
     toolbarLayout->addWidget(viewBar);
     toolbarLayout->addWidget(toolBar);
+    // Shortcut hints widen the view row; keep it inside the 1100px budget.
+    viewLayoutLocal->setSpacing(3);
     viewLayoutLocal->addWidget(m_syncZoomChk);
     viewLayoutLocal->addWidget(m_syncDragChk);
     viewLayoutLocal->addWidget(m_syncRotateChk);
@@ -364,7 +366,7 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     viewLayout->addWidget(m_layoutCombo);
 
     // A-4.2: custom grid is column-driven. CompareEngine derives the row count.
-    auto *columnsLabel = new QLabel(tr("列数:"), this);
+    auto *columnsLabel = new QLabel(tr("列:"), this);
     columnsLabel->setObjectName("compareColumnsCaption");
     columnsLabel->setToolTip(tr("只设置列数；行数由当前图片数自动推导"));
     viewLayout->addWidget(columnsLabel);
@@ -379,7 +381,6 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     viewLayout->addWidget(m_gridColsSpin);
     m_layoutStatusLabel = new QLabel(this);
     m_layoutStatusLabel->setObjectName("compareGridStatus");
-    m_layoutStatusLabel->setMinimumWidth(120);
     m_layoutStatusLabel->setToolTip(tr("当前网格：行数由图片数和列数推导"));
     viewLayout->addWidget(m_layoutStatusLabel);
 
@@ -411,7 +412,7 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
             });
     viewLayout->addWidget(m_focusBtn);
     m_focusLabel = new QLabel(tr("基准: —"), this);
-    m_focusLabel->setMinimumWidth(60);
+    m_focusLabel->setMinimumWidth(48);
     viewLayout->addWidget(m_focusLabel);
 
     // M57: Compare is static by default, but a focused animated/page source
