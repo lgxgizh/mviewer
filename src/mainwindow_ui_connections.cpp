@@ -596,9 +596,8 @@ void MainWindow::connectMenuSignals()
     connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
             [this](const QString &msg, int timeoutMs)
             {
-                if (!isVisible() || !statusBar())
-                    return;
-                statusBar()->showMessage(msg, timeoutMs);
+                if (isVisible() && statusBar())
+                    statusBar()->showMessage(msg, timeoutMs);
             });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
@@ -607,7 +606,8 @@ void MainWindow::connectMenuSignals()
     connect(m_actExportReport, &QAction::triggered, this, &MainWindow::exportReport);
     connect(m_actExportImages, &QAction::triggered, this, &MainWindow::exportImages);
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
-    connect(m_actCompare, &QAction::triggered, this, [this]() { openCompare(); });
+    connect(m_actCompare, &QAction::triggered, this,
+            [this]() { m_thumbnailPanel ? m_thumbnailPanel->requestCompare() : openCompare(); });
 }
 
 void MainWindow::connectWorkspaceSignals()
@@ -713,12 +713,8 @@ void MainWindow::connectPanelSignals()
             {
                 if (!m_batchDialog)
                     m_batchDialog = new BatchDialog(this);
-                // A-3: prefer SelectionModel multi-selection; fall back to
-                // gallery selection, then the full directory list.
-                QStringList inputs = resolveSelectedPaths(true);
-                if (inputs.isEmpty())
-                    inputs = m_imageList->paths();
-                m_batchDialog->setInputFiles(inputs);
+                QStringList in = resolveSelectedPaths(true);
+                m_batchDialog->setInputFiles(in.isEmpty() ? m_imageList->paths() : in);
                 m_batchDialog->exec();
             });
     connect(m_actPluginSettings, &QAction::triggered, this,

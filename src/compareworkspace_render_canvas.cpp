@@ -344,7 +344,7 @@ void CompareWorkspace::buildOverlayControls(QHBoxLayout *lay)
 {
     if (!lay)
         return;
-    m_overlayChk = new QCheckBox("叠加对比(&O)", this);
+    m_overlayChk = new QCheckBox(tr("叠加对比 (O)"), this);
     m_overlayChk->setEnabled(false);
     m_overlayChk->setToolTip(tr("仅 2 张图片时可用：半透明叠加对比（快捷键: O）"));
     connect(m_overlayChk, &QCheckBox::toggled, this,
@@ -384,7 +384,7 @@ void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
 {
     if (!lay)
         return;
-    m_checkerChk = new QCheckBox(tr("棋盘对比(&K)"), this);
+    m_checkerChk = new QCheckBox(tr("棋盘对比 (K)"), this);
     m_checkerChk->setEnabled(false);
     m_checkerChk->setToolTip(tr("棋盘格交替显示两张图像（快捷键 K），块大小可调"));
     connect(m_checkerChk, &QCheckBox::toggled, this,

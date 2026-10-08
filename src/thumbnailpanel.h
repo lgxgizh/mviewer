@@ -314,6 +314,7 @@ class ThumbnailPanel : public QListView
     // M13.4: run a chosen analyzer over every selected image and export the
     // structured per-image metrics to CSV/JSON. Drives core AnalyzerRegistry.
     void batchAnalyzeExport();
+    void requestCompare();
 
     // P0 #①: read access for the delegate (paths + ready pixmaps + entry data).
     const QStringList &pathList() const
@@ -465,7 +466,6 @@ class ThumbnailPanel : public QListView
     void buildModel(const QList<Entry> &entries);
     bool takePendingFilterRestore(bool hasEntries, QStringList &selection, QString &current);
     void updateVisibleRange();
-    void onCompareClicked();
     QString thumbCacheKey(const QString &path, int size) const;
     void enforceThumbPixmapBudgetLocked();
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);

@@ -390,17 +390,9 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
     }
     if ((ctrl || plain) && key == Qt::Key_1)
     {
-        const double currentScale = m_engine.cellTransform(0).scale;
-        if (currentScale > 0.0)
-        {
-            applyAnchorZoom(0, 0.0, 0.0, 1.0 / currentScale);
-            showCompareStatus(tr("视图缩放: 100% (原始大小)"));
-            if (m_compareCanvas)
-                m_compareCanvas->update();
-            update();
-            event->accept();
-            return true;
-        }
+        zoomActual();
+        event->accept();
+        return true;
     }
     // Zoom in / out (+ / = / - / _).
     const bool isZoomIn = (key == Qt::Key_Plus || key == Qt::Key_Equal);

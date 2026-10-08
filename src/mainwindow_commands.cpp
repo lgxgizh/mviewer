@@ -498,32 +498,30 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    if (!mod && event->key() == Qt::Key_Minus)
+    if (!mod)
     {
-        zoomViewer(1);
-        event->accept();
-        return true;
-    }
-    if (!mod && event->key() == Qt::Key_0)
-    {
-        zoomViewer(2);
-        event->accept();
-        return true;
-    }
-    // Cheat sheet: F fits the window. F11 is fullscreen. Accept F with no
-    // image so it cannot fall through to the fullscreen command.
-    if (!mod && event->key() == Qt::Key_F)
-    {
-        if (!currentImagePath().isEmpty())
+        switch (event->key())
+        {
+        case Qt::Key_Minus:
+            zoomViewer(1);
+            event->accept();
+            return true;
+        case Qt::Key_0:
             zoomViewer(2);
-        event->accept();
-        return true;
-    }
-    if (!mod && event->key() == Qt::Key_1)
-    {
-        zoomViewer(3);
-        event->accept();
-        return true;
+            event->accept();
+            return true;
+        case Qt::Key_F:
+            // Cheat sheet: F fits the window. F11 is fullscreen. Accept F with no
+            // image so it cannot fall through to the fullscreen command.
+            if (!currentImagePath().isEmpty())
+                zoomViewer(2);
+            event->accept();
+            return true;
+        case Qt::Key_1:
+            zoomViewer(3);
+            event->accept();
+            return true;
+        }
     }
     if (!mod && event->key() == Qt::Key_2)
     {
@@ -779,7 +777,9 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     if (m_compareView && !m_compareView->isHidden())
     {
         QMenu menu(this);
-        menu.addAction("适应窗口 (Fit / 0)", this, [this]() { m_compareView->fitAll(); });
+        menu.addAction(tr("适应窗口 (F)"), this, [this]() { m_compareView->fitAll(); });
+        menu.addAction(tr("实际大小 100% (1)"), this, [this]() { m_compareView->zoomActual(); });
+        menu.addAction(tr("最适合"), this, [this]() { m_compareView->bestFitAll(); });
         menu.exec(globalPos);
         return;
     }

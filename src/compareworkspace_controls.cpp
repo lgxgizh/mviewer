@@ -53,19 +53,29 @@ bool CompareWorkspace::cellFlipV(int cellIdx) const
     return false;
 }
 
+bool CompareWorkspace::syncRotate() const
+{
+    return m_syncRotate;
+}
+
+int CompareWorkspace::editCellIndex() const
+{
+    return m_editIdx;
+}
+
 void CompareWorkspace::buildSyncControls()
 {
-    m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
+    m_syncZoomChk = new QCheckBox(tr("同步缩放 (Z)"), this);
     m_syncZoomChk->setObjectName("syncZoomCheck");
     m_syncZoomChk->setChecked(true);
     m_syncZoomChk->setToolTip(tr("同步所有窗格的缩放倍率 (Z)"));
-    m_syncDragChk = new QCheckBox("同步拖动(&D)", this);
+    m_syncDragChk = new QCheckBox(tr("同步拖动 (D)"), this);
     m_syncDragChk->setObjectName("syncDragCheck");
     m_syncDragChk->setChecked(true);
     m_syncDragChk->setToolTip(tr("同步所有窗格的平移拖动 (D)"));
-    m_syncRotateChk = new QCheckBox(tr("同步旋转"), this);
+    m_syncRotateChk = new QCheckBox(tr("同步旋转 (Alt+R)"), this);
     m_syncRotateChk->setObjectName("syncRotateCheck");
-    m_syncRotateChk->setToolTip(tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像"));
+    m_syncRotateChk->setToolTip(tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像 (Alt+R)"));
     m_syncRotateChk->setChecked(m_syncRotate);
 
     auto applySync = [this](bool) { update(); };
@@ -126,6 +136,8 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     toolbarLayout->addWidget(modeBar);
     toolbarLayout->addWidget(viewBar);
     toolbarLayout->addWidget(toolBar);
+    // Shortcut hints widen the view row; keep it inside the 1100px budget.
+    viewLayoutLocal->setSpacing(3);
     viewLayoutLocal->addWidget(m_syncZoomChk);
     viewLayoutLocal->addWidget(m_syncDragChk);
     viewLayoutLocal->addWidget(m_syncRotateChk);
@@ -156,7 +168,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
 
     // M14-3: blink (flicker) compare — rapid toggle between base and target.
     // Click the button (or press B) to start/stop rapid blinking.
-    m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
+    m_blinkChk = new QCheckBox(tr("闪烁对比 (B)"), this);
     m_blinkChk->setObjectName("blinkCompareToggle");
     m_blinkChk->setEnabled(false);
     m_blinkChk->setToolTip(tr("点击开始/停止快速闪烁切换（快捷键: B）"));
@@ -181,7 +193,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     modeLayout->addWidget(m_blinkChk);
 
     // P0-4: split / swipe compare for exactly two images.
-    m_splitChk = new QCheckBox("左右分割(&S)", this);
+    m_splitChk = new QCheckBox(tr("左右分割 (S)"), this);
     m_splitChk->setEnabled(false);
     // M24 (B#8): a disabled control must say why it is unavailable.
     m_splitChk->setToolTip(tr("仅 2 张图片时可用：左右并排对比（快捷键: S）"));
@@ -194,7 +206,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             });
     modeLayout->addWidget(m_splitChk);
 
-    m_swipeChk = new QCheckBox("滑动对比(&W)", this);
+    m_swipeChk = new QCheckBox(tr("滑动对比 (W)"), this);
     m_swipeChk->setEnabled(false);
     m_swipeChk->setToolTip(tr("仅 2 张图片时可用：滑动分割线对比（快捷键: W）"));
     connect(m_swipeChk, &QCheckBox::toggled, this,
@@ -210,14 +222,14 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     buildCheckerboardControls(modeLayout);
 
     // A-4.5: continuous compare — walk consecutive pairs without reopening.
-    m_prevPairBtn = new QPushButton("◀ 上一对", this);
+    m_prevPairBtn = new QPushButton(tr("◀ 上一对 (P)"), this);
     m_prevPairBtn->setToolTip(
         tr("P 上一对（PgUp、← 同样是上一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"));
     m_prevPairBtn->setEnabled(false);
     connect(m_prevPairBtn, &QPushButton::clicked, this, &CompareWorkspace::prevPair);
     modeLayout->addWidget(m_prevPairBtn);
 
-    m_nextPairBtn = new QPushButton("下一对 ▶", this);
+    m_nextPairBtn = new QPushButton(tr("下一对 ▶ (N)"), this);
     m_nextPairBtn->setToolTip(
         tr("N 下一对（PgDn、→ 同样是下一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"));
     m_nextPairBtn->setEnabled(false);
@@ -281,10 +293,10 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             });
     toolLayout->addWidget(m_diffOverlayChk);
 
-    m_diffHighlightChk = new QCheckBox(tr("高亮差异"), this);
+    m_diffHighlightChk = new QCheckBox(tr("高亮差异 (H)"), this);
     m_diffHighlightChk->setObjectName("diffHighlightToggle");
     m_diffHighlightChk->setEnabled(false);
-    m_diffHighlightChk->setToolTip(tr("差异区域红色高亮，相似区域灰度显示"));
+    m_diffHighlightChk->setToolTip(tr("差异区域红色高亮，相似区域灰度显示 (H)"));
     connect(m_diffHighlightChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -323,10 +335,10 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     toolLayout->addWidget(m_diffGainCombo);
 
     // A-4.3: Pixel Link — mark corresponding points across cells.
-    m_pixelLinkChk = new QCheckBox(tr("像素连线"), this);
+    m_pixelLinkChk = new QCheckBox(tr("像素连线 (L)"), this);
     m_pixelLinkChk->setObjectName("pixelLinkToggle");
     m_pixelLinkChk->setEnabled(false);
-    m_pixelLinkChk->setToolTip(tr("开启后点击图片添加标记点，显示各图 RGB 与差值"));
+    m_pixelLinkChk->setToolTip(tr("开启后点击图片添加标记点，显示各图 RGB 与差值 (L)"));
     connect(m_pixelLinkChk, &QCheckBox::toggled, this, &CompareWorkspace::onPixelLinkToggled);
     toolLayout->addWidget(m_pixelLinkChk);
     m_clearLinksBtn = new QPushButton(tr("清除标记"), this);
@@ -354,7 +366,7 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     viewLayout->addWidget(m_layoutCombo);
 
     // A-4.2: custom grid is column-driven. CompareEngine derives the row count.
-    auto *columnsLabel = new QLabel(tr("列数:"), this);
+    auto *columnsLabel = new QLabel(tr("列:"), this);
     columnsLabel->setObjectName("compareColumnsCaption");
     columnsLabel->setToolTip(tr("只设置列数；行数由当前图片数自动推导"));
     viewLayout->addWidget(columnsLabel);
@@ -369,12 +381,11 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     viewLayout->addWidget(m_gridColsSpin);
     m_layoutStatusLabel = new QLabel(this);
     m_layoutStatusLabel->setObjectName("compareGridStatus");
-    m_layoutStatusLabel->setMinimumWidth(120);
     m_layoutStatusLabel->setToolTip(tr("当前网格：行数由图片数和列数推导"));
     viewLayout->addWidget(m_layoutStatusLabel);
 
     // P0 #③: inspector + histogram side panel toggle.
-    m_sideChk = new QCheckBox(tr("检视面板"), this);
+    m_sideChk = new QCheckBox(tr("检视面板 (I)"), this);
     m_sideChk->setObjectName("analysisPanelToggle");
     m_sideChk->setChecked(false);
     connect(m_sideChk, &QCheckBox::toggled, this, &CompareWorkspace::onSideToggled);
@@ -383,7 +394,7 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     // M16.1: cursor-sync crosshair (n/n). When on, hovering any cell draws a
     // crosshair at the same image-space point across all compared cells, and the
     // inspector samples every cell at that point.
-    m_crosshairChk = new QCheckBox(tr("同步准星"), this);
+    m_crosshairChk = new QCheckBox(tr("同步准星 (R)"), this);
     m_crosshairChk->setChecked(false);
     viewLayout->addWidget(m_crosshairChk);
 
@@ -401,7 +412,7 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
             });
     viewLayout->addWidget(m_focusBtn);
     m_focusLabel = new QLabel(tr("基准: —"), this);
-    m_focusLabel->setMinimumWidth(60);
+    m_focusLabel->setMinimumWidth(48);
     viewLayout->addWidget(m_focusLabel);
 
     // M57: Compare is static by default, but a focused animated/page source
@@ -513,13 +524,13 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 
     m_channelCombo = new QComboBox(this);
     m_channelCombo->setObjectName("compareChannelCombo");
-    m_channelCombo->setMaximumWidth(72);
-    m_channelCombo->addItem(tr("RGB"), static_cast<int>(mviewer::OverlayMode::None));
-    m_channelCombo->addItem(tr("R"), static_cast<int>(mviewer::OverlayMode::ChannelR));
-    m_channelCombo->addItem(tr("G"), static_cast<int>(mviewer::OverlayMode::ChannelG));
-    m_channelCombo->addItem(tr("B"), static_cast<int>(mviewer::OverlayMode::ChannelB));
-    m_channelCombo->addItem(tr("Y"), static_cast<int>(mviewer::OverlayMode::ChannelY));
-    m_channelCombo->addItem(tr("V"), static_cast<int>(mviewer::OverlayMode::ChannelV));
+    m_channelCombo->setMaximumWidth(125);
+    m_channelCombo->addItem(tr("RGB (Shift+1)"), static_cast<int>(mviewer::OverlayMode::None));
+    m_channelCombo->addItem(tr("R (Shift+2)"), static_cast<int>(mviewer::OverlayMode::ChannelR));
+    m_channelCombo->addItem(tr("G (Shift+3)"), static_cast<int>(mviewer::OverlayMode::ChannelG));
+    m_channelCombo->addItem(tr("B (Shift+4)"), static_cast<int>(mviewer::OverlayMode::ChannelB));
+    m_channelCombo->addItem(tr("Y (Shift+5)"), static_cast<int>(mviewer::OverlayMode::ChannelY));
+    m_channelCombo->addItem(tr("V (Shift+6)"), static_cast<int>(mviewer::OverlayMode::ChannelV));
     m_channelCombo->setToolTip(tr("隔离 R/G/B/Y/V 通道（Shift+1…6）"));
     connect(m_channelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int)
@@ -543,14 +554,14 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     connect(m_loadPresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onLoadPreset);
     toolLayout->addWidget(m_loadPresetBtn);
 
-    m_swapBtn = new QPushButton(tr("交换 A/B"), this);
+    m_swapBtn = new QPushButton(tr("交换 A/B (X)"), this);
     m_swapBtn->setObjectName("compareSwapPanesButton");
     m_swapBtn->setToolTip(tr("交换 A/B 窗格 (快捷键: X)"));
     m_swapBtn->setEnabled(false);
     connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
     toolLayout->addWidget(m_swapBtn);
 
-    m_temporaryCompareButton = new QPushButton(tr("临时切换"), this);
+    m_temporaryCompareButton = new QPushButton(tr("临时切换 (Space)"), this);
     m_temporaryCompareButton->setObjectName("temporaryCompareButton");
     m_temporaryCompareButton->setToolTip(
         tr("两张图：按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。"
@@ -637,7 +648,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
     m_compareStatusLabel->setStyleSheet("color:#a1a1aa;");
     lay->addWidget(m_compareStatusLabel, 1);
 
-    m_exitBtn = new QPushButton(tr("退出比较"), strip);
+    m_exitBtn = new QPushButton(tr("退出比较 (Esc)"), strip);
     m_exitBtn->setObjectName("exitCompareButton");
     m_exitBtn->setToolTip(tr("关闭比较窗口（Esc；有选区时 Esc 先清除选区）"));
     connect(m_exitBtn, &QPushButton::clicked, this, &CompareWorkspace::closeCompareHost);
