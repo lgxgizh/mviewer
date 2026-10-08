@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+## [1.0.104] - 2026-10-08
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.104**.
+
 ### Added
 
 - **对比模式优化 (Compare Mode Polish)**：差异热力图引入感知自适应渐变映射（微小差异琥珀警戒过渡至剧烈差异深红），在严格保持红色显著性通道契约的同时大幅提升细微瑕疵的可辨识度；新增基于大津法 (Otsu) 的自适应差异阈值推荐算法 `DifferenceEngine::suggestThreshold`；对比工作区阈值控制区新增「自动」按钮（`diffAutoThresholdButton`），根据当前两图差异分布一键自动匹配并填充最佳分割阈值。
