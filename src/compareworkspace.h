@@ -190,9 +190,9 @@ class CompareWorkspace : public QWidget
     void buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *viewLayout);
     void buildOverlayControls(QHBoxLayout *modeLayout);
     void buildDiffControls(QHBoxLayout *toolLayout);
+    void buildPixelLinkControls(QHBoxLayout *toolLayout);
     void buildViewControls(QHBoxLayout *viewLayout);
     void buildToolbarActions(QHBoxLayout *toolLayout);
-
     bool handleBasicCompareKey(QKeyEvent *event);
     bool handleBasicCompareSpace(QKeyEvent *event);
     bool handleBasicCompareEscape(QKeyEvent *event);

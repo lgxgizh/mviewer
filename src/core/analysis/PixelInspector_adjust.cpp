@@ -505,6 +505,95 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
     return stats;
 }
 
+namespace
+{
+struct NeighborhoodAcc
+{
+    int64_t sum = 0, sumSq = 0;
+    int64_t rSum = 0, gSum = 0, bSum = 0, vSum = 0;
+    int64_t rSumSq = 0, gSumSq = 0, bSumSq = 0;
+    int mn = 255, mx = 0;
+    int rMin = 255, rMax = 0;
+    int gMin = 255, gMax = 0;
+    int bMin = 255, bMax = 0;
+    int skipped = 0;
+
+    void addSample(uint8_t r, uint8_t g, uint8_t b)
+    {
+        rSum += r;
+        gSum += g;
+        bSum += b;
+        vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
+        rSumSq += static_cast<int64_t>(r) * r;
+        gSumSq += static_cast<int64_t>(g) * g;
+        bSumSq += static_cast<int64_t>(b) * b;
+        rMin = std::min(rMin, static_cast<int>(r));
+        rMax = std::max(rMax, static_cast<int>(r));
+        gMin = std::min(gMin, static_cast<int>(g));
+        gMax = std::max(gMax, static_cast<int>(g));
+        bMin = std::min(bMin, static_cast<int>(b));
+        bMax = std::max(bMax, static_cast<int>(b));
+        const int v = lumaFast(r, g, b);
+        sum += v;
+        sumSq += static_cast<int64_t>(v) * v;
+        if (v < mn)
+            mn = v;
+        if (v > mx)
+            mx = v;
+    }
+};
+
+void accumulateGray(NeighborhoodAcc &acc, const uint8_t *data, int stride, int xStart, int xEnd,
+                    int yStart, int yEnd)
+{
+    for (int yy = yStart; yy <= yEnd; ++yy)
+    {
+        const uint8_t *row = data + static_cast<size_t>(yy) * stride;
+        for (int xx = xStart; xx <= xEnd; ++xx)
+        {
+            const uint8_t v = row[xx];
+            acc.sum += v;
+            acc.sumSq += static_cast<int64_t>(v) * v;
+            if (v < acc.mn)
+                acc.mn = v;
+            if (v > acc.mx)
+                acc.mx = v;
+        }
+    }
+    acc.rSum = acc.gSum = acc.bSum = acc.vSum = acc.sum;
+    acc.rSumSq = acc.gSumSq = acc.bSumSq = acc.sumSq;
+    acc.rMin = acc.gMin = acc.bMin = acc.mn;
+    acc.rMax = acc.gMax = acc.bMax = acc.mx;
+}
+
+void accumulateColor(NeighborhoodAcc &acc, const uint8_t *data, int stride, int xStart, int xEnd,
+                     int yStart, int yEnd, int channels)
+{
+    for (int yy = yStart; yy <= yEnd; ++yy)
+    {
+        const uint8_t *row = data + static_cast<size_t>(yy) * stride;
+        for (int xx = xStart; xx <= xEnd; ++xx)
+        {
+            if (channels == 4)
+            {
+                const uint8_t *p = row + static_cast<size_t>(xx) * 4;
+                if (p[3] == 0)
+                {
+                    ++acc.skipped;
+                    continue;
+                }
+                acc.addSample(p[2], p[1], p[0]);
+            }
+            else
+            {
+                const uint8_t *p = row + static_cast<size_t>(xx) * 3;
+                acc.addSample(p[0], p[1], p[2]);
+            }
+        }
+    }
+}
+} // namespace
+
 NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, int height, int cx,
                                     int cy, int n, int channels)
 {
@@ -521,139 +610,42 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     if (yStart > yEnd || xStart > xEnd)
         return s;
 
-    int64_t sum = 0, sumSq = 0;
-    int64_t rSum = 0, gSum = 0, bSum = 0, vSum = 0;
-    int64_t rSumSq = 0, gSumSq = 0, bSumSq = 0;
-    int mn = 255, mx = 0;
-    int rMin = 255, rMax = 0;
-    int gMin = 255, gMax = 0;
-    int bMin = 255, bMax = 0;
-    int count = (yEnd - yStart + 1) * (xEnd - xStart + 1);
-    int skipped = 0;
-
+    NeighborhoodAcc acc;
     if (channels == 1)
-    {
-        for (int yy = yStart; yy <= yEnd; ++yy)
-        {
-            const uint8_t *row = data + static_cast<size_t>(yy) * stride;
-            for (int xx = xStart; xx <= xEnd; ++xx)
-            {
-                const uint8_t v = row[xx];
-                sum += v;
-                sumSq += static_cast<int64_t>(v) * v;
-                if (v < mn)
-                    mn = v;
-                if (v > mx)
-                    mx = v;
-            }
-        }
-        rSum = gSum = bSum = vSum = sum;
-        rSumSq = gSumSq = bSumSq = sumSq;
-        rMin = gMin = bMin = mn;
-        rMax = gMax = bMax = mx;
-    }
-    else if (channels == 4)
-    {
-        for (int yy = yStart; yy <= yEnd; ++yy)
-        {
-            const uint8_t *row = data + static_cast<size_t>(yy) * stride;
-            for (int xx = xStart; xx <= xEnd; ++xx)
-            {
-                const uint8_t *p = row + static_cast<size_t>(xx) * 4;
-                if (p[3] == 0)
-                {
-                    ++skipped;
-                    continue;
-                }
-                const uint8_t b = p[0];
-                const uint8_t g = p[1];
-                const uint8_t r = p[2];
-                rSum += r;
-                gSum += g;
-                bSum += b;
-                vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
-                rSumSq += static_cast<int64_t>(r) * r;
-                gSumSq += static_cast<int64_t>(g) * g;
-                bSumSq += static_cast<int64_t>(b) * b;
-                rMin = std::min(rMin, static_cast<int>(r));
-                rMax = std::max(rMax, static_cast<int>(r));
-                gMin = std::min(gMin, static_cast<int>(g));
-                gMax = std::max(gMax, static_cast<int>(g));
-                bMin = std::min(bMin, static_cast<int>(b));
-                bMax = std::max(bMax, static_cast<int>(b));
-                const int v = lumaFast(r, g, b);
-                sum += v;
-                sumSq += static_cast<int64_t>(v) * v;
-                if (v < mn)
-                    mn = v;
-                if (v > mx)
-                    mx = v;
-            }
-        }
-    }
+        accumulateGray(acc, data, stride, xStart, xEnd, yStart, yEnd);
     else
-    {
-        for (int yy = yStart; yy <= yEnd; ++yy)
-        {
-            const uint8_t *row = data + static_cast<size_t>(yy) * stride;
-            for (int xx = xStart; xx <= xEnd; ++xx)
-            {
-                const uint8_t *p = row + static_cast<size_t>(xx) * 3;
-                const uint8_t r = p[0];
-                const uint8_t g = p[1];
-                const uint8_t b = p[2];
-                rSum += r;
-                gSum += g;
-                bSum += b;
-                vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
-                rSumSq += static_cast<int64_t>(r) * r;
-                gSumSq += static_cast<int64_t>(g) * g;
-                bSumSq += static_cast<int64_t>(b) * b;
-                rMin = std::min(rMin, static_cast<int>(r));
-                rMax = std::max(rMax, static_cast<int>(r));
-                gMin = std::min(gMin, static_cast<int>(g));
-                gMax = std::max(gMax, static_cast<int>(g));
-                bMin = std::min(bMin, static_cast<int>(b));
-                bMax = std::max(bMax, static_cast<int>(b));
-                const int v = lumaFast(r, g, b);
-                sum += v;
-                sumSq += static_cast<int64_t>(v) * v;
-                if (v < mn)
-                    mn = v;
-                if (v > mx)
-                    mx = v;
-            }
-        }
-    }
+        accumulateColor(acc, data, stride, xStart, xEnd, yStart, yEnd, channels);
 
+    int count = (yEnd - yStart + 1) * (xEnd - xStart + 1);
     if (channels == 4)
-        count -= skipped;
+        count -= acc.skipped;
     if (count <= 0)
         return s;
-    const double mean = static_cast<double>(sum) / count;
-    const double var = static_cast<double>(sumSq) / count - mean * mean;
+
+    const double mean = static_cast<double>(acc.sum) / count;
+    const double var = static_cast<double>(acc.sumSq) / count - mean * mean;
     s.mean = mean;
     s.variance = var > 0 ? var : 0.0;
     s.stdDev = std::sqrt(s.variance);
-    s.min = mn;
-    s.max = mx;
+    s.min = acc.mn;
+    s.max = acc.mx;
     s.count = count;
-    s.rMean = static_cast<double>(rSum) / count;
-    s.gMean = static_cast<double>(gSum) / count;
-    s.bMean = static_cast<double>(bSum) / count;
-    s.vMean = static_cast<double>(vSum) / count;
+    s.rMean = static_cast<double>(acc.rSum) / count;
+    s.gMean = static_cast<double>(acc.gSum) / count;
+    s.bMean = static_cast<double>(acc.bSum) / count;
+    s.vMean = static_cast<double>(acc.vSum) / count;
     s.rStdDev = std::sqrt(
-        std::max(0.0, static_cast<double>(rSumSq) / count - s.rMean * s.rMean));
+        std::max(0.0, static_cast<double>(acc.rSumSq) / count - s.rMean * s.rMean));
     s.gStdDev = std::sqrt(
-        std::max(0.0, static_cast<double>(gSumSq) / count - s.gMean * s.gMean));
+        std::max(0.0, static_cast<double>(acc.gSumSq) / count - s.gMean * s.gMean));
     s.bStdDev = std::sqrt(
-        std::max(0.0, static_cast<double>(bSumSq) / count - s.bMean * s.bMean));
-    s.rMin = rMin;
-    s.rMax = rMax;
-    s.gMin = gMin;
-    s.gMax = gMax;
-    s.bMin = bMin;
-    s.bMax = bMax;
+        std::max(0.0, static_cast<double>(acc.bSumSq) / count - s.bMean * s.bMean));
+    s.rMin = acc.rMin;
+    s.rMax = acc.rMax;
+    s.gMin = acc.gMin;
+    s.gMax = acc.gMax;
+    s.bMin = acc.bMin;
+    s.bMax = acc.bMax;
     return s;
 }
 } // namespace mviewer::core

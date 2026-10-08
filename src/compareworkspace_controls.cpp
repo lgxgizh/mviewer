@@ -343,6 +343,11 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             });
     toolLayout->addWidget(m_diffGainCombo);
 
+    buildPixelLinkControls(toolLayout);
+}
+
+void CompareWorkspace::buildPixelLinkControls(QHBoxLayout *toolLayout)
+{
     // A-4.3: Pixel Link — mark corresponding points across cells.
     m_pixelLinkChk = new QCheckBox(tr("像素连线 (L)"), this);
     m_pixelLinkChk->setObjectName("pixelLinkToggle");
