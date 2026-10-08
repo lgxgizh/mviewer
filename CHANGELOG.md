@@ -2,7 +2,11 @@
 
 ## [Unreleased]
 
-### Fixed
+### Added
+
+- **对比模式优化 (Compare Mode Polish)**：差异热力图引入感知自适应渐变映射（微小差异琥珀警戒过渡至剧烈差异深红），在严格保持红色显著性通道契约的同时大幅提升细微瑕疵的可辨识度；新增基于大津法 (Otsu) 的自适应差异阈值推荐算法 `DifferenceEngine::suggestThreshold`；对比工作区阈值控制区新增「自动」按钮（`diffAutoThresholdButton`），根据当前两图差异分布一键自动匹配并填充最佳分割阈值。
+- **像素检视与定量分析扩展 (Pixel Inspector & Analysis)**：`ImageStats` 与 `NeighborhoodStats` 全面补充各颜色通道与亮度维度的标准差（stdDev）、极值（min/max）及方差统计；提供 `ImageStats::toSummaryString()`、`toCsvRow()` 与 `csvHeader()` 结构化导出与分析辅助接口；像素检视器面板支持 8-bit 源图像 `[0..1]` 归一化浮点采样值展示，邻域统计直观显示 RGB 各通道标准差。
+- **算法导出与定量分析报告 (Export & Report Enhancement)**：扩充比较分析报告上下文，HTML 比较报告丰富呈现参考图与目标图的均值、各通道均值差（ΔRGB）、高斯/拉普拉斯噪声估计与 PSNR/SSIM 完整定量指标矩阵；`formatDiffStats` 支持输出差异分布标准差。
 
 ## [1.0.103] - 2026-10-08
 

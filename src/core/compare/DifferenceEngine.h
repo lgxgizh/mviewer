@@ -43,7 +43,13 @@ class DifferenceEngine
         double diffRatio = 0.0;    // diffPixels / totalPixels (0..1)
         double meanDiff = 0.0;     // mean gray diff over all examined pixels
         int maxDiff = 0;           // peak gray diff
+        double stdDevDiff = 0.0;   // standard deviation of gray differences
     };
+
+    // Suggests an optimal difference threshold using Otsu's method on the
+    // difference distribution (maximizing between-class variance). Returns a
+    // value in 1..254 (or 0 if identical/null).
+    static uint8_t suggestThreshold(const ImageData &grayDiff);
 
     // Stats over the whole diff map. Returns default (all zero) on null input.
     static DiffStats computeStats(const ImageData &grayDiff, uint8_t threshold = 0);

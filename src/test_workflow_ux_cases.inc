@@ -2739,17 +2739,18 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     // Esc 退出 Compare（真实 QDialog::reject 路径）。
     QSlider *thresholdSlider = ws->findChild<QSlider *>("diffThresholdSlider");
     QLabel *thresholdValueLabel = ws->findChild<QLabel *>("diffThresholdValueLabel");
+    QPushButton *autoThresholdBtn = ws->findChild<QPushButton *>("diffAutoThresholdButton");
     QSlider *brightnessSlider = ws->findChild<QSlider *>("brightnessSlider");
     QPushButton *resetButton = ws->findChild<QPushButton *>("resetAdjustmentsButton");
     QLabel *metricsLabel = ws->findChild<QLabel *>("diffMetricsLabel");
     QCheckBox *analysisToggle = ws->findChild<QCheckBox *>("analysisPanelToggle");
     QTableWidget *inspector = ws->findChild<QTableWidget *>("pixelInspectorTable");
     QWidget *histogram = ws->findChild<QWidget *>("analysisHistogram");
-    CHECK(thresholdSlider && thresholdValueLabel && brightnessSlider && resetButton &&
-              metricsLabel && analysisToggle && inspector && histogram,
+    CHECK(thresholdSlider && thresholdValueLabel && autoThresholdBtn && brightnessSlider &&
+              resetButton && metricsLabel && analysisToggle && inspector && histogram,
           "compare analysis controls expose stable object names");
-    if (thresholdSlider && thresholdValueLabel && brightnessSlider && resetButton && metricsLabel &&
-        analysisToggle && inspector && referenceView)
+    if (thresholdSlider && thresholdValueLabel && autoThresholdBtn && brightnessSlider &&
+        resetButton && metricsLabel && analysisToggle && inspector && referenceView)
     {
         analysisToggle->setChecked(true);
         pump(20);

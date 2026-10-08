@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <sstream>
 
 // 内部实现：把 ImageData 转成 QImage 做像素级统计，算法逻辑保持不变。
 // header 不暴露 Qt；这里在 .cpp 内部使用 Qt 作为实现细节。
@@ -26,6 +27,47 @@ ImageStats AnalysisEngine::computeStats(const ImageData &imgData)
 
 namespace
 {
+
+void finalizeStatsHistogramMetrics(ImageStats &s)
+{
+    if (s.pixelCount <= 0)
+        return;
+
+    auto calcChannel = [](const int hist[256], int count, double mean,
+                          double &stdDev, int &minV, int &maxV)
+    {
+        double varSum = 0.0;
+        minV = 255;
+        maxV = 0;
+        bool found = false;
+        for (int i = 0; i < 256; ++i)
+        {
+            const int cnt = hist[i];
+            if (cnt > 0)
+            {
+                if (!found)
+                {
+                    minV = i;
+                    found = true;
+                }
+                maxV = i;
+                const double d = static_cast<double>(i) - mean;
+                varSum += d * d * cnt;
+            }
+        }
+        if (!found)
+        {
+            minV = 0;
+            maxV = 0;
+        }
+        stdDev = std::sqrt(std::max(0.0, varSum / count));
+    };
+
+    calcChannel(s.histLum, s.pixelCount, s.lumMean, s.lumStdDev, s.lumMin, s.lumMax);
+    calcChannel(s.histR, s.pixelCount, s.rMean, s.rStdDev, s.rMin, s.rMax);
+    calcChannel(s.histG, s.pixelCount, s.gMean, s.gStdDev, s.gMin, s.gMax);
+    calcChannel(s.histB, s.pixelCount, s.bMean, s.bStdDev, s.bMin, s.bMax);
+}
 
 ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw, int rh)
 {
@@ -70,6 +112,7 @@ ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw
         s.rMean = mean;
         s.gMean = mean;
         s.bMean = mean;
+        finalizeStatsHistogramMetrics(s);
     }
     return s;
 }
@@ -110,6 +153,7 @@ ImageStats computeStatsFallback(const ImageData &imgData, int rx, int ry, int rw
         s.rMean = static_cast<double>(sumR) / count;
         s.gMean = static_cast<double>(sumG) / count;
         s.bMean = static_cast<double>(sumB) / count;
+        finalizeStatsHistogramMetrics(s);
     }
     return s;
 }
@@ -222,6 +266,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
             s.rMean = static_cast<double>(sumR) / count;
             s.gMean = static_cast<double>(sumG) / count;
             s.bMean = static_cast<double>(sumB) / count;
+            finalizeStatsHistogramMetrics(s);
         }
         return s;
     }
@@ -240,3 +285,38 @@ ImageData AnalysisEngine::heatMap(const ImageData &grayData)
         return ImageData();
     return DifferenceEngine::heatMap(grayData);
 }
+
+std::string ImageStats::toSummaryString() const
+{
+    std::ostringstream os;
+    os << "Pixels: " << pixelCount
+       << ", Lum: " << lumMean << " [std=" << lumStdDev << ", min=" << lumMin
+       << ", max=" << lumMax << "]"
+       << ", R: " << rMean << " [std=" << rStdDev << ", min=" << rMin
+       << ", max=" << rMax << "]"
+       << ", G: " << gMean << " [std=" << gStdDev << ", min=" << gMin
+       << ", max=" << gMax << "]"
+       << ", B: " << bMean << " [std=" << bStdDev << ", min=" << bMin
+       << ", max=" << bMax << "]"
+       << ", HSV-V: " << vMean;
+    return os.str();
+}
+
+std::string ImageStats::toCsvRow() const
+{
+    std::ostringstream os;
+    os << pixelCount << ","
+       << lumMean << "," << lumStdDev << "," << lumMin << "," << lumMax << ","
+       << rMean << "," << rStdDev << "," << rMin << "," << rMax << ","
+       << gMean << "," << gStdDev << "," << gMin << "," << gMax << ","
+       << bMean << "," << bStdDev << "," << bMin << "," << bMax << ","
+       << vMean;
+    return os.str();
+}
+
+std::string ImageStats::csvHeader()
+{
+    return "pixelCount,lumMean,lumStdDev,lumMin,lumMax,rMean,rStdDev,rMin,rMax,"
+           "gMean,gStdDev,gMin,gMax,bMean,bStdDev,bMin,bMax,vMean";
+}
+

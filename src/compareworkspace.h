@@ -476,7 +476,11 @@ class CompareWorkspace : public QWidget
     // M15: difference threshold
     QSlider *m_thresholdSlider = nullptr;
     QLabel *m_thresholdLabel = nullptr;
+    QPushButton *m_autoThresholdBtn = nullptr;
     uint8_t m_thresholdValue = 0;
+    uint8_t m_suggestedThreshold = 0;
+    bool m_hasSuggestedThreshold = false;
+    void onAutoThresholdClicked();
 
     // P0 #③: explicit multi-layout selector.
     QComboBox *m_layoutCombo = nullptr;
@@ -573,6 +577,8 @@ class CompareWorkspace : public QWidget
         DifferenceEngine::DiffStats roiStats;
         double diffGain = 1.0;
         bool provisional = false; // live low-precision; metrics skipped
+        uint8_t suggestedThreshold = 0;
+        bool hasSuggestedThreshold = false;
 
         struct CellOverlay
         {

@@ -150,6 +150,8 @@ void CompareWorkspace::computeDiffMetrics(DiffBatchResult &result, const DiffSou
         return;
     result.stats = DifferenceEngine::computeStats(sources.diff, threshold);
     result.hasStats = true;
+    result.suggestedThreshold = DifferenceEngine::suggestThreshold(sources.diff);
+    result.hasSuggestedThreshold = true;
     if (!roi.isEmpty())
     {
         if (context.isCancelled())
@@ -360,6 +362,17 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
     {
         update();
         return;
+    }
+
+    if (r.hasSuggestedThreshold)
+    {
+        m_suggestedThreshold = r.suggestedThreshold;
+        m_hasSuggestedThreshold = true;
+        if (m_autoThresholdBtn)
+        {
+            m_autoThresholdBtn->setToolTip(
+                tr("基于差异分布自动计算最佳分离阈值 (Otsu 建议: %1)").arg(m_suggestedThreshold));
+        }
     }
 
     if (m_metricLabel)

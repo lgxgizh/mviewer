@@ -188,6 +188,18 @@ void appendCompareHtml(std::ostringstream &os, const ReportContext &ctx)
         os << "<tr><td>SSIM</td><td>" << formatNumber(ctx.compare.ssim) << "</td></tr>\n";
         os << "<tr><td>Diff Mean</td><td>" << formatNumber(ctx.compare.diffMean) << "</td></tr>\n";
         os << "<tr><td>Diff Max</td><td>" << formatNumber(ctx.compare.diffMax) << "</td></tr>\n";
+        os << "<tr><td>Mean RGB (A)</td><td>(" << formatNumber(ctx.compare.meanR_A) << ", "
+           << formatNumber(ctx.compare.meanG_A) << ", " << formatNumber(ctx.compare.meanB_A)
+           << ")</td></tr>\n";
+        os << "<tr><td>Mean RGB (B)</td><td>(" << formatNumber(ctx.compare.meanR_B) << ", "
+           << formatNumber(ctx.compare.meanG_B) << ", " << formatNumber(ctx.compare.meanB_B)
+           << ")</td></tr>\n";
+        os << "<tr><td>Delta RGB Mean</td><td>("
+           << formatNumber(ctx.compare.meanR_B - ctx.compare.meanR_A) << ", "
+           << formatNumber(ctx.compare.meanG_B - ctx.compare.meanG_A) << ", "
+           << formatNumber(ctx.compare.meanB_B - ctx.compare.meanB_A) << ")</td></tr>\n";
+        os << "<tr><td>Noise Est. (A / B)</td><td>" << formatNumber(ctx.compare.noiseA)
+           << " / " << formatNumber(ctx.compare.noiseB) << "</td></tr>\n";
         os << "</table>\n";
         if (!ctx.compareDiffPng.empty())
             os << "<img src=\"data:image/png;base64," << ctx.compareDiffPng << "\" alt=\"diff\">\n";

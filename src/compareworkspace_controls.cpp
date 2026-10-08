@@ -278,6 +278,15 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             [this](int value) { m_thresholdLabel->setText(QString::number(value)); });
     toolLayout->addWidget(m_thresholdLabel);
 
+    m_autoThresholdBtn = new QPushButton(tr("自动"), this);
+    m_autoThresholdBtn->setObjectName("diffAutoThresholdButton");
+    m_autoThresholdBtn->setMaximumWidth(42);
+    m_autoThresholdBtn->setToolTip(tr("基于差异分布自动计算最佳分离阈值 (Otsu)"));
+    m_autoThresholdBtn->setEnabled(false);
+    connect(m_autoThresholdBtn, &QPushButton::clicked, this,
+            &CompareWorkspace::onAutoThresholdClicked);
+    toolLayout->addWidget(m_autoThresholdBtn);
+
     // A-4.6: Diff highlight mode (red diffs / gray similar).
     m_diffOverlayChk = new QCheckBox(tr("显示差异"), this);
     m_diffOverlayChk->setObjectName("diffOverlayToggle");
@@ -677,9 +686,18 @@ void CompareWorkspace::syncContextualCompareControls()
     keep(m_checkerSizeLabel, checkerOn);
     keep(m_thresholdSlider, diffOn);
     keep(m_thresholdLabel, diffOn);
+    keep(m_autoThresholdBtn, diffOn);
     keep(findChild<QLabel *>(QStringLiteral("diffThresholdCaption")), diffOn);
     keep(m_diffGainCombo, diffOn);
     keep(findChild<QLabel *>(QStringLiteral("diffGainCaption")), diffOn);
     keep(m_gridColsSpin, customGrid);
     keep(findChild<QLabel *>(QStringLiteral("compareColumnsCaption")), customGrid);
+}
+
+void CompareWorkspace::onAutoThresholdClicked()
+{
+    if (m_thresholdSlider && m_hasSuggestedThreshold)
+    {
+        m_thresholdSlider->setValue(static_cast<int>(m_suggestedThreshold));
+    }
 }

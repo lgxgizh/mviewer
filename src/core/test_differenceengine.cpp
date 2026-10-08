@@ -211,11 +211,19 @@ int main(int argc, char **argv)
         CHECK(st.diffPixels == 2, "stats diffPixels = 2 (threshold 0)");
         CHECK(st.maxDiff > 0 && st.maxDiff <= 255, "stats maxDiff in range");
         CHECK(st.meanDiff > 0.0, "stats meanDiff > 0");
+        CHECK(st.stdDevDiff > 0.0, "stats stdDevDiff > 0");
         CHECK(st.diffRatio > 0.019 && st.diffRatio < 0.021, "stats diffRatio ≈ 2%");
 
         // Threshold filters out the weak diff pixel (gray ≈ 1 < 20 ≤ 33)
         const auto st2 = DifferenceEngine::computeStats(diff, 20);
         CHECK(st2.diffPixels == 1, "stats threshold=20 keeps only strong pixel");
+
+        // suggestThreshold — Otsu on difference distribution
+        CHECK(DifferenceEngine::suggestThreshold(ImageData{}) == 0, "suggestThreshold null is 0");
+        CHECK(DifferenceEngine::suggestThreshold(DifferenceEngine::differenceMap(a, a)) == 0,
+              "suggestThreshold identical is 0");
+        const uint8_t suggested = DifferenceEngine::suggestThreshold(diff);
+        CHECK(suggested > 0, "suggestThreshold on differing image produces positive threshold");
     }
 
     // M23: computeStats — ROI clipping

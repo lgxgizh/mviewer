@@ -133,6 +133,12 @@ static void test_neighborhood()
     // population variance = (3·0² + 3·10² + 3·20²)/9 − 10² = 66.67
     const double expectedVar = (3.0 * (0 - 10) * (0 - 10) + 3.0 * (20 - 10) * (20 - 10)) / 9.0;
     CHECK(std::abs(sg.variance - expectedVar) < 1e-6);
+    CHECK(sg.rMin == 0 && sg.rMax == 20);
+    CHECK(sg.gMin == 0 && sg.gMax == 20);
+    CHECK(sg.bMin == 0 && sg.bMax == 20);
+    CHECK(std::abs(sg.rStdDev - std::sqrt(expectedVar)) < 1e-6);
+    CHECK(std::abs(sg.gStdDev - std::sqrt(expectedVar)) < 1e-6);
+    CHECK(std::abs(sg.bStdDev - std::sqrt(expectedVar)) < 1e-6);
 
     // Out-of-bounds center must be clipped (1×1 at corner = single pixel).
     auto corner = neighborhoodStats(g.data(), w * 3, w, h, 0, 0, 1);

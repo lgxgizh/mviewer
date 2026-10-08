@@ -407,7 +407,11 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
 
     int64_t sum = 0, sumSq = 0;
     int64_t rSum = 0, gSum = 0, bSum = 0, vSum = 0;
+    int64_t rSumSq = 0, gSumSq = 0, bSumSq = 0;
     int minValue = 255, maxValue = 0;
+    int rMin = 255, rMax = 0;
+    int gMin = 255, gMax = 0;
+    int bMin = 255, bMax = 0;
     const int half = n / 2;
     for (int dy = -half; dy <= half; ++dy)
     {
@@ -459,8 +463,17 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
             gSum += pg;
             bSum += pb;
             vSum += std::max({pr, pg, pb});
+            rSumSq += static_cast<int64_t>(pr) * pr;
+            gSumSq += static_cast<int64_t>(pg) * pg;
+            bSumSq += static_cast<int64_t>(pb) * pb;
             minValue = std::min(minValue, luminance);
             maxValue = std::max(maxValue, luminance);
+            rMin = std::min(rMin, pr);
+            rMax = std::max(rMax, pr);
+            gMin = std::min(gMin, pg);
+            gMax = std::max(gMax, pg);
+            bMin = std::min(bMin, pb);
+            bMax = std::max(bMax, pb);
             ++stats.count;
         }
     }
@@ -477,6 +490,18 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
     stats.gMean = static_cast<double>(gSum) / stats.count;
     stats.bMean = static_cast<double>(bSum) / stats.count;
     stats.vMean = static_cast<double>(vSum) / stats.count;
+    stats.rStdDev = std::sqrt(
+        std::max(0.0, static_cast<double>(rSumSq) / stats.count - stats.rMean * stats.rMean));
+    stats.gStdDev = std::sqrt(
+        std::max(0.0, static_cast<double>(gSumSq) / stats.count - stats.gMean * stats.gMean));
+    stats.bStdDev = std::sqrt(
+        std::max(0.0, static_cast<double>(bSumSq) / stats.count - stats.bMean * stats.bMean));
+    stats.rMin = rMin;
+    stats.rMax = rMax;
+    stats.gMin = gMin;
+    stats.gMax = gMax;
+    stats.bMin = bMin;
+    stats.bMax = bMax;
     return stats;
 }
 
@@ -498,7 +523,11 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
 
     int64_t sum = 0, sumSq = 0;
     int64_t rSum = 0, gSum = 0, bSum = 0, vSum = 0;
+    int64_t rSumSq = 0, gSumSq = 0, bSumSq = 0;
     int mn = 255, mx = 0;
+    int rMin = 255, rMax = 0;
+    int gMin = 255, gMax = 0;
+    int bMin = 255, bMax = 0;
     int count = (yEnd - yStart + 1) * (xEnd - xStart + 1);
     int skipped = 0;
 
@@ -519,6 +548,9 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
             }
         }
         rSum = gSum = bSum = vSum = sum;
+        rSumSq = gSumSq = bSumSq = sumSq;
+        rMin = gMin = bMin = mn;
+        rMax = gMax = bMax = mx;
     }
     else if (channels == 4)
     {
@@ -540,6 +572,15 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
                 gSum += g;
                 bSum += b;
                 vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
+                rSumSq += static_cast<int64_t>(r) * r;
+                gSumSq += static_cast<int64_t>(g) * g;
+                bSumSq += static_cast<int64_t>(b) * b;
+                rMin = std::min(rMin, static_cast<int>(r));
+                rMax = std::max(rMax, static_cast<int>(r));
+                gMin = std::min(gMin, static_cast<int>(g));
+                gMax = std::max(gMax, static_cast<int>(g));
+                bMin = std::min(bMin, static_cast<int>(b));
+                bMax = std::max(bMax, static_cast<int>(b));
                 const int v = lumaFast(r, g, b);
                 sum += v;
                 sumSq += static_cast<int64_t>(v) * v;
@@ -565,6 +606,15 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
                 gSum += g;
                 bSum += b;
                 vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
+                rSumSq += static_cast<int64_t>(r) * r;
+                gSumSq += static_cast<int64_t>(g) * g;
+                bSumSq += static_cast<int64_t>(b) * b;
+                rMin = std::min(rMin, static_cast<int>(r));
+                rMax = std::max(rMax, static_cast<int>(r));
+                gMin = std::min(gMin, static_cast<int>(g));
+                gMax = std::max(gMax, static_cast<int>(g));
+                bMin = std::min(bMin, static_cast<int>(b));
+                bMax = std::max(bMax, static_cast<int>(b));
                 const int v = lumaFast(r, g, b);
                 sum += v;
                 sumSq += static_cast<int64_t>(v) * v;
@@ -592,6 +642,18 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     s.gMean = static_cast<double>(gSum) / count;
     s.bMean = static_cast<double>(bSum) / count;
     s.vMean = static_cast<double>(vSum) / count;
+    s.rStdDev = std::sqrt(
+        std::max(0.0, static_cast<double>(rSumSq) / count - s.rMean * s.rMean));
+    s.gStdDev = std::sqrt(
+        std::max(0.0, static_cast<double>(gSumSq) / count - s.gMean * s.gMean));
+    s.bStdDev = std::sqrt(
+        std::max(0.0, static_cast<double>(bSumSq) / count - s.bMean * s.bMean));
+    s.rMin = rMin;
+    s.rMax = rMax;
+    s.gMin = gMin;
+    s.gMax = gMax;
+    s.bMin = bMin;
+    s.bMax = bMax;
     return s;
 }
 } // namespace mviewer::core

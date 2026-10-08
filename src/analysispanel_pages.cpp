@@ -107,7 +107,10 @@ void AnalysisPanel::updateInspectorPage()
     }
     else
     {
-        txt += QString("8-bit 源 (无高位深)");
+        txt += QString("8-bit 源 归一化 R=%1 G=%2 B=%3")
+                   .arg(m_pR / 255.0, 0, 'f', 4)
+                   .arg(m_pG / 255.0, 0, 'f', 4)
+                   .arg(m_pB / 255.0, 0, 'f', 4);
     }
 
     // NxN neighborhood luminance statistics over the left image (real pixels,
@@ -137,6 +140,10 @@ void AnalysisPanel::updateInspectorPage()
                        .arg(s.gMean, 0, 'f', 1)
                        .arg(s.bMean, 0, 'f', 1)
                        .arg(s.vMean, 0, 'f', 1);
+            txt += QString("<br>通道标准差: R %1  G %2  B %3")
+                       .arg(s.rStdDev, 0, 'f', 1)
+                       .arg(s.gStdDev, 0, 'f', 1)
+                       .arg(s.bStdDev, 0, 'f', 1);
         }
     }
 

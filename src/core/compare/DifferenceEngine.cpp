@@ -378,7 +378,8 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
 
 #if defined(__AVX2__) || defined(_M_AVX2)
 static inline void accumulateGrayscaleStatsAVX2(const uint8_t *data, size_t count, int minDiff,
-                                                int64_t &sum, int64_t &diffCount, int &maxV)
+                                                int64_t &sum, int64_t &diffCount, int &maxV,
+                                                int64_t &sumSq)
 {
     const __m256i vzero = _mm256_setzero_si256();
     const __m256i vMinDiff = _mm256_set1_epi8(static_cast<char>(minDiff));
@@ -386,6 +387,7 @@ static inline void accumulateGrayscaleStatsAVX2(const uint8_t *data, size_t coun
     __m256i vSumAcc = _mm256_setzero_si256();
     __m256i vDiffAcc = _mm256_setzero_si256();
     __m256i vMaxAcc = _mm256_setzero_si256();
+    __m256i vSumSqAcc = _mm256_setzero_si256();
 
     size_t i = 0;
     for (; i + 32 <= count; i += 32)
@@ -401,15 +403,27 @@ static inline void accumulateGrayscaleStatsAVX2(const uint8_t *data, size_t coun
         const __m256i matchedOnes = _mm256_and_si256(mask, vOnes);
         const __m256i diffSad = _mm256_sad_epu8(matchedOnes, vzero);
         vDiffAcc = _mm256_add_epi64(vDiffAcc, diffSad);
+
+        const __m256i vlo = _mm256_unpacklo_epi8(v, vzero);
+        const __m256i vhi = _mm256_unpackhi_epi8(v, vzero);
+        const __m256i sqlo = _mm256_madd_epi16(vlo, vlo);
+        const __m256i sqhi = _mm256_madd_epi16(vhi, vhi);
+        vSumSqAcc = _mm256_add_epi64(vSumSqAcc, _mm256_unpacklo_epi32(sqlo, vzero));
+        vSumSqAcc = _mm256_add_epi64(vSumSqAcc, _mm256_unpackhi_epi32(sqlo, vzero));
+        vSumSqAcc = _mm256_add_epi64(vSumSqAcc, _mm256_unpacklo_epi32(sqhi, vzero));
+        vSumSqAcc = _mm256_add_epi64(vSumSqAcc, _mm256_unpackhi_epi32(sqhi, vzero));
     }
 
     alignas(32) int64_t sums[4];
     alignas(32) int64_t diffCounts[4];
+    alignas(32) int64_t sqSums[4];
     _mm256_store_si256(reinterpret_cast<__m256i *>(sums), vSumAcc);
     _mm256_store_si256(reinterpret_cast<__m256i *>(diffCounts), vDiffAcc);
+    _mm256_store_si256(reinterpret_cast<__m256i *>(sqSums), vSumSqAcc);
 
     sum += sums[0] + sums[1] + sums[2] + sums[3];
     diffCount += diffCounts[0] + diffCounts[1] + diffCounts[2] + diffCounts[3];
+    sumSq += sqSums[0] + sqSums[1] + sqSums[2] + sqSums[3];
 
     __m128i max128 =
         _mm_max_epu8(_mm256_castsi256_si128(vMaxAcc), _mm256_extracti128_si256(vMaxAcc, 1));
@@ -425,12 +439,14 @@ static inline void accumulateGrayscaleStatsAVX2(const uint8_t *data, size_t coun
         sum += val;
         diffCount += (val >= minDiff ? 1 : 0);
         maxV = std::max(maxV, val);
+        sumSq += static_cast<int64_t>(val) * val;
     }
 }
 #endif
 
 static inline void accumulateGrayscaleStatsSSE2(const uint8_t *data, size_t count, int minDiff,
-                                                int64_t &sum, int64_t &diffCount, int &maxV)
+                                                int64_t &sum, int64_t &diffCount, int &maxV,
+                                                int64_t &sumSq)
 {
     const __m128i vzero = _mm_setzero_si128();
     const __m128i vMinDiff = _mm_set1_epi8(static_cast<char>(minDiff));
@@ -438,6 +454,7 @@ static inline void accumulateGrayscaleStatsSSE2(const uint8_t *data, size_t coun
     __m128i vSumAcc = _mm_setzero_si128();
     __m128i vDiffAcc = _mm_setzero_si128();
     __m128i vMaxAcc = _mm_setzero_si128();
+    __m128i vSumSqAcc = _mm_setzero_si128();
 
     size_t i = 0;
     for (; i + 16 <= count; i += 16)
@@ -453,15 +470,27 @@ static inline void accumulateGrayscaleStatsSSE2(const uint8_t *data, size_t coun
         const __m128i matchedOnes = _mm_and_si128(mask, vOnes);
         const __m128i diffSad = _mm_sad_epu8(matchedOnes, vzero);
         vDiffAcc = _mm_add_epi64(vDiffAcc, diffSad);
+
+        const __m128i vlo = _mm_unpacklo_epi8(v, vzero);
+        const __m128i vhi = _mm_unpackhi_epi8(v, vzero);
+        const __m128i sqlo = _mm_madd_epi16(vlo, vlo);
+        const __m128i sqhi = _mm_madd_epi16(vhi, vhi);
+        vSumSqAcc = _mm_add_epi64(vSumSqAcc, _mm_unpacklo_epi32(sqlo, vzero));
+        vSumSqAcc = _mm_add_epi64(vSumSqAcc, _mm_unpackhi_epi32(sqlo, vzero));
+        vSumSqAcc = _mm_add_epi64(vSumSqAcc, _mm_unpacklo_epi32(sqhi, vzero));
+        vSumSqAcc = _mm_add_epi64(vSumSqAcc, _mm_unpackhi_epi32(sqhi, vzero));
     }
 
     alignas(16) int64_t sums[2];
     alignas(16) int64_t diffCounts[2];
+    alignas(16) int64_t sqSums[2];
     _mm_store_si128(reinterpret_cast<__m128i *>(sums), vSumAcc);
     _mm_store_si128(reinterpret_cast<__m128i *>(diffCounts), vDiffAcc);
+    _mm_store_si128(reinterpret_cast<__m128i *>(sqSums), vSumSqAcc);
 
     sum += sums[0] + sums[1];
     diffCount += diffCounts[0] + diffCounts[1];
+    sumSq += sqSums[0] + sqSums[1];
 
     __m128i max128 = vMaxAcc;
     max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 8));
@@ -476,6 +505,7 @@ static inline void accumulateGrayscaleStatsSSE2(const uint8_t *data, size_t coun
         sum += val;
         diffCount += (val >= minDiff ? 1 : 0);
         maxV = std::max(maxV, val);
+        sumSq += static_cast<int64_t>(val) * val;
     }
 }
 
@@ -502,6 +532,7 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
     int64_t sum = 0;
     int64_t diffCount = 0;
     int maxV = 0;
+    int64_t sumSq = 0;
     const bool contiguous =
         (cpp == 1 && ro == 0 && x0 == 0 && y0 == 0 && x1 == grayDiff.width &&
          y1 == grayDiff.height && grayDiff.stride() == static_cast<ptrdiff_t>(grayDiff.width));
@@ -515,10 +546,10 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
         const uint8_t *src = grayDiff.buffer->data();
 #if defined(__AVX2__) || defined(_M_AVX2)
         if (useAvx2)
-            accumulateGrayscaleStatsAVX2(src, total, minDiff, sum, diffCount, maxV);
+            accumulateGrayscaleStatsAVX2(src, total, minDiff, sum, diffCount, maxV, sumSq);
         else
 #endif
-            accumulateGrayscaleStatsSSE2(src, total, minDiff, sum, diffCount, maxV);
+            accumulateGrayscaleStatsSSE2(src, total, minDiff, sum, diffCount, maxV, sumSq);
     }
     else if (cpp == 1 && ro == 0)
     {
@@ -530,10 +561,10 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
                                  static_cast<size_t>(x0);
 #if defined(__AVX2__) || defined(_M_AVX2)
             if (useAvx2)
-                accumulateGrayscaleStatsAVX2(src, rowLen, minDiff, sum, diffCount, maxV);
+                accumulateGrayscaleStatsAVX2(src, rowLen, minDiff, sum, diffCount, maxV, sumSq);
             else
 #endif
-                accumulateGrayscaleStatsSSE2(src, rowLen, minDiff, sum, diffCount, maxV);
+                accumulateGrayscaleStatsSSE2(src, rowLen, minDiff, sum, diffCount, maxV, sumSq);
         }
     }
     else
@@ -549,6 +580,7 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
                 sum += v;
                 diffCount += (v >= minDiff ? 1 : 0);
                 maxV = std::max(maxV, v);
+                sumSq += static_cast<int64_t>(v) * v;
             }
         }
     }
@@ -558,7 +590,70 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
     s.diffRatio = count > 0 ? static_cast<double>(diffCount) / static_cast<double>(count) : 0.0;
     s.meanDiff = count > 0 ? static_cast<double>(sum) / static_cast<double>(count) : 0.0;
     s.maxDiff = maxV;
+    const double variance =
+        count > 0 ? (static_cast<double>(sumSq) / count) - (s.meanDiff * s.meanDiff) : 0.0;
+    s.stdDevDiff = std::sqrt(std::max(0.0, variance));
     return s;
+}
+
+uint8_t DifferenceEngine::suggestThreshold(const ImageData &grayDiff)
+{
+    if (grayDiff.isNull() || grayDiff.width <= 0 || grayDiff.height <= 0)
+        return 0;
+
+    int hist[256] = {0};
+    const int w = grayDiff.width;
+    const int h = grayDiff.height;
+    const int cpp = grayDiff.channelsPerPixel();
+    const int ro = channelOffset(grayDiff.format, 0);
+
+    for (int y = 0; y < h; ++y)
+    {
+        const uint8_t *src = grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+        for (int x = 0; x < w; ++x)
+        {
+            const uint8_t v = (cpp == 1 && ro == 0) ? src[x] : src[x * cpp + ro];
+            ++hist[v];
+        }
+    }
+
+    const int total = w * h;
+    const int nonZero = total - hist[0];
+    if (nonZero <= 0)
+        return 0;
+
+    double sum = 0.0;
+    for (int i = 1; i < 256; ++i)
+        sum += static_cast<double>(i) * hist[i];
+
+    double sumB = 0.0;
+    int wB = 0;
+    double maxVar = -1.0;
+    int bestT = 1;
+
+    for (int t = 1; t < 255; ++t)
+    {
+        wB += hist[t];
+        if (wB == 0)
+            continue;
+        const int wF = nonZero - wB;
+        if (wF == 0)
+            break;
+
+        sumB += static_cast<double>(t) * hist[t];
+        const double mB = sumB / wB;
+        const double mF = (sum - sumB) / wF;
+
+        const double varBetween =
+            static_cast<double>(wB) * static_cast<double>(wF) * (mB - mF) * (mB - mF);
+        if (varBetween > maxVar)
+        {
+            maxVar = varBetween;
+            bestT = t;
+        }
+    }
+
+    return static_cast<uint8_t>(std::clamp(bestT, 1, 254));
 }
 
 namespace
@@ -587,13 +682,28 @@ const auto &heatLUT()
     return table;
 }
 
-const auto &highlightIntensityLUT()
+const auto &highlightColorLUT()
 {
     static const auto table = []()
     {
-        std::array<uint8_t, 256> lut{};
+        std::array<std::array<uint8_t, 3>, 256> lut{};
         for (int v = 0; v < 256; ++v)
-            lut[v] = static_cast<uint8_t>(std::min(255, 80 + v * 2));
+        {
+            const uint8_t r = static_cast<uint8_t>(std::min(255, 80 + v * 2));
+            uint8_t g = 0;
+            uint8_t b = 0;
+            if (v < 60)
+            {
+                // Subtle difference: warm amber warning gradient, strictly R > G > B
+                g = static_cast<uint8_t>(std::min<int>(r / 3, 48 - (v * 48 / 60)));
+            }
+            else if (v >= 180)
+            {
+                // Severe difference: vivid crimson alert
+                b = static_cast<uint8_t>(std::min<int>(24, (v - 180) / 4));
+            }
+            lut[v] = {r, g, b};
+        }
         return lut;
     }();
     return table;
@@ -655,8 +765,8 @@ static ImageData renderHeatOverlay(const ImageData &grayDiff, const uint8_t *val
 }
 
 static ImageData renderHighlightOverlay(const ImageData &grayDiff, const ImageData &base,
-                                        const uint8_t *valLut, uint8_t threshold, int w, int h,
-                                        int cppD, int roD, bool isDirectDiff)
+                                         const uint8_t *valLut, uint8_t threshold, int w, int h,
+                                         int cppD, int roD, bool isDirectDiff)
 {
     ImageData out = makeImageData(w, h, PixelFormat::RGB24);
     if (out.isNull())
@@ -668,7 +778,7 @@ static ImageData renderHighlightOverlay(const ImageData &grayDiff, const ImageDa
          base.format == PixelFormat::Grayscale8);
     const int cppB = hasBase ? base.channelsPerPixel() : 0;
     const int minDiff = std::max<int>(threshold, 1);
-    const auto &intLUT = highlightIntensityLUT();
+    const auto &hlColorLUT = highlightColorLUT();
 
     if (!hasBase)
     {
@@ -683,9 +793,10 @@ static ImageData renderHighlightOverlay(const ImageData &grayDiff, const ImageDa
                 const uint8_t v = valLut[rawV];
                 if (v >= minDiff)
                 {
-                    dst[x * 3 + 0] = intLUT[v];
-                    dst[x * 3 + 1] = 0;
-                    dst[x * 3 + 2] = 0;
+                    const auto &c = hlColorLUT[v];
+                    dst[x * 3 + 0] = c[0];
+                    dst[x * 3 + 1] = c[1];
+                    dst[x * 3 + 2] = c[2];
                 }
                 else
                 {
@@ -712,9 +823,10 @@ static ImageData renderHighlightOverlay(const ImageData &grayDiff, const ImageDa
                 const uint8_t v = valLut[rawV];
                 if (v >= minDiff)
                 {
-                    dst[x * 3 + 0] = intLUT[v];
-                    dst[x * 3 + 1] = 0;
-                    dst[x * 3 + 2] = 0;
+                    const auto &c = hlColorLUT[v];
+                    dst[x * 3 + 0] = c[0];
+                    dst[x * 3 + 1] = c[1];
+                    dst[x * 3 + 2] = c[2];
                 }
                 else
                 {
@@ -741,9 +853,10 @@ static ImageData renderHighlightOverlay(const ImageData &grayDiff, const ImageDa
             const uint8_t v = valLut[rawV];
             if (v >= minDiff)
             {
-                dst[0] = intLUT[v];
-                dst[1] = 0;
-                dst[2] = 0;
+                const auto &c = hlColorLUT[v];
+                dst[0] = c[0];
+                dst[1] = c[1];
+                dst[2] = c[2];
             }
             else
             {

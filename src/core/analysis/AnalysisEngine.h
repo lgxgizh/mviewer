@@ -3,6 +3,7 @@
 #include "core/image/ImageBuffer.h"
 #include "domain/Selection.h"
 
+#include <string>
 #include <vector>
 
 // 图像统计算法（独立于 QWidget，接口只暴露 ImageData/std 类型）。
@@ -12,10 +13,18 @@ struct ImageStats
     double lumMean = 0;                                       // 亮度均值
     double vMean = 0;                                         // HSV-V 明度均值
     double rMean = 0, gMean = 0, bMean = 0;                   // RGB 均值
+    double lumStdDev = 0;                                     // 亮度标准差
+    double rStdDev = 0, gStdDev = 0, bStdDev = 0;             // RGB 各通道标准差
+    int lumMin = 0, lumMax = 0;                               // 亮度极值
+    int rMin = 0, rMax = 0, gMin = 0, gMax = 0, bMin = 0, bMax = 0; // RGB 各通道极值
     int histLum[256] = {0};                                   // 亮度直方图
     int histV[256] = {0};                                     // HSV-V 直方图
     int histR[256] = {0}, histG[256] = {0}, histB[256] = {0}; // RGB 直方图
     int pixelCount = 0; // 参与统计的像素数（ROI 时可能小于全图）
+
+    std::string toSummaryString() const;
+    std::string toCsvRow() const;
+    static std::string csvHeader();
 };
 
 class AnalysisEngine

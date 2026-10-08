@@ -313,6 +313,40 @@ void test_stats_roi_bounds()
     }
 }
 
+void test_image_stats_extended()
+{
+    ImageData img = makeImageData(4, 4, PixelFormat::RGB24);
+    uint8_t *p = img.buffer->data();
+    for (int i = 0; i < 16; ++i)
+    {
+        p[i * 3] = static_cast<uint8_t>(i * 10);
+        p[i * 3 + 1] = static_cast<uint8_t>(i * 15);
+        p[i * 3 + 2] = 50;
+    }
+    ImageStats s = AnalysisEngine::computeStats(img);
+    CHECK(s.pixelCount == 16);
+    CHECK(s.rMin == 0 && s.rMax == 150);
+    CHECK(s.gMin == 0 && s.gMax == 225);
+    CHECK(s.bMin == 50 && s.bMax == 50);
+    CHECK(s.rStdDev > 0.0);
+    CHECK(s.gStdDev > 0.0);
+    CHECK_NEAR(s.bStdDev, 0.0, 1e-6);
+    CHECK(s.lumStdDev > 0.0);
+
+    const std::string summary = s.toSummaryString();
+    CHECK(!summary.empty());
+    CHECK(summary.find("Lum:") != std::string::npos);
+    CHECK(summary.find("R:") != std::string::npos);
+
+    const std::string header = ImageStats::csvHeader();
+    CHECK(!header.empty());
+    CHECK(header.find("pixelCount,") != std::string::npos);
+
+    const std::string csv = s.toCsvRow();
+    CHECK(!csv.empty());
+    CHECK(csv.find("16,") == 0); // starts with pixelCount=16
+}
+
 int main()
 {
     std::printf("Running AnalysisEngine and PixelInspector test suite...\n");
@@ -323,6 +357,7 @@ int main()
     test_ssim();
     test_noise_estimate();
     test_stats_roi_bounds();
+    test_image_stats_extended();
 
     if (g_failures == 0)
     {
