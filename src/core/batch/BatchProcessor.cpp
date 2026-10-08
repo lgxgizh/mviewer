@@ -1,6 +1,7 @@
 #include "core/batch/BatchProcessor.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/AnalyzerPipeline.h"
+#include "core/batch/BatchRename.h"
 #include "core/export/ExporterRegistry.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/Decoder.h"
@@ -69,20 +70,19 @@ WatermarkPosition mapWatermarkPos(int pos)
 std::string buildOutputPath(const domain::BatchJobConfig &config, const std::string &inputPath,
                             int index, int total)
 {
-    const std::string base = baseNameOf(inputPath);
     const std::string ext = config.exportFormat.empty() ? extOf(inputPath) : config.exportFormat;
 
-    std::string outName;
-    if (!config.renamePattern.empty())
-    {
-        outName = applyRenamePattern(config.renamePattern, base, ext, index, total);
-        if (!ext.empty())
-            outName += "." + ext;
-    }
-    else
-    {
-        outName = base + "." + ext;
-    }
+    // Find/replace on the stem, then the rename pattern, then ".ext" — the
+    // order the batch dialog preview shows (BatchRename.h).
+    BatchRenameOptions rename;
+    rename.pattern = config.renamePattern;
+    rename.find = config.renameFind;
+    rename.replace = config.renameReplace;
+    rename.useRegex = config.renameUseRegex;
+    rename.caseSensitive = config.renameCaseSensitive;
+    std::string outName = composeRenamedFileName(baseNameOf(inputPath), ext, rename, index, total);
+    if (outName.empty() || outName == "." + ext) // replace emptied the stem
+        outName = baseNameOf(inputPath) + outName;
 
     if (config.outputDir.empty())
         return outName;

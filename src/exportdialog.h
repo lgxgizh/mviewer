@@ -20,6 +20,7 @@ class QLabel;
 class QProgressDialog;
 class QCloseEvent;
 class QVBoxLayout;
+class BatchRenamePanel;
 
 // Batch / single image export dialog. Supports format conversion, resizing,
 // text watermarking, batch rename, contact-sheet generation and PDF export.
@@ -48,10 +49,7 @@ class ExportDialog : public QDialog
     void setOutputDir(const QString &dir);
 
     // New: explicit list of source files to export (from the gallery selection).
-    void setSources(const QStringList &paths)
-    {
-        m_sources = paths;
-    }
+    void setSources(const QStringList &paths);
 
   private slots:
     void onBrowse();
@@ -75,6 +73,8 @@ class ExportDialog : public QDialog
     void buildRenameSection(QVBoxLayout *root);
     void buildContactSection(QVBoxLayout *root);
     void buildButtonSection(QVBoxLayout *root);
+    // 「批量重命名」: invalid rename settings disable 导出 in convert mode.
+    void refreshExportButton();
 
     ImageData applyResize(const ImageData &d) const;
     ImageData applyWatermark(const ImageData &d) const;
@@ -106,6 +106,7 @@ class ExportDialog : public QDialog
     QComboBox *m_wmPosCombo = nullptr;
     QSpinBox *m_wmOpacitySpin = nullptr;
     QLineEdit *m_renameEdit = nullptr;
+    BatchRenamePanel *m_renamePanel = nullptr;
     QSpinBox *m_colsSpin = nullptr;
     QSpinBox *m_thumbSpin = nullptr;
 

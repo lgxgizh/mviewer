@@ -1,4 +1,5 @@
 #include "exportdialog.h"
+#include "batchrenamepanel.h"
 
 #include "core/export/ExportJob.h"
 #include "core/image/ImageTransform.h"
@@ -35,9 +36,15 @@ void ExportDialog::setOutputDir(const QString &dir)
         m_dirEdit->setText(dir);
 }
 
+void ExportDialog::setSources(const QStringList &paths)
+{
+    m_sources = paths;
+    m_renamePanel->setSourceFiles(paths);
+}
+
 ExportDialog::ExportDialog(const QStringList &sources, QWidget *parent) : ExportDialog(parent)
 {
-    m_sources = sources;
+    setSources(sources);
     if (!sources.isEmpty())
     {
         const QFileInfo fi(sources.first());
@@ -233,12 +240,24 @@ void ExportDialog::buildRenameSection(QVBoxLayout *root)
 {
     // ---- rename ----
     auto *rnBox = new QGroupBox(tr("批量重命名 (留空=原名)"));
-    auto *rnLay = new QFormLayout(rnBox);
-    m_renameEdit = new QLineEdit(this);
+    auto *rnLay = new QVBoxLayout(rnBox);
+    m_renamePanel = new BatchRenamePanel(rnBox);
+    m_renamePanel->setSettingsGroup(QStringLiteral("exportRename"));
+    m_renameEdit = m_renamePanel->patternEdit();
     m_renameEdit->setPlaceholderText("{name}_{seq:3}");
-    rnLay->addRow(tr("模式:"), m_renameEdit);
-    rnLay->addRow(new QLabel(tr("可用: {name} {ext} {n} {total} {seq:W}")));
+    rnLay->addWidget(m_renamePanel);
+    rnLay->addWidget(new QLabel(tr("可用: {name} {ext} {n} {total} {seq:W}")));
     root->addWidget(rnBox);
+    // The preview shows the encoded extension; the last confirmed settings return.
+    const auto syncExtension = [this]()
+    {
+        const QString format = m_formatCombo->currentData().toString();
+        m_renamePanel->setTargetExtension(format == QLatin1String("jpeg") ? QStringLiteral("jpg")
+                                                                          : format);
+    };
+    connect(m_formatCombo, &QComboBox::currentIndexChanged, this, syncExtension);
+    syncExtension();
+    m_renamePanel->loadSettings();
 }
 
 void ExportDialog::buildContactSection(QVBoxLayout *root)
@@ -271,6 +290,17 @@ void ExportDialog::buildButtonSection(QVBoxLayout *root)
     connect(m_browseBtn, &QPushButton::clicked, this, &ExportDialog::onBrowse);
     connect(m_exportBtn, &QPushButton::clicked, this, &ExportDialog::onExportClicked);
     connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(m_renamePanel, &BatchRenamePanel::validityChanged, this,
+            &ExportDialog::refreshExportButton);
+    connect(m_modeCombo, &QComboBox::currentIndexChanged, this, &ExportDialog::refreshExportButton);
+    refreshExportButton();
+}
+
+void ExportDialog::refreshExportButton()
+{
+    const bool convert = m_modeCombo->currentData().toString() == QLatin1String("convert");
+    if (!m_cancelFlag)
+        m_exportBtn->setEnabled(!convert || m_renamePanel->isValid());
 }
 
 void ExportDialog::reject()
@@ -383,7 +413,18 @@ void ExportDialog::exportConvertBatch()
         cfg.sourceDirectory = m_outDir.toUtf8().toStdString();
     cfg.format = m_formatCombo->currentData().toString().toStdString();
     cfg.quality = m_qualitySpin->value();
-    cfg.renamePattern = m_renameEdit->text().toStdString();
+    if (!m_renamePanel->isValid())
+    {
+        m_statusLabel->setText(tr("重命名设置无效：%1").arg(m_renamePanel->errorMessage()));
+        return;
+    }
+    const auto rename = m_renamePanel->options();
+    cfg.renamePattern = rename.pattern;
+    cfg.renameFind = rename.find;
+    cfg.renameReplace = rename.replace;
+    cfg.renameUseRegex = rename.useRegex;
+    cfg.renameCaseSensitive = rename.caseSensitive;
+    m_renamePanel->saveSettings(); // remembered only when the export is confirmed
     cfg.watermarkText = m_watermarkEdit->text().toStdString();
     cfg.watermarkPos = m_wmPosCombo->currentIndex();
     cfg.watermarkOpacity = m_wmOpacitySpin->value();

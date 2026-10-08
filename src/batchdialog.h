@@ -20,6 +20,8 @@ class QTextEdit;
 class QLabel;
 class QVBoxLayout;
 class QWidget;
+class QShowEvent;
+class BatchRenamePanel;
 
 // BatchDialog is a modal dialog for configuring and running batch processing
 // jobs. The user adds files, selects operations (resize, watermark, analyze,
@@ -35,6 +37,10 @@ class BatchDialog : public QDialog
 
     // Pre-fill the file list with the given paths.
     void setInputFiles(const QStringList &paths);
+
+  protected:
+    // Restores the last confirmed rename settings each time the dialog opens.
+    void showEvent(QShowEvent *event) override;
 
   private slots:
     void onAddFiles();
@@ -55,6 +61,9 @@ class BatchDialog : public QDialog
     void buildConfig(mviewer::domain::BatchJobConfig &config) const;
     void updateUiState(bool running);
     void updateParamVisibility();
+    bool renameReady() const;
+    void refreshStartButton();
+    void syncFilesToRenamePanel();
     // Completion path of a batch run: drains the QFutureWatcher (which rethrows a
     // worker exception), reports the summary and resets the dialog for reuse.
     void finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher);
@@ -101,8 +110,7 @@ class BatchDialog : public QDialog
     QWidget *m_watermarkPanel = nullptr;
 
     // ── rename params ──────────────────────────────────────────────
-    QLineEdit *m_renamePattern = nullptr;
-    QWidget *m_renamePanel = nullptr;
+    BatchRenamePanel *m_renamePanel = nullptr;
 
     // ── export params ──────────────────────────────────────────────
     QComboBox *m_exportFormat = nullptr;

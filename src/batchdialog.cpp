@@ -1,4 +1,5 @@
 #include "batchdialog.h"
+#include "batchrenamepanel.h"
 
 #include "core/image/ImageFormats.h"
 
@@ -20,6 +21,7 @@
 #include <QPointer>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QShowEvent>
 #include <QSpinBox>
 #include <QTextEdit>
 #include <QUrl>
@@ -171,19 +173,6 @@ QWidget *makeWatermarkPanel(QLineEdit *&text, QComboBox *&pos, QDoubleSpinBox *&
     return panel;
 }
 
-QWidget *makeRenamePanel(QLineEdit *&pattern)
-{
-    auto *panel = new QWidget;
-    panel->setObjectName(QStringLiteral("batchRenamePanel"));
-    auto *row = new QHBoxLayout(panel);
-    row->setContentsMargins(0, 0, 0, 0);
-    row->addWidget(new QLabel("重命名模式:"));
-    pattern = new QLineEdit;
-    pattern->setPlaceholderText("{name}_batched_{seq:3}");
-    row->addWidget(pattern, 1);
-    return panel;
-}
-
 QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&outputDir,
                          QPushButton *&browseBtn)
 {
@@ -243,6 +232,7 @@ BatchDialog::BatchDialog(QWidget *parent)
     buildParameterControls(mainLayout);
     buildProgressControls(mainLayout);
     connectControls();
+    m_renamePanel->loadSettings();
     updateParamVisibility();
 }
 
@@ -328,7 +318,7 @@ void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
     m_cropPanel = makeCropPanel(m_cropX, m_cropY, m_cropW, m_cropH);
     m_watermarkPanel = makeWatermarkPanel(m_watermarkText, m_watermarkPos, m_watermarkOpacity,
                                           m_watermarkFontSize);
-    m_renamePanel = makeRenamePanel(m_renamePattern);
+    m_renamePanel = new BatchRenamePanel;
     m_exportPanel = makeExportPanel(m_exportFormat, m_exportQuality, m_outputDir, m_browseBtn);
     paramLay->addWidget(m_resizePanel);
     paramLay->addWidget(m_cropPanel);
@@ -401,6 +391,43 @@ void BatchDialog::connectControls()
     connect(m_chkWatermark, &QCheckBox::toggled, this, syncParams);
     connect(m_chkRename, &QCheckBox::toggled, this, syncParams);
     connect(m_chkExport, &QCheckBox::toggled, this, syncParams);
+
+    // Rename settings: live preview uses the export format; an invalid rename
+    // (bad regex, illegal or duplicate names) disables 开始 while 重命名 is on.
+    connect(m_chkRename, &QCheckBox::toggled, this, &BatchDialog::refreshStartButton);
+    connect(m_renamePanel, &BatchRenamePanel::validityChanged, this,
+            &BatchDialog::refreshStartButton);
+    connect(m_exportFormat, &QComboBox::currentTextChanged, m_renamePanel,
+            &BatchRenamePanel::setTargetExtension);
+    m_renamePanel->setTargetExtension(m_exportFormat->currentText());
+}
+
+bool BatchDialog::renameReady() const
+{
+    return !m_chkRename->isChecked() || m_renamePanel->isValid();
+}
+
+void BatchDialog::refreshStartButton()
+{
+    if (!m_activeProcessor)
+        m_startBtn->setEnabled(renameReady());
+}
+
+void BatchDialog::syncFilesToRenamePanel()
+{
+    QStringList files;
+    files.reserve(m_fileList->count());
+    for (int i = 0; i < m_fileList->count(); ++i)
+        files.append(m_fileList->item(i)->text());
+    m_renamePanel->setSourceFiles(files);
+}
+
+void BatchDialog::showEvent(QShowEvent *event)
+{
+    QDialog::showEvent(event);
+    // Each time the dialog opens it restores the last confirmed rename settings.
+    if (!event->spontaneous() && !m_activeProcessor)
+        m_renamePanel->loadSettings();
 }
 
 void BatchDialog::updateParamVisibility()
@@ -421,6 +448,7 @@ void BatchDialog::setInputFiles(const QStringList &paths)
 {
     m_fileList->clear();
     m_fileList->addItems(paths);
+    syncFilesToRenamePanel();
 }
 
 void BatchDialog::onAddFiles()
@@ -433,6 +461,7 @@ void BatchDialog::onAddFiles()
     const auto files = QFileDialog::getOpenFileNames(this, "选择文件", {}, filter);
     for (const auto &f : files)
         m_fileList->addItem(f);
+    syncFilesToRenamePanel();
 }
 
 void BatchDialog::onAddDir() // P2 #⑦
@@ -441,6 +470,7 @@ void BatchDialog::onAddDir() // P2 #⑦
     if (dir.isEmpty())
         return;
     const int added = addSupportedImages(m_fileList, dir, m_chkRecursive->isChecked());
+    syncFilesToRenamePanel();
     if (added == 0)
         QMessageBox::information(this, "批量处理", "该目录下没有可识别的图片文件。");
 }
@@ -450,6 +480,7 @@ void BatchDialog::onRemoveSelected()
     auto items = m_fileList->selectedItems();
     for (auto *item : items)
         delete item;
+    syncFilesToRenamePanel();
 }
 
 void BatchDialog::onBrowseOutputDir()
@@ -491,7 +522,15 @@ void BatchDialog::buildConfig(mviewer::domain::BatchJobConfig &config) const
     config.watermarkPosition = m_watermarkPos->currentIndex();
     config.watermarkOpacity = m_watermarkOpacity->value();
     config.watermarkFontSize = m_watermarkFontSize->value();
-    config.renamePattern = m_renamePattern->text().toStdString();
+    if (m_chkRename->isChecked())
+    {
+        const auto rename = m_renamePanel->options();
+        config.renamePattern = rename.pattern;
+        config.renameFind = rename.find;
+        config.renameReplace = rename.replace;
+        config.renameUseRegex = rename.useRegex;
+        config.renameCaseSensitive = rename.caseSensitive;
+    }
     config.exportFormat = m_exportFormat->currentText().toStdString();
     config.exportQuality = m_exportQuality->value();
     config.outputDir = m_outputDir->text().toStdString();
@@ -512,6 +551,18 @@ void BatchDialog::onStart()
     {
         QMessageBox::warning(this, "批量处理", "请至少选择一个操作。");
         return;
+    }
+
+    if (m_chkRename->isChecked())
+    {
+        if (!m_renamePanel->isValid())
+        {
+            QMessageBox::warning(
+                this, "批量处理",
+                QStringLiteral("重命名设置无效：%1").arg(m_renamePanel->errorMessage()));
+            return;
+        }
+        m_renamePanel->saveSettings(); // remembered only when the run is confirmed
     }
 
     updateUiState(true);
@@ -691,7 +742,7 @@ void BatchDialog::onOpenOutputDir()
 void BatchDialog::updateUiState(bool running)
 {
     const bool idle = !running;
-    m_startBtn->setEnabled(idle);
+    m_startBtn->setEnabled(idle && renameReady());
     m_pauseBtn->setEnabled(running);
     m_cancelBtn->setEnabled(running);
     m_addBtn->setEnabled(idle);
@@ -706,8 +757,8 @@ void BatchDialog::updateUiState(bool running)
     for (QCheckBox *chk :
          {m_chkAnalyze, m_chkResize, m_chkCrop, m_chkWatermark, m_chkRename, m_chkExport})
         chk->setEnabled(idle);
-    for (QWidget *panel :
-         {m_resizePanel, m_cropPanel, m_watermarkPanel, m_renamePanel, m_exportPanel})
+    for (QWidget *panel : {m_resizePanel, m_cropPanel, m_watermarkPanel,
+                           static_cast<QWidget *>(m_renamePanel), m_exportPanel})
     {
         if (panel)
             panel->setEnabled(idle);

@@ -56,6 +56,11 @@ struct ExportJobConfig
     int watermarkPos = 3; // 0=tl,1=tr,2=bl,3=br,4=center,5=tile
     int watermarkOpacity = 40;
     std::string renamePattern = "{name}_{seq:3}";
+    // Find/replace on the stem before renamePattern (see core/batch/BatchRename.h).
+    std::string renameFind;
+    std::string renameReplace;
+    bool renameUseRegex = false;
+    bool renameCaseSensitive = false;
     int contactCols = 4;
     int contactThumb = 200;
 

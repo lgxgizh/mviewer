@@ -62,7 +62,11 @@ struct BatchJobConfig
     int watermarkFontSize = 24;
 
     // --- Rename params ---
-    std::string renamePattern; // e.g. "{name}_batched_{seq:3}"
+    std::string renamePattern;        // e.g. "{name}_batched_{seq:3}"
+    std::string renameFind;           // applied to the stem before the pattern
+    std::string renameReplace;        // regex mode expands \1, \2 …
+    bool renameUseRegex = false;      // false = literal text
+    bool renameCaseSensitive = false; // false = case-insensitive
 
     // --- Export params ---
     std::string exportFormat; // "png", "jpg", "bmp" — empty = skip export

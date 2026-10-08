@@ -1,12 +1,14 @@
 // BatchProcessor unit tests — verify batch decode → resize → export pipeline,
 // progress callback, cancellation, and result collection.
 #include "core/batch/BatchProcessor.h"
+#include "core/batch/BatchRename.h"
 #include "domain/BatchJob.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QSettings>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -300,6 +302,203 @@ int main(int argc, char *argv[])
         QFile::remove(nestedFile);
         QDir(nested).rmdir(nested);
         QDir(dirPath).rmdir(dirPath);
+    }
+
+    // ── Test 10: Pure find/replace transform logic ─────────────────
+    {
+        using mviewer::core::applyFindReplace;
+        std::string err;
+
+        // 1. Plain replace (single and multiple occurrences, case-sensitive & insensitive)
+        CHECK(applyFindReplace("image_test_01", "test", "final", false, false) == "image_final_01",
+              "Plain replace single occurrence");
+        CHECK(applyFindReplace("foo_bar_foo", "foo", "baz", false, false) == "baz_bar_baz",
+              "Plain replace multiple occurrences");
+        CHECK(applyFindReplace("a[0].jpg", "[0]", "_zero", false, false) == "a_zero.jpg",
+              "Plain replace with regex special characters taken literally");
+
+        // Case sensitivity in plain replace
+        CHECK(applyFindReplace("Photo_ABC", "abc", "xyz", false, false) == "Photo_xyz",
+              "Plain replace case-insensitive match");
+        CHECK(applyFindReplace("Photo_ABC", "abc", "xyz", false, true) == "Photo_ABC",
+              "Plain replace case-sensitive no match");
+        CHECK(applyFindReplace("Photo_ABC", "ABC", "xyz", false, true) == "Photo_xyz",
+              "Plain replace case-sensitive match");
+
+        // 2. Regex with capture groups
+        CHECK(applyFindReplace("IMG_1234", "^IMG_", "PHOTO_", true, false) == "PHOTO_1234",
+              "Regex basic anchor replace");
+        CHECK(applyFindReplace("doc_2026_05", "doc_(\\d+)_(\\d+)", "archive_\\2_\\1", true,
+                               false) == "archive_05_2026",
+              "Regex capture groups \\1 and \\2");
+        CHECK(applyFindReplace("x1_y2_z3", "([a-z])(\\d)", "\\1-\\2", true, false) == "x-1_y-2_z-3",
+              "Regex global replacement with capture groups");
+
+        // Case sensitivity in regex mode
+        CHECK(applyFindReplace("Report_FINAL", "report_([a-z]+)", "summary_\\1", true, false) ==
+                  "summary_FINAL",
+              "Regex case-insensitive match");
+        CHECK(applyFindReplace("Report_FINAL", "report_([a-z]+)", "summary_\\1", true, true) ==
+                  "Report_FINAL",
+              "Regex case-sensitive no match");
+
+        // 3. Invalid regex: populates errorMessage, returns baseName, never crashes
+        err.clear();
+        std::string resInvalid =
+            applyFindReplace("keep_name", "[unclosed_bracket", "rep", true, false, &err);
+        CHECK(resInvalid == "keep_name", "Invalid regex returns baseName unchanged");
+        CHECK(!err.empty(), "Invalid regex populates error string");
+
+        // 4. Empty find: no-op, returns baseName, empty error
+        err.clear();
+        CHECK(applyFindReplace("original", "", "something", false, false, &err) == "original",
+              "Empty find in plain mode is no-op");
+        CHECK(err.empty(), "Empty find in plain mode produces no error");
+        CHECK(applyFindReplace("original", "", "something", true, false, &err) == "original",
+              "Empty find in regex mode is no-op");
+        CHECK(err.empty(), "Empty find in regex mode produces no error");
+    }
+
+    // ── Test 11: Batch rename composition and validation ──────────
+    {
+        using mviewer::core::applyBatchRename;
+        using mviewer::core::BatchRenameOptions;
+        using mviewer::core::validateBatchRename;
+
+        // Apply batch rename on file path: find/replace applied to stem, extension kept
+        BatchRenameOptions opts;
+        opts.find = "raw";
+        opts.replace = "proc";
+        auto res1 = applyBatchRename("C:/photos/raw_photo.png", opts, 0, 1);
+        CHECK(res1.valid, "applyBatchRename valid");
+        CHECK(res1.newName == "proc_photo.png",
+              "applyBatchRename transforms stem and preserves extension");
+
+        // Composed with pattern
+        opts.pattern = "{name}_v{seq:2}";
+        auto res2 = applyBatchRename("C:/photos/raw_photo.png", opts, 0, 5);
+        CHECK(res2.valid, "applyBatchRename with pattern valid");
+        CHECK(res2.newName == "proc_photo_v01.png", "applyBatchRename composed with pattern");
+
+        // Invalid regex in options marks result invalid
+        opts.useRegex = true;
+        opts.find = "([0-9]+"; // invalid unclosed parenthesis
+        auto res3 = applyBatchRename("C:/photos/raw_photo.png", opts, 0, 1);
+        CHECK(!res3.valid, "applyBatchRename invalid regex is marked invalid");
+        CHECK(res3.errorMessage.find("正则表达式无效：") != std::string::npos,
+              "Error message indicates invalid regex");
+
+        // Invalid Windows filename characters in replacement
+        opts.useRegex = false;
+        opts.find = "raw";
+        opts.replace = "bad:char";
+        opts.pattern.clear();
+        auto res4 = applyBatchRename("C:/photos/raw_photo.png", opts, 0, 1);
+        CHECK(!res4.valid, "applyBatchRename invalid character marked invalid");
+
+        // validateBatchRename detecting duplicate target filenames
+        BatchRenameOptions dupOpts;
+        dupOpts.pattern = "same_name";
+        std::string aggErr;
+        auto dupResults = validateBatchRename({"C:/img1.jpg", "C:/img2.jpg"}, dupOpts, &aggErr);
+        CHECK(dupResults.size() == 2, "validateBatchRename returns result for all inputs");
+        CHECK(!dupResults[0].valid && !dupResults[1].valid, "Duplicate filenames marked invalid");
+        CHECK(!aggErr.empty() && aggErr.find("重复") != std::string::npos,
+              "Aggregate error detects duplicates");
+
+        // Re-encoded output: the target extension replaces the source one
+        BatchRenameOptions extOpts;
+        extOpts.find = "raw";
+        extOpts.replace = "proc";
+        auto res5 = applyBatchRename("C:/photos/raw_photo.png", extOpts, 0, 1, "jpg");
+        CHECK(res5.valid && res5.newName == "proc_photo.jpg",
+              "applyBatchRename uses the target extension");
+
+        // A replacement that empties the stem is rejected
+        BatchRenameOptions emptyOpts;
+        emptyOpts.find = ".*";
+        emptyOpts.useRegex = true;
+        auto res6 = applyBatchRename("C:/photos/raw_photo.png", emptyOpts, 0, 1);
+        CHECK(!res6.valid, "replacement that empties the file name is invalid");
+
+        // Regex error is reported even with no files
+        BatchRenameOptions badRegex;
+        badRegex.find = "(";
+        badRegex.useRegex = true;
+        CHECK(mviewer::core::findReplaceError(badRegex).find("正则表达式无效：") == 0,
+              "findReplaceError reports invalid regex");
+        badRegex.useRegex = false;
+        CHECK(mviewer::core::findReplaceError(badRegex).empty(),
+              "literal mode never reports a regex error");
+
+        // Composition order: replace → pattern → extension
+        BatchRenameOptions composeOpts;
+        composeOpts.find = "IMG_(\\d+)";
+        composeOpts.replace = "shot\\1";
+        composeOpts.useRegex = true;
+        composeOpts.pattern = "{name}_{n}";
+        CHECK(mviewer::core::composeRenamedFileName("IMG_42", "png", composeOpts, 1, 3) ==
+                  "shot42_2.png",
+              "composeRenamedFileName applies replace, then pattern, then extension");
+        CHECK(!mviewer::core::fileNameError("CON.png").empty(),
+              "reserved device names are rejected");
+        CHECK(mviewer::core::fileNameError("ok_name.png").empty(), "a normal name is accepted");
+    }
+
+    // ── Test 12: Settings persistence round-trip ───────────────────
+    {
+        // Isolated INI store: never touches the user's real settings.
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+                           QDir::tempPath() + "/mviewer_batch_settings");
+        QCoreApplication::setOrganizationName(QStringLiteral("mviewer-test"));
+        QCoreApplication::setApplicationName(QStringLiteral("test_batch"));
+        QSettings settings;
+        settings.remove(QStringLiteral("batchRename"));
+
+        mviewer::core::BatchRenameOptions saveOpts;
+        saveOpts.pattern = "{name}_renamed_{seq:3}";
+        saveOpts.find = "old_prefix_";
+        saveOpts.replace = "new_prefix_";
+        saveOpts.useRegex = true;
+        saveOpts.caseSensitive = true;
+
+        mviewer::core::saveBatchRenameSettings(saveOpts);
+
+        mviewer::core::BatchRenameOptions loadedOpts = mviewer::core::loadBatchRenameSettings();
+        CHECK(loadedOpts.pattern == saveOpts.pattern, "Settings pattern matches");
+        CHECK(loadedOpts.find == saveOpts.find, "Settings find matches");
+        CHECK(loadedOpts.replace == saveOpts.replace, "Settings replace matches");
+        CHECK(loadedOpts.useRegex == saveOpts.useRegex, "Settings useRegex matches");
+        CHECK(loadedOpts.caseSensitive == saveOpts.caseSensitive, "Settings caseSensitive matches");
+
+        // Separate groups (batch dialog vs export dialog) do not leak
+        const auto other = mviewer::core::loadBatchRenameSettings("exportRename");
+        CHECK(other.find.empty() && other.pattern.empty() && !other.useRegex,
+              "an unused settings group loads defaults");
+        settings.remove(QStringLiteral("exportRename"));
+
+        settings.remove(QStringLiteral("batchRename"));
+    }
+
+    // ── Test 13: BatchProcessor execution with find/replace ─────────
+    {
+        mviewer::domain::BatchJobConfig config;
+        config.inputPaths = {p1.toStdString()};
+        config.operations = {mviewer::domain::BatchOp::Rename, mviewer::domain::BatchOp::Export};
+        config.renameFind = "batch_a";
+        config.renameReplace = "replaced_out";
+        config.exportFormat = "png";
+        config.outputDir = outDir.toStdString();
+
+        mviewer::core::BatchProcessor processor;
+        auto result = processor.execute(config);
+
+        CHECK(result.totalSucceeded == 1, "BatchProcessor with find/replace succeeds");
+        CHECK(result.fileResults[0].outputPath.find("replaced_out") != std::string::npos,
+              "BatchProcessor output path reflects find/replace transformation");
+        QFile outFile(QString::fromStdString(result.fileResults[0].outputPath));
+        CHECK(outFile.exists(), "Exported file exists on disk");
     }
 
     // ── Cleanup ────────────────────────────────────────────────────
