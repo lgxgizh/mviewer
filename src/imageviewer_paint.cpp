@@ -5,10 +5,12 @@
 #include "core/analysis/PixelGrid.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/image/QtConvert.h"
-#include "core/render/RenderEngine.h"
-#include "core/render/TileSourceDecode.h"
+#include "core/render/TileSeam.h"
+#include "core/render/ZoomPercent.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
+#include "imageviewer_tile_seam.h"
+#include "widgets/infooverlay.h"
 #include "widgets/pixelgrid.h"
 
 #include <QApplication>
@@ -91,7 +93,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             ensureLodTileGrid();
             const auto regionTiles = requestLodRegionTiles();
             const Viewport tileView = m_view;
-            auto ready = regionTiles.ready;
+            const auto ready = composeVisibleTiles(regionTiles);
             drawGpuTiles(painter, ready, tileView);
             drawCpuTiles(painter, ready, tileView);
         }
@@ -110,7 +112,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             m_provisionalImage = QImage();
             m_provisionalSourceSize = QSize();
         }
-        auto ready = visible.ready;
+        auto ready = composeVisibleTiles(visible);
         if (ready.empty() && visible.pending > 0 && m_provisionalImage.isNull())
         {
             painter.setPen(QColor(180, 180, 180));
@@ -130,6 +132,15 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     drawOverlayBadge(painter);
     drawSelection(painter);
     drawFrameStatus(painter);
+    if (hasDisplayImage())
+    {
+        const std::string zoomText = mviewer::core::formatZoomPercent(m_view.scale);
+        if (!zoomText.empty())
+        {
+            mviewer::ui::drawZoomPercentBadge(painter, rect(),
+                                              QString::fromLatin1(zoomText.c_str()), true);
+        }
+    }
     noteDisplayedFrameForPixelReadout();
 }
 
@@ -298,33 +309,25 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
 {
     MV_TRACE_SCOPED("ImageViewer::paint");
     const std::string id = m_frame->id().hash;
-    const qreal dpr = devicePixelRatioF();
-    const int renderScalePercent =
-        std::max(100, static_cast<int>(std::lround(std::max<qreal>(1.0, dpr) * 100.0)));
+    noteTileRequest(id);
     const uint64_t generation = m_imageGeneration;
     const ImageData source = m_frame->pixels();
     const auto metadata = m_frame->metadata();
     const auto displayTarget = m_displayColorTarget;
     const std::string path =
         !metadata.filePath.empty() ? metadata.filePath : m_currentPath.toUtf8().toStdString();
+    const int imageW = m_tiles.imageW;
+    const int imageH = m_tiles.imageH;
     QPointer<ImageViewer> guard(this);
-    const auto decode = [source, metadata, displayTarget, path](const std::string &, int sx, int sy,
-                                                                int sw, int sh, int tw,
-                                                                int th) -> ImageData
+    const auto decode = [source, metadata, displayTarget, path, imageW,
+                         imageH](const std::string &, int sx, int sy, int sw, int sh, int tw,
+                                 int th) -> ImageData
     {
-        // Coarse tiles: prefer in-memory mip / decodeLod / decodeRegion before
-        // scaling the full decoded frame.
-        ImageData raw =
-            mviewer::core::decodeTilePreferReduced(path, source, sx, sy, sw, sh, tw, th);
-        if (raw.isNull())
-        {
-            raw = RenderEngine::scaleRegionStatic(source, RenderRect{sx, sy, sw, sh},
-                                                  RenderSize{tw, th}, RenderInterp::Bilinear);
-        }
-        return mvcore::toDisplayImageData(raw, metadata, displayTarget);
+        return decodeViewerTile(path, source, imageW, imageH, sx, sy, sw, sh, tw, th, metadata,
+                                displayTarget);
     };
     return m_tileRequests.requestVisibleRegion(
-        id, m_view, m_tiles, renderScalePercent, generation, decode,
+        id, m_view, m_tiles, m_tileScalePercent, generation, decode,
         [guard, generation](const TileKey &)
         {
             if (!guard || !qApp)
@@ -351,7 +354,8 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
                                        });
                 },
                 Qt::QueuedConnection);
-        });
+        },
+        m_requestedLod);
 }
 
 void ImageViewer::scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready)
@@ -410,6 +414,71 @@ void ImageViewer::scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready)
     }
 }
 
+namespace
+{
+
+mviewer::core::TileScreenPlacement placedTile(const Viewport &tileView, const TileGrid &tiles,
+                                              const TileCache::ReadyTile &rt, int decodedW,
+                                              int decodedH)
+{
+    return mviewer::core::placeTile(tileView, tiles.imageW, tiles.imageH, tiles.tileSize,
+                                    rt.key.col, rt.key.row, rt.key.lod, rt.key.renderScalePercent,
+                                    decodedW, decodedH);
+}
+
+void blitPlacedTile(QOpenGLTextureBlitter &blitter, GpuTileUploader &gpu, uintptr_t handle,
+                    const mviewer::core::TileScreenPlacement &placed, const QRect &viewportRect)
+{
+    if (!placed.valid || handle == 0)
+        return;
+    const bool magnified = placed.screenW > placed.contentW || placed.screenH > placed.contentH;
+    gpu.setMagnifyNearest(handle, magnified);
+    const QRect destination(placed.screenX, placed.screenY, placed.screenW, placed.screenH);
+    const QMatrix4x4 target = QOpenGLTextureBlitter::targetTransform(destination, viewportRect);
+    const bool fullTexture = placed.contentX == 0 && placed.contentY == 0 &&
+                             placed.contentW == placed.texW && placed.contentH == placed.texH;
+    if (fullTexture)
+    {
+        blitter.blit(static_cast<GLuint>(handle), target, QOpenGLTextureBlitter::OriginTopLeft);
+        return;
+    }
+    const QMatrix3x3 source = QOpenGLTextureBlitter::sourceTransform(
+        QRectF(placed.contentX, placed.contentY, placed.contentW, placed.contentH),
+        QSize(placed.texW, placed.texH), QOpenGLTextureBlitter::OriginTopLeft);
+    blitter.blit(static_cast<GLuint>(handle), target, source);
+}
+
+void drawPlacedCpuTile(QPainter &painter, const QImage &image,
+                       const mviewer::core::TileScreenPlacement &placed)
+{
+    if (!placed.valid || image.isNull())
+        return;
+    painter.save();
+    const bool magnified = placed.screenW > placed.contentW || placed.screenH > placed.contentH;
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, !magnified);
+    const QRect screen(placed.screenX, placed.screenY, placed.screenW, placed.screenH);
+    const bool apron = placed.contentX != 0 || placed.contentY != 0 ||
+                       placed.contentW != placed.texW || placed.contentH != placed.texH;
+    if (!apron)
+    {
+        painter.drawImage(screen, image);
+        painter.restore();
+        return;
+    }
+    const double scaleX =
+        static_cast<double>(placed.screenW) / static_cast<double>(placed.contentW);
+    const double scaleY =
+        static_cast<double>(placed.screenH) / static_cast<double>(placed.contentH);
+    const QRectF dest(
+        placed.screenX - placed.contentX * scaleX, placed.screenY - placed.contentY * scaleY,
+        static_cast<double>(placed.texW) * scaleX, static_cast<double>(placed.texH) * scaleY);
+    painter.setClipRect(screen, Qt::IntersectClip);
+    painter.drawImage(dest, image);
+    painter.restore();
+}
+
+} // namespace
+
 void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                                const Viewport &tileView)
 {
@@ -437,26 +506,11 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
     m_blitter.bind();
     for (const auto &rt : ready)
     {
+        if (rt.data.isNull())
+            continue;
         const auto handle = m_gpu.handle(rt.key);
-        if (handle == 0)
-            continue;
-        int screenX = 0;
-        int screenY = 0;
-        int screenW = 0;
-        int screenH = 0;
-        const int lod = rt.key.lod;
-        const int sourceX = rt.key.col * m_tiles.tileSize * (1 << lod);
-        const int sourceY = rt.key.row * m_tiles.tileSize * (1 << lod);
-        const int lodSize = TileCache::lodTileSize(m_tiles.tileSize, lod);
-        const int actualW = qMin(lodSize, m_tiles.imageW - sourceX);
-        const int actualH = qMin(lodSize, m_tiles.imageH - sourceY);
-        if (actualW <= 0 || actualH <= 0)
-            continue;
-        tileView.imageRectToScreen(sourceX, sourceY, actualW, actualH, screenX, screenY, screenW,
-                                   screenH);
-        const QRect destination(screenX, screenY, screenW, screenH);
-        const QMatrix4x4 target = QOpenGLTextureBlitter::targetTransform(destination, viewportRect);
-        m_blitter.blit(static_cast<GLuint>(handle), target, QOpenGLTextureBlitter::OriginTopLeft);
+        const auto placed = placedTile(tileView, m_tiles, rt, rt.data.width, rt.data.height);
+        blitPlacedTile(m_blitter, m_gpu, handle, placed, viewportRect);
     }
     m_blitter.release();
     painter.endNativePainting();
@@ -469,28 +523,45 @@ void ImageViewer::drawCpuTiles(QPainter &painter, const std::vector<TileCache::R
         GpuTileUploader::enabled() && m_blitterReady && m_overlayMode == mviewer::OverlayMode::None;
     for (const auto &rt : ready)
     {
+        if (rt.data.isNull())
+            continue;
         if (gpuActive && m_gpu.handle(rt.key) != 0)
             continue;
-        int screenX = 0;
-        int screenY = 0;
-        int screenW = 0;
-        int screenH = 0;
-        const int lod = rt.key.lod;
-        const int sourceX = rt.key.col * m_tiles.tileSize * (1 << lod);
-        const int sourceY = rt.key.row * m_tiles.tileSize * (1 << lod);
-        const int lodSize = TileCache::lodTileSize(m_tiles.tileSize, lod);
-        const int actualW = qMin(lodSize, m_tiles.imageW - sourceX);
-        const int actualH = qMin(lodSize, m_tiles.imageH - sourceY);
-        if (actualW <= 0 || actualH <= 0)
-            continue;
-        tileView.imageRectToScreen(sourceX, sourceY, actualW, actualH, screenX, screenY, screenW,
-                                   screenH);
         QImage image = mvcore::toQImageRef(rt.data);
         if (image.isNull())
             image = mvcore::toQImage(rt.data);
-        if (!image.isNull())
-            painter.drawImage(QRect(screenX, screenY, screenW, screenH), image);
+        const auto placed = placedTile(tileView, m_tiles, rt, image.width(), image.height());
+        drawPlacedCpuTile(painter, image, placed);
     }
+}
+
+void ImageViewer::drawDisplayRaster(QPainter &painter) const
+{
+    if (m_raster.image.isNull())
+        return;
+    const QRect &r = m_raster.sourceRect;
+    int sx = 0;
+    int sy = 0;
+    int sw = 0;
+    int sh = 0;
+    m_view.imageRectToScreen(r.x(), r.y(), r.width(), r.height(), sx, sy, sw, sh);
+    if (sw <= 0 || sh <= 0)
+        return;
+    const QImage *drawn = &m_raster.image;
+    if (m_overlayMode != mviewer::OverlayMode::None)
+    {
+        const qint64 key = m_raster.image.cacheKey();
+        const bool ready = m_lodOverlayKey == key && m_lodOverlayMode == m_overlayMode &&
+                           m_lodOverlayThreshold == m_zebraThreshold && !m_lodOverlayImage.isNull();
+        if (ready)
+            drawn = &m_lodOverlayImage;
+        else
+            scheduleLodOverlayDerivation();
+    }
+    painter.save();
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(QRect(sx, sy, sw, sh), *drawn);
+    painter.restore();
 }
 
 void ImageViewer::drawEmptyState(QPainter &painter)

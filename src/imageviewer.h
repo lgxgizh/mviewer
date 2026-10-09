@@ -26,6 +26,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 
 class QEvent;
@@ -471,6 +472,8 @@ class ImageViewer : public QOpenGLWidget
     PixelRGBA sampleAnalysisPixel(int ix, int iy) const;
     void scheduleRasterRoiStats(const QRect &selection);
     void drawDisplayRaster(QPainter &painter) const;
+    // Keep a covering raster that is already at least as sharp as `density`.
+    bool acceptDisplayRaster(const QImage &image, const QRect &covered, double density) const;
     void drawPixelGridOverlay(QPainter &painter);
     void drawOverlayBadge(QPainter &painter);
     void drawProvisional(QPainter &painter) const;
@@ -482,6 +485,10 @@ class ImageViewer : public QOpenGLWidget
     void resamplePixelUnderCursor();
     void noteDisplayedFrameForPixelReadout();
     AsyncTileRequestManager::VisibleTiles requestVisibleTiles();
+    void noteTileRequest(const std::string &imageId);
+    std::vector<TileCache::ReadyTile>
+    composeVisibleTiles(const AsyncTileRequestManager::VisibleTiles &visible);
+    std::vector<TileCache::ReadyTile> cachedTilesForLod(int lod);
     // Large-source zoomed-in pans: per-tile decodeRegion, no full frame.
     bool lodRegionTilesActive() const;
     void ensureLodTileGrid();
@@ -572,6 +579,12 @@ class ImageViewer : public QOpenGLWidget
     // views cheap. No decode happens in the Widget — the cache's decode
     // callback calls RenderEngine (core/), never QWidget.
     TileCache m_tileCache;
+    // LOD actually on screen. -1 until the first complete visible set. A finer
+    // level is requested immediately but does not replace this until it is ready.
+    int m_pinnedLod = -1;
+    int m_requestedLod = 0;
+    int m_tileScalePercent = 100;
+    std::string m_tileImageId;
     // Derived overlay tiles are separate from the display base cache and are
     // invalidated whenever the overlay policy changes.
     TileCache m_overlayCache;

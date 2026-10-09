@@ -433,7 +433,7 @@ void ImageViewer::applyPendingView()
     }
     m_pendingView.reset();
     m_fitMode = false;
-    emit zoomChanged(static_cast<int>(m_view.scale * 100.0 + 0.5));
+    emitZoom();
 }
 
 void ImageViewer::clearLoadedGpu()
