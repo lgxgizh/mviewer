@@ -118,8 +118,7 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
 {
     std::cout << "── M49: exact grid + momentary Compare ──\n";
     const QString longA = writePng(
-        dir,
-        QStringLiteral("a very long 中文 filename for caption elision 0123456789.png"), 80, 60,
+        dir, QStringLiteral("a very long 中文 filename for caption elision 0123456789.png"), 80, 60,
         QColor(240, 40, 40));
     const QString b = writePng(dir, QStringLiteral("B 蓝色.png"), 80, 60, QColor(40, 80, 240));
 
@@ -425,13 +424,13 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     std::mutex gateMtx;
     std::condition_variable gateCv;
     bool gateReleased = false;
-    auto blocker = sched.submit(
-        TaskScheduler::Priority::Analysis,
-        [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
-        {
-            std::unique_lock<std::mutex> lk(gateMtx);
-            gateCv.wait(lk, [&gateReleased] { return gateReleased; });
-        });
+    auto blocker =
+        sched.submit(TaskScheduler::Priority::Analysis,
+                     [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
+                     {
+                         std::unique_lock<std::mutex> lk(gateMtx);
+                         gateCv.wait(lk, [&gateReleased] { return gateReleased; });
+                     });
     struct ReleaseGateGuard
     {
         std::mutex &mtx;
@@ -453,15 +452,13 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     }
     CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks >= 1,
           "P1: release-gated blocker occupies the Analysis worker");
-    const uint64_t submittedBefore =
-        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+    const uint64_t submittedBefore = sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
 
     // The overlay toggle submits exactly ONE Analysis batch for all pane
     // histograms; while the worker is blocked the panes stay empty because the
     // delivery is asynchronous, never a synchronous UI-thread refresh.
     overlay->setChecked(true);
-    const uint64_t submittedAfter =
-        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+    const uint64_t submittedAfter = sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
     CHECK(submittedAfter == submittedBefore + 1,
           "P1: overlay toggle submits exactly one Analysis histogram batch");
     CHECK(hist0->histogramCount() == 0 && hist1->histogramCount() == 0,
@@ -656,13 +653,13 @@ void testCompareLoadIsAsync(const QDir &dir)
     std::mutex gateMtx;
     std::condition_variable gateCv;
     bool gateReleased = false;
-    auto blocker = sched.submit(
-        TaskScheduler::Priority::Analysis,
-        [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
-        {
-            std::unique_lock<std::mutex> lk(gateMtx);
-            gateCv.wait(lk, [&gateReleased] { return gateReleased; });
-        });
+    auto blocker =
+        sched.submit(TaskScheduler::Priority::Analysis,
+                     [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
+                     {
+                         std::unique_lock<std::mutex> lk(gateMtx);
+                         gateCv.wait(lk, [&gateReleased] { return gateReleased; });
+                     });
     struct ReleaseGateGuard
     {
         std::mutex &mtx;
@@ -684,8 +681,7 @@ void testCompareLoadIsAsync(const QDir &dir)
     }
     CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks >= 1,
           "P1-01: release-gated blocker occupies the Analysis worker");
-    const uint64_t submittedBefore =
-        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+    const uint64_t submittedBefore = sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
 
     QElapsedTimer t;
     t.start();
@@ -718,8 +714,7 @@ void testCompareLoadIsAsync(const QDir &dir)
 
     // Diff (and any non-provisional / upgrade display) still enqueue on Analysis.
     // Cheap provisional first paint races Decode and is not counted here.
-    const uint64_t submittedAfter =
-        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+    const uint64_t submittedAfter = sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
     CHECK(submittedAfter >= submittedBefore + 1,
           "P1-01: load generation submits at least the diff Analysis batch");
 
@@ -813,8 +808,8 @@ void testLargeCompareDisplayBounded(const QDir &dir)
         if (!pane)
             continue;
         displayBytes += static_cast<size_t>(pane->image().sizeInBytes());
-        everyPaneIsLod = everyPaneIsLod && pane->image().width() < 2400 &&
-                         pane->image().height() < 1600;
+        everyPaneIsLod =
+            everyPaneIsLod && pane->image().width() < 2400 && pane->image().height() < 1600;
     }
     CHECK(everyPaneIsLod, "M42: Fit panes use a display LOD below source dimensions");
     CHECK(sourceBytes > 0 && displayBytes * 2 < sourceBytes,
@@ -826,8 +821,8 @@ void testLargeCompareDisplayBounded(const QDir &dir)
 
     // Exercise the real continuation path: zoom/pan, explicit diff, then close.
     if (!panes.isEmpty() && panes.first())
-        panes.first()->zoom(2.0, QPointF(panes.first()->width() / 2.0,
-                                         panes.first()->height() / 2.0));
+        panes.first()->zoom(2.0,
+                            QPointF(panes.first()->width() / 2.0, panes.first()->height() / 2.0));
     if (QCheckBox *diff = findChk(ws, QStringLiteral("显示差异")))
         diff->setChecked(true);
     pump(100);
@@ -855,8 +850,8 @@ void testInspectorUsesFullResolutionSource(const QDir &dir)
     std::cout << "-- Compare M43: Inspector source truth vs display LOD --\n";
     constexpr int sourceWidth = 2400;
     constexpr int sourceHeight = 1600;
-    const QString path = writeHighFrequencyPng(dir, "m43_high_frequency.png", sourceWidth,
-                                                sourceHeight);
+    const QString path =
+        writeHighFrequencyPng(dir, "m43_high_frequency.png", sourceWidth, sourceHeight);
 
     SelectionModel sel;
     QDialog dlg;
@@ -940,7 +935,7 @@ void testInspectorUsesFullResolutionSource(const QDir &dir)
     CHECK(exactR == QString::number(expected.red()),
           "M43: Inspector RGB is sampled from the exact full-resolution source pixel");
     CHECK(exactR != QString::number(qRed(view->image().pixel(
-                      view->displayPointForSource(sourcePoint.x(), sourcePoint.y())))),
+                        view->displayPointForSource(sourcePoint.x(), sourcePoint.y())))),
           "M43: Inspector RGB is not the display LOD sample");
 
     auto *kernel = ws->findChild<QComboBox *>("pixelInspectorKernelCombo");
@@ -950,9 +945,8 @@ void testInspectorUsesFullResolutionSource(const QDir &dir)
     {
         kernel->setCurrentIndex(3); // 7×7
         pump(80);
-        const QString expectedMean =
-            QString::number(highFrequencyNeighborhoodMean(sourcePoint.x(), sourcePoint.y(), 7),
-                            'f', 1);
+        const QString expectedMean = QString::number(
+            highFrequencyNeighborhoodMean(sourcePoint.x(), sourcePoint.y(), 7), 'f', 1);
         CHECK(stats->text().contains(QStringLiteral("μ=") + expectedMean),
               "M43: 7x7 neighborhood stats use full-resolution source pixels");
     }
@@ -1011,21 +1005,20 @@ void testCompareLoadCancellation(const QDir &dir)
         ~RestoreDecodeThreads()
         {
             TaskScheduler::instance().setQueueMaxThreads(
-                TaskScheduler::Priority::Decode,
-                std::max(1, QThread::idealThreadCount() / 2));
+                TaskScheduler::Priority::Decode, std::max(1, QThread::idealThreadCount() / 2));
         }
     } restoreThreads;
 
     std::mutex gateMutex;
     std::condition_variable gateCv;
     bool released = false;
-    auto blocker = scheduler.submit(
-        TaskScheduler::Priority::Decode,
-        [&gateMutex, &gateCv, &released](const TaskScheduler::TaskContext &)
-        {
-            std::unique_lock<std::mutex> lk(gateMutex);
-            gateCv.wait(lk, [&released] { return released; });
-        });
+    auto blocker =
+        scheduler.submit(TaskScheduler::Priority::Decode,
+                         [&gateMutex, &gateCv, &released](const TaskScheduler::TaskContext &)
+                         {
+                             std::unique_lock<std::mutex> lk(gateMutex);
+                             gateCv.wait(lk, [&released] { return released; });
+                         });
     while (scheduler.activeTaskCount(TaskScheduler::DecodePool) < 1)
         pump(10);
 
@@ -1054,8 +1047,7 @@ void testCompareLoadCancellation(const QDir &dir)
     scheduler.pause(TaskScheduler::DecodePool);
     ws->setImages({a, b});
     pump(80);
-    CHECK(ws->comparedImageCount() == 0,
-          "M40: scheduler rejection does not hang batch completion");
+    CHECK(ws->comparedImageCount() == 0, "M40: scheduler rejection does not hang batch completion");
     scheduler.resume(TaskScheduler::DecodePool);
     (void)blocker;
 }
@@ -1130,8 +1122,7 @@ void testInspectorCoalescing(const QString &a, const QString &b)
     const int burstDy[] = {0, 1, 2, 3, 5, 4};
     for (int k = 0; k < 6; ++k)
         hoverAt(burstDx[k], burstDy[k]);
-    CHECK(renderCount() == burstBase,
-          "M30(a): the hover burst performs no synchronous render");
+    CHECK(renderCount() == burstBase, "M30(a): the hover burst performs no synchronous render");
     pump(60);
     CHECK(renderCount() == burstBase + 1,
           "M30(a): a hover burst renders the inspector exactly once");
@@ -1251,10 +1242,8 @@ void testInspectorCoalescing(const QString &a, const QString &b)
         pump(60);
         CHECK(renderCount() > before,
               "M30(d): pane double-click re-renders the inspector at the current coordinate");
-        CHECK(lockReference->isChecked(),
-              "M30(d): pane double-click locks the reference button");
-        CHECK(ws->focusImagePath() == b,
-              "M30(d): the workspace reference path is the locked pane");
+        CHECK(lockReference->isChecked(), "M30(d): pane double-click locks the reference button");
+        CHECK(ws->focusImagePath() == b, "M30(d): the workspace reference path is the locked pane");
         CHECK(sel.focused() == b,
               "M30(d): the SelectionModel focused path follows the locked reference");
         CHECK(inspector->item(1, 5) && inspector->item(1, 5)->text() == QStringLiteral("0"),
@@ -1267,8 +1256,7 @@ void testInspectorCoalescing(const QString &a, const QString &b)
         pump(60);
         CHECK(!lockReference->isChecked(),
               "M30(d): double-clicking the locked pane again unlocks the reference");
-        CHECK(sel.focused().isEmpty(),
-              "M30(d): unlocking clears the SelectionModel focused path");
+        CHECK(sel.focused().isEmpty(), "M30(d): unlocking clears the SelectionModel focused path");
     }
 
     // (e) A queued render must be lifetime-safe: destroying the workspace with
@@ -1339,21 +1327,22 @@ void testCanvasDoubleClickGestures(const QString &a, const QString &b)
     pump(50);
 
     auto *canvas = ws->findChild<QWidget *>(QStringLiteral("compareCanvas"));
-    CHECK(canvas && canvas->isVisible(), "Canvas double-click: compareCanvas is visible in swipe mode");
+    CHECK(canvas && canvas->isVisible(),
+          "Canvas double-click: compareCanvas is visible in swipe mode");
     if (!canvas)
         return;
 
     // Drag the divider to 0.25
     const int startX = int(canvas->width() * 0.5);
     const int targetX = int(canvas->width() * 0.25);
-    QMouseEvent press(QEvent::MouseButtonPress, QPointF(startX, 300), Qt::LeftButton, Qt::LeftButton,
-                      Qt::NoModifier);
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(startX, 300), Qt::LeftButton,
+                      Qt::LeftButton, Qt::NoModifier);
     QApplication::sendEvent(canvas, &press);
     QMouseEvent move(QEvent::MouseMove, QPointF(targetX, 300), Qt::LeftButton, Qt::LeftButton,
                      Qt::NoModifier);
     QApplication::sendEvent(canvas, &move);
-    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(targetX, 300), Qt::LeftButton, Qt::NoButton,
-                        Qt::NoModifier);
+    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(targetX, 300), Qt::LeftButton,
+                        Qt::NoButton, Qt::NoModifier);
     QApplication::sendEvent(canvas, &release);
     pump(30);
 
@@ -1365,8 +1354,8 @@ void testCanvasDoubleClickGestures(const QString &a, const QString &b)
 
     // Double click away from divider (e.g. at 0.8) should toggle zoom
     const double initialScale = ws->engine().cellTransform(0).scale;
-    QMouseEvent dblZoom(QEvent::MouseButtonDblClick, QPointF(canvas->width() * 0.8, 300), Qt::LeftButton,
-                        Qt::LeftButton, Qt::NoModifier);
+    QMouseEvent dblZoom(QEvent::MouseButtonDblClick, QPointF(canvas->width() * 0.8, 300),
+                        Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
     QApplication::sendEvent(canvas, &dblZoom);
     pump(30);
     const double zoomedScale = ws->engine().cellTransform(0).scale;
@@ -1556,4 +1545,3 @@ void testComparePresetSanitize()
 }
 
 } // namespace
-

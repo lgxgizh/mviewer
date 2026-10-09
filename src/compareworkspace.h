@@ -206,7 +206,7 @@ class CompareWorkspace : public QWidget
     void buildToolbarActions(QHBoxLayout *toolLayout);
     void addFitWindowButton(QHBoxLayout *toolLayout);
     void addSnapshotButton(QHBoxLayout *toolLayout);
-    QPixmap grabComparisonView() const;
+    QPixmap grabComparisonView();
     void saveComparisonViewToFile();
     bool handleBasicCompareKey(QKeyEvent *event);
     bool handleBasicCompareSpace(QKeyEvent *event);

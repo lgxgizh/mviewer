@@ -37,9 +37,9 @@ QString snapshotSuggestion()
 
 } // namespace
 
-QPixmap CompareWorkspace::grabComparisonView() const
+QPixmap CompareWorkspace::grabComparisonView()
 {
-    const QWidget *target = nullptr;
+    QWidget *target = nullptr;
     if (m_compareCanvas && m_compareCanvas->isVisible())
         target = m_compareCanvas;
     else
@@ -70,8 +70,8 @@ bool CompareWorkspace::saveComparisonViewTo(const QString &path)
 
 void CompareWorkspace::saveComparisonViewToFile()
 {
-    const QString path = QFileDialog::getSaveFileName(this, tr("保存比较截图"), snapshotSuggestion(),
-                                                      tr("PNG 图片 (*.png)"));
+    const QString path = QFileDialog::getSaveFileName(this, tr("保存比较截图"),
+                                                      snapshotSuggestion(), tr("PNG 图片 (*.png)"));
     if (path.isEmpty())
         return;
     const QString native = QDir::toNativeSeparators(path);
