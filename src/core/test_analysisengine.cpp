@@ -344,7 +344,7 @@ void test_image_stats_extended()
 
     const std::string csv = s.toCsvRow();
     CHECK(!csv.empty());
-    CHECK(csv.find("16,") == 0); // starts with pixelCount=16
+    CHECK(csv.starts_with("16,")); // starts with pixelCount=16
 }
 
 int main()
