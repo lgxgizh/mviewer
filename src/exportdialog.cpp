@@ -1,5 +1,6 @@
 #include "exportdialog.h"
 #include "batchrenamepanel.h"
+#include "exportmessages.h"
 
 #include "core/export/ExportJob.h"
 #include "core/image/ImageTransform.h"
@@ -558,7 +559,7 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
                     if (!clipboard.isNull())
                         QApplication::clipboard()->setImage(clipboard);
                 }
-                dialog->m_statusLabel->setText(QString::fromStdString(result.message));
+                dialog->m_statusLabel->setText(mviewer::ui::exportResultMessageZh(result));
             });
     watcher->setFuture(QtConcurrent::run(
         [cfg, self, generation]() -> mviewer::exportjob::ExportJobResult

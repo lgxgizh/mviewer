@@ -28,27 +28,36 @@
 #include <string>
 #include <unordered_map>
 
-void AnalysisPanel::refreshAnalyzers()
+void AnalysisPanel::fillAnalyzerCombo(const QString &restoreId)
 {
     if (!m_analyzerCombo)
         return;
-    const QString prev = m_analyzerCombo->currentData().toString();
+    m_analyzerCombo->setObjectName(QStringLiteral("analysisAnalyzerCombo"));
     m_analyzerCombo->clear();
     m_pluginIds.clear();
-    auto &reg = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
-    m_pluginIds = reg.availableAnalyzers();
+    auto &registry = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
+    m_pluginIds = registry.availableAnalyzers();
     for (const auto &id : m_pluginIds)
     {
-        const auto info = reg.infoFor(id);
+        const auto info = registry.infoFor(id);
         const QString label =
             info ? QString::fromStdString(info->name) : QString::fromStdString(id);
         m_analyzerCombo->addItem(label, QString::fromStdString(id));
     }
-    m_analyzerCombo->addItem(tr("双图对比 (PSNR/SSIM)"), QString("builtin_compare"));
-    // Restore previous selection if still present.
-    const int idx = m_analyzerCombo->findData(prev);
-    if (idx >= 0)
-        m_analyzerCombo->setCurrentIndex(idx);
+    if (m_analyzerCombo->count() == 0)
+        return;
+    // An empty id must not match a blank userData. A missing id, including a
+    // persisted builtin_compare entry, falls back to the first analyzer.
+    const int found = restoreId.isEmpty() ? -1 : m_analyzerCombo->findData(restoreId);
+    m_analyzerCombo->setCurrentIndex(found >= 0 ? found : 0);
+}
+
+void AnalysisPanel::refreshAnalyzers()
+{
+    if (!m_analyzerCombo)
+        return;
+    const QString previous = m_analyzerCombo->currentData().toString();
+    fillAnalyzerCombo(previous);
 }
 
 void AnalysisPanel::setImage(const QImage &img)
@@ -171,5 +180,5 @@ void AnalysisPanel::selectAnalyzer(const QString &id)
 
 void AnalysisPanel::setRegionStats(const QString &text)
 {
-    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Region Stats")).arg(text));
+    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("选区统计")).arg(text));
 }

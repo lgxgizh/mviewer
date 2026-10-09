@@ -1,5 +1,6 @@
 #include "mainwindow_p.h"
 
+#include "ShortcutHelper.h"
 #include "runtime_storage.h"
 
 namespace
@@ -836,7 +837,6 @@ QStringList MainWindow::resolveSelectedPaths(bool preferMulti) const
 
 void MainWindow::updateSelectionActions()
 {
-    // A-3.4: commands reflect whether their required source data is actually available.
     const int n = m_selection ? m_selection->selection().size() : 0;
     const int availableCount =
         std::max(m_imageList ? m_imageList->count() : 0,
@@ -848,7 +848,9 @@ void MainWindow::updateSelectionActions()
     {
         const bool canCompare = (n >= 2 && n <= 8);
         m_actCompare->setEnabled(canCompare);
-        m_actCompare->setToolTip(canCompare ? tr("比较 (P)") : tr("选择 2–8 张图片进行比较"));
+        m_actCompare->setToolTip(
+            mviewer::ui::appendShortcutHint(canCompare ? tr("比较") : tr("选择 2–8 张图片进行比较"),
+                                            mviewer::ui::actionShortcutHint(m_actCompare)));
     }
     if (m_actExportImages)
         m_actExportImages->setEnabled(n >= 1 || hasImages);
@@ -903,9 +905,7 @@ void MainWindow::ensureImageList()
     const QString dir = m_directory->currentDirectory();
     if (dir.isEmpty())
         return;
-    // M37: ThumbnailPanel is the only owner of directory scan/sort/filter.
-    // This helper remains for callers that need to assert the active directory,
-    // but it must never synchronously enumerate the filesystem on the UI thread.
+    // M37: ThumbnailPanel owns directory scan/sort/filter; do not enumerate here.
     if (m_imageList->directory() != dir)
         m_imageList->setPaths({}, dir);
 }

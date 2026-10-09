@@ -205,23 +205,23 @@ void AnalysisPanel::updateMetadataPage()
 {
     if (!m_hasA)
     {
-        m_metaLabel->setText(tr("No image selected"));
+        m_metaLabel->setText(tr("未选择图片"));
         return;
     }
-    QString txt = QString("<h3>%1</h3>").arg(tr("Metadata"));
+    QString txt = QString("<h3>%1</h3>").arg(tr("元数据"));
     txt += QString("<table>"
                    "<tr><td>%1</td><td>%2 x %3</td></tr>"
                    "<tr><td>%4</td><td>%5</td></tr>"
                    "<tr><td>%6</td><td>%7</td></tr>"
                    "</table>")
-               .arg(tr("Dimensions"))
+               .arg(tr("尺寸"))
                .arg(m_imageA.width())
                .arg(m_imageA.height())
-               .arg(tr("Format"))
+               .arg(tr("格式"))
                .arg(formatToString(m_imageA.format()))
-               .arg(tr("Depth"))
+               .arg(tr("位深"))
                .arg(m_imageA.depth());
     if (!m_imagePath.isEmpty())
-        txt += QString("<br><b>%1</b> %2").arg(tr("Path:")).arg(m_imagePath);
+        txt += QString("<br><b>%1</b> %2").arg(tr("路径：")).arg(m_imagePath);
     m_metaLabel->setText(txt);
 }

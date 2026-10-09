@@ -29,6 +29,7 @@
 #include "core/filesystem/DirectorySnapshot.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/search/BrowseQuery.h"
+#include "thumbnailpanel_types.h"
 
 class QPushButton;
 class QContextMenuEvent;
@@ -507,13 +508,7 @@ class ThumbnailPanel : public QListView
 
     // Thread-safe ready thumbnail pixmaps (filled from the pipeline result fn).
     mutable QMutex m_thumbMtx;
-    struct ReadyPixmap
-    {
-        QPixmap pixmap;
-        qint64 bytes = 0;
-        uint64_t lastUse = 0;
-        std::list<QString>::iterator lruIt;
-    };
+    using ReadyPixmap = mviewer::tp::ReadyPixmap;
     mutable QHash<QString, ReadyPixmap> m_thumbReady; // key = path + size
     mutable std::list<QString> m_thumbReadyLru;       // MRU at front, LRU at back
     mutable qint64 m_thumbReadyBytes = 0;
@@ -738,62 +733,6 @@ class ThumbnailPanel : public QListView
     bool m_fileOperationBusy = false;
 };
 
-// Paints only the visible cells: a (cached/decoded) thumbnail + filename. No
-// widget is created per image, so the gallery scales to very large directories.
-class ThumbnailPanel::ThumbDelegate : public QStyledItemDelegate
-{
-  public:
-    explicit ThumbDelegate(ThumbnailPanel *panel, QObject *parent = nullptr)
-        : QStyledItemDelegate(parent), m_panel(panel)
-    {
-    }
-
-    void paint(QPainter *painter, const QStyleOptionViewItem &option,
-               const QModelIndex &index) const override;
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-    bool helpEvent(QHelpEvent *event, QAbstractItemView *view, const QStyleOptionViewItem &option,
-                   const QModelIndex &index) override;
-
-  private:
-    int thumbSize() const; // reads m_panel->thumbSize()
-    ThumbnailPanel *m_panel;
-};
-
-// Details / List mode delegate: renders each row as a horizontal strip with
-// columns for thumbnail, filename, resolution, size, date, and format.
-class ThumbnailPanel::DetailsDelegate : public QStyledItemDelegate
-{
-  public:
-    explicit DetailsDelegate(ThumbnailPanel *panel, QObject *parent = nullptr)
-        : QStyledItemDelegate(parent), m_panel(panel)
-    {
-    }
-
-    void paint(QPainter *painter, const QStyleOptionViewItem &option,
-               const QModelIndex &index) const override;
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-    bool helpEvent(QHelpEvent *event, QAbstractItemView *view, const QStyleOptionViewItem &option,
-                   const QModelIndex &index) override;
-
-  private:
-    ThumbnailPanel *m_panel;
-};
-
-// P0: Windows-Explorer-style list — a small icon plus the file name, wrapping
-// into columns. Used by ViewMode::List. Lighter than Details (no columns).
-class ThumbnailPanel::ListDelegate : public QStyledItemDelegate
-{
-  public:
-    explicit ListDelegate(ThumbnailPanel *panel, QObject *parent = nullptr)
-        : QStyledItemDelegate(parent), m_panel(panel)
-    {
-    }
-    void paint(QPainter *painter, const QStyleOptionViewItem &option,
-               const QModelIndex &index) const override;
-    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
-    bool helpEvent(QHelpEvent *event, QAbstractItemView *view, const QStyleOptionViewItem &option,
-                   const QModelIndex &index) override;
-
-  private:
-    ThumbnailPanel *m_panel;
-};
+// Nested delegates are defined after ThumbnailPanel itself is complete.
+#define MVIEWER_THUMBNAILPANEL_DEFINE_DELEGATES
+#include "thumbnailpanel_types.h"

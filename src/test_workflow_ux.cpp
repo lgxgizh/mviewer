@@ -18,6 +18,7 @@
 //
 // 与 docs/beta_checklist.md 的 "浏览体验 / Compare / View" 条目一一对应。
 
+#include "analysispanel.h"
 #include "appstate.h"
 #include "batchdialog.h"
 #include "compareworkspace.h"
@@ -37,6 +38,7 @@
 #include "directorymodel.h"
 #include "directorytree.h"
 #include "exportdialog.h"
+#include "exportmessages.h"
 #include "imagelistmodel.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
@@ -656,6 +658,7 @@ int main(int argc, char **argv)
                           w, h);
     }
 
+    workflow18_shell_copy_and_export_text();
     workflow1_browse(workDir.absolutePath(), paths);
     workflow3_session_restore(workDir.absolutePath(), paths.first());
     workflow11_compare_fullscreen(paths[0], paths[2]);

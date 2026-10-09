@@ -5223,4 +5223,79 @@ void workflow17_batch_dialog(const QString &rootDir)
     QDir(outputDirPath).removeRecursively();
 }
 
+void workflow18_shell_copy_and_export_text()
+{
+    std::cout << "── Workflow 18: shell copy and export text ──\n";
+
+    AnalysisPanel panel;
+    auto *combo = panel.findChild<QComboBox *>(QStringLiteral("analysisAnalyzerCombo"));
+    CHECK(combo != nullptr, "analysis analyzer combo exists");
+    if (combo)
+    {
+        CHECK(combo->findData(QStringLiteral("builtin_compare")) == -1,
+              "analyzer combo has no builtin_compare item");
+        const int stale = combo->count();
+        combo->addItem(QStringLiteral("stale"), QStringLiteral("builtin_compare"));
+        combo->setCurrentIndex(stale);
+        panel.refreshAnalyzers();
+        CHECK(combo->findData(QStringLiteral("builtin_compare")) == -1,
+              "refresh drops a persisted builtin_compare selection");
+        CHECK(combo->count() == 0 || combo->currentIndex() == 0,
+              "missing analyzer id falls back to the first entry");
+    }
+    auto *stats = panel.findChild<QLabel *>(QStringLiteral("analysisStatsLabel"));
+    CHECK(stats && stats->text().contains(QStringLiteral("未选择图片")),
+          "empty analysis panel says no image is selected");
+
+    MainWindow window;
+    auto *bar = window.findChild<QToolBar *>(QStringLiteral("browserToolBar"));
+    CHECK(bar != nullptr, "browser toolbar exists");
+    if (bar)
+    {
+        const QList<QAction *> actions = bar->actions();
+        for (QAction *action : actions)
+        {
+            if (!action || action->shortcut().isEmpty())
+                continue;
+            const QString key = action->shortcut().toString(QKeySequence::NativeText);
+            CHECK(action->toolTip().contains(key), "toolbar tooltip includes the action shortcut");
+        }
+    }
+
+    mviewer::exportjob::ExportJobResult summaryResult;
+    summaryResult.done = 3;
+    summaryResult.total = 4;
+    summaryResult.failed = 1;
+    summaryResult.message = "done 3 / 4 (failed 1): a.png; b.png (+1 more)";
+    const QString summary = mviewer::ui::exportResultMessageZh(summaryResult);
+    CHECK(summary.contains(QStringLiteral("导出完成：3 / 4")), "done summary uses Chinese counts");
+    CHECK(summary.contains(QStringLiteral("，失败 1 个")), "done summary names the failure count");
+    CHECK(summary.contains(QStringLiteral(": a.png; b.png (+1 more)")),
+          "done summary keeps the named-failure tail");
+
+    mviewer::exportjob::ExportJobResult conflict;
+    conflict.message = "source/destination conflict";
+    CHECK(mviewer::ui::exportResultMessageZh(conflict) == QStringLiteral("源文件与目标文件冲突"),
+          "source/destination conflict is translated");
+
+    mviewer::exportjob::ExportJobResult directory;
+    directory.message = "cannot create output directory: E:/out";
+    const QString directoryText = mviewer::ui::exportResultMessageZh(directory);
+    CHECK(directoryText == QStringLiteral("无法创建输出目录：E:/out"),
+          "output directory errors keep the path suffix");
+
+    mviewer::exportjob::ExportJobResult one;
+    one.done = 1;
+    one.total = 1;
+    one.failed = 0;
+    one.message = "done 1 output";
+    CHECK(mviewer::ui::exportResultMessageZh(one) == QStringLiteral("导出完成：1 / 1"),
+          "done 1 output uses the numeric fields");
+
+    mviewer::exportjob::ExportJobResult unknown;
+    unknown.message = "mystery export status";
+    CHECK(mviewer::ui::exportResultMessageZh(unknown) == QStringLiteral("mystery export status"),
+          "unknown export messages pass through");
+}
+
 } // namespace

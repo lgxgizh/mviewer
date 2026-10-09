@@ -153,6 +153,7 @@ add_library(mviewer_ui STATIC
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
     mainwindow_ui_menus.cpp
+    mainwindow_filetransform.cpp
     mainwindow_ui_connections.cpp
     mainwindow_commands.cpp
     mainwindow_navigation.cpp
@@ -229,6 +230,7 @@ add_library(mviewer_ui STATIC
     analysispanel_pages.cpp
     analysispanel_history.cpp
     exportdialog.cpp
+    exportmessages.cpp
     exportcommand.cpp
     metadatapanel.cpp
     metadatamodel.cpp
