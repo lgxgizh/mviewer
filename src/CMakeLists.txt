@@ -763,7 +763,8 @@ target_include_directories(compare_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOUR
 add_test(NAME compare_acceptance_tests COMMAND compare_acceptance_tests)
 set_tests_properties(compare_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
-# 「最适合」: same-aspect, different-resolution panes scale inversely to size.
+# 「适合窗口 (F)」, 统一像素倍率 off: same-aspect, different-resolution panes scale
+# inversely to size.
 add_executable(compare_best_fit_tests
     test_compare_best_fit.cpp
 )

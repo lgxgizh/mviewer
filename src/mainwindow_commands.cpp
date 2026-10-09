@@ -779,7 +779,6 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
         QMenu menu(this);
         menu.addAction(tr("适应窗口 (F)"), this, [this]() { m_compareView->fitAll(); });
         menu.addAction(tr("实际大小 100% (1)"), this, [this]() { m_compareView->zoomActual(); });
-        menu.addAction(tr("最适合"), this, [this]() { m_compareView->bestFitAll(); });
         menu.exec(globalPos);
         return;
     }

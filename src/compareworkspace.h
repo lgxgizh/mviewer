@@ -150,7 +150,6 @@ class CompareWorkspace : public QWidget
     bool syncRotate() const;
     void fitAll();
     void zoomActual();
-    void bestFitAll();
     void copyComparisonViewToClipboard();
     void setEditCellIndex(int cellIdx);
     int editCellIndex() const;
@@ -193,6 +192,7 @@ class CompareWorkspace : public QWidget
     void buildPixelLinkControls(QHBoxLayout *toolLayout);
     void buildViewControls(QHBoxLayout *viewLayout);
     void buildToolbarActions(QHBoxLayout *toolLayout);
+    void addFitWindowButton(QHBoxLayout *toolLayout);
     bool handleBasicCompareKey(QKeyEvent *event);
     bool handleBasicCompareSpace(QKeyEvent *event);
     bool handleBasicCompareEscape(QKeyEvent *event);

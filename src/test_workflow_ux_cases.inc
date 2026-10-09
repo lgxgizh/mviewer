@@ -1912,15 +1912,15 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(toolToolbar && toolToolbar->width() <= availableToolbarWidth &&
               toolToolbar->sizeHint().width() <= availableToolbarWidth,
           "compare tool toolbar fits the standard 1100px workspace width");
-    QPushButton *bestFitButton = ws->findChild<QPushButton *>(QStringLiteral("bestFitButton"));
-    CHECK(bestFitButton && bestFitButton->isVisible() && toolToolbar &&
-              toolToolbar->isAncestorOf(bestFitButton),
-          "best-fit button stays visible on the tool toolbar at 1100x750");
-    if (bestFitButton)
+    QPushButton *fitWindowButton = ws->findChild<QPushButton *>(QStringLiteral("fitWindowButton"));
+    CHECK(fitWindowButton && fitWindowButton->isVisible() && toolToolbar &&
+              toolToolbar->isAncestorOf(fitWindowButton),
+          "fit-window button stays visible on the tool toolbar at 1100x750");
+    if (fitWindowButton)
     {
-        const QRect fitInWs(bestFitButton->mapTo(ws, QPoint(0, 0)), bestFitButton->size());
+        const QRect fitInWs(fitWindowButton->mapTo(ws, QPoint(0, 0)), fitWindowButton->size());
         CHECK(ws->contentsRect().contains(fitInWs),
-              "best-fit button is fully inside the Compare workspace, not clipped");
+              "fit-window button is fully inside the Compare workspace, not clipped");
     }
 
     // 默认状态（评审"默认值不合理"检查）。
