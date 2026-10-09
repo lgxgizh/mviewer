@@ -599,9 +599,9 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
         "<tr><td><kbd>R</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / "
         "侧栏</td></tr>"
-        "<tr><td><kbd>1</kbd>~<kbd>8</kbd></td><td>两张及以下：N "
-        "联布局。超过两张且鼠标在窗格上：按住在该窗格临时看第 N "
-        "张；鼠标不在窗格上仍改布局。Ctrl+2/4/8 始终改布局</td></tr>"
+        "<tr><td><kbd>1</kbd>~<kbd>8</kbd></td><td>按住临时看第 N "
+        "张（鼠标所在窗格，否则当前窗格）；松开恢复。超出张数仅提示。"
+        "100% 用 Ctrl+1。布局仅 Ctrl+2/4/8</td></tr>"
         "<tr><td><kbd>P</kbd> 上一对 · <kbd>PgUp</kbd> 上一对 · "
         "<kbd>←</kbd> 上一对</td><td>比较上一对（连续对比）</td></tr>"
         "<tr><td><kbd>N</kbd> 下一对 · <kbd>PgDn</kbd> 下一对 · "
@@ -778,7 +778,8 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     {
         QMenu menu(this);
         menu.addAction(tr("适应窗口 (F)"), this, [this]() { m_compareView->fitAll(); });
-        menu.addAction(tr("实际大小 100% (1)"), this, [this]() { m_compareView->zoomActual(); });
+        menu.addAction(tr("实际大小 100% (Ctrl+1)"), this,
+                       [this]() { m_compareView->zoomActual(); });
         menu.exec(globalPos);
         return;
     }
