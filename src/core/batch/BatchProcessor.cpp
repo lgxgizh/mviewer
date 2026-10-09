@@ -356,7 +356,7 @@ std::string pngSizeGuard(const std::string &inputPath)
 
 std::string decodeFailureMessage(const std::string &inputPath)
 {
-    const std::string fromPng = pngSizeGuard(inputPath);
+    std::string fromPng = pngSizeGuard(inputPath);
     if (!fromPng.empty())
         return fromPng;
 
@@ -365,7 +365,7 @@ std::string decodeFailureMessage(const std::string &inputPath)
     const QSize size = reader.size();
     if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
         return "无法解码图片";
-    const std::string tooBig = oversizedMessage(size.width(), size.height());
+    std::string tooBig = oversizedMessage(size.width(), size.height());
     if (!tooBig.empty())
         return tooBig;
     return "无法解码图片";
@@ -431,7 +431,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
 
     // Reject an oversized claim before decode. A full read of a truncated PNG
     // only produces "libpng error: Read Error" and hides the IHDR dimensions.
-    const std::string tooBig = pngSizeGuard(inputPath);
+    std::string tooBig = pngSizeGuard(inputPath);
     if (!tooBig.empty())
     {
         result.errorMessage = tooBig;
