@@ -277,11 +277,18 @@ void evictNonVisible(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
     }
 }
 
+int resolvedTileLod(double scale, int lodOverride)
+{
+    if (lodOverride >= 0)
+        return (std::min)(lodOverride, 4);
+    return TileCache::chooseLod(scale);
+}
+
 void scheduleRingPrefetch(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
                           const std::string &imageId, const Viewport &viewport,
                           const TileGrid &grid, int renderScalePercent, uint64_t generation,
                           const TileDecodeFn &decode,
-                          const AsyncTileRequestManager::ReadyCallback &onReady)
+                          const AsyncTileRequestManager::ReadyCallback &onReady, int lodOverride)
 {
     if (!decode)
         return;
@@ -291,7 +298,7 @@ void scheduleRingPrefetch(const std::shared_ptr<AsyncTileRequestManager::Impl> &
             return;
     }
 
-    const int lod = TileCache::chooseLod(viewport.scale);
+    const int lod = resolvedTileLod(viewport.scale, lodOverride);
     const int lodSize = TileCache::lodTileSize(grid.tileSize, lod);
     const TileGrid lodGrid(grid.imageW, grid.imageH, lodSize);
     const int policy = (std::max)(1, renderScalePercent);
@@ -446,7 +453,7 @@ void AsyncTileRequestManager::reset(uint64_t generation)
 AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
     const std::string &imageId, const Viewport &viewport, const TileGrid &grid,
     int renderScalePercent, uint64_t generation, const TileDecodeFn &decode,
-    const ReadyCallback &onReady, TaskScheduler::Priority priority)
+    const ReadyCallback &onReady, TaskScheduler::Priority priority, int lodOverride)
 {
     VisibleTiles result;
     if (!decode)
@@ -459,7 +466,7 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
             return result;
     }
 
-    const int lod = TileCache::chooseLod(viewport.scale);
+    const int lod = resolvedTileLod(viewport.scale, lodOverride);
     const int lodSize = TileCache::lodTileSize(grid.tileSize, lod);
     const TileGrid lodGrid(grid.imageW, grid.imageH, lodSize);
     const int policy = (std::max)(1, renderScalePercent);
@@ -539,14 +546,15 @@ AsyncTileRequestManager::VisibleTiles
 AsyncTileRequestManager::requestVisibleRegion(const std::string &imageId, const Viewport &viewport,
                                               const TileGrid &grid, int renderScalePercent,
                                               uint64_t generation, const TileDecodeFn &decode,
-                                              const ReadyCallback &onReady)
+                                              const ReadyCallback &onReady, int lodOverride)
 {
-    VisibleTiles visible = requestVisible(imageId, viewport, grid, renderScalePercent, generation,
-                                          decode, onReady, TaskScheduler::Priority::Decode);
+    VisibleTiles visible =
+        requestVisible(imageId, viewport, grid, renderScalePercent, generation, decode, onReady,
+                       TaskScheduler::Priority::Decode, lodOverride);
     const bool zoomedIn = viewport.scale >= 1.0 && std::isfinite(viewport.scale);
     if (zoomedIn)
         scheduleRingPrefetch(m_impl, imageId, viewport, grid, renderScalePercent, generation,
-                             decode, onReady);
+                             decode, onReady, lodOverride);
     return visible;
 }
 

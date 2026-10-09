@@ -9,6 +9,7 @@
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
+#include "core/render/ZoomPercent.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
 
@@ -325,6 +326,8 @@ void ImageViewer::beginImageGeneration()
     ++m_overlayGeneration;
     m_tileRequests.reset(m_imageGeneration);
     m_overlayRequests.reset(m_overlayGeneration);
+    m_pinnedLod = -1;
+    m_tileImageId.clear();
     cancelRoiStats();
 }
 
@@ -437,7 +440,7 @@ void ImageViewer::saveToPath(const QString &path)
 
 void ImageViewer::emitZoom()
 {
-    emit zoomChanged(static_cast<int>(m_view.scale * 100.0 + 0.5));
+    emit zoomChanged(mviewer::core::zoomPercentFromScale(m_view.scale));
 }
 
 bool ImageViewer::hasDisplayImage() const

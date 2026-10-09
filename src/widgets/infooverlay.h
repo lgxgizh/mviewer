@@ -48,6 +48,31 @@ inline QRect drawFilenameOverlay(QPainter &p, const QRect &pane, const QString &
     return box;
 }
 
+// Zoom readout. topRight sits clear of the viewer histogram; the compare pane
+// uses the bottom-left so it does not cover the filename overlay.
+inline void drawZoomPercentBadge(QPainter &p, const QRect &pane, const QString &text, bool topRight)
+{
+    if (text.isEmpty() || pane.width() < 48 || pane.height() < 28)
+        return;
+    p.save();
+    QFont font = p.font();
+    font.setBold(true);
+    font.setPointSize(10);
+    p.setFont(font);
+    const QFontMetrics metrics(font);
+    const int boxW = metrics.horizontalAdvance(text) + 12;
+    const int boxH = metrics.height() + 6;
+    const int x = topRight ? pane.left() + pane.width() - boxW - 8 : pane.left() + 8;
+    const int y = topRight ? pane.top() + 8 : pane.top() + pane.height() - boxH - 8;
+    const QRect box(x, y, boxW, boxH);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0, 0, 0, 170));
+    p.drawRoundedRect(box, 4, 4);
+    p.setPen(Qt::white);
+    p.drawText(box, Qt::AlignCenter, text);
+    p.restore();
+}
+
 inline QRect histogramOverlayRect(const QRect &pane, const QRect &filenameBox)
 {
     if (pane.width() < 80 || pane.height() < 80)

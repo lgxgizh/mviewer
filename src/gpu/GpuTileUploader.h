@@ -85,6 +85,11 @@ class GpuTileUploader
     // drops unpinned textures first, so already-cached visible tiles stay put.
     void pinVisible(const TileKey *keys, size_t count);
 
+    // Draw-time filter. Upload leaves MIN/MAG linear and CLAMP_TO_EDGE; a tile
+    // is magnified at some zooms and minified at others, so the mag filter is
+    // chosen when the tile is drawn. No-op for the headless inject path.
+    void setMagnifyNearest(uintptr_t handle, bool nearest);
+
     // Drop all resident textures (calls free for each).
     void clear();
 

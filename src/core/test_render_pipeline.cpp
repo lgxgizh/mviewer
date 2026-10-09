@@ -4,8 +4,11 @@
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/render/TileGrid.h"
+#include "core/render/TileSeam.h"
 #include "core/render/Viewport.h"
+#include "core/render/ZoomPercent.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <limits>
@@ -235,6 +238,118 @@ static void testRenderEngineBoundsAndScaling()
     CHECK(!ovZero.isNull() && ovZero.width == 100, "overlayDifference at alpha=0 succeeds");
 }
 
+static void testTileEdgeContinuity()
+{
+    printf("\n[tile screen edges + apron]\n");
+    fflush(stdout);
+    const double scales[] = {0.05, 0.5, 0.9, 1.0, 1.01, 1.1, 1.25, 1.5, 2.0, 3.7, 8.0, 20.0};
+    const double offsets[] = {0.0, 0.5, -0.5, 10.7, -100.2, 3.14159};
+    bool shared = true;
+    bool nonNegative = true;
+    for (double scale : scales)
+    {
+        for (double offset : offsets)
+        {
+            Viewport vp(800, 600, scale, offset, offset * 0.5);
+            int prevRight = 0;
+            bool haveCol = false;
+            for (int x = 0; x < 1000; x += 256)
+            {
+                const int w = (std::min)(256, 1000 - x);
+                int sx = 0;
+                int sy = 0;
+                int sw = 0;
+                int sh = 0;
+                vp.imageRectToScreen(x, 0, w, 256, sx, sy, sw, sh);
+                if (sw < 0 || sh < 0)
+                    nonNegative = false;
+                if (haveCol && sx != prevRight)
+                    shared = false;
+                prevRight = sx + sw;
+                haveCol = true;
+            }
+            int fx = 0;
+            int fy = 0;
+            int fw = 0;
+            int fh = 0;
+            vp.imageRectToScreen(0, 0, 1000, 256, fx, fy, fw, fh);
+            if (prevRight != fx + fw)
+                shared = false;
+            int prevBottom = 0;
+            bool haveRow = false;
+            for (int y = 0; y < 512; y += 256)
+            {
+                const int h = (std::min)(256, 512 - y);
+                int sx = 0;
+                int sy = 0;
+                int sw = 0;
+                int sh = 0;
+                vp.imageRectToScreen(0, y, 256, h, sx, sy, sw, sh);
+                if (sw < 0 || sh < 0)
+                    nonNegative = false;
+                if (haveRow && sy != prevBottom)
+                    shared = false;
+                prevBottom = sy + sh;
+                haveRow = true;
+            }
+        }
+    }
+    CHECK(shared, "adjacent tiles share edges at many zoom and offset values");
+    CHECK(nonNegative, "tile screen sizes stay non-negative");
+
+    const auto left = mviewer::core::tileContentLayout(2048, 2048, 256, 0, 256, 256, 256, 256);
+    const auto right = mviewer::core::tileContentLayout(2048, 2048, 512, 0, 256, 256, 256, 256);
+    CHECK(left.contentX == 1 && left.contentW == 256 && left.outW == 258,
+          "interior 256 tile keeps a 1px apron");
+    CHECK(left.srcX == 255, "apron includes the previous source pixel");
+    CHECK(left.srcX + left.srcW > right.srcX, "expanded sources overlap at the boundary");
+    CHECK(left.srcX + left.contentX + left.contentW == right.srcX + right.contentX,
+          "content source ranges abut");
+
+    const auto edge = mviewer::core::tileContentLayout(2048, 2048, 0, 0, 256, 256, 256, 256);
+    CHECK(edge.srcX == 0 && edge.contentX == 0 && edge.outW == 257, "image edge has no left apron");
+
+    const auto lod = mviewer::core::tileContentLayout(4096, 4096, 512, 0, 512, 512, 256, 256);
+    CHECK(lod.contentX == 1 && lod.outW == 258, "LOD1 apron is one output pixel");
+    CHECK(lod.srcX == 510, "LOD1 apron reaches two source pixels earlier");
+
+    Viewport placedView(800, 600, 1.37, 10.4, -3.2);
+    bool placedShared = true;
+    for (int col = 1; col < 4; ++col)
+    {
+        const auto a =
+            mviewer::core::placeTile(placedView, 2048, 2048, 256, col, 1, 0, 100, 258, 258);
+        const auto b =
+            mviewer::core::placeTile(placedView, 2048, 2048, 256, col + 1, 1, 0, 100, 258, 258);
+        if (!a.valid || !b.valid || a.screenX + a.screenW != b.screenX || a.contentX != 1 ||
+            a.contentW != 256)
+            placedShared = false;
+    }
+    CHECK(placedShared, "apron payloads still share screen edges and sample the inner texels");
+
+    const auto lodA = mviewer::core::placeTile(placedView, 4096, 4096, 256, 1, 1, 1, 100, 258, 258);
+    const auto lodB = mviewer::core::placeTile(placedView, 4096, 4096, 256, 2, 1, 1, 100, 258, 258);
+    CHECK(lodA.valid && lodB.valid && lodA.screenX + lodA.screenW == lodB.screenX,
+          "LOD1 neighbours share the vertical edge");
+    CHECK(lodA.contentX == 1 && lodA.contentW == 256, "LOD1 placement samples the inner region");
+}
+
+static void testZoomPercentFormat()
+{
+    printf("\n[zoom percent]\n");
+    fflush(stdout);
+    CHECK(mviewer::core::zoomPercentFromScale(1.0) == 100, "100% at scale 1");
+    CHECK(mviewer::core::zoomPercentFromScale(1.25) == 125, "125% at scale 1.25");
+    CHECK(mviewer::core::zoomPercentFromScale(0.5) == 50, "50% at scale 0.5");
+    CHECK(mviewer::core::zoomPercentFromScale(0.0) == -1, "non-positive scale is unknown");
+    CHECK(mviewer::core::zoomPercentFromScale(-2.0) == -1, "negative scale is unknown");
+    CHECK(mviewer::core::zoomPercentFromScale(std::numeric_limits<double>::quiet_NaN()) == -1,
+          "non-finite scale is unknown");
+    CHECK(mviewer::core::formatZoomPercent(1.25) == "125%", "format scale 1.25 as 125%");
+    CHECK(mviewer::core::formatZoomPercent(125) == "125%", "format 125 as 125%");
+    CHECK(mviewer::core::formatZoomPercent(-1).empty(), "negative percent formats empty");
+}
+
 int main()
 {
     printf("=== Render Pipeline foundation tests (M7) ===\n");
@@ -247,6 +362,8 @@ int main()
     testViewportEdgeAndOffscreen();
     testTileGridBoundsAndClamping();
     testRenderEngineBoundsAndScaling();
+    testTileEdgeContinuity();
+    testZoomPercentFormat();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

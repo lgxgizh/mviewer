@@ -433,6 +433,36 @@ static void testAsyncTileManagerEvictionAndBounds()
     CHECK(manager.pendingCount() == 0, "pending count cleared after reset");
 }
 
+static void testLodHysteresis()
+{
+    printf("\n[TileCache::chooseLodStable]\n");
+    fflush(stdout);
+    CHECK(TileCache::chooseLod(0.9) == 1, "chooseLod still ceils 0.9 to LOD 1");
+    CHECK(TileCache::chooseLodStable(0.9, -1) == 0, "stable 0.9 stays on full-res tiles");
+    CHECK(TileCache::chooseLodStable(0.5, -1) == 1, "stable 0.5 -> LOD 1");
+    CHECK(TileCache::chooseLodStable(0.25, -1) == 2, "stable 0.25 -> LOD 2");
+    CHECK(TileCache::chooseLodStable(2.0, -1) == 0, "stable zoom-in -> LOD 0");
+    CHECK(TileCache::chooseLodStable(0.01, -1) == 4, "stable very-small scale clamps to LOD 4");
+    CHECK(TileCache::chooseLodStable(0.57, 1) == 1, "hold coarser LOD while texel <= 1.15");
+    CHECK(TileCache::chooseLodStable(0.55, 1) == 1, "hold coarser LOD at scale 0.55");
+    CHECK(TileCache::chooseLodStable(0.58, 1) == 0, "leave coarser LOD once texel exceeds 1.15");
+    CHECK(TileCache::chooseLodStable(0.70, 1) == 0, "scale 0.70 from LOD 1 moves to LOD 0");
+    CHECK(TileCache::chooseLodStable(0.49, 0) == 1, "drop a too-fine LOD below texel 0.5");
+    CHECK(TileCache::chooseLodStable(0.50, 0) == 0, "keep the finer LOD at texel 0.5");
+
+    int lod = -1;
+    int flips = 0;
+    const double steps[] = {0.45, 0.51, 0.45, 0.51, 0.49, 0.51, 0.49, 0.51};
+    for (double scale : steps)
+    {
+        const int next = TileCache::chooseLodStable(scale, lod);
+        if (lod >= 0 && next != lod)
+            ++flips;
+        lod = next;
+    }
+    CHECK(flips <= 1, "alternating nearby scales flip LOD at most once");
+}
+
 static void testPreferReducedMip()
 {
     printf("\n[TileSourceDecode prefer mip]\n");
@@ -461,6 +491,7 @@ int main(int argc, char **argv)
     printf("=== TileCache + LOD tests (M7 ①) ===\n");
     fflush(stdout);
     testLodSelection();
+    testLodHysteresis();
     testPreferReducedMip();
     testLruEviction();
     testRequestCacheHit();
