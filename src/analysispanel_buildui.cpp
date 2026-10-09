@@ -31,6 +31,7 @@ void AnalysisPanel::buildUi()
     buildInspectorTab();
     m_analyzerCombo->setCurrentIndex(0);
     onAnalyzerSelected(0);
+    updateHistogramPage();
 }
 
 void AnalysisPanel::buildAnalyzerSection(QVBoxLayout &layout)
@@ -38,16 +39,7 @@ void AnalysisPanel::buildAnalyzerSection(QVBoxLayout &layout)
     auto *bar = new QHBoxLayout;
     bar->addWidget(new QLabel(tr("分析器:")));
     m_analyzerCombo = new QComboBox;
-    auto &registry = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
-    m_pluginIds = registry.availableAnalyzers();
-    for (const auto &id : m_pluginIds)
-    {
-        const auto info = registry.infoFor(id);
-        const QString label =
-            info ? QString::fromStdString(info->name) : QString::fromStdString(id);
-        m_analyzerCombo->addItem(label, QString::fromStdString(id));
-    }
-    m_analyzerCombo->addItem(tr("双图对比 (PSNR/SSIM)"), QString("builtin_compare"));
+    fillAnalyzerCombo(QString());
     bar->addWidget(m_analyzerCombo, 1);
 
     auto *runButton = new QPushButton(tr("运行"));
@@ -108,6 +100,7 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     m_histogramLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_histogramLabel->setStyleSheet("QLabel{background:#141414;}");
     m_statsLabel = new QLabel;
+    m_statsLabel->setObjectName(QStringLiteral("analysisStatsLabel"));
     m_statsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_statsLabel->setWordWrap(true);
     m_statsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");

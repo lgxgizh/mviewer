@@ -165,6 +165,7 @@ class AnalysisPanel : public QWidget
   private:
     void buildUi();
     void buildAnalyzerSection(QVBoxLayout &layout);
+    void fillAnalyzerCombo(const QString &restoreId);
     void buildHistorySection(QVBoxLayout &layout);
     void buildResultTabs(QVBoxLayout &layout);
     void buildInspectorTab();

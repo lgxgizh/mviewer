@@ -1,6 +1,8 @@
 // MainWindow layout construction and command surfaces.
 #include "mainwindow_p.h"
 
+#include "ShortcutHelper.h"
+
 #include <QFocusEvent>
 #include <QIcon>
 #include <QMouseEvent>
@@ -145,22 +147,23 @@ class SelectAllOnActivateLineEdit : public QLineEdit
             selectAll();
     }
 };
+
+QString actTip(const QString &label, const QAction *action)
+{
+    return mviewer::ui::appendShortcutHint(label, mviewer::ui::actionShortcutHint(action));
+}
 } // namespace
 
 void MainWindow::buildBrowserShell()
 {
-    // FastStone-inspired browser shell: a compact, stable command strip sits
-    // above the single editable path expression. The actions remain available
-    // in menus as well, so the toolbar is an accelerator rather than a second
-    // command model.
     m_actDirUp = new QAction(tr("上一级"), this);
     m_actDirUp->setObjectName("directoryUpAction");
     m_actDirUp->setShortcut(QKeySequence("Alt+Up"));
-    m_actDirUp->setToolTip(tr("上一级目录 (Alt+Up)"));
+    m_actDirUp->setToolTip(actTip(tr("上一级目录"), m_actDirUp));
     m_actRefresh = new QAction(tr("刷新"), this);
     m_actRefresh->setObjectName("refreshDirectoryAction");
     m_actRefresh->setShortcut(QKeySequence::Refresh);
-    m_actRefresh->setToolTip(tr("刷新目录与缩略图 (F5)"));
+    m_actRefresh->setToolTip(actTip(tr("刷新目录与缩略图"), m_actRefresh));
     auto *browserToolBar = new QToolBar(tr("浏览工具栏"), this);
     addToolBar(Qt::TopToolBarArea, browserToolBar);
     browserToolBar->setObjectName("browserToolBar");
@@ -178,35 +181,35 @@ void MainWindow::buildBrowserShell()
             action->setToolTip(tip);
         browserToolBar->addAction(action);
     };
-    addBrowserAction(m_actOpenDir, "open", tr("打开目录 (Ctrl+O)"));
-    addBrowserAction(m_actDirBack, "back", tr("上一个目录 (Ctrl+Alt+Left)"));
-    addBrowserAction(m_actDirForward, "forward", tr("下一个目录 (Ctrl+Alt+Right)"));
+    addBrowserAction(m_actOpenDir, "open", actTip(tr("打开目录"), m_actOpenDir));
+    addBrowserAction(m_actDirBack, "back", actTip(tr("上一个目录"), m_actDirBack));
+    addBrowserAction(m_actDirForward, "forward", actTip(tr("下一个目录"), m_actDirForward));
     addBrowserAction(m_actDirUp, "up");
     addBrowserAction(m_actRefresh, "refresh");
     browserToolBar->addSeparator();
-    addBrowserAction(m_actAddFavorite, "favorite", tr("收藏当前目录 (Ctrl+D)"));
-    addBrowserAction(m_actToggleAnalysis, "analysis", tr("分析面板 (Alt+H)"));
-    addBrowserAction(m_actToggleSearch, "search", tr("全局搜索 (Ctrl+Shift+F)"));
+    addBrowserAction(m_actAddFavorite, "favorite", actTip(tr("收藏当前目录"), m_actAddFavorite));
+    addBrowserAction(m_actToggleAnalysis, "analysis", actTip(tr("分析面板"), m_actToggleAnalysis));
+    addBrowserAction(m_actToggleSearch, "search", actTip(tr("全局搜索"), m_actToggleSearch));
     browserToolBar->addSeparator();
     addBrowserAction(m_actBrowseWorkspace, "browse");
     browserToolBar->addSeparator();
     if (m_actRotateCCW)
     {
         m_actRotateCCW->setIcon(makeToolbarIcon("rotate_ccw"));
-        m_actRotateCCW->setToolTip(tr("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)"));
+        m_actRotateCCW->setToolTip(actTip(tr("逆时针旋转 90° 并覆盖原文件"), m_actRotateCCW));
         browserToolBar->addAction(m_actRotateCCW);
     }
     if (m_actRotateCW)
     {
         m_actRotateCW->setIcon(makeToolbarIcon("rotate_cw"));
-        m_actRotateCW->setToolTip(tr("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)"));
+        m_actRotateCW->setToolTip(actTip(tr("顺时针旋转 90° 并覆盖原文件"), m_actRotateCW));
         browserToolBar->addAction(m_actRotateCW);
     }
     if (m_actCompare)
     {
         m_actCompare->setIcon(makeToolbarIcon("compare"));
         m_actCompare->setObjectName("compareAction");
-        m_actCompare->setToolTip(tr("选择 2–8 张图片进行比较"));
+        m_actCompare->setToolTip(actTip(tr("选择 2–8 张图片进行比较"), m_actCompare));
         browserToolBar->addAction(m_actCompare);
     }
 
