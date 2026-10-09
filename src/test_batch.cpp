@@ -1,14 +1,26 @@
 // BatchProcessor unit tests — verify batch decode → resize → export pipeline,
 // progress callback, cancellation, and result collection.
+#include "batchdialog.h"
 #include "core/batch/BatchProcessor.h"
 #include "core/batch/BatchRename.h"
 #include "domain/BatchJob.h"
 
+#include <QApplication>
+#include <QByteArray>
+#include <QCheckBox>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
+#include <QMessageBox>
+#include <QPushButton>
 #include <QSettings>
+#include <QStringList>
+#include <QTextEdit>
+#include <QTimer>
+#include <QUuid>
+
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -36,9 +48,72 @@ static QString writeTempPng(const std::string &name, int w = 64, int h = 48,
     return path;
 }
 
+// IHDR-only PNG (33 bytes). QImageReader::size() reports the claim; decode fails.
+static QByteArray pngClaim(const char *hex)
+{
+    return QByteArray::fromHex(QByteArray(hex));
+}
+
+static QString makeTempDir(const char *prefix)
+{
+    const QString path = QDir::tempPath() + QLatin1Char('/') + QLatin1String(prefix) +
+                         QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QDir().mkpath(path);
+    return path;
+}
+
+static QString writePngIn(const QString &dir, const char *name, QRgb color)
+{
+    const QString path = dir + QLatin1Char('/') + QLatin1String(name);
+    QImage image(16, 16, QImage::Format_RGB32);
+    image.fill(color);
+    image.save(path, "PNG");
+    return path;
+}
+
+static QString writeBytes(const QString &path, const QByteArray &bytes)
+{
+    QFile file(path);
+    if (file.open(QIODevice::WriteOnly))
+        file.write(bytes);
+    return path;
+}
+
+static QByteArray readAllBytes(const QString &path)
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    return file.readAll();
+}
+
+static bool hasMviewerTemp(const QString &dir)
+{
+    const QStringList names = QDir(dir).entryList(QStringList{QStringLiteral(".mviewer-tmp-*")},
+                                                  QDir::Files | QDir::Hidden);
+    return !names.isEmpty();
+}
+
+static mviewer::domain::BatchFileResult exportFile(const QString &input, const QString &outputDir,
+                                                   const char *pattern, bool overwrite)
+{
+    mviewer::domain::BatchJobConfig config;
+    config.inputPaths = {input.toStdString()};
+    config.operations = {mviewer::domain::BatchOp::Export};
+    if (pattern != nullptr && pattern[0] != '\0')
+        config.renamePattern = pattern;
+    config.exportFormat = "png";
+    config.outputDir = outputDir.toStdString();
+    config.overwriteExisting = overwrite;
+    const auto result = mviewer::core::BatchProcessor().execute(config);
+    if (result.fileResults.empty())
+        return {};
+    return result.fileResults.front();
+}
+
 int main(int argc, char *argv[])
 {
-    QCoreApplication app(argc, argv);
+    QApplication app(argc, argv);
 
     // ── Setup: create temp images ──────────────────────────────────
     const QString p1 = writeTempPng("a", 64, 48);
@@ -499,6 +574,215 @@ int main(int argc, char *argv[])
               "BatchProcessor output path reflects find/replace transformation");
         QFile outFile(QString::fromStdString(result.fileResults[0].outputPath));
         CHECK(outFile.exists(), "Exported file exists on disk");
+    }
+
+    // ── Test 14: empty / whitespace output dir writes beside the source ──
+    {
+        const QString dir = makeTempDir("mviewer_batch_beside_");
+        const QString input = writePngIn(dir, "src.png", qRgb(9, 8, 7));
+        const auto beside = exportFile(input, QString(), "beside_{name}", false);
+        const QString besideOut = QString::fromStdString(beside.outputPath);
+        CHECK(beside.success, "empty outputDir export succeeds");
+        CHECK(QFileInfo(besideOut).absolutePath() == QFileInfo(input).absolutePath(),
+              "empty outputDir writes next to the input");
+        CHECK(QFileInfo(besideOut).fileName() == QStringLiteral("beside_src.png"),
+              "empty outputDir applies the rename pattern");
+        CHECK(!hasMviewerTemp(dir), "empty outputDir leaves no .mviewer-tmp file");
+        const auto spaced = exportFile(input, QStringLiteral("   "), "spaced_{name}", false);
+        const QString spacedPath = QString::fromStdString(spaced.outputPath);
+        const bool spacedBeside =
+            QFileInfo(spacedPath).absolutePath() == QFileInfo(input).absolutePath();
+        CHECK(spaced.success && spacedBeside, "whitespace outputDir writes next to the input");
+        QDir(dir).removeRecursively();
+    }
+
+    // ── Test 15: a missing Chinese output directory is created ──
+    {
+        const QString dir = QDir::tempPath() + QStringLiteral("/mviewer_批处理_输出_") +
+                            QUuid::createUuid().toString(QUuid::WithoutBraces);
+        const QString srcDir = makeTempDir("mviewer_batch_cnsrc_");
+        const QString input = writePngIn(srcDir, "cn.png", qRgb(4, 5, 6));
+        const auto written = exportFile(input, QStringLiteral("  ") + dir + QStringLiteral("  "),
+                                        "out_{name}", false);
+        const QString out = QString::fromStdString(written.outputPath);
+        CHECK(written.success && QDir(dir).exists(), "Chinese output directory is created");
+        CHECK(QFileInfo(out).absolutePath() == QDir(dir).absolutePath(),
+              "file is written inside the Chinese output directory");
+        CHECK(QFileInfo::exists(out), "Chinese output directory contains the file");
+        CHECK(!hasMviewerTemp(dir), "Chinese output directory has no .mviewer-tmp file");
+        QDir(dir).removeRecursively();
+        QDir(srcDir).removeRecursively();
+    }
+
+    // ── Test 16: never overwrite the source, even when overwrite is on ──
+    {
+        const QString dir = makeTempDir("mviewer_batch_same_");
+        const QString input = writePngIn(dir, "same.png", qRgb(1, 2, 3));
+        const QByteArray before = readAllBytes(input);
+        const QString sourceDir = QFileInfo(input).absolutePath();
+        const auto blocked = exportFile(input, sourceDir, "", false);
+        CHECK(!blocked.success, "export onto the source is not a success");
+        CHECK(blocked.errorMessage == "目标与源文件相同，已跳过",
+              "export onto the source reports the conflict");
+        CHECK(readAllBytes(input) == before, "source bytes stay unchanged");
+        CHECK(!hasMviewerTemp(dir), "source conflict leaves no .mviewer-tmp file");
+        const auto forced = exportFile(input, sourceDir, "", true);
+        CHECK(!forced.success && forced.errorMessage == "目标与源文件相同，已跳过",
+              "overwrite still refuses to replace the source");
+        CHECK(readAllBytes(input) == before, "source bytes stay unchanged when overwrite is on");
+        QDir(dir).removeRecursively();
+    }
+
+    // ── Test 17: existing destination is skipped unless overwrite is on ──
+    {
+        const QString srcDir = makeTempDir("mviewer_batch_owsrc_");
+        const QString dstDir = makeTempDir("mviewer_batch_owdst_");
+        const QString input = writePngIn(srcDir, "keep.png", qRgb(10, 20, 30));
+        const QString existing = writePngIn(dstDir, "keep.png", qRgb(200, 210, 220));
+        const QByteArray before = readAllBytes(existing);
+        const auto skipped = exportFile(input, dstDir, "", false);
+        CHECK(!skipped.success, "existing destination is skipped");
+        CHECK(skipped.errorMessage == "目标文件已存在：keep.png",
+              "existing destination names the file");
+        CHECK(readAllBytes(existing) == before, "skipped destination bytes stay unchanged");
+        CHECK(!hasMviewerTemp(dstDir), "skipped destination leaves no .mviewer-tmp file");
+        const auto replaced = exportFile(input, dstDir, "", true);
+        CHECK(replaced.success, "overwriteExisting replaces the destination");
+        CHECK(readAllBytes(existing) != before, "overwriteExisting changes the destination bytes");
+        CHECK(!hasMviewerTemp(dstDir), "overwrite leaves no .mviewer-tmp file");
+        QDir(srcDir).removeRecursively();
+        QDir(dstDir).removeRecursively();
+    }
+
+    // ── Test 18: a failed commit removes the .mviewer-tmp file ──
+    {
+        const QString srcDir = makeTempDir("mviewer_batch_badsrc_");
+        const QString dstDir = makeTempDir("mviewer_batch_baddst_");
+        const QString input = writePngIn(srcDir, "photo.png", qRgb(7, 8, 9));
+        QDir().mkpath(dstDir + QStringLiteral("/photo.png"));
+        const auto failed = exportFile(input, dstDir, "", true);
+        CHECK(!failed.success && failed.errorMessage.find("导出失败：") == 0,
+              "commit onto a directory reports 导出失败");
+        CHECK(!hasMviewerTemp(dstDir), "failed commit leaves no .mviewer-tmp file");
+        QDir(srcDir).removeRecursively();
+        QDir(dstDir).removeRecursively();
+    }
+
+    // ── Test 19: huge and undecodable images get distinct messages ──
+    {
+        const QString dir = makeTempDir("mviewer_batch_huge_");
+        const QString hugeOut = dir + QStringLiteral("/out");
+        const char *wide = "89504e470d0a1a0a0000000d4948445200004e2000000008080200000093d95811";
+        const char *heavy = "89504e470d0a1a0a0000000d4948445200002328000023280802000000e2b7e5ed";
+        const auto tooWide =
+            exportFile(writeBytes(dir + QStringLiteral("/huge.png"), pngClaim(wide)), hugeOut,
+                       "x_{name}", false);
+        CHECK(tooWide.errorMessage == "图片过大（20000x8），批处理暂不支持",
+              "an image wider than 16384 reports 图片过大");
+        const auto tooHeavy =
+            exportFile(writeBytes(dir + QStringLiteral("/heavy.png"), pngClaim(heavy)), hugeOut,
+                       "y_{name}", false);
+        CHECK(tooHeavy.errorMessage == "图片过大（9000x9000），批处理暂不支持",
+              "an image over 256MB reports 图片过大");
+        const auto undecoded =
+            exportFile(writeBytes(dir + QStringLiteral("/junk.png"), QByteArray("not a png")),
+                       hugeOut, "z_{name}", false);
+        CHECK(undecoded.errorMessage == "无法解码图片", "undecodable image reports 无法解码图片");
+        QDir(dir).removeRecursively();
+    }
+
+    // ── Test 21: directory scan uses ImageFormats, not a private list ──
+    {
+        const QString dir = makeTempDir("mviewer_batch_scan_");
+        const QString scanOut = makeTempDir("mviewer_batch_scanout_");
+        writePngIn(dir, "ok.png", qRgb(3, 3, 3));
+        writeBytes(dir + QStringLiteral("/notes.txt"), QByteArray("note"));
+        writeBytes(dir + QStringLiteral("/also.cr3"), QByteArray("raw"));
+        mviewer::domain::BatchJobConfig config;
+        config.inputPaths = {dir.toStdString()};
+        config.operations = {mviewer::domain::BatchOp::Export};
+        config.exportFormat = "png";
+        config.outputDir = scanOut.toStdString();
+        config.renamePattern = "scan_{name}";
+        const auto result = mviewer::core::BatchProcessor().execute(config);
+        bool sawCr3 = false;
+        bool sawTxt = false;
+        for (const auto &file : result.fileResults)
+        {
+            sawCr3 = sawCr3 || file.inputPath.ends_with(".cr3");
+            sawTxt = sawTxt || file.inputPath.ends_with(".txt");
+        }
+        CHECK(sawCr3, "directory scan includes cr3 from ImageFormats");
+        CHECK(!sawTxt, "directory scan skips a txt file");
+        QDir(dir).removeRecursively();
+        QDir(scanOut).removeRecursively();
+    }
+
+    // ── Test 22: overwriteExisting defaults off; result lines stay explicit ──
+    {
+        mviewer::domain::BatchJobConfig config;
+        CHECK(!config.overwriteExisting, "overwriteExisting defaults to false");
+        mviewer::domain::BatchFileResult analyzed;
+        analyzed.success = true;
+        analyzed.inputPath = "C:/in.png";
+        CHECK(BatchDialog::formatResultLine(analyzed) ==
+                  QStringLiteral("[OK] C:/in.png（仅分析，未写出文件）"),
+              "analysis-only success does not show an empty arrow");
+        mviewer::domain::BatchFileResult exported;
+        exported.success = true;
+        exported.inputPath = "C:/in.png";
+        exported.outputPath = "C:/out/in.png";
+        CHECK(BatchDialog::formatResultLine(exported) ==
+                  QStringLiteral("[OK] C:/in.png → C:/out/in.png"),
+              "export success still shows input and output");
+    }
+
+    // ── Test 23: overwrite checkbox and the no-export guard ──
+    {
+        QSettings::setDefaultFormat(QSettings::IniFormat);
+        QSettings::setPath(QSettings::IniFormat, QSettings::UserScope,
+                           QDir::tempPath() + "/mviewer_batch_settings");
+        QCoreApplication::setOrganizationName(QStringLiteral("mviewer-test"));
+        QCoreApplication::setApplicationName(QStringLiteral("test_batch"));
+        QSettings settings;
+        settings.remove(QStringLiteral("batch/overwriteExisting"));
+        BatchDialog fresh;
+        auto *box = fresh.findChild<QCheckBox *>(QStringLiteral("batchOverwriteExisting"));
+        CHECK(box != nullptr && !box->isChecked(), "overwrite checkbox starts unchecked");
+        settings.setValue(QStringLiteral("batch/overwriteExisting"), true);
+        BatchDialog loaded;
+        auto *loadedBox = loaded.findChild<QCheckBox *>(QStringLiteral("batchOverwriteExisting"));
+        CHECK(loadedBox != nullptr && loadedBox->isChecked(),
+              "overwrite checkbox restores batch/overwriteExisting");
+        auto *exportBox = loaded.findChild<QCheckBox *>(QStringLiteral("batchChkExport"));
+        auto *resizeBox = loaded.findChild<QCheckBox *>(QStringLiteral("batchChkResize"));
+        auto *start = loaded.findChild<QPushButton *>(QStringLiteral("batchStartButton"));
+        auto *log = loaded.findChild<QTextEdit *>(QStringLiteral("batchLog"));
+        loaded.setInputFiles({p1});
+        CHECK(exportBox && resizeBox && start && log, "batch export guard controls exist");
+        if (exportBox && resizeBox && start)
+        {
+            exportBox->setChecked(false);
+            resizeBox->setChecked(true);
+            QString seen;
+            QTimer::singleShot(0,
+                               [&seen]()
+                               {
+                                   auto *message = qobject_cast<QMessageBox *>(
+                                       QApplication::activeModalWidget());
+                                   if (!message)
+                                       return;
+                                   seen = message->text();
+                                   message->reject();
+                               });
+            start->click();
+            CHECK(start->isEnabled(), "resize without 导出 does not start the batch");
+            CHECK(seen.contains(QStringLiteral("请勾选「导出」")),
+                  "resize without 导出 warns to check 导出");
+            CHECK(log && !log->toPlainText().contains(QStringLiteral("[OK]")),
+                  "resize without 导出 writes no result line");
+        }
+        settings.remove(QStringLiteral("batch/overwriteExisting"));
     }
 
     // ── Cleanup ────────────────────────────────────────────────────
