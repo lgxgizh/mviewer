@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+## [1.0.105] - 2026-10-09
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.105**.
+
 ### Added
 
 - 比较模式新增「截图」按钮（复制到剪贴板 Ctrl+C / 保存为 PNG Ctrl+S）。
