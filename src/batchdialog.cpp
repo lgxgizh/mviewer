@@ -1,4 +1,5 @@
 #include "batchdialog.h"
+#include "batchdialog_panels.h"
 #include "batchrenamepanel.h"
 
 #include "core/image/ImageFormats.h"
@@ -8,10 +9,9 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QDirIterator>
-#include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFutureWatcher>
-#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -21,6 +21,7 @@
 #include <QPointer>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QSettings>
 #include <QShowEvent>
 #include <QSpinBox>
 #include <QTextEdit>
@@ -88,121 +89,17 @@ int addSupportedImages(QListWidget *list, const QString &dir, bool recursive)
     return added;
 }
 
-QWidget *makeResizePanel(QSpinBox *&maxEdge)
+QString directoryOfFirstOutput(const mviewer::domain::BatchJobResult &result)
 {
-    auto *panel = new QWidget;
-    panel->setObjectName(QStringLiteral("batchResizePanel"));
-    auto *row = new QHBoxLayout(panel);
-    row->setContentsMargins(0, 0, 0, 0);
-    row->addWidget(new QLabel("缩放最大边:"));
-    maxEdge = new QSpinBox;
-    maxEdge->setRange(64, 32768);
-    maxEdge->setValue(1920);
-    maxEdge->setSuffix(" px");
-    row->addWidget(maxEdge);
-    row->addStretch();
-    return panel;
-}
-
-QWidget *makeCropPanel(QSpinBox *&x, QSpinBox *&y, QSpinBox *&w, QSpinBox *&h)
-{
-    auto *panel = new QWidget;
-    panel->setObjectName(QStringLiteral("batchCropPanel"));
-    panel->setToolTip("按像素矩形裁剪；超出图像范围时自动裁到有效区域");
-    auto *grid = new QGridLayout(panel);
-    grid->setContentsMargins(0, 0, 0, 0);
-    x = new QSpinBox;
-    y = new QSpinBox;
-    w = new QSpinBox;
-    h = new QSpinBox;
-    x->setObjectName(QStringLiteral("batchCropX"));
-    y->setObjectName(QStringLiteral("batchCropY"));
-    w->setObjectName(QStringLiteral("batchCropW"));
-    h->setObjectName(QStringLiteral("batchCropH"));
-    x->setRange(0, 100000);
-    y->setRange(0, 100000);
-    w->setRange(1, 100000);
-    h->setRange(1, 100000);
-    w->setValue(256);
-    h->setValue(256);
-    grid->addWidget(new QLabel("X:"), 0, 0);
-    grid->addWidget(x, 0, 1);
-    grid->addWidget(new QLabel("Y:"), 0, 2);
-    grid->addWidget(y, 0, 3);
-    grid->addWidget(new QLabel("宽:"), 1, 0);
-    grid->addWidget(w, 1, 1);
-    grid->addWidget(new QLabel("高:"), 1, 2);
-    grid->addWidget(h, 1, 3);
-    grid->setColumnStretch(4, 1);
-    return panel;
-}
-
-QWidget *makeWatermarkPanel(QLineEdit *&text, QComboBox *&pos, QDoubleSpinBox *&opacity,
-                            QSpinBox *&fontSize)
-{
-    auto *panel = new QWidget;
-    panel->setObjectName(QStringLiteral("batchWatermarkPanel"));
-    auto *lay = new QVBoxLayout(panel);
-    lay->setContentsMargins(0, 0, 0, 0);
-    lay->setSpacing(6);
-    auto *row1 = new QHBoxLayout;
-    row1->addWidget(new QLabel("水印文字:"));
-    text = new QLineEdit;
-    text->setPlaceholderText("© 2025");
-    row1->addWidget(text, 1);
-    row1->addWidget(new QLabel("位置:"));
-    pos = new QComboBox;
-    pos->addItems({"左上", "右上", "左下", "右下", "居中", "平铺"});
-    pos->setCurrentIndex(4);
-    row1->addWidget(pos);
-    lay->addLayout(row1);
-    auto *row2 = new QHBoxLayout;
-    row2->addWidget(new QLabel("不透明度:"));
-    opacity = new QDoubleSpinBox;
-    opacity->setRange(0.0, 1.0);
-    opacity->setSingleStep(0.05);
-    opacity->setValue(0.3);
-    row2->addWidget(opacity);
-    row2->addWidget(new QLabel("字号:"));
-    fontSize = new QSpinBox;
-    fontSize->setRange(8, 200);
-    fontSize->setValue(24);
-    row2->addWidget(fontSize);
-    row2->addStretch();
-    lay->addLayout(row2);
-    return panel;
-}
-
-QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&outputDir,
-                         QPushButton *&browseBtn)
-{
-    auto *panel = new QWidget;
-    panel->setObjectName(QStringLiteral("batchExportPanel"));
-    auto *lay = new QVBoxLayout(panel);
-    lay->setContentsMargins(0, 0, 0, 0);
-    lay->setSpacing(6);
-    auto *fmtRow = new QHBoxLayout;
-    fmtRow->addWidget(new QLabel("导出格式:"));
-    format = new QComboBox;
-    format->addItems({"png", "jpg", "bmp", "webp"});
-    fmtRow->addWidget(format);
-    fmtRow->addWidget(new QLabel("质量:"));
-    quality = new QSpinBox;
-    quality->setRange(1, 100);
-    quality->setValue(90);
-    fmtRow->addWidget(quality);
-    fmtRow->addStretch();
-    lay->addLayout(fmtRow);
-    auto *outputRow = new QHBoxLayout;
-    outputRow->addWidget(new QLabel("输出目录:"));
-    outputDir = new QLineEdit;
-    outputDir->setObjectName(QStringLiteral("batchOutputDir"));
-    outputDir->setPlaceholderText("(留空=原目录)");
-    outputRow->addWidget(outputDir, 1);
-    browseBtn = new QPushButton("浏览...");
-    outputRow->addWidget(browseBtn);
-    lay->addLayout(outputRow);
-    return panel;
+    for (const auto &file : result.fileResults)
+    {
+        if (!file.success || file.outputPath.empty())
+            continue;
+        const QString path =
+            QString::fromUtf8(file.outputPath.data(), static_cast<int>(file.outputPath.size()));
+        return QFileInfo(path).absolutePath();
+    }
+    return {};
 }
 
 } // namespace
@@ -232,6 +129,9 @@ BatchDialog::BatchDialog(QWidget *parent)
     buildParameterControls(mainLayout);
     buildProgressControls(mainLayout);
     connectControls();
+    const QSettings settings;
+    m_overwriteExisting->setChecked(
+        settings.value(QStringLiteral("batch/overwriteExisting"), false).toBool());
     m_renamePanel->loadSettings();
     updateParamVisibility();
 }
@@ -314,12 +214,13 @@ void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
     retryRow->addStretch();
     paramLay->addLayout(retryRow);
 
-    m_resizePanel = makeResizePanel(m_resizeMaxEdge);
-    m_cropPanel = makeCropPanel(m_cropX, m_cropY, m_cropW, m_cropH);
-    m_watermarkPanel = makeWatermarkPanel(m_watermarkText, m_watermarkPos, m_watermarkOpacity,
-                                          m_watermarkFontSize);
+    m_resizePanel = batchdialog_detail::makeResizePanel(m_resizeMaxEdge);
+    m_cropPanel = batchdialog_detail::makeCropPanel(m_cropX, m_cropY, m_cropW, m_cropH);
+    m_watermarkPanel = batchdialog_detail::makeWatermarkPanel(
+        m_watermarkText, m_watermarkPos, m_watermarkOpacity, m_watermarkFontSize);
     m_renamePanel = new BatchRenamePanel;
-    m_exportPanel = makeExportPanel(m_exportFormat, m_exportQuality, m_outputDir, m_browseBtn);
+    m_exportPanel = batchdialog_detail::makeExportPanel(
+        m_exportFormat, m_exportQuality, m_outputDir, m_browseBtn, m_overwriteExisting);
     paramLay->addWidget(m_resizePanel);
     paramLay->addWidget(m_cropPanel);
     paramLay->addWidget(m_watermarkPanel);
@@ -533,37 +434,52 @@ void BatchDialog::buildConfig(mviewer::domain::BatchJobConfig &config) const
     }
     config.exportFormat = m_exportFormat->currentText().toStdString();
     config.exportQuality = m_exportQuality->value();
-    config.outputDir = m_outputDir->text().toStdString();
+    config.outputDir = m_outputDir->text().trimmed().toStdString();
+    config.overwriteExisting = m_overwriteExisting->isChecked();
+}
+
+bool BatchDialog::validateStart(const mviewer::domain::BatchJobConfig &config)
+{
+    if (config.inputPaths.empty())
+    {
+        QMessageBox::warning(this, "批量处理", "请先添加文件。");
+        return false;
+    }
+    if (config.operations.empty())
+    {
+        QMessageBox::warning(this, "批量处理", "请至少选择一个操作。");
+        return false;
+    }
+    const bool writesNothing = m_chkRename->isChecked() || m_chkResize->isChecked() ||
+                               m_chkCrop->isChecked() || m_chkWatermark->isChecked();
+    if (!m_chkExport->isChecked() && writesNothing)
+    {
+        QMessageBox::warning(
+            this, "批量处理",
+            "未勾选「导出」时，重命名/缩放/裁剪/水印不会生成任何文件。请勾选「导出」。");
+        return false;
+    }
+    if (m_chkRename->isChecked() && !m_renamePanel->isValid())
+    {
+        QMessageBox::warning(
+            this, "批量处理",
+            QStringLiteral("重命名设置无效：%1").arg(m_renamePanel->errorMessage()));
+        return false;
+    }
+    return true;
 }
 
 void BatchDialog::onStart()
 {
     mviewer::domain::BatchJobConfig config;
     buildConfig(config);
-
-    if (config.inputPaths.empty())
-    {
-        QMessageBox::warning(this, "批量处理", "请先添加文件。");
+    if (!validateStart(config))
         return;
-    }
-
-    if (config.operations.empty())
-    {
-        QMessageBox::warning(this, "批量处理", "请至少选择一个操作。");
-        return;
-    }
 
     if (m_chkRename->isChecked())
-    {
-        if (!m_renamePanel->isValid())
-        {
-            QMessageBox::warning(
-                this, "批量处理",
-                QStringLiteral("重命名设置无效：%1").arg(m_renamePanel->errorMessage()));
-            return;
-        }
         m_renamePanel->saveSettings(); // remembered only when the run is confirmed
-    }
+    QSettings settings;
+    settings.setValue(QStringLiteral("batch/overwriteExisting"), m_overwriteExisting->isChecked());
 
     updateUiState(true);
     m_progress->setRange(0, static_cast<int>(config.inputPaths.size()));
@@ -638,8 +554,11 @@ QString BatchDialog::formatResultLine(const mviewer::domain::BatchFileResult &re
         QString::fromUtf8(result.outputPath.data(), static_cast<int>(result.outputPath.size()));
     const auto errorMessage =
         QString::fromUtf8(result.errorMessage.data(), static_cast<int>(result.errorMessage.size()));
-    return result.success ? QString("[OK] %1 → %2").arg(inputPath).arg(outputPath)
-                          : QString("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
+    if (!result.success)
+        return QString("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
+    if (outputPath.isEmpty())
+        return QString("[OK] %1（仅分析，未写出文件）").arg(inputPath);
+    return QString("[OK] %1 → %2").arg(inputPath).arg(outputPath);
 }
 
 void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher)
@@ -680,9 +599,11 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     else if (result.totalFailed > 0)
         m_log->append(QStringLiteral("[SUMMARY] %1 个文件失败").arg(result.totalFailed));
 
-    // Enable "open output dir" if any files were produced and the output
-    // directory is known (empty = same-as-source per file).
+    // Enable "open output dir" if any files were produced. An empty field means
+    // each file was written beside its source; open the first one that landed.
     m_lastOutputDir = m_outputDir->text().trimmed();
+    if (m_lastOutputDir.isEmpty())
+        m_lastOutputDir = directoryOfFirstOutput(result);
     m_openOutputBtn->setEnabled(!m_lastOutputDir.isEmpty() && result.totalSucceeded > 0 &&
                                 QDir(m_lastOutputDir).exists());
 
