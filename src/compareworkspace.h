@@ -7,6 +7,7 @@
 #include "compareworkspace_prefetch.h"
 #include "compareworkspace_roi_types.h"
 #include "compareworkspace_session_runtime.h"
+#include "compareworkspace_types.h"
 #include "compareworkspace_warm_seed.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
@@ -31,6 +32,7 @@
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPair>
+#include <QPixmap>
 #include <QPointF>
 #include <QPushButton>
 #include <QRect>
@@ -49,6 +51,8 @@
 #include <string>
 #include <vector>
 
+class QDialog;
+class QJsonObject;
 class QStackedLayout;
 class QTableWidget;
 class HistogramWidget;
@@ -151,6 +155,7 @@ class CompareWorkspace : public QWidget
     void fitAll();
     void zoomActual();
     void copyComparisonViewToClipboard();
+    bool saveComparisonViewTo(const QString &path);
     void setEditCellIndex(int cellIdx);
     int editCellIndex() const;
     int cellRotation(int cellIdx) const;
@@ -181,6 +186,13 @@ class CompareWorkspace : public QWidget
     bool forwardFocusedCompareKey(QEvent *event);
 
   private:
+    using NavState = mviewer::cw::NavState;
+    using InspectorSample = mviewer::cw::InspectorSample;
+    using DiffBatchResult = mviewer::cw::DiffBatchResult;
+    using DiffSources = mviewer::cw::DiffSources;
+    using HistogramBatchResult = mviewer::cw::HistogramBatchResult;
+    using HistIndexPlan = mviewer::cw::HistIndexPlan;
+
     void bindDisplayColorScreen();
     void onDisplayScreenChanged();
     void buildSyncControls();
@@ -193,6 +205,9 @@ class CompareWorkspace : public QWidget
     void buildViewControls(QHBoxLayout *viewLayout);
     void buildToolbarActions(QHBoxLayout *toolLayout);
     void addFitWindowButton(QHBoxLayout *toolLayout);
+    void addSnapshotButton(QHBoxLayout *toolLayout);
+    QPixmap grabComparisonView();
+    void saveComparisonViewToFile();
     bool handleBasicCompareKey(QKeyEvent *event);
     bool handleBasicCompareSpace(QKeyEvent *event);
     bool handleBasicCompareEscape(QKeyEvent *event);
@@ -206,6 +221,7 @@ class CompareWorkspace : public QWidget
     bool handleSyncCompareKey(QKeyEvent *event);
     bool handleZoomCompareKey(QKeyEvent *event);
     bool handleAdvancedCompareKey(QKeyEvent *event);
+    bool handleClipboardCompareKey(QKeyEvent *event);
     void rebuildCells();
     void buildCompareCells(int count, int columns);
     // Fit of `sourceW×sourceH` in this pane, times the shared zoom ratio.
@@ -354,6 +370,9 @@ class CompareWorkspace : public QWidget
     void endTemporaryCompare();
     void updateTemporaryCompareAvailability();
     void refreshCompareControlTooltips();
+    QString pairNavTooltip(bool next, bool atEnd) const;
+    QString temporaryCompareTooltip() const;
+    QString clearLinkTooltip() const;
     int paneIndexAtGlobalPos(const QPoint &globalPos) const;
     void updatePaneIndexBadges();
     bool temporaryHoldBlocked() const;
@@ -445,29 +464,6 @@ class CompareWorkspace : public QWidget
     void updatePairButtons();
     void updateActionAvailability();
     // M20: snapshot UI mode so next/prev can restore after setImages rebuild.
-    struct NavState
-    {
-        bool blink = false;
-        bool split = false;
-        bool swipe = false;
-        bool overlay = false;
-        bool checker = false; // M23
-        int checkerSize = 64; // M23
-        bool diffHighlight = false;
-        int diffGainIndex = 0;
-        bool syncZoom = true;
-        bool syncDrag = true;
-        bool syncRotate = false;
-        bool crosshair = false;
-        bool pixelLink = false;
-        bool filenameOverlay = true;
-        int overlayMode = 0;
-        int overlayAlpha = 45;
-        uint8_t threshold = 0;
-        int layoutIndex = 0;
-        mviewer::domain::Selection roi;
-        bool hasRoi = false;
-    };
     NavState captureNavState() const;
     void restoreNavState(const NavState &s);
     void showShortcutHelp();
@@ -481,6 +477,8 @@ class CompareWorkspace : public QWidget
     uint8_t m_suggestedThreshold = 0;
     bool m_hasSuggestedThreshold = false;
     void onAutoThresholdClicked();
+    void resetSuggestedThreshold();
+    void noteSuggestedThreshold(bool hasSuggestion, int value);
 
     // P0 #③: explicit multi-layout selector.
     QComboBox *m_layoutCombo = nullptr;
@@ -497,13 +495,6 @@ class CompareWorkspace : public QWidget
     HistogramWidget *m_hist = nullptr;
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
-    struct InspectorSample
-    {
-        int r = 0;
-        int g = 0;
-        int b = 0;
-        bool valid = false;
-    };
     void updateInspectorRows(const std::vector<InspectorSample> &samples,
                              mviewer::core::ColorSpace space, int baseIndex, int x, int y);
     QString formatPixelInfo(int cellIndex, const QString &cellName, int x, int y,
@@ -560,47 +551,6 @@ class CompareWorkspace : public QWidget
     // and delivered to the UI thread via qApp. Value/POD data only (QImage is
     // implicitly shared; no widget is referenced).
     struct CellAdjust;
-    struct DiffBatchResult
-    {
-        uint64_t generation = 0;
-        int baseIdx = 0;
-        int targetIdx = -1;
-        bool sizeMismatch = false; // first non-base cell differs in size
-        bool aligned = false;
-        int alignX = 0, alignY = 0;
-        bool metricsValid = false;
-        double psnr = 0.0;
-        double ssim = 0.0;
-        bool hasStats = false;
-        DifferenceEngine::DiffStats stats;
-        bool hasRoiStats = false;
-        DifferenceEngine::DiffStats roiStats;
-        double diffGain = 1.0;
-        bool provisional = false; // live low-precision; metrics skipped
-        uint8_t suggestedThreshold = 0;
-        bool hasSuggestedThreshold = false;
-
-        struct CellOverlay
-        {
-            int index = -1;
-            bool sizeMismatch = false;
-            QImage overlay;
-            double opacity = 0.5;
-            double psnr = 0.0;
-            double ssim = 0.0;
-            bool hasMetrics = false;
-        };
-        std::vector<CellOverlay> overlays;
-    };
-    struct DiffSources
-    {
-        int targetIndex = -1;
-        ImageData target;
-        ImageData diff;
-        bool sizeMismatch = false;
-        double psnr = 0.0, ssim = 0.0;
-        bool hasMetrics = false;
-    };
     static DiffSources
     buildDiffOverlays(DiffBatchResult &result, const std::vector<ImageData> &pixels,
                       const std::vector<QSize> &displayTargets,
@@ -727,31 +677,7 @@ class CompareWorkspace : public QWidget
     bool m_paneHistOverlay = false;
 
     // Async batch histogram refresh: one cancellable latest-wins task per refresh.
-    struct HistogramBatchResult
-    {
-        uint64_t generation = 0;
-        int paneCount = 0;
-        bool updateMain = false;
-        // M23: coherent title and histogram data delivered as one pair.
-        bool roiEnabled = false;
-        mviewer::domain::Selection roi;
-        std::vector<mviewer::core::Histogram> main; // main surface, in main order
-
-        struct CellHist
-        {
-            int index = -1;
-            mviewer::core::Histogram hist;
-        };
-        std::vector<CellHist> panes; // pane overlay widgets keyed by index
-    };
     void scheduleHistogramRefresh(bool includeMain, const std::vector<int> &paneIndices);
-    struct HistIndexPlan
-    {
-        bool updateMain = false;
-        std::vector<int> mainIndices;
-        std::vector<int> panes;
-        std::vector<int> unionIdx;
-    };
     HistIndexPlan collectHistogramIndices(bool includeMain, const std::vector<int> &paneIndices);
     void clearMainHistogramForEmptyPlan(bool updateMain);
     static void computeHistogramBatch(const std::vector<ImageData> &pixels,
@@ -783,6 +709,8 @@ class CompareWorkspace : public QWidget
     QString m_presetDir;
     void onSavePreset();
     void onLoadPreset();
+    void restorePresetAdjustments(const QJsonObject &root);
+    void restorePresetSession(const QJsonObject &root);
     void ensurePresetDir();
 
     QPushButton *m_swapBtn = nullptr;
@@ -796,4 +724,5 @@ class CompareWorkspace : public QWidget
     void showCompareStatus(const QString &text, int msec = 3000);
     void applyCompareSafeInsets();
     void syncContextualCompareControls();
+    QDialog *m_shortcutHelpDialog = nullptr;
 };

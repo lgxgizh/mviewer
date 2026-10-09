@@ -1,5 +1,7 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
 #include "compareworkspace_p.h"
+#include "compareworkspace_preset_sanitize.h"
+#include "domain/CompareSession.h"
 #include <QFontMetrics>
 
 #include "runtime_storage.h"
@@ -561,34 +563,7 @@ void CompareWorkspace::onLoadPreset()
     if (!doc.isObject())
         return;
     const QJsonObject root = doc.object();
-
-    // Restore adjustments
-    if (root.contains("adjustments"))
-    {
-        const QJsonArray adjArray = root["adjustments"].toArray();
-        m_cellAdjusts.resize(static_cast<size_t>(adjArray.size()));
-        for (int i = 0; i < adjArray.size(); ++i)
-        {
-            const QJsonObject ao = adjArray[i].toObject();
-            auto &a = m_cellAdjusts[static_cast<size_t>(i)];
-            a.brightness = ao["brightness"].toInt();
-            a.contrast = static_cast<float>(ao["contrast"].toDouble(1.0));
-            a.gamma = static_cast<float>(ao["gamma"].toDouble(1.0));
-            a.rGain = static_cast<float>(ao["rGain"].toDouble(1.0));
-            a.bGain = static_cast<float>(ao["bGain"].toDouble(1.0));
-            a.rotation = ao["rotation"].toInt();
-            a.flipH = ao["flipH"].toBool();
-            a.flipV = ao["flipV"].toBool();
-            a.hasCrop = ao["hasCrop"].toBool();
-            if (a.hasCrop)
-            {
-                a.cropX = ao["cropX"].toInt();
-                a.cropY = ao["cropY"].toInt();
-                a.cropW = ao["cropW"].toInt();
-                a.cropH = ao["cropH"].toInt();
-            }
-        }
-    }
+    restorePresetAdjustments(root);
 
     // per-pane histogram
     if (root.contains("perPaneHist"))
@@ -605,43 +580,7 @@ void CompareWorkspace::onLoadPreset()
     // display batch with the loaded m_cellAdjusts. Only schedule explicitly
     // when no display generation was scheduled during that restoration.
     const uint64_t displayGenBeforeRestore = m_displayGen;
-
-    // Restore session settings inline
-    if (root.contains("session") && root["session"].isObject())
-    {
-        const QJsonObject s = root["session"].toObject();
-        mviewer::domain::CompareSession sess;
-        if (s.contains("syncMode"))
-        {
-            const int mode = qBound(0, s["syncMode"].toInt(), 3);
-            sess.syncMode = static_cast<mviewer::domain::SyncMode>(mode);
-        }
-        else
-        {
-            sess.syncMode = s["synced"].toBool(false) ? mviewer::domain::SyncMode::All
-                                                      : mviewer::domain::SyncMode::Off;
-        }
-        sess.sharedScale = s["sharedScale"].toDouble(1.0);
-        sess.sharedOffsetX = s["sharedOffsetX"].toDouble(0.0);
-        sess.sharedOffsetY = s["sharedOffsetY"].toDouble(0.0);
-        sess.blinkIndex = s["blinkIndex"].toInt(-1);
-        sess.blinkIntervalMs = s["blinkIntervalMs"].toInt(500);
-        sess.threshold = static_cast<uint8_t>(s["threshold"].toInt(0));
-        sess.sidePanelVisible = s["sidePanelVisible"].toBool(false);
-        sess.layoutIndex = s["layoutIndex"].toInt(0);
-        sess.customColumns = s["customColumns"].toInt(2);
-        if (s.contains("selection") && s["selection"].isObject())
-        {
-            const QJsonObject sel = s["selection"].toObject();
-            sess.selection.x = sel["x"].toInt();
-            sess.selection.y = sel["y"].toInt();
-            sess.selection.w = sel["w"].toInt();
-            sess.selection.h = sel["h"].toInt();
-            sess.selection.active = sel["active"].toBool();
-            sess.selection.synced = sel["synced"].toBool();
-        }
-        applySession(sess);
-    }
+    restorePresetSession(root);
 
     // Restore layout combo
     if (root.contains("layoutIndex") && m_layoutCombo)
@@ -652,6 +591,81 @@ void CompareWorkspace::onLoadPreset()
     }
 
     finishPresetRestore(displayGenBeforeRestore);
+}
+
+void CompareWorkspace::restorePresetAdjustments(const QJsonObject &root)
+{
+    if (!root.contains(QStringLiteral("adjustments")))
+        return;
+    const QJsonArray adjArray = root[QStringLiteral("adjustments")].toArray();
+    const qsizetype cap = static_cast<qsizetype>(mviewer::domain::CompareSession::MAX_IMAGES);
+    const qsizetype count = (std::min)(adjArray.size(), cap);
+    m_cellAdjusts.resize(static_cast<size_t>(count));
+    for (qsizetype i = 0; i < count; ++i)
+    {
+        const QJsonObject ao = adjArray.at(i).toObject();
+        CellAdjust &cell = m_cellAdjusts[static_cast<size_t>(i)];
+        cell.brightness = ao[QStringLiteral("brightness")].toInt();
+        cell.contrast = static_cast<float>(ao[QStringLiteral("contrast")].toDouble(1.0));
+        cell.gamma = static_cast<float>(ao[QStringLiteral("gamma")].toDouble(1.0));
+        cell.rGain = static_cast<float>(ao[QStringLiteral("rGain")].toDouble(1.0));
+        cell.bGain = static_cast<float>(ao[QStringLiteral("bGain")].toDouble(1.0));
+        cell.rotation = mviewer::cw::clampRotation(ao[QStringLiteral("rotation")].toInt());
+        cell.flipH = ao[QStringLiteral("flipH")].toBool();
+        cell.flipV = ao[QStringLiteral("flipV")].toBool();
+        cell.hasCrop = ao[QStringLiteral("hasCrop")].toBool();
+        if (!cell.hasCrop)
+            continue;
+        const mviewer::cw::PresetCrop crop = mviewer::cw::clampCrop(
+            ao[QStringLiteral("cropX")].toInt(), ao[QStringLiteral("cropY")].toInt(),
+            ao[QStringLiteral("cropW")].toInt(), ao[QStringLiteral("cropH")].toInt());
+        cell.cropX = crop.x;
+        cell.cropY = crop.y;
+        cell.cropW = crop.w;
+        cell.cropH = crop.h;
+    }
+}
+
+void CompareWorkspace::restorePresetSession(const QJsonObject &root)
+{
+    if (!root.contains(QStringLiteral("session")) || !root[QStringLiteral("session")].isObject())
+        return;
+    const QJsonObject session = root[QStringLiteral("session")].toObject();
+    mviewer::domain::CompareSession restored;
+    if (session.contains(QStringLiteral("syncMode")))
+    {
+        const int mode = qBound(0, session[QStringLiteral("syncMode")].toInt(), 3);
+        restored.syncMode = static_cast<mviewer::domain::SyncMode>(mode);
+    }
+    else
+    {
+        restored.syncMode = session[QStringLiteral("synced")].toBool(false)
+                                ? mviewer::domain::SyncMode::All
+                                : mviewer::domain::SyncMode::Off;
+    }
+    restored.sharedScale = session[QStringLiteral("sharedScale")].toDouble(1.0);
+    restored.sharedOffsetX = session[QStringLiteral("sharedOffsetX")].toDouble(0.0);
+    restored.sharedOffsetY = session[QStringLiteral("sharedOffsetY")].toDouble(0.0);
+    restored.blinkIndex = session[QStringLiteral("blinkIndex")].toInt(-1);
+    restored.blinkIntervalMs =
+        mviewer::cw::clampBlinkMs(session[QStringLiteral("blinkIntervalMs")].toInt(500));
+    restored.threshold = mviewer::cw::clampThreshold(session[QStringLiteral("threshold")].toInt(0));
+    restored.sidePanelVisible = session[QStringLiteral("sidePanelVisible")].toBool(false);
+    restored.layoutIndex = session[QStringLiteral("layoutIndex")].toInt(0);
+    restored.customColumns =
+        mviewer::cw::clampColumns(session[QStringLiteral("customColumns")].toInt(2));
+    if (session.contains(QStringLiteral("selection")) &&
+        session[QStringLiteral("selection")].isObject())
+    {
+        const QJsonObject sel = session[QStringLiteral("selection")].toObject();
+        restored.selection.x = sel[QStringLiteral("x")].toInt();
+        restored.selection.y = sel[QStringLiteral("y")].toInt();
+        restored.selection.w = sel[QStringLiteral("w")].toInt();
+        restored.selection.h = sel[QStringLiteral("h")].toInt();
+        restored.selection.active = sel[QStringLiteral("active")].toBool();
+        restored.selection.synced = sel[QStringLiteral("synced")].toBool();
+    }
+    applySession(restored);
 }
 
 void CompareWorkspace::finishPresetRestore(uint64_t displayGenBeforeRestore)

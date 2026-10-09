@@ -4,7 +4,6 @@
 #include <QApplication>
 #include <QMetaObject>
 #include <QPointer>
-#include <QSettings>
 
 #include <algorithm>
 

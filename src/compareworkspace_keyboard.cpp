@@ -1,11 +1,9 @@
 // CompareWorkspace keyboard-first interaction (M20 P0#4).
 #include "compareworkspace_p.h"
+#include "compareworkspace_shortcuts.h"
 #include "compareworkspace_temporary.h"
 
-#include <QApplication>
-#include <QClipboard>
 #include <QCursor>
-#include <QDir>
 #include <QKeyEvent>
 #include <QTimer>
 
@@ -94,6 +92,25 @@ bool CompareWorkspace::handleBasicCompareNavigation(QKeyEvent *event)
 
 namespace
 {
+
+QString compareShortcutName(const char *keys)
+{
+    const mviewer::cw::CompareShortcut *entry = mviewer::cw::findCompareShortcut(keys);
+    const char *name = (entry && entry->name) ? entry->name : keys;
+    return QString::fromUtf8(name ? name : "");
+}
+
+QString compareModeStatus(const char *keys)
+{
+    return QString::fromUtf8("模式: ") + mviewer::cw::compareShortcutText(keys);
+}
+
+QString compareToggleStatus(const char *keys, bool on, const char *whenOn, const char *whenOff)
+{
+    const char *suffix = on ? whenOn : whenOff;
+    return compareShortcutName(keys) + QString::fromUtf8(": ") +
+           QString::fromUtf8(suffix ? suffix : "");
+}
 
 int focusedUnlinkedPane(int focusIndex, const QList<RawImageView *> &views)
 {
@@ -247,28 +264,28 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
     {
     case Qt::Key_B:
         target = m_blinkChk;
-        modeName = tr("模式: 闪烁对比 (B)");
+        modeName = compareModeStatus("B");
         break;
     case Qt::Key_S:
         target = m_splitChk;
-        modeName = tr("模式: 左右分割 (S)");
+        modeName = compareModeStatus("S");
         break;
     case Qt::Key_W:
         target = m_swipeChk;
-        modeName = tr("模式: 卷帘对比 (W)");
+        modeName = compareModeStatus("W");
         break;
     case Qt::Key_O:
     case Qt::Key_Tab:
         target = m_overlayChk;
-        modeName = tr("模式: 叠加对比 (O)");
+        modeName = compareModeStatus("O");
         break;
     case Qt::Key_K:
         target = m_checkerChk;
-        modeName = tr("模式: 棋盘对比 (K)");
+        modeName = compareModeStatus("K");
         break;
     case Qt::Key_H:
         target = m_diffHighlightChk;
-        modeName = tr("模式: 差异高亮 (H)");
+        modeName = compareModeStatus("H");
         break;
     default:
         return false;
@@ -290,7 +307,7 @@ bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
     if (key == Qt::Key_0)
     {
         setOverlayMode(mviewer::OverlayMode::None);
-        showCompareStatus(tr("已重置为全色彩通道"));
+        showCompareStatus(QString::fromUtf8("已重置为") + compareShortcutName("Shift+0"));
         event->accept();
         return true;
     }
@@ -317,14 +334,14 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_Z && m_syncZoomChk)
     {
         m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
-        showCompareStatus(m_syncZoomChk->isChecked() ? tr("同步缩放: 开启") : tr("同步缩放: 关闭"));
+        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(), "开启", "关闭"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_D && m_syncDragChk)
     {
         m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
-        showCompareStatus(m_syncDragChk->isChecked() ? tr("同步平移: 开启") : tr("同步平移: 关闭"));
+        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(), "开启", "关闭"));
         event->accept();
         return true;
     }
@@ -332,23 +349,21 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_R && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
-        showCompareStatus(m_crosshairChk->isChecked() ? tr("十字光标: 开启")
-                                                      : tr("十字光标: 关闭"));
+        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(), "开启", "关闭"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_L && m_pixelLinkChk)
     {
         m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
-        showCompareStatus(m_pixelLinkChk->isChecked() ? tr("像素审查联动: 开启")
-                                                      : tr("像素审查联动: 关闭"));
+        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(), "开启", "关闭"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_I && m_sideChk)
     {
         m_sideChk->setChecked(!m_sideChk->isChecked());
-        showCompareStatus(m_sideChk->isChecked() ? tr("分析面板: 展开") : tr("分析面板: 收起"));
+        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(), "展开", "收起"));
         event->accept();
         return true;
     }
@@ -420,31 +435,8 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
 
-    // Ctrl+Shift+C copies the focused image path. Exact Ctrl+C copies the view.
-    if (key == Qt::Key_C && mods == (Qt::ControlModifier | Qt::ShiftModifier))
-    {
-        const QString path = focusImagePath();
-        if (!path.isEmpty())
-        {
-            const QString native = QDir::toNativeSeparators(path);
-            QApplication::clipboard()->setText(native);
-            showCompareStatus(tr("已复制路径: %1").arg(native));
-        }
-        else
-        {
-            showCompareStatus(tr("没有可复制的路径"));
-        }
-        event->accept();
+    if (handleClipboardCompareKey(event))
         return true;
-    }
-
-    // Ctrl+C: copy comparison view to clipboard.
-    if (ctrl && key == Qt::Key_C)
-    {
-        copyComparisonViewToClipboard();
-        event->accept();
-        return true;
-    }
 
     // Diff threshold ± ( [ / ] ).
     if (plain && (key == Qt::Key_BracketLeft || key == Qt::Key_BracketRight) && m_thresholdSlider)
@@ -499,7 +491,7 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // ? / F1 → shortcut help (title bar tip).
+    // ? / F1 toggles the shortcut table. The status line keeps pair guidance.
     if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash || key == Qt::Key_F1))
     {
         showShortcutHelp();
@@ -741,7 +733,7 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
     if (alt && key == Qt::Key_R)
     {
         setSyncRotate(!m_syncRotate);
-        showCompareStatus(m_syncRotate ? tr("已开启同步旋转/翻转") : tr("已关闭同步旋转/翻转"));
+        showCompareStatus(compareToggleStatus("Alt+R", m_syncRotate, "开启", "关闭"));
         event->accept();
         return true;
     }

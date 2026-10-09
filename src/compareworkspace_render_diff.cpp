@@ -364,16 +364,7 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
         return;
     }
 
-    if (r.hasSuggestedThreshold)
-    {
-        m_suggestedThreshold = r.suggestedThreshold;
-        m_hasSuggestedThreshold = true;
-        if (m_autoThresholdBtn)
-        {
-            m_autoThresholdBtn->setToolTip(
-                tr("基于差异分布自动计算最佳分离阈值 (Otsu 建议: %1)").arg(m_suggestedThreshold));
-        }
-    }
+    noteSuggestedThreshold(r.hasSuggestedThreshold, static_cast<int>(r.suggestedThreshold));
 
     if (m_metricLabel)
     {
