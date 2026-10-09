@@ -263,6 +263,7 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         TaskScheduler::cancel(m_diffTask);
     m_diffTask.reset();
     ++m_diffGen;
+    resetSuggestedThreshold();
     if (m_session)
     {
         m_session->forceDecodePriority = true;
