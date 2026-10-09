@@ -11,12 +11,26 @@
 
 #include <algorithm>
 
+namespace
+{
+// Shift+F: FOV-matched best fit (toolbar「最适合」). Plain F stays Fit.
+bool handleBestFitCompareKey(CompareWorkspace *workspace, QKeyEvent *event)
+{
+    if (event->key() != Qt::Key_F || event->modifiers() != Qt::ShiftModifier)
+        return false;
+    workspace->bestFitAll();
+    event->accept();
+    return true;
+}
+} // namespace
+
 // P0-4 / M20: keyboard-first compare — day-long work without the mouse.
 void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 {
     if (handleBasicCompareKey(event) || handleModeCompareKey(event) ||
         handleChannelCompareKey(event) || handleSyncCompareKey(event) ||
-        handleZoomCompareKey(event) || handleAdvancedCompareKey(event))
+        handleZoomCompareKey(event) || handleBestFitCompareKey(this, event) ||
+        handleAdvancedCompareKey(event))
         return;
     QWidget::keyPressEvent(event);
 }

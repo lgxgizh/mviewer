@@ -166,7 +166,8 @@ int main(int argc, char **argv)
     }
     auto *button = ws->findChild<QPushButton *>(QStringLiteral("bestFitButton"));
     auto *toolBar = ws->findChild<QWidget *>(QStringLiteral("compareToolToolbar"));
-    check(button && button->text() == QStringLiteral("最适合"), "toolbar button「最适合」");
+    check(button && button->text() == QStringLiteral("最适合 (Shift+F)"),
+          "toolbar button「最适合 (Shift+F)」shows its shortcut");
     check(button && button->isVisible() && toolBar && toolBar->isAncestorOf(button),
           "button sits on the tool actions toolbar");
     check(button && button->toolTip().contains(QStringLiteral("统一像素倍率")),
@@ -197,6 +198,19 @@ int main(int argc, char **argv)
     check(uniform->isChecked(), "F keeps 统一像素倍率 checked");
     check(std::abs(ws->engine().cellScale(0) - ws->engine().cellScale(1)) < 1e-9,
           "F refits inside uniform pixel scale");
+
+    // Shift+F is the keyboard shortcut for 最适合.
+    check(button && button->toolTip().contains(QStringLiteral("Shift+F")),
+          "tooltip names the Shift+F shortcut");
+    QKeyEvent bestFitKey(QEvent::KeyPress, Qt::Key_F, Qt::ShiftModifier);
+    QApplication::sendEvent(ws, &bestFitKey);
+    pump(30);
+    check(bestFitKey.isAccepted(), "Shift+F is handled by the compare workspace");
+    check(!uniform->isChecked(), "Shift+F runs 最适合 and turns 统一像素倍率 off");
+    check(std::abs(ws->engine().cellScale(0) -
+                   fitScale(lowView->width(), lowView->height(), 400, 600)) < 1e-6,
+          "Shift+F gives the low-res pane its own fit");
+    uniform->setChecked(true);
 
     button->click();
     pump(30);

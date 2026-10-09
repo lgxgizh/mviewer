@@ -592,11 +592,11 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 
     // FOV-matched screen fit. The view row is already at the 1100px sizeHint
     // budget, so this stays on the actions row beside 分析 / 导出报告.
-    auto *bestFitBtn = new QPushButton(tr("最适合"), this);
+    auto *bestFitBtn = new QPushButton(tr("最适合 (Shift+F)"), this);
     bestFitBtn->setObjectName("bestFitButton");
-    bestFitBtn->setToolTip(
-        tr("最适合：各窗格按自身分辨率适配窗口，相同视野/宽高比的图显示为相近大小"
-           "（关闭统一像素倍率）。临时切换、闪烁或换图后仍保持该屏幕大小"));
+    bestFitBtn->setToolTip(tr(
+        "最适合（快捷键: Shift+F）：各窗格按自身分辨率适配窗口，相同视野/宽高比的图显示为相近大小"
+        "（关闭统一像素倍率）。临时切换、闪烁或换图后仍保持该屏幕大小"));
     connect(bestFitBtn, &QPushButton::clicked, this, &CompareWorkspace::bestFitAll);
     toolLayout->addWidget(bestFitBtn);
 

@@ -610,8 +610,8 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>Alt+R</kbd></td><td>切换同步旋转/翻转（勾选后作用于所有比较图）</td></tr>"
         "<tr><td><kbd>Alt+方向键</kbd></td><td>微调 ROI 选区（Shift+Alt 步长 "
         "10px；支持单格独立/全局联动）</td></tr>"
-        "<tr><td><kbd>F</kbd> / <kbd>X</kbd> / <kbd>?</kbd></td><td>Fit / 交换 A/B "
-        "(多图交换当前与基准) / 帮助</td></tr>"
+        "<tr><td><kbd>F</kbd> / <kbd>Shift+F</kbd> / <kbd>X</kbd> / <kbd>?</kbd></td><td>Fit / "
+        "最适合 / 交换 A/B (多图交换当前与基准) / 帮助</td></tr>"
         "<tr><td><kbd>ESC</kbd></td><td>有选区则清除选区，再按一次退出比较</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
         "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口）</td></tr>"
@@ -697,7 +697,7 @@ QString MainWindow::userGuideHtml()
         "<tr><td><kbd>Alt+R</kbd></td><td>切换同步旋转/翻转（作用于所有比较图）</td></tr>"
         "<tr><td><kbd>Alt+方向键</kbd></td><td>微调 ROI 选区位置（Shift 步长 10px）</td></tr>"
         "<tr><td><kbd>X</kbd></td><td>交换当前与基准图（多图对比直接对比任意图）</td></tr>"
-        "<tr><td><kbd>F</kbd></td><td>全部适应窗口</td></tr>"
+        "<tr><td><kbd>F</kbd> / <kbd>Shift+F</kbd></td><td>全部适应窗口 / 最适合</td></tr>"
         "<tr><td><kbd>P</kbd> 上一对 · <kbd>PgUp</kbd> 上一对 · "
         "<kbd>←</kbd> 上一对</td><td>上一对</td></tr>"
         "<tr><td><kbd>N</kbd> 下一对 · <kbd>PgDn</kbd> 下一对 · "
@@ -779,7 +779,7 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
         QMenu menu(this);
         menu.addAction(tr("适应窗口 (F)"), this, [this]() { m_compareView->fitAll(); });
         menu.addAction(tr("实际大小 100% (1)"), this, [this]() { m_compareView->zoomActual(); });
-        menu.addAction(tr("最适合"), this, [this]() { m_compareView->bestFitAll(); });
+        menu.addAction(tr("最适合 (Shift+F)"), this, [this]() { m_compareView->bestFitAll(); });
         menu.exec(globalPos);
         return;
     }
