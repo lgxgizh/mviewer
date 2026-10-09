@@ -1444,5 +1444,116 @@ void testSyncRotate(const QString &img0, const QString &img1)
           "Rotating pane 1 only modifies pane 1 when syncRotate is off");
 }
 
+void testCompareShortcutHelpSnapshot(const QDir &dir, const QString &img0, const QString &img1)
+{
+    std::cout << "── Compare: shortcut table, help, snapshot, auto threshold ──\n";
+    bool rowsFilled = true;
+    for (const mviewer::cw::CompareShortcut &entry : mviewer::cw::kCompareShortcuts)
+    {
+        if (!entry.keys || entry.keys[0] == '\0' || !entry.name || entry.name[0] == '\0')
+            rowsFilled = false;
+    }
+    CHECK(rowsFilled, "every compare shortcut has a non-empty name and keys");
+
+    const char *requiredKeys[] = {"W", "I", "Alt+R",        "Ctrl+R", "Ctrl+Shift+R",
+                                  "[", ",", "Ctrl+Shift+C", "Ctrl+C", "Ctrl+S"};
+    bool requiredPresent = true;
+    for (const char *keys : requiredKeys)
+    {
+        if (!mviewer::cw::findCompareShortcut(keys))
+            requiredPresent = false;
+    }
+    CHECK(requiredPresent, "shortcut table lists W, I, rotate, threshold, copy, and save");
+
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    dlg.resize(1100, 750);
+    dlg.show();
+    pump(30);
+
+    QCheckBox *swipe = findChk(ws, QStringLiteral("滑动对比"));
+    const mviewer::cw::CompareShortcut *swipeKeys = mviewer::cw::findCompareShortcut("W");
+    QString swipeName;
+    if (swipe)
+    {
+        const qsizetype cut = swipe->text().indexOf(QLatin1Char('('));
+        swipeName = (cut < 0) ? swipe->text().trimmed() : swipe->text().left(cut).trimmed();
+    }
+    const bool nameMatches =
+        swipeKeys && swipeKeys->name && swipeName == QString::fromUtf8(swipeKeys->name);
+    CHECK(nameMatches, "W shortcut name matches the swipe checkbox text");
+
+    const QString titleBefore = dlg.windowTitle();
+    QKeyEvent press(QEvent::KeyPress, Qt::Key_Question, Qt::NoModifier);
+    QApplication::sendEvent(ws, &press);
+    QKeyEvent release(QEvent::KeyRelease, Qt::Key_Question, Qt::NoModifier);
+    QApplication::sendEvent(ws, &release);
+    pump(30);
+    auto *help = ws->findChild<QDialog *>(QStringLiteral("compareShortcutHelpDialog"));
+    auto *table =
+        help ? help->findChild<QTableWidget *>(QStringLiteral("compareShortcutTable")) : nullptr;
+    const int shortcutCount = static_cast<int>(std::size(mviewer::cw::kCompareShortcuts));
+    CHECK(help && help->isVisible(), "? shows the compare shortcut help dialog");
+    CHECK(dlg.windowTitle() == titleBefore, "? keeps the compare window title");
+    CHECK(table && table->rowCount() == shortcutCount, "shortcut help rows match the table");
+
+    QKeyEvent pressAgain(QEvent::KeyPress, Qt::Key_Question, Qt::NoModifier);
+    QApplication::sendEvent(ws, &pressAgain);
+    QKeyEvent releaseAgain(QEvent::KeyRelease, Qt::Key_Question, Qt::NoModifier);
+    QApplication::sendEvent(ws, &releaseAgain);
+    pump(20);
+    CHECK(help && !help->isVisible(), "? hides the compare shortcut help dialog");
+
+    auto *snapshot = ws->findChild<QToolButton *>(QStringLiteral("compareSnapshotButton"));
+    CHECK(snapshot, "compare snapshot button exists");
+    CHECK(ws->findChild<QAction *>(QStringLiteral("compareSnapshotCopyAction")),
+          "snapshot menu copies the view");
+    CHECK(ws->findChild<QAction *>(QStringLiteral("compareSnapshotSaveAction")),
+          "snapshot menu saves a png");
+
+    ws->setImages({img0, img1});
+    waitForCompareCount(ws, 2);
+    const QString snapPath = dir.filePath(QStringLiteral("compare_snap.png"));
+    CHECK(!ws->saveComparisonViewTo(QString()), "saveComparisonViewTo rejects an empty path");
+    CHECK(ws->saveComparisonViewTo(snapPath), "saveComparisonViewTo writes the compare view");
+    CHECK(QFile::exists(snapPath), "snapshot png exists");
+    const QImage saved(snapPath);
+    CHECK(!saved.isNull(), "snapshot png decodes");
+
+    auto *diffToggle = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
+    auto *autoBtn = ws->findChild<QPushButton *>(QStringLiteral("diffAutoThresholdButton"));
+    CHECK(diffToggle && autoBtn, "diff overlay and auto-threshold controls exist");
+    if (diffToggle && autoBtn)
+    {
+        diffToggle->setChecked(true);
+        // setImages drops the previous suggestion before the next diff result.
+        ws->setImages({img1, img0});
+        CHECK(ws->comparedImageCount() == 2, "loaded panes stay up while the next pair loads");
+        CHECK(diffToggle->isChecked(), "diff stays on when the compared set changes");
+        CHECK(!autoBtn->isEnabled(), "auto threshold is disabled before the new diff result");
+    }
+}
+
+void testComparePresetSanitize()
+{
+    std::cout << "── Compare: preset value clamps ──\n";
+    CHECK(mviewer::cw::clampRotation(45) == 0, "rotation 45 snaps to 0");
+    CHECK(mviewer::cw::clampRotation(-90) == 270, "rotation -90 normalizes to 270");
+    CHECK(mviewer::cw::clampRotation(450) == 90, "rotation 450 snaps to 90");
+    CHECK(mviewer::cw::clampThreshold(300) == 255, "threshold 300 clamps to 255");
+    CHECK(mviewer::cw::clampThreshold(-5) == 0, "threshold -5 clamps to 0");
+    CHECK(mviewer::cw::clampBlinkMs(1) == 50, "blink 1 clamps to 50 ms");
+    CHECK(mviewer::cw::clampBlinkMs(99999) == 5000, "blink 99999 clamps to 5000 ms");
+    CHECK(mviewer::cw::clampColumns(0) == 1, "columns 0 clamps to 1");
+    CHECK(mviewer::cw::clampColumns(50) == 8, "columns 50 clamps to 8");
+    const mviewer::cw::PresetCrop crop = mviewer::cw::clampCrop(-4, -2, -9, 12);
+    CHECK(crop.x == 0 && crop.y == 0 && crop.w == 0 && crop.h == 12,
+          "negative crop edges clamp to zero");
+}
+
 } // namespace
 

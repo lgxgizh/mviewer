@@ -203,25 +203,7 @@ void CompareWorkspace::updateTemporaryCompareAvailability()
     if (m_temporaryCompareButton)
     {
         m_temporaryCompareButton->setEnabled(available);
-        if (m_engine.imageCount() > 2)
-        {
-            m_temporaryCompareButton->setToolTip(
-                tr("超过 2 张时此按钮和 Space 不可用。把鼠标移到窗格上，按住数字键 1–N "
-                   "在该窗格临时显示第 N 张图；松开恢复。布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。"));
-        }
-        else if (!imagesReady)
-        {
-            m_temporaryCompareButton->setToolTip(tr("需要恰好 2 张已显示的图片才能按住临时切换"));
-        }
-        else if (!available)
-        {
-            m_temporaryCompareButton->setToolTip(tr("闪烁开启时不能临时切换"));
-        }
-        else
-        {
-            m_temporaryCompareButton->setToolTip(
-                tr("按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。"));
-        }
+        m_temporaryCompareButton->setToolTip(temporaryCompareTooltip());
     }
     updatePaneIndexBadges();
     if (!available && m_temporaryCompareActive && m_temporaryDigit == 0)
@@ -238,14 +220,8 @@ void CompareWorkspace::refreshCompareControlTooltips()
             return;
         widget->setToolTip(widget->isEnabled() ? enabledTip : disabledTip);
     };
-    setTip(m_prevPairBtn,
-           tr("P 上一对（PgUp、← 同样是上一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"),
-           tr("已经是第一对，没有上一对（P、PgUp、←）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A "
-              "批量分析导出。"));
-    setTip(m_nextPairBtn,
-           tr("N 下一对（PgDn、→ 同样是下一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"),
-           tr("已经是最后一对，没有下一对（N、PgDn、→）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A "
-              "批量分析导出。"));
+    setTip(m_prevPairBtn, pairNavTooltip(false, false), pairNavTooltip(false, true));
+    setTip(m_nextPairBtn, pairNavTooltip(true, false), pairNavTooltip(true, true));
     setTip(m_swapBtn, tr("交换窗格顺序（快捷键 X）"),
            loading ? tr("图片还在加载，暂时不能交换")
                    : tr("至少需要 2 张图片才能交换（快捷键 X）"));
@@ -254,14 +230,55 @@ void CompareWorkspace::refreshCompareControlTooltips()
     setTip(m_exportReportBtn, tr("将对比结果导出为 HTML/Markdown/JSON 报告"),
            count < 2 ? tr("至少需要 2 张图片才能导出报告") : tr("图片还在加载，暂时不能导出报告"));
     if (m_clearLinksBtn)
-    {
-        const bool linkOn = m_pixelLinkChk && m_pixelLinkChk->isChecked();
-        if (m_clearLinksBtn->isEnabled())
-            m_clearLinksBtn->setToolTip(tr("清除全部像素连线标记"));
-        else if (!linkOn)
-            m_clearLinksBtn->setToolTip(tr("请先勾选「像素连线」（仅 2 张图片时可用）"));
-        else
-            m_clearLinksBtn->setToolTip(tr("还没有标记点"));
-    }
+        m_clearLinksBtn->setToolTip(clearLinkTooltip());
     updateTemporaryCompareAvailability();
+}
+
+QString CompareWorkspace::pairNavTooltip(bool next, bool atEnd) const
+{
+    if (next && atEnd)
+    {
+        return tr("已经是最后一对，没有下一对（N、PgDn、→）。Ctrl+Shift+A 取消选择。"
+                  "Ctrl+Alt+A 批量分析导出。");
+    }
+    if (next)
+    {
+        return tr("N 下一对（PgDn、→ 同样是下一对）。Ctrl+Shift+A 取消选择。"
+                  "Ctrl+Alt+A 批量分析导出。");
+    }
+    if (atEnd)
+    {
+        return tr("已经是第一对，没有上一对（P、PgUp、←）。Ctrl+Shift+A 取消选择。"
+                  "Ctrl+Alt+A 批量分析导出。");
+    }
+    return tr("P 上一对（PgUp、← 同样是上一对）。Ctrl+Shift+A 取消选择。"
+              "Ctrl+Alt+A 批量分析导出。");
+}
+
+QString CompareWorkspace::temporaryCompareTooltip() const
+{
+    const bool imagesReady =
+        m_engine.imageCount() == 2 && m_cellViews.size() >= 2 && m_cellViews[0] && m_cellViews[1] &&
+        !m_cellViews[0]->displayImage().isNull() && !m_cellViews[1]->displayImage().isNull() &&
+        m_cellViews[0]->sourceSize().isValid() && m_cellViews[1]->sourceSize().isValid();
+    if (m_engine.imageCount() > 2)
+    {
+        return tr("超过 2 张时此按钮和 Space 不可用。把鼠标移到窗格上，按住数字键 1–N "
+                  "在该窗格临时显示第 N 张图；松开恢复。布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。");
+    }
+    if (!imagesReady)
+        return tr("需要恰好 2 张已显示的图片才能按住临时切换");
+    if (temporaryHoldBlocked())
+        return tr("闪烁开启时不能临时切换");
+    return tr("按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。");
+}
+
+QString CompareWorkspace::clearLinkTooltip() const
+{
+    if (m_clearLinksBtn && m_clearLinksBtn->isEnabled())
+        return tr("清除全部像素连线标记");
+    const bool linkOn = m_pixelLinkChk && m_pixelLinkChk->isChecked();
+    if (!linkOn)
+        return tr("请先勾选「像素连线」（仅 2 张图片时可用）");
+    return tr("还没有标记点");
 }

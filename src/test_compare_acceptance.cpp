@@ -12,6 +12,8 @@
 // bundles are already covered by workflow_ux_tests / compare_session_tests.)
 
 #include "compareworkspace.h"
+#include "compareworkspace_preset_sanitize.h"
+#include "compareworkspace_shortcuts.h"
 #include "core/compare/CompareEngine.h"
 #include "core/perf/MemoryTracker.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -19,6 +21,7 @@
 #include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
@@ -36,6 +39,7 @@
 #include <QTableWidget>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -45,6 +49,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
+#include <iterator>
 #include <mutex>
 #include <string>
 
@@ -245,6 +250,8 @@ int main(int argc, char **argv)
     testInspectorCoalescing(paths8[0], paths8[1]);
     testCanvasDoubleClickGestures(paths8[0], paths8[1]);
     testSyncRotate(paths8[0], paths8[1]);
+    testCompareShortcutHelpSnapshot(dir, paths8[0], paths8[1]);
+    testComparePresetSanitize();
 
     if (g_failures > 0)
     {
