@@ -38,6 +38,9 @@ class BatchDialog : public QDialog
     // Pre-fill the file list with the given paths.
     void setInputFiles(const QStringList &paths);
 
+    // One "[OK] in → out" / "[FAIL] in: error" line for the batch log.
+    static QString formatResultLine(const mviewer::domain::BatchFileResult &result);
+
   protected:
     // Restores the last confirmed rename settings each time the dialog opens.
     void showEvent(QShowEvent *event) override;
@@ -59,6 +62,8 @@ class BatchDialog : public QDialog
     void buildProgressControls(QVBoxLayout *mainLayout);
     void connectControls();
     void buildConfig(mviewer::domain::BatchJobConfig &config) const;
+    // False when Start must abort. Shows the reason (missing files, no export, …).
+    bool validateStart(const mviewer::domain::BatchJobConfig &config);
     void updateUiState(bool running);
     void updateParamVisibility();
     bool renameReady() const;
@@ -67,10 +72,6 @@ class BatchDialog : public QDialog
     // Completion path of a batch run: drains the QFutureWatcher (which rethrows a
     // worker exception), reports the summary and resets the dialog for reuse.
     void finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher);
-
-    // One "[OK] in → out" / "[FAIL] in: error" line for the dialog log. Used by
-    // the streaming per-file result callback.
-    static QString formatResultLine(const mviewer::domain::BatchFileResult &result);
 
     // ── file list ──────────────────────────────────────────────────
     QListWidget *m_fileList = nullptr;
@@ -116,6 +117,7 @@ class BatchDialog : public QDialog
     QComboBox *m_exportFormat = nullptr;
     QSpinBox *m_exportQuality = nullptr;
     QLineEdit *m_outputDir = nullptr;
+    QCheckBox *m_overwriteExisting = nullptr;
     QPushButton *m_browseBtn = nullptr;
     QWidget *m_exportPanel = nullptr;
 

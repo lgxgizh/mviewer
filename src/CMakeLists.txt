@@ -234,6 +234,7 @@ add_library(mviewer_ui STATIC
     metadatamodel.cpp
     searchpanel.cpp
     batchdialog.cpp
+    batchdialog_panels.cpp
     batchrenamepanel.cpp
     widgets/rawimageview.cpp
     widgets/rawimageview_surface.cpp
@@ -1034,6 +1035,7 @@ target_link_libraries(batch_tests
         Qt6::Gui
         Qt6::Core
         mviewer_core
+        mviewer_ui
 )
 
 target_compile_features(batch_tests PRIVATE cxx_std_20)

@@ -2,18 +2,27 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/AnalyzerPipeline.h"
 #include "core/batch/BatchRename.h"
+#include "core/export/ExportJobInternal.h"
 #include "core/export/ExporterRegistry.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/Decoder.h"
 #include "core/image/Encoder.h"
+#include "core/image/ImageFormats.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageTransform.h"
 #include "core/image/RawMetadata.h"
+
+#include <QFile>
+#include <QImageReader>
+#include <QSize>
+#include <QString>
 
 #include <algorithm>
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <sstream>
 #include <thread>
@@ -66,6 +75,12 @@ WatermarkPosition mapWatermarkPos(int pos)
     }
 }
 
+std::string trimmedUtf8(const std::string &text)
+{
+    const QString value = QString::fromUtf8(text.data(), static_cast<int>(text.size()));
+    return value.trimmed().toStdString();
+}
+
 // Build the output path for an exported file.
 std::string buildOutputPath(const domain::BatchJobConfig &config, const std::string &inputPath,
                             int index, int total)
@@ -84,12 +99,117 @@ std::string buildOutputPath(const domain::BatchJobConfig &config, const std::str
     if (outName.empty() || outName == "." + ext) // replace emptied the stem
         outName = baseNameOf(inputPath) + outName;
 
-    if (config.outputDir.empty())
-        return outName;
+    const std::filesystem::path fileName = pathFromUtf8(outName);
+    const std::string dir = trimmedUtf8(config.outputDir);
+    if (dir.empty())
+        return pathToUtf8(pathFromUtf8(inputPath).parent_path() / fileName);
+    return pathToUtf8(pathFromUtf8(dir) / fileName);
+}
 
-    std::filesystem::path dir = pathFromUtf8(config.outputDir);
-    dir /= pathFromUtf8(outName);
-    return pathToUtf8(dir);
+QString normalizedPath(const std::filesystem::path &path)
+{
+    const std::string utf8 = pathToUtf8(path.lexically_normal());
+    QString text = QString::fromUtf8(utf8.data(), static_cast<int>(utf8.size()));
+    text.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    return text;
+}
+
+// equivalent() only works once both paths exist. A not-yet-created destination
+// falls back to a case-insensitive compare, which is what Windows will do.
+bool sameAsSource(const std::filesystem::path &input, const std::filesystem::path &destination)
+{
+    std::error_code equivalentError;
+    const bool equivalent = std::filesystem::equivalent(input, destination, equivalentError);
+    if (!equivalentError)
+        return equivalent;
+
+    std::error_code existsError;
+    if (std::filesystem::exists(destination, existsError) && !existsError)
+        return false;
+    const QString left = normalizedPath(input);
+    const QString right = normalizedPath(destination);
+    return left.compare(right, Qt::CaseInsensitive) == 0;
+}
+
+std::string ensureOutputDir(const domain::BatchJobConfig &config)
+{
+    const std::string dir = trimmedUtf8(config.outputDir);
+    if (dir.empty())
+        return {};
+    std::error_code dirEc;
+    std::filesystem::create_directories(pathFromUtf8(dir), dirEc);
+    if (!dirEc)
+        return {};
+    std::string message = "无法创建输出目录：";
+    message += dirEc.message();
+    return message;
+}
+
+std::string checkDestination(const domain::BatchJobConfig &config,
+                             const std::filesystem::path &input,
+                             const std::filesystem::path &destination)
+{
+    if (sameAsSource(input, destination))
+        return "目标与源文件相同，已跳过";
+
+    std::error_code existsError;
+    const bool exists = std::filesystem::exists(destination, existsError);
+    if (existsError || !exists || config.overwriteExisting)
+        return {};
+    std::string message = "目标文件已存在：";
+    message += pathToUtf8(destination.filename());
+    return message;
+}
+
+void removeQuietly(const std::filesystem::path &path)
+{
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+}
+
+std::string exportFailed(const std::filesystem::path &destination)
+{
+    std::string message = "导出失败：";
+    message += pathToUtf8(destination);
+    return message;
+}
+
+bool encodeToPath(const domain::BatchJobConfig &config, const ImageData &img,
+                  const std::string &path)
+{
+    const std::string exporterId = config.exportFormat + "-exporter";
+    const auto exporter = ExporterRegistry::instance().get(exporterId);
+    if (exporter)
+        return exporter->exportImage(img, path);
+    return Encoder::encode(img, path, Encoder::Params(config.exportQuality));
+}
+
+bool writeAtomically(const domain::BatchJobConfig &config, const ImageData &img,
+                     const std::filesystem::path &destination, std::string &error)
+{
+    const std::filesystem::path temporary = mviewer::exportjob::uniqueTempPath(destination);
+    if (!encodeToPath(config, img, pathToUtf8(temporary)))
+    {
+        removeQuietly(temporary);
+        error = exportFailed(destination);
+        return false;
+    }
+
+    std::error_code commitError;
+    if (!mviewer::exportjob::commitTempFile(temporary, destination, commitError))
+    {
+        removeQuietly(temporary);
+        error = exportFailed(destination);
+        return false;
+    }
+    error.clear();
+    return true;
+}
+
+std::filesystem::path resolveDestination(const domain::BatchJobConfig &config,
+                                         const std::string &inputPath, int index, int total)
+{
+    return pathFromUtf8(buildOutputPath(config, inputPath, index, total));
 }
 
 void applyAnalyzeOp(const domain::BatchJobConfig &config, const std::string &inputPath,
@@ -149,49 +269,111 @@ bool applyExportOp(const domain::BatchJobConfig &config, const std::string &inpu
     if (config.exportFormat.empty())
         return true;
 
-    const std::string outPath = buildOutputPath(config, inputPath, fileIndex, totalFiles);
-
-    if (!config.outputDir.empty())
+    const std::filesystem::path destination =
+        resolveDestination(config, inputPath, fileIndex, totalFiles);
+    std::string error = ensureOutputDir(config);
+    if (error.empty())
+        error = checkDestination(config, pathFromUtf8(inputPath), destination);
+    const bool ready = error.empty();
+    const bool wrote = ready && writeAtomically(config, img, destination, error);
+    if (!ready || !wrote)
     {
-        std::error_code dirEc;
-        std::filesystem::create_directories(config.outputDir, dirEc);
-        if (dirEc)
-        {
-            result.errorMessage = "cannot create output directory: " + dirEc.message();
-            return false;
-        }
+        result.errorMessage = std::move(error);
+        return false;
     }
+    result.outputPath = pathToUtf8(destination);
+    return true;
+}
 
-    bool exported = false;
-    auto exporter = ExporterRegistry::instance().get(config.exportFormat + "-exporter");
-    if (exporter)
-    {
-        exported = exporter->exportImage(img, outPath);
-    }
-    else
-    {
-        exported = Encoder::encode(img, outPath, Encoder::Params(config.exportQuality));
-    }
+std::string tooLargeMessage(int width, int height)
+{
+    std::string message = "图片过大（";
+    message += std::to_string(width);
+    message += "x";
+    message += std::to_string(height);
+    message += "），批处理暂不支持";
+    return message;
+}
 
-    if (exported)
-    {
-        result.outputPath = outPath;
-        return true;
-    }
+// Empty when the claimed raster is inside the batch limit.
+std::string oversizedMessage(int width, int height)
+{
+    constexpr int kMaxSide = 16384;
+    constexpr std::int64_t kBytesPerPixel = 4;
+    constexpr std::int64_t kMaxBytes = 256LL * 1024LL * 1024LL;
+    if (width <= 0 || height <= 0)
+        return {};
+    if (width > kMaxSide || height > kMaxSide)
+        return tooLargeMessage(width, height);
+    const std::int64_t pixels = static_cast<std::int64_t>(width) * height;
+    if (pixels > kMaxBytes / kBytesPerPixel)
+        return tooLargeMessage(width, height);
+    return {};
+}
 
-    result.errorMessage = "Export failed: " + outPath;
-    return false;
+std::uint32_t readBe32(const unsigned char *bytes)
+{
+    return (static_cast<std::uint32_t>(bytes[0]) << 24) |
+           (static_cast<std::uint32_t>(bytes[1]) << 16) |
+           (static_cast<std::uint32_t>(bytes[2]) << 8) | static_cast<std::uint32_t>(bytes[3]);
+}
+
+// QImageReader::size() asks libpng to read through the first IDAT. An IHDR-only
+// file ends before that, so the reader reports no size and libpng prints
+// "Read Error". The batch guard only needs the claimed dimensions.
+bool readPngIhdr(const std::string &path, int &width, int &height)
+{
+    QFile file(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray header = file.read(24);
+    if (header.size() < 24)
+        return false;
+    const auto *bytes = reinterpret_cast<const unsigned char *>(header.constData());
+    static const unsigned char kSignature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+    if (std::memcmp(bytes, kSignature, 8) != 0 || readBe32(bytes + 8) != 13 ||
+        std::memcmp(bytes + 12, "IHDR", 4) != 0)
+        return false;
+    const std::uint32_t claimedWidth = readBe32(bytes + 16);
+    const std::uint32_t claimedHeight = readBe32(bytes + 20);
+    constexpr std::uint32_t kMaxInt = 0x7fffffffu;
+    if (claimedWidth == 0 || claimedHeight == 0 || claimedWidth > kMaxInt ||
+        claimedHeight > kMaxInt)
+        return false;
+    width = static_cast<int>(claimedWidth);
+    height = static_cast<int>(claimedHeight);
+    return true;
+}
+
+std::string pngSizeGuard(const std::string &inputPath)
+{
+    int width = 0;
+    int height = 0;
+    if (!readPngIhdr(inputPath, width, height))
+        return {};
+    return oversizedMessage(width, height);
+}
+
+std::string decodeFailureMessage(const std::string &inputPath)
+{
+    std::string fromPng = pngSizeGuard(inputPath);
+    if (!fromPng.empty())
+        return fromPng;
+
+    const QString path = QString::fromUtf8(inputPath.data(), static_cast<int>(inputPath.size()));
+    const QImageReader reader(path);
+    const QSize size = reader.size();
+    if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
+        return "无法解码图片";
+    std::string tooBig = oversizedMessage(size.width(), size.height());
+    if (!tooBig.empty())
+        return tooBig;
+    return "无法解码图片";
 }
 
 bool isImageFile(const std::filesystem::path &path)
 {
-    auto ext = pathToUtf8(path.extension());
-    std::transform(ext.begin(), ext.end(), ext.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    static const std::vector<std::string> imgExts = {".jpg",  ".jpeg", ".png", ".bmp", ".tif",
-                                                     ".tiff", ".webp", ".cr2", ".nef", ".arw",
-                                                     ".dng",  ".raf",  ".rw2", ".orf", ".raw"};
-    return std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end();
+    return ImageFormats::isSupportedPath(pathToUtf8(path));
 }
 
 void collectImages(const std::filesystem::path &dir, bool recursive, std::vector<std::string> &out)
@@ -243,7 +425,16 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
 
     if (m_cancelled.load())
     {
-        result.errorMessage = "Cancelled";
+        result.errorMessage = "已取消";
+        return result;
+    }
+
+    // Reject an oversized claim before decode. A full read of a truncated PNG
+    // only produces "libpng error: Read Error" and hides the IHDR dimensions.
+    std::string tooBig = pngSizeGuard(inputPath);
+    if (!tooBig.empty())
+    {
+        result.errorMessage = tooBig;
         return result;
     }
 
@@ -251,12 +442,12 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     ImageData img = Decoder::decodeFull(inputPath);
     if (m_cancelled.load())
     {
-        result.errorMessage = "Cancelled";
+        result.errorMessage = "已取消";
         return result;
     }
     if (img.isNull())
     {
-        result.errorMessage = "Failed to decode image";
+        result.errorMessage = decodeFailureMessage(inputPath);
         return result;
     }
 
@@ -268,7 +459,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     {
         if (m_cancelled.load())
         {
-            result.errorMessage = "Cancelled";
+            result.errorMessage = "已取消";
             return result;
         }
 

@@ -2,6 +2,7 @@
 #include "thumbnailpanel_p.h"
 #include "selectionmodel.h"
 
+#include "core/batch/BatchRename.h"
 #include "core/image/ImageSortKeys.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
@@ -512,22 +513,6 @@ int compareDigitRun(QStringView left, QStringView right)
     return 0;
 }
 
-bool reservedWindowsStem(const QString &fileName)
-{
-    const int dot = fileName.indexOf(QLatin1Char('.'));
-    if (dot == 0)
-        return false;
-    const QString stem = (dot > 0 ? fileName.left(dot) : fileName).toUpper();
-    if (stem == QLatin1String("CON") || stem == QLatin1String("PRN") ||
-        stem == QLatin1String("AUX") || stem == QLatin1String("NUL"))
-        return true;
-    if (stem.size() != 4)
-        return false;
-    if (!stem.startsWith(QLatin1String("COM")) && !stem.startsWith(QLatin1String("LPT")))
-        return false;
-    return stem.at(3).isDigit();
-}
-
 QStringView nameExtension(const QString &name)
 {
     const int dot = name.lastIndexOf(QLatin1Char('.'));
@@ -675,23 +660,10 @@ bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString
 QString renameBlockedReason(const QString &directory, const QString &oldName,
                             const QString &newName)
 {
-    if (newName.isEmpty() || newName == QLatin1String(".") || newName == QLatin1String(".."))
-        return QStringLiteral("文件名不能为空。");
-    if (newName.size() > 255)
-        return QStringLiteral("文件名不能超过 255 个字符。");
-    if (newName != newName.trimmed() || newName.endsWith(QLatin1Char('.')) ||
-        newName.endsWith(QLatin1Char(' ')))
-        return QStringLiteral("文件名不能以空格或句点开头或结尾。");
-    for (const QChar ch : newName)
-    {
-        const char16_t code = ch.unicode();
-        if (code < 32 || QStringLiteral("<>:\"|?*\\/").contains(ch))
-            return QStringLiteral("文件名包含 Windows 不允许的字符（\\ / : * ? \" < > |）。");
-    }
-    if (reservedWindowsStem(newName))
-        return QStringLiteral("文件名是 Windows 保留设备名。");
-    if (QFileInfo(newName).fileName() != newName)
-        return QStringLiteral("文件名不能包含路径。");
+    const QString nameError =
+        QString::fromStdString(mviewer::core::fileNameError(newName.toStdString()));
+    if (!nameError.isEmpty())
+        return nameError;
 
     const QString oldPath = QDir(directory).filePath(oldName);
     const QString newPath = QDir(directory).filePath(newName);

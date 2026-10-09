@@ -71,7 +71,8 @@ struct BatchJobConfig
     // --- Export params ---
     std::string exportFormat; // "png", "jpg", "bmp" — empty = skip export
     int exportQuality = 90;   // JPEG quality 1-100
-    std::string outputDir;    // destination directory for exported files
+    std::string outputDir;    // empty = each source file's own directory
+    bool overwriteExisting = false; // false skips a destination that already exists
 
     // --- Analyze params ---
     std::vector<std::string> analyzerIds; // which analyzers to run
