@@ -223,9 +223,10 @@ template <typename T> T waitFuture(const QFuture<T> &future, const BatchFileProg
         loop.exec(QEventLoop::ExcludeUserInputEvents);
         cancelTimer.stop();
     }
-    if (!future.isFinished())
-        future.waitForFinished();
-    return future.result();
+    QFuture<T> pending = future; // waitForFinished() is non-const
+    if (!pending.isFinished())
+        pending.waitForFinished();
+    return pending.result();
 }
 
 void recordTransformResult(FileTransformBatch &batch, ThumbnailPanel *panel, const QString &path,
