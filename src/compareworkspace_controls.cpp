@@ -590,15 +590,7 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
         w->installEventFilter(this);
     toolLayout->addWidget(m_temporaryCompareButton);
 
-    // FOV-matched screen fit. The view row is already at the 1100px sizeHint
-    // budget, so this stays on the actions row beside 分析 / 导出报告.
-    auto *bestFitBtn = new QPushButton(tr("最适合 (Shift+F)"), this);
-    bestFitBtn->setObjectName("bestFitButton");
-    bestFitBtn->setToolTip(tr(
-        "最适合（快捷键: Shift+F）：各窗格按自身分辨率适配窗口，相同视野/宽高比的图显示为相近大小"
-        "（关闭统一像素倍率）。临时切换、闪烁或换图后仍保持该屏幕大小"));
-    connect(bestFitBtn, &QPushButton::clicked, this, &CompareWorkspace::bestFitAll);
-    toolLayout->addWidget(bestFitBtn);
+    addFitWindowButton(toolLayout);
 
     // P1 #④: Analyze & export buttons in the compare toolbar.
     m_analyzeBtn = new QPushButton(tr("分析"), this);
@@ -622,6 +614,26 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
             &CompareWorkspace::exportReportRequested);
     toolLayout->addWidget(m_exportReportBtn);
     toolLayout->addStretch(1);
+}
+
+void CompareWorkspace::addFitWindowButton(QHBoxLayout *toolLayout)
+{
+    // Fit to window (F). 统一像素倍率 decides shared vs per-pane scale. The view
+    // row is already at the 1100px budget, so this stays on the actions row.
+    auto *fitBtn = new QPushButton(tr("适合窗口 (F)"), this);
+    fitBtn->setObjectName("fitWindowButton");
+    fitBtn->setToolTip(tr("适合窗口（快捷键: F）：勾选「统一像素倍率」时所有窗格用同一倍率适配；"
+                          "不勾选时各窗格按自身分辨率适配，相同视野/宽高比的图显示为相近大小"));
+    connect(fitBtn, &QPushButton::clicked, this,
+            [this]()
+            {
+                fitAll();
+                showCompareStatus(tr("视图自适应窗口 (Fit)"));
+                if (m_compareCanvas)
+                    m_compareCanvas->update();
+                update();
+            });
+    toolLayout->addWidget(fitBtn);
 }
 
 QWidget *CompareWorkspace::buildStatusStrip()

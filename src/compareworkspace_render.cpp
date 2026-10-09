@@ -367,22 +367,6 @@ void CompareWorkspace::fitAll()
     }
 }
 
-void CompareWorkspace::bestFitAll()
-{
-    // The checkbox slot also calls fitAll(). Block it so unchecking fits once.
-    if (m_uniformScaleChk)
-    {
-        const QSignalBlocker blocker(m_uniformScaleChk);
-        m_uniformScaleChk->setChecked(false);
-    }
-    m_uniformScale = false;
-    fitAll();
-    showCompareStatus(tr("最适合：已按视野对齐并适配窗口"));
-    if (m_compareCanvas)
-        m_compareCanvas->update();
-    update();
-}
-
 void CompareWorkspace::zoomActual()
 {
     const double currentScale = m_engine.cellTransform(0).scale;

@@ -221,7 +221,6 @@ above is the main window only.
 | `R` / `L` | Sync crosshair / pixel link |
 | `X` | Swap A/B |
 | `F` | Fit all panes |
-| `Shift+F` | Best fit (「最适合」): each pane fits at its own resolution, uniform pixel scale off |
 | `Ctrl+R` / `Ctrl+Shift+R` | Preview-rotate the edit/hover/focus pane (does not write files) |
 | `Ctrl+Shift+H` / `Ctrl+Shift+V` | Preview-flip the edit/hover/focus pane (does not write files) |
 | `P` / `PageUp` / `Left` | Previous pair |

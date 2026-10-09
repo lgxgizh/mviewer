@@ -1,4 +1,4 @@
-// 「最适合」fits each compare pane to its own resolution (uniform pixel scale off).
+// 「适合窗口 (F)」with 统一像素倍率 off fits each compare pane to its own resolution.
 // Same aspect, different size — 400×600 beside 800×1200 — must land at about 2×.
 
 #include "compareworkspace.h"
@@ -164,14 +164,14 @@ int main(int argc, char **argv)
         if (box->text().startsWith(QStringLiteral("统一像素倍率")))
             uniform = box;
     }
-    auto *button = ws->findChild<QPushButton *>(QStringLiteral("bestFitButton"));
+    auto *button = ws->findChild<QPushButton *>(QStringLiteral("fitWindowButton"));
     auto *toolBar = ws->findChild<QWidget *>(QStringLiteral("compareToolToolbar"));
-    check(button && button->text() == QStringLiteral("最适合 (Shift+F)"),
-          "toolbar button「最适合 (Shift+F)」shows its shortcut");
+    check(button && button->text() == QStringLiteral("适合窗口 (F)"),
+          "toolbar button「适合窗口 (F)」shows its shortcut");
     check(button && button->isVisible() && toolBar && toolBar->isAncestorOf(button),
           "button sits on the tool actions toolbar");
     check(button && button->toolTip().contains(QStringLiteral("统一像素倍率")),
-          "tooltip contrasts FOV fit with uniform pixel scale");
+          "tooltip says 统一像素倍率 decides shared vs per-pane fit");
     check(uniform && !uniform->isChecked(), "uniform pixel scale starts off");
     if (!button || !uniform || !lowFrame || !highFrame)
         return 1;
@@ -199,22 +199,11 @@ int main(int argc, char **argv)
     check(std::abs(ws->engine().cellScale(0) - ws->engine().cellScale(1)) < 1e-9,
           "F refits inside uniform pixel scale");
 
-    // Shift+F is the keyboard shortcut for 最适合.
-    check(button && button->toolTip().contains(QStringLiteral("Shift+F")),
-          "tooltip names the Shift+F shortcut");
-    QKeyEvent bestFitKey(QEvent::KeyPress, Qt::Key_F, Qt::ShiftModifier);
-    QApplication::sendEvent(ws, &bestFitKey);
-    pump(30);
-    check(bestFitKey.isAccepted(), "Shift+F is handled by the compare workspace");
-    check(!uniform->isChecked(), "Shift+F runs 最适合 and turns 统一像素倍率 off");
-    check(std::abs(ws->engine().cellScale(0) -
-                   fitScale(lowView->width(), lowView->height(), 400, 600)) < 1e-6,
-          "Shift+F gives the low-res pane its own fit");
-    uniform->setChecked(true);
-
+    // 最适合 merged into 适合窗口: the user turns 统一像素倍率 off, then fits.
+    uniform->setChecked(false);
     button->click();
     pump(30);
-    check(!uniform->isChecked(), "最适合 turns 统一像素倍率 off");
+    check(!uniform->isChecked(), "适合窗口 leaves 统一像素倍率 off");
     const double bestLow = ws->engine().cellScale(0);
     const double bestHigh = ws->engine().cellScale(1);
     std::printf("scales: low=%.6f high=%.6f ratio=%.4f (fits %.6f / %.6f)\n", bestLow, bestHigh,
@@ -228,9 +217,17 @@ int main(int argc, char **argv)
     check(std::abs(lowView->scale() - bestLow) < 1e-6, "low-res view painted at its fit scale");
     check(std::abs(highView->scale() - bestHigh) < 1e-6, "high-res view painted at its fit scale");
 
+    QKeyEvent perPaneFitKey(QEvent::KeyPress, Qt::Key_F, Qt::NoModifier);
+    QApplication::sendEvent(ws, &perPaneFitKey);
+    check(std::abs(ws->engine().cellScale(0) - lowFit) < 1e-6 &&
+              std::abs(ws->engine().cellScale(1) - highFit) < 1e-6,
+          "F with 统一像素倍率 off matches the 适合窗口 button");
+    button->click();
+    pump(30);
+
     auto *status = ws->findChild<QLabel *>(QStringLiteral("compareStatusLabel"));
-    check(status && status->text() == QStringLiteral("最适合：已按视野对齐并适配窗口"),
-          "status toast reports FOV-matched fit");
+    check(status && status->text() == QStringLiteral("视图自适应窗口 (Fit)"),
+          "status toast reports the fit");
 
     check(waitForDisplayed(ws, 20000), "both panes have a display raster");
     button->click();
@@ -293,7 +290,13 @@ int main(int argc, char **argv)
     }
     button->click();
     pump(30);
-    check(!uniform->isChecked(), "最适合 again turns 统一像素倍率 off");
+    check(uniform->isChecked(), "适合窗口 keeps 统一像素倍率 checked");
+    check(std::abs(ws->engine().cellScale(0) - ws->engine().cellScale(1)) < 1e-9,
+          "适合窗口 with 统一像素倍率 shares one zoom");
+    uniform->setChecked(false);
+    button->click();
+    pump(30);
+    check(!uniform->isChecked(), "统一像素倍率 is off again for per-pane fit");
 
     // Tall window: each half pane is width-limited, blink's full-width cell is not.
     host.setMinimumSize(400, 400);
