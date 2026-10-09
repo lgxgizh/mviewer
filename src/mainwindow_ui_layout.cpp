@@ -1,6 +1,8 @@
 // MainWindow layout construction and command surfaces.
 #include "mainwindow_p.h"
 
+#include "core/render/ZoomPercent.h"
+
 #include <QFocusEvent>
 #include <QIcon>
 #include <QMouseEvent>
@@ -757,6 +759,7 @@ void MainWindow::buildStatusBarUi()
         l->setContentsMargins(8, 0, 8, 0);
         statusBar()->addPermanentWidget(l);
     }
+    m_lblZoom->setMinimumWidth(64);
 
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
@@ -775,14 +778,9 @@ void MainWindow::buildStatusBarUi()
             {
                 if (!m_lblZoom)
                     return;
-                if (pct < 0)
-                {
-                    m_lblZoom->setText(QStringLiteral("缩放 —"));
-                    return;
-                }
-                const bool fit = m_imageViewer && m_imageViewer->isFitMode();
-                m_lblZoom->setText(fit ? QString("缩放 %1% (自适应)").arg(pct)
-                                       : QString("缩放 %1%").arg(pct));
+                m_lblZoom->setText(
+                    pct < 0 ? QStringLiteral("缩放 —")
+                            : QString::fromLatin1(mviewer::core::formatZoomPercent(pct).c_str()));
             });
 
     m_statTimer = new QTimer(this);

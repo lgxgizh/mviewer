@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 // ─── Viewport ────────────────────────────────────────────────────────────────
 // Domain-free view transform: maps between *image space* (full-resolution pixel
@@ -26,6 +27,20 @@ enum class FitPolicy
 
 inline constexpr double kMaxFitMargin = 1.0;
 inline constexpr double kComfortFitMargin = 0.95;
+
+// Floor one screen-space edge into an int. Shared by both sides of a tile
+// boundary so neighbours land on the same pixel instead of rounding apart.
+inline int snapScreenEdge(double value)
+{
+    if (!std::isfinite(value))
+        return 0;
+    const double floored = std::floor(value);
+    if (floored >= static_cast<double>(std::numeric_limits<int>::max()))
+        return std::numeric_limits<int>::max();
+    if (floored <= static_cast<double>(std::numeric_limits<int>::min()))
+        return std::numeric_limits<int>::min();
+    return static_cast<int>(floored);
+}
 
 struct Viewport
 {
@@ -140,11 +155,34 @@ struct Viewport
     }
 
     // Screen rect (widget pixels) for a source-image rectangle (image px).
+    // Edges are floored from the same image-to-screen expression, so the right
+    // edge of one tile is the left edge of the next (no gap, no overlap).
     void imageRectToScreen(int ix, int iy, int iw, int ih, int &sx, int &sy, int &sw, int &sh) const
     {
-        sx = static_cast<int>(ix * scale + offsetX);
-        sy = static_cast<int>(iy * scale + offsetY);
-        sw = static_cast<int>(iw * scale);
-        sh = static_cast<int>(ih * scale);
+        sx = 0;
+        sy = 0;
+        sw = 0;
+        sh = 0;
+        if (!(scale > 0.0) || !std::isfinite(scale) || !std::isfinite(offsetX) ||
+            !std::isfinite(offsetY))
+            return;
+        const double x0d = static_cast<double>(ix) * scale + offsetX;
+        const double y0d = static_cast<double>(iy) * scale + offsetY;
+        const double x1d = (static_cast<double>(ix) + static_cast<double>(iw)) * scale + offsetX;
+        const double y1d = (static_cast<double>(iy) + static_cast<double>(ih)) * scale + offsetY;
+        if (!std::isfinite(x0d) || !std::isfinite(y0d) || !std::isfinite(x1d) ||
+            !std::isfinite(y1d))
+            return;
+        const int x0 = snapScreenEdge(x0d);
+        const int y0 = snapScreenEdge(y0d);
+        const int x1 = snapScreenEdge(x1d);
+        const int y1 = snapScreenEdge(y1d);
+        const int64_t dw = static_cast<int64_t>(x1) - static_cast<int64_t>(x0);
+        const int64_t dh = static_cast<int64_t>(y1) - static_cast<int64_t>(y0);
+        const int64_t maxInt = std::numeric_limits<int>::max();
+        sx = x0;
+        sy = y0;
+        sw = static_cast<int>(dw < 0 ? 0 : (std::min)(dw, maxInt));
+        sh = static_cast<int>(dh < 0 ? 0 : (std::min)(dh, maxInt));
     }
 };

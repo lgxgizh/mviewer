@@ -54,10 +54,14 @@ class AsyncTileRequestManager
     // repeated call for a Pending canonical key is de-duplicated. On-screen
     // tiles use Decode; a lower priority is for ring prefetch only. `decode`
     // must be pure CPU/value work.
+    // `lodOverride` < 0 keeps TileCache::chooseLod. A non-negative override
+    // (including 0) is the level for both the visible set and the ring, so a
+    // viewer can hold a stable LOD without changing canonical payload sizes.
     VisibleTiles requestVisible(const std::string &imageId, const Viewport &viewport,
                                 const TileGrid &grid, int renderScalePercent, uint64_t generation,
                                 const TileDecodeFn &decode, const ReadyCallback &onReady,
-                                TaskScheduler::Priority priority = TaskScheduler::Priority::Decode);
+                                TaskScheduler::Priority priority = TaskScheduler::Priority::Decode,
+                                int lodOverride = -1);
 
     // Zoomed-in pans (scale >= 1) schedule visible tiles at Decode, then a
     // capped one-tile ring at Background. Zoomed-out views keep the exact
@@ -66,7 +70,7 @@ class AsyncTileRequestManager
     VisibleTiles requestVisibleRegion(const std::string &imageId, const Viewport &viewport,
                                       const TileGrid &grid, int renderScalePercent,
                                       uint64_t generation, const TileDecodeFn &decode,
-                                      const ReadyCallback &onReady);
+                                      const ReadyCallback &onReady, int lodOverride = -1);
 
     // Schedule a derived value (for example an overlay tile) without doing
     // the materialization in a GUI paint callback. The source is a cheap

@@ -106,6 +106,34 @@ struct TileCache
         return l;
     }
 
+    // Display LOD. floor(log2(1/scale)) never magnifies a coarse tile (the
+    // ceil policy does, and a 1.15x wheel step then alternates blur and sharp).
+    // `previous` < 0 selects the natural level. A held level stays until the
+    // on-screen texel size leaves [0.5, 1.15], so small wheel steps do not
+    // thrash. Callers that still want the historical payload size use chooseLod.
+    static int chooseLodStable(double scale, int previous, int maxLod = 4)
+    {
+        int natural = 0;
+        if (scale > 0.0 && std::isfinite(scale) && scale < 1.0)
+        {
+            natural = static_cast<int>(std::floor(std::log2(1.0 / scale)));
+            if (natural < 0)
+                natural = 0;
+            if (natural > maxLod)
+                natural = maxLod;
+        }
+        if (previous < 0 || previous > maxLod || !(scale > 0.0) || !std::isfinite(scale))
+            return natural;
+        const double texel = scale * std::ldexp(1.0, previous);
+        if (!std::isfinite(texel))
+            return natural;
+        if (previous > natural)
+            return texel <= 1.15 ? previous : natural;
+        if (previous < natural)
+            return texel >= 0.5 ? previous : natural;
+        return previous;
+    }
+
     // Source pixel size of a tile at the given LOD (tileSize * 2^lod).
     static int lodTileSize(int baseTileSize, int lod)
     {

@@ -5,6 +5,7 @@
 
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/QtConvert.h"
+#include "core/render/ZoomPercent.h"
 
 #include <QEvent>
 #include <QMouseEvent>
@@ -406,6 +407,9 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
 
     if (m_filenameOverlayVisible && !m_filenameOverlayText.isEmpty())
         mviewer::ui::drawFilenameOverlay(p, rect(), m_filenameOverlayText);
+    const std::string zoomText = mviewer::core::formatZoomPercent(presented);
+    if (!zoomText.empty())
+        mviewer::ui::drawZoomPercentBadge(p, rect(), QString::fromLatin1(zoomText.c_str()), false);
 }
 
 void RawImageView::wheelEvent(QWheelEvent *ev)

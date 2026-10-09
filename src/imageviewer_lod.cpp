@@ -28,7 +28,6 @@
 
 #include <QApplication>
 #include <QFileInfo>
-#include <QPainter>
 #include <QTimer>
 #include <QWindow>
 
@@ -316,10 +315,10 @@ void ImageViewer::cancelDisplayRequest()
 void ImageViewer::scheduleDisplayUpgrade()
 {
     if (m_displayUpgradeScheduled || !m_lodMode || m_displayDegraded ||
-        property("mviewerClosing").toBool())
+        property("mviewerClosing").toBool() || !displayNeedsUpgrade())
         return;
     m_displayUpgradeScheduled = true;
-    QTimer::singleShot(0, this, &ImageViewer::requestDisplayRaster);
+    QTimer::singleShot(48, this, &ImageViewer::requestDisplayRaster);
 }
 
 bool ImageViewer::displayNeedsUpgrade() const
@@ -379,6 +378,8 @@ void ImageViewer::requestDisplayRasterImpl()
     if (m_currentPath.isEmpty() || m_displayDegraded)
         return;
     const bool firstRequest = !m_lodMode && m_raster.image.isNull();
+    if (!firstRequest && !displayNeedsUpgrade())
+        return;
     const int sw = m_sourceImage ? m_sourceImage->metadata().width : m_raster.sourceSize.width();
     const int sh = m_sourceImage ? m_sourceImage->metadata().height : m_raster.sourceSize.height();
 
@@ -538,6 +539,13 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
         if (firstRaster)
             runAnalysisLoadDecision(sourceValid, sourceSize);
         update();
+        return;
+    }
+
+    if (!acceptDisplayRaster(image, m_raster.sourceRect, density))
+    {
+        if (displayNeedsUpgrade())
+            scheduleDisplayUpgrade();
         return;
     }
 
@@ -718,37 +726,23 @@ void ImageViewer::scheduleRasterRoiStats(const QRect &selection)
                 Qt::QueuedConnection);
         });
 }
-void ImageViewer::drawDisplayRaster(QPainter &painter) const
+bool ImageViewer::acceptDisplayRaster(const QImage &image, const QRect &covered,
+                                      double density) const
 {
-    if (m_raster.image.isNull())
-        return;
-    const QRect &r = m_raster.sourceRect;
-    int sx = 0, sy = 0, sw = 0, sh = 0;
-    m_view.imageRectToScreen(r.x(), r.y(), r.width(), r.height(), sx, sy, sw, sh);
-    if (sw <= 0 || sh <= 0)
-        return;
-    const QImage *drawn = &m_raster.image;
-    if (m_overlayMode != mviewer::OverlayMode::None)
-    {
-        const qint64 key = m_raster.image.cacheKey();
-        const bool ready = m_lodOverlayKey == key && m_lodOverlayMode == m_overlayMode &&
-                           m_lodOverlayThreshold == m_zebraThreshold && !m_lodOverlayImage.isNull();
-        if (ready)
-        {
-            drawn = &m_lodOverlayImage;
-        }
-        else
-        {
-            // Never derive here: this runs inside paintEvent, and the derivation
-            // is a full-raster conversion plus a per-pixel pass. The worker
-            // stores the result and requests a repaint.
-            scheduleLodOverlayDerivation();
-        }
-    }
-    painter.save();
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    painter.drawImage(QRect(sx, sy, sw, sh), *drawn);
-    painter.restore();
+    if (image.isNull())
+        return false;
+    if (m_raster.image.isNull() || !(density > 0.0) || !(m_raster.density > 0.0))
+        return true;
+    int vx = 0;
+    int vy = 0;
+    int vw = 0;
+    int vh = 0;
+    m_view.visibleImageRect(m_raster.sourceSize.width(), m_raster.sourceSize.height(), vx, vy, vw,
+                            vh);
+    const bool covers = vw > 0 && vh > 0 && covered.contains(QRect(vx, vy, vw, vh));
+    if (!covers)
+        return true;
+    return density <= m_raster.density + 1e-6;
 }
 
 void ImageViewer::scheduleLodOverlayDerivation() const

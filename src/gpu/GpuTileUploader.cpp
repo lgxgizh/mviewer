@@ -336,6 +336,24 @@ bool GpuTileUploader::doReplace(uintptr_t handle, const uint8_t *pixels, int w, 
     return true;
 }
 
+void GpuTileUploader::setMagnifyNearest(uintptr_t handle, bool nearest)
+{
+    if (handle == 0 || m_upload)
+        return;
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (!ctx || !ctx->isValid())
+        return;
+    QOpenGLFunctions *gl = ctx->functions();
+    if (!gl)
+        return;
+    gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(handle));
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nearest ? GL_NEAREST : GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void GpuTileUploader::doFree(uintptr_t handle)
 {
     if (handle == 0)
