@@ -48,7 +48,7 @@ static QString writeTempPng(const std::string &name, int w = 64, int h = 48,
     return path;
 }
 
-// IHDR-only PNG (33 bytes). QImageReader::size() reports the claim; decode fails.
+// IHDR-only PNG (33 bytes). Decode fails; the guard reads the IHDR size claim.
 static QByteArray pngClaim(const char *hex)
 {
     return QByteArray::fromHex(QByteArray(hex));
@@ -330,6 +330,7 @@ int main(int argc, char *argv[])
         config.cropH = 16;
         config.exportFormat = "png";
         config.outputDir = outDir.toStdString();
+        QFile::remove(outDir + "/mviewer_batch_a.png"); // Test 1 already wrote this name
 
         mviewer::core::BatchProcessor processor;
         auto result = processor.execute(config);
@@ -368,6 +369,7 @@ int main(int argc, char *argv[])
               "Non-recursive dir input should not walk nested dirs");
 
         config.recursiveScan = true;
+        QFile::remove(outDir + "/top.png"); // non-recursive pass already wrote it
         mviewer::core::BatchProcessor recursiveProcessor;
         auto recursiveResult = recursiveProcessor.execute(config);
         CHECK(recursiveResult.totalSucceeded == 2,

@@ -12,6 +12,7 @@
 #include "core/image/ImageTransform.h"
 #include "core/image/RawMetadata.h"
 
+#include <QFile>
 #include <QImageReader>
 #include <QSize>
 #include <QString>
@@ -21,6 +22,7 @@
 #include <cctype>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <sstream>
 #include <thread>
@@ -293,24 +295,79 @@ std::string tooLargeMessage(int width, int height)
     return message;
 }
 
+// Empty when the claimed raster is inside the batch limit.
+std::string oversizedMessage(int width, int height)
+{
+    constexpr int kMaxSide = 16384;
+    constexpr std::int64_t kBytesPerPixel = 4;
+    constexpr std::int64_t kMaxBytes = 256LL * 1024LL * 1024LL;
+    if (width <= 0 || height <= 0)
+        return {};
+    if (width > kMaxSide || height > kMaxSide)
+        return tooLargeMessage(width, height);
+    const std::int64_t pixels = static_cast<std::int64_t>(width) * height;
+    if (pixels > kMaxBytes / kBytesPerPixel)
+        return tooLargeMessage(width, height);
+    return {};
+}
+
+std::uint32_t readBe32(const unsigned char *bytes)
+{
+    return (static_cast<std::uint32_t>(bytes[0]) << 24) |
+           (static_cast<std::uint32_t>(bytes[1]) << 16) |
+           (static_cast<std::uint32_t>(bytes[2]) << 8) | static_cast<std::uint32_t>(bytes[3]);
+}
+
+// QImageReader::size() asks libpng to read through the first IDAT. An IHDR-only
+// file ends before that, so the reader reports no size and libpng prints
+// "Read Error". The batch guard only needs the claimed dimensions.
+bool readPngIhdr(const std::string &path, int &width, int &height)
+{
+    QFile file(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray header = file.read(24);
+    if (header.size() < 24)
+        return false;
+    const auto *bytes = reinterpret_cast<const unsigned char *>(header.constData());
+    static const unsigned char kSignature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
+    if (std::memcmp(bytes, kSignature, 8) != 0 || readBe32(bytes + 8) != 13 ||
+        std::memcmp(bytes + 12, "IHDR", 4) != 0)
+        return false;
+    const std::uint32_t claimedWidth = readBe32(bytes + 16);
+    const std::uint32_t claimedHeight = readBe32(bytes + 20);
+    constexpr std::uint32_t kMaxInt = 0x7fffffffu;
+    if (claimedWidth == 0 || claimedHeight == 0 || claimedWidth > kMaxInt ||
+        claimedHeight > kMaxInt)
+        return false;
+    width = static_cast<int>(claimedWidth);
+    height = static_cast<int>(claimedHeight);
+    return true;
+}
+
+std::string pngSizeGuard(const std::string &inputPath)
+{
+    int width = 0;
+    int height = 0;
+    if (!readPngIhdr(inputPath, width, height))
+        return {};
+    return oversizedMessage(width, height);
+}
+
 std::string decodeFailureMessage(const std::string &inputPath)
 {
+    const std::string fromPng = pngSizeGuard(inputPath);
+    if (!fromPng.empty())
+        return fromPng;
+
     const QString path = QString::fromUtf8(inputPath.data(), static_cast<int>(inputPath.size()));
     const QImageReader reader(path);
     const QSize size = reader.size();
     if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
         return "无法解码图片";
-
-    constexpr int kMaxSide = 16384;
-    constexpr std::int64_t kBytesPerPixel = 4;
-    constexpr std::int64_t kMaxBytes = 256LL * 1024LL * 1024LL;
-    const std::int64_t width = size.width();
-    const std::int64_t height = size.height();
-    if (width > kMaxSide || height > kMaxSide)
-        return tooLargeMessage(size.width(), size.height());
-    // Sides are <= 16384, so width * height * 4 cannot overflow int64.
-    if (width * height * kBytesPerPixel > kMaxBytes)
-        return tooLargeMessage(size.width(), size.height());
+    const std::string tooBig = oversizedMessage(size.width(), size.height());
+    if (!tooBig.empty())
+        return tooBig;
     return "无法解码图片";
 }
 
@@ -369,6 +426,15 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     if (m_cancelled.load())
     {
         result.errorMessage = "已取消";
+        return result;
+    }
+
+    // Reject an oversized claim before decode. A full read of a truncated PNG
+    // only produces "libpng error: Read Error" and hides the IHDR dimensions.
+    const std::string tooBig = pngSizeGuard(inputPath);
+    if (!tooBig.empty())
+    {
+        result.errorMessage = tooBig;
         return result;
     }
 
