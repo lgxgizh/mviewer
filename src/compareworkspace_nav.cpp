@@ -350,7 +350,7 @@ void CompareWorkspace::updatePairButtons()
 
 void CompareWorkspace::applyLayoutPreset(int n)
 {
-    // M16: number keys 1–8 select an N-up compare preset.
+    // N-up compare preset. Keyboard entry is Ctrl+2 / Ctrl+4 / Ctrl+8.
     if (n < 1 || n > 8)
         return;
     m_navWindow = n;

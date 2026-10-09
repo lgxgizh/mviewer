@@ -1544,4 +1544,214 @@ void testComparePresetSanitize()
           "negative crop edges clamp to zero");
 }
 
+struct LayoutMarks
+{
+    int count = 0;
+    int nav = 0;
+    int forcedCols = -1;
+    int combo = -1;
+};
+
+QComboBox *compareLayoutCombo(QWidget *root)
+{
+    const auto boxes = root->findChildren<QComboBox *>();
+    for (QComboBox *box : boxes)
+    {
+        if (box && box->count() > 0 && box->itemText(0) == QStringLiteral("自动"))
+            return box;
+    }
+    return nullptr;
+}
+
+LayoutMarks layoutMarks(CompareWorkspace *ws)
+{
+    LayoutMarks marks;
+    marks.count = ws->comparedImageCount();
+    marks.nav = ws->navWindow();
+    marks.forcedCols = ws->engine().forcedColumns();
+    if (QComboBox *combo = compareLayoutCombo(ws))
+        marks.combo = combo->currentIndex();
+    return marks;
+}
+
+bool sameLayout(const LayoutMarks &before, const LayoutMarks &after)
+{
+    return before.count == after.count && before.nav == after.nav &&
+           before.forcedCols == after.forcedCols && before.combo == after.combo;
+}
+
+RawImageView *comparePaneView(QWidget *root, int index)
+{
+    QWidget *pane = root->findChild<QWidget *>(QStringLiteral("comparePane%1").arg(index));
+    return pane ? pane->findChild<RawImageView *>() : nullptr;
+}
+
+void tapCompareKey(QWidget *target, int key, Qt::KeyboardModifiers mods = Qt::NoModifier)
+{
+    QKeyEvent press(QEvent::KeyPress, key, mods);
+    QApplication::sendEvent(target, &press);
+    QKeyEvent release(QEvent::KeyRelease, key, mods);
+    QApplication::sendEvent(target, &release);
+}
+
+bool waitForStableCompareScale(CompareWorkspace *ws, int count, int timeoutMs)
+{
+    QElapsedTimer timer;
+    timer.start();
+    double previous = -1.0;
+    while (timer.elapsed() < timeoutMs)
+    {
+        pump(40);
+        bool imagesReady = ws->comparedImageCount() == count;
+        for (int i = 0; imagesReady && i < count; ++i)
+        {
+            RawImageView *view = comparePaneView(ws, i);
+            if (!view || view->displayImage().isNull() || view->width() < 16)
+                imagesReady = false;
+        }
+        const double scale = imagesReady ? ws->engine().cellTransform(0).scale : 0.0;
+        if (imagesReady && scale > 0.0 && std::abs(scale - previous) < 1e-9)
+            return true;
+        previous = scale;
+    }
+    return false;
+}
+
+double nudgeCompareZoom(CompareWorkspace *ws)
+{
+    tapCompareKey(ws, Qt::Key_Equal);
+    tapCompareKey(ws, Qt::Key_Equal);
+    pump(30);
+    return ws->engine().cellTransform(0).scale;
+}
+
+void pointAtComparePane(RawImageView *view)
+{
+    if (!view)
+        return;
+    QEvent enter(QEvent::Enter);
+    QApplication::sendEvent(view, &enter);
+    QCursor::setPos(view->mapToGlobal(view->rect().center()));
+}
+
+// Plain 1–8 preview images. They must not zoom to 100% or apply a layout preset.
+// Ctrl+1 remains actual size. Ctrl+2 remains the 2-up preset.
+void testPlainDigitsReservedForPreview(const QDir &dir)
+{
+    std::cout << "── Compare: plain digits preview images ──\n";
+    bool plainOneIsZoom = false;
+    bool digitsChangeLayout = false;
+    bool ctrl1IsActual = false;
+    bool digitsPreview = false;
+    for (const mviewer::cw::CompareShortcut &entry : mviewer::cw::kCompareShortcuts)
+    {
+        const QString keys = QString::fromUtf8(entry.keys ? entry.keys : "");
+        const QString text = QString::fromUtf8(entry.name ? entry.name : "") +
+                             QString::fromUtf8(entry.description ? entry.description : "");
+        if (keys == QLatin1String("1") && text.contains(QStringLiteral("实际大小")))
+            plainOneIsZoom = true;
+        if (text.contains(QStringLiteral("套用宫格")) || text.contains(QStringLiteral("改布局")))
+            digitsChangeLayout = true;
+        if (keys == QLatin1String("Ctrl+1") && text.contains(QStringLiteral("100%")))
+            ctrl1IsActual = true;
+        if (keys.contains(QLatin1Char('1')) && keys.contains(QLatin1Char('8')) &&
+            text.contains(QStringLiteral("临时")))
+            digitsPreview = true;
+    }
+    CHECK(!plainOneIsZoom && ctrl1IsActual && digitsPreview && !digitsChangeLayout,
+          "shortcut table reserves plain 1-8 for preview and Ctrl+1 for 100%");
+
+    const QString red =
+        writePng(dir, QStringLiteral("digit_r.png"), 1200, 900, QColor(220, 20, 20));
+    const QString green =
+        writePng(dir, QStringLiteral("digit_g.png"), 1200, 900, QColor(20, 200, 40));
+    const QString blue =
+        writePng(dir, QStringLiteral("digit_b.png"), 1200, 900, QColor(20, 40, 220));
+
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    dlg.resize(1000, 700);
+    dlg.show();
+    pump(30);
+
+    ws->setImages({red, green});
+    CHECK(waitForStableCompareScale(ws, 2, 60000), "two-image digit fixture is displayed");
+    const double twoScale = nudgeCompareZoom(ws);
+    CHECK(std::abs(twoScale - 1.0) > 0.05, "two-image zoom is away from 100% before digits");
+    const LayoutMarks twoLayout = layoutMarks(ws);
+    tapCompareKey(ws, Qt::Key_2);
+    tapCompareKey(ws, Qt::Key_3);
+    pump(40);
+    const LayoutMarks twoAfter = layoutMarks(ws);
+    CHECK(sameLayout(twoLayout, twoAfter), "plain 2/3 with two images do not change the layout");
+    CHECK(std::abs(ws->engine().cellTransform(0).scale - twoScale) < 1e-6,
+          "plain 2/3 with two images do not change zoom");
+    tapCompareKey(ws, Qt::Key_1);
+    pump(20);
+    CHECK(std::abs(ws->engine().cellTransform(0).scale - twoScale) < 1e-6,
+          "plain 1 with two images does not set 100% zoom");
+    CHECK(sameLayout(twoLayout, layoutMarks(ws)), "plain 1 with two images does not change layout");
+
+    ws->setImages({red, green, blue});
+    CHECK(waitForStableCompareScale(ws, 3, 60000), "three-image digit fixture is displayed");
+    const double threeScale = nudgeCompareZoom(ws);
+    CHECK(std::abs(threeScale - 1.0) > 0.05, "three-image zoom is away from 100% before digit 1");
+    QCursor::setPos(-10000, -10000);
+    const LayoutMarks threeLayout = layoutMarks(ws);
+    tapCompareKey(ws, Qt::Key_2);
+    tapCompareKey(ws, Qt::Key_3);
+    tapCompareKey(ws, Qt::Key_4);
+    pump(40);
+    CHECK(sameLayout(threeLayout, layoutMarks(ws)),
+          "plain 2/3/4 with three images do not change the layout preset");
+    CHECK(std::abs(ws->engine().cellTransform(0).scale - threeScale) < 1e-6,
+          "plain 2/3/4 with three images do not change zoom");
+    auto *status = ws->findChild<QLabel *>(QStringLiteral("compareStatusLabel"));
+    CHECK(status && status->text().contains(QStringLiteral("当前共 3 张")),
+          "a digit past the image count shows a status hint");
+
+    RawImageView *pane0 = comparePaneView(ws, 0);
+    RawImageView *pane2 = comparePaneView(ws, 2);
+    CHECK(pane0 && pane2 && !pane0->displayImage().isNull() && !pane2->displayImage().isNull(),
+          "pane 0 and pane 2 have images before digit 1");
+    if (!pane0 || !pane2 || pane0->displayImage().isNull() || pane2->displayImage().isNull())
+        return;
+    const QRgb image1 = pane0->displayImage().pixel(0, 0);
+    const QRgb image3 = pane2->displayImage().pixel(0, 0);
+    CHECK(image1 != image3, "image 1 and image 3 are visually distinct");
+    pointAtComparePane(pane2);
+    QKeyEvent press1(QEvent::KeyPress, Qt::Key_1, Qt::NoModifier);
+    QApplication::sendEvent(ws, &press1);
+    pump(20);
+    CHECK(pane2->hasTransientDisplay(), "plain 1 with three images previews on the target pane");
+    CHECK(pane2->displayImage().pixel(0, 0) == image1,
+          "plain 1 with three images previews image 1");
+    CHECK(!pane0->hasTransientDisplay(), "plain 1 does not replace the pane that already shows it");
+    CHECK(std::abs(ws->engine().cellTransform(0).scale - threeScale) < 1e-6,
+          "plain 1 with three images does not change zoom");
+    CHECK(sameLayout(threeLayout, layoutMarks(ws)), "plain 1 does not change the layout preset");
+    QKeyEvent release1(QEvent::KeyRelease, Qt::Key_1, Qt::NoModifier);
+    QApplication::sendEvent(ws, &release1);
+    pump(20);
+    CHECK(!pane2->hasTransientDisplay(), "releasing 1 restores the pane");
+
+    tapCompareKey(ws, Qt::Key_1, Qt::ControlModifier);
+    pump(30);
+    CHECK(std::abs(ws->engine().cellTransform(0).scale - 1.0) < 0.02, "Ctrl+1 sets 100% zoom");
+    CHECK(ws->comparedImageCount() == 3, "Ctrl+1 keeps the three images");
+    CHECK(sameLayout(threeLayout, layoutMarks(ws)), "Ctrl+1 does not change the layout preset");
+
+    tapCompareKey(ws, Qt::Key_2, Qt::ControlModifier);
+    waitForCompareCount(ws, 2);
+    CHECK(ws->comparedImageCount() == 2 && ws->navWindow() == 2 &&
+              ws->engine().forcedColumns() == 2,
+          "Ctrl+2 still applies the 2-up layout preset");
+    QComboBox *combo = compareLayoutCombo(ws);
+    CHECK(combo && combo->currentIndex() == 2, "Ctrl+2 selects the 2-column layout");
+}
+
 } // namespace

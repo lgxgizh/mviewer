@@ -8,7 +8,6 @@ enum class TemporaryAction
     None,
     ShowPair,
     ShowDigit,
-    KeepLayoutPreset,
     HintMoveMouse,
     HintUseDigits
 };
@@ -48,26 +47,27 @@ inline TemporaryKeyDecision decidePairHold(int imageCount, int hoveredPane)
     return decision;
 }
 
-// More than two panes: digit K shows image K on the hovered pane.
-// Outside a pane, plain 1–8 keeps the layout preset.
-inline TemporaryKeyDecision decideDigitHold(int imageCount, int hoveredPane, int digit)
+// Digit K (1..8) temporarily shows image K. The pane under the pointer is the
+// target. Off a pane, fallbackPane is used when it names a real image; otherwise
+// pane 0. A digit past the image count only asks for a hint. Plain digits never
+// select a layout preset, including when only one or two images are open.
+inline TemporaryKeyDecision decideDigitHold(int imageCount, int hoveredPane, int digit,
+                                            int fallbackPane = -1)
 {
     TemporaryKeyDecision decision;
     if (digit < 1 || digit > 8)
         return decision;
-    const bool onPane = hoveredPane >= 0 && hoveredPane < imageCount;
-    if (imageCount <= 2 || !onPane)
-    {
-        decision.action = TemporaryAction::KeepLayoutPreset;
-        return decision;
-    }
-    if (digit > imageCount)
+    if (imageCount < 1 || digit > imageCount)
     {
         decision.action = TemporaryAction::HintUseDigits;
         return decision;
     }
+    const bool onPane = hoveredPane >= 0 && hoveredPane < imageCount;
+    int target = onPane ? hoveredPane : fallbackPane;
+    if (target < 0 || target >= imageCount)
+        target = 0;
     decision.action = TemporaryAction::ShowDigit;
-    decision.targetPane = hoveredPane;
+    decision.targetPane = target;
     decision.sourcePane = digit - 1;
     return decision;
 }

@@ -3,6 +3,23 @@
 
 #include <QCursor>
 
+namespace
+{
+
+// Off a pane, preview on the locked reference, then the edit cell, else pane 0.
+int digitHoldFallbackPane(int imageCount, int focusIndex, int explicitEditIndex, int editIndex)
+{
+    if (focusIndex >= 0 && focusIndex < imageCount)
+        return focusIndex;
+    if (explicitEditIndex >= 0 && explicitEditIndex < imageCount)
+        return explicitEditIndex;
+    if (editIndex >= 0 && editIndex < imageCount)
+        return editIndex;
+    return -1;
+}
+
+} // namespace
+
 int CompareWorkspace::paneIndexAtGlobalPos(const QPoint &globalPos) const
 {
     for (int i = 0; i < m_cellViews.size(); ++i)
@@ -90,7 +107,7 @@ void CompareWorkspace::beginTemporaryCompare()
     const auto decision = mviewer::ui::decidePairHold(m_engine.imageCount(), hovered);
     if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
     {
-        showCompareStatus(tr("超过 2 张时请把鼠标移到窗格上，按住数字键 1–N 临时换图"));
+        showCompareStatus(tr("超过 2 张时请按住数字键 1–N 临时换图"));
         return;
     }
     if (decision.action == mviewer::ui::TemporaryAction::HintMoveMouse)
@@ -122,12 +139,16 @@ void CompareWorkspace::beginTemporaryCompare()
 
 void CompareWorkspace::beginDigitTemporaryCompare(int digit)
 {
+    const int count = m_engine.imageCount();
     const int hovered = paneIndexAtGlobalPos(QCursor::pos());
-    const auto decision = mviewer::ui::decideDigitHold(m_engine.imageCount(), hovered, digit);
+    const int fallback = digitHoldFallbackPane(count, m_focusIndex, m_explicitEditIdx, m_editIdx);
+    const auto decision = mviewer::ui::decideDigitHold(count, hovered, digit, fallback);
     if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
     {
-        showCompareStatus(
-            tr("当前共 %1 张，按住 1–%1 在鼠标所在窗格临时换图").arg(m_engine.imageCount()));
+        if (count < 1)
+            showCompareStatus(tr("没有可切换的图像"));
+        else
+            showCompareStatus(tr("当前共 %1 张，按住 1–%2 临时换图").arg(count).arg(count));
         return;
     }
     if (decision.action != mviewer::ui::TemporaryAction::ShowDigit)
@@ -263,8 +284,9 @@ QString CompareWorkspace::temporaryCompareTooltip() const
         m_cellViews[0]->sourceSize().isValid() && m_cellViews[1]->sourceSize().isValid();
     if (m_engine.imageCount() > 2)
     {
-        return tr("超过 2 张时此按钮和 Space 不可用。把鼠标移到窗格上，按住数字键 1–N "
-                  "在该窗格临时显示第 N 张图；松开恢复。布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。");
+        return tr("超过 2 张时此按钮和 Space 不可用。按住数字键 1–N "
+                  "在鼠标所在窗格临时显示第 N 张（不在窗格上则用当前窗格）；松开恢复。"
+                  "布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。");
     }
     if (!imagesReady)
         return tr("需要恰好 2 张已显示的图片才能按住临时切换");
