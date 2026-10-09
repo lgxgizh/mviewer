@@ -1,7 +1,6 @@
 // CompareWorkspace keyboard-first interaction (M20 P0#4).
 #include "compareworkspace_p.h"
 #include "compareworkspace_shortcuts.h"
-#include "compareworkspace_temporary.h"
 
 #include <QCursor>
 #include <QKeyEvent>
@@ -392,7 +391,7 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
 
-    // Ctrl+0 or 0 -> Fit, Ctrl+1 -> 100% actual size.
+    // Plain 0 / Ctrl+0 fit the window. Ctrl+1 is 100%. Plain 1 previews an image.
     if ((ctrl || plain) && key == Qt::Key_0)
     {
         fitAll();
@@ -403,7 +402,7 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    if ((ctrl || plain) && key == Qt::Key_1)
+    if (ctrl && key == Qt::Key_1)
     {
         zoomActual();
         event->accept();
@@ -462,32 +461,11 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // Plain 2–8: with more than two images and the pointer on a pane, hold the
-    // digit to preview that image. Otherwise keep the N-up layout preset.
-    if (plain && (key >= Qt::Key_2 && key <= Qt::Key_8))
+    // Plain 1–8 only preview images. Layout presets stay on Ctrl+2 / Ctrl+4 / Ctrl+8.
+    if (plain && key >= Qt::Key_1 && key <= Qt::Key_8)
     {
-        const int n = key - Qt::Key_0;
-        if (event->isAutoRepeat())
-        {
-            event->accept();
-            return true;
-        }
-        const int hovered = paneIndexAtGlobalPos(QCursor::pos());
-        const auto decision = mviewer::ui::decideDigitHold(m_engine.imageCount(), hovered, n);
-        if (decision.action == mviewer::ui::TemporaryAction::ShowDigit)
-        {
-            beginDigitTemporaryCompare(n);
-            event->accept();
-            return true;
-        }
-        if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
-        {
-            showCompareStatus(
-                tr("移到窗格上按 1–%1 临时换图；布局请用 Ctrl+2/4/8").arg(m_engine.imageCount()));
-            event->accept();
-            return true;
-        }
-        applyLayoutPreset(n);
+        if (!event->isAutoRepeat())
+            beginDigitTemporaryCompare(key - Qt::Key_0);
         event->accept();
         return true;
     }

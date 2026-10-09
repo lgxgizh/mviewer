@@ -25,6 +25,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCursor>
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
@@ -252,6 +253,7 @@ int main(int argc, char **argv)
     testSyncRotate(paths8[0], paths8[1]);
     testCompareShortcutHelpSnapshot(dir, paths8[0], paths8[1]);
     testComparePresetSanitize();
+    testPlainDigitsReservedForPreview(dir);
 
     if (g_failures > 0)
     {

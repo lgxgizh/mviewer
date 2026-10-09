@@ -221,6 +221,10 @@ above is the main window only.
 | `R` / `L` | Sync crosshair / pixel link |
 | `X` | Swap A/B |
 | `F` | Fit all panes |
+| `0` / `Ctrl+0` | Fit all panes (same as `F`) |
+| `Ctrl+1` | 100% actual size |
+| `1`–`8` | Hold to preview image N on the pane under the pointer. Off a pane, the focused pane is used, otherwise the first pane. Digits past the image count show a status hint only |
+| `Ctrl+2` / `Ctrl+4` / `Ctrl+8` | 2-up / 4-up / 8-up layout presets |
 | `Ctrl+R` / `Ctrl+Shift+R` | Preview-rotate the edit/hover/focus pane (does not write files) |
 | `Ctrl+Shift+H` / `Ctrl+Shift+V` | Preview-flip the edit/hover/focus pane (does not write files) |
 | `P` / `PageUp` / `Left` | Previous pair |

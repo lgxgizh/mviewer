@@ -43,13 +43,32 @@ int main()
     const auto digit = decideDigitHold(4, 2, 1);
     expect(digit.action == TemporaryAction::ShowDigit && digit.targetPane == 2 &&
                digit.sourcePane == 0,
-           "digit shows that image on the hovered pane");
-    expect(decideDigitHold(4, -1, 2).action == TemporaryAction::KeepLayoutPreset,
-           "digit off-pane keeps layout");
-    expect(decideDigitHold(2, 0, 1).action == TemporaryAction::KeepLayoutPreset,
-           "two panes keep layout presets on digits");
+           "digit 1 shows image 1 on the hovered pane");
+    const auto digitOffPane = decideDigitHold(4, -1, 2);
+    expect(digitOffPane.action == TemporaryAction::ShowDigit && digitOffPane.targetPane == 0 &&
+               digitOffPane.sourcePane == 1,
+           "digit off-pane previews on pane 0 instead of a layout preset");
+    const auto focused = decideDigitHold(3, -1, 1, 2);
+    expect(focused.action == TemporaryAction::ShowDigit && focused.targetPane == 2 &&
+               focused.sourcePane == 0,
+           "digit 1 off-pane previews image 1 on the fallback pane");
+    const auto two = decideDigitHold(2, 0, 1);
+    expect(two.action == TemporaryAction::ShowDigit && two.targetPane == 0 && two.sourcePane == 0,
+           "two images preview on digits instead of a layout preset");
+    const auto twoOff = decideDigitHold(2, -1, 2, 1);
+    expect(twoOff.action == TemporaryAction::ShowDigit && twoOff.targetPane == 1 &&
+               twoOff.sourcePane == 1,
+           "two images off-pane preview image 2 on the fallback pane");
     expect(decideDigitHold(3, 1, 8).action == TemporaryAction::HintUseDigits,
-           "digit past count does not change layout");
+           "digit past count only hints");
+    expect(decideDigitHold(3, -1, 4).action == TemporaryAction::HintUseDigits,
+           "off-pane digit past count only hints");
+    expect(decideDigitHold(0, 0, 1).action == TemporaryAction::HintUseDigits,
+           "no images only hint");
+    const auto badFallback = decideDigitHold(4, 9, 3, 1);
+    expect(badFallback.action == TemporaryAction::ShowDigit && badFallback.targetPane == 1 &&
+               badFallback.sourcePane == 2,
+           "a hover outside the image range uses the fallback pane");
 
     if (g_failed)
         return 1;
