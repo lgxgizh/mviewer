@@ -7,7 +7,6 @@
 #include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
-#include <QFontMetrics>
 #include <QLabel>
 #include <QMenu>
 #include <QPushButton>
@@ -244,14 +243,14 @@ void CompareWorkspace::presentDiffMetrics(const QString &text)
 {
     if (!m_metricLabel)
         return;
+    // Keep the full metric text in the label (reports and tests read it); a
+    // fixed maximum width clips the chip visually instead of eliding text, so
+    // threshold-dependent tail values never collapse into identical strings
+    // on platforms with wider fonts.
     QString chip = text;
     chip.replace(QLatin1Char('\n'), QStringLiteral(" · "));
-    const int budget = 480;
-    const QFontMetrics metrics(m_metricLabel->font());
-    if (metrics.horizontalAdvance(chip) > budget)
-        chip = metrics.elidedText(chip, Qt::ElideRight, budget);
     m_metricLabel->setWordWrap(false);
-    m_metricLabel->setMaximumWidth(budget);
+    m_metricLabel->setMaximumWidth(480);
     m_metricLabel->setToolTip(text);
     m_metricLabel->setText(chip);
 }
