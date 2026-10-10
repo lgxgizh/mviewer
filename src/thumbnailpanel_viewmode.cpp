@@ -83,6 +83,8 @@ bool ThumbnailPanel::event(QEvent *event)
             return true;
         }
     }
+    if (consumeRubberBandCancel(event))
+        return true;
     return QListView::event(event);
 }
 

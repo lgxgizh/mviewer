@@ -5,8 +5,23 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QCursor>
 #include <QDir>
+#include <QFocusEvent>
+#include <QKeyEvent>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QRubberBand>
+
+#if defined(Q_OS_WIN)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 
 void ThumbnailPanel::onSelectionChanged()
 {
@@ -333,4 +348,298 @@ void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)
     QAction *actClearFlag = flagMenu->addAction(tr("清除标记"));
     connect(actClearFlag, &QAction::triggered, this,
             [this]() { batchSetFlagSelected(false, false); });
+}
+
+namespace
+{
+Qt::KeyboardModifiers sanitizedPressModifiers(const QMouseEvent *event)
+{
+    Qt::KeyboardModifiers mods = event->modifiers();
+#if defined(Q_OS_WIN)
+    // Guard against a phantom Shift/Ctrl modifier from the Windows IME language
+    // toggle (a Shift tap). Spontaneous events are checked against the live key.
+    if (event->spontaneous())
+    {
+        if ((mods & Qt::ShiftModifier) && ((GetKeyState(VK_SHIFT) & 0x8000) == 0))
+            mods &= ~Qt::ShiftModifier;
+        if ((mods & Qt::ControlModifier) && ((GetKeyState(VK_CONTROL) & 0x8000) == 0))
+            mods &= ~Qt::ControlModifier;
+    }
+#endif
+    return mods;
+}
+
+bool modifierExtendsSelection(Qt::KeyboardModifiers mods)
+{
+    return (mods & (Qt::ControlModifier | Qt::ShiftModifier)) != 0;
+}
+} // namespace
+
+void ThumbnailPanel::selectAnchorRange(const QModelIndex &index, Qt::KeyboardModifiers mods)
+{
+    int anchorRow = m_rowByPath.value(galleryPathKey(m_selectionAnchorPath), -1);
+    if (anchorRow < 0 && currentIndex().isValid())
+        anchorRow = currentIndex().row();
+    if (anchorRow < 0)
+        anchorRow = index.row();
+    const int first = qMin(anchorRow, index.row());
+    const int last = qMax(anchorRow, index.row());
+    // Plain Shift replaces the selection with the anchor range.
+    // Ctrl+Shift adds that range and keeps images outside it.
+    const auto flags = (mods & Qt::ControlModifier) != 0 ? QItemSelectionModel::Select
+                                                         : QItemSelectionModel::ClearAndSelect;
+    const QModelIndex firstIndex = m_model->index(first, 0);
+    const QModelIndex lastIndex = m_model->index(last, 0);
+    selectionModel()->select(QItemSelection(firstIndex, lastIndex), flags);
+    selectionModel()->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
+}
+
+void ThumbnailPanel::applyItemClickSelection(const QModelIndex &index, Qt::KeyboardModifiers mods)
+{
+    const QString path = m_paths.value(index.row());
+    if ((mods & Qt::ShiftModifier) != 0)
+    {
+        selectAnchorRange(index, mods);
+        return;
+    }
+    if ((mods & Qt::ControlModifier) != 0)
+    {
+        selectionModel()->select(index, QItemSelectionModel::Toggle);
+        selectionModel()->setCurrentIndex(index, QItemSelectionModel::NoUpdate);
+        m_selectionAnchorPath = path;
+        return;
+    }
+    selectionModel()->setCurrentIndex(index, QItemSelectionModel::ClearAndSelect);
+    m_selectionAnchorPath = path;
+}
+
+void ThumbnailPanel::beginEmptyAreaRubberBand(QMouseEvent *event, Qt::KeyboardModifiers mods)
+{
+    m_pressedOnItem = false;
+    m_emptyAreaPress = true;
+    m_emptyAreaModifiers = mods;
+    // A marquee retargets current as the pointer crosses cells. Hold the gesture
+    // flag so currentChanged does not emit itemClicked for every crossed cell.
+    m_selectionGesture = true;
+    if (selectionModel() && !modifierExtendsSelection(mods))
+    {
+        selectionModel()->clearSelection();
+        m_selectionAnchorPath.clear();
+    }
+    if (selectionModel())
+        m_rubberBaseSelection = selectionModel()->selection();
+    // QListView records pressedPosition from this press. Without it, the next
+    // move starts DragSelectingState from a stale origin.
+    QListView::mousePressEvent(event);
+}
+
+void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
+{
+    const bool left = event->button() == Qt::LeftButton;
+    const Qt::KeyboardModifiers mods = sanitizedPressModifiers(event);
+    m_selectionGesture = left && modifierExtendsSelection(mods);
+
+    // Item clicks stay on the path anchor. IconMode on Windows can keep only
+    // the clicked item for Shift ranges after a custom ClearAndSelect.
+    if (!left)
+    {
+        m_pressedOnItem = false;
+        m_emptyAreaPress = false;
+        QListView::mousePressEvent(event);
+        return;
+    }
+    const QModelIndex index = indexAt(event->pos());
+    m_pressedOnItem = index.isValid();
+    if (index.isValid())
+    {
+        m_emptyAreaPress = false;
+        applyItemClickSelection(index, mods);
+        event->accept();
+        return;
+    }
+    beginEmptyAreaRubberBand(event, mods);
+    event->accept();
+}
+
+void ThumbnailPanel::reapplyRubberBandBase()
+{
+    if (!m_emptyAreaPress || !selectionModel())
+        return;
+    const bool control = (m_emptyAreaModifiers & Qt::ControlModifier) != 0;
+    const bool shift = (m_emptyAreaModifiers & Qt::ShiftModifier) != 0;
+    if (!control && !shift)
+        return;
+    // Qt replaced the selection with the band. Recombine with the press-time
+    // snapshot: Ctrl toggles the band (Explorer), Shift adds it.
+    QItemSelection merged = m_rubberBaseSelection;
+    const auto mergeFlag = control ? QItemSelectionModel::Toggle : QItemSelectionModel::Select;
+    merged.merge(selectionModel()->selection(), mergeFlag);
+    selectionModel()->select(merged, QItemSelectionModel::ClearAndSelect);
+}
+
+void ThumbnailPanel::mouseMoveEvent(QMouseEvent *event)
+{
+    // A press that began on a thumbnail must not drag-select from a stale
+    // pressed index. Empty-area moves update QListView's elastic band.
+    if ((event->buttons() & Qt::LeftButton) != 0 && m_pressedOnItem)
+    {
+        event->accept();
+        return;
+    }
+    QListView::mouseMoveEvent(event);
+    if (m_emptyAreaPress && (event->buttons() & Qt::LeftButton) != 0 &&
+        state() == QAbstractItemView::DragSelectingState)
+        reapplyRubberBandBase();
+}
+
+QItemSelectionModel::SelectionFlags ThumbnailPanel::selectionCommand(const QModelIndex &index,
+                                                                     const QEvent *event) const
+{
+    // While the marquee is active, always select exactly the items under the
+    // band. Ctrl/Shift are reapplied from the press snapshot afterwards so a
+    // Toggle command cannot flip the same cells on every move.
+    if (m_emptyAreaPress && event != nullptr && event->type() == QEvent::MouseMove &&
+        state() == QAbstractItemView::DragSelectingState)
+        return QItemSelectionModel::Clear | QItemSelectionModel::SelectCurrent;
+    return QListView::selectionCommand(index, event);
+}
+
+void ThumbnailPanel::hideStrayRubberBand()
+{
+    const QList<QRubberBand *> bands = findChildren<QRubberBand *>();
+    for (QRubberBand *band : bands)
+    {
+        if (band->isVisible())
+            band->hide();
+    }
+    if (state() == QAbstractItemView::DragSelectingState)
+        setState(QAbstractItemView::NoState);
+}
+
+void ThumbnailPanel::syncRubberBandAnchor()
+{
+    if (!selectionModel() || !m_model)
+        return;
+    const QModelIndexList selected = selectionModel()->selectedIndexes();
+    if (selected.isEmpty())
+    {
+        m_selectionAnchorPath.clear();
+        return;
+    }
+    QModelIndex anchor = selected.constFirst();
+    for (const QModelIndex &index : selected)
+    {
+        if (index.row() > anchor.row())
+            anchor = index;
+    }
+    if (!anchor.isValid() || anchor.row() < 0 || anchor.row() >= m_paths.size())
+        return;
+    if (selectionModel()->currentIndex() != anchor)
+        selectionModel()->setCurrentIndex(anchor, QItemSelectionModel::NoUpdate);
+    m_selectionAnchorPath = m_paths.at(anchor.row());
+}
+
+void ThumbnailPanel::forwardRubberBandRelease(QMouseEvent *event)
+{
+    if (m_endingRubberBand)
+        return;
+    m_endingRubberBand = true;
+    const bool dragged = state() == QAbstractItemView::DragSelectingState;
+    m_emptyAreaPress = false;
+    QListView::mouseReleaseEvent(event);
+    hideStrayRubberBand();
+    if (dragged)
+        syncRubberBandAnchor();
+    m_rubberBaseSelection.clear();
+    m_endingRubberBand = false;
+}
+
+void ThumbnailPanel::mouseReleaseEvent(QMouseEvent *event)
+{
+    const bool endBand = event->button() == Qt::LeftButton && m_emptyAreaPress;
+    m_pressedOnItem = false;
+    if (endBand)
+    {
+        forwardRubberBandRelease(event);
+        m_selectionGesture = false;
+        return;
+    }
+    if (event->button() == Qt::LeftButton)
+    {
+        m_selectionGesture = false;
+        event->accept();
+        return;
+    }
+    QListView::mouseReleaseEvent(event);
+}
+
+void ThumbnailPanel::endRubberBandIfActive()
+{
+    if (m_endingRubberBand || !isRubberBandActive())
+        return;
+    QWidget *vp = viewport();
+    const QPoint local = vp != nullptr ? vp->mapFromGlobal(QCursor::pos()) : QPoint();
+    const QPoint global = vp != nullptr ? vp->mapToGlobal(local) : local;
+    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(local), QPointF(global), Qt::LeftButton,
+                        Qt::NoButton, m_emptyAreaModifiers);
+    m_pressedOnItem = false;
+    forwardRubberBandRelease(&release);
+    m_selectionGesture = false;
+}
+
+bool ThumbnailPanel::isRubberBandActive() const
+{
+    return m_emptyAreaPress || state() == QAbstractItemView::DragSelectingState;
+}
+
+bool ThumbnailPanel::consumeRubberBandCancel(QEvent *event)
+{
+    if (event == nullptr || !isRubberBandActive())
+        return false;
+    const QEvent::Type type = event->type();
+    if (type == QEvent::UngrabMouse || type == QEvent::WindowDeactivate)
+    {
+        endRubberBandIfActive();
+        return false;
+    }
+    if (type == QEvent::ShortcutOverride)
+    {
+        const auto *keyEvent = static_cast<const QKeyEvent *>(event);
+        if (keyEvent->key() != Qt::Key_Escape)
+            return false;
+        event->accept();
+        return true;
+    }
+    if (type != QEvent::KeyPress)
+        return false;
+    const auto *keyEvent = static_cast<const QKeyEvent *>(event);
+    if (keyEvent->key() != Qt::Key_Escape)
+        return false;
+    endRubberBandIfActive();
+    event->accept();
+    return true;
+}
+
+void ThumbnailPanel::focusOutEvent(QFocusEvent *event)
+{
+    endRubberBandIfActive();
+    QListView::focusOutEvent(event);
+}
+
+void ThumbnailPanel::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    // Item presses do not call QListView::mousePressEvent, so the open signal
+    // cannot depend on QAbstractItemView's press tracking. Empty-area presses
+    // do forward, for the rubber band only.
+    if (event->button() == Qt::LeftButton)
+    {
+        const QModelIndex index = indexAt(event->pos());
+        if (index.isValid())
+        {
+            event->accept();
+            emit itemDoubleClicked(m_paths.value(index.row()));
+            return;
+        }
+    }
+    QListView::mouseDoubleClickEvent(event);
 }
