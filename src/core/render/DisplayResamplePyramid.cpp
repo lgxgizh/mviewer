@@ -389,7 +389,7 @@ class PyramidCache
     std::vector<std::shared_ptr<Flight>> flights_;
     size_t bytes_ = 0;
     uint64_t generation_ = 1;
-    static constexpr size_t kBudget = 96u * 1024u * 1024u;
+    static constexpr size_t kBudget = size_t{96} * 1024u * 1024u;
 };
 
 bool buildUncached(RgbView &view, int dstW, int dstH, bool halfX, bool halfY,

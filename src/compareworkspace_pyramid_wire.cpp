@@ -83,6 +83,20 @@ bool skipLateProvisional(bool provisional, bool preview, int index, const QImage
            session->panePyramids[static_cast<size_t>(index)].haveFull;
 }
 
+// Records whether pane `index` now shows a preview. Returns true when this
+// delivery only upgrades a preview to the sharp raster.
+bool swapPreviewState(mviewer::ui::CompareSessionRuntime *session, int index, bool preview)
+{
+    if (!session || index < 0)
+        return false;
+    auto &flags = session->displayIsPreview;
+    if (flags.size() <= static_cast<size_t>(index))
+        flags.resize(static_cast<size_t>(index) + 1, 0);
+    const bool upgrade = flags[static_cast<size_t>(index)] != 0 && !preview;
+    flags[static_cast<size_t>(index)] = preview ? 1 : 0;
+    return upgrade;
+}
+
 bool tryPaintFromPyramid(mviewer::ui::CompareSessionRuntime *session,
                          const QList<RawImageView *> &cellViews, int pane,
                          const mviewer::ui::CompareDisplayRequest &desired)
@@ -301,6 +315,9 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
     if (!r.provisional && m_session)
         m_session->forceDecodePriority = false;
 
+    // A sharp raster replacing a preview of the same view does not change the
+    // pixels the inspector samples, so it must not cost a second render.
+    bool inspectorStale = false;
     for (const auto &cell : r.cells)
     {
         if (cell.index < 0 || cell.index >= static_cast<int>(m_cellViews.size()))
@@ -325,12 +342,8 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
             continue;
         view->setSoftLoading(false);
         view->setImage(cell.image, cell.sourceSize, cell.sourceRect);
-        if (m_session)
-        {
-            if (m_session->displayIsPreview.size() <= static_cast<size_t>(cell.index))
-                m_session->displayIsPreview.resize(static_cast<size_t>(cell.index) + 1, 0);
-            m_session->displayIsPreview[static_cast<size_t>(cell.index)] = r.preview ? 1 : 0;
-        }
+        if (!swapPreviewState(m_session.get(), cell.index, r.preview))
+            inspectorStale = true;
         if (cell.index < m_cellLabels.size())
             clearComparePaneCaptionStatus(m_cellLabels[cell.index]);
         if (!oldSize.isEmpty() && view->sourceSize() == oldSourceSize)
@@ -356,7 +369,7 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
     // delivery stays pinned until the full raster follows.
     reapplyPinnedCellTransforms(!r.provisional);
 
-    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
+    if (inspectorStale && m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 
     updateTemporaryCompareAvailability();

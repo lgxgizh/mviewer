@@ -22,7 +22,7 @@ constexpr int kHorizBias = 1 << (kHorizShift - 1);
 constexpr int kVertShift = 18; // Q4 sample * Q14 weight
 constexpr int kVertBias = 1 << (kVertShift - 1);
 
-enum class Isa
+enum class Isa : std::uint8_t
 {
     Scalar,
     Sse41,

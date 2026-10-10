@@ -25,7 +25,7 @@ namespace mviewer::core::resample_detail
 namespace
 {
 
-enum class PairIsa
+enum class PairIsa : std::uint8_t
 {
     Sse,
     Avx
