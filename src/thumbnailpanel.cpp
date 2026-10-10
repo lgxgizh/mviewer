@@ -61,8 +61,9 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     m_delegate = new ThumbDelegate(this, this);
     setItemDelegate(m_delegate);
 
-    m_compareBtn = new QPushButton(QStringLiteral("比较选中"), this);
+    m_compareBtn = new QPushButton(QStringLiteral("比较 (P)"), this);
     m_compareBtn->setObjectName(QStringLiteral("compareSelectionButton"));
+    m_compareBtn->setFixedHeight(28);
     m_compareBtn->setVisible(false);
     connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::requestCompare);
 
@@ -509,7 +510,7 @@ void ThumbnailPanel::setSelectionModel(SelectionModel *sel) { m_selection = sel;
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)
 {
     QListView::resizeEvent(event);
-    if (m_compareBtn)
+    if (m_compareBtn && m_compareBtn->parentWidget() == this)
         m_compareBtn->move(viewport()->width() - m_compareBtn->width() - 8, 8);
     positionDetailsHeader();
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);

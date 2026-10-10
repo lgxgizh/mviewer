@@ -2,9 +2,8 @@
 #include "compareworkspace_p.h"
 
 #include "Theme.h"
-#include "compareworkspace_caption.h"
+#include "ThemeTokens.h"
 #include "compareworkspace_shortcuts.h"
-#include "core/image/ImageFrame.h"
 
 #include <QAction>
 #include <QMenu>
@@ -27,6 +26,8 @@ void CompareWorkspace::setSyncRotate(bool on)
         const QSignalBlocker blocker(m_syncRotatePanelChk);
         m_syncRotatePanelChk->setChecked(on);
     }
+    if (QAction *action = findChild<QAction *>(QStringLiteral("syncRotateAction")))
+        action->setChecked(on);
     showCompareStatus(on ? tr("已开启同步旋转：旋转将同时作用于所有图像")
                          : tr("已关闭同步旋转：旋转仅对选中的图像生效"));
 }
@@ -99,59 +100,6 @@ void CompareWorkspace::buildSyncControls()
                 applySync(on);
             });
     connect(m_syncRotateChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
-}
-
-QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
-                                                 QHBoxLayout *&toolLayout,
-                                                 QHBoxLayout *&toolActionsLayout)
-{
-    auto *toolbarContainer = new QWidget(this);
-    toolbarContainer->setAttribute(Qt::WA_AlwaysShowToolTips, true);
-    auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
-    toolbarLayout->setContentsMargins(0, 0, 0, 0);
-    toolbarLayout->setSpacing(2);
-    auto makeToolbar = [toolbarContainer](const char *name)
-    {
-        auto *bar = new QWidget(toolbarContainer);
-        bar->setObjectName(name);
-        auto *layout = new QHBoxLayout(bar);
-        layout->setContentsMargins(6, 1, 6, 1);
-        layout->setSpacing(4);
-        return std::pair{bar, layout};
-    };
-    auto [modeBar, modeLayoutLocal] = makeToolbar("compareModeToolbar");
-    auto [viewBar, viewLayoutLocal] = makeToolbar("compareViewToolbar");
-    auto *toolBar = new QWidget(toolbarContainer);
-    toolBar->setObjectName("compareToolToolbar");
-    auto *toolRows = new QVBoxLayout(toolBar);
-    toolRows->setContentsMargins(0, 0, 0, 0);
-    toolRows->setSpacing(2);
-    auto makeToolRow = [toolBar]()
-    {
-        auto *row = new QWidget(toolBar);
-        auto *layout = new QHBoxLayout(row);
-        layout->setContentsMargins(6, 1, 6, 1);
-        layout->setSpacing(4);
-        return std::pair{row, layout};
-    };
-    auto [toolDiffBar, toolLayoutLocal] = makeToolRow();
-    auto [toolActionsBar, toolActionsLayoutLocal] = makeToolRow();
-    toolRows->addWidget(toolDiffBar);
-    toolRows->addWidget(toolActionsBar);
-    toolbarLayout->addWidget(modeBar);
-    toolbarLayout->addWidget(viewBar);
-    toolbarLayout->addWidget(toolBar);
-    // Shortcut hints widen the view row; keep it inside the 1100px budget.
-    viewLayoutLocal->setSpacing(3);
-    viewLayoutLocal->addWidget(m_syncZoomChk);
-    viewLayoutLocal->addWidget(m_syncDragChk);
-    viewLayoutLocal->addWidget(m_syncRotateChk);
-
-    modeLayout = modeLayoutLocal;
-    viewLayout = viewLayoutLocal;
-    toolLayout = toolLayoutLocal;
-    toolActionsLayout = toolActionsLayoutLocal;
-    return toolbarContainer;
 }
 
 void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *viewLayout)
@@ -227,19 +175,13 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     buildCheckerboardControls(modeLayout);
 
     // A-4.5: continuous compare — walk consecutive pairs without reopening.
-    m_prevPairBtn =
-        new QPushButton(QString::fromUtf8("◀ ") + mviewer::cw::compareShortcutText("P"), this);
+    m_prevPairBtn = new QPushButton(mviewer::cw::compareShortcutText("P"), this);
     m_prevPairBtn->setToolTip(pairNavTooltip(false, true));
     m_prevPairBtn->setEnabled(false);
     connect(m_prevPairBtn, &QPushButton::clicked, this, &CompareWorkspace::prevPair);
     modeLayout->addWidget(m_prevPairBtn);
 
-    const mviewer::cw::CompareShortcut *nextShortcut = mviewer::cw::findCompareShortcut("N");
-    const QString nextText =
-        nextShortcut ? QString::fromUtf8(nextShortcut->name) + QString::fromUtf8(" ▶ (") +
-                           QString::fromUtf8(nextShortcut->keys) + QStringLiteral(")")
-                     : QString::fromUtf8("下一对 ▶ (N)");
-    m_nextPairBtn = new QPushButton(nextText, this);
+    m_nextPairBtn = new QPushButton(mviewer::cw::compareShortcutText("N"), this);
     m_nextPairBtn->setToolTip(pairNavTooltip(true, true));
     m_nextPairBtn->setEnabled(false);
     connect(m_nextPairBtn, &QPushButton::clicked, this, &CompareWorkspace::nextPair);
@@ -496,31 +438,6 @@ void CompareWorkspace::applyDisplayOverlayToViews()
     }
 }
 
-void CompareWorkspace::applyFilenameOverlays()
-{
-    for (int i = 0; i < m_cellViews.size(); ++i)
-    {
-        RawImageView *view = m_cellViews[i];
-        if (!view)
-            continue;
-        QString name;
-        if (i < m_cellLabels.size())
-            name = comparePaneCaptionFullText(m_cellLabels[i]);
-        if (name.isEmpty())
-        {
-            const ImageFrame *img = m_engine.imageAt(i);
-            if (img)
-                name = QString::fromStdString(img->metadata().fileName);
-        }
-        view->setFilenameOverlay(name, m_filenameOverlay);
-        // Filename visibility is the top overlay only. A display-error status
-        // is the one reason the below-pane label stays on screen.
-        if (i < m_cellLabels.size() && m_cellLabels[i] &&
-            !comparePaneCaptionHasStatus(m_cellLabels[i]))
-            m_cellLabels[i]->setVisible(false);
-    }
-}
-
 void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 {
     m_paneHistOverlayChk = new QCheckBox(tr("直方图"), this);
@@ -657,16 +574,20 @@ QWidget *CompareWorkspace::buildStatusStrip()
     lay->setContentsMargins(8, 2, 8, 2);
     lay->setSpacing(8);
 
-    m_metricLabel = new QLabel(tr("PSNR: —    SSIM: —"), strip);
+    const int chipRadius = mviewer::ui::makeThemeTokens(true).radiusControl;
+    m_metricLabel = new QLabel(strip);
     m_metricLabel->setObjectName("diffMetricsLabel");
     m_metricLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_metricLabel->setWordWrap(true);
-    m_metricLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
+    m_metricLabel->setWordWrap(false);
+    m_metricLabel->setFixedHeight(24);
+    m_metricLabel->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     m_metricLabel->setStyleSheet(
         QStringLiteral("color:#38bdf8; font-family:monospace; font-weight:700; padding:2px 8px; "
-                       "background:%1; border:1px solid %2; border-radius:4px;")
+                       "background:%1; border:1px solid %2; border-radius:%3px;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border)));
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border))
+            .arg(chipRadius));
+    presentDiffMetrics(tr("PSNR: —    SSIM: —"));
     lay->addWidget(m_metricLabel, 0);
 
     m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
@@ -701,31 +622,30 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
 void CompareWorkspace::syncContextualCompareControls()
 {
-    // Accessory sliders stay in the layout so toggling a mode does not shove
-    // the primary buttons. Enabled state follows the mode; visibility does not.
+    // Mode sliders appear only while that mode is on, so the idle chrome stays one row.
     const bool overlayOn = m_overlayChk && m_overlayChk->isChecked();
     const bool checkerOn = m_checkerChk && m_checkerChk->isChecked();
     const bool diffOn = m_diffOverlayChk && m_diffOverlayChk->isChecked();
     const bool customGrid = m_layoutCombo && m_layoutCombo->currentIndex() == 6;
-    auto keep = [](QWidget *widget, bool enabled)
+    auto show = [](QWidget *widget, bool visible, bool enabled)
     {
         if (!widget)
             return;
-        widget->setVisible(true);
+        widget->setVisible(visible);
         widget->setEnabled(enabled);
     };
-    keep(m_overlayAlphaSlider, overlayOn);
-    keep(m_overlayAlphaLabel, overlayOn);
-    keep(m_checkerSizeSlider, checkerOn);
-    keep(m_checkerSizeLabel, checkerOn);
-    keep(m_thresholdSlider, diffOn);
-    keep(m_thresholdLabel, diffOn);
-    keep(m_autoThresholdBtn, diffOn && m_hasSuggestedThreshold);
-    keep(findChild<QLabel *>(QStringLiteral("diffThresholdCaption")), diffOn);
-    keep(m_diffGainCombo, diffOn);
-    keep(findChild<QLabel *>(QStringLiteral("diffGainCaption")), diffOn);
-    keep(m_gridColsSpin, customGrid);
-    keep(findChild<QLabel *>(QStringLiteral("compareColumnsCaption")), customGrid);
+    show(m_overlayAlphaSlider, overlayOn, overlayOn);
+    show(m_overlayAlphaLabel, overlayOn, overlayOn);
+    show(m_checkerSizeSlider, checkerOn, checkerOn);
+    show(m_checkerSizeLabel, checkerOn, checkerOn);
+    show(m_thresholdSlider, diffOn, diffOn);
+    show(m_thresholdLabel, diffOn, diffOn);
+    show(m_autoThresholdBtn, diffOn, diffOn && m_hasSuggestedThreshold);
+    show(findChild<QLabel *>(QStringLiteral("diffThresholdCaption")), diffOn, diffOn);
+    show(m_diffGainCombo, diffOn, diffOn);
+    show(findChild<QLabel *>(QStringLiteral("diffGainCaption")), diffOn, diffOn);
+    show(m_gridColsSpin, customGrid, customGrid);
+    show(findChild<QLabel *>(QStringLiteral("compareColumnsCaption")), customGrid, customGrid);
 }
 
 void CompareWorkspace::onAutoThresholdClicked()

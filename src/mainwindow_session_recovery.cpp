@@ -249,6 +249,12 @@ void MainWindow::persistWindowLayoutOnClose(bool inBrowseWorkspace, QStringList 
     // A-6.4: persist vertical proportions of the left sidebar independently.
     if (m_leftSplitter)
         settings.setValue("leftSplitterState", m_leftSplitter->saveState());
+    if (m_navigationWidget)
+    {
+        const bool collapsed =
+            m_focusBrowse ? !m_focusNavigationVisible : !m_navigationWidget->isVisible();
+        settings.setValue(QStringLiteral("navigationPanelCollapsed"), collapsed);
+    }
     settings.sync();
     if (settings.status() != QSettings::NoError)
         failures.append(QStringLiteral("界面设置"));

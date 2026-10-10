@@ -55,6 +55,19 @@ QString actTip(const QString &label, const QAction *action)
 {
     return mviewer::ui::appendShortcutHint(label, mviewer::ui::actionShortcutHint(action));
 }
+
+QLabel *sectionHeaderLabel(QWidget *parent, const char *objectName, const QString &text)
+{
+    auto *label = new QLabel(text, parent);
+    label->setObjectName(QString::fromLatin1(objectName));
+    label->setProperty("sectionHeader", true);
+    label->setFixedHeight(28);
+    label->setStyleSheet(
+        QStringLiteral("QLabel{color:%1;background:%2;padding-left:8px;}")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1)));
+    return label;
+}
 } // namespace
 
 void MainWindow::buildBrowserShell()
@@ -115,6 +128,8 @@ void MainWindow::buildBrowserShell()
         m_actCompare->setToolTip(actTip(tr("选择 2–8 张图片进行比较"), m_actCompare));
         browserToolBar->addAction(m_actCompare);
     }
+    browserToolBar->setIconSize(QSize(16, 16));
+    installNavigationCollapse();
 
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
     m_breadcrumb = new BreadcrumbBar(this);
@@ -191,11 +206,8 @@ QWidget *MainWindow::buildNavigationPanel()
     auto *foldersLayout = new QVBoxLayout(foldersSection);
     foldersLayout->setContentsMargins(0, 0, 0, 0);
     foldersLayout->setSpacing(2);
-    auto *foldersLabel = new QLabel(tr("文件夹"), foldersSection);
-    foldersLabel->setObjectName("foldersSectionLabel");
-    foldersLabel->setProperty("sectionHeader", true);
-    foldersLabel->setFixedHeight(24);
-    foldersLayout->addWidget(foldersLabel);
+    foldersLayout->addWidget(
+        sectionHeaderLabel(foldersSection, "foldersSectionLabel", tr("文件夹")));
 
     m_directoryTree = new DirectoryTree(foldersSection);
     m_directoryTree->installEventFilter(this);
@@ -209,11 +221,7 @@ QWidget *MainWindow::buildNavigationPanel()
     auto *previewLayout = new QVBoxLayout(previewSection);
     previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(2);
-    auto *previewLabel = new QLabel(tr("预览"), previewSection);
-    previewLabel->setObjectName("previewSectionLabel");
-    previewLabel->setProperty("sectionHeader", true);
-    previewLabel->setFixedHeight(24);
-    previewLayout->addWidget(previewLabel);
+    previewLayout->addWidget(sectionHeaderLabel(previewSection, "previewSectionLabel", tr("预览")));
     m_previewPanel = new PreviewPanel(previewSection);
     m_previewPanel->installEventFilter(this);
     previewLayout->addWidget(m_previewPanel, 1);
@@ -267,7 +275,8 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
         sortRootLayout->addWidget(m_pathEdit);
     }
     auto *sortLayout = new QHBoxLayout;
-    sortLayout->setContentsMargins(6, 4, 6, 4);
+    sortLayout->setContentsMargins(8, 8, 8, 8);
+    sortLayout->setSpacing(8);
     sortRootLayout->addLayout(sortLayout);
 
     auto *advancedFilterPanel = new QWidget(sortBar);
@@ -281,6 +290,7 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
     buildPrimarySortControls(sortBar, sortLayout);
     buildAdvancedFilterControls(sortBar, sortLayout, advancedFilterPanel, advancedLayout);
     buildSearchControls(sortBar, sortLayout, advancedFilterPanel, advancedLayout);
+    polishGalleryToolbar(sortBar);
     return sortBar;
 }
 
@@ -485,6 +495,7 @@ QWidget *MainWindow::buildGalleryPanel()
     rightLayout->addWidget(sortBar);
 
     m_thumbnailPanel = new ThumbnailPanel(rightWidget);
+    placeGalleryCompareButton(sortBar);
     m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
     m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
     m_thumbnailPanel->installEventFilter(this);
@@ -671,6 +682,8 @@ void MainWindow::buildStatusBarUi()
         l->setContentsMargins(8, 0, 8, 0);
         statusBar()->addPermanentWidget(l);
     }
+    m_lblSize->hide();
+    m_lblCache->hide();
     m_lblZoom->setMinimumWidth(64);
 
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
@@ -684,6 +697,7 @@ void MainWindow::buildStatusBarUi()
                 m_lblSize->setText(
                     selected > 0 ? QString("已选 %1 · %2").arg(selected).arg(formatBytes(selBytes))
                                  : QString("大小 %1").arg(formatBytes(totalBytes)));
+                updateCacheStat();
             });
     connect(m_imageViewer, &ImageViewer::zoomChanged, this,
             [this](int pct)

@@ -118,6 +118,9 @@ class MainWindow : public QMainWindow
     void buildViewMenu(QMenuBar *menuBar);
     void buildToolsHelpMenus(QMenuBar *menuBar);
     void buildBrowserShell();
+    void installNavigationCollapse();
+    void polishGalleryToolbar(QWidget *sortBar);
+    void placeGalleryCompareButton(QWidget *sortBar);
     QWidget *buildNavigationPanel();
     QWidget *buildGalleryPanel();
     QWidget *buildSortBar(QWidget *parent);
@@ -285,6 +288,7 @@ class MainWindow : public QMainWindow
     QAction *m_actBrowseWorkspace = nullptr;
     QAction *m_actDirUp = nullptr;
     QAction *m_actRefresh = nullptr;
+    QAction *m_actToggleNavigation = nullptr;
     QAction *m_actBatch = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;

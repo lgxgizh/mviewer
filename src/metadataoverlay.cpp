@@ -1,6 +1,9 @@
 #include "metadataoverlay.h"
 #include "widgets/histogramwidget.h"
 
+#include "Theme.h"
+#include "ThemeTokens.h"
+
 #include "core/image/MetadataReader.h"
 #include "core/image/RawMetadata.h"
 
@@ -28,6 +31,7 @@ MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setAutoFillBackground(false);
+    setAttribute(Qt::WA_TranslucentBackground, true);
 
     // P0: Embedded mini histogram (rendered as overlay child widget).
     m_histogram = new HistogramWidget(this);
@@ -393,17 +397,21 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
     const int y = 20;
     QRect boxRect(x, y, boxW, boxH);
 
-    // Semi-transparent dark background
-    QPainterPath bgPath;
-    bgPath.addRoundedRect(QRectF(boxRect), 8.0, 8.0);
-    p.fillPath(bgPath, QColor(20, 20, 20, 200));
+    const int radius = mviewer::ui::makeThemeTokens(true).radiusPanel;
+    QColor fill(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1));
+    fill.setAlpha(235);
+    QColor edge(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border));
+    QColor ink(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary));
+    QColor muted(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary));
 
-    // Border
-    p.setPen(QPen(QColor(255, 255, 255, 60), 1));
+    QPainterPath bgPath;
+    bgPath.addRoundedRect(QRectF(boxRect), radius, radius);
+    p.fillPath(bgPath, fill);
+
+    p.setPen(QPen(edge, 1));
     p.drawPath(bgPath);
 
-    // Header
-    p.setPen(QColor(255, 255, 255, 255));
+    p.setPen(ink);
     QFont hf = font();
     hf.setPixelSize(kFontSize + 2);
     hf.setBold(true);
@@ -415,7 +423,7 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
     QFont bf = font();
     bf.setPixelSize(kFontSize);
     p.setFont(bf);
-    p.setPen(QColor(220, 220, 220, 255));
+    p.setPen(ink);
 
     for (int i = 0; i < m_lines.size(); ++i)
     {
@@ -428,7 +436,7 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
         positionHistogram(boxRect);
 
     // Hint
-    p.setPen(QColor(150, 150, 150, 255));
+    p.setPen(muted);
     QFont sf = font();
     sf.setPixelSize(10);
     p.setFont(sf);

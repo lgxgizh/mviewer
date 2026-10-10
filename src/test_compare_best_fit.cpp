@@ -165,11 +165,11 @@ int main(int argc, char **argv)
             uniform = box;
     }
     auto *button = ws->findChild<QPushButton *>(QStringLiteral("fitWindowButton"));
-    auto *toolBar = ws->findChild<QWidget *>(QStringLiteral("compareToolToolbar"));
+    auto *viewBar = ws->findChild<QWidget *>(QStringLiteral("compareViewToolbar"));
     check(button && button->text() == QStringLiteral("适合窗口 (F)"),
           "toolbar button「适合窗口 (F)」shows its shortcut");
-    check(button && button->isVisible() && toolBar && toolBar->isAncestorOf(button),
-          "button sits on the tool actions toolbar");
+    check(button && button->isVisible() && viewBar && viewBar->isAncestorOf(button),
+          "button sits on the view toolbar");
     check(button && button->toolTip().contains(QStringLiteral("统一像素倍率")),
           "tooltip says 统一像素倍率 decides shared vs per-pane fit");
     check(uniform && !uniform->isChecked(), "uniform pixel scale starts off");

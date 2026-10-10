@@ -70,6 +70,7 @@
 #include <QFont>
 #include <QFontMetrics>
 #include <QGroupBox>
+#include <QHash>
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -101,7 +102,9 @@
 #include <QThread>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
+#include <QVariant>
 #include <QWheelEvent>
 #include <QtMath>
 
@@ -113,6 +116,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <unordered_set>
 
@@ -665,6 +669,7 @@ int main(int argc, char **argv)
     workflow15_compare_nonfirst_pair_navigation(workDir.absolutePath());
     workflow12_compare_mixed_fit(workDir.absolutePath());
     workflow2_compare(paths[0], paths[2]);
+    workflow19_layout_chrome(paths[0], paths[1], paths[2]);
     workflow10_compare_canvas(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());
     workflow17_batch_dialog(workDir.absolutePath());

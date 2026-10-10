@@ -153,6 +153,7 @@ add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
+    mainwindow_ui_chrome.cpp
     mainwindow_ui_menus.cpp
     mainwindow_filetransform.cpp
     mainwindow_ui_connections.cpp
@@ -204,6 +205,8 @@ add_library(mviewer_ui STATIC
     compareworkspace_display_pyramid.cpp
     compare_session_frame_pool.cpp
     compareworkspace_controls.cpp
+    compareworkspace_toolbar.cpp
+    compareworkspace_pane_header.cpp
     compareworkspace_render.cpp
     compareworkspace_render_materialization.cpp
     compareworkspace_pyramid_wire.cpp

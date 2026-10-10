@@ -1,6 +1,8 @@
 #include "compareworkspace_temporary.h"
 #include "compareworkspace_p.h"
 
+#include "compareworkspace_pane_header.h"
+
 #include <QCursor>
 
 namespace
@@ -190,27 +192,7 @@ void CompareWorkspace::updatePaneIndexBadges()
         QWidget *cell = view ? view->parentWidget() : nullptr;
         if (!cell)
             continue;
-        auto *badge = cell->findChild<QLabel *>(QStringLiteral("paneIndexBadge"));
-        if (!show || i >= count)
-        {
-            if (badge)
-                badge->hide();
-            continue;
-        }
-        if (!badge)
-        {
-            badge = new QLabel(cell);
-            badge->setObjectName(QStringLiteral("paneIndexBadge"));
-            badge->setAlignment(Qt::AlignCenter);
-            badge->setAttribute(Qt::WA_TransparentForMouseEvents);
-            badge->setStyleSheet(
-                "QLabel#paneIndexBadge{background:rgba(0,0,0,120);color:rgba(255,255,255,210);"
-                "border-radius:3px;font-weight:700;font-size:13px;}");
-        }
-        badge->setText(QString::number(i + 1));
-        badge->setGeometry(6, 6, 22, 22);
-        badge->show();
-        badge->raise();
+        mviewer::ui::updateComparePaneHeaderBadge(cell, i + 1, show && i < count);
     }
 }
 
