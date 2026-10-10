@@ -4966,8 +4966,8 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
               !emptyMenu.enabledLabels.contains(QStringLiteral("另存为...")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("放大 (+)")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("缩小 (-)")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("适应窗口 (0)")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("实际大小 (1)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("适应窗口 (0 / F)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("实际大小 100% (1)")) &&
               !emptyMenu.enabledLabels.contains(QStringLiteral("框选区域 (R)")) &&
               emptyMenu.enabledLabels.contains(QStringLiteral("全屏 (F11)")),
           "empty viewer disables image-dependent context actions but keeps fullscreen available");

@@ -91,8 +91,8 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
     menu.addSeparator();
     zoomIn = menu.addAction("放大 (+)");
     zoomOut = menu.addAction("缩小 (-)");
-    zoomFit = menu.addAction("适应窗口 (0)");
-    zoomActual = menu.addAction("实际大小 (1)");
+    zoomFit = menu.addAction("适应窗口 (0 / F)");
+    zoomActual = menu.addAction("实际大小 100% (1)");
     lockZoomAction = menu.addAction("锁定缩放比 (Ctrl+L)");
     lockZoomAction->setCheckable(true);
     lockZoomAction->setChecked(lockZoom);

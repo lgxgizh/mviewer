@@ -441,6 +441,16 @@ void MainWindow::applyPreferences()
                               : mviewer::OverlayMode::None;
         m_imageViewer->setOverlayMode(mode);
     }
+    applyColorManagementPreference();
+}
+
+void MainWindow::applyColorManagementPreference()
+{
+    if (!m_actColorManagement)
+        return;
+    const bool enabled = QSettings().value("display/colorManagement", true).toBool();
+    if (m_actColorManagement->isChecked() != enabled)
+        m_actColorManagement->setChecked(enabled);
 }
 
 void MainWindow::openAnalysisOverlay()

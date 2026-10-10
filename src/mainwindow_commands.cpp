@@ -786,11 +786,11 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
         return;
     QMenu menu(this);
-    menu.addAction("适应窗口 (0)", this, [this]() { m_imageViewer->zoomFit(); });
+    menu.addAction("适应窗口 (0 / F)", this, [this]() { m_imageViewer->zoomFit(); });
     menu.addAction("实际大小 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
     menu.addSeparator();
     menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
-    menu.addAction("200%", this, [this]() { m_imageViewer->zoomTo(2.0); });
+    menu.addAction("200% (2)", this, [this]() { m_imageViewer->zoomTo(2.0); });
     menu.addAction("400%", this, [this]() { m_imageViewer->zoomTo(4.0); });
     menu.addAction("800% (像素网格)", this, [this]() { m_imageViewer->zoomTo(8.0); });
     menu.exec(globalPos);
