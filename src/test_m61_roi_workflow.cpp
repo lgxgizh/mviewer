@@ -454,11 +454,11 @@ int main(int argc, char **argv)
     TaskScheduler::instance().pause(TaskScheduler::AnalysisPool);
     sendRightDrag(first, gridFrom, gridTo);
     QLabel *status = workspace->findChild<QLabel *>("roiStatusLabel");
-    CHECK(status && status->text().contains(QStringLiteral("Backpressured")),
+    CHECK(status && status->text().contains(QStringLiteral("繁忙稍后")),
           "AnalysisPool rejection produces a visible Backpressured terminal state");
     TaskScheduler::instance().resume(TaskScheduler::AnalysisPool);
     sendRightDrag(first, gridFrom, gridTo);
-    CHECK(status && waitFor([&]() { return status->text().contains(QStringLiteral("Ready")); }),
+    CHECK(status && waitFor([&]() { return status->text().contains(QStringLiteral("就绪")); }),
           "a new release retries successfully after backpressure clears");
 
     {
@@ -481,7 +481,7 @@ int main(int argc, char **argv)
                           unequalA->sourcePointToWidget(QPointF(30, 25)).toPoint());
             QLabel *unequalStatus = unequal->findChild<QLabel *>("roiStatusLabel");
             CHECK(unequalB->selection().isEmpty() && unequalStatus &&
-                      unequalStatus->text().contains(QStringLiteral("image dimensions differ")),
+                      unequalStatus->text().contains(QStringLiteral("图像尺寸不一致")),
                   "unequal dimensions never fabricate linked measurement");
             const auto beforeNudge = unequalA->selection();
             CHECK(!beforeNudge.isEmpty(), "unequal pane 0 keeps its own ROI");
@@ -525,7 +525,7 @@ int main(int argc, char **argv)
                           pane0->sourcePointToWidget(QPointF(30, 25)).toPoint());
             QLabel *statusLabel = mismatch->findChild<QLabel *>("roiStatusLabel");
             CHECK(pane1->selection().isEmpty() && statusLabel &&
-                      statusLabel->text().contains(QStringLiteral("image dimensions differ")),
+                      statusLabel->text().contains(QStringLiteral("图像尺寸不一致")),
                   "mismatched horizontal/vertical pair initially reports differing dimensions");
             QTableWidget *initialTable = mismatch->findChild<QTableWidget *>("roiMeasurementTable");
             CHECK(initialTable &&
@@ -558,10 +558,10 @@ int main(int argc, char **argv)
                       pane1->selection().width == pane0->selection().width &&
                       pane1->selection().height == pane0->selection().height,
                   "synchronized ROI geometry matches display selection");
-            CHECK(statusLabel &&
-                      waitFor([&]()
-                              { return statusLabel->text().contains(QStringLiteral("Ready")); }),
-                  "rotated pane ROI measurement reaches Ready state");
+            CHECK(
+                statusLabel &&
+                    waitFor([&]() { return statusLabel->text().contains(QStringLiteral("就绪")); }),
+                "rotated pane ROI measurement reaches Ready state");
             QTableWidget *measurementTable =
                 mismatch->findChild<QTableWidget *>("roiMeasurementTable");
             CHECK(measurementTable && waitFor([&]() { return measurementTable->rowCount() == 2; }),
