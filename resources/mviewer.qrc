@@ -2,15 +2,36 @@
 <RCC version="1.0">
     <qresource prefix="/app">
         <file>mviewer.png</file>
-        <file>toolbar/open.png</file>
-        <file>toolbar/back.png</file>
-        <file>toolbar/forward.png</file>
-        <file>toolbar/up.png</file>
-        <file>toolbar/refresh.png</file>
-        <file>toolbar/favorite.png</file>
-        <file>toolbar/compare.png</file>
-        <file>toolbar/analysis.png</file>
-        <file>toolbar/search.png</file>
-        <file>toolbar/browse.png</file>
+    </qresource>
+    <qresource prefix="/theme">
+        <file alias="dark.qss">theme/dark.qss</file>
+        <file alias="check.png">theme/check.png</file>
+        <file alias="dot.png">theme/dot.png</file>
+    </qresource>
+    <qresource prefix="/icons">
+        <file alias="open.png">icons/open.png</file>
+        <file alias="open@2x.png">icons/open@2x.png</file>
+        <file alias="back.png">icons/back.png</file>
+        <file alias="back@2x.png">icons/back@2x.png</file>
+        <file alias="forward.png">icons/forward.png</file>
+        <file alias="forward@2x.png">icons/forward@2x.png</file>
+        <file alias="up.png">icons/up.png</file>
+        <file alias="up@2x.png">icons/up@2x.png</file>
+        <file alias="refresh.png">icons/refresh.png</file>
+        <file alias="refresh@2x.png">icons/refresh@2x.png</file>
+        <file alias="favorite.png">icons/favorite.png</file>
+        <file alias="favorite@2x.png">icons/favorite@2x.png</file>
+        <file alias="compare.png">icons/compare.png</file>
+        <file alias="compare@2x.png">icons/compare@2x.png</file>
+        <file alias="analysis.png">icons/analysis.png</file>
+        <file alias="analysis@2x.png">icons/analysis@2x.png</file>
+        <file alias="search.png">icons/search.png</file>
+        <file alias="search@2x.png">icons/search@2x.png</file>
+        <file alias="browse.png">icons/browse.png</file>
+        <file alias="browse@2x.png">icons/browse@2x.png</file>
+        <file alias="rotate_ccw.png">icons/rotate_ccw.png</file>
+        <file alias="rotate_ccw@2x.png">icons/rotate_ccw@2x.png</file>
+        <file alias="rotate_cw.png">icons/rotate_cw.png</file>
+        <file alias="rotate_cw@2x.png">icons/rotate_cw@2x.png</file>
     </qresource>
 </RCC>

@@ -1,6 +1,7 @@
 // M17: Plugin Settings page implementation.
 #include "pluginsettings.h"
 
+#include "Theme.h"
 #include "core/plugin/PluginManager.h"
 
 #include <QApplication>
@@ -70,7 +71,9 @@ void PluginSettings::setupUi()
     mainLayout->addLayout(pathLayout);
 
     m_statusLabel = new QLabel(this);
-    m_statusLabel->setStyleSheet("color:#888;");
+    m_statusLabel->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     mainLayout->addWidget(m_statusLabel);
 
     // ── Close button ──

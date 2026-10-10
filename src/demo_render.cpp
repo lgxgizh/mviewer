@@ -4,6 +4,7 @@
 // genuine render of the real UI (no mock widgets), captured headlessly because
 // the build/terminal session cannot reach the interactive display session.
 // Build target `mviewer_demo_render`.
+#include "Theme.h"
 #include "mainwindow.h"
 #include "metadatapanel.h"
 #include "previewpanel.h"
@@ -36,6 +37,7 @@ void pump(int ms)
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    mviewer::ui::Theme::initTheme();
     app.setAttribute(Qt::AA_UseSoftwareOpenGL, true);
     printf("RENDER_START\n");
     fflush(stdout);

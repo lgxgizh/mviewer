@@ -1,5 +1,7 @@
 #include "batchrenamepanel.h"
 
+#include "Theme.h"
+
 #include <QCheckBox>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -56,7 +58,9 @@ BatchRenamePanel::BatchRenamePanel(QWidget *parent) : QWidget(parent)
 
     m_errorLabel = new QLabel;
     m_errorLabel->setObjectName(QStringLiteral("batchRenameError"));
-    m_errorLabel->setStyleSheet(QStringLiteral("color: #ef4444; font-weight: bold;"));
+    m_errorLabel->setStyleSheet(
+        QStringLiteral("color:%1; font-weight: bold;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Danger)));
     m_errorLabel->setWordWrap(true);
     m_errorLabel->hide();
     mainLay->addWidget(m_errorLabel);

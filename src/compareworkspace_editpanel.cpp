@@ -1,4 +1,5 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
+#include "Theme.h"
 #include "compareworkspace_p.h"
 #include "compareworkspace_preset_sanitize.h"
 #include "domain/CompareSession.h"
@@ -42,7 +43,9 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     editLay->setSpacing(3);
 
     m_editLabel = new QLabel(tr("— 选中窗格后可编辑 —"), m_editPanel);
-    m_editLabel->setStyleSheet("font-weight:bold;color:#ccc;");
+    m_editLabel->setStyleSheet(
+        QStringLiteral("font-weight:bold;color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     editLay->addWidget(m_editLabel);
     auto *previewHint = new QLabel(tr("旋转/翻转仅预览，不覆盖原文件"), m_editPanel);
     previewHint->setObjectName("previewOnlyHint");

@@ -1,5 +1,6 @@
 #include "compareworkspace_p.h"
 
+#include "Theme.h"
 #include "core/analysis/PixelInspector.h"
 #include "core/image/ExifOrientation.h"
 #include "core/image/SourceImage.h"
@@ -126,7 +127,9 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiStatusLabel = new QLabel(this);
     m_roiStatusLabel->setObjectName("roiStatusLabel");
     m_roiStatusLabel->setWordWrap(true);
-    m_roiStatusLabel->setStyleSheet("color:#aaa;");
+    m_roiStatusLabel->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     sideLay->addWidget(m_roiStatusLabel);
     m_roiGeometryLabel = new QLabel(tr("ROI: —"), this);
     m_roiGeometryLabel->setObjectName("roiGeometryLabel");
@@ -154,7 +157,9 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiDeltaLabel = new QLabel(tr("差值 (B − A): —"), this);
     m_roiDeltaLabel->setObjectName("roiDeltaLabel");
     m_roiDeltaLabel->setWordWrap(true);
-    m_roiDeltaLabel->setStyleSheet("color:#aaa;");
+    m_roiDeltaLabel->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     sideLay->addWidget(m_roiDeltaLabel);
 
     m_roiHud = new QPushButton(this);

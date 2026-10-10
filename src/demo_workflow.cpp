@@ -3,6 +3,7 @@
 // capture it: open directory -> select image (metadata + analysis populate) ->
 // type a live filename search -> clear search. No mock widgets; this exercises
 // the same code paths a user does. Build target `mviewer_demo`.
+#include "Theme.h"
 #include "mainwindow.h"
 #include "thumbnailpanel.h"
 
@@ -20,6 +21,7 @@
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    mviewer::ui::Theme::initTheme();
 
     const std::filesystem::path assets = (argc > 1)
                                              ? std::filesystem::path(argv[1])

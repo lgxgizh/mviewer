@@ -248,6 +248,8 @@ add_library(mviewer_ui STATIC
     pluginsettings.cpp
     preferencesdialog.cpp
     Theme.cpp
+    ThemeIcons.cpp
+    ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
     analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
 )
@@ -276,7 +278,6 @@ target_compile_features(mviewer_application PUBLIC cxx_std_20)
 
 add_executable(MViewer
     main.cpp
-    ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
 )
 if(WIN32)
     target_sources(MViewer PRIVATE ${CMAKE_SOURCE_DIR}/resources/mviewer.rc)
@@ -401,7 +402,9 @@ add_executable(test_ui_models
     workspacemodel.cpp
     analyzermodel.cpp
     Theme.cpp
+    ThemeIcons.cpp
     breadcrumbbar.cpp
+    ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
 )
 target_link_libraries(test_ui_models
     PRIVATE

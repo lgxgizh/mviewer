@@ -1,5 +1,7 @@
 #include "directorytree.h"
 
+#include "Theme.h"
+
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
@@ -153,7 +155,9 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
 
     // A-1.6: loading indicator label (shown briefly while expanding large dirs).
     m_loadingLabel = new QLabel("  加载中...", this);
-    m_loadingLabel->setStyleSheet("color: #888; font-style: italic; padding: 4px;");
+    m_loadingLabel->setStyleSheet(
+        QStringLiteral("color:%1; font-style: italic; padding: 4px;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     m_loadingLabel->hide();
 
     // Directory name filter kept for programmatic clear-on-navigate / tests, but

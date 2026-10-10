@@ -2,116 +2,18 @@
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
+#include "Theme.h"
+#include "ThemeIcons.h"
 #include "core/render/ZoomPercent.h"
 
 #include <QFocusEvent>
-#include <QIcon>
 #include <QMouseEvent>
-#include <QPainter>
-#include <QPolygonF>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QToolBar>
 
-#include <string_view>
-
 namespace
 {
-void drawNavIcon(QPainter &p, std::string_view name, const QColor &fg)
-{
-    if (name == "back" || name == "forward" || name == "up")
-    {
-        const bool b = (name == "back"), f = (name == "forward");
-        const QPointF p1 = b ? QPointF(14, 9) : (f ? QPointF(4, 9) : QPointF(9, 14));
-        const QPointF p2 = b ? QPointF(4, 9) : (f ? QPointF(14, 9) : QPointF(9, 4));
-        p.drawLine(p1, p2);
-        QPolygonF h;
-        if (b)
-            h << QPointF(8, 5) << QPointF(4, 9) << QPointF(8, 13);
-        else if (f)
-            h << QPointF(10, 5) << QPointF(14, 9) << QPointF(10, 13);
-        else
-            h << QPointF(5, 8) << QPointF(9, 4) << QPointF(13, 8);
-        p.drawPolyline(h);
-    }
-    else if (name == "refresh" || name == "rotate_ccw" || name == "rotate_cw")
-    {
-        const bool cw = (name != "rotate_ccw");
-        p.drawArc(QRectF(3.5, 3.5, 11, 11), cw ? 40 * 16 : 140 * 16, cw ? -270 * 16 : 270 * 16);
-        p.setBrush(fg);
-        p.setPen(Qt::NoPen);
-        QPolygonF h;
-        if (cw)
-            h << QPointF(14.5, 5.5) << QPointF(11.5, 4.0) << QPointF(12.8, 7.2);
-        else
-            h << QPointF(3.5, 5.5) << QPointF(6.5, 4.0) << QPointF(5.2, 7.2);
-        p.drawPolygon(h);
-    }
-}
-
-void drawAppIcon(QPainter &p, std::string_view name, const QColor &fg)
-{
-    if (name == "open")
-    {
-        QPolygonF f;
-        f << QPointF(2.5, 4.5) << QPointF(7, 4.5) << QPointF(8.5, 6.5) << QPointF(15.5, 6.5)
-          << QPointF(15.5, 14.5) << QPointF(2.5, 14.5);
-        p.drawPolygon(f);
-        p.drawLine(QPointF(2.5, 8.5), QPointF(15.5, 8.5));
-    }
-    else if (name == "favorite")
-    {
-        p.setBrush(fg);
-        p.setPen(Qt::NoPen);
-        QPolygonF s;
-        s << QPointF(9, 2.5) << QPointF(11, 6.8) << QPointF(15.5, 7.2) << QPointF(12.1, 10.3)
-          << QPointF(13, 15) << QPointF(9, 12.6) << QPointF(5, 15) << QPointF(5.9, 10.3)
-          << QPointF(2.5, 7.2) << QPointF(7, 6.8);
-        p.drawPolygon(s);
-    }
-    else if (name == "compare")
-    {
-        p.drawRoundedRect(QRectF(2.5, 3.5, 13, 11), 1.5, 1.5);
-        p.drawLine(QPointF(9, 3.5), QPointF(9, 14.5));
-    }
-    else if (name == "analysis")
-    {
-        p.setBrush(fg);
-        p.setPen(Qt::NoPen);
-        p.drawRect(QRectF(3, 9, 3, 6));
-        p.drawRect(QRectF(7.5, 4.5, 3, 10.5));
-        p.drawRect(QRectF(12, 7, 3, 8));
-    }
-    else if (name == "search")
-    {
-        p.drawEllipse(QRectF(3, 3, 8, 8));
-        p.drawLine(QPointF(9.5, 9.5), QPointF(14.5, 14.5));
-    }
-    else if (name == "browse")
-    {
-        p.setBrush(fg);
-        p.setPen(Qt::NoPen);
-        p.drawRect(QRectF(3, 3, 4.5, 4.5));
-        p.drawRect(QRectF(10.5, 3, 4.5, 4.5));
-        p.drawRect(QRectF(3, 10.5, 4.5, 4.5));
-        p.drawRect(QRectF(10.5, 10.5, 4.5, 4.5));
-    }
-}
-
-// Procedural crisp vector icons for toolbar actions.
-QIcon makeToolbarIcon(std::string_view name)
-{
-    QPixmap pm(18, 18);
-    pm.fill(Qt::transparent);
-    QPainter p(&pm);
-    p.setRenderHint(QPainter::Antialiasing, true);
-    const QColor fg(220, 220, 220);
-    p.setPen(QPen(fg, 1.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    p.setBrush(Qt::NoBrush);
-    drawNavIcon(p, name, fg);
-    drawAppIcon(p, name, fg);
-    return QIcon(pm);
-}
 
 // Address bar: first click / focus selects all (Ctrl+A look) so the user can
 // immediately type a new path or copy. Later clicks while focused keep the
@@ -177,7 +79,7 @@ void MainWindow::buildBrowserShell()
     {
         if (!action)
             return;
-        action->setIcon(makeToolbarIcon(iconName));
+        action->setIcon(mviewer::ui::toolbarIcon(iconName));
         if (!tip.isEmpty())
             action->setToolTip(tip);
         browserToolBar->addAction(action);
@@ -196,19 +98,19 @@ void MainWindow::buildBrowserShell()
     browserToolBar->addSeparator();
     if (m_actRotateCCW)
     {
-        m_actRotateCCW->setIcon(makeToolbarIcon("rotate_ccw"));
+        m_actRotateCCW->setIcon(mviewer::ui::toolbarIcon("rotate_ccw"));
         m_actRotateCCW->setToolTip(actTip(tr("逆时针旋转 90° 并覆盖原文件"), m_actRotateCCW));
         browserToolBar->addAction(m_actRotateCCW);
     }
     if (m_actRotateCW)
     {
-        m_actRotateCW->setIcon(makeToolbarIcon("rotate_cw"));
+        m_actRotateCW->setIcon(mviewer::ui::toolbarIcon("rotate_cw"));
         m_actRotateCW->setToolTip(actTip(tr("顺时针旋转 90° 并覆盖原文件"), m_actRotateCW));
         browserToolBar->addAction(m_actRotateCW);
     }
     if (m_actCompare)
     {
-        m_actCompare->setIcon(makeToolbarIcon("compare"));
+        m_actCompare->setIcon(mviewer::ui::toolbarIcon("compare"));
         m_actCompare->setObjectName("compareAction");
         m_actCompare->setToolTip(actTip(tr("选择 2–8 张图片进行比较"), m_actCompare));
         browserToolBar->addAction(m_actCompare);
@@ -248,9 +150,13 @@ QWidget *MainWindow::buildNavigationPanel()
     m_favoritesBar->setMaximumHeight(100);
     m_favoritesBar->hide();
     m_favoritesBar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_favoritesBar->setStyleSheet("QListWidget { background: #1e1e1e; border: none; }"
-                                  "QListWidget::item { padding: 3px 8px; color: #ccc; }"
-                                  "QListWidget::item:hover { background: #333; }");
+    m_favoritesBar->setStyleSheet(
+        QStringLiteral("QListWidget { background: %1; border: none; }"
+                       "QListWidget::item { padding: 3px 8px; color: %2; }"
+                       "QListWidget::item:hover { background: %3; }")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg3)));
     m_favoritesBar->setToolTip("收藏目录 — 右键移除，Ctrl+D 收藏当前目录");
     connect(m_favoritesBar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item)
             { changeDirectory(item->data(Qt::UserRole).toString()); });
@@ -715,8 +621,12 @@ void MainWindow::buildMetadataPanelUi()
     m_metadataPanel->setAttribute(Qt::WA_ShowWithoutActivating, false);
     m_metadataPanel->setFixedSize(300, 480);
     m_metadataPanel->setWindowOpacity(0.92); // semi-transparent
-    m_metadataPanel->setStyleSheet("MetadataPanel { background: rgba(30,30,30,220); color: #eee; "
-                                   "border: 1px solid #555; border-radius: 6px; }");
+    m_metadataPanel->setStyleSheet(
+        QStringLiteral("MetadataPanel { background: %1; color: %2; "
+                       "border: 1px solid %3; border-radius: 6px; }")
+            .arg(mviewer::ui::Theme::themeRgba(mviewer::ui::ThemeRole::Bg0, 220),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border)));
     m_metadataPanel->hide();
 }
 
