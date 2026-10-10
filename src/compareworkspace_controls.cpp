@@ -631,6 +631,15 @@ void CompareWorkspace::syncContextualCompareControls()
     {
         if (!widget)
             return;
+        // Reserve the slot while hidden: toggling a mode must not change the
+        // toolbar's minimum size, or the canvas resize would refit and drop
+        // the shared zoom/pan.
+        QSizePolicy policy = widget->sizePolicy();
+        if (!policy.retainSizeWhenHidden())
+        {
+            policy.setRetainSizeWhenHidden(true);
+            widget->setSizePolicy(policy);
+        }
         widget->setVisible(visible);
         widget->setEnabled(enabled);
     };
