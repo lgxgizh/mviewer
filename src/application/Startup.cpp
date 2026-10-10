@@ -28,9 +28,9 @@ void doStartupPlugins()
         fs::create_directories(pluginDir, ec);
     if (absoluteEc || ec || !fs::is_directory(pluginDir, ec))
     {
-        std::cout << "[Startup] Plugin directory unavailable: " << mviewer::core::pathToUtf8(pluginDir)
-                  << " (" << (absoluteEc ? absoluteEc : ec).message()
-                  << ")" << std::endl;
+        std::cout << "[Startup] Plugin directory unavailable: "
+                  << mviewer::core::pathToUtf8(pluginDir) << " ("
+                  << (absoluteEc ? absoluteEc : ec).message() << ")" << '\n';
         return;
     }
 
@@ -40,11 +40,11 @@ void doStartupPlugins()
 
     if (count == 0)
     {
-        std::cout << "[Startup] No plugins loaded from " << pluginPath << std::endl;
+        std::cout << "[Startup] No plugins loaded from " << pluginPath << '\n';
     }
     else
     {
-        std::cout << "[Startup] Loaded " << count << " plugin(s) from " << pluginPath << std::endl;
+        std::cout << "[Startup] Loaded " << count << " plugin(s) from " << pluginPath << '\n';
     }
 }
 

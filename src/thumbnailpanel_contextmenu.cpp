@@ -7,6 +7,7 @@ struct ThumbnailPanel::ContextMenuActions
     QAction *aCopy = nullptr;
     QAction *aMove = nullptr;
     QAction *aTrash = nullptr;
+    QAction *aOpenTrash = nullptr;
     QAction *aReveal = nullptr;
     QAction *aCopyPath = nullptr;
     QAction *aCopyName = nullptr;
@@ -52,6 +53,7 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aMove->setShortcut(QKeySequence("Ctrl+M"));
     acts.aTrash = menu.addAction("移到 MViewer 回收站");
     acts.aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
+    acts.aOpenTrash = menu.addAction("打开 MViewer 回收站");
     acts.aReveal = menu.addAction("在资源管理器中显示");
     acts.aReveal->setShortcut(QKeySequence("Ctrl+E"));
     acts.aCopyPath = menu.addAction("复制路径");
@@ -95,26 +97,63 @@ void ThumbnailPanel::removeTagFromSelected(const QString &tag)
     viewport()->update();
 }
 
+bool ThumbnailPanel::handleFileContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
+                                                 const QString &path)
+{
+    if (chosen == actions.aOpen)
+    {
+        emit itemDoubleClicked(path);
+        return true;
+    }
+    if (chosen == actions.aRename)
+    {
+        renameSelected();
+        return true;
+    }
+    if (chosen == actions.aCopy)
+    {
+        copySelectedTo();
+        return true;
+    }
+    if (chosen == actions.aMove)
+    {
+        moveSelectedTo();
+        return true;
+    }
+    if (chosen == actions.aTrash)
+    {
+        moveToTrashSelected();
+        return true;
+    }
+    if (chosen == actions.aOpenTrash)
+    {
+        openTrashFolder();
+        return true;
+    }
+    if (chosen == actions.aReveal)
+    {
+        revealSelected();
+        return true;
+    }
+    if (chosen == actions.aCopyPath)
+    {
+        copySelectedPaths();
+        return true;
+    }
+    if (chosen == actions.aCopyName)
+    {
+        copySelectedFileNames();
+        return true;
+    }
+    return false;
+}
+
 void ThumbnailPanel::handleContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
                                              const QString &path)
 {
-    if (chosen == actions.aOpen)
-        emit itemDoubleClicked(path);
-    else if (chosen == actions.aRename)
-        renameSelected();
-    else if (chosen == actions.aCopy)
-        copySelectedTo();
-    else if (chosen == actions.aMove)
-        moveSelectedTo();
-    else if (chosen == actions.aTrash)
-        moveToTrashSelected();
-    else if (chosen == actions.aReveal)
-        revealSelected();
-    else if (chosen == actions.aCopyPath)
-        copySelectedPaths();
-    else if (chosen == actions.aCopyName)
-        copySelectedFileNames();
-    else if (chosen == actions.aCompare)
+    if (handleFileContextMenuAction(actions, chosen, path))
+        return;
+    if (chosen == actions.aCompare)
         requestCompare();
     else if (chosen == actions.aAnalyze)
         batchAnalyzeExport();

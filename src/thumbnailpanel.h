@@ -293,6 +293,7 @@ class ThumbnailPanel : public QListView
 
     void renameSelected();
     void moveToTrashSelected();
+    void openTrashFolder();
     void copySelectedTo();
     void moveSelectedTo();
     void revealSelected();
@@ -473,6 +474,8 @@ class ThumbnailPanel : public QListView
     struct ContextMenuActions;
     ContextMenuActions buildContextMenu(QMenu &menu, const QStringList &selPaths);
     void contextMenuEvent(QContextMenuEvent *event) override;
+    bool handleFileContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
+                                     const QString &path);
     void handleContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
                                  const QString &path);
     void addTagToSelected();

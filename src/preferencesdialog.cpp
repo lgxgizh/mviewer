@@ -1,5 +1,6 @@
 #include "preferencesdialog.h"
 #include "Theme.h"
+#include "display/DisplayColorContextProvider.h"
 #include "thumbnailpanel.h"
 
 #include <QCheckBox>
@@ -88,6 +89,11 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_gpuAcceleration->setChecked(s.value("gpuAcceleration", true).toBool());
     gl->addRow(m_gpuAcceleration);
 
+    m_colorManagement = new QCheckBox(tr("启用色彩管理 (CMS)"));
+    m_colorManagement->setToolTip(tr("启用时根据显示器 ICC 转换颜色；禁用时使用原生 RGB/sRGB"));
+    m_colorManagement->setChecked(s.value("display/colorManagement", true).toBool());
+    gl->addRow(m_colorManagement);
+
     return general;
 }
 
@@ -173,7 +179,10 @@ void PreferencesDialog::accept()
     s.setValue("autoAlignBeforeDiff", m_autoAlign->isChecked());
     s.setValue("defaultAnalysisOverlay", m_analysisOverlay->currentData().toInt());
     s.setValue("zebraThreshold", m_zebraThreshold->value());
+    const bool colorManagement = m_colorManagement->isChecked();
+    s.setValue("display/colorManagement", colorManagement);
     s.sync();
+    DisplayColorContextProvider::setColorManagementEnabled(colorManagement);
     emit settingsChanged();
     QDialog::accept();
 }
