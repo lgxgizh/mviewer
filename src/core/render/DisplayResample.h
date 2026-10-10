@@ -3,6 +3,7 @@
 #include "core/image/ImageBuffer.h"
 
 #include <atomic>
+#include <cstdint>
 #include <vector>
 
 namespace mviewer::core
@@ -22,30 +23,33 @@ struct DisplayResampleRect
     }
 };
 
+enum class DisplayResampleQuality : std::uint8_t
+{
+    Sharp,
+    Preview
+};
+
 // One resample of `source` onto an exact target size. The caller picks the
 // target in device pixels; this type does not know about widgets or DPR.
+// Preview is a fast bilinear stand-in; Sharp is the separable kernel.
 struct DisplayResampleRequest
 {
     DisplayResampleRect source;
     int targetWidth = 0;
     int targetHeight = 0;
+    DisplayResampleQuality quality = DisplayResampleQuality::Sharp;
 };
 
 // Worker-owned scratch so repeated pane resamples do not reallocate.
-// Not safe to share across threads.
+// Not safe to share across threads. Tap tables are read-only once built.
 struct DisplayResampleScratch
 {
-    std::vector<float> plane;
-    std::vector<float> row;
-    std::vector<float> accum;
-    std::vector<float> samples;
-    std::vector<float> prefix;
-    std::vector<int> tapOffset;
-    std::vector<int> tapIndex;
-    std::vector<float> tapWeight;
-    std::vector<int> tapOffsetY;
-    std::vector<int> tapIndexY;
-    std::vector<float> tapWeightY;
+    std::vector<int> originX;
+    std::vector<int> countX;
+    std::vector<int16_t> weightX;
+    std::vector<int> originY;
+    std::vector<int> countY;
+    std::vector<int16_t> weightY;
 };
 
 // Coverage of one displayed raster. Density is output pixels per source pixel
@@ -72,13 +76,19 @@ bool isBlurrierDisplayStandIn(const DisplayRasterLevel &shown,
 int selectDisplayStandIn(const DisplayRasterLevel *levels, int count,
                          const DisplayRasterLevel &shown, const DisplayRasterLevel &desired);
 
+// Drops cached 2x box levels. In-flight resamples keep the buffers they
+// already took. Compare session teardown calls this with the pane caches.
+void releaseDisplayResampleCache() noexcept;
+
+// 0 auto, 1 scalar, 2 SSE4.1, 3 AVX2. Test hook; production leaves this at 0.
+void setDisplayResampleIsaForTest(int isa) noexcept;
+
 // High-quality resample of `request.source` to the exact target size.
-// Identity (exact RGB) when the target matches the source rect. Large
-// reductions are an area-average box down to about twice the target, then a
-// separable prefiltered Catmull-Rom. Modest reductions use Catmull-Rom only.
-// Output is RGB24. `scratch` may be null. When `cancel` becomes true the
-// resample returns an empty image so a superseded scheduler job can exit
-// without holding its worker until the full kernel finishes.
+// Identity (exact RGB) when the target matches the source rect. Reductions
+// of about 2x or more first take exact 2x box steps until the remainder is
+// in [1, 2), then a separable fixed-point Catmull-Rom. Preview uses bilinear
+// for that last step. Output is RGB24. `scratch` may be null. When `cancel`
+// becomes true the resample returns an empty image.
 ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &request,
                           DisplayResampleScratch *scratch = nullptr,
                           const std::atomic<bool> *cancel = nullptr);

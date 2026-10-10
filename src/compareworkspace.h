@@ -609,7 +609,9 @@ class CompareWorkspace : public QWidget
     bool rasterCoversView(int pane, const DisplayRequest &desired) const;
     DisplayRequest buildPaneDisplayRequest(int pane, bool preferCheap) const;
     void scheduleDisplayLodRefresh(int idx = -1);
-    void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
+    void queueDisplayLod(int requestedPane);
+    void queueFastPreview(int requestedPane);
+    void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes, bool preview = false);
     // Drops the in-flight display batch from the scheduler graph immediately.
     void releaseDisplayTask();
     void reapplyPinnedCellTransforms(bool clearPins = false);

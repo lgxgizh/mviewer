@@ -3,6 +3,7 @@
 #include "compare_session_frame_pool.h"
 #include "compareworkspace_display_types.h"
 
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -26,6 +27,16 @@ struct CompareSessionRuntime
     // schedulePostLayoutFit coalesces while one callback is queued. Set when
     // a newer request arrives, so an epoch-superseded callback can requeue it.
     bool postLayoutFitAgain = false;
+    // Trailing quiet-period for the sharp display resample. Each wheel/pan
+    // bumps this; only the timer that captured the latest value submits HQ.
+    uint64_t lodDebounceEpoch = 0;
+    // m_displayGen of the in-flight fast preview, or 0 when none is queued.
+    uint64_t previewGeneration = 0;
+    // True while queueFastPreview is inside scheduleDisplayMaterialization,
+    // so setImage's scaleChanged cannot start another preview recursively.
+    bool fastPreviewBusy = false;
+    // 1 when the pane is showing a fast preview that still needs a sharp pass.
+    std::vector<uint8_t> displayIsPreview;
 };
 
 } // namespace mviewer::ui

@@ -3,6 +3,7 @@
 #include "core/image/DisplayMip.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/SourceImage.h"
+#include "core/render/DisplayResample.h"
 
 #include <QScreen>
 
@@ -124,7 +125,12 @@ void CompareWorkspace::releaseSessionMemory()
         m_session->panePyramids.clear();
         m_session->reapplyCellTransform.clear();
         m_session->forceDecodePriority = false;
+        ++m_session->lodDebounceEpoch;
+        m_session->previewGeneration = 0;
+        m_session->displayIsPreview.clear();
+        m_session->fastPreviewBusy = false;
     }
+    mviewer::core::releaseDisplayResampleCache();
     m_pendingWarmSeeds.clear();
     m_engine.setFrames({});
     for (const std::string &key : mipKeys)
@@ -374,6 +380,10 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
         m_session->panePyramids.resize(static_cast<size_t>(m_engine.imageCount()));
         m_session->reapplyCellTransform.clear();
         m_session->forceDecodePriority = true;
+        ++m_session->lodDebounceEpoch;
+        m_session->previewGeneration = 0;
+        m_session->displayIsPreview.clear();
+        mviewer::core::releaseDisplayResampleCache();
     }
     if (m_compareLoadingProgress)
         m_compareLoadingProgress->setVisible(false);

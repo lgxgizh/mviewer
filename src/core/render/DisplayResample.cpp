@@ -1,59 +1,228 @@
-#include "core/render/DisplayResample.h"
+#include "core/render/DisplayResampleDetail.h"
+
+#include "core/simd/CpuFeatures.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
-#include <cstddef>
-#include <cstdint>
+#include <cstring>
+#include <utility>
 
-namespace mviewer::core
+namespace mviewer::core::resample_detail
 {
+
+static std::atomic<int> g_isaOverride{0};
+
 namespace
 {
-
-constexpr int kMaxCatmullTaps = 16;
-constexpr float kCatmullSupport = 2.f;
-constexpr double kDensityEpsilon = 1e-4;
-
-struct Rgb
-{
-    float r = 0.f;
-    float g = 0.f;
-    float b = 0.f;
-};
-
-struct SampleLayout
-{
-    const uint8_t *base = nullptr;
-    int width = 0;
-    int height = 0;
-    int channels = 0;
-    int red = 0;
-    int green = 1;
-    int blue = 2;
-    bool gray = false;
-};
-
-struct SourceRect
-{
-    int x = 0;
-    int y = 0;
-    int width = 0;
-    int height = 0;
-
-    bool isValid() const
-    {
-        return width > 0 && height > 0;
-    }
-};
 
 float catmullWeight(float x)
 {
     x = std::fabs(x);
-    if (x >= kCatmullSupport)
+    if (x >= 2.f)
         return 0.f;
     if (x >= 1.f)
         return ((-0.5f * x + 2.5f) * x - 4.f) * x + 2.f;
     return (1.5f * x - 2.5f) * x * x + 1.f;
+}
+
+struct TapList
+{
+    int origin = 0;
+    int count = 0;
+    float weight[kMaxTaps] = {};
+    double sum = 0.0;
+};
+
+void collectTaps(TapList &taps, int srcCount, int dstIndex, int dstCount)
+{
+    const double inv =
+        dstCount < srcCount ? static_cast<double>(srcCount) / static_cast<double>(dstCount) : 1.0;
+    const double center = (static_cast<double>(dstIndex) + 0.5) * static_cast<double>(srcCount) /
+                          static_cast<double>(dstCount);
+    const double radius = 2.0 * inv;
+    const int begin = static_cast<int>(std::floor(center - radius));
+    const int end = static_cast<int>(std::ceil(center + radius));
+    float raw[kMaxTaps] = {};
+    int n = 0;
+    int first = -1;
+    int last = -1;
+    for (int i = begin; i < end && n < kMaxTaps; ++i)
+    {
+        const double kernelX = ((static_cast<double>(i) + 0.5) - center) / inv;
+        const float weight = catmullWeight(static_cast<float>(kernelX));
+        raw[n] = weight;
+        if (weight != 0.f)
+        {
+            if (first < 0)
+                first = n;
+            last = n;
+        }
+        ++n;
+    }
+    if (first < 0)
+        return;
+    taps.origin = begin + first;
+    taps.count = last - first + 1;
+    for (int i = 0; i < taps.count; ++i)
+    {
+        taps.weight[i] = raw[first + i];
+        taps.sum += static_cast<double>(taps.weight[i]);
+    }
+}
+
+void storeQuantized(AxisKernel &kernel, int dstIndex, const TapList &taps, int srcCount)
+{
+    int16_t *out = kernel.weight.data() + static_cast<size_t>(dstIndex) * kMaxTaps;
+    if (taps.count <= 0 || !(taps.sum > 0.0))
+    {
+        kernel.origin[static_cast<size_t>(dstIndex)] = clampIndex(dstIndex, srcCount);
+        kernel.count[static_cast<size_t>(dstIndex)] = 1;
+        out[0] = static_cast<int16_t>(kWeightOne);
+        return;
+    }
+    int quantized[kMaxTaps] = {};
+    int sum = 0;
+    int largest = 0;
+    int magnitude = -1;
+    for (int tap = 0; tap < taps.count; ++tap)
+    {
+        const double scaled =
+            static_cast<double>(taps.weight[tap]) / taps.sum * static_cast<double>(kWeightOne);
+        quantized[tap] = static_cast<int>(std::lround(scaled));
+        sum += quantized[tap];
+        const int absWeight = quantized[tap] < 0 ? -quantized[tap] : quantized[tap];
+        if (absWeight > magnitude)
+        {
+            magnitude = absWeight;
+            largest = tap;
+        }
+    }
+    quantized[largest] += kWeightOne - sum;
+    if (quantized[largest] > 32767)
+        quantized[largest] = 32767;
+    if (quantized[largest] < -32768)
+        quantized[largest] = -32768;
+    kernel.origin[static_cast<size_t>(dstIndex)] = taps.origin;
+    kernel.count[static_cast<size_t>(dstIndex)] = taps.count;
+    for (int tap = 0; tap < taps.count; ++tap)
+        out[tap] = static_cast<int16_t>(quantized[tap]);
+}
+
+} // namespace
+
+RgbView viewFromLayout(const SampleLayout &layout, const SourceRect &rect)
+{
+    RgbView view;
+    view.width = rect.width;
+    view.height = rect.height;
+    view.stride = layout.width;
+    view.channels = layout.channels;
+    view.red = layout.red;
+    view.green = layout.green;
+    view.blue = layout.blue;
+    view.gray = layout.gray;
+    view.keep = layout.buffer;
+    const size_t offset = (static_cast<size_t>(rect.y) * static_cast<size_t>(layout.width) +
+                           static_cast<size_t>(rect.x)) *
+                          static_cast<size_t>(layout.channels);
+    view.data = layout.base + offset;
+    return view;
+}
+
+int channelOffset(const RgbView &view, int channel)
+{
+    if (view.gray)
+        return 0;
+    if (channel == 1)
+        return view.green;
+    if (channel == 2)
+        return view.blue;
+    return view.red;
+}
+
+void copyRgbView(const RgbView &view, uint8_t *dst)
+{
+    const bool packed = !view.gray && view.channels == 3 && view.red == 0 && view.green == 1 &&
+                        view.blue == 2 && view.stride == view.width;
+    if (packed)
+    {
+        const size_t bytes =
+            static_cast<size_t>(view.width) * static_cast<size_t>(view.height) * 3u;
+        std::memcpy(dst, view.data, bytes);
+        return;
+    }
+    for (int y = 0; y < view.height; ++y)
+    {
+        const uint8_t *row = view.data + static_cast<size_t>(y) * static_cast<size_t>(view.stride) *
+                                             static_cast<size_t>(view.channels);
+        uint8_t *out = dst + static_cast<size_t>(y) * static_cast<size_t>(view.width) * 3u;
+        for (int x = 0; x < view.width; ++x)
+        {
+            const uint8_t *pixel =
+                row + static_cast<size_t>(x) * static_cast<size_t>(view.channels);
+            out[static_cast<size_t>(x) * 3u] = pixel[channelOffset(view, 0)];
+            out[static_cast<size_t>(x) * 3u + 1u] = pixel[channelOffset(view, 1)];
+            out[static_cast<size_t>(x) * 3u + 2u] = pixel[channelOffset(view, 2)];
+        }
+    }
+}
+
+struct KernelScratch
+{
+    AxisKernel x;
+    AxisKernel y;
+    DisplayResampleScratch *scratch = nullptr;
+
+    explicit KernelScratch(DisplayResampleScratch *held) : scratch(held)
+    {
+        if (scratch == nullptr)
+            return;
+        exchangeKernel(x, scratch->originX, scratch->countX, scratch->weightX);
+        exchangeKernel(y, scratch->originY, scratch->countY, scratch->weightY);
+    }
+
+    ~KernelScratch()
+    {
+        if (scratch == nullptr)
+            return;
+        exchangeKernel(x, scratch->originX, scratch->countX, scratch->weightX);
+        exchangeKernel(y, scratch->originY, scratch->countY, scratch->weightY);
+    }
+
+    KernelScratch(const KernelScratch &) = delete;
+    KernelScratch &operator=(const KernelScratch &) = delete;
+};
+
+bool filterSeparable(const RgbView &view, uint8_t *dst, int dstW, int dstH,
+                     DisplayResampleScratch *scratch, const std::atomic<bool> *cancel)
+{
+    KernelScratch kernels(scratch);
+    buildAxisKernel(kernels.x, view.width, dstW);
+    buildAxisKernel(kernels.y, view.height, dstH);
+    return resizeSeparable(view, dst, dstW, dstH, kernels.x, kernels.y, cancel);
+}
+
+Isa activeIsa() noexcept
+{
+    const int forced = g_isaOverride.load(std::memory_order_relaxed);
+    if (forced == 1)
+        return Isa::Scalar;
+    if (forced == 2)
+        return CpuFeatures::hasSse41() ? Isa::Sse41 : Isa::Scalar;
+    if (forced == 3)
+    {
+        if (CpuFeatures::hasAvx2())
+            return Isa::Avx2;
+        if (CpuFeatures::hasSse41())
+            return Isa::Sse41;
+        return Isa::Scalar;
+    }
+    if (CpuFeatures::hasAvx2())
+        return Isa::Avx2;
+    if (CpuFeatures::hasSse41())
+        return Isa::Sse41;
+    return Isa::Scalar;
 }
 
 SampleLayout layoutFor(const ImageData &src)
@@ -94,38 +263,9 @@ SampleLayout layoutFor(const ImageData &src)
                         static_cast<size_t>(layout.channels);
     if (layout.channels <= 0 || src.buffer->size() < need)
         return {};
+    layout.buffer = src.buffer;
     layout.base = src.buffer->data();
     return layout;
-}
-
-Rgb loadRgb(const SampleLayout &layout, int x, int y)
-{
-    if (x < 0)
-        x = 0;
-    else if (x >= layout.width)
-        x = layout.width - 1;
-    if (y < 0)
-        y = 0;
-    else if (y >= layout.height)
-        y = layout.height - 1;
-    const uint8_t *pixel =
-        layout.base +
-        (static_cast<size_t>(y) * static_cast<size_t>(layout.width) + static_cast<size_t>(x)) *
-            static_cast<size_t>(layout.channels);
-    if (layout.gray)
-        return {static_cast<float>(pixel[0]), static_cast<float>(pixel[0]),
-                static_cast<float>(pixel[0])};
-    return {static_cast<float>(pixel[layout.red]), static_cast<float>(pixel[layout.green]),
-            static_cast<float>(pixel[layout.blue])};
-}
-
-uint8_t quantize(float value)
-{
-    if (value <= 0.f)
-        return 0;
-    if (value >= 255.f)
-        return 255;
-    return static_cast<uint8_t>(std::lround(value));
 }
 
 SourceRect clampSource(const SampleLayout &layout, const DisplayResampleRect &rect)
@@ -146,309 +286,52 @@ SourceRect clampSource(const SampleLayout &layout, const DisplayResampleRect &re
     return clamped;
 }
 
-ImageData copyIdentity(const SampleLayout &layout, const SourceRect &rect)
-{
-    ImageData out = makeImageData(rect.width, rect.height, PixelFormat::RGB24);
-    uint8_t *dst = out.buffer->data();
-    for (int y = 0; y < rect.height; ++y)
-    {
-        uint8_t *row = dst + static_cast<size_t>(y) * static_cast<size_t>(rect.width) * 3u;
-        for (int x = 0; x < rect.width; ++x)
-        {
-            const Rgb pixel = loadRgb(layout, rect.x + x, rect.y + y);
-            uint8_t *outPx = row + static_cast<size_t>(x) * 3u;
-            outPx[0] = static_cast<uint8_t>(pixel.r);
-            outPx[1] = static_cast<uint8_t>(pixel.g);
-            outPx[2] = static_cast<uint8_t>(pixel.b);
-        }
-    }
-    return out;
-}
-
-int intermediateExtent(int src, int dst)
-{
-    if (src <= 0 || dst <= 0)
-        return 0;
-    if (dst >= src)
-        return src;
-    // Leave about 2x for the sharp kernel so a wide box does not blur alone.
-    if (src >= dst * 2)
-    {
-        const int twice = dst * 2;
-        return twice < src ? twice : src;
-    }
-    return src;
-}
-
-float spanAverage(const float *samples, const float *prefix, int srcCount, int channel,
-                  double start, double end)
-{
-    const double span = end - start;
-    if (!(span > 0.0))
-        return 0.f;
-    int first = static_cast<int>(std::floor(start));
-    int last = static_cast<int>(std::ceil(end - 1e-9)) - 1;
-    if (first < 0)
-        first = 0;
-    if (last >= srcCount)
-        last = srcCount - 1;
-    if (first > last)
-        return 0.f;
-
-    double sum = 0.0;
-    const double leftEnd = (std::min)(end, static_cast<double>(first + 1));
-    const double leftFrac = leftEnd - (std::max)(start, static_cast<double>(first));
-    if (leftFrac > 0.0)
-        sum += leftFrac * samples[static_cast<size_t>(first) * 3u + static_cast<size_t>(channel)];
-    if (last == first)
-        return static_cast<float>(sum / span);
-
-    const double lastLo = static_cast<double>(last);
-    const bool lastPartial = end < lastLo + 1.0;
-    const int fullEnd = lastPartial ? last : last + 1;
-    if (fullEnd > first + 1)
-    {
-        sum += prefix[static_cast<size_t>(fullEnd) * 3u + static_cast<size_t>(channel)] -
-               prefix[static_cast<size_t>(first + 1) * 3u + static_cast<size_t>(channel)];
-    }
-    if (lastPartial)
-    {
-        const double rightFrac = end - lastLo;
-        if (rightFrac > 0.0)
-            sum +=
-                rightFrac * samples[static_cast<size_t>(last) * 3u + static_cast<size_t>(channel)];
-    }
-    return static_cast<float>(sum / span);
-}
-
-void boxHorizontal(const SampleLayout &layout, int x0, int y, int srcW, int dstW, float *dst,
-                   std::vector<float> &samples, std::vector<float> &prefix)
-{
-    samples.resize(static_cast<size_t>(srcW) * 3u);
-    prefix.assign(static_cast<size_t>(srcW + 1) * 3u, 0.f);
-    for (int x = 0; x < srcW; ++x)
-    {
-        const Rgb pixel = loadRgb(layout, x0 + x, y);
-        const size_t i = static_cast<size_t>(x) * 3u;
-        samples[i] = pixel.r;
-        samples[i + 1] = pixel.g;
-        samples[i + 2] = pixel.b;
-        prefix[i + 3] = prefix[i] + pixel.r;
-        prefix[i + 4] = prefix[i + 1] + pixel.g;
-        prefix[i + 5] = prefix[i + 2] + pixel.b;
-    }
-    for (int x = 0; x < dstW; ++x)
-    {
-        const double start = static_cast<double>(x) * static_cast<double>(srcW) / dstW;
-        const double end = static_cast<double>(x + 1) * static_cast<double>(srcW) / dstW;
-        float *out = dst + static_cast<size_t>(x) * 3u;
-        out[0] = spanAverage(samples.data(), prefix.data(), srcW, 0, start, end);
-        out[1] = spanAverage(samples.data(), prefix.data(), srcW, 1, start, end);
-        out[2] = spanAverage(samples.data(), prefix.data(), srcW, 2, start, end);
-    }
-}
-
-bool resampleCancelled(const std::atomic<bool> *cancel)
+bool resampleCancelled(const std::atomic<bool> *cancel) noexcept
 {
     return cancel != nullptr && cancel->load(std::memory_order_relaxed);
 }
 
-bool boxToPlane(const SampleLayout &layout, const SourceRect &rect, int dstW, int dstH, float *dst,
-                DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
+void buildAxisKernel(AxisKernel &kernel, int srcCount, int dstCount)
 {
-    scratch.row.resize(static_cast<size_t>(dstW) * 3u);
-    scratch.accum.assign(static_cast<size_t>(dstW) * 3u, 0.f);
-    for (int y = 0; y < dstH; ++y)
+    kernel.srcCount = srcCount;
+    kernel.dstCount = dstCount;
+    if (srcCount <= 0 || dstCount <= 0)
     {
-        if (resampleCancelled(cancel))
-            return false;
-        const double y0 = static_cast<double>(y) * static_cast<double>(rect.height) / dstH;
-        const double y1 = static_cast<double>(y + 1) * static_cast<double>(rect.height) / dstH;
-        std::fill(scratch.accum.begin(), scratch.accum.end(), 0.f);
-        int row0 = static_cast<int>(std::floor(y0));
-        int row1 = static_cast<int>(std::ceil(y1 - 1e-9)) - 1;
-        if (row0 < 0)
-            row0 = 0;
-        if (row1 >= rect.height)
-            row1 = rect.height - 1;
-        for (int sy = row0; sy <= row1; ++sy)
-        {
-            const double lo = (std::max)(y0, static_cast<double>(sy));
-            const double hi = (std::min)(y1, static_cast<double>(sy + 1));
-            const float coverage = static_cast<float>(hi - lo);
-            if (!(coverage > 0.f))
-                continue;
-            boxHorizontal(layout, rect.x, rect.y + sy, rect.width, dstW, scratch.row.data(),
-                          scratch.samples, scratch.prefix);
-            for (size_t i = 0; i < scratch.accum.size(); ++i)
-                scratch.accum[i] += coverage * scratch.row[i];
-        }
-        const float span = static_cast<float>(y1 - y0);
-        float *out = dst + static_cast<size_t>(y) * static_cast<size_t>(dstW) * 3u;
-        for (int x = 0; x < dstW * 3; ++x)
-            out[x] = span > 0.f ? scratch.accum[static_cast<size_t>(x)] / span : 0.f;
+        kernel.origin.clear();
+        kernel.count.clear();
+        kernel.weight.clear();
+        return;
     }
-    return true;
-}
-
-bool absorbTap(int index, float weight, int *indices, float *weights, int &count, double &sum)
-{
-    for (int i = 0; i < count; ++i)
-    {
-        if (indices[i] != index)
-            continue;
-        weights[i] += weight;
-        sum += static_cast<double>(weight);
-        return true;
-    }
-    if (count >= kMaxCatmullTaps)
-        return false;
-    indices[count] = index;
-    weights[count] = weight;
-    sum += static_cast<double>(weight);
-    ++count;
-    return true;
-}
-
-int buildPixelTaps(int srcCount, int dstIndex, int dstCount, int *indices, float *weights)
-{
-    const double inv = dstCount < srcCount ? static_cast<double>(srcCount) / dstCount : 1.0;
-    const double center = (static_cast<double>(dstIndex) + 0.5) * static_cast<double>(srcCount) /
-                          static_cast<double>(dstCount);
-    const double radius = static_cast<double>(kCatmullSupport) * inv;
-    const int begin = static_cast<int>(std::floor(center - radius));
-    const int end = static_cast<int>(std::ceil(center + radius));
-    int count = 0;
-    double sum = 0.0;
-    for (int i = begin; i < end; ++i)
-    {
-        const double kernelX = ((static_cast<double>(i) + 0.5) - center) / inv;
-        const float weight = catmullWeight(static_cast<float>(kernelX));
-        if (weight == 0.f)
-            continue;
-        int clamped = i;
-        if (clamped < 0)
-            clamped = 0;
-        else if (clamped >= srcCount)
-            clamped = srcCount - 1;
-        absorbTap(clamped, weight, indices, weights, count, sum);
-    }
-    if (!(sum > 0.0) || count <= 0)
-        return 0;
-    const float norm = static_cast<float>(sum);
-    for (int i = 0; i < count; ++i)
-        weights[i] /= norm;
-    return count;
-}
-
-void buildAxisTaps(int srcCount, int dstCount, std::vector<int> &offset, std::vector<int> &index,
-                   std::vector<float> &weight)
-{
-    offset.assign(static_cast<size_t>(dstCount) + 1u, 0);
-    index.clear();
-    weight.clear();
-    index.reserve(static_cast<size_t>(dstCount) * 4u);
-    weight.reserve(static_cast<size_t>(dstCount) * 4u);
-    int packedIndex[kMaxCatmullTaps];
-    float packedWeight[kMaxCatmullTaps];
+    kernel.origin.assign(static_cast<size_t>(dstCount), 0);
+    kernel.count.assign(static_cast<size_t>(dstCount), 0);
+    kernel.weight.assign(static_cast<size_t>(dstCount) * static_cast<size_t>(kMaxTaps), 0);
     for (int i = 0; i < dstCount; ++i)
     {
-        const int count = buildPixelTaps(srcCount, i, dstCount, packedIndex, packedWeight);
-        offset[static_cast<size_t>(i)] = static_cast<int>(index.size());
-        for (int t = 0; t < count; ++t)
-        {
-            index.push_back(packedIndex[t]);
-            weight.push_back(packedWeight[t]);
-        }
+        TapList taps;
+        collectTaps(taps, srcCount, i, dstCount);
+        storeQuantized(kernel, i, taps, srcCount);
     }
-    offset[static_cast<size_t>(dstCount)] = static_cast<int>(index.size());
 }
 
-template <typename Load>
-ImageData catmullResize(Load load, int srcW, int srcH, int dstW, int dstH,
-                        DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
+void exchangeKernel(AxisKernel &kernel, std::vector<int> &origin, std::vector<int> &count,
+                    std::vector<int16_t> &weight)
 {
-    buildAxisTaps(srcW, dstW, scratch.tapOffset, scratch.tapIndex, scratch.tapWeight);
-    buildAxisTaps(srcH, dstH, scratch.tapOffsetY, scratch.tapIndexY, scratch.tapWeightY);
-
-    ImageData out = makeImageData(dstW, dstH, PixelFormat::RGB24);
-    uint8_t *dst = out.buffer->data();
-    scratch.row.assign(static_cast<size_t>(dstW) * 3u, 0.f);
-    scratch.accum.assign(static_cast<size_t>(dstW) * 3u, 0.f);
-
-    for (int y = 0; y < dstH; ++y)
-    {
-        if (resampleCancelled(cancel))
-            return {};
-        std::fill(scratch.accum.begin(), scratch.accum.end(), 0.f);
-        const int yBegin = scratch.tapOffsetY[static_cast<size_t>(y)];
-        const int yEnd = scratch.tapOffsetY[static_cast<size_t>(y) + 1u];
-        for (int tap = yBegin; tap < yEnd; ++tap)
-        {
-            const int sy = scratch.tapIndexY[static_cast<size_t>(tap)];
-            const float wy = scratch.tapWeightY[static_cast<size_t>(tap)];
-            for (int x = 0; x < dstW; ++x)
-            {
-                float r = 0.f;
-                float g = 0.f;
-                float b = 0.f;
-                const int xBegin = scratch.tapOffset[static_cast<size_t>(x)];
-                const int xEnd = scratch.tapOffset[static_cast<size_t>(x) + 1u];
-                for (int xt = xBegin; xt < xEnd; ++xt)
-                {
-                    const Rgb sample = load(scratch.tapIndex[static_cast<size_t>(xt)], sy);
-                    const float wx = scratch.tapWeight[static_cast<size_t>(xt)];
-                    r += wx * sample.r;
-                    g += wx * sample.g;
-                    b += wx * sample.b;
-                }
-                const size_t i = static_cast<size_t>(x) * 3u;
-                scratch.row[i] = r;
-                scratch.row[i + 1] = g;
-                scratch.row[i + 2] = b;
-            }
-            for (size_t i = 0; i < scratch.accum.size(); ++i)
-                scratch.accum[i] += wy * scratch.row[i];
-        }
-        uint8_t *row = dst + static_cast<size_t>(y) * static_cast<size_t>(dstW) * 3u;
-        for (int x = 0; x < dstW * 3; ++x)
-            row[x] = quantize(scratch.accum[static_cast<size_t>(x)]);
-    }
-    return out;
+    kernel.origin.swap(origin);
+    kernel.count.swap(count);
+    kernel.weight.swap(weight);
 }
 
-ImageData catmullFromImage(const SampleLayout &layout, const SourceRect &rect, int dstW, int dstH,
-                           DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
+} // namespace mviewer::core::resample_detail
+
+namespace mviewer::core
 {
-    const int x0 = rect.x;
-    const int y0 = rect.y;
-    const int srcW = rect.width;
-    const int srcH = rect.height;
-    return catmullResize([&](int x, int y) { return loadRgb(layout, x0 + x, y0 + y); }, srcW, srcH,
-                         dstW, dstH, scratch, cancel);
-}
-
-ImageData catmullFromPlane(const float *plane, int srcW, int srcH, int dstW, int dstH,
-                           DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
+namespace
 {
-    return catmullResize(
-        [&](int x, int y)
-        {
-            if (x < 0)
-                x = 0;
-            else if (x >= srcW)
-                x = srcW - 1;
-            if (y < 0)
-                y = 0;
-            else if (y >= srcH)
-                y = srcH - 1;
-            const float *p =
-                plane +
-                (static_cast<size_t>(y) * static_cast<size_t>(srcW) + static_cast<size_t>(x)) * 3u;
-            return Rgb{p[0], p[1], p[2]};
-        },
-        srcW, srcH, dstW, dstH, scratch, cancel);
-}
+
+constexpr double kDensityEpsilon = 1e-4;
+
+using resample_detail::SampleLayout;
+using resample_detail::SourceRect;
 
 bool sameLevel(const DisplayRasterLevel &a, const DisplayRasterLevel &b)
 {
@@ -503,6 +386,15 @@ bool preferStandIn(const DisplayRasterLevel &level, double density, const Displa
     return matchesDesiredSize(level, desired) && !matchesDesiredSize(best, desired);
 }
 
+ImageData imageFromView(const resample_detail::RgbView &view)
+{
+    ImageData out = makeImageData(view.width, view.height, PixelFormat::RGB24);
+    if (out.isNull() || out.buffer == nullptr)
+        return {};
+    resample_detail::copyRgbView(view, out.buffer->data());
+    return out;
+}
+
 } // namespace
 
 double displayRasterDensity(const DisplayRasterLevel &level) noexcept
@@ -549,40 +441,49 @@ int selectDisplayStandIn(const DisplayRasterLevel *levels, int count,
     return best;
 }
 
+void releaseDisplayResampleCache() noexcept
+{
+    resample_detail::releasePyramidCache();
+}
+
+void setDisplayResampleIsaForTest(int isa) noexcept
+{
+    resample_detail::g_isaOverride.store(isa, std::memory_order_relaxed);
+}
+
 ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &request,
                           DisplayResampleScratch *scratch, const std::atomic<bool> *cancel)
 {
-    if (request.targetWidth <= 0 || request.targetHeight <= 0 || resampleCancelled(cancel))
+    if (request.targetWidth <= 0 || request.targetHeight <= 0 ||
+        resample_detail::resampleCancelled(cancel))
         return {};
-    const SampleLayout layout = layoutFor(src);
-    const SourceRect rect = clampSource(layout, request.source);
+    const SampleLayout layout = resample_detail::layoutFor(src);
+    const SourceRect rect = resample_detail::clampSource(layout, request.source);
     if (!rect.isValid())
         return {};
-    DisplayResampleScratch local;
-    DisplayResampleScratch &work = scratch != nullptr ? *scratch : local;
+    resample_detail::RgbView view = resample_detail::viewFromLayout(layout, rect);
     if (rect.width == request.targetWidth && rect.height == request.targetHeight)
-        return copyIdentity(layout, rect);
-
-    const int midW = intermediateExtent(rect.width, request.targetWidth);
-    const int midH = intermediateExtent(rect.height, request.targetHeight);
-    if (midW == rect.width && midH == rect.height)
-        return catmullFromImage(layout, rect, request.targetWidth, request.targetHeight, work,
-                                cancel);
-
-    work.plane.resize(static_cast<size_t>(midW) * static_cast<size_t>(midH) * 3u);
-    if (!boxToPlane(layout, rect, midW, midH, work.plane.data(), work, cancel) ||
-        resampleCancelled(cancel))
+        return imageFromView(view);
+    if (!resample_detail::reduceByBox(view, layout, rect, request.targetWidth, request.targetHeight,
+                                      cancel) ||
+        resample_detail::resampleCancelled(cancel))
         return {};
-    if (midW == request.targetWidth && midH == request.targetHeight)
-    {
-        ImageData out = makeImageData(midW, midH, PixelFormat::RGB24);
-        uint8_t *dst = out.buffer->data();
-        for (size_t i = 0; i < work.plane.size(); ++i)
-            dst[i] = quantize(work.plane[i]);
-        return out;
-    }
-    return catmullFromPlane(work.plane.data(), midW, midH, request.targetWidth,
-                            request.targetHeight, work, cancel);
+    if (view.width == request.targetWidth && view.height == request.targetHeight)
+        return imageFromView(view);
+
+    ImageData out = makeImageData(request.targetWidth, request.targetHeight, PixelFormat::RGB24);
+    if (out.isNull() || out.buffer == nullptr)
+        return {};
+    bool ok = false;
+    if (request.quality == DisplayResampleQuality::Preview)
+        ok = resample_detail::resizeBilinear(view, out.buffer->data(), request.targetWidth,
+                                             request.targetHeight, cancel);
+    else
+        ok = resample_detail::filterSeparable(view, out.buffer->data(), request.targetWidth,
+                                              request.targetHeight, scratch, cancel);
+    if (!ok || resample_detail::resampleCancelled(cancel))
+        return {};
+    return out;
 }
 
 } // namespace mviewer::core

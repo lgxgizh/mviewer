@@ -91,6 +91,10 @@ add_library(mviewer_core SHARED
     core/render/RenderEngine.cpp
     core/render/BilinearScale.cpp
     core/render/DisplayResample.cpp
+    core/render/DisplayResampleScalar.cpp
+    core/render/DisplayResampleThread.cpp
+    core/render/DisplayResamplePyramid.cpp
+    core/render/DisplayResampleSimd.cpp
     core/render/AsyncTileRequestManager.cpp
     core/thumbnail/ThumbnailPipeline.h
     core/plugin/PluginLoader.cpp
@@ -1335,6 +1339,21 @@ add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)
 add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
 add_test(NAME display_resample_tests COMMAND test_display_resample)
+
+# Generous wall-time ceiling for the HQ display resample. Not a perf gate:
+# the budget only fails a pathological regression, not noise around the median.
+add_executable(bench_display_resample
+    core/bench_display_resample.cpp
+)
+target_link_libraries(bench_display_resample
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(bench_display_resample PRIVATE cxx_std_20)
+target_include_directories(bench_display_resample PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME display_resample_bench COMMAND bench_display_resample)
+set_tests_properties(display_resample_bench PROPERTIES TIMEOUT 120)
 add_test(NAME tilecache_tests COMMAND test_tilecache)
 add_test(NAME region_tiles_tests COMMAND test_region_tiles)
 add_test(NAME gputile_tests  COMMAND test_gputile)

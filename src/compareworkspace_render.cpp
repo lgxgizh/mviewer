@@ -646,86 +646,28 @@ void CompareWorkspace::schedulePostLayoutFit()
 
 void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
 {
-    // Keep the latest pane request while the debounce timer is pending. This
-    // matters when independent-pane zoom switches panes faster than the timer.
-    // Do NOT mark interaction-busy here: setImage/resetFit emits scaleChanged
-    // during materialization and would defer hist/diff after rebuildCells.
+    // Trailing quiet period: a wheel burst keeps restarting the timer, and
+    // only the last one submits the sharp resample. Do NOT mark
+    // interaction-busy here: setImage/resetFit emits scaleChanged during
+    // materialization and would defer hist/diff after rebuildCells.
     m_displayLodRefreshPane = idx;
-    if (m_displayLodRefreshPending)
-        return;
+    if (m_session)
+        ++m_session->lodDebounceEpoch;
+    const uint64_t epoch = m_session ? m_session->lodDebounceEpoch : 0;
     m_displayLodRefreshPending = true;
     QPointer<CompareWorkspace> guard(this);
-    QTimer::singleShot(
-        70, this,
-        [guard]()
-        {
-            CompareWorkspace *ws = guard.data();
-            if (!ws)
-                return;
-            ws->m_displayLodRefreshPending = false;
-            // A hidden session already dropped its display batch. Do not
-            // submit another HQ job after close/teardown.
-            if (!ws->isVisible())
-                return;
-            const int requestedPane = ws->m_displayLodRefreshPane;
-            ws->m_displayLodRefreshPane = -1;
-            std::vector<int> dirty;
-            auto addIfNeeded = [&dirty, ws](int pane)
-            {
-                if (pane < 0 || pane >= ws->m_cellViews.size() || !ws->m_cellViews[pane])
-                    return;
-                const ImageFrame *frame = ws->m_engine.imageAt(pane);
-                if (!frame || frame->pixels().isNull())
-                {
-                    // M47: source-backed pane (no full frame —
-                    // e.g. an infeasible source): refresh when
-                    // its LOD raster is stale (zoom/pan/scale).
-                    if (pane < static_cast<int>(ws->m_comparePaths.size()) &&
-                        !ws->m_comparePaths[static_cast<size_t>(pane)].empty())
-                    {
-                        const RawImageView *view = ws->m_cellViews[pane];
-                        const DisplayRequest desired = ws->sourceDisplayRequest(pane);
-                        const QRect current = view->sourceRect();
-                        const bool hasRaster = !view->image().isNull();
-                        bool stale = !hasRaster || !current.isValid();
-                        if (!stale && desired.region)
-                        {
-                            const QRect visible = ws->sourceVisibleRect(pane);
-                            const double currentDensity =
-                                static_cast<double>(view->image().width()) /
-                                std::max(1, current.width());
-                            const double requiredDensity =
-                                static_cast<double>(desired.target.width()) /
-                                std::max(1, desired.sourceRect.width());
-                            stale = !current.contains(desired.sourceRect) ||
-                                    currentDensity < requiredDensity * 0.9 ||
-                                    !current.contains(visible);
-                        }
-                        else if (!stale)
-                        {
-                            stale = desired.region ||
-                                    std::max(view->image().width(), view->image().height()) !=
-                                        std::max(desired.target.width(), desired.target.height()) ||
-                                    current != desired.sourceRect;
-                        }
-                        if (stale)
-                            dirty.push_back(pane);
-                    }
-                    return;
-                }
-                const DisplayRequest desired = ws->memoryDisplayRequest(pane, false);
-                if (!ws->rasterCoversView(pane, desired))
-                    dirty.push_back(pane);
-            };
-            if (requestedPane >= 0 && !ws->m_syncZoom)
-                addIfNeeded(requestedPane);
-            else
-            {
-                dirty.reserve(ws->m_cellViews.size());
-                for (int i = 0; i < ws->m_cellViews.size(); ++i)
-                    addIfNeeded(i);
-            }
-            if (!dirty.empty())
-                ws->scheduleDisplayMaterialization(dirty);
-        });
+    QTimer::singleShot(80, this,
+                       [guard, epoch]()
+                       {
+                           CompareWorkspace *ws = guard.data();
+                           if (!ws || !ws->isVisible())
+                               return;
+                           if (ws->m_session && ws->m_session->lodDebounceEpoch != epoch)
+                               return;
+                           ws->m_displayLodRefreshPending = false;
+                           const int requestedPane = ws->m_displayLodRefreshPane;
+                           ws->m_displayLodRefreshPane = -1;
+                           ws->queueDisplayLod(requestedPane);
+                       });
+    queueFastPreview(idx);
 }

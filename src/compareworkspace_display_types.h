@@ -26,6 +26,7 @@ struct CompareDisplayRequest
     QRect sourceRect;
     bool region = false;
     bool provisional = false; // cheap first paint; upgrade after delivery
+    bool preview = false;     // fast stand-in; sharp resample follows after the wheel settles
 };
 
 struct CompareDisplayBatchResult
@@ -33,6 +34,7 @@ struct CompareDisplayBatchResult
     uint64_t generation = 0;
     int paneCount = 0;
     bool provisional = false;
+    bool preview = false;
 
     struct CellImage
     {
