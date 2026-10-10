@@ -53,6 +53,8 @@ ImageData resolveSharpRegion(const ImageData &src,
     resample.source.height = request.sourceRect.height();
     resample.targetWidth = request.target.width();
     resample.targetHeight = request.target.height();
+    if (request.preview)
+        resample.quality = mviewer::core::DisplayResampleQuality::Preview;
     return mviewer::core::resampleDisplay(src, resample, &scratch, cancel);
 }
 

@@ -81,6 +81,26 @@ class CpuFeatures
         return supported;
     }
 
+    static bool hasSse41()
+    {
+        static const bool supported = []() -> bool
+        {
+#if defined(_MSC_VER)
+            int info[4] = {0};
+            __cpuid(info, 1);
+            return (info[2] & (1 << 19)) != 0;
+#elif defined(__GNUC__) || defined(__clang__)
+            unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+            if (__get_cpuid(1, &eax, &ebx, &ecx, &edx))
+                return (ecx & (1 << 19)) != 0;
+            return false;
+#else
+            return false;
+#endif
+        }();
+        return supported;
+    }
+
     static bool hasSsse3()
     {
         static const bool supported = []() -> bool

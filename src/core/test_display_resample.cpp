@@ -1,6 +1,8 @@
 #include "core/render/DisplayResample.h"
+#include "core/simd/CpuFeatures.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 
@@ -326,6 +328,91 @@ int main()
         const int covered = mviewer::core::selectDisplayStandIn(choices, 2, empty, wantedHere);
         expect(covered == 1, "sharper stand-in outside the view is not swapped in");
     }
+
+    {
+        std::atomic<bool> cancel{true};
+        ImageData image = solid(8, 8, 4, 5, 6);
+        const ImageData out =
+            mviewer::core::resampleDisplay(image, fullRequest(image, 3, 3), nullptr, &cancel);
+        expect(out.isNull(), "cancel returns an empty image");
+    }
+
+    auto thresholds = []()
+    {
+        for (int scale : {2, 3, 4})
+        {
+            ImageData image = solid(scale * 5, scale * 4, 128, 64, 32);
+            const ImageData out = mviewer::core::resampleDisplay(image, fullRequest(image, 5, 4));
+            bool exact = !out.isNull();
+            if (exact)
+            {
+                for (int i = 0; i < out.width * out.height; ++i)
+                {
+                    const uint8_t *px = out.buffer->data() + static_cast<size_t>(i) * 3u;
+                    exact = exact && px[0] == 128 && px[1] == 64 && px[2] == 32;
+                }
+            }
+            expect(exact, "constant survives scalar and simd");
+        }
+        checkLineSurvives(8, 4, 80, "1px line survives 2x");
+        checkLineSurvives(12, 4, 50, "1px line survives 3x");
+        checkLineSurvives(16, 4, 40, "1px line survives 4x");
+        checkEdge(true, true, "left edge line stays on the left");
+        checkEdge(true, false, "right edge line stays on the right");
+        checkEdge(false, true, "top edge line stays on the top");
+        checkEdge(false, false, "bottom edge line stays on the bottom");
+    };
+    mviewer::core::releaseDisplayResampleCache();
+    mviewer::core::setDisplayResampleIsaForTest(1);
+    thresholds();
+
+    auto resampleTo = [](const ImageData &image, int w, int h)
+    { return mviewer::core::resampleDisplay(image, fullRequest(image, w, h)); };
+    ImageData wide = solid(64, 40, 0, 0, 0);
+    for (int y = 0; y < wide.height; ++y)
+    {
+        for (int x = 0; x < wide.width; ++x)
+        {
+            const uint8_t value = static_cast<uint8_t>((x * 13 + y * 7) & 255);
+            putRgb(wide, x, y, value, static_cast<uint8_t>(255 - value), static_cast<uint8_t>(x));
+        }
+        putRgb(wide, 31, y, 255, 255, 255);
+    }
+    mviewer::core::releaseDisplayResampleCache();
+    mviewer::core::setDisplayResampleIsaForTest(1);
+    const ImageData scalarBox = resampleTo(wide, 32, 20);
+    const ImageData scalarSharp = resampleTo(wide, 30, 18);
+    const auto closeEnough = [](const ImageData &a, const ImageData &b)
+    {
+        if (a.isNull() || b.isNull() || a.width != b.width || a.height != b.height)
+            return false;
+        const int count = a.width * a.height * 3;
+        for (int i = 0; i < count; ++i)
+        {
+            const int delta = std::abs(static_cast<int>(a.buffer->data()[static_cast<size_t>(i)]) -
+                                       static_cast<int>(b.buffer->data()[static_cast<size_t>(i)]));
+            if (delta > 1)
+                return false;
+        }
+        return true;
+    };
+    if (mviewer::core::CpuFeatures::hasAvx2())
+    {
+        mviewer::core::releaseDisplayResampleCache();
+        mviewer::core::setDisplayResampleIsaForTest(3);
+        expect(closeEnough(scalarBox, resampleTo(wide, 32, 20)), "avx2 box matches scalar");
+        expect(closeEnough(scalarSharp, resampleTo(wide, 30, 18)), "avx2 kernel matches scalar");
+    }
+    if (mviewer::core::CpuFeatures::hasSse41())
+    {
+        mviewer::core::releaseDisplayResampleCache();
+        mviewer::core::setDisplayResampleIsaForTest(2);
+        expect(closeEnough(scalarBox, resampleTo(wide, 32, 20)), "sse4.1 box matches scalar");
+        expect(closeEnough(scalarSharp, resampleTo(wide, 30, 18)), "sse4.1 kernel matches scalar");
+        thresholds();
+    }
+    mviewer::core::setDisplayResampleIsaForTest(0);
+    mviewer::core::releaseDisplayResampleCache();
 
     std::printf("=== Display resample tests: %s ===\n", g_failures == 0 ? "PASS" : "FAIL");
     return g_failures == 0 ? 0 : 1;

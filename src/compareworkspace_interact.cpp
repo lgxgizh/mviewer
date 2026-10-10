@@ -59,6 +59,12 @@ bool CompareWorkspace::event(QEvent *event)
     if (hiding && !isVisible())
     {
         m_displayLodRefreshPending = false;
+        if (m_session)
+        {
+            ++m_session->lodDebounceEpoch;
+            m_session->previewGeneration = 0;
+            m_session->displayIsPreview.clear();
+        }
         releaseDisplayTask();
         ++m_displayGen;
     }
