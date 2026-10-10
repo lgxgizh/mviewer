@@ -595,11 +595,15 @@ bool ImageViewer::handleViewerEscape()
     // filter. A real drag is next, then metadata the user opened. One Esc
     // then returns to Browse. Leaving fullscreen alone stranded the window:
     // showNormal() can move focus so the next Esc never reaches this viewer.
+    // setFullscreenRequested(false) restores the windowed frame and drops a
+    // stale WindowFullScreen bit before hide(), so the next F11 toggle does
+    // not restore the monitor frame.
     if (clearRealSelectionForEscape())
         return true;
     if (dismissOpenMetadata())
         return true;
-    if (property("mviewerFullscreenRequested").toBool() || isFullScreen())
+    if (property("mviewerFullscreenRequested").toBool() || isFullScreen() ||
+        windowState().testFlag(Qt::WindowFullScreen))
         setFullscreenRequested(false);
     close();
     return true;

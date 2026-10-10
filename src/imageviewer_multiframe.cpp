@@ -29,6 +29,28 @@ namespace
 constexpr int kPlaybackTimerIntervalMs = 10;
 constexpr int kPrefetchCount = 1;
 
+// Headless Qt can report WindowFullScreen after a close that raced showNormal().
+// The property is the contract F11 toggles; a stale native bit must not stick.
+bool fullscreenBit(const QWidget *widget)
+{
+    return widget->isFullScreen() || widget->windowState().testFlag(Qt::WindowFullScreen);
+}
+
+void dropUnrequestedFullscreen(QWidget *widget)
+{
+    if (!widget || widget->property("mviewerFullscreenRequested").toBool())
+        return;
+    if (!fullscreenBit(widget))
+        return;
+    // setWindowState re-enters changeEvent. A platform that ignores the clear
+    // must not recurse.
+    if (widget->property("mviewerDroppingFullscreen").toBool())
+        return;
+    widget->setProperty("mviewerDroppingFullscreen", true);
+    widget->setWindowState(widget->windowState() & ~Qt::WindowFullScreen);
+    widget->setProperty("mviewerDroppingFullscreen", false);
+}
+
 QString sequenceLabel(const mviewer::core::FrameSequenceInfo &sequence)
 {
     return sequence.kind == mviewer::core::FrameSequenceKind::Pages ? QStringLiteral("Page")
@@ -369,6 +391,7 @@ void ImageViewer::changeEvent(QEvent *event)
     QOpenGLWidget::changeEvent(event);
     if (!event || event->type() != QEvent::WindowStateChange)
         return;
+    dropUnrequestedFullscreen(this);
     if (playbackOccluded())
         suspendPlaybackClock();
     else
@@ -498,7 +521,9 @@ void ImageViewer::markClosing()
 void ImageViewer::persistWindowGeometry()
 {
     QSettings settings;
-    const bool fullscreen = property("mviewerFullscreenRequested").toBool();
+    // A close that cleared the request can still be fullscreen-sized. Persist
+    // the windowed frame so the next viewer does not restore the monitor rect.
+    const bool fullscreen = property("mviewerFullscreenRequested").toBool() || fullscreenBit(this);
     const QByteArray geom =
         (fullscreen && !m_windowedGeometry.isEmpty()) ? m_windowedGeometry : saveGeometry();
     settings.setValue(QStringLiteral("viewerGeometry"), geom);
@@ -512,8 +537,9 @@ void ImageViewer::persistWindowGeometry()
 void ImageViewer::setFullscreenRequested(bool requested)
 {
     // The property is authoritative when offscreen Qt cannot report fullscreen.
-    // Keep the windowed frame so leave/close does not store the monitor rect.
-    if (requested && !property("mviewerFullscreenRequested").toBool())
+    // Never snapshot a fullscreen frame: F11 exit restores this byte array, and
+    // a close that raced showNormal() would put WindowFullScreen back.
+    if (requested && !property("mviewerFullscreenRequested").toBool() && !fullscreenBit(this))
         m_windowedGeometry = saveGeometry();
     setProperty("mviewerFullscreenRequested", requested);
     if (requested)
@@ -527,6 +553,7 @@ void ImageViewer::setFullscreenRequested(bool requested)
         showNormal();
         if (!m_windowedGeometry.isEmpty())
             restoreGeometry(m_windowedGeometry);
+        dropUnrequestedFullscreen(this);
         clampWidgetToAvailableScreens(this);
     }
 
