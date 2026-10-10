@@ -504,6 +504,13 @@ class ImageViewer : public QOpenGLWidget
     bool handleZoomKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleTransformKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
+    // Esc: a non-trivial drag rect, then a metadata overlay the user opened,
+    // then leave the image view. A click without a drag is not a rect.
+    bool handleViewerEscape();
+    bool hasRealSelection() const;
+    bool clearRealSelectionForEscape();
+    bool dismissOpenMetadata();
+    void commitSelectionDrag();
     bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath, QAction *reveal,
                                  QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
                                  QAction *copyHsv, QContextMenuEvent *event,

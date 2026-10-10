@@ -442,11 +442,27 @@ void MetadataOverlay::mousePressEvent(QMouseEvent *event)
     hide();
 }
 
+namespace
+{
+void hideFloatingMetadataPanel()
+{
+    const QWidgetList tops = QApplication::topLevelWidgets();
+    for (QWidget *top : tops)
+    {
+        if (top->isVisible() && top->inherits("MetadataPanel"))
+            top->hide();
+    }
+}
+} // namespace
+
 void MetadataOverlay::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Escape || event->key() == Qt::Key_I || event->key() == Qt::Key_M)
     {
         hide();
+        // The overlay and the floating panel are one toggle. Focus stays on
+        // this widget, so the viewer's Esc ladder never sees the key.
+        hideFloatingMetadataPanel();
         event->accept();
         return;
     }

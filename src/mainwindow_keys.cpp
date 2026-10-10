@@ -128,8 +128,9 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         return false;
     }
     // Esc stops a running slideshow before the viewer's own ladder (clear a
-    // real selection, else leave fullscreen, else close). An empty default
-    // selection is not something to clear; that stays in ImageViewer.
+    // real drag selection, else close metadata the user opened, else leave
+    // the image view and fullscreen together). A click without a drag is not
+    // a selection; that stays in ImageViewer.
     if (ke->key() == Qt::Key_Escape && mods == Qt::NoModifier && m_slideshowTimer &&
         m_slideshowTimer->isActive())
     {

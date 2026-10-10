@@ -697,37 +697,7 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton)
     {
         if (m_selecting && event->button() == Qt::LeftButton)
-        {
-            m_selecting = false;
-            const QRect r = selectedRegion();
-            if (r.width() > 5 && r.height() > 5)
-            {
-                // M26: compute ROI statistics directly from the decoded
-                // ImageData (worker-side helper) — no full-image
-                // QPixmap->QImage conversion on the UI thread.
-                const QRect imgRect =
-                    QRect(static_cast<int>(std::floor((r.x() - m_view.offsetX) / m_view.scale)),
-                          static_cast<int>(std::floor((r.y() - m_view.offsetY) / m_view.scale)),
-                          static_cast<int>(std::round(r.width() / m_view.scale)),
-                          static_cast<int>(std::round(r.height() / m_view.scale)))
-                        .normalized();
-                const QSize bounds = displaySize();
-                const QRect valid =
-                    bounds.isEmpty()
-                        ? QRect()
-                        : imgRect.intersected(QRect(0, 0, bounds.width(), bounds.height()));
-                if (!valid.isEmpty())
-                {
-                    scheduleRoiStats(valid);
-                    emit selectionChanged(valid);
-                }
-                else
-                {
-                    cancelRoiStats();
-                    emit selectionChanged(QRect());
-                }
-            }
-        }
+            commitSelectionDrag();
         else
         {
             m_dragging = false;

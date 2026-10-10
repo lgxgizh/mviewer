@@ -1,4 +1,5 @@
 #include "imageviewer.h"
+#include "metadataoverlay.h"
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/PixelInspector.h"
@@ -529,26 +530,118 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
     else if (key == Qt::Key_F11)
         toggleFullscreen();
     else if (key == Qt::Key_Escape)
-    {
-        if (m_selecting || m_selectMode || m_selStart != m_selEnd)
-        {
-            m_selecting = false;
-            m_selStart = m_selEnd = QPoint();
-            if (m_selectMode)
-                setSelectMode(false);
-            update();
-            return true;
-        }
-        if (property("mviewerFullscreenRequested").toBool())
-        {
-            setFullscreenRequested(false);
-            return true;
-        }
-        close();
-    }
+        return handleViewerEscape();
     else
         return false;
     return true;
+}
+
+bool ImageViewer::hasRealSelection() const
+{
+    // Same threshold as the ROI commit: QRect's inclusive edge makes a click
+    // 1×1, and a couple of pixels of jitter is still not a drag.
+    const QRect region = QRect(m_selStart, m_selEnd).normalized();
+    return region.width() > 5 && region.height() > 5;
+}
+
+bool ImageViewer::clearRealSelectionForEscape()
+{
+    if (!hasRealSelection())
+    {
+        if (m_selecting || m_selStart != m_selEnd)
+        {
+            m_selecting = false;
+            m_selStart = m_selEnd = QPoint();
+            update();
+        }
+        return false;
+    }
+    m_selecting = false;
+    m_selStart = m_selEnd = QPoint();
+    if (m_selectMode)
+        setSelectMode(false);
+    else
+        update();
+    return true;
+}
+
+bool ImageViewer::dismissOpenMetadata()
+{
+    bool dismissed = false;
+    if (auto *overlay = findChild<MetadataOverlay *>(QString(), Qt::FindDirectChildrenOnly))
+    {
+        if (overlay->isVisible())
+        {
+            overlay->hide();
+            dismissed = true;
+        }
+    }
+    // The floating panel is a tool window parented to the main window.
+    const QWidgetList tops = QApplication::topLevelWidgets();
+    for (QWidget *top : tops)
+    {
+        if (top->isVisible() && top->inherits("MetadataPanel"))
+        {
+            top->hide();
+            dismissed = true;
+        }
+    }
+    return dismissed;
+}
+
+bool ImageViewer::handleViewerEscape()
+{
+    // Slideshow is stopped earlier, while the key is still in MainWindow's
+    // filter. A real drag is next, then metadata the user opened. One Esc
+    // then returns to Browse. Leaving fullscreen alone stranded the window:
+    // showNormal() can move focus so the next Esc never reaches this viewer.
+    // setFullscreenRequested(false) restores the windowed frame and drops a
+    // stale WindowFullScreen bit before hide(), so the next F11 toggle does
+    // not restore the monitor frame.
+    if (clearRealSelectionForEscape())
+        return true;
+    if (dismissOpenMetadata())
+        return true;
+    if (property("mviewerFullscreenRequested").toBool() || isFullScreen() ||
+        windowState().testFlag(Qt::WindowFullScreen))
+        setFullscreenRequested(false);
+    close();
+    return true;
+}
+
+void ImageViewer::commitSelectionDrag()
+{
+    m_selecting = false;
+    if (!hasRealSelection())
+    {
+        m_selStart = m_selEnd = QPoint();
+        update();
+        return;
+    }
+    const QRect r = selectedRegion();
+    // ROI stats come from the decoded frame, off the UI thread.
+    if (!(m_view.scale > 0.0))
+        return;
+    const QRect imgRect =
+        QRect(static_cast<int>(std::floor((r.x() - m_view.offsetX) / m_view.scale)),
+              static_cast<int>(std::floor((r.y() - m_view.offsetY) / m_view.scale)),
+              static_cast<int>(std::round(r.width() / m_view.scale)),
+              static_cast<int>(std::round(r.height() / m_view.scale)))
+            .normalized();
+    const QSize bounds = displaySize();
+    const QRect valid = bounds.isEmpty()
+                            ? QRect()
+                            : imgRect.intersected(QRect(0, 0, bounds.width(), bounds.height()));
+    if (!valid.isEmpty())
+    {
+        scheduleRoiStats(valid);
+        emit selectionChanged(valid);
+    }
+    else
+    {
+        cancelRoiStats();
+        emit selectionChanged(QRect());
+    }
 }
 
 void ImageViewer::revealInExplorer()
