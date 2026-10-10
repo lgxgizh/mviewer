@@ -53,6 +53,11 @@ struct CompareDisplayPlan
 
 CompareDisplayPlan planCompareDisplay(const CompareDisplayPlanningInput &input);
 
+// In-memory compare pane: one resample at the exact physical size of the
+// covered source rect. Below 100% (scale * dpr < 1) that size is the rect
+// times the physical scale. At or above 100% it is a 1:1 crop. Long edge <= 4096.
+CompareDisplayPlan planSharpCompareDisplay(const CompareDisplayPlanningInput &input);
+
 // Cheap full-frame LOD for cold/first paint (small edge, then upgrade).
 CompareDisplayPlan planCompareDisplayCheap(const CompareDisplayPlanningInput &input);
 

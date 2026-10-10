@@ -90,6 +90,7 @@ add_library(mviewer_core SHARED
     core/analyzer/ExposureAnalyzer.cpp
     core/render/RenderEngine.cpp
     core/render/BilinearScale.cpp
+    core/render/DisplayResample.cpp
     core/render/AsyncTileRequestManager.cpp
     core/thumbnail/ThumbnailPipeline.h
     core/plugin/PluginLoader.cpp
@@ -462,7 +463,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache mipmap_pyramid repository scheduler metadata filesystem eventbus render_pipeline tilecache region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata filesystem eventbus render_pipeline display_resample tilecache region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1330,6 +1331,7 @@ add_test(NAME metadata_tests   COMMAND test_metadata)
 add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)
 add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
+add_test(NAME display_resample_tests COMMAND test_display_resample)
 add_test(NAME tilecache_tests COMMAND test_tilecache)
 add_test(NAME region_tiles_tests COMMAND test_region_tiles)
 add_test(NAME gputile_tests  COMMAND test_gputile)

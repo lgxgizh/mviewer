@@ -4,6 +4,7 @@
 #include "core/analysis/PixelInspector.h"
 #include "core/image/DisplayMip.h"
 #include "core/image/SourceImage.h"
+#include "core/render/DisplayResample.h"
 #include "display/DisplayColorContextProvider.h"
 #include "widgets/infooverlay.h"
 #include "widgets/pixelgrid.h"
@@ -28,12 +29,37 @@ ImageData tryCacheBestMip(const std::string &path, int maxEdge)
     return mviewer::core::tryBestMip(path, maxEdge);
 }
 
+QRect coveredRectForRequest(const QSize &sourceDims,
+                            const mviewer::ui::CompareDisplayRequest &request)
+{
+    const QRect full(QPoint(0, 0), sourceDims);
+    if (!request.region || !request.sourceRect.isValid())
+        return full;
+    return request.sourceRect.intersected(full);
+}
+
+ImageData resolveSharpRegion(const ImageData &src,
+                             const mviewer::ui::CompareDisplayRequest &request)
+{
+    thread_local mviewer::core::DisplayResampleScratch scratch;
+    mviewer::core::DisplayResampleRequest resample;
+    resample.source.x = request.sourceRect.x();
+    resample.source.y = request.sourceRect.y();
+    resample.source.width = request.sourceRect.width();
+    resample.source.height = request.sourceRect.height();
+    resample.targetWidth = request.target.width();
+    resample.targetHeight = request.target.height();
+    return mviewer::core::resampleDisplay(src, resample, &scratch);
+}
+
 ImageData resolveLodFromCachedFull(const ImageData &src,
                                    const mviewer::ui::CompareDisplayRequest &request,
                                    const std::string &pathKey)
 {
     if (!request.target.isValid())
         return ImageData{};
+    if (request.region && request.sourceRect.isValid())
+        return resolveSharpRegion(src, request);
     const int wantEdge = std::max(request.target.width(), request.target.height());
     if (!pathKey.empty())
     {
@@ -619,7 +645,7 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
         {
             sourceDims = QSize(src.width, src.height);
             convMeta = metadata[static_cast<size_t>(idx)];
-            coveredRect = QRect(QPoint(0, 0), sourceDims);
+            coveredRect = coveredRectForRequest(sourceDims, request);
             const std::string pathKey = (idx < static_cast<int>(paths.size()))
                                             ? paths[static_cast<size_t>(idx)]
                                             : std::string();

@@ -1,5 +1,6 @@
 #include "compareworkspace_p.h"
 #include "compareworkspace_shortcuts.h"
+#include "widgets/imageblit.h"
 
 #include <algorithm>
 void CompareWorkspace::toggleBlink()
@@ -228,11 +229,9 @@ void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &clipRe
     // offset) so the user's zoom/pan carries over into split/swipe/overlay.
     // The offset is a pan delta from the target rect's center (center-relative),
     // exactly like RawImageView stores it for a cell widget.
-    const double effScale = (img.width() > 0) ? (dr.width() / img.width()) : 1.0;
     p.save();
     p.setClipRect(clipRect);
-    p.setRenderHint(QPainter::SmoothPixmapTransform, effScale < 0.999);
-    p.drawImage(dr, img);
+    mviewer::ui::blitDeviceImage(p, dr, img);
 
     // Diff/heatmap overlay (set per cell by the async batch result). Only the
     // non-base cell carries one, so this is a no-op for the base image —
@@ -240,7 +239,9 @@ void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &clipRe
     const QImage &ov = m_cellViews[idx]->overlay();
     if (!ov.isNull())
     {
+        const double effScale = (img.width() > 0) ? (dr.width() / img.width()) : 1.0;
         p.setOpacity(m_cellViews[idx]->overlayOpacity());
+        p.setRenderHint(QPainter::SmoothPixmapTransform, effScale < 0.999);
         p.drawImage(cellFullDestRect(idx, geomRect), ov);
         p.setOpacity(1.0);
     }
@@ -321,11 +322,11 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
     const double effScale = (img1.width() > 0) ? (dr.width() / img1.width()) : 1.0;
     p.save();
     p.setClipRect(r);
-    p.setRenderHint(QPainter::SmoothPixmapTransform, effScale < 0.999);
     // Blend the second image on top with user-controlled opacity (A-4.1 slider).
     p.setOpacity(std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0));
-    p.drawImage(dr, img1);
+    mviewer::ui::blitDeviceImage(p, dr, img1);
     p.setOpacity(1.0);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, effScale < 0.999);
     // Keep the diff overlay visible on top of the blend (H3 fix).
     const QImage &ov = m_cellViews[1]->overlay();
     if (!ov.isNull())
@@ -449,8 +450,8 @@ void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
     const double effScale = (img1.width() > 0) ? (dr.width() / img1.width()) : 1.0;
     p.save();
     p.setClipRegion(region);
+    mviewer::ui::blitDeviceImage(p, dr, img1);
     p.setRenderHint(QPainter::SmoothPixmapTransform, effScale < 0.999);
-    p.drawImage(dr, img1);
     // Keep the diff overlay visible inside the B blocks.
     const QImage &ov = m_cellViews[1]->overlay();
     if (!ov.isNull())

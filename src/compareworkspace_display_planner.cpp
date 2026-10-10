@@ -42,6 +42,34 @@ double uniformFit(const std::vector<double> &fits)
     return std::isfinite(common) ? common : 0.0;
 }
 
+CompareDisplayRect expandVisible(const CompareDisplayPlanningInput &input)
+{
+    CompareDisplayRect visible =
+        input.visibleSourceRect.isValid() ? input.visibleSourceRect : fullRect(input);
+    const int marginX = std::max(16, visible.width / 8);
+    const int marginY = std::max(16, visible.height / 8);
+    const int left = std::max(0, visible.x - marginX);
+    const int top = std::max(0, visible.y - marginY);
+    const int right = std::min(input.sourceWidth, visible.x + visible.width + marginX);
+    const int bottom = std::min(input.sourceHeight, visible.y + visible.height + marginY);
+    const CompareDisplayRect covered{left, top, right - left, bottom - top};
+    return covered.isValid() ? covered : fullRect(input);
+}
+
+void capLongEdge(int &width, int &height)
+{
+    const int longEdge = std::max(width, height);
+    if (longEdge <= kMaxCompareLodEdge)
+        return;
+    const double scale = static_cast<double>(kMaxCompareLodEdge) / static_cast<double>(longEdge);
+    width =
+        std::min(kMaxCompareLodEdge,
+                 std::max(1, static_cast<int>(std::lround(static_cast<double>(width) * scale))));
+    height =
+        std::min(kMaxCompareLodEdge,
+                 std::max(1, static_cast<int>(std::lround(static_cast<double>(height) * scale))));
+}
+
 } // namespace
 
 CompareDisplayPlan planCompareDisplay(const CompareDisplayPlanningInput &input)
@@ -103,6 +131,33 @@ CompareDisplayPlan planCompareDisplay(const CompareDisplayPlanningInput &input)
     plan.targetWidth = clampEdge(covered.width * density);
     plan.targetHeight = clampEdge(covered.height * density);
     plan.region = true;
+    return plan;
+}
+
+CompareDisplayPlan planSharpCompareDisplay(const CompareDisplayPlanningInput &input)
+{
+    CompareDisplayPlan plan;
+    if (input.sourceWidth <= 0 || input.sourceHeight <= 0)
+        return plan;
+    if (!(input.currentScale > 0.0) || !std::isfinite(input.currentScale))
+        return plan;
+
+    const double dpr = std::max(1.0, input.devicePixelRatio);
+    const double physical = input.currentScale * dpr;
+    const CompareDisplayRect covered = expandVisible(input);
+    plan.sourceRect = covered;
+    plan.region = true;
+    if (physical >= 1.0)
+    {
+        plan.targetWidth = covered.width;
+        plan.targetHeight = covered.height;
+    }
+    else
+    {
+        plan.targetWidth = std::max(1, static_cast<int>(std::lround(covered.width * physical)));
+        plan.targetHeight = std::max(1, static_cast<int>(std::lround(covered.height * physical)));
+    }
+    capLongEdge(plan.targetWidth, plan.targetHeight);
     return plan;
 }
 

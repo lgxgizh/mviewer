@@ -191,6 +191,8 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
                 onEditCellSelected(m_dragIdx);
                 refreshHistograms();
             }
+            else if (delta.manhattanLength() >= 4)
+                scheduleDisplayLodRefresh();
         }
         return false;
     }
@@ -358,8 +360,11 @@ bool CompareWorkspace::handleCanvasRelease(QEvent *event)
     }
     if (me->button() == Qt::LeftButton)
     {
+        const bool imageDrag = m_dragging && (me->pos() - m_dragStartPos).manhattanLength() >= 4;
         m_splitDragging = false;
         m_dragging = false;
+        if (imageDrag)
+            scheduleDisplayLodRefresh();
         if (m_compareCanvas)
             m_compareCanvas->update();
     }

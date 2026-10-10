@@ -599,7 +599,10 @@ class CompareWorkspace : public QWidget
         const TaskScheduler::TaskContext &context);
     QSize displayLodTarget(int idx, const ImageData &source) const;
     QRect sourceVisibleRect(int pane) const;
+    mviewer::ui::CompareDisplayPlanningInput displayPlanningInput(int pane) const;
     DisplayRequest sourceDisplayRequest(int pane) const;
+    DisplayRequest memoryDisplayRequest(int pane, bool blank) const;
+    bool rasterCoversView(int pane, const DisplayRequest &desired) const;
     DisplayRequest buildPaneDisplayRequest(int pane, bool preferCheap) const;
     void scheduleDisplayLodRefresh(int idx = -1);
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);

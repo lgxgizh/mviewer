@@ -1,4 +1,5 @@
 #include "widgets/rawimageview.h"
+#include "widgets/imageblit.h"
 #include "widgets/infooverlay.h"
 #include "widgets/pixelgrid.h"
 #include "widgets/roioverlay.h"
@@ -436,17 +437,16 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const QSize sourceSize = renderSourceSize();
     const QRect sourceRect = renderSourceRect();
     const double scale = presentedScale();
-    // Consistent interpolation: when magnified (scale >= 1.0), use nearest-neighbor
-    // so engineers can inspect exact pixels; when downscaled (scale < 1.0),
-    // use smooth bilinear to prevent downsample aliasing.
-    // Crucially, interpolation must never depend on dragging/clicking state.
+    // Below 100% physical the raster is already device-sized and drawn 1:1.
+    // At or above 100%, and while a sharper raster is pending, nearest
+    // neighbour keeps pixel inspection. The choice does not depend on dragging.
     const double effectiveScale =
         (image.width() > 0 && sourceRect.width() > 0)
             ? (static_cast<double>(sourceRect.width()) * scale / image.width())
             : scale;
-    p.setRenderHint(QPainter::SmoothPixmapTransform, effectiveScale < 0.999);
 
-    // Center in widget, then apply pan offset, then scale.
+    // Center in widget, then apply pan offset, then scale. The base raster is
+    // already the physical size when zoomed below 100%, so it is drawn 1:1.
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
     const int dw = qRound(sourceSize.width() * scale);
@@ -456,7 +456,7 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const QRectF coveredDest(sourceLeft + sourceRect.x() * scale,
                              sourceTop + sourceRect.y() * scale, sourceRect.width() * scale,
                              sourceRect.height() * scale);
-    p.drawImage(coveredDest, image);
+    mviewer::ui::blitDeviceImage(p, coveredDest, image);
 
     // Difference/heatmap overlay (compare mode): same transform as the base image
     // so it tracks zoom/pan. The QImage is produced by the workspace from core-layer
@@ -465,6 +465,7 @@ void RawImageView::drawBaseLayer(QPainter &p)
     {
         p.save();
         p.setOpacity(m_overlayAlpha);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, effectiveScale < 0.999);
         // The overlay is a display LOD of the same source geometry. Draw it
         // into the base destination so a smaller materialization remains
         // registered instead of being centered as a smaller image.
