@@ -21,6 +21,7 @@
 #include <cmath>
 
 #include "compareworkspace_caption.h"
+#include "compareworkspace_pane_header.h"
 
 namespace
 {
@@ -440,8 +441,10 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         auto *cellLay = new QVBoxLayout(cellWidget);
         cellLay->setContentsMargins(0, 0, 0, 0);
         cellLay->setSpacing(1);
+        mviewer::ui::installComparePaneHeader(cellWidget, cellLay);
 
         auto *view = new RawImageView(cellWidget);
+        view->setProperty("paneHeaderOwnsFilename", true);
         view->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         view->setMinimumSize(64, 64);
         view->setMouseTracking(true);
@@ -509,6 +512,11 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         cellLay->addWidget(caption);
         m_cellLabels.push_back(caption);
         view->setFilenameOverlay(caption->fullText(), m_filenameOverlay);
+        QString headerPath = caption->fullText();
+        if (img && !img->metadata().filePath.empty())
+            headerPath = QString::fromStdString(img->metadata().filePath);
+        mviewer::ui::updateComparePaneHeaderName(cellWidget, caption->fullText(), headerPath,
+                                                 m_filenameOverlay);
 
         const int row = i / columns;
         const int col = i % columns;

@@ -3,6 +3,9 @@
 
 #include "application/ExternalOpen.h"
 #include "core/analysis/ImageOverlay.h"
+
+#include <QSignalBlocker>
+
 #include <algorithm>
 
 // M15: drag & drop — accept files/folders dropped onto the window.
@@ -377,6 +380,11 @@ void MainWindow::toggleFocusBrowse()
     }
     if (m_actFocusBrowse)
         m_actFocusBrowse->setChecked(m_focusBrowse);
+    if (m_actToggleNavigation && m_navigationWidget)
+    {
+        const QSignalBlocker blocker(m_actToggleNavigation);
+        m_actToggleNavigation->setChecked(m_navigationWidget->isVisible());
+    }
 }
 
 void MainWindow::openPreferences()
@@ -630,6 +638,14 @@ void MainWindow::updateCacheStat()
         m_lblCache->setToolTip(
             tr("缓存命中率: %1% (命中 %2 / 请求 %3)").arg(pct).arg(hits).arg(hits + misses));
     }
+    if (!m_lblImage)
+        return;
+    QString tip = tr("点击在资源管理器中定位当前文件，右键复制完整路径");
+    if (!m_lblCache->toolTip().isEmpty())
+        tip += QLatin1Char('\n') + m_lblCache->toolTip();
+    if (m_lblSize && !m_lblSize->text().isEmpty())
+        tip += QLatin1Char('\n') + m_lblSize->text();
+    m_lblImage->setToolTip(tip);
 }
 
 // P0-3: click / hover on the image viewer shows the metadata overlay.

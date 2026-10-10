@@ -62,7 +62,9 @@ void ThumbnailPanel::onSelectionChanged()
     else
     {
         m_compareBtn->setVisible(true);
-        m_compareBtn->setText(QStringLiteral("比较选中 (%1)").arg(n));
+        m_compareBtn->setText(QStringLiteral("比较 (P)"));
+        m_compareBtn->setFixedHeight(28);
+        m_compareBtn->adjustSize();
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
         m_compareBtn->setToolTip(

@@ -92,8 +92,7 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
         view->setMetricBadge(QString());
         view->setToolTip(QString());
     }
-    if (m_metricLabel)
-        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
+    presentDiffMetrics(tr("PSNR: —  SSIM: —"));
     auto &svc = mviewer::application::ImageLoadingService::instance();
     for (int i = 0; i < n; ++i)
     {

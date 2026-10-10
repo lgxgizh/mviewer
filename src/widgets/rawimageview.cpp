@@ -406,7 +406,8 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
         p.restore();
     }
 
-    if (m_filenameOverlayVisible && !m_filenameOverlayText.isEmpty())
+    if (m_filenameOverlayVisible && !m_filenameOverlayText.isEmpty() &&
+        !property("paneHeaderOwnsFilename").toBool())
         mviewer::ui::drawFilenameOverlay(p, rect(), m_filenameOverlayText);
     const std::string zoomText = mviewer::core::formatZoomPercent(presented);
     if (!zoomText.empty())

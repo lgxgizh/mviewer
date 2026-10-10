@@ -1981,21 +1981,25 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               viewToolbar->sizeHint().width() <= availableToolbarWidth,
           "compare view toolbar fits the standard 1100px workspace width");
     QCheckBox *syncZoomChk = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck"));
-    CHECK(syncZoomChk && syncZoomChk->isVisible(), "sync-zoom checkbox is on the view toolbar");
-    if (syncZoomChk)
+    QToolButton *syncButton = ws->findChild<QToolButton *>(QStringLiteral("compareSyncButton"));
+    QAction *syncZoomAction = ws->findChild<QAction *>(QStringLiteral("syncZoomAction"));
+    CHECK(syncZoomChk && syncButton && syncButton->isVisible() && syncZoomAction &&
+              syncZoomAction->isChecked() == syncZoomChk->isChecked(),
+          "sync-zoom stays reachable from the sync menu and matches its checkbox");
+    if (syncButton)
     {
-        const QRect zoomInWs(syncZoomChk->mapTo(ws, QPoint(0, 0)), syncZoomChk->size());
+        const QRect zoomInWs(syncButton->mapTo(ws, QPoint(0, 0)), syncButton->size());
         CHECK(ws->contentsRect().contains(zoomInWs),
-              "sync-zoom checkbox is fully inside the Compare workspace, not clipped");
+              "sync control is fully inside the Compare workspace, not clipped");
     }
 
     CHECK(toolToolbar && toolToolbar->width() <= availableToolbarWidth &&
               toolToolbar->sizeHint().width() <= availableToolbarWidth,
           "compare tool toolbar fits the standard 1100px workspace width");
     QPushButton *fitWindowButton = ws->findChild<QPushButton *>(QStringLiteral("fitWindowButton"));
-    CHECK(fitWindowButton && fitWindowButton->isVisible() && toolToolbar &&
-              toolToolbar->isAncestorOf(fitWindowButton),
-          "fit-window button stays visible on the tool toolbar at 1100x750");
+    CHECK(fitWindowButton && fitWindowButton->isVisible() && viewToolbar &&
+              viewToolbar->isAncestorOf(fitWindowButton),
+          "fit-window button stays visible on the view toolbar at 1100x750");
     if (fitWindowButton)
     {
         const QRect fitInWs(fitWindowButton->mapTo(ws, QPoint(0, 0)), fitWindowButton->size());
@@ -2044,13 +2048,15 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     QSlider *overlayAlphaSlider = ws->findChild<QSlider *>(QStringLiteral("overlayAlphaSlider"));
     QSlider *checkerSizeSlider = ws->findChild<QSlider *>(QStringLiteral("checkerSizeSlider"));
     QSlider *diffThresholdEarly = ws->findChild<QSlider *>(QStringLiteral("diffThresholdSlider"));
-    // Contextual helpers stay in-layout (no setVisible jump); availability is enablement.
-    CHECK(overlayAlphaSlider && overlayAlphaSlider->isVisible() && !overlayAlphaSlider->isEnabled(),
-          "overlay opacity slider stays disabled until overlay mode is on");
-    CHECK(checkerSizeSlider && checkerSizeSlider->isVisible() && !checkerSizeSlider->isEnabled(),
-          "checker size slider stays disabled until checkerboard mode is on");
-    CHECK(diffThresholdEarly && diffThresholdEarly->isVisible() && !diffThresholdEarly->isEnabled(),
-          "diff threshold slider stays disabled until the diff overlay is on");
+    // Mode sliders stay hidden until that mode is on, then become visible and enabled.
+    CHECK(overlayAlphaSlider && !overlayAlphaSlider->isVisible() &&
+              !overlayAlphaSlider->isEnabled(),
+          "overlay opacity slider stays hidden until overlay mode is on");
+    CHECK(checkerSizeSlider && !checkerSizeSlider->isVisible() && !checkerSizeSlider->isEnabled(),
+          "checker size slider stays hidden until checkerboard mode is on");
+    CHECK(diffThresholdEarly && !diffThresholdEarly->isVisible() &&
+              !diffThresholdEarly->isEnabled(),
+          "diff threshold slider stays hidden until the diff overlay is on");
     if (overlay && overlayAlphaSlider)
     {
         overlay->setChecked(true);
@@ -2059,8 +2065,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "overlay opacity slider enables in overlay mode");
         overlay->setChecked(false);
         pump(20);
-        CHECK(overlayAlphaSlider->isVisible() && !overlayAlphaSlider->isEnabled(),
-              "overlay opacity slider disables when overlay is off");
+        CHECK(!overlayAlphaSlider->isVisible() && !overlayAlphaSlider->isEnabled(),
+              "overlay opacity slider hides when overlay is off");
     }
     QCheckBox *diffOverlayChk = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
     if (diffOverlayChk && diffThresholdEarly)
@@ -2071,8 +2077,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "diff threshold slider enables with the overlay");
         diffOverlayChk->setChecked(false);
         pump(20);
-        CHECK(diffThresholdEarly->isVisible() && !diffThresholdEarly->isEnabled(),
-              "diff threshold slider disables with the overlay");
+        CHECK(!diffThresholdEarly->isVisible() && !diffThresholdEarly->isEnabled(),
+              "diff threshold slider hides with the overlay");
     }
     QCheckBox *inspectorToggle = ws->findChild<QCheckBox *>(QStringLiteral("analysisPanelToggle"));
     if (analyzeButton && inspectorToggle)
@@ -2113,11 +2119,18 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(swapButton && swapButton->isEnabled(), "swap A/B is enabled for two images");
     CHECK(exitButton && exitButton->isVisible() && exitButton->isEnabled(),
           "exit compare is visible on the status strip");
+    QToolButton *moreButton = ws->findChild<QToolButton *>(QStringLiteral("compareMoreButton"));
+    if (moreButton && moreButton->menu())
+        moreButton->menu()->popup(moreButton->mapToGlobal(QPoint(0, moreButton->height())));
+    pump(30);
     CHECK(autoAlignChk && autoAlignChk->isVisible(),
           "auto-align lives on the compare chrome, not only in Preferences");
     reportGuidance(autoAlignChk && autoAlignChk->toolTip().contains(QStringLiteral("整数像素")) &&
                        !autoAlignChk->toolTip().contains(QStringLiteral("亚像素")),
                    "auto-align tooltip", "describes an integer-pixel translation");
+    if (moreButton && moreButton->menu())
+        moreButton->menu()->close();
+    pump(10);
 
     // 闪烁（B）开 → 关。
     sendKey(ws, Qt::Key_B);
@@ -5376,6 +5389,389 @@ void workflow18_shell_copy_and_export_text()
     unknown.message = "mystery export status";
     CHECK(mviewer::ui::exportResultMessageZh(unknown) == QStringLiteral("mystery export status"),
           "unknown export messages pass through");
+}
+
+struct SavedFile
+{
+    QString path;
+    bool existed = false;
+    QByteArray bytes;
+};
+
+SavedFile snapshotFile(const QString &path)
+{
+    SavedFile saved;
+    saved.path = path;
+    QFile file(path);
+    if (file.open(QIODevice::ReadOnly))
+    {
+        saved.existed = true;
+        saved.bytes = file.readAll();
+    }
+    return saved;
+}
+
+void restoreFile(const SavedFile &saved)
+{
+    if (saved.path.isEmpty())
+        return;
+    if (!saved.existed)
+    {
+        QFile::remove(saved.path);
+        return;
+    }
+    QDir().mkpath(QFileInfo(saved.path).absolutePath());
+    QFile file(saved.path);
+    if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        file.write(saved.bytes);
+}
+
+void dismissVisibleMessageBoxes()
+{
+    const auto tops = QApplication::topLevelWidgets();
+    for (QWidget *top : tops)
+    {
+        if (!top)
+            continue;
+        if (auto *box = qobject_cast<QMessageBox *>(top))
+        {
+            if (box->isVisible())
+                box->done(QMessageBox::No);
+        }
+        const auto boxes = top->findChildren<QMessageBox *>();
+        for (QMessageBox *box : boxes)
+        {
+            if (box && box->isVisible())
+                box->done(QMessageBox::No);
+        }
+    }
+}
+
+CompareWorkspace *showCompare(QDialog &host, const QStringList &paths, int expectedCount)
+{
+    auto *layout = new QVBoxLayout(&host);
+    auto *ws = new CompareWorkspace(&host);
+    layout->addWidget(ws);
+    ws->setImages(paths);
+    host.resize(1280, 860);
+    host.show();
+    QElapsedTimer timer;
+    timer.start();
+    while (ws->comparedImageCount() != expectedCount && timer.elapsed() < 8000)
+        pump(25);
+    return ws;
+}
+
+void expectSyncMirror(QCheckBox *box, QAction *action, const char *name)
+{
+    const std::string exists = std::string(name) + " checkbox and sync action exist";
+    const std::string actionWay = std::string(name) + " sync action toggles the checkbox";
+    const std::string boxWay = std::string(name) + " checkbox toggles the sync action";
+    CHECK(box && action && action->isCheckable(), exists.c_str());
+    if (!box || !action)
+        return;
+    const bool wasEnabled = box->isEnabled();
+    box->setEnabled(true);
+    const bool original = box->isChecked();
+    action->setChecked(!original);
+    pump(10);
+    CHECK(box->isChecked() == !original && action->isChecked() == box->isChecked(),
+          actionWay.c_str());
+    box->setChecked(original);
+    pump(10);
+    CHECK(action->isChecked() == original && box->isChecked() == action->isChecked(),
+          boxWay.c_str());
+    box->setEnabled(wasEnabled);
+}
+
+void assertCompareControlsReachable(const QString &pathA, const QString &pathB)
+{
+    QDialog host;
+    CompareWorkspace *ws = showCompare(host, {pathA, pathB}, 2);
+    CHECK(ws && ws->comparedImageCount() == 2, "layout chrome compare loads two images");
+    if (!ws)
+        return;
+
+    const char *const names[] = {
+        "syncZoomCheck",
+        "syncDragCheck",
+        "syncRotateCheck",
+        "compareModeToolbar",
+        "compareViewToolbar",
+        "compareToolToolbar",
+        "compareNavTail",
+        "blinkCompareToggle",
+        "diffThresholdCaption",
+        "diffThresholdSlider",
+        "diffThresholdValueLabel",
+        "diffAutoThresholdButton",
+        "diffOverlayToggle",
+        "diffHighlightToggle",
+        "diffGainCaption",
+        "diffGainCombo",
+        "pixelLinkToggle",
+        "compareColumnsCaption",
+        "compareColumnsSpin",
+        "compareGridStatus",
+        "analysisPanelToggle",
+        "compareFrameSpin",
+        "paneHistogramOverlayToggle",
+        "compareFilenameOverlayToggle",
+        "compareChannelCombo",
+        "compareSwapPanesButton",
+        "temporaryCompareButton",
+        "analyzeCompareButton",
+        "exportCompareReportButton",
+        "fitWindowButton",
+        "compareStatusStrip",
+        "diffMetricsLabel",
+        "autoAlignBeforeDiffToggle",
+        "compareStatusLabel",
+        "exitCompareButton",
+        "compareSnapshotButton",
+        "compareSnapshotCopyAction",
+        "compareSnapshotSaveAction",
+        "overlayAlphaSlider",
+        "checkerSizeSlider",
+        "brightnessSlider",
+        "resetAdjustmentsButton",
+        "rotateCCWButton",
+        "rotateCWButton",
+        "syncRotatePanelCheck",
+        "flipHButton",
+        "flipVButton",
+        "previewOnlyHint",
+        "compareSyncButton",
+        "compareAdjustButton",
+        "compareMoreButton",
+        "syncZoomAction",
+        "syncDragAction",
+        "syncRotateAction",
+        "syncCrosshairAction",
+        "pixelLinkAction",
+        "uniformScaleAction",
+    };
+    for (const char *name : names)
+    {
+        const std::string msg = std::string("compare control still exists: ") + name;
+        CHECK(ws->findChild<QObject *>(QLatin1String(name)) != nullptr, msg.c_str());
+    }
+    CHECK(findChk(ws, QStringLiteral("闪烁对比")) && findChk(ws, QStringLiteral("左右分割")) &&
+              findChk(ws, QStringLiteral("滑动对比")) && findChk(ws, QStringLiteral("叠加对比")) &&
+              findChk(ws, QStringLiteral("棋盘")) && findChk(ws, QStringLiteral("同步准星")) &&
+              findChk(ws, QStringLiteral("统一像素倍率")),
+          "compare mode and sync labels stay reachable");
+
+    auto *zoomBox = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck"));
+    auto *dragBox = ws->findChild<QCheckBox *>(QStringLiteral("syncDragCheck"));
+    auto *rotateBox = ws->findChild<QCheckBox *>(QStringLiteral("syncRotateCheck"));
+    auto *crossBox = findChk(ws, QStringLiteral("同步准星"));
+    auto *linkBox = ws->findChild<QCheckBox *>(QStringLiteral("pixelLinkToggle"));
+    auto *uniformBox = findChk(ws, QStringLiteral("统一像素倍率"));
+    const bool zoomWas = zoomBox && zoomBox->isChecked();
+    const bool dragWas = dragBox && dragBox->isChecked();
+    expectSyncMirror(zoomBox, ws->findChild<QAction *>(QStringLiteral("syncZoomAction")),
+                     "sync zoom");
+    expectSyncMirror(dragBox, ws->findChild<QAction *>(QStringLiteral("syncDragAction")),
+                     "sync drag");
+    expectSyncMirror(rotateBox, ws->findChild<QAction *>(QStringLiteral("syncRotateAction")),
+                     "sync rotate");
+    expectSyncMirror(crossBox, ws->findChild<QAction *>(QStringLiteral("syncCrosshairAction")),
+                     "sync crosshair");
+    expectSyncMirror(linkBox, ws->findChild<QAction *>(QStringLiteral("pixelLinkAction")),
+                     "pixel link");
+    expectSyncMirror(uniformBox, ws->findChild<QAction *>(QStringLiteral("uniformScaleAction")),
+                     "uniform scale");
+    if (zoomBox && dragBox)
+    {
+        zoomBox->setChecked(false);
+        dragBox->setChecked(false);
+        pump(10);
+        CHECK(!ws->isSyncEnabled(), "sync is off when zoom and drag are both unchecked");
+        if (QAction *zoomAction = ws->findChild<QAction *>(QStringLiteral("syncZoomAction")))
+            zoomAction->setChecked(true);
+        pump(10);
+        CHECK(zoomBox->isChecked() && ws->isSyncEnabled(),
+              "sync zoom action turns compare sync back on");
+        zoomBox->setChecked(zoomWas);
+        dragBox->setChecked(dragWas);
+        pump(10);
+    }
+
+    auto *more = ws->findChild<QToolButton *>(QStringLiteral("compareMoreButton"));
+    auto *adjust = ws->findChild<QToolButton *>(QStringLiteral("compareAdjustButton"));
+    if (more && more->menu())
+        more->menu()->popup(more->mapToGlobal(QPoint(0, more->height())));
+    pump(40);
+    auto *align = ws->findChild<QCheckBox *>(QStringLiteral("autoAlignBeforeDiffToggle"));
+    auto *swap = ws->findChild<QPushButton *>(QStringLiteral("compareSwapPanesButton"));
+    CHECK(align && align->isVisible() && swap && swap->isVisible(),
+          "align and swap are reachable from the more menu");
+    if (more && more->menu())
+        more->menu()->close();
+    pump(10);
+    if (adjust && adjust->menu())
+        adjust->menu()->popup(adjust->mapToGlobal(QPoint(0, adjust->height())));
+    pump(40);
+    auto *brightness = ws->findChild<QSlider *>(QStringLiteral("brightnessSlider"));
+    CHECK(brightness && brightness->isVisible(),
+          "brightness slider is reachable from the adjust menu");
+    if (adjust && adjust->menu())
+        adjust->menu()->close();
+    pump(10);
+
+    auto *exitButton = ws->findChild<QPushButton *>(QStringLiteral("exitCompareButton"));
+    auto *navTail = ws->findChild<QWidget *>(QStringLiteral("compareNavTail"));
+    CHECK(exitButton && exitButton->isVisible() && exitButton->isEnabled() &&
+              exitButton->property("primary").toBool() && navTail &&
+              navTail->isAncestorOf(exitButton),
+          "exit compare stays the visible primary control on the nav tail");
+}
+
+void assertPaneHeadersDoNotOverlap(const QString &pathA, const QString &pathB, const QString &pathC)
+{
+    QDialog host;
+    CompareWorkspace *ws = showCompare(host, {pathA, pathB, pathC}, 3);
+    CHECK(ws && ws->comparedImageCount() == 3, "pane header fixture loads three images");
+    if (!ws || ws->comparedImageCount() != 3)
+        return;
+    for (int i = 0; i < 3; ++i)
+    {
+        const QString paneName = QStringLiteral("comparePane%1").arg(i);
+        QWidget *pane = ws->findChild<QWidget *>(paneName);
+        QLabel *badge =
+            pane ? pane->findChild<QLabel *>(QStringLiteral("paneIndexBadge")) : nullptr;
+        QLabel *name = pane ? pane->findChild<QLabel *>(QStringLiteral("paneHeaderName")) : nullptr;
+        RawImageView *view = pane ? pane->findChild<RawImageView *>() : nullptr;
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 2000 &&
+               !(badge && badge->isVisible() && badge->width() > 0 && name && name->isVisible() &&
+                 name->width() > 8 && view && !view->filenameOverlayText().isEmpty()))
+        {
+            pump(25);
+            pane = ws->findChild<QWidget *>(paneName);
+            badge = pane ? pane->findChild<QLabel *>(QStringLiteral("paneIndexBadge")) : nullptr;
+            name = pane ? pane->findChild<QLabel *>(QStringLiteral("paneHeaderName")) : nullptr;
+            view = pane ? pane->findChild<RawImageView *>() : nullptr;
+        }
+        const std::string chip =
+            "pane " + std::to_string(i) + " index chip sits beside the file name";
+        CHECK(badge && name && view && badge->isVisible() && name->isVisible() &&
+                  badge->width() > 0 && name->width() > 8,
+              chip.c_str());
+        if (!badge || !name || !view)
+            continue;
+        const QRect badgeRect(badge->mapToGlobal(QPoint(0, 0)), badge->size());
+        const QRect nameRect(name->mapToGlobal(QPoint(0, 0)), name->size());
+        CHECK(nameRect.left() >= badgeRect.right() && !badgeRect.intersects(nameRect),
+              chip.c_str());
+        CHECK(badge->text() == QString::number(i + 1), chip.c_str());
+        CHECK(!view->filenameOverlayText().isEmpty() &&
+                  !view->filenameOverlayText().contains(QChar(0x2026)) &&
+                  name->text() == view->filenameOverlayText() &&
+                  name->toolTip().contains(view->filenameOverlayText()),
+              chip.c_str());
+    }
+}
+
+void assertNavigationCollapseRoundTrip()
+{
+    QHash<QString, QVariant> savedSettings;
+    {
+        QSettings settings;
+        const QStringList keys = settings.allKeys();
+        for (const QString &key : keys)
+            savedSettings.insert(key, settings.value(key));
+    }
+    const SavedFile savedSession = snapshotFile(mviewer::runtime::filePath(
+        QStandardPaths::AppConfigLocation, QStringLiteral("mviewer.json")));
+    const SavedFile savedRecent = snapshotFile(appConfigFile(QStringLiteral("recent.json")));
+    const SavedFile savedRecovery = snapshotFile(appConfigFile(QStringLiteral("recovery.json")));
+    const SavedFile savedAnalysis = snapshotFile(mviewer::runtime::filePath(
+        QStandardPaths::AppDataLocation, QStringLiteral("analysis_history.json")));
+
+    QSettings().setValue(QStringLiteral("navigationPanelCollapsed"), false);
+    QSettings().sync();
+
+    auto pumpWindow = [](MainWindow &window)
+    {
+        window.resize(1280, 800);
+        window.show();
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 400)
+        {
+            dismissVisibleMessageBoxes();
+            pump(20);
+        }
+    };
+
+    {
+        MainWindow window;
+        pumpWindow(window);
+        auto *nav = window.findChild<QWidget *>(QStringLiteral("navigationPanel"));
+        auto *action = window.findChild<QAction *>(QStringLiteral("toggleNavigationPanelAction"));
+        CHECK(nav && nav->isVisible() && action && action->isChecked(),
+              "side panel starts expanded when settings say so");
+        if (action)
+            action->setChecked(false);
+        pump(20);
+        CHECK(nav && !nav->isVisible() && action && !action->isChecked(),
+              "side panel toggle hides the folder column");
+        CHECK(QSettings().value(QStringLiteral("navigationPanelCollapsed"), false).toBool(),
+              "collapsing the side panel writes navigationPanelCollapsed");
+        window.close();
+        pump(40);
+        dismissVisibleMessageBoxes();
+    }
+    {
+        MainWindow window;
+        pumpWindow(window);
+        auto *nav = window.findChild<QWidget *>(QStringLiteral("navigationPanel"));
+        auto *action = window.findChild<QAction *>(QStringLiteral("toggleNavigationPanelAction"));
+        CHECK(nav && !nav->isVisible() && action && !action->isChecked(),
+              "a new window restores the collapsed side panel from settings");
+        if (action)
+            action->setChecked(true);
+        pump(20);
+        CHECK(nav && nav->isVisible() && action && action->isChecked(),
+              "side panel toggle shows the folder column again");
+        CHECK(!QSettings().value(QStringLiteral("navigationPanelCollapsed"), true).toBool(),
+              "expanding the side panel clears navigationPanelCollapsed");
+        window.close();
+        pump(40);
+        dismissVisibleMessageBoxes();
+    }
+    {
+        MainWindow window;
+        pumpWindow(window);
+        auto *nav = window.findChild<QWidget *>(QStringLiteral("navigationPanel"));
+        CHECK(nav && nav->isVisible(), "side panel stays expanded across the next launch");
+        window.close();
+        pump(40);
+        dismissVisibleMessageBoxes();
+    }
+
+    {
+        QSettings settings;
+        settings.clear();
+        for (auto it = savedSettings.cbegin(); it != savedSettings.cend(); ++it)
+            settings.setValue(it.key(), it.value());
+        settings.sync();
+    }
+    restoreFile(savedSession);
+    restoreFile(savedRecent);
+    restoreFile(savedRecovery);
+    restoreFile(savedAnalysis);
+}
+
+void workflow19_layout_chrome(const QString &pathA, const QString &pathB, const QString &pathC)
+{
+    std::cout << "── Workflow 19: layout chrome ──\n";
+    assertCompareControlsReachable(pathA, pathB);
+    assertPaneHeadersDoNotOverlap(pathA, pathB, pathC);
+    assertNavigationCollapseRoundTrip();
 }
 
 } // namespace

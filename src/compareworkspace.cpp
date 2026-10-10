@@ -72,6 +72,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     updateActionAvailability();
     updateROIAvailabilityStatus();
     syncContextualCompareControls();
+    regroupCompareChrome();
 }
 
 void CompareWorkspace::applyCompareSafeInsets()

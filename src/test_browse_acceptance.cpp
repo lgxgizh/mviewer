@@ -267,13 +267,13 @@ void testCompareSelectionAffordance(const QString &dirPath)
 
     panel.selectPath(paths[0]);
     CHECK(button->isVisible() && !button->isEnabled() &&
-              button->text() == QStringLiteral("比较选中 (1)") &&
+              button->text() == QStringLiteral("比较 (P)") &&
               button->toolTip() == QStringLiteral("需要选择 2-8 张图片才能比较（当前 1 张）"),
           "Compare selection affordance: one selection is visible with disabled guidance");
 
     panel.selectPaths({paths[0], paths[2]}, paths[0]);
     CHECK(button->isVisible() && button->isEnabled() &&
-              button->text() == QStringLiteral("比较选中 (2)") &&
+              button->text() == QStringLiteral("比较 (P)") &&
               button->toolTip() == QStringLiteral("将选中的 2 张图片送入对比"),
           "Compare selection affordance: two selections enable the exact Compare action");
     CHECK(nativeToolTipShows(QStringLiteral("将选中的 2 张图片送入对比")),
@@ -294,7 +294,7 @@ void testCompareSelectionAffordance(const QString &dirPath)
 
     panel.selectPaths(paths, paths.first());
     CHECK(button->isVisible() && !button->isEnabled() &&
-              button->text() == QStringLiteral("比较选中 (9)") &&
+              button->text() == QStringLiteral("比较 (P)") &&
               button->toolTip() == QStringLiteral("需要选择 2-8 张图片才能比较（当前 9 张）"),
           "Compare selection affordance: nine selections remain visible but disabled");
     CHECK(nativeToolTipShows(QStringLiteral("需要选择 2-8 张图片才能比较（当前 9 张）")),

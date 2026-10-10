@@ -276,8 +276,7 @@ void CompareWorkspace::refreshAllDiffOverlays()
             view->setOverlay(QImage(), 0.0);
             view->setMetricBadge(QString());
         }
-        if (m_metricLabel)
-            m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
+        presentDiffMetrics(tr("PSNR: —  SSIM: —"));
         update();
         return;
     }
@@ -399,7 +398,7 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
                                 .arg(r.roiStats.maxDiff);
             }
         }
-        m_metricLabel->setText(text);
+        presentDiffMetrics(text);
     }
     update();
 }

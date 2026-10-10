@@ -198,6 +198,10 @@ class CompareWorkspace : public QWidget
     void buildSyncControls();
     QWidget *buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
                                    QHBoxLayout *&toolLayout, QHBoxLayout *&toolActionsLayout);
+    void regroupCompareChrome();
+    void installCompareMenus(QWidget *viewBar, QWidget *toolBar, QWidget *&syncButton,
+                             QWidget *&adjustButton, QWidget *&moreButton);
+    void presentDiffMetrics(const QString &text);
     void buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *viewLayout);
     void buildOverlayControls(QHBoxLayout *modeLayout);
     void buildDiffControls(QHBoxLayout *toolLayout);
