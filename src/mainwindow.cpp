@@ -181,8 +181,13 @@ void MainWindow::restoreNavigationSettings(const QSettings &settings)
     if (m_leftSplitter && settings.contains("leftSplitterState"))
         m_leftSplitter->restoreState(settings.value("leftSplitterState").toByteArray());
     if (m_thumbnailPanel && settings.contains("thumbViewMode"))
-        m_thumbnailPanel->setViewMode(
-            static_cast<ThumbnailPanel::ViewMode>(settings.value("thumbViewMode").toInt()));
+    {
+        const int viewMode = settings.value("thumbViewMode").toInt();
+        const bool known =
+            viewMode >= ThumbnailPanel::Thumbnail && viewMode <= ThumbnailPanel::List;
+        m_thumbnailPanel->setViewMode(known ? static_cast<ThumbnailPanel::ViewMode>(viewMode)
+                                            : ThumbnailPanel::Thumbnail);
+    }
     if (m_sortCombo && settings.contains("thumbSortMode"))
     {
         const int sortMode = settings.value("thumbSortMode").toInt();

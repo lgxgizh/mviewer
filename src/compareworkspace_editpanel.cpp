@@ -605,11 +605,15 @@ void CompareWorkspace::restorePresetAdjustments(const QJsonObject &root)
     {
         const QJsonObject ao = adjArray.at(i).toObject();
         CellAdjust &cell = m_cellAdjusts[static_cast<size_t>(i)];
-        cell.brightness = ao[QStringLiteral("brightness")].toInt();
-        cell.contrast = static_cast<float>(ao[QStringLiteral("contrast")].toDouble(1.0));
-        cell.gamma = static_cast<float>(ao[QStringLiteral("gamma")].toDouble(1.0));
-        cell.rGain = static_cast<float>(ao[QStringLiteral("rGain")].toDouble(1.0));
-        cell.bGain = static_cast<float>(ao[QStringLiteral("bGain")].toDouble(1.0));
+        cell.brightness = mviewer::cw::clampBrightness(ao[QStringLiteral("brightness")].toInt());
+        cell.contrast = mviewer::cw::clampContrast(
+            static_cast<float>(ao[QStringLiteral("contrast")].toDouble(1.0)));
+        cell.gamma =
+            mviewer::cw::clampGamma(static_cast<float>(ao[QStringLiteral("gamma")].toDouble(1.0)));
+        cell.rGain =
+            mviewer::cw::clampGain(static_cast<float>(ao[QStringLiteral("rGain")].toDouble(1.0)));
+        cell.bGain =
+            mviewer::cw::clampGain(static_cast<float>(ao[QStringLiteral("bGain")].toDouble(1.0)));
         cell.rotation = mviewer::cw::clampRotation(ao[QStringLiteral("rotation")].toInt());
         cell.flipH = ao[QStringLiteral("flipH")].toBool();
         cell.flipV = ao[QStringLiteral("flipV")].toBool();
@@ -643,7 +647,8 @@ void CompareWorkspace::restorePresetSession(const QJsonObject &root)
                                 ? mviewer::domain::SyncMode::All
                                 : mviewer::domain::SyncMode::Off;
     }
-    restored.sharedScale = session[QStringLiteral("sharedScale")].toDouble(1.0);
+    restored.sharedScale =
+        mviewer::cw::clampSharedScale(session[QStringLiteral("sharedScale")].toDouble(1.0));
     restored.sharedOffsetX = session[QStringLiteral("sharedOffsetX")].toDouble(0.0);
     restored.sharedOffsetY = session[QStringLiteral("sharedOffsetY")].toDouble(0.0);
     restored.blinkIndex = session[QStringLiteral("blinkIndex")].toInt(-1);
