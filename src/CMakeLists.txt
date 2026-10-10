@@ -232,6 +232,7 @@ add_library(mviewer_ui STATIC
     analysispanel_history.cpp
     exportdialog.cpp
     exportmessages.cpp
+    fileopmessages.cpp
     exportcommand.cpp
     metadatapanel.cpp
     metadatamodel.cpp

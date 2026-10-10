@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 
 namespace mviewer::cw
@@ -68,6 +69,56 @@ inline PresetCrop clampCrop(int x, int y, int w, int h)
     crop.w = nonNegative(w);
     crop.h = nonNegative(h);
     return crop;
+}
+
+// Brightness slider [-255, 255].
+inline int clampBrightness(int value)
+{
+    if (value < -255)
+        return -255;
+    if (value > 255)
+        return 255;
+    return value;
+}
+
+// Contrast [0, 3], gamma [0.05, 8], WB gain [0.01, 5] (slider 1..500 / 100).
+// A non-finite value falls back to the identity the slider uses.
+inline float clampAdjustFloat(float value, float identity, float low, float high)
+{
+    if (!std::isfinite(value))
+        return identity;
+    if (value < low)
+        return low;
+    if (value > high)
+        return high;
+    return value;
+}
+
+inline float clampContrast(float value)
+{
+    return clampAdjustFloat(value, 1.0f, 0.0f, 3.0f);
+}
+
+inline float clampGamma(float value)
+{
+    return clampAdjustFloat(value, 1.0f, 0.05f, 8.0f);
+}
+
+inline float clampGain(float value)
+{
+    return clampAdjustFloat(value, 1.0f, 0.01f, 5.0f);
+}
+
+// Upper bound matches ImageViewer restored scale. The floor is the preset bound.
+inline double clampSharedScale(double value)
+{
+    if (!std::isfinite(value))
+        return 1.0;
+    if (value < 0.01)
+        return 0.01;
+    if (value > 50.0)
+        return 50.0;
+    return value;
 }
 
 } // namespace mviewer::cw
