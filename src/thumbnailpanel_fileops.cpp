@@ -1,6 +1,7 @@
 // ThumbnailPanel file operations: rename, trash, copy/move, batch export, context menu (M20 P0#3).
 #include "thumbnailpanel_p.h"
 
+#include "fileopmessages.h"
 #include "runtime_storage.h"
 
 #include <QDesktopServices>
@@ -202,7 +203,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
 
                     if (!state->succeeded)
                     {
-                        const QString detail = QString::fromUtf8(error.c_str());
+                        const QString detail = mviewer::ui::fileOpErrorZh(error);
                         QMessageBox::warning(panel, label,
                                              state->cancelled
                                                  ? label + QStringLiteral("已取消。\n") + detail
@@ -267,7 +268,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                 if (destination.empty())
                 {
                     state->failures.append(path + ": " +
-                                           QString::fromUtf8(destinationError.c_str()));
+                                           mviewer::ui::fileOpErrorZh(destinationError));
                     continue;
                 }
 
@@ -287,7 +288,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                     ++state->copied;
                 else
                 {
-                    state->failures.append(path + ": " + QString::fromUtf8(result.error.c_str()));
+                    state->failures.append(path + ": " + mviewer::ui::fileOpErrorZh(result.error));
                     if (ctx.isCancelled())
                     {
                         state->cancelled = true;
@@ -388,7 +389,7 @@ void ThumbnailPanel::renameSelected()
         if (!m_cmdStack->execute(std::move(cmd)))
         {
             QMessageBox::warning(this, "重命名失败",
-                                 QString::fromStdString(m_cmdStack->lastError()));
+                                 mviewer::ui::fileOpErrorZh(m_cmdStack->lastError()));
             return;
         }
     }
@@ -400,7 +401,7 @@ void ThumbnailPanel::renameSelected()
         if (!cmd->lastError().empty())
         {
             QMessageBox::warning(this, tr("重命名失败"),
-                                 QString::fromUtf8(cmd->lastError().c_str()));
+                                 mviewer::ui::fileOpErrorZh(cmd->lastError()));
             return;
         }
     }
