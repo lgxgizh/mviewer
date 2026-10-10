@@ -1,6 +1,7 @@
 // CompareWorkspace control construction split from the lifecycle constructor.
 #include "compareworkspace_p.h"
 
+#include "Theme.h"
 #include "compareworkspace_caption.h"
 #include "compareworkspace_shortcuts.h"
 #include "core/image/ImageFrame.h"
@@ -369,7 +370,9 @@ void CompareWorkspace::buildPixelLinkControls(QHBoxLayout *toolLayout)
     toolLayout->addWidget(m_clearLinksBtn);
     m_linkInfoLabel = new QLabel(tr("标记: 0"), this);
     m_linkInfoLabel->setMinimumWidth(48);
-    m_linkInfoLabel->setStyleSheet("color:#aaa;");
+    m_linkInfoLabel->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     toolLayout->addWidget(m_linkInfoLabel);
 }
 
@@ -647,7 +650,9 @@ QWidget *CompareWorkspace::buildStatusStrip()
     auto *strip = new QWidget(this);
     strip->setObjectName("compareStatusStrip");
     strip->setStyleSheet(
-        "QWidget#compareStatusStrip{background:#141416; border-top:1px solid #27272a;}");
+        QStringLiteral("QWidget#compareStatusStrip{background:%1; border-top:1px solid %2;}")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border)));
     auto *lay = new QHBoxLayout(strip);
     lay->setContentsMargins(8, 2, 8, 2);
     lay->setSpacing(8);
@@ -658,13 +663,17 @@ QWidget *CompareWorkspace::buildStatusStrip()
     m_metricLabel->setWordWrap(true);
     m_metricLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
     m_metricLabel->setStyleSheet(
-        "color:#38bdf8; font-family:monospace; font-weight:700; padding:2px 8px; "
-        "background:#18181b; border:1px solid #27272a; border-radius:4px;");
+        QStringLiteral("color:#38bdf8; font-family:monospace; font-weight:700; padding:2px 8px; "
+                       "background:%1; border:1px solid %2; border-radius:4px;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border)));
     lay->addWidget(m_metricLabel, 0);
 
     m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
-    m_autoAlignChk->setStyleSheet("color:#e4e4e7;");
+    m_autoAlignChk->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     m_autoAlignChk->setToolTip(tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
     m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
@@ -677,7 +686,9 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
     m_compareStatusLabel = new QLabel(strip);
     m_compareStatusLabel->setObjectName("compareStatusLabel");
-    m_compareStatusLabel->setStyleSheet("color:#a1a1aa;");
+    m_compareStatusLabel->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     lay->addWidget(m_compareStatusLabel, 1);
 
     m_exitBtn = new QPushButton(mviewer::cw::compareShortcutText("Esc"), strip);

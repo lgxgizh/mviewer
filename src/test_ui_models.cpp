@@ -1,4 +1,5 @@
 #include "Theme.h"
+#include "ThemeIcons.h"
 #include "analyzermodel.h"
 #include "breadcrumbbar.h"
 #include "directorymodel.h"
@@ -8,6 +9,8 @@
 
 #include <QApplication>
 #include <QDebug>
+#include <QImage>
+#include <QSettings>
 #include <QStringList>
 #include <cstdio>
 #include <memory>
@@ -168,19 +171,80 @@ int main(int argc, char **argv)
 
     // ---- Theme ----
     {
+        {
+            QSettings settings;
+            settings.remove(QStringLiteral("uiTheme"));
+            settings.sync();
+        }
         mviewer::ui::Theme::initTheme();
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
               "Default theme is Dark");
+        QString darkSheet = qApp->styleSheet();
+        CHECK(!darkSheet.isEmpty(), "dark application stylesheet is set");
+        CHECK(darkSheet.contains(QStringLiteral("#4c8dff")), "dark stylesheet contains the accent");
+        CHECK(darkSheet.contains(QStringLiteral("#1e1e1e")),
+              "dark stylesheet uses the dark background");
+        CHECK(!darkSheet.contains(QStringLiteral("{{")),
+              "dark stylesheet has no unresolved placeholders");
+
+        mviewer::ui::ThemeTokens darkTokens =
+            mviewer::ui::Theme::tokensFor(mviewer::ui::ThemeMode::Dark, false);
+        mviewer::ui::ThemeTokens systemDark =
+            mviewer::ui::Theme::tokensFor(mviewer::ui::ThemeMode::System, true);
+        mviewer::ui::ThemeTokens systemLight =
+            mviewer::ui::Theme::tokensFor(mviewer::ui::ThemeMode::System, false);
+        CHECK(darkTokens.bg0 == QStringLiteral("#1e1e1e"), "dark background token");
+        CHECK(systemDark.bg0 == darkTokens.bg0, "System on a dark desktop uses dark tokens");
+        CHECK(systemLight.bg0 != darkTokens.bg0, "System on a light desktop swaps tokens");
+        CHECK(systemLight.accent == QStringLiteral("#4c8dff"), "light tokens keep the accent");
+        QString lightSheet = mviewer::ui::Theme::buildStyleSheet(systemLight);
+        CHECK(!lightSheet.isEmpty() && !lightSheet.contains(QStringLiteral("{{")),
+              "light stylesheet has no unresolved placeholders");
+        CHECK(lightSheet.contains(QStringLiteral("#4c8dff")),
+              "light stylesheet contains the accent");
+
         mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::System);
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::System,
               "Theme switched to System");
-        mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::Dark);
-        CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
-              "Theme switched back to Dark");
+        QString systemSheet = qApp->styleSheet();
+        mviewer::ui::ThemeTokens resolved = mviewer::ui::Theme::tokensFor(
+            mviewer::ui::ThemeMode::System, mviewer::ui::Theme::systemPrefersDark());
+        CHECK(!systemSheet.isEmpty(), "system application stylesheet is set");
+        CHECK(!systemSheet.contains(QStringLiteral("{{")),
+              "system stylesheet has no unresolved placeholders");
+        CHECK(systemSheet.contains(QStringLiteral("#4c8dff")),
+              "system stylesheet contains the accent");
+        CHECK(systemSheet.contains(resolved.bg0), "system stylesheet follows the desktop scheme");
         CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::Dark).isEmpty(),
               "ThemeModeName not empty for Dark");
         CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::System).isEmpty(),
               "ThemeModeName not empty for System");
+
+        CHECK(mviewer::ui::toolbarIconIds().size() == 12, "toolbar icon catalog has 12 ids");
+        for (const QString &id : mviewer::ui::toolbarIconIds())
+        {
+            QByteArray bytes = id.toUtf8();
+            QPixmap pixmap = mviewer::ui::toolbarIconPixmap(bytes.constData());
+            QImage image = pixmap.toImage();
+            int ink = 0;
+            for (int y = 0; y < image.height(); ++y)
+            {
+                for (int x = 0; x < image.width(); ++x)
+                {
+                    if (qAlpha(image.pixel(x, y)) > 0)
+                        ++ink;
+                }
+            }
+            if (pixmap.isNull() || ink == 0)
+                std::printf("FAIL icon: %s ink=%d\n", bytes.constData(), ink);
+            CHECK(!pixmap.isNull() && ink > 0, "toolbar icon pixmap is visible");
+        }
+        CHECK(mviewer::ui::toolbarIcon("missing-toolbar-icon").isNull(),
+              "unknown toolbar icon id is empty");
+
+        mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::Dark);
+        CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
+              "Theme switched back to Dark");
     }
 
     // ---- BreadcrumbBar ----

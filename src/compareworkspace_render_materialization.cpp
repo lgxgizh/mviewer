@@ -1,6 +1,8 @@
 #include "compareworkspace_display_pyramid.h"
 #include "compareworkspace_p.h"
 
+#include "Theme.h"
+
 #include "core/analysis/PixelInspector.h"
 #include "core/image/DisplayMip.h"
 #include "core/image/SourceImage.h"
@@ -105,7 +107,10 @@ ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const Imag
     capFont.setPointSize(12);
     capFont.setBold(true);
     caption->setFont(capFont);
-    caption->setStyleSheet("QLabel{background:#222;color:#ffffff;padding:4px 8px;}");
+    caption->setStyleSheet(
+        QStringLiteral("QLabel{background:%1;color:%2;padding:4px 8px;}")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1),
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     caption->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     caption->setMinimumWidth(0);
     caption->setMinimumHeight(28);

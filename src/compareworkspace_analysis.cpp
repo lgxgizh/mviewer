@@ -3,6 +3,7 @@
 // Split out per ADR 014 (keep compareworkspace.cpp under the line budget).
 #include "compareworkspace_p.h"
 
+#include "Theme.h"
 #include "core/analysis/PixelInspector.h"
 
 #include <cmath>
@@ -168,7 +169,9 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     inspHeader->addWidget(new QLabel(tr("像素检视"), this));
     m_coordLabel = new QLabel(QStringLiteral("(—, —)"), this);
     m_coordLabel->setObjectName("pixelInspectorCoordLabel");
-    m_coordLabel->setStyleSheet("color:#888;");
+    m_coordLabel->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     inspHeader->addWidget(m_coordLabel);
     inspHeader->addStretch(1);
 
@@ -219,7 +222,9 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_statsLabel = new QLabel(tr("邻域统计: —"), this);
     m_statsLabel->setObjectName("pixelInspectorStatsLabel");
     m_statsLabel->setWordWrap(true);
-    m_statsLabel->setStyleSheet("color:#888;");
+    m_statsLabel->setStyleSheet(
+        QStringLiteral("color:%1;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     sideLay->addWidget(m_statsLabel);
 
     buildHistogramPanel(sideLay);

@@ -1,3 +1,4 @@
+#include "Theme.h"
 #include "analysispanel.h"
 #include "analyzermodel.h"
 #include "core/analysis/AnalysisEngine.h"
@@ -19,6 +20,17 @@
 #include <QVBoxLayout>
 
 #include <cmath>
+
+namespace
+{
+QString analysisReadoutStyle(bool monospace)
+{
+    QString extra = monospace ? QStringLiteral("font-family:monospace;") : QString();
+    return QStringLiteral("QLabel{background:%1;color:%2;padding:8px;%3}")
+        .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
+             mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary), extra);
+}
+} // namespace
 
 void AnalysisPanel::buildUi()
 {
@@ -103,7 +115,7 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     m_statsLabel->setObjectName(QStringLiteral("analysisStatsLabel"));
     m_statsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_statsLabel->setWordWrap(true);
-    m_statsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_statsLabel->setStyleSheet(analysisReadoutStyle(false));
     auto *histogramPage = new QWidget;
     auto *histogramLayout = new QVBoxLayout(histogramPage);
     histogramLayout->setContentsMargins(0, 0, 0, 0);
@@ -118,7 +130,7 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     m_rgbStatsLabel = new QLabel;
     m_rgbStatsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_rgbStatsLabel->setWordWrap(true);
-    m_rgbStatsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_rgbStatsLabel->setStyleSheet(analysisReadoutStyle(false));
     auto *rgbPage = new QWidget;
     auto *rgbLayout = new QVBoxLayout(rgbPage);
     rgbLayout->setContentsMargins(0, 0, 0, 0);
@@ -130,22 +142,22 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     m_exposureLabel = new QLabel;
     m_exposureLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_exposureLabel->setWordWrap(true);
-    m_exposureLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_exposureLabel->setStyleSheet(analysisReadoutStyle(false));
     m_tabs->addTab(m_exposureLabel, tr("曝光"));
     m_focusLabel = new QLabel;
     m_focusLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_focusLabel->setWordWrap(true);
-    m_focusLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_focusLabel->setStyleSheet(analysisReadoutStyle(false));
     m_tabs->addTab(m_focusLabel, tr("对焦"));
     m_metaLabel = new QLabel;
     m_metaLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_metaLabel->setWordWrap(true);
-    m_metaLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_metaLabel->setStyleSheet(analysisReadoutStyle(false));
     m_tabs->addTab(m_metaLabel, tr("元数据"));
     m_compareLabel = new QLabel;
     m_compareLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_compareLabel->setWordWrap(true);
-    m_compareLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_compareLabel->setStyleSheet(analysisReadoutStyle(false));
     m_tabs->addTab(m_compareLabel, tr("对比"));
     m_diffPreview = new QLabel;
     m_diffPreview->setMinimumHeight(kPreviewSize);
@@ -155,7 +167,7 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     m_pluginResult = new QLabel;
     m_pluginResult->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_pluginResult->setWordWrap(true);
-    m_pluginResult->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_pluginResult->setStyleSheet(analysisReadoutStyle(false));
     m_tabs->addTab(m_pluginResult, tr("插件"));
 }
 
@@ -195,8 +207,7 @@ void AnalysisPanel::buildInspectorTab()
     m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_inspectorLabel->setWordWrap(true);
     m_inspectorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_inspectorLabel->setStyleSheet(
-        "QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
+    m_inspectorLabel->setStyleSheet(analysisReadoutStyle(true));
     m_inspectorLabel->setText(tr("将鼠标移到图像上检视像素。"));
     layout->addWidget(m_inspectorLabel, 1);
     buildInspectorActions(*layout);

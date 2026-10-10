@@ -333,6 +333,13 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a pull request. See
 [CHANGELOG.md](CHANGELOG.md) for the release history.
 
+## Third-party
+
+Toolbar outline icons are adapted from [Lucide](https://lucide.dev) (ISC License).
+The license text is in [resources/icons/LICENSE-lucide](resources/icons/LICENSE-lucide).
+SVG files under `resources/icons/` are the source artwork. The application tints
+the matching pre-rendered PNG masks at runtime.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
