@@ -671,30 +671,24 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(sel->currentImage() == paths[0],
           "launch open keeps SelectionModel.currentImage synchronized");
 
-    // Browse open is fullscreen-requested. The first Esc leaves the Viewer
-    // visible and clears that request; the second Esc closes it. Return in
-    // the path field is checked only after that close, so it must navigate
-    // without quick-previewing the image that was just dismissed.
+    // Browse open is fullscreen. One Esc returns to Browse and drops that
+    // request. Return in the path field is checked only after the close, so
+    // it must navigate without quick-previewing the image that was just
+    // dismissed.
     if (viewer)
     {
+        const QString openedPath = sel->currentImage();
         sendKey(viewer, Qt::Key_Escape);
         pump(20);
-        CHECK(viewer->isVisible(), "first Escape leaves the default fullscreen Viewer visible");
+        CHECK(!viewer->isVisible(),
+              "one Escape closes the fullscreen Viewer and returns to Browse");
         CHECK(!viewer->property("mviewerFullscreenRequested").toBool(),
-              "first Escape clears the fullscreen request without closing the Viewer");
-        CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
-                  zoomInAction->isEnabled() && zoomOutAction->isEnabled() &&
-                  zoomFitAction->isEnabled() && zoomActualAction->isEnabled(),
-              "first Escape keeps menu zoom commands enabled");
-        CHECK(sel->currentImage() == paths[0], "first Escape keeps the current Browse selection");
-        sendKey(viewer, Qt::Key_Escape);
-        pump(20);
-        CHECK(!viewer->isVisible(), "second Escape closes the Viewer after fullscreen was cleared");
+              "one Escape exits fullscreen together with the Viewer");
         CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
                   !zoomInAction->isEnabled() && !zoomOutAction->isEnabled() &&
                   !zoomFitAction->isEnabled() && !zoomActualAction->isEnabled(),
               "closed Viewer disables menu zoom commands without clearing Browse selection");
-        CHECK(sel->currentImage() == paths[0],
+        CHECK(sel->currentImage() == openedPath && openedPath == paths[0],
               "Escape returns to Browse without changing the current selection");
     }
     if (pathEdit)
@@ -982,30 +976,95 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             CHECK(viewer->isVisible(), "real thumbnail double-click opens the Viewer");
             CHECK(QApplication::focusWidget() == viewer,
                   "real thumbnail double-click transfers keyboard focus to the Viewer");
-            // The open above is fullscreen-requested, so the focused Esc only
-            // clears fullscreen. Deliver the second Esc straight to the Viewer:
-            // showNormal() can move QApplication focus without leaving the ladder.
+            // The double-click's button release can land on the fullscreen
+            // viewer. It must not plant a selection that eats this Esc.
+            const QPoint viewerClick(80, 80);
+            QMouseEvent tailRelease(QEvent::MouseButtonRelease, QPointF(viewerClick),
+                                    Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(viewer, &tailRelease);
+            const QString openedPath = sel->currentImage();
             sendFocusedKey(Qt::Key_Escape);
-            CHECK(viewer->isVisible(),
-                  "first Escape leaves a double-click fullscreen Viewer visible");
+            pump(20);
+            CHECK(!viewer->isVisible(), "one Escape returns a double-click Viewer to Browse");
             CHECK(!viewer->property("mviewerFullscreenRequested").toBool(),
-                  "first Escape clears fullscreen on a double-click Viewer");
-            sendKey(viewer, Qt::Key_Escape);
-            CHECK(!viewer->isVisible(),
-                  "second Escape closes a Viewer opened by a distant-thumbnail double-click");
+                  "one Escape exits fullscreen when leaving a double-click Viewer");
+            CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
+                      !zoomInAction->isEnabled() && !zoomOutAction->isEnabled() &&
+                      !zoomFitAction->isEnabled() && !zoomActualAction->isEnabled(),
+                  "one Escape disables menu zoom after a double-click open");
+            CHECK(sel->currentImage() == openedPath,
+                  "one Escape keeps the Browse selection after a double-click open");
+
+            auto reopenDecoded = [&]()
+            {
+                QMouseEvent reopen(QEvent::MouseButtonDblClick, QPointF(point), Qt::LeftButton,
+                                   Qt::LeftButton, Qt::NoModifier);
+                QApplication::sendEvent(thumbnailPanel->viewport(), &reopen);
+                QElapsedTimer reopenTimer;
+                reopenTimer.start();
+                while ((!viewer->isVisible() || !viewer->frame()) && reopenTimer.elapsed() < 5000)
+                    pump(25);
+            };
+            auto dragSelect = [&](const QPoint &from, const QPoint &to)
+            {
+                QMouseEvent press(QEvent::MouseButtonPress, QPointF(from), Qt::LeftButton,
+                                  Qt::LeftButton, Qt::NoModifier);
+                QMouseEvent move(QEvent::MouseMove, QPointF(to), Qt::NoButton, Qt::LeftButton,
+                                 Qt::NoModifier);
+                QMouseEvent release(QEvent::MouseButtonRelease, QPointF(to), Qt::LeftButton,
+                                    Qt::NoButton, Qt::NoModifier);
+                QApplication::sendEvent(viewer, &press);
+                QApplication::sendEvent(viewer, &move);
+                QApplication::sendEvent(viewer, &release);
+            };
+
+            // A click or a tiny nudge in select mode is not a drag. Esc still
+            // returns to Browse on the first press.
+            reopenDecoded();
+            CHECK(viewer->isVisible() && viewer->frame(),
+                  "viewer is decoded before the click-without-drag Esc check");
+            if (viewer->isVisible() && viewer->frame())
+            {
+                viewer->setSelectMode(true);
+                dragSelect(QPoint(80, 80), QPoint(82, 82));
+                sendKey(viewer, Qt::Key_Escape);
+                pump(20);
+                CHECK(!viewer->isVisible(),
+                      "a click without a drag does not consume the Browse Esc");
+                CHECK(!viewer->property("mviewerFullscreenRequested").toBool(),
+                      "a click without a drag still exits fullscreen on one Esc");
+            }
+
+            // A real drag still takes the first Esc. The next one returns to Browse.
+            reopenDecoded();
+            CHECK(viewer->isVisible() && viewer->frame(),
+                  "viewer is decoded before the real-selection Esc check");
+            if (viewer->isVisible() && viewer->frame())
+            {
+                viewer->setSelectMode(true);
+                dragSelect(QPoint(30, 30), QPoint(160, 140));
+                sendKey(viewer, Qt::Key_Escape);
+                pump(20);
+                CHECK(viewer->isVisible(), "Escape clears a real drag selection before closing");
+                CHECK(viewer->property("mviewerFullscreenRequested").toBool() ||
+                          viewer->isFullScreen(),
+                      "clearing a real selection does not leave fullscreen");
+                CHECK(zoomInAction && zoomInAction->isEnabled(),
+                      "clearing a real selection keeps the Viewer open");
+                sendKey(viewer, Qt::Key_Escape);
+                pump(20);
+                CHECK(!viewer->isVisible(),
+                      "the next Escape returns to Browse after a real selection was cleared");
+                CHECK(!viewer->property("mviewerFullscreenRequested").toBool(),
+                      "the next Escape exits fullscreen after the selection was cleared");
+            }
 
             // Continue the canonical Browse workflow with the Viewer open.
             // Closing above intentionally cancels an in-flight decode; on a
             // slower CI runner the frame may therefore still be null. Reopen
             // through the same real double-click path before keyboard
             // navigation/zoom assertions instead of depending on decode speed.
-            QMouseEvent reopen(QEvent::MouseButtonDblClick, QPointF(point), Qt::LeftButton,
-                               Qt::LeftButton, Qt::NoModifier);
-            QApplication::sendEvent(thumbnailPanel->viewport(), &reopen);
-            QElapsedTimer reopenTimer;
-            reopenTimer.start();
-            while ((!viewer->isVisible() || !viewer->frame()) && reopenTimer.elapsed() < 5000)
-                pump(25);
+            reopenDecoded();
             CHECK(viewer->isVisible() && viewer->frame(),
                   "Browse workflow reopens a decoded Viewer after the ESC regression check");
         }
@@ -1459,6 +1518,27 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 sendKey(&w, Qt::Key_Escape);
                 pump(50);
                 CHECK(overlay && !overlay->isVisible(), "ESC hides the metadata overlay");
+                sendKey(&w, Qt::Key_I);
+                pump(50);
+                CHECK(overlay && overlay->isVisible() && viewer->isVisible(),
+                      "metadata overlay is shown again on the open viewer");
+                if (overlay && overlay->isVisible() && viewer->isVisible())
+                {
+                    const bool fullscreenBefore =
+                        viewer->property("mviewerFullscreenRequested").toBool() ||
+                        viewer->isFullScreen();
+                    MetadataPanel *panel = w.findChild<MetadataPanel *>();
+                    sendKey(viewer, Qt::Key_Escape);
+                    pump(50);
+                    CHECK(!overlay->isVisible(),
+                          "Escape on the viewer closes the metadata overlay first");
+                    CHECK(!panel || !panel->isVisible(),
+                          "Escape on the viewer closes the metadata panel");
+                    CHECK(viewer->isVisible(), "closing metadata does not leave the image view");
+                    CHECK((viewer->property("mviewerFullscreenRequested").toBool() ||
+                           viewer->isFullScreen()) == fullscreenBefore,
+                          "closing metadata does not consume the image-view Escape");
+                }
             }
 
             // M-viewer P0-3 async metadata-overlay histogram contract: showing
