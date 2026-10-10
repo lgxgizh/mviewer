@@ -3,6 +3,7 @@
 
 #include "ShortcutHelper.h"
 #include "display/DisplayColorContextProvider.h"
+#include "fileopmessages.h"
 
 #include <QMenuBar>
 
@@ -80,7 +81,7 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, "撤销失败", QString::fromStdString(err));
+                        QMessageBox::warning(this, "撤销失败", mviewer::ui::fileOpErrorZh(err));
                     updateUndoRedoActions();
                     return;
                 }
@@ -95,7 +96,7 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, "重做失败", QString::fromStdString(err));
+                        QMessageBox::warning(this, "重做失败", mviewer::ui::fileOpErrorZh(err));
                     updateUndoRedoActions();
                     return;
                 }

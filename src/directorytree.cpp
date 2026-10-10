@@ -4,6 +4,7 @@
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDir>
+#include <QFileInfo>
 #include <QFileSystemModel>
 #include <QFileSystemWatcher>
 #include <QLabel>
@@ -248,8 +249,14 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
     }
     else if (chosen == aReveal)
     {
+#ifdef Q_OS_WIN
         QProcess::startDetached(
-            "explorer.exe", {QStringLiteral("/select,\"%1\"").arg(QDir::toNativeSeparators(path))});
+            QStringLiteral("explorer.exe"),
+            QStringList{QStringLiteral("/select,") + QDir::toNativeSeparators(path)});
+#else
+        QProcess::startDetached(QStringLiteral("xdg-open"),
+                                QStringList{QFileInfo(path).absolutePath()});
+#endif
     }
     else if (chosen == aCopyPath)
         QApplication::clipboard()->setText(QDir::toNativeSeparators(path));

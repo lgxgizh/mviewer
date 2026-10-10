@@ -1542,6 +1542,19 @@ void testComparePresetSanitize()
     const mviewer::cw::PresetCrop crop = mviewer::cw::clampCrop(-4, -2, -9, 12);
     CHECK(crop.x == 0 && crop.y == 0 && crop.w == 0 && crop.h == 12,
           "negative crop edges clamp to zero");
+    CHECK(mviewer::cw::clampBrightness(-400) == -255, "brightness below range clamps to -255");
+    CHECK(mviewer::cw::clampBrightness(400) == 255, "brightness above range clamps to 255");
+    CHECK(mviewer::cw::clampBrightness(-255) == -255, "brightness at the low bound stays");
+    CHECK(mviewer::cw::clampGamma(0.0f) == 0.05f, "gamma below range clamps to 0.05");
+    CHECK(mviewer::cw::clampGamma(9.0f) == 8.0f, "gamma above range clamps to 8");
+    CHECK(mviewer::cw::clampGamma(1.0f) == 1.0f, "gamma identity stays");
+    CHECK(mviewer::cw::clampSharedScale(0.0) == 0.01, "sharedScale below range clamps to 0.01");
+    CHECK(mviewer::cw::clampSharedScale(80.0) == 50.0, "sharedScale above range clamps to 50");
+    CHECK(mviewer::cw::clampSharedScale(1.0) == 1.0, "sharedScale identity stays");
+    CHECK(mviewer::cw::clampContrast(-1.0f) == 0.0f, "contrast below range clamps to 0");
+    CHECK(mviewer::cw::clampContrast(4.0f) == 3.0f, "contrast above range clamps to 3");
+    CHECK(mviewer::cw::clampGain(0.0f) == 0.01f, "gain below range clamps to 0.01");
+    CHECK(mviewer::cw::clampGain(9.0f) == 5.0f, "gain above range clamps to 5");
 }
 
 struct LayoutMarks
