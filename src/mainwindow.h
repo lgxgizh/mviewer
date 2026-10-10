@@ -113,6 +113,7 @@ class MainWindow : public QMainWindow
     void buildMenus();
     void buildFileMenu(QMenuBar *menuBar);
     void buildEditMenu(QMenuBar *menuBar);
+    void addOpenTrashEditAction(QMenu *editMenu);
     void buildEditTransformActions(QMenu *editMenu);
     void buildViewMenu(QMenuBar *menuBar);
     void buildToolsHelpMenus(QMenuBar *menuBar);
@@ -231,6 +232,7 @@ class MainWindow : public QMainWindow
     void openQuickCompare();
     void openPreferences();     // F1 (M22): centralized Preferences dialog
     void applyPreferences();    // re-apply view/sort/slideshow after settings change
+    void applyColorManagementPreference();
     void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
     void toggleFocusBrowse();
 

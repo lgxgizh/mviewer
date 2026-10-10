@@ -264,9 +264,6 @@ target_include_directories(mviewer_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(mviewer_application STATIC
     application/ExternalOpen.cpp
     application/OpenDirectoryUseCase.cpp
-    application/CompareImagesUseCase.cpp
-    application/RenameImageUseCase.cpp
-    application/DeleteImageUseCase.cpp
     application/Startup.cpp
 )
 

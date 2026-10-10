@@ -110,7 +110,7 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
 
     result.loaded = true;
     std::cout << "[PluginLoader] Loaded plugin: " << result.name << " (analyzer: " << id
-              << ") from " << path << std::endl;
+              << ") from " << path << '\n';
 
     // The module handle is deliberately kept mapped for the process lifetime:
     // unloading a Qt-linking plugin DLL is unsafe on Windows (DLL-detach / CRT
@@ -169,7 +169,7 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
         }
         std::string warn = pluginABIWarnings(hostPluginABI(), *pabi);
         if (!warn.empty())
-            std::cout << "[PluginLoader] Warning: " << warn << std::endl;
+            std::cout << "[PluginLoader] Warning: " << warn << '\n';
     }
     else if (versionFn && versionFn() != MVIEWER_PLUGIN_API_VERSION)
     {
@@ -216,7 +216,7 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
         }
         std::string warn = pluginABIWarnings(hostPluginABI(), *pabi);
         if (!warn.empty())
-            std::cout << "[PluginLoader] Warning: " << warn << std::endl;
+            std::cout << "[PluginLoader] Warning: " << warn << '\n';
     }
 #endif
 
@@ -236,7 +236,7 @@ std::vector<PluginLoader::LoadedPlugin> PluginLoader::loadFromDirectory(const st
     }
     if (results.empty())
     {
-        std::cout << "[PluginLoader] No plugins found in " << dirPath << std::endl;
+        std::cout << "[PluginLoader] No plugins found in " << dirPath << '\n';
     }
     return results;
 }

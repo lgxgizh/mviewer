@@ -3,7 +3,9 @@
 
 #include "runtime_storage.h"
 
+#include <QDesktopServices>
 #include <QSettings>
+#include <QUrl>
 
 namespace
 {
@@ -36,6 +38,14 @@ struct AsyncCopyState
     bool cancelled = false;
     QStringList failures;
 };
+
+// Same app-private trash directory as ThumbnailPanel::moveToTrashSelected.
+QString mviewerTrashDirectory()
+{
+    const QString dataDir =
+        mviewer::runtime::writableDirectory(QStandardPaths::GenericDataLocation);
+    return dataDir.isEmpty() ? QString() : QDir(dataDir).filePath("trash");
+}
 
 int transferPercent(uintmax_t copied, uintmax_t total)
 {
@@ -435,9 +445,7 @@ void ThumbnailPanel::moveToTrashSelected()
             return;
     }
     // App-private trash until a native recycle-bin adapter exists.
-    const QString dataDir =
-        mviewer::runtime::writableDirectory(QStandardPaths::GenericDataLocation);
-    const QString trashDir = dataDir.isEmpty() ? QString() : QDir(dataDir).filePath("trash");
+    const QString trashDir = mviewerTrashDirectory();
     if (trashDir.isEmpty() || !QDir().mkpath(trashDir))
     {
         QMessageBox::warning(this, tr("删除失败"), tr("无法创建回收目录。"));
@@ -447,6 +455,18 @@ void ThumbnailPanel::moveToTrashSelected()
     auto cmd =
         std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
     startCommandFileOperation(std::move(cmd), paths, QStringLiteral("删除"));
+}
+
+void ThumbnailPanel::openTrashFolder()
+{
+    const QString trashDir = mviewerTrashDirectory();
+    if (trashDir.isEmpty())
+    {
+        QMessageBox::warning(this, tr("回收站"), tr("无法定位 MViewer 回收站。"));
+        return;
+    }
+    QDir().mkpath(trashDir);
+    QDesktopServices::openUrl(QUrl::fromLocalFile(trashDir));
 }
 
 void ThumbnailPanel::copySelectedTo()

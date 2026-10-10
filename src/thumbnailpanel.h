@@ -293,6 +293,7 @@ class ThumbnailPanel : public QListView
 
     void renameSelected();
     void moveToTrashSelected();
+    void openTrashFolder();
     void copySelectedTo();
     void moveSelectedTo();
     void revealSelected();

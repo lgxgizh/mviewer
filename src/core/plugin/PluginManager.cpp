@@ -180,7 +180,7 @@ bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
         }
         const std::string warning = pluginABIWarnings(hostPluginABI(), *abi);
         if (!warning.empty())
-            std::cout << "[PluginManager] Warning: " << warning << std::endl;
+            std::cout << "[PluginManager] Warning: " << warning << '\n';
     }
 #ifdef _WIN32
     else if (s.version && s.version() != MVIEWER_PLUGIN_API_VERSION)
@@ -207,7 +207,7 @@ void recordPlugin(const std::string &path, const std::string &displayName, Plugi
     entry.loaded = true;
     plugins[path] = entry;
     std::cout << "[PluginManager] Loaded: " << displayName << " (" << kind << ": " << id
-              << ") from " << path << std::endl;
+              << ") from " << path << '\n';
 }
 
 bool registerAnalyzerPlugin(const std::string &path, const std::string &displayName,
@@ -387,7 +387,7 @@ bool PluginManager::unload(const std::string &path)
     // Plugins are process-lifetime; the handle is reclaimed by the OS at exit.
     m_plugins.erase(it);
 
-    std::cout << "[PluginManager] Released: " << path << std::endl;
+    std::cout << "[PluginManager] Released: " << path << '\n';
     return true;
 }
 

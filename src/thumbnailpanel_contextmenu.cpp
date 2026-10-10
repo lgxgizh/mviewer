@@ -7,6 +7,7 @@ struct ThumbnailPanel::ContextMenuActions
     QAction *aCopy = nullptr;
     QAction *aMove = nullptr;
     QAction *aTrash = nullptr;
+    QAction *aOpenTrash = nullptr;
     QAction *aReveal = nullptr;
     QAction *aCopyPath = nullptr;
     QAction *aCopyName = nullptr;
@@ -52,6 +53,7 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aMove->setShortcut(QKeySequence("Ctrl+M"));
     acts.aTrash = menu.addAction("移到 MViewer 回收站");
     acts.aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
+    acts.aOpenTrash = menu.addAction("打开 MViewer 回收站");
     acts.aReveal = menu.addAction("在资源管理器中显示");
     acts.aReveal->setShortcut(QKeySequence("Ctrl+E"));
     acts.aCopyPath = menu.addAction("复制路径");
@@ -108,6 +110,8 @@ void ThumbnailPanel::handleContextMenuAction(const ContextMenuActions &actions, 
         moveSelectedTo();
     else if (chosen == actions.aTrash)
         moveToTrashSelected();
+    else if (chosen == actions.aOpenTrash)
+        openTrashFolder();
     else if (chosen == actions.aReveal)
         revealSelected();
     else if (chosen == actions.aCopyPath)
