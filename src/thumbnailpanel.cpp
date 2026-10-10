@@ -2,13 +2,6 @@
 #include "thumbnailpanel_p.h"
 #include "thumbnailprovider.h"
 
-#if defined(Q_OS_WIN)
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
 // P0#3: DetailsHeader (the column-title strip above the Details list) is now
 // defined in thumbnailpanel_p.h alongside the shared DetailLayout geometry, so
 // it stays in sync with the delegate cells and keeps this TU lean.
@@ -613,123 +606,6 @@ void ThumbnailPanel::showEvent(QShowEvent *event)
 {
     QListView::showEvent(event);
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
-}
-
-void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
-{
-    const bool left = event->button() == Qt::LeftButton;
-    Qt::KeyboardModifiers mods = event->modifiers();
-
-#if defined(Q_OS_WIN)
-    // Guard against phantom Shift/Ctrl modifier from Windows IME language toggle (Shift tap).
-    // Validate Qt's cached event modifier against live physical key state for spontaneous events.
-    if (event->spontaneous())
-    {
-        if ((mods & Qt::ShiftModifier) && ((GetKeyState(VK_SHIFT) & 0x8000) == 0))
-            mods &= ~Qt::ShiftModifier;
-        if ((mods & Qt::ControlModifier) && ((GetKeyState(VK_CONTROL) & 0x8000) == 0))
-            mods &= ~Qt::ControlModifier;
-    }
-#endif
-
-    m_selectionGesture = left && (mods & (Qt::ControlModifier | Qt::ShiftModifier));
-
-    // Keep the native QListView gesture surface, but apply the selection
-    // command explicitly. In IconMode on Windows, QListView can retain only
-    // the clicked item for Shift ranges when the previous click was a custom
-    // ClearAndSelect; the path anchor makes plain/Ctrl/Shift deterministic.
-    if (left)
-    {
-        const QModelIndex idx = indexAt(event->pos());
-        m_pressedOnItem = idx.isValid();
-        if (idx.isValid())
-        {
-            const QString path = m_paths.value(idx.row());
-            if (mods & Qt::ShiftModifier)
-            {
-                int anchorRow = m_rowByPath.value(galleryPathKey(m_selectionAnchorPath), -1);
-                if (anchorRow < 0 && currentIndex().isValid())
-                    anchorRow = currentIndex().row();
-                if (anchorRow < 0)
-                    anchorRow = idx.row();
-                const int first = qMin(anchorRow, idx.row());
-                const int last = qMax(anchorRow, idx.row());
-                const QModelIndex firstIndex = m_model->index(first, 0);
-                const QModelIndex lastIndex = m_model->index(last, 0);
-                // Plain Shift replaces the selection with the anchor range.
-                // Ctrl+Shift adds that range and keeps images outside it.
-                const auto flags = (mods & Qt::ControlModifier)
-                                       ? QItemSelectionModel::Select
-                                       : QItemSelectionModel::ClearAndSelect;
-                selectionModel()->select(QItemSelection(firstIndex, lastIndex), flags);
-                selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
-            }
-            else if (mods & Qt::ControlModifier)
-            {
-                selectionModel()->select(idx, QItemSelectionModel::Toggle);
-                selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
-                m_selectionAnchorPath = path;
-            }
-            else
-            {
-                selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
-                m_selectionAnchorPath = path;
-            }
-            event->accept();
-            return;
-        }
-        // Click on empty area: deselect everything.
-        selectionModel()->clearSelection();
-        m_selectionAnchorPath.clear();
-        event->accept();
-        return;
-    }
-    m_pressedOnItem = false;
-    QListView::mousePressEvent(event);
-}
-
-void ThumbnailPanel::mouseMoveEvent(QMouseEvent *event)
-{
-    // If the press started on a thumbnail item, suppress QAbstractItemView's
-    // accidental drag-selection which could drag-expand selection across items
-    // from a stale internal pressedIndex.
-    if ((event->buttons() & Qt::LeftButton) && m_pressedOnItem)
-    {
-        event->accept();
-        return;
-    }
-    QListView::mouseMoveEvent(event);
-}
-
-void ThumbnailPanel::mouseReleaseEvent(QMouseEvent *event)
-{
-    m_pressedOnItem = false;
-    if (event->button() == Qt::LeftButton)
-    {
-        m_selectionGesture = false;
-        event->accept();
-        return;
-    }
-    QListView::mouseReleaseEvent(event);
-}
-
-void ThumbnailPanel::mouseDoubleClickEvent(QMouseEvent *event)
-{
-    // mousePressEvent owns selection updates, so it intentionally does not
-    // call QListView::mousePressEvent. Emit the open signal from the virtual
-    // double-click path directly instead of relying on QAbstractItemView's
-    // internal press/release tracking (which is platform-dependent).
-    if (event->button() == Qt::LeftButton)
-    {
-        const QModelIndex idx = indexAt(event->pos());
-        if (idx.isValid())
-        {
-            event->accept();
-            emit itemDoubleClicked(m_paths.value(idx.row()));
-            return;
-        }
-    }
-    QListView::mouseDoubleClickEvent(event);
 }
 
 void ThumbnailPanel::seedDisplayThumbForTest(const QString &path, const QPixmap &pixmap)

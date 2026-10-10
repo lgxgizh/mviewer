@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
+#include <QItemSelectionModel>
 #include <QListView>
 #include <QMouseEvent>
 #include <QMutex>
@@ -33,6 +34,7 @@
 
 class QPushButton;
 class QContextMenuEvent;
+class QFocusEvent;
 class QKeyEvent;
 class QMenu;
 class QResizeEvent;
@@ -486,6 +488,19 @@ class ThumbnailPanel : public QListView
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
+    QItemSelectionModel::SelectionFlags selectionCommand(const QModelIndex &index,
+                                                         const QEvent *event) const override;
+    void applyItemClickSelection(const QModelIndex &index, Qt::KeyboardModifiers mods);
+    void selectAnchorRange(const QModelIndex &index, Qt::KeyboardModifiers mods);
+    void beginEmptyAreaRubberBand(QMouseEvent *event, Qt::KeyboardModifiers mods);
+    void forwardRubberBandRelease(QMouseEvent *event);
+    void endRubberBandIfActive();
+    void reapplyRubberBandBase();
+    void syncRubberBandAnchor();
+    void hideStrayRubberBand();
+    bool consumeRubberBandCancel(QEvent *event);
+    bool isRubberBandActive() const;
     // Ctrl+wheel adjusts the thumbnail size (Explorer/FastStone parity).
     void wheelEvent(QWheelEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
@@ -552,6 +567,14 @@ class ThumbnailPanel : public QListView
     // clicked/currentChanged while the gesture is being processed.
     bool m_selectionGesture = false;
     bool m_pressedOnItem = false;
+    // Empty-area left press is forwarded so QListView records the rubber-band
+    // origin. Release, Esc, focus loss, and a lost mouse grab must forward a
+    // release; otherwise IconMode stays in DragSelectingState and the band
+    // keeps following the cursor.
+    bool m_emptyAreaPress = false;
+    bool m_endingRubberBand = false;
+    Qt::KeyboardModifiers m_emptyAreaModifiers = Qt::NoModifier;
+    QItemSelection m_rubberBaseSelection;
     // Stable path anchor for Shift ranges. Qt's IconMode selection anchor is
     // not consistent across the Windows styles used by the native view, so
     // keep the anchor at the panel boundary and apply the same range semantics
