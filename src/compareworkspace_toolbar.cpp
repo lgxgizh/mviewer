@@ -176,6 +176,18 @@ void showWithMenu(QMenu *menu, QWidget *panel)
                      });
 }
 
+// QWidgetAction::setDefaultWidget() orphans the panel until the menu first
+// opens; parent it to the menu now so its controls stay in the workspace tree.
+// The panel must not be hidden before setDefaultWidget(): a hidden default
+// widget makes the action invisible, and Qt then force-disables the panel.
+void keepFindable(QMenu *menu, QWidget *panel)
+{
+    if (!menu || !panel || panel->parentWidget())
+        return;
+    panel->setParent(menu);
+    panel->hide();
+}
+
 void park(QVBoxLayout *layout, QWidget *widget, bool showIt)
 {
     if (!layout || !widget)
@@ -265,10 +277,10 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
         lift(m_editPanel);
         m_editPanel->setParent(adjust);
         m_editPanel->setMinimumWidth(260);
-        m_editPanel->hide();
         auto *adjustAction = new QWidgetAction(adjust);
         adjustAction->setDefaultWidget(m_editPanel);
         adjust->menu()->addAction(adjustAction);
+        keepFindable(adjust->menu(), m_editPanel);
         showWithMenu(adjust->menu(), m_editPanel);
     }
     adjustButton = adjust;
@@ -292,12 +304,12 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     park(moreLay, m_diffOverlayChk, true);
     park(moreLay, m_frameLabel, false);
     park(moreLay, m_frameSpin, false);
-    morePanel->hide();
     if (more->menu())
     {
         auto *moreAction = new QWidgetAction(more);
         moreAction->setDefaultWidget(morePanel);
         more->menu()->addAction(moreAction);
+        keepFindable(more->menu(), morePanel);
         showWithMenu(more->menu(), morePanel);
     }
     moreButton = more;
