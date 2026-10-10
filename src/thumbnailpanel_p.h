@@ -5,7 +5,8 @@
 // 800):
 //   thumbnailpanel.cpp             core view / model / directory scan      730
 //   thumbnailpanel_async.cpp       scan + dimension-probe workers          482
-//   thumbnailpanel_delegates.cpp   thumb / details / list item delegates   739
+//   thumbnailpanel_delegates.cpp          thumb / list delegates + scale cache  589
+//   thumbnailpanel_delegates_details.cpp  details-row delegate                 219
 //   thumbnailpanel_fileops.cpp     rename / trash / copy / move / batch export 765
 //   thumbnailpanel_filters.cpp     filtering / sorting / metadata index    722
 //   thumbnailpanel_live.cpp        incremental live-folder delta apply     492
@@ -254,3 +255,16 @@ bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString
 // Empty when `newName` may replace `oldName` in `directory`.
 QString renameBlockedReason(const QString &directory, const QString &oldName,
                             const QString &newName);
+
+class QHelpEvent;
+
+// Shared by the thumbnail and details delegates. The scale cache stays in
+// thumbnailpanel_delegates.cpp; these are the only cross-TU entry points.
+namespace thumb_delegate
+{
+QPixmap cachedScaledPixmap(const QPixmap &pm, const QSize &targetSize);
+QString formatFileSize(qint64 bytes);
+QString fileSuffixFromPath(const QString &path);
+bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QModelIndex &index,
+                          const ThumbnailPanel *panel);
+} // namespace thumb_delegate
