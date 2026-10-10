@@ -248,13 +248,20 @@ void boxHorizontal(const SampleLayout &layout, int x0, int y, int srcW, int dstW
     }
 }
 
-void boxToPlane(const SampleLayout &layout, const SourceRect &rect, int dstW, int dstH, float *dst,
-                DisplayResampleScratch &scratch)
+bool resampleCancelled(const std::atomic<bool> *cancel)
+{
+    return cancel != nullptr && cancel->load(std::memory_order_relaxed);
+}
+
+bool boxToPlane(const SampleLayout &layout, const SourceRect &rect, int dstW, int dstH, float *dst,
+                DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
 {
     scratch.row.resize(static_cast<size_t>(dstW) * 3u);
     scratch.accum.assign(static_cast<size_t>(dstW) * 3u, 0.f);
     for (int y = 0; y < dstH; ++y)
     {
+        if (resampleCancelled(cancel))
+            return false;
         const double y0 = static_cast<double>(y) * static_cast<double>(rect.height) / dstH;
         const double y1 = static_cast<double>(y + 1) * static_cast<double>(rect.height) / dstH;
         std::fill(scratch.accum.begin(), scratch.accum.end(), 0.f);
@@ -281,6 +288,7 @@ void boxToPlane(const SampleLayout &layout, const SourceRect &rect, int dstW, in
         for (int x = 0; x < dstW * 3; ++x)
             out[x] = span > 0.f ? scratch.accum[static_cast<size_t>(x)] / span : 0.f;
     }
+    return true;
 }
 
 bool absorbTap(int index, float weight, int *indices, float *weights, int &count, double &sum)
@@ -358,7 +366,7 @@ void buildAxisTaps(int srcCount, int dstCount, std::vector<int> &offset, std::ve
 
 template <typename Load>
 ImageData catmullResize(Load load, int srcW, int srcH, int dstW, int dstH,
-                        DisplayResampleScratch &scratch)
+                        DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
 {
     buildAxisTaps(srcW, dstW, scratch.tapOffset, scratch.tapIndex, scratch.tapWeight);
     buildAxisTaps(srcH, dstH, scratch.tapOffsetY, scratch.tapIndexY, scratch.tapWeightY);
@@ -370,6 +378,8 @@ ImageData catmullResize(Load load, int srcW, int srcH, int dstW, int dstH,
 
     for (int y = 0; y < dstH; ++y)
     {
+        if (resampleCancelled(cancel))
+            return {};
         std::fill(scratch.accum.begin(), scratch.accum.end(), 0.f);
         const int yBegin = scratch.tapOffsetY[static_cast<size_t>(y)];
         const int yEnd = scratch.tapOffsetY[static_cast<size_t>(y) + 1u];
@@ -408,18 +418,18 @@ ImageData catmullResize(Load load, int srcW, int srcH, int dstW, int dstH,
 }
 
 ImageData catmullFromImage(const SampleLayout &layout, const SourceRect &rect, int dstW, int dstH,
-                           DisplayResampleScratch &scratch)
+                           DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
 {
     const int x0 = rect.x;
     const int y0 = rect.y;
     const int srcW = rect.width;
     const int srcH = rect.height;
     return catmullResize([&](int x, int y) { return loadRgb(layout, x0 + x, y0 + y); }, srcW, srcH,
-                         dstW, dstH, scratch);
+                         dstW, dstH, scratch, cancel);
 }
 
 ImageData catmullFromPlane(const float *plane, int srcW, int srcH, int dstW, int dstH,
-                           DisplayResampleScratch &scratch)
+                           DisplayResampleScratch &scratch, const std::atomic<bool> *cancel)
 {
     return catmullResize(
         [&](int x, int y)
@@ -437,7 +447,7 @@ ImageData catmullFromPlane(const float *plane, int srcW, int srcH, int dstW, int
                 (static_cast<size_t>(y) * static_cast<size_t>(srcW) + static_cast<size_t>(x)) * 3u;
             return Rgb{p[0], p[1], p[2]};
         },
-        srcW, srcH, dstW, dstH, scratch);
+        srcW, srcH, dstW, dstH, scratch, cancel);
 }
 
 bool sameLevel(const DisplayRasterLevel &a, const DisplayRasterLevel &b)
@@ -540,9 +550,9 @@ int selectDisplayStandIn(const DisplayRasterLevel *levels, int count,
 }
 
 ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &request,
-                          DisplayResampleScratch *scratch)
+                          DisplayResampleScratch *scratch, const std::atomic<bool> *cancel)
 {
-    if (request.targetWidth <= 0 || request.targetHeight <= 0)
+    if (request.targetWidth <= 0 || request.targetHeight <= 0 || resampleCancelled(cancel))
         return {};
     const SampleLayout layout = layoutFor(src);
     const SourceRect rect = clampSource(layout, request.source);
@@ -556,10 +566,13 @@ ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &re
     const int midW = intermediateExtent(rect.width, request.targetWidth);
     const int midH = intermediateExtent(rect.height, request.targetHeight);
     if (midW == rect.width && midH == rect.height)
-        return catmullFromImage(layout, rect, request.targetWidth, request.targetHeight, work);
+        return catmullFromImage(layout, rect, request.targetWidth, request.targetHeight, work,
+                                cancel);
 
     work.plane.resize(static_cast<size_t>(midW) * static_cast<size_t>(midH) * 3u);
-    boxToPlane(layout, rect, midW, midH, work.plane.data(), work);
+    if (!boxToPlane(layout, rect, midW, midH, work.plane.data(), work, cancel) ||
+        resampleCancelled(cancel))
+        return {};
     if (midW == request.targetWidth && midH == request.targetHeight)
     {
         ImageData out = makeImageData(midW, midH, PixelFormat::RGB24);
@@ -569,7 +582,7 @@ ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &re
         return out;
     }
     return catmullFromPlane(work.plane.data(), midW, midH, request.targetWidth,
-                            request.targetHeight, work);
+                            request.targetHeight, work, cancel);
 }
 
 } // namespace mviewer::core

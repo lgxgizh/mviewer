@@ -663,6 +663,10 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
             if (!ws)
                 return;
             ws->m_displayLodRefreshPending = false;
+            // A hidden session already dropped its display batch. Do not
+            // submit another HQ job after close/teardown.
+            if (!ws->isVisible())
+                return;
             const int requestedPane = ws->m_displayLodRefreshPane;
             ws->m_displayLodRefreshPane = -1;
             std::vector<int> dirty;

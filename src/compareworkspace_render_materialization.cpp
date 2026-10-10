@@ -39,7 +39,8 @@ QRect coveredRectForRequest(const QSize &sourceDims,
 }
 
 ImageData resolveSharpRegion(const ImageData &src,
-                             const mviewer::ui::CompareDisplayRequest &request)
+                             const mviewer::ui::CompareDisplayRequest &request,
+                             const std::atomic<bool> *cancel)
 {
     thread_local mviewer::core::DisplayResampleScratch scratch;
     mviewer::core::DisplayResampleRequest resample;
@@ -49,17 +50,17 @@ ImageData resolveSharpRegion(const ImageData &src,
     resample.source.height = request.sourceRect.height();
     resample.targetWidth = request.target.width();
     resample.targetHeight = request.target.height();
-    return mviewer::core::resampleDisplay(src, resample, &scratch);
+    return mviewer::core::resampleDisplay(src, resample, &scratch, cancel);
 }
 
 ImageData resolveLodFromCachedFull(const ImageData &src,
                                    const mviewer::ui::CompareDisplayRequest &request,
-                                   const std::string &pathKey)
+                                   const std::string &pathKey, const std::atomic<bool> *cancel)
 {
     if (!request.target.isValid())
         return ImageData{};
     if (request.region && request.sourceRect.isValid())
-        return resolveSharpRegion(src, request);
+        return resolveSharpRegion(src, request, cancel);
     const int wantEdge = std::max(request.target.width(), request.target.height());
     if (!pathKey.empty())
     {
@@ -649,7 +650,7 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
             const std::string pathKey = (idx < static_cast<int>(paths.size()))
                                             ? paths[static_cast<size_t>(idx)]
                                             : std::string();
-            lod = resolveLodFromCachedFull(src, request, pathKey);
+            lod = resolveLodFromCachedFull(src, request, pathKey, context.cancel.get());
         }
         else
         {

@@ -2,6 +2,7 @@
 
 #include "core/image/ImageBuffer.h"
 
+#include <atomic>
 #include <vector>
 
 namespace mviewer::core
@@ -75,8 +76,11 @@ int selectDisplayStandIn(const DisplayRasterLevel *levels, int count,
 // Identity (exact RGB) when the target matches the source rect. Large
 // reductions are an area-average box down to about twice the target, then a
 // separable prefiltered Catmull-Rom. Modest reductions use Catmull-Rom only.
-// Output is RGB24. `scratch` may be null.
+// Output is RGB24. `scratch` may be null. When `cancel` becomes true the
+// resample returns an empty image so a superseded scheduler job can exit
+// without holding its worker until the full kernel finishes.
 ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &request,
-                          DisplayResampleScratch *scratch = nullptr);
+                          DisplayResampleScratch *scratch = nullptr,
+                          const std::atomic<bool> *cancel = nullptr);
 
 } // namespace mviewer::core

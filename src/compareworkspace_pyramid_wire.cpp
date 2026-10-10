@@ -135,11 +135,13 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
             break;
         }
     }
-    // Visible Compare panes (blank/soft/provisional/forced) race Decode so
-    // neighbor Background preload and Analysis hist/diff never starve them.
-    const bool forceDecode = guard && guard->m_session && guard->m_session->forceDecodePriority;
-    const auto priority = (provisional || forceDecode) ? TaskScheduler::Priority::Decode
-                                                       : TaskScheduler::Priority::Analysis;
+    // Cheap provisional paint stays on Decode so Analysis hist/diff cannot
+    // starve the first pixels. The sharp HQ batch stays on Analysis: that is
+    // the pool session drains wait on, and releaseDisplayTask() drops its
+    // handle on generation change, hide, and teardown. Parking HQ on Decode
+    // (forceDecodePriority) left the handle alive after those drains.
+    const auto priority =
+        provisional ? TaskScheduler::Priority::Decode : TaskScheduler::Priority::Analysis;
     return TaskScheduler::instance().submit(
         priority,
         [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target, guard,
@@ -165,12 +167,19 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
         });
 }
 
+void CompareWorkspace::releaseDisplayTask()
+{
+    if (m_displayTask)
+        TaskScheduler::cancelTree(m_displayTask->id);
+    m_displayTask.reset();
+}
+
 void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes)
 {
-    // Latest-wins: cancel any in-flight batch and start a fresh generation.
-    if (m_displayTask)
-        TaskScheduler::cancel(m_displayTask);
-    m_displayTask.reset();
+    // Latest-wins: drop any in-flight batch from the scheduler graph and start
+    // a fresh generation. Cooperative cancel would keep the handle until the
+    // sharp resample returned.
+    releaseDisplayTask();
     ++m_displayGen;
 
     const int paneCount = static_cast<int>(m_cellViews.size());
