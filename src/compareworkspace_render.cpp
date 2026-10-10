@@ -19,6 +19,12 @@ double sharedZoomRatio(double ratio)
     return (ratio > 0.0 && std::isfinite(ratio)) ? ratio : 1.0;
 }
 
+bool withinOne(int have, int want)
+{
+    const int delta = have - want;
+    return delta <= 1 && delta >= -1;
+}
+
 QSize fallbackFrameSize(const ImageFrame *img)
 {
     if (!img)
@@ -211,10 +217,11 @@ QRect CompareWorkspace::sourceVisibleRect(int pane) const
     return QRect(left, top, std::max(1, right - left), std::max(1, bottom - top)).intersected(full);
 }
 
-CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane) const
+mviewer::ui::CompareDisplayPlanningInput CompareWorkspace::displayPlanningInput(int pane) const
 {
+    mviewer::ui::CompareDisplayPlanningInput input;
     if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
-        return {};
+        return input;
     const RawImageView *view = m_cellViews[pane];
     const QSize viewSourceSize = view->sourceSize();
     QSize sourceSize = viewSourceSize;
@@ -232,9 +239,8 @@ CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane
         }
     }
     if (!sourceSize.isValid())
-        return {};
+        return input;
 
-    mviewer::ui::CompareDisplayPlanningInput input;
     input.pane = pane;
     input.sourceWidth = sourceSize.width();
     input.sourceHeight = sourceSize.height();
@@ -261,13 +267,82 @@ CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane
     }
     const QRect visible = sourceVisibleRect(pane);
     input.visibleSourceRect = {visible.x(), visible.y(), visible.width(), visible.height()};
+    return input;
+}
 
+CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane) const
+{
+    const mviewer::ui::CompareDisplayPlanningInput input = displayPlanningInput(pane);
+    if (input.sourceWidth <= 0 || input.sourceHeight <= 0)
+        return {};
     const mviewer::ui::CompareDisplayPlan plan = mviewer::ui::planCompareDisplay(input);
     if (!plan.isValid())
         return {};
     return {{plan.targetWidth, plan.targetHeight},
             {plan.sourceRect.x, plan.sourceRect.y, plan.sourceRect.width, plan.sourceRect.height},
             plan.region};
+}
+
+CompareWorkspace::DisplayRequest CompareWorkspace::memoryDisplayRequest(int pane, bool blank) const
+{
+    if (pane < 0 || pane >= m_engine.imageCount())
+        return {};
+    const ImageFrame *frame = m_engine.imageAt(pane);
+    if (!frame || frame->pixels().isNull())
+        return {};
+
+    DisplayRequest req;
+    const mviewer::ui::CompareDisplayPlanningInput input = displayPlanningInput(pane);
+    const bool sharp = input.hasWidgetSourceSize && !input.hasCropOrRotation &&
+                       input.sourceWidth > 0 && input.sourceHeight > 0;
+    if (sharp)
+    {
+        const mviewer::ui::CompareDisplayPlan plan = mviewer::ui::planSharpCompareDisplay(input);
+        if (plan.isValid())
+        {
+            req.target = QSize(plan.targetWidth, plan.targetHeight);
+            req.sourceRect = QRect(plan.sourceRect.x, plan.sourceRect.y, plan.sourceRect.width,
+                                   plan.sourceRect.height);
+            req.region = plan.region;
+        }
+    }
+    if (!req.target.isValid())
+    {
+        req.target = displayLodTarget(pane, frame->pixels());
+        req.sourceRect = QRect(0, 0, frame->pixels().width, frame->pixels().height);
+        req.region = false;
+    }
+    if (!req.target.isValid() || !blank)
+        return req;
+
+    const int longEdge = (std::max)(req.target.width(), req.target.height());
+    const int edge = (std::min)(640, longEdge);
+    if (edge <= 0 || edge >= longEdge)
+        return req;
+    req.target = QSize(edge, edge);
+    req.sourceRect = QRect(0, 0, frame->pixels().width, frame->pixels().height);
+    req.region = false;
+    req.provisional = true;
+    return req;
+}
+
+bool CompareWorkspace::rasterCoversView(int pane, const DisplayRequest &desired) const
+{
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane] || !desired.target.isValid())
+        return false;
+    const RawImageView *view = m_cellViews[pane];
+    const QImage &image = view->image();
+    const QRect current = view->sourceRect();
+    if (image.isNull() || !current.isValid())
+        return false;
+    if (!withinOne(image.width(), desired.target.width()) ||
+        !withinOne(image.height(), desired.target.height()))
+        return false;
+    if (!withinOne(current.width(), desired.sourceRect.width()) ||
+        !withinOne(current.height(), desired.sourceRect.height()))
+        return false;
+    const QRect visible = sourceVisibleRect(pane);
+    return !visible.isValid() || current.contains(visible);
 }
 
 QSize CompareWorkspace::displayLodTarget(int idx, const ImageData &source) const
@@ -588,6 +663,10 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
             if (!ws)
                 return;
             ws->m_displayLodRefreshPending = false;
+            // A hidden session already dropped its display batch. Do not
+            // submit another HQ job after close/teardown.
+            if (!ws->isVisible())
+                return;
             const int requestedPane = ws->m_displayLodRefreshPane;
             ws->m_displayLodRefreshPane = -1;
             std::vector<int> dirty;
@@ -634,9 +713,8 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
                     }
                     return;
                 }
-                if (ws->m_cellViews[pane]->image().isNull() ||
-                    ws->m_cellViews[pane]->image().size() !=
-                        ws->displayLodTarget(pane, frame->pixels()))
+                const DisplayRequest desired = ws->memoryDisplayRequest(pane, false);
+                if (!ws->rasterCoversView(pane, desired))
                     dirty.push_back(pane);
             };
             if (requestedPane >= 0 && !ws->m_syncZoom)

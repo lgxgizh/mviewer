@@ -209,6 +209,58 @@ int main()
             ++failures;
     }
 
+    auto expectSharp = [&failures](const char *name, const CompareDisplayPlanningInput &sample,
+                                   int targetWidth, int targetHeight, CompareDisplayRect rect)
+    {
+        const CompareDisplayPlan plan = mviewer::ui::planSharpCompareDisplay(sample);
+        const bool ok = plan.isValid() && plan.region && plan.targetWidth == targetWidth &&
+                        plan.targetHeight == targetHeight && plan.sourceRect.x == rect.x &&
+                        plan.sourceRect.y == rect.y && plan.sourceRect.width == rect.width &&
+                        plan.sourceRect.height == rect.height;
+        std::printf("%s: sharp %s\n", ok ? "PASS" : "FAIL", name);
+        if (!ok)
+        {
+            std::printf("  got target=%dx%d rect=%d,%d %dx%d region=%d\n", plan.targetWidth,
+                        plan.targetHeight, plan.sourceRect.x, plan.sourceRect.y,
+                        plan.sourceRect.width, plan.sourceRect.height, plan.region);
+            ++failures;
+        }
+    };
+
+    auto sharpFit = input(4000, 3000, 1000, 600, 0.2);
+    sharpFit.visibleSourceRect = {0, 0, 4000, 3000};
+    expectSharp("full image at 20%", sharpFit, 800, 600, {0, 0, 4000, 3000});
+
+    auto sharpZoom = sharpFit;
+    sharpZoom.currentScale = 2.0;
+    sharpZoom.paneScale = 2.0;
+    expectSharp("full image at 200% is a 1:1 crop", sharpZoom, 4000, 3000, {0, 0, 4000, 3000});
+
+    auto sharpDpr = sharpFit;
+    sharpDpr.currentScale = 0.5;
+    sharpDpr.paneScale = 0.5;
+    sharpDpr.devicePixelRatio = 2.0;
+    expectSharp("dpr 2 at 50% is 100% physical", sharpDpr, 4000, 3000, {0, 0, 4000, 3000});
+
+    sharpDpr.currentScale = 0.25;
+    sharpDpr.paneScale = 0.25;
+    expectSharp("dpr 2 at 25% is half", sharpDpr, 2000, 1500, {0, 0, 4000, 3000});
+
+    auto sharpRegion = input(4000, 3000, 800, 600, 0.5);
+    sharpRegion.visibleSourceRect = {1000, 800, 500, 400};
+    expectSharp("visible region plus margin", sharpRegion, 312, 250, {938, 750, 624, 500});
+
+    auto sharpCap = input(10000, 2000, 800, 600, 0.8);
+    sharpCap.visibleSourceRect = {0, 0, 10000, 2000};
+    expectSharp("long edge capped at 4096", sharpCap, 4096, 819, {0, 0, 10000, 2000});
+
+    auto sharpMissing = input(0, 0, 100, 100, 0.5);
+    const CompareDisplayPlan missing = mviewer::ui::planSharpCompareDisplay(sharpMissing);
+    const bool missingOk = !missing.isValid();
+    std::printf("%s: sharp empty source is invalid\n", missingOk ? "PASS" : "FAIL");
+    if (!missingOk)
+        ++failures;
+
     std::printf("=== Compare display planner tests: %s ===\n", failures == 0 ? "PASS" : "FAIL");
     return failures == 0 ? 0 : 1;
 }

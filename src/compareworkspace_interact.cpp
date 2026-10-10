@@ -51,7 +51,18 @@ bool CompareWorkspace::event(QEvent *event)
                   event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Close ||
                   event->type() == QEvent::EnabledChange))
         endTemporaryCompare();
-    return QWidget::event(event);
+    const bool hiding = event && event->type() == QEvent::Hide;
+    const bool handled = QWidget::event(event);
+    // Dialog close hides this workspace before the destructor runs. Drop the
+    // HQ display batch here so its scheduler handle is gone while the dialog
+    // is still on the stack (close does not destroy a non-WA_DeleteOnClose host).
+    if (hiding && !isVisible())
+    {
+        m_displayLodRefreshPending = false;
+        releaseDisplayTask();
+        ++m_displayGen;
+    }
+    return handled;
 }
 
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
@@ -191,6 +202,8 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
                 onEditCellSelected(m_dragIdx);
                 refreshHistograms();
             }
+            else if (delta.manhattanLength() >= 4)
+                scheduleDisplayLodRefresh();
         }
         return false;
     }
@@ -358,8 +371,11 @@ bool CompareWorkspace::handleCanvasRelease(QEvent *event)
     }
     if (me->button() == Qt::LeftButton)
     {
+        const bool imageDrag = m_dragging && (me->pos() - m_dragStartPos).manhattanLength() >= 4;
         m_splitDragging = false;
         m_dragging = false;
+        if (imageDrag)
+            scheduleDisplayLodRefresh();
         if (m_compareCanvas)
             m_compareCanvas->update();
     }
@@ -539,10 +555,6 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
         m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
     }
     scheduleDisplayLodRefresh(refIdx);
-    // Predictive gesture LOD: while zooming in/out, mark Decode priority so the
-    // debounced refresh climbs toward the predictive bucket without waiting on Analysis.
-    if (m_session)
-        m_session->forceDecodePriority = true;
     noteCompareInteraction();
     positionROIHud();
 }

@@ -176,9 +176,9 @@ CompareWorkspace::~CompareWorkspace()
     ++m_diffGen;
 
     // Same lifetime handling for the async pane-materialization batch.
-    if (m_displayTask)
-        TaskScheduler::cancel(m_displayTask);
-    m_displayTask.reset();
+    // cancelTree, not the cooperative flag: a sharp resample must not keep
+    // its scheduler handle until the worker notices.
+    releaseDisplayTask();
     ++m_displayGen;
 
     // Same lifetime handling for the async pane-histogram batch.
@@ -251,9 +251,7 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     ++m_roiGen;
     // Hard cancel: pair change must never leave hist/diff/display starving the
     // new visible decode. Generation bumps reject any already-queued delivery.
-    if (m_displayTask)
-        TaskScheduler::cancel(m_displayTask);
-    m_displayTask.reset();
+    releaseDisplayTask();
     ++m_displayGen;
     if (m_histTask)
         TaskScheduler::cancel(m_histTask);

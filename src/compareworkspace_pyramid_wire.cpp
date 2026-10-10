@@ -1,7 +1,7 @@
 #include "compareworkspace_caption.h"
-#include "compareworkspace_display_planner.h"
-#include "compareworkspace_display_pyramid.h"
 #include "compareworkspace_p.h"
+
+#include "core/render/DisplayResample.h"
 
 #include <QTimer>
 #include <algorithm>
@@ -48,6 +48,35 @@ void rememberPyramidDelivery(mviewer::ui::CompareSessionRuntime *session, int pa
         slot.haveFull = true;
 }
 
+mviewer::core::DisplayRasterLevel rasterLevel(int targetW, int targetH, const QRect &covered)
+{
+    mviewer::core::DisplayRasterLevel level;
+    if (targetW <= 0 || targetH <= 0 || !covered.isValid())
+        return level;
+    level.targetWidth = targetW;
+    level.targetHeight = targetH;
+    level.coveredSourceWidth = covered.width();
+    level.coveredSourceHeight = covered.height();
+    level.originX = covered.x();
+    level.originY = covered.y();
+    return level;
+}
+
+bool skipLateProvisional(bool provisional, int index, const QImage &shownImage,
+                         const QRect &shownRect, const QImage &incomingImage,
+                         const QRect &incomingRect,
+                         const mviewer::ui::CompareSessionRuntime *session)
+{
+    if (!provisional)
+        return false;
+    if (session && index >= 0 && index < static_cast<int>(session->panePyramids.size()) &&
+        session->panePyramids[static_cast<size_t>(index)].haveFull)
+        return true;
+    return mviewer::core::isBlurrierDisplayStandIn(
+        rasterLevel(shownImage.width(), shownImage.height(), shownRect),
+        rasterLevel(incomingImage.width(), incomingImage.height(), incomingRect));
+}
+
 bool tryPaintFromPyramid(mviewer::ui::CompareSessionRuntime *session,
                          const QList<RawImageView *> &cellViews, int pane,
                          const mviewer::ui::CompareDisplayRequest &desired)
@@ -58,31 +87,26 @@ bool tryPaintFromPyramid(mviewer::ui::CompareSessionRuntime *session,
     if (slot.images.empty() || pane >= cellViews.size() || !cellViews[pane])
         return false;
 
-    std::vector<mviewer::ui::CompareDisplayPlan> have;
-    have.reserve(slot.levels.size());
-    for (const auto &lvl : slot.levels)
+    const int count = static_cast<int>((std::min)(slot.levels.size(), slot.images.size()));
+    std::vector<mviewer::core::DisplayRasterLevel> levels;
+    levels.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i)
     {
-        mviewer::ui::CompareDisplayPlan plan;
-        plan.targetWidth = lvl.target.width();
-        plan.targetHeight = lvl.target.height();
-        plan.sourceRect = {lvl.sourceRect.x(), lvl.sourceRect.y(), lvl.sourceRect.width(),
-                           lvl.sourceRect.height()};
-        plan.region = lvl.region;
-        have.push_back(plan);
+        const QImage &image = slot.images[static_cast<size_t>(i)];
+        const auto &lvl = slot.levels[static_cast<size_t>(i)];
+        levels.push_back(image.isNull()
+                             ? mviewer::core::DisplayRasterLevel{}
+                             : rasterLevel(image.width(), image.height(), lvl.sourceRect));
     }
-    mviewer::ui::CompareDisplayPlan want;
-    want.targetWidth = desired.target.width();
-    want.targetHeight = desired.target.height();
-    want.sourceRect = {desired.sourceRect.x(), desired.sourceRect.y(), desired.sourceRect.width(),
-                       desired.sourceRect.height()};
-    want.region = desired.region;
-
-    const int idx = mviewer::ui::selectReadyPyramidLevel(have, want);
-    if (idx < 0 || idx >= static_cast<int>(slot.images.size()) ||
-        slot.images[static_cast<size_t>(idx)].isNull())
+    RawImageView *view = cellViews[pane];
+    const mviewer::core::DisplayRasterLevel shown =
+        rasterLevel(view->image().width(), view->image().height(), view->sourceRect());
+    const mviewer::core::DisplayRasterLevel want =
+        rasterLevel(desired.target.width(), desired.target.height(), desired.sourceRect);
+    const int idx = mviewer::core::selectDisplayStandIn(levels.data(), count, shown, want);
+    if (idx < 0 || slot.images[static_cast<size_t>(idx)].isNull())
         return false;
 
-    RawImageView *view = cellViews[pane];
     const double oldScale = view->scale();
     const QPointF oldOffset = view->offset();
     const QSize oldSource = view->sourceSize();
@@ -111,11 +135,13 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
             break;
         }
     }
-    // Visible Compare panes (blank/soft/provisional/forced) race Decode so
-    // neighbor Background preload and Analysis hist/diff never starve them.
-    const bool forceDecode = guard && guard->m_session && guard->m_session->forceDecodePriority;
-    const auto priority = (provisional || forceDecode) ? TaskScheduler::Priority::Decode
-                                                       : TaskScheduler::Priority::Analysis;
+    // Cheap provisional paint stays on Decode so Analysis hist/diff cannot
+    // starve the first pixels. The sharp HQ batch stays on Analysis: that is
+    // the pool session drains wait on, and releaseDisplayTask() drops its
+    // handle on generation change, hide, and teardown. Parking HQ on Decode
+    // (forceDecodePriority) left the handle alive after those drains.
+    const auto priority =
+        provisional ? TaskScheduler::Priority::Decode : TaskScheduler::Priority::Analysis;
     return TaskScheduler::instance().submit(
         priority,
         [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target, guard,
@@ -141,12 +167,19 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
         });
 }
 
+void CompareWorkspace::releaseDisplayTask()
+{
+    if (m_displayTask)
+        TaskScheduler::cancelTree(m_displayTask->id);
+    m_displayTask.reset();
+}
+
 void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes)
 {
-    // Latest-wins: cancel any in-flight batch and start a fresh generation.
-    if (m_displayTask)
-        TaskScheduler::cancel(m_displayTask);
-    m_displayTask.reset();
+    // Latest-wins: drop any in-flight batch from the scheduler graph and start
+    // a fresh generation. Cooperative cancel would keep the handle until the
+    // sharp resample returned.
+    releaseDisplayTask();
     ++m_displayGen;
 
     const int paneCount = static_cast<int>(m_cellViews.size());
@@ -185,16 +218,9 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
         DisplayRequest desired;
         const ImageFrame *img = m_engine.imageAt(idx);
         if (img && !img->pixels().isNull())
-        {
-            desired = DisplayRequest{
-                displayLodTarget(idx, img->pixels()),
-                QRect(QPoint(0, 0), QSize(img->pixels().width, img->pixels().height)), false,
-                false};
-        }
+            desired = memoryDisplayRequest(idx, false);
         else if (idx < static_cast<int>(m_comparePaths.size()))
-        {
             desired = buildPaneDisplayRequest(idx, false);
-        }
         if (desired.target.isValid())
             tryPaintFromPyramid(m_session.get(), m_cellViews, idx, desired);
     }
@@ -216,22 +242,7 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
         RawImageView *view = (i < m_cellViews.size()) ? m_cellViews[i] : nullptr;
         const bool blankPane = !view || view->image().isNull() || view->softLoading();
         if (img && !img->pixels().isNull())
-        {
-            DisplayRequest req{
-                displayLodTarget(i, img->pixels()),
-                QRect(QPoint(0, 0), QSize(img->pixels().width, img->pixels().height)), false,
-                false};
-            if (blankPane)
-            {
-                const int edge = std::min(640, std::max(req.target.width(), req.target.height()));
-                if (edge > 0 && edge < std::max(req.target.width(), req.target.height()))
-                {
-                    req.target = QSize(edge, edge);
-                    req.provisional = true;
-                }
-            }
-            displayRequests.push_back(req);
-        }
+            displayRequests.push_back(memoryDisplayRequest(i, blankPane));
         else if (i < static_cast<int>(m_comparePaths.size()) &&
                  !m_comparePaths[static_cast<size_t>(i)].empty())
         {
@@ -286,10 +297,9 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         const QSize oldSourceSize = view->sourceSize();
         const double oldScale = view->scale();
         const QPointF oldOffset = view->offset();
-        if (r.provisional && m_session &&
-            cell.index < static_cast<int>(m_session->panePyramids.size()) &&
-            m_session->panePyramids[static_cast<size_t>(cell.index)].haveFull)
-            continue; // do not downgrade a full pane with late provisional
+        if (skipLateProvisional(r.provisional, cell.index, view->image(), view->sourceRect(),
+                                cell.image, cell.sourceRect, m_session.get()))
+            continue;
         view->setSoftLoading(false);
         view->setImage(cell.image, cell.sourceSize, cell.sourceRect);
         if (cell.index < m_cellLabels.size())
