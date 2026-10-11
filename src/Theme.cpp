@@ -1,7 +1,11 @@
 #include "Theme.h"
 
+#include <QAbstractButton>
 #include <QApplication>
 #include <QColor>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QEvent>
 #include <QFile>
 #include <QFont>
 #include <QGuiApplication>
@@ -87,6 +91,56 @@ void applyThemeFont(const ThemeTokens &tokens)
     QApplication::setFont(font);
 }
 
+// Every dialog (our own, QMessageBox, QInputDialog, Qt's file dialog) gets its
+// accept button marked primary when shown, so the accent stays on the action
+// that commits instead of following keyboard focus like QPushButton:default.
+class DialogPolisher : public QObject
+{
+  public:
+    using QObject::QObject;
+
+  protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (event->type() == QEvent::Show && watched->isWidgetType())
+        {
+            if (auto *dialog = qobject_cast<QDialog *>(watched))
+                markPrimaryButtons(dialog);
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+  private:
+    static void markPrimaryButtons(QDialog *dialog)
+    {
+        const auto boxes = dialog->findChildren<QDialogButtonBox *>();
+        for (QDialogButtonBox *box : boxes)
+        {
+            const auto buttons = box->buttons();
+            for (QAbstractButton *button : buttons)
+            {
+                const QDialogButtonBox::ButtonRole role = box->buttonRole(button);
+                const bool primary =
+                    role == QDialogButtonBox::AcceptRole || role == QDialogButtonBox::YesRole;
+                if (button->property("primary").toBool() == primary)
+                    continue;
+                button->setProperty("primary", primary);
+                button->style()->unpolish(button);
+                button->style()->polish(button);
+            }
+        }
+    }
+};
+
+void installDialogPolisher()
+{
+    static DialogPolisher *polisher = nullptr;
+    if (polisher != nullptr || qApp == nullptr)
+        return;
+    polisher = new DialogPolisher(qApp);
+    qApp->installEventFilter(polisher);
+}
+
 } // namespace
 
 void Theme::initTheme()
@@ -109,6 +163,7 @@ void Theme::applyTheme(ThemeMode mode)
     applyThemeFont(g_tokens);
     if (qApp)
         qApp->setStyleSheet(buildStyleSheet(g_tokens));
+    installDialogPolisher();
 
     QSettings settings;
     settings.setValue(QStringLiteral("uiTheme"),

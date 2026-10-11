@@ -75,30 +75,77 @@ QPushButton:disabled {
     border-color: {{border}};
 }
 
-QPushButton:default,
+QPushButton:focus {
+    border-color: {{accent}};
+}
+
+QPushButton:checked {
+    background: {{accentTint}};
+    color: {{textPrimary}};
+    border-color: {{accent}};
+}
+
+/* Dialog accept buttons carry primary=true (Theme's dialog polisher); the
+   accent stays on them instead of jumping with keyboard focus. Buttons a
+   dialog marks default by hand keep an accent outline. */
+QPushButton:default {
+    border: 1px solid {{accent}};
+}
+
 QPushButton[primary="true"] {
     background: {{accent}};
     color: {{onAccent}};
     border: 1px solid {{accent}};
 }
 
-QPushButton:default:hover,
 QPushButton[primary="true"]:hover {
     background: {{accentHover}};
     border-color: {{accentHover}};
 }
 
-QPushButton:default:pressed,
 QPushButton[primary="true"]:pressed {
     background: {{accentPressed}};
     border-color: {{accentPressed}};
 }
 
-QPushButton:default:disabled,
 QPushButton[primary="true"]:disabled {
     background: {{bg3}};
     color: {{textDisabled}};
     border-color: {{border}};
+}
+
+QToolButton:checked:hover {
+    background: {{selection}};
+}
+
+QDialogButtonBox {
+    dialogbuttonbox-buttons-have-icons: 0;
+}
+
+QMessageBox {
+    background: {{bg1}};
+}
+
+QMessageBox QLabel {
+    color: {{textPrimary}};
+    min-width: 280px;
+}
+
+QTextEdit,
+QPlainTextEdit,
+QTextBrowser {
+    background: {{bg0}};
+    color: {{textPrimary}};
+    border: 1px solid {{border}};
+    border-radius: {{radiusControl}}px;
+    padding: {{space4}}px;
+    selection-background-color: {{selection}};
+    selection-color: {{textPrimary}};
+}
+
+QTextEdit:focus,
+QPlainTextEdit:focus {
+    border-color: {{accent}};
 }
 
 QCheckBox,
@@ -129,6 +176,11 @@ QCheckBox::indicator:checked {
     background: {{accent}};
     border-color: {{accent}};
     image: url(:/theme/check.png);
+}
+
+QCheckBox::indicator:pressed,
+QRadioButton::indicator:pressed {
+    border-color: {{accentPressed}};
 }
 
 QCheckBox::indicator:disabled {
@@ -172,6 +224,13 @@ QDoubleSpinBox {
     selection-color: {{textPrimary}};
 }
 
+QLineEdit:hover,
+QComboBox:hover,
+QSpinBox:hover,
+QDoubleSpinBox:hover {
+    border-color: {{textDisabled}};
+}
+
 QLineEdit:focus,
 QComboBox:focus,
 QSpinBox:focus,
@@ -190,6 +249,29 @@ QDoubleSpinBox:disabled {
 QComboBox::drop-down {
     border: none;
     width: 20px;
+}
+
+QSpinBox::up-button,
+QSpinBox::down-button,
+QDoubleSpinBox::up-button,
+QDoubleSpinBox::down-button {
+    border: none;
+    width: 16px;
+    background: transparent;
+}
+
+QSpinBox::up-button:hover,
+QSpinBox::down-button:hover,
+QDoubleSpinBox::up-button:hover,
+QDoubleSpinBox::down-button:hover {
+    background: {{bg2}};
+}
+
+QSpinBox::up-button:pressed,
+QSpinBox::down-button:pressed,
+QDoubleSpinBox::up-button:pressed,
+QDoubleSpinBox::down-button:pressed {
+    background: {{bg3}};
 }
 
 QComboBox QAbstractItemView {
@@ -263,6 +345,11 @@ QScrollBar::handle:vertical:hover {
     background: {{textSecondary}};
 }
 
+QScrollBar::handle:vertical:pressed,
+QScrollBar::handle:horizontal:pressed {
+    background: {{textPrimary}};
+}
+
 QScrollBar::add-line:vertical,
 QScrollBar::sub-line:vertical {
     height: 0;
@@ -334,6 +421,10 @@ QTabBar::tab:hover:!selected {
     background: {{bg2}};
 }
 
+QTabBar::tab:pressed {
+    background: {{bg3}};
+}
+
 QHeaderView::section {
     background: {{bg1}};
     color: {{textSecondary}};
@@ -341,6 +432,11 @@ QHeaderView::section {
     border: none;
     border-right: 1px solid {{border}};
     border-bottom: 1px solid {{border}};
+}
+
+QHeaderView::section:hover {
+    background: {{bg2}};
+    color: {{textPrimary}};
 }
 
 QTreeView,
@@ -375,6 +471,15 @@ QTableWidget::item:selected,
 QListWidget::item:selected {
     background: {{selection}};
     color: {{textPrimary}};
+}
+
+QTreeView::item:selected:hover,
+QTableView::item:selected:hover,
+QListView::item:selected:hover,
+QTreeWidget::item:selected:hover,
+QTableWidget::item:selected:hover,
+QListWidget::item:selected:hover {
+    background: {{accentTint}};
 }
 
 QMenuBar {
@@ -415,6 +520,14 @@ QMenu::item {
 QMenu::item:selected {
     background: {{selection}};
     color: {{textPrimary}};
+}
+
+QMenu::item:pressed {
+    background: {{accentTint}};
+}
+
+QMenu::item:checked {
+    color: {{accent}};
 }
 
 QMenu::item:disabled {

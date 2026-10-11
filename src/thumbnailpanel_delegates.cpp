@@ -3,6 +3,7 @@
 #include "thumbnailpanel_p.h"
 
 #include "SquareLetterbox.h"
+#include "hoverfade.h"
 
 #include <QDir>
 #include <QFontMetrics>
@@ -113,12 +114,14 @@ QString thumbInfoText(const ThumbnailPanel::Entry *entry, const QString &suffix)
 }
 
 void drawThumbBackground(QPainter *painter, const QRect &card, const QRect &itemRect, bool selected,
-                         bool hovered, const QStyleOptionViewItem &option)
+                         qreal hover, const QStyleOptionViewItem &option)
 {
     const QColor base = option.palette.color(QPalette::Base);
     const QColor accent = option.palette.color(QPalette::Highlight);
-    const QColor cardBg =
-        selected ? blended(base, accent, 30) : (hovered ? blended(base, accent, 12) : base);
+    // hover is 0..1 from the hover fade, so the tint eases in instead of snapping.
+    const QColor cardBg = selected
+                              ? blended(base, accent, 30)
+                              : (hover > 0.0 ? blended(base, accent, qRound(12 * hover)) : base);
     painter->fillRect(itemRect, base);
     painter->setPen(Qt::NoPen);
     painter->setBrush(cardBg);
@@ -270,7 +273,7 @@ void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const 
     }
 }
 
-void drawThumbCardBorder(QPainter *painter, const QRect &card, bool selected, bool hovered,
+void drawThumbCardBorder(QPainter *painter, const QRect &card, bool selected, qreal hover,
                          const QStyleOptionViewItem &option)
 {
     if (selected)
@@ -281,9 +284,11 @@ void drawThumbCardBorder(QPainter *painter, const QRect &card, bool selected, bo
         painter->setBrush(Qt::NoBrush);
         painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 4, 4);
     }
-    else if (hovered)
+    else if (hover > 0.0)
     {
-        QPen border(option.palette.color(QPalette::Midlight));
+        QColor edge = option.palette.color(QPalette::Midlight);
+        edge.setAlphaF(static_cast<float>(hover));
+        QPen border(edge);
         border.setWidth(1);
         painter->setPen(border);
         painter->setBrush(Qt::NoBrush);
@@ -467,6 +472,8 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
     const ThumbnailPanel::Entry *entry = m_panel->entryForPath(path);
     const bool selected = option.state & QStyle::State_Selected;
     const bool hovered = option.state & QStyle::State_MouseOver;
+    const mviewer::ui::HoverFade *fade = mviewer::ui::HoverFade::forView(option.widget);
+    const qreal hover = fade != nullptr ? fade->progress(index) : (hovered ? 1.0 : 0.0);
     const ThumbnailPanel::ViewMode mode = m_panel->viewMode();
     const bool richFooter = mode == ThumbnailPanel::Thumbnail || mode == ThumbnailPanel::LargeIcon;
     const bool nameFooter = richFooter || mode == ThumbnailPanel::SmallIcon;
@@ -478,7 +485,7 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
 
     const QRect card = option.rect.adjusted(compactImageOnly ? 1 : 3, compactImageOnly ? 1 : 3,
                                             compactImageOnly ? -1 : -3, compactImageOnly ? -1 : -3);
-    drawThumbBackground(painter, card, option.rect, selected, hovered, option);
+    drawThumbBackground(painter, card, option.rect, selected, hover, option);
 
     const int footerHeight = richFooter ? 42 : (nameFooter ? 20 : 0);
     const int imagePadding = compactImageOnly ? 4 : 7;
@@ -492,7 +499,7 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
     drawFrameBadge(painter, card, entry);
     drawThumbFooter(painter, card, thumbRect, entry, path, name, richFooter, nameFooter, option);
     drawThumbRatingOverlays(painter, card, path);
-    drawThumbCardBorder(painter, card, selected, hovered, option);
+    drawThumbCardBorder(painter, card, selected, hover, option);
 
     painter->restore();
 }
