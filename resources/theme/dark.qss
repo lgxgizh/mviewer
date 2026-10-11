@@ -126,9 +126,9 @@ QMessageBox {
     background: {{bg1}};
 }
 
-QMessageBox QLabel {
+QMessageBox QLabel#qt_msgbox_label {
     color: {{textPrimary}};
-    min-width: 280px;
+    min-width: 240px;
 }
 
 QTextEdit,
