@@ -179,6 +179,8 @@ class MainWindow : public QMainWindow
     void scheduleSidecarImportPaths(const QStringList &imagePaths);
     // Shows/hides the gallery empty-state hint (no directory open yet).
     void updateEmptyState();
+    void buildEmptyStateUi();
+    void layoutEmptyState();
     // Shows/hides the gallery empty-folder hint (directory open, no images).
     void updateEmptyFolderState();
     // Toggles fullscreen on the image viewer when it is visible, else on the
@@ -233,8 +235,8 @@ class MainWindow : public QMainWindow
     std::string m_statusMetadataConsumer;
     void copyCurrentImageToClipboard();
     void openQuickCompare();
-    void openPreferences();     // F1 (M22): centralized Preferences dialog
-    void applyPreferences();    // re-apply view/sort/slideshow after settings change
+    void openPreferences();  // F1 (M22): centralized Preferences dialog
+    void applyPreferences(); // re-apply view/sort/slideshow after settings change
     void applyColorManagementPreference();
     void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
     void toggleFocusBrowse();
@@ -254,7 +256,8 @@ class MainWindow : public QMainWindow
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
     QLabel *m_emptyFolderLabel =
         nullptr; // gallery empty-folder hint (objectName: emptyFolderLabel)
-    QTimer *m_emptyFolderTimer = nullptr; // defers the hint past the pre-scan zero
+    QTimer *m_emptyFolderTimer = nullptr;    // defers the hint past the pre-scan zero
+    QPushButton *m_emptyStateOpen = nullptr; // empty-state "open folder" (emptyStateOpenButton)
     PreviewPanel *m_previewPanel = nullptr;
 
     AnalysisPanel *m_analysisPanel = nullptr;

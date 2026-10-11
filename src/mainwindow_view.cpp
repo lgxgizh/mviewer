@@ -735,8 +735,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // (and therefore the gallery) resizes.
     if (watched == m_thumbnailPanel && event->type() == QEvent::Resize)
     {
-        if (m_emptyState)
-            m_emptyState->setGeometry(m_thumbnailPanel->rect());
+        if (m_emptyState && !m_emptyState->isHidden())
+            layoutEmptyState();
         if (m_emptyFolderLabel && m_emptyFolderLabel->isVisible())
             m_emptyFolderLabel->setGeometry(m_thumbnailPanel->rect());
     }

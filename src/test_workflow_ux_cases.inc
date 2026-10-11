@@ -441,6 +441,13 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(emptyFolder != nullptr, "empty-folder hint has a stable object name");
     CHECK(emptyState && emptyState->isVisible(),
           "empty-state hint is shown when no directory is open");
+    auto *emptyOpen = w.findChild<QPushButton *>("emptyStateOpenButton");
+    CHECK(emptyOpen && emptyOpen->isVisible() && emptyOpen->isEnabled(),
+          "empty-state guide offers a visible open-folder button");
+    CHECK(emptyOpen && emptyState && emptyOpen->geometry().top() >= emptyState->geometry().top(),
+          "open-folder button sits under the empty-state guide text");
+    if (auto *viewer = w.findChild<ImageViewer *>())
+        CHECK(!viewer->loadingIndicatorVisible(), "idle viewer shows no loading bar");
     CHECK(metadataAction && !metadataAction->isEnabled() && !metadataAction->isChecked(),
           "empty Browse disables the image-information command without a stale checked state");
     CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&

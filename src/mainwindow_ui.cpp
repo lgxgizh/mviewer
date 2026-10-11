@@ -25,8 +25,10 @@ void MainWindow::updateEmptyState()
         return;
     const bool show = currentDir().isEmpty();
     m_emptyState->setVisible(show);
+    if (m_emptyStateOpen)
+        m_emptyStateOpen->setVisible(show);
     if (show)
-        m_emptyState->setGeometry(m_thumbnailPanel->rect());
+        layoutEmptyState();
 }
 
 void MainWindow::updateEmptyFolderState()

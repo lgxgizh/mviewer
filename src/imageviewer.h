@@ -15,6 +15,7 @@
 #include "gpu/GpuTileUploader.h"
 
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QOpenGLTextureBlitter>
 #include <QOpenGLWidget>
@@ -59,6 +60,11 @@ class ImageViewer : public QOpenGLWidget
     Q_OBJECT
 
   public:
+    // True while the thin loading bar is drawn: a decode is in flight (or only
+    // the provisional thumbnail is up) for longer than kLoadingBarDelayMs.
+    bool loadingIndicatorVisible() const;
+    static constexpr int kLoadingBarDelayMs = 150;
+
     explicit ImageViewer(QWidget *parent = nullptr);
     ~ImageViewer() override;
 
@@ -499,6 +505,8 @@ class ImageViewer : public QOpenGLWidget
     void drawCpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                       const Viewport &tileView);
     void drawEmptyState(QPainter &painter);
+    bool isLoadingBusy() const;
+    void drawLoadingBar(QPainter &painter);
     void drawSelection(QPainter &painter);
     bool handleNavigationKey(int key);
     bool handleZoomKey(int key, Qt::KeyboardModifiers modifiers);
@@ -608,6 +616,8 @@ class ImageViewer : public QOpenGLWidget
     QSize m_transitionSourceSize;
     bool m_tileRepaintQueued = false;
     bool m_loading = false;
+    QElapsedTimer m_busyClock;      // started when a load becomes visible-busy
+    QTimer *m_busyTicker = nullptr; // repaints the loading bar while busy
     bool m_preserveViewOnReload = false;
     TaskScheduler::TaskHandle m_roiStatsRequest;
     uint64_t m_exportGeneration = 0;
