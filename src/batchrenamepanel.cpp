@@ -1,4 +1,5 @@
 #include "batchrenamepanel.h"
+#include "ThemeMetrics.h"
 
 #include "Theme.h"
 
@@ -42,7 +43,7 @@ BatchRenamePanel::BatchRenamePanel(QWidget *parent) : QWidget(parent)
     setObjectName(QStringLiteral("batchRenamePanel"));
     auto *mainLay = new QVBoxLayout(this);
     mainLay->setContentsMargins(0, 0, 0, 0);
-    mainLay->setSpacing(6);
+    mainLay->setSpacing(mviewer::ui::metrics::kSpace8);
 
     auto *patternRow = new QHBoxLayout;
     patternRow->addWidget(new QLabel(tr("重命名模式:")));

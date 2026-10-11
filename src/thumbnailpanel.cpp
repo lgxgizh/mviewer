@@ -1,3 +1,4 @@
+#include "ThemeMetrics.h"
 #include "hoverfade.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
@@ -58,7 +59,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 
     m_compareBtn = new QPushButton(QStringLiteral("比较 (P)"), this);
     m_compareBtn->setObjectName(QStringLiteral("compareSelectionButton"));
-    m_compareBtn->setFixedHeight(28);
+    m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     m_compareBtn->setVisible(false);
     connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::requestCompare);
 

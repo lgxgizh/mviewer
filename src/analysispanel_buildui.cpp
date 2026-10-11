@@ -1,4 +1,5 @@
 #include "Theme.h"
+#include "ThemeMetrics.h"
 #include "analysispanel.h"
 #include "analyzermodel.h"
 #include "core/analysis/AnalysisEngine.h"
@@ -35,7 +36,8 @@ QString analysisReadoutStyle(bool monospace)
 void AnalysisPanel::buildUi()
 {
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(6, 6, 6, 6);
+    mainLayout->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8,
+                                   mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
     mainLayout->setSpacing(4);
     buildAnalyzerSection(*mainLayout);
     buildHistorySection(*mainLayout);

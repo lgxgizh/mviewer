@@ -1,4 +1,5 @@
 // MainWindow layout construction and command surfaces.
+#include "ThemeMetrics.h"
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
@@ -61,11 +62,12 @@ QLabel *sectionHeaderLabel(QWidget *parent, const char *objectName, const QStrin
     auto *label = new QLabel(text, parent);
     label->setObjectName(QString::fromLatin1(objectName));
     label->setProperty("sectionHeader", true);
-    label->setFixedHeight(28);
+    label->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     label->setStyleSheet(
-        QStringLiteral("QLabel{color:%1;background:%2;padding-left:8px;}")
+        QStringLiteral("QLabel{color:%1;background:%2;padding-left:%3px;}")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1)));
+                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1),
+                 QString::number(mviewer::ui::metrics::kSpace8)));
     return label;
 }
 } // namespace
@@ -205,7 +207,7 @@ QWidget *MainWindow::buildNavigationPanel()
     foldersSection->setObjectName("foldersSection");
     auto *foldersLayout = new QVBoxLayout(foldersSection);
     foldersLayout->setContentsMargins(0, 0, 0, 0);
-    foldersLayout->setSpacing(2);
+    foldersLayout->setSpacing(mviewer::ui::metrics::kSpace4);
     foldersLayout->addWidget(
         sectionHeaderLabel(foldersSection, "foldersSectionLabel", tr("文件夹")));
 
@@ -220,7 +222,7 @@ QWidget *MainWindow::buildNavigationPanel()
     previewSection->setObjectName("previewSection");
     auto *previewLayout = new QVBoxLayout(previewSection);
     previewLayout->setContentsMargins(0, 0, 0, 0);
-    previewLayout->setSpacing(2);
+    previewLayout->setSpacing(mviewer::ui::metrics::kSpace4);
     previewLayout->addWidget(sectionHeaderLabel(previewSection, "previewSectionLabel", tr("预览")));
     m_previewPanel = new PreviewPanel(previewSection);
     m_previewPanel->installEventFilter(this);
@@ -267,7 +269,7 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
     auto *sortBar = new QWidget(parent);
     auto *sortRootLayout = new QVBoxLayout(sortBar);
     sortRootLayout->setContentsMargins(0, 0, 0, 0);
-    sortRootLayout->setSpacing(2);
+    sortRootLayout->setSpacing(mviewer::ui::metrics::kSpace4);
     // Address bar sits on the gallery toolbar strip, above 排序 / 高级筛选.
     if (m_pathEdit)
     {
@@ -282,8 +284,10 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
     auto *advancedFilterPanel = new QWidget(sortBar);
     advancedFilterPanel->setObjectName("advancedFilterPanel");
     auto *advancedLayout = new QHBoxLayout(advancedFilterPanel);
-    advancedLayout->setContentsMargins(6, 2, 6, 4);
-    advancedLayout->setSpacing(6);
+    advancedLayout->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace4,
+                                       mviewer::ui::metrics::kSpace8,
+                                       mviewer::ui::metrics::kSpace4);
+    advancedLayout->setSpacing(mviewer::ui::metrics::kSpace8);
     sortRootLayout->addWidget(advancedFilterPanel);
     m_advancedFilterPanel = advancedFilterPanel;
 
@@ -679,7 +683,7 @@ void MainWindow::buildStatusBarUi()
     m_lblCache->setToolTip(tr("缓存命中率: 提升连续大图切换与缩略图加载性能"));
     for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
     {
-        l->setContentsMargins(8, 0, 8, 0);
+        l->setContentsMargins(mviewer::ui::metrics::kSpace8, 0, mviewer::ui::metrics::kSpace8, 0);
         statusBar()->addPermanentWidget(l);
     }
     m_lblSize->hide();

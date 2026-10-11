@@ -1,3 +1,4 @@
+#include "ThemeMetrics.h"
 #include "compareworkspace_p.h"
 
 #include "Theme.h"
@@ -51,7 +52,7 @@ void tighten(QWidget *widget)
         return;
     if (qobject_cast<QAbstractButton *>(widget) || qobject_cast<QComboBox *>(widget) ||
         qobject_cast<QSpinBox *>(widget) || qobject_cast<QSlider *>(widget))
-        widget->setFixedHeight(28);
+        widget->setFixedHeight(mviewer::ui::metrics::kControlHeight);
 }
 
 void place(QLayout *layout, QWidget *widget, bool showIt)
@@ -95,7 +96,7 @@ void styleSegment(QCheckBox *box)
         return;
     const int radius = mviewer::ui::makeThemeTokens(true).radiusControl;
     box->setCursor(Qt::PointingHandCursor);
-    box->setFixedHeight(28);
+    box->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     box->setStyleSheet(QStringLiteral("QCheckBox{spacing:0px;padding:2px 6px;border:1px solid %1;"
                                       "border-radius:%2px;background:%3;}"
                                       "QCheckBox::indicator{width:0px;height:0px;}"
@@ -143,7 +144,7 @@ QToolButton *makePopup(QWidget *parent, const char *name, const QString &text, c
     button->setToolTip(tip);
     button->setPopupMode(QToolButton::InstantPopup);
     button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-    button->setFixedHeight(28);
+    button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     button->setMenu(new QMenu(button));
     return button;
 }
@@ -289,7 +290,7 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     auto *morePanel = new QWidget(more);
     auto *moreLay = new QVBoxLayout(morePanel);
     moreLay->setContentsMargins(8, 8, 8, 8);
-    moreLay->setSpacing(6);
+    moreLay->setSpacing(mviewer::ui::metrics::kSpace8);
     park(moreLay, m_savePresetBtn, true);
     park(moreLay, m_loadPresetBtn, true);
     park(moreLay, m_autoAlignChk, true);
@@ -364,7 +365,7 @@ void CompareWorkspace::regroupCompareChrome()
     if (m_layoutCombo)
     {
         m_layoutCombo->setToolTip(tr("布局：自动 / 1×N / 2×2 …（Ctrl+2 / Ctrl+4 / Ctrl+8）"));
-        m_layoutCombo->setFixedHeight(28);
+        m_layoutCombo->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     }
     place(viewLay, syncButton, true);
     place(viewLay, findChild<QPushButton *>(QStringLiteral("fitWindowButton")), true);

@@ -1,4 +1,5 @@
 #include "breadcrumbbar.h"
+#include "ThemeMetrics.h"
 
 #include "Theme.h"
 
@@ -13,10 +14,11 @@
 BreadcrumbBar::BreadcrumbBar(QWidget *parent) : QWidget(parent)
 {
     m_layout = new QHBoxLayout(this);
-    m_layout->setContentsMargins(2, 0, 2, 0);
+    m_layout->setContentsMargins(mviewer::ui::metrics::kSpace4, 0, mviewer::ui::metrics::kSpace4,
+                                 0);
     m_layout->setSpacing(0);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-    setFixedHeight(28);
+    setFixedHeight(mviewer::ui::metrics::kControlHeight);
 }
 
 void BreadcrumbBar::setPath(const QString &path)

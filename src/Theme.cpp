@@ -1,4 +1,5 @@
 #include "Theme.h"
+#include "ThemeMetrics.h"
 
 #include <QAbstractButton>
 #include <QApplication>
@@ -10,6 +11,7 @@
 #include <QFont>
 #include <QGuiApplication>
 #include <QPalette>
+#include <QProxyStyle>
 #include <QSettings>
 #include <QStyle>
 #include <QStyleFactory>
@@ -91,6 +93,33 @@ void applyThemeFont(const ThemeTokens &tokens)
     QApplication::setFont(font);
 }
 
+// Fusion with the app spacing scale: layouts that do not set explicit margins
+// or spacing (most dialogs, form layouts, button boxes) land on the same grid.
+class ScaledStyle : public QProxyStyle
+{
+  public:
+    using QProxyStyle::QProxyStyle;
+
+    int pixelMetric(PixelMetric metric, const QStyleOption *option,
+                    const QWidget *widget) const override
+    {
+        namespace m = mviewer::ui::metrics;
+        switch (metric)
+        {
+        case PM_LayoutLeftMargin:
+        case PM_LayoutTopMargin:
+        case PM_LayoutRightMargin:
+        case PM_LayoutBottomMargin:
+            return (widget != nullptr && widget->isWindow()) ? m::kWindowMargin : m::kChildMargin;
+        case PM_LayoutHorizontalSpacing:
+        case PM_LayoutVerticalSpacing:
+            return m::kLayoutSpacing;
+        default:
+            return QProxyStyle::pixelMetric(metric, option, widget);
+        }
+    }
+};
+
 // Every dialog (our own, QMessageBox, QInputDialog, Qt's file dialog) gets its
 // accept button marked primary when shown, so the accent stays on the action
 // that commits instead of following keyboard focus like QPushButton:default.
@@ -157,8 +186,8 @@ void Theme::applyTheme(ThemeMode mode)
     ensureThemeResources();
     g_mode = mode;
     g_tokens = tokensFor(mode, systemPrefersDark());
-    if (QStyle *style = QStyleFactory::create(QStringLiteral("Fusion")))
-        QApplication::setStyle(style);
+    if (QStyle *fusion = QStyleFactory::create(QStringLiteral("Fusion")))
+        QApplication::setStyle(new ScaledStyle(fusion));
     QApplication::setPalette(buildPalette(g_tokens));
     applyThemeFont(g_tokens);
     if (qApp)

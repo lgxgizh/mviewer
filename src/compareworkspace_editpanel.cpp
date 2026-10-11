@@ -1,5 +1,6 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
 #include "Theme.h"
+#include "ThemeMetrics.h"
 #include "compareworkspace_p.h"
 #include "compareworkspace_preset_sanitize.h"
 #include "domain/CompareSession.h"
@@ -40,7 +41,7 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     m_editPanel = new QWidget(m_sidePanel);
     auto *editLay = new QVBoxLayout(m_editPanel);
     editLay->setContentsMargins(0, 4, 0, 0);
-    editLay->setSpacing(3);
+    editLay->setSpacing(mviewer::ui::metrics::kSpace4);
 
     m_editLabel = new QLabel(tr("— 选中窗格后可编辑 —"), m_editPanel);
     m_editLabel->setStyleSheet(

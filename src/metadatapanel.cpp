@@ -1,4 +1,5 @@
 #include "metadatapanel.h"
+#include "ThemeMetrics.h"
 
 #include "core/RatingStore.h"
 #include "core/image/MetadataReader.h"
@@ -26,7 +27,8 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
 {
     m_consumerId = "metadata-panel-" + std::to_string(reinterpret_cast<std::uintptr_t>(this));
     auto *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(6, 6, 6, 6);
+    layout->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8,
+                               mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
     layout->setSpacing(4);
 
     layout->addWidget(new QLabel(tr("元数据 (Metadata)"), this));
@@ -63,7 +65,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     auto *ratingBox = new QWidget(this);
     auto *ratingLay = new QHBoxLayout(ratingBox);
     ratingLay->setContentsMargins(0, 0, 0, 0);
-    ratingLay->setSpacing(6);
+    ratingLay->setSpacing(mviewer::ui::metrics::kSpace8);
     ratingLay->addWidget(new QLabel(tr("评分:"), this));
     m_rating = new RatingWidget(this);
     ratingLay->addWidget(m_rating);
@@ -91,7 +93,7 @@ QWidget *MetadataPanel::buildFlagsBox()
     auto *flagBox = new QWidget(this);
     auto *flagLay = new QHBoxLayout(flagBox);
     flagLay->setContentsMargins(0, 0, 0, 0);
-    flagLay->setSpacing(6);
+    flagLay->setSpacing(mviewer::ui::metrics::kSpace8);
     flagLay->addWidget(new QLabel(tr("色标:"), this));
     m_colorLabel = new QComboBox(this);
     m_colorLabel->addItem(tr("无"), 0);
@@ -321,8 +323,7 @@ void MetadataPanel::onTreeContextMenu(const QPoint &pos)
 
             if (!valStr.isEmpty())
             {
-                const QString displayVal =
-                    valStr.length() > 20 ? valStr.left(17) + "..." : valStr;
+                const QString displayVal = valStr.length() > 20 ? valStr.left(17) + "..." : valStr;
                 menu.addAction(tr("复制数值 (\"%1\")").arg(displayVal), this,
                                [valStr]() { QApplication::clipboard()->setText(valStr); });
             }
@@ -331,12 +332,9 @@ void MetadataPanel::onTreeContextMenu(const QPoint &pos)
                 const QString preview = QString("%1: %2").arg(keyStr, valStr);
                 const QString displayKv =
                     preview.length() > 25 ? preview.left(22) + "..." : preview;
-                menu.addAction(tr("复制项 (\"%1\")").arg(displayKv), this,
-                               [keyStr, valStr]()
-                               {
-                                   QApplication::clipboard()->setText(
-                                       QString("%1: %2").arg(keyStr, valStr));
-                               });
+                menu.addAction(
+                    tr("复制项 (\"%1\")").arg(displayKv), this, [keyStr, valStr]()
+                    { QApplication::clipboard()->setText(QString("%1: %2").arg(keyStr, valStr)); });
             }
             menu.addSeparator();
         }
@@ -360,4 +358,3 @@ void MetadataPanel::onTreeDoubleClicked(const QModelIndex &index)
     QApplication::clipboard()->setText(valStr);
     QToolTip::showText(QCursor::pos(), tr("已复制数值: %1").arg(valStr), m_tree);
 }
-
