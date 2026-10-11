@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.107] - 2026-10-11
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.107**.
+
 ### Changed
 
 - 比较模式高质量缩放提速（多线程、先粗后精、SIMD、渐进显示）.
