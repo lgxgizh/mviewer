@@ -14,6 +14,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QImage>
+#include <QLabel>
 #include <QListView>
 #include <QPushButton>
 #include <QSettings>
@@ -253,6 +254,46 @@ int main(int argc, char **argv)
         mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::Dark);
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
               "Theme switched back to Dark");
+    }
+
+    // ---- Light theme ----
+    {
+        using mviewer::ui::Theme;
+        using mviewer::ui::ThemeMode;
+        CHECK(Theme::themeModeFromKey(QStringLiteral("light")) == ThemeMode::Light,
+              "light theme key parses");
+        CHECK(Theme::themeModeFromKey(Theme::themeModeKey(ThemeMode::System)) == ThemeMode::System,
+              "system theme key round-trips");
+        CHECK(Theme::themeModeFromKey(QStringLiteral("bogus")) == ThemeMode::Dark,
+              "unknown theme key falls back to dark");
+        CHECK(!Theme::themeModeName(ThemeMode::Light).isEmpty(),
+              "ThemeModeName not empty for Light");
+        const mviewer::ui::ThemeTokens light = Theme::tokensFor(ThemeMode::Light, true);
+        const mviewer::ui::ThemeTokens dark = Theme::tokensFor(ThemeMode::Dark, false);
+        CHECK(light.bg0 == mviewer::ui::makeThemeTokens(false).bg0,
+              "Light ignores a dark desktop and uses light tokens");
+
+        Theme::applyTheme(ThemeMode::Dark);
+        QLabel probe;
+        probe.setStyleSheet(QStringLiteral("QLabel{background:%1;color:#ffffff;}")
+                                .arg(Theme::themeColor(mviewer::ui::ThemeRole::Bg1)));
+        probe.setTextFormat(Qt::RichText);
+        probe.setText(QStringLiteral("<span style='color:%1'>x</span>")
+                          .arg(Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
+        Theme::applyTheme(ThemeMode::Light);
+        CHECK(Theme::currentTheme() == ThemeMode::Light, "Theme switched to Light");
+        CHECK(qApp->styleSheet().contains(light.bg0), "light stylesheet uses the light background");
+        CHECK(probe.styleSheet().contains(light.bg1) && !probe.styleSheet().contains(dark.bg1),
+              "live switch retints token colors in widget stylesheets");
+        CHECK(probe.styleSheet().contains(QStringLiteral("#ffffff")),
+              "live switch keeps literal white untouched");
+        CHECK(probe.text().contains(light.textSecondary), "live switch retints rich-text labels");
+        CHECK(!mviewer::ui::toolbarIconPixmap("open").isNull(),
+              "toolbar icon renders in light theme");
+        CHECK(QSettings().value(QStringLiteral("uiTheme")).toString() == QStringLiteral("light"),
+              "light theme choice is persisted");
+        Theme::applyTheme(ThemeMode::Dark);
+        CHECK(probe.styleSheet().contains(dark.bg1), "switching back restores dark token colors");
     }
 
     // ---- Dialog polish + hover fade ----

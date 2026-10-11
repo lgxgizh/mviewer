@@ -10,8 +10,11 @@
 #include <QFile>
 #include <QFont>
 #include <QGuiApplication>
+#include <QHash>
+#include <QLabel>
 #include <QPalette>
 #include <QProxyStyle>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStyle>
 #include <QStyleFactory>
@@ -170,21 +173,159 @@ void installDialogPolisher()
     qApp->installEventFilter(polisher);
 }
 
+// Token colors baked into per-widget stylesheets and rich-text labels at build
+// time are swapped to the new theme in one pass, so a live light/dark switch
+// does not leave dark islands behind. Colors that are not tokens are untouched.
+QHash<QString, QString> tokenColorMap(const ThemeTokens &from, const ThemeTokens &to)
+{
+    const QString ThemeTokens::*fields[] = {
+        &ThemeTokens::bg0,           &ThemeTokens::bg1,          &ThemeTokens::bg2,
+        &ThemeTokens::bg3,           &ThemeTokens::border,       &ThemeTokens::textPrimary,
+        &ThemeTokens::textSecondary, &ThemeTokens::textDisabled, &ThemeTokens::accentHover,
+        &ThemeTokens::accentPressed,
+    };
+    QHash<QString, QString> map;
+    for (const auto field : fields)
+    {
+        const QColor oldColor(from.*field);
+        const QColor newColor(to.*field);
+        const bool literal = oldColor == QColor(Qt::white) || oldColor == QColor(Qt::black);
+        if (oldColor.isValid() && newColor.isValid() && oldColor != newColor && !literal)
+            map.insert(oldColor.name().toLower(), newColor.name());
+    }
+    return map;
+}
+
+QString remapColors(const QString &text, const QHash<QString, QString> &map)
+{
+    static const QRegularExpression hex(QStringLiteral("#[0-9a-fA-F]{6}\\b"));
+    static const QRegularExpression rgba(QStringLiteral("rgba\\((\\d+),\\s*(\\d+),\\s*(\\d+),"));
+    QString out;
+    out.reserve(text.size());
+    qsizetype last = 0;
+    auto it = hex.globalMatch(text);
+    while (it.hasNext())
+    {
+        const QRegularExpressionMatch m = it.next();
+        const auto found = map.constFind(m.captured(0).toLower());
+        if (found == map.constEnd())
+            continue;
+        out += text.mid(last, m.capturedStart(0) - last) + found.value();
+        last = m.capturedEnd(0);
+    }
+    out += text.mid(last);
+
+    QString result;
+    last = 0;
+    auto rit = rgba.globalMatch(out);
+    while (rit.hasNext())
+    {
+        const QRegularExpressionMatch m = rit.next();
+        const QColor c(m.captured(1).toInt(), m.captured(2).toInt(), m.captured(3).toInt());
+        const auto found = map.constFind(c.name());
+        if (found == map.constEnd())
+            continue;
+        const QColor n(found.value());
+        result += out.mid(last, m.capturedStart(0) - last) +
+                  QStringLiteral("rgba(%1,%2,%3,").arg(n.red()).arg(n.green()).arg(n.blue());
+        last = m.capturedEnd(0);
+    }
+    result += out.mid(last);
+    return result;
+}
+
+void retintLiveWidgets(const ThemeTokens &from, const ThemeTokens &to)
+{
+    if (qApp == nullptr)
+        return;
+    const QHash<QString, QString> map = tokenColorMap(from, to);
+    if (map.isEmpty())
+        return;
+    const auto widgets = QApplication::allWidgets();
+    for (QWidget *widget : widgets)
+    {
+        const QString sheet = widget->styleSheet();
+        if (!sheet.isEmpty())
+        {
+            const QString mapped = remapColors(sheet, map);
+            if (mapped != sheet)
+                widget->setStyleSheet(mapped);
+        }
+        auto *label = qobject_cast<QLabel *>(widget);
+        if (label != nullptr && label->textFormat() == Qt::RichText)
+        {
+            const QString text = label->text();
+            const QString mapped = remapColors(text, map);
+            if (mapped != text)
+                label->setText(mapped);
+        }
+    }
+}
+
+// In System mode, re-apply when Windows switches between light and dark apps.
+void installSystemSchemeFollower()
+{
+    static bool installed = false;
+    if (installed || qApp == nullptr)
+        return;
+    installed = true;
+    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, qApp,
+                     [](Qt::ColorScheme)
+                     {
+                         if (g_mode == ThemeMode::System)
+                             Theme::applyTheme(ThemeMode::System);
+                     });
+}
+
 } // namespace
 
 void Theme::initTheme()
 {
     ensureThemeResources();
     QSettings settings;
-    QString mode = settings.value(QStringLiteral("uiTheme"), QStringLiteral("dark")).toString();
-    g_mode = (mode.toLower() == QStringLiteral("system")) ? ThemeMode::System : ThemeMode::Dark;
+    // Without a saved choice the fallback stays Dark; main() seeds "system" on a
+    // first launch via seedDefaultThemeChoice().
+    g_mode = themeModeFromKey(
+        settings.value(QStringLiteral("uiTheme"), QStringLiteral("dark")).toString());
     applyTheme(g_mode);
+}
+
+void Theme::seedDefaultThemeChoice()
+{
+    QSettings settings;
+    if (!settings.contains(QStringLiteral("uiTheme")))
+        settings.setValue(QStringLiteral("uiTheme"), themeModeKey(ThemeMode::System));
+}
+
+QString Theme::themeModeKey(ThemeMode mode)
+{
+    switch (mode)
+    {
+    case ThemeMode::System:
+        return QStringLiteral("system");
+    case ThemeMode::Light:
+        return QStringLiteral("light");
+    case ThemeMode::Dark:
+    default:
+        return QStringLiteral("dark");
+    }
+}
+
+ThemeMode Theme::themeModeFromKey(const QString &key)
+{
+    const QString lower = key.trimmed().toLower();
+    if (lower == QStringLiteral("system"))
+        return ThemeMode::System;
+    if (lower == QStringLiteral("light"))
+        return ThemeMode::Light;
+    return ThemeMode::Dark;
 }
 
 void Theme::applyTheme(ThemeMode mode)
 {
     ensureThemeResources();
     g_mode = mode;
+    const ThemeTokens previous = g_tokens;
     g_tokens = tokensFor(mode, systemPrefersDark());
     if (QStyle *fusion = QStyleFactory::create(QStringLiteral("Fusion")))
         QApplication::setStyle(new ScaledStyle(fusion));
@@ -193,10 +334,12 @@ void Theme::applyTheme(ThemeMode mode)
     if (qApp)
         qApp->setStyleSheet(buildStyleSheet(g_tokens));
     installDialogPolisher();
+    retintLiveWidgets(previous, g_tokens);
+
+    installSystemSchemeFollower();
 
     QSettings settings;
-    settings.setValue(QStringLiteral("uiTheme"),
-                      mode == ThemeMode::Dark ? QStringLiteral("dark") : QStringLiteral("system"));
+    settings.setValue(QStringLiteral("uiTheme"), themeModeKey(mode));
 }
 
 ThemeMode Theme::currentTheme()
@@ -206,7 +349,16 @@ ThemeMode Theme::currentTheme()
 
 QString Theme::themeModeName(ThemeMode mode)
 {
-    return mode == ThemeMode::Dark ? QStringLiteral("深色模式") : QStringLiteral("系统默认");
+    switch (mode)
+    {
+    case ThemeMode::System:
+        return QStringLiteral("跟随系统");
+    case ThemeMode::Light:
+        return QStringLiteral("浅色模式");
+    case ThemeMode::Dark:
+    default:
+        return QStringLiteral("深色模式");
+    }
 }
 
 bool Theme::systemPrefersDark()
@@ -217,6 +369,7 @@ bool Theme::systemPrefersDark()
 ThemeTokens Theme::tokensFor(ThemeMode mode, bool prefersDark)
 {
     const bool dark = mode == ThemeMode::Dark || (mode == ThemeMode::System && prefersDark);
+    // ThemeMode::Light always uses the light token swap.
     return makeThemeTokens(dark);
 }
 

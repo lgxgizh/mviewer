@@ -38,7 +38,9 @@ inline ThemeTokens makeThemeTokens(bool dark)
 {
     ThemeTokens tokens;
     tokens.bg0 = QString::fromLatin1(dark ? "#1e1e1e" : "#f5f5f5");
-    tokens.bg1 = QString::fromLatin1(dark ? "#252526" : "#ffffff");
+    // Light bg1 is off-white, not #ffffff, so a live theme switch can tell the
+    // token apart from literal white text on image overlays.
+    tokens.bg1 = QString::fromLatin1(dark ? "#252526" : "#fcfcfd");
     tokens.bg2 = QString::fromLatin1(dark ? "#2d2d30" : "#ececef");
     tokens.bg3 = QString::fromLatin1(dark ? "#3a3a3d" : "#e1e1e5");
     tokens.border = QString::fromLatin1(dark ? "#3f3f46" : "#d0d0d6");
