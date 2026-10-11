@@ -507,40 +507,7 @@ QWidget *MainWindow::buildGalleryPanel()
         m_thumbnailPanel->viewport()->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
 
-    // Empty-state hint overlay: shown until the first directory is opened.
-    m_emptyState = new QLabel(m_thumbnailPanel);
-    m_emptyState->setObjectName(QStringLiteral("emptyStateLabel"));
-    m_emptyState->setAlignment(Qt::AlignCenter);
-    m_emptyState->setWordWrap(true);
-    m_emptyState->setTextFormat(Qt::RichText);
-    // clang-format off
-    m_emptyState->setText(tr("<table align='center'><tr><td bgcolor='#1c1c1f' align='center' style='padding:22px 32px; border:1px solid #333338; border-radius:8px;'>"
-                             "<div style='color:#f4f4f5; font-size:15px; font-weight:600; margin-bottom:8px;'>\u6253\u5f00\u4e00\u4e2a\u6587\u4ef6\u5939\u4ee5\u5f00\u59cb\u6d4f\u89c8</div>"
-                             "<div style='color:#a1a1aa; font-size:12px;'>"
-                             "<span style='background-color:#2a2b30; color:#e4e4e7;'>&nbsp;Ctrl+O&nbsp;</span> "
-                             "\u6253\u5f00\u76ee\u5f55 &nbsp;\u00b7&nbsp; \u4e5f\u53ef\u5c06\u56fe\u7247\u6216\u6587\u4ef6\u5939\u62d6\u5165\u7a97\u53e3</div>"
-                             "</td></tr></table>"));
-    // clang-format on
-    m_emptyState->setAttribute(Qt::WA_TransparentForMouseEvents);
-    m_emptyState->show();
-    updateEmptyState();
-
-    // Empty-folder hint: a directory is open but nothing is displayable
-    // (no image files, or every entry is hidden by filters). Deferred via
-    // a short timer so the transient pre-scan zero cannot flash it.
-    m_emptyFolderLabel = new QLabel(m_thumbnailPanel);
-    m_emptyFolderLabel->setObjectName(QStringLiteral("emptyFolderLabel"));
-    m_emptyFolderLabel->setAlignment(Qt::AlignCenter);
-    m_emptyFolderLabel->setWordWrap(true);
-    m_emptyFolderLabel->setTextFormat(Qt::RichText);
-    // clang-format off
-    m_emptyFolderLabel->setText(tr("<table align='center'><tr><td bgcolor='#1c1c1f' align='center' style='padding:22px 32px; border:1px solid #333338; border-radius:8px;'>"
-                                   "<div style='color:#f4f4f5; font-size:15px; font-weight:600; margin-bottom:8px;'>\u6b64\u6587\u4ef6\u5939\u4e2d\u6ca1\u6709\u53ef\u663e\u793a\u7684\u56fe\u7247</div>"
-                                   "<div style='color:#a1a1aa; font-size:12px;'>\u5c1d\u8bd5\u6e05\u9664\u7b5b\u9009\u6216\u6362\u4e00\u4e2a\u6587\u4ef6\u5939</div>"
-                                   "</td></tr></table>"));
-    // clang-format on
-    m_emptyFolderLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
-    m_emptyFolderLabel->hide();
+    buildEmptyStateUi();
     m_emptyFolderTimer = new QTimer(this);
     m_emptyFolderTimer->setSingleShot(true);
     m_emptyFolderTimer->setInterval(600);

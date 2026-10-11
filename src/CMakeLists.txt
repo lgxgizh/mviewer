@@ -157,6 +157,7 @@ add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
+    mainwindow_emptystate.cpp
     mainwindow_ui_chrome.cpp
     mainwindow_ui_menus.cpp
     mainwindow_filetransform.cpp
@@ -180,6 +181,7 @@ add_library(mviewer_ui STATIC
     imageviewer_multiframe.cpp
     imageviewer_lod.cpp
     imageviewer_paint.cpp
+    imageviewer_loadingbar.cpp
     imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp
     imageviewer_transform.cpp

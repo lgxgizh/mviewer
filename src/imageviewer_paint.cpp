@@ -132,6 +132,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     drawOverlayBadge(painter);
     drawSelection(painter);
     drawFrameStatus(painter);
+    drawLoadingBar(painter);
     if (hasDisplayImage())
     {
         const std::string zoomText = mviewer::core::formatZoomPercent(m_view.scale);
