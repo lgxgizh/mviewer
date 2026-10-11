@@ -1,3 +1,4 @@
+#include "ThemeMetrics.h"
 #include "mainwindow_p.h"
 
 #include <QComboBox>
@@ -21,12 +22,12 @@ void MainWindow::installNavigationCollapse()
     if (auto *bar = findChild<QToolBar *>(QStringLiteral("browserToolBar")))
     {
         bar->setIconSize(QSize(16, 16));
-        bar->setFixedHeight(40);
+        bar->setFixedHeight(mviewer::ui::metrics::kBarHeight);
         auto *button = new QToolButton(bar);
         button->setObjectName(QStringLiteral("toggleNavigationPanelButton"));
         button->setDefaultAction(m_actToggleNavigation);
         button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        button->setFixedHeight(28);
+        button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
         QAction *first = bar->actions().isEmpty() ? nullptr : bar->actions().constFirst();
         bar->insertWidget(first, button);
     }
@@ -70,7 +71,7 @@ void MainWindow::polishGalleryToolbar(QWidget *sortBar)
     {
         if (qobject_cast<QComboBox *>(widget) || qobject_cast<QPushButton *>(widget) ||
             qobject_cast<QLineEdit *>(widget))
-            widget->setFixedHeight(28);
+            widget->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     }
 }
 
@@ -96,7 +97,7 @@ void MainWindow::placeGalleryCompareButton(QWidget *sortBar)
         return;
     button->setParent(sortBar);
     button->setText(QStringLiteral("比较 (P)"));
-    button->setFixedHeight(28);
+    button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     button->adjustSize();
     row->addWidget(button);
 }

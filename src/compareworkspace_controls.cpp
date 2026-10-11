@@ -1,4 +1,5 @@
 // CompareWorkspace control construction split from the lifecycle constructor.
+#include "ThemeMetrics.h"
 #include "compareworkspace_p.h"
 
 #include "Theme.h"
@@ -571,7 +572,8 @@ QWidget *CompareWorkspace::buildStatusStrip()
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border)));
     auto *lay = new QHBoxLayout(strip);
-    lay->setContentsMargins(8, 2, 8, 2);
+    lay->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace4,
+                            mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace4);
     lay->setSpacing(8);
 
     const int chipRadius = mviewer::ui::makeThemeTokens(true).radiusControl;

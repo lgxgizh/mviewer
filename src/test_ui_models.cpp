@@ -1,5 +1,6 @@
 #include "Theme.h"
 #include "ThemeIcons.h"
+#include "ThemeMetrics.h"
 #include "analyzermodel.h"
 #include "breadcrumbbar.h"
 #include "directorymodel.h"
@@ -18,6 +19,7 @@
 #include <QSettings>
 #include <QStringList>
 #include <QStringListModel>
+#include <QStyle>
 #include <cstdio>
 #include <memory>
 
@@ -273,6 +275,17 @@ int main(int argc, char **argv)
         CHECK(mviewer::ui::HoverFade::forView(&view) == fade, "hover fade found on its view");
         CHECK(fade->progress(fadeModel.index(0)) == 0.0, "unhovered item has no hover progress");
         CHECK(fade->progress(QModelIndex()) == 0.0, "invalid index has no hover progress");
+
+        QWidget child(&dialog);
+        CHECK(QApplication::style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing) ==
+                  mviewer::ui::metrics::kLayoutSpacing,
+              "app style uses the spacing scale between layout items");
+        CHECK(QApplication::style()->pixelMetric(QStyle::PM_LayoutLeftMargin, nullptr, &dialog) ==
+                  mviewer::ui::metrics::kWindowMargin,
+              "dialogs get the window margin from the spacing scale");
+        CHECK(QApplication::style()->pixelMetric(QStyle::PM_LayoutLeftMargin, nullptr, &child) ==
+                  mviewer::ui::metrics::kChildMargin,
+              "child widgets get the child margin from the spacing scale");
     }
 
     // ---- BreadcrumbBar ----

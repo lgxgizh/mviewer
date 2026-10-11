@@ -1,4 +1,5 @@
 #include "batchdialog_panels.h"
+#include "ThemeMetrics.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -72,7 +73,7 @@ QWidget *makeWatermarkPanel(QLineEdit *&text, QComboBox *&pos, QDoubleSpinBox *&
     panel->setObjectName(QStringLiteral("batchWatermarkPanel"));
     auto *lay = new QVBoxLayout(panel);
     lay->setContentsMargins(0, 0, 0, 0);
-    lay->setSpacing(6);
+    lay->setSpacing(mviewer::ui::metrics::kSpace8);
     auto *row1 = new QHBoxLayout;
     row1->addWidget(new QLabel("水印文字:"));
     text = new QLineEdit;
@@ -108,7 +109,7 @@ QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&out
     panel->setObjectName(QStringLiteral("batchExportPanel"));
     auto *lay = new QVBoxLayout(panel);
     lay->setContentsMargins(0, 0, 0, 0);
-    lay->setSpacing(6);
+    lay->setSpacing(mviewer::ui::metrics::kSpace8);
     auto *fmtRow = new QHBoxLayout;
     fmtRow->addWidget(new QLabel("导出格式:"));
     format = new QComboBox;

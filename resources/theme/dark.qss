@@ -32,6 +32,8 @@ QToolButton {
     border: none;
     border-radius: {{radiusControl}}px;
     padding: {{space4}}px;
+    min-height: 20px;
+    min-width: 20px;
     color: {{textPrimary}};
 }
 
@@ -161,10 +163,10 @@ QRadioButton:disabled {
 }
 
 QCheckBox::indicator {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border: 1px solid {{border}};
-    border-radius: 3px;
+    border-radius: {{space4}}px;
     background: {{bg0}};
 }
 
@@ -189,10 +191,10 @@ QCheckBox::indicator:disabled {
 }
 
 QRadioButton::indicator {
-    width: 14px;
-    height: 14px;
+    width: 16px;
+    height: 16px;
     border: 1px solid {{border}};
-    border-radius: 7px;
+    border-radius: {{space8}}px;
     background: {{bg0}};
 }
 
@@ -219,6 +221,7 @@ QDoubleSpinBox {
     border: 1px solid {{border}};
     border-radius: {{radiusControl}}px;
     padding: 3px {{space8}}px;
+    min-height: 20px;
     color: {{textPrimary}};
     selection-background-color: {{selection}};
     selection-color: {{textPrimary}};
@@ -532,8 +535,8 @@ QMenu {
 }
 
 QMenu::item {
-    padding: {{space8}}px 24px {{space8}}px {{space12}}px;
-    border-radius: 4px;
+    padding: {{space8}}px {{space16}}px {{space8}}px {{space12}}px;
+    border-radius: {{space4}}px;
     background: transparent;
 }
 
@@ -582,7 +585,7 @@ QStatusBar::item {
 
 QStatusBar QLabel {
     color: {{textSecondary}};
-    padding: 1px {{space8}}px;
+    padding: 0 {{space8}}px;
 }
 
 QSplitter::handle {
@@ -613,8 +616,8 @@ QGroupBox {
     border: 1px solid {{border}};
     border-radius: {{radiusPanel}}px;
     margin-top: {{space12}}px;
-    padding: {{space8}}px;
-    padding-top: {{space12}}px;
+    padding: {{space12}}px;
+    padding-top: {{space16}}px;
     color: {{textPrimary}};
     background: transparent;
 }

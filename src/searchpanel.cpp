@@ -1,4 +1,5 @@
 #include "searchpanel.h"
+#include "ThemeMetrics.h"
 #include "core/search/SearchEngine.h"
 #include "domain/SearchQuery.h"
 #include "domain/SearchResult.h"
@@ -22,7 +23,8 @@ SearchPanel::SearchPanel(QWidget *parent)
       m_alive(std::make_shared<std::atomic<bool>>(true))
 {
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(4, 4, 4, 4);
+    mainLayout->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8,
+                                   mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
     mainLayout->setSpacing(4);
 
     // ── top bar: search input + reindex button ──────────────────────

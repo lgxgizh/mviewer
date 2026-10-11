@@ -1,4 +1,5 @@
 #include "batchdialog.h"
+#include "ThemeMetrics.h"
 #include "batchdialog_panels.h"
 #include "batchrenamepanel.h"
 
@@ -122,8 +123,9 @@ BatchDialog::BatchDialog(QWidget *parent)
     setSizeGripEnabled(true);
 
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(12, 12, 12, 12);
-    mainLayout->setSpacing(10);
+    mainLayout->setContentsMargins(mviewer::ui::metrics::kSpace16, mviewer::ui::metrics::kSpace16,
+                                   mviewer::ui::metrics::kSpace16, mviewer::ui::metrics::kSpace16);
+    mainLayout->setSpacing(mviewer::ui::metrics::kSpace12);
     buildFileControls(mainLayout);
     buildOperationControls(mainLayout);
     buildParameterControls(mainLayout);

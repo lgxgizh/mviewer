@@ -1,3 +1,4 @@
+#include "ThemeMetrics.h"
 #include "compareworkspace_p.h"
 
 #include "core/image/DisplayMip.h"
@@ -46,8 +47,9 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_sidePanel = new QWidget(this);
     m_sidePanel->setFixedWidth(280);
     auto *sideLay = new QVBoxLayout(m_sidePanel);
-    sideLay->setContentsMargins(4, 4, 4, 4);
-    sideLay->setSpacing(6);
+    sideLay->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8,
+                                mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
+    sideLay->setSpacing(mviewer::ui::metrics::kSpace8);
 
     // M23: inspector (multi color-space) + histogram (channels/log/ROI) +
     // metrics — built in compareworkspace_analysis.cpp (ADR 014 TU split).

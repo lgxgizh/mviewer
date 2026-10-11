@@ -1,3 +1,4 @@
+#include "ThemeMetrics.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 
@@ -63,7 +64,7 @@ void ThumbnailPanel::onSelectionChanged()
     {
         m_compareBtn->setVisible(true);
         m_compareBtn->setText(QStringLiteral("比较 (P)"));
-        m_compareBtn->setFixedHeight(28);
+        m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
         m_compareBtn->adjustSize();
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
