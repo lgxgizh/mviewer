@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.108] - 2026-10-11
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.108**.
+
 ### Changed
 
 - 弹窗（设置、批量处理、导出、提示框等）统一套用新主题：确认按钮固定高亮，输入框、文本框、数值框加上悬停与按下反馈。
