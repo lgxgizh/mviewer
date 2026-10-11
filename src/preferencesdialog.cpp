@@ -22,9 +22,11 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     auto *gl = new QFormLayout(general);
 
     m_uiTheme = new QComboBox;
-    m_uiTheme->addItem(tr("深色模式 (专业 / 推荐)"),
-                       static_cast<int>(mviewer::ui::ThemeMode::Dark));
-    m_uiTheme->addItem(tr("系统默认 (亮色)"), static_cast<int>(mviewer::ui::ThemeMode::System));
+    m_uiTheme->setObjectName(QStringLiteral("preferencesUiTheme"));
+    m_uiTheme->addItem(tr("跟随系统 (默认)"), static_cast<int>(mviewer::ui::ThemeMode::System));
+    m_uiTheme->addItem(tr("深色模式"), static_cast<int>(mviewer::ui::ThemeMode::Dark));
+    m_uiTheme->addItem(tr("浅色模式"), static_cast<int>(mviewer::ui::ThemeMode::Light));
+    m_uiTheme->setToolTip(tr("跟随系统会随 Windows「应用模式」的深色/浅色设置自动切换"));
     m_uiTheme->setCurrentIndex(
         m_uiTheme->findData(static_cast<int>(mviewer::ui::Theme::currentTheme())));
     gl->addRow(tr("界面主题"), m_uiTheme);

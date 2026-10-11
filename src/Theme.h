@@ -10,7 +10,8 @@ namespace mviewer::ui
 enum class ThemeMode
 {
     Dark,
-    System
+    System, // follows the Windows light/dark app setting, live
+    Light
 };
 
 enum class ThemeRole
@@ -33,6 +34,12 @@ class Theme
 {
   public:
     static void initTheme();
+    // First launch (no saved choice) follows the system; an existing choice,
+    // including a saved "dark", is kept. Call before initTheme in main().
+    static void seedDefaultThemeChoice();
+    // Persisted settings value for a mode ("dark" / "system" / "light").
+    static QString themeModeKey(ThemeMode mode);
+    static ThemeMode themeModeFromKey(const QString &key);
     static void applyTheme(ThemeMode mode);
     static ThemeMode currentTheme();
     static QString themeModeName(ThemeMode mode);

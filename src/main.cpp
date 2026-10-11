@@ -60,6 +60,7 @@ int main(int argc, char *argv[])
     app.setOrganizationName("MViewer");
     app.setApplicationVersion(QStringLiteral(MVIEWER_VERSION_STRING));
     mviewer::runtime::configureSettings();
+    mviewer::ui::Theme::seedDefaultThemeChoice();
     mviewer::ui::Theme::initTheme();
     app.setWindowIcon(QIcon(QStringLiteral(":/app/mviewer.png")));
 

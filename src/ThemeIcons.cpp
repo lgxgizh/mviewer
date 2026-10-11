@@ -4,7 +4,11 @@
 
 #include <QColor>
 #include <QHash>
+#include <QIconEngine>
 #include <QImage>
+#include <QPainter>
+
+#include <utility>
 
 static void ensureThemeResources()
 {
@@ -89,35 +93,73 @@ QStringList toolbarIconIds()
     return ids;
 }
 
+// Tints at paint time from the active tokens, so toolbar icons follow a live
+// light/dark switch without rebuilding the actions that hold them.
+class ThemedIconEngine : public QIconEngine
+{
+  public:
+    explicit ThemedIconEngine(QByteArray id) : m_id(std::move(id))
+    {
+    }
+
+    QPixmap pixmap(const QSize &size, QIcon::Mode mode, QIcon::State state) override
+    {
+        return scaledPixmap(size, mode, state, 1.0);
+    }
+
+    QPixmap scaledPixmap(const QSize &size, QIcon::Mode mode, QIcon::State state,
+                         qreal scale) override
+    {
+        ThemeRole role = ThemeRole::TextPrimary;
+        if (mode == QIcon::Disabled)
+            role = ThemeRole::TextDisabled;
+        else if (state == QIcon::On || mode == QIcon::Selected)
+            role = ThemeRole::Accent;
+        const QSize device = size * scale;
+        const qreal maskScale = qMax(device.width(), device.height()) > kMaskPixels ? 2.0 : 1.0;
+        QPixmap mask = tintedIcon(m_id.constData(), QColor(Theme::themeColor(role)), maskScale);
+        if (mask.isNull() || device.isEmpty())
+            return mask;
+        if (mask.size() != device)
+            mask = mask.scaled(device, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        mask.setDevicePixelRatio(scale);
+        return mask;
+    }
+
+    void paint(QPainter *painter, const QRect &rect, QIcon::Mode mode, QIcon::State state) override
+    {
+        const qreal dpr =
+            painter->device() != nullptr ? painter->device()->devicePixelRatioF() : 1.0;
+        painter->drawPixmap(rect, scaledPixmap(rect.size(), mode, state, dpr));
+    }
+
+    QSize actualSize(const QSize &size, QIcon::Mode, QIcon::State) override
+    {
+        return size;
+    }
+
+    QIconEngine *clone() const override
+    {
+        return new ThemedIconEngine(m_id);
+    }
+
+    QString key() const override
+    {
+        return QStringLiteral("mviewer-themed");
+    }
+
+  private:
+    static constexpr int kMaskPixels = 18;
+    QByteArray m_id;
+};
+
 QIcon toolbarIcon(const char *id)
 {
     if (id == nullptr || id[0] == '\0')
         return {};
-
-    QColor primary(Theme::themeColor(ThemeRole::TextPrimary));
-    QColor accent(Theme::themeColor(ThemeRole::Accent));
-    QColor disabled(Theme::themeColor(ThemeRole::TextDisabled));
-    QPixmap probe = tintedIcon(id, primary, 1.0);
-    if (probe.isNull())
+    if (tintedIcon(id, QColor(Theme::themeColor(ThemeRole::TextPrimary)), 1.0).isNull())
         return {};
-
-    QIcon icon;
-    const qreal scales[] = {1.0, 2.0};
-    for (const qreal dpr : scales)
-    {
-        QPixmap normal = tintedIcon(id, primary, dpr);
-        QPixmap checked = tintedIcon(id, accent, dpr);
-        QPixmap dim = tintedIcon(id, disabled, dpr);
-        icon.addPixmap(normal, QIcon::Normal, QIcon::Off);
-        icon.addPixmap(normal, QIcon::Active, QIcon::Off);
-        icon.addPixmap(checked, QIcon::Normal, QIcon::On);
-        icon.addPixmap(checked, QIcon::Active, QIcon::On);
-        icon.addPixmap(checked, QIcon::Selected, QIcon::Off);
-        icon.addPixmap(checked, QIcon::Selected, QIcon::On);
-        icon.addPixmap(dim, QIcon::Disabled, QIcon::Off);
-        icon.addPixmap(dim, QIcon::Disabled, QIcon::On);
-    }
-    return icon;
+    return QIcon(new ThemedIconEngine(QByteArray(id)));
 }
 
 QPixmap toolbarIconPixmap(const char *id)
