@@ -3,15 +3,21 @@
 #include "analyzermodel.h"
 #include "breadcrumbbar.h"
 #include "directorymodel.h"
+#include "hoverfade.h"
 #include "imagelistmodel.h"
 #include "selectionmodel.h"
 #include "workspacemodel.h"
 
 #include <QApplication>
 #include <QDebug>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QImage>
+#include <QListView>
+#include <QPushButton>
 #include <QSettings>
 #include <QStringList>
+#include <QStringListModel>
 #include <cstdio>
 #include <memory>
 
@@ -245,6 +251,28 @@ int main(int argc, char **argv)
         mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::Dark);
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
               "Theme switched back to Dark");
+    }
+
+    // ---- Dialog polish + hover fade ----
+    {
+        QDialog dialog;
+        auto *box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        dialog.show();
+        QApplication::processEvents();
+        CHECK(box->button(QDialogButtonBox::Ok)->property("primary").toBool(),
+              "dialog accept button is marked primary");
+        CHECK(!box->button(QDialogButtonBox::Cancel)->property("primary").toBool(),
+              "dialog reject button is not primary");
+        dialog.hide();
+
+        QListView view;
+        QStringListModel fadeModel(QStringList{QStringLiteral("a"), QStringLiteral("b")});
+        view.setModel(&fadeModel);
+        CHECK(mviewer::ui::HoverFade::forView(&view) == nullptr, "no hover fade by default");
+        auto *fade = new mviewer::ui::HoverFade(&view);
+        CHECK(mviewer::ui::HoverFade::forView(&view) == fade, "hover fade found on its view");
+        CHECK(fade->progress(fadeModel.index(0)) == 0.0, "unhovered item has no hover progress");
+        CHECK(fade->progress(QModelIndex()) == 0.0, "invalid index has no hover progress");
     }
 
     // ---- BreadcrumbBar ----

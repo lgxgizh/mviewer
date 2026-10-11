@@ -7,6 +7,10 @@
         <file alias="dark.qss">theme/dark.qss</file>
         <file alias="check.png">theme/check.png</file>
         <file alias="dot.png">theme/dot.png</file>
+        <file alias="chevron-up.png">theme/chevron-up.png</file>
+        <file alias="chevron-up@2x.png">theme/chevron-up@2x.png</file>
+        <file alias="chevron-down.png">theme/chevron-down.png</file>
+        <file alias="chevron-down@2x.png">theme/chevron-down@2x.png</file>
     </qresource>
     <qresource prefix="/icons">
         <file alias="open.png">icons/open.png</file>

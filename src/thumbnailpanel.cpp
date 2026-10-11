@@ -1,3 +1,4 @@
+#include "hoverfade.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 #include "thumbnailprovider.h"
@@ -53,6 +54,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 
     m_delegate = new ThumbDelegate(this, this);
     setItemDelegate(m_delegate);
+    new mviewer::ui::HoverFade(this); // owned by the view; delegates look it up
 
     m_compareBtn = new QPushButton(QStringLiteral("比较 (P)"), this);
     m_compareBtn->setObjectName(QStringLiteral("compareSelectionButton"));
@@ -498,7 +500,10 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
-void ThumbnailPanel::setSelectionModel(SelectionModel *sel) { m_selection = sel; }
+void ThumbnailPanel::setSelectionModel(SelectionModel *sel)
+{
+    m_selection = sel;
+}
 
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)
 {

@@ -256,6 +256,7 @@ add_library(mviewer_ui STATIC
     preferencesdialog.cpp
     Theme.cpp
     ThemeIcons.cpp
+    hoverfade.cpp
     ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
     analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
@@ -410,6 +411,7 @@ add_executable(test_ui_models
     analyzermodel.cpp
     Theme.cpp
     ThemeIcons.cpp
+    hoverfade.cpp
     breadcrumbbar.cpp
     ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
 )
