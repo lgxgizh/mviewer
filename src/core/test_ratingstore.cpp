@@ -144,6 +144,10 @@ static void testMetadataFollowsFile()
     rs.clearRating(a);
     rs.clearColorLabel(a);
     ts.clearTags(a);
+    // Flush now: a debounced write still pending at process exit would race
+    // static destruction.
+    rs.flushSave();
+    ts.flushSave();
 }
 
 int main()
