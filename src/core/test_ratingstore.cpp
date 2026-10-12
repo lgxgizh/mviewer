@@ -7,6 +7,9 @@
 #include "core/RatingStore.h"
 #include "core/SidecarStore.h"
 #include "core/TagStore.h"
+#include "core/command/FileDeleteCommand.h"
+#include "core/command/FileMoveCommand.h"
+#include "core/command/FileRenameCommand.h"
 #include "core/filesystem/Utf8Path.h"
 
 #include <QDir>
@@ -39,6 +42,113 @@ static int g_fail = 0;
     } while (0)
 
 using namespace mviewer::core;
+
+static std::string writeImage(const QString &dir, const char *name)
+{
+    QImage img(4, 4, QImage::Format_RGB32);
+    img.fill(Qt::blue);
+    const QString path = QDir(dir).filePath(QString::fromUtf8(name));
+    img.save(path, "PNG");
+    return path.toUtf8().toStdString();
+}
+
+static bool fileExists(const std::string &path)
+{
+    std::error_code ec;
+    return std::filesystem::exists(mviewer::core::pathFromUtf8(path), ec);
+}
+
+static void testMetadataFollowsFile()
+{
+    using namespace mviewer::core;
+    printf("\n[metadata follows rename / move / delete and undo]\n");
+    QTemporaryDir tmp;
+    auto &rs = RatingStore::instance();
+    auto &ts = TagStore::instance();
+    auto &ss = SidecarStore::instance();
+    rs.setFilePath(QDir(tmp.path()).filePath("follow_ratings.txt").toUtf8().toStdString());
+    ts.setFilePath(QDir(tmp.path()).filePath("follow_tags.txt").toUtf8().toStdString());
+    const QString dir = tmp.path();
+    const std::string a = writeImage(dir, "a.png");
+    const std::string renamed = QDir(dir).filePath("b.png").toUtf8().toStdString();
+    rs.setRating(a, 4);
+    rs.setColorLabel(a, 3);
+    rs.setPicked(a, true);
+    ts.addTag(a, "keep");
+    CHECK(ss.writeSidecar(a), "sidecar written before rename");
+
+    FileRenameCommand rename(a, renamed);
+    rename.execute();
+    CHECK(rs.rating(renamed) == 4 && rs.colorLabel(renamed) == 3 && rs.picked(renamed),
+          "rename moves rating, label and pick to the new path");
+    CHECK(rs.rating(a) == 0 && !rs.picked(a), "rename leaves nothing on the old path");
+    CHECK(ts.hasTag(renamed, "keep") && !ts.hasTag(a, "keep"), "rename moves tags");
+    CHECK(fileExists(SidecarStore::sidecarPath(renamed)) &&
+              !fileExists(SidecarStore::sidecarPath(a)),
+          "rename moves the .xmp sidecar");
+    rename.undo();
+    CHECK(rs.rating(a) == 4 && ts.hasTag(a, "keep") && fileExists(SidecarStore::sidecarPath(a)),
+          "undo rename moves metadata and sidecar back");
+
+    const std::string sub = QDir(dir).filePath("sub").toUtf8().toStdString();
+    FileMoveCommand move({a}, sub);
+    move.execute();
+    const std::string moved = move.moved().empty() ? std::string{} : move.moved()[0].second;
+    CHECK(!moved.empty() && rs.rating(moved) == 4 && ts.hasTag(moved, "keep") &&
+              fileExists(SidecarStore::sidecarPath(moved)),
+          "move carries metadata and sidecar to the destination");
+    move.undo();
+    CHECK(rs.rating(a) == 4 && rs.rating(moved) == 0, "undo move restores metadata");
+
+    const std::string trash = QDir(dir).filePath("trash").toUtf8().toStdString();
+    FileDeleteCommand del({a}, trash);
+    del.execute();
+    CHECK(rs.rating(a) == 0, "delete takes metadata off the deleted path");
+    del.undo();
+    CHECK(rs.rating(a) == 4 && rs.colorLabel(a) == 3 && rs.picked(a) && ts.hasTag(a, "keep") &&
+              fileExists(SidecarStore::sidecarPath(a)),
+          "undo delete restores rating, label, pick, tags and sidecar");
+
+    // H2: same stem, different extension -> separate sidecars.
+    const std::string jpg = writeImage(dir, "IMG_001.jpg");
+    const std::string png = writeImage(dir, "IMG_001.png");
+    CHECK(SidecarStore::sidecarPath(jpg) != SidecarStore::sidecarPath(png),
+          "IMG_001.jpg and IMG_001.png get distinct sidecars");
+    rs.setRating(jpg, 2);
+    rs.setRating(png, 5);
+    ss.writeSidecar(jpg);
+    ss.writeSidecar(png);
+    rs.clearRating(jpg);
+    rs.clearRating(png);
+    ss.readSidecar(jpg);
+    ss.readSidecar(png);
+    CHECK(rs.rating(jpg) == 2 && rs.rating(png) == 5, "same-stem sidecars do not overwrite");
+
+    // Legacy stem.xmp: migrated when it names its image, ignored when ambiguous.
+    const std::string solo = writeImage(dir, "solo.png");
+    const std::string legacySolo = QDir(dir).filePath("solo.xmp").toUtf8().toStdString();
+    std::ofstream(pathFromUtf8(legacySolo)) << "{ \"rating\": 3 }\n";
+    CHECK(ss.readSidecar(solo) && rs.rating(solo) == 3, "unambiguous legacy sidecar is read");
+    CHECK(!fileExists(legacySolo) && fileExists(SidecarStore::sidecarPath(solo)),
+          "legacy sidecar is migrated to the per-file name");
+    const std::string legacyShared = QDir(dir).filePath("IMG_001.xmp").toUtf8().toStdString();
+    std::ofstream(pathFromUtf8(legacyShared)) << "{ \"rating\": 1 }\n";
+    std::filesystem::remove(pathFromUtf8(SidecarStore::sidecarPath(jpg)));
+    rs.clearRating(jpg);
+    ss.readSidecar(jpg);
+    CHECK(rs.rating(jpg) == 0 && fileExists(legacyShared),
+          "ambiguous legacy sidecar (two images share the stem) is not applied");
+    rs.clearRating(png);
+    rs.clearRating(solo);
+    rs.setPicked(a, false);
+    rs.clearRating(a);
+    rs.clearColorLabel(a);
+    ts.clearTags(a);
+    // Flush now: a debounced write still pending at process exit would race
+    // static destruction.
+    rs.flushSave();
+    ts.flushSave();
+}
 
 int main()
 {
@@ -207,6 +317,8 @@ int main()
         CHECK(!ts.hasTag(missingPath, "ghost"), "TagStore ghost tag gone");
         CHECK(ts.hasTag(existPath, "landscape"), "TagStore landscape tag preserved");
     }
+
+    testMetadataFollowsFile();
 
     printf("\nratingstore_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

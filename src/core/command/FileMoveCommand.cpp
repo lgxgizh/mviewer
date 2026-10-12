@@ -1,5 +1,7 @@
 #include "FileMoveCommand.h"
 
+#include "core/FileMetadataRelocation.h"
+
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -14,8 +16,8 @@ FileMoveCommand::FileMoveCommand(std::vector<std::string> paths, std::string des
 std::string FileMoveCommand::description() const
 {
     if (m_paths.size() == 1)
-        return "Move " + mviewer::core::pathToUtf8(
-                            mviewer::core::pathFromUtf8(m_paths.front()).filename());
+        return "Move " +
+               mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(m_paths.front()).filename());
     return "Move " + std::to_string(m_paths.size()) + " files";
 }
 
@@ -105,6 +107,7 @@ void FileMoveCommand::execute()
         {
             m_moved.emplace_back(mviewer::core::pathToUtf8(source),
                                  mviewer::core::pathToUtf8(destination));
+            mviewer::core::relocateFileMetadata(m_moved.back().first, m_moved.back().second);
             completedBytes += planSizes[index];
             continue;
         }
@@ -142,7 +145,10 @@ bool FileMoveCommand::restoreMovedPaths(const char *operation)
 
         const auto result = mviewer::core::moveFileSafely(current, original, m_fileSystem);
         if (result.state == mviewer::core::FileTransferState::Succeeded)
+        {
+            mviewer::core::relocateFileMetadata(it->second, it->first);
             continue;
+        }
         remaining.push_back(*it);
         failure = result.error;
     }

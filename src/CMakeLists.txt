@@ -58,6 +58,7 @@ add_library(mviewer_core SHARED
     core/RatingStore.cpp
     core/TagStore.cpp
     core/SidecarStore.cpp
+    core/FileMetadataRelocation.cpp
     core/CrashHandler.cpp
     core/Logger.cpp
     core/SelfTest.cpp

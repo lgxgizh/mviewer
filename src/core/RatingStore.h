@@ -89,6 +89,12 @@ class RatingStore
 
     Snapshot snapshot() const;
 
+    // Move every record (rating, label, pick/reject, recents entry) from
+    // oldPath to newPath after a file rename/move/delete-to-trash so the
+    // metadata follows the file. Records already at newPath are replaced.
+    // Returns true when anything moved.
+    bool renamePath(const std::string &oldPath, const std::string &newPath);
+
     // Prune stale records for files that no longer exist on disk.
     // Returns total number of pruned entries across ratings, labels, flags, and recents.
     size_t pruneMissing();

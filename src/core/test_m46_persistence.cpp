@@ -255,7 +255,7 @@ void testTagAndSidecarAtomicity()
     // SidecarStore: same semantics on the per-image .xmp file.
     auto &ss = SidecarStore::instance();
     const std::string imgPath = dir + "/photo.jpg";
-    const std::string sidecar = dir + "/photo.xmp";
+    const std::string sidecar = dir + "/photo.jpg.xmp"; // per-file sidecar name
     auto &rs = RatingStore::instance();
     rs.setRating(imgPath, 4);
     CHECK(ss.writeSidecar(imgPath), "sidecar initial write succeeds");
