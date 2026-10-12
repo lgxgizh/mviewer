@@ -82,6 +82,16 @@ struct DiffBatchResult
     std::vector<CellOverlay> overlays;
 };
 
+// Threshold-independent products of one (base, target) comparison.
+struct DiffPair
+{
+    ImageData target; // adjusted (and aligned when auto-align is on)
+    ImageData diff;
+    bool sizeMismatch = false;
+    int alignX = 0, alignY = 0;
+    double psnr = 0.0, ssim = 0.0;
+};
+
 struct DiffSources
 {
     int targetIndex = -1;
