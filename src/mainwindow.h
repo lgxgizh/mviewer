@@ -14,6 +14,7 @@
 #include <QMap>
 #include <QPointer>
 #include <QStringList>
+#include <QVariantMap>
 
 #include <atomic>
 #include <memory>
@@ -235,8 +236,10 @@ class MainWindow : public QMainWindow
     std::string m_statusMetadataConsumer;
     void copyCurrentImageToClipboard();
     void openQuickCompare();
-    void openPreferences();  // F1 (M22): centralized Preferences dialog
-    void applyPreferences(); // re-apply view/sort/slideshow after settings change
+    void openPreferences(); // F1 (M22): centralized Preferences dialog
+    // Re-apply the preferences that changed relative to `before` (a snapshot
+    // taken when the dialog opened).
+    void applyPreferences(const QVariantMap &before);
     void applyColorManagementPreference();
     void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
     void toggleFocusBrowse();

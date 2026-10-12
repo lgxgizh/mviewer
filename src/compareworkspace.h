@@ -72,6 +72,13 @@ class CompareWorkspace : public QWidget
     // M34: deterministic split geometry contract: two adjacent rects covering canvas.
     static QPair<QRect, QRect> splitRects(const QRect &canvas);
 
+    // Preferences / toolbar: integer-shift auto-align before diff. Syncs the
+    // toolbar checkbox and recomputes the diff when the value changes.
+    void setAutoAlignBeforeDiff(bool on);
+    bool autoAlignBeforeDiff() const
+    {
+        return m_autoAlignBeforeDiff;
+    }
     // The default frame/page is zero. A caller restoring a persisted compare
     // session may provide one explicit frame index per pane.
     void setImages(const QStringList &paths);
@@ -738,6 +745,7 @@ class CompareWorkspace : public QWidget
     SelectionModel *m_selection = nullptr;
     QPushButton *m_analyzeBtn = nullptr, *m_exportReportBtn = nullptr, *m_exitBtn = nullptr;
     QCheckBox *m_autoAlignChk = nullptr;
+    bool m_autoAlignBeforeDiff = false; // in-memory "autoAlignBeforeDiff"
     QLabel *m_compareStatusLabel = nullptr;
     QWidget *buildStatusStrip();
     void closeCompareHost();
