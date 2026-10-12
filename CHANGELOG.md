@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.110] - 2026-10-13
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.110**.
+
 ### Performance
 
 - 缩略图磁盘缓存改存 JPEG（质量 90），只有真正带透明像素的缩略图才存 PNG（快速压缩档）。原来的 PNG「质量 1」其实是最慢的 zlib 9 档，一张 256 像素缩略图编码约 58 ms，现在约 0.2 ms；缓存文件也小约 8 倍。缓存版本升到 v5，旧的 `.png` 缓存在首次索引时自动清掉。
