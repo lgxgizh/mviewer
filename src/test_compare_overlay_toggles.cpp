@@ -150,6 +150,41 @@ void diffOverlayCases(CompareWorkspace *ws, RawImageView *v0)
     pump(1500);
     check(!anyOverlay(ws), "no stale heatmap reappears after the interaction settles");
 }
+void highlightCases(CompareWorkspace *ws)
+{
+    // User report: 高亮差异 on, then off -> the right pane kept the diff view.
+    auto *hl = ws->findChild<QCheckBox *>(QStringLiteral("diffHighlightToggle"));
+    auto *ov = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
+    RawImageView *right = paneView(ws, 1);
+    check(hl && ov && right, "highlight toggle and right pane exist");
+    if (!hl || !ov || !right)
+        return;
+    pump(500);
+    check(!ov->isChecked() && !anyOverlay(ws), "diff view starts off");
+    hl->setChecked(true);
+    check(ov->isChecked(), "highlight turns the diff view on");
+    check(waitTrue([right] { return !right->overlay().isNull(); }, 20000),
+          "right pane shows the highlight rendering");
+    hl->setChecked(false);
+    check(!ov->isChecked(), "highlight off also turns the diff view it enabled off");
+    check(right->overlay().isNull(), "right pane drops the highlight immediately");
+    pump(1500);
+    check(!anyOverlay(ws), "no highlight/heatmap comes back after settling");
+    const QImage shot = right->grab().toImage().convertToFormat(QImage::Format_RGB32);
+    const QRgb mid = shot.pixel(shot.width() / 2, shot.height() / 2);
+    check(qRed(mid) > 230 && qGreen(mid) > 230 && qBlue(mid) > 230,
+          "right pane renders the original white stripe pixels");
+    const QRgb body = shot.pixel(shot.width() / 2, shot.height() / 2 - shot.height() / 6);
+    check(qAbs(qRed(body) - 40) < 12 && qAbs(qBlue(body) - 160) < 12,
+          "right pane renders the original blue body pixels");
+
+    // Manual 显示差异 stays on when highlight is switched off.
+    ov->setChecked(true);
+    hl->setChecked(true);
+    hl->setChecked(false);
+    check(ov->isChecked(), "a diff view the user enabled survives highlight off");
+    ov->setChecked(false);
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -184,6 +219,7 @@ int main(int argc, char **argv)
 
     crosshairCases(ws, v0);
     diffOverlayCases(ws, v0);
+    highlightCases(ws);
 
     std::printf("=== compare overlay toggle tests: %s ===\n", g_failures == 0 ? "PASS" : "FAIL");
     return g_failures == 0 ? 0 : 1;

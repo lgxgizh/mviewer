@@ -452,6 +452,8 @@ class CompareWorkspace : public QWidget
     QComboBox *m_diffGainCombo = nullptr;
     bool m_diffOverlayVisible = false;
     bool m_diffHighlight = false;
+    // 高亮差异 switched 显示差异 on by itself; switching highlight off undoes it.
+    bool m_diffOverlayPromoted = false;
     double m_diffGain = 1.0;
 
     // A-4.2: custom grid is column-driven; rows are derived by CompareEngine.

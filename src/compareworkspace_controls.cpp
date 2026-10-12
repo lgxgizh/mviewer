@@ -248,6 +248,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             [this](bool on)
             {
                 m_diffOverlayVisible = on;
+                m_diffOverlayPromoted = false;
                 syncContextualCompareControls();
                 refreshAllDiffOverlays();
             });
@@ -269,6 +270,16 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
                     const QSignalBlocker blocker(m_diffOverlayChk);
                     m_diffOverlayChk->setChecked(true);
                     m_diffOverlayVisible = true;
+                    m_diffOverlayPromoted = true;
+                }
+                // Off restores the plain image when highlight was what turned
+                // the heatmap on; otherwise the right pane kept the diff view.
+                if (!on && m_diffOverlayPromoted && m_diffOverlayChk)
+                {
+                    const QSignalBlocker blocker(m_diffOverlayChk);
+                    m_diffOverlayChk->setChecked(false);
+                    m_diffOverlayVisible = false;
+                    m_diffOverlayPromoted = false;
                 }
                 m_diffHighlight = on;
                 syncContextualCompareControls();
