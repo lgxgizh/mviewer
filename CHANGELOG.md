@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.109] - 2026-10-12
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.109**.
+
 ### Fixed
 
 - 比较模式放大（如 200%）后拖动图片，新露出的一侧不再先显示黑边：清晰区域图下面始终垫着整图底图，拖动中也会节流重绘清晰区域，不必等松开鼠标。
