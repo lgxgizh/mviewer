@@ -1,5 +1,7 @@
 #include "core/render/DisplayResampleDetail.h"
 
+#include "core/scheduler/TaskScheduler.h"
+
 #include <QCoreApplication>
 #include <QRunnable>
 #include <QThread>
@@ -109,6 +111,9 @@ void parallelForRows(int rowCount, int minRows, const std::atomic<bool> *cancel,
         return;
     }
 
+    // A multi-band resample is foreground work (HQ zoom / compare panes):
+    // thumbnail tasks back off while it runs.
+    const TaskScheduler::ForegroundWork foreground;
     int bands = threads;
     if (bands > rowCount)
         bands = rowCount;

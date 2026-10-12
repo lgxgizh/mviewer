@@ -10,9 +10,22 @@
 #include <cassert>
 #include <chrono>
 #include <memory>
+#include <thread>
 
 namespace
 {
+
+std::atomic<int> g_foregroundDepth{0};
+
+// Thumbnail work yields to foreground work for a bounded time (never forever,
+// so drain()/handle convergence is unaffected) and re-checks cancellation.
+void yieldToForeground(const TaskScheduler::TaskContext &ctx)
+{
+    constexpr auto kStep = std::chrono::milliseconds(4);
+    constexpr int kMaxSteps = 50; // <= ~200 ms per task
+    for (int i = 0; i < kMaxSteps && TaskScheduler::foregroundBusy() && !ctx.isCancelled(); ++i)
+        std::this_thread::sleep_for(kStep);
+}
 
 class LambdaTask : public QRunnable
 {
@@ -56,8 +69,18 @@ class LambdaTask : public QRunnable
         // PoolMetrics::execution_failures at the terminal transition.
         try
         {
-            if (!m_ctx->isCancelled())
+            if (m_ctx->priority == TaskScheduler::Priority::Thumbnail)
+                yieldToForeground(*m_ctx);
+            if (m_ctx->priority == TaskScheduler::Priority::Decode)
+            {
+                const TaskScheduler::ForegroundWork foreground;
+                if (!m_ctx->isCancelled())
+                    m_work(*m_ctx);
+            }
+            else if (!m_ctx->isCancelled())
+            {
                 m_work(*m_ctx);
+            }
         }
         catch (...)
         {
@@ -117,9 +140,29 @@ TaskScheduler::TaskScheduler() : m_impl(new Impl)
     const int n = QThread::idealThreadCount();
     setQueueMaxThreads(Priority::UI, std::max(1, n));
     setQueueMaxThreads(Priority::Decode, std::max(1, n));
-    setQueueMaxThreads(Priority::Thumbnail, std::max(2, n));
+    // Thumbnails used to get n threads on top of n decode + n resample threads
+    // (~4n runnable threads while scrolling). Cap them at half the cores and
+    // run them below normal OS priority so the current image always wins.
+    setQueueMaxThreads(Priority::Thumbnail, std::max(2, n / 2));
     setQueueMaxThreads(Priority::Analysis, std::max(1, n / 2));
     setQueueMaxThreads(Priority::Background, std::max(1, n / 2));
+    for (const Priority low : {Priority::Thumbnail, Priority::Analysis, Priority::Background})
+        m_impl->priorityQueues[static_cast<int>(low)].setThreadPriority(QThread::LowPriority);
+}
+
+TaskScheduler::ForegroundWork::ForegroundWork()
+{
+    g_foregroundDepth.fetch_add(1, std::memory_order_relaxed);
+}
+
+TaskScheduler::ForegroundWork::~ForegroundWork()
+{
+    g_foregroundDepth.fetch_sub(1, std::memory_order_relaxed);
+}
+
+bool TaskScheduler::foregroundBusy()
+{
+    return g_foregroundDepth.load(std::memory_order_relaxed) > 0;
 }
 
 TaskScheduler::~TaskScheduler()

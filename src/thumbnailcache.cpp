@@ -14,6 +14,30 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <string>
+
+namespace
+{
+// True only when the image carries alpha AND at least one pixel actually uses
+// it; such thumbnails must stay lossless-with-alpha (PNG), everything else is
+// stored as JPEG.
+bool hasTransparentPixel(const QImage &img)
+{
+    if (!img.hasAlphaChannel())
+        return false;
+    const QImage argb = img.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < argb.height(); ++y)
+    {
+        const auto *line = reinterpret_cast<const QRgb *>(argb.constScanLine(y));
+        for (int x = 0; x < argb.width(); ++x)
+        {
+            if (qAlpha(line[x]) != 255)
+                return true;
+        }
+    }
+    return false;
+}
+} // namespace
 
 ThumbnailCache &ThumbnailCache::instance()
 {
@@ -163,7 +187,7 @@ void ThumbnailCache::runInvalidationWorker()
         }
         for (const QString &key : keysToRemove)
         {
-            const QString file = QDir(dir).filePath(key + ".png");
+            const QString file = QDir(dir).filePath(key + kFileSuffix);
             removeKey(key, file);
         }
         m_pathInvalidations.remove(task.first);
@@ -182,8 +206,16 @@ void ThumbnailCache::ensureIndexed()
     const QString dir = cacheDir();
     if (dir.isEmpty())
         return;
-    QFileInfoList infos = QDir(dir).entryInfoList(QStringList{QStringLiteral("*.png")},
-                                                  QDir::Files | QDir::NoDotAndDotDot);
+    // Schema <= 4 stored slow-to-encode PNG files under "<key>.png". Their keys
+    // can never match again (the schema version is part of the key), so drop
+    // them once instead of letting them occupy the byte budget forever.
+    const QFileInfoList legacy = QDir(dir).entryInfoList(QStringList{QStringLiteral("*.png")},
+                                                         QDir::Files | QDir::NoDotAndDotDot);
+    for (const QFileInfo &fi : legacy)
+        QFile::remove(fi.absoluteFilePath());
+    QFileInfoList infos =
+        QDir(dir).entryInfoList(QStringList{QStringLiteral("*") + QLatin1StringView(kFileSuffix)},
+                                QDir::Files | QDir::NoDotAndDotDot);
     struct FileItem
     {
         qint64 mtime = 0;
@@ -195,11 +227,13 @@ void ThumbnailCache::ensureIndexed()
     for (const QFileInfo &fi : infos)
     {
         const QString base = fi.fileName();
-        if (!base.endsWith(QStringLiteral(".png"), Qt::CaseInsensitive) || base.size() <= 4)
+        const auto suffixLen = static_cast<qsizetype>(std::char_traits<char>::length(kFileSuffix));
+        if (!base.endsWith(QLatin1StringView(kFileSuffix), Qt::CaseInsensitive) ||
+            base.size() <= suffixLen)
             continue;
         items.push_back({fi.lastModified().toMSecsSinceEpoch(),
                          static_cast<quint64>(std::max<qint64>(0, fi.size())),
-                         base.left(base.size() - 4)});
+                         base.left(base.size() - suffixLen)});
     }
     std::sort(items.begin(), items.end(),
               [](const FileItem &a, const FileItem &b)
@@ -308,7 +342,7 @@ void ThumbnailCache::pruneToCap()
     while (m_totalBytes > m_maxBytes && !m_lru.empty())
     {
         const QString key = m_lru.begin()->second;
-        const QString file = QDir(dir).filePath(key + ".png");
+        const QString file = QDir(dir).filePath(key + kFileSuffix);
         if (QFile::remove(file) || !QFile::exists(file))
         {
             dropEntry(key);
@@ -334,9 +368,15 @@ bool ThumbnailCache::writeFileAtomically(const QString &file, const QImage &img)
     QSaveFile save(file);
     if (!save.open(QIODevice::WriteOnly))
         return false;
-    // Compression quality 1: uses fast zlib compression (level 1), ~5-10x faster
-    // than the default level 6 while remaining 100% valid lossless PNG.
-    if (!img.save(&save, "PNG", 1))
+    // Opaque thumbnails are stored as JPEG q90 (~0.2 ms encode); the old PNG
+    // "quality 1" actually meant zlib level 9, the slowest setting (~57 ms per
+    // 256px thumbnail). Thumbnails with real alpha keep PNG, at quality 90 =
+    // fast zlib level. Readers detect the format from the content, so one
+    // suffix covers both.
+    const bool alpha = hasTransparentPixel(img);
+    const bool ok = alpha ? img.save(&save, "PNG", 90)
+                          : img.convertToFormat(QImage::Format_RGB32).save(&save, "JPG", 90);
+    if (!ok)
         return false;
     return save.commit();
 }
@@ -356,7 +396,7 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
         const QString dir = cacheDir();
         if (dir.isEmpty())
             return false;
-        file = QDir(dir).filePath(key + ".png");
+        file = QDir(dir).filePath(key + kFileSuffix);
     }
 
     // M54: filesystem probes and PNG decoding are deliberately outside the
@@ -427,7 +467,7 @@ void ThumbnailCache::put(const QString &path, int size, const QImage &img)
         const QString dir = cacheDir();
         if (dir.isEmpty())
             return;
-        file = QDir(dir).filePath(key + ".png");
+        file = QDir(dir).filePath(key + kFileSuffix);
         if (m_maxBytes == 0)
         {
             removeKey(key, file); // zero budget: never persist
@@ -500,7 +540,7 @@ void ThumbnailCache::clear()
     QHash<QString, Entry> surviving;
     for (auto it = m_entries.cbegin(); it != m_entries.cend(); ++it)
     {
-        const QString file = QDir(dir).filePath(it.key() + ".png");
+        const QString file = QDir(dir).filePath(it.key() + kFileSuffix);
         if (!QFile::remove(file) && QFile::exists(file))
         {
             surviving.insert(it.key(), it.value());
