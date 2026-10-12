@@ -4,6 +4,7 @@
 #include "core/image/ExifOrientation.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/SourceImage.h"
+#include "core/render/JpegBlockTiles.h"
 #include "core/render/RegionTileSelect.h"
 #include "core/render/RenderEngine.h"
 
@@ -97,6 +98,29 @@ inline ImageData decodeTileFromSource(SourceImage &source, const ImageData &full
     return scaleToTarget(std::move(region.pixels));
 }
 
+// 1:1 JPEG tile sliced from a cached 1024 px block (see JpegBlockTiles.h).
+inline ImageData decodeJpegBlockTile(const std::string &path, const ImageData &fullFrame, int srcX,
+                                     int srcY, int srcW, int srcH)
+{
+    return jpegBlockTile(path, srcX, srcY, srcW, srcH,
+                         [&path, &fullFrame](int bx, int by, int edge) -> ImageData
+                         {
+                             auto blockSource = SourceImage::open(path);
+                             if (!blockSource || !blockSource->isValid())
+                                 return ImageData{};
+                             const auto regionPath = blockSource->regionDecodePath();
+                             if (regionPath != SourceDecodePath::NativeRegion &&
+                                 regionPath != SourceDecodePath::BoundedRasterRegion)
+                                 return ImageData{};
+                             const int bw = (std::min)(edge, blockSource->metadata().width - bx);
+                             const int bh = (std::min)(edge, blockSource->metadata().height - by);
+                             if (bw <= 0 || bh <= 0)
+                                 return ImageData{};
+                             return decodeTileFromSource(*blockSource, fullFrame, bx, by, bw, bh,
+                                                         bw, bh);
+                         });
+}
+
 inline ImageData decodeTilePreferReduced(const std::string &path, const ImageData &fullFrame,
                                          int srcX, int srcY, int srcW, int srcH, int targetW,
                                          int targetH)
@@ -155,6 +179,12 @@ inline ImageData decodeTilePreferReduced(const std::string &path, const ImageDat
     const bool coarse = (std::max)(srcW, srcH) >= 2 * (std::max)(targetW, targetH);
     if (path.empty() || (!fullFrame.isNull() && !coarse))
         return ImageData{};
+    if (jpegBlockEligible(path, srcX, srcY, srcW, srcH, targetW, targetH))
+    {
+        ImageData tile = decodeJpegBlockTile(path, fullFrame, srcX, srcY, srcW, srcH);
+        if (!tile.isNull())
+            return tile;
+    }
     auto source = SourceImage::open(path);
     if (!source || !source->isValid())
         return ImageData{};
