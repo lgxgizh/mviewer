@@ -417,6 +417,34 @@ static void testFileDeleteCommand()
     cmd2.execute();
     CHECK(!cmd2.lastError().empty(), "delete fails when source is missing");
 
+    // M2: system recycle bin first; undo restores from the returned location.
+    const fs::path bin = dir / "system-bin";
+    fs::create_directories(bin);
+    writeFile(a, "content");
+    FileDeleteCommand sys({a.string()}, trash.string());
+    sys.setSystemTrash(
+        [&bin](const std::string &source, std::string &pathInTrash)
+        {
+            const fs::path target = bin / fs::path(source).filename();
+            std::error_code ec;
+            fs::rename(source, target, ec);
+            pathInTrash = target.string();
+            return !ec;
+        });
+    sys.execute();
+    CHECK(sys.lastError().empty() && !fs::exists(a) && fs::exists(bin / "a.txt") &&
+              !fs::exists(trash / "a.txt"),
+          "delete prefers the system recycle bin over the app trash");
+    sys.undo();
+    CHECK(sys.lastError().empty() && fs::exists(a), "undo restores from the system recycle bin");
+    FileDeleteCommand fallback({a.string()}, trash.string());
+    fallback.setSystemTrash([](const std::string &, std::string &) { return false; });
+    fallback.execute();
+    CHECK(fallback.lastError().empty() && !fs::exists(a) && fs::exists(trash / "a.txt"),
+          "recycle bin failure falls back to the app trash");
+    fallback.undo();
+    CHECK(fs::exists(a), "undo restores from the fallback trash");
+
     fs::remove_all(dir);
 }
 

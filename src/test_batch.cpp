@@ -4,7 +4,6 @@
 #include "core/batch/BatchProcessor.h"
 #include "core/batch/BatchRename.h"
 #include "domain/BatchJob.h"
-
 #include <QApplication>
 #include <QByteArray>
 #include <QCheckBox>
@@ -17,10 +16,10 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QTextEdit>
 #include <QTimer>
 #include <QUuid>
-
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -110,6 +109,7 @@ static mviewer::domain::BatchFileResult exportFile(const QString &input, const Q
         return {};
     return result.fileResults.front();
 }
+#include "test_batch_collision.inc"
 
 int main(int argc, char *argv[])
 {
@@ -787,12 +787,12 @@ int main(int argc, char *argv[])
         settings.remove(QStringLiteral("batch/overwriteExisting"));
     }
 
+    testOutputNameCollision();
     // ── Cleanup ────────────────────────────────────────────────────
     QFile::remove(p1);
     QFile::remove(p2);
     QFile::remove(p3);
     QDir(outDir).removeRecursively();
-
     std::fprintf(stderr, "%s: %d failures\n", g_fail == 0 ? "All tests passed" : "Tests failed",
                  g_fail);
     return g_fail == 0 ? 0 : 1;

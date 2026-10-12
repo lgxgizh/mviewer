@@ -75,7 +75,9 @@ void ImageViewer::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     QPainter painter(this);
-    painter.fillRect(rect(), Qt::black);
+    // Same backdrop as the compare panes (RawImageView): follows the theme
+    // palette instead of a hardcoded black that clashed with light mode.
+    painter.fillRect(rect(), palette().color(QPalette::Dark));
 
     // M47: LOD-first display — a large source draws through the bounded
     // display raster (viewport LOD / visible region), never through a full
@@ -113,11 +115,8 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             m_provisionalSourceSize = QSize();
         }
         auto ready = composeVisibleTiles(visible);
-        if (ready.empty() && visible.pending > 0 && m_provisionalImage.isNull())
-        {
-            painter.setPen(QColor(180, 180, 180));
-            painter.drawText(rect(), Qt::AlignCenter, "Loading...");
-        }
+        // Pending tiles: the thin loading bar (imageviewer_loadingbar.cpp)
+        // is the only progress cue; no extra English "Loading..." text.
         const Viewport tileView = m_view;
         scheduleOverlayTiles(ready);
         drawGpuTiles(painter, ready, tileView);

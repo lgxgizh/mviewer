@@ -572,9 +572,9 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
     if (!pm.isNull())
         painter->drawPixmap(iconR, thumb_delegate::cachedScaledPixmap(pm, QSize(icon, icon)));
     else if (m_panel->thumbFailed(path))
-        painter->fillRect(iconR, QColor(200, 200, 200));
+        painter->fillRect(iconR, option.palette.color(QPalette::Mid));
     else
-        painter->fillRect(iconR, QColor(228, 228, 228));
+        painter->fillRect(iconR, option.palette.color(QPalette::AlternateBase));
 
     const QRect textR(iconR.right() + 6, r.y(), r.right() - iconR.right() - 6, r.height());
     painter->setPen(sel ? option.palette.color(QPalette::HighlightedText)

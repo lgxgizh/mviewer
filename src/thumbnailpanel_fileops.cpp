@@ -4,7 +4,11 @@
 #include "fileopmessages.h"
 #include "runtime_storage.h"
 
+#include <QDateTime>
 #include <QDesktopServices>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QSettings>
 #include <QUrl>
 
@@ -46,6 +50,40 @@ QString mviewerTrashDirectory()
     const QString dataDir =
         mviewer::runtime::writableDirectory(QStandardPaths::GenericDataLocation);
     return dataDir.isEmpty() ? QString() : QDir(dataDir).filePath("trash");
+}
+
+// Fallback trash (used only when the system recycle bin refuses a file,
+// e.g. some network shares): keep it bounded instead of growing forever.
+constexpr qint64 kInternalTrashMaxAgeDays = 30;
+constexpr qint64 kInternalTrashMaxBytes = qint64(2) * 1024 * 1024 * 1024;
+
+void pruneInternalTrash(const QString &trashDir)
+{
+    QDir dir(trashDir);
+    if (trashDir.isEmpty() || !dir.exists())
+        return;
+    const QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::Hidden, QDir::Time);
+    const QDateTime cutoff = QDateTime::currentDateTime().addDays(-kInternalTrashMaxAgeDays);
+    qint64 total = 0;
+    for (const QFileInfo &info : entries) // newest first
+    {
+        if (info.lastModified() < cutoff || total + info.size() > kInternalTrashMaxBytes)
+        {
+            QFile::remove(info.absoluteFilePath());
+            continue;
+        }
+        total += info.size();
+    }
+}
+
+bool moveToSystemTrash(const std::string &source, std::string &pathInTrash)
+{
+    QString trashed;
+    if (!QFile::moveToTrash(QString::fromUtf8(source.data(), static_cast<qsizetype>(source.size())),
+                            &trashed))
+        return false;
+    pathInTrash = trashed.toUtf8().toStdString();
+    return true;
 }
 
 int transferPercent(uintmax_t copied, uintmax_t total)
@@ -438,14 +476,15 @@ void ThumbnailPanel::moveToTrashSelected()
     if (QSettings().value(QStringLiteral("confirmDelete"), true).toBool())
     {
         const QString prompt = paths.size() == 1
-                                   ? tr("确定将此文件移到 MViewer 回收站？")
-                                   : tr("确定将 %1 个文件移到 MViewer 回收站？").arg(paths.size());
+                                   ? tr("确定将此文件移到回收站？")
+                                   : tr("确定将 %1 个文件移到回收站？").arg(paths.size());
         const auto answer = QMessageBox::question(
             this, tr("删除确认"), prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
     }
-    // App-private trash until a native recycle-bin adapter exists.
+    // System recycle bin first (Undo moves the file back from there); the
+    // app-private directory is only the fallback, pruned by age and size.
     const QString trashDir = mviewerTrashDirectory();
     if (trashDir.isEmpty() || !QDir().mkpath(trashDir))
     {
@@ -453,8 +492,10 @@ void ThumbnailPanel::moveToTrashSelected()
         return;
     }
 
+    pruneInternalTrash(trashDir);
     auto cmd =
         std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
+    cmd->setSystemTrash(&moveToSystemTrash);
     startCommandFileOperation(std::move(cmd), paths, QStringLiteral("删除"));
 }
 

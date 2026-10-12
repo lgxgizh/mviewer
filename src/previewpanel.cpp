@@ -1,6 +1,7 @@
 #include "previewpanel.h"
 
 #include "SquareLetterbox.h"
+#include "Theme.h"
 #include "core/image/Decoder.h"
 #include "core/image/FrameSequence.h"
 #include "core/image/ImageStats.h"
@@ -400,7 +401,8 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     const QColor base = pal.color(QPalette::Base);
     const QColor well = pal.color(QPalette::AlternateBase);
     const QColor text = pal.color(QPalette::Text);
-    const QColor secondary = QColor(161, 161, 170);
+    const QColor secondary =
+        QColor(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary));
     painter.fillRect(rect(), base);
 
     if (!m_hasImage)

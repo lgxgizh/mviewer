@@ -1,8 +1,10 @@
 #pragma once
 
-#include "ICommand.h"
 #include "FileSystemAdapter.h"
+#include "ICommand.h"
 
+#include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -56,6 +58,16 @@ class FileDeleteCommand : public ICommand
         m_transferObserver = std::move(observer);
     }
 
+    // Optional system recycle bin (Windows Recycle Bin / freedesktop Trash),
+    // installed by the UI layer. Returns true and the file's new location
+    // when the OS took the file; undo moves it back from there. When it is
+    // unset or fails, the file goes to `trashDir` as before.
+    using SystemTrash = std::function<bool(const std::string &source, std::string &pathInTrash)>;
+    void setSystemTrash(SystemTrash systemTrash)
+    {
+        m_systemTrash = std::move(systemTrash);
+    }
+
     bool hasUnresolvedState() const override
     {
         return m_unresolved;
@@ -78,11 +90,13 @@ class FileDeleteCommand : public ICommand
 
   private:
     void rollback();
+    bool moveToSystemTrash(const std::filesystem::path &source);
     bool restoreMovedPaths(const char *operation);
     void setFailure(const std::string &message);
 
     std::vector<std::string> m_paths;
     std::string m_trashDir;
+    SystemTrash m_systemTrash;
     // (originalPath, trashPath) for each successfully moved file.
     std::vector<std::pair<std::string, std::string>> m_moved;
     bool m_executed = false;
