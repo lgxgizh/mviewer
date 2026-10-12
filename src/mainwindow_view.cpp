@@ -387,36 +387,51 @@ void MainWindow::toggleFocusBrowse()
     }
 }
 
+namespace
+{
+const char *const kPreferenceKeys[] = {
+    "thumbViewMode",     "thumbSortMode",  "thumbSortAscending",     "thumbSize",
+    "slideshowInterval", "zebraThreshold", "defaultAnalysisOverlay", "autoAlignBeforeDiff",
+};
+
+QVariantMap preferenceSnapshot()
+{
+    QSettings s;
+    QVariantMap out;
+    for (const char *key : kPreferenceKeys)
+        out.insert(QString::fromLatin1(key), s.value(key));
+    return out;
+}
+} // namespace
+
 void MainWindow::openPreferences()
 {
     PreferencesDialog dlg(this);
-    connect(&dlg, &PreferencesDialog::settingsChanged, this, &MainWindow::applyPreferences);
+    // OK writes every field back to QSettings. Apply only what the user
+    // actually changed, so an untouched "default view mode" no longer resets
+    // the live List/Compact view or a hand-picked analysis overlay.
+    const QVariantMap before = preferenceSnapshot();
+    connect(&dlg, &PreferencesDialog::settingsChanged, this,
+            [this, before]() { applyPreferences(before); });
     dlg.exec();
 }
 
-void MainWindow::applyPreferences()
+void MainWindow::applyPreferences(const QVariantMap &before)
 {
     QSettings s;
-    const int vm = s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt();
-    if (m_thumbnailPanel)
-    {
-        const auto mode = (vm >= 0 && vm <= 4) ? static_cast<ThumbnailPanel::ViewMode>(vm)
-                                               : ThumbnailPanel::Thumbnail;
-        m_thumbnailPanel->setViewMode(mode);
-    }
+    auto changed = [&s, &before](const char *key)
+    { return before.value(QString::fromLatin1(key)).toString() != s.value(key).toString(); };
+    if (m_thumbnailPanel && changed("thumbViewMode"))
+        m_thumbnailPanel->setViewMode(ThumbnailPanel::viewModeFromInt(
+            s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt()));
     const int sm = s.value("thumbSortMode", ThumbnailPanel::SortName).toInt();
-    if (m_sortCombo)
+    if (m_sortCombo && changed("thumbSortMode"))
     {
-        for (int i = 0; i < m_sortCombo->count(); ++i)
-        {
-            if (m_sortCombo->itemData(i).toInt() == sm)
-            {
-                m_sortCombo->setCurrentIndex(i);
-                break;
-            }
-        }
+        const int index = m_sortCombo->findData(sm);
+        if (index >= 0)
+            m_sortCombo->setCurrentIndex(index);
     }
-    if (s.contains("thumbSortAscending"))
+    if (s.contains("thumbSortAscending") && changed("thumbSortAscending"))
     {
         const bool ascending = s.value("thumbSortAscending", true).toBool();
         if (m_thumbnailPanel)
@@ -427,28 +442,31 @@ void MainWindow::applyPreferences()
             m_sortDirBtn->setText(ascending ? "↑" : "↓");
         }
     }
-    if (m_thumbnailPanel)
+    if (m_thumbnailPanel && changed("thumbSize"))
     {
-        const int size = std::clamp(s.value("thumbSize", 160).toInt(), 64, 512);
+        const int size = std::clamp(s.value("thumbSize", ThumbnailPanel::kDefaultThumbSize).toInt(),
+                                    ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
         m_thumbnailPanel->setThumbSize(size);
     }
-    if (m_slideshowTimer)
+    if (m_slideshowTimer && changed("slideshowInterval"))
     {
         const int interval = std::clamp(s.value("slideshowInterval", 3000).toInt(), 500, 30000);
         m_slideshowTimer->setInterval(interval);
         if (m_slideshowTimer->isActive())
             m_slideshowTimer->start(interval);
     }
-    if (m_imageViewer)
+    if (m_imageViewer && changed("zebraThreshold"))
+        m_imageViewer->setZebraThreshold(std::clamp(s.value("zebraThreshold", 2).toInt(), 1, 40));
+    if (m_imageViewer && changed("defaultAnalysisOverlay"))
     {
-        const int zebra = std::clamp(s.value("zebraThreshold", 2).toInt(), 1, 40);
-        m_imageViewer->setZebraThreshold(zebra);
         const int overlay = s.value("defaultAnalysisOverlay", 0).toInt();
         const auto mode = (overlay >= 0 && overlay <= 7)
                               ? static_cast<mviewer::OverlayMode>(overlay)
                               : mviewer::OverlayMode::None;
         m_imageViewer->setOverlayMode(mode);
     }
+    if (m_compareView && changed("autoAlignBeforeDiff"))
+        m_compareView->setAutoAlignBeforeDiff(s.value("autoAlignBeforeDiff", false).toBool());
     applyColorManagementPreference();
 }
 

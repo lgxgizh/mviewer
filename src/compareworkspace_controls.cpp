@@ -621,12 +621,13 @@ QWidget *CompareWorkspace::buildStatusStrip()
         QStringLiteral("color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     m_autoAlignChk->setToolTip(tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
-    m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
+    m_autoAlignBeforeDiff = QSettings().value("autoAlignBeforeDiff", false).toBool();
+    m_autoAlignChk->setChecked(m_autoAlignBeforeDiff);
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
                 QSettings().setValue("autoAlignBeforeDiff", on);
-                refreshAllDiffOverlays();
+                setAutoAlignBeforeDiff(on);
             });
     lay->addWidget(m_autoAlignChk);
 

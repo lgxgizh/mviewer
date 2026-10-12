@@ -278,6 +278,11 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     }
     clearROIStatsDisplay();
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
+    // A synced crosshair belongs to the previous image set; P/N must not
+    // carry it over to the next one.
+    for (RawImageView *view : m_cellViews)
+        if (view)
+            view->clearCrosshair();
     if (!m_roiLinked)
         m_lastSelection = {};
     // M28 P1-01: Compare loads are ASYNC. Decoding happens on the DecodePool,

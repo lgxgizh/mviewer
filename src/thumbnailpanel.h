@@ -88,6 +88,12 @@ class ThumbnailPanel : public QListView
         Compact,       // Dense grid, minimal padding (M15)
         List           // Windows-Explorer-style icon+name wrapping list (P0)
     };
+    // Single range check for persisted / user-supplied view-mode integers:
+    // every ViewMode is valid, anything else falls back to Thumbnail.
+    static constexpr ViewMode viewModeFromInt(int value)
+    {
+        return (value >= Thumbnail && value <= List) ? static_cast<ViewMode>(value) : Thumbnail;
+    }
 
     // Details-view columns (shared by header + DetailsDelegate layout).
     enum DetailColumn
