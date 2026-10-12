@@ -2461,11 +2461,15 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "highlighted diff delivers a visible red-style overlay");
 
         sendKey(ws, Qt::Key_H);
-        CHECK(!diffHl->isChecked() && diffOverlay->isChecked(),
-              "key H turns highlight OFF without hiding diff display");
-        double normalOpacity = 0.0;
-        CHECK(waitForDiffOverlay(normalOpacity, 0.1, 0.7) && normalOpacity < highlightedOpacity,
-              "turning highlight OFF keeps the ordinary heatmap overlay visible");
+        // User-reported bug: highlight OFF used to leave the heatmap the
+        // highlight had switched on. H off now restores the plain image.
+        CHECK(!diffHl->isChecked() && !diffOverlay->isChecked(),
+              "key H turns highlight OFF and the diff display it enabled");
+        pump(300);
+        bool anyOverlayLeft = false;
+        for (RawImageView *view : ws->findChildren<RawImageView *>())
+            anyOverlayLeft = anyOverlayLeft || (view && !view->overlay().isNull());
+        CHECK(!anyOverlayLeft, "turning highlight OFF restores the plain image on every pane");
 
         diffHl->click();
         CHECK(diffHl->isChecked() && diffOverlay->isChecked(),
