@@ -1,5 +1,7 @@
 #include "FileDeleteCommand.h"
 
+#include "core/FileMetadataRelocation.h"
+
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -112,6 +114,7 @@ void FileDeleteCommand::execute()
         {
             m_moved.emplace_back(mviewer::core::pathToUtf8(source),
                                  mviewer::core::pathToUtf8(destination));
+            mviewer::core::relocateFileMetadata(m_moved.back().first, m_moved.back().second);
             completedBytes += planSizes[index];
             continue;
         }
@@ -163,7 +166,10 @@ bool FileDeleteCommand::restoreMovedPaths(const char *operation)
 
         const auto result = mviewer::core::moveFileSafely(current, original, m_fileSystem);
         if (result.state == mviewer::core::FileTransferState::Succeeded)
+        {
+            mviewer::core::relocateFileMetadata(it->second, it->first);
             continue;
+        }
         remaining.push_back(*it);
         failure = result.error;
     }

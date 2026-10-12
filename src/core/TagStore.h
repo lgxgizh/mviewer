@@ -48,6 +48,10 @@ class TagStore
 
     Snapshot snapshot() const;
 
+    // Move the tag set from oldPath to newPath (file rename/move/delete-to-
+    // trash). Returns true when anything moved.
+    bool renamePath(const std::string &oldPath, const std::string &newPath);
+
     // Prune stale records for files that no longer exist on disk.
     // Returns the number of pruned tag associations.
     size_t pruneMissing();
