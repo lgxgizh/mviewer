@@ -553,7 +553,7 @@ static void testThumbnailCacheCapacity()
     CHECK(cache.totalBytes() == 0, "zero budget persists nothing");
     CHECK(!cache.get(b, 64, out), "zero budget serves nothing");
 
-    // Existing *.png files written by an earlier process count toward the
+    // Existing cache files written by an earlier process count toward the
     // budget once the lazy startup scan runs on first access.
     const QString cacheBase = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
     const QString thumbDir =
@@ -579,7 +579,7 @@ static void testThumbnailCacheCapacity()
     {
         const QString p = fixture(QString("pre%1").arg(i));
         const QString k = ThumbnailCache::keyFor(p, 64);
-        const QString cf = thumbDir + "/" + k + ".png";
+        const QString cf = thumbDir + "/" + k + ThumbnailCache::kFileSuffix;
         QImage im(48, 48, QImage::Format_RGB32);
         im.fill(QColor(10 + i * 40, 20, 30));
         CHECK(im.save(cf, "PNG"), "pre-existing cache file written");
@@ -606,13 +606,13 @@ static void testThumbnailCacheCapacity()
     cache.setMaxBytes(pre[1].bytes + pre[2].bytes); // pre[0] (oldest mtime) must go
     CHECK(cache.totalBytes() == pre[1].bytes + pre[2].bytes,
           "oldest historical file evicted by lower cap");
-    CHECK(!QFile::exists(thumbDir + "/" + pre[0].key + ".png"),
+    CHECK(!QFile::exists(thumbDir + "/" + pre[0].key + ThumbnailCache::kFileSuffix),
           "evicted oldest file removed from disk");
     cache.setMaxBytes(pre[2].bytes); // pre[1] must go next
     CHECK(cache.totalBytes() == pre[2].bytes, "second-oldest historical file evicted");
-    CHECK(!QFile::exists(thumbDir + "/" + pre[1].key + ".png"),
+    CHECK(!QFile::exists(thumbDir + "/" + pre[1].key + ThumbnailCache::kFileSuffix),
           "evicted second file removed from disk");
-    CHECK(QFile::exists(thumbDir + "/" + pre[2].key + ".png"),
+    CHECK(QFile::exists(thumbDir + "/" + pre[2].key + ThumbnailCache::kFileSuffix),
           "newest historical file survives the lowered cap");
     CHECK(cache.totalBytes() <= cache.maxBytes(), "usage stays within the lowered cap");
 
@@ -623,7 +623,7 @@ static void testThumbnailCacheCapacity()
     const QString extSrc = fixture("ext");
     const QString extKey = ThumbnailCache::keyFor(extSrc, 64);
     CHECK(cache.totalBytes() == 0, "index rebuilt over an empty folder");
-    const QString extFile = thumbDir + "/" + extKey + ".png";
+    const QString extFile = thumbDir + "/" + extKey + ThumbnailCache::kFileSuffix;
     QImage extImg(32, 32, QImage::Format_RGB32);
     extImg.fill(Qt::green);
     CHECK(extImg.save(extFile, "PNG"), "external cache file written behind the cache's back");
@@ -635,7 +635,7 @@ static void testThumbnailCacheCapacity()
     // A corrupt payload is dropped and its bytes un-accounted.
     const QString badSrc = fixture("bad");
     const QString badKey = ThumbnailCache::keyFor(badSrc, 64);
-    const QString badFile = thumbDir + "/" + badKey + ".png";
+    const QString badFile = thumbDir + "/" + badKey + ThumbnailCache::kFileSuffix;
     QFile badf(badFile);
     CHECK(badf.open(QIODevice::WriteOnly), "corrupt cache file created");
     CHECK(badf.write("not a png at all") == 16, "corrupt payload written");
@@ -651,7 +651,7 @@ static void testThumbnailCacheCapacity()
     const QString ovSrc = fixture("ov");
     const QString ovKey = ThumbnailCache::keyFor(ovSrc, 64);
     CHECK(cache.totalBytes() == 0, "index rebuilt before external overwrite test");
-    const QString ovFile = thumbDir + "/" + ovKey + ".png";
+    const QString ovFile = thumbDir + "/" + ovKey + ThumbnailCache::kFileSuffix;
     QImage ovSmall(32, 32, QImage::Format_RGB32);
     ovSmall.fill(Qt::darkYellow);
     CHECK(ovSmall.save(ovFile, "PNG"), "small external cache file written");
@@ -671,7 +671,7 @@ static void testThumbnailCacheCapacity()
     cache.clear();
     const QString validSrc = fixture("valid_entry");
     const QString validKey = ThumbnailCache::keyFor(validSrc, 64);
-    const QString validFile = thumbDir + "/" + validKey + ".png";
+    const QString validFile = thumbDir + "/" + validKey + ThumbnailCache::kFileSuffix;
     QImage validImg(32, 32, QImage::Format_RGB32);
     validImg.fill(Qt::blue);
     CHECK(validImg.save(validFile, "PNG"), "valid thumbnail written under tight budget");
@@ -685,7 +685,7 @@ static void testThumbnailCacheCapacity()
     // An oversized file (strictly larger than tightCap) appearing on disk
     const QString hugeSrc = fixture("huge_entry");
     const QString hugeKey = ThumbnailCache::keyFor(hugeSrc, 64);
-    const QString hugeFile = thumbDir + "/" + hugeKey + ".png";
+    const QString hugeFile = thumbDir + "/" + hugeKey + ThumbnailCache::kFileSuffix;
     QFile hf(hugeFile);
     CHECK(hf.open(QIODevice::WriteOnly), "oversized file opened");
     QByteArray bigData(static_cast<int>(tightCap + 1024), 'X');
