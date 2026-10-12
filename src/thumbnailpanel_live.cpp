@@ -1,6 +1,6 @@
 // M56: incremental live-folder application for the Browse gallery.
-#include "thumbnailpanel_p.h"
 #include "selectionmodel.h"
+#include "thumbnailpanel_p.h"
 
 #include "core/batch/BatchRename.h"
 #include "core/image/ImageSortKeys.h"
@@ -11,6 +11,7 @@
 #include <QScrollBar>
 
 #include <algorithm>
+#include <vector>
 
 namespace
 {
@@ -131,13 +132,11 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
         emit pathsModified(modifiedPaths);
 }
 
-static void applyDeltaRemovalsAndModifications(
-    const mviewer::core::DirectoryDelta &delta,
-    QList<ThumbnailPanel::Entry> &next,
-    QStringList &removedPaths,
-    QStringList &renamedFrom,
-    QStringList &renamedTo,
-    const std::function<void(const QString &)> &invalidate)
+static void
+applyDeltaRemovalsAndModifications(const mviewer::core::DirectoryDelta &delta,
+                                   QList<ThumbnailPanel::Entry> &next, QStringList &removedPaths,
+                                   QStringList &renamedFrom, QStringList &renamedTo,
+                                   const std::function<void(const QString &)> &invalidate)
 {
     QHash<QString, int> nextIndex;
     nextIndex.reserve(next.size());
@@ -217,10 +216,8 @@ static void applyDeltaRemovalsAndModifications(
 }
 
 void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDelta &delta,
-                                                 QList<Entry> &next,
-                                                 QStringList &removedPaths,
-                                                 QStringList &renamedFrom,
-                                                 QStringList &renamedTo)
+                                                QList<Entry> &next, QStringList &removedPaths,
+                                                QStringList &renamedFrom, QStringList &renamedTo)
 {
     QStringList diskInvalidations;
     auto invalidate = [this, &diskInvalidations](const QString &path)
@@ -233,7 +230,8 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
         diskInvalidations.append(path);
     };
 
-    applyDeltaRemovalsAndModifications(delta, next, removedPaths, renamedFrom, renamedTo, invalidate);
+    applyDeltaRemovalsAndModifications(delta, next, removedPaths, renamedFrom, renamedTo,
+                                       invalidate);
 
     for (const auto &rename : delta.renamed)
     {
@@ -284,12 +282,11 @@ void ThumbnailPanel::sortDirectoryDeltaEntries(QList<Entry> &entries) const
 }
 
 void ThumbnailPanel::captureIncrementalDeltaState(QStringList &selection, QString &current,
-                                                    QString &anchorPath, int &anchorOffset,
-                                                    int &currentRow) const
+                                                  QString &anchorPath, int &anchorOffset,
+                                                  int &currentRow) const
 {
-    current = currentIndex().isValid()
-                  ? m_paths.value(currentIndex().row())
-                  : (m_selection ? m_selection->currentImage() : QString());
+    current = currentIndex().isValid() ? m_paths.value(currentIndex().row())
+                                       : (m_selection ? m_selection->currentImage() : QString());
     currentRow = m_paths.indexOf(current);
     const QModelIndex anchorIndex = indexAt(QPoint(2, 2));
     if (!anchorIndex.isValid())
@@ -324,9 +321,75 @@ void ThumbnailPanel::refreshSidecarPaths(const QStringList &paths)
     applyFilter();
 }
 
-static void syncModelRows(QAbstractItemModel *model,
-                           const QList<ThumbnailPanel::Entry> &entries,
-                           QStringList &working)
+// Progressive rows land where the finished scan's sort will put them, so the
+// list no longer jumps when the scan completes (directory order is not the
+// natural-name order). Sort fields that need metadata snapshots (rating,
+// camera, lens, resolution) are not known yet and still append.
+void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch)
+{
+    const auto field = static_cast<mviewer::core::BrowseSortField>(m_sortMode);
+    const bool sortable = field == mviewer::core::BrowseSortField::Name ||
+                          field == mviewer::core::BrowseSortField::Date ||
+                          field == mviewer::core::BrowseSortField::Size ||
+                          field == mviewer::core::BrowseSortField::Type;
+    QList<Entry> sorted = batch;
+    std::vector<int> oldPos(static_cast<size_t>(sorted.size()), m_displayEntries.size());
+    if (sortable)
+    {
+        const QHash<QString, int> noRatings;
+        const auto less = [this, field, &noRatings](const Entry &a, const Entry &b)
+        {
+            const int primary =
+                browsePrimaryCompare(field, a, b, noRatings, m_metaCamera, m_metaLens);
+            return browseOrderedLess(primary, a.name, b.name, a.path, b.path, m_sortAscending);
+        };
+        std::stable_sort(sorted.begin(), sorted.end(), less);
+        for (int k = 0; k < sorted.size(); ++k)
+            oldPos[static_cast<size_t>(k)] =
+                static_cast<int>(std::upper_bound(m_displayEntries.cbegin(),
+                                                  m_displayEntries.cend(), sorted.at(k), less) -
+                                 m_displayEntries.cbegin());
+    }
+    // Existing rows shift by the number of new rows placed before them.
+    if (!oldPos.empty() && oldPos.front() < m_displayEntries.size())
+    {
+        const auto shifted = [&oldPos](int row)
+        {
+            return row + static_cast<int>(std::upper_bound(oldPos.begin(), oldPos.end(), row) -
+                                          oldPos.begin());
+        };
+        for (auto it = m_rowByPath.begin(); it != m_rowByPath.end(); ++it)
+            it.value() = shifted(it.value());
+        for (auto it = m_displayEntryRow.begin(); it != m_displayEntryRow.end(); ++it)
+            it.value() = shifted(it.value());
+    }
+    for (int k = 0; k < sorted.size(); ++k)
+    {
+        const Entry &entry = sorted.at(k);
+        const int row = oldPos[static_cast<size_t>(k)] + k;
+        // One model insert per contiguous run (all appends -> one call).
+        if (k == 0 || oldPos[static_cast<size_t>(k)] != oldPos[static_cast<size_t>(k - 1)])
+        {
+            int run = 1;
+            while (k + run < sorted.size() &&
+                   oldPos[static_cast<size_t>(k + run)] == oldPos[static_cast<size_t>(k)])
+                ++run;
+            if (!m_model->insertRows(row, run))
+                return;
+        }
+        m_displayEntries.insert(row, entry);
+        m_paths.insert(row, entry.path);
+        const QString key = galleryPathKey(entry.path);
+        m_rowByPath.insert(key, row);
+        m_displayEntryRow.insert(key, row);
+        m_sizeByPath.insert(key, entry.size);
+        m_model->setData(m_model->index(row, 0), entry.name);
+        m_totalBytes += entry.size;
+    }
+}
+
+static void syncModelRows(QAbstractItemModel *model, const QList<ThumbnailPanel::Entry> &entries,
+                          QStringList &working)
 {
     QSet<QString> desired;
     for (const auto &entry : entries)
@@ -354,9 +417,8 @@ static void syncModelRows(QAbstractItemModel *model,
             continue;
         }
         const auto idxIt = workingIndex.find(entry.path);
-        const int existing = (idxIt != workingIndex.end() && idxIt.value() >= target)
-                                 ? idxIt.value()
-                                 : -1;
+        const int existing =
+            (idxIt != workingIndex.end() && idxIt.value() >= target) ? idxIt.value() : -1;
         if (existing >= 0)
         {
             const QString moved = working.takeAt(existing);
@@ -387,9 +449,9 @@ static void syncModelRows(QAbstractItemModel *model,
 }
 
 void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entries,
-                                                       const QStringList &previousSelection,
-                                                       const QString &previousCurrent,
-                                                       const QString &anchorPath, int anchorOffset)
+                                                      const QStringList &previousSelection,
+                                                      const QString &previousCurrent,
+                                                      const QString &anchorPath, int anchorOffset)
 {
     QStringList working = m_paths;
     syncModelRows(m_model, entries, working);
@@ -429,9 +491,8 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
     QString nextCurrent = previousCurrent;
     if (!m_rowByPath.contains(galleryPathKey(nextCurrent)))
     {
-        const int candidate = m_paths.isEmpty()
-                                  ? -1
-                                  : qBound(0, m_incrementalPreviousCurrentRow, m_paths.size() - 1);
+        const int candidate =
+            m_paths.isEmpty() ? -1 : qBound(0, m_incrementalPreviousCurrentRow, m_paths.size() - 1);
         nextCurrent = candidate >= 0 ? m_paths.at(candidate) : QString();
         if (m_selection)
         {

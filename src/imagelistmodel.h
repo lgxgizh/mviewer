@@ -1,5 +1,7 @@
 #pragma once
 
+#include "browsepathindex.h"
+
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -57,6 +59,7 @@ class ImageListModel : public QObject
 
   private:
     QStringList m_paths;
+    BrowsePathIndex m_index{BrowsePathIndex::Separators::Native};
     QString m_directory;
     bool m_dirty = true;
 };

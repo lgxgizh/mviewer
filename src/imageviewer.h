@@ -1,5 +1,7 @@
 #pragma once
 
+#include "browsepathindex.h"
+
 #include "application/ImageLoadingService.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/async/AsyncLifetimeToken.h"
@@ -540,6 +542,7 @@ class ImageViewer : public QOpenGLWidget
     takeMatchingPreload(const QString &path);
     QString m_currentPath;
     QStringList m_fileList;
+    BrowsePathIndex m_fileIndex{BrowsePathIndex::Separators::Always};
     int m_currentIndex = -1;
     // M27: request generation — bumped on every setImage() so a late delivery
     // from an older request can never overwrite the current image, even for
