@@ -654,7 +654,7 @@ class CompareWorkspace : public QWidget
                    std::abs(bGain - 1.0f) < 1e-6f && rotation == 0 && !flipH && !flipV && !hasCrop;
         }
     };
-    std::vector<CellAdjust> m_cellAdjusts;      // per-cell adjustment state
+    std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
     // Identity of a pane's displayed content (source frame + adjustments).
     // RawImageView drops its full-frame pan backdrop when this changes.
     quint64 paneContentKey(int pane) const;

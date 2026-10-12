@@ -55,7 +55,10 @@ RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
     setCursor(Qt::OpenHandCursor);
 }
 
-void RawImageView::setImage(const QImage &img) { setImage(img, {}); }
+void RawImageView::setImage(const QImage &img)
+{
+    setImage(img, {});
+}
 
 void RawImageView::setImage(const QImage &img, const QSize &sourceSize)
 {
@@ -228,9 +231,9 @@ void RawImageView::paintBackdrop(QPainter &p, const QRectF &fullDest,
     if (m_backdrop.isNull() || !m_transientImage.isNull() || m_backdropSourceSize != m_sourceSize ||
         m_sourceRect == QRect(QPoint(0, 0), m_sourceSize) || fullDest.isEmpty())
         return;
-    const QRectF visible = p.hasClipping() ? p.clipBoundingRect()
-                                           : QRectF(QPointF(0, 0), QSizeF(p.device()->width(),
-                                                                         p.device()->height()));
+    const QRectF visible =
+        p.hasClipping() ? p.clipBoundingRect()
+                        : QRectF(QPointF(0, 0), QSizeF(p.device()->width(), p.device()->height()));
     if (coveredDest.contains(visible.intersected(fullDest)))
         return;
     const bool filtered =
@@ -363,8 +366,8 @@ void RawImageView::paintEvent(QPaintEvent *)
         return;
 
     // During active dragging/panning, bypass the offscreen baseSurface buffer
-    // (allocating/clearing a 4K surface on every mouse move frame wastes tens of MB of memory memset).
-    // Direct drawing to the viewport is faster and smoother.
+    // (allocating/clearing a 4K surface on every mouse move frame wastes tens of MB of memory
+    // memset). Direct drawing to the viewport is faster and smoother.
     if (m_dragging)
     {
         m_baseSurfaceValid = false;
@@ -389,7 +392,7 @@ void RawImageView::paintEvent(QPaintEvent *)
 }
 
 void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, int dh,
-                                   const QSize &sourceSize, double presented)
+                                    const QSize &sourceSize, double presented)
 {
     if (mviewer::pixelGridVisible(presented) && sourceSize.width() > 0 && sourceSize.height() > 0)
     {
@@ -436,7 +439,8 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
                 f.setBold(true);
                 f.setPointSize(8);
                 p.setFont(f);
-                p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter, QString::number(i + 1));
+                p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter,
+                           QString::number(i + 1));
             }
         }
     }
@@ -515,9 +519,9 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const QRectF coveredDest(sourceLeft + sourceRect.x() * scale,
                              sourceTop + sourceRect.y() * scale, sourceRect.width() * scale,
                              sourceRect.height() * scale);
-    paintBackdrop(p, QRectF(sourceLeft, sourceTop, sourceSize.width() * scale,
-                            sourceSize.height() * scale),
-                  coveredDest);
+    paintBackdrop(
+        p, QRectF(sourceLeft, sourceTop, sourceSize.width() * scale, sourceSize.height() * scale),
+        coveredDest);
     mviewer::ui::blitDeviceImage(p, coveredDest, image);
 
     // Difference/heatmap overlay (compare mode): same transform as the base image
