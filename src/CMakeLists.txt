@@ -1840,6 +1840,22 @@ target_compile_features(compare_pan_backdrop_tests PRIVATE cxx_std_20)
 target_include_directories(compare_pan_backdrop_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_pan_backdrop_tests COMMAND compare_pan_backdrop_tests)
 
+# Compare overlay toggles (sync crosshair, diff heatmap) clear on switch-off.
+add_executable(compare_overlay_toggle_tests
+    test_compare_overlay_toggles.cpp
+)
+target_link_libraries(compare_overlay_toggle_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_overlay_toggle_tests PRIVATE cxx_std_20)
+target_include_directories(compare_overlay_toggle_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_overlay_toggle_tests COMMAND compare_overlay_toggle_tests)
+
 # M52: pure source-backed Compare display planning regression matrix. The
 # planner owns no widget or decoder state, so this remains deterministic and
 # proves placeholder/Fit/zoom/pan/DPR/crop/rotation/supersession semantics.

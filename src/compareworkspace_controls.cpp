@@ -363,6 +363,18 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     // inspector samples every cell at that point.
     m_crosshairChk = new QCheckBox(mviewer::cw::compareShortcutText("R"), this);
     m_crosshairChk->setChecked(false);
+    m_crosshairChk->setObjectName("syncCrosshairToggle");
+    connect(m_crosshairChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                // R / checkbox / menu all land here. Off must erase the synced
+                // crosshair from every pane now, not on the next hover.
+                if (on)
+                    return;
+                for (RawImageView *view : m_cellViews)
+                    if (view)
+                        view->clearCrosshair();
+            });
     viewLayout->addWidget(m_crosshairChk);
 
     // M16.1: focus-lock / reference pin (n/1). Locks a cell as the comparison
