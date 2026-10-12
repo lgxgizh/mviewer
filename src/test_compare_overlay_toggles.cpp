@@ -171,10 +171,12 @@ void highlightCases(CompareWorkspace *ws)
     pump(1500);
     check(!anyOverlay(ws), "no highlight/heatmap comes back after settling");
     const QImage shot = right->grab().toImage().convertToFormat(QImage::Format_RGB32);
-    const QRgb mid = shot.pixel(shot.width() / 2, shot.height() / 2);
+    const QPoint stripe = right->sourcePointToWidget(QPointF(160, 120)).toPoint();
+    const QRgb mid = shot.scaled(right->size()).pixel(stripe);
     check(qRed(mid) > 230 && qGreen(mid) > 230 && qBlue(mid) > 230,
           "right pane renders the original white stripe pixels");
-    const QRgb body = shot.pixel(shot.width() / 2, shot.height() / 2 - shot.height() / 6);
+    const QPoint bodyPt = right->sourcePointToWidget(QPointF(160, 40)).toPoint();
+    const QRgb body = shot.scaled(right->size()).pixel(bodyPt);
     check(qAbs(qRed(body) - 40) < 12 && qAbs(qBlue(body) - 160) < 12,
           "right pane renders the original blue body pixels");
 
