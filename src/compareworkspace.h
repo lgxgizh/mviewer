@@ -671,7 +671,21 @@ class CompareWorkspace : public QWidget
     int m_editIdx = -1, m_explicitEditIdx = -1; // currently selected cell for editing
     static mviewer::core::CompareAdjustmentState reportAdjustment(const CellAdjust &adjust);
     static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
+    static std::string adjustKey(const CellAdjust &a);
+    static ImageData cachedAdjusted(const ImageData &src, const CellAdjust &adjust);
+    static bool computeDiffPair(mviewer::cw::DiffPair &out, const ImageData &source,
+                                const CellAdjust &adjust, const ImageData &basePixels,
+                                bool autoAlign, const TaskScheduler::TaskContext &context);
+    static bool cachedDiffPair(mviewer::cw::DiffPair &out, const ImageData &source,
+                               const CellAdjust &adjust, const ImageData &basePixels,
+                               bool autoAlign, const TaskScheduler::TaskContext &context);
 
+  public:
+    // Drops cached adjusted images / diff maps (new compare set, teardown).
+    static void clearDiffCache();
+    friend struct CompareDiffCacheTestAccess;
+
+  private:
     // Analysis samples deliberately bypass RawImageView::image(). That image
     // is a bounded display LOD; this conversion feeds the Qt-free source
     // sampler with the current adjusted-pane coordinate space.
