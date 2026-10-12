@@ -140,6 +140,19 @@ class TaskScheduler
 
     static TaskScheduler &instance();
 
+    // Shared CPU budget: while any ForegroundWork scope is alive (current
+    // image decode, compare HQ resample), thumbnail tasks back off briefly
+    // before starting so they do not compete with what the user is looking at.
+    class ForegroundWork
+    {
+      public:
+        ForegroundWork();
+        ~ForegroundWork();
+        ForegroundWork(const ForegroundWork &) = delete;
+        ForegroundWork &operator=(const ForegroundWork &) = delete;
+    };
+    static bool foregroundBusy();
+
     void submit(PoolType pool, void *runnable);
 
     TaskHandle submit(Priority prio, std::function<void(const TaskContext &)> work,

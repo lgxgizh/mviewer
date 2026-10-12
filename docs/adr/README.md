@@ -23,6 +23,7 @@
 | [014](014-ui-tu-split-by-responsibility.md) | 大 UI 文件按职责拆 TU | `mainwindow.cpp` <1000 行等硬约束 |
 | [016](016-qt-boundary-in-core-headers.md) | core/domain 头文件不得 include Qt（两个具名适配头例外） | 规则须与 R5 门禁一致且可审计 |
 | [017](017-process-lifetime-services.md) | 进程级服务故意不析构；对象级析构必须成立 | 区分"平台退出限制"与"忘记析构"，并由 stress 测试守住后者 |
+| [018](018-thumbnail-cpu-budget.md) | 缩略图线程上限为核心数一半、低优先级，并在前台解码/重采样时短暂让路 | 避免缩略图与当前图片解码、比较高清重采样抢 CPU |
 
 ### 缓存与调度
 
