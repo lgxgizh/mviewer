@@ -1,6 +1,7 @@
 // CompareWorkspace keyboard-first interaction (M20 P0#4).
 #include "compareworkspace_p.h"
 #include "compareworkspace_shortcuts.h"
+#include "shortcutdigits.h"
 
 #include <QCursor>
 #include <QKeyEvent>
@@ -302,22 +303,17 @@ bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
 {
     if (event->modifiers() != Qt::ShiftModifier)
         return false;
-    const int key = event->key();
-    if (key == Qt::Key_0)
+    const int digit = mviewer::ui::shortcutDigit(event);
+    if (digit == 0)
     {
         setOverlayMode(mviewer::OverlayMode::None);
         showCompareStatus(QString::fromUtf8("已重置为") + compareShortcutName("Shift+0"));
         event->accept();
         return true;
     }
-    if (key < Qt::Key_1 || key > Qt::Key_6)
+    if (digit < 1 || digit > 6)
         return false;
-    static const mviewer::OverlayMode kModes[] = {
-        mviewer::OverlayMode::None,     mviewer::OverlayMode::ChannelR,
-        mviewer::OverlayMode::ChannelG, mviewer::OverlayMode::ChannelB,
-        mviewer::OverlayMode::ChannelY, mviewer::OverlayMode::ChannelV,
-    };
-    setOverlayMode(kModes[key - Qt::Key_1]);
+    setOverlayMode(mviewer::ui::channelOverlayForDigit(digit));
     event->accept();
     return true;
 }

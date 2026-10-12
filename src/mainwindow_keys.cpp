@@ -1,5 +1,6 @@
 // MainWindow keyboard routing while a child or the viewer window has focus.
 #include "mainwindow_p.h"
+#include "shortcutdigits.h"
 
 namespace mviewer_keys
 {
@@ -51,10 +52,11 @@ bool MainWindow::forwardGlobalShortcut(QObject *watched, QKeyEvent *ke, Qt::Keyb
         Qt::Key_Tab,   Qt::Key_C,      Qt::Key_P,       Qt::Key_S, Qt::Key_Plus, Qt::Key_Equal,
         Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,       Qt::Key_2, Qt::Key_F11,  Qt::Key_Home,
         Qt::Key_End,   Qt::Key_PageUp, Qt::Key_PageDown};
+    // Shift+digit is reported as a symbol on Windows; route by the digit.
+    const int key = mviewer::ui::normalizedShortcutKey(ke);
     const bool isGlobalKey =
-        globalKeys.contains(ke->key()) ||
-        ((ke->modifiers() & Qt::ControlModifier) &&
-         (ke->key() == Qt::Key_C || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6)));
+        globalKeys.contains(key) || ((ke->modifiers() & Qt::ControlModifier) &&
+                                     (key == Qt::Key_C || (key >= Qt::Key_1 && key <= Qt::Key_6)));
     if (!isGlobalKey || watched == this)
         return false;
     // Also forward from the image viewer (it has its own keyPressEvent
@@ -70,10 +72,9 @@ bool MainWindow::forwardGlobalShortcut(QObject *watched, QKeyEvent *ke, Qt::Keyb
             return true;
         }
         // Ctrl+F is the address bar. Ctrl+1..6 are view modes, not zoom.
-        const bool ctrlGallery =
-            (mods & Qt::ControlModifier) &&
-            (ke->key() == Qt::Key_F || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6));
-        if (viewerOwns.contains(ke->key()) && !ctrlGallery)
+        const bool ctrlGallery = (mods & Qt::ControlModifier) &&
+                                 (key == Qt::Key_F || (key >= Qt::Key_1 && key <= Qt::Key_6));
+        if (viewerOwns.contains(key) && !ctrlGallery)
             return false; // let the viewer handle it
     }
     keyPressEvent(ke);
@@ -157,7 +158,7 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
     // Viewer focus: rename, delete, refresh, ratings, color labels, pick, reject.
     if (watched == m_imageViewer)
     {
-        const int key = ke->key();
+        const int key = mviewer::ui::normalizedShortcutKey(ke);
         const bool ctrlShift = mods == (Qt::ControlModifier | Qt::ShiftModifier);
         const bool altOnly = mods == Qt::AltModifier;
         const bool refresh = mods == Qt::NoModifier && key == Qt::Key_F5;
