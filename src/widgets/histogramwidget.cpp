@@ -56,11 +56,12 @@ void HistogramWidget::paintEvent(QPaintEvent *)
     paintOverlay(p, rect());
 }
 
-static void drawHistogramGrid(QPainter &p, double left, double top, int w, int h)
+static void drawHistogramGrid(QPainter &p, double left, double top, int w, int h, QColor ink)
 {
     p.save();
     p.setRenderHint(QPainter::Antialiasing, false);
-    QPen gridPen(QColor(255, 255, 255, 28), 1, Qt::DashLine);
+    ink.setAlpha(28);
+    QPen gridPen(ink, 1, Qt::DashLine);
     gridPen.setCosmetic(true);
     p.setPen(gridPen);
     for (int q = 1; q <= 3; ++q)
@@ -68,7 +69,8 @@ static void drawHistogramGrid(QPainter &p, double left, double top, int w, int h
         const double gx = left + (static_cast<double>(w) * q) / 4.0;
         p.drawLine(QPointF(gx, top), QPointF(gx, top + h));
     }
-    QPen basePen(QColor(255, 255, 255, 50), 1);
+    ink.setAlpha(50);
+    QPen basePen(ink, 1);
     basePen.setCosmetic(true);
     p.setPen(basePen);
     p.drawLine(QPointF(left, top + h - 1), QPointF(left + w, top + h - 1));
@@ -82,14 +84,17 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
     if (m_overlayStyle)
         p.fillRect(target, QColor(0, 0, 0, 90));
     else
-        p.fillRect(target, QColor(20, 20, 22));
+        p.fillRect(target, palette().color(QPalette::Base));
 
     const int w = target.width();
     const int h = target.height();
     const double left = target.left();
     const double top = target.top();
 
-    drawHistogramGrid(p, left, top, w, h);
+    // Over an image (overlay style) the ink stays white on the dark scrim;
+    // as a panel it follows the theme so light mode gets a light well.
+    const QColor ink = m_overlayStyle ? QColor(255, 255, 255) : palette().color(QPalette::Text);
+    drawHistogramGrid(p, left, top, w, h, ink);
 
     if (m_hists.empty())
         return;
@@ -138,7 +143,7 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
 
     // Channel colours: R, G, B, Luma (light gray), V (amber). Low-alpha overlay fills.
     const QColor cols[5] = {QColor(255, 70, 70), QColor(70, 220, 90), QColor(80, 140, 255),
-                            QColor(225, 225, 225), QColor(255, 200, 50)};
+                            m_overlayStyle ? QColor(225, 225, 225) : ink, QColor(255, 200, 50)};
 
     for (const auto &hist : m_hists)
     {

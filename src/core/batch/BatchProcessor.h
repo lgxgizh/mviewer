@@ -4,9 +4,11 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <string>
+#include <vector>
 
 namespace mviewer::core
 {
@@ -92,6 +94,10 @@ class BatchProcessor
     ProgressCallback m_progressCb;
     FileResultCallback m_fileResultCb;
     std::atomic<bool> m_cancelled{false};
+    // Export destination per file index, planned once per execute() so two
+    // inputs that map to the same output name (a.jpg + a.png -> a.webp) get
+    // distinct files instead of the later one overwriting the earlier one.
+    std::vector<std::filesystem::path> m_plannedDestinations;
     std::atomic<bool> m_paused{false};
     mutable std::mutex m_pauseMtx;
     std::condition_variable m_pauseCv;
@@ -104,6 +110,7 @@ class BatchProcessor
     }
 
     // Process a single file through the configured operation pipeline.
+    std::filesystem::path plannedDestination(int fileIndex) const;
     domain::BatchFileResult processFile(const domain::BatchJobConfig &config,
                                         const std::string &inputPath, int fileIndex,
                                         int totalFiles);

@@ -14,8 +14,8 @@ FileDeleteCommand::FileDeleteCommand(std::vector<std::string> paths, std::string
 std::string FileDeleteCommand::description() const
 {
     if (m_paths.size() == 1)
-        return "Delete " + mviewer::core::pathToUtf8(
-                             mviewer::core::pathFromUtf8(m_paths.front()).filename());
+        return "Delete " +
+               mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(m_paths.front()).filename());
     return "Delete " + std::to_string(m_paths.size()) + " files";
 }
 
@@ -99,6 +99,13 @@ void FileDeleteCommand::execute()
                                           batchTotal == 0 ? fileTotal : batchTotal);
             };
         }
+        if (moveToSystemTrash(source))
+        {
+            completedBytes += planSizes[index];
+            if (m_transferObserver)
+                m_transferObserver(completedBytes, totalBytes);
+            continue;
+        }
         const auto result =
             mviewer::core::moveFileSafely(source, destination, m_fileSystem, observer);
         if (result.state == mviewer::core::FileTransferState::Succeeded)
@@ -118,6 +125,20 @@ void FileDeleteCommand::execute()
     }
     m_executed = true;
     m_state = State::Succeeded;
+}
+
+bool FileDeleteCommand::moveToSystemTrash(const fs::path &source)
+{
+    if (!m_systemTrash)
+        return false;
+    std::string pathInTrash;
+    const std::string original = mviewer::core::pathToUtf8(source);
+    if (!m_systemTrash(original, pathInTrash))
+        return false;
+    // An empty location means the OS took the file but cannot report where;
+    // the pair is still recorded so Undo reports it instead of losing track.
+    m_moved.emplace_back(original, pathInTrash);
+    return true;
 }
 
 bool FileDeleteCommand::restoreMovedPaths(const char *operation)

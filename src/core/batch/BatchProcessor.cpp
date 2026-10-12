@@ -24,6 +24,7 @@
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
+#include <set>
 #include <sstream>
 #include <thread>
 
@@ -212,6 +213,51 @@ std::filesystem::path resolveDestination(const domain::BatchJobConfig &config,
     return pathFromUtf8(buildOutputPath(config, inputPath, index, total));
 }
 
+// Lowercase, slash-normalized identity: Windows paths are case-insensitive.
+QString destinationKey(const std::filesystem::path &path)
+{
+    return normalizedPath(path).toLower();
+}
+
+// "name.ext" -> "name (2).ext", "name (3).ext", ... until the name is neither
+// planned for another input of this batch nor already on disk.
+std::filesystem::path uniqueDestination(const std::filesystem::path &wanted,
+                                        const std::set<QString> &taken)
+{
+    const std::filesystem::path parent = wanted.parent_path();
+    const std::string stem = pathToUtf8(wanted.stem());
+    const std::string ext = pathToUtf8(wanted.extension());
+    for (int n = 2;; ++n)
+    {
+        std::filesystem::path candidate =
+            parent / pathFromUtf8(stem + " (" + std::to_string(n) + ")" + ext);
+        std::error_code ec;
+        if (taken.count(destinationKey(candidate)) == 0 && !std::filesystem::exists(candidate, ec))
+            return candidate;
+    }
+}
+
+std::vector<std::filesystem::path> planDestinations(const domain::BatchJobConfig &config,
+                                                    const std::vector<std::string> &inputs)
+{
+    std::vector<std::filesystem::path> planned;
+    if (config.exportFormat.empty())
+        return planned;
+    const int total = static_cast<int>(inputs.size());
+    planned.reserve(inputs.size());
+    std::set<QString> taken;
+    for (int i = 0; i < total; ++i)
+    {
+        std::filesystem::path destination =
+            resolveDestination(config, inputs[static_cast<size_t>(i)], i, total);
+        if (taken.count(destinationKey(destination)) != 0)
+            destination = uniqueDestination(destination, taken);
+        taken.insert(destinationKey(destination));
+        planned.push_back(std::move(destination));
+    }
+    return planned;
+}
+
 void applyAnalyzeOp(const domain::BatchJobConfig &config, const std::string &inputPath,
                     const ImageData &img, domain::BatchFileResult &result)
 {
@@ -264,13 +310,13 @@ void applyWatermarkOp(const domain::BatchJobConfig &config, ImageData &img)
 
 bool applyExportOp(const domain::BatchJobConfig &config, const std::string &inputPath,
                    const ImageData &img, int fileIndex, int totalFiles,
-                   domain::BatchFileResult &result)
+                   const std::filesystem::path &planned, domain::BatchFileResult &result)
 {
     if (config.exportFormat.empty())
         return true;
 
     const std::filesystem::path destination =
-        resolveDestination(config, inputPath, fileIndex, totalFiles);
+        planned.empty() ? resolveDestination(config, inputPath, fileIndex, totalFiles) : planned;
     std::string error = ensureOutputDir(config);
     if (error.empty())
         error = checkDestination(config, pathFromUtf8(inputPath), destination);
@@ -416,6 +462,13 @@ std::vector<std::string> expandInputPaths(const domain::BatchJobConfig &config)
 
 } // anonymous namespace
 
+std::filesystem::path BatchProcessor::plannedDestination(int fileIndex) const
+{
+    if (fileIndex < 0 || static_cast<size_t>(fileIndex) >= m_plannedDestinations.size())
+        return {};
+    return m_plannedDestinations[static_cast<size_t>(fileIndex)];
+}
+
 domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig &config,
                                                     const std::string &inputPath, int fileIndex,
                                                     int totalFiles)
@@ -486,7 +539,8 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
             break;
 
         case domain::BatchOp::Export:
-            if (!applyExportOp(config, inputPath, img, fileIndex, totalFiles, result))
+            if (!applyExportOp(config, inputPath, img, fileIndex, totalFiles,
+                               plannedDestination(fileIndex), result))
                 return result;
             break;
         }
@@ -515,6 +569,7 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
     }
     m_paused.store(false);
     aggregate.fileResults.reserve(static_cast<size_t>(total));
+    m_plannedDestinations = planDestinations(config, expandedPaths);
 
     // P2 #⑦: retry counter (config.retryCount, default 0 = no retry).
     for (int i = 0; i < total; ++i)
@@ -565,6 +620,8 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
         const int finished = static_cast<int>(aggregate.fileResults.size());
         aggregate.totalSkipped = total > finished ? total - finished : 0;
     }
+
+    m_plannedDestinations.clear();
 
     // Final progress notification.
     if (m_progressCb && !m_cancelled.load())
