@@ -1,5 +1,7 @@
 #include "FileRenameCommand.h"
 
+#include "core/FileMetadataRelocation.h"
+
 #include <filesystem>
 
 namespace fs = std::filesystem;
@@ -61,6 +63,7 @@ void FileRenameCommand::execute()
     if (result.state == mviewer::core::FileTransferState::Succeeded)
     {
         m_executed = true;
+        mviewer::core::relocateFileMetadata(m_oldPath, m_newPath);
         return;
     }
 
@@ -102,6 +105,7 @@ void FileRenameCommand::undo()
         m_unresolved = result.state == mviewer::core::FileTransferState::Partial;
         return;
     }
+    mviewer::core::relocateFileMetadata(m_newPath, m_oldPath);
     m_executed = false;
     m_unresolved = false;
 }

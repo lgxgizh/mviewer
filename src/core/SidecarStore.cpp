@@ -120,6 +120,48 @@ bool extractBool(const std::string &json, const std::string &key, bool fallback 
     return fallback;
 }
 
+std::string readWholeFile(const std::filesystem::path &path)
+{
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return {};
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
+}
+
+std::string lowerAscii(std::string text)
+{
+    std::transform(text.begin(), text.end(), text.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return text;
+}
+
+bool isImagePath(const std::filesystem::path &p)
+{
+    return mviewer::core::ImageFormats::isSupportedSuffix(lowerAscii(pathToUtf8(p.extension())));
+}
+
+// True when another supported image in the same directory shares the stem
+// of `image` (IMG_001.jpg vs IMG_001.png), i.e. a legacy stem.xmp sidecar
+// cannot be attributed to one of them without its "file" record.
+bool hasStemSibling(const std::filesystem::path &image)
+{
+    std::error_code ec;
+    std::filesystem::directory_iterator it(
+        image.parent_path(), std::filesystem::directory_options::skip_permission_denied, ec);
+    for (std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
+    {
+        const auto &candidate = it->path();
+        if (candidate.filename() == image.filename() || candidate.stem() != image.stem())
+            continue;
+        std::error_code fileEc;
+        if (it->is_regular_file(fileEc) && isImagePath(candidate))
+            return true;
+    }
+    return false;
+}
+
 } // namespace
 
 SidecarStore &SidecarStore::instance()
@@ -130,11 +172,62 @@ SidecarStore &SidecarStore::instance()
 
 std::string SidecarStore::sidecarPath(const std::string &imagePath)
 {
-    // Replace extension with .xmp; for no extension, append .xmp.
-    namespace fs = std::filesystem;
-    fs::path p = pathFromUtf8(imagePath);
+    if (imagePath.empty())
+        return {};
+    return imagePath + ".xmp";
+}
+
+std::string SidecarStore::legacySidecarPath(const std::string &imagePath)
+{
+    std::filesystem::path p = pathFromUtf8(imagePath);
+    if (!p.has_extension())
+        return {};
     p.replace_extension(pathFromUtf8(".xmp"));
     return pathToUtf8(p);
+}
+
+std::string SidecarStore::ownedLegacySidecar(const std::string &imagePath)
+{
+    std::string legacy = legacySidecarPath(imagePath);
+    if (legacy.empty())
+        return {};
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(pathFromUtf8(legacy), ec))
+        return {};
+    const auto image = pathFromUtf8(imagePath);
+    const std::string recorded = extractStr(readWholeFile(pathFromUtf8(legacy)), "file");
+    if (!recorded.empty())
+        return pathFromUtf8(recorded).filename() == image.filename() ? legacy : std::string{};
+    return hasStemSibling(image) ? std::string{} : legacy;
+}
+
+std::string SidecarStore::existingSidecar(const std::string &imagePath)
+{
+    std::string current = sidecarPath(imagePath);
+    std::error_code ec;
+    if (!current.empty() && std::filesystem::is_regular_file(pathFromUtf8(current), ec))
+        return current;
+    return ownedLegacySidecar(imagePath);
+}
+
+bool SidecarStore::relocateSidecar(const std::string &oldImagePath, const std::string &newImagePath)
+{
+    try
+    {
+        const std::string source = existingSidecar(oldImagePath);
+        if (source.empty() || oldImagePath == newImagePath)
+            return false;
+        fromJson(readWholeFile(pathFromUtf8(source)), newImagePath);
+        std::error_code ec;
+        std::filesystem::remove(pathFromUtf8(source), ec);
+        // writeSidecar records the new path (or drops an empty sidecar).
+        writeSidecar(newImagePath);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
 }
 
 std::string SidecarStore::toJson(const std::string &imagePath)
@@ -178,21 +271,31 @@ bool SidecarStore::writeSidecar(const std::string &imagePath)
 {
     try
     {
-    auto &rs = RatingStore::instance();
-    // Only write sidecar if there's actual data to save.
-    if (rs.rating(imagePath) == 0 && rs.colorLabel(imagePath) == 0 && !rs.picked(imagePath) &&
-        !rs.rejected(imagePath))
-    {
-        return removeSidecar(imagePath);
-    }
+        auto &rs = RatingStore::instance();
+        // Only write sidecar if there's actual data to save.
+        if (rs.rating(imagePath) == 0 && rs.colorLabel(imagePath) == 0 && !rs.picked(imagePath) &&
+            !rs.rejected(imagePath))
+        {
+            return removeSidecar(imagePath);
+        }
 
-    const std::string spath = sidecarPath(imagePath);
-    if (spath.empty())
-        return false;
-    // M46: crash-safe atomic replace — a failed sidecar write leaves the
-    // previous .xmp intact and can never leave a half-written JSON file.
-    std::string error;
-    return atomicWriteFile(spath, toJson(imagePath), &error);
+        const std::string spath = sidecarPath(imagePath);
+        if (spath.empty())
+            return false;
+        // M46: crash-safe atomic replace — a failed sidecar write leaves the
+        // previous .xmp intact and can never leave a half-written JSON file.
+        std::string error;
+        if (!atomicWriteFile(spath, toJson(imagePath), &error))
+            return false;
+        // Migrate: once the per-file sidecar exists, an owned legacy
+        // stem.xmp is redundant.
+        const std::string legacy = ownedLegacySidecar(imagePath);
+        if (!legacy.empty())
+        {
+            std::error_code ec;
+            std::filesystem::remove(pathFromUtf8(legacy), ec);
+        }
+        return true;
     }
     catch (...)
     {
@@ -204,13 +307,15 @@ bool SidecarStore::readSidecar(const std::string &imagePath)
 {
     try
     {
-        const std::string spath = sidecarPath(imagePath);
-        std::ifstream in(pathFromUtf8(spath), std::ios::binary);
-        if (!in)
+        const std::string spath = existingSidecar(imagePath);
+        if (spath.empty())
             return false;
-        std::ostringstream ss;
-        ss << in.rdbuf();
-        return fromJson(ss.str(), imagePath);
+        const bool ok = fromJson(readWholeFile(pathFromUtf8(spath)), imagePath);
+        // Legacy stem.xmp that belongs to this image: migrate it to the
+        // per-file name so a later same-stem sibling cannot claim it.
+        if (ok && spath != sidecarPath(imagePath))
+            writeSidecar(imagePath);
+        return ok;
     }
     catch (...)
     {
@@ -223,6 +328,10 @@ bool SidecarStore::removeSidecar(const std::string &imagePath)
     try
     {
         std::error_code ec;
+        const std::string legacy = ownedLegacySidecar(imagePath);
+        if (!legacy.empty())
+            std::filesystem::remove(pathFromUtf8(legacy), ec);
+        ec.clear();
         return std::filesystem::remove(pathFromUtf8(sidecarPath(imagePath)), ec) || !ec;
     }
     catch (...)
@@ -283,37 +392,37 @@ int SidecarStore::exportDirectory(const std::string &dirPath)
         auto &rs = RatingStore::instance();
         std::error_code ec;
 
-    // Walk directory for all image files with known extensions (M25: the
-    // shipped-format SSOT decides what counts as an image).
-    auto isImageFile = [](const std::filesystem::path &p)
-    {
-        const std::string ext = pathToUtf8(p.extension());
-        std::string lowerExt = ext;
-        std::transform(lowerExt.begin(), lowerExt.end(), lowerExt.begin(),
-                       [](char c) { return static_cast<char>(std::tolower(c)); });
-        return mviewer::core::ImageFormats::isSupportedSuffix(lowerExt);
-    };
-
-    const auto dir = pathFromUtf8(dirPath);
-    std::filesystem::directory_iterator it(
-        dir, std::filesystem::directory_options::skip_permission_denied, ec);
-    for (std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
-    {
-        const auto &entry = *it;
-        std::error_code fileEc;
-        if (!entry.is_regular_file(fileEc))
-            continue;
-        if (!isImageFile(entry.path()))
-            continue;
-
-        const std::string imgPath = pathToUtf8(entry.path());
-        if (rs.rating(imgPath) > 0 || rs.colorLabel(imgPath) > 0 || rs.picked(imgPath) ||
-            rs.rejected(imgPath))
+        // Walk directory for all image files with known extensions (M25: the
+        // shipped-format SSOT decides what counts as an image).
+        auto isImageFile = [](const std::filesystem::path &p)
         {
-            if (writeSidecar(imgPath))
-                ++count;
+            const std::string ext = pathToUtf8(p.extension());
+            std::string lowerExt = ext;
+            std::transform(lowerExt.begin(), lowerExt.end(), lowerExt.begin(),
+                           [](char c) { return static_cast<char>(std::tolower(c)); });
+            return mviewer::core::ImageFormats::isSupportedSuffix(lowerExt);
+        };
+
+        const auto dir = pathFromUtf8(dirPath);
+        std::filesystem::directory_iterator it(
+            dir, std::filesystem::directory_options::skip_permission_denied, ec);
+        for (std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
+        {
+            const auto &entry = *it;
+            std::error_code fileEc;
+            if (!entry.is_regular_file(fileEc))
+                continue;
+            if (!isImageFile(entry.path()))
+                continue;
+
+            const std::string imgPath = pathToUtf8(entry.path());
+            if (rs.rating(imgPath) > 0 || rs.colorLabel(imgPath) > 0 || rs.picked(imgPath) ||
+                rs.rejected(imgPath))
+            {
+                if (writeSidecar(imgPath))
+                    ++count;
+            }
         }
-    }
         return count;
     }
     catch (...)
