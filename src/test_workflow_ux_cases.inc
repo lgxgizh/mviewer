@@ -2208,6 +2208,22 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelV, "Shift+6 isolates the V channel");
     sendKey(ws, Qt::Key_1, Qt::ShiftModifier);
     CHECK(ws->overlayMode() == mviewer::OverlayMode::None, "Shift+1 restores RGB");
+    sendWindowsShiftedDigit(ws, Qt::Key_At, 2);
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelR,
+          "Windows-style Shift+2 (Key_At + VK '2') isolates the red channel");
+    sendWindowsShiftedDigit(ws, Qt::Key_AsciiCircum, 6);
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelV,
+          "Windows-style Shift+6 (Key_AsciiCircum) isolates the V channel");
+    {
+        QKeyEvent symbolOnly(QEvent::KeyPress, Qt::Key_Dollar, Qt::ShiftModifier);
+        QApplication::sendEvent(ws, &symbolOnly);
+        pump(20);
+    }
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelB,
+          "Shift+4 reported only as Key_Dollar (no native key) still isolates blue");
+    sendWindowsShiftedDigit(ws, Qt::Key_Exclam, 1);
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::None,
+          "Windows-style Shift+1 (Key_Exclam) restores RGB");
     CHECK(mviewer::pixelGridVisible(8.0) && !mviewer::pixelGridVisible(4.0),
           "pixel grid appears at 800% and stays off at 400%");
 

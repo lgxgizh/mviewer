@@ -1,5 +1,6 @@
 #include "imageviewer.h"
 #include "metadataoverlay.h"
+#include "shortcutdigits.h"
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/PixelInspector.h"
@@ -459,7 +460,8 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
 
 void ImageViewer::keyPressEvent(QKeyEvent *event)
 {
-    const int key = event->key();
+    // Shift+digit arrives as Key_Exclam/Key_At/... on Windows.
+    const int key = mviewer::ui::normalizedShortcutKey(event);
     const auto mods = event->modifiers();
     if (handleFrameKey(key, mods) || handleNavigationKey(key) || handleZoomKey(key, mods) ||
         handleModeKey(key, mods))
@@ -515,12 +517,7 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
 {
     if (modifiers == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6)
     {
-        static const mviewer::OverlayMode kChannelKeys[] = {
-            mviewer::OverlayMode::None,     mviewer::OverlayMode::ChannelR,
-            mviewer::OverlayMode::ChannelG, mviewer::OverlayMode::ChannelB,
-            mviewer::OverlayMode::ChannelY, mviewer::OverlayMode::ChannelV};
-        setOverlayMode(key == Qt::Key_0 ? mviewer::OverlayMode::None
-                                        : kChannelKeys[key - Qt::Key_1]);
+        setOverlayMode(mviewer::ui::channelOverlayForDigit(key - Qt::Key_0));
         return true;
     }
     if (handleTransformKey(key, modifiers))
