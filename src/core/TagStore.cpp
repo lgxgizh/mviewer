@@ -171,6 +171,25 @@ std::vector<std::string> TagStore::allTags() const
     return {all.begin(), all.end()};
 }
 
+bool TagStore::renamePath(const std::string &oldPath, const std::string &newPath)
+{
+    const std::string from = normalize(oldPath);
+    const std::string to = normalize(newPath);
+    if (from == to)
+        return false;
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        auto it = m_tags.find(from);
+        if (it == m_tags.end())
+            return false;
+        auto tags = std::move(it->second);
+        m_tags.erase(it);
+        m_tags[to] = std::move(tags);
+    }
+    scheduleSave();
+    return true;
+}
+
 size_t TagStore::pruneMissing()
 {
     size_t removed = 0;

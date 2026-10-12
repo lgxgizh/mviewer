@@ -290,6 +290,58 @@ std::vector<std::string> RatingStore::favorites() const
     return std::vector<std::string>(m_picked.begin(), m_picked.end());
 }
 
+namespace
+{
+template <typename Map> bool moveMapKey(Map &map, const std::string &from, const std::string &to)
+{
+    auto it = map.find(from);
+    if (it == map.end())
+        return false;
+    auto value = it->second;
+    map.erase(it);
+    map[to] = value;
+    return true;
+}
+
+bool moveSetKey(std::set<std::string> &set, const std::string &from, const std::string &to)
+{
+    if (set.erase(from) == 0)
+        return false;
+    set.insert(to);
+    return true;
+}
+} // namespace
+
+bool RatingStore::renamePath(const std::string &oldPath, const std::string &newPath)
+{
+    const std::string from = normalize(oldPath);
+    const std::string to = normalize(newPath);
+    if (from == to)
+        return false;
+    bool changed = false;
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        changed |= moveMapKey(m_ratings, from, to);
+        changed |= moveMapKey(m_colorLabels, from, to);
+        changed |= moveSetKey(m_rejected, from, to);
+        changed |= moveSetKey(m_picked, from, to);
+        auto recent = std::find(m_recents.begin(), m_recents.end(), from);
+        if (recent != m_recents.end())
+        {
+            const bool targetListed =
+                std::find(m_recents.begin(), m_recents.end(), to) != m_recents.end();
+            if (targetListed)
+                m_recents.erase(recent);
+            else
+                *recent = to;
+            changed = true;
+        }
+    }
+    if (changed)
+        scheduleSave();
+    return changed;
+}
+
 size_t RatingStore::pruneMissing()
 {
     size_t removed = 0;
