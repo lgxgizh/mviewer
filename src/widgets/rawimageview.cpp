@@ -212,6 +212,8 @@ void RawImageView::setBackdropKey(quint64 key)
     m_backdrop = QImage();
     m_filteredBackdrop = QImage();
     m_backdropSourceSize = {};
+    releaseBaseSurface();
+    update();
 }
 
 void RawImageView::swapBackdrop(RawImageView &other) noexcept

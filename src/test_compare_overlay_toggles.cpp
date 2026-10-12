@@ -69,9 +69,9 @@ RawImageView *paneView(QWidget *root, int idx)
     return pane ? pane->findChild<RawImageView *>() : nullptr;
 }
 
-void hover(RawImageView *view)
+void hover(RawImageView *view, double dx = 0.0)
 {
-    const QPointF local(view->width() / 2.0, view->height() / 2.0);
+    const QPointF local(view->width() / 2.0 + dx, view->height() / 2.0);
     QMouseEvent move(QEvent::MouseMove, local, view->mapToGlobal(local), Qt::NoButton, Qt::NoButton,
                      Qt::NoModifier);
     QApplication::sendEvent(view, &move);
@@ -123,7 +123,7 @@ void crosshairCases(CompareWorkspace *ws, RawImageView *v0)
     check(!anyCrosshair(ws), "R off clears the crosshair from every pane immediately");
 
     chk->setChecked(true);
-    hover(v0);
+    hover(v0, 20.0); // a new pixel: hover only reports pixel changes
     check(allCrosshair(ws), "checkbox on + hover draws the crosshair");
     chk->setChecked(false); // also the path of the mirrored menu action
     check(!anyCrosshair(ws), "checkbox/menu off clears the crosshair immediately");
