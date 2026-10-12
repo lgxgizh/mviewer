@@ -49,6 +49,7 @@
 #include "runtime_storage.h"
 #include "searchpanel.h"
 #include "selectionmodel.h"
+#include "shortcutdigits.h"
 #include "thumbnailpanel.h"
 #include "widgets/histogramwidget.h"
 #include "widgets/infooverlay.h"
@@ -162,6 +163,26 @@ void sendKey(QWidget *w, Qt::Key key, Qt::KeyboardModifiers mods = Qt::NoModifie
     QApplication::sendEvent(w, &release);
     pump(20);
 }
+
+// Windows delivers Shift+digit as the shifted symbol (Shift+2 -> Key_At)
+// with the digit only in the native virtual key (VK '2' = 0x32).
+void sendWindowsShiftedDigit(QWidget *w, Qt::Key symbol, int digit,
+                             Qt::KeyboardModifiers mods = Qt::ShiftModifier)
+{
+    const auto vk = static_cast<quint32>(0x30 + digit);
+    QKeyEvent press(QEvent::KeyPress, symbol, mods, 0, vk, 0);
+    QApplication::sendEvent(w, &press);
+    QKeyEvent release(QEvent::KeyRelease, symbol, mods, 0, vk, 0);
+    QApplication::sendEvent(w, &release);
+    pump(20);
+}
+
+static_assert(mviewer::ui::shortcutDigit(Qt::Key_Exclam, Qt::ShiftModifier, 0) == 1);
+static_assert(mviewer::ui::shortcutDigit(Qt::Key_ParenRight, Qt::ShiftModifier, 0) == 0);
+static_assert(mviewer::ui::shortcutDigit(Qt::Key_AsciiCircum, Qt::ShiftModifier, 0) == 6);
+static_assert(mviewer::ui::shortcutDigit(Qt::Key_At, Qt::ShiftModifier, 0x32) == 2);
+static_assert(mviewer::ui::shortcutDigit(Qt::Key_Exclam, Qt::NoModifier, 0) == -1);
+static_assert(mviewer::ui::shortcutDigit(Qt::Key_5, Qt::NoModifier, 0) == 5);
 
 void sendFocusedKey(Qt::Key key, Qt::KeyboardModifiers mods = Qt::NoModifier)
 {

@@ -1,6 +1,7 @@
 // MainWindow command registration and keyboard dispatch (M20 P0#1).
 #include "mainwindow_p.h"
 #include "runtime_storage.h"
+#include "shortcutdigits.h"
 
 namespace
 {
@@ -244,10 +245,11 @@ bool MainWindow::handleMetadataKey(QKeyEvent *event)
     // P1: Ctrl+Shift+0..5 rate the current image; Ctrl+Shift+0 clears.
     // (Was Ctrl+0..5, which collided with the Ctrl+1..6 view-mode shortcuts —
     //  Ctrl+1..5 could never reach view-mode switching.)
-    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier) && event->key() >= Qt::Key_0 &&
-        event->key() <= Qt::Key_5)
+    const int digit = mviewer::ui::shortcutDigit(event);
+    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier) && digit >= 0 && digit <= 5)
     {
-        rateCurrentImage(event->key() - Qt::Key_0);
+        // Windows reports Ctrl+Shift+1 as Key_Exclam; shortcutDigit maps it.
+        rateCurrentImage(digit);
         event->accept();
         return true;
     }
