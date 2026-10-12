@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace
 {
@@ -54,7 +55,10 @@ RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
     setCursor(Qt::OpenHandCursor);
 }
 
-void RawImageView::setImage(const QImage &img) { setImage(img, {}); }
+void RawImageView::setImage(const QImage &img)
+{
+    setImage(img, {});
+}
 
 void RawImageView::setImage(const QImage &img, const QSize &sourceSize)
 {
@@ -71,6 +75,16 @@ void RawImageView::setImage(const QImage &img, const QSize &sourceSize, const QR
     m_sourceRect = sourceRect.isValid() ? sourceRect.normalized().intersected(fullRect) : fullRect;
     if (m_sourceRect.isEmpty())
         m_sourceRect = fullRect;
+    if (m_sourceRect == fullRect)
+    {
+        m_backdrop = img;
+        m_backdropSourceSize = m_sourceSize;
+    }
+    else if (m_backdropSourceSize != m_sourceSize)
+    {
+        m_backdrop = QImage();
+        m_filteredBackdrop = QImage();
+    }
     m_sizeMismatch = false;
     rebuildFilteredDisplay();
     releaseBaseSurface();
@@ -83,6 +97,9 @@ void RawImageView::clear()
     clearTransientDisplay();
     m_image = QImage();
     m_filteredDisplay = QImage();
+    m_backdrop = QImage();
+    m_filteredBackdrop = QImage();
+    m_backdropSourceSize = {};
     m_metricBadge.clear();
     m_sourceSize = {};
     m_sourceRect = {};
@@ -165,19 +182,65 @@ void RawImageView::setFilenameOverlay(const QString &text, bool visible)
     update();
 }
 
-void RawImageView::rebuildFilteredDisplay()
+namespace
 {
-    m_filteredDisplay = QImage();
-    if (m_displayOverlay == mviewer::OverlayMode::None)
-        return;
-    const QImage &src = displayImage();
-    if (src.isNull())
-        return;
+QImage filteredPresentation(const QImage &src, mviewer::OverlayMode mode)
+{
+    if (mode == mviewer::OverlayMode::None || src.isNull())
+        return {};
     ImageData data = mvcore::fromQImage(src);
     if (data.isNull())
+        return {};
+    mviewer::applyOverlay(data, mode, 2);
+    return mvcore::toQImage(data);
+}
+} // namespace
+
+void RawImageView::rebuildFilteredDisplay()
+{
+    m_filteredDisplay = filteredPresentation(displayImage(), m_displayOverlay);
+    m_filteredBackdrop = (m_backdrop.isNull() || m_backdrop.cacheKey() == m_image.cacheKey())
+                             ? QImage()
+                             : filteredPresentation(m_backdrop, m_displayOverlay);
+}
+
+void RawImageView::setBackdropKey(quint64 key)
+{
+    if (m_backdropKey == key)
         return;
-    mviewer::applyOverlay(data, m_displayOverlay, 2);
-    m_filteredDisplay = mvcore::toQImage(data);
+    m_backdropKey = key;
+    m_backdrop = QImage();
+    m_filteredBackdrop = QImage();
+    m_backdropSourceSize = {};
+    releaseBaseSurface();
+    update();
+}
+
+void RawImageView::swapBackdrop(RawImageView &other) noexcept
+{
+    std::swap(m_backdrop, other.m_backdrop);
+    std::swap(m_filteredBackdrop, other.m_filteredBackdrop);
+    std::swap(m_backdropSourceSize, other.m_backdropSourceSize);
+    std::swap(m_backdropKey, other.m_backdropKey);
+}
+
+void RawImageView::paintBackdrop(QPainter &p, const QRectF &fullDest,
+                                 const QRectF &coveredDest) const
+{
+    // Only a region raster needs the stand-in; a full-frame raster already
+    // covers every pixel of the image. Momentary Compare shows B, never A's
+    // backdrop.
+    if (m_backdrop.isNull() || !m_transientImage.isNull() || m_backdropSourceSize != m_sourceSize ||
+        m_sourceRect == QRect(QPoint(0, 0), m_sourceSize) || fullDest.isEmpty())
+        return;
+    const QRectF visible =
+        p.hasClipping() ? p.clipBoundingRect()
+                        : QRectF(QPointF(0, 0), QSizeF(p.device()->width(), p.device()->height()));
+    if (coveredDest.contains(visible.intersected(fullDest)))
+        return;
+    const bool filtered =
+        m_displayOverlay != mviewer::OverlayMode::None && !m_filteredBackdrop.isNull();
+    mviewer::ui::blitDeviceImage(p, fullDest, filtered ? m_filteredBackdrop : m_backdrop);
 }
 
 QSize RawImageView::renderSourceSize() const
@@ -305,8 +368,8 @@ void RawImageView::paintEvent(QPaintEvent *)
         return;
 
     // During active dragging/panning, bypass the offscreen baseSurface buffer
-    // (allocating/clearing a 4K surface on every mouse move frame wastes tens of MB of memory memset).
-    // Direct drawing to the viewport is faster and smoother.
+    // (allocating/clearing a 4K surface on every mouse move frame wastes tens of MB of memory
+    // memset). Direct drawing to the viewport is faster and smoother.
     if (m_dragging)
     {
         m_baseSurfaceValid = false;
@@ -331,7 +394,7 @@ void RawImageView::paintEvent(QPaintEvent *)
 }
 
 void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, int dh,
-                                   const QSize &sourceSize, double presented)
+                                    const QSize &sourceSize, double presented)
 {
     if (mviewer::pixelGridVisible(presented) && sourceSize.width() > 0 && sourceSize.height() > 0)
     {
@@ -378,7 +441,8 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
                 f.setBold(true);
                 f.setPointSize(8);
                 p.setFont(f);
-                p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter, QString::number(i + 1));
+                p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter,
+                           QString::number(i + 1));
             }
         }
     }
@@ -457,6 +521,9 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const QRectF coveredDest(sourceLeft + sourceRect.x() * scale,
                              sourceTop + sourceRect.y() * scale, sourceRect.width() * scale,
                              sourceRect.height() * scale);
+    paintBackdrop(
+        p, QRectF(sourceLeft, sourceTop, sourceSize.width() * scale, sourceSize.height() * scale),
+        coveredDest);
     mviewer::ui::blitDeviceImage(p, coveredDest, image);
 
     // Difference/heatmap overlay (compare mode): same transform as the base image

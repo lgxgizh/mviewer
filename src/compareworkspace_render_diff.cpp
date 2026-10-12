@@ -232,9 +232,26 @@ TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
 
 void CompareWorkspace::refreshAllDiffOverlays()
 {
+    if (!m_diffOverlayVisible)
+    {
+        // Turning the visualization off must clear every pane now, even while
+        // heavy work is deferred by a zoom/pan: otherwise the heatmap (or an
+        // in-flight live preview landing late) stays until the settle.
+        for (RawImageView *view : m_cellViews)
+            if (view)
+                view->setOverlay(QImage(), 0.0);
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+    }
     if (!m_rebuildingCells && shouldDeferHeavyCompareWork())
     {
         m_deferredDiffRefresh = true;
+        if (!m_diffOverlayVisible && m_diffTask)
+        {
+            TaskScheduler::cancel(m_diffTask);
+            m_diffTask.reset();
+            ++m_diffGen;
+        }
         // Keep a cheap provisional overlay responsive during zoom/pan; full
         // precision still runs in flushDeferredCompareAnalysis on settle.
         if (m_diffOverlayVisible)
@@ -256,13 +273,6 @@ void CompareWorkspace::refreshAllDiffOverlays()
     // visualization off restores every source image immediately; the batch
     // below still computes PSNR/SSIM/stats and its generation prevents an old
     // in-flight heatmap from reappearing.
-    if (!m_diffOverlayVisible)
-    {
-        for (RawImageView *view : m_cellViews)
-            if (view)
-                view->setOverlay(QImage(), 0.0);
-    }
-
     // 0/1 panes: nothing to compare. Clear overlays and metrics synchronously
     // (cheap). For 2+ panes the previous target overlays stay visible while
     // the new batch is in flight.

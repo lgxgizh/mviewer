@@ -248,6 +248,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             [this](bool on)
             {
                 m_diffOverlayVisible = on;
+                m_diffOverlayPromoted = false;
                 syncContextualCompareControls();
                 refreshAllDiffOverlays();
             });
@@ -269,6 +270,16 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
                     const QSignalBlocker blocker(m_diffOverlayChk);
                     m_diffOverlayChk->setChecked(true);
                     m_diffOverlayVisible = true;
+                    m_diffOverlayPromoted = true;
+                }
+                // Off restores the plain image when highlight was what turned
+                // the heatmap on; otherwise the right pane kept the diff view.
+                if (!on && m_diffOverlayPromoted && m_diffOverlayChk)
+                {
+                    const QSignalBlocker blocker(m_diffOverlayChk);
+                    m_diffOverlayChk->setChecked(false);
+                    m_diffOverlayVisible = false;
+                    m_diffOverlayPromoted = false;
                 }
                 m_diffHighlight = on;
                 syncContextualCompareControls();
@@ -363,6 +374,18 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     // inspector samples every cell at that point.
     m_crosshairChk = new QCheckBox(mviewer::cw::compareShortcutText("R"), this);
     m_crosshairChk->setChecked(false);
+    m_crosshairChk->setObjectName("syncCrosshairToggle");
+    connect(m_crosshairChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                // R / checkbox / menu all land here. Off must erase the synced
+                // crosshair from every pane now, not on the next hover.
+                if (on)
+                    return;
+                for (RawImageView *view : m_cellViews)
+                    if (view)
+                        view->clearCrosshair();
+            });
     viewLayout->addWidget(m_crosshairChk);
 
     // M16.1: focus-lock / reference pin (n/1). Locks a cell as the comparison

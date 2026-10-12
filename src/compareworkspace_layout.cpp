@@ -63,6 +63,7 @@ void swapPaneViewsAndCaptions(RawImageView *va, RawImageView *vb, QLabel *ca, QL
         const QSize sa = va->sourceSize(), sb = vb->sourceSize();
         const QRect ra = va->sourceRect(), rb = vb->sourceRect();
         const double aa = va->overlayOpacity(), ab = vb->overlayOpacity();
+        va->swapBackdrop(*vb);
         va->setImage(ib, sb, rb);
         vb->setImage(ia, sa, ra);
         va->setOverlay(ob, ab);
