@@ -7,6 +7,183 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <deque>
+#include <memory>
+#include <mutex>
+#include <string>
+
+namespace
+{
+
+// Threshold drags (every ~35 ms) used to redo the adjust copy, alignment,
+// difference map, PSNR and SSIM on every tick although none of them depend on
+// the threshold. Those threshold-independent products are cached here, keyed
+// by pixel-buffer identity plus the exact adjustment bytes and alignment flag.
+// Entries keep their source buffers alive, so a cached buffer address can
+// never be reused by a different image while its key is still present.
+struct AdjustedEntry
+{
+    std::shared_ptr<std::vector<uint8_t>> sourceHold;
+    std::string key;
+    ImageData adjusted;
+};
+
+struct PairEntry
+{
+    std::shared_ptr<std::vector<uint8_t>> baseHold;
+    std::shared_ptr<std::vector<uint8_t>> targetHold;
+    std::string key;
+    mviewer::cw::DiffPair pair;
+};
+
+// Small caps: a 24 MP pair holds a target and a diff map (~150 MB).
+constexpr std::size_t kMaxAdjusted = 2;
+constexpr std::size_t kMaxPairs = 4;
+
+std::mutex g_diffCacheMutex;
+std::deque<AdjustedEntry> g_adjusted; // front = most recent
+std::deque<PairEntry> g_pairs;
+
+std::string identityKey(const ImageData &image)
+{
+    std::string key(sizeof(const void *) + 3 * sizeof(int), '\0');
+    const void *ptr = image.buffer.get();
+    const int dims[3] = {image.width, image.height, static_cast<int>(image.format)};
+    std::memcpy(key.data(), static_cast<const void *>(&ptr), sizeof(ptr));
+    std::memcpy(key.data() + sizeof(ptr), dims, sizeof(dims));
+    return key;
+}
+
+template <typename Entry> const Entry *findEntry(std::deque<Entry> &entries, const std::string &key)
+{
+    const auto it = std::find_if(entries.begin(), entries.end(),
+                                 [&key](const Entry &e) { return e.key == key; });
+    if (it == entries.end())
+        return nullptr;
+    if (it != entries.begin())
+    {
+        Entry moved = std::move(*it);
+        entries.erase(it);
+        entries.push_front(std::move(moved));
+    }
+    return &entries.front();
+}
+
+template <typename Entry> void storeEntry(std::deque<Entry> &entries, Entry entry, std::size_t cap)
+{
+    entries.push_front(std::move(entry));
+    while (entries.size() > cap)
+        entries.pop_back();
+}
+
+} // namespace
+
+std::string CompareWorkspace::adjustKey(const CellAdjust &a)
+{
+    std::string key;
+    const auto put = [&key](const auto &value)
+    {
+        const auto *bytes = reinterpret_cast<const char *>(&value);
+        key.append(bytes, sizeof(value));
+    };
+    put(a.brightness);
+    put(a.contrast);
+    put(a.gamma);
+    put(a.rGain);
+    put(a.bGain);
+    put(a.rotation);
+    put(a.flipH);
+    put(a.flipV);
+    put(a.hasCrop);
+    put(a.cropX);
+    put(a.cropY);
+    put(a.cropW);
+    put(a.cropH);
+    return key;
+}
+
+ImageData CompareWorkspace::cachedAdjusted(const ImageData &src, const CellAdjust &adjust)
+{
+    if (src.isNull())
+        return CompareWorkspace::applyAdjusts(src, adjust);
+    const std::string key = identityKey(src) + adjustKey(adjust);
+    {
+        const std::lock_guard<std::mutex> lock(g_diffCacheMutex);
+        if (const AdjustedEntry *hit = findEntry(g_adjusted, key))
+            return hit->adjusted;
+    }
+    ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjust);
+    const std::lock_guard<std::mutex> lock(g_diffCacheMutex);
+    storeEntry(g_adjusted, AdjustedEntry{src.buffer, key, adjusted}, kMaxAdjusted);
+    return adjusted;
+}
+
+// Everything about one (base, target) pair that does not depend on the
+// threshold. Returns false when cancelled part-way (nothing is cached then).
+bool CompareWorkspace::computeDiffPair(mviewer::cw::DiffPair &out, const ImageData &source,
+                                       const CellAdjust &adjust, const ImageData &basePixels,
+                                       bool autoAlign, const TaskScheduler::TaskContext &context)
+{
+    out.target = CompareWorkspace::applyAdjusts(source, adjust);
+    if (context.isCancelled())
+        return false;
+    if (out.target.isNull())
+        return true;
+    if (out.target.width != basePixels.width || out.target.height != basePixels.height)
+    {
+        out.sizeMismatch = true;
+        return true;
+    }
+    if (autoAlign)
+    {
+        const mviewer::AlignOffset off = mviewer::Aligner::estimate(basePixels, out.target, 32);
+        out.alignX = off.x;
+        out.alignY = off.y;
+        if (off.x != 0 || off.y != 0)
+            out.target = mviewer::Aligner::shift(out.target, off.x, off.y);
+        if (context.isCancelled())
+            return false;
+    }
+    out.diff = DifferenceEngine::differenceMap(out.target, basePixels);
+    if (context.isCancelled())
+        return false;
+    if (out.diff.isNull())
+        return true;
+    out.psnr = AnalysisEngine::psnr(basePixels, out.target);
+    out.ssim = AnalysisEngine::ssim(basePixels, out.target);
+    return !context.isCancelled();
+}
+
+bool CompareWorkspace::cachedDiffPair(mviewer::cw::DiffPair &out, const ImageData &source,
+                                      const CellAdjust &adjust, const ImageData &basePixels,
+                                      bool autoAlign, const TaskScheduler::TaskContext &context)
+{
+    const std::string key =
+        identityKey(basePixels) + identityKey(source) + adjustKey(adjust) + (autoAlign ? "A" : "-");
+    {
+        const std::lock_guard<std::mutex> lock(g_diffCacheMutex);
+        if (const PairEntry *hit = findEntry(g_pairs, key))
+        {
+            out = hit->pair;
+            return true;
+        }
+    }
+    if (!computeDiffPair(out, source, adjust, basePixels, autoAlign, context))
+        return false;
+    if (source.isNull() || basePixels.isNull())
+        return true;
+    const std::lock_guard<std::mutex> lock(g_diffCacheMutex);
+    storeEntry(g_pairs, PairEntry{basePixels.buffer, source.buffer, key, out}, kMaxPairs);
+    return true;
+}
+
+void CompareWorkspace::clearDiffCache()
+{
+    const std::lock_guard<std::mutex> lock(g_diffCacheMutex);
+    g_adjusted.clear();
+    g_pairs.clear();
+}
 CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
     DiffBatchResult &result, const std::vector<ImageData> &pixels,
     const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts, int baseIndex,
@@ -34,15 +211,18 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
         }
         if (sources.targetIndex < 0)
             sources.targetIndex = i;
-        ImageData target = CompareWorkspace::applyAdjusts(pixels[i], adjustFor(i));
-        if (context.isCancelled())
+        mviewer::cw::DiffPair pair;
+        if (!cachedDiffPair(pair, pixels[static_cast<size_t>(i)], adjustFor(i), basePixels,
+                            autoAlign, context) ||
+            context.isCancelled())
             return sources;
+        const ImageData &target = pair.target;
         if (target.isNull())
         {
             result.overlays.push_back(std::move(overlay));
             continue;
         }
-        if (target.width != basePixels.width || target.height != basePixels.height)
+        if (pair.sizeMismatch)
         {
             overlay.sizeMismatch = true;
             if (sources.targetIndex == i)
@@ -55,25 +235,18 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
         }
         if (autoAlign)
         {
-            const mviewer::AlignOffset off = mviewer::Aligner::estimate(basePixels, target, 32);
             result.aligned = true;
-            result.alignX = off.x;
-            result.alignY = off.y;
-            if (off.x != 0 || off.y != 0)
-                target = mviewer::Aligner::shift(target, off.x, off.y);
-            if (context.isCancelled())
-                return sources;
+            result.alignX = pair.alignX;
+            result.alignY = pair.alignY;
         }
-        const ImageData diff = DifferenceEngine::differenceMap(target, basePixels);
-        if (context.isCancelled())
-            return sources;
+        const ImageData &diff = pair.diff;
         if (diff.isNull())
         {
             result.overlays.push_back(std::move(overlay));
             continue;
         }
-        overlay.psnr = AnalysisEngine::psnr(basePixels, target);
-        overlay.ssim = AnalysisEngine::ssim(basePixels, target);
+        overlay.psnr = pair.psnr;
+        overlay.ssim = pair.ssim;
         overlay.hasMetrics = true;
         if (sources.targetIndex == i)
         {
@@ -179,7 +352,7 @@ CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
             return adjusts[static_cast<size_t>(index)];
         return CellAdjust{};
     };
-    const ImageData basePixels = CompareWorkspace::applyAdjusts(
+    const ImageData basePixels = CompareWorkspace::cachedAdjusted(
         pixels[static_cast<size_t>(baseIndex)], adjustFor(baseIndex));
     if (context.isCancelled())
         return result;
