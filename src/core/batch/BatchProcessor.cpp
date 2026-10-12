@@ -229,8 +229,12 @@ std::filesystem::path uniqueDestination(const std::filesystem::path &wanted,
     const std::string ext = pathToUtf8(wanted.extension());
     for (int n = 2;; ++n)
     {
-        std::filesystem::path candidate =
-            parent / pathFromUtf8(stem + " (" + std::to_string(n) + ")" + ext);
+        std::string name = stem;
+        name += " (";
+        name += std::to_string(n);
+        name += ")";
+        name += ext;
+        std::filesystem::path candidate = parent / pathFromUtf8(name);
         std::error_code ec;
         if (taken.count(destinationKey(candidate)) == 0 && !std::filesystem::exists(candidate, ec))
             return candidate;
