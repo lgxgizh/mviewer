@@ -805,6 +805,22 @@ set_tests_properties(compare_best_fit_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 1
 
 # ─── M24: Analyze workflow acceptance (throwing-analyzer isolation, result
 # currency per image, history/pin persistence) ───────────────────────────────
+# Compare diff cache: warm (cached) batches equal cold ones exactly.
+add_executable(compare_diff_cache_tests
+    test_compare_diff_cache.cpp
+)
+target_link_libraries(compare_diff_cache_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_diff_cache_tests PRIVATE cxx_std_20)
+target_include_directories(compare_diff_cache_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_diff_cache_tests COMMAND compare_diff_cache_tests)
+
 add_executable(analyze_acceptance_tests
     test_analyze_acceptance.cpp
 )

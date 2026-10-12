@@ -145,6 +145,7 @@ void CompareWorkspace::releaseSessionMemory()
 
 CompareWorkspace::~CompareWorkspace()
 {
+    clearDiffCache();
     // Settle timers and blink must not touch widgets while cancel waits.
     ++m_interactionGen;
     m_interactionBusy = false;
@@ -249,6 +250,7 @@ void CompareWorkspace::setImages(const QStringList &paths)
 void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &frameIndices)
 {
     endTemporaryCompare();
+    clearDiffCache(); // cached diff maps belong to the previous image set
     // Neighbor preloads are consumed via promote in queueLoadRequests; leftovers
     // are cancelled at the end of that queue so next/prev can hit a warm decode.
     // A new compare set supersedes any in-flight ROI calculation immediately;
