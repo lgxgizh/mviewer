@@ -2,7 +2,8 @@
 
 #include "core/compare/Aligner.h"
 
-#include <QSettings>
+#include <QCheckBox>
+#include <QSignalBlocker>
 
 #include <algorithm>
 #include <cmath>
@@ -311,7 +312,7 @@ void CompareWorkspace::refreshAllDiffOverlays()
     const double gain = m_diffGain;
     const bool highlight = m_diffHighlight;
     const bool visualize = m_diffOverlayVisible;
-    const bool autoAlign = QSettings().value("autoAlignBeforeDiff", false).toBool();
+    const bool autoAlign = m_autoAlignBeforeDiff;
     const mviewer::domain::Selection roi = m_lastSelection;
     const uint64_t gen = m_diffGen;
     QPointer<CompareWorkspace> guard(this);
@@ -411,4 +412,19 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
         presentDiffMetrics(text);
     }
     update();
+}
+
+void CompareWorkspace::setAutoAlignBeforeDiff(bool on)
+{
+    // Single in-memory owner for the preference: the compare toolbar
+    // checkbox and Preferences both route here, so they never drift.
+    if (m_autoAlignChk && m_autoAlignChk->isChecked() != on)
+    {
+        const QSignalBlocker blocker(m_autoAlignChk);
+        m_autoAlignChk->setChecked(on);
+    }
+    if (m_autoAlignBeforeDiff == on)
+        return;
+    m_autoAlignBeforeDiff = on;
+    refreshAllDiffOverlays();
 }

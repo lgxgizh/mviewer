@@ -70,7 +70,7 @@ void MainWindow::restoreLastSession()
                 m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
             const int vm = settings.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt();
             if (m_thumbnailPanel)
-                m_thumbnailPanel->setViewMode(static_cast<ThumbnailPanel::ViewMode>(vm));
+                m_thumbnailPanel->setViewMode(ThumbnailPanel::viewModeFromInt(vm));
             const int ts = settings.value("thumbSize", ThumbnailPanel::kDefaultThumbSize).toInt();
             if (m_thumbnailPanel)
                 m_thumbnailPanel->setThumbSize(ts);

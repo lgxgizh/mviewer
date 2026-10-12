@@ -37,15 +37,15 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         const char *name;
         ThumbnailPanel::ViewMode v;
     };
-    static const VM kVM[] = {{"缩略图", ThumbnailPanel::Thumbnail},
-                             {"大图标", ThumbnailPanel::LargeIcon},
-                             {"小图标", ThumbnailPanel::SmallIcon},
-                             {"详情", ThumbnailPanel::Details},
-                             {"胶片", ThumbnailPanel::Filmstrip}};
+    static const VM kVM[] = {
+        {"缩略图", ThumbnailPanel::Thumbnail}, {"大图标", ThumbnailPanel::LargeIcon},
+        {"小图标", ThumbnailPanel::SmallIcon}, {"详情", ThumbnailPanel::Details},
+        {"胶片", ThumbnailPanel::Filmstrip},   {"紧凑", ThumbnailPanel::Compact},
+        {"列表", ThumbnailPanel::List}};
     for (const auto &e : kVM)
         m_viewMode->addItem(tr(e.name), static_cast<int>(e.v));
-    const int vmIdx =
-        m_viewMode->findData(s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt());
+    const int vmIdx = m_viewMode->findData(static_cast<int>(ThumbnailPanel::viewModeFromInt(
+        s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt())));
     m_viewMode->setCurrentIndex(vmIdx >= 0 ? vmIdx : 0);
     gl->addRow(tr("默认视图模式"), m_viewMode);
 
@@ -68,8 +68,10 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     gl->addRow(tr("默认排序"), m_sortMode);
 
     m_thumbSize = new QSpinBox;
-    m_thumbSize->setRange(64, 512);
-    m_thumbSize->setValue(std::clamp(s.value("thumbSize", 160).toInt(), 64, 512));
+    m_thumbSize->setRange(ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
+    m_thumbSize->setValue(
+        std::clamp(s.value("thumbSize", ThumbnailPanel::kDefaultThumbSize).toInt(),
+                   ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize));
     gl->addRow(tr("缩略图尺寸"), m_thumbSize);
 
     m_slideshowInterval = new QSpinBox;
@@ -168,8 +170,11 @@ void PreferencesDialog::accept()
     QSettings s;
     if (m_uiTheme)
     {
+        // Re-applying an unchanged theme restyles the whole app (visible
+        // flash); only switch when the user picked a different mode.
         const auto mode = static_cast<mviewer::ui::ThemeMode>(m_uiTheme->currentData().toInt());
-        mviewer::ui::Theme::applyTheme(mode);
+        if (mode != mviewer::ui::Theme::currentTheme())
+            mviewer::ui::Theme::applyTheme(mode);
     }
     s.setValue("thumbViewMode", m_viewMode->currentData().toInt());
     s.setValue("thumbSortMode", m_sortMode->currentData().toInt());

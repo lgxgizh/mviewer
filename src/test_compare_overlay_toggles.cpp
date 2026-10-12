@@ -187,6 +187,38 @@ void highlightCases(CompareWorkspace *ws)
     check(ov->isChecked(), "a diff view the user enabled survives highlight off");
     ov->setChecked(false);
 }
+// L2: P/N to the next image set must not carry the synced crosshair over.
+void crosshairAcrossSetsCase(CompareWorkspace *ws, RawImageView *v0, const QStringList &paths)
+{
+    auto *chk = ws->findChild<QCheckBox *>("syncCrosshairToggle");
+    if (!chk)
+    {
+        check(false, "sync crosshair checkbox exists");
+        return;
+    }
+    chk->setChecked(true);
+    hover(v0);
+    check(anyCrosshair(ws), "crosshair drawn before switching image set");
+    ws->setImages(paths);
+    check(!anyCrosshair(ws), "switching the image set clears the synced crosshair");
+    waitTrue([ws] { return ws->comparedImageCount() == 2; }, 20000);
+    chk->setChecked(false);
+}
+
+// M1: Preferences and the compare toolbar share one auto-align state.
+void autoAlignSyncCase(CompareWorkspace *ws)
+{
+    auto *chk = ws->findChild<QCheckBox *>("autoAlignBeforeDiffToggle");
+    check(chk != nullptr, "auto-align toolbar checkbox exists");
+    if (!chk)
+        return;
+    const bool initial = ws->autoAlignBeforeDiff();
+    ws->setAutoAlignBeforeDiff(!initial);
+    check(chk->isChecked() == !initial && ws->autoAlignBeforeDiff() == !initial,
+          "preference change updates the toolbar checkbox");
+    chk->setChecked(initial);
+    check(ws->autoAlignBeforeDiff() == initial, "toolbar checkbox updates the in-memory state");
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -222,6 +254,8 @@ int main(int argc, char **argv)
     crosshairCases(ws, v0);
     diffOverlayCases(ws, v0);
     highlightCases(ws);
+    crosshairAcrossSetsCase(ws, v0, {b, a});
+    autoAlignSyncCase(ws);
 
     std::printf("=== compare overlay toggle tests: %s ===\n", g_failures == 0 ? "PASS" : "FAIL");
     return g_failures == 0 ? 0 : 1;
