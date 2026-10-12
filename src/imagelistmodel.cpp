@@ -1,20 +1,7 @@
 #include "imagelistmodel.h"
 
 #include <QDir>
-
-namespace
-{
-bool equivalentListPath(const QString &left, const QString &right)
-{
-    const QString normalizedLeft = QDir::cleanPath(QDir::fromNativeSeparators(left));
-    const QString normalizedRight = QDir::cleanPath(QDir::fromNativeSeparators(right));
-#ifdef Q_OS_WIN
-    return normalizedLeft.compare(normalizedRight, Qt::CaseInsensitive) == 0;
-#else
-    return normalizedLeft == normalizedRight;
-#endif
-}
-} // namespace
+#include <QSet>
 
 ImageListModel::ImageListModel(QObject *parent) : QObject(parent)
 {
@@ -25,6 +12,8 @@ void ImageListModel::setPaths(const QStringList &paths, const QString &directory
     const QString cleaned = directory.isEmpty() ? m_directory : QDir::cleanPath(directory);
     const bool dirChanged = (cleaned != m_directory);
     const bool pathsChanged = (paths != m_paths) || m_dirty;
+    if (paths != m_paths)
+        m_index.invalidate();
     m_paths = paths;
     m_directory = cleaned;
     m_dirty = false;
@@ -41,33 +30,24 @@ void ImageListModel::markDirty()
 
 int ImageListModel::indexOf(const QString &path) const
 {
-    for (int i = 0; i < m_paths.size(); ++i)
-    {
-        if (equivalentListPath(m_paths.at(i), path))
-            return i;
-    }
-    return -1;
+    return m_index.indexOf(m_paths, path);
 }
 
 void ImageListModel::removePaths(const QStringList &paths)
 {
     if (paths.isEmpty() || m_paths.isEmpty())
         return;
-    bool changed = false;
-    for (int i = m_paths.size() - 1; i >= 0; --i)
+    QSet<QString> doomed;
+    doomed.reserve(paths.size());
+    for (const QString &p : paths)
+        doomed.insert(m_index.key(p));
+    const qsizetype before = m_paths.size();
+    m_paths.removeIf([this, &doomed](const QString &p) { return doomed.contains(m_index.key(p)); });
+    if (m_paths.size() != before)
     {
-        for (const QString &p : paths)
-        {
-            if (equivalentListPath(m_paths.at(i), p))
-            {
-                m_paths.removeAt(i);
-                changed = true;
-                break;
-            }
-        }
-    }
-    if (changed)
+        m_index.invalidate();
         emit pathsChanged(m_paths);
+    }
 }
 
 void ImageListModel::clear()
@@ -75,6 +55,7 @@ void ImageListModel::clear()
     const bool hadPaths = !m_paths.isEmpty();
     const bool hadDir = !m_directory.isEmpty();
     m_paths.clear();
+    m_index.invalidate();
     m_directory.clear();
     m_dirty = true;
     if (hadDir)

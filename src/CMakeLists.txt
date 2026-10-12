@@ -1722,6 +1722,23 @@ target_compile_definitions(m59_phase0_metadata_tests PRIVATE MVIEWER_SOURCE_DIR=
 add_test(NAME m59_phase0_metadata_tests COMMAND m59_phase0_metadata_tests)
 set_tests_properties(m59_phase0_metadata_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# ─── Big folders: hashed path lookups + progressive scan order ─────────────
+add_executable(big_folder_tests
+    test_big_folder.cpp
+)
+target_link_libraries(big_folder_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(big_folder_tests PRIVATE cxx_std_20)
+target_include_directories(big_folder_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME big_folder_tests COMMAND big_folder_tests)
+set_tests_properties(big_folder_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # ─── M59 Browse regression: production evaluator + latest-wins panel ───────
 add_executable(m59_browse_regression_tests
     test_m59_browse_regression.cpp

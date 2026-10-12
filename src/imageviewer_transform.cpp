@@ -286,10 +286,5 @@ bool ImageViewer::browsePathEquals(const QString &left, const QString &right)
 
 int ImageViewer::indexInBrowseSequence(const QString &path) const
 {
-    for (int i = 0; i < m_fileList.size(); ++i)
-    {
-        if (browsePathEquals(m_fileList.at(i), path))
-            return i;
-    }
-    return -1;
+    return m_fileIndex.indexOf(m_fileList, path);
 }

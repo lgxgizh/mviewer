@@ -29,6 +29,7 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
         cancelDisplayRasterPreloads();
         m_displayRasterWarm.clear();
         m_displayRasterWarmBytes = 0;
+        m_fileIndex.invalidate();
     }
     m_fileList = paths;
     m_currentIndex = indexInBrowseSequence(m_currentPath);
@@ -278,41 +279,41 @@ ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString 
 void ImageViewer::queueImageLoadFailure(const QString &path, uint64_t generation,
                                         const ImageLoadGuard &guard)
 {
-    QMetaObject::invokeMethod(
-        qApp,
-        [path, generation, guard]()
-        {
-            ImageViewer *viewer = guard->data();
-            if (!viewer || path != viewer->m_currentPath || generation != viewer->m_requestGen)
-                return;
-            viewer->m_foregroundRequest.reset();
-            viewer->m_loading = false;
-            viewer->m_hasHistogram = false;
-            viewer->m_transitionImage = QImage();
-            viewer->m_transitionSourceSize = QSize();
-            // M47: while the raster-path verdict for a
-            // large source is still pending, suppress the
-            // analysis-support full-frame failure (the
-            // 100 MP full decode fails fast, the LOD
-            // arrives later — the display owns the
-            // verdict).
-            if (viewer->m_largeSourcePending)
-            {
-                viewer->update();
-                return;
-            }
-            // M47: in LOD-first display the image IS on
-            // screen (the raster path); only the
-            // analysis-support full frame failed (e.g.
-            // > Qt's allocation limit). Do not clobber
-            // the successful display with a failure.
-            if (viewer->m_lodMode && !viewer->m_raster.image.isNull())
-            {
-                viewer->update();
-                return;
-            }
-            viewer->presentLoadFailure();
-        });
+    QMetaObject::invokeMethod(qApp,
+                              [path, generation, guard]()
+                              {
+                                  ImageViewer *viewer = guard->data();
+                                  if (!viewer || path != viewer->m_currentPath ||
+                                      generation != viewer->m_requestGen)
+                                      return;
+                                  viewer->m_foregroundRequest.reset();
+                                  viewer->m_loading = false;
+                                  viewer->m_hasHistogram = false;
+                                  viewer->m_transitionImage = QImage();
+                                  viewer->m_transitionSourceSize = QSize();
+                                  // M47: while the raster-path verdict for a
+                                  // large source is still pending, suppress the
+                                  // analysis-support full-frame failure (the
+                                  // 100 MP full decode fails fast, the LOD
+                                  // arrives later — the display owns the
+                                  // verdict).
+                                  if (viewer->m_largeSourcePending)
+                                  {
+                                      viewer->update();
+                                      return;
+                                  }
+                                  // M47: in LOD-first display the image IS on
+                                  // screen (the raster path); only the
+                                  // analysis-support full frame failed (e.g.
+                                  // > Qt's allocation limit). Do not clobber
+                                  // the successful display with a failure.
+                                  if (viewer->m_lodMode && !viewer->m_raster.image.isNull())
+                                  {
+                                      viewer->update();
+                                      return;
+                                  }
+                                  viewer->presentLoadFailure();
+                              });
 }
 
 void ImageViewer::queueLoadedImage(const QString &path, uint64_t generation,
@@ -519,8 +520,11 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
                     if (!ctx.isCancelled())
                     {
                         DisplayRasterPreloadResult res;
-                        res.path = neighbor; res.browseGeneration = browseGen;
-                        res.state = state; res.target = target; res.failed = true;
+                        res.path = neighbor;
+                        res.browseGeneration = browseGen;
+                        res.state = state;
+                        res.target = target;
+                        res.failed = true;
                         queueDisplayRasterPreloadResult(guard, std::move(res));
                     }
                 }
@@ -559,7 +563,8 @@ ImageViewer::takeMatchingPreload(const QString &path)
     {
         if (!match && browsePathEquals(p.path, path))
             match = std::move(p.handle);
-        else mviewer::application::ImageLoadingService::instance().cancelAsync(p.handle);
+        else
+            mviewer::application::ImageLoadingService::instance().cancelAsync(p.handle);
     }
     m_neighborPreloads.clear();
     return match;
@@ -572,7 +577,8 @@ ImageViewer::DisplayRasterPreload ImageViewer::takeMatchingDisplayRasterPreload(
     {
         if (!match.handle && browsePathEquals(preload.path, path))
             match = std::move(preload);
-        else TaskScheduler::cancel(preload.handle);
+        else
+            TaskScheduler::cancel(preload.handle);
     }
     m_displayRasterPreloads.clear();
     return match;
@@ -600,9 +606,12 @@ bool ImageViewer::takeWarmDisplayForCompare(const QString &path, QImage *image, 
     if (!warm || warm->image.isNull())
         return false;
     const QSize size = warm->sourceSize.isValid() ? warm->sourceSize : warm->image.size();
-    if (image) *image = warm->image;
-    if (sourceSize) *sourceSize = size;
-    if (sourceRect) *sourceRect = warm->sourceRect.isValid() ? warm->sourceRect : QRect(QPoint(0, 0), size);
+    if (image)
+        *image = warm->image;
+    if (sourceSize)
+        *sourceSize = size;
+    if (sourceRect)
+        *sourceRect = warm->sourceRect.isValid() ? warm->sourceRect : QRect(QPoint(0, 0), size);
     return true;
 }
 

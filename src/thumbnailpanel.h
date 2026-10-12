@@ -282,6 +282,7 @@ class ThumbnailPanel : public QListView
                             const QPointer<ThumbnailPanel> &self);
     // M54: publish scan batches before the final sorted convergence pass.
     void applyScanBatch(int gen, const QList<Entry> &batch);
+    void insertProgressiveRows(const QList<Entry> &batch);
     // M46: publish a completed scan's entries on the UI thread (extracted from
     // setDirectory's completion lambda so the scanning TU stays under the
     // function-length gate). Runs on the GUI thread; re-checks the generation.

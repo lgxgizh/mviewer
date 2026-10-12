@@ -21,6 +21,7 @@
 #include <QSet>
 #include <QThread>
 #include <functional>
+
 namespace
 {
 // M46/M55 test instrumentation storage (empty in production). The immutable
@@ -422,23 +423,7 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
     if (!m_scanProgressive)
         return;
 
-    const int firstRow = m_paths.size();
-    if (!m_model->insertRows(firstRow, batch.size()))
-        return;
-    m_displayEntries.append(batch);
-    m_displayEntryRow.reserve(m_displayEntries.size());
-    for (int i = 0; i < batch.size(); ++i)
-    {
-        const Entry &entry = batch.at(i);
-        const int row = firstRow + i;
-        m_paths.append(entry.path);
-        const QString key = galleryPathKey(entry.path);
-        m_rowByPath.insert(key, row);
-        m_displayEntryRow.insert(key, row);
-        m_sizeByPath.insert(key, entry.size);
-        m_model->setData(m_model->index(row, 0), entry.name);
-        m_totalBytes += entry.size;
-    }
+    insertProgressiveRows(batch);
     QStringList paths;
     paths.reserve(batch.size());
     for (const Entry &entry : batch)
