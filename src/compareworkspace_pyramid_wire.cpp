@@ -131,7 +131,6 @@ bool tryPaintFromPyramid(mviewer::ui::CompareSessionRuntime *session,
     const QPointF oldOffset = view->offset();
     const QSize oldSource = view->sourceSize();
     const auto &lvl = slot.levels[static_cast<size_t>(idx)];
-    tagPaneContent(idx);
     view->setImage(slot.images[static_cast<size_t>(idx)], slot.sourceSize, lvl.sourceRect);
     if (oldSource.isValid() && oldSource == slot.sourceSize)
         view->setTransform(oldScale, oldOffset);
@@ -244,8 +243,10 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
             desired = memoryDisplayRequest(idx, false);
         else if (idx < static_cast<int>(m_comparePaths.size()))
             desired = buildPaneDisplayRequest(idx, false);
-        if (desired.target.isValid())
-            tryPaintFromPyramid(m_session.get(), m_cellViews, idx, desired);
+        if (!desired.target.isValid())
+            continue;
+        tagPaneContent(idx);
+        tryPaintFromPyramid(m_session.get(), m_cellViews, idx, desired);
     }
     // tryPaintFromPyramid -> setImage() fits the raster. A swap has already
     // stored the destination scale; put it back on the view before paint.
