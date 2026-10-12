@@ -188,7 +188,7 @@ std::string SidecarStore::legacySidecarPath(const std::string &imagePath)
 
 std::string SidecarStore::ownedLegacySidecar(const std::string &imagePath)
 {
-    const std::string legacy = legacySidecarPath(imagePath);
+    std::string legacy = legacySidecarPath(imagePath);
     if (legacy.empty())
         return {};
     std::error_code ec;
@@ -203,7 +203,7 @@ std::string SidecarStore::ownedLegacySidecar(const std::string &imagePath)
 
 std::string SidecarStore::existingSidecar(const std::string &imagePath)
 {
-    const std::string current = sidecarPath(imagePath);
+    std::string current = sidecarPath(imagePath);
     std::error_code ec;
     if (!current.empty() && std::filesystem::is_regular_file(pathFromUtf8(current), ec))
         return current;
