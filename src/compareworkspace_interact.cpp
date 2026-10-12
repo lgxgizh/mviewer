@@ -184,6 +184,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
             }
             update();
             positionROIHud();
+            refreshPanCoverage();
         }
         return false;
     }
@@ -360,6 +361,7 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
         else
             update();
         positionROIHud();
+        refreshPanCoverage();
     }
     return true;
 }

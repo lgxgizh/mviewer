@@ -131,6 +131,7 @@ bool tryPaintFromPyramid(mviewer::ui::CompareSessionRuntime *session,
     const QPointF oldOffset = view->offset();
     const QSize oldSource = view->sourceSize();
     const auto &lvl = slot.levels[static_cast<size_t>(idx)];
+    tagPaneContent(idx);
     view->setImage(slot.images[static_cast<size_t>(idx)], slot.sourceSize, lvl.sourceRect);
     if (oldSource.isValid() && oldSource == slot.sourceSize)
         view->setTransform(oldScale, oldOffset);
@@ -341,6 +342,7 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
                                 view->sourceRect(), cell.image, cell.sourceRect, m_session.get()))
             continue;
         view->setSoftLoading(false);
+        tagPaneContent(cell.index);
         view->setImage(cell.image, cell.sourceSize, cell.sourceRect);
         if (!swapPreviewState(m_session.get(), cell.index, r.preview))
             inspectorStale = true;
@@ -510,4 +512,41 @@ void CompareWorkspace::queueFastPreview(int requestedPane)
         }
     } busy(m_session->fastPreviewBusy);
     scheduleDisplayMaterialization(dirty, true);
+}
+
+quint64 CompareWorkspace::paneContentKey(int pane) const
+{
+    if (pane < 0)
+        return 0;
+    // FNV-1a over the pane's source path and every adjustment that changes
+    // pixels or geometry. Collisions only cost a briefly stale pan backdrop.
+    quint64 h = 1469598103934665603ULL;
+    auto mix = [&h](const void *data, size_t size)
+    {
+        const auto *bytes = static_cast<const unsigned char *>(data);
+        for (size_t i = 0; i < size; ++i)
+        {
+            h ^= bytes[i];
+            h *= 1099511628211ULL;
+        }
+    };
+    const auto idx = static_cast<size_t>(pane);
+    if (idx < m_comparePaths.size())
+        mix(m_comparePaths[idx].data(), m_comparePaths[idx].size());
+    if (idx < m_cellAdjusts.size())
+    {
+        const CellAdjust &a = m_cellAdjusts[idx];
+        const float gains[] = {a.contrast, a.gamma, a.rGain, a.bGain};
+        const int ints[] = {a.brightness, a.rotation, a.flipH ? 1 : 0, a.flipV ? 1 : 0,
+                            a.hasCrop ? 1 : 0, a.cropX, a.cropY, a.cropW, a.cropH};
+        mix(gains, sizeof(gains));
+        mix(ints, sizeof(ints));
+    }
+    return h;
+}
+
+void CompareWorkspace::tagPaneContent(int pane)
+{
+    if (pane >= 0 && pane < m_cellViews.size() && m_cellViews[pane])
+        m_cellViews[pane]->setBackdropKey(paneContentKey(pane));
 }

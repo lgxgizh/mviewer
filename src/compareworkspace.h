@@ -631,6 +631,9 @@ class CompareWorkspace : public QWidget
         mviewer::core::DisplayColorContext::sRGB();
     TaskScheduler::TaskHandle m_displayTask;
     bool m_displayLodRefreshPending = false;
+    // Throttle for re-rendering region rasters while a pan drag is in flight.
+    bool m_panLodRefreshArmed = false;
+    void refreshPanCoverage();
     int m_displayLodRefreshPane = -1;
     // ── M16.2: per-cell image adjustments ──
     struct CellAdjust
@@ -652,6 +655,10 @@ class CompareWorkspace : public QWidget
         }
     };
     std::vector<CellAdjust> m_cellAdjusts;      // per-cell adjustment state
+    // Identity of a pane's displayed content (source frame + adjustments).
+    // RawImageView drops its full-frame pan backdrop when this changes.
+    quint64 paneContentKey(int pane) const;
+    void tagPaneContent(int pane);
     int m_editIdx = -1, m_explicitEditIdx = -1; // currently selected cell for editing
     static mviewer::core::CompareAdjustmentState reportAdjustment(const CellAdjust &adjust);
     static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);

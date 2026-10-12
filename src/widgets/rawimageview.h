@@ -77,6 +77,20 @@ class RawImageView : public QWidget
     {
         return m_sourceSize;
     }
+    // Full-frame stand-in painted beneath a region raster so pan never exposes
+    // the background before the sharp region is re-rendered. It is captured
+    // from the latest full-frame setImage() and dropped when the content key
+    // (source identity + adjustments) or the source size changes.
+    void setBackdropKey(quint64 key);
+    void swapBackdrop(RawImageView &other) noexcept;
+    // Paints the stand-in into fullDest (the whole source image's destination)
+    // when coveredDest (the region raster's destination) leaves part of the
+    // painter's clip/device uncovered. No-op for full-frame rasters.
+    void paintBackdrop(QPainter &p, const QRectF &fullDest, const QRectF &coveredDest) const;
+    bool hasBackdrop() const
+    {
+        return !m_backdrop.isNull();
+    }
     QRect sourceRect() const
     {
         return m_sourceRect;
@@ -320,6 +334,10 @@ class RawImageView : public QWidget
 
     QImage m_image;
     QImage m_filteredDisplay;
+    QImage m_backdrop;
+    QImage m_filteredBackdrop;
+    QSize m_backdropSourceSize;
+    quint64 m_backdropKey = 0;
     mviewer::OverlayMode m_displayOverlay = mviewer::OverlayMode::None;
     QString m_filenameOverlayText;
     bool m_filenameOverlayVisible = false;

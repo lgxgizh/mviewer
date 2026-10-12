@@ -128,6 +128,7 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
         const double oldScale = view->scale();
         const QPointF oldOffset = view->offset();
         const QSize oldSource = view->sourceSize();
+        tagPaneContent(i);
         view->setImage(q, srcSize, QRect(QPoint(0, 0), srcSize));
         if (oldSource.isValid() && oldSource == srcSize)
             view->setTransform(oldScale, oldOffset);
@@ -243,6 +244,7 @@ void CompareWorkspace::applyPendingWarmSeeds()
             // this image's PSNR/SSIM.
             view->setSoftLoading(true);
             view->setMetricBadge(QString());
+            tagPaneContent(i);
             view->setImage(seed.image, seed.sourceSize, seed.sourceRect);
             if (oldSource.isValid() && oldSource == seed.sourceSize)
                 view->setTransform(oldScale, oldOffset);

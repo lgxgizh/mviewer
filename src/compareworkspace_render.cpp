@@ -671,3 +671,36 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
                        });
     queueFastPreview(idx);
 }
+
+void CompareWorkspace::refreshPanCoverage()
+{
+    // A pan drag moves the bounded region raster with the cursor. RawImageView
+    // paints its full-frame backdrop under the uncovered strip at once; this
+    // throttled (not debounced) refresh re-renders the sharp region while the
+    // drag continues instead of waiting for the release.
+    if (m_panLodRefreshArmed || !isVisible())
+        return;
+    bool uncovered = false;
+    for (int i = 0; i < m_cellViews.size() && !uncovered; ++i)
+    {
+        if (!m_cellViews[i] || m_cellViews[i]->image().isNull() || i >= m_engine.imageCount())
+            continue;
+        const DisplayRequest desired = memoryDisplayRequest(i, false);
+        uncovered = desired.target.isValid() && desired.region && !rasterCoversView(i, desired);
+    }
+    if (!uncovered)
+        return;
+    m_panLodRefreshArmed = true;
+    const int pane = m_syncDrag ? -1 : m_dragIdx;
+    QPointer<CompareWorkspace> guard(this);
+    QTimer::singleShot(100, this,
+                       [guard, pane]()
+                       {
+                           CompareWorkspace *ws = guard.data();
+                           if (!ws)
+                               return;
+                           ws->m_panLodRefreshArmed = false;
+                           if (ws->isVisible())
+                               ws->queueDisplayLod(pane);
+                       });
+}
