@@ -804,6 +804,24 @@ target_include_directories(compare_best_fit_tests PRIVATE ${CMAKE_CURRENT_SOURCE
 add_test(NAME compare_best_fit_tests COMMAND compare_best_fit_tests)
 set_tests_properties(compare_best_fit_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
+# Three-pane compare: long unbreakable filenames must not squeeze the left
+# pane; every pane gets an equal column and its own fit-to-window scale.
+add_executable(compare_three_pane_fit_tests
+    test_compare_three_pane_fit.cpp
+)
+target_link_libraries(compare_three_pane_fit_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_three_pane_fit_tests PRIVATE cxx_std_20)
+target_include_directories(compare_three_pane_fit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_three_pane_fit_tests COMMAND compare_three_pane_fit_tests)
+set_tests_properties(compare_three_pane_fit_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # ─── M24: Analyze workflow acceptance (throwing-analyzer isolation, result
 # currency per image, history/pin persistence) ───────────────────────────────
 # Compare diff cache: warm (cached) batches equal cold ones exactly.
