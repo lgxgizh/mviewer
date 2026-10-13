@@ -71,4 +71,9 @@ struct RawMetadata
 // not a recognized RAW format or no RAW tags could be extracted.
 RawMetadata parseRawMetadata(const std::string &filePath);
 
+// Camera identity + exposure for any capture: RAW via parseRawMetadata, JPEG
+// via the TIFF structure inside its APP1 "Exif" segment (header-only read).
+// Other formats return parsed=false. Used by search, filters and sort keys.
+RawMetadata parseCaptureMetadata(const std::string &filePath);
+
 } // namespace mviewer::core

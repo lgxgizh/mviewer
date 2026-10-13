@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- JPEG 照片现在也能按相机、镜头、ISO 过滤和排序，搜索也能搜到相机型号：新增 `parseCaptureMetadata`，RAW 照旧解析，JPEG 只读 APP1「Exif」段里的 TIFF 结构（只走文件头，不碰压缩数据）。原来这些字段只从 RAW 文件里取，JPEG 相册里按相机过滤基本没有结果。信息面板的 RAW 区块不变。
+
 ### Performance
 
 - 搜索索引和按相机/镜头/ISO 过滤读取元数据时，不再为了 DPI 和 ICC 做一次 1×1 缩放解码（JPEG 这一步仍要走完整个压缩流）：新增只读文件头的 `MetadataReader::readHeaders`，索引改用它。Linux 实测每张 1200 万像素 JPEG 从约 41 ms 降到约 0.05 ms，一亿像素从约 195 ms 降到约 0.05 ms；信息面板仍读取完整元数据。
