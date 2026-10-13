@@ -138,14 +138,19 @@ TaskScheduler &TaskScheduler::instance()
 TaskScheduler::TaskScheduler() : m_impl(new Impl)
 {
     const int n = QThread::idealThreadCount();
-    setQueueMaxThreads(Priority::UI, std::max(1, n));
+    // UI-queue work is short file I/O (file ops, visible prefetch): it never
+    // needs every core, and at n threads it competed with decode and the
+    // resample pool (~36 runnable threads on 8 cores before this budget).
+    setQueueMaxThreads(Priority::UI, std::max(2, n / 2));
     setQueueMaxThreads(Priority::Decode, std::max(1, n));
     // Thumbnails used to get n threads on top of n decode + n resample threads
     // (~4n runnable threads while scrolling). Cap them at half the cores and
     // run them below normal OS priority so the current image always wins.
     setQueueMaxThreads(Priority::Thumbnail, std::max(2, n / 2));
     setQueueMaxThreads(Priority::Analysis, std::max(1, n / 2));
-    setQueueMaxThreads(Priority::Background, std::max(1, n / 2));
+    // Background = metadata indexing / adjacent prefetch: lowest priority and
+    // mostly I/O-bound, so a quarter of the cores keeps it progressing.
+    setQueueMaxThreads(Priority::Background, std::max(1, n / 4));
     for (const Priority low : {Priority::Thumbnail, Priority::Analysis, Priority::Background})
         m_impl->priorityQueues[static_cast<int>(low)].setThreadPriority(QThread::LowPriority);
 }
