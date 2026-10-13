@@ -203,6 +203,8 @@ CompareWorkspace::NavState CompareWorkspace::captureNavState() const
     s.checker = m_checkerChk && m_checkerChk->isChecked(); // M23
     s.checkerSize = m_checkerSize;                         // M23
     s.diffHighlight = m_diffHighlightChk && m_diffHighlightChk->isChecked();
+    s.diffOverlay = m_diffOverlayVisible;
+    s.diffOverlayPromoted = m_diffOverlayPromoted;
     s.diffGainIndex = m_diffGainCombo ? m_diffGainCombo->currentIndex() : 0;
     s.syncZoom = m_syncZoomChk ? m_syncZoomChk->isChecked() : true;
     s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
@@ -235,10 +237,25 @@ void CompareWorkspace::restoreNavState(const NavState &s)
         m_filenameOverlayChk->setChecked(s.filenameOverlay);
     applyFilenameOverlays();
     setOverlayMode(static_cast<mviewer::OverlayMode>(s.overlayMode));
+    // Restore heatmap + highlight without going through the promote/demote
+    // toggled handlers (those would fight each other and lose a manual
+    // "显示差异" that was never promoted by H).
+    m_diffOverlayPromoted = s.diffOverlayPromoted;
+    m_diffOverlayVisible = s.diffOverlay;
+    m_diffHighlight = s.diffHighlight;
+    if (m_diffOverlayChk)
+    {
+        const QSignalBlocker blocker(m_diffOverlayChk);
+        m_diffOverlayChk->setChecked(s.diffOverlay);
+    }
     if (m_diffHighlightChk)
+    {
+        const QSignalBlocker blocker(m_diffHighlightChk);
         m_diffHighlightChk->setChecked(s.diffHighlight);
+    }
     if (m_diffGainCombo && s.diffGainIndex >= 0 && s.diffGainIndex < m_diffGainCombo->count())
         m_diffGainCombo->setCurrentIndex(s.diffGainIndex);
+    refreshAllDiffOverlays();
     m_overlayAlpha = s.overlayAlpha;
     if (m_overlayAlphaSlider)
         m_overlayAlphaSlider->setValue(s.overlayAlpha);
