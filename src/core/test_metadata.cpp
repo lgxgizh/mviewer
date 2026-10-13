@@ -131,6 +131,15 @@ static void testMetadataReader()
     CHECK(!m.hash.empty(), "MetadataReader builds hash");
     CHECK(m.fileName == "mr.png", "MetadataReader reads fileName");
 
+    // readHeaders = read() minus DPI/ICC: every header field matches.
+    const mviewer::domain::ImageMetadata h = mviewer::core::MetadataReader::readHeaders(p);
+    CHECK(h.width == m.width && h.height == m.height, "readHeaders dimensions match read");
+    CHECK(h.format == m.format && h.orientation == m.orientation, "readHeaders format/orient");
+    CHECK(h.fileSize == m.fileSize && h.hash == m.hash, "readHeaders identity matches read");
+    CHECK(h.textKeys == m.textKeys, "readHeaders text keys match read");
+    CHECK(mviewer::core::MetadataReader::readHeaders("/no/such/file.png").filePath.empty(),
+          "readHeaders missing file -> empty metadata");
+
     const std::string k1 = mviewer::core::MetadataReader::key(p);
     CHECK(!k1.empty(), "key non-empty");
     // Same path+size+mtime -> stable key.

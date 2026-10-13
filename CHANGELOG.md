@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Performance
+
+- 搜索索引和按相机/镜头/ISO 过滤读取元数据时，不再为了 DPI 和 ICC 做一次 1×1 缩放解码（JPEG 这一步仍要走完整个压缩流）：新增只读文件头的 `MetadataReader::readHeaders`，索引改用它。Linux 实测每张 1200 万像素 JPEG 从约 41 ms 降到约 0.05 ms，一亿像素从约 195 ms 降到约 0.05 ms；信息面板仍读取完整元数据。
+
 ## [1.0.110] - 2026-10-13
 
 ### Release
