@@ -77,7 +77,7 @@ void MainWindow::setupCommands()
         "file_rename", "重命名 (F2)", [this]() { m_thumbnailPanel->renameSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_F2, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_delete", "删除到 MViewer 回收站 (Delete)",
+        "file_delete", "删除到回收站 (Delete)",
         [this]() { m_thumbnailPanel->moveToTrashSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_Delete, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
@@ -635,7 +635,7 @@ QString MainWindow::shortcutsHelpHtml()
         "<td>水平 / 垂直翻转（浏览覆盖原文件；比较窗口仅预览当前窗格）</td></tr>"
         "<tr><th colspan='2'>文件操作</th></tr>"
         "<tr><td><kbd>F2</kbd></td><td>重命名选中图片</td></tr>"
-        "<tr><td><kbd>Delete</kbd></td><td>删除到 MViewer 回收站</td></tr>"
+        "<tr><td><kbd>Delete</kbd></td><td>删除到回收站</td></tr>"
         "<tr><td><kbd>Ctrl+M</kbd></td><td>移动到...</td></tr>"
         "<tr><td><kbd>Ctrl+E</kbd></td><td>在资源管理器中显示</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+B</kbd></td><td>批量处理</td></tr>"
