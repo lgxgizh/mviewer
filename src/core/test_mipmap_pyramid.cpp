@@ -89,11 +89,12 @@ static void testCacheManagerMips()
     mgr.put(CacheLevel::FullImage, key, full);
 
     ImageData lod1;
-    CHECK(mgr.getMip(key, 1, lod1) && !lod1.isNull(), "eager put builds lod1");
-    CHECK(lod1.width == 512 && lod1.height == 256, "lod1 is half");
+    CHECK(!mgr.getMip(key, 1, lod1), "put does not build mips eagerly");
 
     ImageData best;
     CHECK(mgr.getBestMip(key, 300, best) && !best.isNull(), "getBestMip hits ≤300");
+    CHECK(mgr.getMip(key, 1, lod1) && !lod1.isNull(), "first getBestMip builds lod1 lazily");
+    CHECK(lod1.width == 512 && lod1.height == 256, "lod1 is half");
     CHECK(mviewer::cache::imageMaxEdge(best) <= 300, "best edge ≤ maxEdge");
     CHECK(mviewer::cache::imageMaxEdge(best) >= 256, "best not coarser than needed when available");
 
@@ -124,7 +125,7 @@ static void testLazyBuildAndEviction()
     const std::string key = "mip_lazy_key";
     ImageData full = makeRgbRamp(512, 512);
     // putMemory path without going through ensure via put — use ImageCache Viewer
-    // then lazy getBestMip. Direct putMemory triggers eager; use putMip lod0 only.
+    // then lazy getBestMip (putMip lod0 only, no chain tracking).
     mgr.putMip(key, 0, full); // FullImage only, no chain yet
     {
         // Clear tracking so ensure thinks none exist — putMip(0) does not set m_mipMaxLod.
