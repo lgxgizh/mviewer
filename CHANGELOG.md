@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.111] - 2026-10-13
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.111**.
+
 ### Fixed
 
 - JPEG 照片现在也能按相机、镜头、ISO 过滤和排序，搜索也能搜到相机型号：新增 `parseCaptureMetadata`，RAW 照旧解析，JPEG 只读 APP1「Exif」段里的 TIFF 结构（只走文件头，不碰压缩数据）。原来这些字段只从 RAW 文件里取，JPEG 相册里按相机过滤基本没有结果。信息面板的 RAW 区块不变。
