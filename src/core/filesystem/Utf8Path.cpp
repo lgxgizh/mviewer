@@ -40,9 +40,9 @@ std::string pathToUtf8(const std::filesystem::path &path)
         return {};
     if (wide.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
         throw std::length_error("filesystem path is too long");
-    const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
-                                           static_cast<int>(wide.size()), nullptr, 0, nullptr,
-                                           nullptr);
+    const int length =
+        WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(),
+                            static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
     if (length <= 0)
         throw std::runtime_error("filesystem path is not valid Unicode");
     std::string utf8(static_cast<size_t>(length), '\0');
@@ -54,6 +54,32 @@ std::string pathToUtf8(const std::filesystem::path &path)
 #else
     return path.string();
 #endif
+}
+
+std::string normalizePathKey(std::string path)
+{
+    for (char &ch : path)
+    {
+        if (ch == '\\')
+            ch = '/';
+    }
+#ifdef _WIN32
+    if (!path.empty())
+    {
+        try
+        {
+            std::wstring wide = pathFromUtf8(path).wstring();
+            if (!wide.empty())
+                CharLowerBuffW(wide.data(), static_cast<DWORD>(wide.size()));
+            path = pathToUtf8(std::filesystem::path(std::move(wide)));
+        }
+        catch (...)
+        {
+            // Keep the slash-normalized form when the path is not valid UTF-8.
+        }
+    }
+#endif
+    return path;
 }
 
 } // namespace mviewer::core

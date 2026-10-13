@@ -76,12 +76,11 @@ std::string TagStore::defaultPath() const
 
 namespace
 {
-std::string slashKey(std::string path)
+// RatingStore / TagStore path identity: slash-normalize, and on Windows also
+// case-fold so C:/Photos/A.JPG and c:/photos/a.jpg share one record.
+std::string slashKey(const std::string &path)
 {
-    for (char &c : path)
-        if (c == '\\')
-            c = '/';
-    return path;
+    return normalizePathKey(path);
 }
 } // namespace
 
