@@ -4,8 +4,11 @@
 #include "thumbnailpanel.h"
 
 #include <QApplication>
+#include <QColor>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QImage>
 #include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QThread>
@@ -214,6 +217,29 @@ int main(int argc, char **argv)
         ties, QString(), false, QRegularExpression(), dateDesc, ratings, emptyTags, {}, {}, {}, {});
     CHECK(namesOf(byDate) == QStringLiteral("a.png,b.png,img02.png,img2.png,img10.png"),
           "descending date keeps name order when timestamps match");
+
+    // Details view must start ensureMetaIndex so camera/lens/ISO columns leave
+    // the "-" placeholder. Thumbnail mode alone must not build that index.
+    {
+        QTemporaryDir detailsDir;
+        CHECK(detailsDir.isValid(), "Details meta: temporary directory is available");
+        const QString imagePath = detailsDir.filePath(QStringLiteral("details_meta.png"));
+        {
+            QImage img(32, 24, QImage::Format_RGB32);
+            img.fill(QColor(20, 40, 60));
+            CHECK(img.save(imagePath, "PNG"), "Details meta: PNG fixture written");
+        }
+        ThumbnailPanel detailsPanel;
+        detailsPanel.setViewMode(ThumbnailPanel::Thumbnail);
+        detailsPanel.setDirectory(detailsDir.path());
+        CHECK(waitFor([&]() { return detailsPanel.entries().size() == 1; }, 10000),
+              "Details meta: Thumbnail scan lands the fixture");
+        CHECK(detailsPanel.metaIsoForPath(imagePath) < 0,
+              "Details meta: Thumbnail mode leaves the EXIF index empty");
+        detailsPanel.setViewMode(ThumbnailPanel::Details);
+        CHECK(waitFor([&]() { return detailsPanel.metaIsoForPath(imagePath) >= 0; }, 20000),
+              "Details meta: switching to Details indexes the gallery path");
+    }
 
     std::printf("M59 Browse regression failures: %d\n", g_failures);
     return g_failures == 0 ? 0 : 1;
