@@ -118,6 +118,14 @@ void populateTextMetadata(mviewer::domain::ImageMetadata &meta, QImageReader &re
 }
 mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
 {
+    mviewer::domain::ImageMetadata meta = readHeaders(filePath);
+    if (!meta.filePath.empty())
+        populateDisplayMetadata(meta, filePath);
+    return meta;
+}
+
+mviewer::domain::ImageMetadata MetadataReader::readHeaders(const std::string &filePath)
+{
     mviewer::domain::ImageMetadata meta;
     const QFileInfo fi(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
     if (!fi.exists())
@@ -125,7 +133,6 @@ mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
     populateFileIdentity(meta, filePath, fi);
     QImageReader reader(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
     populateImageInfo(meta, reader, fi);
-    populateDisplayMetadata(meta, filePath);
     populateTextMetadata(meta, reader);
     readGps(meta, filePath);
     meta.hash = filePath + "|" + std::to_string(meta.fileSize) + "|" +
