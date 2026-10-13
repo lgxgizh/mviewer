@@ -501,10 +501,23 @@ void ThumbnailPanel::moveToTrashSelected()
 
 void ThumbnailPanel::openTrashFolder()
 {
+    // Deletes prefer the OS recycle bin; open that view first. The app-private
+    // directory is only a fallback when moveToTrash fails (e.g. some shares).
+#ifdef Q_OS_WIN
+    if (QProcess::startDetached(QStringLiteral("explorer.exe"),
+                                {QStringLiteral("shell:RecycleBinFolder")}))
+        return;
+#elif defined(Q_OS_MACOS)
+    if (QProcess::startDetached(QStringLiteral("open"), {QStringLiteral("trash:///")}))
+        return;
+#else
+    if (QDesktopServices::openUrl(QUrl(QStringLiteral("trash:///"))))
+        return;
+#endif
     const QString trashDir = mviewerTrashDirectory();
     if (trashDir.isEmpty())
     {
-        QMessageBox::warning(this, tr("回收站"), tr("无法定位 MViewer 回收站。"));
+        QMessageBox::warning(this, tr("回收站"), tr("无法打开系统回收站。"));
         return;
     }
     QDir().mkpath(trashDir);

@@ -145,7 +145,7 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
 void MainWindow::addOpenTrashEditAction(QMenu *editMenu)
 {
     editMenu->addSeparator();
-    auto *openTrash = new QAction(tr("打开 MViewer 回收站"), this);
+    auto *openTrash = new QAction(tr("打开回收站"), this);
     openTrash->setObjectName(QStringLiteral("openTrashAction"));
     editMenu->addAction(openTrash);
     connect(openTrash, &QAction::triggered, this,

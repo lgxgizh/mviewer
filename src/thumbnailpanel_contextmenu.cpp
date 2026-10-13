@@ -51,9 +51,9 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCopy = menu.addAction("复制...");
     acts.aMove = menu.addAction("移动...");
     acts.aMove->setShortcut(QKeySequence("Ctrl+M"));
-    acts.aTrash = menu.addAction("移到 MViewer 回收站");
+    acts.aTrash = menu.addAction("移到回收站");
     acts.aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
-    acts.aOpenTrash = menu.addAction("打开 MViewer 回收站");
+    acts.aOpenTrash = menu.addAction("打开回收站");
     acts.aReveal = menu.addAction("在资源管理器中显示");
     acts.aReveal->setShortcut(QKeySequence("Ctrl+E"));
     acts.aCopyPath = menu.addAction("复制路径");

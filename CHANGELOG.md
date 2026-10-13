@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- 删除进系统回收站后，菜单与帮助不再写「MViewer 回收站」；「打开回收站」优先打开系统回收站（Windows `shell:RecycleBinFolder`，其它平台 `trash:///`），打不开时才退回应用内备用目录。
+
 ## [1.0.111] - 2026-10-13
 
 ### Release
