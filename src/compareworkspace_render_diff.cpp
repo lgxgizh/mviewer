@@ -523,7 +523,12 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
         if (!view)
             continue;
         view->setSizeMismatch(ov.sizeMismatch);
-        view->setOverlay(ov.overlay, ov.opacity);
+        // Generation already drops superseded batches; still refuse to paint a
+        // heatmap after the user turned visualization off mid-flight.
+        if (!m_diffOverlayVisible)
+            view->setOverlay(QImage(), 0.0);
+        else
+            view->setOverlay(ov.overlay, ov.opacity);
         if (ov.hasMetrics && m_cellViews.size() > 2)
         {
             view->setMetricBadge(

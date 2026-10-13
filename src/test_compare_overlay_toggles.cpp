@@ -205,6 +205,32 @@ void crosshairAcrossSetsCase(CompareWorkspace *ws, RawImageView *v0, const QStri
     chk->setChecked(false);
 }
 
+// Manual "显示差异" (no highlight) must survive P/N pair navigation.
+void diffOverlayAcrossPairsCase(CompareWorkspace *ws, const QStringList &pool)
+{
+    auto *ov = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
+    auto *hl = ws->findChild<QCheckBox *>(QStringLiteral("diffHighlightToggle"));
+    check(ov && hl && pool.size() >= 4, "diff overlay P/N: toggles and 2 pairs exist");
+    if (!ov || !hl || pool.size() < 4)
+        return;
+    ws->setImagePool(pool, pool.mid(0, 2));
+    check(waitTrue([ws] { return ws->comparedImageCount() == 2; }, 20000),
+          "diff overlay P/N: first pair loaded");
+    check(waitTrue([ov] { return ov->isEnabled(); }, 20000), "diff overlay P/N: toggle enabled");
+    ov->setChecked(true);
+    check(waitTrue([ws] { return anyOverlay(ws); }, 20000), "diff overlay P/N: heatmap on");
+    check(!hl->isChecked(), "diff overlay P/N: highlight stays off");
+    check(ws->hasNextPair(), "diff overlay P/N: next pair available");
+    ws->nextPair();
+    check(waitTrue([ws] { return ws->comparedImageCount() == 2; }, 20000),
+          "diff overlay P/N: second pair loaded");
+    check(ov->isChecked(), "diff overlay P/N: 显示差异 survives nextPair");
+    check(waitTrue([ws] { return anyOverlay(ws); }, 20000),
+          "diff overlay P/N: heatmap redraws on the new pair");
+    ov->setChecked(false);
+    check(!anyOverlay(ws), "diff overlay P/N: turning off clears the heatmap");
+}
+
 // M1: Preferences and the compare toolbar share one auto-align state.
 void autoAlignSyncCase(CompareWorkspace *ws)
 {
@@ -230,6 +256,8 @@ int main(int argc, char **argv)
     const QDir dir(tmp.path());
     const QString a = writePng(dir, QStringLiteral("a.png"), QColor(40, 80, 160), false);
     const QString b = writePng(dir, QStringLiteral("b.png"), QColor(40, 80, 160), true);
+    const QString c = writePng(dir, QStringLiteral("c.png"), QColor(80, 40, 40), false);
+    const QString d = writePng(dir, QStringLiteral("d.png"), QColor(80, 40, 40), true);
 
     QDialog host;
     auto *layout = new QVBoxLayout(&host);
@@ -255,6 +283,7 @@ int main(int argc, char **argv)
     diffOverlayCases(ws, v0);
     highlightCases(ws);
     crosshairAcrossSetsCase(ws, v0, {b, a});
+    diffOverlayAcrossPairsCase(ws, {a, b, c, d});
     autoAlignSyncCase(ws);
 
     std::printf("=== compare overlay toggle tests: %s ===\n", g_failures == 0 ? "PASS" : "FAIL");

@@ -290,7 +290,7 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
     default:
         return false;
     }
-    if (!target || (target != m_diffHighlightChk && !target->isEnabled()))
+    if (!target || !target->isEnabled())
         return false;
     const bool newState = !target->isChecked();
     target->setChecked(newState);
