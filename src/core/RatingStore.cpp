@@ -68,33 +68,47 @@ std::string slashKey(const std::string &path)
 {
     return normalizePathKey(path);
 }
+
+// Snapshot lookups accept both the stored (normalized) key and a caller's
+// verbatim slash-form key, so snapshots assembled outside the store keep working.
+template <typename Container> auto findPathKey(const Container &c, const std::string &path)
+{
+    std::string raw = path;
+    for (char &ch : raw)
+    {
+        if (ch == '\\')
+            ch = '/';
+    }
+    auto it = c.find(raw);
+    return it != c.end() ? it : c.find(slashKey(path));
+}
 } // namespace
 
 int RatingStore::Snapshot::rating(const std::string &path) const
 {
-    auto it = ratings.find(slashKey(path));
+    auto it = findPathKey(ratings, path);
     return it == ratings.end() ? 0 : it->second;
 }
 
 int RatingStore::Snapshot::colorLabel(const std::string &path) const
 {
-    auto it = colorLabels.find(slashKey(path));
+    auto it = findPathKey(colorLabels, path);
     return it == colorLabels.end() ? 0 : it->second;
 }
 
 bool RatingStore::Snapshot::isRejected(const std::string &path) const
 {
-    return rejected.count(slashKey(path)) != 0;
+    return findPathKey(rejected, path) != rejected.end();
 }
 
 bool RatingStore::Snapshot::isPicked(const std::string &path) const
 {
-    return picked.count(slashKey(path)) != 0;
+    return findPathKey(picked, path) != picked.end();
 }
 
 bool RatingStore::Snapshot::isRecent(const std::string &path) const
 {
-    return recentSet.count(slashKey(path)) != 0;
+    return findPathKey(recentSet, path) != recentSet.end();
 }
 
 RatingStore::Snapshot RatingStore::snapshot() const

@@ -82,6 +82,20 @@ std::string slashKey(const std::string &path)
 {
     return normalizePathKey(path);
 }
+
+// Snapshot lookups accept both the stored (normalized) key and a caller's
+// verbatim slash-form key, so snapshots assembled outside the store keep working.
+template <typename Container> auto findPathKey(const Container &c, const std::string &path)
+{
+    std::string raw = path;
+    for (char &ch : raw)
+    {
+        if (ch == '\\')
+            ch = '/';
+    }
+    auto it = c.find(raw);
+    return it != c.end() ? it : c.find(slashKey(path));
+}
 } // namespace
 
 std::string TagStore::normalize(const std::string &path) const
@@ -243,7 +257,7 @@ void TagStore::setFilePath(const std::string &path)
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool TagStore::Snapshot::hasTag(const std::string &path, const std::string &tag) const
 {
-    auto it = tags.find(slashKey(path));
+    auto it = findPathKey(tags, path);
     return it != tags.end() && it->second.count(tag) != 0;
 }
 
