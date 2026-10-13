@@ -58,6 +58,53 @@ static bool fileExists(const std::string &path)
     return std::filesystem::exists(mviewer::core::pathFromUtf8(path), ec);
 }
 
+static void testPathKeyAndAtomicRelocate()
+{
+    using namespace mviewer::core;
+    printf("\n[path key case-fold + atomic sidecar relocate]\n");
+    QTemporaryDir tmp;
+    auto &rs = RatingStore::instance();
+    auto &ss = SidecarStore::instance();
+    rs.setFilePath(QDir(tmp.path()).filePath("case_ratings.txt").toUtf8().toStdString());
+
+    const std::string mixed = "C:/Photos/Shot.JPG";
+    const std::string lower = "c:/photos/shot.jpg";
+    const std::string backslash = "C:\\Photos\\Shot.JPG";
+    CHECK(normalizePathKey(mixed) == normalizePathKey("C:/Photos/Shot.JPG"),
+          "normalizePathKey is stable for forward slashes");
+    CHECK(normalizePathKey(backslash) == normalizePathKey(mixed),
+          "normalizePathKey folds backslashes to forward slashes");
+#ifdef _WIN32
+    CHECK(normalizePathKey(mixed) == normalizePathKey(lower),
+          "Windows path keys are case-insensitive");
+    rs.setRating(mixed, 5);
+    CHECK(rs.rating(lower) == 5, "Windows RatingStore lookup ignores case");
+    rs.clearRating(mixed);
+#else
+    CHECK(normalizePathKey(mixed) != normalizePathKey(lower),
+          "non-Windows path keys stay case-sensitive");
+#endif
+
+    const QString dir = tmp.path();
+    const std::string oldPath = writeImage(dir, "atomic_old.png");
+    const std::string newPath = QDir(dir).filePath("atomic_new.png").toUtf8().toStdString();
+    rs.setRating(oldPath, 4);
+    rs.setPicked(oldPath, true);
+    CHECK(ss.writeSidecar(oldPath), "atomic relocate: source sidecar written");
+    const std::string oldSidecar = SidecarStore::sidecarPath(oldPath);
+    CHECK(ss.relocateSidecar(oldPath, newPath), "atomic relocate: relocateSidecar succeeds");
+    CHECK(fileExists(SidecarStore::sidecarPath(newPath)),
+          "atomic relocate: destination sidecar exists after write");
+    CHECK(!fileExists(oldSidecar), "atomic relocate: source sidecar removed only after write");
+    rs.clearRating(newPath);
+    rs.setPicked(newPath, false);
+    CHECK(ss.readSidecar(newPath) && rs.rating(newPath) == 4 && rs.picked(newPath),
+          "atomic relocate: destination sidecar restores rating and pick");
+    rs.clearRating(newPath);
+    rs.setPicked(newPath, false);
+    rs.flushSave();
+}
+
 static void testMetadataFollowsFile()
 {
     using namespace mviewer::core;
@@ -318,6 +365,7 @@ int main()
         CHECK(ts.hasTag(existPath, "landscape"), "TagStore landscape tag preserved");
     }
 
+    testPathKeyAndAtomicRelocate();
     testMetadataFollowsFile();
 
     printf("\nratingstore_tests: %d passed, %d failed\n", g_pass, g_fail);

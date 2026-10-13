@@ -12,4 +12,9 @@ namespace mviewer::core
 std::filesystem::path pathFromUtf8(const std::string &path);
 std::string pathToUtf8(const std::filesystem::path &path);
 
+// Slash-normalize a path key for RatingStore / TagStore lookups. On Windows the
+// filesystem is case-insensitive, so the key is also case-folded (same idea as
+// BrowsePathIndex); elsewhere only '\' -> '/' is applied.
+std::string normalizePathKey(std::string path);
+
 } // namespace mviewer::core

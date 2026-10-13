@@ -218,10 +218,16 @@ bool SidecarStore::relocateSidecar(const std::string &oldImagePath, const std::s
         if (source.empty() || oldImagePath == newImagePath)
             return false;
         fromJson(readWholeFile(pathFromUtf8(source)), newImagePath);
-        std::error_code ec;
-        std::filesystem::remove(pathFromUtf8(source), ec);
-        // writeSidecar records the new path (or drops an empty sidecar).
-        writeSidecar(newImagePath);
+        // Write the destination sidecar BEFORE removing the source so a failed
+        // write never deletes the only on-disk copy of the ratings.
+        if (!writeSidecar(newImagePath))
+            return false;
+        const std::string destination = sidecarPath(newImagePath);
+        if (!destination.empty() && source != destination)
+        {
+            std::error_code ec;
+            std::filesystem::remove(pathFromUtf8(source), ec);
+        }
         return true;
     }
     catch (...)

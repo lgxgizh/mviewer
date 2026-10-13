@@ -76,12 +76,25 @@ std::string TagStore::defaultPath() const
 
 namespace
 {
-std::string slashKey(std::string path)
+// RatingStore / TagStore path identity: slash-normalize, and on Windows also
+// case-fold so C:/Photos/A.JPG and c:/photos/a.jpg share one record.
+std::string slashKey(const std::string &path)
 {
-    for (char &c : path)
-        if (c == '\\')
-            c = '/';
-    return path;
+    return normalizePathKey(path);
+}
+
+// Snapshot lookups accept both the stored (normalized) key and a caller's
+// verbatim slash-form key, so snapshots assembled outside the store keep working.
+template <typename Container> auto findPathKey(const Container &c, const std::string &path)
+{
+    std::string raw = path;
+    for (char &ch : raw)
+    {
+        if (ch == '\\')
+            ch = '/';
+    }
+    auto it = c.find(raw);
+    return it != c.end() ? it : c.find(slashKey(path));
 }
 } // namespace
 
@@ -244,7 +257,7 @@ void TagStore::setFilePath(const std::string &path)
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool TagStore::Snapshot::hasTag(const std::string &path, const std::string &tag) const
 {
-    auto it = tags.find(slashKey(path));
+    auto it = findPathKey(tags, path);
     return it != tags.end() && it->second.count(tag) != 0;
 }
 
