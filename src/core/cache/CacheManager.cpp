@@ -72,13 +72,13 @@ void CacheManager::putMemory(CacheLevel level, const std::string &key, const Ima
     if (level == CacheLevel::Disk)
         return;
     ImageCache::instance().put(toImageCacheLevel(level), key, img);
-    // Eager mip build for FullImage puts (lod≥1 live in Preview pool).
-    // Replace path: drop prior chain so a new full raster cannot leave stale mips.
+    // Replace path: drop any prior chain so a new full raster cannot leave stale
+    // mips. The chain itself is built lazily by getBestMip() the first time a
+    // smaller level is actually requested: building it here put ~12 ms (12 MP)
+    // to ~117 ms and +100 MB (100 MP) between decode and first paint, even for
+    // images that are only ever viewed at full size.
     if (level == CacheLevel::FullImage && !key.empty() && !img.isNull())
-    {
         eraseMips(key);
-        ensureMips(key, img);
-    }
 }
 
 bool CacheManager::getMemory(CacheLevel level, const std::string &key, ImageData &out)
