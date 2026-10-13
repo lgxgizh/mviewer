@@ -18,6 +18,22 @@ namespace
 constexpr int kPad = 8;
 constexpr int kChip = 22;
 
+// Camera-style names ("DSC_2026_10_13_..._v3.jpg") have no spaces, so a
+// word-wrapping QLabel cannot break them. Offer a zero-width break after the
+// usual separators so the two-line layout really wraps.
+QString wrappableName(const QString &name)
+{
+    QString out;
+    out.reserve(name.size() + name.size() / 4);
+    for (const QChar ch : name)
+    {
+        out.append(ch);
+        if (ch == QLatin1Char('_') || ch == QLatin1Char('-') || ch == QLatin1Char('.'))
+            out.append(QChar(0x200B));
+    }
+    return out;
+}
+
 int oneLineHeight(const QFontMetrics &metrics)
 {
     const int textHeight = metrics.height() + kPad * 2;
@@ -50,7 +66,11 @@ class ComparePaneHeader : public QWidget
         m_name = new QLabel(this);
         m_name->setObjectName(QStringLiteral("paneHeaderName"));
         m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        m_name->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        // Ignored: the filename must never size the grid column. With
+        // Preferred/Expanding, a long name without break points (e.g.
+        // "DSC_..._v3.jpg") became the column's minimum width and squeezed
+        // the other panes; refreshName() elides/wraps to the width it gets.
+        m_name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         m_name->setMinimumWidth(0);
         m_name->setStyleSheet(
             QStringLiteral("QLabel#paneHeaderName{color:%1;background:transparent;}")
@@ -132,7 +152,7 @@ class ComparePaneHeader : public QWidget
             const int twoLines = line + metrics.height();
             m_name->setWordWrap(true);
             m_name->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-            m_name->setText(m_fullName);
+            m_name->setText(wrappableName(m_fullName));
             if (height() != twoLines)
                 setFixedHeight(twoLines);
         }
