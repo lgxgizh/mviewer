@@ -142,7 +142,7 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
                         break;
                     const mviewer::domain::ImageMetadata meta =
                         mviewer::core::MetadataReader::readHeaders(p);
-                    const RawMetadata raw = mviewer::core::parseRawMetadata(p);
+                    const RawMetadata raw = mviewer::core::parseCaptureMetadata(p);
                     e = buildEntry(p, meta, raw);
                     {
                         std::lock_guard<std::mutex> lk(m_mtx);
@@ -294,7 +294,7 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
                     if (cancelToken->load() || ctx.isCancelled())
                         break;
                     const auto meta = mviewer::core::MetadataReader::readHeaders(p);
-                    const auto raw = mviewer::core::parseRawMetadata(p);
+                    const auto raw = mviewer::core::parseCaptureMetadata(p);
                     e = buildEntry(p, meta, raw);
                     {
                         std::lock_guard<std::mutex> lk(m_mtx);

@@ -38,6 +38,16 @@ static bool fits(uint64_t offset, uint64_t need, uint64_t size)
     return offset <= size && need <= size - offset;
 }
 
+// TIFF offsets are relative to the TIFF header. For RAW files that header is
+// the start of the file; for JPEG it sits inside the APP1 "Exif" segment, so
+// every offset seek is shifted by the header's file position.
+thread_local long t_tiffBase = 0;
+
+static int seekTiff(FILE *f, uint64_t offset)
+{
+    return std::fseek(f, t_tiffBase + static_cast<long>(offset), SEEK_SET);
+}
+
 struct TiffHeader
 {
     bool littleEndian = false;
@@ -121,7 +131,7 @@ static std::string readString(FILE *f, uint64_t fileSize, uint32_t offset, uint3
     if (count == 0 || count > 4096 || !fits(offset, count, fileSize))
         return "";
     const long cur = std::ftell(f);
-    if (std::fseek(f, static_cast<long>(offset), SEEK_SET) != 0)
+    if (seekTiff(f, offset) != 0)
         return "";
     std::string s(count, '\0');
     const size_t readCount = std::fread(s.data(), 1, count, f);
@@ -141,7 +151,7 @@ static uint16_t readTagU16(FILE *f, bool le, uint64_t fileSize, uint32_t v, uint
     if (!fits(v, 2, fileSize))
         return 0;
     const long cur = std::ftell(f);
-    if (std::fseek(f, static_cast<long>(v), SEEK_SET) != 0)
+    if (seekTiff(f, v) != 0)
         return 0;
     const uint16_t r = readU16(f, le);
     std::fseek(f, cur, SEEK_SET);
@@ -156,7 +166,7 @@ static uint32_t readTagU32(FILE *f, bool le, uint64_t fileSize, uint32_t v, uint
     if (!fits(v, 4, fileSize))
         return 0;
     const long cur = std::ftell(f);
-    if (std::fseek(f, static_cast<long>(v), SEEK_SET) != 0)
+    if (seekTiff(f, v) != 0)
         return 0;
     const uint32_t r = readU32(f, le);
     std::fseek(f, cur, SEEK_SET);
@@ -168,7 +178,7 @@ static double readRational(FILE *f, bool le, uint64_t fileSize, uint32_t offset)
     if (!fits(offset, 8, fileSize))
         return 0.0;
     const long cur = std::ftell(f);
-    if (std::fseek(f, static_cast<long>(offset), SEEK_SET) != 0)
+    if (seekTiff(f, offset) != 0)
         return 0.0;
     const uint32_t num = readU32(f, le);
     const uint32_t den = readU32(f, le);
@@ -509,7 +519,7 @@ static bool parseSensorTag(FILE *f, bool le, uint64_t fileSize, const IfdEntry &
             else if (fits(e.value, 4, fileSize))
             {
                 const long cur = std::ftell(f);
-                if (std::fseek(f, static_cast<long>(e.value), SEEK_SET) == 0)
+                if (seekTiff(f, e.value) == 0)
                 {
                     if (std::fread(cfa, 1, 4, f) != 4)
                         std::memset(cfa, 0xFF, sizeof(cfa));
@@ -559,7 +569,7 @@ static void parseIfd(FILE *f, bool le, uint64_t fileSize, uint32_t ifdOffset, Ra
     }
     visited.push_back(ifdOffset);
 
-    if (std::fseek(f, static_cast<long>(ifdOffset), SEEK_SET) != 0)
+    if (seekTiff(f, ifdOffset) != 0)
         return;
     const uint16_t count = readU16(f, le);
     if (count == 0 || count > 4096)
@@ -595,7 +605,7 @@ static void parseIfd(FILE *f, bool le, uint64_t fileSize, uint32_t ifdOffset, Ra
     const uint64_t nextIfdOffset = static_cast<uint64_t>(ifdOffset) + 2 + entriesBytes;
     if (fits(nextIfdOffset, 4, fileSize))
     {
-        if (std::fseek(f, static_cast<long>(nextIfdOffset), SEEK_SET) == 0)
+        if (seekTiff(f, nextIfdOffset) == 0)
             nextIfd = readU32(f, le);
     }
 
@@ -614,59 +624,132 @@ static void parseIfd(FILE *f, bool le, uint64_t fileSize, uint32_t ifdOffset, Ra
 
 } // namespace
 
+namespace
+{
+
+FILE *openUtf8(const std::string &filePath)
+{
+#ifdef _WIN32
+    try
+    {
+        const std::filesystem::path nativePath = pathFromUtf8(filePath);
+        return _wfopen(nativePath.native().c_str(), L"rb");
+    }
+    catch (...)
+    {
+        return nullptr;
+    }
+#else
+    return std::fopen(filePath.c_str(), "rb");
+#endif
+}
+
+uint64_t fileSizeOf(FILE *f)
+{
+    if (std::fseek(f, 0, SEEK_END) != 0)
+        return 0;
+    const long endPos = std::ftell(f);
+    if (endPos <= 0 || std::fseek(f, 0, SEEK_SET) != 0)
+        return 0;
+    return static_cast<uint64_t>(endPos);
+}
+
+// Parses the TIFF structure starting at file position `base` (`size` bytes).
+void parseTiffAt(FILE *f, long base, uint64_t size, RawMetadata &rm)
+{
+    t_tiffBase = base;
+    TiffHeader h;
+    if (std::fseek(f, base, SEEK_SET) == 0 && readTiffHeader(f, size, h))
+    {
+        std::vector<uint32_t> visited;
+        parseIfd(f, h.littleEndian, size, h.ifdOffset, rm, visited, 0);
+    }
+    t_tiffBase = 0;
+    rm.parsed = hasAnyParsedTag(rm);
+}
+
+// Finds the TIFF payload of the JPEG APP1 "Exif" segment. Header-only walk:
+// stops at SOS, never touches entropy-coded data.
+bool findJpegExif(FILE *f, uint64_t fileSize, long &base, uint64_t &size)
+{
+    uint8_t b[4];
+    if (std::fread(b, 1, 2, f) != 2 || b[0] != 0xFF || b[1] != 0xD8)
+        return false;
+    for (int guard = 0; guard < 256; ++guard)
+    {
+        if (std::fread(b, 1, 2, f) != 2 || b[0] != 0xFF)
+            return false;
+        if (b[1] == 0xFF)
+        {
+            std::fseek(f, -1, SEEK_CUR);
+            continue;
+        }
+        if (b[1] == 0xD9 || b[1] == 0xDA)
+            return false;
+        if (b[1] == 0x01 || (b[1] >= 0xD0 && b[1] <= 0xD7))
+            continue;
+        const uint8_t code = b[1];
+        if (std::fread(b, 1, 2, f) != 2)
+            return false;
+        const int len = (b[0] << 8) | b[1];
+        if (len < 2)
+            return false;
+        const long payloadPos = std::ftell(f);
+        if (!fits(static_cast<uint64_t>(payloadPos), static_cast<uint64_t>(len - 2), fileSize))
+            return false;
+        char id[6] = {};
+        if (code == 0xE1 && len >= 16 && std::fread(id, 1, 6, f) == 6 &&
+            std::memcmp(id, "Exif\0\0", 6) == 0)
+        {
+            base = payloadPos + 6;
+            size = static_cast<uint64_t>(len - 2 - 6);
+            return true;
+        }
+        if (std::fseek(f, payloadPos + len - 2, SEEK_SET) != 0)
+            return false;
+    }
+    return false;
+}
+
+bool isJpegExtension(const std::string &path)
+{
+    const std::string ext = toLower(pathToUtf8(pathFromUtf8(path).extension()));
+    return ext == ".jpg" || ext == ".jpeg" || ext == ".jpe";
+}
+
+} // namespace
+
 RawMetadata parseRawMetadata(const std::string &filePath)
 {
     RawMetadata rm;
     if (!isRawExtension(filePath))
         return rm;
-
-    FILE *f = nullptr;
-#ifdef _WIN32
-    try
-    {
-        const std::filesystem::path nativePath = pathFromUtf8(filePath);
-        f = _wfopen(nativePath.native().c_str(), L"rb");
-    }
-    catch (...)
-    {
-        return rm;
-    }
-#else
-    f = std::fopen(filePath.c_str(), "rb");
-#endif
+    FILE *f = openUtf8(filePath);
     if (!f)
         return rm;
-
-    if (std::fseek(f, 0, SEEK_END) != 0)
-    {
-        std::fclose(f);
-        return rm;
-    }
-    const long endPos = std::ftell(f);
-    if (endPos <= 0)
-    {
-        std::fclose(f);
-        return rm;
-    }
-    const uint64_t fileSize = static_cast<uint64_t>(endPos);
-    if (std::fseek(f, 0, SEEK_SET) != 0)
-    {
-        std::fclose(f);
-        return rm;
-    }
-
-    TiffHeader h;
-    if (!readTiffHeader(f, fileSize, h))
-    {
-        std::fclose(f);
-        return rm;
-    }
-
-    std::vector<uint32_t> visited;
-    parseIfd(f, h.littleEndian, fileSize, h.ifdOffset, rm, visited, 0);
+    const uint64_t fileSize = fileSizeOf(f);
+    if (fileSize > 0)
+        parseTiffAt(f, 0, fileSize, rm);
     std::fclose(f);
+    return rm;
+}
 
-    rm.parsed = hasAnyParsedTag(rm);
+RawMetadata parseCaptureMetadata(const std::string &filePath)
+{
+    if (isRawExtension(filePath))
+        return parseRawMetadata(filePath);
+    RawMetadata rm;
+    if (!isJpegExtension(filePath))
+        return rm;
+    FILE *f = openUtf8(filePath);
+    if (!f)
+        return rm;
+    const uint64_t fileSize = fileSizeOf(f);
+    long base = 0;
+    uint64_t size = 0;
+    if (fileSize > 0 && findJpegExif(f, fileSize, base, size))
+        parseTiffAt(f, base, size, rm);
+    std::fclose(f);
     return rm;
 }
 

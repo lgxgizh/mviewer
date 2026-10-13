@@ -28,7 +28,7 @@ std::string lower(std::string s)
 
 RawMetadata defaultMetaReader(const std::string &path)
 {
-    return parseRawMetadata(path);
+    return parseCaptureMetadata(path);
 }
 
 } // namespace

@@ -258,6 +258,55 @@ int main(int argc, char **argv)
     auto rmBad = mviewer::core::parseRawMetadata(badOffsetPath);
     CHECK(!rmBad.parsed, "Wild IFD offset past EOF reports parsed=false without crash");
 
+    // 4b) JPEG: the same TIFF/EXIF structure inside an APP1 "Exif" segment.
+    {
+        FILE *tf = std::fopen(exifRawPath.c_str(), "rb");
+        std::string tiff;
+        if (tf)
+        {
+            char buf[4096];
+            size_t n = 0;
+            while ((n = std::fread(buf, 1, sizeof(buf), tf)) > 0)
+                tiff.append(buf, n);
+            std::fclose(tf);
+        }
+        const std::string jpegExifPath = tmp.path().toStdString() + "/exif_camera.jpg";
+        FILE *jf = std::fopen(jpegExifPath.c_str(), "wb");
+        if (jf)
+        {
+            const size_t segLen = 2 + 6 + tiff.size();
+            const uint8_t head[] = {0xFF,
+                                    0xD8,
+                                    0xFF,
+                                    0xE0,
+                                    0x00,
+                                    0x04,
+                                    0x00,
+                                    0x00, // SOI, APP0
+                                    0xFF,
+                                    0xE1,
+                                    static_cast<uint8_t>(segLen >> 8),
+                                    static_cast<uint8_t>(segLen & 0xFF)};
+            std::fwrite(head, 1, sizeof(head), jf);
+            std::fwrite("Exif\0\0", 1, 6, jf);
+            std::fwrite(tiff.data(), 1, tiff.size(), jf);
+            const uint8_t eoi[] = {0xFF, 0xD9};
+            std::fwrite(eoi, 1, 2, jf);
+            std::fclose(jf);
+        }
+        const auto cap = mviewer::core::parseCaptureMetadata(jpegExifPath);
+        CHECK(cap.parsed, "JPEG APP1 Exif parsed by parseCaptureMetadata");
+        CHECK(cap.make == rmExif.make && cap.make == "Canon", "JPEG Make = Canon");
+        CHECK(cap.iso == 1600, "JPEG ISO = 1600 from nested Exif IFD");
+        CHECK(cap.focalLength > 49.9 && cap.focalLength < 50.1, "JPEG focal = 50mm");
+        CHECK(!mviewer::core::parseRawMetadata(jpegExifPath).parsed,
+              "parseRawMetadata stays RAW-only for JPEG");
+        const auto capRaw = mviewer::core::parseCaptureMetadata(exifRawPath);
+        CHECK(capRaw.parsed && capRaw.make == "Canon", "parseCaptureMetadata handles RAW too");
+        CHECK(!mviewer::core::parseCaptureMetadata(badOffsetPath).parsed,
+              "parseCaptureMetadata rejects wild offsets");
+    }
+
     // 5) Non-RAW should return parsed=false
     const std::string jpgPath = tmp.path().toStdString() + "/test.jpg";
     auto rm2 = mviewer::core::parseRawMetadata(jpgPath);
