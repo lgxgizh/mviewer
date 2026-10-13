@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.112] - 2026-10-13
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.112**.
+
 ### Fixed
 
 - 比较模式按 P/N 切换图片组时保留「显示差异」开关（以及高亮 promote 状态）；H 在控件禁用时不再能切换；差异结果落地时若可视化已关则强制清空热力图。
