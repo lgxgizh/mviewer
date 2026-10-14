@@ -279,6 +279,13 @@ void ImageRepository::release(const std::string &filePath)
         CacheManager::instance().invalidate(current);
 }
 
+void ImageRepository::releaseFullPixels(const std::string &filePath)
+{
+    const std::string key = cachedKeyForPath(filePath);
+    if (!key.empty())
+        CacheManager::instance().dropFullImage(key);
+}
+
 mviewer::domain::ImageMetadata ImageRepository::metadata(const std::string &filePath) const
 {
     const std::string key = makeKey(filePath);
@@ -338,8 +345,8 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &roo
 
     if (recursive)
     {
-        for (std::filesystem::recursive_directory_iterator it(
-                 root, std::filesystem::directory_options::skip_permission_denied, ec),
+        for (std::filesystem::recursive_directory_iterator
+                 it(root, std::filesystem::directory_options::skip_permission_denied, ec),
              end;
              !ec && it != end; it.increment(ec))
         {

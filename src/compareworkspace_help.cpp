@@ -62,8 +62,8 @@ void CompareWorkspace::showShortcutHelp()
     m_shortcutHelpDialog->setVisible(open);
     if (open)
         m_shortcutHelpDialog->raise();
-    // Pair guidance stays on the status label; the dialog is the full table.
-    const QString tip =
-        pairNavTooltip(false, false) + QStringLiteral(" ") + pairNavTooltip(true, false);
+    // Selection guidance stays on the status label; the dialog is the full table.
+    // Compare pairs are chosen in Browse, so there is no in-Compare pair stepping.
+    const QString tip = tr("Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。");
     showCompareStatus(tip, 8000);
 }

@@ -27,35 +27,35 @@ class ImageLoadingService
     // M46: `lifetime` is the consumer's AsyncLifetimeToken (see
     // ImageLoadingFacade). Widgets create one token per QObject and invalidate
     // it in the destructor; expired tokens suppress late client deliveries.
-    AsyncRequestHandle loadAsyncCancellable(
-        const std::string &path, std::function<void(const Result &)> callback,
-        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
-        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
+    AsyncRequestHandle
+    loadAsyncCancellable(const std::string &path, std::function<void(const Result &)> callback,
+                         const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
+                         std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
     {
         return mviewer::core::ImageLoadingFacade::instance().loadAsyncCancellable(
             path, std::move(callback), options, std::move(lifetime));
     }
 
-    AsyncRequestHandle loadFrameAsync(
-        const std::string &path, int frameIndex, std::function<void(const Result &)> callback,
-        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
-        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
+    AsyncRequestHandle
+    loadFrameAsync(const std::string &path, int frameIndex,
+                   std::function<void(const Result &)> callback,
+                   const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
+                   std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
     {
         return mviewer::core::ImageLoadingFacade::instance().loadFrameAsync(
             path, frameIndex, std::move(callback), options, std::move(lifetime));
     }
 
-    AsyncRequestHandle preloadAsync(
-        const std::string &path,
-        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
+    AsyncRequestHandle preloadAsync(const std::string &path,
+                                    std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
     {
-        return mviewer::core::ImageLoadingFacade::instance().preloadAsync(
-            path, std::move(lifetime));
+        return mviewer::core::ImageLoadingFacade::instance().preloadAsync(path,
+                                                                          std::move(lifetime));
     }
 
-    AsyncRequestHandle promotePreloadAsync(
-        AsyncRequestHandle &preload, std::function<void(const Result &)> callback,
-        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
+    AsyncRequestHandle
+    promotePreloadAsync(AsyncRequestHandle &preload, std::function<void(const Result &)> callback,
+                        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
     {
         return mviewer::core::ImageLoadingFacade::instance().promotePreloadAsync(
             preload, std::move(callback), std::move(lifetime));
@@ -69,6 +69,13 @@ class ImageLoadingService
     std::string makeKey(const std::string &path) const
     {
         return mviewer::core::ImageLoadingFacade::instance().makeKey(path);
+    }
+
+    // Compare drops its decoded pairs from the warm full-res RAM cache once
+    // they leave the screen (pairs are chosen manually; no pair revisits).
+    void releaseFullPixels(const std::string &path)
+    {
+        mviewer::core::ImageLoadingFacade::instance().releaseFullPixels(path);
     }
 
     bool getPreviewCache(const std::string &key, ImageData &out) const

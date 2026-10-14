@@ -227,8 +227,6 @@ above is the main window only.
 | `Ctrl+2` / `Ctrl+4` / `Ctrl+8` | 2-up / 4-up / 8-up layout presets |
 | `Ctrl+R` / `Ctrl+Shift+R` | Preview-rotate the edit/hover/focus pane (does not write files) |
 | `Ctrl+Shift+H` / `Ctrl+Shift+V` | Preview-flip the edit/hover/focus pane (does not write files) |
-| `P` / `PageUp` / `Left` | Previous pair |
-| `N` / `PageDown` / `Right` | Next pair |
 | `Shift+1`…`Shift+6` | Channel: none / R / G / B / Y / V |
 | `?` | Shortcut hints |
 | `Esc` | Clear the ROI, then exit Compare |

@@ -234,13 +234,10 @@ int main(int argc, char **argv)
         paths8 << writePng(dir, QString("cmp_%1.png").arg(i), 160 + i * 8, 120 + i * 4,
                            QColor(20 * i, 40, 255 - 20 * i));
     }
-    const QStringList paths6 = paths8.mid(0, 6);
 
     testMultiImageEntry(paths8);
     testModePreservesState(paths8[0], paths8[1]);
     testLayoutAndMomentaryCompare(dir);
-    testContinuousNav(paths6);
-    testNonFirstWindowNav(paths6);
     testNonAdjacentFocus(paths8, paths8[0], paths8[2]);
     testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);

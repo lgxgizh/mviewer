@@ -175,18 +175,6 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     buildOverlayControls(modeLayout);
     buildCheckerboardControls(modeLayout);
 
-    // A-4.5: continuous compare — walk consecutive pairs without reopening.
-    m_prevPairBtn = new QPushButton(mviewer::cw::compareShortcutText("P"), this);
-    m_prevPairBtn->setToolTip(pairNavTooltip(false, true));
-    m_prevPairBtn->setEnabled(false);
-    connect(m_prevPairBtn, &QPushButton::clicked, this, &CompareWorkspace::prevPair);
-    modeLayout->addWidget(m_prevPairBtn);
-
-    m_nextPairBtn = new QPushButton(mviewer::cw::compareShortcutText("N"), this);
-    m_nextPairBtn->setToolTip(pairNavTooltip(true, true));
-    m_nextPairBtn->setEnabled(false);
-    connect(m_nextPairBtn, &QPushButton::clicked, this, &CompareWorkspace::nextPair);
-    modeLayout->addWidget(m_nextPairBtn);
     modeLayout->addStretch(1);
 }
 

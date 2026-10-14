@@ -22,7 +22,7 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 bool CompareWorkspace::handleBasicCompareKey(QKeyEvent *event)
 {
     return handleBasicCompareSpace(event) || handleBasicCompareEscape(event) ||
-           handleBasicCompareNavigation(event) || handleROIKeyboardNudge(event);
+           handleROIKeyboardNudge(event);
 }
 
 bool CompareWorkspace::handleBasicCompareSpace(QKeyEvent *event)
@@ -71,22 +71,6 @@ bool CompareWorkspace::handleBasicCompareEscape(QKeyEvent *event)
         return true;
     }
     closeCompareHost();
-    return true;
-}
-
-bool CompareWorkspace::handleBasicCompareNavigation(QKeyEvent *event)
-{
-    if (event->modifiers() != Qt::NoModifier)
-        return false;
-    if (event->key() == Qt::Key_PageDown || event->key() == Qt::Key_Right ||
-        event->key() == Qt::Key_N)
-        nextPair();
-    else if (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_Left ||
-             event->key() == Qt::Key_P)
-        prevPair();
-    else
-        return false;
-    event->accept();
     return true;
 }
 

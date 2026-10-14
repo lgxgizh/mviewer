@@ -80,6 +80,9 @@ class CacheManager
 
     // 从所有层级删除某 key（仓库释放/失效时使用）。
     void erase(const std::string &key);
+    // Drop only the in-memory full-resolution entry (Viewer level) for `key`.
+    // Disk cache, thumbnails, previews and metadata are kept.
+    void dropFullImage(const std::string &key);
 
     // 逐层统计
     CacheLevelStats levelStats(CacheLevel level) const;

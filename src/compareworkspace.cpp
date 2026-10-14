@@ -1,6 +1,7 @@
 #include "ThemeMetrics.h"
 #include "compareworkspace_p.h"
 
+#include "core/MemoryTrim.h"
 #include "core/image/DisplayMip.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/SourceImage.h"
@@ -137,10 +138,13 @@ void CompareWorkspace::releaseSessionMemory()
     m_engine.setFrames({});
     for (const std::string &key : mipKeys)
     {
-        if (!key.empty())
-            mviewer::core::dropMips(key);
+        if (key.empty())
+            continue;
+        mviewer::core::dropMips(key);
+        mviewer::application::ImageLoadingService::instance().releaseFullPixels(key);
     }
     mviewer::core::trimMipsToBudget(96ull * 1024ull * 1024ull, {});
+    mviewer::core::releaseFreeHeapToOs();
 }
 
 CompareWorkspace::~CompareWorkspace()
@@ -162,7 +166,6 @@ CompareWorkspace::~CompareWorkspace()
     // The batch cancellation below then also waits for any delivery that
     // already started, closing the decode-done vs destruction race.
     m_lifetime->invalidate();
-    cancelPairPrefetch();
     // A batch completion is bookkeeping, not cancellation. Every request is
     // accounted exactly once when a batch is superseded so a cancelled queued
     // decode cannot leave `remaining` permanently non-zero. The generation
@@ -204,6 +207,9 @@ CompareWorkspace::~CompareWorkspace()
     ++m_roiGen;
     // A delivery that landed during the cancel wait must not keep the pool.
     releaseSessionMemory();
+    // Child panes (and their display rasters) are destroyed after this body;
+    // trim once more after the event loop has finished the teardown.
+    QTimer::singleShot(0, qApp, [] { mviewer::core::releaseFreeHeapToOs(); });
 }
 
 void CompareWorkspace::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)
@@ -345,7 +351,6 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     }
     if (requested == 0)
     {
-        cancelPairPrefetch();
         m_softPairReload = false;
         finishLoad({}, 0);
         return;
@@ -375,6 +380,19 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     m_engine.setFrames(frames);
     if (m_session)
     {
+        // Retain only the pair on screen, sized from the frames actually
+        // loaded: the previous pair's decoded frames are released here.
+        size_t pairBytes = 0;
+        size_t paneCount = 0;
+        for (const auto &frame : frames)
+        {
+            if (!frame)
+                continue;
+            pairBytes += mviewer::ui::CompareSessionFramePool::frameBytes(frame);
+            ++paneCount;
+        }
+        m_session->framePool.clear();
+        m_session->framePool.setPairBudget(paneCount, pairBytes);
         for (size_t i = 0; i < frames.size(); ++i)
         {
             if (!frames[i])
@@ -444,7 +462,8 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     updateTemporaryCompareAvailability();
     updateLayoutStatus();
     updateROIAvailabilityStatus();
-    prefetchNeighborPairs();
+    // Return the previous pair's freed decode buffers to the OS.
+    mviewer::core::releaseFreeHeapToOs();
     setFocus();
     // P0-2: publish the compare set + reference to the app-wide SelectionModel so
     // Metadata/Analysis/Export stay in sync with what is being compared.

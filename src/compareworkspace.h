@@ -129,8 +129,6 @@ class CompareWorkspace : public QWidget
     // Seed the navigation pool; an optional current window aligns the pair
     // index before an asynchronous setImages() finishes loading.
     void setImagePool(const QStringList &allPaths, const QStringList &currentWindow = {});
-    bool hasNextPair() const;
-    bool hasPrevPair() const;
 
     // M20: named layout presets — 2-up (2×1), 4-up (2×2), 8-up (4×2).
     // Loads up to N images from the pool (or current set) and forces the grid.
@@ -153,8 +151,6 @@ class CompareWorkspace : public QWidget
     mviewer::core::CompareReportBundle buildReportBundle() const;
 
   public slots:
-    void nextPair();
-    void prevPair();
     void rotateCurrentCell(int degrees);
     void flipCurrentCell(bool horizontal);
     void setSyncRotate(bool on);
@@ -222,7 +218,6 @@ class CompareWorkspace : public QWidget
     bool handleBasicCompareKey(QKeyEvent *event);
     bool handleBasicCompareSpace(QKeyEvent *event);
     bool handleBasicCompareEscape(QKeyEvent *event);
-    bool handleBasicCompareNavigation(QKeyEvent *event);
     bool handleROIKeyboardNudge(QKeyEvent *event);
     bool handleModeCompareKey(QKeyEvent *event);
     bool handleChannelCompareKey(QKeyEvent *event);
@@ -272,7 +267,6 @@ class CompareWorkspace : public QWidget
     uint64_t m_interactionGen = 0;
     bool m_deferredDiffRefresh = false;
     bool m_deferredHistRefresh = false;
-    std::vector<mviewer::ui::PairPrefetchEntry> m_pairPrefetch;
     std::vector<mviewer::ui::CompareWarmSeed> m_pendingWarmSeeds;
     std::unique_ptr<mviewer::ui::CompareSessionRuntime> m_session;
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
@@ -294,13 +288,6 @@ class CompareWorkspace : public QWidget
     // Background only while the next pair is still soft-loading.
     TaskScheduler::Priority deferredAnalysisPriority() const;
     void releaseSessionMemory();
-    void cancelPairPrefetch();
-    void prefetchNeighborPairs();
-    void claimPromotedPrefetch(
-        const std::vector<std::string> &paths, const std::vector<int> &frameIndices,
-        std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle> &out);
-    mviewer::application::ImageLoadingService::AsyncRequestHandle
-    takePrefetchHandle(const std::string &path);
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
     QCheckBox *m_syncRotateChk = nullptr;
@@ -381,7 +368,6 @@ class CompareWorkspace : public QWidget
     void endTemporaryCompare();
     void updateTemporaryCompareAvailability();
     void refreshCompareControlTooltips();
-    QString pairNavTooltip(bool next, bool atEnd) const;
     QString temporaryCompareTooltip() const;
     QString clearLinkTooltip() const;
     int paneIndexAtGlobalPos(const QPoint &globalPos) const;
@@ -471,10 +457,7 @@ class CompareWorkspace : public QWidget
     // A-4.5 / M20: continuous compare — walk a sliding window over the pool.
     QStringList m_imagePool;
     int m_pairIndex = 0; // index of the first image of the current window
-    int m_navWindow = 2; // 2 / 4 / 8 — step size for next/prev
-    QPushButton *m_prevPairBtn = nullptr;
-    QPushButton *m_nextPairBtn = nullptr;
-    void updatePairButtons();
+    int m_navWindow = 2; // 2 / 4 / 8 — N-up layout preset window
     void updateActionAvailability();
     // M20: snapshot UI mode so next/prev can restore after setImages rebuild.
     NavState captureNavState() const;

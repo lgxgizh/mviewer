@@ -2,8 +2,8 @@
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/cache/CacheManager.h"
 
-#include "ImageFrame.h"
 #include "FrameSequence.h"
+#include "ImageFrame.h"
 #include "domain/Workspace.h"
 
 #include <atomic>
@@ -69,10 +69,11 @@ class ImageRepository
     void loadAsync(const std::string &filePath, std::function<void(const Result &)> callback,
                    const LoadOptions &opts = kDefaultLoadOptions);
 
-    AsyncRequestHandle loadFrameAsync(
-        const std::string &filePath, int frameIndex, std::function<void(const Result &)> callback,
-        const LoadOptions &opts = kDefaultLoadOptions,
-        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
+    AsyncRequestHandle
+    loadFrameAsync(const std::string &filePath, int frameIndex,
+                   std::function<void(const Result &)> callback,
+                   const LoadOptions &opts = kDefaultLoadOptions,
+                   std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
 
     // M29 cancellable loads. AsyncRequestState is opaque (defined in the .cpp):
     // UI callers hold an AsyncRequestHandle and call cancelAsync() — they never
@@ -85,10 +86,10 @@ class ImageRepository
     // invalidated before delivery, the client callback is never invoked (the
     // late completion becomes a no-op). The request keeps only a weak_ptr, so
     // the consumer's token outlives the request unless the consumer dies.
-    AsyncRequestHandle loadAsyncCancellable(const std::string &filePath,
-                                            std::function<void(const Result &)> callback,
-                                            const LoadOptions &opts = kDefaultLoadOptions,
-                                            std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
+    AsyncRequestHandle
+    loadAsyncCancellable(const std::string &filePath, std::function<void(const Result &)> callback,
+                         const LoadOptions &opts = kDefaultLoadOptions,
+                         std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
 
     // Low-priority neighbor preload (Background pool, disk cache allowed, no
     // histogram, no client callback). Best-effort: queued work may be skipped
@@ -100,9 +101,9 @@ class ImageRepository
     // Consumes a preload handle: queued work is resubmitted at Decode priority,
     // running work is reused, finished work falls back to cache. nullptr is a
     // no-op.
-    AsyncRequestHandle promotePreloadAsync(AsyncRequestHandle &preload,
-                                           std::function<void(const Result &)> callback,
-                                           std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
+    AsyncRequestHandle
+    promotePreloadAsync(AsyncRequestHandle &preload, std::function<void(const Result &)> callback,
+                        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
 
     // Mark the request cancelled (best-effort), soft-cancel the scheduler
     // handle, and clear the caller's handle. May be called from any thread, but
@@ -140,6 +141,11 @@ class ImageRepository
 
     // Release: drop this path from all cache layers.
     void release(const std::string &filePath);
+
+    // Drop only the warm full-resolution RAM copy of `filePath` (no filesystem
+    // access; uses the last key this repository produced for the path).
+    // Holders of the frame keep their shared pixels alive.
+    void releaseFullPixels(const std::string &filePath);
 
     // Lightweight metadata: no pixel decode (path/size/mtime/hash).
     mviewer::domain::ImageMetadata metadata(const std::string &filePath) const;
@@ -201,11 +207,11 @@ class ImageRepository
     void rememberKey(const std::string &filePath, const std::string &key) const;
     void forgetKey(const std::string &filePath) const;
 
-    bool loadMemoryHit(const std::string &filePath, const std::string &key,
-                       const LoadOptions &opts, Result &result) const;
-    bool loadPixels(const std::string &filePath, const std::string &key,
-                    const LoadOptions &opts, ImageData &pixels, bool &fromCache,
-                    mviewer::domain::ImageMetadata &decodeMeta, std::string &error) const;
+    bool loadMemoryHit(const std::string &filePath, const std::string &key, const LoadOptions &opts,
+                       Result &result) const;
+    bool loadPixels(const std::string &filePath, const std::string &key, const LoadOptions &opts,
+                    ImageData &pixels, bool &fromCache, mviewer::domain::ImageMetadata &decodeMeta,
+                    std::string &error) const;
     void enrichFrame(ImageFrame &frame, const std::string &filePath, const ImageData &pixels,
                      const mviewer::domain::ImageMetadata &decodeMeta) const;
     void restoreRaw16(ImageFrame &frame, const std::string &filePath, const std::string &key) const;

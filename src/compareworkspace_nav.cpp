@@ -127,7 +127,6 @@ void CompareWorkspace::setImagePool(const QStringList &allPaths, const QStringLi
         if (n == 2 || n == 4 || n == 8)
             m_navWindow = n;
     }
-    updatePairButtons();
 }
 
 void CompareWorkspace::setNavWindow(int n)
@@ -135,17 +134,6 @@ void CompareWorkspace::setNavWindow(int n)
     if (n != 2 && n != 4 && n != 8)
         n = 2;
     m_navWindow = n;
-    updatePairButtons();
-}
-
-bool CompareWorkspace::hasNextPair() const
-{
-    return m_pairIndex + m_navWindow < m_imagePool.size();
-}
-
-bool CompareWorkspace::hasPrevPair() const
-{
-    return m_pairIndex >= m_navWindow;
 }
 
 void CompareWorkspace::updateActionAvailability()
@@ -318,53 +306,6 @@ QString CompareWorkspace::focusImagePath() const
     return comparedImages().value(0);
 }
 
-void CompareWorkspace::nextPair()
-{
-    if (!hasNextPair())
-        return;
-    const NavState saved = captureNavState();
-    m_pairIndex += m_navWindow;
-    QStringList win;
-    for (int i = 0; i < m_navWindow && m_pairIndex + i < m_imagePool.size(); ++i)
-        win << m_imagePool[m_pairIndex + i];
-    setImages(win);
-    restoreNavState(saved);
-    updatePairButtons();
-    // P0: publish the complete ordered window so Browse and Compare share the
-    // same multi-selection while navigating.
-    if (m_selection && !win.isEmpty())
-        m_selection->setSelection(win, win.first());
-}
-
-void CompareWorkspace::prevPair()
-{
-    if (!hasPrevPair())
-        return;
-    const NavState saved = captureNavState();
-    m_pairIndex -= m_navWindow;
-    if (m_pairIndex < 0)
-        m_pairIndex = 0;
-    QStringList win;
-    for (int i = 0; i < m_navWindow && m_pairIndex + i < m_imagePool.size(); ++i)
-        win << m_imagePool[m_pairIndex + i];
-    setImages(win);
-    restoreNavState(saved);
-    updatePairButtons();
-    // P0: publish the complete ordered window so Browse and Compare share the
-    // same multi-selection while navigating.
-    if (m_selection && !win.isEmpty())
-        m_selection->setSelection(win, win.first());
-}
-
-void CompareWorkspace::updatePairButtons()
-{
-    if (m_nextPairBtn)
-        m_nextPairBtn->setEnabled(hasNextPair());
-    if (m_prevPairBtn)
-        m_prevPairBtn->setEnabled(hasPrevPair());
-    refreshCompareControlTooltips();
-}
-
 void CompareWorkspace::applyLayoutPreset(int n)
 {
     // N-up compare preset. Keyboard entry is Ctrl+2 / Ctrl+4 / Ctrl+8.
@@ -402,7 +343,6 @@ void CompareWorkspace::applyLayoutPreset(int n)
     const NavState saved = captureNavState();
     setImages(win);
     restoreNavState(saved);
-    updatePairButtons();
     showCompareStatus(tr("已切换至 %1 窗格对比布局").arg(n));
     update();
 }
