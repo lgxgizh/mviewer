@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.116] - 2026-10-14
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.116**.
+
 ### Fixed
 
 - **生命周期与内存安全性**：`toQImageRef` 引入 `QImageCleanupFunction` 绑定源 `ImageData` 缓冲的 `std::shared_ptr` 引用计数，杜绝返回的 `QImage` 生命周期超出源数据时的野指针与悬空指针风险；`RawDecoder_libraw` 中 `libraw_processed_image_t` 资源改用 `std::unique_ptr` 自定义 RAII 删除器管理，防止异常或失败分支引发内存泄漏。
