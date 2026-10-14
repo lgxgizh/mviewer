@@ -320,6 +320,29 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
                              const mviewer::core::DisplayColorContext &target)
 {
+    if (src.isNull())
+        return {};
+
+    // Identity display: no colour transform. Returning `src` shares the pixel
+    // buffer (ImageData is already a shared_ptr alias) and skips the
+    // ImageData→QImage→ImageData round-trip that used to cost ~70 ms on 12 MP.
+    const bool wantsManaged = target.colorManagementEnabled;
+    if (!wantsManaged)
+    {
+        if (src.format == PixelFormat::RGB24 || src.format == PixelFormat::Grayscale8)
+            return src;
+        return fromQImage(toQImage(src));
+    }
+
+    const QColorSpace source = sourceColorSpace(meta);
+    const QColorSpace destination = colorSpaceFromIcc(target.iccProfile);
+    if (source == destination)
+    {
+        if (src.format == PixelFormat::RGB24 || src.format == PixelFormat::Grayscale8)
+            return src;
+        return fromQImage(toQImage(src));
+    }
+
     return fromQImage(toDisplayQImage(src, meta, target));
 }
 
