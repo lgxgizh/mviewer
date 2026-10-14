@@ -185,6 +185,13 @@ int main(int argc, char **argv)
     CHECK(rawDisplay.pixelColor(0, 0) == QColor(180, 90, 40),
           "no-profile display keeps numeric pixels");
     CHECK(*source.buffer == before, "analysis-domain bytes remain byte-identical");
+    {
+        // Identity sRGB→sRGB must share the RGB24 buffer (no double convert).
+        mviewer::domain::ImageMetadata srgbMeta;
+        const ImageData identity = mvcore::toDisplayImageData(source, srgbMeta);
+        CHECK(!identity.isNull() && identity.buffer == source.buffer,
+              "identity toDisplayImageData shares the source buffer");
+    }
     checkSyncAxes();
     checkMetadataSingleFlight(argc, argv);
     std::printf("M36 display tests: %s\n", g_fail == 0 ? "PASS" : "FAIL");
