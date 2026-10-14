@@ -160,7 +160,10 @@ void AnalysisOverlayDialog::updateOverlay()
     const auto overlayMode = static_cast<mviewer::OverlayMode>(m_mode->currentData().toInt());
 
     // Work on a capped-size copy so even large images process instantly.
-    QImage work = m_src.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation)
+    // FastTransformation is enough for zebra / false-color preview (~12×
+    // cheaper than Smooth on a 12 MP → 1024 downscale) and matches the live
+    // overlay path which already uses nearest/fast sampling.
+    QImage work = m_src.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::FastTransformation)
                       .convertToFormat(QImage::Format_ARGB32);
 
     // Reuse the single overlay implementation shared with the ImageViewer's

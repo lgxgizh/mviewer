@@ -1,5 +1,3 @@
-# Changelog
-
 ## [Unreleased]
 
 ### Performance
@@ -7,6 +5,8 @@
 - EXIF 缩略图旋转（`orientThumbnail`）改用 `QImage::mirrored` / `transformed`，与原来的 `displayToRaw` 逐像素结果一致；256 像素约 0.49 ms → 0.02 ms。
 - `toDisplayImageData` 在无需色彩转换时直接共享源 `ImageData` 缓冲（常见的 RGB24 + sRGB），避免 ImageData→QImage→ImageData 双重拷贝；12MP 约 71 ms → 接近 0。预览面板与导出走同一路径。
 - `SourceImage` / `QtDecoder::probeMetadata` 不再为了 ICC 做 1×1 缩放解码（大 JPEG/PNG 仍会走完整压缩流，实测 12MP JPEG 约 47 ms、100MP 约 193 ms、48MP PNG 约 279 ms）。JPEG 改为只扫 APP2「ICC_PROFILE」段（约 0.01 ms）；PNG/TIFF 的 ICC 与缺省栅格字段在首次 `decodeLod`/`decodeFull` 时补齐。打开大图、LOD、比较窗格和 JPEG block tile 的 `SourceImage::open` 跟着变快。
+- 分析叠加对话框生成 zebra/伪彩工作图时，12MP→1024 的缩放改用 `FastTransformation`（约 37 ms → 3 ms），最终预览贴到控件仍用 Smooth。
+- 高清重采样线程池上限从「核心数」改为「核心数一半（至少 2）」，与 UI 队列配额一致；8 核上可运行线程上限约 30 → 26，减轻与解码抢核。
 
 ## [1.0.113] - 2026-10-13
 
