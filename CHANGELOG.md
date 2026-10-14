@@ -5,6 +5,8 @@
 ### Performance
 
 - `toDisplayImageData` 在无需色彩转换时直接共享源 `ImageData` 缓冲（常见的 RGB24 + sRGB），避免 ImageData→QImage→ImageData 双重拷贝；12MP 约 71 ms → 接近 0。预览面板与导出走同一路径。
+- `SourceImage` / `QtDecoder::probeMetadata` 不再为了 ICC 做 1×1 缩放解码（大 JPEG/PNG 仍会走完整压缩流，实测 12MP JPEG 约 47 ms、100MP 约 193 ms、48MP PNG 约 279 ms）。JPEG 改为只扫 APP2「ICC_PROFILE」段（约 0.01 ms）；PNG/TIFF 的 ICC 与缺省栅格字段在首次 `decodeLod`/`decodeFull` 时补齐。打开大图、LOD、比较窗格和 JPEG block tile 的 `SourceImage::open` 跟着变快。
+
 
 ## [1.0.113] - 2026-10-13
 

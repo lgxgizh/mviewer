@@ -119,6 +119,31 @@ inline std::string colorSpaceLabel(const QColorSpace &colorSpace)
     }
 }
 
+inline void applyIccProfileBytes(const QByteArray &profile, mviewer::domain::ImageMetadata &meta)
+{
+    meta.hasIccProfile = false;
+    if (profile.isEmpty())
+        return;
+    const QColorSpace colorSpace = QColorSpace::fromIccProfile(profile);
+    if (!colorSpace.isValid())
+        return;
+    meta.colorSpace = colorSpaceLabel(colorSpace);
+    meta.hasIccProfile = true;
+    const QByteArray encoded = profile.toBase64();
+    meta.textKeys["MViewer.DisplayICC.Base64"] =
+        std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
+    const auto parsed =
+        parseIccProfile(reinterpret_cast<const unsigned char *>(profile.constData()),
+                        static_cast<size_t>(profile.size()));
+    meta.iccDescription = parsed.description;
+    meta.iccCopyright = parsed.copyright;
+    meta.iccColorSpace = parsed.colorSpace;
+    meta.iccDeviceClass = parsed.deviceClass;
+    meta.iccPcs = parsed.pcs;
+    meta.iccRenderingIntent = parsed.renderingIntent;
+    meta.iccVersion = parsed.version;
+}
+
 inline void applyColorMetadata(const QImage &image, mviewer::domain::ImageMetadata &meta)
 {
     const QColorSpace colorSpace = image.colorSpace();

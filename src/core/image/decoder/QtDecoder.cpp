@@ -2,6 +2,7 @@
 #include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
+#include "core/image/MetadataReader.h"
 #include "core/image/QtMetadataSemantics.h"
 
 #include <QColorSpace>
@@ -29,9 +30,8 @@ ImageData toImageData(const QImage &src)
 {
     if (src.isNull())
         return ImageData();
-    const QImage img = (src.format() == QImage::Format_RGB888)
-                           ? src
-                           : src.convertToFormat(QImage::Format_RGB888);
+    const QImage img =
+        (src.format() == QImage::Format_RGB888) ? src : src.convertToFormat(QImage::Format_RGB888);
     if (img.isNull())
         return ImageData();
     ImageData out = makeImageData(img.width(), img.height(), PixelFormat::RGB24);
@@ -39,8 +39,7 @@ ImageData toImageData(const QImage &src)
     const int h = img.height();
     const size_t rowBytes = static_cast<size_t>(w) * 3;
     const qsizetype bytesPerLine = img.bytesPerLine();
-    if (bytesPerLine == static_cast<qsizetype>(rowBytes) &&
-        out.stride() == rowBytes)
+    if (bytesPerLine == static_cast<qsizetype>(rowBytes) && out.stride() == rowBytes)
     {
         std::memcpy(out.buffer->data(), img.constBits(), rowBytes * static_cast<size_t>(h));
     }
@@ -379,25 +378,34 @@ bool QtDecoder::probeMetadata(const std::string &path, mviewer::domain::ImageMet
     meta.orientation = orientationFromTransform(t);
     meta.format = formatName(reader);
 
-    // Keep the probe bounded and avoid asking every optional Qt plugin to
-    // materialize a scaled raster. JPEG/PNG carry the common ICC metadata;
-    // TIFF additionally needs the reader format to preserve 16-bit source
-    // depth. Other formats enrich metadata during their normal decode path.
-    const QString ext = info.suffix().toLower();
-    if (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "tif" || ext == "tiff")
+    // Header-only probe: never 1x1-decode (that still walks the full JPEG/PNG
+    // entropy stream — tens to hundreds of ms on large files). Channel/bit
+    // depth come from QImageReader::imageFormat when the plugin can answer
+    // without pixels. JPEG ICC is scraped from APP2 "ICC_PROFILE" markers;
+    // PNG/TIFF ICC and any missing raster fields are filled on the first
+    // decodeLod/decodeFull via fillMetadata.
+    const QImage::Format sourceFormat = reader.imageFormat();
+    if (sourceFormat != QImage::Format_Invalid)
     {
-        QImageReader iccReader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-        iccReader.setScaledSize(QSize(1, 1));
-        QImage tiny;
-        if (iccReader.read(&tiny))
+        const QImage probe(1, 1, sourceFormat);
+        meta.channels = mviewer::core::qtmetadata::channelsForFormat(sourceFormat, probe);
+        meta.bitDepth = mviewer::core::qtmetadata::bitsPerChannel(sourceFormat, meta.channels);
+    }
+    const QString ext = info.suffix().toLower();
+    if (ext == "jpg" || ext == "jpeg" || ext == "jpe")
+    {
+        const std::vector<uint8_t> icc = mviewer::core::MetadataReader::extractJpegIccProfile(path);
+        if (!icc.empty())
         {
-            if (ext == "tif" || ext == "tiff")
-                mviewer::core::qtmetadata::applyReaderRasterMetadata(iccReader, tiny, meta);
-            else
-            {
-                mviewer::core::qtmetadata::applyRasterMetadata(tiny, meta);
-            }
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+            const QByteArray bytes(reinterpret_cast<const char *>(icc.data()),
+                                   static_cast<qsizetype>(icc.size()));
+            mviewer::core::qtmetadata::applyIccProfileBytes(bytes, meta);
         }
+        if (meta.channels == 0)
+            meta.channels = 3;
+        if (meta.bitDepth == 0)
+            meta.bitDepth = 8;
     }
     return true;
 }

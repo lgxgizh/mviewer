@@ -57,6 +57,10 @@ class MetadataReader
     // Returns raw JPEG bytes, or empty vector if none.
     static std::vector<uint8_t> extractExifThumbnail(const std::string &filePath);
 
+    // Header-only JPEG APP2 "ICC_PROFILE" scrape. Empty when the file is
+    // not JPEG or has no embedded ICC. Never decodes pixels.
+    static std::vector<uint8_t> extractJpegIccProfile(const std::string &filePath);
+
   private:
     // P0: parse GPS IFD from a JPEG file buffer. Populates hasGps, gpsLatitude,
     // gpsLongitude, gpsAltitude on the metadata struct in-place.
