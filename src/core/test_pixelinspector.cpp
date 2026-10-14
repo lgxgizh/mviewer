@@ -1,9 +1,14 @@
 #include "core/analysis/PixelInspector.h"
 #include "core/image/ExifOrientation.h"
+#include "thumbnail_orient.h"
+
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageStats.h"
+#include <QColor>
+#include <QImage>
+#include <QRgb>
 #include <cassert>
 #include <climits>
 #include <cmath>
@@ -508,6 +513,37 @@ static void test_display_orientation_and_alpha()
     CHECK(!embeddedThumbFollowsRawAspect(6, 4000, 3000, 120, 160));
     CHECK(!embeddedThumbFollowsRawAspect(1, 4000, 3000, 160, 120));
     CHECK(!embeddedThumbFollowsRawAspect(6, 1000, 980, 100, 98));
+
+    {
+        QImage src(5, 3, QImage::Format_ARGB32);
+        for (int y = 0; y < 3; ++y)
+            for (int x = 0; x < 5; ++x)
+                src.setPixel(x, y, qRgb(x * 40, y * 80, x * y + 1));
+        for (int o = 1; o <= 8; ++o)
+        {
+            const QImage got = orientThumbnailImage(src, o);
+            int dw = 0;
+            int dh = 0;
+            orientedSize(src.width(), src.height(), o, dw, dh);
+            CHECK(got.width() == dw && got.height() == dh);
+            bool ok = true;
+            for (int oy = 0; oy < dh && ok; ++oy)
+            {
+                for (int ox = 0; ox < dw; ++ox)
+                {
+                    int rx = 0;
+                    int ry = 0;
+                    displayToRaw(ox, oy, src.width(), src.height(), o, rx, ry);
+                    if (src.pixel(rx, ry) != got.pixel(ox, oy))
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+            CHECK(ok);
+        }
+    }
 
     const auto labLow =
         displayedColorSpace(128, 128, 128, true, 32768, 32768, 32768, 0, ColorSpace::Lab);

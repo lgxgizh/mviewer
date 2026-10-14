@@ -967,6 +967,7 @@ add_executable(test_pixelinspector
 target_link_libraries(test_pixelinspector
     PRIVATE
         Qt6::Core
+        Qt6::Gui
         mviewer_core
 )
 

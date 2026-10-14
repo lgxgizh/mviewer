@@ -1,4 +1,5 @@
 #include "thumbnailprovider.h"
+#include "thumbnail_orient.h"
 
 #include "application/ImageLoadingService.h"
 #include "core/image/Decoder.h"
@@ -39,33 +40,7 @@ QImage loadEmbeddedThumb(const std::vector<uint8_t> &bytes, int &ownOrientation)
 
 QImage orientThumbnail(const QImage &thumb, int orientation)
 {
-    if (thumb.isNull() || orientation <= 1 || orientation > 8)
-        return thumb;
-    const QImage src = thumb.convertToFormat(QImage::Format_ARGB32);
-    int displayW = 0;
-    int displayH = 0;
-    mviewer::core::orientedSize(src.width(), src.height(), orientation, displayW, displayH);
-    if (displayW <= 0 || displayH <= 0)
-        return thumb;
-    QImage oriented(displayW, displayH, QImage::Format_ARGB32);
-    if (oriented.isNull())
-        return thumb;
-    oriented.fill(Qt::black);
-    for (int oy = 0; oy < displayH; ++oy)
-    {
-        auto *dst = reinterpret_cast<QRgb *>(oriented.scanLine(oy));
-        for (int ox = 0; ox < displayW; ++ox)
-        {
-            int rx = 0;
-            int ry = 0;
-            mviewer::core::displayToRaw(ox, oy, src.width(), src.height(), orientation, rx, ry);
-            if (rx < 0 || ry < 0 || rx >= src.width() || ry >= src.height())
-                continue;
-            const auto *row = reinterpret_cast<const QRgb *>(src.constScanLine(ry));
-            dst[ox] = row[rx];
-        }
-    }
-    return oriented;
+    return orientThumbnailImage(thumb, orientation);
 }
 
 QImage maybeOrientEmbedded(const QString &sourcePath, const QImage &thumb, int thumbOwnOrientation)
