@@ -1,9 +1,11 @@
 #include "core/image/decoder/DecoderRegistry.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <mutex>
 #include <utility>
 
+#include "core/filesystem/Utf8Path.h"
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
 #include "core/image/decoder/RawDecoder.h"
@@ -86,6 +88,48 @@ std::vector<std::string> DecoderRegistry::available() const
     return ids;
 }
 
+mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+DecoderRegistry::decodeFullResult(const std::string &path) const
+{
+    mviewer::domain::ImageMetadata meta;
+    return decodeFullResult(path, meta);
+}
+
+mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+DecoderRegistry::decodeFullResult(const std::string &path,
+                                  mviewer::domain::ImageMetadata &outMeta) const
+{
+    std::error_code ec;
+    if (!std::filesystem::exists(mviewer::core::pathFromUtf8(path), ec))
+    {
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {mviewer::domain::DecodeErrorCode::FileNotFound, "File does not exist: " + path, path});
+    }
+
+    bool claimed = false;
+    for (const auto &d : snapshot())
+    {
+        if (d && d->canDecode(path))
+        {
+            claimed = true;
+            auto res = d->decodeFullResult(path, outMeta);
+            if (res.has_value() && !res.value().isNull())
+                return res;
+        }
+    }
+
+    if (!claimed)
+    {
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {mviewer::domain::DecodeErrorCode::UnsupportedFormat,
+             "No registered decoder supports this format: " + path, path});
+    }
+
+    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+        {mviewer::domain::DecodeErrorCode::CorruptData,
+         "Decoder claimed format but failed to decode: " + path, path});
+}
+
 ImageData DecoderRegistry::decodeFull(const std::string &path) const
 {
     mviewer::domain::ImageMetadata meta;
@@ -95,9 +139,6 @@ ImageData DecoderRegistry::decodeFull(const std::string &path) const
 ImageData DecoderRegistry::decodeFull(const std::string &path,
                                       mviewer::domain::ImageMetadata &outMeta) const
 {
-    // Iterate a snapshot: a plugin registering/unregistering a decoder from the
-    // UI thread must not reallocate the vector under this loop, and the
-    // shared_ptr copies keep each decoder alive for the whole decode.
     for (const auto &d : snapshot())
     {
         if (d && d->canDecode(path))
@@ -107,8 +148,6 @@ ImageData DecoderRegistry::decodeFull(const std::string &path,
                 return out;
         }
     }
-    // No decoder claimed the file (or all failed). Graceful: empty ImageData.
-    // (RAW preview support is handled by RawDecoder; see DecoderRegistry.h.)
     return ImageData();
 }
 

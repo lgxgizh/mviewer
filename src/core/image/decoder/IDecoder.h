@@ -2,6 +2,7 @@
 
 #include "core/image/ImageBuffer.h"
 #include "domain/Image.h"
+#include "domain/Result.h"
 
 #include <string>
 #include <vector>
@@ -36,6 +37,20 @@ class IDecoder
     // cannot determine a field leave it at its default. Never throws.
     virtual ImageData decodeFull(const std::string &path,
                                  mviewer::domain::ImageMetadata &outMeta) const = 0;
+
+    // Modern Result-based decode returning rich error context when decode fails.
+    virtual mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+    decodeFullResult(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const
+    {
+        ImageData img = decodeFull(path, outMeta);
+        if (img.isNull())
+        {
+            return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+                {mviewer::domain::DecodeErrorCode::CorruptData,
+                 std::string("Decoder '") + name() + "' failed to decode image", path});
+        }
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(std::move(img));
+    }
 
     // Lowercased extensions this decoder handles (e.g. "jpg","png").
     virtual std::vector<std::string> extensions() const = 0;
