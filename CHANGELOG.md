@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.115] - 2026-10-14
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.115**.
+
 ### Changed
 
 - 比较模式不再提供「上一对 / 下一对」切换：去掉工具栏按钮，**P / N / PgUp / PgDn / ← / →** 在比较中不再换图，快捷键表、F1 速查、用户指南同步删除。要比较的两张图一律在浏览器中手动选择；**Ctrl+2/4/8** 布局预设不受影响。
