@@ -155,8 +155,9 @@ TaskScheduler::TaskScheduler() : m_impl(new Impl)
     setQueueMaxThreads(Priority::Thumbnail, std::max(2, n / 2));
     setQueueMaxThreads(Priority::Analysis, std::max(1, n / 2));
     // Background = metadata indexing / adjacent prefetch: lowest priority and
-    // mostly I/O-bound, so a quarter of the cores keeps it progressing.
     setQueueMaxThreads(Priority::Background, std::max(1, n / 4));
+    for (int i = 0; i < Impl::kNumQueues; ++i)
+        m_impl->priorityQueues[i].setExpiryTimeout(5000);
     for (const Priority low : {Priority::Thumbnail, Priority::Analysis, Priority::Background})
         m_impl->priorityQueues[static_cast<int>(low)].setThreadPriority(QThread::LowPriority);
 }
