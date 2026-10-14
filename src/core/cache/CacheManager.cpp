@@ -375,6 +375,12 @@ bool CacheManager::getBestMip(const std::string &baseKey, int maxEdge, ImageData
     return false;
 }
 
+void CacheManager::dropFullImage(const std::string &key)
+{
+    if (!key.empty())
+        ImageCache::instance().remove(ImageCache::Viewer, key);
+}
+
 void CacheManager::erase(const std::string &key)
 {
     if (key.empty())

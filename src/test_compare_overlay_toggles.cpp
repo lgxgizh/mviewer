@@ -205,7 +205,7 @@ void crosshairAcrossSetsCase(CompareWorkspace *ws, RawImageView *v0, const QStri
     chk->setChecked(false);
 }
 
-// Manual "显示差异" (no highlight) must survive P/N pair navigation.
+// Manual "显示差异" (no highlight) must survive choosing a new pair.
 void diffOverlayAcrossPairsCase(CompareWorkspace *ws, const QStringList &pool)
 {
     auto *ov = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
@@ -220,11 +220,10 @@ void diffOverlayAcrossPairsCase(CompareWorkspace *ws, const QStringList &pool)
     ov->setChecked(true);
     check(waitTrue([ws] { return anyOverlay(ws); }, 20000), "diff overlay P/N: heatmap on");
     check(!hl->isChecked(), "diff overlay P/N: highlight stays off");
-    check(ws->hasNextPair(), "diff overlay P/N: next pair available");
-    ws->nextPair();
+    ws->setImages(pool.mid(2, 2));
     check(waitTrue([ws] { return ws->comparedImageCount() == 2; }, 20000),
           "diff overlay P/N: second pair loaded");
-    check(ov->isChecked(), "diff overlay P/N: 显示差异 survives nextPair");
+    check(ov->isChecked(), "diff overlay P/N: 显示差异 survives a new pair");
     check(waitTrue([ws] { return anyOverlay(ws); }, 20000),
           "diff overlay P/N: heatmap redraws on the new pair");
     ov->setChecked(false);

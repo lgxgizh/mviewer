@@ -383,8 +383,6 @@ void CompareWorkspace::regroupCompareChrome()
     place(toolLay, moreButton, true);
     place(toolLay, m_sideChk, true);
 
-    place(navLay, m_prevPairBtn, true);
-    place(navLay, m_nextPairBtn, true);
     place(navLay, m_temporaryCompareButton, true);
     place(navLay, m_exitBtn, true);
     if (m_exitBtn)

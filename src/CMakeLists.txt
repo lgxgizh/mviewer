@@ -61,6 +61,7 @@ add_library(mviewer_core SHARED
     core/FileMetadataRelocation.cpp
     core/CrashHandler.cpp
     core/Logger.cpp
+    core/MemoryTrim.cpp
     core/SelfTest.cpp
     core/SettingsIO.cpp
     core/analysis/AnalysisEngine.cpp
@@ -224,7 +225,6 @@ add_library(mviewer_ui STATIC
     compareworkspace_roi.cpp
     compareworkspace_roi_overlay.cpp
     compareworkspace_temporary.cpp
-    compareworkspace_prefetch.cpp
     compareworkspace_load.cpp
     compareworkspace_layout.cpp
     compareworkspace_progressive.cpp

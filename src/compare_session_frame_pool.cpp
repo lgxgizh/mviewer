@@ -88,6 +88,26 @@ void CompareSessionFramePool::touch(const std::string &path, int frameIndex)
     (void)tryGet(path, frameIndex);
 }
 
+size_t CompareSessionFramePool::pairBudgetBytes(size_t currentPairBytes)
+{
+    // Current set only; 1/16 slack absorbs per-frame estimate overhead.
+    const size_t want = currentPairBytes + currentPairBytes / 16;
+    return std::clamp(want, kMinBudgetBytes, kDefaultMaxBytes);
+}
+
+void CompareSessionFramePool::setPairBudget(size_t paneCount, size_t currentPairBytes)
+{
+    m_maxEntries = std::max<size_t>(1, paneCount);
+    m_maxBytes = pairBudgetBytes(currentPairBytes);
+    while (!m_lru.empty() && (m_map.size() > m_maxEntries || m_bytes > m_maxBytes))
+    {
+        Entry &victim = m_lru.back();
+        m_bytes -= victim.bytes;
+        m_map.erase(victim.key);
+        m_lru.pop_back();
+    }
+}
+
 void CompareSessionFramePool::clear()
 {
     m_lru.clear();

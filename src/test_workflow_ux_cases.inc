@@ -103,23 +103,13 @@ void reportGuidance(bool ok, const char *surface, const char *what)
 void checkChinesePairGuidance(const char *surface, const QString &text, bool wantP, bool wantN)
 {
     const QString plain = guidancePlain(text);
-    if (wantP)
-    {
-        reportGuidance(plain.contains(QStringLiteral("P 上一对")) &&
-                           !plain.contains(QStringLiteral("P 下一对")),
-                       surface, "P is the previous pair");
-    }
-    if (wantN)
-    {
-        reportGuidance(plain.contains(QStringLiteral("N 下一对")) &&
-                           !plain.contains(QStringLiteral("N 上一对")),
-                       surface, "N is the next pair");
-    }
-    reportGuidance(!plain.contains(QStringLiteral("比较下一对 / 上一对")) &&
-                       !plain.contains(QStringLiteral("比较下一对/上一对")) &&
-                       !plain.contains(QStringLiteral("不作为翻页")) &&
-                       !plain.contains(QStringLiteral("P 不作为")),
-                   surface, "does not invert P/N or deny that P steps pairs");
+    // Compare pairs are chosen in Browse; Compare no longer steps pairs, so no
+    // surface may advertise P/N/PgUp/PgDn/arrow pair navigation.
+    (void)wantP;
+    (void)wantN;
+    reportGuidance(!plain.contains(QStringLiteral("上一对")) &&
+                       !plain.contains(QStringLiteral("下一对")),
+                   surface, "no in-Compare previous/next pair navigation is advertised");
     reportGuidance(!plain.contains(QStringLiteral("亚像素")), surface,
                    "alignment is not described as sub-pixel");
     if (plain.contains(QStringLiteral("对齐")))
@@ -139,20 +129,9 @@ void checkChinesePairGuidance(const char *surface, const QString &text, bool wan
 void checkEnglishShortcutMirror(const char *surface, const QString &text)
 {
     const QString plain = guidancePlain(text);
-    const int pAt = static_cast<int>(plain.indexOf(QStringLiteral("P / PageUp / Left")));
-    const int nAt = static_cast<int>(plain.indexOf(QStringLiteral("N / PageDown / Right")));
-    const int prevAfterP =
-        pAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Previous pair"), pAt));
-    const int nextAfterP =
-        pAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Next pair"), pAt));
-    const int nextAfterN =
-        nAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Next pair"), nAt));
-    const int prevAfterN =
-        nAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Previous pair"), nAt));
-    reportGuidance(pAt >= 0 && prevAfterP >= 0 && (nextAfterP < 0 || prevAfterP < nextAfterP),
-                   surface, "P PageUp Left are the previous pair");
-    reportGuidance(nAt >= 0 && nextAfterN >= 0 && (prevAfterN < 0 || nextAfterN < prevAfterN),
-                   surface, "N PageDown Right are the next pair");
+    reportGuidance(!plain.contains(QStringLiteral("Previous pair")) &&
+                       !plain.contains(QStringLiteral("Next pair")),
+                   surface, "no in-Compare previous/next pair navigation is listed");
     const QString lower = plain.toLower();
     reportGuidance(!plain.contains(QStringLiteral("亚像素")) &&
                        !lower.contains(QStringLiteral("sub-pixel")) &&
@@ -3547,104 +3526,32 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     };
 
     const QStringList firstPair{paths[2], paths[3]};
-    const QStringList nextPair{paths[4], paths[5]};
-    const QStringList lastPair{paths[0], paths[1]};
-    CHECK(waitForPair(firstPair), "non-first navigation opens at the selected C/D pair");
-    CHECK(compare && compare->hasPrevPair() && compare->hasNextPair(),
-          "non-first navigation exposes both previous and next from C/D");
+    CHECK(waitForPair(firstPair), "non-first Compare opens at the selected C/D pair");
 
-    auto findNavButton = [](QWidget *root, const QString &marker)
+    // Pairs are chosen manually in Browse: Compare has no previous/next pair
+    // buttons, and N / P / PageUp / PageDown / arrows do not step the pair.
+    bool hasPairButton = false;
+    if (compare)
     {
-        if (!root)
-            return static_cast<QPushButton *>(nullptr);
-        for (QPushButton *button : root->findChildren<QPushButton *>())
-            if (button->text().contains(marker))
-                return button;
-        return static_cast<QPushButton *>(nullptr);
-    };
-    QPushButton *previous = findNavButton(compare, QStringLiteral("上一对"));
-    QPushButton *next = findNavButton(compare, QStringLiteral("下一对"));
-    QCheckBox *overlay = compare ? findChk(compare, QStringLiteral("叠加对比")) : nullptr;
-    CHECK(previous && next && previous->isEnabled() && next->isEnabled(),
-          "non-first navigation enables both real pair buttons at C/D");
-    if (previous)
-        checkChinesePairGuidance("previous-pair tooltip", previous->toolTip(), true, false);
-    else
-        reportGuidance(false, "previous-pair tooltip", "P is the previous pair");
-    if (next)
-        checkChinesePairGuidance("next-pair tooltip", next->toolTip(), false, true);
-    else
-        reportGuidance(false, "next-pair tooltip", "N is the next pair");
+        for (QPushButton *button : compare->findChildren<QPushButton *>())
+            if (button->text().contains(QStringLiteral("上一对")) ||
+                button->text().contains(QStringLiteral("下一对")))
+                hasPairButton = true;
+    }
+    CHECK(compare && !hasPairButton, "Compare exposes no previous/next pair buttons");
     if (compare)
     {
         compare->setFocus();
-        sendKey(compare, Qt::Key_N);
-        CHECK(waitForPair(nextPair), "PASS N on the live Compare widget steps to the next pair");
-        CHECK(sel && sel->selection() == nextPair,
-              "PASS N makes the next pair the current selection");
-        sendKey(compare, Qt::Key_P);
-        CHECK(waitForPair(firstPair),
-              "PASS P on the live Compare widget steps to the previous pair");
+        for (Qt::Key key :
+             {Qt::Key_N, Qt::Key_P, Qt::Key_PageDown, Qt::Key_PageUp, Qt::Key_Right, Qt::Key_Left})
+        {
+            sendKey(compare, key);
+            pump(60);
+        }
+        CHECK(compare->comparedImages() == firstPair,
+              "pair keys no longer change the manually chosen C/D pair");
         CHECK(sel && sel->selection() == firstPair,
-              "PASS P makes the previous pair the current selection");
-        sendKey(compare, Qt::Key_PageDown);
-        CHECK(waitForPair(nextPair),
-              "PASS PageDown on the live Compare widget steps to the next pair");
-        sendKey(compare, Qt::Key_PageUp);
-        CHECK(waitForPair(firstPair),
-              "PASS PageUp on the live Compare widget steps to the previous pair");
-        sendKey(compare, Qt::Key_Right);
-        CHECK(waitForPair(nextPair),
-              "PASS Right on the live Compare widget steps to the next pair");
-        sendKey(compare, Qt::Key_Left);
-        CHECK(waitForPair(firstPair),
-              "PASS Left on the live Compare widget steps to the previous pair");
-    }
-    CHECK(overlay != nullptr, "non-first navigation exposes the real overlay mode");
-    if (overlay)
-    {
-        overlay->setChecked(true);
-        pump(30);
-    }
-
-    if (next)
-    {
-        next->click();
-        CHECK(waitForPair(nextPair), "real MainWindow navigation advances C/D to E/F");
-        CHECK(compare && compare->hasPrevPair() && !compare->hasNextPair(),
-              "real pair buttons report E/F as the final window");
-        CHECK(sel && sel->selection() == nextPair,
-              "real navigation synchronizes the complete E/F selection to Browse");
-        CHECK(sel && sel->currentImage() == nextPair.first(),
-              "real navigation focuses E within the E/F selection");
-        CHECK(gallery && gallery->selectedPaths() == nextPair,
-              "real navigation highlights the complete E/F pair in Browse");
-        CHECK(!overlay || overlay->isChecked(),
-              "real navigation preserves overlay while advancing");
-    }
-
-    if (previous)
-    {
-        previous->click();
-        CHECK(waitForPair(firstPair), "real MainWindow navigation returns E/F to C/D");
-        CHECK(sel && sel->selection() == firstPair,
-              "real navigation synchronizes the complete C/D selection to Browse");
-        CHECK(sel && sel->currentImage() == firstPair.first(),
-              "real navigation focuses C within the C/D selection");
-        CHECK(gallery && gallery->selectedPaths() == firstPair,
-              "real navigation highlights the complete C/D pair in Browse");
-        previous->click();
-        CHECK(waitForPair(lastPair), "real MainWindow navigation reaches A/B from C/D");
-        CHECK(compare && !compare->hasPrevPair() && compare->hasNextPair(),
-              "real pair buttons report A/B as the first window");
-        CHECK(sel && sel->selection() == lastPair,
-              "real navigation synchronizes the complete A/B selection to Browse");
-        CHECK(sel && sel->currentImage() == lastPair.first(),
-              "real navigation focuses A within the A/B selection");
-        CHECK(gallery && gallery->selectedPaths() == lastPair,
-              "real navigation highlights the complete A/B pair in Browse");
-        CHECK(!overlay || overlay->isChecked(),
-              "real navigation preserves overlay while returning");
+              "the C/D selection is unchanged by former pair keys");
     }
 
     if (compareDialog && compareDialog->isVisible())
@@ -3657,22 +3564,19 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
             pump(50);
         }
     }
+    CHECK(sel && sel->selection() == firstPair,
+          "leaving Compare keeps the C/D SelectionModel window");
+    CHECK(gallery->selectedPaths() == firstPair, "leaving Compare keeps the C/D Browse selection");
 
-    CHECK(sel && sel->selection() == lastPair,
-          "leaving Compare keeps the final A/B SelectionModel window");
-    CHECK(gallery->selectedPaths() == lastPair,
-          "leaving Compare keeps the final A/B Browse selection");
-
-    // Re-enter through the real MainWindow action: the post-navigation Pair
-    // must remain the Compare entry selection instead of falling back to the
-    // whole directory after SelectionModel was projected to one image.
+    // Re-enter through the real MainWindow action: the pair must remain the
+    // Compare entry selection instead of falling back to the whole directory.
     compareAction->trigger();
     pump(300);
     compareDialog = w.findChild<QDialog *>(QStringLiteral("compareDialog"));
     compare = compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
     CHECK(compareDialog && compareDialog->isVisible() && compare,
           "re-entering Compare after browsing opens the real workspace");
-    CHECK(waitForPair(lastPair), "re-entering Compare after exit keeps the final A/B pair");
+    CHECK(waitForPair(firstPair), "re-entering Compare after exit keeps the C/D pair");
     if (compareDialog && compareDialog->isVisible())
     {
         QElapsedTimer closeTimer;

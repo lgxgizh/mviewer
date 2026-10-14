@@ -223,8 +223,6 @@ void CompareWorkspace::refreshCompareControlTooltips()
             return;
         widget->setToolTip(widget->isEnabled() ? enabledTip : disabledTip);
     };
-    setTip(m_prevPairBtn, pairNavTooltip(false, false), pairNavTooltip(false, true));
-    setTip(m_nextPairBtn, pairNavTooltip(true, false), pairNavTooltip(true, true));
     setTip(m_swapBtn, tr("交换窗格顺序（快捷键 X）"),
            loading ? tr("图片还在加载，暂时不能交换")
                    : tr("至少需要 2 张图片才能交换（快捷键 X）"));
@@ -235,27 +233,6 @@ void CompareWorkspace::refreshCompareControlTooltips()
     if (m_clearLinksBtn)
         m_clearLinksBtn->setToolTip(clearLinkTooltip());
     updateTemporaryCompareAvailability();
-}
-
-QString CompareWorkspace::pairNavTooltip(bool next, bool atEnd) const
-{
-    if (next && atEnd)
-    {
-        return tr("已经是最后一对，没有下一对（N、PgDn、→）。Ctrl+Shift+A 取消选择。"
-                  "Ctrl+Alt+A 批量分析导出。");
-    }
-    if (next)
-    {
-        return tr("N 下一对（PgDn、→ 同样是下一对）。Ctrl+Shift+A 取消选择。"
-                  "Ctrl+Alt+A 批量分析导出。");
-    }
-    if (atEnd)
-    {
-        return tr("已经是第一对，没有上一对（P、PgUp、←）。Ctrl+Shift+A 取消选择。"
-                  "Ctrl+Alt+A 批量分析导出。");
-    }
-    return tr("P 上一对（PgUp、← 同样是上一对）。Ctrl+Shift+A 取消选择。"
-              "Ctrl+Alt+A 批量分析导出。");
 }
 
 QString CompareWorkspace::temporaryCompareTooltip() const

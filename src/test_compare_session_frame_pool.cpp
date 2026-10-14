@@ -133,6 +133,46 @@ int main()
             std::printf("PASS: clear drops the last session frame\n");
     }
 
+    {
+        // Budget follows the loaded pair: only the pair on screen is kept.
+        using P = CompareSessionFramePool;
+        const size_t pair = 2ull * 4096ull * 3072ull * 3ull; // two 12.6 MP RGB24
+        const size_t budget = P::pairBudgetBytes(pair);
+        const bool sized = budget >= pair && budget < pair * 2;
+        const bool floor = P::pairBudgetBytes(1024) == P::kMinBudgetBytes;
+        const bool ceiling = P::pairBudgetBytes(1ull << 34) == P::kDefaultMaxBytes;
+        if (!sized || !floor || !ceiling)
+        {
+            std::printf("FAIL: pairBudgetBytes (sized=%d floor=%d ceiling=%d)\n", sized, floor,
+                        ceiling);
+            ++failures;
+        }
+        else
+            std::printf("PASS: pairBudgetBytes\n");
+
+        P pairPool;
+        const size_t one = P::frameBytes(makeFrame("/x.png", 64, 64));
+        pairPool.setPairBudget(2, 2 * one);
+        for (int i = 0; i < 6; ++i)
+        {
+            const std::string path = "/p" + std::to_string(i) + ".png";
+            pairPool.put(path, 0, makeFrame(path, 64, 64));
+        }
+        const bool keepsCurrentPair = pairPool.size() == 2 && pairPool.tryGet("/p5.png", 0) &&
+                                      pairPool.tryGet("/p4.png", 0) &&
+                                      !pairPool.tryGet("/p3.png", 0);
+        pairPool.setPairBudget(1, one);
+        const bool shrinks = pairPool.size() == 1;
+        if (!keepsCurrentPair || !shrinks)
+        {
+            std::printf("FAIL: setPairBudget (keepsCurrentPair=%d shrinks=%d)\n", keepsCurrentPair,
+                        shrinks);
+            ++failures;
+        }
+        else
+            std::printf("PASS: setPairBudget keeps only the current pair\n");
+    }
+
     std::printf("=== Compare session frame pool tests: %s ===\n", failures == 0 ? "PASS" : "FAIL");
     return failures == 0 ? 0 : 1;
 }

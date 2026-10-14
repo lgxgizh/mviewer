@@ -99,11 +99,14 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
     };
 
     // M47: capability probe on DecodePool; huge sources become metadata placeholders.
-    // Claim neighbor preloads that match this pair first, then cancel the rest
-    // so leftover Background decodes are not still running when Decode starts.
+    // The outgoing pair will not be revisited from Compare, so its warm
+    // full-res RAM copy is dropped; panes keep their frames until replaced.
+    for (const std::string &old : m_comparePaths)
+    {
+        if (!old.empty() && std::find(paths.begin(), paths.end(), old) == paths.end())
+            mviewer::application::ImageLoadingService::instance().releaseFullPixels(old);
+    }
     m_comparePaths = paths;
-    std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle> promoted;
-    claimPromotedPrefetch(paths, frameIndices, promoted);
     for (size_t i = 0; i < paths.size(); ++i)
     {
         auto *request = batch->requests[i].get();
@@ -120,44 +123,6 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                 hit.fromCache = true;
                 if (accountLoadRequest(batch, i, &hit))
                     finish();
-                continue;
-            }
-        }
-
-        // Promote warm neighbor preload into this batch when available.
-        if (i < promoted.size() && promoted[i])
-        {
-            auto prefetch = std::move(promoted[i]);
-            if (prefetch)
-            {
-                mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
-                bool rejected = false;
-                try
-                {
-                    handle =
-                        mviewer::application::ImageLoadingService::instance().promotePreloadAsync(
-                            prefetch,
-                            [batch, i,
-                             finish](const mviewer::application::ImageLoadingService::Result &res)
-                            {
-                                if (CompareWorkspace::accountLoadRequest(batch, i, &res))
-                                    finish();
-                            },
-                            lifetime);
-                }
-                catch (...)
-                {
-                    rejected = true;
-                }
-                {
-                    std::lock_guard<std::mutex> lk(batch->handlesMutex);
-                    request->handle = std::move(handle);
-                }
-                if (rejected || !request->handle)
-                {
-                    if (accountLoadRequest(batch, i, nullptr, true))
-                        finish();
-                }
                 continue;
             }
         }

@@ -203,113 +203,6 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
           "M49: momentary Compare leaves engine and SelectionModel state unchanged");
 }
 
-// ─── B#6: continuous pair navigation preserves mode ─────────────────────────
-void testContinuousNav(const QStringList &paths6)
-{
-    std::cout << "── Compare B#6: continuous pair navigation ──\n";
-    SelectionModel sel;
-    QDialog dlg;
-    auto *lay = new QVBoxLayout(&dlg);
-    auto *ws = new CompareWorkspace(&dlg);
-    lay->addWidget(ws);
-    ws->setSelectionModel(&sel);
-    ws->setImagePool(paths6);
-    ws->setNavWindow(2);
-    dlg.resize(1100, 750);
-    dlg.show();
-    pump(80);
-
-    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
-    CHECK(overlay != nullptr, "B#6: overlay control present");
-    if (!overlay)
-        return;
-    overlay->setChecked(true);
-    pump(30);
-
-    // Walk forward through the pool; the overlay mode must persist.
-    int pairs = 0;
-    while (ws->hasNextPair())
-    {
-        ws->nextPair();
-        waitForCompareCount(ws, 2);
-        ++pairs;
-        if (!overlay->isChecked())
-            break;
-    }
-    CHECK(pairs >= 2, "B#6: next-pair walks at least two pairs");
-    CHECK(overlay->isChecked(), "B#6: overlay mode persists across pair navigation");
-
-    // Walk backward; mode + focus stay coherent.
-    int back = 0;
-    while (ws->hasPrevPair() && back < 4)
-    {
-        ws->prevPair();
-        waitForCompareCount(ws, 2);
-        ++back;
-    }
-    CHECK(back >= 2, "B#6: prev-pair walks back");
-    CHECK(overlay->isChecked(), "B#6: mode persists walking backward");
-    CHECK(!ws->focusImagePath().isEmpty(), "B#6: focus image defined after navigation");
-}
-
-// B#6 regression: MainWindow seeds the pool before the asynchronous initial
-// compare load.  The explicit current window must therefore establish both
-// the pair index and the navigation step before setImages() finishes.
-void testNonFirstWindowNav(const QStringList &paths6)
-{
-    std::cout << "── Compare B#6: selected non-first window navigation ──\n";
-    SelectionModel sel;
-    QDialog dlg;
-    auto *lay = new QVBoxLayout(&dlg);
-    auto *ws = new CompareWorkspace(&dlg);
-    lay->addWidget(ws);
-    ws->setSelectionModel(&sel);
-    dlg.resize(1100, 750);
-    dlg.show();
-    pump(80);
-
-    const QStringList current{paths6[2], paths6[3]};
-    ws->setImagePool(paths6, current);
-    ws->setImages(current);
-    waitForCompareLoadFinished(ws, 2);
-    CHECK(ws->comparedImages() == current,
-          "B#6: an explicit current window loads the selected C/D pair");
-    CHECK(ws->hasPrevPair() && ws->hasNextPair(),
-          "B#6: non-first C/D window enables both previous and next pair");
-
-    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
-    CHECK(overlay != nullptr, "B#6: selected-window navigation exposes overlay mode");
-    if (!overlay)
-        return;
-    overlay->setChecked(true);
-    pump(30);
-
-    ws->nextPair();
-    waitForCompareLoadFinished(ws, 2);
-    const QStringList end{paths6[4], paths6[5]};
-    CHECK(ws->comparedImages() == end, "B#6: next from C/D loads E/F without reopening Compare");
-    CHECK(overlay->isChecked(), "B#6: next preserves overlay");
-    CHECK(sel.selection() == end, "B#6: next publishes the complete E/F SelectionModel window");
-    CHECK(sel.currentImage() == end.first(), "B#6: next focuses E within the E/F window");
-
-    ws->prevPair();
-    waitForCompareLoadFinished(ws, 2);
-    CHECK(ws->comparedImages() == current, "B#6: previous from E/F returns to C/D");
-    CHECK(overlay->isChecked(), "B#6: returning to C/D preserves overlay");
-    CHECK(sel.selection() == current,
-          "B#6: returning to C/D publishes the complete C/D SelectionModel window");
-    CHECK(sel.currentImage() == current.first(), "B#6: returning to C/D focuses C");
-
-    ws->prevPair();
-    waitForCompareLoadFinished(ws, 2);
-    const QStringList start{paths6[0], paths6[1]};
-    CHECK(ws->comparedImages() == start, "B#6: previous from C/D reaches the first A/B pair");
-    CHECK(overlay->isChecked(), "B#6: first pair keeps the compare mode");
-    CHECK(sel.selection() == start,
-          "B#6: first pair publishes the complete A/B SelectionModel window");
-    CHECK(sel.currentImage() == start.first(), "B#6: first pair focuses A");
-}
-
 // B#6 regression: a selected non-adjacent pair must map Compare focus to the
 // engine's pane path, not to the adjacent entry in the navigation pool.
 void testNonAdjacentFocus(const QStringList &pool, const QString &pathA, const QString &pathC)
@@ -591,14 +484,10 @@ void testDegradedImages(const QDir &dir)
     ws->applyROI({0, 0, 32, 32});
     pump(60);
 
-    // Next/prev navigation across the mixed pool stays safe.
-    ws->setImagePool({small, large, portrait, corrupt});
-    ws->setNavWindow(2);
-    ws->nextPair();
+    // Re-choosing a pair from the mixed pool (manual selection) stays safe.
+    ws->setImages({large, corrupt});
     waitForCompareAtLeast(ws, 1);
-    ws->nextPair();
-    waitForCompareAtLeast(ws, 1);
-    CHECK(ws->comparedImageCount() >= 1, "B#7: navigation over degraded pool keeps a grid");
+    CHECK(ws->comparedImageCount() >= 1, "B#7: re-choosing a degraded pair keeps a grid");
     (void)corrupt;
 }
 

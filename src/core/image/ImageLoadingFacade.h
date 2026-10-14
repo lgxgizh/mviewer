@@ -28,34 +28,36 @@ class ImageLoadingFacade
     // M46: `lifetime` is the consumer's AsyncLifetimeToken. The request layer
     // holds a weak_ptr; once the consumer invalidates/expires the token, any
     // late completion is suppressed BEFORE the client callback starts.
-    ImageAsyncRequestHandle loadAsyncCancellable(
-        const std::string &path, std::function<void(const ImageLoadResult &)> callback,
-        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
-        std::weak_ptr<AsyncLifetimeToken> lifetime = {})
+    ImageAsyncRequestHandle
+    loadAsyncCancellable(const std::string &path,
+                         std::function<void(const ImageLoadResult &)> callback,
+                         const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
+                         std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {
-        return ImageRepository::instance().loadAsyncCancellable(
-            path, std::move(callback), options, std::move(lifetime));
+        return ImageRepository::instance().loadAsyncCancellable(path, std::move(callback), options,
+                                                                std::move(lifetime));
     }
 
-    ImageAsyncRequestHandle loadFrameAsync(
-        const std::string &path, int frameIndex,
-        std::function<void(const ImageLoadResult &)> callback,
-        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
-        std::weak_ptr<AsyncLifetimeToken> lifetime = {})
+    ImageAsyncRequestHandle
+    loadFrameAsync(const std::string &path, int frameIndex,
+                   std::function<void(const ImageLoadResult &)> callback,
+                   const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
+                   std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {
-        return ImageRepository::instance().loadFrameAsync(
-            path, frameIndex, std::move(callback), options, std::move(lifetime));
+        return ImageRepository::instance().loadFrameAsync(path, frameIndex, std::move(callback),
+                                                          options, std::move(lifetime));
     }
 
-    ImageAsyncRequestHandle preloadAsync(
-        const std::string &path, std::weak_ptr<AsyncLifetimeToken> lifetime = {})
+    ImageAsyncRequestHandle preloadAsync(const std::string &path,
+                                         std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {
         return ImageRepository::instance().preloadAsync(path, std::move(lifetime));
     }
 
-    ImageAsyncRequestHandle promotePreloadAsync(
-        ImageAsyncRequestHandle &preload, std::function<void(const ImageLoadResult &)> callback,
-        std::weak_ptr<AsyncLifetimeToken> lifetime = {})
+    ImageAsyncRequestHandle
+    promotePreloadAsync(ImageAsyncRequestHandle &preload,
+                        std::function<void(const ImageLoadResult &)> callback,
+                        std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {
         return ImageRepository::instance().promotePreloadAsync(preload, std::move(callback),
                                                                std::move(lifetime));
@@ -69,6 +71,11 @@ class ImageLoadingFacade
     std::string makeKey(const std::string &path) const
     {
         return ImageRepository::instance().makeKey(path);
+    }
+
+    void releaseFullPixels(const std::string &path)
+    {
+        ImageRepository::instance().releaseFullPixels(path);
     }
 
     // UI preview boundary: cache ownership stays inside the repository/cache
