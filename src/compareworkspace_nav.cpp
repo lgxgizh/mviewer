@@ -16,6 +16,38 @@ void checkBox(QCheckBox *button, bool on)
     if (button)
         button->setChecked(on);
 }
+
+void applyCellTransforms(CompareEngine &engine, const mviewer::domain::CompareSession &s,
+                         bool syncOn, const QVector<double> &fitScales, double sharedZoomRatio)
+{
+    for (size_t i = 0; i < s.cells.size(); ++i)
+    {
+        const int idx = static_cast<int>(i);
+        if (idx >= engine.imageCount())
+            break;
+        engine.setCellScale(idx, s.cells[i].scale);
+        engine.setCellOffset(idx, s.cells[i].offsetX, s.cells[i].offsetY);
+    }
+    if (syncOn && !s.uniformScale && fitScales.size() == engine.imageCount())
+    {
+        for (int i = 0; i < engine.imageCount(); ++i)
+            engine.setCellScale(i, fitScales[i] * sharedZoomRatio);
+    }
+}
+
+void applySessionToComponents(mviewer::ui::CompareSessionState *sessionState,
+                              mviewer::ui::CompareDiffRenderer *diffRenderer,
+                              const mviewer::domain::CompareSession &s)
+{
+    if (diffRenderer)
+        diffRenderer->setThreshold(s.threshold);
+    if (sessionState)
+    {
+        sessionState->setSyncEnabled(s.syncMode != mviewer::domain::SyncMode::Off);
+        sessionState->setSharedScale(s.sharedScale);
+        sessionState->setSharedOffset(QPointF(s.sharedOffsetX, s.sharedOffsetY));
+    }
+}
 } // namespace
 
 const mviewer::core::DisplayColorContext &CompareWorkspace::displayColorContext() const
@@ -30,11 +62,15 @@ CompareEngine &CompareWorkspace::engine()
 
 mviewer::domain::Selection CompareWorkspace::currentROI() const
 {
+    if (m_roiController && m_roiController->hasValidROI())
+        return m_roiController->currentROI();
     return m_lastSelection;
 }
 
 void CompareWorkspace::applyROI(const mviewer::domain::Selection &sel)
 {
+    if (m_roiController)
+        m_roiController->setROI(sel);
     applySelectionToAll(sel);
 }
 
@@ -99,6 +135,8 @@ void CompareWorkspace::setImagePool(const QStringList &allPaths, const QStringLi
 {
     m_imagePool = allPaths;
     m_pairIndex = 0;
+    if (m_sessionState)
+        m_sessionState->setImagePool(allPaths, currentWindow);
     if (!currentWindow.isEmpty())
     {
         // MainWindow seeds the pool before the deferred setImages() call, so
@@ -134,6 +172,8 @@ void CompareWorkspace::setNavWindow(int n)
     if (n != 2 && n != 4 && n != 8)
         n = 2;
     m_navWindow = n;
+    if (m_sessionState)
+        m_sessionState->setNavWindow(n);
 }
 
 void CompareWorkspace::updateActionAvailability()
@@ -312,6 +352,8 @@ void CompareWorkspace::applyLayoutPreset(int n)
     if (n < 1 || n > 8)
         return;
     m_navWindow = n;
+    if (m_sessionState)
+        m_sessionState->setLayoutPreset(n);
     // Prefer pool; fall back to currently loaded images.
     QStringList src = m_imagePool;
     if (src.isEmpty())
@@ -377,27 +419,15 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
     m_engine.setScale(m_sharedZoomRatio);
     m_engine.setOffset(s.sharedOffsetX, s.sharedOffsetY);
 
-    // Per-cell independent transforms (used when sync is off).
-    for (size_t i = 0; i < s.cells.size(); ++i)
-    {
-        const int idx = static_cast<int>(i);
-        if (idx >= m_engine.imageCount())
-            break;
-        m_engine.setCellScale(idx, s.cells[i].scale);
-        m_engine.setCellOffset(idx, s.cells[i].offsetX, s.cells[i].offsetY);
-    }
     const bool syncOn = m_syncZoom && m_syncDrag;
-    if (syncOn && !s.uniformScale && m_fitScales.size() == m_engine.imageCount())
-    {
-        for (int i = 0; i < m_engine.imageCount(); ++i)
-            m_engine.setCellScale(i, m_fitScales[i] * m_sharedZoomRatio);
-    }
+    applyCellTransforms(m_engine, s, syncOn, m_fitScales, m_sharedZoomRatio);
 
     // M15 P0#1: replay the UI-only state so the reopened view is identical.
     // HeatMap / Diff threshold. Block the slider's valueChanged handler (which
     // would schedule its own batch refresh) so the threshold restore below
     // contributes exactly one logical refresh.
     m_thresholdValue = s.threshold;
+    applySessionToComponents(m_sessionState.get(), m_diffRenderer.get(), s);
     if (m_thresholdSlider)
     {
         const QSignalBlocker blocker(m_thresholdSlider);

@@ -312,23 +312,54 @@ ImageData QtDecoder::decodeFull(const std::string &path) const
     return decodeFull(path, meta);
 }
 
-ImageData QtDecoder::decodeFull(const std::string &path,
-                                mviewer::domain::ImageMetadata &outMeta) const
+mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+QtDecoder::decodeFullResult(const std::string &path,
+                            mviewer::domain::ImageMetadata &outMeta) const
 {
-    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    const auto stdPath = mviewer::core::pathFromUtf8(path);
+    std::error_code ec;
+    if (!std::filesystem::exists(stdPath, ec))
+    {
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {mviewer::domain::DecodeErrorCode::FileNotFound, "Image file not found: " + path, path});
+    }
+
+    const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
+    QImageReader reader(qPath);
     reader.setAutoTransform(true); // 尊重 EXIF 方向
     const QImage img = reader.read();
     if (img.isNull())
     {
-        qWarning("QtDecoder: failed to decode \"%s\": %s", path.c_str(),
-                 qPrintable(reader.errorString()));
-        return ImageData();
+        const auto readerErr = reader.error();
+        const QString errStr = reader.errorString();
+        mviewer::domain::DecodeErrorCode code = mviewer::domain::DecodeErrorCode::CorruptData;
+        if (readerErr == QImageReader::FileNotFoundError)
+            code = mviewer::domain::DecodeErrorCode::FileNotFound;
+        else if (readerErr == QImageReader::UnsupportedFormatError)
+            code = mviewer::domain::DecodeErrorCode::UnsupportedFormat;
+        else if (readerErr == QImageReader::InvalidDataError)
+            code = mviewer::domain::DecodeErrorCode::CorruptData;
+
+        std::string msg = errStr.isEmpty() ? ("QtDecoder failed to decode " + path)
+                                           : errStr.toStdString();
+        qWarning("QtDecoder: failed to decode \"%s\": %s", path.c_str(), msg.c_str());
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {code, std::move(msg), path});
     }
 
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
     fillMetadata(reader, img, outMeta);
-    return toImageData(img);
+    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(toImageData(img));
+}
+
+ImageData QtDecoder::decodeFull(const std::string &path,
+                                mviewer::domain::ImageMetadata &outMeta) const
+{
+    auto res = decodeFullResult(path, outMeta);
+    if (res.has_value())
+        return std::move(res.value());
+    return ImageData();
 }
 
 ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge) const

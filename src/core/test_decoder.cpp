@@ -10,6 +10,7 @@
 #include <QImageReader>
 #include <chrono>
 #include <cstdio>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -172,6 +173,42 @@ static void testRegistryDispatch()
     CHECK(reg.get("DummyCustomDecoder") == nullptr, "unregistered decoder is removed");
 }
 
+static void testDecodeFullResultDetailedErrors()
+{
+    printf("\n[decodeFullResult detailed errors]\n");
+    fflush(stdout);
+
+    DecoderRegistry &reg = DecoderRegistry::instance();
+    mviewer::domain::ImageMetadata meta;
+
+    // 1. Non-existent file
+    auto resMissing = reg.decodeFullResult("this_file_does_not_exist_at_all.png", meta);
+    CHECK(!resMissing.has_value(), "missing file returns error");
+    CHECK(resMissing.error().code == mviewer::domain::DecodeErrorCode::FileNotFound,
+          "missing file error code is FileNotFound");
+
+    // 2. Unsupported format (file exists but has unsupported extension)
+    const std::string dummyUnsupported = "dummy_unsupported_test_file.xyz123";
+    {
+        std::ofstream ofs(dummyUnsupported);
+        ofs << "dummy content";
+    }
+    auto resUnsupported = reg.decodeFullResult(dummyUnsupported, meta);
+    std::filesystem::remove(dummyUnsupported);
+    CHECK(!resUnsupported.has_value(), "unsupported format returns error");
+    CHECK(resUnsupported.error().code == mviewer::domain::DecodeErrorCode::UnsupportedFormat,
+          "unsupported format error code is UnsupportedFormat");
+
+    // 3. Valid golden image
+    const std::string goldenJpg =
+        std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/flat_color_256x256.jpg";
+    auto resGolden = reg.decodeFullResult(goldenJpg, meta);
+    CHECK(resGolden.has_value(), "golden jpg decodes successfully via decodeFullResult");
+    CHECK(!resGolden.value().isNull(), "golden jpg ImageData is non-null");
+    CHECK(resGolden.value().width == 256 && resGolden.value().height == 256,
+          "golden jpg dimensions 256x256");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -180,6 +217,7 @@ int main(int argc, char **argv)
 
     testBenchmarkSmokeDecode();
     testRegistryDispatch();
+    testDecodeFullResultDetailedErrors();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

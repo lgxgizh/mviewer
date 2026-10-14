@@ -28,6 +28,14 @@ struct Selection
     {
         return width * height;
     }
+    bool operator==(const Selection &other) const noexcept
+    {
+        return x == other.x && y == other.y && width == other.width && height == other.height;
+    }
+    bool operator!=(const Selection &other) const noexcept
+    {
+        return !(*this == other);
+    }
 };
 
 // Canonical half-open ROI normalization. Coordinates are source-image pixels

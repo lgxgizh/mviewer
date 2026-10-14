@@ -60,6 +60,13 @@ class RawImageView;
 class QProgressBar;
 class SelectionModel;
 
+namespace mviewer::ui
+{
+class CompareSessionState;
+class CompareRoiController;
+class CompareDiffRenderer;
+}
+
 // CompareWorkspace：多图同步比较工作区
 class CompareWorkspace : public QWidget
 {
@@ -96,6 +103,9 @@ class CompareWorkspace : public QWidget
     void setSyncEnabled(bool on);
 
     CompareEngine &engine();
+    mviewer::ui::CompareSessionState *sessionState() const { return m_sessionState.get(); }
+    mviewer::ui::CompareRoiController *roiController() const { return m_roiController.get(); }
+    mviewer::ui::CompareDiffRenderer *diffRenderer() const { return m_diffRenderer.get(); }
 
     // Last ROI applied to the compare cells; empty means unset.
     mviewer::domain::Selection currentROI() const;
@@ -750,4 +760,8 @@ class CompareWorkspace : public QWidget
     void applyCompareSafeInsets();
     void syncContextualCompareControls();
     QDialog *m_shortcutHelpDialog = nullptr;
+
+    std::unique_ptr<mviewer::ui::CompareSessionState> m_sessionState;
+    std::unique_ptr<mviewer::ui::CompareRoiController> m_roiController;
+    std::unique_ptr<mviewer::ui::CompareDiffRenderer> m_diffRenderer;
 };

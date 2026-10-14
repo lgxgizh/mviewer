@@ -601,6 +601,8 @@ void CompareWorkspace::setAutoAlignBeforeDiff(bool on)
         const QSignalBlocker blocker(m_autoAlignChk);
         m_autoAlignChk->setChecked(on);
     }
+    if (m_sessionState)
+        m_sessionState->setAutoAlignBeforeDiff(on);
     if (m_autoAlignBeforeDiff == on)
         return;
     m_autoAlignBeforeDiff = on;

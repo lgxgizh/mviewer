@@ -199,6 +199,8 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             [this, sliderTimer](int value)
             {
                 m_thresholdValue = static_cast<uint8_t>(value);
+                if (m_diffRenderer)
+                    m_diffRenderer->setThreshold(m_thresholdValue);
                 if (!m_thresholdSlider->isSliderDown())
                     refreshAllDiffOverlays();
                 else

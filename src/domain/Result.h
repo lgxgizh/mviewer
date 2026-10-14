@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <exception>
 #include <functional>
 #include <string>
@@ -84,15 +85,47 @@ class Result
         return std::move(std::get<0>(m_storage));
     }
 
-    constexpr const T &operator*() const & noexcept { return std::get<0>(m_storage); }
-    constexpr T &operator*() & noexcept { return std::get<0>(m_storage); }
-    constexpr const T *operator->() const noexcept { return &std::get<0>(m_storage); }
-    constexpr T *operator->() noexcept { return &std::get<0>(m_storage); }
+    constexpr const T &operator*() const & noexcept
+    {
+        assert(has_value());
+        return std::get<0>(m_storage);
+    }
+
+    constexpr T &operator*() & noexcept
+    {
+        assert(has_value());
+        return std::get<0>(m_storage);
+    }
+
+    constexpr const T &&operator*() const && noexcept
+    {
+        assert(has_value());
+        return std::move(std::get<0>(m_storage));
+    }
+
+    constexpr T &&operator*() && noexcept
+    {
+        assert(has_value());
+        return std::move(std::get<0>(m_storage));
+    }
+
+    constexpr const T *operator->() const noexcept
+    {
+        assert(has_value());
+        return &std::get<0>(m_storage);
+    }
+
+    constexpr T *operator->() noexcept
+    {
+        assert(has_value());
+        return &std::get<0>(m_storage);
+    }
 
     template <typename U>
     constexpr T value_or(U &&default_value) const &
     {
-        return has_value() ? std::get<0>(m_storage) : static_cast<T>(std::forward<U>(default_value));
+        return has_value() ? std::get<0>(m_storage)
+                           : static_cast<T>(std::forward<U>(default_value));
     }
 
     template <typename U>
@@ -123,7 +156,7 @@ class Result
         return std::move(std::get<1>(m_storage));
     }
 
-    // Monadic map: transforms value if ok, propagates error if failed
+    // Monadic map: transforms value if ok, propagates error if failed (const &)
     template <typename F>
     auto map(F &&f) const &
     {
@@ -143,7 +176,28 @@ class Result
         return Result<ReturnType, E>::err(error());
     }
 
-    // Monadic and_then: chains with another Result returning function
+    // Monadic map: transforms value if ok, propagates error if failed (&&)
+    template <typename F>
+    auto map(F &&f) &&
+    {
+        using ReturnType = std::invoke_result_t<F, T &&>;
+        if (has_value())
+        {
+            if constexpr (std::is_void_v<ReturnType>)
+            {
+                std::invoke(std::forward<F>(f), std::move(value()));
+                return Result<void, E>::ok();
+            }
+            else
+            {
+                return Result<ReturnType, E>::ok(
+                    std::invoke(std::forward<F>(f), std::move(value())));
+            }
+        }
+        return Result<ReturnType, E>::err(std::move(error()));
+    }
+
+    // Monadic and_then: chains with another Result returning function (const &)
     template <typename F>
     auto and_then(F &&f) const &
     {
@@ -155,7 +209,19 @@ class Result
         return ResultType::err(error());
     }
 
-    // Monadic map_error: transforms error if failed, propagates value if ok
+    // Monadic and_then: chains with another Result returning function (&&)
+    template <typename F>
+    auto and_then(F &&f) &&
+    {
+        using ResultType = std::invoke_result_t<F, T &&>;
+        if (has_value())
+        {
+            return std::invoke(std::forward<F>(f), std::move(value()));
+        }
+        return ResultType::err(std::move(error()));
+    }
+
+    // Monadic map_error: transforms error if failed, propagates value if ok (const &)
     template <typename F>
     auto map_error(F &&f) const &
     {
@@ -165,6 +231,18 @@ class Result
             return Result<T, NewError>::ok(value());
         }
         return Result<T, NewError>::err(std::invoke(std::forward<F>(f), error()));
+    }
+
+    // Monadic map_error: transforms error if failed, propagates value if ok (&&)
+    template <typename F>
+    auto map_error(F &&f) &&
+    {
+        using NewError = std::invoke_result_t<F, E &&>;
+        if (has_value())
+        {
+            return Result<T, NewError>::ok(std::move(value()));
+        }
+        return Result<T, NewError>::err(std::invoke(std::forward<F>(f), std::move(error())));
     }
 
   private:
@@ -222,39 +300,53 @@ class Result<void, E>
         return std::move(m_error);
     }
 
+    template <typename F>
+    auto and_then(F &&f) const &
+    {
+        using ResultType = std::invoke_result_t<F>;
+        if (has_value())
+        {
+            return std::invoke(std::forward<F>(f));
+        }
+        return ResultType::err(error());
+    }
+
+    template <typename F>
+    auto and_then(F &&f) &&
+    {
+        using ResultType = std::invoke_result_t<F>;
+        if (has_value())
+        {
+            return std::invoke(std::forward<F>(f));
+        }
+        return ResultType::err(std::move(error()));
+    }
+
+    template <typename F>
+    auto map_error(F &&f) const &
+    {
+        using NewError = std::invoke_result_t<F, const E &>;
+        if (has_value())
+        {
+            return Result<void, NewError>::ok();
+        }
+        return Result<void, NewError>::err(std::invoke(std::forward<F>(f), error()));
+    }
+
+    template <typename F>
+    auto map_error(F &&f) &&
+    {
+        using NewError = std::invoke_result_t<F, E &&>;
+        if (has_value())
+        {
+            return Result<void, NewError>::ok();
+        }
+        return Result<void, NewError>::err(std::invoke(std::forward<F>(f), std::move(error())));
+    }
+
   private:
     bool m_has_value = true;
     E m_error{};
-};
-
-// Domain Error Types
-enum class DecodeErrorCode
-{
-    Success = 0,
-    FileNotFound,
-    AccessDenied,
-    CorruptData,
-    UnsupportedFormat,
-    OutOfMemory,
-    Unknown
-};
-
-struct DecodeError
-{
-    DecodeErrorCode code = DecodeErrorCode::Unknown;
-    std::string message;
-    std::string path;
-
-    std::string toString() const
-    {
-        std::string s = "DecodeError: ";
-        s += message;
-        if (!path.empty())
-        {
-            s += " (path: " + path + ")";
-        }
-        return s;
-    }
 };
 
 } // namespace mviewer::domain

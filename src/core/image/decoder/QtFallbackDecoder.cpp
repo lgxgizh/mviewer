@@ -85,18 +85,45 @@ ImageData QtFallbackDecoder::decodeFull(const std::string &path) const
     return decodeFull(path, meta);
 }
 
-ImageData QtFallbackDecoder::decodeFull(const std::string &path,
-                                        mviewer::domain::ImageMetadata &outMeta) const
+mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+QtFallbackDecoder::decodeFullResult(const std::string &path,
+                                    mviewer::domain::ImageMetadata &outMeta) const
 {
-    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
+    QImageReader reader(qPath);
     reader.setAutoTransform(true);
     const QImage img = reader.read();
     if (img.isNull())
-        return ImageData();
+    {
+        const auto readerErr = reader.error();
+        const QString errStr = reader.errorString();
+        mviewer::domain::DecodeErrorCode code = mviewer::domain::DecodeErrorCode::UnsupportedFormat;
+        if (readerErr == QImageReader::FileNotFoundError)
+            code = mviewer::domain::DecodeErrorCode::FileNotFound;
+        else if (readerErr == QImageReader::InvalidDataError)
+            code = mviewer::domain::DecodeErrorCode::CorruptData;
+        else if (readerErr == QImageReader::UnsupportedFormatError)
+            code = mviewer::domain::DecodeErrorCode::UnsupportedFormat;
+
+        std::string msg = errStr.isEmpty() ? ("QtFallbackDecoder failed to decode " + path)
+                                           : errStr.toStdString();
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {code, std::move(msg), path});
+    }
+
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
     fillMeta(reader, img, outMeta);
-    return toImageData(img);
+    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(toImageData(img));
+}
+
+ImageData QtFallbackDecoder::decodeFull(const std::string &path,
+                                        mviewer::domain::ImageMetadata &outMeta) const
+{
+    auto res = decodeFullResult(path, outMeta);
+    if (res.has_value())
+        return std::move(res.value());
+    return ImageData();
 }
 
 ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge) const

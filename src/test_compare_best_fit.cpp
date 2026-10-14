@@ -150,6 +150,7 @@ int main(int argc, char **argv)
     waitForCompareCount(ws, 2, 20000);
     check(ws->comparedImageCount() == 2, "both images loaded");
     check(waitForPaneSize(ws, 5000), "compare panes have a real size");
+    check(waitForDisplayed(ws, 20000), "both panes have a display raster");
 
     const auto *lowFrame = ws->engine().imageAt(0);
     const auto *highFrame = ws->engine().imageAt(1);
@@ -204,12 +205,16 @@ int main(int argc, char **argv)
     button->click();
     pump(30);
     check(!uniform->isChecked(), "适合窗口 leaves 统一像素倍率 off");
+    lowView = paneView(ws, "comparePane0");
+    highView = paneView(ws, "comparePane1");
+    const double curLowFit = fitScale(lowView->width(), lowView->height(), 400, 600);
+    const double curHighFit = fitScale(highView->width(), highView->height(), 800, 1200);
     const double bestLow = ws->engine().cellScale(0);
     const double bestHigh = ws->engine().cellScale(1);
     std::printf("scales: low=%.6f high=%.6f ratio=%.4f (fits %.6f / %.6f)\n", bestLow, bestHigh,
-                bestHigh > 0.0 ? bestLow / bestHigh : 0.0, lowFit, highFit);
-    check(bestHigh > 0.0 && std::abs(bestLow - lowFit) < 1e-6, "low-res pane uses its own fit");
-    check(std::abs(bestHigh - highFit) < 1e-6, "high-res pane uses its own fit");
+                bestHigh > 0.0 ? bestLow / bestHigh : 0.0, curLowFit, curHighFit);
+    check(bestHigh > 0.0 && std::abs(bestLow - curLowFit) < 1e-6, "low-res pane uses its own fit");
+    check(std::abs(bestHigh - curHighFit) < 1e-6, "high-res pane uses its own fit");
     check(std::abs(bestLow / bestHigh - 2.0) < 0.15,
           "low-res scale is about 2x the high-res scale");
     check(std::abs(ws->engine().syncTransform().scale - 1.0) < 1e-9,
@@ -219,8 +224,8 @@ int main(int argc, char **argv)
 
     QKeyEvent perPaneFitKey(QEvent::KeyPress, Qt::Key_F, Qt::NoModifier);
     QApplication::sendEvent(ws, &perPaneFitKey);
-    check(std::abs(ws->engine().cellScale(0) - lowFit) < 1e-6 &&
-              std::abs(ws->engine().cellScale(1) - highFit) < 1e-6,
+    check(std::abs(ws->engine().cellScale(0) - curLowFit) < 1e-6 &&
+              std::abs(ws->engine().cellScale(1) - curHighFit) < 1e-6,
           "F with 统一像素倍率 off matches the 适合窗口 button");
     button->click();
     pump(30);

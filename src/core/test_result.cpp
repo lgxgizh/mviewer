@@ -1,6 +1,8 @@
+#include "domain/DecodeError.h"
 #include "domain/Result.h"
 
 #include <iostream>
+#include <memory>
 #include <string>
 
 #define CHECK(cond, msg)                                                                           \
@@ -47,7 +49,7 @@ int main()
         CHECK(res.value_or(99) == 99, "res.value_or fallback works");
     }
 
-    // 4. Monadic map
+    // 4. Monadic map (const & and &&)
     {
         Result<int> r1 = 10;
         auto r2 = r1.map([](int x) { return x * 2; });
@@ -57,9 +59,16 @@ int main()
         auto r4 = r3.map([](int x) { return x * 2; });
         CHECK(!r4.has_value(), "r3.map propagates error");
         CHECK(r4.error() == "initial error", "r4 error preserved");
+
+        // Rvalue map with move-only type (std::unique_ptr)
+        Result<std::unique_ptr<int>> rMove = std::make_unique<int>(42);
+        auto rMapped = std::move(rMove).map([](std::unique_ptr<int> ptr) {
+            return *ptr + 10;
+        });
+        CHECK(rMapped.has_value() && rMapped.value() == 52, "rvalue map with move-only type");
     }
 
-    // 5. Monadic and_then
+    // 5. Monadic and_then (const & and &&)
     {
         auto divide = [](int a, int b) -> Result<int> {
             if (b == 0)
@@ -78,14 +87,30 @@ int main()
         auto step3 = step2.and_then([&](int v) { return divide(v, 5); });
         CHECK(!step3.has_value(), "and_then skips after failure");
         CHECK(step3.error() == "division by zero", "step3 error unchanged");
+
+        // Rvalue and_then with move-only payload
+        auto toPtr = [](int v) -> Result<std::unique_ptr<int>> {
+            return std::make_unique<int>(v * 3);
+        };
+        Result<int> seed = 15;
+        auto ptrRes = std::move(seed).and_then(toPtr);
+        CHECK(ptrRes.has_value() && *ptrRes.value() == 45, "rvalue and_then with move-only result");
     }
 
-    // 6. Monadic map_error
+    // 6. Monadic map_error (const & and &&)
     {
         Result<int, int> r1 = makeUnexpected(404);
         auto r2 = r1.map_error([](int code) { return "Error code " + std::to_string(code); });
         CHECK(!r2.has_value(), "map_error remains error");
         CHECK(r2.error() == "Error code 404", "map_error transformed error");
+
+        Result<int, std::unique_ptr<std::string>> rErrMove =
+            makeUnexpected(std::make_unique<std::string>("move error"));
+        auto rMappedErr = std::move(rErrMove).map_error([](std::unique_ptr<std::string> ptr) {
+            return *ptr + " resolved";
+        });
+        CHECK(!rMappedErr.has_value(), "rvalue map_error remains error");
+        CHECK(rMappedErr.error() == "move error resolved", "rvalue map_error works with move-only error");
     }
 
     // 7. Void specialization
@@ -96,6 +121,13 @@ int main()
         Result<void> v2 = Result<void>::err("void failure");
         CHECK(!v2.has_value(), "Result<void> err has no value");
         CHECK(v2.error() == "void failure", "Result<void> error matches");
+
+        bool thenExecuted = false;
+        v1.and_then([&]() {
+            thenExecuted = true;
+            return Result<void>::ok();
+        });
+        CHECK(thenExecuted, "Result<void> and_then executed on success");
     }
 
     // 8. DecodeError domain type

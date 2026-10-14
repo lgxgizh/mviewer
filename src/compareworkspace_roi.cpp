@@ -543,6 +543,8 @@ void CompareWorkspace::setROIMeasurementState(mviewer::ui::ROIMeasurementState s
 {
     m_roiState = state;
     m_roiStateDetail = detail;
+    if (m_roiController)
+        m_roiController->setMeasurementState(state);
     updateROISurfaces();
 }
 

@@ -51,7 +51,7 @@ class CompareDiffRenderer : public QObject
 
     // Pure rendering algorithms
     static QImage renderSplit(const QImage &imgA, const QImage &imgB, double ratio,
-                              Qt::Orientation orientation = Qt::Vertical);
+                              Qt::Orientation orientation = Qt::Horizontal);
 
     static ImageData computeDifference(const ImageData &imgA, const ImageData &imgB,
                                        uint8_t threshold);

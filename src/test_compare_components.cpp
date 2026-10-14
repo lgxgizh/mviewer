@@ -1,7 +1,9 @@
+#include "compare_diff_renderer.h"
 #include "compare_roi_controller.h"
 #include "compare_session_state.h"
+#include "compareworkspace.h"
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <iostream>
 
 #define CHECK(cond, msg)                                                                           \
@@ -23,7 +25,8 @@ using namespace mviewer::domain;
 
 int main(int argc, char **argv)
 {
-    QCoreApplication app(argc, argv);
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+    QApplication app(argc, argv);
 
     // 1. CompareSessionState tests
     {
@@ -131,6 +134,44 @@ int main(int argc, char **argv)
         controller.clearROI();
         CHECK(clearedEmitted, "roiCleared emitted");
         CHECK(!controller.hasValidROI(), "hasValidROI is false after clear");
+    }
+
+    // 3. CompareWorkspace component wiring and mediation tests
+    {
+        CompareWorkspace workspace;
+        CHECK(workspace.sessionState() != nullptr, "sessionState component instantiated");
+        CHECK(workspace.roiController() != nullptr, "roiController component instantiated");
+        CHECK(workspace.diffRenderer() != nullptr, "diffRenderer component instantiated");
+
+        // ROI mediation
+        Selection roi;
+        roi.x = 25;
+        roi.y = 35;
+        roi.width = 120;
+        roi.height = 90;
+        workspace.applyROI(roi);
+        CHECK(workspace.roiController()->currentROI() == roi,
+              "applyROI synchronizes with roiController");
+        CHECK(workspace.currentROI() == roi, "currentROI returns controller ROI");
+
+        workspace.roiController()->clearROI();
+        CHECK(!workspace.roiController()->hasValidROI(),
+              "clearROI on controller clears ROI");
+        CHECK(workspace.currentROI().isEmpty(),
+              "workspace.currentROI is empty after clear");
+
+        // DiffRenderer threshold mediation
+        workspace.diffRenderer()->setThreshold(64);
+        CHECK(workspace.diffRenderer()->threshold() == 64, "diffRenderer threshold updated");
+
+        // SessionState navigation mediation
+        workspace.setNavWindow(4);
+        CHECK(workspace.sessionState()->navWindow() == 4,
+              "setNavWindow synchronizes with sessionState");
+
+        workspace.setImagePool({"test1.png", "test2.png"});
+        CHECK(workspace.sessionState()->allPoolPaths().size() == 2,
+              "setImagePool synchronizes with sessionState");
     }
 
     std::cout << "All Compare component tests passed!" << std::endl;

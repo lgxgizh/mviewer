@@ -2,6 +2,7 @@
 
 #include "core/image/ImageBuffer.h"
 #include "domain/Image.h"
+#include "domain/DecodeError.h"
 #include "domain/Result.h"
 
 #include <string>

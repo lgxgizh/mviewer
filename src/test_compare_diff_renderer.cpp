@@ -59,23 +59,29 @@ int main(int argc, char **argv)
     CHECK(blinkEmitted, "blinkStateChanged emitted");
     CHECK(renderer.isBlinkActive(), "blink is active");
 
-    // Test renderSplit vertical
+    // Test renderSplit horizontal (left/right along X)
     QImage imgA(100, 100, QImage::Format_ARGB32_Premultiplied);
     imgA.fill(QColor(255, 0, 0)); // Red
     QImage imgB(100, 100, QImage::Format_ARGB32_Premultiplied);
     imgB.fill(QColor(0, 0, 255)); // Blue
 
-    QImage splitV = CompareDiffRenderer::renderSplit(imgA, imgB, 0.5, Qt::Vertical);
-    CHECK(!splitV.isNull(), "vertical split rendered");
-    CHECK(splitV.width() == 100 && splitV.height() == 100, "split dimensions 100x100");
-    CHECK(splitV.pixelColor(25, 50) == QColor(255, 0, 0), "left half is red");
-    CHECK(splitV.pixelColor(75, 50) == QColor(0, 0, 255), "right half is blue");
-
-    // Test renderSplit horizontal
     QImage splitH = CompareDiffRenderer::renderSplit(imgA, imgB, 0.5, Qt::Horizontal);
     CHECK(!splitH.isNull(), "horizontal split rendered");
-    CHECK(splitH.pixelColor(50, 25) == QColor(255, 0, 0), "top half is red");
-    CHECK(splitH.pixelColor(50, 75) == QColor(0, 0, 255), "bottom half is blue");
+    CHECK(splitH.width() == 100 && splitH.height() == 100, "split dimensions 100x100");
+    CHECK(splitH.pixelColor(25, 50) == QColor(255, 0, 0), "left half is red");
+    CHECK(splitH.pixelColor(75, 50) == QColor(0, 0, 255), "right half is blue");
+
+    // Test renderSplit default orientation (defaults to Qt::Horizontal)
+    QImage splitDef = CompareDiffRenderer::renderSplit(imgA, imgB, 0.5);
+    CHECK(!splitDef.isNull(), "default split rendered");
+    CHECK(splitDef.pixelColor(25, 50) == QColor(255, 0, 0), "default split left half is red");
+    CHECK(splitDef.pixelColor(75, 50) == QColor(0, 0, 255), "default split right half is blue");
+
+    // Test renderSplit vertical (top/bottom along Y)
+    QImage splitV = CompareDiffRenderer::renderSplit(imgA, imgB, 0.5, Qt::Vertical);
+    CHECK(!splitV.isNull(), "vertical split rendered");
+    CHECK(splitV.pixelColor(50, 25) == QColor(255, 0, 0), "top half is red");
+    CHECK(splitV.pixelColor(50, 75) == QColor(0, 0, 255), "bottom half is blue");
 
     // Test computeDifference
     ImageData a = makeImageData(10, 10, PixelFormat::RGB24);
