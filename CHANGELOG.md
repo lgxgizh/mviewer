@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **生命周期与内存安全性**：`toQImageRef` 引入 `QImageCleanupFunction` 绑定源 `ImageData` 缓冲的 `std::shared_ptr` 引用计数，杜绝返回的 `QImage` 生命周期超出源数据时的野指针与悬空指针风险；`RawDecoder_libraw` 中 `libraw_processed_image_t` 资源改用 `std::unique_ptr` 自定义 RAII 删除器管理，防止异常或失败分支引发内存泄漏。
+- **SIMD 跨架构兼容性**：`CpuFeatures.h` 与 `DifferenceEngine.cpp` 增加体系结构隔离宏 `MV_ARCH_X86`，防止在 ARM64 或非 x86 架构下包含 x86 专用头文件（`<cpuid.h>` / `<immintrin.h>`）而编译报错。
+
+### Performance & Architecture
+
+- **后台调度无忙等待**：`TaskScheduler::yieldToForeground` 废弃原 `std::this_thread::sleep_for(4ms)` 忙等待轮询，改用条件变量 `std::condition_variable` 通知配合前台引用计数，消除后台缩略图 worker 线程的自旋等待和多余上下文切换。
+- **写时复制（COW）与只读视图支持**：`ImageData` 引入 `makeUnique()`、`detach()`、`ConstImageBuffer`、`constView()` 与带自动分离机制的 `mutableView()`，提升 const 安全性与多组件共享缓冲区的独立性。
+- **高频路径零拷贝渲染**：比较模式差异叠加层（`compareworkspace_render_diff.cpp`）与快速预览面板（`previewpanel.cpp`）采用 `toQImageFast` 进行生命周期受保护的零拷贝视图转换，避免重复全尺寸内存申请与 memcpy。
+- **算法魔数语义化**：`DifferenceEngine` 与渲染模块将定点数乘数与色标阈值提取为语义明确的 `constexpr` 常量（如 `kFixedPointDiv3Multiplier = 21846` 等）。
+
 ## [1.0.115] - 2026-10-14
 
 ### Release

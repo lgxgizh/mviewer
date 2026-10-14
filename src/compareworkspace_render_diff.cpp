@@ -278,7 +278,7 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
                     displayOverlay = RenderEngine::scaleBoundedStatic(
                         overlayImage, RenderSize{overlayTarget.width(), overlayTarget.height()});
                 }
-                overlay.overlay = mvcore::toQImage(displayOverlay);
+                overlay.overlay = mvcore::toQImageFast(displayOverlay);
                 overlay.opacity = highlight ? 0.75 : 0.5;
             }
         }

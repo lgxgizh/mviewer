@@ -24,6 +24,13 @@ int DifferenceEngine::channelOffset(PixelFormat fmt, int channel)
     }
 }
 
+namespace
+{
+// Fixed-point reciprocal for division by 3: round((1.0 / 3.0) * 65536) = 21846
+constexpr uint16_t kFixedPointDiv3Multiplier = 21846;
+} // namespace
+
+#if defined(MV_ARCH_X86)
 static inline uint32_t diffRGB24Quad(__m128i va, __m128i vb, __m128i maskR, __m128i maskG,
                                      __m128i maskB, __m128i vthresh, __m128i vdiv, __m128i vzero)
 {
@@ -36,11 +43,13 @@ static inline uint32_t diffRGB24Quad(__m128i va, __m128i vb, __m128i maskR, __m1
     const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh, avg8), vzero);
     return static_cast<uint32_t>(_mm_cvtsi128_si32(_mm_and_si128(avg8, mask)));
 }
+#endif
 
 static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
                                 uint8_t threshold, bool useSsse3)
 {
     int x = 0;
+#if defined(MV_ARCH_X86)
     if (useSsse3)
     {
         const __m128i maskR =
@@ -51,7 +60,7 @@ static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *d
             _mm_setr_epi8(2, 5, 8, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
         const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
         const __m128i vzero = _mm_setzero_si128();
-        const __m128i vdiv = _mm_set1_epi16(21846);
+        const __m128i vdiv = _mm_set1_epi16(kFixedPointDiv3Multiplier);
 
         for (; x * 3 + 16 <= w * 3; x += 4)
         {
@@ -61,13 +70,16 @@ static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *d
             std::memcpy(dst + x, &out4, 4);
         }
     }
+#else
+    (void)useSsse3;
+#endif
     for (; x < w; ++x)
     {
         const int dr = std::abs(static_cast<int>(la[x * 3 + 0]) - static_cast<int>(lb[x * 3 + 0]));
         const int dg = std::abs(static_cast<int>(la[x * 3 + 1]) - static_cast<int>(lb[x * 3 + 1]));
         const int db = std::abs(static_cast<int>(la[x * 3 + 2]) - static_cast<int>(lb[x * 3 + 2]));
         const int sum = dr + dg + db;
-        const uint8_t diff = static_cast<uint8_t>((sum * 21846) >> 16);
+        const uint8_t diff = static_cast<uint8_t>((sum * kFixedPointDiv3Multiplier) >> 16);
         dst[x] = (diff >= threshold) ? diff : 0;
     }
 }
@@ -76,6 +88,7 @@ static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8
                                      uint8_t threshold, bool useAvx2)
 {
     int x = 0;
+#if defined(MV_ARCH_X86)
     if (useAvx2)
     {
         const __m256i vthresh = _mm256_set1_epi8(static_cast<char>(threshold));
@@ -102,6 +115,9 @@ static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8
         const __m128i mask = _mm_cmpeq_epi8(under, vzero128);
         _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + x), _mm_and_si128(diff, mask));
     }
+#else
+    (void)useAvx2;
+#endif
     for (; x < w; ++x)
     {
         const int dr = std::abs(static_cast<int>(la[x]) - static_cast<int>(lb[x]));
@@ -109,6 +125,7 @@ static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8
     }
 }
 
+#if defined(MV_ARCH_X86)
 static inline uint32_t diffRGBA32Quad(__m128i va, __m128i vb, __m128i wRGB, __m128i vthresh,
                                       __m128i vdiv, __m128i vzero)
 {
@@ -119,16 +136,18 @@ static inline uint32_t diffRGBA32Quad(__m128i va, __m128i vb, __m128i wRGB, __m1
     const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh, avg8), vzero);
     return static_cast<uint32_t>(_mm_cvtsi128_si32(_mm_and_si128(avg8, mask)));
 }
+#endif
 
 static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
                                  uint8_t threshold, bool useSsse3)
 {
     int x = 0;
+#if defined(MV_ARCH_X86)
     if (useSsse3)
     {
         const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
         const __m128i vzero = _mm_setzero_si128();
-        const __m128i vdiv = _mm_set1_epi16(21846);
+        const __m128i vdiv = _mm_set1_epi16(kFixedPointDiv3Multiplier);
         const __m128i wRGB = _mm_setr_epi8(1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0);
 
         for (; x + 8 <= w; x += 8)
@@ -158,13 +177,16 @@ static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *
             std::memcpy(dst + x, &out4, 4);
         }
     }
+#else
+    (void)useSsse3;
+#endif
     for (; x < w; ++x)
     {
         const int dr = std::abs(static_cast<int>(la[x * 4 + 0]) - static_cast<int>(lb[x * 4 + 0]));
         const int dg = std::abs(static_cast<int>(la[x * 4 + 1]) - static_cast<int>(lb[x * 4 + 1]));
         const int db = std::abs(static_cast<int>(la[x * 4 + 2]) - static_cast<int>(lb[x * 4 + 2]));
         const int sum = dr + db + dg;
-        const uint8_t diff = static_cast<uint8_t>((sum * 21846) >> 16);
+        const uint8_t diff = static_cast<uint8_t>((sum * kFixedPointDiv3Multiplier) >> 16);
         dst[x] = (diff >= threshold) ? diff : 0;
     }
 }
@@ -181,7 +203,7 @@ static inline void diffScalarRow(const uint8_t *la, const uint8_t *lb, uint8_t *
         const int dg = std::abs(static_cast<int>(pa[roA1]) - static_cast<int>(pb[roB1]));
         const int db = std::abs(static_cast<int>(pa[roA2]) - static_cast<int>(pb[roB2]));
         const int sum = dr + dg + db;
-        const uint8_t diff = static_cast<uint8_t>((sum * 21846) >> 16);
+        const uint8_t diff = static_cast<uint8_t>((sum * kFixedPointDiv3Multiplier) >> 16);
         dst[x] = (diff >= threshold) ? diff : 0;
     }
 }

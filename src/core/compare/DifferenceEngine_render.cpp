@@ -31,6 +31,12 @@ const auto &heatLUT()
     return table;
 }
 
+// Visual comparison colormap tuning constants
+constexpr int kSubtleDiffThreshold = 60;  // Threshold below which differences are subtle amber
+constexpr int kSevereDiffThreshold = 180; // Threshold above which differences are severe crimson
+constexpr int kAmberMaxGreen = 48;        // Maximum green channel intensity in amber warning
+constexpr int kCrimsonMaxBlue = 24;       // Maximum blue channel intensity in crimson alert
+
 const auto &highlightColorLUT()
 {
     static const auto table = []()
@@ -41,15 +47,16 @@ const auto &highlightColorLUT()
             const uint8_t r = static_cast<uint8_t>(std::min(255, 80 + v * 2));
             uint8_t g = 0;
             uint8_t b = 0;
-            if (v < 60)
+            if (v < kSubtleDiffThreshold)
             {
                 // Subtle difference: warm amber warning gradient, strictly R > G > B
-                g = static_cast<uint8_t>(std::min<int>(r / 3, 48 - (v * 48 / 60)));
+                g = static_cast<uint8_t>(std::min<int>(
+                    r / 3, kAmberMaxGreen - (v * kAmberMaxGreen / kSubtleDiffThreshold)));
             }
-            else if (v >= 180)
+            else if (v >= kSevereDiffThreshold)
             {
                 // Severe difference: vivid crimson alert
-                b = static_cast<uint8_t>(std::min<int>(24, (v - 180) / 4));
+                b = static_cast<uint8_t>(std::min<int>(kCrimsonMaxBlue, (v - kSevereDiffThreshold) / 4));
             }
             lut[v] = {r, g, b};
         }

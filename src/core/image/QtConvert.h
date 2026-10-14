@@ -16,13 +16,20 @@ namespace mvcore
 // ImageData -> QImage（格式感知：Grayscale8/RGB24/RGBA32 各自映射）
 QImage toQImage(const ImageData &src);
 
-// M28 P1-03: NON-OWNING QImage view over the ImageData buffer where the byte
+// M28 P1-03: Zero-copy QImage view over the ImageData buffer where the byte
 // order matches a Qt format (RGB24->RGB888, BGR24->BGR888, BGRA32->ARGB32,
-// Grayscale8->Grayscale8). Zero copy — the caller must keep `src` alive while
-// the returned QImage is used (Qt never frees the referenced data). Returns a
-// null QImage for formats whose byte order does not map (RGBA32); callers
+// Grayscale8->Grayscale8). The underlying buffer is kept alive via a custom
+// cleanup hook until the returned QImage and all copies are destroyed. Returns
+// a null QImage for formats whose byte order does not map (RGBA32); callers
 // must fall back to toQImage().
 QImage toQImageRef(const ImageData &src);
+
+// Returns zero-copy toQImageRef(src) if format allows, else falls back to toQImage(src).
+inline QImage toQImageFast(const ImageData &src)
+{
+    const QImage ref = toQImageRef(src);
+    return ref.isNull() ? toQImage(src) : ref;
+}
 
 // Materialize a display-only sRGB copy from analysis-domain pixels. Embedded
 // ICC is applied to the copy; the source ImageData bytes are never modified.

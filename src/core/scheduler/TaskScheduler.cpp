@@ -9,22 +9,28 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <thread>
 
 namespace
 {
 
 std::atomic<int> g_foregroundDepth{0};
+std::mutex g_foregroundMtx;
+std::condition_variable g_foregroundCv;
 
 // Thumbnail work yields to foreground work for a bounded time (never forever,
 // so drain()/handle convergence is unaffected) and re-checks cancellation.
 void yieldToForeground(const TaskScheduler::TaskContext &ctx)
 {
-    constexpr auto kStep = std::chrono::milliseconds(4);
-    constexpr int kMaxSteps = 50; // <= ~200 ms per task
-    for (int i = 0; i < kMaxSteps && TaskScheduler::foregroundBusy() && !ctx.isCancelled(); ++i)
-        std::this_thread::sleep_for(kStep);
+    if (g_foregroundDepth.load(std::memory_order_relaxed) == 0 || ctx.isCancelled())
+        return;
+    std::unique_lock<std::mutex> lock(g_foregroundMtx);
+    g_foregroundCv.wait_for(lock, std::chrono::milliseconds(200), [&]() {
+        return g_foregroundDepth.load(std::memory_order_relaxed) == 0 || ctx.isCancelled();
+    });
 }
 
 class LambdaTask : public QRunnable
@@ -162,7 +168,11 @@ TaskScheduler::ForegroundWork::ForegroundWork()
 
 TaskScheduler::ForegroundWork::~ForegroundWork()
 {
-    g_foregroundDepth.fetch_sub(1, std::memory_order_relaxed);
+    if (g_foregroundDepth.fetch_sub(1, std::memory_order_release) == 1)
+    {
+        std::lock_guard<std::mutex> lock(g_foregroundMtx);
+        g_foregroundCv.notify_all();
+    }
 }
 
 bool TaskScheduler::foregroundBusy()
