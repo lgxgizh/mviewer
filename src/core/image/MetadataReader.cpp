@@ -497,4 +497,89 @@ std::vector<uint8_t> MetadataReader::extractExifThumbnail(const std::string &fil
     return {};
 }
 
+std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &filePath)
+{
+    QFile file(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    const QByteArray soi = file.read(2);
+    if (soi.size() < 2 || static_cast<unsigned char>(soi[0]) != 0xFF ||
+        static_cast<unsigned char>(soi[1]) != 0xD8)
+        return {};
+
+    std::vector<QByteArray> parts;
+    int expectedParts = 0;
+    for (int guard = 0; guard < 512 && !file.atEnd(); ++guard)
+    {
+        char b0 = 0;
+        if (file.read(&b0, 1) != 1)
+            break;
+        if (static_cast<unsigned char>(b0) != 0xFF)
+            continue;
+        char marker = 0;
+        while (file.read(&marker, 1) == 1 && static_cast<unsigned char>(marker) == 0xFF)
+        {
+        }
+        const auto code = static_cast<unsigned char>(marker);
+        if (code == 0xD9 || code == 0xDA)
+            break;
+        if (code == 0x01 || (code >= 0xD0 && code <= 0xD7))
+            continue;
+        const QByteArray lenBytes = file.read(2);
+        if (lenBytes.size() < 2)
+            break;
+        int segmentSize = (static_cast<unsigned char>(lenBytes[0]) << 8) |
+                          static_cast<unsigned char>(lenBytes[1]);
+        if (segmentSize < 2)
+            break;
+        segmentSize -= 2;
+        if (code != 0xE2 || segmentSize < 14)
+        {
+            if (!file.seek(file.pos() + segmentSize))
+                break;
+            continue;
+        }
+        // "ICC_PROFILE\0" (12) + seq + count
+        const QByteArray id = file.read(14);
+        segmentSize -= 14;
+        if (id.size() < 14 || !id.startsWith(QByteArray("ICC_PROFILE", 11) + char(0)))
+        {
+            if (!file.seek(file.pos() + segmentSize))
+                break;
+            continue;
+        }
+        const int seq = static_cast<unsigned char>(id[12]);
+        const int count = static_cast<unsigned char>(id[13]);
+        if (seq < 1 || count < 1 || seq > count)
+        {
+            if (!file.seek(file.pos() + segmentSize))
+                break;
+            continue;
+        }
+        if (expectedParts == 0)
+        {
+            expectedParts = count;
+            parts.assign(static_cast<size_t>(count), QByteArray());
+        }
+        else if (count != expectedParts)
+        {
+            if (!file.seek(file.pos() + segmentSize))
+                break;
+            continue;
+        }
+        const QByteArray chunk = file.read(segmentSize);
+        if (chunk.size() != segmentSize)
+            return {};
+        parts[static_cast<size_t>(seq - 1)] = chunk;
+    }
+
+    if (parts.empty() ||
+        std::any_of(parts.begin(), parts.end(), [](const QByteArray &c) { return c.isEmpty(); }))
+        return {};
+    QByteArray all;
+    for (const QByteArray &c : parts)
+        all += c;
+    return std::vector<uint8_t>(all.begin(), all.end());
+}
+
 } // namespace mviewer::core

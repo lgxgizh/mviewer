@@ -3,17 +3,22 @@
 #include "core/image/Decoder.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
+#include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
 
+#include <QBuffer>
 #include <QByteArray>
 #include <QColor>
+#include <QColorSpace>
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QTemporaryDir>
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -317,6 +322,87 @@ static void testMetadataHostileOffsets()
     }
 }
 
+static QByteArray jpegApp2IccSegment(const QByteArray &icc, int seq, int count)
+{
+    QByteArray payload;
+    payload.append(QByteArray("ICC_PROFILE", 11));
+    payload.append(char{0});
+    payload.append(static_cast<char>(seq));
+    payload.append(static_cast<char>(count));
+    payload.append(icc);
+    const auto segLen = static_cast<int>(payload.size() + 2);
+    QByteArray seg;
+    seg.append(static_cast<char>(0xFF));
+    seg.append(static_cast<char>(0xE2));
+    seg.append(static_cast<char>((segLen >> 8) & 0xFF));
+    seg.append(static_cast<char>(segLen & 0xFF));
+    seg.append(payload);
+    return seg;
+}
+
+static bool writeJpegWithIcc(const QString &path, const QByteArray &icc)
+{
+    QImage img(64, 48, QImage::Format_RGB888);
+    img.fill(QColor(20, 40, 60));
+    QByteArray jpeg;
+    {
+        QBuffer buf(&jpeg);
+        if (!buf.open(QIODevice::WriteOnly) || !img.save(&buf, "JPEG", 90) || jpeg.size() < 4)
+            return false;
+    }
+    // Insert one APP2 chunk right after SOI (FF D8).
+    const QByteArray app2 = jpegApp2IccSegment(icc, 1, 1);
+    QByteArray out;
+    out.append(jpeg.left(2));
+    out.append(app2);
+    out.append(jpeg.mid(2));
+    QFile f(path);
+    if (!f.open(QIODevice::WriteOnly))
+        return false;
+    return f.write(out) == out.size();
+}
+
+static void testJpegIccHeaderScrape()
+{
+    printf("\n[MetadataReader JPEG APP2 ICC]\n");
+    fflush(stdout);
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "icc temp dir");
+    const QString jpgPath = dir.path() + "/with_icc.jpg";
+    const QByteArray adobe = QColorSpace(QColorSpace::AdobeRgb).iccProfile();
+    CHECK(!adobe.isEmpty(), "AdobeRGB ICC bytes available");
+    CHECK(writeJpegWithIcc(jpgPath, adobe), "write JPEG with injected APP2 ICC");
+
+    const std::string path = jpgPath.toStdString();
+    const auto scraped = mviewer::core::MetadataReader::extractJpegIccProfile(path);
+    CHECK(scraped.size() == static_cast<size_t>(adobe.size()),
+          "extractJpegIccProfile size matches");
+    CHECK(!scraped.empty() && scraped.size() == static_cast<size_t>(adobe.size()) &&
+              std::memcmp(scraped.data(), adobe.constData(), scraped.size()) == 0,
+          "extractJpegIccProfile bytes match embedded profile");
+    CHECK(mviewer::core::MetadataReader::extractJpegIccProfile(path + ".missing").empty(),
+          "missing file -> empty ICC");
+
+    auto src = mviewer::core::SourceImage::open(path);
+    CHECK(src != nullptr, "SourceImage opens ICC JPEG");
+    if (src)
+    {
+        CHECK(src->metadata().textKeys.count("MViewer.DisplayICC.Base64") != 0,
+              "probe attaches DisplayICC without 1x1 decode");
+        CHECK(src->metadata().hasIccProfile, "probe sets hasIccProfile");
+    }
+
+    const QString pngPath = dir.path() + "/no_probe_icc.png";
+    {
+        QImage img(32, 32, QImage::Format_RGB32);
+        img.fill(Qt::green);
+        CHECK(img.save(pngPath, "PNG"), "write png");
+    }
+    auto png = mviewer::core::SourceImage::open(pngPath.toStdString());
+    CHECK(png != nullptr, "SourceImage opens PNG without 1x1 ICC probe");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -327,6 +413,7 @@ int main(int argc, char **argv)
     testDecoderEnrichment();
     testMetadataReader();
     testMetadataHostileOffsets();
+    testJpegIccHeaderScrape();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
