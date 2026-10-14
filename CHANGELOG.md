@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.119] - 2026-10-14
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.119**.
+
+### Architecture & Componentization
+
+- **CompareDiffRenderer 独立渲染合成组件（ADR-014）**：
+  - 引入 `CompareDiffRenderer` 组件，抽离差异图计算、Swipe / Split 视口合成以及 Blink 动画状态管理；
+  - 建立纯组件单元测试 `src/test_compare_diff_renderer.cpp`（`compare_diff_renderer_tests`）接入 CTest 质量门禁，验证横向/纵向 Split 混合及纯度量渲染。
+
+### Performance & Concurrency
+
+- **DifferenceEngine 尾部循环展开与跨平台流水线优化**：
+  - 在 `diffRGB24Row` 与 `diffRGBA32Row` 标量/非 SIMD 分支引入 4 像素循环展开，大幅提升 ARM64 及非对齐边界下的指令流水线吞吐与自动向量化效率。
+- **TaskScheduler 线程池生命周期与闲置回收**：
+  - 显式为全部 5 个优先级线程队列配置 5000ms 闲置过期回收（`setExpiryTimeout(5000)`），消除空闲线程长期占用系统句柄与栈内存的问题，缓解多线程池并发过度订阅。
+
 ## [1.0.118] - 2026-10-14
 
 ### Release
