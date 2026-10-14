@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.0.117] - 2026-10-14
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.117**.
+
+### Added & Architecture
+
+- **Domain 层现代 C++20 Result<T, E> 单子容器**：基于 C++23 `std::expected` 设计规范，在 `src/domain/Result.h` 引入纯标准库、零依赖的泛型容器 `Result<T, E = std::string>`，支持 `has_value()`、`value()`、`error()`、`value_or()`、`map()`、`and_then()`、`map_error()` 等链式单子操作，并针对无返回值操作提供 `Result<void, E>` 特化。
+- **结构化领域解码错误类型**：定义 `DecodeError` 与 `DecodeErrorCode`（`FileNotFound`, `AccessDenied`, `CorruptData`, `UnsupportedFormat`, `OutOfMemory`, `Unknown`），规范化算法与解码底层错误上下文传递；新增 `test_result.cpp` 单元测试套件并接入 CTest 质量门禁。
+- **跨平台 POSIX build.sh 自动适配**：重构 `build.sh`，在 Windows/WSL 环境下自动委托 `build.ps1`，在无 PowerShell 的原生 Linux/macOS POSIX 环境下原生调用 `cmake`、`cmake --build` 与 `ctest`，实现真正的跨平台一键构建。
+- **进程退出有序安全关闭（Graceful Shutdown）**：在 `main.cpp` 中将 `QCoreApplication::aboutToQuit` 信号显式连接到 `TaskScheduler::instance().shutdown()`，在 Qt 核心子系统析构前安全取消并排空后台任务线程池，消除进程退出时的死锁风险。
+
+### Performance & Safety
+
+- **全管线全面推行零拷贝 QImage 视图**：在瓦片渲染绘制路径（`imageviewer_paint.cpp`）、缩略图回调（`thumbnailpanel.cpp`）、对比渐进式显示（`compareworkspace_progressive.cpp`）、分析面板与工作线程（`analysispanel.cpp` / `analysispanel_analysis_worker.cpp`）、主窗口视图与报告导出（`mainwindow_view.cpp` / `mainwindow_export.cpp`）、LOD 叠加层及过渡快照（`imageviewer_lod.cpp` / `imageviewer_loading.cpp`）等高频核心交互路径中全面采用带生命周期自动保活的 `toQImageFast`，彻底杜绝单帧几十兆内存的重复申请与 memcpy。
+- **重采样 SIMD 跨平台隔离与标量回退**：在 `DisplayResampleSimd.cpp` 中对 AVX2 / SSE4.1 x86 向量化实现全面施加 `MV_ARCH_X86` 体系结构隔离，并为 ARM64 及非 x86 平台提供安全保真的标量回退分支。
+
 ## [1.0.116] - 2026-10-14
 
 ### Release
