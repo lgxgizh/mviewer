@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.114] - 2026-10-14
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.114**.
+
 ### Performance
 
 - EXIF 缩略图旋转（`orientThumbnail`）改用 `QImage::mirrored` / `transformed`，与原来的 `displayToRaw` 逐像素结果一致；256 像素约 0.49 ms → 0.02 ms。
