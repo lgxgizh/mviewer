@@ -62,6 +62,8 @@ static void testBenchmarkSmokeDecode()
         ImageData d = reg.decodeFull(base + f);
         if (!d.isNull())
             ++ok;
+        auto res = reg.decodeFullResult(base + f);
+        CHECK(res.has_value() && !res.value().isNull(), "decodeFullResult succeeded on golden file");
     }
     const auto t1 = std::chrono::steady_clock::now();
     const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -126,6 +128,11 @@ static void testRegistryDispatch()
     // Unknown/undecodable path must NOT crash — returns empty ImageData.
     ImageData empty = reg.decodeFull("/nonexistent/path/to/image.xyz");
     CHECK(empty.isNull(), "unknown file returns empty ImageData (graceful, no crash)");
+
+    auto resErr = reg.decodeFullResult("/nonexistent/path/to/image.xyz");
+    CHECK(!resErr.has_value(), "decodeFullResult for nonexistent file returns error");
+    CHECK(resErr.error().code == mviewer::domain::DecodeErrorCode::FileNotFound,
+          "error code is FileNotFound");
 
     // Custom decoder registration must precede QtFallbackDecoder
     class DummyCustomDecoder : public IDecoder

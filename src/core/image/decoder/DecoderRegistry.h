@@ -39,6 +39,12 @@ class DecoderRegistry
     // Decode and populate metadata in a single pass.
     ImageData decodeFull(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const;
 
+    // Modern Result-based decode returning rich error context when decode fails.
+    mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+    decodeFullResult(const std::string &path) const;
+    mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+    decodeFullResult(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const;
+
     // Union of all registered decoders' extensions (fallback contributes none).
     std::vector<std::string> supportedExtensions() const;
 
