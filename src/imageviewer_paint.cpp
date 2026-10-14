@@ -527,9 +527,7 @@ void ImageViewer::drawCpuTiles(QPainter &painter, const std::vector<TileCache::R
             continue;
         if (gpuActive && m_gpu.handle(rt.key) != 0)
             continue;
-        QImage image = mvcore::toQImageRef(rt.data);
-        if (image.isNull())
-            image = mvcore::toQImage(rt.data);
+        const QImage image = mvcore::toQImageFast(rt.data);
         const auto placed = placedTile(tileView, m_tiles, rt, image.width(), image.height());
         drawPlacedCpuTile(painter, image, placed);
     }

@@ -494,7 +494,7 @@ void MainWindow::openAnalysisOverlay()
         const auto frame = m_imageViewer->frame();
         if (frame && !frame->pixels().isNull() && frame->metadata().filePath == path.toStdString())
         {
-            img = mvcore::toQImage(frame->pixels());
+            img = mvcore::toQImageFast(frame->pixels());
         }
     }
     if (img.isNull())

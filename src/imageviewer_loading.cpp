@@ -158,9 +158,7 @@ void ImageViewer::setImageImpl(const QString &path)
         }
         else if (m_frame && m_frame->isValid())
         {
-            QImage img = mvcore::toQImageRef(m_frame->pixels());
-            if (img.isNull())
-                img = mvcore::toQImage(m_frame->pixels());
+            QImage img = mvcore::toQImageFast(m_frame->pixels());
             m_transitionImage = ownedTransitionSnapshot(img);
             m_transitionSourceSize = QSize(m_frame->width(), m_frame->height());
         }

@@ -770,7 +770,7 @@ void ImageViewer::scheduleLodOverlayDerivation() const
             if (!data.isNull())
             {
                 mviewer::applyOverlay(data, mode, threshold);
-                derived = mvcore::toQImage(data);
+                derived = mvcore::toQImageFast(data);
             }
             if (!qApp)
                 return;

@@ -49,9 +49,7 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
     ImageData data; // base stats input; valid only for materializing requests
     if (in.materialize)
     {
-        QImage img = mvcore::toQImageRef(in.frame->pixels());
-        if (img.isNull())
-            img = mvcore::toQImage(in.frame->pixels()); // RGBA32 fallback
+        QImage img = mvcore::toQImageFast(in.frame->pixels());
         img = img.convertToFormat(QImage::Format_RGB32);
         if (ctx.isCancelled())
             return r;

@@ -121,7 +121,7 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
         const std::string key = PreviewPanel::previewCacheKey(path);
         if (!svc.getPreviewCache(key, preview) || preview.isNull())
             continue;
-        const QImage q = mvcore::toQImage(preview);
+        const QImage q = mvcore::toQImageFast(preview);
         if (q.isNull())
             continue;
         const QSize srcSize = view->sourceSize().isValid() ? view->sourceSize() : q.size();

@@ -99,6 +99,7 @@ void averageBytesScalar(const uint8_t *a, const uint8_t *b, uint8_t *dst, int co
         dst[i] = static_cast<uint8_t>((static_cast<int>(a[i]) + static_cast<int>(b[i]) + 1) >> 1);
 }
 
+#if defined(MV_ARCH_X86)
 MV_TARGET_AVX2 MV_NOINLINE void averagePairsAvx2(const uint8_t *src, uint8_t *dst, int pairs)
 {
     const __m256i one = _mm256_set1_epi16(1);
@@ -564,9 +565,11 @@ MV_TARGET_SSE41 MV_NOINLINE void verticalSse(const uint16_t *planeR, const uint1
         verticalTail(planeR, planeG, planeB, srcRow0, srcH, ky, y, x, dstW, dst);
     }
 }
+#endif // MV_ARCH_X86
 
 } // namespace
 
+#if defined(MV_ARCH_X86)
 bool boxWriteBodyFast(const RgbView &src, uint8_t *dst, int dstW, int dstH, bool halfX, bool halfY,
                       int y0, int y1)
 {
@@ -625,5 +628,24 @@ bool convolveVerticalFast(const uint16_t *planeR, const uint16_t *planeG, const 
         verticalSse(planeR, planeG, planeB, srcRow0, srcH, ky, y0, y1, dstW, dst);
     return true;
 }
+#else
+bool boxWriteBodyFast(const RgbView &, uint8_t *, int, int, bool, bool, int, int)
+{
+    return false;
+}
+
+bool convolveHorizontalFast(const RgbView &, int, const AxisKernel &, uint16_t *,
+                            uint16_t *, uint16_t *)
+{
+    return false;
+}
+
+bool convolveVerticalFast(const uint16_t *, const uint16_t *, const uint16_t *,
+                          int, int, const AxisKernel &, int, int, int,
+                          uint8_t *)
+{
+    return false;
+}
+#endif // MV_ARCH_X86
 
 } // namespace mviewer::core::resample_detail
