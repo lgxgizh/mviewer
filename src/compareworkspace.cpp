@@ -15,12 +15,69 @@
 // M47: Compare analysis-support full frames are only loaded when the source's
 // RGB materialization fits comfortably under Qt's 256 MB allocation limit
 // (60 MP * 3 B = 180 MB, leaving headroom for QImage copies). Infeasible
-// sources display through the source-backed LOD path only.
+namespace
+{
+void cancelInFlightTasks(TaskScheduler::TaskHandle &roiTask, uint64_t &roiGen,
+                         TaskScheduler::TaskHandle &histTask, uint64_t &histGen,
+                         TaskScheduler::TaskHandle &diffTask, uint64_t &diffGen)
+{
+    if (roiTask)
+        TaskScheduler::cancel(roiTask);
+    roiTask.reset();
+    ++roiGen;
+    if (histTask)
+        TaskScheduler::cancel(histTask);
+    histTask.reset();
+    ++histGen;
+    if (diffTask)
+        TaskScheduler::cancel(diffTask);
+    diffTask.reset();
+    ++diffGen;
+}
+
+void syncSessionStateOnLoad(mviewer::ui::CompareSessionState *state,
+                            const QStringList &paths,
+                            const QVector<int> &frameIndices)
+{
+    if (!state)
+        return;
+    state->setComparePaths(paths);
+    std::vector<int> frames(frameIndices.begin(), frameIndices.end());
+    state->setFrameIndices(frames);
+}
+} // namespace
 
 CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 {
     m_lifetime = mviewer::core::AsyncLifetimeToken::create();
     m_session = std::make_unique<mviewer::ui::CompareSessionRuntime>();
+    m_sessionState = std::make_unique<mviewer::ui::CompareSessionState>(this);
+    m_roiController = std::make_unique<mviewer::ui::CompareRoiController>(this);
+    m_diffRenderer = std::make_unique<mviewer::ui::CompareDiffRenderer>(this);
+
+    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiChanged, this,
+            [this](const mviewer::domain::Selection &sel) {
+                if (sel != m_lastSelection)
+                    applySelectionToAll(sel);
+            });
+    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiCleared, this,
+            &CompareWorkspace::clearROI);
+    connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::thresholdChanged, this,
+            [this](uint8_t th) {
+                if (m_thresholdValue != th)
+                {
+                    m_thresholdValue = th;
+                    if (m_thresholdSlider && m_thresholdSlider->value() != th)
+                    {
+                        const QSignalBlocker b(m_thresholdSlider);
+                        m_thresholdSlider->setValue(th);
+                    }
+                    if (m_thresholdLabel)
+                        m_thresholdLabel->setText(QString::number(th));
+                    refreshAllDiffOverlays();
+                }
+            });
+
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
 
@@ -262,23 +319,11 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     // A new compare set supersedes any in-flight ROI calculation immediately;
     // preserving only the geometry for a possible same-dimension navigation
     // restore prevents stale source statistics from crossing image pairs.
-    if (m_roiTask)
-        TaskScheduler::cancel(m_roiTask);
-    m_roiTask.reset();
-    ++m_roiGen;
-    // Hard cancel: pair change must never leave hist/diff/display starving the
-    // new visible decode. Generation bumps reject any already-queued delivery.
+    cancelInFlightTasks(m_roiTask, m_roiGen, m_histTask, m_histGen, m_diffTask, m_diffGen);
     releaseDisplayTask();
     ++m_displayGen;
-    if (m_histTask)
-        TaskScheduler::cancel(m_histTask);
-    m_histTask.reset();
-    ++m_histGen;
-    if (m_diffTask)
-        TaskScheduler::cancel(m_diffTask);
-    m_diffTask.reset();
-    ++m_diffGen;
     resetSuggestedThreshold();
+    syncSessionStateOnLoad(m_sessionState.get(), paths, frameIndices);
     if (m_session)
     {
         m_session->forceDecodePriority = true;

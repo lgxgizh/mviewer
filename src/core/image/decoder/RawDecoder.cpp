@@ -412,20 +412,43 @@ ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
     return d;
 }
 
+mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+RawDecoder::decodeFullResult(const std::string &path,
+                             mviewer::domain::ImageMetadata &outMeta) const
+{
+    const auto stdPath = mviewer::core::pathFromUtf8(path);
+    std::error_code ec;
+    if (!std::filesystem::exists(stdPath, ec))
+    {
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {mviewer::domain::DecodeErrorCode::FileNotFound, "RAW file not found: " + path, path});
+    }
+
+    ImageData d = decodeRawPixels(path, 0, true);
+    if (d.isNull())
+    {
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {mviewer::domain::DecodeErrorCode::CorruptData,
+             "RawDecoder: failed to extract preview or demosaic RAW image: " + path, path});
+    }
+
+    outMeta.width = d.width;
+    outMeta.height = d.height;
+    outMeta.format = "RAW";
+    outMeta.channels = 3;
+    if (outMeta.filePath.empty())
+        outMeta.filePath = path;
+
+    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(std::move(d));
+}
+
 ImageData RawDecoder::decodeFull(const std::string &path,
                                  mviewer::domain::ImageMetadata &outMeta) const
 {
-    ImageData d = decodeRawPixels(path, 0, true);
-    if (!d.isNull())
-    {
-        outMeta.width = d.width;
-        outMeta.height = d.height;
-        outMeta.format = "RAW";
-        outMeta.channels = 3;
-        if (outMeta.filePath.empty())
-            outMeta.filePath = path;
-    }
-    return d;
+    auto res = decodeFullResult(path, outMeta);
+    if (res.has_value())
+        return std::move(res.value());
+    return ImageData();
 }
 
 bool RawDecoder::probePreviewSize(const std::string &path, int &outW, int &outH) const

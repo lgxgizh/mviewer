@@ -107,6 +107,9 @@ DecoderRegistry::decodeFullResult(const std::string &path,
     }
 
     bool claimed = false;
+    mviewer::domain::DecodeError lastErr{
+        mviewer::domain::DecodeErrorCode::CorruptData,
+        "Decoder claimed format but failed to decode: " + path, path};
     for (const auto &d : snapshot())
     {
         if (d && d->canDecode(path))
@@ -115,6 +118,8 @@ DecoderRegistry::decodeFullResult(const std::string &path,
             auto res = d->decodeFullResult(path, outMeta);
             if (res.has_value() && !res.value().isNull())
                 return res;
+            if (!res.has_value())
+                lastErr = std::move(res.error());
         }
     }
 
@@ -125,9 +130,7 @@ DecoderRegistry::decodeFullResult(const std::string &path,
              "No registered decoder supports this format: " + path, path});
     }
 
-    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
-        {mviewer::domain::DecodeErrorCode::CorruptData,
-         "Decoder claimed format but failed to decode: " + path, path});
+    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(std::move(lastErr));
 }
 
 ImageData DecoderRegistry::decodeFull(const std::string &path) const

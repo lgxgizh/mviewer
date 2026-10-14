@@ -34,6 +34,9 @@ class QtDecoder : public IDecoder,
                            mviewer::domain::ImageMetadata &outMeta) const override;
     ImageData decodeFull(const std::string &path,
                          mviewer::domain::ImageMetadata &outMeta) const override;
+    mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+    decodeFullResult(const std::string &path,
+                     mviewer::domain::ImageMetadata &outMeta) const override;
     std::vector<std::string> extensions() const override;
     const char *name() const override
     {

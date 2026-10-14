@@ -83,19 +83,6 @@ QImage CompareDiffRenderer::renderSplit(const QImage &imgA, const QImage &imgB, 
 
     if (orientation == Qt::Horizontal)
     {
-        const int splitY = static_cast<int>(std::round(h * clampedRatio));
-        if (splitY > 0)
-        {
-            painter.drawImage(QRect(0, 0, w, splitY), imgA, QRect(0, 0, w, splitY));
-        }
-        if (splitY < h)
-        {
-            painter.drawImage(QRect(0, splitY, w, h - splitY), imgB,
-                              QRect(0, splitY, w, h - splitY));
-        }
-    }
-    else
-    {
         const int splitX = static_cast<int>(std::round(w * clampedRatio));
         if (splitX > 0)
         {
@@ -105,6 +92,19 @@ QImage CompareDiffRenderer::renderSplit(const QImage &imgA, const QImage &imgB, 
         {
             painter.drawImage(QRect(splitX, 0, w - splitX, h), imgB,
                               QRect(splitX, 0, w - splitX, h));
+        }
+    }
+    else
+    {
+        const int splitY = static_cast<int>(std::round(h * clampedRatio));
+        if (splitY > 0)
+        {
+            painter.drawImage(QRect(0, 0, w, splitY), imgA, QRect(0, 0, w, splitY));
+        }
+        if (splitY < h)
+        {
+            painter.drawImage(QRect(0, splitY, w, h - splitY), imgB,
+                              QRect(0, splitY, w, h - splitY));
         }
     }
 
