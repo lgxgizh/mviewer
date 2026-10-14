@@ -1,4 +1,5 @@
 #include "core/render/DisplayResampleDetail.h"
+#include <algorithm>
 
 #include "core/scheduler/TaskScheduler.h"
 
@@ -74,9 +75,14 @@ QThreadPool *resamplePool()
     if (pool == nullptr)
     {
         pool = new QThreadPool();
+        // Match TaskScheduler UI budget: HQ resample is bursty foreground work
+        // and used to stack another full-core pool on top of Decode (≈30
+        // runnable threads on 8 cores). Half the cores keeps Sharp usable
+        // without starving decode/thumbnails.
         int threads = QThread::idealThreadCount();
         if (threads < 1)
             threads = 1;
+        threads = std::max(2, threads / 2);
         pool->setMaxThreadCount(threads);
         pool->setExpiryTimeout(-1);
     }
