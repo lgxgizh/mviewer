@@ -330,7 +330,7 @@ static QByteArray jpegApp2IccSegment(const QByteArray &icc, int seq, int count)
     payload.append(static_cast<char>(seq));
     payload.append(static_cast<char>(count));
     payload.append(icc);
-    const int segLen = payload.size() + 2;
+    const auto segLen = static_cast<int>(payload.size() + 2);
     QByteArray seg;
     seg.append(static_cast<char>(0xFF));
     seg.append(static_cast<char>(0xE2));
