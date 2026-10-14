@@ -366,7 +366,7 @@ void AnalysisPanel::updateComparePage()
                    .arg(offset.y());
     m_compareLabel->setText(txt);
 
-    QImage diff = computeDifferencePreview(m_imageA, mvcore::toQImage(b));
+    QImage diff = computeDifferencePreview(m_imageA, mvcore::toQImageFast(b));
     if (!diff.isNull())
     {
         m_diffPreview->setPixmap(QPixmap::fromImage(diff).scaled(
@@ -405,7 +405,7 @@ QImage AnalysisPanel::computeDifferencePreview(const QImage &a, const QImage &b)
     ImageData diff = AnalysisEngine::differenceMap(mvcore::fromQImage(a), mvcore::fromQImage(b));
     if (diff.isNull())
         return QImage();
-    return mvcore::toQImage(diff);
+    return mvcore::toQImageFast(diff);
 }
 
 QString AnalysisPanel::noiseLevelText(double variance)

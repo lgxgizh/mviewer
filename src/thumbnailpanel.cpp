@@ -161,7 +161,7 @@ void ThumbnailPanel::wireThumbnailPipeline()
                         panel->onThumbReady(qp);
                         return;
                     }
-                    const QImage q = mvcore::toQImage(img);
+                    const QImage q = mvcore::toQImageFast(img);
                     if (q.isNull())
                     {
                         {

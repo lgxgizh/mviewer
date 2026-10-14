@@ -8,6 +8,7 @@
 #include "core/Logger.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "core/SettingsIO.h"
 #include "runtime_storage.h"
 
@@ -118,6 +119,10 @@ int main(int argc, char *argv[])
     if (!g_openOnLaunch.isEmpty())
         mainWindow.setOpenOnLaunch(g_openOnLaunch);
     mainWindow.show();
+
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, []() {
+        TaskScheduler::instance().shutdown();
+    });
 
     const int exitCode = app.exec();
 

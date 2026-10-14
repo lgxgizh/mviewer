@@ -173,7 +173,7 @@ void AnalysisOverlayDialog::updateOverlay()
     {
         ImageData data = mvcore::fromQImage(work);
         mviewer::applyOverlay(data, overlayMode, m_threshold->value());
-        work = mvcore::toQImage(data);
+        work = mvcore::toQImageFast(data);
     }
 
     m_preview->setPixmap(QPixmap::fromImage(work).scaled(m_preview->size(), Qt::KeepAspectRatio,

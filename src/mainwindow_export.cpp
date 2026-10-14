@@ -51,7 +51,7 @@ void encodeReportImages(ReportExportState &state, const TaskScheduler::TaskConte
             const ImageData &diff = state.context.compareBundle.targets[i].diffHeatmap;
             if (diff.isNull())
                 continue;
-            const QImage image = mvcore::toQImage(diff);
+            const QImage image = mvcore::toQImageFast(diff);
             if (image.isNull())
                 continue;
             QByteArray bytes;
