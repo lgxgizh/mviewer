@@ -4,6 +4,7 @@
 
 ### Performance
 
+- EXIF 缩略图旋转（`orientThumbnail`）改用 `QImage::mirrored` / `transformed`，与原来的 `displayToRaw` 逐像素结果一致；256 像素约 0.49 ms → 0.02 ms。
 - `toDisplayImageData` 在无需色彩转换时直接共享源 `ImageData` 缓冲（常见的 RGB24 + sRGB），避免 ImageData→QImage→ImageData 双重拷贝；12MP 约 71 ms → 接近 0。预览面板与导出走同一路径。
 
 ## [1.0.113] - 2026-10-13
