@@ -215,6 +215,7 @@ add_library(mviewer_ui STATIC
     compare_session_frame_pool.cpp
     compare_session_state.cpp
     compare_roi_controller.cpp
+    compare_diff_renderer.cpp
     compareworkspace_controls.cpp
     compareworkspace_toolbar.cpp
     compareworkspace_pane_header.cpp
@@ -1995,6 +1996,23 @@ target_compile_features(compare_components_tests PRIVATE cxx_std_20)
 target_include_directories(compare_components_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_components_tests COMMAND compare_components_tests)
 set_tests_properties(compare_components_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+# ADR-014 CompareWorkspace componentization tests (CompareDiffRenderer)
+add_executable(compare_diff_renderer_tests
+    test_compare_diff_renderer.cpp
+)
+target_link_libraries(compare_diff_renderer_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_diff_renderer_tests PRIVATE cxx_std_20)
+target_include_directories(compare_diff_renderer_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_diff_renderer_tests COMMAND compare_diff_renderer_tests)
+set_tests_properties(compare_diff_renderer_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # ─── M47 Phase 4: exact-source consumers with source-backed panes ────────────
 # Inspector / diff / PSNR / SSIM / export keep full-resolution correctness when

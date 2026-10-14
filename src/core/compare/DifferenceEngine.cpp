@@ -73,6 +73,22 @@ static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *d
 #else
     (void)useSsse3;
 #endif
+    for (; x + 4 <= w; x += 4)
+    {
+        for (int k = 0; k < 4; ++k)
+        {
+            const int idx = (x + k) * 3;
+            const int dr =
+                std::abs(static_cast<int>(la[idx + 0]) - static_cast<int>(lb[idx + 0]));
+            const int dg =
+                std::abs(static_cast<int>(la[idx + 1]) - static_cast<int>(lb[idx + 1]));
+            const int db =
+                std::abs(static_cast<int>(la[idx + 2]) - static_cast<int>(lb[idx + 2]));
+            const int sum = dr + dg + db;
+            const uint8_t diff = static_cast<uint8_t>((sum * kFixedPointDiv3Multiplier) >> 16);
+            dst[x + k] = (diff >= threshold) ? diff : 0;
+        }
+    }
     for (; x < w; ++x)
     {
         const int dr = std::abs(static_cast<int>(la[x * 3 + 0]) - static_cast<int>(lb[x * 3 + 0]));
@@ -179,6 +195,22 @@ static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *
     }
 #else
     (void)useSsse3;
+    for (; x + 4 <= w; x += 4)
+    {
+        for (int k = 0; k < 4; ++k)
+        {
+            const int idx = (x + k) * 4;
+            const int dr =
+                std::abs(static_cast<int>(la[idx + 0]) - static_cast<int>(lb[idx + 0]));
+            const int dg =
+                std::abs(static_cast<int>(la[idx + 1]) - static_cast<int>(lb[idx + 1]));
+            const int db =
+                std::abs(static_cast<int>(la[idx + 2]) - static_cast<int>(lb[idx + 2]));
+            const int sum = dr + db + dg;
+            const uint8_t diff = static_cast<uint8_t>((sum * kFixedPointDiv3Multiplier) >> 16);
+            dst[x + k] = (diff >= threshold) ? diff : 0;
+        }
+    }
 #endif
     for (; x < w; ++x)
     {
