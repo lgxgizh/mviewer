@@ -160,7 +160,7 @@ PreviewDecodeResult loadPreviewPixels(const std::string &stdPath, int knownW, in
     out.fileSizeKnown = out.fileSize > 0;
     out.img = std::move(img);
     if (!out.img.isNull())
-        out.qimg = mvcore::toQImage(out.img);
+        out.qimg = mvcore::toQImageFast(out.img);
     return out;
 }
 

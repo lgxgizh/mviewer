@@ -2,12 +2,15 @@
 
 #include <cstdint>
 
+#if defined(_M_X64) || defined(__x86_64__) || defined(_M_IX86) || defined(__i386__)
+#define MV_ARCH_X86 1
 #if defined(_MSC_VER)
 #include <immintrin.h>
 #include <intrin.h>
 #elif defined(__GNUC__) || defined(__clang__)
 #include <cpuid.h>
 #include <immintrin.h>
+#endif
 #endif
 
 namespace mviewer::core
@@ -20,6 +23,7 @@ class CpuFeatures
     {
         static const bool supported = []() -> bool
         {
+#if defined(MV_ARCH_X86)
 #if defined(_MSC_VER)
             int info[4] = {0};
             __cpuid(info, 1);
@@ -55,6 +59,9 @@ class CpuFeatures
 #else
             return false;
 #endif
+#else
+            return false;
+#endif
         }();
         return supported;
     }
@@ -63,6 +70,7 @@ class CpuFeatures
     {
         static const bool supported = []() -> bool
         {
+#if defined(MV_ARCH_X86)
 #if defined(_M_X64) || defined(__x86_64__)
             return true; // SSE2 is part of the x86-64 ABI
 #elif defined(_MSC_VER)
@@ -77,6 +85,9 @@ class CpuFeatures
 #else
             return false;
 #endif
+#else
+            return false;
+#endif
         }();
         return supported;
     }
@@ -85,6 +96,7 @@ class CpuFeatures
     {
         static const bool supported = []() -> bool
         {
+#if defined(MV_ARCH_X86)
 #if defined(_MSC_VER)
             int info[4] = {0};
             __cpuid(info, 1);
@@ -97,6 +109,9 @@ class CpuFeatures
 #else
             return false;
 #endif
+#else
+            return false;
+#endif
         }();
         return supported;
     }
@@ -105,6 +120,7 @@ class CpuFeatures
     {
         static const bool supported = []() -> bool
         {
+#if defined(MV_ARCH_X86)
 #if defined(_MSC_VER)
             int info[4] = {0};
             __cpuid(info, 1);
@@ -114,6 +130,9 @@ class CpuFeatures
             if (__get_cpuid(1, &eax, &ebx, &ecx, &edx))
                 return (ecx & (1 << 9)) != 0;
             return false;
+#else
+            return false;
+#endif
 #else
             return false;
 #endif

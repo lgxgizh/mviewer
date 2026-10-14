@@ -18,12 +18,59 @@ enum class PixelFormat
     Grayscale8
 };
 
+struct ConstImageBuffer
+{
+    const uint8_t *data = nullptr;
+    int width = 0;
+    int height = 0;
+    PixelFormat format = PixelFormat::RGB24;
+
+    int channelsPerPixel() const noexcept
+    {
+        switch (format)
+        {
+        case PixelFormat::RGB24:
+            return 3;
+        case PixelFormat::RGBA32:
+            return 4;
+        case PixelFormat::BGR24:
+            return 3;
+        case PixelFormat::BGRA32:
+            return 4;
+        case PixelFormat::Grayscale8:
+            return 1;
+        }
+        return 3;
+    }
+
+    size_t byteSize() const noexcept
+    {
+        return static_cast<size_t>(width) * static_cast<size_t>(height) *
+               static_cast<size_t>(channelsPerPixel());
+    }
+
+    bool isNull() const noexcept
+    {
+        return data == nullptr || width <= 0 || height <= 0;
+    }
+
+    ptrdiff_t stride() const noexcept
+    {
+        return static_cast<int64_t>(width) * static_cast<int64_t>(channelsPerPixel());
+    }
+};
+
 struct ImageBuffer
 {
     uint8_t *data = nullptr;
     int width = 0;
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
+
+    operator ConstImageBuffer() const noexcept
+    {
+        return ConstImageBuffer{data, width, height, format};
+    }
 
     int channelsPerPixel() const noexcept
     {
@@ -81,6 +128,43 @@ struct ImageData
         return !buffer || buffer->empty() || width <= 0 || height <= 0;
     }
 
+    // Copy-on-write detachment: ensures this ImageData uniquely owns its backing buffer.
+    void makeUnique()
+    {
+        if (buffer && buffer.use_count() > 1)
+        {
+            buffer = std::make_shared<std::vector<uint8_t>>(*buffer);
+        }
+    }
+
+    void detach()
+    {
+        makeUnique();
+    }
+
+    // Const read-only view guaranteeing pixel data cannot be mutated through it.
+    ConstImageBuffer constView() const
+    {
+        ConstImageBuffer b;
+        b.data = (buffer && !buffer->empty()) ? buffer->data() : nullptr;
+        b.width = width;
+        b.height = height;
+        b.format = format;
+        return b;
+    }
+
+    // Mutable view with automatic Copy-on-Write detachment if the buffer is shared.
+    ImageBuffer mutableView()
+    {
+        makeUnique();
+        ImageBuffer b;
+        b.data = (buffer && !buffer->empty()) ? buffer->data() : nullptr;
+        b.width = width;
+        b.height = height;
+        b.format = format;
+        return b;
+    }
+
     ImageBuffer view() const
     {
         ImageBuffer b;
@@ -89,8 +173,9 @@ struct ImageData
         // alive. const_cast: buffer->data() is const here (view() is
         // const), but ImageBuffer::data is intentionally non-const for
         // in-place pixel access by analyzers/engines that hold the
-        // alive owner.
-        b.data = const_cast<uint8_t *>(buffer->data());
+        // alive owner. Call mutableView() when performing in-place writes
+        // to guarantee Copy-On-Write separation.
+        b.data = (buffer && !buffer->empty()) ? const_cast<uint8_t *>(buffer->data()) : nullptr;
         b.width = width;
         b.height = height;
         b.format = format;

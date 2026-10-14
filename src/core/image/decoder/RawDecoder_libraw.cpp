@@ -86,13 +86,20 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
             raw.recycle();
             return {};
         }
+        struct MemImageDeleter
+        {
+            void operator()(libraw_processed_image_t *p) const noexcept
+            {
+                if (p)
+                    LibRaw::dcraw_clear_mem(p);
+            }
+        };
         int err = 0;
-        libraw_processed_image_t *image = raw.dcraw_make_mem_image(&err);
+        std::unique_ptr<libraw_processed_image_t, MemImageDeleter> image(
+            raw.dcraw_make_mem_image(&err));
         if (!image || err != LIBRAW_SUCCESS || image->bits != 8 || image->width <= 0 ||
             image->height <= 0 || image->colors < 1)
         {
-            if (image)
-                LibRaw::dcraw_clear_mem(image);
             raw.recycle();
             return {};
         }
@@ -109,7 +116,6 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
         const size_t need = pixels * srcChannels;
         if (image->data_size < need)
         {
-            LibRaw::dcraw_clear_mem(image);
             raw.recycle();
             return {};
         }
@@ -126,7 +132,7 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
                 dst[i * 3 + 2] = src[i * srcChannels + 2];
             }
         }
-        LibRaw::dcraw_clear_mem(image);
+        image.reset();
         raw.recycle();
         return scaleToEdge(std::move(out), maxEdge);
     }

@@ -235,17 +235,36 @@ QImage toQImageRef(const ImageData &src)
     if (src.isNull() || !src.buffer)
         return QImage();
     const ImageBuffer v = src.view();
+    if (!v.data || v.width <= 0 || v.height <= 0)
+        return QImage();
+
+    auto cleanup = [](void *info) {
+        delete static_cast<std::shared_ptr<std::vector<uint8_t>> *>(info);
+    };
+
     switch (src.format)
     {
     case PixelFormat::RGB24:
-        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_RGB888);
+    {
+        auto *holder = new std::shared_ptr<std::vector<uint8_t>>(src.buffer);
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_RGB888, cleanup, holder);
+    }
     case PixelFormat::BGR24:
-        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_BGR888);
+    {
+        auto *holder = new std::shared_ptr<std::vector<uint8_t>>(src.buffer);
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_BGR888, cleanup, holder);
+    }
     case PixelFormat::BGRA32:
+    {
+        auto *holder = new std::shared_ptr<std::vector<uint8_t>>(src.buffer);
         // BGRA byte order == ARGB32 on little-endian (0xAARRGGBB stored BB GG RR AA).
-        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_ARGB32);
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_ARGB32, cleanup, holder);
+    }
     case PixelFormat::Grayscale8:
-        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_Grayscale8);
+    {
+        auto *holder = new std::shared_ptr<std::vector<uint8_t>>(src.buffer);
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_Grayscale8, cleanup, holder);
+    }
     case PixelFormat::RGBA32:
         // RGBA32 requires channel swap (RGBA -> ARGB32) to render; cannot zero-copy.
         // ADR-002: toQImageRef returns null for formats that require byte conversion.
