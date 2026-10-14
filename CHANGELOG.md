@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [1.0.118] - 2026-10-14
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.118**.
+
+### Architecture & Componentization
+
+- **CompareWorkspace 职责解耦与组件化（ADR-014）**：
+  - 引入 `CompareSessionState` 独立组件，封装对比会话全部参数、输入路径与帧索引、视口变换与预设状态，支持与 `domain::CompareSession` 的双向序列化；
+  - 引入 `CompareRoiController` 独立组件，接管联动 ROI 选择框计算、有界微调（Nudge）以及实时度量遥测（Telemetry）代数轮次管理；
+  - 建立组件化架构测试套件 `src/test_compare_components.cpp`（`compare_components_tests`）接入 CTest 质量门禁。
+
+### Safety & Robustness
+
+- **DecoderRegistry 结构化单子错误处理与 Unicode 跨平台安全**：
+  - 在 `IDecoder` 与 `DecoderRegistry` 中引入基于 `Result<ImageData, DecodeError>` 的结构化返回接口 `decodeFullResult(...)`，精准区分 `FileNotFound`、`UnsupportedFormat` 与 `CorruptData`；
+  - 严格通过 `mviewer::core::pathFromUtf8` 执行 Windows 平台下 UTF-8 与原生宽字符（UTF-16）文件系统交互，消除非 ASCII/Unicode 路径解码隐患；
+  - 扩充 `test_decoder.cpp` 验证不存在文件结构化错误捕获与金样正常解码。
+
 ## [1.0.117] - 2026-10-14
 
 ### Release
