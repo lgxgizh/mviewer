@@ -20,6 +20,7 @@
 - **补充对比连续 4 次 90° 旋转回归测试**：在 `test_rotate_selection.cpp` 中新增针对非对称比例图片在 Compare 窗格下连续 4 次旋转的端到端断言，确保全幅源矩形 `sourceRect == fullRect` 与完整渲染高度。
 - **加固浏览测试用例损坏缩略图等待逻辑**：在 `test_browse_acceptance.cpp` 中将固定延时改为谓词驱动 `while (!panel.thumbFailed(bad) && t.elapsed() < 10000)`，杜绝高负载并行测试调度时偶发的时序超时。
 
+## [1.0.125] - 2026-10-15
 
 ### Release
 
