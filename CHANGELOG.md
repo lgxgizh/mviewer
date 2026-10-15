@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [1.0.123] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.123**.
+
+### Fixes & Reliability
+
+- **对比模式加载容错与批量加载计数修复**：
+  - 修复 `CompareWorkspace::accountLoadRequest` 中当解码结果失败或帧为空时未计入 `batch->failed` 的逻辑漏洞，确保图像加载异常时能够准确反馈失败状态并触发回退与提示；
+  - 在 `ImageRepository_load.cpp` 中增强解码容错机制：当 `Decoder::decodeFullResult` 抛出异常或返回空像素时，无缝回退至稳定基线解码链路 `Decoder::decodeFull`，彻底解决对比模式提示“没有可用的图片”的问题。
+
+### Image Decoder Resilience
+
+- **解码层 UTF-8 异常防护与全景降级策略**：
+  - 在 `DecoderRegistry::decodeFullResult`、`QtDecoder::decodeFullResult` 及 `RawDecoder::decodeFullResult` 中增加对 `mviewer::core::pathFromUtf8` 及 `std::filesystem::exists` 的全局 `try/catch` 保护，防止非 UTF-8 编码或非法路径导致直接抛出未捕获异常中断主线程；
+  - 当解码器返回 Ok 但像素为空（Null pixels）或异常时，主动回退到 `decodeFull`，并在 `BatchProcessor` 中同步引入双重容错链路。
+
+### Componentization & Clean Architecture
+
+- **CompareRoiController 接口扩展与契约收口**：
+  - 新增 `CompareRoiController::computeSourceROI(const QRectF&, const QSize&)` 辅助算法，将纯几何源区域计算逻辑内聚至控制器；
+  - 调整 `CompareWorkspace` 布局委托与切片职责分派，确保 `compareworkspace.cpp`（746 行）严格收敛在 800 行硬性门禁之下。
+
 ## [1.0.122] - 2026-10-15
 
 ### Release
