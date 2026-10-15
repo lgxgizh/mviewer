@@ -195,6 +195,7 @@ static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *
     }
 #else
     (void)useSsse3;
+#endif
     for (; x + 4 <= w; x += 4)
     {
         for (int k = 0; k < 4; ++k)
@@ -211,7 +212,6 @@ static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *
             dst[x + k] = (diff >= threshold) ? diff : 0;
         }
     }
-#endif
     for (; x < w; ++x)
     {
         const int dr = std::abs(static_cast<int>(la[x * 4 + 0]) - static_cast<int>(lb[x * 4 + 0]));

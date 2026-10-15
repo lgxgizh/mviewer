@@ -1,4 +1,5 @@
 #include "ThemeMetrics.h"
+#include "compare_display_manager.h"
 #include "compareworkspace_p.h"
 
 #include "core/MemoryTrim.h"
@@ -21,18 +22,15 @@ void cancelInFlightTasks(TaskScheduler::TaskHandle &roiTask, uint64_t &roiGen,
                          TaskScheduler::TaskHandle &histTask, uint64_t &histGen,
                          TaskScheduler::TaskHandle &diffTask, uint64_t &diffGen)
 {
-    if (roiTask)
-        TaskScheduler::cancel(roiTask);
-    roiTask.reset();
-    ++roiGen;
-    if (histTask)
-        TaskScheduler::cancel(histTask);
-    histTask.reset();
-    ++histGen;
-    if (diffTask)
-        TaskScheduler::cancel(diffTask);
-    diffTask.reset();
-    ++diffGen;
+    auto cancelAndBump = [](TaskScheduler::TaskHandle &task, uint64_t &gen) {
+        if (task)
+            TaskScheduler::cancel(task);
+        task.reset();
+        ++gen;
+    };
+    cancelAndBump(roiTask, roiGen);
+    cancelAndBump(histTask, histGen);
+    cancelAndBump(diffTask, diffGen);
 }
 
 void syncSessionStateOnLoad(mviewer::ui::CompareSessionState *state,
@@ -54,14 +52,15 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_sessionState = std::make_unique<mviewer::ui::CompareSessionState>(this);
     m_roiController = std::make_unique<mviewer::ui::CompareRoiController>(this);
     m_diffRenderer = std::make_unique<mviewer::ui::CompareDiffRenderer>(this);
+    m_displayManager = std::make_unique<mviewer::ui::CompareDisplayManager>(this);
 
+    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::fitRequested, this, &CompareWorkspace::fitAll);
     connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiChanged, this,
             [this](const mviewer::domain::Selection &sel) {
                 if (sel != m_lastSelection)
                     applySelectionToAll(sel);
             });
-    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiCleared, this,
-            &CompareWorkspace::clearROI);
+    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiCleared, this, &CompareWorkspace::clearROI);
     connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::thresholdChanged, this,
             [this](uint8_t th) {
                 if (m_thresholdValue != th)

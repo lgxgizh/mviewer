@@ -1,5 +1,6 @@
 // CompareWorkspace control construction split from the lifecycle constructor.
 #include "ThemeMetrics.h"
+#include "compare_display_manager.h"
 #include "compareworkspace_p.h"
 
 #include "Theme.h"
@@ -90,6 +91,8 @@ void CompareWorkspace::buildSyncControls()
             [this, applySync](bool on)
             {
                 m_syncZoom = on;
+                if (m_displayManager)
+                    m_displayManager->setSyncZoom(on);
                 m_engine.setSyncMode(m_syncZoom, m_syncDrag);
                 applySync(on);
             });
@@ -97,6 +100,8 @@ void CompareWorkspace::buildSyncControls()
             [this, applySync](bool on)
             {
                 m_syncDrag = on;
+                if (m_displayManager)
+                    m_displayManager->setSyncDrag(on);
                 m_engine.setSyncMode(m_syncZoom, m_syncDrag);
                 applySync(on);
             });
@@ -115,6 +120,8 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             [this](bool on)
             {
                 m_uniformScale = on;
+                if (m_displayManager)
+                    m_displayManager->setUniformScale(on);
                 fitAll();
                 update();
             });

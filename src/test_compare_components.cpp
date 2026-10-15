@@ -1,4 +1,5 @@
 #include "compare_diff_renderer.h"
+#include "compare_display_manager.h"
 #include "compare_roi_controller.h"
 #include "compare_session_state.h"
 #include "compareworkspace.h"
@@ -142,6 +143,7 @@ int main(int argc, char **argv)
         CHECK(workspace.sessionState() != nullptr, "sessionState component instantiated");
         CHECK(workspace.roiController() != nullptr, "roiController component instantiated");
         CHECK(workspace.diffRenderer() != nullptr, "diffRenderer component instantiated");
+        CHECK(workspace.displayManager() != nullptr, "displayManager component instantiated");
 
         // ROI mediation
         Selection roi;
