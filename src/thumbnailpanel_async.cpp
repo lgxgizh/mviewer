@@ -478,6 +478,10 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     for (const Entry &e : m_allEntries)
         ThumbnailCache::instance().hintSourceIdentity(
             e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
+    // Progressive batches used replaceSources for convergence; completed scan
+    // and subsequent filter rebuilds must use updateSources so in-flight
+    // viewport decodes are retained across the rebuild.
+    m_scanProgressive = false;
     applyFilter();
     // sequenceChanged (inside the filter rebuild) publishes "Browse: N images".
     // A failure or empty result must win over that line.
@@ -485,10 +489,6 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
         emit browseStatusChanged(QStringLiteral("目录加载失败"));
     else if (entries.isEmpty() && !m_currentDir.isEmpty())
         emit browseStatusChanged(QStringLiteral("暂无图片"));
-    // Progressive batches used replaceSources for convergence; later filter /
-    // sort rebuilds must not keep that mode or every keystroke cancels
-    // in-flight thumbnail handles (m46 B2 paint-cache flake after clear).
-    m_scanProgressive = false;
     // Details (resolution column) and SortResolution need header probes.
     // Thumbnail/LargeIcon intentionally skip the full-directory probe so the
     // first viewport decode owns the link on high-latency folders.
@@ -499,6 +499,8 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
         m_galleryModelReadyEmitted = true;
         emit galleryModelReady();
     }
+    // Ensure viewport thumbnail demand is scheduled for the completed listing
+    QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
 // ---- M46: cooperative dimension probe (viewport-first) ----------------------

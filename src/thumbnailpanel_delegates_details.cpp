@@ -7,7 +7,7 @@
 namespace
 {
 void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &path,
-                      const ThumbnailPanel *panel)
+                      const ThumbnailPanel *panel, const QStyleOptionViewItem &option)
 {
     const QPixmap pm = panel->thumbReady(path);
     if (!pm.isNull())
@@ -18,16 +18,16 @@ void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &pat
     }
     else if (panel->thumbFailed(path))
     {
-        painter->fillRect(thumbR, QColor(200, 200, 200));
-        painter->setPen(QColor(150, 150, 150));
+        painter->fillRect(thumbR, option.palette.color(QPalette::Mid));
+        painter->setPen(option.palette.color(QPalette::Text));
         QFont f = painter->font();
         f.setPointSize(qMax(7, f.pointSize() - 1));
         painter->setFont(f);
-        painter->drawText(thumbR, Qt::AlignCenter, "无法\n加载");
+        painter->drawText(thumbR, Qt::AlignCenter, QStringLiteral("无法\n加载"));
     }
     else
     {
-        painter->fillRect(thumbR, QColor(228, 228, 228));
+        painter->fillRect(thumbR, option.palette.color(QPalette::AlternateBase));
     }
 }
 
@@ -152,7 +152,7 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
 
     // Column 1: small thumbnail (48×48)
     const QRect thumbR(L.thumb.x(), r.y() + (r.height() - 48) / 2, 48, 48);
-    drawDetailsThumb(painter, thumbR, path, m_panel);
+    drawDetailsThumb(painter, thumbR, path, m_panel, option);
 
     const QColor textColor = sel ? option.palette.color(QPalette::HighlightedText)
                                  : option.palette.color(QPalette::Text);
