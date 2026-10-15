@@ -65,7 +65,7 @@ class CompareDiffRenderer : public QObject
   private:
     uint8_t m_threshold = 0;
     double m_splitRatio = 0.5;
-    Qt::Orientation m_splitOrientation = Qt::Vertical;
+    Qt::Orientation m_splitOrientation = Qt::Horizontal;
     DiffBlendMode m_blendMode = DiffBlendMode::Difference;
     bool m_blinkActive = false;
     int m_blinkIntervalMs = 150;

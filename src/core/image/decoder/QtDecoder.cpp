@@ -345,6 +345,8 @@ QtDecoder::decodeFullResult(const std::string &path,
         mviewer::domain::DecodeErrorCode code = mviewer::domain::DecodeErrorCode::CorruptData;
         if (readerErr == QImageReader::FileNotFoundError)
             code = mviewer::domain::DecodeErrorCode::FileNotFound;
+        else if (readerErr == QImageReader::DeviceError)
+            code = mviewer::domain::DecodeErrorCode::AccessDenied;
         else if (readerErr == QImageReader::UnsupportedFormatError)
             code = mviewer::domain::DecodeErrorCode::UnsupportedFormat;
         else if (readerErr == QImageReader::InvalidDataError)

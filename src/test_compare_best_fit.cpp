@@ -268,7 +268,12 @@ int main(int argc, char **argv)
         const double ownedW = ownedScale * lowView->sourceSize().width();
         const double ownedH = ownedScale * lowView->sourceSize().height();
         holdPress(hold);
-        pump(30);
+        {
+            QElapsedTimer t;
+            t.start();
+            while (!lowView->hasTransientDisplay() && t.elapsed() < 3000)
+                pump(20);
+        }
         const double presented = lowView->presentedScale();
         const double shownW = presented * highView->sourceSize().width();
         const double shownH = presented * highView->sourceSize().height();
@@ -287,7 +292,12 @@ int main(int argc, char **argv)
         check(std::abs(highView->scale() - otherScale) < 1e-6,
               "source pane scale stays during the hold");
         holdRelease(hold);
-        pump(30);
+        {
+            QElapsedTimer t;
+            t.start();
+            while (lowView->hasTransientDisplay() && t.elapsed() < 3000)
+                pump(20);
+        }
         check(!lowView->hasTransientDisplay(), "release restores the pane image");
         check(std::abs(lowView->scale() - ownedScale) < 1e-4, "low pane scale restored after hold");
         check(std::abs(highView->scale() - otherScale) < 1e-4,
@@ -304,12 +314,22 @@ int main(int argc, char **argv)
     if (hold && hold->isEnabled())
     {
         holdPress(hold);
-        pump(20);
+        {
+            QElapsedTimer t;
+            t.start();
+            while (!lowView->hasTransientDisplay() && t.elapsed() < 3000)
+                pump(20);
+        }
         check(lowView->hasTransientDisplay(), "uniform mode can still hold");
         check(std::abs(lowView->presentedScale() - uniformHeld) < 1e-6,
               "uniform pixel scale is unchanged during temporary switch");
         holdRelease(hold);
-        pump(20);
+        {
+            QElapsedTimer t;
+            t.start();
+            while (lowView->hasTransientDisplay() && t.elapsed() < 3000)
+                pump(20);
+        }
     }
     button->click();
     pump(30);
