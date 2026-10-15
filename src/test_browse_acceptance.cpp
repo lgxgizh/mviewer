@@ -500,7 +500,7 @@ void testDegradedInputs(QTemporaryDir &tmp)
             pump(10);
         // Wait a decode attempt on the corrupt file through the pipeline.
         t.restart();
-        while (t.elapsed() < 3000)
+        while (!panel.thumbFailed(bad) && t.elapsed() < 10000)
             pump(50);
         CHECK(panel.thumbFailed(bad), "A#9: corrupt file recorded as failed (placeholder)");
         CHECK(!panel.thumbFailed(good), "A#9: healthy file unaffected by corrupt sibling");

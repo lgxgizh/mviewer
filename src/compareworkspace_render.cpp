@@ -224,30 +224,41 @@ mviewer::ui::CompareDisplayPlanningInput CompareWorkspace::displayPlanningInput(
         return input;
     const RawImageView *view = m_cellViews[pane];
     const QSize viewSourceSize = view->sourceSize();
-    QSize sourceSize = viewSourceSize;
-    // The first materialization is scheduled while the placeholder pane is
-    // still blank. Carry the probed metadata dimensions through that request
-    // so it is an explicit full-frame LOD (and never a partial region based on
-    // a stale engine transform).
-    if (!sourceSize.isValid() && pane < m_engine.imageCount())
+
+    QSize baseSize;
+    if (pane < m_engine.imageCount())
     {
-        const ImageFrame *img = m_engine.imageAt(pane);
-        if (img)
+        if (const ImageFrame *img = m_engine.imageAt(pane))
         {
             const auto &meta = img->metadata();
-            sourceSize = QSize(meta.width, meta.height);
+            if (meta.width > 0 && meta.height > 0)
+                baseSize = QSize(meta.width, meta.height);
+            else if (!img->pixels().isNull())
+                baseSize = QSize(img->pixels().width, img->pixels().height);
         }
     }
-    if (!sourceSize.isValid())
+    if (!baseSize.isValid())
+        baseSize = viewSourceSize;
+
+    const CellAdjust adjust = (pane < static_cast<int>(m_cellAdjusts.size()))
+                                  ? m_cellAdjusts[static_cast<size_t>(pane)]
+                                  : CellAdjust{};
+    const QSize expectedSize = baseSize.isValid() ? transformedSourceDims(baseSize, adjust)
+                                                  : viewSourceSize;
+    if (!expectedSize.isValid())
         return input;
 
     input.pane = pane;
-    input.sourceWidth = sourceSize.width();
-    input.sourceHeight = sourceSize.height();
+    input.sourceWidth = expectedSize.width();
+    input.sourceHeight = expectedSize.height();
     input.viewportWidth = view->width();
     input.viewportHeight = view->height();
     input.devicePixelRatio = view->devicePixelRatioF();
-    input.hasWidgetSourceSize = viewSourceSize.isValid();
+
+    const bool contentMatches = viewSourceSize.isValid() &&
+                                viewSourceSize == expectedSize &&
+                                view->backdropKey() == paneContentKey(pane);
+    input.hasWidgetSourceSize = contentMatches;
     input.uniformScale = m_uniformScale;
     input.fitScales.reserve(static_cast<size_t>(m_fitScales.size()));
     for (const double fit : m_fitScales)
@@ -259,14 +270,18 @@ mviewer::ui::CompareDisplayPlanningInput CompareWorkspace::displayPlanningInput(
         input.currentScale = m_engine.cellTransform(pane).scale;
         input.paneScale = input.currentScale;
     }
-    if (pane < static_cast<int>(m_cellAdjusts.size()))
+    input.hasCropOrRotation =
+        adjust.hasCrop || adjust.rotation != 0 || adjust.flipH || adjust.flipV;
+
+    if (contentMatches)
     {
-        const auto &adjust = m_cellAdjusts[static_cast<size_t>(pane)];
-        input.hasCropOrRotation =
-            adjust.hasCrop || adjust.rotation != 0 || adjust.flipH || adjust.flipV;
+        const QRect visible = sourceVisibleRect(pane);
+        input.visibleSourceRect = {visible.x(), visible.y(), visible.width(), visible.height()};
     }
-    const QRect visible = sourceVisibleRect(pane);
-    input.visibleSourceRect = {visible.x(), visible.y(), visible.width(), visible.height()};
+    else
+    {
+        input.visibleSourceRect = {};
+    }
     return input;
 }
 

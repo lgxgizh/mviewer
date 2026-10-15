@@ -463,6 +463,69 @@ int main(int argc, char **argv)
         }
     }
 
+    // Compare consecutive 4x 90° clockwise rotations preserves full raster (no partial cut-off)
+    {
+        CompareWorkspace compare;
+        compare.resize(600, 400);
+        compare.setImages({pathD1, pathD2});
+        CHECK(waitFor([&] { return compare.comparedImageCount() == 2; }),
+              "Compare loaded two panes for 4x rotation test");
+        pump(50);
+
+        RawImageView *v0 = paneView(&compare, 0);
+        CHECK(v0 != nullptr, "pane 0 view exists for 4x rotation test");
+        if (v0)
+        {
+            QEvent enter(QEvent::Enter);
+            QApplication::sendEvent(v0, &enter);
+            pump(20);
+
+            CHECK(waitFor([&] { return v0->sourceSize() == QSize(6, 12); }),
+                  "initial pane 0 source size is 6x12");
+
+            // 1st rotation: 90° -> 12x6
+            compare.rotateCurrentCell(90);
+            CHECK(waitFor([&]
+                          {
+                              return v0->sourceSize() == QSize(12, 6) &&
+                                     v0->sourceRect() == QRect(0, 0, 12, 6);
+                          }),
+                  "1x rotate: 12x6 full rect");
+
+            // 2nd rotation: 180° -> 6x12
+            compare.rotateCurrentCell(90);
+            CHECK(waitFor([&]
+                          {
+                              return v0->sourceSize() == QSize(6, 12) &&
+                                     v0->sourceRect() == QRect(0, 0, 6, 12);
+                          }),
+                  "2x rotate: 6x12 full rect");
+
+            // 3rd rotation: 270° -> 12x6
+            compare.rotateCurrentCell(90);
+            CHECK(waitFor([&]
+                          {
+                              return v0->sourceSize() == QSize(12, 6) &&
+                                     v0->sourceRect() == QRect(0, 0, 12, 6);
+                          }),
+                  "3x rotate: 12x6 full rect");
+
+            // 4th rotation: 360°/0° -> 6x12 (must not be clipped to 12x6 / partial height)
+            compare.rotateCurrentCell(90);
+            CHECK(waitFor(
+                      [&]
+                      {
+                          return v0->sourceSize() == QSize(6, 12) &&
+                                 v0->sourceRect() == QRect(0, 0, 6, 12) && !v0->image().isNull();
+                      }),
+                  "4x rotate: returns to 0° with full 6x12 raster, not partial bottom-clipped");
+
+            QEvent leave(QEvent::Leave);
+            QApplication::sendEvent(v0, &leave);
+            pump(20);
+        }
+    }
+
     if (g_failures)
     {
         std::cerr << g_failures << " failure(s)\n";
