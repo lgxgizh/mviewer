@@ -276,28 +276,9 @@ CompareWorkspace::DisplayRequest CompareWorkspace::buildPaneDisplayRequest(int p
 {
     if (!preferCheap)
         return sourceDisplayRequest(pane);
-    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+    const mviewer::ui::CompareDisplayPlanningInput input = displayPlanningInput(pane);
+    if (input.sourceWidth <= 0 || input.sourceHeight <= 0)
         return sourceDisplayRequest(pane);
-    RawImageView *view = m_cellViews[pane];
-    const ImageFrame *img = pane < m_engine.imageCount() ? m_engine.imageAt(pane) : nullptr;
-    mviewer::ui::CompareDisplayPlanningInput input;
-    input.pane = pane;
-    QSize sourceSize = view->sourceSize();
-    if (!sourceSize.isValid() && img)
-        sourceSize = QSize(img->metadata().width, img->metadata().height);
-    if (!sourceSize.isValid() && pane < static_cast<int>(m_comparePaths.size()))
-    {
-        // Still unknown — fall back to full planner via sourceDisplayRequest.
-        return sourceDisplayRequest(pane);
-    }
-    input.sourceWidth = sourceSize.width();
-    input.sourceHeight = sourceSize.height();
-    input.viewportWidth = view->width();
-    input.viewportHeight = view->height();
-    input.devicePixelRatio = view->devicePixelRatioF();
-    input.hasWidgetSourceSize = view->sourceSize().isValid();
-    input.currentScale = view->scale();
-    input.paneScale = input.currentScale;
     const auto cheap = mviewer::ui::planCompareDisplayCheap(input);
     if (!cheap.isValid())
         return sourceDisplayRequest(pane);

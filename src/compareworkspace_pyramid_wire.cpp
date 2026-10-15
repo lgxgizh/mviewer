@@ -9,18 +9,20 @@
 namespace
 {
 void rememberPyramidDelivery(mviewer::ui::CompareSessionRuntime *session, int pane,
-                             const std::string &path, const QImage &image, const QSize &sourceSize,
-                             const mviewer::ui::CompareDisplayRequest &req, bool full)
+                             const std::string &path, uint64_t contentKey, const QImage &image,
+                             const QSize &sourceSize, const mviewer::ui::CompareDisplayRequest &req,
+                             bool full)
 {
     if (!session || pane < 0)
         return;
     if (session->panePyramids.size() <= static_cast<size_t>(pane))
         session->panePyramids.resize(static_cast<size_t>(pane) + 1);
     auto &slot = session->panePyramids[static_cast<size_t>(pane)];
-    if (slot.path != path)
+    if (slot.path != path || slot.contentKey != contentKey)
     {
         slot = {};
         slot.path = path;
+        slot.contentKey = contentKey;
     }
     slot.sourceSize = sourceSize;
     const int edge = std::max(req.target.width(), req.target.height());
@@ -98,13 +100,14 @@ bool swapPreviewState(mviewer::ui::CompareSessionRuntime *session, int index, bo
 }
 
 bool tryPaintFromPyramid(mviewer::ui::CompareSessionRuntime *session,
-                         const QList<RawImageView *> &cellViews, int pane,
+                         const QList<RawImageView *> &cellViews, int pane, uint64_t contentKey,
                          const mviewer::ui::CompareDisplayRequest &desired)
 {
     if (!session || pane < 0 || pane >= static_cast<int>(session->panePyramids.size()))
         return false;
     auto &slot = session->panePyramids[static_cast<size_t>(pane)];
-    if (slot.images.empty() || pane >= cellViews.size() || !cellViews[pane])
+    if (slot.contentKey != contentKey || slot.images.empty() || pane >= cellViews.size() ||
+        !cellViews[pane])
         return false;
 
     const int count = static_cast<int>((std::min)(slot.levels.size(), slot.images.size()));
@@ -245,8 +248,8 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
             desired = buildPaneDisplayRequest(idx, false);
         if (!desired.target.isValid())
             continue;
-        tagPaneContent(idx);
-        tryPaintFromPyramid(m_session.get(), m_cellViews, idx, desired);
+        if (tryPaintFromPyramid(m_session.get(), m_cellViews, idx, paneContentKey(idx), desired))
+            tagPaneContent(idx);
     }
     // tryPaintFromPyramid -> setImage() fits the raster. A swap has already
     // stored the destination scale; put it back on the view before paint.
@@ -361,8 +364,9 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
                                       r.provisional};
             remembered.target = cell.image.size();
             rememberPyramidDelivery(m_session.get(), cell.index,
-                                    m_comparePaths[static_cast<size_t>(cell.index)], cell.image,
-                                    cell.sourceSize, remembered, !r.provisional);
+                                    m_comparePaths[static_cast<size_t>(cell.index)],
+                                    paneContentKey(cell.index), cell.image, cell.sourceSize,
+                                    remembered, !r.provisional);
         }
     }
 

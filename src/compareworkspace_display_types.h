@@ -63,6 +63,7 @@ struct CompareSourceDisplayResult
 struct ComparePanePyramidSlot
 {
     std::string path;
+    uint64_t contentKey = 0;
     std::vector<CompareDisplayRequest> levels; // parallel to images
     std::vector<QImage> images;
     QSize sourceSize;

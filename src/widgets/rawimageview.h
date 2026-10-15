@@ -91,6 +91,10 @@ class RawImageView : public QWidget
     {
         return !m_backdrop.isNull();
     }
+    quint64 backdropKey() const noexcept
+    {
+        return m_backdropKey;
+    }
     QRect sourceRect() const
     {
         return m_sourceRect;
