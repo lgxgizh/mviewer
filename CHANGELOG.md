@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **浏览模式列表/详细信息视图小缩略图白块与加载中断修复（Browse Thumbnail Loading Fix）**：
+  - 修复 `applyScanResult` 中标志重置时序（`m_scanProgressive = false` 移至 `applyFilter()` 前），确保扫描完成重构视图时使用 `updateSources` 保留首屏正在解码的缩略图任务，避免旧逻辑调用 `replaceSources` 误取消所有在飞任务；
+  - 优化 `ThumbnailPipeline::replaceSources`，改用 `cancelObsoleteHandlesLocked()` 与 `scheduleLocked(false)`，不再无条件丢弃视口内解码任务并即时补录视口需求；
+  - `ThumbnailPipeline::setSources` 重置 `m_visibleBegin = 0; m_visibleEnd = 0;`，彻底消除上一目录滚动偏移污染新目录可见范围导致的漏排队缺陷；
+  - `ThumbnailPanel::thumbReady` 新增跨层级检查 `ThumbnailPipeline` 内存缓存（`findCached`），并完善 DetailsDelegate 占位配色以适应暗色/浅色主题。
+
 ## [1.0.128] - 2026-10-15
 
 ### Release

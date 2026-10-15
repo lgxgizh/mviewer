@@ -2,6 +2,7 @@
 // its generation-guarded latest-wins UI projection over a large source.
 
 #include "thumbnailpanel.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 
 #include <QApplication>
 #include <QColor>
@@ -239,6 +240,50 @@ int main(int argc, char **argv)
         detailsPanel.setViewMode(ThumbnailPanel::Details);
         CHECK(waitFor([&]() { return detailsPanel.metaIsoForPath(imagePath) >= 0; }, 20000),
               "Details meta: switching to Details indexes the gallery path");
+    }
+
+    // Details & List mode: newly entering a directory must load visible thumbnails
+    // without leaving them as null/white placeholders, even after visiting another
+    // directory with a scrolled visible window.
+    {
+        QTemporaryDir dir1;
+        QTemporaryDir dir2;
+        CHECK(dir1.isValid() && dir2.isValid(), "Thumb test: temporary directories available");
+        for (int i = 0; i < 5; ++i)
+        {
+            QImage img(48, 48, QImage::Format_RGB32);
+            img.fill(QColor(10 + i * 20, 30 + i * 15, 50 + i * 10));
+            img.save(dir1.filePath(QStringLiteral("dir1_%1.png").arg(i)), "PNG");
+            img.save(dir2.filePath(QStringLiteral("dir2_%1.png").arg(i)), "PNG");
+        }
+
+        ThumbnailPanel panel;
+        panel.resize(800, 600);
+        panel.show();
+        panel.setViewMode(ThumbnailPanel::Details);
+
+        // Enter dir1
+        panel.setDirectory(dir1.path());
+        CHECK(waitFor([&]() { return panel.entries().size() == 5; }, 10000),
+              "Thumb test: dir1 scan lands 5 entries");
+        // Simulate previous scroll in ThumbnailPipeline
+        ThumbnailPipeline::instance().setVisibleRange(10, 20);
+
+        // Now switch into dir2
+        panel.setDirectory(dir2.path());
+        CHECK(waitFor([&]() { return panel.entries().size() == 5; }, 10000),
+              "Thumb test: dir2 scan lands 5 entries");
+        const QString firstImage = dir2.filePath(QStringLiteral("dir2_0.png"));
+        CHECK(waitFor([&]() { return !panel.thumbReady(firstImage).isNull(); }, 15000),
+              "Thumb test: entering dir2 loads first visible thumbnail");
+
+        // Re-enter dir1 (should immediately hit pipeline cache without stall)
+        panel.setDirectory(dir1.path());
+        CHECK(waitFor([&]() { return panel.entries().size() == 5; }, 10000),
+              "Thumb test: re-entering dir1 lands entries");
+        const QString dir1Image = dir1.filePath(QStringLiteral("dir1_0.png"));
+        CHECK(waitFor([&]() { return !panel.thumbReady(dir1Image).isNull(); }, 15000),
+              "Thumb test: re-entering dir1 loads thumbnail");
     }
 
     std::printf("M59 Browse regression failures: %d\n", g_failures);

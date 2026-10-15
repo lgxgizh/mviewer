@@ -478,7 +478,7 @@ class ThumbnailPanel : public QListView
     bool takePendingFilterRestore(bool hasEntries, QStringList &selection, QString &current);
     void updateVisibleRange();
     QString thumbCacheKey(const QString &path, int size) const;
-    void enforceThumbPixmapBudgetLocked();
+    void enforceThumbPixmapBudgetLocked() const;
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
     struct ContextMenuActions;
     ContextMenuActions buildContextMenu(QMenu &menu, const QStringList &selPaths);

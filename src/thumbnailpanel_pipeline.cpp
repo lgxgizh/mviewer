@@ -63,7 +63,7 @@ void ThumbnailPanel::invalidateSourceImage(const QString &path)
     updateVisibleRange();
 }
 
-void ThumbnailPanel::enforceThumbPixmapBudgetLocked()
+void ThumbnailPanel::enforceThumbPixmapBudgetLocked() const
 {
     while (!m_thumbReadyLru.empty() && (m_thumbReady.size() > kThumbPixmapCacheMaxEntries ||
                                         m_thumbReadyBytes > kThumbPixmapCacheMaxBytes))
@@ -89,7 +89,10 @@ void ThumbnailPanel::updateVisibleRange()
     const int viewportWidth = viewport()->width();
     const int viewportHeight = viewport()->height();
     if (viewportWidth < 10 || viewportHeight < 10)
+    {
+        QTimer::singleShot(50, this, &ThumbnailPanel::updateVisibleRange);
         return;
+    }
 
     // Compute every view mode arithmetically. Calling indexAt()/visualRect()
     // here can force QListView to synchronously lay out the entire model.
@@ -234,6 +237,30 @@ QPixmap ThumbnailPanel::thumbReady(const QString &path) const
     {
         if (alt.key().startsWith(prefix) && !alt.value().pixmap.isNull())
             return alt.value().pixmap;
+    }
+    const ImageData img =
+        ThumbnailPipeline::instance().findCached(path.toStdString(), m_thumbSize);
+    if (!img.isNull())
+    {
+        const QImage q = mvcore::toQImageFast(img);
+        if (!q.isNull())
+        {
+            const qint64 pixmapBytes = static_cast<qint64>(q.sizeInBytes());
+            if (pixmapBytes <= kThumbPixmapCacheMaxBytes)
+            {
+                const QString cacheKey = thumbCacheKey(path, m_thumbSize);
+                m_thumbReadyLru.push_front(cacheKey);
+                ThumbnailPanel::ReadyPixmap ready;
+                ready.pixmap = QPixmap::fromImage(q);
+                ready.bytes = pixmapBytes;
+                ready.lastUse = ++m_thumbReadyClock;
+                ready.lruIt = m_thumbReadyLru.begin();
+                m_thumbReadyBytes += ready.bytes;
+                m_thumbReady.insert(cacheKey, ready);
+                enforceThumbPixmapBudgetLocked();
+                return ready.pixmap;
+            }
+        }
     }
     return QPixmap();
 }

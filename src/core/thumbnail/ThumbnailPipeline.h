@@ -98,6 +98,8 @@ struct ThumbnailPipeline
         m_failed.clear();
         m_attemptedKeys.clear();
         m_pathRevisions.clear();
+        m_visibleBegin = 0;
+        m_visibleEnd = 0;
     }
 
     // M54: publish discovered batches without superseding already decoded
@@ -115,9 +117,9 @@ struct ThumbnailPipeline
     void replaceSources(const std::vector<std::string> &paths)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
-        cancelHandlesLocked();
         m_sources = paths;
-        m_pending.clear();
+        cancelObsoleteHandlesLocked();
+        scheduleLocked(false);
     }
 
     // M56: update the live source order without bumping generation or
@@ -247,6 +249,30 @@ struct ThumbnailPipeline
         m_failed.clear();
         m_attemptedKeys.clear();
         m_memCacheBytes = 0;
+    }
+
+    // Non-submitting cache probe: returns the cached thumbnail if present in
+    // memory at `size` (or any other size for the same path), else null without
+    // mutating demand or triggering scheduler work.
+    ImageData findCached(const std::string &path, int size)
+    {
+        if (path.empty() || size <= 0)
+            return ImageData{};
+        std::lock_guard<std::mutex> lk(m_mtx);
+        auto it = m_memCache.find(key(path, size));
+        if (it != m_memCache.end())
+        {
+            ++m_hits;
+            m_lru.splice(m_lru.begin(), m_lru, it->second.lruIt);
+            return it->second.data;
+        }
+        const std::string prefix = path + "\x1f";
+        for (const auto &entry : m_memCache)
+        {
+            if (entry.first.rfind(prefix, 0) == 0 && !entry.second.data.isNull())
+                return entry.second.data;
+        }
+        return ImageData{};
     }
 
     // Synchronous cache probe: returns the cached thumbnail at `size` if
@@ -497,7 +523,12 @@ struct ThumbnailPipeline
                     // Superseded generation: drop everything (no cache, no
                     // delivery) so old directories can never pollute the
                     // current one.
-                    if (gen != m_gen || ctx.isCancelled() || m_pathRevisions[path] != pathRevision)
+                    if (ctx.isCancelled())
+                    {
+                        m_attemptedKeys.erase(k);
+                        return;
+                    }
+                    if (gen != m_gen || m_pathRevisions[path] != pathRevision)
                         return;
                     if (!thumb.isNull())
                     {
