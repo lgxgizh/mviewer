@@ -1531,9 +1531,15 @@ void pointAtComparePane(RawImageView *view)
 {
     if (!view)
         return;
+    const QPoint center = view->rect().center();
+    const QPoint globalCenter = view->mapToGlobal(center);
+    QCursor::setPos(globalCenter);
     QEvent enter(QEvent::Enter);
     QApplication::sendEvent(view, &enter);
-    QCursor::setPos(view->mapToGlobal(view->rect().center()));
+    QMouseEvent move(QEvent::MouseMove, QPointF(center), QPointF(globalCenter), Qt::NoButton,
+                     Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(view, &move);
+    pump(30);
 }
 
 // Plain 1–8 preview images. They must not zoom to 100% or apply a layout preset.
@@ -1628,7 +1634,7 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
     pointAtComparePane(pane2);
     QKeyEvent press1(QEvent::KeyPress, Qt::Key_1, Qt::NoModifier);
     QApplication::sendEvent(ws, &press1);
-    pump(20);
+    pump(30);
     CHECK(pane2->hasTransientDisplay(), "plain 1 with three images previews on the target pane");
     CHECK(pane2->displayImage().pixel(0, 0) == image1,
           "plain 1 with three images previews image 1");

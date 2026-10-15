@@ -136,6 +136,8 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     connect(m_blinkChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
+                if (m_diffRenderer)
+                    m_diffRenderer->setBlinkActive(on);
                 if (on)
                 {
                     // Blink owns the normal grid surface. For a two-image
@@ -162,7 +164,11 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             [this](bool on)
             {
                 if (on)
+                {
                     exclusiveMode(m_splitChk);
+                    if (m_diffRenderer)
+                        m_diffRenderer->setBlendMode(mviewer::ui::DiffBlendMode::SideBySideSplit);
+                }
                 updateCanvasModeVisibility();
             });
     modeLayout->addWidget(m_splitChk);
@@ -174,7 +180,11 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             [this](bool on)
             {
                 if (on)
+                {
                     exclusiveMode(m_swipeChk);
+                    if (m_diffRenderer)
+                        m_diffRenderer->setBlendMode(mviewer::ui::DiffBlendMode::Swipe);
+                }
                 updateCanvasModeVisibility();
             });
     modeLayout->addWidget(m_swipeChk);

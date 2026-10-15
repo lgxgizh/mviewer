@@ -172,7 +172,7 @@ bool CompareWorkspace::accountLoadRequest(
 
     if (result && result->success() && result->frame)
         (*batch->frames)[index] = result->frame;
-    else if (countAsFailure)
+    else if (countAsFailure || (result && (!result->success() || !result->frame)))
         batch->failed->fetch_add(1, std::memory_order_relaxed);
 
     return batch->remaining->fetch_sub(1, std::memory_order_acq_rel) == 1;

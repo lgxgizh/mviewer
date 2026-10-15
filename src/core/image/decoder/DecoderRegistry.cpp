@@ -100,7 +100,16 @@ DecoderRegistry::decodeFullResult(const std::string &path,
                                   mviewer::domain::ImageMetadata &outMeta) const
 {
     std::error_code ec;
-    if (!std::filesystem::exists(mviewer::core::pathFromUtf8(path), ec))
+    bool exists = true;
+    try
+    {
+        exists = std::filesystem::exists(mviewer::core::pathFromUtf8(path), ec);
+    }
+    catch (...)
+    {
+        exists = true; // Let decoders handle non-UTF8/native paths directly
+    }
+    if (!ec && !exists)
     {
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
             {mviewer::domain::DecodeErrorCode::FileNotFound, "File does not exist: " + path, path});
@@ -115,13 +124,30 @@ DecoderRegistry::decodeFullResult(const std::string &path,
         if (d && d->canDecode(path))
         {
             claimed = true;
-            auto res = d->decodeFullResult(path, outMeta);
-            if (res.has_value() && !res.value().isNull())
-                return res;
-            if (!res.has_value())
-                lastErr = std::move(res.error());
+            try
+            {
+                auto res = d->decodeFullResult(path, outMeta);
+                if (res.has_value() && !res.value().isNull())
+                    return res;
+                if (!res.has_value())
+                    lastErr = std::move(res.error());
+            }
+            catch (const std::exception &e)
+            {
+                lastErr = {mviewer::domain::DecodeErrorCode::CorruptData, e.what(), path};
+            }
+            catch (...)
+            {
+                lastErr = {mviewer::domain::DecodeErrorCode::CorruptData,
+                           "Decoder threw unexpected exception", path};
+            }
         }
     }
+
+    // Resilient fallback to legacy decodeFull if result path failed
+    ImageData fallback = decodeFull(path, outMeta);
+    if (!fallback.isNull())
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(std::move(fallback));
 
     if (!claimed)
     {

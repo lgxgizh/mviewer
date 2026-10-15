@@ -109,18 +109,34 @@ bool waitForDisplayed(CompareWorkspace *ws, int timeoutMs)
 
 void holdPress(QWidget *widget)
 {
-    const QPointF local(10, 10);
-    QMouseEvent press(QEvent::MouseButtonPress, local, widget->mapToGlobal(local), Qt::LeftButton,
-                      Qt::LeftButton, Qt::NoModifier);
-    QApplication::sendEvent(widget, &press);
+    if (auto *btn = qobject_cast<QAbstractButton *>(widget))
+    {
+        btn->setDown(true);
+        emit btn->pressed();
+    }
+    else
+    {
+        const QPointF local(10, 10);
+        QMouseEvent press(QEvent::MouseButtonPress, local, widget->mapToGlobal(local), Qt::LeftButton,
+                          Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(widget, &press);
+    }
 }
 
 void holdRelease(QWidget *widget)
 {
-    const QPointF local(10, 10);
-    QMouseEvent release(QEvent::MouseButtonRelease, local, widget->mapToGlobal(local),
-                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
-    QApplication::sendEvent(widget, &release);
+    if (auto *btn = qobject_cast<QAbstractButton *>(widget))
+    {
+        btn->setDown(false);
+        emit btn->released();
+    }
+    else
+    {
+        const QPointF local(10, 10);
+        QMouseEvent release(QEvent::MouseButtonRelease, local, widget->mapToGlobal(local),
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(widget, &release);
+    }
 }
 } // namespace
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "compareworkspace_roi_types.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "domain/Selection.h"
 
 #include <QObject>
@@ -31,6 +32,10 @@ class CompareRoiController : public QObject
 
     uint64_t currentGeneration() const noexcept { return m_generation; }
     uint64_t bumpGeneration() noexcept { return ++m_generation; }
+
+    static ROIPaneMeasurement computeSourceROI(const ROIInput &input,
+                                               const mviewer::domain::Selection &roi,
+                                               const TaskScheduler::TaskContext &context);
 
   signals:
     void roiChanged(const mviewer::domain::Selection &roi);

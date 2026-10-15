@@ -316,9 +316,19 @@ mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
 QtDecoder::decodeFullResult(const std::string &path,
                             mviewer::domain::ImageMetadata &outMeta) const
 {
-    const auto stdPath = mviewer::core::pathFromUtf8(path);
-    std::error_code ec;
-    if (!std::filesystem::exists(stdPath, ec))
+    bool exists = true;
+    try
+    {
+        const auto stdPath = mviewer::core::pathFromUtf8(path);
+        std::error_code ec;
+        if (!std::filesystem::exists(stdPath, ec) && !ec)
+            exists = false;
+    }
+    catch (...)
+    {
+        exists = true; // Let QImageReader attempt to open natively
+    }
+    if (!exists)
     {
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
             {mviewer::domain::DecodeErrorCode::FileNotFound, "Image file not found: " + path, path});
