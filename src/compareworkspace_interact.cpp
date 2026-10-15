@@ -291,6 +291,8 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
         {
             m_splitDragging = true;
             m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
+            if (m_diffRenderer)
+                m_diffRenderer->setSplitRatio(m_splitPos);
             if (m_compareCanvas)
                 m_compareCanvas->update();
             return true;
@@ -332,6 +334,8 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
     if (m_splitDragging && m_swipeChk && m_swipeChk->isChecked())
     {
         m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
+        if (m_diffRenderer)
+            m_diffRenderer->setSplitRatio(m_splitPos);
         if (m_compareCanvas)
             m_compareCanvas->update();
         return true;
@@ -404,6 +408,8 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
         m_splitDragging = false;
         m_dragging = false;
         m_splitPos = 0.5;
+        if (m_diffRenderer)
+            m_diffRenderer->setSplitRatio(0.5);
         if (m_compareCanvas)
             m_compareCanvas->update();
         showCompareStatus(tr("滑动卷帘已重置居中 (50%)"));

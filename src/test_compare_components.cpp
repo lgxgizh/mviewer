@@ -139,6 +139,24 @@ int main(int argc, char **argv)
         controller.clearROI();
         CHECK(clearedEmitted, "roiCleared emitted");
         CHECK(!controller.hasValidROI(), "hasValidROI is false after clear");
+
+        // computeSourceROI static helper tests
+        Selection raw;
+        raw.x = 2;
+        raw.y = 2;
+        raw.width = 4;
+        raw.height = 4;
+
+        ROIInput input;
+        input.pixels.width = 10;
+        input.pixels.height = 10;
+        input.pixels.format = PixelFormat::RGB24;
+        input.pixels.buffer = std::make_shared<std::vector<uint8_t>>(10 * 10 * 3, 128);
+        TaskScheduler::TaskContext ctx;
+        ROIPaneMeasurement meas = CompareRoiController::computeSourceROI(input, raw, ctx);
+        CHECK(meas.state == ROIPaneState::Ready, "computeSourceROI ready on valid pixels");
+        CHECK(meas.stats.valid, "computeSourceROI stats valid");
+        CHECK(meas.stats.pixelCount == 16, "computeSourceROI 4x4 pixelCount == 16");
     }
 
     // 3. CompareWorkspace component wiring and mediation tests
@@ -177,6 +195,14 @@ int main(int argc, char **argv)
         // DiffRenderer threshold mediation
         workspace.diffRenderer()->setThreshold(64);
         CHECK(workspace.diffRenderer()->threshold() == 64, "diffRenderer threshold updated");
+
+        workspace.diffRenderer()->setSplitRatio(0.42);
+        CHECK(std::abs(workspace.diffRenderer()->splitRatio() - 0.42) < 1e-6,
+              "diffRenderer splitRatio updated");
+
+        // DisplayManager uniform scale mediation
+        workspace.displayManager()->setUniformScale(true);
+        CHECK(workspace.displayManager()->uniformScale(), "displayManager uniformScale updated");
 
         // SessionState navigation mediation
         workspace.setNavWindow(4);

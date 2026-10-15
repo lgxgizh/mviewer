@@ -138,13 +138,21 @@ bool ImageRepository::loadPixels(const std::string &filePath, const std::string 
     }
 
     auto decodeRes = Decoder::decodeFullResult(filePath, decodeMeta);
-    if (!decodeRes.isOk())
+    if (decodeRes.isOk() && !decodeRes.value().isNull())
     {
-        error = decodeRes.error().message.empty() ? ("decode failed: " + filePath)
-                                                  : decodeRes.error().message;
-        return false;
+        pixels = std::move(decodeRes).value();
     }
-    pixels = std::move(decodeRes).value();
+    else
+    {
+        pixels = Decoder::decodeFull(filePath, decodeMeta);
+        if (pixels.isNull())
+        {
+            error = !decodeRes.isOk() && !decodeRes.error().message.empty()
+                        ? decodeRes.error().message
+                        : ("decode failed: " + filePath);
+            return false;
+        }
+    }
     if (opts.useDiskCache)
         DiskCache::instance().put(key, pixels);
     return true;

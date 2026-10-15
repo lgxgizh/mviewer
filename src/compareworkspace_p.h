@@ -21,6 +21,7 @@
 
 #include "compareworkspace.h"
 #include "compare_diff_renderer.h"
+#include "compare_display_manager.h"
 #include "compare_roi_controller.h"
 #include "compare_session_state.h"
 #include "selectionmodel.h"

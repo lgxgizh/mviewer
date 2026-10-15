@@ -208,3 +208,77 @@ void CompareWorkspace::onSwapPanes()
         m_session->postLayoutFitAgain = false;
     }
 }
+
+void CompareWorkspace::onLayoutChanged()
+{
+    if (!m_layoutCombo)
+        return;
+    const int idx = m_layoutCombo->currentIndex();
+    const bool custom = (idx == 6); // 自定义 M×N
+    if (m_gridColsSpin)
+        m_gridColsSpin->setEnabled(custom);
+    syncContextualCompareControls();
+    if (m_sessionState)
+        m_sessionState->setLayoutPreset(idx);
+
+    int cols = 0;
+    switch (idx)
+    {
+    case 1:
+        cols = 1;
+        break; // 单列
+    case 2:
+        cols = 2;
+        break; // 2 列
+    case 3:
+        cols = 3;
+        break; // 3 列
+    case 4:
+        cols = 4;
+        break; // 4 列
+    case 5:
+        cols = m_engine.imageCount();
+        break; // 一行
+    case 6:
+        // A-4.2: custom grid — columns from spin; rows derived by engine.
+        cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+        break;
+    default:
+        cols = 0;
+        break; // 自动
+    }
+    m_engine.setColumns(cols);
+    if (m_displayManager)
+        m_displayManager->setColumns(cols);
+
+    if (!m_cellViews.isEmpty() && m_cellViews.size() == m_engine.imageCount())
+        relayoutGridKeepingPanes();
+    else
+        rebuildCells();
+    updateLayoutStatus();
+    schedulePostLayoutFit();
+    refreshLinkMarkers();
+    update();
+    if (m_sidePanel && m_sidePanel->isVisible())
+        refreshHistograms();
+}
+
+void CompareWorkspace::onCustomGridChanged()
+{
+    if (!m_layoutCombo || m_layoutCombo->currentIndex() != 6)
+        return;
+    // Re-apply custom columns; rows are informational (engine packs by cols).
+    const int cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+    m_engine.setColumns(cols);
+    if (m_displayManager)
+        m_displayManager->setColumns(cols);
+
+    if (!m_cellViews.isEmpty() && m_cellViews.size() == m_engine.imageCount())
+        relayoutGridKeepingPanes();
+    else
+        rebuildCells();
+    updateLayoutStatus();
+    schedulePostLayoutFit();
+    refreshLinkMarkers();
+    update();
+}

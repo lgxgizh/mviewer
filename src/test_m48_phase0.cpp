@@ -288,8 +288,10 @@ int main(int argc, char **argv)
         ws.resize(1280, 800);
         ws.show();
         ws.setImages({adobe100, adobe100});
-        CHECK(waitTrue([&] { return comparePanesReady(&ws, 2); }, 60000),
+        CHECK(waitTrue([&] { return comparePanesReady(&ws, 2) && schedulerIdle(); }, 60000),
               "A2: source-backed panes display");
+        pump(100);
+        waitTrue([&] { return schedulerIdle(); }, 10000);
         RawImageView *v0 = paneView(&ws, 0);
         if (v0)
         {
@@ -298,10 +300,10 @@ int main(int argc, char **argv)
                            (patch100.y() * pane.height()) / 8333);
             const QRgb sample = rasterSample(pane, p.x(), p.y());
             const QRgb expected = expectedDisplayRgb(adobe100, patchRaw);
-            printf("  A2: pane sample=(%d,%d,%d) expected=(%d,%d,%d) raw=(%d,%d,%d)\n",
-                   qRed(sample), qGreen(sample), qBlue(sample), qRed(expected),
-                   qGreen(expected), qBlue(expected), qRed(patchRaw), qGreen(patchRaw),
-                   qBlue(patchRaw));
+            printf("  A2: pane dims=(%d,%d) sample=(%d,%d,%d) expected=(%d,%d,%d) raw=(%d,%d,%d)\n",
+                   pane.width(), pane.height(), qRed(sample), qGreen(sample), qBlue(sample),
+                   qRed(expected), qGreen(expected), qBlue(expected), qRed(patchRaw),
+                   qGreen(patchRaw), qBlue(patchRaw));
             std::fflush(stdout);
             CHECK(colorClose(sample, expected, 14),
                   "A2: compare source-backed pane applies the ICC conversion");
