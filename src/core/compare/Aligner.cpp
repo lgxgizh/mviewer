@@ -92,27 +92,10 @@ ImageData downscaleBy(const ImageData &src, int scale)
     return d;
 }
 
-} // namespace
-
-AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int maxShift)
+// Coarse SAD grid search over downscaled thumbnails.
+AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int W, int H, int maxShift)
 {
-    if (ref.isNull() || moving.isNull())
-        return {0, 0};
-
-    // Downscale both by the same factor for a consistent offset mapping.
-    const int fullMax =
-        std::max(std::max(ref.width, ref.height), std::max(moving.width, moving.height));
-    const int scale = std::max(1, fullMax / 256);
-    ImageData rg = downscaleBy(ref, scale);
-    ImageData mg = downscaleBy(moving, scale);
-    if (rg.isNull() || mg.isNull())
-        return {0, 0};
-
-    const ImageBuffer rv = rg.view();
-    const ImageBuffer mv = mg.view();
-    const int W = rg.width, H = rg.height;
-
-    long long bestSAD = std::numeric_limits<long long>::max();
+    double bestSAD = std::numeric_limits<double>::infinity();
     AlignOffset best{0, 0};
 
     for (int dy = -maxShift; dy <= maxShift; ++dy)
@@ -131,9 +114,10 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
             if (overlap <= 0)
                 continue;
 
-            const long long maxAllowedSad = (bestSAD == std::numeric_limits<long long>::max())
-                                                ? std::numeric_limits<long long>::max()
-                                                : bestSAD * overlap;
+            const long long maxAllowedSad =
+                (bestSAD == std::numeric_limits<double>::infinity())
+                    ? std::numeric_limits<long long>::max()
+                    : static_cast<long long>(bestSAD * overlap);
 
             long long sad = 0;
             const int len = colHi - colLo;
@@ -164,7 +148,7 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
                 if (sad >= maxAllowedSad)
                     break;
             }
-            const long long avg = sad / overlap;
+            const double avg = static_cast<double>(sad) / static_cast<double>(overlap);
             if (avg < bestSAD)
             {
                 bestSAD = avg;
@@ -172,9 +156,121 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
             }
         }
     }
-    best.x *= scale;
-    best.y *= scale;
     return best;
+}
+
+// Fine 1-pixel precision SAD search around coarse offset on full-resolution rasters.
+AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int fW, int fH,
+                       int coarseDx, int coarseDy, int scale, int maxShift)
+{
+    double fineBestSAD = std::numeric_limits<double>::infinity();
+    AlignOffset fineBest{coarseDx, coarseDy};
+
+    const int fineMinY = std::max(-maxShift * scale, coarseDy - scale);
+    const int fineMaxY = std::min(maxShift * scale, coarseDy + scale);
+    const int fineMinX = std::max(-maxShift * scale, coarseDx - scale);
+    const int fineMaxX = std::min(maxShift * scale, coarseDx + scale);
+    const int stepY = std::max(1, fH / 256);
+
+    for (int dy = fineMinY; dy <= fineMaxY; ++dy)
+    {
+        const int rowLo = std::max(0, dy);
+        const int rowHi = std::min(fH, fH + dy);
+        if (rowHi <= rowLo)
+            continue;
+        for (int dx = fineMinX; dx <= fineMaxX; ++dx)
+        {
+            const int colLo = std::max(0, dx);
+            const int colHi = std::min(fW, fW + dx);
+            if (colHi <= colLo)
+                continue;
+
+            const int len = colHi - colLo;
+            long long sad = 0;
+            int rowsCounted = 0;
+            const long long maxAllowedSad =
+                (fineBestSAD == std::numeric_limits<double>::infinity())
+                    ? std::numeric_limits<long long>::max()
+                    : static_cast<long long>(fineBestSAD *
+                                            (static_cast<double>(len) *
+                                             ((rowHi - rowLo) / stepY + 1)));
+
+            for (int y = rowLo; y < rowHi; y += stepY)
+            {
+                const uint8_t *rp = frv.data + static_cast<size_t>(y) * frv.stride() + colLo;
+                const uint8_t *mp =
+                    fmv.data + static_cast<size_t>(y - dy) * fmv.stride() + (colLo - dx);
+                int x = 0;
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+                __m128i vsum = _mm_setzero_si128();
+                for (; x + 16 <= len; x += 16)
+                {
+                    const __m128i vr = _mm_loadu_si128(reinterpret_cast<const __m128i *>(rp + x));
+                    const __m128i vm = _mm_loadu_si128(reinterpret_cast<const __m128i *>(mp + x));
+                    vsum = _mm_add_epi64(vsum, _mm_sad_epu8(vr, vm));
+                }
+                alignas(16) uint64_t sums[2];
+                _mm_store_si128(reinterpret_cast<__m128i *>(sums), vsum);
+                sad += static_cast<long long>(sums[0] + sums[1]);
+#endif
+                for (; x < len; ++x)
+                {
+                    const int d = static_cast<int>(rp[x]) - static_cast<int>(mp[x]);
+                    sad += (d < 0 ? -d : d);
+                }
+                ++rowsCounted;
+                if (sad >= maxAllowedSad)
+                    break;
+            }
+
+            if (rowsCounted > 0)
+            {
+                const long long totalPixels = static_cast<long long>(len) * rowsCounted;
+                const double avg = static_cast<double>(sad) / static_cast<double>(totalPixels);
+                if (avg < fineBestSAD)
+                {
+                    fineBestSAD = avg;
+                    fineBest = {dx, dy};
+                }
+            }
+        }
+    }
+    return fineBest;
+}
+
+} // namespace
+
+AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int maxShift)
+{
+    if (ref.isNull() || moving.isNull())
+        return {0, 0};
+
+    // Downscale both by the same factor for a consistent offset mapping.
+    const int fullMax =
+        std::max(std::max(ref.width, ref.height), std::max(moving.width, moving.height));
+    const int scale = std::max(1, fullMax / 256);
+    ImageData rg = downscaleBy(ref, scale);
+    ImageData mg = downscaleBy(moving, scale);
+    if (rg.isNull() || mg.isNull())
+        return {0, 0};
+
+    const AlignOffset best = coarseSearch(rg.view(), mg.view(), rg.width, rg.height, maxShift);
+    const int coarseDx = best.x * scale;
+    const int coarseDy = best.y * scale;
+
+    if (scale <= 1)
+        return {coarseDx, coarseDy};
+
+    // Coarse-to-fine 1-pixel precision search:
+    // Refine around (coarseDx, coarseDy) in the range [-scale, +scale]
+    // at exact 1-pixel resolution using full-resolution grayscale images.
+    ImageData fullRefGray = (ref.format == PixelFormat::Grayscale8) ? ref : toGray(ref);
+    ImageData fullMovGray = (moving.format == PixelFormat::Grayscale8) ? moving : toGray(moving);
+    if (fullRefGray.isNull() || fullMovGray.isNull())
+        return {coarseDx, coarseDy};
+
+    return fineSearch(fullRefGray.view(), fullMovGray.view(), fullRefGray.width,
+                      fullRefGray.height, coarseDx, coarseDy, scale, maxShift);
 }
 
 ImageData Aligner::shift(const ImageData &src, int dx, int dy, uint8_t fill)
