@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.0.125] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.125**.
+
+### Compare Workspace & Headless CI Hardening
+
+- **悬停窗格探测优先级与无头环境适配（fix/compare）**：
+  - 在 `CompareWorkspace::paneIndexAtGlobalPos` 中直接优先返回有效的 `m_hoverIdx`，避免依赖无头 CI 环境中无效的 `QCursor::pos()` 或窗口焦点导致的误测；
+  - 杜绝在多窗格对比按住数字键临时预览时将目标窗格误判定为窗格 0 的隐患。
+
+### Test Robustness
+
+- **对比验收套件数字临时预览测试稳定性加固**：
+  - 在 `pointAtComparePane` 后重发 `Enter` 事件以维持事件泵之后的悬停状态；
+  - 在 `testPlainDigitsReservedForPreview` 中为 `hasTransientDisplay()` 和释放恢复引入弹性等待循环，消除 GitHub Actions CI 虚拟显示环境中的时序抖动。
+
 ## [1.0.124] - 2026-10-15
 
 ### Release
