@@ -496,28 +496,20 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     }
 
     // ── Decode ──────────────────────────────────────────────────────
-    ImageData img;
     auto decodeRes = Decoder::decodeFullResult(inputPath);
     if (m_cancelled.load())
     {
         result.errorMessage = "已取消";
         return result;
     }
-    if (decodeRes.isOk() && !decodeRes.value().isNull())
-    {
-        img = std::move(decodeRes).value();
-    }
-    else
-    {
-        img = Decoder::decodeFull(inputPath);
-    }
-    if (img.isNull())
+    if (!decodeRes.isOk() || decodeRes.value().isNull())
     {
         qWarning("BatchProcessor: failed to decode %s: %s", inputPath.c_str(),
                  decodeRes.isOk() ? "null image" : decodeRes.error().toString().c_str());
         result.errorMessage = decodeFailureMessage(inputPath);
         return result;
     }
+    ImageData img = std::move(decodeRes).value();
 
     result.width = img.width;
     result.height = img.height;

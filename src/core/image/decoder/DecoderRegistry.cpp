@@ -144,11 +144,6 @@ DecoderRegistry::decodeFullResult(const std::string &path,
         }
     }
 
-    // Resilient fallback to legacy decodeFull if result path failed
-    ImageData fallback = decodeFull(path, outMeta);
-    if (!fallback.isNull())
-        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(std::move(fallback));
-
     if (!claimed)
     {
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(

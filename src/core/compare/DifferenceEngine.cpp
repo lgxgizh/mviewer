@@ -336,6 +336,40 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
     return out;
 }
 
+#if defined(MV_ARCH_X86)
+MV_TARGET_AVX2
+static inline int applyThresholdRowAVX2(const uint8_t *src, uint8_t *dst, int width,
+                                        uint8_t threshold)
+{
+    int x = 0;
+    const __m256i vthresh = _mm256_set1_epi8(static_cast<char>(threshold));
+    const __m256i vzero = _mm256_setzero_si256();
+    for (; x + 32 <= width; x += 32)
+    {
+        const __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + x));
+        const __m256i mask = _mm256_cmpeq_epi8(_mm256_subs_epu8(vthresh, v), vzero);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + x), _mm256_and_si256(v, mask));
+    }
+    return x;
+}
+
+MV_TARGET_SSE2
+static inline int applyThresholdRowSSE2(const uint8_t *src, uint8_t *dst, int startX, int width,
+                                        uint8_t threshold)
+{
+    int x = startX;
+    const __m128i vthresh128 = _mm_set1_epi8(static_cast<char>(threshold));
+    const __m128i vzero128 = _mm_setzero_si128();
+    for (; x + 16 <= width; x += 16)
+    {
+        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src + x));
+        const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh128, v), vzero128);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + x), _mm_and_si128(v, mask));
+    }
+    return x;
+}
+#endif
+
 ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t threshold)
 {
     if (gray.isNull())
@@ -349,34 +383,15 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
     if (cpp == 1 && ro == 0)
     {
 #if defined(MV_ARCH_X86)
-        const __m128i vthresh128 = _mm_set1_epi8(static_cast<char>(threshold));
-        const __m128i vzero128 = _mm_setzero_si128();
         const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
-        const __m256i vthresh256 = _mm256_set1_epi8(static_cast<char>(threshold));
-        const __m256i vzero256 = _mm256_setzero_si256();
         for (int y = 0; y < gray.height; ++y)
         {
             const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
             uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
             int x = 0;
             if (useAvx2)
-            {
-                for (; x + 32 <= gray.width; x += 32)
-                {
-                    const __m256i v =
-                        _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + x));
-                    const __m256i mask =
-                        _mm256_cmpeq_epi8(_mm256_subs_epu8(vthresh256, v), vzero256);
-                    _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + x),
-                                        _mm256_and_si256(v, mask));
-                }
-            }
-            for (; x + 16 <= gray.width; x += 16)
-            {
-                const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src + x));
-                const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh128, v), vzero128);
-                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + x), _mm_and_si128(v, mask));
-            }
+                x = applyThresholdRowAVX2(src, dst, gray.width, threshold);
+            x = applyThresholdRowSSE2(src, dst, x, gray.width, threshold);
             for (; x < gray.width; ++x)
             {
                 const uint8_t v = src[x];

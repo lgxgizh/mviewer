@@ -1,5 +1,9 @@
 #include "compare_roi_controller.h"
 
+#include "core/analysis/PixelInspector.h"
+#include "core/image/ExifOrientation.h"
+#include "core/image/SourceImage.h"
+
 #include <QSize>
 #include <algorithm>
 
@@ -57,10 +61,6 @@ void CompareRoiController::nudgeROI(int dx, int dy, int maxWidth, int maxHeight)
         emit roiChanged(m_roi);
     }
 }
-
-#include "core/analysis/PixelInspector.h"
-#include "core/image/ExifOrientation.h"
-#include "core/image/SourceImage.h"
 
 void CompareRoiController::setMeasurementState(ROIMeasurementState state)
 {
