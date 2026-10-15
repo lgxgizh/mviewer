@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [1.0.128] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.128**.
+
+### Performance & Pipeline Optimization
+
+- **对比图像多参数调节 4 合 1 1D LUT 融合（Compare 4-in-1 LUT Fusion）**：
+  - 在 `ImageAdjust.h` 中实现 `adjustCombinedLut`，将亮度、对比度、伽马、白平衡（R/B 增益）4 步串行处理融合为单次 3×256 1D LUT 变换；
+  - `ExportReport.cpp` 对比图导出调节全幅内存分配与遍历带宽开销减少 75%，并在浮点域单次量化，消除多次级联 8-bit 截断造成的暗部色阶断裂（Banding）。
+- **RGB24 toGrayscale8 SSSE3 向量化加速**：
+  - 在 `AnalysisEngine_metrics.cpp` 为最常见的解码产物 RGB24 补齐 SSSE3 快速灰度转换路径（基于 `_mm_shuffle_epi8` 与 `_mm_maddubs_epi16`）；
+  - `ssim()` 与 `noiseEstimate()` 避免在 3 通道图像上退化为逐像素标量循环。
+- **AnalysisPanel Worker 零拷贝直通**：
+  - 在 `analysispanel_analysis_worker.cpp` 中去除多余的 `mvcore::fromQImage(img)` 格式来回转换与两遍整图拷贝，直接基于帧原生像素缓冲区计算直方图基础统计与噪声。
+- **瓦片色彩管理解析结果缓存（Tile Color Profile Caching）**：
+  - 在 `QtConvert.cpp` 中增加线程安全有限容量色彩空间缓存，杜绝屏幕各瓦片在视口渲染时重复解析 Base64 与 ICC Profile。
+- **DiskCache 巨型裸像素保护（Giant BLOB Guard）**：
+  - 在 `ImageRepository_load.cpp` 中对大于 16MB 的未压缩帧跳过 SQLite 同步写入，避免大图磁盘缓存耗时超过重新解码。
+
+### Algorithm & Analysis Precision
+
+- **Aligner 粗精两级高精度搜索（Aligner Coarse-to-Fine Search）**：
+  - 在 `Aligner.cpp` 实现粗精两级搜索：在 256px 缩略图粗搜索确定基准偏移后，在全分辨率灰度图 ±scale 窗口内执行 1px 精细搜索；
+  - 修正平均 SAD 浮点精度，消除整型除法截断为 0 导致错误偏移锁定的缺陷。
+- **ColorChecker 色差标准升级与中心区域采样**：
+  - `ColorCheckerAnalyzer` 全面采用标准 CIE76 $\Delta E^*_{ab}$（sRGB → XYZ → CIE L\*a\*b\*）度量色差；
+  - 取各色块中心 25% 面积进行均值采样，排除色卡边缘与暗角畸变，并新增 `maxDeltaE` 最大色差输出。
+- **MTF50 倾斜边缘自动判向与汉明窗抑制（MTF Edge Auto-Orientation & Windowing）**：
+  - `MTFAnalyzer` 自动计算水平与垂直边缘梯度强度以自适应选定投影方向；
+  - 在对 ESF 微分获得 LSF 后引入 Hamming 窗函数抑制频谱泄漏，显著提升复杂边缘下的频率交叉点解算稳定性。
+
 ## [1.0.127] - 2026-10-15
 
 ### Release
