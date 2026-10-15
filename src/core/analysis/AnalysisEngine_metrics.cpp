@@ -628,6 +628,29 @@ static inline void toGrayscale8RowSSSE3(const uint8_t *sl, uint8_t *dl, int widt
         std::memcpy(dl + x, &out4, 4);
     }
 }
+
+MV_TARGET_SSSE3
+static inline int toGrayscale8RowRgb24SSSE3(const uint8_t *sl, uint8_t *dl, int width, bool isBgr)
+{
+    const __m128i shuf = isBgr
+                             ? _mm_setr_epi8(2, 1, 0, -1, 5, 4, 3, -1, 8, 7, 6, -1, 11, 10, 9, -1)
+                             : _mm_setr_epi8(0, 1, 2, -1, 3, 4, 5, -1, 6, 7, 8, -1, 9, 10, 11, -1);
+    const __m128i weights = _mm_setr_epi8(11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0);
+    const __m128i vzero = _mm_setzero_si128();
+    int x = 0;
+    for (; x * 3 + 16 <= width * 3; x += 4)
+    {
+        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(sl + x * 3));
+        const __m128i shuffled = _mm_shuffle_epi8(v, shuf);
+        const __m128i pairs = _mm_maddubs_epi16(shuffled, weights);
+        const __m128i sums = _mm_hadd_epi16(pairs, pairs);
+        const __m128i scaled = _mm_srli_epi16(sums, 5);
+        const __m128i packed = _mm_packus_epi16(scaled, vzero);
+        const uint32_t out4 = static_cast<uint32_t>(_mm_cvtsi128_si32(packed));
+        std::memcpy(dl + x, &out4, 4);
+    }
+    return x;
+}
 #endif
 
 static ImageData toGrayscale8(const ImageData &src)
@@ -646,7 +669,7 @@ static ImageData toGrayscale8(const ImageData &src)
 
     const bool useSsse3 =
 #if defined(MV_ARCH_X86)
-        (cpp == 4) && mviewer::core::CpuFeatures::hasSsse3();
+        mviewer::core::CpuFeatures::hasSsse3();
 #else
         false;
 #endif
@@ -659,8 +682,15 @@ static ImageData toGrayscale8(const ImageData &src)
 #if defined(MV_ARCH_X86)
         if (useSsse3)
         {
-            toGrayscale8RowSSSE3(sl, dl, src.width, isBgr);
-            x = (src.width / 4) * 4;
+            if (cpp == 4)
+            {
+                toGrayscale8RowSSSE3(sl, dl, src.width, isBgr);
+                x = (src.width / 4) * 4;
+            }
+            else if (cpp == 3)
+            {
+                x = toGrayscale8RowRgb24SSSE3(sl, dl, src.width, isBgr);
+            }
         }
 #endif
         for (; x < src.width; ++x)

@@ -272,3 +272,152 @@ inline ImageData adjustWhiteBalance(const ImageData &src, float rGain, float bGa
     }
     return dst;
 }
+
+// Build 3x256 fused LUT for brightness, contrast, gamma, and white balance.
+inline void buildCombinedLuts(int adj, float f, float g, float r, float b, bool isGray,
+                              std::array<uint8_t, 256> &lutR, std::array<uint8_t, 256> &lutG,
+                              std::array<uint8_t, 256> &lutB)
+{
+    const bool hasBrightness = (adj != 0);
+    const bool hasContrast = (std::abs(f - 1.0f) >= 1e-6f);
+    const bool hasGamma = (std::abs(g - 1.0f) >= 1e-6f);
+    const bool hasWb = (std::abs(r - 1.0f) >= 1e-6f || std::abs(b - 1.0f) >= 1e-6f);
+    const float invGamma = 1.0f / g;
+
+    for (int i = 0; i < 256; ++i)
+    {
+        float val = static_cast<float>(i);
+        if (hasBrightness)
+            val += static_cast<float>(adj);
+        if (hasContrast)
+            val = (val - 128.0f) * f + 128.0f;
+        val = std::clamp(val, 0.0f, 255.0f);
+        if (hasGamma)
+        {
+            const float norm = val / 255.0f;
+            val = std::pow(norm, invGamma) * 255.0f;
+        }
+
+        if (isGray)
+        {
+            lutR[static_cast<size_t>(i)] =
+                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(val)), 0, 255));
+        }
+        else
+        {
+            const float rVal = hasWb ? (val * r) : val;
+            const float bVal = hasWb ? (val * b) : val;
+            lutR[static_cast<size_t>(i)] =
+                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(rVal)), 0, 255));
+            lutG[static_cast<size_t>(i)] =
+                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(val)), 0, 255));
+            lutB[static_cast<size_t>(i)] =
+                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(bVal)), 0, 255));
+        }
+    }
+}
+
+// Apply the precomputed fused LUTs to an ImageBuffer.
+inline void applyCombinedLuts(const ImageBuffer &v, ImageBuffer &d,
+                              const std::array<uint8_t, 256> &lutR,
+                              const std::array<uint8_t, 256> &lutG,
+                              const std::array<uint8_t, 256> &lutB,
+                              PixelFormat fmt, int cpp)
+{
+    const bool isGray = (fmt == PixelFormat::Grayscale8);
+    int rOff = 0, gOff = 1, bOff = 2;
+    if (fmt == PixelFormat::BGR24 || fmt == PixelFormat::BGRA32)
+    {
+        rOff = 2;
+        bOff = 0;
+    }
+
+    const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * cpp) &&
+                              (d.stride() == static_cast<ptrdiff_t>(d.width) * cpp);
+
+    if (isGray)
+    {
+        if (isContiguous)
+        {
+            const size_t total = static_cast<size_t>(v.width) * static_cast<size_t>(v.height);
+            for (size_t i = 0; i < total; ++i)
+                d.data[i] = lutR[v.data[i]];
+            return;
+        }
+        for (int y = 0; y < v.height; ++y)
+        {
+            const uint8_t *s = v.data + static_cast<size_t>(y) * v.stride();
+            uint8_t *t = d.data + static_cast<size_t>(y) * d.stride();
+            for (int x = 0; x < v.width; ++x)
+                t[x] = lutR[s[x]];
+        }
+        return;
+    }
+
+    if (isContiguous)
+    {
+        const size_t total = static_cast<size_t>(v.width) * static_cast<size_t>(v.height);
+        for (size_t i = 0; i < total; ++i)
+        {
+            const size_t off = i * static_cast<size_t>(cpp);
+            d.data[off + static_cast<size_t>(rOff)] = lutR[v.data[off + static_cast<size_t>(rOff)]];
+            d.data[off + static_cast<size_t>(gOff)] = lutG[v.data[off + static_cast<size_t>(gOff)]];
+            d.data[off + static_cast<size_t>(bOff)] = lutB[v.data[off + static_cast<size_t>(bOff)]];
+            if (cpp == 4)
+                d.data[off + 3] = v.data[off + 3];
+        }
+        return;
+    }
+
+    for (int y = 0; y < v.height; ++y)
+    {
+        const uint8_t *s = v.data + static_cast<size_t>(y) * v.stride();
+        uint8_t *t = d.data + static_cast<size_t>(y) * d.stride();
+        for (int x = 0; x < v.width; ++x)
+        {
+            const size_t off = static_cast<size_t>(x) * static_cast<size_t>(cpp);
+            t[off + static_cast<size_t>(rOff)] = lutR[s[off + static_cast<size_t>(rOff)]];
+            t[off + static_cast<size_t>(gOff)] = lutG[s[off + static_cast<size_t>(gOff)]];
+            t[off + static_cast<size_t>(bOff)] = lutB[s[off + static_cast<size_t>(bOff)]];
+            if (cpp == 4)
+                t[off + 3] = s[off + 3];
+        }
+    }
+}
+
+// Fused 1D LUT applying brightness, contrast, gamma, and white balance in a
+// single pass with a single allocation, eliminating redundant intermediate
+// full-image buffers and cascade quantization artifacts.
+inline ImageData adjustCombinedLut(const ImageData &src, int brightness, float contrast,
+                                   float gamma, float rGain, float bGain)
+{
+    if (src.isNull())
+        return src;
+
+    const int adj = std::clamp(brightness, -255, 255);
+    const float f = std::max(contrast, 0.0f);
+    const float g = std::clamp(gamma, 0.05f, 8.0f);
+    const float r = std::max(rGain, 0.01f);
+    const float b = std::max(bGain, 0.01f);
+
+    if (adj == 0 && std::abs(f - 1.0f) < 1e-6f && std::abs(g - 1.0f) < 1e-6f &&
+        std::abs(r - 1.0f) < 1e-6f && std::abs(b - 1.0f) < 1e-6f)
+    {
+        return src;
+    }
+
+    ImageBuffer v = src.view();
+    if (v.width <= 0 || v.height <= 0)
+        return src;
+
+    ImageData dst = makeImageData(v.width, v.height, src.format);
+    ImageBuffer d = dst.view();
+
+    const bool isGray = (src.format == PixelFormat::Grayscale8);
+    std::array<uint8_t, 256> lutR{};
+    std::array<uint8_t, 256> lutG{};
+    std::array<uint8_t, 256> lutB{};
+    buildCombinedLuts(adj, f, g, r, b, isGray, lutR, lutG, lutB);
+    applyCombinedLuts(v, d, lutR, lutG, lutB, src.format, v.channelsPerPixel());
+    return dst;
+}

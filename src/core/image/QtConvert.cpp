@@ -4,7 +4,9 @@
 #include <QByteArray>
 #include <QColorSpace>
 #include <algorithm>
+#include <array>
 #include <cstring>
+#include <mutex>
 
 namespace
 {
@@ -272,29 +274,84 @@ QImage toQImageRef(const ImageData &src)
 namespace
 {
 
+struct ColorSpaceCacheEntry
+{
+    std::string key;
+    QColorSpace cs;
+};
+
 QColorSpace colorSpaceFromIcc(const std::vector<uint8_t> &profile)
 {
     if (profile.empty())
         return QColorSpace::SRgb;
+
+    // Fast 64-bit FNV-1a hash over profile bytes
+    uint64_t hash = 14695981039346656037ULL;
+    for (uint8_t b : profile)
+    {
+        hash ^= b;
+        hash *= 1099511628211ULL;
+    }
+    const std::string key = std::to_string(profile.size()) + "_" + std::to_string(hash);
+
+    static std::mutex s_mutex;
+    static std::array<ColorSpaceCacheEntry, 8> s_cache;
+    static size_t s_nextIdx = 0;
+
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        for (const auto &entry : s_cache)
+        {
+            if (entry.key == key)
+                return entry.cs;
+        }
+    }
+
     const QByteArray bytes(reinterpret_cast<const char *>(profile.data()),
                            static_cast<qsizetype>(profile.size()));
     const QColorSpace colorSpace = QColorSpace::fromIccProfile(bytes);
-    return colorSpace.isValid() ? colorSpace : QColorSpace::SRgb;
+    const QColorSpace res = colorSpace.isValid() ? colorSpace : QColorSpace::SRgb;
+
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        s_cache[s_nextIdx % s_cache.size()] = {key, res};
+        ++s_nextIdx;
+    }
+    return res;
 }
 
 QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta)
 {
     const auto profileIt = meta.textKeys.find("MViewer.DisplayICC.Base64");
-    if (profileIt != meta.textKeys.end() && !profileIt->second.empty())
+    if (profileIt == meta.textKeys.end() || profileIt->second.empty())
+        return QColorSpace::SRgb;
+
+    const std::string &base64Str = profileIt->second;
+
+    static std::mutex s_mutex;
+    static std::array<ColorSpaceCacheEntry, 8> s_cache;
+    static size_t s_nextIdx = 0;
+
     {
-        const QByteArray encoded(profileIt->second.data(),
-                                 static_cast<qsizetype>(profileIt->second.size()));
-        const QByteArray profile = QByteArray::fromBase64(encoded);
-        const QColorSpace source = QColorSpace::fromIccProfile(profile);
-        if (source.isValid())
-            return source;
+        std::lock_guard<std::mutex> lock(s_mutex);
+        for (const auto &entry : s_cache)
+        {
+            if (entry.key == base64Str)
+                return entry.cs;
+        }
     }
-    return QColorSpace::SRgb;
+
+    const QByteArray encoded(base64Str.data(), static_cast<qsizetype>(base64Str.size()));
+    const QByteArray profile = QByteArray::fromBase64(encoded);
+    const QColorSpace source = QColorSpace::fromIccProfile(profile);
+    const QColorSpace res = source.isValid() ? source : QColorSpace::SRgb;
+
+    {
+        std::lock_guard<std::mutex> lock(s_mutex);
+        s_cache[s_nextIdx % s_cache.size()] = {base64Str, res};
+        ++s_nextIdx;
+    }
+    return res;
 }
 
 } // namespace

@@ -131,22 +131,18 @@ ImageData applyCompareAdjustments(const ImageData &src, const CompareAdjustmentS
         return src;
 
     ImageData cur = src;
-    if (adjustment.brightness != 0)
-        cur = adjustBrightness(cur, adjustment.brightness);
-    if (shouldCancel())
-        return {};
-    if (std::abs(adjustment.contrast - 1.0) >= 1e-6)
-        cur = adjustContrast(cur, static_cast<float>(adjustment.contrast));
-    if (shouldCancel())
-        return {};
-    if (std::abs(adjustment.gamma - 1.0) >= 1e-6)
-        cur = adjustGamma(cur, static_cast<float>(adjustment.gamma));
-    if (shouldCancel())
-        return {};
-    if (std::abs(adjustment.redGain - 1.0) >= 1e-6 || std::abs(adjustment.blueGain - 1.0) >= 1e-6)
+    const bool hasColorAdjust = (adjustment.brightness != 0) ||
+                                (std::abs(adjustment.contrast - 1.0) >= 1e-6) ||
+                                (std::abs(adjustment.gamma - 1.0) >= 1e-6) ||
+                                (std::abs(adjustment.redGain - 1.0) >= 1e-6) ||
+                                (std::abs(adjustment.blueGain - 1.0) >= 1e-6);
+    if (hasColorAdjust)
     {
-        cur = adjustWhiteBalance(cur, static_cast<float>(adjustment.redGain),
-                                 static_cast<float>(adjustment.blueGain));
+        cur = adjustCombinedLut(cur, adjustment.brightness,
+                                static_cast<float>(adjustment.contrast),
+                                static_cast<float>(adjustment.gamma),
+                                static_cast<float>(adjustment.redGain),
+                                static_cast<float>(adjustment.blueGain));
     }
     if (shouldCancel())
         return {};

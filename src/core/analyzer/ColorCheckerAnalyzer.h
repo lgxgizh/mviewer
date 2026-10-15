@@ -43,6 +43,10 @@ class ColorCheckerAnalyzer : public Analyzer
     {
         return m_meanDE;
     }
+    double maxDeltaE() const
+    {
+        return m_maxDE;
+    }
     int patchCount() const
     {
         return m_patches;
@@ -53,5 +57,7 @@ class ColorCheckerAnalyzer : public Analyzer
     bool compute(const ImageBuffer &v, int x0, int y0, int x1, int y1);
 
     double m_meanDE = 0.0;
+    double m_maxDE = 0.0;
+    int m_maxPatch = -1;
     int m_patches = 0;
 };

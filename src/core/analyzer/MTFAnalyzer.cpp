@@ -57,6 +57,156 @@ void fft(std::vector<double> &re, std::vector<double> &im)
     }
 }
 
+std::vector<double> extractEdgeProfile(const ImageBuffer &v, int x0, int y0, int x1, int y1, int cpp)
+{
+    const int w = x1 - x0;
+    const int h = y1 - y0;
+    const int qW = std::max(1, w / 4);
+    const int qH = std::max(1, h / 4);
+    double leftSum = 0.0, rightSum = 0.0;
+    double topSum = 0.0, bottomSum = 0.0;
+
+    for (int y = y0; y < y1; ++y)
+    {
+        for (int x = x0; x < x0 + qW; ++x)
+        {
+            const uint8_t *p =
+                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+            leftSum += pixelLuminanceAvg(p, v.format);
+        }
+        for (int x = x1 - qW; x < x1; ++x)
+        {
+            const uint8_t *p =
+                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+            rightSum += pixelLuminanceAvg(p, v.format);
+        }
+    }
+    const double diffX = std::abs((rightSum - leftSum) / (static_cast<double>(qW * h)));
+
+    for (int x = x0; x < x1; ++x)
+    {
+        for (int y = y0; y < y0 + qH; ++y)
+        {
+            const uint8_t *p =
+                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+            topSum += pixelLuminanceAvg(p, v.format);
+        }
+        for (int y = y1 - qH; y < y1; ++y)
+        {
+            const uint8_t *p =
+                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+            bottomSum += pixelLuminanceAvg(p, v.format);
+        }
+    }
+    const double diffY = std::abs((bottomSum - topSum) / (static_cast<double>(w * qH)));
+    const bool isVerticalEdge = (diffX > diffY);
+
+    const size_t profLen = isVerticalEdge ? static_cast<size_t>(w) : static_cast<size_t>(h);
+    if (profLen < 4)
+        return {};
+
+    std::vector<double> profile(profLen, 0.0);
+    if (isVerticalEdge)
+    {
+        for (int x = x0; x < x1; ++x)
+        {
+            double col = 0.0;
+            for (int y = y0; y < y1; ++y)
+            {
+                const uint8_t *p =
+                    v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+                col += pixelLuminanceAvg(p, v.format);
+            }
+            profile[static_cast<size_t>(x - x0)] = col / h;
+        }
+    }
+    else
+    {
+        for (int y = y0; y < y1; ++y)
+        {
+            double row = 0.0;
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t *p =
+                    v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+                row += pixelLuminanceAvg(p, v.format);
+            }
+            profile[static_cast<size_t>(y - y0)] = row / w;
+        }
+    }
+    return profile;
+}
+
+bool calculateMtf50(std::vector<double> &profile, double &outMtf50, double &outMtf50Cps)
+{
+    double lo = profile.front(), hi = profile.front();
+    for (double d : profile)
+    {
+        lo = std::min(lo, d);
+        hi = std::max(hi, d);
+    }
+    if (hi - lo < 1e-3)
+        return false;
+
+    for (double &d : profile)
+        d = (d - lo) / (hi - lo);
+
+    const size_t profLen = profile.size();
+    std::vector<double> lsf(profLen, 0.0);
+    for (size_t i = 0; i + 1 < profLen; ++i)
+        lsf[i] = std::abs(profile[i + 1] - profile[i]);
+    lsf[profLen - 1] = 0.0;
+
+    if (profLen > 1)
+    {
+        for (size_t i = 0; i < profLen; ++i)
+        {
+            const double wnd =
+                0.54 - 0.46 * std::cos(2.0 * M_PI * static_cast<double>(i) /
+                                       static_cast<double>(profLen - 1));
+            lsf[i] *= wnd;
+        }
+    }
+
+    size_t n = 1;
+    while (n < profLen)
+        n <<= 1;
+    std::vector<double> re(n, 0.0), im(n, 0.0);
+    for (size_t i = 0; i < profLen; ++i)
+        re[i] = lsf[i];
+    fft(re, im);
+
+    const size_t half = n / 2;
+    std::vector<double> mag(half, 0.0);
+    for (size_t i = 0; i < half; ++i)
+        mag[i] = std::sqrt(re[i] * re[i] + im[i] * im[i]);
+
+    const size_t lowN = std::max<size_t>(1, half / 20);
+    double low = 0.0;
+    for (size_t i = 0; i < lowN; ++i)
+        low += mag[i];
+    low /= static_cast<double>(lowN);
+    if (low < 1e-6)
+        return false;
+
+    double mtf50Cps = 0.5;
+    for (size_t i = 1; i < half; ++i)
+    {
+        if (mag[i] <= 0.5 * low)
+        {
+            const double m0 = mag[i - 1];
+            const double m1 = mag[i];
+            const double frac = (m0 - 0.5 * low) / (m0 - m1 + 1e-9);
+            const double bin = static_cast<double>(i - 1) + frac;
+            mtf50Cps = bin / static_cast<double>(n);
+            break;
+        }
+    }
+    outMtf50Cps = mtf50Cps;
+    outMtf50 = std::min(1.0, (mtf50Cps / 0.5));
+    return true;
+}
+
 } // namespace
 
 bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
@@ -79,93 +229,13 @@ bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
         return false;
     }
 
-    // Build an Edge Spread Function (ESF) from a vertical edge: for each row,
-    // average the luminance across the width to get a 1-D profile that
-    // transitions dark->bright. Then differentiate to the Line Spread (LSF)
-    // and FFT to the MTF.
-    std::vector<double> profile(static_cast<size_t>(h), 0.0);
-    for (int y = y0; y < y1; ++y)
-    {
-        double row = 0.0;
-        for (int x = x0; x < x1; ++x)
-        {
-            const uint8_t *p =
-                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            row += pixelLuminanceAvg(p, v.format);
-        }
-        profile[y - y0] = row / w;
-    }
-    // Normalize the profile to [0,1].
-    double lo = profile.front(), hi = profile.front();
-    for (double d : profile)
-    {
-        lo = std::min(lo, d);
-        hi = std::max(hi, d);
-    }
-    if (hi - lo < 1e-3)
+    std::vector<double> profile = extractEdgeProfile(v, x0, y0, x1, y1, cpp);
+    if (profile.empty() || !calculateMtf50(profile, m_mtf50, m_mtf50Cps))
     {
         m_mtf50 = 0.0;
         m_mtf50Cps = 0.0;
         return false;
     }
-    for (double &d : profile)
-        d = (d - lo) / (hi - lo);
-
-    // Differentiate ESF to obtain the Line Spread Function (LSF).
-    std::vector<double> lsf(static_cast<size_t>(h), 0.0);
-    for (size_t y = 0; y + 1 < static_cast<size_t>(h); ++y)
-    {
-        lsf[y] = std::abs(profile[y + 1] - profile[y]);
-    }
-    lsf[static_cast<size_t>(h) - 1] = 0.0;
-
-    // Pad LSF to the next power of two for the FFT.
-    size_t n = 1;
-    while (n < static_cast<size_t>(h))
-        n <<= 1;
-    std::vector<double> re(n, 0.0), im(n, 0.0);
-    for (size_t i = 0; i < static_cast<size_t>(h); ++i)
-        re[i] = lsf[i];
-    fft(re, im);
-
-    // MTF = magnitude spectrum (single-sided up to Nyquist = n/2 bins).
-    const size_t half = n / 2;
-    std::vector<double> mag(half, 0.0);
-    for (size_t i = 0; i < half; ++i)
-        mag[i] = std::sqrt(re[i] * re[i] + im[i] * im[i]);
-    // Low-frequency reference (average of the first few bins starting at DC).
-    const size_t lowN = std::max<size_t>(1, half / 20);
-    double low = 0.0;
-    for (size_t i = 0; i < lowN; ++i)
-        low += mag[i];
-    low /= static_cast<double>(lowN);
-    if (low < 1e-6)
-    {
-        m_mtf50 = 0.0;
-        m_mtf50Cps = 0.0;
-        return false;
-    }
-    // Find the first spatial frequency where MTF drops to 50% of low.
-    // bin i corresponds to i/N cycles-per-pixel-unit; Nyquist = half -> 0.5.
-    // If the edge transition is sharp and never drops below 50% before Nyquist,
-    // default to Nyquist (0.5 c/px -> MTF50 = 1.0).
-    double mtf50Cps = 0.5;
-    for (size_t i = 1; i < half; ++i)
-    {
-        if (mag[i] <= 0.5 * low)
-        {
-            // Linear interpolate the crossing between bin i-1 and i.
-            const double m0 = mag[i - 1];
-            const double m1 = mag[i];
-            const double frac = (m0 - 0.5 * low) / (m0 - m1 + 1e-9);
-            const double bin = static_cast<double>(i - 1) + frac;
-            mtf50Cps = bin / static_cast<double>(n); // cycles per pixel
-            break;
-        }
-    }
-    m_mtf50Cps = mtf50Cps;
-    // Normalize to Nyquist (0.5 c/p) -> [0,1].
-    m_mtf50 = std::min(1.0, (mtf50Cps / 0.5));
     return true;
 }
 

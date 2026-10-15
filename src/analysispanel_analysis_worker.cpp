@@ -46,7 +46,6 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
     // 1. Materializing request: create the RGB32 display copy and compute the
     //    full-image base stats + noise estimate (mirrors the old
     //    refreshFromFrame).
-    ImageData data; // base stats input; valid only for materializing requests
     if (in.materialize)
     {
         QImage img = mvcore::toQImageFast(in.frame->pixels());
@@ -56,11 +55,11 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
         if (img.isNull())
             return r; // nothing to present — the panel stays empty
         r.image = img;
-        data = mvcore::fromQImage(img);
-        r.stats = AnalysisEngine::computeStats(data);
+        const ImageData &pixels = in.frame->pixels();
+        r.stats = AnalysisEngine::computeStats(pixels);
         if (ctx.isCancelled())
             return r;
-        r.noise = AnalysisEngine::noiseEstimate(data);
+        r.noise = AnalysisEngine::noiseEstimate(pixels);
         r.noiseValid = true;
         if (ctx.isCancelled())
             return r;
@@ -126,7 +125,7 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
     //    or the freshly created one (materializing) — never a UI-thread scan.
     if (in.hasROI)
     {
-        const ImageData roiData = in.materialize ? data : mvcore::fromQImage(in.image);
+        const ImageData roiData = in.materialize ? in.frame->pixels() : mvcore::fromQImage(in.image);
         r.roiFallback = true;
         r.roiStats = AnalysisEngine::computeStatsROI(roiData, in.roi);
         r.hasRoiStats = true;
