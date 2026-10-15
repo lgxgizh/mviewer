@@ -50,7 +50,7 @@ struct RenderCacheEntry
 
 // Universal domain object: holds pixels, metadata, cache, state, and ownership.
 // All engines pass ImageFrame; no external ad-hoc data structures.
-// Thread-safe for read-only access; pixels are held via ImageData (COW buffer); cache/decode state changes are atomic.
+// Thread-safe for read-only access; pixels are held via ImageData (COW buffer); cache/decode state must be synchronized externally.
 class ImageFrame
 {
   public:
