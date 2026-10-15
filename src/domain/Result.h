@@ -62,6 +62,8 @@ class Result
     static Result err(E err) { return Result(makeUnexpected(std::move(err))); }
 
     constexpr bool has_value() const noexcept { return m_storage.index() == 0; }
+    constexpr bool isOk() const noexcept { return has_value(); }
+    constexpr bool isErr() const noexcept { return !has_value(); }
     constexpr explicit operator bool() const noexcept { return has_value(); }
 
     constexpr const T &value() const &
@@ -277,6 +279,8 @@ class Result<void, E>
     static Result err(E err) { return Result(makeUnexpected(std::move(err))); }
 
     constexpr bool has_value() const noexcept { return m_has_value; }
+    constexpr bool isOk() const noexcept { return m_has_value; }
+    constexpr bool isErr() const noexcept { return !m_has_value; }
     constexpr explicit operator bool() const noexcept { return has_value(); }
 
     constexpr const E &error() const &

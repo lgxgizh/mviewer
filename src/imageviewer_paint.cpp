@@ -255,9 +255,9 @@ QImage ImageViewer::ownedTransitionSnapshot(const QImage &view) const
 {
     if (view.isNull())
         return {};
-    // toQImageRef() does not own its buffer, and the frame is released as soon
-    // as this load replaces it. A window-sized copy stays valid after that and
-    // does not memcpy a full photo on the UI thread while the user flips.
+    // toQImageFast() wraps the buffer's shared_ptr via QImageCleanupFunction.
+    // An owned window-sized copy is retained during transition so that
+    // large source buffers are not pinned in memory while the user flips photos.
     int edge = width() > height() ? width() : height();
     if (edge < 64)
         edge = 64;

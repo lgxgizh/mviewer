@@ -31,6 +31,7 @@ constexpr uint16_t kFixedPointDiv3Multiplier = 21846;
 } // namespace
 
 #if defined(MV_ARCH_X86)
+MV_TARGET_SSSE3_SSE41
 static inline uint32_t diffRGB24Quad(__m128i va, __m128i vb, __m128i maskR, __m128i maskG,
                                      __m128i maskB, __m128i vthresh, __m128i vdiv, __m128i vzero)
 {
@@ -43,35 +44,44 @@ static inline uint32_t diffRGB24Quad(__m128i va, __m128i vb, __m128i maskR, __m1
     const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh, avg8), vzero);
     return static_cast<uint32_t>(_mm_cvtsi128_si32(_mm_and_si128(avg8, mask)));
 }
+
+MV_TARGET_SSSE3_SSE41
+static inline int diffRGB24RowSIMD(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
+                                   uint8_t threshold)
+{
+    const __m128i maskR =
+        _mm_setr_epi8(0, 3, 6, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+    const __m128i maskG =
+        _mm_setr_epi8(1, 4, 7, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+    const __m128i maskB =
+        _mm_setr_epi8(2, 5, 8, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+    const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
+    const __m128i vzero = _mm_setzero_si128();
+    const __m128i vdiv = _mm_set1_epi16(kFixedPointDiv3Multiplier);
+
+    int x = 0;
+    for (; x * 3 + 16 <= w * 3; x += 4)
+    {
+        const __m128i va = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 3));
+        const __m128i vb = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 3));
+        const uint32_t out4 = diffRGB24Quad(va, vb, maskR, maskG, maskB, vthresh, vdiv, vzero);
+        std::memcpy(dst + x, &out4, 4);
+    }
+    return x;
+}
 #endif
 
 static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
-                                uint8_t threshold, bool useSsse3)
+                                uint8_t threshold, bool useSse41Ssse3)
 {
     int x = 0;
 #if defined(MV_ARCH_X86)
-    if (useSsse3)
+    if (useSse41Ssse3)
     {
-        const __m128i maskR =
-            _mm_setr_epi8(0, 3, 6, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-        const __m128i maskG =
-            _mm_setr_epi8(1, 4, 7, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-        const __m128i maskB =
-            _mm_setr_epi8(2, 5, 8, 11, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
-        const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
-        const __m128i vzero = _mm_setzero_si128();
-        const __m128i vdiv = _mm_set1_epi16(kFixedPointDiv3Multiplier);
-
-        for (; x * 3 + 16 <= w * 3; x += 4)
-        {
-            const __m128i va = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 3));
-            const __m128i vb = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 3));
-            const uint32_t out4 = diffRGB24Quad(va, vb, maskR, maskG, maskB, vthresh, vdiv, vzero);
-            std::memcpy(dst + x, &out4, 4);
-        }
+        x = diffRGB24RowSIMD(la, lb, dst, w, threshold);
     }
 #else
-    (void)useSsse3;
+    (void)useSse41Ssse3;
 #endif
     for (; x + 4 <= w; x += 4)
     {
@@ -100,26 +110,32 @@ static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *d
     }
 }
 
-static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
-                                     uint8_t threshold, bool useAvx2)
+#if defined(MV_ARCH_X86)
+MV_TARGET_AVX2
+static inline int diffGrayscale8RowAVX2(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
+                                       uint8_t threshold)
 {
     int x = 0;
-#if defined(MV_ARCH_X86)
-    if (useAvx2)
+    const __m256i vthresh = _mm256_set1_epi8(static_cast<char>(threshold));
+    const __m256i vzero = _mm256_setzero_si256();
+    for (; x + 32 <= w; x += 32)
     {
-        const __m256i vthresh = _mm256_set1_epi8(static_cast<char>(threshold));
-        const __m256i vzero = _mm256_setzero_si256();
-        for (; x + 32 <= w; x += 32)
-        {
-            const __m256i va = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(la + x));
-            const __m256i vb = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(lb + x));
-            const __m256i diff =
-                _mm256_or_si256(_mm256_subs_epu8(va, vb), _mm256_subs_epu8(vb, va));
-            const __m256i under = _mm256_subs_epu8(vthresh, diff);
-            const __m256i mask = _mm256_cmpeq_epi8(under, vzero);
-            _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + x), _mm256_and_si256(diff, mask));
-        }
+        const __m256i va = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(la + x));
+        const __m256i vb = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(lb + x));
+        const __m256i diff =
+            _mm256_or_si256(_mm256_subs_epu8(va, vb), _mm256_subs_epu8(vb, va));
+        const __m256i under = _mm256_subs_epu8(vthresh, diff);
+        const __m256i mask = _mm256_cmpeq_epi8(under, vzero);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + x), _mm256_and_si256(diff, mask));
     }
+    return x;
+}
+
+MV_TARGET_SSE2
+static inline int diffGrayscale8RowSSE2(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
+                                       int startX, uint8_t threshold)
+{
+    int x = startX;
     const __m128i vthresh128 = _mm_set1_epi8(static_cast<char>(threshold));
     const __m128i vzero128 = _mm_setzero_si128();
     for (; x + 16 <= w; x += 16)
@@ -131,6 +147,18 @@ static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8
         const __m128i mask = _mm_cmpeq_epi8(under, vzero128);
         _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + x), _mm_and_si128(diff, mask));
     }
+    return x;
+}
+#endif
+
+static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
+                                     uint8_t threshold, bool useAvx2)
+{
+    int x = 0;
+#if defined(MV_ARCH_X86)
+    if (useAvx2)
+        x = diffGrayscale8RowAVX2(la, lb, dst, w, threshold);
+    x = diffGrayscale8RowSSE2(la, lb, dst, w, x, threshold);
 #else
     (void)useAvx2;
 #endif
@@ -142,6 +170,7 @@ static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8
 }
 
 #if defined(MV_ARCH_X86)
+MV_TARGET_SSSE3
 static inline uint32_t diffRGBA32Quad(__m128i va, __m128i vb, __m128i wRGB, __m128i vthresh,
                                       __m128i vdiv, __m128i vzero)
 {
@@ -152,6 +181,45 @@ static inline uint32_t diffRGBA32Quad(__m128i va, __m128i vb, __m128i wRGB, __m1
     const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh, avg8), vzero);
     return static_cast<uint32_t>(_mm_cvtsi128_si32(_mm_and_si128(avg8, mask)));
 }
+
+MV_TARGET_SSSE3
+static inline int diffRGBA32RowSIMD(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
+                                    uint8_t threshold)
+{
+    const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
+    const __m128i vzero = _mm_setzero_si128();
+    const __m128i vdiv = _mm_set1_epi16(kFixedPointDiv3Multiplier);
+    const __m128i wRGB = _mm_setr_epi8(1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0);
+
+    int x = 0;
+    for (; x + 8 <= w; x += 8)
+    {
+        const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
+        const __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
+        const __m128i va1 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + (x + 4) * 4));
+        const __m128i vb1 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + (x + 4) * 4));
+
+        const __m128i diff0 = _mm_or_si128(_mm_subs_epu8(va0, vb0), _mm_subs_epu8(vb0, va0));
+        const __m128i diff1 = _mm_or_si128(_mm_subs_epu8(va1, vb1), _mm_subs_epu8(vb1, va1));
+
+        const __m128i pixel_sum =
+            _mm_hadd_epi16(_mm_maddubs_epi16(diff0, wRGB), _mm_maddubs_epi16(diff1, wRGB));
+        const __m128i avg8 = _mm_packus_epi16(_mm_mulhi_epu16(pixel_sum, vdiv), vzero);
+        const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh, avg8), vzero);
+
+        _mm_storel_epi64(reinterpret_cast<__m128i *>(dst + x), _mm_and_si128(avg8, mask));
+    }
+    for (; x + 4 <= w; x += 4)
+    {
+        const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
+        const __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
+        const uint32_t out4 = diffRGBA32Quad(va0, vb0, wRGB, vthresh, vdiv, vzero);
+        std::memcpy(dst + x, &out4, 4);
+    }
+    return x;
+}
 #endif
 
 static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
@@ -161,37 +229,7 @@ static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *
 #if defined(MV_ARCH_X86)
     if (useSsse3)
     {
-        const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
-        const __m128i vzero = _mm_setzero_si128();
-        const __m128i vdiv = _mm_set1_epi16(kFixedPointDiv3Multiplier);
-        const __m128i wRGB = _mm_setr_epi8(1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0);
-
-        for (; x + 8 <= w; x += 8)
-        {
-            const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
-            const __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
-            const __m128i va1 =
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + (x + 4) * 4));
-            const __m128i vb1 =
-                _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + (x + 4) * 4));
-
-            const __m128i diff0 = _mm_or_si128(_mm_subs_epu8(va0, vb0), _mm_subs_epu8(vb0, va0));
-            const __m128i diff1 = _mm_or_si128(_mm_subs_epu8(va1, vb1), _mm_subs_epu8(vb1, va1));
-
-            const __m128i pixel_sum =
-                _mm_hadd_epi16(_mm_maddubs_epi16(diff0, wRGB), _mm_maddubs_epi16(diff1, wRGB));
-            const __m128i avg8 = _mm_packus_epi16(_mm_mulhi_epu16(pixel_sum, vdiv), vzero);
-            const __m128i mask = _mm_cmpeq_epi8(_mm_subs_epu8(vthresh, avg8), vzero);
-
-            _mm_storel_epi64(reinterpret_cast<__m128i *>(dst + x), _mm_and_si128(avg8, mask));
-        }
-        for (; x + 4 <= w; x += 4)
-        {
-            const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
-            const __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
-            const uint32_t out4 = diffRGBA32Quad(va0, vb0, wRGB, vthresh, vdiv, vzero);
-            std::memcpy(dst + x, &out4, 4);
-        }
+        x = diffRGBA32RowSIMD(la, lb, dst, w, threshold);
     }
 #else
     (void)useSsse3;
@@ -277,6 +315,7 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
 
     const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
     const bool useSsse3 = mviewer::core::CpuFeatures::hasSsse3();
+    const bool useSse41Ssse3 = useSsse3 && mviewer::core::CpuFeatures::hasSse41();
 
     for (int y = 0; y < h; ++y)
     {
@@ -287,7 +326,7 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
         if (isGray8)
             diffGrayscale8Row(la, lb, dst, w, threshold, useAvx2);
         else if (isRGB24)
-            diffRGB24Row(la, lb, dst, w, threshold, useSsse3);
+            diffRGB24Row(la, lb, dst, w, threshold, useSse41Ssse3);
         else if (isRGBA32)
             diffRGBA32Row(la, lb, dst, w, threshold, useSsse3);
         else
@@ -309,19 +348,17 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
 
     if (cpp == 1 && ro == 0)
     {
+#if defined(MV_ARCH_X86)
         const __m128i vthresh128 = _mm_set1_epi8(static_cast<char>(threshold));
         const __m128i vzero128 = _mm_setzero_si128();
-#if defined(__AVX2__) || defined(_M_AVX2)
         const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
         const __m256i vthresh256 = _mm256_set1_epi8(static_cast<char>(threshold));
         const __m256i vzero256 = _mm256_setzero_si256();
-#endif
         for (int y = 0; y < gray.height; ++y)
         {
             const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
             uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
             int x = 0;
-#if defined(__AVX2__) || defined(_M_AVX2)
             if (useAvx2)
             {
                 for (; x + 32 <= gray.width; x += 32)
@@ -334,7 +371,6 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
                                         _mm256_and_si256(v, mask));
                 }
             }
-#endif
             for (; x + 16 <= gray.width; x += 16)
             {
                 const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src + x));
@@ -348,6 +384,19 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
             }
         }
         return out;
+#else
+        for (int y = 0; y < gray.height; ++y)
+        {
+            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            for (int x = 0; x < gray.width; ++x)
+            {
+                const uint8_t v = src[x];
+                dst[x] = (v >= threshold) ? v : 0;
+            }
+        }
+        return out;
+#endif
     }
 
     for (int y = 0; y < gray.height; ++y)
@@ -430,7 +479,8 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
     return computeStats(grayDiff, threshold, 0, 0, grayDiff.width, grayDiff.height);
 }
 
-#if defined(__AVX2__) || defined(_M_AVX2)
+#if defined(MV_ARCH_X86)
+MV_TARGET_AVX2
 static inline void accumulateGrayscaleStatsAVX2(const uint8_t *data, size_t count, int minDiff,
                                                 int64_t &sum, int64_t &diffCount, int &maxV,
                                                 int64_t &sumSq)
@@ -496,8 +546,8 @@ static inline void accumulateGrayscaleStatsAVX2(const uint8_t *data, size_t coun
         sumSq += static_cast<int64_t>(val) * val;
     }
 }
-#endif
 
+MV_TARGET_SSE2
 static inline void accumulateGrayscaleStatsSSE2(const uint8_t *data, size_t count, int minDiff,
                                                 int64_t &sum, int64_t &diffCount, int &maxV,
                                                 int64_t &sumSq)
@@ -562,6 +612,21 @@ static inline void accumulateGrayscaleStatsSSE2(const uint8_t *data, size_t coun
         sumSq += static_cast<int64_t>(val) * val;
     }
 }
+#endif
+
+static inline void accumulateGrayscaleStatsScalar(const uint8_t *data, size_t count, int minDiff,
+                                                  int64_t &sum, int64_t &diffCount, int &maxV,
+                                                  int64_t &sumSq)
+{
+    for (size_t i = 0; i < count; ++i)
+    {
+        const int val = data[i];
+        sum += val;
+        diffCount += (val >= minDiff ? 1 : 0);
+        maxV = std::max(maxV, val);
+        sumSq += static_cast<int64_t>(val) * val;
+    }
+}
 
 DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &grayDiff,
                                                            uint8_t threshold, int roiX, int roiY,
@@ -590,20 +655,23 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
     const bool contiguous =
         (cpp == 1 && ro == 0 && x0 == 0 && y0 == 0 && x1 == grayDiff.width &&
          y1 == grayDiff.height && grayDiff.stride() == static_cast<ptrdiff_t>(grayDiff.width));
-#if defined(__AVX2__) || defined(_M_AVX2)
+#if defined(MV_ARCH_X86)
     const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
+    const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
 #endif
 
     if (contiguous)
     {
         const size_t total = static_cast<size_t>(grayDiff.width) * grayDiff.height;
         const uint8_t *src = grayDiff.buffer->data();
-#if defined(__AVX2__) || defined(_M_AVX2)
+#if defined(MV_ARCH_X86)
         if (useAvx2)
             accumulateGrayscaleStatsAVX2(src, total, minDiff, sum, diffCount, maxV, sumSq);
+        else if (useSSE2)
+            accumulateGrayscaleStatsSSE2(src, total, minDiff, sum, diffCount, maxV, sumSq);
         else
 #endif
-            accumulateGrayscaleStatsSSE2(src, total, minDiff, sum, diffCount, maxV, sumSq);
+            accumulateGrayscaleStatsScalar(src, total, minDiff, sum, diffCount, maxV, sumSq);
     }
     else if (cpp == 1 && ro == 0)
     {
@@ -613,12 +681,14 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
             const uint8_t *src = grayDiff.buffer->data() +
                                  static_cast<size_t>(y) * grayDiff.stride() +
                                  static_cast<size_t>(x0);
-#if defined(__AVX2__) || defined(_M_AVX2)
+#if defined(MV_ARCH_X86)
             if (useAvx2)
                 accumulateGrayscaleStatsAVX2(src, rowLen, minDiff, sum, diffCount, maxV, sumSq);
+            else if (useSSE2)
+                accumulateGrayscaleStatsSSE2(src, rowLen, minDiff, sum, diffCount, maxV, sumSq);
             else
 #endif
-                accumulateGrayscaleStatsSSE2(src, rowLen, minDiff, sum, diffCount, maxV, sumSq);
+                accumulateGrayscaleStatsScalar(src, rowLen, minDiff, sum, diffCount, maxV, sumSq);
         }
     }
     else

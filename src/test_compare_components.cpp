@@ -37,15 +37,17 @@ int main(int argc, char **argv)
         CHECK(state.layoutPreset() == 2, "initial layout preset is 2");
 
         bool pathsEmitted = false;
+        bool pathsCountOk = false;
         QObject::connect(&state, &CompareSessionState::pathsChanged,
                          [&](const QStringList &p)
                          {
                              pathsEmitted = true;
-                             CHECK(p.size() == 2, "pathsChanged has 2 items");
+                             pathsCountOk = (p.size() == 2);
                          });
 
         state.setComparePaths({"pathA.png", "pathB.png"});
         CHECK(pathsEmitted, "pathsChanged was emitted");
+        CHECK(pathsCountOk, "pathsChanged has 2 items");
         CHECK(state.count() == 2, "state.count() == 2");
         CHECK(state.frameIndices().size() == 2, "frame indices sized to 2");
 
@@ -92,11 +94,12 @@ int main(int argc, char **argv)
               "initial measurement state is Idle");
 
         bool roiChangedEmitted = false;
+        bool roiWidthOk = false;
         QObject::connect(&controller, &CompareRoiController::roiChanged,
                          [&](const Selection &sel)
                          {
                              roiChangedEmitted = true;
-                             CHECK(sel.width == 50, "roiChanged sel.width == 50");
+                             roiWidthOk = (sel.width == 50);
                          });
 
         Selection sel;
@@ -106,6 +109,7 @@ int main(int argc, char **argv)
         sel.height = 40;
         controller.setROI(sel);
         CHECK(roiChangedEmitted, "roiChanged emitted on setROI");
+        CHECK(roiWidthOk, "roiChanged sel.width == 50");
         CHECK(controller.hasValidROI(), "hasValidROI is true");
 
         // Nudge ROI
@@ -161,6 +165,14 @@ int main(int argc, char **argv)
               "clearROI on controller clears ROI");
         CHECK(workspace.currentROI().isEmpty(),
               "workspace.currentROI is empty after clear");
+
+        // Bidirectional test: workspace.clearROI() must also clear roiController
+        workspace.applyROI(roi);
+        CHECK(workspace.roiController()->hasValidROI(), "controller has valid ROI after applyROI");
+        workspace.clearROI();
+        CHECK(!workspace.roiController()->hasValidROI(), "workspace.clearROI clears roiController");
+        CHECK(workspace.currentROI().isEmpty(),
+              "workspace.currentROI is empty after workspace.clearROI");
 
         // DiffRenderer threshold mediation
         workspace.diffRenderer()->setThreshold(64);

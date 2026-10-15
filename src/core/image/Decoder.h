@@ -3,6 +3,9 @@
 #include "core/image/ImageBuffer.h"
 #include "domain/Image.h"
 
+#include "domain/DecodeError.h"
+#include "domain/Result.h"
+
 #include <string>
 #include <vector>
 
@@ -14,6 +17,12 @@ class Decoder
   public:
     // 全图解码
     static ImageData decodeFull(const std::string &path);
+
+    // Modern Result-based decode returning rich error context when decode fails.
+    static mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+    decodeFullResult(const std::string &path);
+    static mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+    decodeFullResult(const std::string &path, mviewer::domain::ImageMetadata &outMeta);
 
     // 缩放到 maxEdge 以内的解码（保持比例）
     static ImageData decodeScaled(const std::string &path, int maxEdge);

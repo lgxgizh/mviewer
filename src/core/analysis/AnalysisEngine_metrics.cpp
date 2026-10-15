@@ -10,17 +10,10 @@
 #include <cstring>
 #include <vector>
 
-#if defined(__GNUC__) || defined(__clang__)
-#define MV_TARGET_AVX2 __attribute__((target("avx2")))
-#define MV_TARGET_SSSE3 __attribute__((target("ssse3,sse4.1")))
-#else
-#define MV_TARGET_AVX2
-#define MV_TARGET_SSSE3
-#endif
-
 namespace
 {
 
+#if defined(MV_ARCH_X86)
 MV_TARGET_AVX2
 inline void accumulateSsdBytesAVX2(const uint8_t *a, const uint8_t *b, size_t count, int64_t &sumSq)
 {
@@ -82,6 +75,7 @@ inline void accumulateSsdBytesAVX2(const uint8_t *a, const uint8_t *b, size_t co
     }
 }
 
+MV_TARGET_SSE2
 inline void accumulateSsdBytesSSE2(const uint8_t *a, const uint8_t *b, size_t count, int64_t &sumSq)
 {
     const __m128i vzero = _mm_setzero_si128();
@@ -130,6 +124,7 @@ inline void accumulateSsdBytesSSE2(const uint8_t *a, const uint8_t *b, size_t co
     }
 }
 
+MV_TARGET_SSE2
 inline void accumulateSsdRgbaSSE2(const uint8_t *a, const uint8_t *b, size_t pixelCount,
                                   int64_t &sumSq)
 {
@@ -181,6 +176,7 @@ inline void accumulateSsdRgbaSSE2(const uint8_t *a, const uint8_t *b, size_t pix
     }
 }
 
+MV_TARGET_SSE2
 inline void computeBlockStatsSSE2(const uint8_t *const linesA[8], const uint8_t *const linesB[8],
                                   int bx, int &sumA, int &sumB, int &sumAA, int &sumBB, int &sumAB)
 {
@@ -223,6 +219,56 @@ inline void computeBlockStatsSSE2(const uint8_t *const linesA[8], const uint8_t 
     sumBB = arrBB[0] + arrBB[1] + arrBB[2] + arrBB[3];
     sumAB = arrAB[0] + arrAB[1] + arrAB[2] + arrAB[3];
 }
+#endif // MV_ARCH_X86
+
+inline void accumulateSsdBytesScalar(const uint8_t *a, const uint8_t *b, size_t count,
+                                     int64_t &sumSq)
+{
+    for (size_t i = 0; i < count; ++i)
+    {
+        const int d = static_cast<int>(a[i]) - static_cast<int>(b[i]);
+        sumSq += static_cast<int64_t>(d) * d;
+    }
+}
+
+inline void accumulateSsdRgbaScalar(const uint8_t *a, const uint8_t *b, size_t pixelCount,
+                                    int64_t &sumSq)
+{
+    for (size_t i = 0; i < pixelCount; ++i)
+    {
+        const int dr = static_cast<int>(a[i * 4 + 0]) - static_cast<int>(b[i * 4 + 0]);
+        const int dg = static_cast<int>(a[i * 4 + 1]) - static_cast<int>(b[i * 4 + 1]);
+        const int db = static_cast<int>(a[i * 4 + 2]) - static_cast<int>(b[i * 4 + 2]);
+        sumSq += static_cast<int64_t>(dr) * dr + static_cast<int64_t>(dg) * dg +
+                 static_cast<int64_t>(db) * db;
+    }
+}
+
+inline void computeBlockStatsScalar(const uint8_t *const linesA[8], const uint8_t *const linesB[8],
+                                    int bx, int &sumA, int &sumB, int &sumAA, int &sumBB, int &sumAB)
+{
+    int sA = 0, sB = 0, sAA = 0, sBB = 0, sAB = 0;
+    for (int y = 0; y < 8; ++y)
+    {
+        const uint8_t *la = linesA[y] + bx;
+        const uint8_t *lb = linesB[y] + bx;
+        for (int x = 0; x < 8; ++x)
+        {
+            const int a = la[x];
+            const int b = lb[x];
+            sA += a;
+            sB += b;
+            sAA += a * a;
+            sBB += b * b;
+            sAB += a * b;
+        }
+    }
+    sumA = sA;
+    sumB = sB;
+    sumAA = sAA;
+    sumBB = sBB;
+    sumAB = sAB;
+}
 
 template <typename LineGetterA, typename LineGetterB>
 double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
@@ -231,6 +277,9 @@ double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
     const double C2 = (0.03 * 255.0) * (0.03 * 255.0);
     constexpr int block = 8;
     constexpr double N = 64.0;
+#if defined(MV_ARCH_X86)
+    const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
+#endif
 
     double ssimSum = 0.0;
     int blocks = 0;
@@ -247,7 +296,12 @@ double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
         for (int bx = 0; bx + block <= w; bx += block)
         {
             int sumA = 0, sumB = 0, sumAA = 0, sumBB = 0, sumAB = 0;
-            computeBlockStatsSSE2(linesA, linesB, bx, sumA, sumB, sumAA, sumBB, sumAB);
+#if defined(MV_ARCH_X86)
+            if (useSSE2)
+                computeBlockStatsSSE2(linesA, linesB, bx, sumA, sumB, sumAA, sumBB, sumAB);
+            else
+#endif
+                computeBlockStatsScalar(linesA, linesB, bx, sumA, sumB, sumAA, sumBB, sumAB);
 
             const double meanA = sumA / N;
             const double meanB = sumB / N;
@@ -263,6 +317,8 @@ double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
     return blocks > 0 ? ssimSum / blocks : 0.0;
 }
 
+#if defined(MV_ARCH_X86)
+MV_TARGET_SSE2
 inline void calcLaplacianRowSSE2(const uint8_t *prev, const uint8_t *curr, const uint8_t *next,
                                  int w, int64_t &sum, int64_t &sumSq)
 {
@@ -348,6 +404,19 @@ inline void calcLaplacianRowSSE2(const uint8_t *prev, const uint8_t *curr, const
         sumSq += static_cast<int64_t>(lap) * lap;
     }
 }
+#endif // MV_ARCH_X86
+
+inline void calcLaplacianRowScalar(const uint8_t *prev, const uint8_t *curr, const uint8_t *next,
+                                   int w, int64_t &sum, int64_t &sumSq)
+{
+    for (int x = 1; x < w - 1; ++x)
+    {
+        const int lap = static_cast<int>(prev[x]) + curr[x - 1] + curr[x + 1] + next[x] -
+                        4 * static_cast<int>(curr[x]);
+        sum += lap;
+        sumSq += static_cast<int64_t>(lap) * lap;
+    }
+}
 
 template <typename LineGetter> double calcLaplacianCore(int w, int h, LineGetter &&getLine)
 {
@@ -356,6 +425,9 @@ template <typename LineGetter> double calcLaplacianCore(int w, int h, LineGetter
     const int count = (w - 2) * (h - 2);
     if (count < 2)
         return 0.0;
+#if defined(MV_ARCH_X86)
+    const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
+#endif
 
     int64_t sum = 0;
     int64_t sumSq = 0;
@@ -364,7 +436,12 @@ template <typename LineGetter> double calcLaplacianCore(int w, int h, LineGetter
     for (int y = 1; y < h - 1; ++y)
     {
         const uint8_t *next = getLine(y + 1);
-        calcLaplacianRowSSE2(prev, curr, next, w, sum, sumSq);
+#if defined(MV_ARCH_X86)
+        if (useSSE2)
+            calcLaplacianRowSSE2(prev, curr, next, w, sum, sumSq);
+        else
+#endif
+            calcLaplacianRowScalar(prev, curr, next, w, sum, sumSq);
         prev = curr;
         curr = next;
     }
@@ -376,15 +453,22 @@ template <typename LineGetter> double calcLaplacianCore(int w, int h, LineGetter
 void accumulateGraySsd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, bool useAvx2,
                        int64_t &sumSq)
 {
+#if defined(MV_ARCH_X86)
+    const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
+#endif
     const bool isContiguous = (w == va.width && va.stride() == static_cast<ptrdiff_t>(w) &&
                                vb.stride() == static_cast<ptrdiff_t>(w));
     if (isContiguous)
     {
         const size_t total = static_cast<size_t>(w) * h;
+#if defined(MV_ARCH_X86)
         if (useAvx2)
             accumulateSsdBytesAVX2(va.data, vb.data, total, sumSq);
-        else
+        else if (useSSE2)
             accumulateSsdBytesSSE2(va.data, vb.data, total, sumSq);
+        else
+#endif
+            accumulateSsdBytesScalar(va.data, vb.data, total, sumSq);
     }
     else
     {
@@ -392,10 +476,14 @@ void accumulateGraySsd(const ImageBuffer &va, const ImageBuffer &vb, int w, int 
         {
             const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
             const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+#if defined(MV_ARCH_X86)
             if (useAvx2)
                 accumulateSsdBytesAVX2(la, lb, static_cast<size_t>(w), sumSq);
-            else
+            else if (useSSE2)
                 accumulateSsdBytesSSE2(la, lb, static_cast<size_t>(w), sumSq);
+            else
+#endif
+                accumulateSsdBytesScalar(la, lb, static_cast<size_t>(w), sumSq);
         }
     }
 }
@@ -403,15 +491,22 @@ void accumulateGraySsd(const ImageBuffer &va, const ImageBuffer &vb, int w, int 
 void accumulateRgb24Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, bool useAvx2,
                         int64_t &sumSq)
 {
+#if defined(MV_ARCH_X86)
+    const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
+#endif
     const bool isContiguous = (w == va.width && va.stride() == static_cast<ptrdiff_t>(w) * 3 &&
                                vb.stride() == static_cast<ptrdiff_t>(w) * 3);
     if (isContiguous)
     {
         const size_t totalBytes = static_cast<size_t>(w) * 3 * static_cast<size_t>(h);
+#if defined(MV_ARCH_X86)
         if (useAvx2)
             accumulateSsdBytesAVX2(va.data, vb.data, totalBytes, sumSq);
-        else
+        else if (useSSE2)
             accumulateSsdBytesSSE2(va.data, vb.data, totalBytes, sumSq);
+        else
+#endif
+            accumulateSsdBytesScalar(va.data, vb.data, totalBytes, sumSq);
     }
     else
     {
@@ -419,21 +514,33 @@ void accumulateRgb24Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int
         {
             const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
             const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+#if defined(MV_ARCH_X86)
             if (useAvx2)
                 accumulateSsdBytesAVX2(la, lb, static_cast<size_t>(w) * 3, sumSq);
-            else
+            else if (useSSE2)
                 accumulateSsdBytesSSE2(la, lb, static_cast<size_t>(w) * 3, sumSq);
+            else
+#endif
+                accumulateSsdBytesScalar(la, lb, static_cast<size_t>(w) * 3, sumSq);
         }
     }
 }
 
 void accumulateRgba32Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, int64_t &sumSq)
 {
+#if defined(MV_ARCH_X86)
+    const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
+#endif
     const bool isContiguous = (w == va.width && va.stride() == static_cast<ptrdiff_t>(w) * 4 &&
                                vb.stride() == static_cast<ptrdiff_t>(w) * 4);
     if (isContiguous)
     {
-        accumulateSsdRgbaSSE2(va.data, vb.data, static_cast<size_t>(w) * h, sumSq);
+#if defined(MV_ARCH_X86)
+        if (useSSE2)
+            accumulateSsdRgbaSSE2(va.data, vb.data, static_cast<size_t>(w) * h, sumSq);
+        else
+#endif
+            accumulateSsdRgbaScalar(va.data, vb.data, static_cast<size_t>(w) * h, sumSq);
     }
     else
     {
@@ -441,7 +548,12 @@ void accumulateRgba32Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, in
         {
             const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
             const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-            accumulateSsdRgbaSSE2(la, lb, static_cast<size_t>(w), sumSq);
+#if defined(MV_ARCH_X86)
+            if (useSSE2)
+                accumulateSsdRgbaSSE2(la, lb, static_cast<size_t>(w), sumSq);
+            else
+#endif
+                accumulateSsdRgbaScalar(la, lb, static_cast<size_t>(w), sumSq);
         }
     }
 }
@@ -567,6 +679,27 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
     return 10.0 * std::log10(65025.0 / mse);
 }
 
+#if defined(MV_ARCH_X86)
+MV_TARGET_SSSE3
+static inline void toGrayscale8RowSSSE3(const uint8_t *sl, uint8_t *dl, int width, bool isBgr)
+{
+    const __m128i weights = isBgr
+                                ? _mm_setr_epi8(5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0)
+                                : _mm_setr_epi8(11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0);
+    const __m128i vzero = _mm_setzero_si128();
+    for (int x = 0; x + 4 <= width; x += 4)
+    {
+        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(sl + x * 4));
+        const __m128i pairs = _mm_maddubs_epi16(v, weights);
+        const __m128i sums = _mm_hadd_epi16(pairs, pairs);
+        const __m128i scaled = _mm_srli_epi16(sums, 5);
+        const __m128i packed = _mm_packus_epi16(scaled, vzero);
+        const uint32_t out4 = static_cast<uint32_t>(_mm_cvtsi128_si32(packed));
+        std::memcpy(dl + x, &out4, 4);
+    }
+}
+#endif
+
 static ImageData toGrayscale8(const ImageData &src)
 {
     if (src.isNull() || src.format == PixelFormat::Grayscale8)
@@ -581,30 +714,25 @@ static ImageData toGrayscale8(const ImageData &src)
     const int rOff = isBgr ? 2 : 0;
     const int bOff = isBgr ? 0 : 2;
 
-    const bool useSsse3 = (cpp == 4) && mviewer::core::CpuFeatures::hasSsse3();
-    const __m128i weights = isBgr
-                                ? _mm_setr_epi8(5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0)
-                                : _mm_setr_epi8(11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0);
-    const __m128i vzero = _mm_setzero_si128();
+    const bool useSsse3 =
+#if defined(MV_ARCH_X86)
+        (cpp == 4) && mviewer::core::CpuFeatures::hasSsse3();
+#else
+        false;
+#endif
 
     for (int y = 0; y < src.height; ++y)
     {
         const uint8_t *sl = sv.data + static_cast<size_t>(y) * sv.stride();
         uint8_t *dl = gv.data + static_cast<size_t>(y) * gv.stride();
         int x = 0;
+#if defined(MV_ARCH_X86)
         if (useSsse3)
         {
-            for (; x + 4 <= src.width; x += 4)
-            {
-                const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(sl + x * 4));
-                const __m128i pairs = _mm_maddubs_epi16(v, weights);
-                const __m128i sums = _mm_hadd_epi16(pairs, pairs);
-                const __m128i scaled = _mm_srli_epi16(sums, 5);
-                const __m128i packed = _mm_packus_epi16(scaled, vzero);
-                const uint32_t out4 = static_cast<uint32_t>(_mm_cvtsi128_si32(packed));
-                std::memcpy(dl + x, &out4, 4);
-            }
+            toGrayscale8RowSSSE3(sl, dl, src.width, isBgr);
+            x = (src.width / 4) * 4;
         }
+#endif
         for (; x < src.width; ++x)
         {
             const uint8_t r = sl[x * cpp + rOff];

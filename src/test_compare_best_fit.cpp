@@ -237,6 +237,7 @@ int main(int argc, char **argv)
     check(waitForDisplayed(ws, 20000), "both panes have a display raster");
     button->click();
     pump(40);
+    waitForDisplayed(ws, 5000);
     lowView = paneView(ws, "comparePane0");
     highView = paneView(ws, "comparePane1");
     if (!lowView || !highView)
@@ -282,6 +283,7 @@ int main(int argc, char **argv)
     // 统一像素倍率 stays pixel-aligned across the same hold.
     uniform->setChecked(true);
     pump(40);
+    waitForDisplayed(ws, 5000);
     const double uniformHeld = lowView->scale();
     if (hold && hold->isEnabled())
     {
