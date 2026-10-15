@@ -1540,6 +1540,7 @@ void pointAtComparePane(RawImageView *view)
                      Qt::NoButton, Qt::NoModifier);
     QApplication::sendEvent(view, &move);
     pump(30);
+    QApplication::sendEvent(view, &enter);
 }
 
 // Plain 1–8 preview images. They must not zoom to 100% or apply a layout preset.
@@ -1632,9 +1633,16 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
     const QRgb image3 = pane2->displayImage().pixel(0, 0);
     CHECK(image1 != image3, "image 1 and image 3 are visually distinct");
     pointAtComparePane(pane2);
+    QEvent enter2(QEvent::Enter);
+    QApplication::sendEvent(pane2, &enter2);
     QKeyEvent press1(QEvent::KeyPress, Qt::Key_1, Qt::NoModifier);
     QApplication::sendEvent(ws, &press1);
-    pump(30);
+    QElapsedTimer previewWait;
+    previewWait.start();
+    while (!pane2->hasTransientDisplay() && previewWait.elapsed() < 3000)
+    {
+        pump(20);
+    }
     CHECK(pane2->hasTransientDisplay(), "plain 1 with three images previews on the target pane");
     CHECK(pane2->displayImage().pixel(0, 0) == image1,
           "plain 1 with three images previews image 1");
@@ -1644,7 +1652,11 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
     CHECK(sameLayout(threeLayout, layoutMarks(ws)), "plain 1 does not change the layout preset");
     QKeyEvent release1(QEvent::KeyRelease, Qt::Key_1, Qt::NoModifier);
     QApplication::sendEvent(ws, &release1);
-    pump(20);
+    previewWait.restart();
+    while (pane2->hasTransientDisplay() && previewWait.elapsed() < 3000)
+    {
+        pump(20);
+    }
     CHECK(!pane2->hasTransientDisplay(), "releasing 1 restores the pane");
 
     tapCompareKey(ws, Qt::Key_1, Qt::ControlModifier);

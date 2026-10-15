@@ -24,6 +24,12 @@ int digitHoldFallbackPane(int imageCount, int focusIndex, int explicitEditIndex,
 
 int CompareWorkspace::paneIndexAtGlobalPos(const QPoint &globalPos) const
 {
+    if (m_hoverIdx >= 0 && m_hoverIdx < m_cellViews.size())
+    {
+        RawImageView *hovered = m_cellViews.at(m_hoverIdx);
+        if (hovered && hovered->isVisible())
+            return m_hoverIdx;
+    }
     for (int i = 0; i < m_cellViews.size(); ++i)
     {
         RawImageView *view = m_cellViews.at(i);
@@ -34,8 +40,6 @@ int CompareWorkspace::paneIndexAtGlobalPos(const QPoint &globalPos) const
     }
     if (m_compareCanvas && m_compareCanvas->isVisible())
         return canvasRefCellAt(m_compareCanvas->mapFromGlobal(globalPos));
-    if (m_hoverIdx >= 0 && m_hoverIdx < m_cellViews.size())
-        return m_hoverIdx;
     return -1;
 }
 
