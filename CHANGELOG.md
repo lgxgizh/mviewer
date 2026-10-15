@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.129] - 2026-10-16
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.129**.
+
 ### Bug Fixes
 
 - **浏览模式列表/详细信息视图小缩略图白块与加载中断修复（Browse Thumbnail Loading Fix）**：
