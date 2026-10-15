@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [1.0.127] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.127**.
+
+### SIMD & Cross-Platform (Bugfix)
+
+- **修复 `DifferenceEngine::applyThreshold` AVX2 目标属性缺失导致的 Linux GCC/Clang 编译失败**：
+  - 将行级 SIMD 运算提取为独立的 `applyThresholdRowAVX2`（标注 `MV_TARGET_AVX2`）与 `applyThresholdRowSSE2`（标注 `MV_TARGET_SSE2`），彻底消除外层非目标函数内联 AVX2 向量指令引起的 target-specific option mismatch 编译报错；
+  - 完整保留 `MV_ARCH_X86` 架构守卫与标量回退分支，确保 ARM64 及各平台下的跨架构构建鲁棒性。
+
+### Core Architecture & Code Hygiene (Refactor)
+
+- **修复 `compare_roi_controller.cpp` 命名空间内包含头文件导致的符号与全局命名空间污染**：
+  - 将 `PixelInspector.h`、`ExifOrientation.h`、`SourceImage.h` 移至文件头部全局范围，避免 `mviewer::ui` 命名空间内部嵌套包含污染。
+- **清除解码主链路与批处理中的三重冗余重试（Redundant Decode Fallback Cleanup）**：
+  - 移除 `DecoderRegistry::decodeFullResult` 内部已遍历全部解码器后的兜底 `decodeFull`；
+  - 移除 `ImageRepository_load.cpp` 与 `BatchProcessor.cpp` 在 `decodeRes` 失败后重复调用的 `Decoder::decodeFull`；
+  - 损坏文件与不支持格式不再触发 3 次重复 I/O 与解码重试，消除重复 Qt 警告日志并显著提升错误路径响应效率。
+- **完善 `ImageFrame` 状态同步与线程安全注释**：
+  - 纠正 `ImageFrame.h` 中关于状态原子的过时注释，明确说明缓存与解码状态变更必须在外部进行显式同步。
+
 ## [1.0.126] - 2026-10-15
 
 ### Release
