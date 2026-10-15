@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+## [1.0.122] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.122**.
+
+### Architecture & Componentization
+
+- **Compare 组件深度接通与双向状态同步（P1-03, P2-01）**：
+  - 彻底打通 `CompareRoiController` 与 `CompareSessionState`，在 `applySelectionToAll`、`applySelectionFromView`、`clearROI` 以及布局切换时通过 `QSignalBlocker` 互保同步；
+  - `CompareWorkspace::clearROI()` 开放为公开接口，确保外部调用与组件内部遥测生命周期严格一致；
+  - `CompareSessionState` 增加 `layoutIndex()` / `setLayoutIndex()`，对齐 `CompareSession` 序列化协议语义。
+
+### SIMD & Portability
+
+- **GCC / Clang 跨平台编译属性与架构隔离（P1-01, P1-02）**：
+  - 在 `CpuFeatures.h` 中为 GCC/Clang 提供统一的 `MV_TARGET_AVX2`、`MV_TARGET_SSSE3`、`MV_TARGET_SSE41` 宏定义与非 x86 安全回退，解决多目标指令集未定义编译错误；
+  - 全面用 `MV_ARCH_X86` 隔离 `DifferenceEngine.cpp`、`AnalysisEngine_metrics.cpp` 和 `QtConvert.cpp` 中的 `__m256i` / `__m128i` 裸用，为 ARM64 补充纯标量降级路径；
+  - 修复 `diffRGB24Row` 门控逻辑，要求 `hasSse41() && hasSsse3()` 同时满足才派发 `_mm_cvtepu8_epi16` 指令。
+
+### Lifecycle & Reliability
+
+- **应用优雅退出与解码错误结构化传播（P2-02, P2-03）**：
+  - `main.cpp` 中通过局部作用域确保 `MainWindow` 栈对象在 `TaskScheduler::shutdown()` 与文件日志关闭前完全析构；
+  - 提供 `Decoder::decodeFullResult` 静态重载，并在 `ImageRepository_load` 与 `BatchProcessor` 中引入结构化错误日志，提升系统可观测性。
+
 ## [1.0.121] - 2026-10-15
 
 ### Release
