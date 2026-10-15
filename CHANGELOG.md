@@ -2,7 +2,24 @@
 
 ## [Unreleased]
 
-## [1.0.125] - 2026-10-15
+## [1.0.126] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.126**.
+
+### Compare Workspace (Bugfix)
+
+- **修复连续 4 次顺时针旋转导致下半截空白缺陷（Compare Rotation Sharp Planning）**：
+  - 根因：窗格经历 4 次 90° 旋转回到 0° 原方向时，`adjust.rotation` 归零，`input.hasCropOrRotation` 突变为 `false`；由于组件底层渲染请求在此时复用了尚未更新的控件旧尺寸（如 270° 旋转后的逆转长宽比），导致清晰层规划算法误按截断高度裁剪局部区域，渲染交付后下半截无像素呈现空白，直至鼠标拖拽触发二次重绘。
+  - 修复：在 `CompareWorkspace::displayPlanningInput` 中通过 `transformedSourceDims` 严格计算当前调整下的期望真实源图尺寸 `expectedSize`，并校验 `view->backdropKey() == paneContentKey(pane)` 与尺寸一致性；在内容或几何尚未同步交付时，禁用部分区域局部规划（`hasWidgetSourceSize = false`）并拉取全幅 LOD 栅格，确保全幅像素正确交付。
+  - 缓存强化：在 `ComparePanePyramidSlot` 中引入 `contentKey` 维度，杜绝跨旋转或色彩调整时复用过期金字塔各级栅格。
+
+### Test Suite Hardening
+
+- **补充对比连续 4 次 90° 旋转回归测试**：在 `test_rotate_selection.cpp` 中新增针对非对称比例图片在 Compare 窗格下连续 4 次旋转的端到端断言，确保全幅源矩形 `sourceRect == fullRect` 与完整渲染高度。
+- **加固浏览测试用例损坏缩略图等待逻辑**：在 `test_browse_acceptance.cpp` 中将固定延时改为谓词驱动 `while (!panel.thumbFailed(bad) && t.elapsed() < 10000)`，杜绝高负载并行测试调度时偶发的时序超时。
+
 
 ### Release
 
