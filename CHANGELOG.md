@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.121] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.121**.
+
+### Architecture & Componentization
+
+- **CompareDisplayManager 布局与视口管理组件抽离（ADR-014）**：
+  - 抽离出独立的 `CompareDisplayManager` QObject 组件，接管网格行列数、视口缩放与平移同步（Pan / Zoom Sync）、统一像素倍率（Uniform Pixel Scale）以及自适应最佳适配纯几何度量计算；
+  - 建立专有单元测试 `src/test_compare_display_manager.cpp`（`compare_display_manager_tests`），并与 `CompareWorkspace` 双向信号槽机制完全接通。
+
+### Concurrency & Lifecycle
+
+- **TaskScheduler 优雅退出即时取消（Graceful Shutdown）**：
+  - 在 `TaskScheduler::shutdown()` 中遍历所有活跃任务句柄触发 `requestCancel()`，并即时唤醒前台条件变量 `g_foregroundCv`，确保后台 worker 线程在退出时不阻塞等待超时，秒级快速回收。
+- **DifferenceEngine 尾部与非 SSSE3 循环展开优化**：
+  - 在 `diffRGBA32Row` 中调整 4 像素展开标量循环范围，确保无论是 x86 非 SSSE3 场景还是 SIMD 计算后的剩余像素尾部均能享受到 4 像素流水线展开优化。
+
 ## [1.0.120] - 2026-10-15
 
 ### Release
