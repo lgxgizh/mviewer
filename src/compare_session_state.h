@@ -40,9 +40,11 @@ class CompareSessionState : public QObject
     const QStringList &allPoolPaths() const noexcept { return m_allPoolPaths; }
     void setImagePool(const QStringList &allPaths, const QStringList &currentWindow = {});
 
-    // Layout preset (2, 4, 8)
+    // Layout preset / index (0=auto, 1=1-col, 2=2-col, 3=3-col, 4=4-col, 5=1-row, 6=custom)
     int layoutPreset() const noexcept { return m_layoutPreset; }
     void setLayoutPreset(int preset);
+    int layoutIndex() const noexcept { return m_layoutPreset; }
+    void setLayoutIndex(int index) { setLayoutPreset(index); }
 
     // Sync mode & transforms
     bool isSyncEnabled() const noexcept { return m_syncEnabled; }

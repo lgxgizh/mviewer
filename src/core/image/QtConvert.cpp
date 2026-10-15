@@ -6,17 +6,10 @@
 #include <algorithm>
 #include <cstring>
 
-#if defined(__GNUC__) || defined(__clang__)
-#define MV_TARGET_AVX2 __attribute__((target("avx2")))
-#define MV_TARGET_SSSE3 __attribute__((target("ssse3,sse4.1")))
-#else
-#define MV_TARGET_AVX2
-#define MV_TARGET_SSSE3
-#endif
-
 namespace
 {
 
+#if defined(MV_ARCH_X86)
 MV_TARGET_AVX2
 inline void convertRgba32ToArgb32RowAVX2(const uint8_t *src, uint8_t *dst, int width)
 {
@@ -67,6 +60,7 @@ inline void convertRgba32ToArgb32RowSSSE3(const uint8_t *src, uint8_t *dst, int 
         d[3] = p[3];
     }
 }
+#endif // MV_ARCH_X86
 
 inline void convertRgba32ToArgb32RowScalar(const uint8_t *src, uint8_t *dst, int width)
 {
@@ -168,11 +162,13 @@ static inline void convertRgba32ToArgb32(QImage &out, const ImageBuffer &v)
     {
         const uint8_t *sl = v.data + static_cast<size_t>(y) * vStride;
         uint8_t *dl = out.scanLine(y);
+#if defined(MV_ARCH_X86)
         if (hasAvx2)
             convertRgba32ToArgb32RowAVX2(sl, dl, v.width);
         else if (hasSsse3)
             convertRgba32ToArgb32RowSSSE3(sl, dl, v.width);
         else
+#endif
             convertRgba32ToArgb32RowScalar(sl, dl, v.width);
     }
 }

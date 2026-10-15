@@ -207,6 +207,12 @@ static void testDecodeFullResultDetailedErrors()
     CHECK(!resGolden.value().isNull(), "golden jpg ImageData is non-null");
     CHECK(resGolden.value().width == 256 && resGolden.value().height == 256,
           "golden jpg dimensions 256x256");
+
+    // 4. Test Decoder static shim
+    auto shimRes = Decoder::decodeFullResult(goldenJpg);
+    CHECK(shimRes.isOk() && !shimRes.value().isNull(), "Decoder::decodeFullResult static shim works");
+    auto shimErr = Decoder::decodeFullResult(dummyUnsupported);
+    CHECK(!shimErr.isOk(), "Decoder::decodeFullResult static shim returns error for unsupported file");
 }
 
 int main(int argc, char **argv)

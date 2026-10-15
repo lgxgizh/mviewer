@@ -147,8 +147,9 @@ void ImageViewer::setImageImpl(const QString &path)
     const bool keepProvisional = !path.isEmpty() && browsePathEquals(path, m_provisionalPath) &&
                                  !m_provisionalImage.isNull();
 
-    // Window-sized owned snapshot so the switch does not flash black. A
-    // full-frame toQImageRef() alias dangles once this frame is released.
+    // Window-sized owned snapshot so the switch does not flash black. Retaining
+    // an owned window-sized copy avoids pinning the entire original photo buffer
+    // in memory during the transition.
     if (!path.isEmpty() && !keepProvisional)
     {
         if (m_lodMode && !m_raster.image.isNull())

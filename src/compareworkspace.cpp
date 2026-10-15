@@ -575,6 +575,8 @@ void CompareWorkspace::onLayoutChanged()
     if (m_gridColsSpin)
         m_gridColsSpin->setEnabled(custom);
     syncContextualCompareControls();
+    if (m_sessionState)
+        m_sessionState->setLayoutPreset(idx);
 
     int cols = 0;
     switch (idx)

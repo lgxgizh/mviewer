@@ -114,6 +114,7 @@ class CompareWorkspace : public QWidget
 
     // Re-apply a persisted ROI.
     void applyROI(const mviewer::domain::Selection &sel);
+    void clearROI();
 
     // M12.2 (G2-ext): the image paths currently loaded into the compare cells.
     // Used by Workspace persistence to capture session context per image.
@@ -253,7 +254,6 @@ class CompareWorkspace : public QWidget
     void applySelectionToAll(const mviewer::domain::Selection &sel);
     void applySelectionFromView(RawImageView *view, const mviewer::domain::Selection &sel);
     void applySelectionPreviewFromView(RawImageView *view, const mviewer::domain::Selection &sel);
-    void clearROI();
     bool linkedROIAvailable() const;
     QSize paneEffectiveSize(int pane) const;
     void updateROIAvailabilityStatus();

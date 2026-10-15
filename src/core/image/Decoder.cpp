@@ -9,6 +9,20 @@ ImageData Decoder::decodeFull(const std::string &path)
     return DecoderRegistry::instance().decodeFull(path);
 }
 
+mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+Decoder::decodeFullResult(const std::string &path)
+{
+    MV_TRACE_SCOPED("Decoder::decodeFullResult");
+    return DecoderRegistry::instance().decodeFullResult(path);
+}
+
+mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
+Decoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetadata &outMeta)
+{
+    MV_TRACE_SCOPED("Decoder::decodeFullResult");
+    return DecoderRegistry::instance().decodeFullResult(path, outMeta);
+}
+
 ImageData Decoder::decodeFull(const std::string &path, mviewer::domain::ImageMetadata &outMeta)
 {
     MV_TRACE_SCOPED("Decoder::decodeFull");

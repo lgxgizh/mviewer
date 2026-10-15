@@ -46,6 +46,9 @@ void applySessionToComponents(mviewer::ui::CompareSessionState *sessionState,
         sessionState->setSyncEnabled(s.syncMode != mviewer::domain::SyncMode::Off);
         sessionState->setSharedScale(s.sharedScale);
         sessionState->setSharedOffset(QPointF(s.sharedOffsetX, s.sharedOffsetY));
+        sessionState->setLayoutPreset(s.layoutIndex);
+        sessionState->setCurrentROI(
+            mviewer::domain::Selection{s.selection.x, s.selection.y, s.selection.w, s.selection.h});
     }
 }
 } // namespace
@@ -69,8 +72,6 @@ mviewer::domain::Selection CompareWorkspace::currentROI() const
 
 void CompareWorkspace::applyROI(const mviewer::domain::Selection &sel)
 {
-    if (m_roiController)
-        m_roiController->setROI(sel);
     applySelectionToAll(sel);
 }
 
@@ -503,6 +504,13 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         m_lastSelection = mviewer::domain::normalizeSelection(
             sel.x, sel.y, sel.x + sel.width, sel.y + sel.height, std::numeric_limits<int>::max(),
             std::numeric_limits<int>::max());
+        if (m_roiController)
+        {
+            const QSignalBlocker b(m_roiController.get());
+            m_roiController->setROI(m_lastSelection);
+        }
+        if (m_sessionState)
+            m_sessionState->setCurrentROI(m_lastSelection);
         m_roiLinked = false;
         m_engine.selection().setSelection(m_lastSelection);
         for (int i = 0; i < m_cellViews.size(); ++i)
@@ -546,6 +554,13 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     const int height = common.isValid() ? common.height() : 0;
     m_lastSelection = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
                                                           sel.y + sel.height, width, height);
+    if (m_roiController)
+    {
+        const QSignalBlocker b(m_roiController.get());
+        m_roiController->setROI(m_lastSelection);
+    }
+    if (m_sessionState)
+        m_sessionState->setCurrentROI(m_lastSelection);
     m_roiLinked = !m_lastSelection.isEmpty();
     // Engine owns the frames; it mirrors the synchronized ROI to every ImageFrame.
     if (m_roiLinked)
@@ -656,6 +671,13 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
                                                           sel.y + sel.height, w, h);
     view->setSelection(norm);
     m_lastSelection = norm;
+    if (m_roiController)
+    {
+        const QSignalBlocker b(m_roiController.get());
+        m_roiController->setROI(m_lastSelection);
+    }
+    if (m_sessionState)
+        m_sessionState->setCurrentROI(m_lastSelection);
     if (m_roiGeometryLabel)
         m_roiGeometryLabel->setText(norm.isEmpty() ? tr("ROI: —")
                                                    : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
@@ -677,6 +699,13 @@ void CompareWorkspace::clearROI()
     ++m_roiGen;
     m_roiLinked = false;
     m_lastSelection = {};
+    if (m_roiController)
+    {
+        const QSignalBlocker b(m_roiController.get());
+        m_roiController->clearROI();
+    }
+    if (m_sessionState)
+        m_sessionState->clearROI();
     m_engine.selection().clearSelection();
     for (RawImageView *view : m_cellViews)
         if (view)

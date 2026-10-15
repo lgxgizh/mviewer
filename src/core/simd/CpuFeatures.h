@@ -13,6 +13,20 @@
 #endif
 #endif
 
+#if defined(MV_ARCH_X86) && (defined(__GNUC__) || defined(__clang__))
+#define MV_TARGET_AVX2 __attribute__((target("avx2")))
+#define MV_TARGET_SSSE3 __attribute__((target("ssse3")))
+#define MV_TARGET_SSE41 __attribute__((target("sse4.1")))
+#define MV_TARGET_SSSE3_SSE41 __attribute__((target("ssse3,sse4.1")))
+#define MV_TARGET_SSE2 __attribute__((target("sse2")))
+#else
+#define MV_TARGET_AVX2
+#define MV_TARGET_SSSE3
+#define MV_TARGET_SSE41
+#define MV_TARGET_SSSE3_SSE41
+#define MV_TARGET_SSE2
+#endif
+
 namespace mviewer::core
 {
 

@@ -115,19 +115,21 @@ int main(int argc, char *argv[])
             qWarning().noquote() << plan.error;
     }
 
-    MainWindow mainWindow;
-    if (!g_openOnLaunch.isEmpty())
-        mainWindow.setOpenOnLaunch(g_openOnLaunch);
-    mainWindow.show();
+    int exitCode = 0;
+    {
+        MainWindow mainWindow;
+        if (!g_openOnLaunch.isEmpty())
+            mainWindow.setOpenOnLaunch(g_openOnLaunch);
+        mainWindow.show();
 
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, []() {
-        TaskScheduler::instance().shutdown();
-    });
+        exitCode = app.exec();
+    }
 
-    const int exitCode = app.exec();
+    // Shut down background task pools after MainWindow and all child widgets
+    // have completed their teardown.
+    TaskScheduler::instance().shutdown();
 
-    // Flush and release the log file after the event loop returns so the last
-    // shutdown messages reach disk.
+    // Flush and release the log file after all teardown messages reach disk.
     mviewer::core::shutdownFileLogger();
     return exitCode;
 }
