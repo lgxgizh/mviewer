@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+## [1.0.124] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.124**.
+
+### Reliability & Architecture Refinement
+
+- **复杂度门禁冗余空间治理与子模块拆分（P3-02）**：
+  - 针对临近 800 行硬性门禁红线的文件实施预防性模块化拆解：
+    - `src/test_batch.cpp`（由 800 行降至 671 行）：抽取 `test_batch_dialog_cases.inc` 独立容纳导出守卫与设置持久化测试；
+    - `src/imageviewer_lod.cpp`（由 794 行降至 675 行）：抽取 `imageviewer_lod_overlay.inc` 独立容纳 ROI 统计调度与斑马线/伪彩色叠加派生逻辑；
+    - `src/core/compare/DifferenceEngine.cpp`（由 783 行降至 649 行）：抽取 `DifferenceEngine_simd.inc` 独立容纳 AVX2/SSE2 灰度统计向量内核；
+    - `src/core/analysis/AnalysisEngine_metrics.cpp`（由 788 行降至 715 行）：抽取 `AnalysisEngine_metrics_cross.inc` 独立容纳跨格式 SSD 与通用度量计算。
+
+### Componentization & UI Semantics
+
+- **CompareDiffRenderer 默认参数与方向对齐**：
+  - 将 `CompareDiffRenderer` 的内部默认分割方向 `m_splitOrientation` 由 `Qt::Vertical` 纠正为 `Qt::Horizontal`，与 `renderSplit` 默认实参和水平并排对比惯例严格对齐。
+
+### Image Decoder Resilience
+
+- **QtDecoder 细分错误上下文映射**：
+  - 补充对 `QImageReader::DeviceError` 的精准拦截，映射为 `DecodeErrorCode::AccessDenied`，进一步完善结构化错误状态向 UI 和批处理链路的传导。
+
+### Concurrency & Test Robustness
+
+- **对比最佳适配异步测试稳定性加固**：
+  - 在 `test_compare_best_fit.cpp` 中将硬编码轮询超时改造为弹性事件驱动等待循环，彻底消除 16 线程全量并行测试时偶发的微秒级瞬态状态判断抖动。
+
 ## [1.0.123] - 2026-10-15
 
 ### Release
