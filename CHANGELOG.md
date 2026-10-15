@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [1.0.120] - 2026-10-15
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.120**.
+
+### Architecture & Componentization
+
+- **CompareWorkspace 核心组件接入主链路（ADR-014）**：
+  - 将 `CompareSessionState`、`CompareRoiController`、`CompareDiffRenderer` 三大独立解耦组件以 `std::unique_ptr` 聚合注入 `CompareWorkspace` 主工作区；
+  - 建立中介者模式信号槽通道，双向同步 ROI 选择、视口参数、滑动窗口图库及差异阈值，消除未接死代码并降低上帝类耦合。
+- **Split 视口分割方向标准化**：
+  - 统一 `CompareDiffRenderer::renderSplit` 与 Qt 标准坐标系惯例：`Qt::Horizontal` 沿水平 X 轴分割（左右对比），`Qt::Vertical` 沿垂直 Y 轴分割（上下对比），默认水平分割。
+
+### Modern C++ & Error Handling
+
+- **Result<T, E> 单子容器泛型解耦与右值引用增强**：
+  - 将特定领域的 `DecodeErrorCode` 与 `DecodeError` 彻底剥离至纯净的 `src/domain/DecodeError.h` 领域头文件，恢复 `Result.h` 基础容器的泛型纯度；
+  - 补充 `operator*()` 与 `operator->()` 的断言契约校验，完善 `map`、`and_then`、`map_error`、`value_or` 的右值引用重载（`&&`），全面支持移动语义及 `std::unique_ptr` 等 Move-only 负载类型。
+- **解码器管道结构化错误码映射与回退保障**：
+  - 在 `QtDecoder`、`QtFallbackDecoder` 与 `RawDecoder` 中全面接入 `decodeFullResult`，向调用者精准透传 `FileNotFound`、`UnsupportedFormat` 与 `CorruptData` 错误分类。
+
 ## [1.0.119] - 2026-10-14
 
 ### Release
