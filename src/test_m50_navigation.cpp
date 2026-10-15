@@ -130,6 +130,11 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName("mviewer-m50-navigation-test");
     mviewer::runtime::configureSettings();
     QSettings().clear();
+    {
+        const QString cfg = mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
+        if (!cfg.isEmpty())
+            QDir(cfg).removeRecursively();
+    }
 
     QTemporaryDir temporary;
     if (!temporary.isValid())

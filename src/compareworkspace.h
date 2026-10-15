@@ -65,6 +65,7 @@ namespace mviewer::ui
 class CompareSessionState;
 class CompareRoiController;
 class CompareDiffRenderer;
+class CompareDisplayManager;
 }
 
 // CompareWorkspace：多图同步比较工作区
@@ -106,6 +107,7 @@ class CompareWorkspace : public QWidget
     mviewer::ui::CompareSessionState *sessionState() const { return m_sessionState.get(); }
     mviewer::ui::CompareRoiController *roiController() const { return m_roiController.get(); }
     mviewer::ui::CompareDiffRenderer *diffRenderer() const { return m_diffRenderer.get(); }
+    mviewer::ui::CompareDisplayManager *displayManager() const { return m_displayManager.get(); }
 
     // Last ROI applied to the compare cells; empty means unset.
     mviewer::domain::Selection currentROI() const;
@@ -764,4 +766,5 @@ class CompareWorkspace : public QWidget
     std::unique_ptr<mviewer::ui::CompareSessionState> m_sessionState;
     std::unique_ptr<mviewer::ui::CompareRoiController> m_roiController;
     std::unique_ptr<mviewer::ui::CompareDiffRenderer> m_diffRenderer;
+    std::unique_ptr<mviewer::ui::CompareDisplayManager> m_displayManager;
 };

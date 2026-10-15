@@ -706,11 +706,22 @@ bool TaskScheduler::drain(PoolType pool, std::chrono::milliseconds timeout)
 
 void TaskScheduler::shutdown(std::chrono::milliseconds timeout)
 {
-    // Pause all pools
-    for (int i = 0; i < 5; ++i)
+    // Pause all pools and request cancel on in-flight tasks so workers exit promptly
     {
         std::lock_guard<std::mutex> lock(m_graphMtx);
-        m_poolState[i].paused = true;
+        for (int i = 0; i < 5; ++i)
+        {
+            m_poolState[i].paused = true;
+        }
+        for (auto &pair : m_handles)
+        {
+            if (pair.second)
+                pair.second->requestCancel();
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(g_foregroundMtx);
+        g_foregroundCv.notify_all();
     }
     // Drain each pool sequentially
     for (int i = 0; i < 5; ++i)
