@@ -30,6 +30,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -128,20 +129,20 @@ void testMidFlightResize()
     pipe.setDecodeFn([gate](const std::string &p, int size) { return gatedDecode(gate, p, size); });
     std::atomic<int> deliveredCount{0};
     std::atomic<bool> staleSizeDelivered{false};
-    pipe.setResultFn([&](const std::string &, int size, const ImageData &img)
-                     {
-                         if (!img.isNull())
-                         {
-                             if (size != 128)
-                                 staleSizeDelivered.store(true, std::memory_order_relaxed);
-                             deliveredCount.fetch_add(1, std::memory_order_relaxed);
-                         }
-                     });
+    pipe.setResultFn(
+        [&](const std::string &, int size, const ImageData &img)
+        {
+            if (!img.isNull())
+            {
+                if (size != 128)
+                    staleSizeDelivered.store(true, std::memory_order_relaxed);
+                deliveredCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
 
     pipe.setSources(makeSources("dirA", 20));
     pipe.setVisibleRange(0, 10); // schedules 10 decodes at thumbSize=256
-    CHECK(waitTrue([&] { return gate->calls.load() >= 1; }, 5000),
-          "old-size decode started");
+    CHECK(waitTrue([&] { return gate->calls.load() >= 1; }, 5000), "old-size decode started");
 
     // Resize while decodes are in flight.
     pipe.setThumbSize(128);
@@ -180,22 +181,22 @@ void testRapidSizeChurn()
     std::atomic<int> size256Deliveries{0};
     std::atomic<int> size64Deliveries{0};
     std::atomic<int> finalDeliveries{0};
-    pipe.setResultFn([&](const std::string &, int size, const ImageData &img)
-                     {
-                         if (img.isNull())
-                             return;
-                         if (size == 256)
-                             size256Deliveries.fetch_add(1);
-                         else if (size == 64)
-                             size64Deliveries.fetch_add(1);
-                         else
-                             finalDeliveries.fetch_add(1);
-                     });
+    pipe.setResultFn(
+        [&](const std::string &, int size, const ImageData &img)
+        {
+            if (img.isNull())
+                return;
+            if (size == 256)
+                size256Deliveries.fetch_add(1);
+            else if (size == 64)
+                size64Deliveries.fetch_add(1);
+            else
+                finalDeliveries.fetch_add(1);
+        });
 
     pipe.setSources(makeSources("dirB", 30));
     pipe.setVisibleRange(0, 10); // 256
-    CHECK(waitTrue([&] { return gate->calls.load() >= 1; }, 5000),
-          "churn: first decode started");
+    CHECK(waitTrue([&] { return gate->calls.load() >= 1; }, 5000), "churn: first decode started");
     pipe.setThumbSize(128); // supersede 256
     pipe.setThumbSize(64);  // supersede 128
     pipe.setThumbSize(128); // final size
@@ -204,13 +205,10 @@ void testRapidSizeChurn()
     gate->release.store(true, std::memory_order_release);
     CHECK(waitTrue([&] { return pipe.handlesCount() == 0 && pipe.pendingCount() == 0; }, 15000),
           "churn: pipeline converges");
-    CHECK(size256Deliveries.load() == 0,
-          "churn: no delivery from the superseded 256 size");
-    CHECK(size64Deliveries.load() == 0,
-          "churn: no delivery from the superseded 64 size");
+    CHECK(size256Deliveries.load() == 0, "churn: no delivery from the superseded 256 size");
+    CHECK(size64Deliveries.load() == 0, "churn: no delivery from the superseded 64 size");
     CHECK(finalDeliveries.load() == 10, "churn: exactly the final-size (128) batch delivers");
-    CHECK(pipe.memCacheSize() == 10,
-          "churn: memory cache holds only the final-size results");
+    CHECK(pipe.memCacheSize() == 10, "churn: memory cache holds only the final-size results");
     CHECK(waitTrue(poolIdle, 5000), "churn: ThumbnailPool idle");
     CHECK(sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(5)),
           "ThumbnailPool drains after T2");
@@ -229,20 +227,20 @@ void testDirectorySwitchMidDecode()
     pipe.setDecodeFn([gate](const std::string &p, int size) { return gatedDecode(gate, p, size); });
     std::atomic<int> dirADeliveries{0};
     std::atomic<int> dirBDeliveries{0};
-    pipe.setResultFn([&](const std::string &p, int, const ImageData &img)
-                     {
-                         if (img.isNull())
-                             return;
-                         if (p.rfind("dirA", 0) == 0)
-                             dirADeliveries.fetch_add(1);
-                         else
-                             dirBDeliveries.fetch_add(1);
-                     });
+    pipe.setResultFn(
+        [&](const std::string &p, int, const ImageData &img)
+        {
+            if (img.isNull())
+                return;
+            if (p.rfind("dirA", 0) == 0)
+                dirADeliveries.fetch_add(1);
+            else
+                dirBDeliveries.fetch_add(1);
+        });
 
     pipe.setSources(makeSources("dirA", 20));
     pipe.setVisibleRange(0, 5);
-    CHECK(waitTrue([&] { return gate->calls.load() >= 1; }, 5000),
-          "dirA decode started");
+    CHECK(waitTrue([&] { return gate->calls.load() >= 1; }, 5000), "dirA decode started");
     // Switch directory mid-decode.
     pipe.setSources(makeSources("dirB", 20));
     pipe.setVisibleRange(0, 5);

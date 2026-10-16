@@ -33,30 +33,33 @@
 #include <cstdlib>
 #include <functional>
 #include <memory>
+#include <thread>
 
 #ifdef _WIN32
+// clang-format off
 #include <windows.h>
 #include <psapi.h>
+// clang-format on
 #endif
 
 static int g_failures = 0;
 
-#define CHECK(c, m)                                                                                 \
-    do                                                                                              \
-    {                                                                                               \
-        if (!(c))                                                                                   \
-        {                                                                                           \
-            std::printf("FAIL: %s\n", m);                                                           \
-            std::fflush(stdout);                                                                    \
-            ++g_failures;                                                                           \
-        }                                                                                           \
+#define CHECK(c, m)                                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(c))                                                                                  \
+        {                                                                                          \
+            std::printf("FAIL: %s\n", m);                                                          \
+            std::fflush(stdout);                                                                   \
+            ++g_failures;                                                                          \
+        }                                                                                          \
     } while (false)
 
-#define MARK(t)                                                                                     \
-    do                                                                                              \
-    {                                                                                               \
-        std::printf("%s\n", t);                                                                     \
-        std::fflush(stdout);                                                                        \
+#define MARK(t)                                                                                    \
+    do                                                                                             \
+    {                                                                                              \
+        std::printf("%s\n", t);                                                                    \
+        std::fflush(stdout);                                                                       \
     } while (false)
 
 namespace
@@ -209,10 +212,10 @@ int main(int argc, char **argv)
         const double rssDelta = rssMB() - rssBefore;
         printf("  V1: rss delta (display path only) = %.1f MB; frame=%s\n", rssDelta,
                viewer.frame() ? "present" : "null");
-        CHECK(rssDelta < 100.0,
-              "V1: display-path RSS stays bounded (< 100 MB; a full 100MP "
-              "materialization would be ~286 MB and is rejected by Qt anyway)");
-        CHECK(waitTrue([&] { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
+        CHECK(rssDelta < 100.0, "V1: display-path RSS stays bounded (< 100 MB; a full 100MP "
+                                "materialization would be ~286 MB and is rejected by Qt anyway)");
+        CHECK(waitTrue([&]
+                       { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
                        15000),
               "V1: decode pools drain after display");
         if (ready && viewer.isLodDisplay())
@@ -294,7 +297,8 @@ int main(int argc, char **argv)
         CHECK(c.fullDecodeScaled.load() == 0 && c.fullDecodeCrop.load() == 0,
               "V2: no full-decode fallback ran");
         pump(300);
-        CHECK(waitTrue([&] { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
+        CHECK(waitTrue([&]
+                       { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
                        15000),
               "V2: decode pools drain after the region upgrade");
     }
@@ -328,7 +332,8 @@ int main(int argc, char **argv)
         CHECK(lastReady == QSize(12000, 8333),
               "V3: the FINAL A generation owns the display (no stale overwrite)");
         CHECK(viewer.isLodDisplay(), "V3: viewer still in LOD display mode");
-        CHECK(waitTrue([&] { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
+        CHECK(waitTrue([&]
+                       { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
                        15000),
               "V3: decode pools drain after A->B->A");
     }
@@ -386,8 +391,7 @@ int main(int argc, char **argv)
         const SchedSample s = sampleScheduler();
         printf("  V5: idle sched(p=%llu,a=%llu,q=%llu,w=%llu)\n",
                static_cast<unsigned long long>(s.pending),
-               static_cast<unsigned long long>(s.active),
-               static_cast<unsigned long long>(s.queue),
+               static_cast<unsigned long long>(s.active), static_cast<unsigned long long>(s.queue),
                static_cast<unsigned long long>(s.waiting));
         CHECK(s.pending == 0 && s.active == 0 && s.queue == 0 && s.waiting == 0,
               "V5: scheduler converges to idle after zoom/pan churn");

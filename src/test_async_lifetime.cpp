@@ -27,6 +27,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <string>
+#include <thread>
 
 namespace
 {
@@ -128,7 +129,8 @@ int main(int argc, char **argv)
         // A second panel must still work (no cross-panel wiring pollution).
         ThumbnailPanel panel2;
         panel2.setDirectory(big);
-        check(waitForEntryCount(panel2, 1200, 8000), "t1: fresh panel scans after destroy-mid-scan");
+        check(waitForEntryCount(panel2, 1200, 8000),
+              "t1: fresh panel scans after destroy-mid-scan");
         QDir(big).removeRecursively();
     }
 

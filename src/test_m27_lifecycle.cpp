@@ -175,7 +175,9 @@ ProcessLeaks sampleLeaks()
     pmc.cb = sizeof(pmc);
     if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
         l.workingSet = pmc.WorkingSetSize;
-    GetProcessHandleCount(GetCurrentProcess(), &l.handles);
+    DWORD hCount = 0;
+    if (GetProcessHandleCount(GetCurrentProcess(), &hCount))
+        l.handles = static_cast<uint32_t>(hCount);
     const HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
     if (snap != INVALID_HANDLE_VALUE)
     {
