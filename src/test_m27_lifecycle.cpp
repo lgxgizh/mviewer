@@ -31,9 +31,14 @@
 #include <QImage>
 
 // clang-format off
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h> // must precede psapi.h / tlhelp32.h (PSAPI types)
 #include <psapi.h>
 #include <tlhelp32.h>
+#endif
 // clang-format on
 
 #include <atomic>
@@ -157,14 +162,15 @@ bool waitConverged(int ms)
 
 struct ProcessLeaks
 {
-    SIZE_T workingSet = 0;
-    DWORD handles = 0;
-    DWORD threads = 0;
+    size_t workingSet = 0;
+    uint32_t handles = 0;
+    uint32_t threads = 0;
 };
 
 ProcessLeaks sampleLeaks()
 {
     ProcessLeaks l;
+#ifdef _WIN32
     PROCESS_MEMORY_COUNTERS pmc{};
     pmc.cb = sizeof(pmc);
     if (GetProcessMemoryInfo(GetCurrentProcess(), &pmc, sizeof(pmc)))
@@ -185,6 +191,7 @@ ProcessLeaks sampleLeaks()
         }
         CloseHandle(snap);
     }
+#endif
     return l;
 }
 
@@ -297,14 +304,18 @@ int main(int argc, char **argv)
                    static_cast<unsigned long long>(diskCache) / 1024, diskEntries, pipeCache);
             if (round == 49)
             {
+#ifdef _WIN32
                 EmptyWorkingSet(GetCurrentProcess());
+#endif
                 pump(20);
                 steady = sampleLeaks(); // steady state after warm-up rounds
             }
         }
     }
 
+#ifdef _WIN32
     EmptyWorkingSet(GetCurrentProcess());
+#endif
     pump(20);
     const ProcessLeaks final = sampleLeaks();
     const long rssGrowthBytes =
