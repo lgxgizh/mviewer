@@ -7,11 +7,14 @@
 #
 # This file (Tier 1 / PR gate) runs on every PR and on every push to master.
 # REQUIRED jobs (branch protection depends on the `ci-gate` aggregator):
-#   format    — incremental clang-format (C++20/Qt6) + markdownlint
-#   cppcheck  — supplemental static analysis (NEW, required)
-#   clang-tidy— bug-finding static analysis, REQUIRED, PR-incremental
-#   build     — MSVC + Qt 6.8.0, zero compiler warnings (warnings-as-errors)
-#   test      — CTest (unit tests + bench_enforce perf hard-gate + golden_image)
+#   format                 — incremental clang-format (C++20/Qt6) + markdownlint
+#   cppcheck               — supplemental static analysis (required)
+#   clang-tidy             — bug-finding static analysis, REQUIRED, PR-incremental
+#   architecture-gate      — layered architecture rules, REQUIRED (zero violations)
+#   build-linux            — Linux GCC compilation check (catches SIMD/syntax/header issues)
+#   windows-build-and-test — MSVC + Qt 6.8.0, zero compiler warnings + CTest
+#   adr-gate               — architectural PRs must update an ADR
+#   known-issues           — bug issues linked to regression tests
 #
 # The Tier-2 (nightly) and Tier-3 (release) workflows live in nightly.yml and
 # release.yml respectively and intentionally do NOT block PRs.
@@ -22,8 +25,9 @@
 #   * cppcheck reports no warning/performance/portability findings in src/
 #   * clang-tidy reports no bugprone/performance/clang-analyzer findings in PR
 #     changed files (incremental — legacy code is not re-checked on PRs)
-#   * build succeeds on windows-2022 (MSVC + Qt 6.8.0)
-#   * zero compiler warnings in the build log (warnings-as-errors)
+#   * architecture gate reports zero layer / dependency violations
+#   * build succeeds on Linux (GCC) without syntax / SIMD attribute errors
+#   * build succeeds on windows-2022 (MSVC + Qt 6.8.0) with zero compiler warnings
 #   * unit tests (CTest) pass, including the bench_enforce perf hard-gate
 # =============================================================================
 
@@ -51,7 +55,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           # Incremental formatting compares the event range, so both endpoints
           # must be available on push and pull_request runs.
@@ -166,16 +170,23 @@ jobs:
         shell: bash
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+            BASE_REF="origin/${{ github.base_ref }}"
+            FILES=$(git diff --name-only "$BASE_REF"...HEAD \
                      -- 'src/**/*.cpp' 'src/**/*.h')
+            BASE_SHA=$(git merge-base "$BASE_REF" HEAD)
           else
-            FILES=$(git diff --name-only HEAD~1 HEAD \
+            BASE_SHA="${{ github.event.before }}"
+            if [ -z "$BASE_SHA" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ]; then
+              BASE_SHA="$(git rev-parse HEAD~1 2>/dev/null || git rev-list --max-parents=0 HEAD)"
+            fi
+            FILES=$(git diff --name-only "$BASE_SHA" HEAD \
                      -- 'src/**/*.cpp' 'src/**/*.h')
           fi
           FILES=$(echo "$FILES" | grep -v -E 'build' || true)
           echo "files<<EOF" >> "$GITHUB_OUTPUT"
           echo "$FILES" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "base_sha=$BASE_SHA" >> "$GITHUB_OUTPUT"
           echo "Changed files to analyze:"; echo "$FILES"
 
       - name: Run clang-tidy (required, changed lines only)
@@ -196,15 +207,55 @@ jobs:
             > clang-tidy.log 2>&1
           set -e
           python3 .github/scripts/clang_tidy_changed_only.py \
-            --base "$(git rev-parse HEAD~1)" --head "$(git rev-parse HEAD)" \
+            --base "${{ steps.changed.outputs.base_sha }}" --head "$(git rev-parse HEAD)" \
             --log clang-tidy.log --prefix "$GITHUB_WORKSPACE"
 
   # ---------------------------------------------------------------------------
-  # build — MSVC + Qt 6.8.0, enforce zero warnings from build log
-  # (this implements the "warnings-as-errors" PR requirement)
+  # architecture-gate — Layered architecture rules (REQUIRED, fast)
+  # Enforces layer boundaries (UI -> Application -> Core -> Domain), zero Qt
+  # in core headers (except sanctioned adapters), zero direct cache/repo coupling.
   # ---------------------------------------------------------------------------
-  build:
-    name: Build (MSVC + Qt 6.8.0)
+  architecture-gate:
+    name: Architecture rules (required)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify zero architecture violations
+        shell: pwsh
+        run: ./scripts/architecture_gate.ps1 -Strict
+
+  # ---------------------------------------------------------------------------
+  # build-linux — Linux GCC compilation check (REQUIRED, fast)
+  # Catches compiler-specific syntax errors, SIMD attribute mismatches
+  # (e.g. MV_TARGET_AVX2), and non-Windows header/portability regressions.
+  # ---------------------------------------------------------------------------
+  build-linux:
+    name: Build check (Linux GCC)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev libgl1-mesa-dev cmake ninja-build g++
+
+      - name: Configure and build
+        run: |
+          cmake -B build_linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build_linux -j 4
+
+  # ---------------------------------------------------------------------------
+  # windows-build-and-test — MSVC + Qt 6.8.0, build + warnings gate + CTest
+  # Single unified runner execution prevents redundant second compilation,
+  # halving Windows runner time while verifying zero compiler warnings and
+  # running the complete CTest test suite.
+  # ---------------------------------------------------------------------------
+  windows-build-and-test:
+    name: Build & Test (MSVC + Qt 6.8.0)
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -223,12 +274,9 @@ jobs:
 
       - name: Build (compile + deploy; zero-warnings gate)
         run: |
-          # `Release` compiles and deploys Qt/CRT but does NOT run CTest — the
-          # dedicated `test` job owns CTest (incl. the bench_enforce perf gate),
-          # so the suite executes exactly once per PR instead of twice. Tee
-          # preserves build.log for the zero-warnings grep below; the
-          # $LASTEXITCODE guard keeps a compile failure from being masked by
-          # Tee-Object.
+          # `Release` compiles and deploys Qt/CRT. Tee preserves build.log for
+          # the zero-warnings grep below; the $LASTEXITCODE guard keeps a
+          # compile failure from being masked by Tee-Object.
           powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release 2>&1 | Tee-Object -FilePath build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -243,35 +291,6 @@ jobs:
             $m | ForEach-Object { Write-Host ("  " + $_.Line) }
             exit 1
           }
-
-  # ---------------------------------------------------------------------------
-  # test — CTest job (separate runner; artifacts not shared)
-  # Runs CTest directly so this job can publish its own JUnit artifact. The
-  # canonical build.ps1 Test gate also propagates CTest failures (M35).
-  # ---------------------------------------------------------------------------
-  test:
-    name: Unit tests (ctest)
-    runs-on: windows-2022
-    needs: [build]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: 6.8.0
-          arch: win64_msvc2022_64
-          modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) required by M3/M5 golden tests
-          cache: true
-
-      # `build.ps1 Release` recompiles on this fresh runner (job isolation);
-      # CTest remains explicit here to keep report generation local to the job.
-      - name: Build
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 
       - name: Generate testdata fixtures
         # testdata/ is git-ignored by design and regenerated deterministically
@@ -383,7 +402,7 @@ jobs:
   ci-gate:
     name: CI gate (Tier 1)
     runs-on: ubuntu-latest
-    needs: [format, cppcheck, clang-tidy, build, test, adr-gate, known-issues]
+    needs: [format, cppcheck, clang-tidy, architecture-gate, build-linux, windows-build-and-test, adr-gate, known-issues]
     if: always()
     steps:
       - name: All required jobs passed

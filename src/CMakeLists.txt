@@ -1387,6 +1387,9 @@ add_test(NAME eventbus_tests   COMMAND test_eventbus)
 add_test(NAME result_tests     COMMAND test_result)
 add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
 add_test(NAME display_resample_tests COMMAND test_display_resample)
+set_tests_properties(cache_tests repository_tests m26_repository_tests m27_repository_tests
+    PROPERTIES RUN_SERIAL TRUE
+)
 
 # Generous wall-time ceiling for the HQ display resample. Not a perf gate:
 # the budget only fails a pathological regression, not noise around the median.

@@ -37,7 +37,8 @@
 param(
     [string]$Repo = (Get-Location).Path,
     [switch]$Json,
-    [string]$OutJson = ''
+    [string]$OutJson = '',
+    [switch]$Strict
 )
 
 $ErrorActionPreference = 'Stop'
@@ -143,9 +144,10 @@ foreach ($f in $src) {
     }
 }
 
+$isClean = ($violations.Count -eq 0)
 $summary = [ordered]@{
     gate       = 'architecture'
-    passed     = $true            # advisory: never hard-fails
+    passed     = $isClean
     warnings   = $violations.Count
     violations = $violations
 }
@@ -154,6 +156,7 @@ if ($Json) {
     $js = $summary | ConvertTo-Json -Depth 6
     if ($OutJson) { Set-Content -Path $OutJson -Value $js -Encoding UTF8 }
     Write-Output $js
+    if ($Strict -and -not $isClean) { exit 1 }
 }
 else {
     Write-Host "=== Architecture Gate ==="
@@ -161,10 +164,14 @@ else {
     # Keep this script ASCII-safe: Windows PowerShell can misread UTF-8 without
     # a BOM under a non-UTF-8 runner code page, turning typographic quotes into
     # parser tokens. The human report does not need a Unicode dash here.
-    Write-Host "violations    : $($violations.Count)  (advisory - never fails the build)"
+    Write-Host "violations    : $($violations.Count)"
     if ($violations.Count) {
         foreach ($v in ($violations | Sort-Object rule, file)) {
             Write-Host ("  [{0}] {1} L{2}: {3}  ({4})" -f $v.rule, $v.file, $v.line, $v.include, $v.message)
+        }
+        if ($Strict) {
+            Write-Host "`nARCHITECTURE: FAIL ($($violations.Count) violation(s))"
+            exit 1
         }
     }
     Write-Host "`nARCHITECTURE: $($violations.Count) advisory violation(s)"
