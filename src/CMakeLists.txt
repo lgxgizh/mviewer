@@ -2433,8 +2433,7 @@ target_link_libraries(mviewer_bench
         Qt6::Core
         Qt6::Widgets
         mviewer_core
-        dxgi
-        ole32
+        $<$<PLATFORM_ID:Windows>:dxgi;ole32>
 )
 
 target_compile_features(mviewer_bench PRIVATE cxx_std_20)
