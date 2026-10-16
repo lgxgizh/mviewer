@@ -58,9 +58,9 @@ class ComparePaneHeader : public QWidget
         m_badge->setAlignment(Qt::AlignCenter);
         m_badge->setFixedSize(kChip, kChip);
         m_badge->setAttribute(Qt::WA_TransparentForMouseEvents);
-        m_badge->setStyleSheet(QStringLiteral(
-            "QLabel#paneIndexBadge{background:rgba(255,255,255,45);color:#ffffff;"
-            "border-radius:3px;font-weight:700;font-size:14px;}"));
+        m_badge->setStyleSheet(
+            QStringLiteral("QLabel#paneIndexBadge{background:rgba(255,255,255,45);color:#ffffff;"
+                           "border-radius:3px;font-weight:700;font-size:14px;}"));
         m_badge->hide();
         row->addWidget(m_badge, 0, Qt::AlignVCenter);
 
@@ -77,8 +77,8 @@ class ComparePaneHeader : public QWidget
         // the other panes; refreshName() elides/wraps to the width it gets.
         m_name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         m_name->setMinimumWidth(0);
-        m_name->setStyleSheet(
-            QStringLiteral("QLabel#paneHeaderName{color:#ffffff;font-weight:700;background:transparent;}"));
+        m_name->setStyleSheet(QStringLiteral(
+            "QLabel#paneHeaderName{color:#ffffff;font-weight:700;background:transparent;}"));
         row->addWidget(m_name, 1, Qt::AlignVCenter);
 
         setStyleSheet(QStringLiteral(
