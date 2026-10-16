@@ -413,8 +413,7 @@ ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
 }
 
 mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
-RawDecoder::decodeFullResult(const std::string &path,
-                             mviewer::domain::ImageMetadata &outMeta) const
+RawDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const
 {
     bool exists = true;
     try
@@ -428,7 +427,9 @@ RawDecoder::decodeFullResult(const std::string &path,
     {
         exists = true;
     }
-    if (!exists)
+    const bool isNetworkPath = (path.size() >= 2 && (path[0] == '/' || path[0] == '\\') &&
+                                (path[1] == '/' || path[1] == '\\'));
+    if (!exists && !isNetworkPath)
     {
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
             {mviewer::domain::DecodeErrorCode::FileNotFound, "RAW file not found: " + path, path});

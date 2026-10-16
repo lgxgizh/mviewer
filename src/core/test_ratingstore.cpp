@@ -319,6 +319,15 @@ int main()
     QDir(QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_路径 closure 😀")))
         .removeRecursively();
 
+#ifdef _WIN32
+    const std::string uncForward = "//myserver/photos/test.png";
+    const std::filesystem::path uncPath = pathFromUtf8(uncForward);
+    CHECK(uncPath.wstring() == L"\\\\myserver\\photos\\test.png",
+          "pathFromUtf8 normalizes forward-slash UNC to Windows backslash UNC");
+    CHECK(normalizePathKey(uncForward) == "//myserver/photos/test.png",
+          "normalizePathKey preserves forward-slash format for UNC keys");
+#endif
+
     std::filesystem::remove(recentRatings, recentEc);
     std::filesystem::remove(recentFlags, recentEc);
 

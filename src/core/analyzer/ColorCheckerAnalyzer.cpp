@@ -185,13 +185,26 @@ bool ColorCheckerAnalyzer::analyzeRegion(const ImageFrame &frame,
 
 std::string ColorCheckerAnalyzer::resultText() const
 {
-    char buf[128];
-    std::snprintf(buf, sizeof(buf), "colorchecker: %d patches, mean Delta-E %.2f, max Delta-E %.2f",
-                  m_patches, m_meanDE, m_maxDE);
+    char buf[160];
+    if (m_maxPatch > 0)
+    {
+        std::snprintf(buf, sizeof(buf),
+                      "colorchecker: %d patches, mean Delta-E %.2f, max Delta-E %.2f (patch #%d)",
+                      m_patches, m_meanDE, m_maxDE, m_maxPatch);
+    }
+    else
+    {
+        std::snprintf(buf, sizeof(buf),
+                      "colorchecker: %d patches, mean Delta-E %.2f, max Delta-E %.2f", m_patches,
+                      m_meanDE, m_maxDE);
+    }
     return std::string(buf);
 }
 
 std::unordered_map<std::string, double> ColorCheckerAnalyzer::resultMetrics() const
 {
-    return {{"meanDeltaE", m_meanDE}, {"maxDeltaE", m_maxDE}, {"patchCount", static_cast<double>(m_patches)}};
+    return {{"meanDeltaE", m_meanDE},
+            {"maxDeltaE", m_maxDE},
+            {"maxDeltaEPatch", static_cast<double>(m_maxPatch)},
+            {"patchCount", static_cast<double>(m_patches)}};
 }

@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [1.0.131] - 2026-10-16
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.131**.
+
+### Bug Fixes & Algorithmic Robustness
+
+- **网络服务器共享路径（UNC）对比模式图片加载修复（Server / UNC Network Path Compare Fix）**：
+  - 修复 Windows 下 UTF-8 路径转换：在 `Utf8Path.cpp` 中将以 `//` 或 `\\` 开头的 UNC 共享路径规范化为标准 Windows 反斜杠格式，并在 `normalizePathKey` 保持正斜杠统一，确保 `std::filesystem::exists` 与 Win32 内核 API 正确解析网络共享；
+  - 在 `DecoderRegistry::decodeFullResult`、`QtDecoder::decodeFullResult` 及 `RawDecoder::decodeFullResult` 中增加网络路径保护，防止部分网络共享权限限制导致误报 `FileNotFound`；
+  - 修复 `MainWindow::showCompareDialog` 在 2 张图片对比且 `m_imageList` 尚未填充时未调用 `setImagePool` 的边界问题。
+- **图像对齐引擎精度与跨平台护栏（Aligner Accuracy & Cross-Platform Guards）**：
+  - 在 `Aligner::fineSearch` 中去除 `stepY` 跨行跳跃，使用中心 512×512 视窗与 `stepY = 1` 逐行搜索，彻底消除因采样相位失配导致的垂直微调误差；
+  - 引入 `CpuFeatures.h` 并使用 `MV_ARCH_X86` 严格包裹 SIMD 指令，避免 ARM64 / macOS 平台编译失败。
+- **MTF 分析算法边缘质心自适应加窗（MTF50 Adaptive Centroid Windowing）**：
+  - `MTFAnalyzer::calculateMtf50` 的 Hamming 窗由固定几何中心改为动态居中于边缘 LSF 峰值质心（`peakIdx`），消除 ROI 边缘偏移时的伪衰减，提升 MTF50 测量鲁棒性。
+- **缓存并发去重与缩略图尺寸隔离（Cache Details & Concurrency Fixes）**：
+  - `ThumbnailPipeline::findCached` 改造为精确 $O(1)$ 查找，移除全表前缀遍历回退，防止错误尺寸的缩略图污染 `m_thumbReady`；
+  - `QtConvert.cpp` 的 ICC Profile 环形缓存（`colorSpaceFromIcc`、`sourceColorSpace`）在加锁写槽前增加重复键校验，杜绝多线程并发解码同一张图时的重复占槽与过早淘汰。
+- **色卡分析器（ColorCheckerAnalyzer）暴露最大偏差色块**：
+  - 暴露 `maxDeltaEPatch()` 接口并在 `resultText()`、`resultMetrics()` 以及 `outputFields` 中完整输出该色块序号，补齐元数据读取闭环。
+
 ## [1.0.130] - 2026-10-16
 
 ### Release

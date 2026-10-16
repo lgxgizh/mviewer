@@ -111,14 +111,24 @@ DecoderRegistry::decodeFullResult(const std::string &path,
     }
     if (!ec && !exists)
     {
-        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
-            {mviewer::domain::DecodeErrorCode::FileNotFound, "File does not exist: " + path, path});
+        // For local files, if filesystem says it doesn't exist, return FileNotFound.
+        // But for network shares / UNC paths (e.g. starting with // or \\),
+        // std::filesystem::exists can return false if directory traversal is restricted.
+        // Let the registered decoders attempt native read before concluding FileNotFound.
+        const bool isNetworkPath = (path.size() >= 2 && (path[0] == '/' || path[0] == '\\') &&
+                                    (path[1] == '/' || path[1] == '\\'));
+        if (!isNetworkPath)
+        {
+            return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+                {mviewer::domain::DecodeErrorCode::FileNotFound, "File does not exist: " + path,
+                 path});
+        }
     }
 
     bool claimed = false;
-    mviewer::domain::DecodeError lastErr{
-        mviewer::domain::DecodeErrorCode::CorruptData,
-        "Decoder claimed format but failed to decode: " + path, path};
+    mviewer::domain::DecodeError lastErr{mviewer::domain::DecodeErrorCode::CorruptData,
+                                         "Decoder claimed format but failed to decode: " + path,
+                                         path};
     for (const auto &d : snapshot())
     {
         if (d && d->canDecode(path))
@@ -151,7 +161,8 @@ DecoderRegistry::decodeFullResult(const std::string &path,
              "No registered decoder supports this format: " + path, path});
     }
 
-    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(std::move(lastErr));
+    return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+        std::move(lastErr));
 }
 
 ImageData DecoderRegistry::decodeFull(const std::string &path) const

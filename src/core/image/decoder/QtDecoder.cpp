@@ -313,8 +313,7 @@ ImageData QtDecoder::decodeFull(const std::string &path) const
 }
 
 mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
-QtDecoder::decodeFullResult(const std::string &path,
-                            mviewer::domain::ImageMetadata &outMeta) const
+QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const
 {
     bool exists = true;
     try
@@ -328,10 +327,13 @@ QtDecoder::decodeFullResult(const std::string &path,
     {
         exists = true; // Let QImageReader attempt to open natively
     }
-    if (!exists)
+    const bool isNetworkPath = (path.size() >= 2 && (path[0] == '/' || path[0] == '\\') &&
+                                (path[1] == '/' || path[1] == '\\'));
+    if (!exists && !isNetworkPath)
     {
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
-            {mviewer::domain::DecodeErrorCode::FileNotFound, "Image file not found: " + path, path});
+            {mviewer::domain::DecodeErrorCode::FileNotFound, "Image file not found: " + path,
+             path});
     }
 
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
@@ -352,8 +354,8 @@ QtDecoder::decodeFullResult(const std::string &path,
         else if (readerErr == QImageReader::InvalidDataError)
             code = mviewer::domain::DecodeErrorCode::CorruptData;
 
-        std::string msg = errStr.isEmpty() ? ("QtDecoder failed to decode " + path)
-                                           : errStr.toStdString();
+        std::string msg =
+            errStr.isEmpty() ? ("QtDecoder failed to decode " + path) : errStr.toStdString();
         qWarning("QtDecoder: failed to decode \"%s\": %s", path.c_str(), msg.c_str());
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
             {code, std::move(msg), path});

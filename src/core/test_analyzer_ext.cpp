@@ -148,7 +148,9 @@ static void testColorChecker()
     CHECK(a.patchCount() == 24, "all 24 patches sampled");
     // Sampled patch centers equal the reference colors -> Delta-E ~0.
     CHECK(a.meanDeltaE() < 1.0, "mean Delta-E ~0 vs reference patches");
-    printf("    mean Delta-E = %.3f\n", a.meanDeltaE());
+    CHECK(a.maxDeltaEPatch() >= 1 && a.maxDeltaEPatch() <= 24, "maxDeltaEPatch in [1, 24]");
+    CHECK(a.resultMetrics().count("maxDeltaEPatch") == 1, "resultMetrics has maxDeltaEPatch");
+    printf("    mean Delta-E = %.3f, max patch = %d\n", a.meanDeltaE(), a.maxDeltaEPatch());
 }
 
 static void testRegistryHasNew()

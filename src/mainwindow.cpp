@@ -717,7 +717,7 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
     ensureImageList();
     if (m_imageList && !m_imageList->isEmpty())
         m_compareView->setImagePool(m_imageList->paths(), imgs);
-    else if (imgs.size() > 2)
+    else if (imgs.size() >= 2)
         m_compareView->setImagePool(imgs, imgs);
     // M19: WorkspaceModel tracks the live compare set.
     if (m_workspace)

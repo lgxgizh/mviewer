@@ -26,6 +26,18 @@ std::filesystem::path pathFromUtf8(const std::string &path)
     if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.data(),
                             static_cast<int>(path.size()), wide.data(), length) != length)
         throw std::runtime_error("UTF-8 filesystem path conversion failed");
+
+    // On Windows, Win32 file APIs and std::filesystem require UNC network paths
+    // (e.g. "//server/share" or "\\server\share") to use backslashes.
+    if (wide.size() >= 2 && (wide[0] == L'/' || wide[0] == L'\\') &&
+        (wide[1] == L'/' || wide[1] == L'\\'))
+    {
+        for (wchar_t &wc : wide)
+        {
+            if (wc == L'/')
+                wc = L'\\';
+        }
+    }
     return std::filesystem::path(wide);
 #else
     return std::filesystem::path(path);
@@ -79,6 +91,11 @@ std::string normalizePathKey(std::string path)
         }
     }
 #endif
+    for (char &ch : path)
+    {
+        if (ch == '\\')
+            ch = '/';
+    }
     return path;
 }
 

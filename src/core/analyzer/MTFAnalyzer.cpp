@@ -1,5 +1,6 @@
 #include "core/analyzer/MTFAnalyzer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -57,7 +58,8 @@ void fft(std::vector<double> &re, std::vector<double> &im)
     }
 }
 
-std::vector<double> extractEdgeProfile(const ImageBuffer &v, int x0, int y0, int x1, int y1, int cpp)
+std::vector<double> extractEdgeProfile(const ImageBuffer &v, int x0, int y0, int x1, int y1,
+                                       int cpp)
 {
     const int w = x1 - x0;
     const int h = y1 - y0;
@@ -159,12 +161,21 @@ bool calculateMtf50(std::vector<double> &profile, double &outMtf50, double &outM
 
     if (profLen > 1)
     {
+        const auto maxIt = std::max_element(lsf.begin(), lsf.end());
+        const size_t peakIdx = static_cast<size_t>(std::distance(lsf.begin(), maxIt));
+        const double radius = std::max(4.0, static_cast<double>(profLen) * 0.5);
         for (size_t i = 0; i < profLen; ++i)
         {
-            const double wnd =
-                0.54 - 0.46 * std::cos(2.0 * M_PI * static_cast<double>(i) /
-                                       static_cast<double>(profLen - 1));
-            lsf[i] *= wnd;
+            const double dist = std::abs(static_cast<double>(i) - static_cast<double>(peakIdx));
+            if (dist >= radius)
+            {
+                lsf[i] = 0.0;
+            }
+            else
+            {
+                const double wnd = 0.54 + 0.46 * std::cos(M_PI * dist / radius);
+                lsf[i] *= wnd;
+            }
         }
     }
 

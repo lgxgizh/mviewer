@@ -5,11 +5,7 @@
 #include <cstring>
 #include <limits>
 
-#if defined(_MSC_VER)
-#include <immintrin.h>
-#elif defined(__GNUC__) || defined(__clang__)
-#include <immintrin.h>
-#endif
+#include "core/simd/CpuFeatures.h"
 
 namespace mviewer
 {
@@ -114,10 +110,9 @@ AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int W, in
             if (overlap <= 0)
                 continue;
 
-            const long long maxAllowedSad =
-                (bestSAD == std::numeric_limits<double>::infinity())
-                    ? std::numeric_limits<long long>::max()
-                    : static_cast<long long>(bestSAD * overlap);
+            const long long maxAllowedSad = (bestSAD == std::numeric_limits<double>::infinity())
+                                                ? std::numeric_limits<long long>::max()
+                                                : static_cast<long long>(bestSAD * overlap);
 
             long long sad = 0;
             const int len = colHi - colLo;
@@ -127,7 +122,8 @@ AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int W, in
                 const uint8_t *mp =
                     mv.data + static_cast<size_t>(y - dy) * mv.stride() + (colLo - dx);
                 int x = 0;
-#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+#if defined(MV_ARCH_X86) &&                                                                        \
+    (defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2))
                 __m128i vsum = _mm_setzero_si128();
                 for (; x + 16 <= len; x += 16)
                 {
@@ -160,8 +156,8 @@ AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int W, in
 }
 
 // Fine 1-pixel precision SAD search around coarse offset on full-resolution rasters.
-AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int fW, int fH,
-                       int coarseDx, int coarseDy, int scale, int maxShift)
+AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int fW, int fH, int coarseDx,
+                       int coarseDy, int scale, int maxShift)
 {
     double fineBestSAD = std::numeric_limits<double>::infinity();
     AlignOffset fineBest{coarseDx, coarseDy};
@@ -170,38 +166,47 @@ AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int fW, i
     const int fineMaxY = std::min(maxShift * scale, coarseDy + scale);
     const int fineMinX = std::max(-maxShift * scale, coarseDx - scale);
     const int fineMaxX = std::min(maxShift * scale, coarseDx + scale);
-    const int stepY = std::max(1, fH / 256);
+
+    // To prevent vertical phase-shift sampling aliasing (where skipping rows in steps > 1
+    // causes SAD to measure mismatched row phases between dy offsets), stepY must be 1.
+    // For large images, restrict the fine evaluation window to a centered region (up to 512x512)
+    // so stepY=1 remains fast while providing exact integer alignment.
+    const int winW = std::min(fW, 512);
+    const int winH = std::min(fH, 512);
+    const int startX = (fW - winW) / 2;
+    const int startY = (fH - winH) / 2;
 
     for (int dy = fineMinY; dy <= fineMaxY; ++dy)
     {
-        const int rowLo = std::max(0, dy);
-        const int rowHi = std::min(fH, fH + dy);
+        const int rowLo = std::max(startY, startY + dy);
+        const int rowHi = std::min(startY + winH, startY + winH + dy);
         if (rowHi <= rowLo)
             continue;
         for (int dx = fineMinX; dx <= fineMaxX; ++dx)
         {
-            const int colLo = std::max(0, dx);
-            const int colHi = std::min(fW, fW + dx);
+            const int colLo = std::max(startX, startX + dx);
+            const int colHi = std::min(startX + winW, startX + winW + dx);
             if (colHi <= colLo)
                 continue;
 
             const int len = colHi - colLo;
-            long long sad = 0;
-            int rowsCounted = 0;
-            const long long maxAllowedSad =
-                (fineBestSAD == std::numeric_limits<double>::infinity())
-                    ? std::numeric_limits<long long>::max()
-                    : static_cast<long long>(fineBestSAD *
-                                            (static_cast<double>(len) *
-                                             ((rowHi - rowLo) / stepY + 1)));
+            const int overlap = len * (rowHi - rowLo);
+            if (overlap <= 0)
+                continue;
 
-            for (int y = rowLo; y < rowHi; y += stepY)
+            const long long maxAllowedSad = (fineBestSAD == std::numeric_limits<double>::infinity())
+                                                ? std::numeric_limits<long long>::max()
+                                                : static_cast<long long>(fineBestSAD * overlap);
+
+            long long sad = 0;
+            for (int y = rowLo; y < rowHi; ++y)
             {
                 const uint8_t *rp = frv.data + static_cast<size_t>(y) * frv.stride() + colLo;
                 const uint8_t *mp =
                     fmv.data + static_cast<size_t>(y - dy) * fmv.stride() + (colLo - dx);
                 int x = 0;
-#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+#if defined(MV_ARCH_X86) &&                                                                        \
+    (defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2))
                 __m128i vsum = _mm_setzero_si128();
                 for (; x + 16 <= len; x += 16)
                 {
@@ -218,20 +223,16 @@ AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int fW, i
                     const int d = static_cast<int>(rp[x]) - static_cast<int>(mp[x]);
                     sad += (d < 0 ? -d : d);
                 }
-                ++rowsCounted;
+
                 if (sad >= maxAllowedSad)
                     break;
             }
 
-            if (rowsCounted > 0)
+            const double avg = static_cast<double>(sad) / static_cast<double>(overlap);
+            if (avg < fineBestSAD)
             {
-                const long long totalPixels = static_cast<long long>(len) * rowsCounted;
-                const double avg = static_cast<double>(sad) / static_cast<double>(totalPixels);
-                if (avg < fineBestSAD)
-                {
-                    fineBestSAD = avg;
-                    fineBest = {dx, dy};
-                }
+                fineBestSAD = avg;
+                fineBest = {dx, dy};
             }
         }
     }
@@ -269,8 +270,8 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
     if (fullRefGray.isNull() || fullMovGray.isNull())
         return {coarseDx, coarseDy};
 
-    return fineSearch(fullRefGray.view(), fullMovGray.view(), fullRefGray.width,
-                      fullRefGray.height, coarseDx, coarseDy, scale, maxShift);
+    return fineSearch(fullRefGray.view(), fullMovGray.view(), fullRefGray.width, fullRefGray.height,
+                      coarseDx, coarseDy, scale, maxShift);
 }
 
 ImageData Aligner::shift(const ImageData &src, int dx, int dy, uint8_t fill)

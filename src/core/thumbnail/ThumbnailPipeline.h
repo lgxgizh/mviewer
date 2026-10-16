@@ -252,8 +252,7 @@ struct ThumbnailPipeline
     }
 
     // Non-submitting cache probe: returns the cached thumbnail if present in
-    // memory at `size` (or any other size for the same path), else null without
-    // mutating demand or triggering scheduler work.
+    // memory at `size`, else null without mutating demand or triggering scheduler work.
     ImageData findCached(const std::string &path, int size)
     {
         if (path.empty() || size <= 0)
@@ -265,12 +264,6 @@ struct ThumbnailPipeline
             ++m_hits;
             m_lru.splice(m_lru.begin(), m_lru, it->second.lruIt);
             return it->second.data;
-        }
-        const std::string prefix = path + "\x1f";
-        for (const auto &entry : m_memCache)
-        {
-            if (entry.first.rfind(prefix, 0) == 0 && !entry.second.data.isNull())
-                return entry.second.data;
         }
         return ImageData{};
     }

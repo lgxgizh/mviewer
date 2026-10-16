@@ -32,7 +32,7 @@ class ColorCheckerAnalyzer : public Analyzer
                             .description = description(),
                             .version = "0.1.0",
                             .capabilities = capabilities(),
-                            .outputFields = {"mean_deltaE"}};
+                            .outputFields = {"mean_deltaE", "max_deltaE", "max_deltaE_patch"}};
     }
 
     bool analyze(const ImageFrame &frame) override;
@@ -46,6 +46,10 @@ class ColorCheckerAnalyzer : public Analyzer
     double maxDeltaE() const
     {
         return m_maxDE;
+    }
+    int maxDeltaEPatch() const
+    {
+        return m_maxPatch;
     }
     int patchCount() const
     {
