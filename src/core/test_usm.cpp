@@ -47,12 +47,13 @@ static void testIdentity()
 
 static void testEdgeEnhancement()
 {
-    const int w = 64;
-    const int h = 64;
-    ImageData src = makeImageData(w, h, PixelFormat::Grayscale8);
-    for (int y = 0; y < h; ++y)
+    const size_t w = 64;
+    const size_t h = 64;
+    ImageData src =
+        makeImageData(static_cast<int>(w), static_cast<int>(h), PixelFormat::Grayscale8);
+    for (size_t y = 0; y < h; ++y)
     {
-        for (int x = 0; x < w; ++x)
+        for (size_t x = 0; x < w; ++x)
         {
             src.buffer->data()[y * w + x] = (x < w / 2) ? 80 : 180;
         }
@@ -67,7 +68,7 @@ static void testEdgeEnhancement()
     ImageData dst = applyUsmSharpen(src, params);
     CHECK(!dst.isNull(), "edge test sharpening succeeded");
 
-    const int midY = h / 2;
+    const size_t midY = h / 2;
     const uint8_t darkEdge = dst.buffer->data()[midY * w + (w / 2 - 1)];
     const uint8_t brightEdge = dst.buffer->data()[midY * w + (w / 2)];
     CHECK(darkEdge < 80, "dark side of edge undershoots to enhance contrast");
@@ -91,13 +92,13 @@ static void testFormatCoverage()
     for (PixelFormat fmt : formats)
     {
         ImageData img = makeImageData(16, 16, fmt);
-        const int cpp = img.channelsPerPixel();
-        for (int y = 0; y < 16; ++y)
+        const size_t cpp = static_cast<size_t>(img.channelsPerPixel());
+        for (size_t y = 0; y < 16; ++y)
         {
-            for (int x = 0; x < 16; ++x)
+            for (size_t x = 0; x < 16; ++x)
             {
                 uint8_t *p = img.buffer->data() + (y * 16 + x) * cpp;
-                for (int c = 0; c < cpp; ++c)
+                for (size_t c = 0; c < cpp; ++c)
                     p[c] = static_cast<uint8_t>((x * 15 + y * 7 + c * 30) & 0xFF);
                 if (cpp == 4)
                     p[3] = 210; // specific alpha
@@ -112,9 +113,9 @@ static void testFormatCoverage()
         if (cpp == 4)
         {
             bool alphaPreserved = true;
-            for (int y = 0; y < 16; ++y)
+            for (size_t y = 0; y < 16; ++y)
             {
-                for (int x = 0; x < 16; ++x)
+                for (size_t x = 0; x < 16; ++x)
                 {
                     if (res.buffer->data()[(y * 16 + x) * cpp + 3] != 210)
                         alphaPreserved = false;
@@ -128,9 +129,9 @@ static void testFormatCoverage()
 static void testLumaOnly()
 {
     ImageData src = makeImageData(20, 20, PixelFormat::RGB24);
-    for (int y = 0; y < 20; ++y)
+    for (size_t y = 0; y < 20; ++y)
     {
-        for (int x = 0; x < 20; ++x)
+        for (size_t x = 0; x < 20; ++x)
         {
             uint8_t *p = src.buffer->data() + (y * 20 + x) * 3;
             p[0] = (x < 10) ? 50 : 200;
@@ -147,8 +148,8 @@ static void testLumaOnly()
 
     ImageData dst = applyUsmSharpen(src, params);
     CHECK(!dst.isNull(), "luma-only sharpening succeeded");
-    const uint8_t *darkP = dst.buffer->data() + (10 * 20 + 9) * 3;
-    const uint8_t *brightP = dst.buffer->data() + (10 * 20 + 10) * 3;
+    const uint8_t *darkP = dst.buffer->data() + (static_cast<size_t>(10) * 20 + 9) * 3;
+    const uint8_t *brightP = dst.buffer->data() + (static_cast<size_t>(10) * 20 + 10) * 3;
     CHECK(darkP[0] < 50 && darkP[1] < 60 && darkP[2] < 70, "dark edge sharpened in luma-only");
     CHECK(brightP[0] > 200 && brightP[1] > 210 && brightP[2] > 220,
           "bright edge sharpened in luma-only");

@@ -44,8 +44,10 @@ bool blurHorizontal(const uint8_t *src, int w, int h, int cpp, int colorChannels
     {
         if ((y & 15) == 0 && cancelled && cancelled())
             return false;
-        const uint8_t *srcRow = src + static_cast<size_t>(y) * static_cast<size_t>(w) * cpp;
-        uint8_t *tempRow = temp + static_cast<size_t>(y) * static_cast<size_t>(w) * colorChannels;
+        const uint8_t *srcRow =
+            src + static_cast<size_t>(y) * static_cast<size_t>(w) * static_cast<size_t>(cpp);
+        uint8_t *tempRow = temp + static_cast<size_t>(y) * static_cast<size_t>(w) *
+                                      static_cast<size_t>(colorChannels);
         for (int x = 0; x < w; ++x)
         {
             for (int c = 0; c < colorChannels; ++c)
@@ -54,9 +56,10 @@ bool blurHorizontal(const uint8_t *src, int w, int h, int cpp, int colorChannels
                 for (int k = 0; k < kSize; ++k)
                 {
                     const int sx = std::clamp(x - radius + k, 0, w - 1);
-                    acc += srcRow[sx * cpp + c] * kernel[k];
+                    acc += srcRow[static_cast<size_t>(sx) * cpp + c] * kernel[k];
                 }
-                tempRow[x * colorChannels + c] = static_cast<uint8_t>((acc + 8192) >> 14);
+                tempRow[static_cast<size_t>(x) * colorChannels + c] =
+                    static_cast<uint8_t>((acc + 8192) >> 14);
             }
         }
     }
@@ -69,39 +72,43 @@ bool blurVerticalAndCombine(const uint8_t *src, const uint8_t *temp, int w, int 
                             const std::function<bool()> &cancelled)
 {
     const int kSize = static_cast<int>(kernel.size());
-    const size_t tempRowStride = static_cast<size_t>(w) * colorChannels;
+    const size_t tempRowStride = static_cast<size_t>(w) * static_cast<size_t>(colorChannels);
     for (int y = 0; y < h; ++y)
     {
         if ((y & 15) == 0 && cancelled && cancelled())
             return false;
-        const uint8_t *srcRow = src + static_cast<size_t>(y) * static_cast<size_t>(w) * cpp;
-        uint8_t *dstRow = dst + static_cast<size_t>(y) * static_cast<size_t>(w) * cpp;
+        const uint8_t *srcRow =
+            src + static_cast<size_t>(y) * static_cast<size_t>(w) * static_cast<size_t>(cpp);
+        uint8_t *dstRow =
+            dst + static_cast<size_t>(y) * static_cast<size_t>(w) * static_cast<size_t>(cpp);
         for (int x = 0; x < w; ++x)
         {
+            const size_t px = static_cast<size_t>(x) * cpp;
             for (int c = 0; c < colorChannels; ++c)
             {
                 int acc = 0;
                 for (int k = 0; k < kSize; ++k)
                 {
                     const int sy = std::clamp(y - radius + k, 0, h - 1);
-                    acc += temp[static_cast<size_t>(sy) * tempRowStride + x * colorChannels + c] *
+                    acc += temp[static_cast<size_t>(sy) * tempRowStride +
+                                static_cast<size_t>(x) * colorChannels + c] *
                            kernel[k];
                 }
                 const int blurVal = (acc + 8192) >> 14;
-                const int origVal = srcRow[x * cpp + c];
+                const int origVal = srcRow[px + c];
                 const int diff = origVal - blurVal;
                 if (std::abs(diff) >= threshold)
                 {
                     const int sharp = static_cast<int>(std::round(origVal + amount * diff));
-                    dstRow[x * cpp + c] = static_cast<uint8_t>(std::clamp(sharp, 0, 255));
+                    dstRow[px + c] = static_cast<uint8_t>(std::clamp(sharp, 0, 255));
                 }
                 else
                 {
-                    dstRow[x * cpp + c] = static_cast<uint8_t>(origVal);
+                    dstRow[px + c] = static_cast<uint8_t>(origVal);
                 }
             }
             if (cpp == 4)
-                dstRow[x * cpp + 3] = srcRow[x * cpp + 3];
+                dstRow[px + 3] = srcRow[px + 3];
         }
     }
     return true;
@@ -141,10 +148,12 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
             for (int k = 0; k < kSize; ++k)
             {
                 const int sy = std::clamp(y - radius + k, 0, h - 1);
-                acc += lumaTemp[static_cast<size_t>(sy) * static_cast<size_t>(w) + x] * kernel[k];
+                acc += lumaTemp[static_cast<size_t>(sy) * static_cast<size_t>(w) +
+                                static_cast<size_t>(x)] *
+                       kernel[k];
             }
             const int blurLuma = (acc + 8192) >> 14;
-            const int origLuma = lumaSrc[rowOffset + x];
+            const int origLuma = lumaSrc[rowOffset + static_cast<size_t>(x)];
             const int diffLuma = origLuma - blurLuma;
             int delta = 0;
             if (std::abs(diffLuma) >= threshold)
@@ -153,14 +162,15 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
             const int rIdx = isBgr ? 2 : 0;
             const int gIdx = 1;
             const int bIdx = isBgr ? 0 : 2;
-            dstRow[x * cpp + rIdx] =
-                static_cast<uint8_t>(std::clamp(srcRow[x * cpp + rIdx] + delta, 0, 255));
-            dstRow[x * cpp + gIdx] =
-                static_cast<uint8_t>(std::clamp(srcRow[x * cpp + gIdx] + delta, 0, 255));
-            dstRow[x * cpp + bIdx] =
-                static_cast<uint8_t>(std::clamp(srcRow[x * cpp + bIdx] + delta, 0, 255));
+            const size_t px = static_cast<size_t>(x) * cpp;
+            dstRow[px + rIdx] =
+                static_cast<uint8_t>(std::clamp(srcRow[px + rIdx] + delta, 0, 255));
+            dstRow[px + gIdx] =
+                static_cast<uint8_t>(std::clamp(srcRow[px + gIdx] + delta, 0, 255));
+            dstRow[px + bIdx] =
+                static_cast<uint8_t>(std::clamp(srcRow[px + bIdx] + delta, 0, 255));
             if (cpp == 4)
-                dstRow[x * cpp + 3] = srcRow[x * cpp + 3];
+                dstRow[px + 3] = srcRow[px + 3];
         }
     }
     return true;
