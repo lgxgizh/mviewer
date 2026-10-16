@@ -5,6 +5,7 @@
 
 #include "core/image/ImageFormats.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>

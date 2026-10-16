@@ -4,6 +4,7 @@
 #include "domain/SearchQuery.h"
 #include "domain/SearchResult.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QHeaderView>

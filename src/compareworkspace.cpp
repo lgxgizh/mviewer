@@ -8,7 +8,9 @@
 #include "core/image/SourceImage.h"
 #include "core/render/DisplayResample.h"
 
+#include <QApplication>
 #include <QScreen>
+#include <QTimer>
 
 #include <algorithm>
 #include <utility>
@@ -22,7 +24,8 @@ void cancelInFlightTasks(TaskScheduler::TaskHandle &roiTask, uint64_t &roiGen,
                          TaskScheduler::TaskHandle &histTask, uint64_t &histGen,
                          TaskScheduler::TaskHandle &diffTask, uint64_t &diffGen)
 {
-    auto cancelAndBump = [](TaskScheduler::TaskHandle &task, uint64_t &gen) {
+    auto cancelAndBump = [](TaskScheduler::TaskHandle &task, uint64_t &gen)
+    {
         if (task)
             TaskScheduler::cancel(task);
         task.reset();
@@ -33,8 +36,7 @@ void cancelInFlightTasks(TaskScheduler::TaskHandle &roiTask, uint64_t &roiGen,
     cancelAndBump(diffTask, diffGen);
 }
 
-void syncSessionStateOnLoad(mviewer::ui::CompareSessionState *state,
-                            const QStringList &paths,
+void syncSessionStateOnLoad(mviewer::ui::CompareSessionState *state, const QStringList &paths,
                             const QVector<int> &frameIndices)
 {
     if (!state)
@@ -54,57 +56,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_diffRenderer = std::make_unique<mviewer::ui::CompareDiffRenderer>(this);
     m_displayManager = std::make_unique<mviewer::ui::CompareDisplayManager>(this);
 
-    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::fitRequested, this, &CompareWorkspace::fitAll);
-    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiChanged, this,
-            [this](const mviewer::domain::Selection &sel) {
-                if (sel != m_lastSelection)
-                    applySelectionToAll(sel);
-            });
-    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiCleared, this, &CompareWorkspace::clearROI);
-    connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::thresholdChanged, this,
-            [this](uint8_t th) {
-                if (m_thresholdValue != th)
-                {
-                    m_thresholdValue = th;
-                    if (m_thresholdSlider && m_thresholdSlider->value() != th)
-                    {
-                        const QSignalBlocker b(m_thresholdSlider);
-                        m_thresholdSlider->setValue(th);
-                    }
-                    if (m_thresholdLabel)
-                        m_thresholdLabel->setText(QString::number(th));
-                    refreshAllDiffOverlays();
-                }
-            });
-    connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::splitRatioChanged, this,
-            [this](double ratio) {
-                if (std::abs(m_splitPos - ratio) > 1e-4)
-                {
-                    m_splitPos = ratio;
-                    if (m_compareCanvas)
-                        m_compareCanvas->update();
-                }
-            });
-    connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::blinkStateChanged, this,
-            [this](bool active) {
-                if (m_blinkChk && m_blinkChk->isChecked() != active)
-                    m_blinkChk->setChecked(active);
-            });
-    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::uniformScaleToggled, this,
-            [this](bool on) {
-                if (m_uniformScaleChk && m_uniformScaleChk->isChecked() != on)
-                    m_uniformScaleChk->setChecked(on);
-            });
-    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::syncZoomToggled, this,
-            [this](bool on) {
-                if (m_syncZoomChk && m_syncZoomChk->isChecked() != on)
-                    m_syncZoomChk->setChecked(on);
-            });
-    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::syncDragToggled, this,
-            [this](bool on) {
-                if (m_syncDragChk && m_syncDragChk->isChecked() != on)
-                    m_syncDragChk->setChecked(on);
-            });
+    setupControllerSignals();
 
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
@@ -162,6 +114,70 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     updateROIAvailabilityStatus();
     syncContextualCompareControls();
     regroupCompareChrome();
+}
+
+void CompareWorkspace::setupControllerSignals()
+{
+    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::fitRequested, this,
+            &CompareWorkspace::fitAll);
+    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiChanged, this,
+            [this](const mviewer::domain::Selection &sel)
+            {
+                if (sel != m_lastSelection)
+                    applySelectionToAll(sel);
+            });
+    connect(m_roiController.get(), &mviewer::ui::CompareRoiController::roiCleared, this,
+            &CompareWorkspace::clearROI);
+    connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::thresholdChanged, this,
+            [this](uint8_t th)
+            {
+                if (m_thresholdValue != th)
+                {
+                    m_thresholdValue = th;
+                    if (m_thresholdSlider && m_thresholdSlider->value() != th)
+                    {
+                        const QSignalBlocker b(m_thresholdSlider);
+                        m_thresholdSlider->setValue(th);
+                    }
+                    if (m_thresholdLabel)
+                        m_thresholdLabel->setText(QString::number(th));
+                    refreshAllDiffOverlays();
+                }
+            });
+    connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::splitRatioChanged, this,
+            [this](double ratio)
+            {
+                if (std::abs(m_splitPos - ratio) > 1e-4)
+                {
+                    m_splitPos = ratio;
+                    if (m_compareCanvas)
+                        m_compareCanvas->update();
+                }
+            });
+    connect(m_diffRenderer.get(), &mviewer::ui::CompareDiffRenderer::blinkStateChanged, this,
+            [this](bool active)
+            {
+                if (m_blinkChk && m_blinkChk->isChecked() != active)
+                    m_blinkChk->setChecked(active);
+            });
+    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::uniformScaleToggled, this,
+            [this](bool on)
+            {
+                if (m_uniformScaleChk && m_uniformScaleChk->isChecked() != on)
+                    m_uniformScaleChk->setChecked(on);
+            });
+    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::syncZoomToggled, this,
+            [this](bool on)
+            {
+                if (m_syncZoomChk && m_syncZoomChk->isChecked() != on)
+                    m_syncZoomChk->setChecked(on);
+            });
+    connect(m_displayManager.get(), &mviewer::ui::CompareDisplayManager::syncDragToggled, this,
+            [this](bool on)
+            {
+                if (m_syncDragChk && m_syncDragChk->isChecked() != on)
+                    m_syncDragChk->setChecked(on);
+            });
 }
 
 void CompareWorkspace::applyCompareSafeInsets()
@@ -595,7 +611,8 @@ void CompareWorkspace::setSyncEnabled(bool on)
 
 // rebuildCells() lives in compareworkspace_render.cpp (ADR 014 TU split).
 
-// onLayoutChanged() and onCustomGridChanged() live in compareworkspace_layout.cpp (ADR 014 TU split).
+// onLayoutChanged() and onCustomGridChanged() live in compareworkspace_layout.cpp (ADR 014 TU
+// split).
 
 void CompareWorkspace::updateFrameControl()
 {

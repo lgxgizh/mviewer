@@ -211,6 +211,7 @@ class CompareWorkspace : public QWidget
 
     void bindDisplayColorScreen();
     void onDisplayScreenChanged();
+    void setupControllerSignals();
     void buildSyncControls();
     QWidget *buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
                                    QHBoxLayout *&toolLayout, QHBoxLayout *&toolActionsLayout);
