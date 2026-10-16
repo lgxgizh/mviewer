@@ -269,12 +269,14 @@ void installSystemSchemeFollower()
     if (installed || qApp == nullptr)
         return;
     installed = true;
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, qApp,
                      [](Qt::ColorScheme)
                      {
                          if (g_mode == ThemeMode::System)
                              Theme::applyTheme(ThemeMode::System);
                      });
+#endif
 }
 
 } // namespace
@@ -363,7 +365,12 @@ QString Theme::themeModeName(ThemeMode mode)
 
 bool Theme::systemPrefersDark()
 {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
     return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+#else
+    const QPalette pal = QGuiApplication::palette();
+    return pal.color(QPalette::WindowText).lightness() > pal.color(QPalette::Window).lightness();
+#endif
 }
 
 ThemeTokens Theme::tokensFor(ThemeMode mode, bool prefersDark)
