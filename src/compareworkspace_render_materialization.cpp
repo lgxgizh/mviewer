@@ -14,6 +14,7 @@
 
 #include <QDataStream>
 #include <QResizeEvent>
+#include <QScreen>
 #include <QTimer>
 #include <QVariant>
 #include <QWindow>

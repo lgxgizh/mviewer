@@ -28,6 +28,7 @@
 
 #include <QApplication>
 #include <QFileInfo>
+#include <QScreen>
 #include <QTimer>
 #include <QWindow>
 
