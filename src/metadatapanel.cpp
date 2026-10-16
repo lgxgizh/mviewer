@@ -197,7 +197,8 @@ void MetadataPanel::setImage(const QString &path)
 
 void MetadataPanel::setFrame(const std::shared_ptr<ImageFrame> &frame)
 {
-    if (!frame || frame->metadata().filePath != m_currentPath || m_currentPath.isEmpty())
+    if (!frame || frame->metadata().filePath != m_currentPath.toStdString() ||
+        m_currentPath.isEmpty())
         return;
     // The metadata service supplies the container/EXIF tree. Replace only the
     // image metadata on frame changes so Current Frame/Page follows playback
