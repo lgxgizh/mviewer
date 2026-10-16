@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.0.130] - 2026-10-16
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.130**.
+
+### UI / UX Enhancements
+
+- **对比图片模式文件名显示放大与样式统一（Compare Mode Filename Overlay Enhancement）**：
+  - 放大对比模式文件名悬浮字体：`kFilenameOverlayPointSize` 由 13pt 提升至 15pt bold，最大高度扩充至 120px，提供更清晰易读的文件名呈现；
+  - 左右分割模式与多图网格模式视觉体验无缝统一：`ComparePaneHeader` 升级为黑色半透明气泡卡片风格（`background: rgba(0, 0, 0, 120)`，圆角 4px，纯白加粗文字 `#ffffff`，半透明高对比度序号徽标），完全对齐左右分割模式的文件名悬浮效果。
+
 ## [1.0.129] - 2026-10-16
 
 ### Release

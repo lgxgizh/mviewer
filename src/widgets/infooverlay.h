@@ -12,8 +12,8 @@ namespace mviewer::ui
 {
 
 inline constexpr int kFilenameOverlayPad = 8;
-inline constexpr int kFilenameOverlayPointSize = 13;
-inline constexpr int kFilenameOverlayMaxHeight = 110;
+inline constexpr int kFilenameOverlayPointSize = 15;
+inline constexpr int kFilenameOverlayMaxHeight = 120;
 
 inline QRect filenameOverlayRect(const QFontMetrics &metrics, const QRect &pane,
                                  const QString &text)
@@ -25,7 +25,7 @@ inline QRect filenameOverlayRect(const QFontMetrics &metrics, const QRect &pane,
         metrics.boundingRect(QRect(0, 0, maxWidth, kFilenameOverlayMaxHeight),
                              Qt::TextWrapAnywhere | Qt::AlignLeft | Qt::AlignTop, text);
     const int height =
-        std::clamp(bound.height() + 6, metrics.height() + 6, kFilenameOverlayMaxHeight);
+        std::clamp(bound.height() + 8, metrics.height() + 8, kFilenameOverlayMaxHeight);
     return QRect(pane.left() + kFilenameOverlayPad, pane.top() + kFilenameOverlayPad, maxWidth,
                  height);
 }
@@ -34,17 +34,25 @@ inline QRect drawFilenameOverlay(QPainter &p, const QRect &pane, const QString &
 {
     if (text.isEmpty() || pane.width() < 24)
         return {};
+    p.save();
     QFont font = p.font();
     font.setBold(true);
     font.setPointSize(kFilenameOverlayPointSize);
     p.setFont(font);
     const QRect box = filenameOverlayRect(QFontMetrics(font), pane, text);
     if (box.isEmpty())
+    {
+        p.restore();
         return {};
-    p.fillRect(box, QColor(0, 0, 0, 110));
+    }
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0, 0, 0, 120));
+    p.drawRoundedRect(box, 4, 4);
     p.setPen(Qt::white);
-    p.drawText(box.adjusted(4, 2, -4, -2), Qt::TextWrapAnywhere | Qt::AlignLeft | Qt::AlignTop,
+    p.drawText(box.adjusted(6, 4, -6, -4), Qt::TextWrapAnywhere | Qt::AlignLeft | Qt::AlignTop,
                text);
+    p.restore();
     return box;
 }
 

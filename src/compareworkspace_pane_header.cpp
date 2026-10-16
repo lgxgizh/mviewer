@@ -3,8 +3,8 @@
 #include "compareworkspace_caption.h"
 #include "compareworkspace_p.h"
 
-#include "Theme.h"
 #include "core/image/ImageFrame.h"
+#include "widgets/infooverlay.h"
 
 #include <QFontMetrics>
 #include <QHBoxLayout>
@@ -16,7 +16,7 @@ namespace
 {
 
 constexpr int kPad = 8;
-constexpr int kChip = 22;
+constexpr int kChip = 24;
 
 // Camera-style names ("DSC_2026_10_13_..._v3.jpg") have no spaces, so a
 // word-wrapping QLabel cannot break them. Offer a zero-width break after the
@@ -47,6 +47,7 @@ class ComparePaneHeader : public QWidget
     explicit ComparePaneHeader(QWidget *parent) : QWidget(parent)
     {
         setObjectName(QStringLiteral("comparePaneHeader"));
+        setAttribute(Qt::WA_StyledBackground, true);
         setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
         auto *row = new QHBoxLayout(this);
         row->setContentsMargins(kPad, kPad, kPad, kPad);
@@ -58,14 +59,18 @@ class ComparePaneHeader : public QWidget
         m_badge->setFixedSize(kChip, kChip);
         m_badge->setAttribute(Qt::WA_TransparentForMouseEvents);
         m_badge->setStyleSheet(QStringLiteral(
-            "QLabel#paneIndexBadge{background:rgba(0,0,0,120);color:rgba(255,255,255,210);"
-            "border-radius:3px;font-weight:700;font-size:13px;}"));
+            "QLabel#paneIndexBadge{background:rgba(255,255,255,45);color:#ffffff;"
+            "border-radius:3px;font-weight:700;font-size:14px;}"));
         m_badge->hide();
         row->addWidget(m_badge, 0, Qt::AlignVCenter);
 
         m_name = new QLabel(this);
         m_name->setObjectName(QStringLiteral("paneHeaderName"));
         m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        QFont nameFont = m_name->font();
+        nameFont.setBold(true);
+        nameFont.setPointSize(mviewer::ui::kFilenameOverlayPointSize);
+        m_name->setFont(nameFont);
         // Ignored: the filename must never size the grid column. With
         // Preferred/Expanding, a long name without break points (e.g.
         // "DSC_..._v3.jpg") became the column's minimum width and squeezed
@@ -73,12 +78,11 @@ class ComparePaneHeader : public QWidget
         m_name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
         m_name->setMinimumWidth(0);
         m_name->setStyleSheet(
-            QStringLiteral("QLabel#paneHeaderName{color:%1;background:transparent;}")
-                .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
+            QStringLiteral("QLabel#paneHeaderName{color:#ffffff;font-weight:700;background:transparent;}"));
         row->addWidget(m_name, 1, Qt::AlignVCenter);
 
-        setStyleSheet(QStringLiteral("QWidget#comparePaneHeader{background:%1;}")
-                          .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1)));
+        setStyleSheet(QStringLiteral(
+            "QWidget#comparePaneHeader{background:rgba(0,0,0,120);border-radius:4px;}"));
         setFixedHeight(oneLineHeight(QFontMetrics(m_name->font())));
         hide();
     }
