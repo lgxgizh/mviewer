@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.0.132] - 2026-10-16
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.132**.
+
+### Product Quality, Safety & Capability Enhancements
+
+- **原图安全守护与确认弹窗（File Safety on Rotate / Flip）**：
+  - 旋转/翻转（Ctrl+R / Ctrl+Shift+R）覆写磁盘原图前增加确认提示弹窗，并提供“不再提示”复选框（配置项 `confirmModifyFile`，默认开启，可在“首选项 → 常规”中随时重新启用）；
+  - `ImageFileRotate` 在重写像素时完整保留源图片的 ICC Profile（`QColorSpace::iccProfile`）与文本元数据（EXIF/XMP/IPTC），并在 `Encoder::encode` / `encodeToBuffer` 中应用，杜绝旋转导致的 ICC 配置文件与元数据静默丢失。
+- **导出元数据剥离开关真闭环（Export Metadata Strip Realization）**：
+  - 导出/批处理管线（`ExportJob_run.cpp`）全面接通 `cfg.stripMetadata` 配置：当用户取消勾选“剥离元数据 (EXIF/ICC)”时，自动提取原图解码的 ICC Profile（`MViewer.DisplayICC.Base64`）和 `textKeys`，并写入导出的目标图片中，实现真正的元数据保留与剥离控制。
+- **专业对比带标快照（Annotated Comparison Snapshot）**：
+  - 全面升级对比模式截图功能（`CompareWorkspace::grabComparisonView`，Ctrl+C 复制 / Ctrl+S 保存）：截取的对比图片底部自动合成专业的数据评估摘要条，包含当前对比模式徽标（左右分割、卷帘、叠加、棋盘格、差异高亮、网格等）、像素缩放比例（100%、150% 等）、双图对比详情（`A: ... vs B: ...`）、PSNR / SSIM 量化评测指标以及时间戳水印，直接满足算法工程师日常发帖、汇报、缺陷单归档与评估需求。
+
 ## [1.0.131] - 2026-10-16
 
 ### Release

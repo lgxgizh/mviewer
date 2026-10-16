@@ -4,6 +4,7 @@
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
 
+#include <QColorSpace>
 #include <QFileDevice>
 #include <QFileInfo>
 #include <QIODevice>
@@ -178,7 +179,8 @@ bool atomicWriteBytes(const QString &path, const std::vector<uint8_t> &bytes, st
 // Load with auto-orientation, then destroy the reader before any overwrite so
 // Windows releases the share lock (QImageReader can keep the file open).
 bool loadOrientedImage(const QString &path, QImage *outImage, std::string *formatOut,
-                       std::string *err)
+                       std::vector<uint8_t> *iccOut,
+                       std::vector<std::pair<std::string, std::string>> *textOut, std::string *err)
 {
     QImageReader reader(path);
     reader.setAutoTransform(true);
@@ -194,6 +196,24 @@ bool loadOrientedImage(const QString &path, QImage *outImage, std::string *forma
         QByteArray fmt = reader.format();
         *formatOut = fmt.isEmpty() ? std::string() : lowerAscii(fmt.toStdString());
     }
+    if (iccOut)
+    {
+        const QColorSpace cs = image.colorSpace();
+        if (cs.isValid())
+        {
+            const QByteArray icc = cs.iccProfile();
+            if (!icc.isEmpty())
+                *iccOut = std::vector<uint8_t>(icc.cbegin(), icc.cend());
+        }
+    }
+    if (textOut)
+    {
+        const QStringList keys = reader.textKeys();
+        for (const QString &k : keys)
+        {
+            textOut->emplace_back(k.toStdString(), reader.text(k).toStdString());
+        }
+    }
     *outImage = std::move(image);
     return true;
 }
@@ -208,13 +228,17 @@ std::string resolveEncodeFormat(const std::string &readerFormat, const std::stri
     return format;
 }
 
-bool encodeRotated(const ImageData &rotated, const std::string &format, std::vector<uint8_t> *out,
-                   std::string *err)
+bool encodeRotated(const ImageData &rotated, const std::string &format,
+                   const std::vector<uint8_t> &icc,
+                   const std::vector<std::pair<std::string, std::string>> &text,
+                   std::vector<uint8_t> *out, std::string *err)
 {
     Encoder::Params params;
     params.quality = 95;
     if (format == "png" || format == "bmp")
         params.quality = -1;
+    params.iccProfile = icc;
+    params.textMetadata = text;
     *out = Encoder::encodeToBuffer(rotated, format, params);
     if (out->empty())
     {
@@ -270,8 +294,10 @@ ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelO
 
     QImage original;
     std::string readerFormat;
+    std::vector<uint8_t> icc;
+    std::vector<std::pair<std::string, std::string>> text;
     std::string err;
-    if (!loadOrientedImage(qPath, &original, &readerFormat, &err))
+    if (!loadOrientedImage(qPath, &original, &readerFormat, &icc, &text, &err))
         return failResult(err, ImageRotateError::ReadFailed);
 
     const ImageData src = mvcore::fromQImage(original);
@@ -284,7 +310,7 @@ ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelO
 
     const std::string format = resolveEncodeFormat(readerFormat, suffix);
     std::vector<uint8_t> encoded;
-    if (!encodeRotated(transformed, format, &encoded, &err))
+    if (!encodeRotated(transformed, format, icc, text, &encoded, &err))
         return failResult(err, ImageRotateError::EncodeFailed);
 
     ImageRotateError writeCode = ImageRotateError::WriteFailed;

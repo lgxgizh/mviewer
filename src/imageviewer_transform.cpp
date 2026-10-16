@@ -11,9 +11,11 @@
 #include "thumbnailprovider.h"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QDir>
 #include <QMessageBox>
 #include <QPointer>
+#include <QSettings>
 
 #include <functional>
 #include <memory>
@@ -60,6 +62,34 @@ LooseIo classifyLooseIo(const QString &error)
         error.contains(QString::fromUtf8("主机")) || error.contains(QLatin1String("\\\\")))
         return LooseIo::Network;
     return LooseIo::None;
+}
+
+bool confirmImageViewerTransform(QWidget *parent, bool rotate)
+{
+    QSettings settings;
+    if (!settings.value(QStringLiteral("confirmModifyFile"), true).toBool())
+        return true;
+
+    const QString prompt = rotate ? QObject::tr("旋转将直接修改并覆盖原图像文件。\n是否继续？")
+                                  : QObject::tr("翻转将直接修改并覆盖原图像文件。\n是否继续？");
+
+    QMessageBox box(parent);
+    box.setIcon(QMessageBox::Question);
+    box.setWindowTitle(QObject::tr("修改原文件确认"));
+    box.setText(prompt);
+    box.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+    box.setDefaultButton(QMessageBox::Ok);
+    auto *cb = new QCheckBox(QObject::tr("不再提示"), &box);
+    box.setCheckBox(cb);
+
+    const int res = box.exec();
+    if (res != QMessageBox::Ok && res != QMessageBox::Yes && res != QDialog::Accepted)
+        return false;
+
+    if (cb->isChecked())
+        settings.setValue(QStringLiteral("confirmModifyFile"), false);
+
+    return true;
 }
 
 struct TransformState
@@ -228,6 +258,9 @@ bool ImageViewer::rotateImage(int angle)
     if (property("mviewerFileTransformBusy").toBool())
         return true;
 
+    if (!confirmImageViewerTransform(this, true))
+        return true;
+
     QString path;
     if (!startFileTransform(this, &path))
         return true;
@@ -254,6 +287,9 @@ bool ImageViewer::flipImage(bool horizontal)
     if (m_currentPath.isEmpty())
         return false;
     if (property("mviewerFileTransformBusy").toBool())
+        return true;
+
+    if (!confirmImageViewerTransform(this, false))
         return true;
 
     QString path;

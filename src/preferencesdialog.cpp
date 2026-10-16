@@ -89,6 +89,10 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_confirmDelete->setChecked(s.value("confirmDelete", true).toBool());
     gl->addRow(m_confirmDelete);
 
+    m_confirmModifyFile = new QCheckBox(tr("修改原文件前确认（旋转/翻转）"));
+    m_confirmModifyFile->setChecked(s.value("confirmModifyFile", true).toBool());
+    gl->addRow(m_confirmModifyFile);
+
     m_gpuAcceleration = new QCheckBox(tr("启用 GPU 硬件加速渲染"));
     m_gpuAcceleration->setChecked(s.value("gpuAcceleration", true).toBool());
     gl->addRow(m_gpuAcceleration);
@@ -182,6 +186,7 @@ void PreferencesDialog::accept()
     s.setValue("slideshowInterval", m_slideshowInterval->value());
     s.setValue("slideshowWrap", m_slideshowWrap->isChecked());
     s.setValue("confirmDelete", m_confirmDelete->isChecked());
+    s.setValue("confirmModifyFile", m_confirmModifyFile->isChecked());
     s.setValue("gpuAcceleration", m_gpuAcceleration->isChecked());
     s.setValue("autoAlignBeforeDiff", m_autoAlign->isChecked());
     s.setValue("defaultAnalysisOverlay", m_analysisOverlay->currentData().toInt());

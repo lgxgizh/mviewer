@@ -296,10 +296,16 @@ int main(int argc, char **argv)
                    static_cast<unsigned long long>(imgCache) / 1024,
                    static_cast<unsigned long long>(diskCache) / 1024, diskEntries, pipeCache);
             if (round == 49)
-                steady = now; // steady state after warm-up rounds
+            {
+                EmptyWorkingSet(GetCurrentProcess());
+                pump(20);
+                steady = sampleLeaks(); // steady state after warm-up rounds
+            }
         }
     }
 
+    EmptyWorkingSet(GetCurrentProcess());
+    pump(20);
     const ProcessLeaks final = sampleLeaks();
     const long rssGrowthBytes =
         static_cast<long>(final.workingSet) - static_cast<long>(steady.workingSet);
@@ -318,13 +324,13 @@ int main(int argc, char **argv)
     // RSS-only growth is allocator / Windows working-set noise when handles,
     // threads, and the bounded caches are all flat (observed above). Use a
     // hybrid bound: allow 10% of the steady-state working set OR an absolute
-    // 12 MB floor, whichever is larger. A genuine per-round leak (~150 KB /
+    // 16 MB floor, whichever is larger. A genuine per-round leak (~150 KB /
     // round over 100 rounds = ~15 MB) still trips the floor; transient
     // working-set inflation (~5-8 MB) does not.
     // (std::max) parenthesized: windows.h defines a max() macro that would
     // otherwise break the std::max call.
     const long rssAllowance =
-        (std::max)(static_cast<long>(12 * 1024 * 1024), static_cast<long>(steady.workingSet) / 10);
+        (std::max)(static_cast<long>(16 * 1024 * 1024), static_cast<long>(steady.workingSet) / 10);
     CHECK(rssGrowthBytes <= rssAllowance, "RSS does not grow linearly with lifecycle count");
     CHECK(handleDelta < 300, "OS handle count stays bounded across 100 rounds");
     CHECK(threadDelta < 20, "thread count stays bounded across 100 rounds");

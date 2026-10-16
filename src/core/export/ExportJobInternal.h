@@ -7,6 +7,11 @@
 #include <optional>
 #include <system_error>
 
+namespace mviewer::domain
+{
+struct ImageMetadata;
+}
+
 namespace mviewer::exportjob
 {
 
@@ -24,7 +29,8 @@ struct ReportRow
 ImageData maybeResize(const ImageData &data, const ExportJobConfig &cfg);
 ImageData maybeWatermark(const ImageData &data, const ExportJobConfig &cfg);
 std::string extensionFor(const std::string &format);
-ImageData decodeSource(const std::string &path, const ExportJobConfig &cfg);
+ImageData decodeSource(const std::string &path, const ExportJobConfig &cfg,
+                       mviewer::domain::ImageMetadata *outMeta = nullptr);
 std::optional<ReportRow> analyzeSource(const std::filesystem::path &path);
 std::string csvEscape(const std::string &value);
 std::string jsonEscape(const std::string &value);

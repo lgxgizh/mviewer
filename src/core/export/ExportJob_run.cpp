@@ -7,7 +7,10 @@
 #include "core/image/ImageRepository.h"
 #include "core/image/ImageTransform.h"
 #include "core/image/QtConvert.h"
+#include "domain/Image.h"
 #include "domain/Selection.h"
+
+#include <QByteArray>
 
 #include <algorithm>
 #include <atomic>
@@ -560,7 +563,8 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
         if (progress)
             progress(i, r.total, src);
 
-        ImageData data = decodeSource(src, cfg);
+        mviewer::domain::ImageMetadata meta;
+        ImageData data = decodeSource(src, cfg, cfg.stripMetadata ? nullptr : &meta);
         if (data.isNull())
         {
             ++r.failed;
@@ -573,9 +577,32 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
                 data, mviewer::domain::Selection{cfg.cropX, cfg.cropY, cfg.cropW, cfg.cropH});
         data = maybeWatermark(data, cfg);
 
+        Encoder::Params fileParams = params;
+        if (!cfg.stripMetadata)
+        {
+            const auto profileIt = meta.textKeys.find("MViewer.DisplayICC.Base64");
+            if (profileIt != meta.textKeys.end() && !profileIt->second.empty())
+            {
+                const QByteArray b64(profileIt->second.data(),
+                                     static_cast<qsizetype>(profileIt->second.size()));
+                const QByteArray rawIcc = QByteArray::fromBase64(b64);
+                if (!rawIcc.isEmpty())
+                {
+                    fileParams.iccProfile.assign(
+                        reinterpret_cast<const uint8_t *>(rawIcc.constData()),
+                        reinterpret_cast<const uint8_t *>(rawIcc.constData()) + rawIcc.size());
+                }
+            }
+            for (const auto &pair : meta.textKeys)
+            {
+                if (pair.first.rfind("MViewer.", 0) != 0 && !pair.second.empty())
+                    fileParams.textMetadata.emplace_back(pair.first, pair.second);
+            }
+        }
+
         const fs::path &dst = plan->destinations[static_cast<size_t>(i)];
         const fs::path tmp = uniqueTempPath(dst);
-        if (Encoder::encode(data, mviewer::core::pathToUtf8(tmp), params))
+        if (Encoder::encode(data, mviewer::core::pathToUtf8(tmp), fileParams))
         {
             std::error_code tec;
             if (!commitTempFile(tmp, dst, tec))

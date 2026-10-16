@@ -3,6 +3,7 @@
 #include "ImageBuffer.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 // 图像编码器：封装 QImageWriter，支持
@@ -18,6 +19,8 @@ class Encoder
     {
         int quality;
         int pngCompression;
+        std::vector<uint8_t> iccProfile;
+        std::vector<std::pair<std::string, std::string>> textMetadata;
         Params() : quality(90), pngCompression(6)
         {
         }

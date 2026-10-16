@@ -12,6 +12,7 @@
 #include "thumbnailprovider.h"
 
 #include <QApplication>
+#include <QCheckBox>
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QFuture>
@@ -19,6 +20,7 @@
 #include <QMessageBox>
 #include <QObject>
 #include <QProgressDialog>
+#include <QSettings>
 #include <QStatusBar>
 #include <QString>
 #include <QStringList>
@@ -431,6 +433,41 @@ void reportFlipBatch(QWidget *parent, QStatusBar *bar, const QStringList &paths,
     showFlipFailureStatus(bar, paths, batch);
 }
 
+bool confirmTransform(QWidget *parent, const QStringList &paths, FileTransformKind kind)
+{
+    QSettings settings;
+    if (!settings.value(QStringLiteral("confirmModifyFile"), true).toBool())
+        return true;
+
+    const bool rotate = (kind == FileTransformKind::Rotate);
+    const QString prompt =
+        paths.size() == 1
+            ? (rotate ? MainWindow::tr("旋转将直接修改并覆盖原图像文件。\n是否继续？")
+                      : MainWindow::tr("翻转将直接修改并覆盖原图像文件。\n是否继续？"))
+            : (rotate ? MainWindow::tr("旋转将直接修改并覆盖选中的 %1 个图像文件。\n是否继续？")
+                            .arg(paths.size())
+                      : MainWindow::tr("翻转将直接修改并覆盖选中的 %1 个图像文件。\n是否继续？")
+                            .arg(paths.size()));
+
+    QMessageBox box(parent);
+    box.setIcon(QMessageBox::Question);
+    box.setWindowTitle(MainWindow::tr("修改原文件确认"));
+    box.setText(prompt);
+    box.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+    box.setDefaultButton(QMessageBox::Ok);
+    auto *cb = new QCheckBox(MainWindow::tr("不再提示"), &box);
+    box.setCheckBox(cb);
+
+    const int res = box.exec();
+    if (res != QMessageBox::Ok && res != QMessageBox::Yes && res != QDialog::Accepted)
+        return false;
+
+    if (cb->isChecked())
+        settings.setValue(QStringLiteral("confirmModifyFile"), false);
+
+    return true;
+}
+
 } // namespace
 
 void MainWindow::rotateCurrentImage(int degrees)
@@ -448,6 +485,9 @@ void MainWindow::rotateCurrentImage(int degrees)
         showStatus(statusBar(), tr("没有可旋转的图片"), 2000);
         return;
     }
+
+    if (!confirmTransform(this, paths, FileTransformKind::Rotate))
+        return;
 
     const FileTransformBatch batch =
         runTransformBatch(this, m_imageViewer, m_previewPanel, m_thumbnailPanel, paths,
@@ -477,6 +517,9 @@ void MainWindow::flipCurrentImage(bool horizontal)
         showStatus(statusBar(), tr("没有可翻转的图片"), 2000);
         return;
     }
+
+    if (!confirmTransform(this, paths, FileTransformKind::Flip))
+        return;
 
     const FileTransformBatch batch =
         runTransformBatch(this, m_imageViewer, m_previewPanel, m_thumbnailPanel, paths,

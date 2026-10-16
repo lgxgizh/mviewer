@@ -3,11 +3,34 @@
 #include "core/image/QtConvert.h"
 
 #include <QBuffer>
+#include <QColorSpace>
 #include <QFileInfo>
 #include <QImage>
 #include <QImageWriter>
 #include <algorithm>
 #include <unordered_map>
+
+namespace
+{
+void applyParamsToImage(QImage &image, const Encoder::Params &params)
+{
+    if (!params.iccProfile.empty())
+    {
+        const QByteArray iccBytes(reinterpret_cast<const char *>(params.iccProfile.data()),
+                                  static_cast<qsizetype>(params.iccProfile.size()));
+        const QColorSpace cs = QColorSpace::fromIccProfile(iccBytes);
+        if (cs.isValid())
+            image.setColorSpace(cs);
+    }
+    for (const auto &[k, v] : params.textMetadata)
+    {
+        if (!k.empty() && !v.empty() && k.rfind("MViewer.", 0) != 0)
+        {
+            image.setText(QString::fromStdString(k), QString::fromStdString(v));
+        }
+    }
+}
+} // namespace
 
 bool Encoder::encode(const ImageData &img, const std::string &path, const Params &params)
 {
@@ -16,6 +39,7 @@ bool Encoder::encode(const ImageData &img, const std::string &path, const Params
     QImage image = mvcore::toQImage(img);
     if (image.isNull())
         return false;
+    applyParamsToImage(image, params);
 
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImageWriter writer(qPath);
@@ -43,6 +67,7 @@ std::vector<uint8_t> Encoder::encodeToBuffer(const ImageData &img, const std::st
     QImage image = mvcore::toQImage(img);
     if (image.isNull())
         return {};
+    applyParamsToImage(image, params);
 
     QByteArray buffer;
     QBuffer qbuf(&buffer);

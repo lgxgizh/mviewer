@@ -11,8 +11,8 @@
 #include "core/image/QtConvert.h"
 #include "domain/Selection.h"
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -103,18 +103,26 @@ std::string extensionFor(const std::string &format)
     return "." + format;
 }
 
-ImageData decodeSource(const std::string &path, const ExportJobConfig &cfg)
+ImageData decodeSource(const std::string &path, const ExportJobConfig &cfg,
+                       mviewer::domain::ImageMetadata *outMeta)
 {
     if (!cfg.preserveDisplayAppearance)
+    {
+        if (outMeta)
+            return Decoder::decodeFull(path, *outMeta);
         return Decoder::decodeFull(path);
+    }
 
     // The repository path preserves the viewer's decode + metadata contract;
     // the ICC/display conversion is deliberately performed on this worker,
     // never by a QAction, QWidget, or clipboard callback on the GUI thread.
     const ImageLoadOptions opts{true, false, 256};
-    const auto loaded = ImageRepository::instance().loadFrame(path, std::max(0, cfg.frameIndex), opts);
+    const auto loaded =
+        ImageRepository::instance().loadFrame(path, std::max(0, cfg.frameIndex), opts);
     if (!loaded.success() || !loaded.frame)
         return {};
+    if (outMeta)
+        *outMeta = loaded.frame->metadata();
     return mvcore::toDisplayImageData(loaded.frame->pixels(), loaded.frame->metadata());
 }
 
@@ -283,8 +291,7 @@ bool writeTextAtomically(const fs::path &destination, const std::string &content
     return false;
 }
 
-std::string outputBaseName(const ExportJobConfig &cfg, const fs::path &source, int index,
-                                  int total)
+std::string outputBaseName(const ExportJobConfig &cfg, const fs::path &source, int index, int total)
 {
     const std::string sourceStem = mviewer::core::pathToUtf8(source.stem());
     std::string baseName = mviewer::core::applyFindReplace(
@@ -295,14 +302,13 @@ std::string outputBaseName(const ExportJobConfig &cfg, const fs::path &source, i
     if (!sourceExtension.empty() && sourceExtension.front() == '.')
         sourceExtension.erase(sourceExtension.begin());
 
-    std::string output =
-        applyRename(cfg.renamePattern, baseName, sourceExtension, index, total);
+    std::string output = applyRename(cfg.renamePattern, baseName, sourceExtension, index, total);
     if (output.empty())
         output = baseName;
 
-    static const char *const kImageExtensions[] = {
-        ".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff",
-        ".bmp", ".gif",  ".jp2", ".jxl",  ".heic", ".avif"};
+    static const char *const kImageExtensions[] = {".jpg", ".jpeg", ".png",  ".webp",
+                                                   ".tif", ".tiff", ".bmp",  ".gif",
+                                                   ".jp2", ".jxl",  ".heic", ".avif"};
     for (const char *extension : kImageExtensions)
     {
         const size_t length = std::char_traits<char>::length(extension);
@@ -313,8 +319,7 @@ std::string outputBaseName(const ExportJobConfig &cfg, const fs::path &source, i
         bool matches = true;
         for (size_t i = 0; i < length; ++i)
         {
-            const char a =
-                static_cast<char>(std::tolower(static_cast<unsigned char>(tail[i])));
+            const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(tail[i])));
             const char b =
                 static_cast<char>(std::tolower(static_cast<unsigned char>(extension[i])));
             if (a != b)
@@ -331,6 +336,5 @@ std::string outputBaseName(const ExportJobConfig &cfg, const fs::path &source, i
     }
     return output;
 }
-
 
 } // namespace mviewer::exportjob
