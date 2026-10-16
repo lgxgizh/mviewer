@@ -163,12 +163,9 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
             const int gIdx = 1;
             const int bIdx = isBgr ? 0 : 2;
             const size_t px = static_cast<size_t>(x) * cpp;
-            dstRow[px + rIdx] =
-                static_cast<uint8_t>(std::clamp(srcRow[px + rIdx] + delta, 0, 255));
-            dstRow[px + gIdx] =
-                static_cast<uint8_t>(std::clamp(srcRow[px + gIdx] + delta, 0, 255));
-            dstRow[px + bIdx] =
-                static_cast<uint8_t>(std::clamp(srcRow[px + bIdx] + delta, 0, 255));
+            dstRow[px + rIdx] = static_cast<uint8_t>(std::clamp(srcRow[px + rIdx] + delta, 0, 255));
+            dstRow[px + gIdx] = static_cast<uint8_t>(std::clamp(srcRow[px + gIdx] + delta, 0, 255));
+            dstRow[px + bIdx] = static_cast<uint8_t>(std::clamp(srcRow[px + bIdx] + delta, 0, 255));
             if (cpp == 4)
                 dstRow[px + 3] = srcRow[px + 3];
         }
