@@ -280,6 +280,7 @@ class ImageViewer : public QOpenGLWidget
     void exportFinished(bool success, const QString &message);
     void statusMessageRequested(const QString &message, int timeoutMs = 2000);
 
+    void usmCompareRequested(const QString &path);
     void regionStats(const QString &text);
     void selectionChanged(const QRect &sel); // image coords (may be null rect)
     void requestPrev();

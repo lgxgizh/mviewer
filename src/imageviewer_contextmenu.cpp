@@ -242,6 +242,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                           aCopyRgb, aCopyFloat, aCopyHsv, aCopyCoord);
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
+    QAction *aUsmCompare = menu.addAction(tr("USM 锐化对比(&U)... (Ctrl+U)"));
     QAction *aRotateCW = menu.addAction("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)");
     QAction *aRotateCCW = menu.addAction("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)");
     QAction *aFlipH = menu.addAction("水平翻转并覆盖原文件 (Ctrl+Shift+H)");
@@ -253,6 +254,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     if (mCopyColor)
         mCopyColor->menuAction()->setEnabled(hasFrame);
     aSaveAs->setEnabled(hasFrame);
+    aUsmCompare->setEnabled(hasPath && (hasFrame || hasDisplayImage()));
     QAction *aPlay = nullptr, *aRestart = nullptr, *aPrevFrame = nullptr, *aNextFrame = nullptr;
     if (isMultiFrame())
     {
@@ -291,6 +293,11 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     if (analyzeActions.contains(chosen) && m_frame)
     {
         emit analysisRequested(chosen->data().toString());
+        return;
+    }
+    if (chosen == aUsmCompare)
+    {
+        emit usmCompareRequested(m_currentPath);
         return;
     }
     if (chosen == aPlay)
@@ -524,6 +531,14 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
         return true;
     if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
+    else if (modifiers == Qt::ControlModifier && key == Qt::Key_U)
+    {
+        if (!m_currentPath.isEmpty())
+        {
+            emit usmCompareRequested(m_currentPath);
+            return true;
+        }
+    }
     else if (key == Qt::Key_F11)
         toggleFullscreen();
     else if (key == Qt::Key_Escape)

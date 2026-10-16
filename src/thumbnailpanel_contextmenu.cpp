@@ -12,6 +12,7 @@ struct ThumbnailPanel::ContextMenuActions
     QAction *aCopyPath = nullptr;
     QAction *aCopyName = nullptr;
     QAction *aCompare = nullptr;
+    QAction *aUsmCompare = nullptr;
     QAction *aAnalyze = nullptr;
     QAction *aAddTag = nullptr;
     QMenu *rmTagMenu = nullptr;
@@ -62,6 +63,8 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCompare = menu.addAction("比较");
     acts.aCompare->setShortcut(QKeySequence("P"));
     acts.aCompare->setEnabled(selPaths.size() >= 2 && selPaths.size() <= 8);
+    acts.aUsmCompare = menu.addAction("USM 锐化对比...");
+    acts.aUsmCompare->setEnabled(selPaths.size() == 1);
     acts.aAnalyze = menu.addAction("批量分析导出");
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     acts.aAnalyze->setEnabled(!selPaths.isEmpty());
@@ -155,6 +158,8 @@ void ThumbnailPanel::handleContextMenuAction(const ContextMenuActions &actions, 
         return;
     if (chosen == actions.aCompare)
         requestCompare();
+    else if (chosen == actions.aUsmCompare)
+        emit usmCompareRequested(path);
     else if (chosen == actions.aAnalyze)
         batchAnalyzeExport();
     else if (chosen == actions.aAddTag)

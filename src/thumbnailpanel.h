@@ -430,6 +430,7 @@ class ThumbnailPanel : public QListView
     void sortChanged(ThumbnailPanel::SortMode mode, bool ascending);
     void thumbSizeChanged(int size);
     void compareRequested(const QStringList &paths);
+    void usmCompareRequested(const QString &path);
     // External files/folders dropped onto the gallery (forwarded to MainWindow).
     void filesDropped(const QStringList &paths);
     // Emitted after a delete/trash operation so the host can advance the viewer

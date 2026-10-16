@@ -70,6 +70,7 @@
 #include "searchpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
+#include "usmcomparedialog.h"
 #include "workspacemodel.h"
 
 #include "core/update/UpdateChecker.h"

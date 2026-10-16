@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Features & Capabilities
+
+- **USM 锐化前后对比与导出（USM Sharpen Before/After Comparison & Export）**：
+  - 核心算法引擎（`UsmSharpen.h` / `UsmSharpen.cpp`）：实现高精度二维可分离高斯滤波核（14-bit 定点数整数运算，`sum = 16384`）、可调阈值控制掩模（Threshold）以及快速仅亮度通道锐化路径（Luma-only，标准 ITU-R BT.601 权重 $Y = (19595R + 38470G + 7471B) \gg 16$），全面覆盖 `RGB24`、`BGR24`、`RGBA32`（Alpha 无损保留）、`BGRA32` 和 `Grayscale8` 等像素格式；
+  - 专属对比弹窗（`UsmCompareDialog`）：提供双 `RawImageView` 并列视图（`原图 (Before)` vs `USM 锐化后 (After)`）、默认双向同步平移/缩放、Space 快捷键瞬时按住看原图（`setTransientDisplay`）、顶部适应窗口 / 100% / 200% 快捷缩放，以及底部数量（Amount 0~500%）、半径（Radius 0.1~20.0px）、阈值（Threshold 0~255）微调控件与参数重置；
+  - 异步计算与量化评测：基于 `TaskScheduler` 交互优先级异步调度与去抖动触发计算，底部状态栏实时显示计算耗时、全图分辨率、色彩空间与 PSNR / SSIM 量化质量指标；
+  - 导出结果保存：提供 `Ctrl+S` / `另存为...` 功能，保存锐化后图像并完整继承源图像 ICC 配置文件；
+  - 入口全面接入：单图查看器右键菜单（`Ctrl+U`）、缩略图画廊右键菜单（单选图片）以及主窗口“工具(&T)”菜单（`Ctrl+U`）与主工具栏均新增快捷触发入口。
+
 ## [1.0.132] - 2026-10-16
 
 ### Release

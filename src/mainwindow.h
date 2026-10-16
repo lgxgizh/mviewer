@@ -242,6 +242,7 @@ class MainWindow : public QMainWindow
     void applyPreferences(const QVariantMap &before);
     void applyColorManagementPreference();
     void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
+    void openUsmCompare(const QString &path = {});
     void toggleFocusBrowse();
 
     void keyPressEvent(QKeyEvent *event) override;
@@ -296,6 +297,7 @@ class MainWindow : public QMainWindow
     QAction *m_actRefresh = nullptr;
     QAction *m_actToggleNavigation = nullptr;
     QAction *m_actBatch = nullptr;
+    QAction *m_actUsmCompare = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
     QAction *m_actExportSettings = nullptr;

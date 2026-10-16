@@ -340,6 +340,11 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     connect(actOverlay, &QAction::triggered, this, &MainWindow::openAnalysisOverlay);
     toolsMenu->addAction(actOverlay);
 
+    m_actUsmCompare = new QAction(tr("USM 锐化对比(&U)..."), this);
+    m_actUsmCompare->setShortcut(QKeySequence("Ctrl+U"));
+    connect(m_actUsmCompare, &QAction::triggered, this, [this]() { openUsmCompare(); });
+    toolsMenu->addAction(m_actUsmCompare);
+
     toolsMenu->addSeparator();
     m_actExportSettings = new QAction("导出设置(&E)...", this);
     m_actImportSettings = new QAction("导入设置(&I)...", this);

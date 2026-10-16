@@ -130,6 +130,13 @@ void MainWindow::buildBrowserShell()
         m_actCompare->setToolTip(actTip(tr("选择 2–8 张图片进行比较"), m_actCompare));
         browserToolBar->addAction(m_actCompare);
     }
+    if (m_actUsmCompare)
+    {
+        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analyze"));
+        m_actUsmCompare->setObjectName("usmCompareAction");
+        m_actUsmCompare->setToolTip(actTip(tr("USM 锐化前后对比与导出 (Ctrl+U)"), m_actUsmCompare));
+        browserToolBar->addAction(m_actUsmCompare);
+    }
     browserToolBar->setIconSize(QSize(16, 16));
     installNavigationCollapse();
 
@@ -499,6 +506,8 @@ QWidget *MainWindow::buildGalleryPanel()
     rightLayout->addWidget(sortBar);
 
     m_thumbnailPanel = new ThumbnailPanel(rightWidget);
+    connect(m_thumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
+            [this](const QString &path) { openUsmCompare(path); });
     placeGalleryCompareButton(sortBar);
     m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
     m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
@@ -617,6 +626,8 @@ void MainWindow::buildImageViewerUi()
     // ----- Full image viewer window -----
     m_imageViewer = new ImageViewer(nullptr);
     m_imageViewer->setWindowTitle("图片查看 - MViewer");
+    connect(m_imageViewer, &ImageViewer::usmCompareRequested, this,
+            [this](const QString &path) { openUsmCompare(path); });
 
     // P0-3: metadata overlay on the image viewer (toggle with I / M / 图片信息)
     m_metadataOverlay = new MetadataOverlay(m_imageViewer);

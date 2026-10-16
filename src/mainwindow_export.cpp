@@ -58,14 +58,14 @@ void encodeReportImages(ReportExportState &state, const TaskScheduler::TaskConte
             QBuffer stream(&bytes);
             if (image.save(&stream, "PNG"))
                 state.context.compareDiffPngs[i] = bytes.toBase64().toStdString();
-            ctx.reportProgress(60 + static_cast<int>((i + 1) * 20 /
-                                                     qMax<size_t>(1, targetCount)));
+            ctx.reportProgress(60 + static_cast<int>((i + 1) * 20 / qMax<size_t>(1, targetCount)));
         }
     }
     ctx.reportProgress(80);
 }
 
-static void executeReportExportTask(ReportExportState &state, const TaskScheduler::TaskContext &task)
+static void executeReportExportTask(ReportExportState &state,
+                                    const TaskScheduler::TaskContext &task)
 {
     if (task.isCancelled())
     {
@@ -77,10 +77,7 @@ static void executeReportExportTask(ReportExportState &state, const TaskSchedule
     {
         mviewer::core::ReportBuildCallbacks callbacks;
         callbacks.cancelled = [&task]() { return task.isCancelled(); };
-        callbacks.progress = [&task](int value)
-        {
-            task.reportProgress(5 + value * 50 / 100);
-        };
+        callbacks.progress = [&task](int value) { task.reportProgress(5 + value * 50 / 100); };
         state.context.compareBundle =
             mviewer::core::buildCompareReportBundle(*state.compareInput, callbacks);
         if (task.isCancelled())
@@ -119,8 +116,8 @@ static void executeReportExportTask(ReportExportState &state, const TaskSchedule
         return;
     }
     task.reportProgress(95);
-    if (!mviewer::exportjob::writeTextAtomically(
-            state.output, state.body, [&task]() { return task.isCancelled(); }))
+    if (!mviewer::exportjob::writeTextAtomically(state.output, state.body,
+                                                 [&task]() { return task.isCancelled(); }))
     {
         if (task.isCancelled())
             state.cancelled = true;
@@ -172,8 +169,7 @@ void MainWindow::exportReport()
         compareInput = m_compareView->captureReportInput();
         const auto &input = *compareInput;
         const bool validReference = input.referenceIndex >= 0 &&
-                                     input.referenceIndex <
-                                         static_cast<int>(input.images.size());
+                                    input.referenceIndex < static_cast<int>(input.images.size());
         if (validReference)
         {
             ctx.imagePath =
@@ -198,16 +194,15 @@ void MainWindow::exportReport()
         {
             const AnalysisPanel::ReportAnalysisState state =
                 m_analysisPanel ? m_analysisPanel->reportAnalysisState()
-                                 : AnalysisPanel::ReportAnalysisState::Unset;
-            const bool mayUseStoredResult =
-                state == AnalysisPanel::ReportAnalysisState::Unset ||
-                state == AnalysisPanel::ReportAnalysisState::Available;
+                                : AnalysisPanel::ReportAnalysisState::Unset;
+            const bool mayUseStoredResult = state == AnalysisPanel::ReportAnalysisState::Unset ||
+                                            state == AnalysisPanel::ReportAnalysisState::Available;
             const QString result = mayUseStoredResult ? m_analyzer->resultText(path) : QString();
-            const QString producerId = mayUseStoredResult ? m_analyzer->resultAnalyzerId(path)
-                                                          : QString();
-            const bool producerMatches =
-                state != AnalysisPanel::ReportAnalysisState::Available ||
-                !m_analysisPanel || m_analysisPanel->reportAnalyzerId() == producerId;
+            const QString producerId =
+                mayUseStoredResult ? m_analyzer->resultAnalyzerId(path) : QString();
+            const bool producerMatches = state != AnalysisPanel::ReportAnalysisState::Available ||
+                                         !m_analysisPanel ||
+                                         m_analysisPanel->reportAnalyzerId() == producerId;
             if (!result.isEmpty() && producerMatches)
             {
                 ctx.analysis.analyzerId = producerId.toStdString();
@@ -232,10 +227,9 @@ void MainWindow::exportReport()
     startReportExport(std::move(ctx), std::move(compareInput), out, suffix);
 }
 
-void MainWindow::startReportExport(
-    mviewer::core::ReportContext ctx,
-    std::optional<mviewer::core::CompareReportInput> compareInput, const QString &out,
-    std::string suffix)
+void MainWindow::startReportExport(mviewer::core::ReportContext ctx,
+                                   std::optional<mviewer::core::CompareReportInput> compareInput,
+                                   const QString &out, std::string suffix)
 {
     cancelReportExport();
     auto state = std::make_shared<ReportExportState>();
@@ -254,10 +248,7 @@ void MainWindow::startReportExport(
     m_reportProgress->show();
     m_reportTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
-        [state](const TaskScheduler::TaskContext &task)
-        {
-            executeReportExportTask(*state, task);
-        },
+        [state](const TaskScheduler::TaskContext &task) { executeReportExportTask(*state, task); },
         {}, std::chrono::steady_clock::time_point::max(),
         [guard, state, generation, out]()
         {
@@ -330,5 +321,40 @@ void MainWindow::exportImages()
     ExportDialog dlg(this);
     dlg.setSources(paths);
     dlg.setWindowTitle(tr("导出图片 — %1 张").arg(paths.size()));
+    dlg.exec();
+}
+
+void MainWindow::openUsmCompare(const QString &path)
+{
+    QString target = path;
+    if (target.isEmpty())
+        target = currentImagePath();
+    if (target.isEmpty() && m_thumbnailPanel)
+    {
+        const auto sel = m_thumbnailPanel->selectedPaths();
+        if (!sel.isEmpty())
+            target = sel.first();
+    }
+    if (target.isEmpty())
+        return;
+
+    ImageData imgData;
+    if (m_imageViewer)
+    {
+        const auto frame = m_imageViewer->frame();
+        if (frame && !frame->pixels().isNull() &&
+            frame->metadata().filePath == target.toStdString())
+            imgData = frame->pixels();
+    }
+    if (imgData.isNull())
+    {
+        const auto res = ImageRepository::instance().load(target.toStdString());
+        if (res.success() && res.frame)
+            imgData = res.frame->pixels();
+    }
+    if (imgData.isNull())
+        return;
+
+    UsmCompareDialog dlg(target, imgData, this);
     dlg.exec();
 }
