@@ -109,11 +109,37 @@ inline void restoreScroll(QAbstractItemView *view, const ScrollPos &s)
     {
         if (vb->maximum() >= s.v)
             vb->setValue(s.v);
+        else if (s.v > 0)
+        {
+            const QPointer<QAbstractItemView> pView(const_cast<QAbstractItemView *>(view));
+            QTimer::singleShot(0,
+                               [pView, s]()
+                               {
+                                   if (pView)
+                                   {
+                                       if (auto *b = pView->verticalScrollBar())
+                                           b->setValue(qMin(s.v, b->maximum()));
+                                   }
+                               });
+        }
     }
     if (auto *hb = view ? view->horizontalScrollBar() : nullptr)
     {
         if (hb->maximum() >= s.h)
             hb->setValue(s.h);
+        else if (s.h > 0)
+        {
+            const QPointer<QAbstractItemView> pView(const_cast<QAbstractItemView *>(view));
+            QTimer::singleShot(0,
+                               [pView, s]()
+                               {
+                                   if (pView)
+                                   {
+                                       if (auto *b = pView->horizontalScrollBar())
+                                           b->setValue(qMin(s.h, b->maximum()));
+                                   }
+                               });
+        }
     }
 }
 

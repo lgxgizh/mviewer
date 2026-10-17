@@ -385,6 +385,38 @@ bool ThumbnailPanel::takePendingFilterRestore(bool hasEntries, QStringList &sele
     return true;
 }
 
+void ThumbnailPanel::restoreSelectionAndCurrent(const QStringList &prevSelected,
+                                                const QString &prevCurrent,
+                                                QItemSelection &selToRestore)
+{
+    for (const QString &p : prevSelected)
+    {
+        auto it = m_rowByPath.constFind(galleryPathKey(p));
+        if (it != m_rowByPath.constEnd())
+            selToRestore.select(m_model->index(it.value(), 0), m_model->index(it.value(), 0));
+    }
+    if (!selToRestore.isEmpty())
+        selectionModel()->select(selToRestore, QItemSelectionModel::ClearAndSelect);
+    if (!prevCurrent.isEmpty())
+    {
+        auto it = m_rowByPath.constFind(galleryPathKey(prevCurrent));
+        if (it != m_rowByPath.constEnd())
+        {
+            const QModelIndex idx = m_model->index(it.value(), 0);
+            selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+        }
+    }
+}
+
+void ThumbnailPanel::restoreScrollState(const QString &anchorPath, int anchorOffset,
+                                        int savedScrollV, int savedScrollH)
+{
+    if (!anchorPath.isEmpty() && m_rowByPath.contains(galleryPathKey(anchorPath)))
+        preserveScrollAnchor(anchorPath, anchorOffset);
+    else
+        restoreScroll(this, {savedScrollV, savedScrollH});
+}
+
 void ThumbnailPanel::buildModel(const QList<Entry> &entries)
 {
     QStringList pendingSelection;
@@ -427,32 +459,15 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         total += entries.at(i).size;
     }
     m_totalBytes = total;
+    QString anchorPath;
+    int anchorOffset = 0;
+    captureScrollAnchor(anchorPath, anchorOffset);
     const ScrollPos savedScroll = captureScroll(this);
     m_model->setStringList(names);
 
-    // Restore selection and current index.
     QItemSelection selToRestore;
-    for (const QString &p : prevSelected)
-    {
-        auto it = m_rowByPath.constFind(galleryPathKey(p));
-        if (it != m_rowByPath.constEnd())
-            selToRestore.select(m_model->index(it.value(), 0), m_model->index(it.value(), 0));
-    }
-    if (!selToRestore.isEmpty())
-        selectionModel()->select(selToRestore, QItemSelectionModel::ClearAndSelect);
-    if (!prevCurrent.isEmpty())
-    {
-        auto it = m_rowByPath.constFind(galleryPathKey(prevCurrent));
-        if (it != m_rowByPath.constEnd())
-        {
-            // NoUpdate: QAbstractItemView::setCurrentIndex would ClearAndSelect
-            // and collapse a restored multi-selection down to one item (e.g. after
-            // rotate → directory-monitor rebuild).
-            const QModelIndex idx = m_model->index(it.value(), 0);
-            selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
-        }
-    }
-    restoreScroll(this, savedScroll);
+    restoreSelectionAndCurrent(prevSelected, prevCurrent, selToRestore);
+    restoreScrollState(anchorPath, anchorOffset, savedScroll.v, savedScroll.h);
 
     // A completed filter rebuild with no visible rows must clear the shared
     // selection as well as the gallery. This drives the existing preview and

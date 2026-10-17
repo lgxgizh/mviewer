@@ -253,6 +253,14 @@ class ThumbnailPanel : public QListView
     void seedDisplayThumbForTest(const QString &path, const QPixmap &pixmap);
     // Times the cell painter reused a scaled pixmap instead of scaling again.
     static int scaleCacheHitsForTest();
+    void insertProgressiveRowsForTest(const QList<Entry> &batch)
+    {
+        insertProgressiveRows(batch);
+    }
+    void captureScrollAnchorForTest(QString &anchorPath, int &anchorOffset) const
+    {
+        captureScrollAnchor(anchorPath, anchorOffset);
+    }
 
     // Paths of the currently selected gallery rows (in model order). Public:
     // MainWindow and acceptance tests consume the selection.
@@ -682,7 +690,12 @@ class ThumbnailPanel : public QListView
                                           const QStringList &previousSelection,
                                           const QString &previousCurrent, const QString &anchorPath,
                                           int anchorOffset);
+    void captureScrollAnchor(QString &anchorPath, int &anchorOffset) const;
     void preserveScrollAnchor(const QString &anchorPath, int anchorOffset);
+    void restoreSelectionAndCurrent(const QStringList &prevSelected, const QString &prevCurrent,
+                                    QItemSelection &selToRestore);
+    void restoreScrollState(const QString &anchorPath, int anchorOffset, int savedScrollV,
+                            int savedScrollH);
     void applyDirectoryDeltaEntries(const mviewer::core::DirectoryDelta &delta, QList<Entry> &next,
                                     QStringList &removedPaths, QStringList &renamedFrom,
                                     QStringList &renamedTo);

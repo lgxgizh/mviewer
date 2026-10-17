@@ -171,7 +171,10 @@ bool scanProgressiveDirectory(
                                           fi.lastModified()};
         entries.append(entry);
         batch.append(entry);
-        const int batchLimit = entries.size() <= kFirstScreenEntries ? 1 : kScanBatchEntries;
+        const int batchLimit = (entries.size() == 1) ? 1
+                                                     : (entries.size() <= kFirstScreenEntries
+                                                            ? (kFirstScreenEntries - 1)
+                                                            : kScanBatchEntries);
         if (batch.size() >= batchLimit)
         {
             publishBatch(batch);
@@ -481,8 +484,19 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     // Progressive batches used replaceSources for convergence; completed scan
     // and subsequent filter rebuilds must use updateSources so in-flight
     // viewport decodes are retained across the rebuild.
+    const bool wasProgressive = m_scanProgressive && m_paths.size() == entries.size();
     m_scanProgressive = false;
-    applyFilter();
+    if (wasProgressive)
+    {
+        pruneThumbnailState();
+        ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
+        emit sequenceChanged(m_currentDir, m_paths);
+        emit statsChanged(m_paths.size(), m_totalBytes, selectedPaths().size(), 0);
+    }
+    else
+    {
+        applyFilter();
+    }
     // sequenceChanged (inside the filter rebuild) publishes "Browse: N images".
     // A failure or empty result must win over that line.
     if (!directoryReadable)

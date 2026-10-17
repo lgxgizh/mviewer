@@ -1,8 +1,8 @@
 // M59 Browse regression: exercise the production ThumbnailPanel evaluator and
 // its generation-guarded latest-wins UI projection over a large source.
 
-#include "thumbnailpanel.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
+#include "thumbnailpanel.h"
 
 #include <QApplication>
 #include <QColor>
@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QImage>
 #include <QRegularExpression>
+#include <QScrollBar>
 #include <QTemporaryDir>
 #include <QThread>
 
@@ -284,6 +285,59 @@ int main(int argc, char **argv)
         const QString dir1Image = dir1.filePath(QStringLiteral("dir1_0.png"));
         CHECK(waitFor([&]() { return !panel.thumbReady(dir1Image).isNull(); }, 15000),
               "Thumb test: re-entering dir1 loads thumbnail");
+    }
+
+    // Progressive scroll anchor test: inserting batches must preserve the
+    // visual anchor position when the user has scrolled down.
+    {
+        QTemporaryDir testDir;
+        CHECK(testDir.isValid(), "Progressive scroll test: temp dir available");
+        for (int i = 0; i < 40; ++i)
+        {
+            QImage img(16, 16, QImage::Format_RGB32);
+            img.fill(Qt::blue);
+            img.save(
+                testDir.filePath(QStringLiteral("scroll_%1.png").arg(i, 4, 10, QLatin1Char('0'))),
+                "PNG");
+        }
+
+        ThumbnailPanel panel;
+        panel.resize(600, 400);
+        panel.show();
+        panel.setDirectory(testDir.path());
+        CHECK(waitFor([&]() { return panel.entries().size() == 40; }, 10000),
+              "Progressive scroll test: directory scan finishes");
+
+        QScrollBar *bar = panel.verticalScrollBar();
+        CHECK(bar && bar->maximum() > 0, "Progressive scroll test: vertical scrollbar available");
+        if (bar && bar->maximum() > 0)
+        {
+            bar->setValue(bar->maximum() / 2);
+            const int savedValue = bar->value();
+            CHECK(savedValue > 0, "Progressive scroll test: scrolled down");
+
+            QString anchorPath;
+            int anchorOffset = 0;
+            panel.captureScrollAnchorForTest(anchorPath, anchorOffset);
+            CHECK(!anchorPath.isEmpty(), "Progressive scroll test: anchor captured");
+            const int oldRow = panel.pathList().indexOf(anchorPath);
+            CHECK(oldRow >= 0, "Progressive scroll test: old row valid");
+            const int oldVisualY = panel.visualRect(panel.model()->index(oldRow, 0)).top();
+
+            // Simulate incoming progressive batch that sorts before the anchor
+            QList<ThumbnailPanel::Entry> batch;
+            batch.append({testDir.filePath(QStringLiteral("scroll_0000_early.png")),
+                          QStringLiteral("scroll_0000_early.png"), 100, 16, 16,
+                          QDateTime::currentDateTime()});
+            panel.insertProgressiveRowsForTest(batch);
+
+            // Anchor item must remain at the exact same screen position
+            const int newRow = panel.pathList().indexOf(anchorPath);
+            CHECK(newRow > oldRow, "Progressive scroll test: anchor shifted row downwards");
+            const int newVisualY = panel.visualRect(panel.model()->index(newRow, 0)).top();
+            CHECK(newVisualY == oldVisualY,
+                  "Progressive scroll test: visual anchor item remains stationary on screen");
+        }
     }
 
     std::printf("M59 Browse regression failures: %d\n", g_failures);

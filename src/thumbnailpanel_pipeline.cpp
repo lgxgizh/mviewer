@@ -203,6 +203,7 @@ void ThumbnailPanel::flushThumbUpdates()
     if (dirtyRows.isEmpty())
         return;
     std::sort(dirtyRows.begin(), dirtyRows.end());
+    static const QList<int> kDecorRoles = {Qt::DecorationRole};
     int spanStart = dirtyRows.first();
     int spanEnd = spanStart;
     for (int i = 1; i < dirtyRows.size(); ++i)
@@ -212,11 +213,22 @@ void ThumbnailPanel::flushThumbUpdates()
             spanEnd = dirtyRows.at(i);
             continue;
         }
-        emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0));
+        emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0), kDecorRoles);
         spanStart = spanEnd = dirtyRows.at(i);
     }
-    emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0));
-    viewport()->update();
+    emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0), kDecorRoles);
+
+    QRegion dirtyRegion;
+    const QRect vpRect = viewport()->rect();
+    for (int r : dirtyRows)
+    {
+        const QModelIndex idx = m_model->index(r, 0);
+        const QRect vr = visualRect(idx);
+        if (vr.intersects(vpRect))
+            dirtyRegion += vr;
+    }
+    if (!dirtyRegion.isEmpty())
+        viewport()->update(dirtyRegion);
 }
 
 QPixmap ThumbnailPanel::thumbReady(const QString &path) const
@@ -238,8 +250,7 @@ QPixmap ThumbnailPanel::thumbReady(const QString &path) const
         if (alt.key().startsWith(prefix) && !alt.value().pixmap.isNull())
             return alt.value().pixmap;
     }
-    const ImageData img =
-        ThumbnailPipeline::instance().findCached(path.toStdString(), m_thumbSize);
+    const ImageData img = ThumbnailPipeline::instance().findCached(path.toStdString(), m_thumbSize);
     if (!img.isNull())
     {
         const QImage q = mvcore::toQImageFast(img);

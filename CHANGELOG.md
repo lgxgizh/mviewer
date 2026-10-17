@@ -1,6 +1,18 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.133] - 2026-10-17
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.133**.
+
+### Performance & User Experience Enhancements
+
+- **超大/网络服务器图片文件夹浏览体验与列表防闪优化（Large & Network Folder Smooth Browsing & Flicker Elimination）**：
+  - **渐进式扫描视口锚点位置动态补偿（Progressive Scan Scroll Anchor Stabilization）**：彻底解决在网络服务器（SMB/UNC）或数千张大图文件夹中向下滚轮时列表位置被持续推回、抵抗无法下拉的问题。在 `ThumbnailPanel::insertProgressiveRows` 和 `buildModel` 中引入精准视口锚点捕获（`captureScrollAnchor`）与视口像素位移补偿（`preserveScrollAnchor`），当新批次图片按字母排序插入到当前视口上方时，自动平移垂直/水平滚动条对应像素差，确保用户当前查看的照片在屏幕上纹丝不动，滚轮下拉如丝般顺滑；
+  - **扫描完成免重建机制（Seamless Progressive Scan Completion）**：当渐进式扫描自然完成且未附加筛选条件时，由于所有条目已按顺序插入模型中，直接更新源序列并跳过破坏性的全量模型重置（`setStringList`），彻底杜绝扫描结束瞬间画面剧烈重排与滚动条强制归零（跳回第一张）的问题；
+  - **缩略图增量刷新杜绝全屏闪烁（Zero-Flicker Dirty Region Updates）**：修复 `flushThumbUpdates` 原先全视口无条件重绘（`viewport()->update()`）及空角色 `dataChanged` 导致 Qt 频繁推翻整个布局的严重闪烁缺陷。将信号角色严格限制为 `{Qt::DecorationRole}`，并仅向视口提交实际发生缩略图变动的单元格脏区域（`viewport()->update(dirtyRegion)`），其余卡片与文字背景完全保持静止，彻底消除眼胀频闪；
+  - **首屏分批节奏优化（Coherent Initial Batching）**：优化 `scanProgressiveDirectory` 的批量发布节奏，第 1 张图片即刻发布以保证首张图毫秒级瞬时可见（满足 `firstGalleryRowMs` 性能指标），其余首屏图片整批（16 张）接入，消除初始 16 次逐张插入引发的高频剧烈抖动。
 
 ### Features & Capabilities
 

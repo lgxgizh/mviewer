@@ -295,6 +295,40 @@ void ThumbnailPanel::captureIncrementalDeltaState(QStringList &selection, QStrin
     anchorOffset = visualRect(anchorIndex).top() - viewport()->rect().top();
 }
 
+void ThumbnailPanel::captureScrollAnchor(QString &anchorPath, int &anchorOffset) const
+{
+    const bool horizontal = (m_viewMode == Filmstrip || m_viewMode == List);
+    const int initialScroll = horizontal
+                                  ? (horizontalScrollBar() ? horizontalScrollBar()->value() : 0)
+                                  : (verticalScrollBar() ? verticalScrollBar()->value() : 0);
+    if (initialScroll <= 0)
+        return;
+
+    QModelIndex anchorIndex =
+        indexAt(QPoint(viewport()->rect().left() + 20, viewport()->rect().top() + 20));
+    if (!anchorIndex.isValid())
+        anchorIndex =
+            indexAt(QPoint(viewport()->rect().left() + 10, viewport()->rect().top() + 10));
+    if (!anchorIndex.isValid())
+        anchorIndex =
+            indexAt(QPoint(viewport()->rect().left() + 35, viewport()->rect().top() + 35));
+    if (!anchorIndex.isValid())
+    {
+        const int cellH = qMax(1, gridSize().height());
+        const int cellW = qMax(1, gridSize().width());
+        const int cols = qMax(1, viewport()->width() / cellW);
+        const int first = (initialScroll / cellH) * cols;
+        if (first >= 0 && first < m_paths.size())
+            anchorIndex = m_model->index(first, 0);
+    }
+    if (anchorIndex.isValid() && anchorIndex.row() >= 0 && anchorIndex.row() < m_paths.size())
+    {
+        anchorPath = m_paths.at(anchorIndex.row());
+        anchorOffset = horizontal ? (visualRect(anchorIndex).left() - viewport()->rect().left())
+                                  : (visualRect(anchorIndex).top() - viewport()->rect().top());
+    }
+}
+
 void ThumbnailPanel::refreshSidecarPaths(const QStringList &paths)
 {
     if (m_currentDir.isEmpty() || paths.isEmpty())
@@ -306,12 +340,7 @@ void ThumbnailPanel::refreshSidecarPaths(const QStringList &paths)
                                         : (m_selection ? m_selection->currentImage() : QString());
     QString anchorPath;
     int anchorOffset = 0;
-    const QModelIndex anchorIndex = indexAt(QPoint(2, 2));
-    if (anchorIndex.isValid())
-    {
-        anchorPath = m_paths.value(anchorIndex.row());
-        anchorOffset = visualRect(anchorIndex).top() - viewport()->rect().top();
-    }
+    captureScrollAnchor(anchorPath, anchorOffset);
     m_incrementalApply = true;
     m_incrementalPrevSelection = previousSelection;
     m_incrementalPrevCurrent = previousCurrent;
@@ -327,6 +356,10 @@ void ThumbnailPanel::refreshSidecarPaths(const QStringList &paths)
 // camera, lens, resolution) are not known yet and still append.
 void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch)
 {
+    QString anchorPath;
+    int anchorOffset = 0;
+    captureScrollAnchor(anchorPath, anchorOffset);
+
     const auto field = static_cast<mviewer::core::BrowseSortField>(m_sortMode);
     const bool sortable = field == mviewer::core::BrowseSortField::Name ||
                           field == mviewer::core::BrowseSortField::Date ||
@@ -386,6 +419,8 @@ void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch)
         m_model->setData(m_model->index(row, 0), entry.name);
         m_totalBytes += entry.size;
     }
+    if (!anchorPath.isEmpty())
+        preserveScrollAnchor(anchorPath, anchorOffset);
 }
 
 static void syncModelRows(QAbstractItemModel *model, const QList<ThumbnailPanel::Entry> &entries,
@@ -535,11 +570,29 @@ void ThumbnailPanel::preserveScrollAnchor(const QString &anchorPath, int anchorO
     if (row < 0)
         return;
     const QModelIndex index = m_model->index(row, 0);
-    scrollTo(index, QAbstractItemView::PositionAtTop);
-    if (QScrollBar *bar = verticalScrollBar())
+    if (!index.isValid())
+        return;
+
+    const bool horizontal = (m_viewMode == Filmstrip || m_viewMode == List);
+    QScrollBar *bar = horizontal ? horizontalScrollBar() : verticalScrollBar();
+    if (!bar)
+        return;
+
+    const QRect vr = visualRect(index);
+    if (vr.isValid() && !vr.isEmpty())
     {
-        const int currentTop = visualRect(index).top() - viewport()->rect().top();
-        bar->setValue(bar->value() + currentTop - anchorOffset);
+        const int currentPos = horizontal ? (vr.left() - viewport()->rect().left())
+                                          : (vr.top() - viewport()->rect().top());
+        const int delta = currentPos - anchorOffset;
+        if (delta != 0)
+            bar->setValue(bar->value() + delta);
+    }
+    else
+    {
+        scrollTo(index, QAbstractItemView::PositionAtTop);
+        const int currentPos = horizontal ? (visualRect(index).left() - viewport()->rect().left())
+                                          : (visualRect(index).top() - viewport()->rect().top());
+        bar->setValue(bar->value() + currentPos - anchorOffset);
     }
 }
 
