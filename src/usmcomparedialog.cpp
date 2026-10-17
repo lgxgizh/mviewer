@@ -7,8 +7,8 @@
 #include "display/DisplayColorContextProvider.h"
 
 #include <QApplication>
-#include <QClipboard>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QColorSpace>
 #include <QComboBox>
 #include <QDoubleSpinBox>
@@ -463,17 +463,16 @@ void UsmCompareDialog::scheduleSharpen()
 }
 
 void UsmCompareDialog::updateStatusInfo(qint64 elapsedMs,
-                                       const mviewer::core::UsmDiffSummary &summary)
+                                        const mviewer::core::UsmDiffSummary &summary)
 {
     m_lblCalcStatus->setText(tr("计算完成 (耗时: %1 ms)").arg(elapsedMs));
-    m_lblMetrics->setText(
-        QString("PSNR: %1 dB | SSIM: %2 | Δ均值: %3 | Δ最大: %4 | 变化像素: %5%")
-            .arg(summary.psnr >= 100.0 ? QStringLiteral("∞")
-                                       : QString::number(summary.psnr, 'f', 2))
-            .arg(summary.ssim, 0, 'f', 4)
-            .arg(summary.meanDelta, 0, 'f', 2)
-            .arg(summary.maxDelta)
-            .arg(QString::number(summary.changedPercent, 'f', 1)));
+    m_lblMetrics->setText(QString("PSNR: %1 dB | SSIM: %2 | Δ均值: %3 | Δ最大: %4 | 变化像素: %5%")
+                              .arg(summary.psnr >= 100.0 ? QStringLiteral("∞")
+                                                         : QString::number(summary.psnr, 'f', 2))
+                              .arg(summary.ssim, 0, 'f', 4)
+                              .arg(summary.meanDelta, 0, 'f', 2)
+                              .arg(summary.maxDelta)
+                              .arg(QString::number(summary.changedPercent, 'f', 1)));
 }
 
 void UsmCompareDialog::resetParameters()

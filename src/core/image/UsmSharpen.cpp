@@ -287,6 +287,8 @@ UsmDiffSummary computeUsmDiffSummary(const ImageData &orig, const ImageData &sha
     const int colorChannels = (cpp == 4) ? 3 : cpp;
     const uint8_t *pOrig = orig.constView().data;
     const uint8_t *pSharp = sharpened.constView().data;
+    if (!pOrig || !pSharp)
+        return summary;
     const size_t totalPixels = static_cast<size_t>(w) * static_cast<size_t>(h);
 
     uint64_t totalDelta = 0;

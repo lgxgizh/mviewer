@@ -152,8 +152,7 @@ void writeAdjustmentJson(std::ostringstream &os, const CompareAdjustmentState &a
        << ", \"width\": " << adjustment.cropW << ", \"height\": " << adjustment.cropH << "}}";
 }
 
-void appendDiffStatsCsv(std::vector<std::string> &fields,
-                        const DifferenceEngine::DiffStats *stats)
+void appendDiffStatsCsv(std::vector<std::string> &fields, const DifferenceEngine::DiffStats *stats)
 {
     if (stats == nullptr)
     {
@@ -179,10 +178,10 @@ std::string CompareReportBundle::toJson() const
             os << ", ";
         os << "\"" << jsonEscape(images[i]) << "\"";
     }
-    os << "],\n  \"referenceIndex\": " << referenceIndex << ",\n  \"threshold\": "
-       << static_cast<unsigned int>(threshold) << ",\n  \"roi\": {\"x\": " << roi.x
-       << ", \"y\": " << roi.y << ", \"width\": " << roi.width << ", \"height\": "
-       << roi.height << "},\n  \"adjustments\": [";
+    os << "],\n  \"referenceIndex\": " << referenceIndex
+       << ",\n  \"threshold\": " << static_cast<unsigned int>(threshold)
+       << ",\n  \"roi\": {\"x\": " << roi.x << ", \"y\": " << roi.y << ", \"width\": " << roi.width
+       << ", \"height\": " << roi.height << "},\n  \"adjustments\": [";
     for (size_t i = 0; i < adjustments.size(); ++i)
     {
         if (i != 0)
@@ -197,8 +196,8 @@ std::string CompareReportBundle::toJson() const
             os << ",";
         os << "\n    {\"index\": " << pair.index << ", \"path\": \"" << jsonEscape(pair.path)
            << "\", \"referenceIndex\": " << pair.referenceIndex << ", \"imageA\": \""
-           << jsonEscape(pair.imageA) << "\", \"comparable\": "
-           << (pair.comparable ? "true" : "false") << ", \"psnr_dB\": ";
+           << jsonEscape(pair.imageA)
+           << "\", \"comparable\": " << (pair.comparable ? "true" : "false") << ", \"psnr_dB\": ";
         if (pair.comparable)
             writeJsonNumber(os, pair.psnr);
         else
@@ -246,8 +245,8 @@ std::string CompareReportBundle::toCsv() const
             fields.push_back(csvNumber(pair.psnr));
             fields.push_back(csvNumber(pair.ssim));
             appendDiffStatsCsv(fields, &pair.fullDiffStats);
-            appendDiffStatsCsv(
-                fields, pair.roiDiffStats.has_value() ? &*pair.roiDiffStats : nullptr);
+            appendDiffStatsCsv(fields,
+                               pair.roiDiffStats.has_value() ? &*pair.roiDiffStats : nullptr);
         }
         else
         {
@@ -317,16 +316,16 @@ std::string CompareReport::toCsv() const
 std::string AnalysisReport::toJson() const
 {
     std::ostringstream os;
-    os << "{\"analyzerId\": \"" << jsonEscape(analyzerId)
-       << "\", \"resultText\": \"" << jsonEscape(resultText) << "\"}";
+    os << "{\"analyzerId\": \"" << jsonEscape(analyzerId) << "\", \"resultText\": \""
+       << jsonEscape(resultText) << "\"}";
     return os.str();
 }
 
 std::string AnalysisReport::toCsv() const
 {
     std::ostringstream os;
-    os << "analyzerId,resultText\n" << csvEscape(analyzerId) << "," << csvEscape(resultText)
-       << "\n";
+    os << "analyzerId,resultText\n"
+       << csvEscape(analyzerId) << "," << csvEscape(resultText) << "\n";
     return os.str();
 }
 
@@ -361,8 +360,9 @@ std::string buildReportCsv(const ReportContext &ctx)
     const std::string analyzerId = ctx.hasAnalysis ? ctx.analysis.analyzerId : std::string{};
     const std::string resultText = ctx.hasAnalysis ? ctx.analysis.resultText : std::string{};
     std::ostringstream os;
-    os << "imagePath,analyzerId,resultText\n" << csvEscape(ctx.imagePath) << ","
-       << csvEscape(analyzerId) << "," << csvEscape(resultText) << "\n";
+    os << "imagePath,analyzerId,resultText\n"
+       << csvEscape(ctx.imagePath) << "," << csvEscape(analyzerId) << "," << csvEscape(resultText)
+       << "\n";
     return os.str();
 }
 

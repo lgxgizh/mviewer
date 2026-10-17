@@ -59,22 +59,24 @@ std::string formatDiffStats(const DifferenceEngine::DiffStats &stats)
 {
     std::ostringstream os;
     os << "diff pixels=" << stats.diffPixels << "/" << stats.totalPixels
-       << "; ratio=" << formatNumber(stats.diffRatio)
-       << "; mean=" << formatNumber(stats.meanDiff) << "; max=" << stats.maxDiff;
+       << "; ratio=" << formatNumber(stats.diffRatio) << "; mean=" << formatNumber(stats.meanDiff)
+       << "; max=" << stats.maxDiff;
     return os.str();
 }
 
 std::string formatAdjustment(const CompareAdjustmentState &adjustment)
 {
     std::ostringstream os;
-    os << "brightness=" << adjustment.brightness << "; contrast="
-       << formatNumber(adjustment.contrast) << "; gamma=" << formatNumber(adjustment.gamma)
+    os << "brightness=" << adjustment.brightness
+       << "; contrast=" << formatNumber(adjustment.contrast)
+       << "; gamma=" << formatNumber(adjustment.gamma)
        << "; redGain=" << formatNumber(adjustment.redGain)
-       << "; blueGain=" << formatNumber(adjustment.blueGain)
-       << "; rotation=" << adjustment.rotation << "°; flipH=" << (adjustment.flipH ? "true" : "false") << "; flipV=" << (adjustment.flipV ? "true" : "false") << "; crop=";
+       << "; blueGain=" << formatNumber(adjustment.blueGain) << "; rotation=" << adjustment.rotation
+       << "°; flipH=" << (adjustment.flipH ? "true" : "false")
+       << "; flipV=" << (adjustment.flipV ? "true" : "false") << "; crop=";
     if (adjustment.hasCrop)
-        os << "(" << adjustment.cropX << "," << adjustment.cropY << "," << adjustment.cropW
-           << "x" << adjustment.cropH << ")";
+        os << "(" << adjustment.cropX << "," << adjustment.cropY << "," << adjustment.cropW << "x"
+           << adjustment.cropH << ")";
     else
         os << "none";
     return os.str();
@@ -97,7 +99,8 @@ void appendAnalysisHtml(std::ostringstream &os, const ReportContext &ctx)
     if (!ctx.hasAnalysis)
         return;
 
-    os << tag("h2", "Analysis") << "\n<table>\n"
+    os << tag("h2", "Analysis")
+       << "\n<table>\n"
           "<tr><th>Analyzer ID</th><th>Result</th></tr>\n<tr><td>"
        << escapeHtml(ctx.analysis.analyzerId) << "</td><td><pre>"
        << escapeHtml(ctx.analysis.resultText) << "</pre></td></tr>\n</table>\n";
@@ -145,8 +148,8 @@ void appendCompareHtml(std::ostringstream &os, const ReportContext &ctx)
         for (size_t i = 0; i < bundle.targets.size(); ++i)
         {
             const CompareReportPair &pair = bundle.targets[i];
-            os << "<tr><td>image #" << (pair.index + 1) << "<br>"
-               << escapeHtml(pair.path) << "</td><td>";
+            os << "<tr><td>image #" << (pair.index + 1) << "<br>" << escapeHtml(pair.path)
+               << "</td><td>";
             if (pair.comparable)
             {
                 os << "Comparable</td><td>" << formatNumber(pair.psnr) << " dB</td><td>"
@@ -198,8 +201,8 @@ void appendCompareHtml(std::ostringstream &os, const ReportContext &ctx)
            << formatNumber(ctx.compare.meanR_B - ctx.compare.meanR_A) << ", "
            << formatNumber(ctx.compare.meanG_B - ctx.compare.meanG_A) << ", "
            << formatNumber(ctx.compare.meanB_B - ctx.compare.meanB_A) << ")</td></tr>\n";
-        os << "<tr><td>Noise Est. (A / B)</td><td>" << formatNumber(ctx.compare.noiseA)
-           << " / " << formatNumber(ctx.compare.noiseB) << "</td></tr>\n";
+        os << "<tr><td>Noise Est. (A / B)</td><td>" << formatNumber(ctx.compare.noiseA) << " / "
+           << formatNumber(ctx.compare.noiseB) << "</td></tr>\n";
         os << "</table>\n";
         if (!ctx.compareDiffPng.empty())
             os << "<img src=\"data:image/png;base64," << ctx.compareDiffPng << "\" alt=\"diff\">\n";

@@ -298,7 +298,8 @@ inline void buildCombinedLuts(int adj, float f, float g, float r, float b, bool 
         if (hasGamma)
         {
             const float norm = static_cast<float>(val) / 255.0f;
-            val = std::clamp(static_cast<int>(std::lroundf(std::pow(norm, invGamma) * 255.0f)), 0, 255);
+            val = std::clamp(static_cast<int>(std::lroundf(std::pow(norm, invGamma) * 255.0f)), 0,
+                             255);
         }
 
         if (isGray)
@@ -314,9 +315,13 @@ inline void buildCombinedLuts(int adj, float f, float g, float r, float b, bool 
             if (hasWb)
             {
                 if (std::abs(r - 1.0f) >= 1e-6f)
-                    rVal = std::clamp(static_cast<int>(std::lroundf(static_cast<float>(val) * std::max(r, 0.01f))), 0, 255);
+                    rVal = std::clamp(static_cast<int>(std::lroundf(static_cast<float>(val) *
+                                                                    std::max(r, 0.01f))),
+                                      0, 255);
                 if (std::abs(b - 1.0f) >= 1e-6f)
-                    bVal = std::clamp(static_cast<int>(std::lroundf(static_cast<float>(val) * std::max(b, 0.01f))), 0, 255);
+                    bVal = std::clamp(static_cast<int>(std::lroundf(static_cast<float>(val) *
+                                                                    std::max(b, 0.01f))),
+                                      0, 255);
             }
             lutR[static_cast<size_t>(i)] = static_cast<uint8_t>(rVal);
             lutG[static_cast<size_t>(i)] = static_cast<uint8_t>(val);
@@ -329,8 +334,7 @@ inline void buildCombinedLuts(int adj, float f, float g, float r, float b, bool 
 inline void applyCombinedLuts(const ImageBuffer &v, ImageBuffer &d,
                               const std::array<uint8_t, 256> &lutR,
                               const std::array<uint8_t, 256> &lutG,
-                              const std::array<uint8_t, 256> &lutB,
-                              PixelFormat fmt, int cpp)
+                              const std::array<uint8_t, 256> &lutB, PixelFormat fmt, int cpp)
 {
     const bool isGray = (fmt == PixelFormat::Grayscale8);
     int rOff = 0, gOff = 1, bOff = 2;

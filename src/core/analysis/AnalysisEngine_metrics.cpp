@@ -242,7 +242,8 @@ inline void accumulateSsdRgbaScalar(const uint8_t *a, const uint8_t *b, size_t p
 }
 
 inline void computeBlockStatsScalar(const uint8_t *const linesA[8], const uint8_t *const linesB[8],
-                                    int bx, int &sumA, int &sumB, int &sumAA, int &sumBB, int &sumAB)
+                                    int bx, int &sumA, int &sumB, int &sumAA, int &sumBB,
+                                    int &sumAB)
 {
     int sA = 0, sB = 0, sAA = 0, sBB = 0, sAB = 0;
     for (int y = 0; y < 8; ++y)
@@ -610,9 +611,9 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 MV_TARGET_SSSE3
 static inline void toGrayscale8RowSSSE3(const uint8_t *sl, uint8_t *dl, int width, bool isBgr)
 {
-    const __m128i weights = isBgr
-                                ? _mm_setr_epi8(5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0)
-                                : _mm_setr_epi8(11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0);
+    const __m128i weights =
+        isBgr ? _mm_setr_epi8(5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0, 5, 16, 11, 0)
+              : _mm_setr_epi8(11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0, 11, 16, 5, 0);
     const __m128i vzero = _mm_setzero_si128();
     for (int x = 0; x + 4 <= width; x += 4)
     {

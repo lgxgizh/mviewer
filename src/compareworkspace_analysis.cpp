@@ -407,8 +407,9 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
         if (auto *it0 = m_inspector->item(i, 0))
         {
             it0->setData(Qt::UserRole,
-                         sample.valid ? QVariant(static_cast<uint>(qRgb(sample.r, sample.g, sample.b)))
-                                      : QVariant());
+                         sample.valid
+                             ? QVariant(static_cast<uint>(qRgb(sample.r, sample.g, sample.b)))
+                             : QVariant());
         }
 
         if (!sample.valid)
