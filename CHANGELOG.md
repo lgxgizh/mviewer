@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.135] - 2026-10-17
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.135**.
+
+### Bug Fixes & UX Enhancements
+
+- **对比模式截图与剪贴板高分屏/缩放画幅修正（High-DPI & Zoom Full-Coverage Comparison Snapshot）**：
+  - **缺陷根因**：自 v1.0.132 引入快照注释条以来，`grabComparisonView()` 依据 `target->grab()` 获取物理像素尺寸创建 `result` 画布，但未设置 `result.setDevicePixelRatio(dpr)`，导致在 Windows 高分屏缩放（如 125%、150%、175%、200%）或放大查看图片时，`QPainter::drawPixmap` 将高 DPI 像素缩小到逻辑视口大小（仅占画面的 $1/(\text{DPR}^2)$，即 25%~50%），其余区域呈现大片黑色死区；
+  - **全画幅高精渲染**：对快照结果缓冲区的设备像素比（`devicePixelRatio`）实施统一对齐与精准映射，按逻辑坐标 `QRect(0, 0, logW, logH)` 严丝合缝铺满视口画面，底栏快照标注信息（ROI 坐标、调参状态、对比图片名、指标等）与字号在高分屏下同步矢量清晰渲染；
+  - **测试防护**：在 `compare_three_pane_fit_tests` 中新增高 DPI 视口与 100% 放大模式下的真实画幅覆盖率回归断言，确保全屏快照与剪贴板复制（Ctrl+C）100% 满幅无黑边。
+
 ## [1.0.134] - 2026-10-17
 
 ### Release

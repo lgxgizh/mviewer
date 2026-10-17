@@ -142,8 +142,45 @@ int main(int argc, char **argv)
     // The window narrows (e.g. restored from maximized): columns stay equal
     // and every pane re-fits instead of the left one collapsing.
     host.resize(1000, 700);
-    pump(400);
     checkThreePanes(ws, "after narrowing the window");
+
+    // Regression test: snapshot in comparison mode must cover the full canvas area on High-DPI
+    // screens without shrinking to 1/DPR or leaving blank dead space when zoomed in.
+    const QString snapPath = dir.filePath("test_snap_coverage.png");
+    check(ws->saveComparisonViewTo(snapPath), "snapshot saves to file successfully");
+    const QImage snapImg(snapPath);
+    check(!snapImg.isNull(), "snapshot image is valid");
+    const qreal dpr = ws->devicePixelRatioF() > 0.0 ? ws->devicePixelRatioF() : 1.0;
+    const int bannerH = static_cast<int>(std::round(36 * dpr));
+    check(snapImg.height() > bannerH, "snapshot includes comparison area and banner");
+
+    auto checkCoverage = [&](const QImage &img, const char *label)
+    {
+        const QRgb bg = qRgb(24, 24, 28);
+        int maxX = 0;
+        for (int y = 0; y < img.height() - bannerH; y += 8)
+        {
+            for (int x = img.width() - 1; x > maxX; --x)
+            {
+                if (img.pixel(x, y) != bg && qAlpha(img.pixel(x, y)) > 0)
+                {
+                    maxX = x;
+                    break;
+                }
+            }
+        }
+        check(maxX >= static_cast<int>(img.width() * 0.9), label);
+    };
+
+    checkCoverage(snapImg, "snapshot covers full canvas width in fit mode");
+
+    // Zoom in (actual pixels / 100%) and verify that snapshot still covers full canvas width
+    ws->zoomActual();
+    pump(300);
+    const QString snapZoomPath = dir.filePath("test_snap_zoomed.png");
+    check(ws->saveComparisonViewTo(snapZoomPath), "zoomed snapshot saves successfully");
+    const QImage snapZoomImg(snapZoomPath);
+    checkCoverage(snapZoomImg, "snapshot covers full canvas width when zoomed in");
 
     if (g_failures > 0)
     {

@@ -198,16 +198,22 @@ QPixmap CompareWorkspace::grabComparisonView()
     a.rightText = QStringLiteral("MViewer · ") +
                   QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm"));
 
+    const qreal dpr = captured.devicePixelRatio() > 0.0 ? captured.devicePixelRatio() : 1.0;
     const int bannerHeight = 36;
-    const int w = captured.width();
-    const int h = captured.height();
+    const int physW = captured.width();
+    const int physH = captured.height();
+    const int physBannerHeight = static_cast<int>(std::round(bannerHeight * dpr));
 
-    QPixmap result(w, h + bannerHeight);
+    const int logW = static_cast<int>(std::round(captured.deviceIndependentSize().width()));
+    const int logH = static_cast<int>(std::round(captured.deviceIndependentSize().height()));
+
+    QPixmap result(physW, physH + physBannerHeight);
+    result.setDevicePixelRatio(dpr);
     result.fill(QColor(24, 24, 28));
 
     QPainter p(&result);
-    p.drawPixmap(0, 0, captured);
-    paintSnapshotBanner(p, a, w, h, bannerHeight);
+    p.drawPixmap(QRect(0, 0, logW, logH), captured);
+    paintSnapshotBanner(p, a, logW, logH, bannerHeight);
     p.end();
 
     return result;
