@@ -144,8 +144,10 @@ void writeAdjustmentJson(std::ostringstream &os, const CompareAdjustmentState &a
     writeJsonNumber(os, adjustment.redGain);
     os << ", \"blueGain\": ";
     writeJsonNumber(os, adjustment.blueGain);
-    os << ", \"rotation\": " << adjustment.rotation << ", \"hasCrop\": "
-       << (adjustment.hasCrop ? "true" : "false")
+    os << ", \"rotation\": " << adjustment.rotation
+       << ", \"flipH\": " << (adjustment.flipH ? "true" : "false")
+       << ", \"flipV\": " << (adjustment.flipV ? "true" : "false")
+       << ", \"hasCrop\": " << (adjustment.hasCrop ? "true" : "false")
        << ", \"crop\": {\"x\": " << adjustment.cropX << ", \"y\": " << adjustment.cropY
        << ", \"width\": " << adjustment.cropW << ", \"height\": " << adjustment.cropH << "}}";
 }

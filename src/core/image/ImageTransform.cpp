@@ -74,7 +74,7 @@ ImageData resizeToFit(const ImageData &src, int maxW, int maxH)
     if (img.isNull())
         return ImageData();
     QImage r = img.scaled(nw, nh, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    return mvcore::fromQImage(r);
+    return mvcore::fromQImagePreservingAlpha(r);
 }
 
 ImageData resizeByFactor(const ImageData &src, double factor)
@@ -95,7 +95,7 @@ ImageData resizeByFactor(const ImageData &src, double factor)
     if (img.isNull())
         return ImageData();
     QImage r = img.scaled(nw, nh, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    return mvcore::fromQImage(r);
+    return mvcore::fromQImagePreservingAlpha(r);
 }
 
 ImageData addTextWatermark(const ImageData &src, const std::string &text, WatermarkPosition pos,
@@ -172,7 +172,8 @@ ImageData addTextWatermark(const ImageData &src, const std::string &text, Waterm
         draw(x, y);
     }
 
-    return mvcore::fromQImage(out);
+    const bool hasAlpha = (src.format == PixelFormat::RGBA32 || src.format == PixelFormat::BGRA32);
+    return hasAlpha ? mvcore::fromQImagePreservingAlpha(out) : mvcore::fromQImage(out);
 }
 
 ImageData makeContactSheet(const std::vector<ImageData> &imgs, int cols, int thumb)

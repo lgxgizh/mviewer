@@ -4,9 +4,13 @@
 #include "core/image/Encoder.h"
 #include "core/image/QtConvert.h"
 #include "core/image/UsmSharpen.h"
+#include "display/DisplayColorContextProvider.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QCheckBox>
 #include <QColorSpace>
+#include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -15,6 +19,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPointer>
 #include <QPushButton>
 #include <QSlider>
 #include <QSpinBox>
@@ -74,17 +79,47 @@ UsmCompareDialog::~UsmCompareDialog()
 {
     if (m_currentCancel)
         *m_currentCancel = true;
+    if (m_activeTask)
+        TaskScheduler::cancel(m_activeTask);
 }
 
-void UsmCompareDialog::loadImageSource(const QString & /*filePath*/, const ImageData &initialData)
+void UsmCompareDialog::loadImageSource(const QString &filePath, const ImageData &initialData)
 {
     if (!initialData.isNull())
+    {
         m_sourceData = initialData;
+    }
+    else if (!filePath.isEmpty())
+    {
+        QImage loaded(filePath);
+        if (!loaded.isNull())
+        {
+            m_sourceData = mvcore::fromQImagePreservingAlpha(loaded);
+            m_meta.filePath = filePath.toStdString();
+            m_meta.width = m_sourceData.width;
+            m_meta.height = m_sourceData.height;
+            if (loaded.colorSpace().isValid())
+            {
+                const QByteArray icc = loaded.colorSpace().iccProfile();
+                if (!icc.isEmpty())
+                {
+                    m_iccProfile.assign(reinterpret_cast<const uint8_t *>(icc.constData()),
+                                        reinterpret_cast<const uint8_t *>(icc.constData()) +
+                                            icc.size());
+                    const QByteArray encoded = icc.toBase64();
+                    m_meta.textKeys["MViewer.DisplayICC.Base64"] =
+                        std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
+                    m_meta.hasIccProfile = true;
+                }
+            }
+        }
+    }
 
     if (m_sourceData.isNull())
         return;
 
-    m_origQImage = mvcore::toQImage(m_sourceData);
+    const auto displayCtx = DisplayColorContextProvider::forWindow(windowHandle());
+    m_origQImage = mvcore::toDisplayQImage(m_sourceData, m_meta, displayCtx);
     m_leftView->setImage(m_origQImage, m_origQImage.size());
     m_rightView->setImage(m_origQImage, m_origQImage.size());
 
@@ -124,6 +159,7 @@ QWidget *UsmCompareDialog::createTopToolBar()
     m_syncCheck = new QCheckBox(tr("同步缩放/平移"), bar);
     m_syncCheck->setChecked(true);
     m_btnHoldCompare = new QPushButton(tr("按住看原图 (Space)"), bar);
+    m_btnCopy = new QPushButton(tr("复制结果 (Ctrl+C)"), bar);
     m_btnSave = new QPushButton(tr("另存为... (Ctrl+S)"), bar);
 
     layout->addWidget(m_btnFit);
@@ -132,6 +168,7 @@ QWidget *UsmCompareDialog::createTopToolBar()
     layout->addWidget(m_syncCheck);
     layout->addWidget(m_btnHoldCompare);
     layout->addStretch(1);
+    layout->addWidget(m_btnCopy);
     layout->addWidget(m_btnSave);
     return bar;
 }
@@ -178,6 +215,12 @@ QWidget *UsmCompareDialog::createBottomControls()
     grid->setHorizontalSpacing(10);
     grid->setVerticalSpacing(6);
 
+    auto *lblPreset = new QLabel(tr("预设模板:"), controls);
+    m_comboPreset = new QComboBox(controls);
+    m_comboPreset->addItems({tr("标准通用锐化"), tr("轻度细节唤醒"), tr("人像肤质保护"),
+                             tr("风景建筑清晰度"), tr("强力边缘增强"), tr("自定义")});
+    m_comboPreset->setCurrentIndex(0);
+
     auto *lblAmount = new QLabel(tr("数量 (Amount):"), controls);
     m_sliderAmount = new QSlider(Qt::Horizontal, controls);
     m_sliderAmount->setRange(0, 500);
@@ -211,18 +254,23 @@ QWidget *UsmCompareDialog::createBottomControls()
     m_btnReset = new QPushButton(tr("重置"), controls);
     m_btnApply = new QPushButton(tr("应用锐化"), controls);
 
-    grid->addWidget(lblAmount, 0, 0);
-    grid->addWidget(m_sliderAmount, 0, 1);
-    grid->addWidget(m_spinAmount, 0, 2);
-    grid->addWidget(lblRadius, 1, 0);
-    grid->addWidget(m_sliderRadius, 1, 1);
-    grid->addWidget(m_spinRadius, 1, 2);
-    grid->addWidget(lblThreshold, 2, 0);
-    grid->addWidget(m_sliderThreshold, 2, 1);
-    grid->addWidget(m_spinThreshold, 2, 2);
+    grid->addWidget(lblPreset, 0, 0);
+    grid->addWidget(m_comboPreset, 0, 1);
     grid->addWidget(m_checkLumaOnly, 0, 3, 1, 2);
-    grid->addWidget(m_btnReset, 1, 3);
-    grid->addWidget(m_btnApply, 1, 4);
+
+    grid->addWidget(lblAmount, 1, 0);
+    grid->addWidget(m_sliderAmount, 1, 1);
+    grid->addWidget(m_spinAmount, 1, 2);
+
+    grid->addWidget(lblRadius, 2, 0);
+    grid->addWidget(m_sliderRadius, 2, 1);
+    grid->addWidget(m_spinRadius, 2, 2);
+
+    grid->addWidget(lblThreshold, 3, 0);
+    grid->addWidget(m_sliderThreshold, 3, 1);
+    grid->addWidget(m_spinThreshold, 3, 2);
+    grid->addWidget(m_btnReset, 3, 3);
+    grid->addWidget(m_btnApply, 3, 4);
     return controls;
 }
 
@@ -249,9 +297,13 @@ void UsmCompareDialog::setupConnections()
     connect(m_btnFit, &QPushButton::clicked, this, &UsmCompareDialog::zoomFit);
     connect(m_btn100, &QPushButton::clicked, this, &UsmCompareDialog::zoom100);
     connect(m_btn200, &QPushButton::clicked, this, &UsmCompareDialog::zoom200);
+    connect(m_btnCopy, &QPushButton::clicked, this, &UsmCompareDialog::copySharpenedToClipboard);
     connect(m_btnSave, &QPushButton::clicked, this, &UsmCompareDialog::saveSharpenedAs);
     connect(m_btnReset, &QPushButton::clicked, this, &UsmCompareDialog::resetParameters);
     connect(m_btnApply, &QPushButton::clicked, this, &UsmCompareDialog::scheduleSharpen);
+
+    connect(m_comboPreset, qOverload<int>(&QComboBox::currentIndexChanged), this,
+            &UsmCompareDialog::onPresetSelected);
 
     connect(m_btnHoldCompare, &QPushButton::pressed, this,
             [this]()
@@ -291,6 +343,57 @@ void UsmCompareDialog::setupConnections()
 
 void UsmCompareDialog::onParametersChanged()
 {
+    if (!m_updatingPreset && m_comboPreset)
+    {
+        m_updatingPreset = true;
+        m_comboPreset->setCurrentIndex(5); // 自定义
+        m_updatingPreset = false;
+    }
+    m_debounceTimer->start();
+}
+
+void UsmCompareDialog::onPresetSelected(int index)
+{
+    if (m_updatingPreset || index < 0 || index >= 5)
+        return;
+
+    m_updatingPreset = true;
+    switch (index)
+    {
+    case 0: // 标准通用锐化
+        m_spinAmount->setValue(150);
+        m_spinRadius->setValue(1.0);
+        m_spinThreshold->setValue(0);
+        m_checkLumaOnly->setChecked(true);
+        break;
+    case 1: // 轻度细节唤醒
+        m_spinAmount->setValue(80);
+        m_spinRadius->setValue(0.8);
+        m_spinThreshold->setValue(2);
+        m_checkLumaOnly->setChecked(true);
+        break;
+    case 2: // 人像肤质保护
+        m_spinAmount->setValue(120);
+        m_spinRadius->setValue(1.2);
+        m_spinThreshold->setValue(6);
+        m_checkLumaOnly->setChecked(true);
+        break;
+    case 3: // 风景建筑清晰度
+        m_spinAmount->setValue(200);
+        m_spinRadius->setValue(1.5);
+        m_spinThreshold->setValue(1);
+        m_checkLumaOnly->setChecked(false);
+        break;
+    case 4: // 强力边缘增强
+        m_spinAmount->setValue(300);
+        m_spinRadius->setValue(2.5);
+        m_spinThreshold->setValue(0);
+        m_checkLumaOnly->setChecked(false);
+        break;
+    default:
+        break;
+    }
+    m_updatingPreset = false;
     m_debounceTimer->start();
 }
 
@@ -302,22 +405,25 @@ void UsmCompareDialog::scheduleSharpen()
     m_debounceTimer->stop();
     if (m_currentCancel)
         *m_currentCancel = true;
+    if (m_activeTask)
+        TaskScheduler::cancel(m_activeTask);
 
     const uint64_t gen = ++m_currentGen;
     auto cancelFlag = std::make_shared<std::atomic<bool>>(false);
     m_currentCancel = cancelFlag;
 
     mviewer::core::UsmParams params;
-    params.amount = static_cast<float>(m_spinAmount->value()) / 100.0f;
-    params.radius = static_cast<float>(m_spinRadius->value());
+    params.amount = static_cast<double>(m_spinAmount->value()) / 100.0;
+    params.radius = m_spinRadius->value();
     params.threshold = m_spinThreshold->value();
     params.lumaOnly = m_checkLumaOnly->isChecked();
 
     m_lblCalcStatus->setText(tr("正在计算锐化..."));
 
+    QPointer<UsmCompareDialog> guard(this);
     m_activeTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [this, gen, cancelFlag, params, src = m_sourceData](const TaskScheduler::TaskContext &)
+        [guard, gen, cancelFlag, params, src = m_sourceData](const TaskScheduler::TaskContext &)
         {
             if (cancelFlag->load(std::memory_order_relaxed))
                 return;
@@ -325,49 +431,64 @@ void UsmCompareDialog::scheduleSharpen()
             auto cancelCb = [cancelFlag]() -> bool
             { return cancelFlag->load(std::memory_order_relaxed); };
             auto out = mviewer::core::applyUsmSharpen(src, params, cancelCb);
-            if (cancelFlag->load(std::memory_order_relaxed))
+            if (cancelFlag->load(std::memory_order_relaxed) || out.isNull())
                 return;
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                                      std::chrono::steady_clock::now() - start)
                                      .count();
-            const double psnr = AnalysisEngine::psnr(src, out);
-            const double ssim = AnalysisEngine::ssim(src, out);
+            const auto summary = mviewer::core::computeUsmDiffSummary(src, out);
             if (cancelFlag->load(std::memory_order_relaxed))
                 return;
 
             QMetaObject::invokeMethod(
-                this,
-                [this, gen, out = std::move(out), elapsed, psnr, ssim]() mutable
+                qApp,
+                [guard, gen, out = std::move(out), elapsed, summary]() mutable
                 {
-                    if (gen != m_currentGen)
+                    UsmCompareDialog *self = guard.data();
+                    if (!self || gen != self->m_currentGen)
                         return;
-                    m_sharpenedData = std::move(out);
-                    m_sharpenedQImage = mvcore::toQImage(m_sharpenedData);
-                    m_rightView->setImage(m_sharpenedQImage, m_origQImage.size(),
-                                          m_origQImage.rect());
-                    m_rightView->setTransform(m_leftView->scale(), m_leftView->offset());
-                    updateStatusInfo(elapsed, psnr, ssim);
+                    self->m_sharpenedData = std::move(out);
+                    const auto displayCtx =
+                        DisplayColorContextProvider::forWindow(self->windowHandle());
+                    self->m_sharpenedQImage =
+                        mvcore::toDisplayQImage(self->m_sharpenedData, self->m_meta, displayCtx);
+                    self->m_rightView->setImage(self->m_sharpenedQImage, self->m_origQImage.size(),
+                                                self->m_origQImage.rect());
+                    self->m_rightView->setTransform(self->m_leftView->scale(),
+                                                    self->m_leftView->offset());
+                    self->updateStatusInfo(elapsed, summary);
                 },
                 Qt::QueuedConnection);
         });
 }
 
-void UsmCompareDialog::updateStatusInfo(qint64 elapsedMs, double psnr, double ssim)
+void UsmCompareDialog::updateStatusInfo(qint64 elapsedMs,
+                                       const mviewer::core::UsmDiffSummary &summary)
 {
     m_lblCalcStatus->setText(tr("计算完成 (耗时: %1 ms)").arg(elapsedMs));
     m_lblMetrics->setText(
-        QString("PSNR: %1 dB | SSIM: %2")
-            .arg(psnr >= 100.0 ? QStringLiteral("∞") : QString::number(psnr, 'f', 2))
-            .arg(ssim, 0, 'f', 4));
+        QString("PSNR: %1 dB | SSIM: %2 | Δ均值: %3 | Δ最大: %4 | 变化像素: %5%")
+            .arg(summary.psnr >= 100.0 ? QStringLiteral("∞")
+                                       : QString::number(summary.psnr, 'f', 2))
+            .arg(summary.ssim, 0, 'f', 4)
+            .arg(summary.meanDelta, 0, 'f', 2)
+            .arg(summary.maxDelta)
+            .arg(QString::number(summary.changedPercent, 'f', 1)));
 }
 
 void UsmCompareDialog::resetParameters()
 {
-    m_spinAmount->setValue(150);
-    m_spinRadius->setValue(1.0);
-    m_spinThreshold->setValue(0);
-    m_checkLumaOnly->setChecked(true);
-    scheduleSharpen();
+    if (m_comboPreset)
+        m_comboPreset->setCurrentIndex(0);
+    onPresetSelected(0);
+}
+
+void UsmCompareDialog::copySharpenedToClipboard()
+{
+    if (m_sharpenedQImage.isNull())
+        return;
+    QApplication::clipboard()->setImage(m_sharpenedQImage);
+    m_lblCalcStatus->setText(tr("已复制锐化结果到剪贴板"));
 }
 
 void UsmCompareDialog::saveSharpenedAs()
@@ -385,7 +506,9 @@ void UsmCompareDialog::saveSharpenedAs()
         return;
 
     Encoder::Params params;
-    if (m_origQImage.colorSpace().isValid())
+    if (!m_iccProfile.empty())
+        params.iccProfile = m_iccProfile;
+    else if (m_origQImage.colorSpace().isValid())
     {
         const QByteArray icc = m_origQImage.colorSpace().iccProfile();
         if (!icc.isEmpty())
@@ -460,6 +583,12 @@ void UsmCompareDialog::keyPressEvent(QKeyEvent *event)
     if (event->matches(QKeySequence::Save))
     {
         saveSharpenedAs();
+        event->accept();
+        return;
+    }
+    if (event->matches(QKeySequence::Copy))
+    {
+        copySharpenedToClipboard();
         event->accept();
         return;
     }

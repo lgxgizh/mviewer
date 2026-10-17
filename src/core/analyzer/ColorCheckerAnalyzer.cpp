@@ -139,7 +139,7 @@ bool ColorCheckerAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1,
             const double *ref = kRef[patchIdx];
             const double de = deltaE(ar, ag, ab, ref[0], ref[1], ref[2]);
             sumDE += de;
-            if (de > maxDE)
+            if (maxPatch < 0 || de > maxDE)
             {
                 maxDE = de;
                 maxPatch = patchIdx + 1;

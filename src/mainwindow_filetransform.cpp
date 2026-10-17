@@ -459,7 +459,10 @@ bool confirmTransform(QWidget *parent, const QStringList &paths, FileTransformKi
     box.setCheckBox(cb);
 
     const int res = box.exec();
-    if (res != QMessageBox::Ok && res != QMessageBox::Yes && res != QDialog::Accepted)
+    const bool accepted = (res == QMessageBox::Ok || res == QMessageBox::Yes ||
+                           res == QDialog::Accepted ||
+                           (res == QMessageBox::NoButton && box.result() == QDialog::Accepted));
+    if (!accepted)
         return false;
 
     if (cb->isChecked())

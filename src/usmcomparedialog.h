@@ -2,6 +2,7 @@
 
 #include "core/image/ImageBuffer.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "domain/Image.h"
 #include "widgets/rawimageview.h"
 
 #include <QDialog>
@@ -11,12 +12,18 @@
 #include <memory>
 
 class QCheckBox;
+class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
 class QPushButton;
 class QSlider;
 class QSpinBox;
 class QTimer;
+
+namespace mviewer::core
+{
+struct UsmDiffSummary;
+}
 
 class UsmCompareDialog : public QDialog
 {
@@ -36,6 +43,8 @@ class UsmCompareDialog : public QDialog
     void scheduleSharpen();
     void resetParameters();
     void saveSharpenedAs();
+    void copySharpenedToClipboard();
+    void onPresetSelected(int index);
     void zoomFit();
     void zoom100();
     void zoom200();
@@ -48,12 +57,14 @@ class UsmCompareDialog : public QDialog
     QWidget *createStatusBarWidget();
     void setupConnections();
     void syncTransforms(RawImageView *source, RawImageView *target);
-    void updateStatusInfo(qint64 elapsedMs, double psnr, double ssim);
+    void updateStatusInfo(qint64 elapsedMs, const mviewer::core::UsmDiffSummary &summary);
     void loadImageSource(const QString &filePath, const ImageData &initialData);
 
     QString m_filePath;
     ImageData m_sourceData;
     ImageData m_sharpenedData;
+    mviewer::domain::ImageMetadata m_meta;
+    std::vector<uint8_t> m_iccProfile;
     QImage m_origQImage;
     QImage m_sharpenedQImage;
 
@@ -65,8 +76,10 @@ class UsmCompareDialog : public QDialog
     QPushButton *m_btn200 = nullptr;
     QCheckBox *m_syncCheck = nullptr;
     QPushButton *m_btnHoldCompare = nullptr;
+    QPushButton *m_btnCopy = nullptr;
     QPushButton *m_btnSave = nullptr;
 
+    QComboBox *m_comboPreset = nullptr;
     QSlider *m_sliderAmount = nullptr;
     QSpinBox *m_spinAmount = nullptr;
     QSlider *m_sliderRadius = nullptr;
@@ -83,6 +96,7 @@ class UsmCompareDialog : public QDialog
 
     QTimer *m_debounceTimer = nullptr;
     bool m_syncing = false;
+    bool m_updatingPreset = false;
     uint64_t m_currentGen = 0;
     std::shared_ptr<std::atomic<bool>> m_currentCancel;
     TaskScheduler::TaskHandle m_activeTask;

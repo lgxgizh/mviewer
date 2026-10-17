@@ -115,6 +115,7 @@ struct HistogramBatchResult
     // M23: coherent title and histogram data delivered as one pair.
     bool roiEnabled = false;
     mviewer::domain::Selection roi;
+    std::vector<int> mainIndices;
     std::vector<mviewer::core::Histogram> main; // main surface, in main order
 
     struct CellHist

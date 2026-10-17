@@ -282,37 +282,45 @@ inline void buildCombinedLuts(int adj, float f, float g, float r, float b, bool 
     const bool hasContrast = (std::abs(f - 1.0f) >= 1e-6f);
     const bool hasGamma = (std::abs(g - 1.0f) >= 1e-6f);
     const bool hasWb = (std::abs(r - 1.0f) >= 1e-6f || std::abs(b - 1.0f) >= 1e-6f);
-    const float invGamma = 1.0f / g;
+    const float clampedGamma = std::clamp(g, 0.05f, 8.0f);
+    const float invGamma = 1.0f / clampedGamma;
 
     for (int i = 0; i < 256; ++i)
     {
-        float val = static_cast<float>(i);
+        int val = i;
         if (hasBrightness)
-            val += static_cast<float>(adj);
+            val = std::clamp(val + std::clamp(adj, -255, 255), 0, 255);
         if (hasContrast)
-            val = (val - 128.0f) * f + 128.0f;
-        val = std::clamp(val, 0.0f, 255.0f);
+        {
+            const float v = (static_cast<float>(val) - 128.0f) * std::max(f, 0.0f) + 128.0f;
+            val = std::clamp(static_cast<int>(std::lroundf(v)), 0, 255);
+        }
         if (hasGamma)
         {
-            const float norm = val / 255.0f;
-            val = std::pow(norm, invGamma) * 255.0f;
+            const float norm = static_cast<float>(val) / 255.0f;
+            val = std::clamp(static_cast<int>(std::lroundf(std::pow(norm, invGamma) * 255.0f)), 0, 255);
         }
 
         if (isGray)
         {
-            lutR[static_cast<size_t>(i)] =
-                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(val)), 0, 255));
+            lutR[static_cast<size_t>(i)] = static_cast<uint8_t>(val);
+            lutG[static_cast<size_t>(i)] = static_cast<uint8_t>(val);
+            lutB[static_cast<size_t>(i)] = static_cast<uint8_t>(val);
         }
         else
         {
-            const float rVal = hasWb ? (val * r) : val;
-            const float bVal = hasWb ? (val * b) : val;
-            lutR[static_cast<size_t>(i)] =
-                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(rVal)), 0, 255));
-            lutG[static_cast<size_t>(i)] =
-                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(val)), 0, 255));
-            lutB[static_cast<size_t>(i)] =
-                static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(bVal)), 0, 255));
+            int rVal = val;
+            int bVal = val;
+            if (hasWb)
+            {
+                if (std::abs(r - 1.0f) >= 1e-6f)
+                    rVal = std::clamp(static_cast<int>(std::lroundf(static_cast<float>(val) * std::max(r, 0.01f))), 0, 255);
+                if (std::abs(b - 1.0f) >= 1e-6f)
+                    bVal = std::clamp(static_cast<int>(std::lroundf(static_cast<float>(val) * std::max(b, 0.01f))), 0, 255);
+            }
+            lutR[static_cast<size_t>(i)] = static_cast<uint8_t>(rVal);
+            lutG[static_cast<size_t>(i)] = static_cast<uint8_t>(val);
+            lutB[static_cast<size_t>(i)] = static_cast<uint8_t>(bVal);
         }
     }
 }

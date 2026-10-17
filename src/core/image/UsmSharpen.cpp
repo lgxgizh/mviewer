@@ -1,8 +1,10 @@
 #include "core/image/UsmSharpen.h"
+#include "core/analysis/AnalysisEngine.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace mviewer::core
@@ -35,11 +37,26 @@ std::vector<int> buildGaussianKernel1D(double sigma, int &radius)
     return kernel;
 }
 
+void buildDeltaLut(double amount, int threshold, int *lut511)
+{
+    for (int diff = -255; diff <= 255; ++diff)
+    {
+        if (std::abs(diff) >= threshold)
+            lut511[diff + 255] = static_cast<int>(std::round(amount * diff));
+        else
+            lut511[diff + 255] = 0;
+    }
+}
+
 bool blurHorizontal(const uint8_t *src, int w, int h, int cpp, int colorChannels,
                     const std::vector<int> &kernel, int radius, uint8_t *temp,
                     const std::function<bool()> &cancelled)
 {
     const int kSize = static_cast<int>(kernel.size());
+    const bool hasInterior = (w > 2 * radius);
+    const int interiorStart = hasInterior ? radius : w;
+    const int interiorEnd = hasInterior ? (w - radius) : w;
+
     for (int y = 0; y < h; ++y)
     {
         if ((y & 15) == 0 && cancelled && cancelled())
@@ -48,7 +65,36 @@ bool blurHorizontal(const uint8_t *src, int w, int h, int cpp, int colorChannels
             src + static_cast<size_t>(y) * static_cast<size_t>(w) * static_cast<size_t>(cpp);
         uint8_t *tempRow = temp + static_cast<size_t>(y) * static_cast<size_t>(w) *
                                       static_cast<size_t>(colorChannels);
-        for (int x = 0; x < w; ++x)
+
+        for (int x = 0; x < interiorStart; ++x)
+        {
+            for (int c = 0; c < colorChannels; ++c)
+            {
+                int acc = 0;
+                for (int k = 0; k < kSize; ++k)
+                {
+                    const int sx = std::clamp(x - radius + k, 0, w - 1);
+                    acc += srcRow[static_cast<size_t>(sx) * cpp + c] * kernel[k];
+                }
+                tempRow[static_cast<size_t>(x) * colorChannels + c] =
+                    static_cast<uint8_t>((acc + 8192) >> 14);
+            }
+        }
+
+        for (int x = interiorStart; x < interiorEnd; ++x)
+        {
+            const uint8_t *inPtr = srcRow + static_cast<size_t>(x - radius) * cpp;
+            for (int c = 0; c < colorChannels; ++c)
+            {
+                int acc = 0;
+                for (int k = 0; k < kSize; ++k)
+                    acc += inPtr[static_cast<size_t>(k) * cpp + c] * kernel[k];
+                tempRow[static_cast<size_t>(x) * colorChannels + c] =
+                    static_cast<uint8_t>((acc + 8192) >> 14);
+            }
+        }
+
+        for (int x = interiorEnd; x < w; ++x)
         {
             for (int c = 0; c < colorChannels; ++c)
             {
@@ -73,6 +119,9 @@ bool blurVerticalAndCombine(const uint8_t *src, const uint8_t *temp, int w, int 
 {
     const int kSize = static_cast<int>(kernel.size());
     const size_t tempRowStride = static_cast<size_t>(w) * static_cast<size_t>(colorChannels);
+    int deltaLut[511];
+    buildDeltaLut(amount, threshold, deltaLut);
+
     for (int y = 0; y < h; ++y)
     {
         if ((y & 15) == 0 && cancelled && cancelled())
@@ -97,15 +146,8 @@ bool blurVerticalAndCombine(const uint8_t *src, const uint8_t *temp, int w, int 
                 const int blurVal = (acc + 8192) >> 14;
                 const int origVal = srcRow[px + c];
                 const int diff = origVal - blurVal;
-                if (std::abs(diff) >= threshold)
-                {
-                    const int sharp = static_cast<int>(std::round(origVal + amount * diff));
-                    dstRow[px + c] = static_cast<uint8_t>(std::clamp(sharp, 0, 255));
-                }
-                else
-                {
-                    dstRow[px + c] = static_cast<uint8_t>(origVal);
-                }
+                const int delta = deltaLut[std::clamp(diff, -255, 255) + 255];
+                dstRow[px + c] = static_cast<uint8_t>(std::clamp(origVal + delta, 0, 255));
             }
             if (cpp == 4)
                 dstRow[px + 3] = srcRow[px + 3];
@@ -135,6 +177,9 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
 {
     const int kSize = static_cast<int>(kernel.size());
     const bool isBgr = (format == PixelFormat::BGR24 || format == PixelFormat::BGRA32);
+    int deltaLut[511];
+    buildDeltaLut(amount, threshold, deltaLut);
+
     for (int y = 0; y < h; ++y)
     {
         if ((y & 15) == 0 && cancelled && cancelled())
@@ -155,9 +200,7 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
             const int blurLuma = (acc + 8192) >> 14;
             const int origLuma = lumaSrc[rowOffset + static_cast<size_t>(x)];
             const int diffLuma = origLuma - blurLuma;
-            int delta = 0;
-            if (std::abs(diffLuma) >= threshold)
-                delta = static_cast<int>(std::round(amount * diffLuma));
+            const int delta = deltaLut[std::clamp(diffLuma, -255, 255) + 255];
 
             const int rIdx = isBgr ? 2 : 0;
             const int gIdx = 1;
@@ -224,6 +267,59 @@ ImageData applyUsmSharpen(const ImageData &src, const UsmParams &params,
     }
 
     return dst;
+}
+
+UsmDiffSummary computeUsmDiffSummary(const ImageData &orig, const ImageData &sharpened)
+{
+    UsmDiffSummary summary;
+    if (orig.isNull() || sharpened.isNull() || orig.width != sharpened.width ||
+        orig.height != sharpened.height || orig.format != sharpened.format)
+    {
+        return summary;
+    }
+
+    summary.psnr = AnalysisEngine::psnr(orig, sharpened);
+    summary.ssim = AnalysisEngine::ssim(orig, sharpened);
+
+    const int w = orig.width;
+    const int h = orig.height;
+    const int cpp = orig.channelsPerPixel();
+    const int colorChannels = (cpp == 4) ? 3 : cpp;
+    const uint8_t *pOrig = orig.constView().data;
+    const uint8_t *pSharp = sharpened.constView().data;
+    const size_t totalPixels = static_cast<size_t>(w) * static_cast<size_t>(h);
+
+    uint64_t totalDelta = 0;
+    int maxDelta = 0;
+    size_t changedPixels = 0;
+
+    for (size_t i = 0; i < totalPixels; ++i)
+    {
+        const size_t offset = i * cpp;
+        int pixelMaxDiff = 0;
+        for (int c = 0; c < colorChannels; ++c)
+        {
+            const int diff = std::abs(static_cast<int>(pOrig[offset + c]) -
+                                      static_cast<int>(pSharp[offset + c]));
+            if (diff > pixelMaxDiff)
+                pixelMaxDiff = diff;
+        }
+        totalDelta += static_cast<uint64_t>(pixelMaxDiff);
+        if (pixelMaxDiff > maxDelta)
+            maxDelta = pixelMaxDiff;
+        if (pixelMaxDiff > 0)
+            ++changedPixels;
+    }
+
+    if (totalPixels > 0)
+    {
+        summary.meanDelta = static_cast<double>(totalDelta) / static_cast<double>(totalPixels);
+        summary.maxDelta = maxDelta;
+        summary.changedPercent =
+            (100.0 * static_cast<double>(changedPixels)) / static_cast<double>(totalPixels);
+    }
+
+    return summary;
 }
 
 } // namespace mviewer::core

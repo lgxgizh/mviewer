@@ -52,4 +52,7 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
 // QImage -> ImageData（格式感知：Grayscale8 保留为灰度，其余转 RGB24）
 ImageData fromQImage(const QImage &src);
 
+// QImage -> ImageData（保留 Alpha 通道：有 Alpha 时转 RGBA32 / BGRA32，无 Alpha 时等同 fromQImage）
+ImageData fromQImagePreservingAlpha(const QImage &src);
+
 } // namespace mvcore

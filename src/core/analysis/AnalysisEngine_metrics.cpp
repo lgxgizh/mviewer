@@ -1,9 +1,6 @@
 #include "core/analysis/AnalysisEngine.h"
 
-#include "core/image/QtConvert.h"
 #include "core/simd/CpuFeatures.h"
-
-#include <QImage>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

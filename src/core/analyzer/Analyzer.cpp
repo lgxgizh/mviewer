@@ -195,18 +195,19 @@ AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
     // state they write into must not be this frame's locals.
     auto mtx = std::make_shared<std::mutex>();
     auto results = std::make_shared<std::unordered_map<std::string, std::string>>();
+    auto frameSnapshot = std::make_shared<ImageFrame>(frame);
     std::vector<TaskScheduler::TaskHandle> handles;
     handles.reserve(m_factories.size());
     for (const auto &[id, factory] : m_factories)
     {
         handles.push_back(sched.submit(TaskScheduler::AnalysisPool,
-                                       [mtx, results, id, factory, &frame]()
+                                       [mtx, results, id, factory, frameSnapshot]()
                                        {
                                            std::string text;
                                            try
                                            {
                                                auto analyzer = factory();
-                                               if (analyzer && analyzer->analyze(frame))
+                                               if (analyzer && analyzer->analyze(*frameSnapshot))
                                                    text = analyzer->resultText();
                                            }
                                            catch (const std::exception &error)

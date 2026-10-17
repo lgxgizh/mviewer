@@ -300,7 +300,7 @@ ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelO
     if (!loadOrientedImage(qPath, &original, &readerFormat, &icc, &text, &err))
         return failResult(err, ImageRotateError::ReadFailed);
 
-    const ImageData src = mvcore::fromQImage(original);
+    const ImageData src = mvcore::fromQImagePreservingAlpha(original);
     if (src.isNull())
         return failResult("pixel convert failed", ImageRotateError::ConvertFailed);
 

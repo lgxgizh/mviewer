@@ -47,7 +47,7 @@ bool Encoder::encode(const ImageData &img, const std::string &path, const Params
     QString fmt = QString::fromStdString(formatForExtension(ext.toStdString()));
     writer.setFormat(fmt.toUtf8());
 
-    if (fmt == "jpg" || fmt == "webp")
+    if (fmt == "jpg" || fmt == "jpeg" || fmt == "webp")
     {
         writer.setQuality(params.quality);
     }

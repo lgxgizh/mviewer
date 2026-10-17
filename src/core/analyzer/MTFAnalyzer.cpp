@@ -104,7 +104,7 @@ std::vector<double> extractEdgeProfile(const ImageBuffer &v, int x0, int y0, int
     const bool isVerticalEdge = (diffX > diffY);
 
     const size_t profLen = isVerticalEdge ? static_cast<size_t>(w) : static_cast<size_t>(h);
-    if (profLen < 4)
+    if (profLen < 8)
         return {};
 
     std::vector<double> profile(profLen, 0.0);
@@ -233,7 +233,7 @@ bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
     const int cpp = v.channelsPerPixel();
     const int w = x1 - x0;
     const int h = y1 - y0;
-    if (w < 8 || h < 4)
+    if (w < 4 || h < 4 || (w < 8 && h < 8))
     {
         m_mtf50 = 0.0;
         m_mtf50Cps = 0.0;

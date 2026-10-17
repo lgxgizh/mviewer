@@ -56,17 +56,23 @@ bool accumulateCrossFormatSsd(const ImageData &aData, const ImageData &bData, in
 void accumulateGenericSsd(const ImageData &aData, const ImageData &bData, int w, int h,
                           int64_t &sumSq)
 {
-    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
-    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
+    const ImageBuffer va = aData.view();
+    const ImageBuffer vb = bData.view();
+    const int cppa = aData.channelsPerPixel();
+    const int cppb = bData.channelsPerPixel();
     for (int y = 0; y < h; ++y)
     {
-        const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
-        const QRgb *lb = reinterpret_cast<const QRgb *>(bb.constScanLine(y));
+        const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
+        const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
         for (int x = 0; x < w; ++x)
         {
-            const int dr = static_cast<int>(qRed(la[x])) - qRed(lb[x]);
-            const int dg = static_cast<int>(qGreen(la[x])) - qGreen(lb[x]);
-            const int db = static_cast<int>(qBlue(la[x])) - qBlue(lb[x]);
+            uint8_t ra = 0, ga = 0, ba = 0;
+            uint8_t rb = 0, gb = 0, bb = 0;
+            getPixelRGB(la + static_cast<size_t>(x) * cppa, aData.format, ra, ga, ba);
+            getPixelRGB(lb + static_cast<size_t>(x) * cppb, bData.format, rb, gb, bb);
+            const int dr = static_cast<int>(ra) - static_cast<int>(rb);
+            const int dg = static_cast<int>(ga) - static_cast<int>(gb);
+            const int db = static_cast<int>(ba) - static_cast<int>(bb);
             sumSq += static_cast<int64_t>(dr) * dr + static_cast<int64_t>(dg) * dg +
                      static_cast<int64_t>(db) * db;
         }

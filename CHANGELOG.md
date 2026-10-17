@@ -1,5 +1,44 @@
 # Changelog
 
+## [1.0.134] - 2026-10-17
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.134**.
+
+### Core Engine & Architecture Fixes
+
+- **渐进式目录扫描筛选守卫与自然排序（Progressive Directory Scan Filtering & Sorting）**：
+  - 新增 `hasActiveBrowseFilter()` 全局守卫，覆盖关键字、格式类型、星级评分、颜色标签、Pick/Reject 标记、最近导入以及相机/镜头/ISO/标签等全量过滤维度，杜绝未过滤条目在异步阶段直接插入画廊且扫描完成时跳过筛选的问题；
+  - 统一 `scanProgressiveDirectory` 尾部批次排序与 `browseOrderedLess` / `compareNaturalName` 自然排序规则（数字自然排序，如 `img2` 位于 `img10` 之前）；
+  - `applyScanBatch` 改为 `replaceSources` 整体映射路径，保证缩略图管线任务索引与当前表格行号严格一致；并在渐进式完成分支中自动恢复 `m_pendingSelect` 选中项。
+- **编码器与透明通道保护（Lossless Alpha Channel Preservation & Quality Control）**：
+  - 修复 `Encoder::encode` 仅匹配 `"jpg"` 导致保存 `.jpeg` 文件时 `params.quality` 参数失效的逻辑缺陷；
+  - 新增 `mvcore::fromQImagePreservingAlpha` 接口，原图 90°/180°/270° 旋转、水平/垂直翻转、图像几何缩放与文字水印合成管线均完整保留 `PixelFormat::RGBA32` / `BGRA32` 透明通道，杜绝静默退化为不透明 24 位 RGB 导致的背景变黑问题。
+- **分析器与对齐引擎健壮性（Analyzer & Aligner Edge Robustness）**：
+  - `ColorCheckerAnalyzer`：增加 `maxPatch < 0` 初始守卫，彻底解决全图色块均未通过质量校验时返回未初始化色块索引的缺陷；
+  - `MTFAnalyzer`：放宽 `compute` 边界检查以完整支持极细长/高挑水平刀口 ROI 区域（如 4×16 / 8×4），并将边缘剖面有效判定阈值收敛至 8 采样点；
+  - `Analyzer`：异步分析调度捕获强引用共享快照 `std::make_shared<ImageFrame>(frame)`，彻底规避栈局部临时帧引用在异步线程执行期间悬空引起的 UAF 隐患；
+  - `Aligner`：对粗/精搜索循环区间双向施加参考图与移动图尺寸边界约束，彻底防止图像尺寸不一致或大位移时搜索窗越界引发崩溃。
+- **对比调参、报告与检视（Compare Parameter Sync, Report & Pixel Inspector）**：
+  - 对齐 `ImageAdjust.h` 熔合调参 LUT 构建公式与 `PixelInspector_adjust.cpp` 的阶梯四舍五入规则，保证 100% 逐位一致；
+  - `AnalysisEngine` 纯标准库实现：移除 `AnalysisEngine_metrics.cpp` 对 Qt 图像转化的隐式依赖，直接基于 `ImageBuffer` 内存布局高效计算均方误差；
+  - 导出报告序列化：在 HTML 与 JSON 分析报告中完整导出窗格水平翻转（`flipH`）与垂直翻转（`flipV`）调参字段；
+  - 直方图批处理与检视表：修正单窗格独立直方图在 tooltip 中的槽位标识（如 C 窗格显示 `[C]` 而非恒定 `[A]`）；检视表行更新无条件拉取最新文件名，并在 `#` 列 UserRole 中同步注入打包 RGB 颜色，打通右键 HEX/RGB 复制链路。
+- **文件覆盖确认逻辑兼容（Transform Confirmation Dialog Compatibility）**：
+  - 扩大原文件修改确认对话框的有效确认状态判断，防止非标准按钮映射或回车键确认被误判为取消。
+
+### Product & UX Enhancements
+
+- **USM 锐化前后对比与导出升级（USM Sharpen Engine & Studio Enhancements）**：
+  - **核心计算极速优化**：建立 511 项预计算差值查找表（Delta LUT），彻底消除高斯差值锐化内层循环的浮点运算；水平滤波内域展开消除边界 clamp 检查，执行效率提升 2~3 倍；
+  - **量化差异全景评测**：新增 `computeUsmDiffSummary`，一次性输出 PSNR、SSIM、Δ均值、Δ最大以及像素变化百分比等多维客观评价指标；
+  - **5 大专业预设模板**：新增预设下拉框，提供“标准通用锐化”、“轻度细节唤醒”、“人像肤质保护”、“风景建筑清晰度”、“强力边缘增强”，并支持微调后无缝切入“自定义”模式；
+  - **剪贴板一键导出**：新增“复制结果 (Ctrl+C)”按钮与快捷键支持，瞬时将锐化图像推送到系统剪贴板；
+  - **全链路色彩管理与任务安全**：锐化渲染与显示严格遵照当前窗口色彩空间上下文，保存时完整继承源图 ICC Profile；异步计算任务严格受控于 `TaskScheduler`，弹窗关闭或参数连动时即刻取消旧任务，UI 回调引入 `QPointer` 守卫保障绝对安全。
+- **对比视图快照画幅增强（Snapshot Banner Context Enrichment）**：
+  - 对比工作区快照底栏摘要信息智能识别当前环境：激活 ROI 时自动附加 `[ROI: x,y w×h]` 选区坐标与几何尺寸，存在任意非恒等色彩/几何调整窗格时自动标注 `[已调参]` 标识。
+
 ## [1.0.133] - 2026-10-17
 
 ### Release

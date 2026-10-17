@@ -89,7 +89,7 @@ ImageData downscaleBy(const ImageData &src, int scale)
 }
 
 // Coarse SAD grid search over downscaled thumbnails.
-AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int W, int H, int maxShift)
+AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int maxShift)
 {
     double bestSAD = std::numeric_limits<double>::infinity();
     AlignOffset best{0, 0};
@@ -97,13 +97,13 @@ AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int W, in
     for (int dy = -maxShift; dy <= maxShift; ++dy)
     {
         const int rowLo = std::max(0, dy);
-        const int rowHi = std::min(H, H + dy);
+        const int rowHi = std::min(rv.height, mv.height + dy);
         if (rowHi <= rowLo)
             continue;
         for (int dx = -maxShift; dx <= maxShift; ++dx)
         {
             const int colLo = std::max(0, dx);
-            const int colHi = std::min(W, W + dx);
+            const int colHi = std::min(rv.width, mv.width + dx);
             if (colHi <= colLo)
                 continue;
             const int overlap = (colHi - colLo) * (rowHi - rowLo);
@@ -156,8 +156,8 @@ AlignOffset coarseSearch(const ImageBuffer &rv, const ImageBuffer &mv, int W, in
 }
 
 // Fine 1-pixel precision SAD search around coarse offset on full-resolution rasters.
-AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int fW, int fH, int coarseDx,
-                       int coarseDy, int scale, int maxShift)
+AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int coarseDx, int coarseDy,
+                       int scale, int maxShift)
 {
     double fineBestSAD = std::numeric_limits<double>::infinity();
     AlignOffset fineBest{coarseDx, coarseDy};
@@ -167,25 +167,25 @@ AlignOffset fineSearch(const ImageBuffer &frv, const ImageBuffer &fmv, int fW, i
     const int fineMinX = std::max(-maxShift * scale, coarseDx - scale);
     const int fineMaxX = std::min(maxShift * scale, coarseDx + scale);
 
-    // To prevent vertical phase-shift sampling aliasing (where skipping rows in steps > 1
-    // causes SAD to measure mismatched row phases between dy offsets), stepY must be 1.
-    // For large images, restrict the fine evaluation window to a centered region (up to 512x512)
-    // so stepY=1 remains fast while providing exact integer alignment.
-    const int winW = std::min(fW, 512);
-    const int winH = std::min(fH, 512);
-    const int startX = (fW - winW) / 2;
-    const int startY = (fH - winH) / 2;
+    const int maxW = std::min(frv.width, fmv.width);
+    const int maxH = std::min(frv.height, fmv.height);
+    const int winW = std::min(maxW, 512);
+    const int winH = std::min(maxH, 512);
+    const int startX = (maxW - winW) / 2;
+    const int startY = (maxH - winH) / 2;
 
     for (int dy = fineMinY; dy <= fineMaxY; ++dy)
     {
-        const int rowLo = std::max(startY, startY + dy);
-        const int rowHi = std::min(startY + winH, startY + winH + dy);
+        const int rowLo = std::max({startY, startY + dy, 0, dy});
+        const int rowHi =
+            std::min({startY + winH, startY + winH + dy, frv.height, fmv.height + dy});
         if (rowHi <= rowLo)
             continue;
         for (int dx = fineMinX; dx <= fineMaxX; ++dx)
         {
-            const int colLo = std::max(startX, startX + dx);
-            const int colHi = std::min(startX + winW, startX + winW + dx);
+            const int colLo = std::max({startX, startX + dx, 0, dx});
+            const int colHi =
+                std::min({startX + winW, startX + winW + dx, frv.width, fmv.width + dx});
             if (colHi <= colLo)
                 continue;
 
@@ -255,7 +255,7 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
     if (rg.isNull() || mg.isNull())
         return {0, 0};
 
-    const AlignOffset best = coarseSearch(rg.view(), mg.view(), rg.width, rg.height, maxShift);
+    const AlignOffset best = coarseSearch(rg.view(), mg.view(), maxShift);
     const int coarseDx = best.x * scale;
     const int coarseDy = best.y * scale;
 
@@ -270,8 +270,7 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
     if (fullRefGray.isNull() || fullMovGray.isNull())
         return {coarseDx, coarseDy};
 
-    return fineSearch(fullRefGray.view(), fullMovGray.view(), fullRefGray.width, fullRefGray.height,
-                      coarseDx, coarseDy, scale, maxShift);
+    return fineSearch(fullRefGray.view(), fullMovGray.view(), coarseDx, coarseDy, scale, maxShift);
 }
 
 ImageData Aligner::shift(const ImageData &src, int dx, int dy, uint8_t fill)

@@ -71,7 +71,7 @@ std::string formatAdjustment(const CompareAdjustmentState &adjustment)
        << formatNumber(adjustment.contrast) << "; gamma=" << formatNumber(adjustment.gamma)
        << "; redGain=" << formatNumber(adjustment.redGain)
        << "; blueGain=" << formatNumber(adjustment.blueGain)
-       << "; rotation=" << adjustment.rotation << "°; crop=";
+       << "; rotation=" << adjustment.rotation << "°; flipH=" << (adjustment.flipH ? "true" : "false") << "; flipV=" << (adjustment.flipV ? "true" : "false") << "; crop=";
     if (adjustment.hasCrop)
         os << "(" << adjustment.cropX << "," << adjustment.cropY << "," << adjustment.cropW
            << "x" << adjustment.cropH << ")";

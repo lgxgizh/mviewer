@@ -176,6 +176,18 @@ QPixmap CompareWorkspace::grabComparisonView()
                                   m_diffHighlightChk, m_blinkChk);
     a.zoomPercent = snapshotZoomPercent(m_cellViews, m_sharedZoomRatio);
     a.compDetail = snapshotComparedDetail(comparedImages());
+    if (!m_lastSelection.isEmpty())
+    {
+        a.compDetail += QString("  [ROI: %1,%2 %3×%4]")
+                            .arg(m_lastSelection.x)
+                            .arg(m_lastSelection.y)
+                            .arg(m_lastSelection.width)
+                            .arg(m_lastSelection.height);
+    }
+    const bool hasAdjust = std::any_of(m_cellAdjusts.cbegin(), m_cellAdjusts.cend(),
+                                       [](const CellAdjust &adj) { return !adj.isIdentity(); });
+    if (hasAdjust)
+        a.compDetail += QStringLiteral("  [已调参]");
 
     if (m_metricLabel && !m_metricLabel->text().isEmpty())
     {

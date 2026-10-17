@@ -189,7 +189,7 @@ bool scanProgressiveDirectory(
         publishBatch(batch);
     std::sort(entries.begin(), entries.end(),
               [](const ThumbnailPanel::Entry &a, const ThumbnailPanel::Entry &b)
-              { return QString::compare(a.path, b.path, Qt::CaseSensitive) < 0; });
+              { return browseOrderedLess(0, a.name, b.name, a.path, b.path, true); });
     return false;
 }
 
@@ -275,7 +275,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     ThumbnailCache::instance().clearSourceIdentityHints();
     m_scanComplete = false;
     m_galleryModelReadyEmitted = false;
-    m_scanProgressive = m_sortMode == SortName && m_sortAscending && m_typeFilter.isEmpty();
+    m_scanProgressive = m_sortMode == SortName && m_sortAscending && !hasActiveBrowseFilter();
 
     // M23 P2 (first-screen): paint the (empty) directory shell immediately so a
     // 1000-image folder shows its grid in well under 1s, then scan the disk off
@@ -302,6 +302,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     const QString typeFilter = m_typeFilter;
     const SortMode sortMode = m_sortMode;
     const bool sortAscending = m_sortAscending;
+    const bool hasFilters = hasActiveBrowseFilter();
     auto alive = m_alive;
     auto genToken = m_scanGenToken;
     auto busyRefs = m_busyCursorRefs;
@@ -312,14 +313,14 @@ void ThumbnailPanel::setDirectory(const QString &path)
     // object is still alive. The busy cursor is restored unconditionally (it
     // is app-global and ref-counted) so a destroyed/superseded scan can never
     // leave the whole application with a stuck override cursor.
-    startDirectoryScan(path, gen, typeFilter, sortMode, sortAscending, alive, genToken, busyRefs,
-                       self);
+    startDirectoryScan(path, gen, typeFilter, sortMode, sortAscending, hasFilters, alive, genToken,
+                       busyRefs, self);
     scheduleHighLatencyProbe(path, gen);
     armScanWatchdog(gen);
 }
 
 void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
-                                        SortMode sortMode, bool sortAscending,
+                                        SortMode sortMode, bool sortAscending, bool hasFilters,
                                         const std::shared_ptr<std::atomic<bool>> &alive,
                                         const std::shared_ptr<std::atomic<uint64_t>> &genToken,
                                         const std::shared_ptr<std::atomic<int>> &busyRefs,
@@ -330,7 +331,7 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
     (void)QtConcurrent::run(
         &m_scanPool,
         [self, alive, gen, genToken, busyRefs, cursorReleased, path, typeFilter, sortMode,
-         sortAscending]()
+         sortAscending, hasFilters]()
         {
             QList<Entry> entries;
             bool publish = false;
@@ -350,7 +351,7 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
                         publish = true;
                         directoryReadable = false;
                     }
-                    else if (sortMode == SortName && sortAscending && typeFilter.isEmpty())
+                    else if (sortMode == SortName && sortAscending && !hasFilters)
                     {
                         const bool aborted = scanProgressiveDirectory(
                             path, alive, genToken, gen, entries, probe,
@@ -427,11 +428,7 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
         return;
 
     insertProgressiveRows(batch);
-    QStringList paths;
-    paths.reserve(batch.size());
-    for (const Entry &entry : batch)
-        paths.append(entry.path);
-    ThumbnailPipeline::instance().appendSources(toStdPaths(paths));
+    ThumbnailPipeline::instance().replaceSources(toStdPaths(m_paths));
     // Navigation reads this list. Publish it with the rows, not only when the
     // sorted rebuild lands at the end of the scan.
     emit sequenceChanged(m_currentDir, m_paths);
@@ -492,6 +489,11 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
         ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
         emit sequenceChanged(m_currentDir, m_paths);
         emit statsChanged(m_paths.size(), m_totalBytes, selectedPaths().size(), 0);
+        if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(galleryPathKey(m_pendingSelect)))
+        {
+            selectPath(m_pendingSelect);
+            m_pendingSelect.clear();
+        }
     }
     else
     {

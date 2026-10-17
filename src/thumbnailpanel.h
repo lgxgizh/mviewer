@@ -228,6 +228,7 @@ class ThumbnailPanel : public QListView
     void setIsoFilter(int iso);
     // P0 #①: free-form tag filter (matches images carrying this exact tag).
     void setTagFilter(const QString &tag);
+    bool hasActiveBrowseFilter() const;
 
     // Quiesce background decode work (e.g. before a headless render where async
     // QPixmap updates are undesirable). Public so test/demo harnesses can
@@ -283,7 +284,7 @@ class ThumbnailPanel : public QListView
     void armScanWatchdog(int gen);
     void noteScanProgress(int gen);
     void startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
-                            SortMode sortMode, bool sortAscending,
+                            SortMode sortMode, bool sortAscending, bool hasFilters,
                             const std::shared_ptr<std::atomic<bool>> &alive,
                             const std::shared_ptr<std::atomic<uint64_t>> &genToken,
                             const std::shared_ptr<std::atomic<int>> &busyRefs,

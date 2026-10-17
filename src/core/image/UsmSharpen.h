@@ -20,10 +20,22 @@ struct UsmParams
     }
 };
 
+struct UsmDiffSummary
+{
+    double psnr = 0.0;
+    double ssim = 0.0;
+    double meanDelta = 0.0;
+    int maxDelta = 0;
+    double changedPercent = 0.0;
+};
+
 // 对输入图像执行 USM (Unsharp Mask) 锐化，返回新分配的 ImageData（保持原图格式与尺寸）。
 // 支持 RGB24, BGR24, RGBA32, BGRA32, Grayscale8。
 // 若 cancelled 回调返回 true，立即中止并返回空 ImageData{}。
 ImageData applyUsmSharpen(const ImageData &src, const UsmParams &params,
                           const std::function<bool()> &cancelled = {});
+
+// 计算原图与锐化图之间的量化差异（PSNR, SSIM, Δ均值, Δ最大, 像素变动百分比）
+UsmDiffSummary computeUsmDiffSummary(const ImageData &orig, const ImageData &sharpened);
 
 } // namespace mviewer::core

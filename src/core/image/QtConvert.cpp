@@ -573,4 +573,37 @@ ImageData fromQImage(const QImage &src)
     return out;
 }
 
+ImageData fromQImagePreservingAlpha(const QImage &src)
+{
+    if (src.isNull())
+        return ImageData();
+
+    if (src.format() == QImage::Format_Grayscale8 || !src.hasAlphaChannel())
+        return fromQImage(src);
+
+    if (src.format() == QImage::Format_RGBA8888)
+    {
+        ImageData out = makeImageData(src.width(), src.height(), PixelFormat::RGBA32);
+        if (!out.isNull())
+            copyFromQImage(out, src, static_cast<size_t>(src.width()) * 4);
+        return out;
+    }
+
+    if (src.format() == QImage::Format_ARGB32)
+    {
+        ImageData out = makeImageData(src.width(), src.height(), PixelFormat::BGRA32);
+        if (!out.isNull())
+            copyFromQImage(out, src, static_cast<size_t>(src.width()) * 4);
+        return out;
+    }
+
+    const QImage converted = src.convertToFormat(QImage::Format_RGBA8888);
+    if (converted.isNull())
+        return ImageData();
+    ImageData out = makeImageData(converted.width(), converted.height(), PixelFormat::RGBA32);
+    if (!out.isNull())
+        copyFromQImage(out, converted, static_cast<size_t>(converted.width()) * 4);
+    return out;
+}
+
 } // namespace mvcore

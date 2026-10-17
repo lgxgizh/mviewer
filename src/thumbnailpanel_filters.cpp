@@ -40,6 +40,14 @@ void ThumbnailPanel::setSortAscending(bool ascending)
     setSort(m_sortMode, ascending);
 }
 
+bool ThumbnailPanel::hasActiveBrowseFilter() const
+{
+    return !m_filterText.trimmed().isEmpty() || !m_typeFilter.isEmpty() || m_ratingFilter > 0 ||
+           m_labelFilter != 0 || m_rejectFilter || m_pickFilter || m_recentFilter ||
+           !m_cameraFilter.isEmpty() || !m_lensFilter.isEmpty() || m_isoFilter > 0 ||
+           !m_tagFilter.isEmpty();
+}
+
 void ThumbnailPanel::setTypeFilter(const QString &types)
 {
     if (m_typeFilter == types)

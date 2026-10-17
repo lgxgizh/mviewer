@@ -76,10 +76,8 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
             if (item && !item->text().isEmpty())
             {
                 const QString cellText = item->text();
-                QAction *actCopyCell =
-                    menu.addAction(QObject::tr("复制单元格内容 (%1)").arg(cellText));
-                QObject::connect(actCopyCell, &QAction::triggered,
-                                 [cellText]() { QApplication::clipboard()->setText(cellText); });
+                menu.addAction(QObject::tr("复制单元格内容 (%1)").arg(cellText),
+                               [cellText]() { QApplication::clipboard()->setText(cellText); });
             }
             auto rowCells = [inspector](int r) -> QStringList
             {
@@ -94,37 +92,29 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
             const int row = item ? item->row() : inspector->currentRow();
             if (row >= 0 && row < inspector->rowCount())
             {
-                const auto cells = rowCells(row);
-                const QString rowText = cells.join('\t');
-                QAction *actCopyRow = menu.addAction(QObject::tr("复制该行数据"));
-                QObject::connect(actCopyRow, &QAction::triggered,
-                                 [rowText]() { QApplication::clipboard()->setText(rowText); });
-                if (cells.size() >= 5)
+                const QString rowText = rowCells(row).join('\t');
+                menu.addAction(QObject::tr("复制该行数据"),
+                               [rowText]() { QApplication::clipboard()->setText(rowText); });
+                auto *item0 = inspector->item(row, 0);
+                const QVariant varRgb = item0 ? item0->data(Qt::UserRole) : QVariant();
+                if (varRgb.isValid())
                 {
-                    bool okR = false, okG = false, okB = false;
-                    const int r = cells[2].toInt(&okR), g = cells[3].toInt(&okG),
-                              b = cells[4].toInt(&okB);
-                    if (okR && okG && okB)
-                    {
-                        const QString hex = QString("#%1%2%3")
-                                                .arg(std::clamp(r, 0, 255), 2, 16, QLatin1Char('0'))
-                                                .arg(std::clamp(g, 0, 255), 2, 16, QLatin1Char('0'))
-                                                .arg(std::clamp(b, 0, 255), 2, 16, QLatin1Char('0'))
-                                                .toUpper();
-                        const QString rgb = QString("rgb(%1, %2, %3)").arg(r).arg(g).arg(b);
-                        auto *actHex = menu.addAction(QObject::tr("复制 HEX 颜色 (%1)").arg(hex));
-                        QObject::connect(actHex, &QAction::triggered,
-                                         [hex]() { QApplication::clipboard()->setText(hex); });
-                        auto *actRgb = menu.addAction(QObject::tr("复制 RGB 颜色 (%1)").arg(rgb));
-                        QObject::connect(actRgb, &QAction::triggered,
-                                         [rgb]() { QApplication::clipboard()->setText(rgb); });
-                    }
+                    const uint u = varRgb.toUInt();
+                    const int r = qRed(u), g = qGreen(u), b = qBlue(u);
+                    const QString hex = QString("#%1%2%3")
+                                            .arg(r, 2, 16, QLatin1Char('0'))
+                                            .arg(g, 2, 16, QLatin1Char('0'))
+                                            .arg(b, 2, 16, QLatin1Char('0'))
+                                            .toUpper();
+                    const QString rgb = QString("rgb(%1, %2, %3)").arg(r).arg(g).arg(b);
+                    menu.addAction(QObject::tr("复制 HEX 颜色 (%1)").arg(hex),
+                                   [hex]() { QApplication::clipboard()->setText(hex); });
+                    menu.addAction(QObject::tr("复制 RGB 颜色 (%1)").arg(rgb),
+                                   [rgb]() { QApplication::clipboard()->setText(rgb); });
                 }
             }
             if (inspector->rowCount() > 0)
             {
-                auto *actCopyTable = menu.addAction(QObject::tr("复制全部表格数据"));
-                auto *actCopyMd = menu.addAction(QObject::tr("复制为 Markdown 表格"));
                 auto copyFormatted = [inspector, rowCells](bool md)
                 {
                     QStringList lines, headers, seps;
@@ -145,9 +135,8 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                     }
                     QApplication::clipboard()->setText(lines.join('\n'));
                 };
-                QObject::connect(actCopyTable, &QAction::triggered,
-                                 [=]() { copyFormatted(false); });
-                QObject::connect(actCopyMd, &QAction::triggered, [=]() { copyFormatted(true); });
+                menu.addAction(QObject::tr("复制全部表格数据"), [=]() { copyFormatted(false); });
+                menu.addAction(QObject::tr("复制为 Markdown 表格"), [=]() { copyFormatted(true); });
             }
             if (!menu.isEmpty())
                 menu.exec(inspector->viewport()->mapToGlobal(pos));
@@ -411,13 +400,15 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
     for (int i = 0; i < n; ++i)
     {
         const InspectorSample &sample = samples[static_cast<size_t>(i)];
-        const ImageFrame *img = nullptr;
-        if (!m_inspector->item(i, 0) || !m_inspector->item(i, 1))
+        const ImageFrame *img = m_engine.imageAt(i);
+        setCellText(m_inspector, i, 0, QString::number(i + 1));
+        const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
+        setCellText(m_inspector, i, 1, name);
+        if (auto *it0 = m_inspector->item(i, 0))
         {
-            img = m_engine.imageAt(i);
-            const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
-            setCellText(m_inspector, i, 0, QString::number(i + 1));
-            setCellText(m_inspector, i, 1, name);
+            it0->setData(Qt::UserRole,
+                         sample.valid ? QVariant(static_cast<uint>(qRgb(sample.r, sample.g, sample.b)))
+                                      : QVariant());
         }
 
         if (!sample.valid)
@@ -653,13 +644,17 @@ void CompareWorkspace::computeHistogramBatch(
     if (r.updateMain)
     {
         r.main.reserve(mainIndices.size());
+        r.mainIndices.reserve(mainIndices.size());
         for (int idx : mainIndices)
         {
             const auto it = std::find_if(computed.cbegin(), computed.cend(),
                                          [idx](const HistogramBatchResult::CellHist &c)
                                          { return c.index == idx; });
             if (it != computed.cend())
+            {
                 r.main.push_back(it->hist);
+                r.mainIndices.push_back(idx);
+            }
         }
     }
     for (int idx : panes)
@@ -773,10 +768,12 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
                     const auto &h = r.main[i];
                     if (h.total <= 0 || h.bins < 256)
                         continue;
+                    const int slot =
+                        i < r.mainIndices.size() ? r.mainIndices[i] : static_cast<int>(i);
                     const double u = (100.0 * h.luma[0]) / static_cast<double>(h.total);
                     const double o = (100.0 * h.luma[255]) / static_cast<double>(h.total);
                     tipLines << tr("[%1] 像素 %2 · 暗部(Y=0): %3 (%4%) · 高光(Y=255): %5 (%6%)")
-                                    .arg(QChar('A' + static_cast<int>(i)))
+                                    .arg(QChar('A' + slot))
                                     .arg(h.total)
                                     .arg(h.luma[0])
                                     .arg(QString::number(u, 'f', 2))
