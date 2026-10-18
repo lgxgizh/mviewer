@@ -13,6 +13,10 @@ namespace mviewer::runtime
 // disable the optional tier or keep state in memory.
 QString writableDirectory(QStandardPaths::StandardLocation location);
 
+// Drop the cached writable directories. Tests that change QStandardPaths
+// after the first lookup call this so the next lookup observes the new path.
+void resetWritableDirectoryCacheForTests();
+
 QString filePath(QStandardPaths::StandardLocation location, const QString &fileName);
 
 // Make QSettings use the same writable, per-application AppConfig directory

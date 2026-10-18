@@ -27,8 +27,8 @@
 #include <QTemporaryDir>
 #include <QTimer>
 
-#include <functional>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 
 #ifdef Q_OS_WIN
@@ -110,9 +110,9 @@ int main(int argc, char **argv)
     const QString appConfig =
         mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
     QFile::remove(QDir(appConfig).filePath(QStringLiteral("recovery.json")));
-    const QString crashDir = QDir(mviewer::runtime::writableDirectory(
-                                      QStandardPaths::AppDataLocation))
-                                 .filePath(QStringLiteral("crash-reports"));
+    const QString crashDir =
+        QDir(mviewer::runtime::writableDirectory(QStandardPaths::AppDataLocation))
+            .filePath(QStringLiteral("crash-reports"));
     QDir(crashDir).removeRecursively();
 
     QTemporaryDir temporary;
@@ -149,18 +149,20 @@ int main(int argc, char **argv)
     // isolates the MainWindow-owned CommandStack and avoids coupling the
     // callback regression to a root-tree scan.
     panel->setDirectory(directory.absolutePath());
-    CHECK(waitFor([&]
-                  {
-                      return panel->currentDir().compare(directory.absolutePath(),
-                                                         Qt::CaseInsensitive) == 0 &&
-                             !panel->entries().isEmpty();
-                  }),
+    CHECK(waitFor(
+              [&]
+              {
+                  return panel->currentDir().compare(directory.absolutePath(),
+                                                     Qt::CaseInsensitive) == 0 &&
+                         !panel->entries().isEmpty();
+              }),
           "M45: production navigation publishes the directory to ThumbnailPanel");
 
     panel->selectPath(original);
     QTimer renamePoller;
     renamePoller.setInterval(10);
-    QObject::connect(&renamePoller, &QTimer::timeout, [&]
+    QObject::connect(&renamePoller, &QTimer::timeout,
+                     [&]
                      {
                          for (QWidget *top : QApplication::topLevelWidgets())
                          {
@@ -178,8 +180,7 @@ int main(int argc, char **argv)
     renamePoller.stop();
     CHECK(QFile::exists(renamed) && !QFile::exists(original),
           "M45: production Rename reaches the disk");
-    CHECK(undo->isEnabled(),
-          "M45: CommandStack callback updates production Undo without deadlock");
+    CHECK(undo->isEnabled(), "M45: CommandStack callback updates production Undo without deadlock");
 
     undo->trigger();
     CHECK(QFile::exists(original) && !QFile::exists(renamed),
@@ -189,14 +190,15 @@ int main(int argc, char **argv)
     CHECK(QFile::exists(renamed) && !QFile::exists(original),
           "M45: production Redo reapplies Rename");
 
-    CHECK(waitFor([&]
-                   {
-                       for (const auto &entry : panel->entries())
-                           if (entry.path == renamed)
-                               return true;
-                       return false;
-                   }),
-           "M45: Rename redo rescan publishes the renamed path before Delete");
+    CHECK(waitFor(
+              [&]
+              {
+                  for (const auto &entry : panel->entries())
+                      if (entry.path == renamed)
+                          return true;
+                  return false;
+              }),
+          "M45: Rename redo rescan publishes the renamed path before Delete");
 
     // Delete is asynchronous in the production panel. Wait for both the disk
     // transition and the CommandStack label, so this test cannot race the
@@ -229,19 +231,13 @@ int main(int argc, char **argv)
     yesPoller.start();
     panel->moveToTrashSelected();
     yesPoller.stop();
-    CHECK(waitFor([&]
-                  {
-                      return !QFile::exists(renamed) && undo->text().contains("Delete");
-                  }),
+    CHECK(waitFor([&] { return !QFile::exists(renamed) && undo->text().contains("Delete"); }),
           "M45: production Delete reaches MViewer trash and commits history");
     undo->trigger();
     CHECK(waitFor([&] { return QFile::exists(renamed) && redo->isEnabled(); }),
           "M45: production Undo restores asynchronously deleted file");
     redo->trigger();
-    CHECK(waitFor([&]
-                  {
-                      return !QFile::exists(renamed) && undo->text().contains("Delete");
-                  }),
+    CHECK(waitFor([&] { return !QFile::exists(renamed) && undo->text().contains("Delete"); }),
           "M45: production Redo reapplies asynchronously deleted file");
 
     QImage clipboardImage(32, 32, QImage::Format_RGB32);
@@ -252,20 +248,20 @@ int main(int argc, char **argv)
     CHECK(paste.isAccepted(), "M45: production Ctrl+V accepts clipboard image paste");
     const QString pasteDir =
         QDir(mviewer::runtime::writableDirectory(QStandardPaths::TempLocation))
-            .filePath(QStringLiteral("mviewer-clip-paste"));
-    CHECK(waitFor([&]
-                  {
-                      return !QDir(pasteDir)
-                                  .entryList(QStringList() << QStringLiteral("paste_*.png"),
-                                             QDir::Files)
-                                  .isEmpty();
-                  }),
+            .filePath(QStringLiteral("mviewer-clip-%1").arg(QCoreApplication::applicationPid()));
+    CHECK(waitFor(
+              [&]
+              {
+                  return !QDir(pasteDir)
+                              .entryList(QStringList() << QStringLiteral("paste_*.png"),
+                                         QDir::Files)
+                              .isEmpty();
+              }),
           "M45: clipboard PNG encoding completes off the UI key handler");
 
     if (g_failures > 0)
     {
-        std::cout << "mainwindow_commandstack_acceptance: FAIL (" << g_failures
-                  << " failures)\n";
+        std::cout << "mainwindow_commandstack_acceptance: FAIL (" << g_failures << " failures)\n";
         std::fflush(stdout);
         terminateTestProcess(1);
     }

@@ -238,19 +238,18 @@ void ThumbnailPanel::copySelectedFileNames()
     QApplication::clipboard()->setText(names.join(QStringLiteral("\n")));
 }
 
-#include <QtConcurrent/QtConcurrent>
+#include <QDebug>
 
 namespace
 {
-void asyncWriteSidecars(std::vector<std::string> paths)
+void asyncWriteSidecars(const std::vector<std::string> &paths)
 {
-    (void)QtConcurrent::run(
-        [paths = std::move(paths)]()
-        {
-            auto &sidecar = mviewer::core::SidecarStore::instance();
-            for (const auto &sp : paths)
-                sidecar.writeSidecar(sp);
-        });
+    auto &sidecar = mviewer::core::SidecarStore::instance();
+    for (const auto &sp : paths)
+    {
+        sidecar.writeSidecarAsync(sp, [](const std::string &failed)
+                                  { qWarning("Sidecar write failed for %s", failed.c_str()); });
+    }
 }
 } // namespace
 
@@ -268,7 +267,7 @@ void ThumbnailPanel::batchRateSelected(int stars)
         rs.setRating(sp, stars);
         toWrite.push_back(sp);
     }
-    asyncWriteSidecars(std::move(toWrite));
+    asyncWriteSidecars(toWrite);
     invalidateRatings();
 }
 
@@ -286,7 +285,7 @@ void ThumbnailPanel::batchSetColorLabelSelected(int label)
         rs.setColorLabel(sp, label);
         toWrite.push_back(sp);
     }
-    asyncWriteSidecars(std::move(toWrite));
+    asyncWriteSidecars(toWrite);
     invalidateRatings();
 }
 
@@ -305,7 +304,7 @@ void ThumbnailPanel::batchSetFlagSelected(bool reject, bool pick)
         rs.setPicked(sp, pick);
         toWrite.push_back(sp);
     }
-    asyncWriteSidecars(std::move(toWrite));
+    asyncWriteSidecars(toWrite);
     invalidateRatings();
 }
 

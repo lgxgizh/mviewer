@@ -5,6 +5,9 @@
 #include <QSettings>
 #include <QTemporaryFile>
 
+#include <mutex>
+#include <unordered_map>
+
 namespace mviewer::runtime
 {
 namespace
@@ -43,23 +46,59 @@ bool makeWritable(const QString &path)
     return probe.open();
 }
 
+std::mutex &writableDirectoryMutex()
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::unordered_map<int, QString> &writableDirectoryCache()
+{
+    static std::unordered_map<int, QString> cache;
+    return cache;
+}
+
 } // namespace
 
 QString writableDirectory(QStandardPaths::StandardLocation location)
 {
+    const int key = static_cast<int>(location);
+    {
+        std::lock_guard<std::mutex> lock(writableDirectoryMutex());
+        const auto it = writableDirectoryCache().find(key);
+        if (it != writableDirectoryCache().end())
+            return it->second;
+    }
+
+    QString result;
     const QString standard = QStandardPaths::writableLocation(location);
     if (makeWritable(standard))
-        return QDir::cleanPath(standard);
+    {
+        result = QDir::cleanPath(standard);
+    }
+    else
+    {
+        const QString temp = QDir::tempPath();
+        if (!temp.isEmpty() && !QDir(temp).isRoot())
+        {
+            const QString fallback =
+                QDir(temp).filePath(QStringLiteral("MViewer/runtime/") + locationName(location));
+            if (makeWritable(fallback))
+                result = QDir::cleanPath(fallback);
+        }
+    }
 
-    const QString temp = QDir::tempPath();
-    if (temp.isEmpty() || QDir(temp).isRoot())
-        return QString();
+    std::lock_guard<std::mutex> lock(writableDirectoryMutex());
+    const auto [it, inserted] = writableDirectoryCache().emplace(key, result);
+    if (!inserted)
+        return it->second;
+    return result;
+}
 
-    const QString fallback = QDir(temp).filePath(QStringLiteral("MViewer/runtime/") +
-                                                  locationName(location));
-    if (!makeWritable(fallback))
-        return QString();
-    return QDir::cleanPath(fallback);
+void resetWritableDirectoryCacheForTests()
+{
+    std::lock_guard<std::mutex> lock(writableDirectoryMutex());
+    writableDirectoryCache().clear();
 }
 
 QString filePath(QStandardPaths::StandardLocation location, const QString &fileName)

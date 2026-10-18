@@ -139,6 +139,13 @@ void testFetchError()
           "the injected fetcher receives the requested custom endpoint");
     check(result.info.error == "offline test failure" && !result.info.hasUpdate,
           "fetch errors are returned unchanged");
+
+    // A non-200 response must not be parsed even when the body is valid JSON.
+    const auto httpError = checkUrl("7.2.3", "https://updates.example.test/latest",
+                                    R"({"tag_name":"9.9.9"})", "UpdateChecker: HTTP 500");
+    check(httpError.info.error == "UpdateChecker: HTTP 500" && !httpError.info.hasUpdate &&
+              httpError.info.latestVersion.empty(),
+          "non-200 fetch errors skip JSON parsing");
 }
 
 void testReleaseUrlPolicy()

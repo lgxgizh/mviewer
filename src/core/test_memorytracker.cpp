@@ -9,6 +9,11 @@
 #include <utility>
 #include <vector>
 
+#if defined(Q_OS_LINUX)
+#include <fstream>
+#include <unistd.h>
+#endif
+
 // Structural tests for MemoryTracker (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
 // These assert deterministic ledger behavior — NOT wall-clock budgets.
 
@@ -160,6 +165,25 @@ static void test_timelineRing()
     CHECK(mt.timelineSize() == 0);
 }
 
+#if defined(Q_OS_LINUX)
+static void test_linuxRssIsCurrent()
+{
+    std::ifstream statm("/proc/self/statm");
+    unsigned long long totalPages = 0;
+    unsigned long long residentPages = 0;
+    CHECK(static_cast<bool>(statm >> totalPages >> residentPages));
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    CHECK(pageSize > 0);
+    const unsigned long long bytes = residentPages * static_cast<unsigned long long>(pageSize);
+    const size_t expectedKb = static_cast<size_t>(bytes / 1024ull);
+    const size_t got = MemoryTracker::instance().sample().processWorkingSetKB;
+    const size_t slack = static_cast<size_t>(128) * 1024;
+    CHECK(got > 0);
+    const size_t delta = got > expectedKb ? got - expectedKb : expectedKb - got;
+    CHECK(delta < slack);
+}
+#endif
+
 int memorytracker_suite()
 {
     test_samplesCacheManager();
@@ -167,5 +191,8 @@ int memorytracker_suite()
     test_copyMoveFrameAccounting();
     test_externalAndPeak();
     test_timelineRing();
+#if defined(Q_OS_LINUX)
+    test_linuxRssIsCurrent();
+#endif
     return g_failures;
 }

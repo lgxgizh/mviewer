@@ -373,6 +373,39 @@ int main()
                                         std::chrono::milliseconds(2000));
     }
 
+    {
+        printf("\n[multiple result subscribers]\n");
+        fflush(stdout);
+        ThumbnailPipeline multi;
+        multi.setDecodeFn([](const std::string &, int size) { return fakeThumb(size); });
+        std::atomic<int> primary{0};
+        std::atomic<int> extraA{0};
+        std::atomic<int> extraB{0};
+        multi.setResultFn([&](const std::string &, int, const ImageData &)
+                          { primary.fetch_add(1, std::memory_order_relaxed); });
+        const auto tokenA = multi.addResultFn([&](const std::string &, int, const ImageData &)
+                                              { extraA.fetch_add(1, std::memory_order_relaxed); });
+        const auto tokenB = multi.addResultFn([&](const std::string &, int, const ImageData &)
+                                              { extraB.fetch_add(1, std::memory_order_relaxed); });
+        CHECK(tokenA != 0 && tokenB != 0 && tokenA != tokenB,
+              "subscriber tokens are unique and non-zero");
+        CHECK(multi.addResultFn({}) == 0, "empty subscriber is rejected");
+        multi.removeResultFn(tokenB);
+        // Replacing the primary slot must not drop the remaining subscriber.
+        multi.setResultFn([&](const std::string &, int, const ImageData &)
+                          { primary.fetch_add(1, std::memory_order_relaxed); });
+        multi.setSources({"sub.jpg"});
+        multi.setVisibleRange(0, 1);
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(5000));
+        CHECK(primary.load() == 1, "primary callback fires once");
+        CHECK(extraA.load() == 1, "registered subscriber receives the result");
+        CHECK(extraB.load() == 0, "removed subscriber does not receive the result");
+        multi.clear();
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(2000));
+    }
+
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

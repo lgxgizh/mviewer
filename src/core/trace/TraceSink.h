@@ -30,8 +30,14 @@ namespace mviewer::trace
 //   durUs — duration in microseconds (>= 0)
 void record(const char *cat, const char *name, int64_t tsUs, int64_t durUs);
 
+// Fixed ring capacity. Once full, record() drops the oldest span. 0 stores
+// nothing. The default is 100000 events.
+void setCapacity(size_t capacity);
+size_t capacity();
+
 // Flush all recorded spans to a Chrome trace JSON file. Returns true on
 // success. The file can be loaded into ui.perfetto.dev or chrome://tracing.
+// Category and name strings are JSON-escaped.
 bool flush(const std::string &path);
 
 // Drop all recorded spans without writing (used to bound memory in long runs).

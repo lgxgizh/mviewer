@@ -38,6 +38,7 @@ struct ThumbnailPipeline
 {
     using DecodeFn = std::function<ImageData(const std::string &path, int size)>;
     using ResultFn = std::function<void(const std::string &path, int size, const ImageData &thumb)>;
+    using ResultToken = uint64_t;
 
     size_t memCacheMax = 512;                           // hot thumbnails retained in memory (LRU)
     size_t memCacheMaxBytes = size_t{96} * 1024 * 1024; // 96 MiB budget (M55)
@@ -77,10 +78,41 @@ struct ThumbnailPipeline
         m_decode = std::move(fn);
     }
     // Deliver decoded thumbnails here (called on the scheduler worker thread).
+    // Replaces only the primary callback. Subscribers from addResultFn stay.
     void setResultFn(ResultFn fn)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         m_result = std::move(fn);
+    }
+
+    // Extra completion subscriber. Returns 0 when fn is empty. A subscriber
+    // registered before a decode finishes receives that result. setResultFn
+    // does not remove these.
+    ResultToken addResultFn(ResultFn fn)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        if (!fn)
+            return 0;
+        ResultToken token = ++m_nextResultToken;
+        if (token == 0)
+            token = ++m_nextResultToken;
+        m_subscribers.push_back(ResultSubscriber{token, std::move(fn)});
+        return token;
+    }
+
+    void removeResultFn(ResultToken token)
+    {
+        if (token == 0)
+            return;
+        std::lock_guard<std::mutex> lk(m_mtx);
+        for (auto it = m_subscribers.begin(); it != m_subscribers.end(); ++it)
+        {
+            if (it->token == token)
+            {
+                m_subscribers.erase(it);
+                return;
+            }
+        }
     }
 
     // Full directory listing (image paths, in display order). Starts a new
@@ -505,6 +537,7 @@ struct ThumbnailPipeline
                 }
                 ImageData deliver;
                 ResultFn cb;
+                std::vector<ResultFn> subscribers;
                 {
                     std::lock_guard<std::mutex> lk(m_mtx);
                     // Remove this task's own bookkeeping only — the key may
@@ -543,10 +576,18 @@ struct ThumbnailPipeline
                         deliver = ImageData{};
                     }
                     cb = result;
+                    subscribers.reserve(m_subscribers.size());
+                    for (const auto &sub : m_subscribers)
+                    {
+                        if (sub.fn)
+                            subscribers.push_back(sub.fn);
+                    }
                     scheduleLocked(true);
                 }
-                if (cb)
+                auto deliverOne = [&](const ResultFn &fn)
                 {
+                    if (!fn)
+                        return;
                     // M27: the result callback is user code running on the
                     // worker — a throw must never escape the pool (an uncaught
                     // exception in a worker thread terminates the process).
@@ -554,12 +595,15 @@ struct ThumbnailPipeline
                     // delivery, so a throw here leaves zero residue.
                     try
                     {
-                        cb(path, size, deliver);
+                        fn(path, size, deliver);
                     }
                     catch (...)
                     {
                     }
-                }
+                };
+                deliverOne(cb);
+                for (const ResultFn &sub : subscribers)
+                    deliverOne(sub);
             });
         if (handle)
         {
@@ -677,7 +721,14 @@ struct ThumbnailPipeline
     uint64_t m_gen = 0;
     DecodeFn m_decode = [](const std::string &path, int size)
     { return Decoder::decodeScaled(path, size); };
+    struct ResultSubscriber
+    {
+        ResultToken token = 0;
+        ResultFn fn;
+    };
     ResultFn m_result;
+    std::vector<ResultSubscriber> m_subscribers;
+    ResultToken m_nextResultToken = 0;
     std::unordered_map<std::string, MemEntry> m_memCache;
     std::list<std::string> m_lru;
     size_t m_memCacheBytes = 0;
