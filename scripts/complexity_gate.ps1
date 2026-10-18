@@ -114,6 +114,11 @@ $knownFunctionDebt = @{
     'src/core/image/ImageRepository_async.cpp::loadAsyncCancellable' = 'span 127'
     'src/core/metadata/MetadataIndexer.cpp::indexBatched'           = 'span 122'
     'src/core/filesystem/AtomicFile.cpp::atomicWriteFile'           = 'span 152'
+    # Surfaced by audit #59's reliable src walk (LiteralPath listing). Tracked
+    # under ADR-014 until the next pass that splits these bodies.
+    'src/core/SidecarStore.cpp::isAppSidecarContent'                = 'span 140'
+    'src/core/update/UpdateChecker.cpp::httpGet'                    = 'span 133'
+    'src/core/thumbnail/ThumbnailPipeline.h::enqueueLocked'         = 'span 130'
 }
 
 $fails = 0
