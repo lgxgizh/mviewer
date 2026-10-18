@@ -6,6 +6,7 @@
 //
 #include "core/compare/Histogram.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageFrame.h"
 
 #include <cstdio>
 #include <cstring>
@@ -195,6 +196,85 @@ int main()
         Histogram hEdges = computeHistogram(img, 64);
         CHECK(hEdges.luma[0] == 50, "pixel value 0 maps to bin 0");
         CHECK(hEdges.luma[63] == 50, "pixel value 255 maps to bin 63");
+    }
+
+    // RGBA/BGRA: alpha is not a colour sample. Fully transparent pixels are
+    // omitted; partial alpha is counted at its RGB value. V is max(R,G,B).
+    {
+        ImageData rgba = makeImageData(2, 1, PixelFormat::RGBA32);
+        uint8_t *px = rgba.buffer ? rgba.buffer->data() : nullptr;
+        CHECK(px != nullptr && rgba.buffer->size() >= 8, "rgba buffer allocated");
+        if (px == nullptr || rgba.buffer->size() < 8)
+            return 1;
+        px[0] = 10;
+        px[1] = 20;
+        px[2] = 30;
+        px[3] = 0;
+        px[4] = 40;
+        px[5] = 50;
+        px[6] = 60;
+        px[7] = 255;
+        Histogram h = computeHistogram(rgba);
+        CHECK(h.total == 1, "fully transparent RGBA pixel is omitted");
+        CHECK(h.r[40] == 1 && h.r[10] == 0, "skipped pixel does not enter the red bins");
+        CHECK(h.g[50] == 1 && h.b[60] == 1, "opaque RGBA pixel contributes RGB");
+        CHECK(h.v[60] == 1, "V is max(R,G,B)");
+        const int luma = luminance(40, 50, 60);
+        CHECK(h.luma[static_cast<size_t>(luma)] == 1, "luma is Rec.601 of the opaque pixel");
+        long redSum = 0;
+        for (long bin : h.r)
+            redSum += bin;
+        CHECK(redSum == h.total, "alpha byte is not counted as an extra colour sample");
+
+        Histogram hn = computeHistogram(rgba, 64);
+        CHECK(hn.total == 1, "n-bin histogram also omits a fully transparent pixel");
+        CHECK(hn.r[(40 * 64) / 256] == 1, "n-bin red uses the opaque pixel");
+        CHECK(hn.v[(60 * 64) / 256] == 1, "n-bin V uses max(R,G,B)");
+
+        px[3] = 128;
+        Histogram partial = computeHistogram(rgba);
+        CHECK(partial.total == 2, "partial alpha is counted at its RGB value");
+        CHECK(partial.r[10] == 1 && partial.v[30] == 1, "partial pixel V is max of its RGB");
+
+        ImageData bgra = makeImageData(1, 1, PixelFormat::BGRA32);
+        uint8_t *bp = bgra.buffer ? bgra.buffer->data() : nullptr;
+        CHECK(bp != nullptr && bgra.buffer->size() >= 4, "bgra buffer allocated");
+        if (bp == nullptr || bgra.buffer->size() < 4)
+            return 1;
+        bp[0] = 10;
+        bp[1] = 20;
+        bp[2] = 30;
+        bp[3] = 255;
+        Histogram hb = computeHistogram(bgra);
+        CHECK(hb.total == 1 && hb.r[30] == 1 && hb.g[20] == 1 && hb.b[10] == 1,
+              "BGRA reads B,G,R and ignores the alpha byte");
+        CHECK(hb.v[30] == 1, "BGRA V is max(R,G,B)");
+        bp[3] = 0;
+        CHECK(computeHistogram(bgra).total == 0, "fully transparent BGRA pixel is omitted");
+
+        ImageFrame frame;
+        px[3] = 0;
+        frame.setPixels(rgba);
+        frame.computeHistogram();
+        const mviewer::domain::Histogram &dh = frame.histogram();
+        CHECK(dh.v[60] == 1 && dh.red[10] == 0, "ImageFrame V counts only the opaque pixel");
+        CHECK(dh.vMean == 60.0, "ImageFrame vMean is max(R,G,B) of counted pixels");
+        CHECK(dh.totalPixels() == 1, "ImageFrame total ignores the transparent pixel");
+        CHECK(dh.rMean == 40.0 && dh.gMean == 50.0 && dh.bMean == 60.0,
+              "ImageFrame means divide by counted samples");
+
+        ImageData clearPx = makeImageData(1, 1, PixelFormat::RGBA32);
+        uint8_t *clearBytes = clearPx.buffer ? clearPx.buffer->data() : nullptr;
+        CHECK(clearBytes != nullptr && clearPx.buffer->size() >= 4, "clear buffer allocated");
+        if (clearBytes == nullptr || clearPx.buffer->size() < 4)
+            return 1;
+        clearBytes[0] = 9;
+        clearBytes[3] = 0;
+        ImageFrame clearFrame;
+        clearFrame.setPixels(clearPx);
+        clearFrame.computeHistogram();
+        CHECK(clearFrame.histogram().vMean == 0.0 && clearFrame.histogram().totalPixels() == 0,
+              "all-transparent ImageFrame keeps zero means");
     }
 
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);

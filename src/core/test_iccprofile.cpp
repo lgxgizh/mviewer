@@ -44,6 +44,17 @@ void put32(std::vector<unsigned char> &b, size_t off, uint32_t v)
     b[off + 3] = v & 0xFF;
 }
 
+void stampProfile(std::vector<unsigned char> &p)
+{
+    put32(p, 0, static_cast<uint32_t>(p.size()));
+    p[36] = 'a';
+    p[37] = 'c';
+    p[38] = 's';
+    p[39] = 'p';
+    if (p[8] != 2 && p[8] != 4)
+        p[8] = 2;
+}
+
 // Build a minimal but structurally valid v2.1.0 ICC profile in memory.
 // When mlucDesc is true the "desc" tag is rewritten as a malformed "mluc"
 // (recSize = 0) to exercise the anti-infinite-loop guard in parseTextType.
@@ -131,6 +142,7 @@ std::vector<unsigned char> makeProfile(bool mlucDesc)
 
     std::memcpy(&p[descOff], descTag.data(), descTag.size());
     std::memcpy(&p[cprtOff], cprt.data(), cprt.size());
+    stampProfile(p);
     return p;
 }
 } // namespace
@@ -176,6 +188,7 @@ int main()
     {
         std::vector<unsigned char> p = makeProfile(false);
         p.resize(140);              // only the header + partial tag directory
+        put32(p, 0, 140);           // declared size matches the truncated buffer
         put32(p, 128, 0xFFFFFFFFu); // lie about the tag count
         const IccProfile info = parseIccProfile(p.data(), p.size());
         CHECK(info.valid, "header-only buffer (140 bytes) reports valid=true");
@@ -242,6 +255,7 @@ int main()
         put32(p, 136, 144);
         put32(p, 140, uint32_t(cprtTag.size()));
         std::memcpy(&p[144], cprtTag.data(), cprtTag.size());
+        stampProfile(p);
 
         const IccProfile info = parseIccProfile(p.data(), p.size());
         CHECK(info.valid, "v2.2 profile with textType tag reports valid=true");
@@ -269,9 +283,101 @@ int main()
         put32(p, 136, 144);
         put32(p, 140, uint32_t(descTag.size()));
         std::memcpy(&p[144], descTag.data(), descTag.size());
+        stampProfile(p);
 
         const IccProfile info = parseIccProfile(p.data(), p.size());
         CHECK(info.description == modelDesc, "dmdd tag surfaces as description fallback");
+    }
+
+    // 8) Signature, declared size, and major version are required.
+    {
+        std::vector<unsigned char> missing = makeProfile(false);
+        missing[36] = 0;
+        const IccProfile noSig = parseIccProfile(missing.data(), missing.size());
+        CHECK(!noSig.valid, "missing acsp signature is rejected");
+
+        std::vector<unsigned char> oversized = makeProfile(false);
+        put32(oversized, 0, static_cast<uint32_t>(oversized.size()) + 16);
+        const IccProfile tooBig = parseIccProfile(oversized.data(), oversized.size());
+        CHECK(!tooBig.valid, "declared size past the buffer is rejected");
+
+        std::vector<unsigned char> major1 = makeProfile(false);
+        major1[8] = 1;
+        std::vector<unsigned char> major9 = makeProfile(false);
+        major9[8] = 9;
+        CHECK(!parseIccProfile(major1.data(), major1.size()).valid, "major version 1 is rejected");
+        CHECK(!parseIccProfile(major9.data(), major9.size()).valid, "major version 9 is rejected");
+    }
+
+    // 9) mluc records are 12 bytes; English wins; non-ASCII UTF-16BE decodes.
+    {
+        const unsigned char hello[] = {0x00, 'H', 0x00, 'e', 0x00, 'l', 0x00, 'l', 0x00, 'o'};
+        std::vector<unsigned char> mluc(52, 0);
+        mluc[0] = 'm';
+        mluc[1] = 'l';
+        mluc[2] = 'u';
+        mluc[3] = 'c';
+        put32(mluc, 8, 2);
+        put32(mluc, 12, 12);
+        mluc[16] = 'j';
+        mluc[17] = 'a';
+        mluc[18] = 'J';
+        mluc[19] = 'P';
+        put32(mluc, 20, 2);
+        put32(mluc, 24, 40);
+        mluc[28] = 'e';
+        mluc[29] = 'n';
+        mluc[30] = 'U';
+        mluc[31] = 'S';
+        put32(mluc, 32, 10);
+        put32(mluc, 36, 42);
+        mluc[40] = 0x4E;
+        mluc[41] = 0x16;
+        std::memcpy(&mluc[42], hello, sizeof(hello));
+
+        std::vector<unsigned char> p(128 + 4 + 12 + mluc.size(), 0);
+        p[8] = 4;
+        p[9] = 0x30;
+        put32(p, 128, 1);
+        p[132] = 'd';
+        p[133] = 'e';
+        p[134] = 's';
+        p[135] = 'c';
+        put32(p, 136, 144);
+        put32(p, 140, static_cast<uint32_t>(mluc.size()));
+        std::memcpy(&p[144], mluc.data(), mluc.size());
+        stampProfile(p);
+        const IccProfile both = parseIccProfile(p.data(), p.size());
+        CHECK(both.valid, "v4 mluc profile is valid");
+        CHECK(both.version == "4.3.0", "v4 version decodes major.minor.bugfix");
+        CHECK(both.description == "Hello", "mluc prefers the en record over an earlier ja record");
+
+        put32(mluc, 8, 1);
+        std::vector<unsigned char> onlyJa(128 + 4 + 12 + mluc.size(), 0);
+        onlyJa[8] = 4;
+        put32(onlyJa, 128, 1);
+        onlyJa[132] = 'd';
+        onlyJa[133] = 'e';
+        onlyJa[134] = 's';
+        onlyJa[135] = 'c';
+        put32(onlyJa, 136, 144);
+        put32(onlyJa, 140, static_cast<uint32_t>(mluc.size()));
+        std::memcpy(&onlyJa[144], mluc.data(), mluc.size());
+        stampProfile(onlyJa);
+        const IccProfile ja = parseIccProfile(onlyJa.data(), onlyJa.size());
+        const std::string world = "\xE4\xB8\x96";
+        CHECK(ja.description == world, "mluc UTF-16BE U+4E16 decodes to UTF-8");
+    }
+
+    // 10) A wrapped tag offset+size must not be treated as in-range.
+    {
+        std::vector<unsigned char> p = makeProfile(false);
+        put32(p, 136, 0xFFFFFFF0u);
+        put32(p, 140, 32);
+        const IccProfile info = parseIccProfile(p.data(), p.size());
+        CHECK(info.valid, "overflowing tag offset keeps the header valid");
+        CHECK(info.description.empty(), "offset+size past the profile is not read");
+        CHECK(info.copyright == "Copyright ACME", "a later in-range tag is still read");
     }
 
     printf("\nIccProfile tests: %d passed, %d failed\n", g_pass, g_fail);

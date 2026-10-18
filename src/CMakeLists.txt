@@ -13,6 +13,7 @@ endif()
 add_library(mviewer_core SHARED
     runtime_storage.cpp
     core/EventBus.cpp
+    core/FileIdentity.cpp
     core/MainThreadDispatcher.cpp
     core/image/Decoder.cpp
     core/image/decoder/QtDecoder.cpp
@@ -31,6 +32,7 @@ add_library(mviewer_core SHARED
     core/image/DisplayMip.cpp
     core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
+    core/image/MetadataDpi.cpp
     core/image/RawMetadata.cpp
     core/image/ImageCache.cpp
     core/image/DiskCache.cpp

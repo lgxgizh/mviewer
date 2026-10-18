@@ -11,8 +11,8 @@ class QSqlDatabase; // forward decl: connectionForThread() returns one; the real
                     // Qt SQL header stays hidden behind the Impl PIMPL.
 
 // SQLite-backed disk cache for decoded full-resolution images.
-// Key = file identity hash (path + mtime + size), so mtime change
-// automatically invalidates the entry.
+// Callers pass fileIdentityKey (path|size|mtimeMs). That string is persisted,
+// so an mtime change misses the old row instead of aliasing it.
 class DiskCache
 {
   public:
@@ -33,12 +33,15 @@ class DiskCache
     // Total bytes consumed by all cached blobs (exact payload bytes).
     size_t totalBytes() const;
 
-    // Soft cap on entry count; enforced lazily on put() by dropping oldest.
+    // Soft cap on entry count. A successful get() refreshes last access, and
+    // eviction drops the least recently used rows. put() checks the cap on a
+    // throttle; setMaxEntries() checks immediately. When the cache is over the
+    // cap it is pruned to 90% (or to the cap itself when the cap is below 10).
     void setMaxEntries(int n);
     int maxEntries() const;
 
-    // Soft cap on total bytes consumed; enforced lazily on put() by dropping
-    // oldest entries until totalBytes() falls below this value.
+    // Soft cap on total payload bytes, enforced the same way as the entry cap:
+    // least recently used rows are dropped down to 90% of the cap.
     void setMaxBytes(size_t n);
     size_t maxBytes() const;
 

@@ -1,5 +1,7 @@
 #include "core/image/ImageObject.h"
 
+#include "core/FileIdentity.h"
+
 #include <QCryptographicHash>
 #include <QFileInfo>
 
@@ -8,11 +10,11 @@ namespace
 
 std::string computeFileHash(const std::string &path, int64_t size, int64_t mtime)
 {
-    const QString key =
-        QString::fromUtf8(path.data(), static_cast<int>(path.size())) + QString::number(size) +
-        QString::number(mtime);
-    const QByteArray raw = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha1);
-    return std::string(raw.constData(), raw.size());
+    const std::string preimage = mviewer::core::legacyUnseparatedIdentity(path, size, mtime);
+    const QByteArray raw = QCryptographicHash::hash(
+        QByteArray(preimage.data(), static_cast<qsizetype>(preimage.size())),
+        QCryptographicHash::Sha1);
+    return std::string(raw.constData(), static_cast<size_t>(raw.size()));
 }
 
 } // namespace

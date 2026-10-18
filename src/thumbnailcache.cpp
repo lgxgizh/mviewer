@@ -1,5 +1,6 @@
 #include "thumbnailcache.h"
 
+#include "core/FileIdentity.h"
 #include "runtime_storage.h"
 
 #include "core/trace/Trace.h"
@@ -74,10 +75,11 @@ QString ThumbnailCache::keyForIdentity(const QString &path, int size, qint64 mti
 {
     if (path.isEmpty() || size <= 0)
         return QString();
-    const QString pathPrefix =
-        QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex();
-    return pathPrefix + "_" + QString::number(mtimeMs) + "_" + QString::number(fileSize) + "_" +
-           QString::number(size) + "_v" + QString::number(kSchemaVersion);
+    const QByteArray utf8 = path.toUtf8();
+    const std::string utf8Path(utf8.constData(), static_cast<size_t>(utf8.size()));
+    const std::string key =
+        mviewer::core::thumbnailDiskKey(utf8Path, size, mtimeMs, fileSize, kSchemaVersion);
+    return QString::fromUtf8(key.data(), static_cast<int>(key.size()));
 }
 
 QString ThumbnailCache::keyFor(const QString &path, int size)

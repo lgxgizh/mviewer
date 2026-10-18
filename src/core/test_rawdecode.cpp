@@ -194,6 +194,44 @@ int main(int argc, char **argv)
               "scaled preview decode honors maxEdge constraint");
     }
 
+    // Probe reads SOF from the marker walk. A multi-hundred-KiB comment pad
+    // must not be copied just to learn width and height.
+    {
+        QByteArray inflated;
+        inflated.append(jpeg.left(2));
+        const QByteArray pad(60000, '\x11');
+        for (int i = 0; i < 8; ++i)
+        {
+            const int length = static_cast<int>(pad.size() + 2);
+            inflated.append('\xff');
+            inflated.append('\xfe');
+            inflated.append(static_cast<char>((length >> 8) & 0xff));
+            inflated.append(static_cast<char>(length & 0xff));
+            inflated.append(pad);
+        }
+        inflated.append(jpeg.mid(2));
+        CHECK(inflated.size() > static_cast<qsizetype>(400) * 1024,
+              "padded embedded JPEG exceeds the scanner window");
+        const std::string paddedPath = tmp.path().toStdString() + "/padded.cr2";
+        writeFile(paddedPath, std::vector<uint8_t>(inflated.begin(), inflated.end()));
+
+        mviewer::domain::ImageMetadata meta;
+        CHECK(dec.probeMetadata(paddedPath, meta), "padded RAW probe succeeds from SOF");
+        CHECK(meta.width == 48 && meta.height == 32, "SOF probe dimensions match the JPEG");
+        const size_t probePeak = RawDecoder::lastPreviewPeakBufferedBytes();
+        CHECK(probePeak <= static_cast<size_t>(2 * 64 * 1024),
+              "SOF probe peak stays inside the scanner window");
+        CHECK(probePeak < static_cast<size_t>(inflated.size()),
+              "SOF probe does not retain the embedded JPEG payload");
+
+        ImageData paddedImage = DecoderRegistry::instance().decodeFull(paddedPath);
+        CHECK(!paddedImage.isNull() && paddedImage.width == 48 && paddedImage.height == 32,
+              "padded embedded JPEG still decodes");
+        ImageData paddedScaled = DecoderRegistry::instance().decodeScaled(paddedPath, 16);
+        CHECK(!paddedScaled.isNull() && paddedScaled.width <= 16 && paddedScaled.height <= 16,
+              "padded embedded JPEG honors setScaledSize maxEdge");
+    }
+
     printf("\n==== RAW decode test: %d passed, %d failed ====\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

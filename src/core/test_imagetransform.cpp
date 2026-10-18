@@ -156,6 +156,30 @@ int main(int argc, char **argv)
     // Final image object (8 0 obj) must be defined and included in xref
     CHECK(pdfContent.find("8 0 obj") != std::string::npos, "final image object 8 0 obj is present");
 
+    const std::string startxrefMark = "startxref\n";
+    const auto startxrefAt = pdfContent.rfind(startxrefMark);
+    CHECK(startxrefAt != std::string::npos, "startxref is present");
+    if (startxrefAt != std::string::npos)
+    {
+        const auto numBegin = startxrefAt + startxrefMark.size();
+        const auto numEnd = pdfContent.find('\n', numBegin);
+        const std::string numText = numEnd == std::string::npos
+                                        ? std::string()
+                                        : pdfContent.substr(numBegin, numEnd - numBegin);
+        bool digits = !numText.empty();
+        for (char c : numText)
+            digits = digits && (c >= '0' && c <= '9');
+        const long xrefAt = digits ? std::stol(numText) : -1L;
+        const bool pointsAtXref = xrefAt >= 0 &&
+                                  static_cast<unsigned long>(xrefAt) + 4 <= pdfContent.size() &&
+                                  pdfContent.compare(static_cast<size_t>(xrefAt), 4, "xref") == 0;
+        CHECK(pointsAtXref, "startxref offset points at the xref keyword");
+    }
+    int inUse = 0;
+    for (size_t at = 0; (at = pdfContent.find(" n \n", at)) != std::string::npos; at += 4)
+        ++inUse;
+    CHECK(inUse == 8, "xref has one in-use entry for each of the 8 objects");
+
     std::cout << "\nImageTransform: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";
     return g_fail == 0 ? 0 : 1;
 }

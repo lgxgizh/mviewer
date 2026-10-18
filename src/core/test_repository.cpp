@@ -6,13 +6,15 @@
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
+#include "core/image/decoder/QtDecoder.h"
 
 #include <QColor>
 #include <QColorSpace>
 #include <QCoreApplication>
 #include <QImage>
-#include <QTemporaryDir>
+#include <QImageReader>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QtGui/qrgba64.h>
 #include <chrono>
 #include <cstdio>
@@ -243,8 +245,8 @@ static void testRaw16ImageSoak()
     {
         QImage image(96, 72, QImage::Format_RGBX64);
         const QColor color = QColor::fromRgba64(static_cast<quint16>(1000 + i * 1000),
-                                                 static_cast<quint16>(2000 + i * 1000),
-                                                 static_cast<quint16>(3000 + i * 1000), 65535);
+                                                static_cast<quint16>(2000 + i * 1000),
+                                                static_cast<quint16>(3000 + i * 1000), 65535);
         image.fill(color);
         const QString png = dir.filePath(QString("m42_%1.png").arg(i));
         const QString tif = dir.filePath(QString("m42_%1.tiff").arg(i));
@@ -275,6 +277,94 @@ static void testRaw16ImageSoak()
     mgr.configure(CacheConfig{});
 }
 
+static void testRaw16SingleDecode()
+{
+    printf("\n[16-bit PNG decodes once]\n");
+    CacheManager::instance().clear();
+    DiskCache::instance().clear();
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "16-bit single-decode temp dir");
+    if (!dir.isValid())
+        return;
+
+    constexpr int kWidth = 8;
+    constexpr int kHeight = 6;
+    QImage image(kWidth, kHeight, QImage::Format_RGBX64);
+    for (int y = 0; y < kHeight; ++y)
+    {
+        for (int x = 0; x < kWidth; ++x)
+        {
+            const quint16 r = static_cast<quint16>(1000 + x * 40 + y);
+            const quint16 g = static_cast<quint16>(20000 + x * 25);
+            const quint16 b = static_cast<quint16>(40000 + y * 30);
+            image.setPixelColor(x, y, QColor::fromRgba64(r, g, b, 65535));
+        }
+    }
+    const QString path = dir.filePath("once.png");
+    CHECK(image.save(path), "16-bit PNG fixture saved");
+
+    QImageReader reference(path);
+    reference.setAutoTransform(true);
+    const QImage referenceImage = reference.read().convertToFormat(QImage::Format_RGB888);
+    QImageReader rawReader(path);
+    rawReader.setAutoTransform(false);
+    const QImage rawImage = rawReader.read();
+    CHECK(!referenceImage.isNull() && !rawImage.isNull(), "reference 16-bit reads succeed");
+    const bool rawIs16 =
+        rawImage.format() == QImage::Format_RGBX64 || rawImage.format() == QImage::Format_RGBA64;
+    CHECK(rawIs16, "fixture reads back as 16-bit RGB");
+
+    QtDecoder::resetFullImageReadCount();
+    const auto result = ImageRepository::instance().load(path.toStdString());
+    CHECK(QtDecoder::fullImageReadCount() == 1, "16-bit PNG full load reads the file once");
+    CHECK(result.success() && result.frame && result.frame->hasRaw16(), "load keeps raw16 samples");
+    if (!result.success() || !result.frame || referenceImage.isNull() || rawImage.isNull() ||
+        !rawIs16)
+    {
+        CacheManager::instance().clear();
+        DiskCache::instance().clear();
+        return;
+    }
+
+    const int sampleStep = 4;
+    bool samplesMatch = true;
+    bool displayMatch = true;
+    for (int y = 0; y < kHeight; ++y)
+    {
+        const auto *row = reinterpret_cast<const uint16_t *>(rawImage.constScanLine(y));
+        if (row == nullptr)
+        {
+            samplesMatch = false;
+            break;
+        }
+        for (int x = 0; x < kWidth; ++x)
+        {
+            uint16_t r = 0;
+            uint16_t g = 0;
+            uint16_t b = 0;
+            if (!result.frame->raw16At(x, y, r, g, b))
+                samplesMatch = false;
+            const int pixel = x * sampleStep;
+            if (r != row[pixel] || g != row[pixel + 1] || b != row[pixel + 2])
+                samplesMatch = false;
+            const PixelRGBA px = samplePixel(result.frame->pixels(), x, y);
+            const QRgb ref = referenceImage.pixel(x, y);
+            if (!px.valid || px.r != qRed(ref) || px.g != qGreen(ref) || px.b != qBlue(ref))
+                displayMatch = false;
+        }
+    }
+    CHECK(samplesMatch, "raw16 matches the single 16-bit decode");
+    CHECK(displayMatch, "8-bit display matches auto-transformed QImageReader");
+
+    const auto again = ImageRepository::instance().load(path.toStdString());
+    CHECK(QtDecoder::fullImageReadCount() == 1, "memory hit does not read 16-bit pixels again");
+    CHECK(again.success() && again.frame && again.frame->hasRaw16(), "memory hit restores raw16");
+
+    CacheManager::instance().clear();
+    DiskCache::instance().clear();
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -286,6 +376,7 @@ int main(int argc, char **argv)
     test1000ImageNonBlocking();
     testImageFrameExtras();
     testRaw16ImageSoak();
+    testRaw16SingleDecode();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

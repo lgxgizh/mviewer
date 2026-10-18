@@ -1,5 +1,6 @@
 #include "core/image/ImageFrame.h"
 
+#include "core/FileIdentity.h"
 #include "core/image/ImageBuffer.h"
 #include "core/perf/MemoryTracker.h"
 
@@ -112,7 +113,7 @@ ImageFrame::LiveFrameToken::~LiveFrameToken()
     meta.fileSize = static_cast<int64_t>(fi.size());
     meta.modifiedEpochSec = fi.lastModified().toSecsSinceEpoch();
     const std::string composite =
-        path + "|" + std::to_string(meta.fileSize) + "|" + std::to_string(meta.modifiedEpochSec);
+        mviewer::core::fileIdentityCompositeSec(path, meta.fileSize, meta.modifiedEpochSec);
     meta.hash = std::to_string(std::hash<std::string>{}(composite));
     return ImageFrame(meta, pixels);
 }
@@ -180,7 +181,12 @@ void ImageFrame::computeHistogram()
     const bool gray = (m_pixels.format == PixelFormat::Grayscale8);
     const bool bgr =
         (m_pixels.format == PixelFormat::BGR24 || m_pixels.format == PixelFormat::BGRA32);
-    int64_t sumL = 0, sumR = 0, sumG = 0, sumB = 0;
+    // Alpha is not a colour channel. Fully transparent pixels are omitted, the
+    // same rule as AnalysisEngine / ImageStats / compare::Histogram. Means use
+    // the counted samples; an all-transparent image stays at zero and is still
+    // marked computed. V is max(R, G, B), or the gray sample for Grayscale8.
+    int64_t sumL = 0, sumV = 0, sumR = 0, sumG = 0, sumB = 0;
+    int64_t counted = 0;
     if (gray)
     {
         for (int y = 0; y < h; ++y)
@@ -191,6 +197,7 @@ void ImageFrame::computeHistogram()
             {
                 const uint8_t gVal = *p;
                 ++m_histogram.luminance[gVal];
+                ++m_histogram.v[gVal];
                 ++m_histogram.red[gVal];
                 ++m_histogram.green[gVal];
                 ++m_histogram.blue[gVal];
@@ -198,6 +205,8 @@ void ImageFrame::computeHistogram()
                 sumG += gVal;
                 sumB += gVal;
                 sumL += gVal;
+                sumV += gVal;
+                ++counted;
             }
         }
     }
@@ -209,11 +218,15 @@ void ImageFrame::computeHistogram()
             const uint8_t *end = p + static_cast<size_t>(w) * static_cast<size_t>(cpp);
             for (; p < end; p += cpp)
             {
+                if (cpp == 4 && p[3] == 0)
+                    continue;
                 const uint8_t bVal = p[0];
                 const uint8_t gVal = p[1];
                 const uint8_t rVal = p[2];
                 const int lum = luminance(rVal, gVal, bVal);
+                const uint8_t vVal = std::max(rVal, std::max(gVal, bVal));
                 ++m_histogram.luminance[lum];
+                ++m_histogram.v[vVal];
                 ++m_histogram.red[rVal];
                 ++m_histogram.green[gVal];
                 ++m_histogram.blue[bVal];
@@ -221,6 +234,8 @@ void ImageFrame::computeHistogram()
                 sumG += gVal;
                 sumB += bVal;
                 sumL += lum;
+                sumV += vVal;
+                ++counted;
             }
         }
     }
@@ -232,11 +247,15 @@ void ImageFrame::computeHistogram()
             const uint8_t *end = p + static_cast<size_t>(w) * static_cast<size_t>(cpp);
             for (; p < end; p += cpp)
             {
+                if (cpp == 4 && p[3] == 0)
+                    continue;
                 const uint8_t rVal = p[0];
                 const uint8_t gVal = p[1];
                 const uint8_t bVal = p[2];
                 const int lum = luminance(rVal, gVal, bVal);
+                const uint8_t vVal = std::max(rVal, std::max(gVal, bVal));
                 ++m_histogram.luminance[lum];
+                ++m_histogram.v[vVal];
                 ++m_histogram.red[rVal];
                 ++m_histogram.green[gVal];
                 ++m_histogram.blue[bVal];
@@ -244,13 +263,20 @@ void ImageFrame::computeHistogram()
                 sumG += gVal;
                 sumB += bVal;
                 sumL += lum;
+                sumV += vVal;
+                ++counted;
             }
         }
     }
-    m_histogram.lumMean = static_cast<double>(sumL) / n;
-    m_histogram.rMean = static_cast<double>(sumR) / n;
-    m_histogram.gMean = static_cast<double>(sumG) / n;
-    m_histogram.bMean = static_cast<double>(sumB) / n;
+    if (counted > 0)
+    {
+        const double samples = static_cast<double>(counted);
+        m_histogram.lumMean = static_cast<double>(sumL) / samples;
+        m_histogram.vMean = static_cast<double>(sumV) / samples;
+        m_histogram.rMean = static_cast<double>(sumR) / samples;
+        m_histogram.gMean = static_cast<double>(sumG) / samples;
+        m_histogram.bMean = static_cast<double>(sumB) / samples;
+    }
     m_histogramComputed = true;
 }
 

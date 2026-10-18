@@ -3,6 +3,8 @@
 #include "core/image/ISourceImageCapabilities.h"
 #include "core/image/decoder/IDecoder.h"
 
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -42,6 +44,17 @@ class QtDecoder : public IDecoder,
     {
         return "QtDecoder";
     }
+
+    // Full-image QImageReader::read() calls (display decode and the disk-hit
+    // 16-bit fallback). Header probes do not count.
+    static void resetFullImageReadCount();
+    static uint64_t fullImageReadCount();
+    static void noteFullImageRead();
+
+    // 16-bit samples stashed by the latest decodeFullResult on this thread.
+    // Null unless `path` matches; a match is consumed.
+    static std::shared_ptr<std::vector<uint16_t>> takePendingRaw16(const std::string &path,
+                                                                   int &channels);
 
     // ── M47 source-backed capabilities ───────────────────────────────────────
     bool canProbe(const std::string &path) const override;
