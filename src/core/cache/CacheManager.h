@@ -104,6 +104,9 @@ class CacheManager
     static std::string mipKey(const std::string &baseKey, int lod);
 
     // Store one mip level (lod≥1 → Preview pool; lod 0 → FullImage under baseKey).
+    // A stored lod 0 drops any lod≥1 chain so a replaced full raster cannot
+    // leave stale Preview mips. Replacing lod≥1 updates the chain byte total
+    // by the difference, which trimMipsToBudget reads.
     void putMip(const std::string &baseKey, int lod, const ImageData &img);
     bool getMip(const std::string &baseKey, int lod, ImageData &out);
 

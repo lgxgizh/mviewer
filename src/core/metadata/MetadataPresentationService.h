@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <list>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -41,11 +42,15 @@ struct MetadataPresentationSnapshot
 // they finally run, so an unregistered consumer is never called. Widget-touching
 // consumers marshal themselves as well: a process without an installed
 // dispatcher gets inline delivery on the worker thread.
+//
+// Snapshots are kept in an LRU capped at kDefaultCacheEntries. A hit
+// (cached() or a matching in-flight read) becomes most-recently used.
 class MetadataPresentationService
 {
   public:
     using Snapshot = MetadataPresentationSnapshot;
     using Callback = std::function<void(const Snapshot &)>;
+    static constexpr size_t kDefaultCacheEntries = 256;
 
     static MetadataPresentationService &instance();
 
@@ -57,10 +62,12 @@ class MetadataPresentationService
 
     // Deliberately memory-only. It never validates identity or touches the
     // filesystem; callers that need freshness use request(), whose worker path
-    // performs identity validation outside the mutex.
+    // performs identity validation outside the mutex. A hit refreshes LRU order.
     std::optional<Snapshot> cached(const std::string &path) const;
 
     size_t cacheSize() const;
+    void setCacheCapacity(size_t entries);
+    size_t cacheCapacity() const;
 
   private:
     struct Registration
@@ -83,13 +90,25 @@ class MetadataPresentationService
         std::shared_ptr<std::atomic<bool>> active;
     };
 
+    struct CacheEntry
+    {
+        Snapshot snapshot;
+        std::list<std::string>::iterator orderIt;
+    };
+
     MetadataPresentationService() = default;
     static std::string fileIdentity(const std::string &path);
     void runFlight(const std::shared_ptr<Flight> &flight);
+    void storeSnapshotLocked(const std::string &path, const Snapshot &snapshot);
+    void touchSnapshotLocked(std::unordered_map<std::string, CacheEntry>::iterator it) const;
+    void evictCacheOverflowLocked(size_t limit);
 
     mutable std::mutex m_mutex;
     uint64_t m_nextRequestId = 0;
-    std::unordered_map<std::string, Snapshot> m_cache;
+    size_t m_cacheCapacity = kDefaultCacheEntries;
+    // Front is most recently used. Mutable so a const cache hit can touch it.
+    mutable std::list<std::string> m_cacheOrder;
+    mutable std::unordered_map<std::string, CacheEntry> m_cache;
     std::unordered_map<std::string, std::shared_ptr<Flight>> m_flights;
     std::unordered_map<std::string, ConsumerState> m_consumers;
 };

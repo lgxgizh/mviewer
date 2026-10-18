@@ -116,11 +116,15 @@ void MemoryTracker::addExternal(size_t bytes)
 
 void MemoryTracker::removeExternal(size_t bytes)
 {
+    // One CAS: next is cur-bytes, or 0 when the ledger is smaller than bytes.
+    // Clamping with a store of 0 followed by fetch_sub wrapped size_t.
     size_t cur = m_external.load(std::memory_order_relaxed);
-    while (cur < bytes && !m_external.compare_exchange_weak(cur, 0, std::memory_order_relaxed))
-        ;
-    const size_t dec = (cur >= bytes) ? bytes : cur;
-    m_external.fetch_sub(dec, std::memory_order_relaxed);
+    for (;;)
+    {
+        const size_t next = (cur >= bytes) ? (cur - bytes) : 0;
+        if (m_external.compare_exchange_weak(cur, next, std::memory_order_relaxed))
+            return;
+    }
 }
 
 void MemoryTracker::reset()

@@ -57,7 +57,15 @@ class ImageFrame
   public:
     ImageFrame();
     ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageData &pixels);
-    ~ImageFrame();
+    // Copy counts as another live frame. Move transfers that count; the
+    // moved-from frame does not notify MemoryTracker again on destruction.
+    // The accounting lives in m_liveToken so every member is copied/moved by
+    // the defaulted operations (no hand-maintained field list).
+    ImageFrame(const ImageFrame &other) = default;
+    ImageFrame &operator=(const ImageFrame &other) = default;
+    ImageFrame(ImageFrame &&other) noexcept = default;
+    ImageFrame &operator=(ImageFrame &&other) noexcept = default;
+    ~ImageFrame() = default;
 
     // Factory: create from a decoded image, filling metadata (hash, size, mtime).
     // Implementation may use Qt for file interrogation (.cpp only).
@@ -237,6 +245,23 @@ class ImageFrame
     bool raw16At(int x, int y, uint16_t &r, uint16_t &g, uint16_t &b) const;
 
   private:
+    // MemoryTracker live-frame accounting (Rule of Five in one place).
+    // Construct/copy: +1 live frame. Move: transfers the count; the moved-from
+    // token goes inactive. Destroy: -1 if active.
+    class LiveFrameToken
+    {
+      public:
+        LiveFrameToken();
+        LiveFrameToken(const LiveFrameToken &other);
+        LiveFrameToken &operator=(const LiveFrameToken &other);
+        LiveFrameToken(LiveFrameToken &&other) noexcept;
+        LiveFrameToken &operator=(LiveFrameToken &&other) noexcept;
+        ~LiveFrameToken();
+
+      private:
+        bool m_active = false;
+    };
+
     mviewer::domain::ImageMetadata m_meta;
     ImageData m_pixels;
     DecodeState m_decodeState = DecodeState::Idle;
@@ -259,4 +284,5 @@ class ImageFrame
     std::shared_ptr<std::vector<uint16_t>> m_raw16;
     uint16_t m_rawMax = 0;
     int m_rawCh = 0;
+    LiveFrameToken m_liveToken;
 };

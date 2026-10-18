@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <utility>
 
 bool ImageFrame::raw16At(int x, int y, uint16_t &r, uint16_t &g, uint16_t &b) const
 {
@@ -37,10 +38,7 @@ bool ImageFrame::raw16At(int x, int y, uint16_t &r, uint16_t &g, uint16_t &b) co
     return true;
 }
 
-ImageFrame::ImageFrame()
-{
-    mviewer::perf::MemoryTracker::notifyFrameCreated();
-}
+ImageFrame::ImageFrame() = default;
 
 ImageFrame::ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageData &pixels)
     : m_meta(meta), m_pixels(pixels)
@@ -57,12 +55,50 @@ ImageFrame::ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageDa
     m_sequence.totalDurationMs = meta.durationMs;
     m_frameIdentity.fileRevision = meta.hash.empty() ? meta.filePath : meta.hash;
     m_frameIdentity.frameIndex = meta.currentFrame;
+}
+
+ImageFrame::LiveFrameToken::LiveFrameToken() : m_active(true)
+{
     mviewer::perf::MemoryTracker::notifyFrameCreated();
 }
 
-ImageFrame::~ImageFrame()
+ImageFrame::LiveFrameToken::LiveFrameToken(const LiveFrameToken & /*other*/) : m_active(true)
 {
-    mviewer::perf::MemoryTracker::notifyFrameDestroyed();
+    mviewer::perf::MemoryTracker::notifyFrameCreated();
+}
+
+ImageFrame::LiveFrameToken &ImageFrame::LiveFrameToken::operator=(const LiveFrameToken &other)
+{
+    if (this != &other && !m_active)
+    {
+        m_active = true;
+        mviewer::perf::MemoryTracker::notifyFrameCreated();
+    }
+    return *this;
+}
+
+ImageFrame::LiveFrameToken::LiveFrameToken(LiveFrameToken &&other) noexcept
+    : m_active(other.m_active)
+{
+    other.m_active = false;
+}
+
+ImageFrame::LiveFrameToken &ImageFrame::LiveFrameToken::operator=(LiveFrameToken &&other) noexcept
+{
+    if (this == &other)
+        return *this;
+    if (m_active && other.m_active)
+        mviewer::perf::MemoryTracker::notifyFrameDestroyed();
+    else if (!m_active && other.m_active)
+        m_active = true;
+    other.m_active = false;
+    return *this;
+}
+
+ImageFrame::LiveFrameToken::~LiveFrameToken()
+{
+    if (m_active)
+        mviewer::perf::MemoryTracker::notifyFrameDestroyed();
 }
 
 /*static*/ ImageFrame ImageFrame::create(const std::string &path, const ImageData &pixels)

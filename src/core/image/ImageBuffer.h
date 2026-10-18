@@ -213,15 +213,27 @@ struct ImageData
 
 inline ImageData makeImageData(int w, int h, PixelFormat fmt)
 {
+    ImageData d;
+    d.format = fmt;
+    if (w <= 0 || h <= 0)
+        return d;
     const int cpp = (fmt == PixelFormat::RGBA32 || fmt == PixelFormat::BGRA32)
                         ? 4
                         : (fmt == PixelFormat::Grayscale8 ? 1 : 3);
-    const size_t bytes = static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(cpp);
-    ImageData d;
-    d.buffer = std::make_shared<std::vector<uint8_t>>(bytes);
+    const size_t uw = static_cast<size_t>(w);
+    const size_t uh = static_cast<size_t>(h);
+    const size_t uc = static_cast<size_t>(cpp);
+    // Reject a product that does not fit in size_t. A negative dimension used
+    // to cast to a huge size_t and either wrap or request an enormous buffer.
+    constexpr size_t kSizeMax = static_cast<size_t>(-1);
+    if (uh != 0 && uw > kSizeMax / uh)
+        return d;
+    const size_t wh = uw * uh;
+    if (uc != 0 && wh > kSizeMax / uc)
+        return d;
+    d.buffer = std::make_shared<std::vector<uint8_t>>(wh * uc);
     d.width = w;
     d.height = h;
-    d.format = fmt;
     return d;
 }
 

@@ -62,8 +62,14 @@ HorizScratch &horizScratch()
 
 void fitBytes(std::vector<uint8_t> &dst, int count)
 {
-    if (count > 0 && static_cast<int>(dst.size()) < count)
-        dst.resize(static_cast<size_t>(count));
+    if (count <= 0)
+        return;
+    const size_t need = static_cast<size_t>(count);
+    if (dst.size() < need)
+        dst.resize(need);
+    // thread_local BoxScratch / HorizScratch only grew. Shrink when a later
+    // row is far smaller than a previous huge width.
+    shrinkOversizedScratch(dst, need);
 }
 
 const uint8_t *packedRow(const RgbView &src, int y)
@@ -634,15 +640,14 @@ bool boxWriteBodyFast(const RgbView &, uint8_t *, int, int, bool, bool, int, int
     return false;
 }
 
-bool convolveHorizontalFast(const RgbView &, int, const AxisKernel &, uint16_t *,
-                            uint16_t *, uint16_t *)
+bool convolveHorizontalFast(const RgbView &, int, const AxisKernel &, uint16_t *, uint16_t *,
+                            uint16_t *)
 {
     return false;
 }
 
-bool convolveVerticalFast(const uint16_t *, const uint16_t *, const uint16_t *,
-                          int, int, const AxisKernel &, int, int, int,
-                          uint8_t *)
+bool convolveVerticalFast(const uint16_t *, const uint16_t *, const uint16_t *, int, int,
+                          const AxisKernel &, int, int, int, uint8_t *)
 {
     return false;
 }

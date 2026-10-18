@@ -149,4 +149,36 @@ void releasePyramidCache() noexcept;
 void parallelForRows(int rowCount, int minRows, const std::atomic<bool> *cancel,
                      const std::function<void(int, int)> &fn);
 
+// Release scratch after a resample when capacity is more than twice the bytes
+// just used and above 1 MiB. One huge target must not pin the buffer forever.
+// Failure to allocate the tight copy keeps the existing buffer.
+template <typename T>
+inline void shrinkOversizedScratch(std::vector<T> &values, size_t needed) noexcept
+{
+    constexpr size_t kRetainBytes = size_t{1024} * size_t{1024};
+    try
+    {
+        if (needed > values.size())
+            needed = values.size();
+        const size_t capacity = values.capacity();
+        if (capacity <= needed)
+            return;
+        constexpr size_t kSizeMax = static_cast<size_t>(-1);
+        if (needed > kSizeMax / 2 || capacity <= needed * 2)
+            return;
+        if (sizeof(T) != 0 && capacity > kSizeMax / sizeof(T))
+            return;
+        if (capacity * sizeof(T) <= kRetainBytes)
+            return;
+        std::vector<T> tight(needed);
+        for (size_t i = 0; i < needed; ++i)
+            tight[i] = values[i];
+        values.swap(tight);
+    }
+    catch (...) // NOLINT(bugprone-empty-catch): allocation failure keeps the existing buffer.
+    {
+        return;
+    }
+}
+
 } // namespace mviewer::core::resample_detail

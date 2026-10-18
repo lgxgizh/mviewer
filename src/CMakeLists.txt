@@ -484,7 +484,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache mipmap_pyramid repository scheduler metadata filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result)
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1419,6 +1419,7 @@ add_test(NAME m27_eventbus_tests COMMAND test_m27_eventbus)
 add_test(NAME m27_scheduler_tests COMMAND test_m27_scheduler)
 add_test(NAME m27_repository_tests COMMAND test_m27_repository)
 add_test(NAME metadata_tests   COMMAND test_metadata)
+add_test(NAME metadata_presentation_tests COMMAND test_metadata_presentation)
 add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)
 add_test(NAME result_tests     COMMAND test_result)

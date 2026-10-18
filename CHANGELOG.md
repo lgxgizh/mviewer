@@ -11,6 +11,12 @@
 - `TaskScheduler::cancelTree` 用 `unordered_set` 记录已访问任务，避免 DFS 里对受害者列表做线性查找（审计 #5）。
 - `waitForPoolDrained` 改为条件变量等待，池里 pending 与 active 归零时唤醒，不再每 5 ms 轮询；超时后仍在释放图锁之后做剩余时间的 `waitForDone`（审计 #6）。
 - 只读像素路径统一走 `ConstImageView` / `constView()`，并删除 `ImageData::view() const`（不再 `const_cast`）。非 const `view()` 仍是不分离的可变别名，共享缓冲上的写入走 `mutableView()`（审计 #7）。
+- `ImageFrame` 补齐拷贝与移动：拷贝计入存活帧，移动把计数转给新对象，被移走的对象析构时不再扣一次，避免存活帧被多减（审计 #8）。
+- `MemoryTracker::removeExternal` 在外部字节不够扣时用一次 CAS 把计数降到 0，不再先写成 0 再 `fetch_sub` 把 `size_t` 绕回（审计 #9）。
+- `makeImageData` 在宽或高非正、或 `w*h*cpp` 乘积溢出 `size_t` 时返回空图，不再按无符号回绕去分配（审计 #10）。
+- 显示重采样的 scratch（含 SIMD 线程局部行缓冲）在容量超过本次需求两倍且大于 1MB 时交还多余容量，一次超大重采样不再长期占住内存（审计 #11）。
+- `CacheManager::putMip` 写入 lod 0 时丢掉该键已有的 mip 链；替换已有 lod 时按新旧字节差更新链的记账，`trimMipsToBudget` 不会把同一级算两次（审计 #12）。
+- 元数据展示缓存改为上限可配的 LRU（默认 256 条），命中时把该条提到最近使用（审计 #14）。
 
 ## [1.0.136] - 2026-10-18
 
