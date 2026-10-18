@@ -2,7 +2,10 @@
 // M6 unit tests: TaskScheduler dependency + priority mapping.
 #include "core/scheduler/TaskScheduler.h"
 
+#include <atomic>
+#include <chrono>
 #include <cstdio>
+#include <thread>
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -55,6 +58,89 @@ static void testTaskSchedulerDependency()
           "toPriority(MetadataPool) = Background");
 }
 
+static void testQueueDepthIsNotYetStarted()
+{
+    printf("\n[TaskScheduler queue_depth vs active_tasks]\n");
+    auto &sched = TaskScheduler::instance();
+    CHECK(sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)),
+          "MetadataPool idle before metrics check");
+    sched.setPoolMaxThreads(TaskScheduler::MetadataPool, 1);
+    sched.setMaxQueueDepth(TaskScheduler::MetadataPool, 1000);
+
+    std::atomic<bool> release{false};
+    std::atomic<bool> blockerEntered{false};
+    auto blocker = sched.submit(TaskScheduler::Priority::Background,
+                                [&](const TaskScheduler::TaskContext &)
+                                {
+                                    blockerEntered.store(true, std::memory_order_release);
+                                    while (!release.load(std::memory_order_acquire))
+                                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                });
+    CHECK(blocker != nullptr, "blocker accepted");
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!blockerEntered.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    CHECK(blockerEntered.load(), "blocker is executing");
+
+    std::atomic<bool> secondRan{false};
+    auto queued =
+        sched.submit(TaskScheduler::Priority::Background, [&](const TaskScheduler::TaskContext &)
+                     { secondRan.store(true, std::memory_order_release); });
+    CHECK(queued != nullptr, "second task accepted onto the single worker");
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    const auto mid = sched.metrics(TaskScheduler::MetadataPool);
+    CHECK(mid.active_tasks == 1, "only the running task counts as active");
+    CHECK(mid.queue_depth >= 1, "not-yet-started task counts as queue_depth");
+    CHECK(!secondRan.load(), "queued task has not started");
+
+    TaskScheduler::cancelTree(queued->id);
+    const auto cancelled = sched.metrics(TaskScheduler::MetadataPool);
+    CHECK(cancelled.queue_depth == 0, "cancel before start drops queue_depth");
+    CHECK(cancelled.active_tasks == 1, "cancel of a queued task leaves the runner active");
+    CHECK(!secondRan.load(), "cancelled queued task does not run");
+
+    release.store(true, std::memory_order_release);
+    CHECK(sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)), "MetadataPool drains");
+    const auto done = sched.metrics(TaskScheduler::MetadataPool);
+    CHECK(done.pending == 0 && done.active_tasks == 0 && done.queue_depth == 0,
+          "metrics converge after the runner finishes");
+
+    // One running + one queued fills a depth of 2; the next submit is rejected.
+    release.store(false, std::memory_order_release);
+    blockerEntered.store(false, std::memory_order_release);
+    sched.setMaxQueueDepth(TaskScheduler::MetadataPool, 2);
+    auto again = sched.submit(TaskScheduler::Priority::Background,
+                              [&](const TaskScheduler::TaskContext &)
+                              {
+                                  blockerEntered.store(true, std::memory_order_release);
+                                  while (!release.load(std::memory_order_acquire))
+                                      std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                              });
+    const auto occupyDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!blockerEntered.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < occupyDeadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    CHECK(again != nullptr && blockerEntered.load(), "depth probe occupies the worker");
+    auto held = sched.submit(TaskScheduler::Priority::Background,
+                             [](const TaskScheduler::TaskContext &) {});
+    CHECK(held != nullptr, "second in-flight task fits max depth 2");
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    auto rejected = sched.submit(TaskScheduler::Priority::Background,
+                                 [](const TaskScheduler::TaskContext &) {});
+    CHECK(rejected == nullptr, "queue_depth + active_tasks saturates max depth");
+    release.store(true, std::memory_order_release);
+    CHECK(sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)),
+          "MetadataPool drains after the depth probe");
+    const auto after = sched.metrics(TaskScheduler::MetadataPool);
+    CHECK(after.pending == 0 && after.active_tasks == 0 && after.queue_depth == 0,
+          "metrics converge after the depth probe");
+    // `held` sat in the queue for the 20 ms sleep above, so its queue wait is
+    // well above a millisecond. total_latency_ns is start minus enqueue.
+    CHECK(after.total_latency_ns > 1000000, "queue-wait latency is start time minus enqueue time");
+    sched.setMaxQueueDepth(TaskScheduler::MetadataPool, 1000);
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -62,6 +148,7 @@ int main(int argc, char **argv)
     fflush(stdout);
 
     testTaskSchedulerDependency();
+    testQueueDepthIsNotYetStarted();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

@@ -3,8 +3,8 @@
 #include "domain/Image.h"
 #include "domain/Selection.h"
 
-#include "ImageBuffer.h"
 #include "FrameSequence.h"
+#include "ImageBuffer.h"
 
 #include <optional>
 #include <string>
@@ -50,7 +50,8 @@ struct RenderCacheEntry
 
 // Universal domain object: holds pixels, metadata, cache, state, and ownership.
 // All engines pass ImageFrame; no external ad-hoc data structures.
-// Thread-safe for read-only access; pixels are held via ImageData (COW buffer); cache/decode state must be synchronized externally.
+// Thread-safe for read-only access; pixels are held via ImageData (COW buffer); cache/decode state
+// must be synchronized externally.
 class ImageFrame
 {
   public:
@@ -92,9 +93,9 @@ class ImageFrame
     {
         return m_pixels;
     }
-    const ImageBuffer view() const
+    ConstImageView constView() const
     {
-        return m_pixels.view();
+        return m_pixels.constView();
     }
     // Replace the pixel buffer (e.g. after a reversible Rotate command). Updates
     // metadata dimensions to match. Callers must ensure the new buffer is valid.

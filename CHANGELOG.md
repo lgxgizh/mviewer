@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `EventBus::instance()` 与 `scope(Application)` 共用同一条总线；`scope()` 遇到越界枚举值时回退到 Application，不再越界访问总线数组（审计 #1）。
+- `AnalyzerRegistry` 的工厂表由互斥锁保护，创建分析器时先把工厂拷出锁外再调用；`registerBuiltins()` 用 `std::call_once` 只注册一次（审计 #2）。
+- `AnalyzerRegistry::runAnalyzer` 只等待自己提交的任务，不再排空整个共享 AnalysisPool；超时后的任务写入堆上的共享状态，不会写已销毁的栈对象（审计 #3）。
+- `TaskScheduler` 的 `queue_depth` 表示已入队但尚未开始的任务，`active_tasks` 表示正在执行的任务，`total_latency_ns` 累计排队等待时间（开始时刻减入队时刻）；背压仍用两者之和对比队列上限（审计 #4）。
+- `TaskScheduler::cancelTree` 用 `unordered_set` 记录已访问任务，避免 DFS 里对受害者列表做线性查找（审计 #5）。
+- `waitForPoolDrained` 改为条件变量等待，池里 pending 与 active 归零时唤醒，不再每 5 ms 轮询；超时后仍在释放图锁之后做剩余时间的 `waitForDone`（审计 #6）。
+- 只读像素路径统一走 `ConstImageView` / `constView()`，并删除 `ImageData::view() const`（不再 `const_cast`）。非 const `view()` 仍是不分离的可变别名，共享缓冲上的写入走 `mutableView()`（审计 #7）。
+
 ## [1.0.136] - 2026-10-18
 
 ### Release

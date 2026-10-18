@@ -11,6 +11,7 @@
 |---|---|---|
 | [002](002-why-image-data-not-qimage.md) | 核心层用 `ImageData`，不用 `QImage` | Core 必须 Qt-free，支持 >8bit / 多平面格式 |
 | [008](008-why-unified-image-frame.md) | 统一 `ImageFrame` 贯穿解码→缓存→渲染 | 消除层间格式转换与拷贝 |
+| [023](023-const-image-view.md) | 只读像素走 `ConstImageView` / `constView()` | 删除 const `view()`，const 图像不再交出可写指针 |
 
 ### 分层与依赖
 
@@ -32,6 +33,7 @@
 | [006](006-why-hierarchical-cache.md) | 分级缓存（内存/缩略图/磁盘） | 不同访问模式不同容量策略 |
 | [021](021-compare-memory-current-pair-only.md) | 比较只在内存中保留屏幕上的这一对，离开即释放整图缓存并归还空闲堆 | 比较的图对一律手动选择，不需要预取或保留上一对 |
 | [007](007-why-priority-scheduler.md) | 优先级调度器 | 可视区域 > 预取 > 后台任务 |
+| [022](022-scheduler-queue-metrics-and-drain.md) | `queue_depth` 是未开始任务，`active_tasks` 是正在执行；drain 用条件变量 | 队列深度和在途任务不再被记成同一个数 |
 
 ### Compare 与分析
 

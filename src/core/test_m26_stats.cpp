@@ -14,6 +14,7 @@
 #include <climits>
 #include <cstdio>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 static int g_pass = 0;
@@ -114,20 +115,19 @@ void testRegionDoesNotCopy()
     ImageData d = makeImageData(10, 10, PixelFormat::RGB24);
     fill(d, 10, 20, 30);
     const auto before = d.buffer;
-    const auto roi = mviewer::core::computePreviewStatsROI(
-        d, mviewer::domain::Selection{2, 3, 4, 5});
+    const auto roi =
+        mviewer::core::computePreviewStatsROI(d, mviewer::domain::Selection{2, 3, 4, 5});
     CHECK(roi.valid && roi.rMean == 10 && roi.gMean == 20 && roi.bMean == 30 &&
               roi.lumMean >= 17.99 && roi.lumMean <= 18.01,
           "small ROI statistics are correct");
     CHECK(d.buffer == before, "ROI statistics retain the original ImageData buffer");
 
-    const auto clipped = mviewer::core::computePreviewStatsROI(
-        d, mviewer::domain::Selection{-4, -4, 6, 6});
+    const auto clipped =
+        mviewer::core::computePreviewStatsROI(d, mviewer::domain::Selection{-4, -4, 6, 6});
     CHECK(clipped.valid, "partially outside ROI is clipped without a crop allocation");
-    CHECK(!mviewer::core::computePreviewStatsROI(
-                d, mviewer::domain::Selection{100, 100, 4, 4})
-                .valid,
-          "fully outside ROI returns an invalid result");
+    CHECK(
+        !mviewer::core::computePreviewStatsROI(d, mviewer::domain::Selection{100, 100, 4, 4}).valid,
+        "fully outside ROI returns an invalid result");
 
     CHECK(!mviewer::core::computePreviewStatsROI(d, mviewer::domain::Selection{0, 0, 0, 4}).valid,
           "zero-width ROI stays empty");
@@ -159,6 +159,23 @@ void testRegionDoesNotCopy()
     CHECK(!edge.contains(INT_MAX - 3, 0), "contains still rejects pixels left of the origin");
 }
 
+void testConstViewDoesNotConstCast()
+{
+    printf("\n[constView is a read-only alias]\n");
+    fflush(stdout);
+    ImageData d = makeImageData(2, 2, PixelFormat::Grayscale8);
+    d.view().data[0] = 42;
+    d.view().data[1] = 7;
+    const ImageData &cd = d;
+    const ConstImageView cv = cd.constView();
+    static_assert(std::is_const_v<std::remove_pointer_t<decltype(cv.data)>>,
+                  "ConstImageView::data is const");
+    CHECK(cv.data != nullptr && cv.data[0] == 42 && cv.data[1] == 7,
+          "constView reads the same pixels as the non-const alias");
+    CHECK(cv.width == 2 && cv.height == 2, "constView keeps dimensions");
+    CHECK(d.buffer.use_count() == 1, "constView does not copy the buffer");
+}
+
 void test24MpBudget()
 {
     printf("\n[24 MP fixture: stats complete fast (worker-side budget)]\n");
@@ -167,9 +184,8 @@ void test24MpBudget()
     fill(big, 80, 120, 160);
     const auto t0 = std::chrono::steady_clock::now();
     const auto s = mviewer::core::computePreviewStats(big);
-    const auto ms = std::chrono::duration<double, std::milli>(
-                        std::chrono::steady_clock::now() - t0)
-                        .count();
+    const auto ms =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     CHECK(s.valid && s.rMean == 80, "24 MP stats correct");
     printf("  24MP stats elapsed = %.1f ms\n", ms);
     fflush(stdout);
@@ -188,6 +204,7 @@ int main()
     testSolidColor();
     testFormatsAgree();
     testRegionDoesNotCopy();
+    testConstViewDoesNotConstCast();
     test24MpBudget();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

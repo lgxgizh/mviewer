@@ -140,7 +140,7 @@ inline void convertBgr24ToRgb888Row(const uint8_t *src, uint8_t *dst, int width)
 namespace mvcore
 {
 
-static inline void copyToQImage(QImage &out, const ImageBuffer &v, size_t rowBytes)
+static inline void copyToQImage(QImage &out, const ConstImageView &v, size_t rowBytes)
 {
     const size_t outStride = static_cast<size_t>(out.bytesPerLine());
     const size_t vStride = static_cast<size_t>(v.stride());
@@ -155,7 +155,7 @@ static inline void copyToQImage(QImage &out, const ImageBuffer &v, size_t rowByt
     }
 }
 
-static inline void convertRgba32ToArgb32(QImage &out, const ImageBuffer &v)
+static inline void convertRgba32ToArgb32(QImage &out, const ConstImageView &v)
 {
     const bool hasAvx2 = mviewer::core::CpuFeatures::hasAvx2();
     const bool hasSsse3 = mviewer::core::CpuFeatures::hasSsse3();
@@ -179,7 +179,7 @@ QImage toQImage(const ImageData &src)
 {
     if (src.isNull())
         return QImage();
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     switch (src.format)
     {
     case PixelFormat::Grayscale8:
@@ -232,7 +232,7 @@ QImage toQImageRef(const ImageData &src)
 {
     if (src.isNull() || !src.buffer)
         return QImage();
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     if (!v.data || v.width <= 0 || v.height <= 0)
         return QImage();
 

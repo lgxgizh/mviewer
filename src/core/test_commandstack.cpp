@@ -67,7 +67,7 @@ static void testRotateCommand()
     rot.undo();
     CHECK(f->width() == 2 && f->height() == 3, "after undo: back to 2x3");
     // Pixel content restored exactly.
-    const ImageBuffer v = f->pixels().view();
+    const ConstImageView v = f->pixels().constView();
     bool restored = true;
     for (int i = 0; i < 2 * 3; ++i)
         if (v.data[i * 3] != 9)

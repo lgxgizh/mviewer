@@ -10,7 +10,7 @@
 #define MV_BRIGHT_SSE2 1
 #endif
 
-bool BrightnessAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
+bool BrightnessAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, int y1)
 {
     if (x1 <= x0 || y1 <= y0)
         return false;
@@ -95,8 +95,8 @@ bool BrightnessAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
-    return compute(frame.pixels().view(), 0, 0, frame.pixels().view().width,
-                   frame.pixels().view().height);
+    return compute(frame.pixels().constView(), 0, 0, frame.pixels().constView().width,
+                   frame.pixels().constView().height);
 }
 
 bool BrightnessAnalyzer::analyzeRegion(const ImageFrame &frame,
@@ -104,7 +104,7 @@ bool BrightnessAnalyzer::analyzeRegion(const ImageFrame &frame,
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
-    const ImageBuffer v = frame.pixels().view();
+    const ConstImageView v = frame.pixels().constView();
     const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
     const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
     const long long x1ll =

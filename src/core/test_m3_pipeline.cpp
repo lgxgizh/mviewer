@@ -138,8 +138,8 @@ static void testViewerCache()
     CHECK(second.frame != nullptr, "second load returns ImageFrame");
 
     // Pixel equality: the two frames must be identical (served from same cache).
-    const ImageBuffer a = first.frame->pixels().view();
-    const ImageBuffer b = second.frame->pixels().view();
+    const ConstImageView a = first.frame->pixels().constView();
+    const ConstImageView b = second.frame->pixels().constView();
     bool identical = (a.width == b.width && a.height == b.height);
     if (identical)
     {
@@ -173,7 +173,7 @@ static void testPixelInspectorReadsFrame()
     if (!res.frame)
         return;
 
-    const ImageBuffer view = res.frame->pixels().view();
+    const ConstImageView view = res.frame->pixels().constView();
     CHECK(view.format == PixelFormat::RGB24, "frame pixels are RGB24");
 
     const int cx = 128, cy = 128;
@@ -186,7 +186,7 @@ static void testPixelInspectorReadsFrame()
     auto bmp = ImageRepository::instance().load(golden("flat_color_256x256.bmp"));
     if (bmp.success())
     {
-        const ImageBuffer bv = bmp.frame->pixels().view();
+        const ConstImageView bv = bmp.frame->pixels().constView();
         const uint8_t *bp = bv.data + static_cast<size_t>(cy) * bv.stride() +
                             static_cast<size_t>(cx) * bv.channelsPerPixel();
         CHECK(bp[0] == r && bp[1] == g && bp[2] == b,

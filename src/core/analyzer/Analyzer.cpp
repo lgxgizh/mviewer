@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <exception>
 #include <memory>
 #include <mutex>
@@ -30,149 +31,157 @@
 #include <utility>
 #include <vector>
 
-AnalyzerRegistry &AnalyzerRegistry::instance()
+namespace
+{
+
+AnalyzerRegistry &registrySingleton()
 {
     static AnalyzerRegistry inst;
+    return inst;
+}
+
+} // namespace
+
+AnalyzerRegistry &AnalyzerRegistry::instance()
+{
+    AnalyzerRegistry &inst = registrySingleton();
     Analyzer::registerBuiltins();
     return inst;
 }
 
 void Analyzer::registerBuiltins()
 {
-    static bool s_registered = false;
-    if (s_registered)
-        return;
-    s_registered = true;
-
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "histogram",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+    // instance() calls this, and this calls back into the singleton. The
+    // callback must not re-enter registerBuiltins (call_once is not recursive).
+    static std::once_flag once;
+    std::call_once(
+        once,
+        []
         {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new HistogramAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "noise",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new NoiseAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "entropy",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new EntropyAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "psnr",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new PSNRAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "rgbmean",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new RGBMeanAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "sharpness",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new SharpnessAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "ssim",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new SSIMAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    // M13: analyzer extensions (MTF / Dead Pixel / ColorChecker).
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "mtf",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new MTFAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "deadpixel",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new DeadPixelAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "colorchecker",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ColorCheckerAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    // M15: analyzer extensions (Brightness/Contrast/Blur/ColorCast/Exposure).
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "brightness",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new BrightnessAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "contrast",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ContrastAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "blur",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new BlurAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "colorcast",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ColorCastAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
-        });
-    AnalyzerRegistry::instance().registerAnalyzer(
-        "exposure",
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ExposureAnalyzer(),
-                                                              [](Analyzer *p) { delete p; });
+            AnalyzerRegistry &reg = registrySingleton();
+            reg.registerAnalyzer("histogram",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new HistogramAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("noise",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new NoiseAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("entropy",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new EntropyAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("psnr",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new PSNRAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("rgbmean",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new RGBMeanAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("sharpness",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new SharpnessAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("ssim",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new SSIMAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            // M13: analyzer extensions (MTF / Dead Pixel / ColorChecker).
+            reg.registerAnalyzer("mtf",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new MTFAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("deadpixel",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new DeadPixelAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("colorchecker",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new ColorCheckerAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            // M15: analyzer extensions (Brightness/Contrast/Blur/ColorCast/Exposure).
+            reg.registerAnalyzer("brightness",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new BrightnessAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("contrast",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new ContrastAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("blur",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new BlurAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("colorcast",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new ColorCastAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
+            reg.registerAnalyzer("exposure",
+                                 []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+                                 {
+                                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                         new ExposureAnalyzer(), [](Analyzer *p) { delete p; });
+                                 });
         });
 }
 
 void AnalyzerRegistry::registerAnalyzer(const std::string &id, AnalyzerCreator creator)
 {
+    std::lock_guard<std::mutex> lock(m_factoriesMtx);
     m_factories[id] = std::move(creator);
 }
 
 void AnalyzerRegistry::unregister(const std::string &id)
 {
+    std::lock_guard<std::mutex> lock(m_factoriesMtx);
     m_factories.erase(id);
 }
 
 std::unique_ptr<Analyzer, AnalyzerDeleter> AnalyzerRegistry::create(const std::string &id) const
 {
-    auto it = m_factories.find(id);
-    if (it == m_factories.end())
-        return nullptr;
-    return it->second();
+    AnalyzerCreator creator;
+    {
+        std::lock_guard<std::mutex> lock(m_factoriesMtx);
+        auto it = m_factories.find(id);
+        if (it == m_factories.end())
+            return nullptr;
+        creator = it->second;
+    }
+    return creator ? creator() : nullptr;
 }
 
 std::vector<std::string> AnalyzerRegistry::availableAnalyzers() const
 {
+    std::lock_guard<std::mutex> lock(m_factoriesMtx);
     std::vector<std::string> out;
     out.reserve(m_factories.size());
     for (const auto &kv : m_factories)
@@ -190,79 +199,127 @@ AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
     // in this build (fail-fast past ~13 concurrent tasks, 0xc0000409). The
     // frame is const and analyzers are read-only; each task creates its own
     // analyzer instance, so no locks are needed inside analyzers.
-    TaskScheduler &sched = TaskScheduler::instance();
-    // The tasks outlive this stack frame if the drain gives up, so the shared
-    // state they write into must not be this frame's locals.
-    auto mtx = std::make_shared<std::mutex>();
-    auto results = std::make_shared<std::unordered_map<std::string, std::string>>();
+    //
+    // Wait only for the tasks this call submitted. AnalysisPool is shared with
+    // diff/ROI batches; draining the whole pool would block on unrelated work.
+    // Timeout semantics match the old drain: 10 s, then cancel our tasks and
+    // wait another 2 s. State is on the heap so a task that outlives the wait
+    // cannot write into destroyed locals.
+    struct BatchState
+    {
+        std::mutex mtx;
+        std::condition_variable cv;
+        size_t remaining = 0;
+        std::unordered_map<std::string, std::string> results;
+    };
+    auto state = std::make_shared<BatchState>();
     auto frameSnapshot = std::make_shared<ImageFrame>(frame);
+
+    std::vector<std::pair<std::string, AnalyzerCreator>> jobs;
+    {
+        std::lock_guard<std::mutex> lock(m_factoriesMtx);
+        jobs.reserve(m_factories.size());
+        for (const auto &kv : m_factories)
+            jobs.emplace_back(kv.first, kv.second);
+    }
+    if (jobs.empty())
+        return {};
+
+    TaskScheduler &sched = TaskScheduler::instance();
+    state->remaining = jobs.size();
     std::vector<TaskScheduler::TaskHandle> handles;
-    handles.reserve(m_factories.size());
-    for (const auto &[id, factory] : m_factories)
+    handles.reserve(jobs.size());
+    size_t rejected = 0;
+    for (const auto &job : jobs)
     {
-        handles.push_back(sched.submit(TaskScheduler::AnalysisPool,
-                                       [mtx, results, id, factory, frameSnapshot]()
-                                       {
-                                           std::string text;
-                                           try
-                                           {
-                                               auto analyzer = factory();
-                                               if (analyzer && analyzer->analyze(*frameSnapshot))
-                                                   text = analyzer->resultText();
-                                           }
-                                           catch (const std::exception &error)
-                                           {
-                                               // M24 (C#7): a throwing analyzer (e.g. a buggy
-                                               // plugin) must be isolated — the whole batch must
-                                               // not crash. Reported rather than swallowed: an
-                                               // invisible failure here looks like "no result".
-                                               qWarning("AnalyzerRegistry: analyzer '%s' threw: %s",
-                                                        id.c_str(), error.what());
-                                           }
-                                           catch (...)
-                                           {
-                                               qWarning("AnalyzerRegistry: analyzer '%s' threw "
-                                                        "an unknown exception",
-                                                        id.c_str());
-                                           }
-                                           if (!text.empty())
-                                           {
-                                               std::lock_guard<std::mutex> lk(*mtx);
-                                               (*results)[id] = std::move(text);
-                                           }
-                                       }));
+        const std::string id = job.first;
+        const AnalyzerCreator factory = job.second;
+        auto handle = sched.submit(
+            TaskScheduler::AnalysisPool,
+            [state, id, factory, frameSnapshot]()
+            {
+                std::string text;
+                try
+                {
+                    auto analyzer = factory ? factory() : nullptr;
+                    if (analyzer && analyzer->analyze(*frameSnapshot))
+                        text = analyzer->resultText();
+                }
+                catch (const std::exception &error)
+                {
+                    // M24 (C#7): a throwing analyzer (e.g. a buggy plugin) must
+                    // be isolated — the whole batch must not crash. Reported
+                    // rather than swallowed: an invisible failure here looks
+                    // like "no result".
+                    qWarning("AnalyzerRegistry: analyzer '%s' threw: %s", id.c_str(), error.what());
+                }
+                catch (...)
+                {
+                    qWarning("AnalyzerRegistry: analyzer '%s' threw an unknown exception",
+                             id.c_str());
+                }
+                std::lock_guard<std::mutex> lk(state->mtx);
+                if (!text.empty())
+                    state->results[id] = std::move(text);
+                if (state->remaining > 0)
+                    --state->remaining;
+                if (state->remaining == 0)
+                    state->cv.notify_all();
+            });
+        if (handle)
+            handles.push_back(std::move(handle));
+        else
+            ++rejected;
     }
-    // Bounded wait: analyzers are short (µs-ms) and 10 s is generous, but the
-    // AnalysisPool is SHARED with diff/ROI batches, so the drain can give up.
-    // Previously the result was discarded, which let still-queued tasks write
-    // into `results`/`mtx` after this function had returned (use-after-free).
-    if (!sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(10)))
+    if (rejected > 0)
     {
-        for (const auto &handle : handles)
+        std::lock_guard<std::mutex> lk(state->mtx);
+        if (state->remaining >= rejected)
+            state->remaining -= rejected;
+        else
+            state->remaining = 0;
+        if (state->remaining == 0)
+            state->cv.notify_all();
+    }
+
+    {
+        std::unique_lock<std::mutex> lk(state->mtx);
+        if (!state->cv.wait_for(lk, std::chrono::seconds(10),
+                                [&] { return state->remaining == 0; }))
         {
-            if (handle)
-                TaskScheduler::cancelTree(handle->id);
+            lk.unlock();
+            for (const auto &handle : handles)
+            {
+                if (handle)
+                    TaskScheduler::cancelTree(handle->id);
+            }
+            lk.lock();
+            state->cv.wait_for(lk, std::chrono::seconds(2), [&] { return state->remaining == 0; });
         }
-        sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(2));
+        return state->results;
     }
-    return *results;
 }
 
 std::vector<mviewer::analyzer::AnalyzerResult> AnalyzerRegistry::runBatch(
     const std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> &frames,
     const std::string &id) const
 {
-    std::vector<mviewer::analyzer::AnalyzerResult> out;
-    auto it = m_factories.find(id);
-    if (it == m_factories.end())
-        return out;
+    AnalyzerCreator creator;
+    {
+        std::lock_guard<std::mutex> lock(m_factoriesMtx);
+        auto it = m_factories.find(id);
+        if (it == m_factories.end())
+            return {};
+        creator = it->second;
+    }
 
+    std::vector<mviewer::analyzer::AnalyzerResult> out;
     out.reserve(frames.size());
     for (const auto &[filename, frame] : frames)
     {
         if (!frame || frame->pixels().isNull())
             continue;
-        auto analyzer = it->second();
+        auto analyzer = creator ? creator() : nullptr;
         if (!analyzer || !analyzer->analyze(*frame))
             continue;
         out.push_back(mviewer::analyzer::AnalyzerResult{filename, analyzer->resultMetrics(),
@@ -273,28 +330,51 @@ std::vector<mviewer::analyzer::AnalyzerResult> AnalyzerRegistry::runBatch(
 
 AnalyzerCapability AnalyzerRegistry::capabilitiesOf(const std::string &id) const
 {
-    auto it = m_factories.find(id);
-    if (it == m_factories.end())
+    AnalyzerCreator creator;
+    {
+        std::lock_guard<std::mutex> lock(m_factoriesMtx);
+        auto it = m_factories.find(id);
+        if (it == m_factories.end())
+            return AnalyzerCapability::None;
+        creator = it->second;
+    }
+    auto instance = creator ? creator() : nullptr;
+    if (!instance)
         return AnalyzerCapability::None;
-    auto instance = it->second();
     return instance->capabilities();
 }
 
 std::optional<AnalyzerInfo> AnalyzerRegistry::infoFor(const std::string &id) const
 {
-    auto it = m_factories.find(id);
-    if (it == m_factories.end())
+    AnalyzerCreator creator;
+    {
+        std::lock_guard<std::mutex> lock(m_factoriesMtx);
+        auto it = m_factories.find(id);
+        if (it == m_factories.end())
+            return std::nullopt;
+        creator = it->second;
+    }
+    auto instance = creator ? creator() : nullptr;
+    if (!instance)
         return std::nullopt;
-    auto instance = it->second();
     return instance->info();
 }
 
 std::vector<std::string> AnalyzerRegistry::queryByCapability(AnalyzerCapability required) const
 {
-    std::vector<std::string> result;
-    for (const auto &[id, factory] : m_factories)
+    std::vector<std::pair<std::string, AnalyzerCreator>> jobs;
     {
-        auto instance = factory();
+        std::lock_guard<std::mutex> lock(m_factoriesMtx);
+        jobs.reserve(m_factories.size());
+        for (const auto &kv : m_factories)
+            jobs.emplace_back(kv.first, kv.second);
+    }
+    std::vector<std::string> result;
+    for (const auto &[id, factory] : jobs)
+    {
+        auto instance = factory ? factory() : nullptr;
+        if (!instance)
+            continue;
         if (required == AnalyzerCapability::None ||
             hasCapability(instance->capabilities(), required))
         {

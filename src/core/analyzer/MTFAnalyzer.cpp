@@ -58,7 +58,7 @@ void fft(std::vector<double> &re, std::vector<double> &im)
     }
 }
 
-std::vector<double> extractEdgeProfile(const ImageBuffer &v, int x0, int y0, int x1, int y1,
+std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, int x1, int y1,
                                        int cpp)
 {
     const int w = x1 - x0;
@@ -220,7 +220,7 @@ bool calculateMtf50(std::vector<double> &profile, double &outMtf50, double &outM
 
 } // namespace
 
-bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
+bool MTFAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, int y1)
 {
     if (x0 < 0)
         x0 = 0;
@@ -254,7 +254,7 @@ bool MTFAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
-    const ImageBuffer v = frame.pixels().view();
+    const ConstImageView v = frame.pixels().constView();
     compute(v, 0, 0, v.width, v.height);
     return true;
 }
@@ -263,7 +263,7 @@ bool MTFAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
-    const ImageBuffer v = frame.pixels().view();
+    const ConstImageView v = frame.pixels().constView();
     const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
     const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
     const long long x1ll =

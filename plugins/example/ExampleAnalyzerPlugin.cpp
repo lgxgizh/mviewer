@@ -79,7 +79,7 @@ class MeanLuminanceAnalyzer : public Analyzer
     {
         if (img.isNull() || w <= 0 || h <= 0)
             return 0.0;
-        const ImageBuffer v = img.view();
+        const ConstImageView v = img.constView();
         const int cpp = v.channelsPerPixel();
         long long sum = 0;
         long long n = 0;

@@ -125,8 +125,8 @@ inline long accumulateRgb256(const uint8_t *data, int64_t stride, int cpp, int64
     return samples;
 }
 
-inline Histogram accumulate256(const ImageBuffer &v, int64_t x0, int64_t y0, int64_t x1, int64_t y1,
-                               int sx, int sy, bool gray, bool bgr)
+inline Histogram accumulate256(const ConstImageView &v, int64_t x0, int64_t y0, int64_t x1,
+                               int64_t y1, int sx, int sy, bool gray, bool bgr)
 {
     Histogram h = makeEmpty(256);
     alignas(16) long rAcc[256]{};
@@ -154,7 +154,7 @@ inline Histogram accumulate256(const ImageBuffer &v, int64_t x0, int64_t y0, int
     return h;
 }
 
-inline Histogram accumulateNBins(const ImageBuffer &v, int64_t x0, int64_t y0, int64_t x1,
+inline Histogram accumulateNBins(const ConstImageView &v, int64_t x0, int64_t y0, int64_t x1,
                                  int64_t y1, int sx, int sy, bool gray, bool bgr, int bins)
 {
     Histogram h = makeEmpty(bins);
@@ -216,7 +216,7 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
     if (img.isNull() || roiW <= 0 || roiH <= 0)
         return histogram_detail::makeEmpty(bins);
 
-    const ImageBuffer v = img.view();
+    const ConstImageView v = img.constView();
     const int64_t x0 = std::clamp<int64_t>(roiX, 0, v.width);
     const int64_t y0 = std::clamp<int64_t>(roiY, 0, v.height);
     const int64_t x1 = std::clamp<int64_t>(static_cast<int64_t>(roiX) + roiW, 0, v.width);

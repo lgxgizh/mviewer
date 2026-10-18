@@ -448,8 +448,8 @@ template <typename LineGetter> double calcLaplacianCore(int w, int h, LineGetter
     return std::max(0.0, variance);
 }
 
-void accumulateGraySsd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, bool useAvx2,
-                       int64_t &sumSq)
+void accumulateGraySsd(const ConstImageView &va, const ConstImageView &vb, int w, int h,
+                       bool useAvx2, int64_t &sumSq)
 {
 #if defined(MV_ARCH_X86)
     const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
@@ -486,8 +486,8 @@ void accumulateGraySsd(const ImageBuffer &va, const ImageBuffer &vb, int w, int 
     }
 }
 
-void accumulateRgb24Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, bool useAvx2,
-                        int64_t &sumSq)
+void accumulateRgb24Ssd(const ConstImageView &va, const ConstImageView &vb, int w, int h,
+                        bool useAvx2, int64_t &sumSq)
 {
 #if defined(MV_ARCH_X86)
     const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
@@ -524,7 +524,8 @@ void accumulateRgb24Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int
     }
 }
 
-void accumulateRgba32Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, int64_t &sumSq)
+void accumulateRgba32Ssd(const ConstImageView &va, const ConstImageView &vb, int w, int h,
+                         int64_t &sumSq)
 {
 #if defined(MV_ARCH_X86)
     const bool useSSE2 = mviewer::core::CpuFeatures::hasSSE2();
@@ -576,19 +577,19 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 
     if (isSameFormat && aData.format == PixelFormat::Grayscale8)
     {
-        accumulateGraySsd(aData.view(), bData.view(), w, h, useAvx2, sumSq);
+        accumulateGraySsd(aData.constView(), bData.constView(), w, h, useAvx2, sumSq);
         channels = 1;
     }
     else if (isSameFormat &&
              (aData.format == PixelFormat::RGB24 || aData.format == PixelFormat::BGR24))
     {
-        accumulateRgb24Ssd(aData.view(), bData.view(), w, h, useAvx2, sumSq);
+        accumulateRgb24Ssd(aData.constView(), bData.constView(), w, h, useAvx2, sumSq);
         channels = 3;
     }
     else if (isSameFormat &&
              (aData.format == PixelFormat::RGBA32 || aData.format == PixelFormat::BGRA32))
     {
-        accumulateRgba32Ssd(aData.view(), bData.view(), w, h, sumSq);
+        accumulateRgba32Ssd(aData.constView(), bData.constView(), w, h, sumSq);
         channels = 3;
     }
     else if (accumulateCrossFormatSsd(aData, bData, w, h, sumSq))
@@ -658,7 +659,7 @@ static ImageData toGrayscale8(const ImageData &src)
     ImageData gray = makeImageData(src.width, src.height, PixelFormat::Grayscale8);
     if (gray.isNull())
         return ImageData();
-    const ImageBuffer sv = src.view();
+    const ConstImageView sv = src.constView();
     const ImageBuffer gv = gray.view();
     const int cpp = src.channelsPerPixel();
     const bool isBgr = (src.format == PixelFormat::BGR24 || src.format == PixelFormat::BGRA32);
@@ -719,8 +720,8 @@ double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
     if (ga.isNull() || gb.isNull())
         return 0.0;
 
-    const ImageBuffer va = ga.view();
-    const ImageBuffer vb = gb.view();
+    const ConstImageView va = ga.constView();
+    const ConstImageView vb = gb.constView();
     return computeSSIMCore(
         w, h, [&va](int y) { return va.data + static_cast<size_t>(y) * va.stride(); },
         [&vb](int y) { return vb.data + static_cast<size_t>(y) * vb.stride(); });
@@ -739,7 +740,7 @@ double AnalysisEngine::noiseEstimate(const ImageData &imgData)
     if (g.isNull())
         return 0.0;
 
-    const ImageBuffer v = g.view();
+    const ConstImageView v = g.constView();
     return calcLaplacianCore(w, h,
                              [&v](int y) { return v.data + static_cast<size_t>(y) * v.stride(); });
 }

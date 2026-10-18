@@ -38,6 +38,6 @@ class NoiseAnalyzer : public Analyzer
     std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
-    double estimateLaplacian(const ImageBuffer &v, int x0, int y0, int x1, int y1) const;
+    double estimateLaplacian(const ConstImageView &v, int x0, int y0, int x1, int y1) const;
     double m_noise = 0.0;
 };

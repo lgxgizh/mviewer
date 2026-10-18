@@ -33,8 +33,8 @@ void finalizeStatsHistogramMetrics(ImageStats &s)
     if (s.pixelCount <= 0)
         return;
 
-    auto calcChannel = [](const int hist[256], int count, double mean,
-                          double &stdDev, int &minV, int &maxV)
+    auto calcChannel =
+        [](const int hist[256], int count, double mean, double &stdDev, int &minV, int &maxV)
     {
         double varSum = 0.0;
         minV = 255;
@@ -69,7 +69,7 @@ void finalizeStatsHistogramMetrics(ImageStats &s)
     calcChannel(s.histB, s.pixelCount, s.bMean, s.bStdDev, s.bMin, s.bMax);
 }
 
-ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw, int rh)
+ImageStats computeStatsGrayscale(const ConstImageView &vbuf, int rx, int ry, int rw, int rh)
 {
     ImageStats s;
     if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<ptrdiff_t>(rw))
@@ -184,7 +184,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     if (rw <= 0 || rh <= 0)
         return {};
 
-    const ImageBuffer vbuf = imgData.view();
+    const ConstImageView vbuf = imgData.constView();
     const PixelFormat fmt = imgData.format;
     if (fmt == PixelFormat::Grayscale8)
         return computeStatsGrayscale(vbuf, rx, ry, rw, rh);
@@ -289,15 +289,11 @@ ImageData AnalysisEngine::heatMap(const ImageData &grayData)
 std::string ImageStats::toSummaryString() const
 {
     std::ostringstream os;
-    os << "Pixels: " << pixelCount
-       << ", Lum: " << lumMean << " [std=" << lumStdDev << ", min=" << lumMin
-       << ", max=" << lumMax << "]"
-       << ", R: " << rMean << " [std=" << rStdDev << ", min=" << rMin
-       << ", max=" << rMax << "]"
-       << ", G: " << gMean << " [std=" << gStdDev << ", min=" << gMin
-       << ", max=" << gMax << "]"
-       << ", B: " << bMean << " [std=" << bStdDev << ", min=" << bMin
-       << ", max=" << bMax << "]"
+    os << "Pixels: " << pixelCount << ", Lum: " << lumMean << " [std=" << lumStdDev
+       << ", min=" << lumMin << ", max=" << lumMax << "]"
+       << ", R: " << rMean << " [std=" << rStdDev << ", min=" << rMin << ", max=" << rMax << "]"
+       << ", G: " << gMean << " [std=" << gStdDev << ", min=" << gMin << ", max=" << gMax << "]"
+       << ", B: " << bMean << " [std=" << bStdDev << ", min=" << bMin << ", max=" << bMax << "]"
        << ", HSV-V: " << vMean;
     return os.str();
 }
@@ -305,12 +301,10 @@ std::string ImageStats::toSummaryString() const
 std::string ImageStats::toCsvRow() const
 {
     std::ostringstream os;
-    os << pixelCount << ","
-       << lumMean << "," << lumStdDev << "," << lumMin << "," << lumMax << ","
-       << rMean << "," << rStdDev << "," << rMin << "," << rMax << ","
-       << gMean << "," << gStdDev << "," << gMin << "," << gMax << ","
-       << bMean << "," << bStdDev << "," << bMin << "," << bMax << ","
-       << vMean;
+    os << pixelCount << "," << lumMean << "," << lumStdDev << "," << lumMin << "," << lumMax << ","
+       << rMean << "," << rStdDev << "," << rMin << "," << rMax << "," << gMean << "," << gStdDev
+       << "," << gMin << "," << gMax << "," << bMean << "," << bStdDev << "," << bMin << "," << bMax
+       << "," << vMean;
     return os.str();
 }
 
@@ -319,4 +313,3 @@ std::string ImageStats::csvHeader()
     return "pixelCount,lumMean,lumStdDev,lumMin,lumMax,rMean,rStdDev,rMin,rMax,"
            "gMean,gStdDev,gMin,gMax,bMean,bStdDev,bMin,bMax,vMean";
 }
-

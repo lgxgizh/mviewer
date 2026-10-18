@@ -60,6 +60,9 @@ struct ConstImageBuffer
     }
 };
 
+// Read-only pixel view. Same fields as ConstImageBuffer (const uint8_t *data).
+using ConstImageView = ConstImageBuffer;
+
 struct ImageBuffer
 {
     uint8_t *data = nullptr;
@@ -142,10 +145,10 @@ struct ImageData
         makeUnique();
     }
 
-    // Const read-only view guaranteeing pixel data cannot be mutated through it.
-    ConstImageBuffer constView() const
+    // Const read-only view. Pixel bytes cannot be mutated through it.
+    ConstImageView constView() const
     {
-        ConstImageBuffer b;
+        ConstImageView b;
         b.data = (buffer && !buffer->empty()) ? buffer->data() : nullptr;
         b.width = width;
         b.height = height;
@@ -165,22 +168,19 @@ struct ImageData
         return b;
     }
 
-    ImageBuffer view() const
+    // Mutable alias of a non-const owner. Does not detach. In-place writes on a
+    // buffer that may be shared must use mutableView() so copy-on-write runs.
+    // There is no const overload: a const ImageData is read through constView().
+    ImageBuffer view()
     {
         ImageBuffer b;
-        // Non-owning alias of the pixel bytes. The source ImageData
-        // owns the buffer; this view is valid only while the owner is
-        // alive. const_cast: buffer->data() is const here (view() is
-        // const), but ImageBuffer::data is intentionally non-const for
-        // in-place pixel access by analyzers/engines that hold the
-        // alive owner. Call mutableView() when performing in-place writes
-        // to guarantee Copy-On-Write separation.
-        b.data = (buffer && !buffer->empty()) ? const_cast<uint8_t *>(buffer->data()) : nullptr;
+        b.data = (buffer && !buffer->empty()) ? buffer->data() : nullptr;
         b.width = width;
         b.height = height;
         b.format = format;
         return b;
     }
+
     ptrdiff_t stride() const noexcept
     {
         return static_cast<int64_t>(width) * static_cast<int64_t>(channelsPerPixel());
@@ -383,7 +383,7 @@ inline ImageData cropRegion(const ImageData &src, const mviewer::domain::Selecti
         return ImageData{};
 
     ImageData dst = makeImageData(cw, ch, src.format);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer dv = dst.view();
     for (int y = 0; y < ch; ++y)
     {
@@ -407,7 +407,7 @@ inline ImageData rotate90CW(const ImageData &src)
     const int h = src.height;
     // dst is h x w.
     ImageData dst = makeImageData(h, w, src.format);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer dv = dst.view();
     for (int y = 0; y < h; ++y)
     {
@@ -436,7 +436,7 @@ inline ImageData rotate90CCW(const ImageData &src)
     const int w = src.width;
     const int h = src.height;
     ImageData dst = makeImageData(h, w, src.format);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer dv = dst.view();
     for (int y = 0; y < h; ++y)
     {
@@ -465,7 +465,7 @@ inline ImageData rotate180(const ImageData &src)
     const int w = src.width;
     const int h = src.height;
     ImageData dst = makeImageData(w, h, src.format);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer dv = dst.view();
     for (int y = 0; y < h; ++y)
     {
@@ -493,7 +493,7 @@ inline ImageData flipHorizontal(const ImageData &src)
     const int w = src.width;
     const int h = src.height;
     ImageData dst = makeImageData(w, h, src.format);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer dv = dst.view();
     for (int y = 0; y < h; ++y)
     {
@@ -519,7 +519,7 @@ inline ImageData flipVertical(const ImageData &src)
     const int w = src.width;
     const int h = src.height;
     ImageData dst = makeImageData(w, h, src.format);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer dv = dst.view();
     const size_t rowBytes = static_cast<size_t>(w) * static_cast<size_t>(cpp);
     for (int y = 0; y < h; ++y)

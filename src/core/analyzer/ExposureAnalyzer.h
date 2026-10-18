@@ -48,5 +48,5 @@ class ExposureAnalyzer : public Analyzer
 
   private:
     Result m_result;
-    bool compute(const ImageBuffer &v, int x0, int y0, int x1, int y1);
+    bool compute(const ConstImageView &v, int x0, int y0, int x1, int y1);
 };

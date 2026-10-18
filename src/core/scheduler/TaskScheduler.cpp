@@ -13,6 +13,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <unordered_set>
 
 namespace
 {
@@ -28,9 +29,9 @@ void yieldToForeground(const TaskScheduler::TaskContext &ctx)
     if (g_foregroundDepth.load(std::memory_order_relaxed) == 0 || ctx.isCancelled())
         return;
     std::unique_lock<std::mutex> lock(g_foregroundMtx);
-    g_foregroundCv.wait_for(lock, std::chrono::milliseconds(200), [&]() {
-        return g_foregroundDepth.load(std::memory_order_relaxed) == 0 || ctx.isCancelled();
-    });
+    g_foregroundCv.wait_for(
+        lock, std::chrono::milliseconds(200), [&]()
+        { return g_foregroundDepth.load(std::memory_order_relaxed) == 0 || ctx.isCancelled(); });
 }
 
 class LambdaTask : public QRunnable
@@ -38,14 +39,21 @@ class LambdaTask : public QRunnable
   public:
     LambdaTask(std::shared_ptr<TaskScheduler::TaskContext> ctx,
                std::function<void(const TaskScheduler::TaskContext &)> work,
-               std::function<void()> done)
-        : m_ctx(std::move(ctx)), m_work(std::move(work)), m_done(std::move(done))
+               std::function<void()> done, std::function<void()> onStart)
+        : m_ctx(std::move(ctx)), m_work(std::move(work)), m_done(std::move(done)),
+          m_onStart(std::move(onStart))
     {
         setAutoDelete(true);
     }
 
     void run() override
     {
+        // The runnable has left the pool queue. Move queue_depth -> active_tasks
+        // before any early return (deadline skip included) so a task that is
+        // dequeued is not left counted as queued.
+        if (m_onStart)
+            m_onStart();
+
         // M26: every terminal path must finalize exactly once. A task whose
         // deadline already expired when it reaches a worker skips its work but
         // still reports the terminal transition (m_done -> onTaskComplete ->
@@ -113,6 +121,7 @@ class LambdaTask : public QRunnable
     std::shared_ptr<TaskScheduler::TaskContext> m_ctx;
     std::function<void(const TaskScheduler::TaskContext &)> m_work;
     std::function<void()> m_done;
+    std::function<void()> m_onStart;
 };
 
 } // namespace
@@ -263,16 +272,14 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
             onTaskComplete(ctx_id, prio, false,
                            ctx->execution_failed.load(std::memory_order_relaxed));
             // No user done callback exists for this legacy path.
-        });
+        },
+        [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); });
     std::lock_guard<std::mutex> lock(m_graphMtx);
     m_poolState[idx].metrics.submitted++;
     m_poolState[idx].metrics.pending++;
     m_handles[ctx_id] = ctx;
     m_taskPriomap[ctx_id] = prio;
-    m_poolState[idx].metrics.queue_depth++;
-    m_impl->priorityQueues[idx].start(wrapped);
-    m_poolState[idx].metrics.queue_depth--;
-    m_poolState[idx].metrics.active_tasks++;
+    launchQueued(ReadyLaunch{prio, ctx_id, wrapped});
 }
 
 TaskScheduler::TaskHandle
@@ -324,7 +331,8 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
                 std::lock_guard<std::mutex> lock(m_graphMtx);
                 m_poolState[static_cast<int>(prio)].metrics.callback_failures++;
             }
-        });
+        },
+        [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); });
 
     enqueueTask(prio, ctx, runnable);
     return ctx;
@@ -375,23 +383,14 @@ void TaskScheduler::enqueueTask(Priority prio, const std::shared_ptr<TaskContext
         for (TaskId dep : ctx->dependencies)
             m_dependents[dep].push_back(ctx->id);
         m_deferred[ctx->id] = DeferredEntry{prio, runnable, ctx->deadline};
-        std::vector<std::pair<Priority, void *>> ready;
+        std::vector<ReadyLaunch> ready;
         releaseReadyTasks(ready);
-        for (auto &[p, r] : ready)
-        {
-            const int readyIdx = static_cast<int>(p);
-            m_poolState[readyIdx].metrics.queue_depth++;
-            m_impl->priorityQueues[readyIdx].start(static_cast<QRunnable *>(r));
-            m_poolState[readyIdx].metrics.queue_depth--;
-            m_poolState[readyIdx].metrics.active_tasks++;
-        }
+        for (const auto &item : ready)
+            launchQueued(item);
         return;
     }
     m_poolState[pIdx].metrics.pending++;
-    m_poolState[pIdx].metrics.queue_depth++;
-    m_impl->priorityQueues[pIdx].start(runnable);
-    m_poolState[pIdx].metrics.queue_depth--;
-    m_poolState[pIdx].metrics.active_tasks++;
+    launchQueued(ReadyLaunch{prio, ctx->id, runnable});
 }
 
 TaskScheduler::TaskHandle TaskScheduler::submit(PoolType pool, std::function<void()> work,
@@ -426,7 +425,52 @@ bool depDone(const std::unordered_map<uint64_t, TaskScheduler::TaskHandle> &hand
     return it->second->currentProgress() >= 100;
 }
 
-void TaskScheduler::releaseReadyTasks(std::vector<std::pair<Priority, void *>> &out)
+void TaskScheduler::launchQueued(const ReadyLaunch &item)
+{
+    // Caller holds m_graphMtx. QThreadPool::start does not run the runnable
+    // on this thread, so noteTaskStarted (which takes the same mutex) cannot
+    // deadlock against this call.
+    const int idx = static_cast<int>(item.prio);
+    if (auto it = m_handles.find(item.id); it != m_handles.end() && it->second)
+    {
+        it->second->enqueuedAt = std::chrono::steady_clock::now();
+        it->second->started = false;
+    }
+    m_poolState[idx].metrics.queue_depth++;
+    m_impl->priorityQueues[idx].start(static_cast<QRunnable *>(item.runnable));
+}
+
+void TaskScheduler::noteTaskStarted(TaskId id, Priority prio)
+{
+    std::lock_guard<std::mutex> lock(m_graphMtx);
+    auto it = m_handles.find(id);
+    if (it == m_handles.end() || !it->second)
+        return; // cancelTree already finalized a task that had not started
+    if (it->second->started)
+        return;
+    it->second->started = true;
+    const int pIdx = static_cast<int>(prio);
+    if (m_poolState[pIdx].metrics.queue_depth > 0)
+        m_poolState[pIdx].metrics.queue_depth--;
+    m_poolState[pIdx].metrics.active_tasks++;
+    const auto wait = std::chrono::steady_clock::now() - it->second->enqueuedAt;
+    if (wait.count() > 0)
+    {
+        const auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(wait).count();
+        if (ns > 0)
+            m_poolState[pIdx].metrics.total_latency_ns += static_cast<uint64_t>(ns);
+    }
+}
+
+void TaskScheduler::notifyDrainIfIdle(int idx)
+{
+    // Caller holds m_graphMtx.
+    const auto &metrics = m_poolState[idx].metrics;
+    if (metrics.pending == 0 && metrics.active_tasks == 0)
+        m_drainCv.notify_all();
+}
+
+void TaskScheduler::releaseReadyTasks(std::vector<ReadyLaunch> &out)
 {
     if (m_deferred.empty())
         return;
@@ -469,7 +513,7 @@ void TaskScheduler::releaseReadyTasks(std::vector<std::pair<Priority, void *>> &
                 }
                 m_depGraph.erase(depsIt);
             }
-            out.push_back({it->second.prio, it->second.runnable});
+            out.push_back(ReadyLaunch{it->second.prio, id, it->second.runnable});
             it = m_deferred.erase(it);
         }
         else
@@ -482,7 +526,7 @@ void TaskScheduler::releaseReadyTasks(std::vector<std::pair<Priority, void *>> &
 bool TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceeded,
                                    bool executionFailed)
 {
-    std::vector<std::pair<Priority, void *>> ready;
+    std::vector<ReadyLaunch> ready;
     {
         std::lock_guard<std::mutex> lock(m_graphMtx);
         // P2-4 fix: if cancelTree() already erased this handle and decremented
@@ -500,6 +544,8 @@ bool TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceed
         if (executionFailed)
             m_poolState[pIdx].metrics.execution_failures++;
         // Terminal transition: exactly one decrement of each counter.
+        // The task was moved queued -> active in noteTaskStarted, so the
+        // running counter (not queue_depth) is what drops here.
         if (m_poolState[pIdx].metrics.pending > 0)
             m_poolState[pIdx].metrics.pending--;
         if (m_poolState[pIdx].metrics.active_tasks > 0)
@@ -508,14 +554,9 @@ bool TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceed
         // needed: dependents keep their m_depGraph entries and depDone() treats
         // a missing handle as done, which is exactly the release condition.
         releaseReadyTasks(ready);
-        for (auto &[p, r] : ready)
-        {
-            const int rpIdx = static_cast<int>(p);
-            m_poolState[rpIdx].metrics.queue_depth++;
-            m_impl->priorityQueues[rpIdx].start(static_cast<QRunnable *>(r));
-            m_poolState[rpIdx].metrics.queue_depth--;
-            m_poolState[rpIdx].metrics.active_tasks++;
-        }
+        for (const auto &item : ready)
+            launchQueued(item);
+        notifyDrainIfIdle(pIdx);
     }
     return true;
 }
@@ -530,12 +571,13 @@ void TaskScheduler::cancelTree(TaskId rootId)
     // and never touches root's own prerequisites.
     std::vector<TaskId> stack;
     std::vector<TaskId> victims;
+    std::unordered_set<TaskId> seen;
     stack.push_back(rootId);
     while (!stack.empty())
     {
         TaskId cur = stack.back();
         stack.pop_back();
-        if (std::find(victims.begin(), victims.end(), cur) != victims.end())
+        if (!seen.insert(cur).second)
             continue;
         victims.push_back(cur);
         auto it = sched.m_dependents.find(cur);
@@ -567,21 +609,33 @@ void TaskScheduler::cancelTree(TaskId rootId)
                 sched.m_poolState[pIdx].metrics.pending--;
             sched.m_handles.erase(vic);
             sched.m_taskPriomap.erase(vic);
+            sched.notifyDrainIfIdle(pIdx);
         }
         else
         {
-            // Live task (running or queued): it still holds active + pending.
+            // Live task. Queued (not started) holds queue_depth + pending.
+            // Running holds active_tasks + pending. cancelTree finalizes both
+            // so onTaskComplete will not decrement again.
             auto hit = sched.m_handles.find(vic);
             if (hit != sched.m_handles.end())
             {
+                const bool started = hit->second && hit->second->started;
                 hit->second->requestCancel();
                 sched.m_handles.erase(hit);
                 sched.m_taskPriomap.erase(vic);
                 sched.m_poolState[pIdx].metrics.cancelled++;
-                if (sched.m_poolState[pIdx].metrics.active_tasks > 0)
-                    sched.m_poolState[pIdx].metrics.active_tasks--;
+                if (started)
+                {
+                    if (sched.m_poolState[pIdx].metrics.active_tasks > 0)
+                        sched.m_poolState[pIdx].metrics.active_tasks--;
+                }
+                else if (sched.m_poolState[pIdx].metrics.queue_depth > 0)
+                {
+                    sched.m_poolState[pIdx].metrics.queue_depth--;
+                }
                 if (sched.m_poolState[pIdx].metrics.pending > 0)
                     sched.m_poolState[pIdx].metrics.pending--;
+                sched.notifyDrainIfIdle(pIdx);
             }
         }
         // If the victim itself was waiting on prerequisites, drop it from
@@ -673,19 +727,17 @@ bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeou
     // P0-2 fix: never call QThreadPool::waitForDone() while holding m_graphMtx.
     // Worker threads call onTaskComplete() -> lock(m_graphMtx) when they finish;
     // if we hold the lock during waitForDone(), the workers can never complete
-    // -> deadlock. Instead, read the pending/active snapshot under the lock,
-    // release it, then call waitForDone() unlocked.
+    // -> deadlock. Wait on m_drainCv under the lock, release it, then call
+    // waitForDone() unlocked.
     const auto deadline = std::chrono::steady_clock::now() + timeout;
-    while (true)
     {
-        {
-            std::lock_guard<std::mutex> lock(m_graphMtx);
-            if (m_poolState[idx].metrics.pending == 0 && m_poolState[idx].metrics.active_tasks == 0)
-                break; // pool is idle — exit loop to do a final waitForDone unlocked
-        }
-        if (std::chrono::steady_clock::now() >= deadline)
-            break;
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::unique_lock<std::mutex> lock(m_graphMtx);
+        m_drainCv.wait_until(lock, deadline,
+                             [&]
+                             {
+                                 return m_poolState[idx].metrics.pending == 0 &&
+                                        m_poolState[idx].metrics.active_tasks == 0;
+                             });
     }
     // M27: pass only the REMAINING budget to waitForDone(). Previously the
     // full timeout was passed again after the polling loop, so drain(timeout)

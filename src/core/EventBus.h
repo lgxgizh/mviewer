@@ -31,7 +31,9 @@ class EventBus
         UI
     };
 
+    // The process-wide bus. This is scope(Application), not a second instance.
     static EventBus &instance();
+    // Out-of-range values fall back to Application (never index past the table).
     static EventBus &scope(EventBusScope s);
 
     // Subscribe to an event type. Returns subscription id (use to unsubscribe).

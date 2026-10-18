@@ -20,7 +20,7 @@ ImageData toGray(const ImageData &src)
     if (src.format == PixelFormat::Grayscale8)
         return src;
     ImageData g = makeImageData(src.width, src.height, PixelFormat::Grayscale8);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer gv = g.view();
     const int cpp = src.channelsPerPixel();
     const bool isBgr = (src.format == PixelFormat::BGR24 || src.format == PixelFormat::BGRA32);
@@ -283,7 +283,7 @@ ImageData Aligner::shift(const ImageData &src, int dx, int dy, uint8_t fill)
     ImageData out = makeImageData(w, h, src.format);
     if (out.isNull())
         return ImageData{};
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer ov = out.view();
     const int cpp = src.channelsPerPixel();
     const size_t rowBytes = static_cast<size_t>(w) * cpp;

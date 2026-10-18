@@ -58,7 +58,7 @@ class ColorCheckerAnalyzer : public Analyzer
     std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
-    bool compute(const ImageBuffer &v, int x0, int y0, int x1, int y1);
+    bool compute(const ConstImageView &v, int x0, int y0, int x1, int y1);
 
     double m_meanDE = 0.0;
     double m_maxDE = 0.0;

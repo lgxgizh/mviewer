@@ -38,6 +38,6 @@ class EntropyAnalyzer : public Analyzer
     std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
-    double computeEntropy(const ImageBuffer &v, int x0, int y0, int x1, int y1) const;
+    double computeEntropy(const ConstImageView &v, int x0, int y0, int x1, int y1) const;
     double m_entropy = 0.0;
 };

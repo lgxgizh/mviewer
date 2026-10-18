@@ -27,7 +27,7 @@ void summarizeDiff(const ImageData &d, double &mn, double &mean, double &mx)
     }
     const int w = d.width;
     const int h = d.height;
-    const ImageBuffer vbuf = d.view();
+    const ConstImageView vbuf = d.constView();
     const ptrdiff_t stride = vbuf.stride();
     long long totalPixels = 0;
     for (int y = 0; y < h; ++y)
@@ -138,8 +138,7 @@ ImageData applyCompareAdjustments(const ImageData &src, const CompareAdjustmentS
                                 (std::abs(adjustment.blueGain - 1.0) >= 1e-6);
     if (hasColorAdjust)
     {
-        cur = adjustCombinedLut(cur, adjustment.brightness,
-                                static_cast<float>(adjustment.contrast),
+        cur = adjustCombinedLut(cur, adjustment.brightness, static_cast<float>(adjustment.contrast),
                                 static_cast<float>(adjustment.gamma),
                                 static_cast<float>(adjustment.redGain),
                                 static_cast<float>(adjustment.blueGain));
