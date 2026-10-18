@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.136] - 2026-10-18
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.136**.
+
 ### Added
 
 - 比较模式每个窗格可单独开启 USM 锐化（数量、半径、阈值、仅亮度），默认关闭，随调整面板、预设和重置一起生效，预览、差异和直方图使用同一套调优。
