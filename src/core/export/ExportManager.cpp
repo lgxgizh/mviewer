@@ -114,7 +114,7 @@ std::string extractStr(const std::string &json, const std::string &key)
 // separators and "..", is replaced so the name cannot escape the preset dir.
 std::string sanitizePresetName(const std::string &name)
 {
-    if (name.empty() || name.size() > static_cast<size_t>(std::numeric_limits<qsizetype>::max()))
+    if (name.empty() || name.size() > static_cast<size_t>((std::numeric_limits<qsizetype>::max)()))
         return {};
     const QString in =
         QString::fromUtf8(QByteArrayView(name.data(), static_cast<qsizetype>(name.size())));
@@ -138,8 +138,8 @@ std::string sanitizePresetName(const std::string &name)
 bool writePresetFile(const std::string &path, const std::string &json)
 {
     if (path.empty() || json.empty() ||
-        path.size() > static_cast<size_t>(std::numeric_limits<qsizetype>::max()) ||
-        json.size() > static_cast<size_t>(std::numeric_limits<qint64>::max()))
+        path.size() > static_cast<size_t>((std::numeric_limits<qsizetype>::max)()) ||
+        json.size() > static_cast<size_t>((std::numeric_limits<qint64>::max)()))
         return false;
     QSaveFile out(
         QString::fromUtf8(QByteArrayView(path.data(), static_cast<qsizetype>(path.size()))));

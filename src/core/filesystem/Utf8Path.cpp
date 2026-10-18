@@ -81,7 +81,7 @@ std::string normalizeKey(std::string path)
 
     // QString::fromUtf8 takes a signed size. A path that cannot be represented
     // is not a usable store key; keep a slash-folded copy rather than truncate.
-    if (path.size() > static_cast<size_t>(std::numeric_limits<qsizetype>::max()))
+    if (path.size() > static_cast<size_t>((std::numeric_limits<qsizetype>::max)()))
     {
         for (char &ch : path)
         {
