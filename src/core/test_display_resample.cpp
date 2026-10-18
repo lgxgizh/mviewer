@@ -1,10 +1,16 @@
 #include "core/render/DisplayResample.h"
+#include "core/render/DisplayResampleDetail.h"
 #include "core/simd/CpuFeatures.h"
+
+#include <QCoreApplication>
 
 #include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 namespace
 {
@@ -435,6 +441,41 @@ int main()
         expect(scratch.weightX.capacity() < grown / 2, "small resample releases oversized scratch");
         mviewer::core::setDisplayResampleIsaForTest(0);
         mviewer::core::releaseDisplayResampleCache();
+    }
+
+    {
+        // Pooled bands: an exception must count the latch down and must not
+        // escape into QThreadPool. Concurrent first use must also be safe.
+        int argc = 1;
+        char arg0[] = "test_display_resample";
+        char *argv[] = {arg0, nullptr};
+        QCoreApplication app(argc, argv);
+        std::atomic<int> covered{0};
+        mviewer::core::resample_detail::parallelForRows(64, 1, nullptr,
+                                                        [&](int y0, int y1)
+                                                        {
+                                                            covered.fetch_add(
+                                                                y1 - y0, std::memory_order_relaxed);
+                                                            throw std::runtime_error("band");
+                                                        });
+        expect(covered.load() == 64, "pooled band exception still finishes every row");
+
+        std::atomic<int> visits{0};
+        std::vector<std::thread> racers;
+        racers.reserve(4);
+        for (int i = 0; i < 4; ++i)
+        {
+            racers.emplace_back(
+                [&visits]()
+                {
+                    mviewer::core::resample_detail::parallelForRows(
+                        32, 1, nullptr, [&visits](int y0, int y1)
+                        { visits.fetch_add(y1 - y0, std::memory_order_relaxed); });
+                });
+        }
+        for (std::thread &racer : racers)
+            racer.join();
+        expect(visits.load() == 128, "concurrent resample pool use covers every row");
     }
 
     std::printf("=== Display resample tests: %s ===\n", g_failures == 0 ? "PASS" : "FAIL");

@@ -4,11 +4,13 @@
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QRunnable>
 #include <QThread>
 #include <QThreadPool>
 
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <utility>
 
@@ -53,6 +55,8 @@ class BandRunnable : public QRunnable
 
     void run() override
     {
+        // Count down even when fn_ throws, and do not let the exception reach
+        // QThreadPool — an exception leaving a pool thread calls std::terminate.
         struct Guard
         {
             Latch *latch;
@@ -61,7 +65,18 @@ class BandRunnable : public QRunnable
                 latch->done();
             }
         } guard{latch_};
-        fn_();
+        try
+        {
+            fn_();
+        }
+        catch (const std::exception &error)
+        {
+            qWarning("DisplayResample band failed: %s", error.what());
+        }
+        catch (...)
+        {
+            qWarning("DisplayResample band failed: unknown error");
+        }
     }
 
   private:
@@ -71,21 +86,24 @@ class BandRunnable : public QRunnable
 
 QThreadPool *resamplePool()
 {
-    static QThreadPool *pool = nullptr;
-    if (pool == nullptr)
+    // Leaked on purpose. QThreadPool joins workers in its destructor, which is
+    // unsafe after QCoreApplication is gone (ADR 017). The function-local
+    // static initializes this pointer once, including when the first callers
+    // race. Match TaskScheduler UI budget: HQ resample is bursty foreground
+    // work and used to stack another full-core pool on top of Decode (≈30
+    // runnable threads on 8 cores). Half the cores keeps Sharp usable without
+    // starving decode/thumbnails.
+    static QThreadPool *const pool = []()
     {
-        pool = new QThreadPool();
-        // Match TaskScheduler UI budget: HQ resample is bursty foreground work
-        // and used to stack another full-core pool on top of Decode (≈30
-        // runnable threads on 8 cores). Half the cores keeps Sharp usable
-        // without starving decode/thumbnails.
+        auto *created = new QThreadPool();
         int threads = QThread::idealThreadCount();
         if (threads < 1)
             threads = 1;
         threads = std::max(2, threads / 2);
-        pool->setMaxThreadCount(threads);
-        pool->setExpiryTimeout(-1);
-    }
+        created->setMaxThreadCount(threads);
+        created->setExpiryTimeout(-1);
+        return created;
+    }();
     return pool;
 }
 

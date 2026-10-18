@@ -222,4 +222,5 @@ class RenderEngine
     void executeDrawSelection(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
     void executeDrawHistogram(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
     void executeDrawHeatmap(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
+    void executeDrawPixelMarker(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
 };

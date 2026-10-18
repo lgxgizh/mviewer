@@ -5,8 +5,10 @@
 #include <QOpenGLFunctions>
 #include <QSettings>
 #include <algorithm>
+#include <atomic>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 
 // ─── capability probes ───────────────────────────────────────────────────────
 
@@ -40,16 +42,51 @@ bool gpuEnabledBySettings()
     QSettings s;
     return s.value("gpuAcceleration", true).toBool();
 }
+
+std::atomic<int> &gpuPolicySlot()
+{
+    // -1: unread, 0: off, 1: on. The slot is process-lifetime.
+    static std::atomic<int> slot{-1};
+    return slot;
+}
+
+std::mutex &gpuPolicyMutex()
+{
+    static std::mutex mu;
+    return mu;
+}
+
+int cachedGpuPolicy()
+{
+    const int cached = gpuPolicySlot().load(std::memory_order_acquire);
+    if (cached >= 0)
+        return cached;
+    const std::lock_guard<std::mutex> lock(gpuPolicyMutex());
+    const int again = gpuPolicySlot().load(std::memory_order_relaxed);
+    if (again >= 0)
+        return again;
+    const int env = gpuRequestedByEnvironment();
+    const int resolved = env >= 0 ? env : (gpuEnabledBySettings() ? 1 : 0);
+    gpuPolicySlot().store(resolved, std::memory_order_release);
+    return resolved;
+}
 } // namespace
+
+bool GpuTileUploader::accelerationRequested()
+{
+    return cachedGpuPolicy() == 1;
+}
+
+void GpuTileUploader::resetEnabledCache()
+{
+    const std::lock_guard<std::mutex> lock(gpuPolicyMutex());
+    gpuPolicySlot().store(-1, std::memory_order_release);
+}
 
 bool GpuTileUploader::enabled()
 {
-    if (!available())
-        return false;
-    const int env = gpuRequestedByEnvironment();
-    if (env >= 0)
-        return env == 1;
-    return gpuEnabledBySettings();
+    // Context availability stays uncached: it changes per thread and per test.
+    return available() && accelerationRequested();
 }
 
 namespace
@@ -60,14 +97,29 @@ uint64_t fingerprintPixels(const uint8_t *pixels, int w, int h, int channels)
         return 0;
     const size_t n =
         static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(channels);
+    // FNV-1a over dimensions, channel count, and every byte. A 32-sample
+    // stride treated tiles that differed between samples as identical and
+    // skipped the upload.
     uint64_t hash = 14695981039346656037ull;
-    const size_t step = std::max<size_t>(1, n / 32);
-    for (size_t i = 0; i < n; i += step)
+    auto mix = [&hash](uint64_t value)
     {
-        hash ^= pixels[i];
+        hash ^= value;
         hash *= 1099511628211ull;
+    };
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(w)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(h)));
+    mix(static_cast<uint64_t>(static_cast<uint32_t>(channels)));
+    size_t offset = 0;
+    while (n - offset >= 8)
+    {
+        uint64_t word = 0;
+        std::memcpy(&word, pixels + offset, sizeof(word));
+        mix(word);
+        offset += 8;
     }
-    hash ^= n;
+    for (; offset < n; ++offset)
+        mix(pixels[offset]);
+    mix(n);
     return hash == 0 ? 1 : hash;
 }
 
@@ -128,6 +180,7 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
         if (sameSize && pixels && doReplace(it->second.handle, pixels, w, h, channels))
         {
             it->second.fingerprint = fp;
+            ++m_replaces;
             touch(key);
             return true;
         }

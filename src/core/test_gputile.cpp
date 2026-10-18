@@ -9,6 +9,33 @@
 #include <cstdio>
 #include <vector>
 
+#if defined(_WIN32)
+#include <stdlib.h>
+#else
+extern "C" int setenv(const char *name, const char *value, int overwrite);
+extern "C" int unsetenv(const char *name);
+#endif
+
+namespace
+{
+
+void setGpuEnv(const char *value)
+{
+#if defined(_WIN32)
+    if (value == nullptr)
+        _putenv("MVIEWER_GPU=");
+    else
+        _putenv_s("MVIEWER_GPU", value);
+#else
+    if (value == nullptr)
+        unsetenv("MVIEWER_GPU");
+    else
+        setenv("MVIEWER_GPU", value, 1);
+#endif
+}
+
+} // namespace
+
 static int g_pass = 0;
 static int g_fail = 0;
 
@@ -107,6 +134,36 @@ int main()
     CHECK(GpuTileUploader::available() == avail, "available() probe is stable");
     CHECK(!GpuTileUploader::enabled() || GpuTileUploader::available(),
           "enabled() implies available() (no GPU without a context)");
+
+    // A 64x1x3 buffer is 192 bytes. The old fingerprint stepped by n/32 (= 6)
+    // and ignored byte 1, so two different tiles skipped the replace.
+    std::vector<uint8_t> pixels(192, 10);
+    std::vector<uint8_t> same(192, 10);
+    std::vector<uint8_t> oneByte = pixels;
+    oneByte[1] = static_cast<uint8_t>(oneByte[1] + 1);
+    const TileKey fpKey{"fp", 0, 0, 0};
+    GpuTileUploader fpUp([](const TileKey &, const uint8_t *, int, int, int) -> uintptr_t
+                         { return 3; });
+    CHECK(fpUp.ensure(fpKey, pixels.data(), 64, 1, 3), "fingerprint tile uploaded");
+    CHECK(fpUp.ensure(fpKey, same.data(), 64, 1, 3), "equal bytes in another buffer stay resident");
+    CHECK(fpUp.uploadCount() == 1, "identical pixels do not upload again");
+    CHECK(fpUp.replaceCount() == 0, "identical pixels do not replace");
+    CHECK(fpUp.ensure(fpKey, oneByte.data(), 64, 1, 3), "one-byte difference stays resident");
+    CHECK(fpUp.uploadCount() == 1, "content change keeps the texture object");
+    CHECK(fpUp.replaceCount() == 1, "a one-byte change is not treated as the same pixels");
+    CHECK(fpUp.ensure(fpKey, nullptr, 64, 1, 3), "null pixels remain a cache hit");
+    CHECK(fpUp.replaceCount() == 1, "null pixels do not replace");
+
+    setGpuEnv("1");
+    GpuTileUploader::resetEnabledCache();
+    CHECK(GpuTileUploader::accelerationRequested(), "MVIEWER_GPU=1 requests acceleration");
+    CHECK(!GpuTileUploader::enabled(), "request does not enable without a GL context");
+    setGpuEnv("0");
+    CHECK(GpuTileUploader::accelerationRequested(), "policy stays cached until reset");
+    GpuTileUploader::resetEnabledCache();
+    CHECK(!GpuTileUploader::accelerationRequested(), "reset re-reads MVIEWER_GPU=0");
+    setGpuEnv("0");
+    GpuTileUploader::resetEnabledCache();
 
     printf("\n=== M16 GpuTileUploader: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

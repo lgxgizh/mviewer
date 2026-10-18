@@ -1,6 +1,7 @@
 #include "preferencesdialog.h"
 #include "Theme.h"
 #include "display/DisplayColorContextProvider.h"
+#include "gpu/GpuTileUploader.h"
 #include "thumbnailpanel.h"
 
 #include <QCheckBox>
@@ -194,6 +195,7 @@ void PreferencesDialog::accept()
     const bool colorManagement = m_colorManagement->isChecked();
     s.setValue("display/colorManagement", colorManagement);
     s.sync();
+    GpuTileUploader::resetEnabledCache();
     DisplayColorContextProvider::setColorManagementEnabled(colorManagement);
     emit settingsChanged();
     QDialog::accept();
