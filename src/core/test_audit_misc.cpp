@@ -36,7 +36,6 @@ static void check(bool condition, const char *message)
     ++g_failures;
 }
 
-
 static std::string sidecarFileFor(const std::string &imagePath)
 {
     std::string modern = imagePath + ".mviewer.json";
