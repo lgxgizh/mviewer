@@ -39,7 +39,7 @@ static void check(bool condition, const char *message)
 
 static std::string sidecarFileFor(const std::string &imagePath)
 {
-    const std::string modern = imagePath + ".mviewer.json";
+    std::string modern = imagePath + ".mviewer.json";
     if (std::ifstream(modern, std::ios::binary))
         return modern;
     return imagePath + ".xmp";
