@@ -2,10 +2,16 @@
 #include "ExportManager.h"
 #include "core/filesystem/Utf8Path.h"
 
+#include <QByteArrayView>
+#include <QChar>
+#include <QSaveFile>
+#include <QString>
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <sstream>
 
 #ifdef _WIN32
@@ -103,6 +109,48 @@ std::string extractStr(const std::string &json, const std::string &key)
     return val;
 }
 
+// Preset names become a single path component. Letters (including CJK),
+// digits, space, '-' and '_' stay; every other code point, including
+// separators and "..", is replaced so the name cannot escape the preset dir.
+std::string sanitizePresetName(const std::string &name)
+{
+    if (name.empty() || name.size() > static_cast<size_t>((std::numeric_limits<qsizetype>::max)()))
+        return {};
+    const QString in =
+        QString::fromUtf8(QByteArrayView(name.data(), static_cast<qsizetype>(name.size())));
+    QString out;
+    const QList<uint> points = in.toUcs4();
+    out.reserve(points.size());
+    for (uint point : points)
+    {
+        const char32_t cp = static_cast<char32_t>(point);
+        if (QChar::isLetter(cp) || QChar::isDigit(cp) || cp == U' ' || cp == U'-' || cp == U'_')
+            out.append(QString::fromUcs4(&cp, 1));
+        else
+            out.append(QLatin1Char('_'));
+    }
+    const QByteArray utf8 = out.toUtf8();
+    if (utf8.isEmpty())
+        return {};
+    return std::string(utf8.constData(), static_cast<size_t>(utf8.size()));
+}
+
+bool writePresetFile(const std::string &path, const std::string &json)
+{
+    if (path.empty() || json.empty() ||
+        path.size() > static_cast<size_t>((std::numeric_limits<qsizetype>::max)()) ||
+        json.size() > static_cast<size_t>((std::numeric_limits<qint64>::max)()))
+        return false;
+    QSaveFile out(
+        QString::fromUtf8(QByteArrayView(path.data(), static_cast<qsizetype>(path.size()))));
+    if (!out.open(QIODevice::WriteOnly))
+        return false;
+    const auto bytes = static_cast<qint64>(json.size());
+    if (out.write(json.data(), bytes) != bytes)
+        return false;
+    return out.commit();
+}
+
 int extractInt(const std::string &json, const std::string &key, int fallback = 0)
 {
     const std::string target = '"' + key + '"';
@@ -187,69 +235,86 @@ std::string ExportManager::defaultPresetDir()
 
 std::string ExportManager::presetPath(const std::string &name)
 {
-    return defaultPresetDir() + "/" + name + ".json";
+    const std::string safe = sanitizePresetName(name);
+    if (safe.empty())
+        return {};
+    return defaultPresetDir() + "/" + safe + ".json";
 }
 
 bool ExportManager::savePreset(const Preset &p)
 {
-    if (p.name.empty())
+    Preset stored = p;
+    stored.name = sanitizePresetName(p.name);
+    if (stored.name.empty())
         return false;
+
+    std::lock_guard<std::mutex> lock(m_mutex);
     std::error_code ec;
     const auto dir = mviewer::core::pathFromUtf8(defaultPresetDir());
     std::filesystem::create_directories(dir, ec);
     if (ec)
         return false;
 
-    const std::string path = presetPath(p.name);
-    std::ofstream out(mviewer::core::pathFromUtf8(path), std::ios::trunc);
-    if (!out)
+    const std::string path = presetPath(stored.name);
+    if (!writePresetFile(path, stored.toJson()))
         return false;
-    out << p.toJson();
 
-    // Update in-memory list
     auto it = std::find_if(m_presets.begin(), m_presets.end(),
-                           [&](const Preset &x) { return x.name == p.name; });
+                           [&](const Preset &x) { return x.name == stored.name; });
     if (it != m_presets.end())
-        *it = p;
+        *it = stored;
     else
-        m_presets.push_back(p);
+        m_presets.push_back(stored);
     return true;
 }
 
 bool ExportManager::deletePreset(const std::string &name)
 {
+    const std::string safe = sanitizePresetName(name);
+    if (safe.empty())
+        return false;
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_presets.erase(std::remove_if(m_presets.begin(), m_presets.end(),
-                                   [&](const Preset &x) { return x.name == name; }),
+                                   [&](const Preset &x) { return x.name == safe; }),
                     m_presets.end());
     std::error_code ec;
-    return std::filesystem::remove(mviewer::core::pathFromUtf8(presetPath(name)), ec) || !ec;
+    const std::string path = presetPath(safe);
+    if (path.empty())
+        return false;
+    return std::filesystem::remove(mviewer::core::pathFromUtf8(path), ec) || !ec;
 }
 
 std::vector<ExportManager::Preset> ExportManager::listPresets() const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_presets;
 }
 
 ExportManager::Preset ExportManager::loadPreset(const std::string &name) const
 {
     const std::string path = presetPath(name);
+    if (path.empty())
+        return {};
+    std::lock_guard<std::mutex> lock(m_mutex);
     std::ifstream in(mviewer::core::pathFromUtf8(path), std::ios::binary);
     if (!in)
         return {};
     std::ostringstream ss;
     ss << in.rdbuf();
-    return Preset::fromJson(ss.str());
+    Preset loaded = Preset::fromJson(ss.str());
+    loaded.name = sanitizePresetName(loaded.name.empty() ? name : loaded.name);
+    return loaded;
 }
 
 void ExportManager::loadAllPresets()
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_presets.clear();
     std::error_code ec;
     const auto dir = mviewer::core::pathFromUtf8(defaultPresetDir());
     if (!std::filesystem::exists(dir, ec))
         return;
-    for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end;
-         it.increment(ec))
+    for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
     {
         std::error_code fileEc;
         if (it->is_regular_file(fileEc) && !fileEc &&
@@ -261,6 +326,7 @@ void ExportManager::loadAllPresets()
             std::ostringstream ss;
             ss << in.rdbuf();
             auto p = Preset::fromJson(ss.str());
+            p.name = sanitizePresetName(p.name);
             if (!p.name.empty())
                 m_presets.push_back(std::move(p));
         }
@@ -269,11 +335,18 @@ void ExportManager::loadAllPresets()
 
 void ExportManager::saveAllPresets()
 {
-    for (const auto &p : m_presets)
+    std::lock_guard<std::mutex> lock(m_mutex);
+    std::error_code ec;
+    const auto dir = mviewer::core::pathFromUtf8(defaultPresetDir());
+    std::filesystem::create_directories(dir, ec);
+    if (ec)
+        return;
+    for (auto &p : m_presets)
     {
+        p.name = sanitizePresetName(p.name);
+        if (p.name.empty())
+            continue;
         const std::string path = presetPath(p.name);
-        std::ofstream out(mviewer::core::pathFromUtf8(path), std::ios::trunc);
-        if (out)
-            out << p.toJson();
+        (void)writePresetFile(path, p.toJson());
     }
 }

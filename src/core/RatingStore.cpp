@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace mviewer::core
 {
@@ -62,11 +63,16 @@ RatingStore &RatingStore::instance()
 
 namespace
 {
-// RatingStore / TagStore path identity: slash-normalize, and on Windows also
-// case-fold so C:/Photos/A.JPG and c:/photos/a.jpg share one record.
+// RatingStore / TagStore path identity. One normalizer for load and lookup.
 std::string slashKey(const std::string &path)
 {
-    return normalizePathKey(path);
+    return normalizeKey(path);
+}
+
+void stripTrailingCr(std::string &line)
+{
+    if (!line.empty() && line.back() == '\r')
+        line.pop_back();
 }
 
 // Snapshot lookups accept both the stored (normalized) key and a caller's
@@ -358,17 +364,43 @@ size_t RatingStore::pruneMissing()
     size_t removed = 0;
     bool flagsChanged = false;
     bool ratingsChanged = false;
-    auto missing = [](const std::string &p)
+
+    // Snapshot keys under the lock, stat them outside it, then erase. exists()
+    // can block on a slow volume and must not stall rating readers.
+    std::vector<std::string> keys;
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        keys.reserve(m_ratings.size() + m_colorLabels.size() + m_rejected.size() + m_picked.size() +
+                     m_recents.size());
+        for (const auto &entry : m_ratings)
+            keys.push_back(entry.first);
+        for (const auto &entry : m_colorLabels)
+            keys.push_back(entry.first);
+        for (const auto &key : m_rejected)
+            keys.push_back(key);
+        for (const auto &key : m_picked)
+            keys.push_back(key);
+        for (const auto &key : m_recents)
+            keys.push_back(key);
+    }
+    std::sort(keys.begin(), keys.end());
+    keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+
+    std::unordered_set<std::string> missing;
+    missing.reserve(keys.size());
+    for (const std::string &key : keys)
     {
         std::error_code ec;
-        return !std::filesystem::exists(pathFromUtf8(p), ec);
-    };
+        if (!std::filesystem::exists(pathFromUtf8(key), ec))
+            missing.insert(key);
+    }
 
+    if (!missing.empty())
     {
         std::lock_guard<std::mutex> lk(m_mutex);
         for (auto it = m_ratings.begin(); it != m_ratings.end();)
         {
-            if (missing(it->first))
+            if (missing.contains(it->first))
             {
                 it = m_ratings.erase(it);
                 ratingsChanged = true;
@@ -382,7 +414,7 @@ size_t RatingStore::pruneMissing()
 
         for (auto it = m_colorLabels.begin(); it != m_colorLabels.end();)
         {
-            if (missing(it->first))
+            if (missing.contains(it->first))
             {
                 it = m_colorLabels.erase(it);
                 flagsChanged = true;
@@ -396,7 +428,7 @@ size_t RatingStore::pruneMissing()
 
         for (auto it = m_rejected.begin(); it != m_rejected.end();)
         {
-            if (missing(*it))
+            if (missing.contains(*it))
             {
                 it = m_rejected.erase(it);
                 flagsChanged = true;
@@ -410,7 +442,7 @@ size_t RatingStore::pruneMissing()
 
         for (auto it = m_picked.begin(); it != m_picked.end();)
         {
-            if (missing(*it))
+            if (missing.contains(*it))
             {
                 it = m_picked.erase(it);
                 flagsChanged = true;
@@ -423,7 +455,9 @@ size_t RatingStore::pruneMissing()
         }
 
         const auto origRecents = m_recents.size();
-        m_recents.erase(std::remove_if(m_recents.begin(), m_recents.end(), missing),
+        m_recents.erase(std::remove_if(m_recents.begin(), m_recents.end(),
+                                       [&missing](const std::string &path)
+                                       { return missing.contains(path); }),
                         m_recents.end());
         if (m_recents.size() != origRecents)
         {
@@ -620,6 +654,7 @@ void RatingStore::loadFlags()
     std::string line;
     while (std::getline(in, line))
     {
+        stripTrailingCr(line);
         if (line.size() < 2)
             continue;
         const char type = line[0];
@@ -634,7 +669,9 @@ void RatingStore::loadFlags()
             const auto pos2 = p.find('|');
             if (pos2 == std::string::npos)
                 continue;
-            const std::string key = p.substr(0, pos2);
+            const std::string key = normalize(p.substr(0, pos2));
+            if (key.empty())
+                continue;
             int n = 0;
             try
             {
@@ -648,11 +685,24 @@ void RatingStore::loadFlags()
                 m_colorLabels[key] = n;
         }
         else if (type == 'X')
-            m_rejected.insert(p);
+        {
+            const std::string key = normalize(p);
+            if (!key.empty())
+                m_rejected.insert(key);
+        }
         else if (type == 'K')
-            m_picked.insert(p);
+        {
+            const std::string key = normalize(p);
+            if (!key.empty())
+                m_picked.insert(key);
+        }
         else if (type == 'N')
-            m_recents.push_back(p);
+        {
+            const std::string key = normalize(p);
+            if (!key.empty() &&
+                std::find(m_recents.begin(), m_recents.end(), key) == m_recents.end())
+                m_recents.push_back(key);
+        }
     }
 }
 
@@ -666,6 +716,7 @@ bool RatingStore::load()
     std::string line;
     while (std::getline(in, line))
     {
+        stripTrailingCr(line);
         if (line.empty())
             continue;
         // Format: "<stars>|<path>"
@@ -683,7 +734,7 @@ bool RatingStore::load()
         }
         if (stars < 0 || stars > 5)
             continue;
-        const std::string p = line.substr(pos + 1);
+        const std::string p = normalize(line.substr(pos + 1));
         if (!p.empty())
             m_ratings[p] = stars;
     }

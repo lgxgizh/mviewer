@@ -52,7 +52,7 @@ CacheLimits cacheLimits(int maxEntries, size_t maxBytes)
         // A 90% target of a tiny cap rounds to 0 and would wipe the cache.
         lim.entryLow = maxEntries < 10 ? maxEntries : static_cast<qint64>(maxEntries) * 9 / 10;
     }
-    if (maxBytes > 0 && maxBytes <= static_cast<size_t>(std::numeric_limits<qint64>::max()))
+    if (maxBytes > 0 && maxBytes <= static_cast<size_t>((std::numeric_limits<qint64>::max)()))
     {
         lim.bytes = true;
         lim.byteCap = static_cast<qint64>(maxBytes);
@@ -92,10 +92,12 @@ qint64 pruneBatch(qint64 entries, bool aboveEntryLow, qint64 entryLow, bool abov
 void touchBlob(const QSqlDatabase &db, const std::string &key)
 {
     QSqlQuery touch(db);
-    touch.prepare(QStringLiteral(
-        "UPDATE blobs SET ts = CASE WHEN ts + 1 > ? THEN ts + 1 ELSE ? END WHERE key = ?"));
+    // Strictly newer than both the previous ts and wall-clock now. MAX(ts, now)+1
+    // avoids tying a touch with an insert that shares the same millisecond
+    // (ORDER BY ts ASC, key ASC would then prefer the smaller key and can
+    // evict the row we just touched).
+    touch.prepare(QStringLiteral("UPDATE blobs SET ts = MAX(ts, ?) + 1 WHERE key = ?"));
     const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-    touch.addBindValue(QVariant::fromValue<qint64>(nowMs));
     touch.addBindValue(QVariant::fromValue<qint64>(nowMs));
     touch.addBindValue(QString::fromStdString(key));
     touch.exec();
@@ -413,7 +415,7 @@ void DiskCache::put(const std::string &key, const ImageData &img)
         return;
     // A QByteArray length is an int; refusing oversized payloads beats silently
     // truncating them into an unreadable row.
-    if (img.byteSize() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    if (img.byteSize() > static_cast<size_t>((std::numeric_limits<int>::max)()))
         return;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());

@@ -1,6 +1,10 @@
-// M17: Sidecar persistence — per-image .xmp JSON sidecar files that mirror
-// RatingStore data (rating, color label, pick, reject) alongside image files.
+// M17: Sidecar persistence — per-image JSON files that mirror RatingStore
+// data (rating, color label, pick, reject) alongside image files.
 // Provides portability: moving a folder preserves its metadata.
+//
+// New writes use "<image>.mviewer.json". Older builds wrote the same JSON
+// into "*.xmp"; those files are still read and migrated. A real third-party
+// XMP packet at the same path is never overwritten or deleted.
 #pragma once
 
 #include <functional>
@@ -23,7 +27,8 @@ class SidecarStore
     // Delete sidecar file.
     bool removeSidecar(const std::string &imagePath);
 
-    // Bulk import: scan directory for .xmp files and merge into RatingStore.
+    // Bulk import: scan directory for this app's sidecars (.mviewer.json and
+    // legacy JSON .xmp) and merge into RatingStore. Third-party XMP is ignored.
     // Returns count of merged entries.
     int importDirectory(const std::string &dirPath, const std::function<bool()> &cancelled = {});
     // Bulk export: write sidecars for all known ratings in a directory.
@@ -35,12 +40,12 @@ class SidecarStore
     // records the new image path. Returns true when a sidecar was moved.
     bool relocateSidecar(const std::string &oldImagePath, const std::string &newImagePath);
 
-    // Get the sidecar file path for an image: the full file name plus
-    // ".xmp" ("IMG_001.jpg" -> "IMG_001.jpg.xmp"), so images that differ
+    // Sidecar written for an image: the full file name plus ".mviewer.json"
+    // ("IMG_001.jpg" -> "IMG_001.jpg.mviewer.json"), so images that differ
     // only by extension never share a sidecar.
     static std::string sidecarPath(const std::string &imagePath);
     // Pre-1.0.109 layout ("IMG_001.jpg" -> "IMG_001.xmp"). Empty when the
-    // image has no extension (the legacy and current names would coincide).
+    // image has no extension (the legacy and per-file names would coincide).
     static std::string legacySidecarPath(const std::string &imagePath);
     // The legacy sidecar path when it exists and unambiguously belongs to
     // imagePath (its recorded "file" names this image, or no sibling image

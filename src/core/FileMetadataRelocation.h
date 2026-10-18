@@ -3,8 +3,8 @@
 // SPDX-License-Identifier: MIT
 //
 // Keeps per-file metadata attached to a file when it changes path: star
-// rating, color label, pick/reject, recents entry, tags and the .xmp
-// sidecar. Called by the rename/move/delete commands on success and on
+// rating, color label, pick/reject, recents entry, tags and the
+// .mviewer.json sidecar. Called by the rename/move/delete commands on success and on
 // undo/rollback so metadata never stays behind on the old path.
 #pragma once
 
