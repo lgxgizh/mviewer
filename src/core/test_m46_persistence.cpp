@@ -95,9 +95,9 @@ void testAtomicWriteBasics()
     // Failure injection matrix: every step failure must leave v1 intact and
     // clean up its temp file.
     const AtomicWriteFaults faults[] = {
-        {true, false, false},  // temp create
-        {false, true, false},  // write
-        {false, false, true},  // replace
+        {true, false, false}, // temp create
+        {false, true, false}, // write
+        {false, false, true}, // replace
     };
     for (const auto &f : faults)
     {
@@ -252,23 +252,21 @@ void testTagAndSidecarAtomicity()
     CHECK(readAll(tagsPath).find("newtag") != std::string::npos,
           "tags update persisted after recovery");
 
-    // SidecarStore: same semantics on the per-image .xmp file.
+    // SidecarStore: same semantics on the per-image .mviewer.json file.
     auto &ss = SidecarStore::instance();
     const std::string imgPath = dir + "/photo.jpg";
-    const std::string sidecar = dir + "/photo.jpg.xmp"; // per-file sidecar name
+    const std::string sidecar = SidecarStore::sidecarPath(imgPath);
     auto &rs = RatingStore::instance();
     rs.setRating(imgPath, 4);
     CHECK(ss.writeSidecar(imgPath), "sidecar initial write succeeds");
     const std::string sidecarBefore = readAll(sidecar);
-    CHECK(sidecarBefore.find("\"rating\": 4") != std::string::npos,
-          "sidecar contains the rating");
+    CHECK(sidecarBefore.find("\"rating\": 4") != std::string::npos, "sidecar contains the rating");
 
     setAtomicWriteFaults({true, false, false}); // fail temp create
     rs.setRating(imgPath, 5);
     CHECK(!ss.writeSidecar(imgPath), "sidecar write reports the injected failure");
     setAtomicWriteFaults({});
-    CHECK(readAll(sidecar) == sidecarBefore,
-          "sidecar file intact after the injected failure");
+    CHECK(readAll(sidecar) == sidecarBefore, "sidecar file intact after the injected failure");
     CHECK(ss.writeSidecar(imgPath), "sidecar write succeeds after the fault clears");
     CHECK(readAll(sidecar).find("\"rating\": 5") != std::string::npos,
           "sidecar updated to the new rating");

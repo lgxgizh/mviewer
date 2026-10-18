@@ -1512,6 +1512,19 @@ target_compile_definitions(flags_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURC
 
 add_test(NAME flags_tests COMMAND flags_tests)
 
+# Audit #41 / #45 / #47 — preset paths, lazy tag-store location, settings restore.
+add_executable(audit_persistence_tests
+    core/test_audit_persistence.cpp
+)
+target_link_libraries(audit_persistence_tests
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(audit_persistence_tests PRIVATE cxx_std_20)
+target_include_directories(audit_persistence_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME audit_persistence_tests COMMAND audit_persistence_tests)
+
 # P2 — AnalyzerRegistry extensibility: a new analyzer is discoverable/runnable
 # without any MainWindow/UI change.
 add_executable(analyzer_registry_tests

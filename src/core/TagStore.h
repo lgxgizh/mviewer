@@ -7,6 +7,9 @@
 // keyed by absolute path so it stays independent of the thumbnail cache.
 //
 //   tags.txt : "<tag>|<path>"   (one line per tag assignment)
+//   Tag text must not contain '|' or a newline; those are the separators and
+//   are rejected on input. The file path is resolved on first use, after
+//   QCoreApplication exists, under the writable app-data directory.
 //
 #pragma once
 
@@ -68,14 +71,20 @@ class TagStore
   private:
     TagStore();
     std::string defaultPath() const;
+    std::string legacyPath() const;
     std::string normalize(const std::string &path) const;
+    // First use after QCoreApplication exists: resolve the store path and
+    // load it. Safe to call from const observers (lazy init under m_mutex).
+    void ensureReady() const;
+    void loadLocked() const;
     void scheduleSave();
     void workerLoop();
     bool saveSnapshot() const;
 
     mutable std::mutex m_mutex;
-    std::map<std::string, std::set<std::string>> m_tags; // path -> tags
-    std::string m_filePath;
+    mutable std::map<std::string, std::set<std::string>> m_tags; // path -> tags
+    mutable std::string m_filePath;
+    mutable bool m_loaded = false;
     mutable std::mutex m_writeMutex;
     mutable std::mutex m_workerMutex;
     mutable std::condition_variable m_workerCv;

@@ -1,4 +1,4 @@
-// M17: SidecarStore implementation — per-image .xmp sidecar file I/O.
+// M17: SidecarStore implementation — per-image .mviewer.json sidecar file I/O.
 #include "SidecarStore.h"
 #include "RatingStore.h"
 #include "core/filesystem/AtomicFile.h"
@@ -137,6 +137,54 @@ std::string lowerAscii(std::string text)
     return text;
 }
 
+// True for the JSON this process writes. Real XMP is XML and must not be
+// treated as our sidecar (never parsed as ratings, never overwritten).
+bool isAppSidecarContent(const std::string &text)
+{
+    size_t i = 0;
+    if (text.size() >= 3 && static_cast<unsigned char>(text[0]) == 0xEF &&
+        static_cast<unsigned char>(text[1]) == 0xBB && static_cast<unsigned char>(text[2]) == 0xBF)
+        i = 3;
+    while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])) != 0)
+        ++i;
+    if (i >= text.size() || text[i] != '{')
+        return false;
+    if (text.find("<x:xmpmeta") != std::string::npos ||
+        text.find("<?xpacket") != std::string::npos || text.find("<rdf:RDF") != std::string::npos)
+        return false;
+    return text.find("\"rating\"") != std::string::npos ||
+           text.find("\"colorLabel\"") != std::string::npos ||
+           text.find("\"picked\"") != std::string::npos ||
+           text.find("\"rejected\"") != std::string::npos ||
+           text.find("\"file\"") != std::string::npos;
+}
+
+bool fileIsAppSidecar(const std::string &path)
+{
+    if (path.empty())
+        return false;
+    std::error_code ec;
+    if (!std::filesystem::is_regular_file(pathFromUtf8(path), ec))
+        return false;
+    return isAppSidecarContent(readWholeFile(pathFromUtf8(path)));
+}
+
+void removeIfAppSidecar(const std::string &path)
+{
+    if (!fileIsAppSidecar(path))
+        return;
+    std::error_code ec;
+    std::filesystem::remove(pathFromUtf8(path), ec);
+}
+
+// Previous per-file layout: "IMG_001.jpg" -> "IMG_001.jpg.xmp" (JSON, not XMP).
+std::string perFileLegacyXmp(const std::string &imagePath)
+{
+    if (imagePath.empty())
+        return {};
+    return imagePath + ".xmp";
+}
+
 bool isImagePath(const std::filesystem::path &p)
 {
     return mviewer::core::ImageFormats::isSupportedSuffix(lowerAscii(pathToUtf8(p.extension())));
@@ -174,7 +222,7 @@ std::string SidecarStore::sidecarPath(const std::string &imagePath)
 {
     if (imagePath.empty())
         return {};
-    return imagePath + ".xmp";
+    return imagePath + ".mviewer.json";
 }
 
 std::string SidecarStore::legacySidecarPath(const std::string &imagePath)
@@ -188,14 +236,18 @@ std::string SidecarStore::legacySidecarPath(const std::string &imagePath)
 
 std::string SidecarStore::ownedLegacySidecar(const std::string &imagePath)
 {
-    std::string legacy = legacySidecarPath(imagePath);
+    const std::string legacy = legacySidecarPath(imagePath);
     if (legacy.empty())
         return {};
     std::error_code ec;
     if (!std::filesystem::is_regular_file(pathFromUtf8(legacy), ec))
         return {};
+    const std::string body = readWholeFile(pathFromUtf8(legacy));
+    // A third-party XMP packet shares this filename but is not our sidecar.
+    if (!isAppSidecarContent(body))
+        return {};
     const auto image = pathFromUtf8(imagePath);
-    const std::string recorded = extractStr(readWholeFile(pathFromUtf8(legacy)), "file");
+    const std::string recorded = extractStr(body, "file");
     if (!recorded.empty())
         return pathFromUtf8(recorded).filename() == image.filename() ? legacy : std::string{};
     return hasStemSibling(image) ? std::string{} : legacy;
@@ -204,9 +256,11 @@ std::string SidecarStore::ownedLegacySidecar(const std::string &imagePath)
 std::string SidecarStore::existingSidecar(const std::string &imagePath)
 {
     std::string current = sidecarPath(imagePath);
-    std::error_code ec;
-    if (!current.empty() && std::filesystem::is_regular_file(pathFromUtf8(current), ec))
+    if (fileIsAppSidecar(current))
         return current;
+    // 1.0.109 layout: JSON stored in "<file>.xmp". Skip real XMP.
+    if (fileIsAppSidecar(perFileLegacyXmp(imagePath)))
+        return perFileLegacyXmp(imagePath);
     return ownedLegacySidecar(imagePath);
 }
 
@@ -289,18 +343,15 @@ bool SidecarStore::writeSidecar(const std::string &imagePath)
         if (spath.empty())
             return false;
         // M46: crash-safe atomic replace — a failed sidecar write leaves the
-        // previous .xmp intact and can never leave a half-written JSON file.
+        // previous sidecar intact and can never leave a half-written JSON file.
+        // The new file is "<image>.mviewer.json", never a .xmp path.
         std::string error;
         if (!atomicWriteFile(spath, toJson(imagePath), &error))
             return false;
-        // Migrate: once the per-file sidecar exists, an owned legacy
-        // stem.xmp is redundant.
-        const std::string legacy = ownedLegacySidecar(imagePath);
-        if (!legacy.empty())
-        {
-            std::error_code ec;
-            std::filesystem::remove(pathFromUtf8(legacy), ec);
-        }
+        // Migrate: once the .mviewer.json sidecar exists, an owned JSON .xmp
+        // is redundant. Real third-party XMP is left in place.
+        removeIfAppSidecar(perFileLegacyXmp(imagePath));
+        removeIfAppSidecar(ownedLegacySidecar(imagePath));
         return true;
     }
     catch (...)
@@ -317,8 +368,9 @@ bool SidecarStore::readSidecar(const std::string &imagePath)
         if (spath.empty())
             return false;
         const bool ok = fromJson(readWholeFile(pathFromUtf8(spath)), imagePath);
-        // Legacy stem.xmp that belongs to this image: migrate it to the
-        // per-file name so a later same-stem sibling cannot claim it.
+        // Legacy JSON .xmp that belongs to this image: migrate it to
+        // "<image>.mviewer.json" so a later sibling cannot claim it and so
+        // we stop shipping non-XMP bytes in an .xmp file.
         if (ok && spath != sidecarPath(imagePath))
             writeSidecar(imagePath);
         return ok;
@@ -333,12 +385,14 @@ bool SidecarStore::removeSidecar(const std::string &imagePath)
 {
     try
     {
+        // Only our JSON sidecars. A third-party .xmp next to the image stays.
+        removeIfAppSidecar(perFileLegacyXmp(imagePath));
+        removeIfAppSidecar(ownedLegacySidecar(imagePath));
         std::error_code ec;
-        const std::string legacy = ownedLegacySidecar(imagePath);
-        if (!legacy.empty())
-            std::filesystem::remove(pathFromUtf8(legacy), ec);
-        ec.clear();
-        return std::filesystem::remove(pathFromUtf8(sidecarPath(imagePath)), ec) || !ec;
+        const std::string current = sidecarPath(imagePath);
+        if (current.empty())
+            return false;
+        return std::filesystem::remove(pathFromUtf8(current), ec) || !ec;
     }
     catch (...)
     {
@@ -364,17 +418,16 @@ int SidecarStore::importDirectory(const std::string &dirPath,
             std::error_code fileEc;
             if (!entry.is_regular_file(fileEc))
                 continue;
-            std::string ext = pathToUtf8(entry.path().extension());
-            std::transform(ext.begin(), ext.end(), ext.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-            if (ext != ".xmp")
+            const std::string filename = lowerAscii(pathToUtf8(entry.path().filename()));
+            const bool legacyXmp = filename.ends_with(".xmp");
+            const bool mviewerJson = filename.ends_with(".mviewer.json");
+            if (!legacyXmp && !mviewerJson)
                 continue;
-            std::ifstream in(entry.path(), std::ios::binary);
-            if (!in)
+            const std::string json = readWholeFile(entry.path());
+            // Directory scans used to treat every .xmp as ours. Skip real XMP
+            // and any other file that is not the JSON this app writes.
+            if (!isAppSidecarContent(json))
                 continue;
-            std::ostringstream ss;
-            ss << in.rdbuf();
-            const std::string json = ss.str();
             const std::string imageFile = extractStr(json, "file");
             if (!imageFile.empty())
             {

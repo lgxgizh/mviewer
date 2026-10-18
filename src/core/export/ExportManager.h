@@ -6,6 +6,7 @@
 #include "core/image/ImageBuffer.h"
 
 #include <functional>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -58,4 +59,6 @@ class ExportManager
   private:
     ExportManager() = default;
     std::vector<Preset> m_presets;
+    // Serializes preset list mutations with the directory reads/writes.
+    mutable std::mutex m_mutex;
 };

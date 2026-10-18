@@ -3,6 +3,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QTemporaryDir>
 
 #include <cstdio>
@@ -85,6 +86,25 @@ int main(int argc, char **argv)
     s.addRecent("c.png");
     auto recents2 = s.recents();
     CHECK(!recents2.empty() && recents2.front() == "c.png", "addRecent moves to front / dedupes");
+
+    // CRLF flags file: the trailing CR must not stick to the path, and the
+    // key is the same one lookup uses (cleanPath + slash fold). Load it via a
+    // different store path — setFilePath flushes the current file first, so
+    // rewriting the live flags.txt would be overwritten by that flush.
+    {
+        QTemporaryDir crlfDir;
+        CHECK(crlfDir.isValid(), "CRLF flags temp dir");
+        const QString flagsPath = QDir(crlfDir.path()).filePath(QStringLiteral("flags.txt"));
+        QFile flags(flagsPath);
+        CHECK(flags.open(QIODevice::WriteOnly | QIODevice::Truncate), "rewrite flags as CRLF");
+        const QByteArray crlf("L|C:\\Photos\\..\\Photos\\shot.jpg|4\r\nX|C:/Photos/shot.jpg\r\n");
+        CHECK(flags.write(crlf) == static_cast<qint64>(crlf.size()), "CRLF flags bytes written");
+        flags.close();
+        const QString crlfRatings = QDir(crlfDir.path()).filePath(QStringLiteral("ratings.txt"));
+        s.setFilePath(crlfRatings.toStdString());
+        CHECK(s.colorLabel("C:/Photos/shot.jpg") == 4, "CRLF flags label uses normalizeKey");
+        CHECK(s.rejected("C:/Photos/shot.jpg"), "CRLF flags reject uses normalizeKey");
+    }
 
     printf("\n=== P3 flags: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

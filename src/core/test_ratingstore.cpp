@@ -132,7 +132,7 @@ static void testMetadataFollowsFile()
     CHECK(ts.hasTag(renamed, "keep") && !ts.hasTag(a, "keep"), "rename moves tags");
     CHECK(fileExists(SidecarStore::sidecarPath(renamed)) &&
               !fileExists(SidecarStore::sidecarPath(a)),
-          "rename moves the .xmp sidecar");
+          "rename moves the sidecar");
     rename.undo();
     CHECK(rs.rating(a) == 4 && ts.hasTag(a, "keep") && fileExists(SidecarStore::sidecarPath(a)),
           "undo rename moves metadata and sidecar back");
@@ -195,6 +195,161 @@ static void testMetadataFollowsFile()
     // static destruction.
     rs.flushSave();
     ts.flushSave();
+}
+
+static QByteArray readFileBytes(const std::string &path)
+{
+    QFile file(QString::fromStdString(path));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    return file.readAll();
+}
+
+// Audit #42 / #44 / #45: new sidecars are .mviewer.json, real XMP is left
+// alone, CRLF store files share normalizeKey with lookup, and tag text that
+// contains the record separators is rejected. save() rewrites the file even
+// after the dirty bit has been cleared.
+static void testAuditSidecarAndKeyNormalization()
+{
+    printf("\n[audit sidecar suffix, CRLF keys, tag separators]\n");
+    auto &rs = RatingStore::instance();
+    auto &ss = SidecarStore::instance();
+    auto &ts = TagStore::instance();
+
+    QTemporaryDir tmp;
+    CHECK(tmp.isValid(), "audit temp dir");
+    const QString dir = tmp.path();
+
+    const std::string fresh = writeImage(dir, "fresh.png");
+    rs.setRating(fresh, 3);
+    CHECK(ss.writeSidecar(fresh), "sidecar write uses the new suffix");
+    CHECK(SidecarStore::sidecarPath(fresh).ends_with(".mviewer.json"),
+          "sidecarPath ends with .mviewer.json");
+    CHECK(fileExists(SidecarStore::sidecarPath(fresh)), "sidecar file is .mviewer.json");
+    CHECK(!fileExists(fresh + ".xmp"), "new writes do not create .xmp");
+
+    const std::string third = writeImage(dir, "third.jpg");
+    const std::string thirdXmp = third + ".xmp";
+    const QByteArray xmpPacket =
+        QByteArrayLiteral("<?xpacket begin=\"\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n"
+                          "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\">\n"
+                          " <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n"
+                          " </rdf:RDF>\n"
+                          "</x:xmpmeta>\n"
+                          "<?xpacket end=\"w\"?>\n");
+    {
+        QFile xmpFile(QString::fromStdString(thirdXmp));
+        CHECK(xmpFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "write third-party XMP");
+        CHECK(xmpFile.write(xmpPacket) == static_cast<qint64>(xmpPacket.size()),
+              "third-party XMP bytes stored");
+    }
+    const QByteArray xmpBefore = readFileBytes(thirdXmp);
+    CHECK(xmpBefore.contains("x:xmpmeta"), "fixture is real XMP");
+    CHECK(!ss.readSidecar(third), "real XMP is not a readable sidecar");
+    CHECK(rs.rating(third) == 0, "real XMP does not apply a rating");
+    CHECK(readFileBytes(thirdXmp) == xmpBefore, "reading past real XMP does not change it");
+
+    rs.setRating(third, 4);
+    CHECK(ss.writeSidecar(third), "rating write leaves real XMP in place");
+    CHECK(fileExists(SidecarStore::sidecarPath(third)), "rating landed in .mviewer.json");
+    CHECK(readFileBytes(thirdXmp) == xmpBefore, "write does not modify real XMP");
+    rs.clearRating(third);
+    CHECK(ss.readSidecar(third) && rs.rating(third) == 4, "read restores the .mviewer.json rating");
+    CHECK(readFileBytes(thirdXmp) == xmpBefore, "read does not rewrite real XMP");
+    CHECK(ss.removeSidecar(third), "remove sidecar");
+    CHECK(!fileExists(SidecarStore::sidecarPath(third)), ".mviewer.json removed");
+    CHECK(readFileBytes(thirdXmp) == xmpBefore, "remove does not delete real XMP");
+
+    const std::string legacy = writeImage(dir, "legacy.jpg");
+    const std::string legacyXmp = legacy + ".xmp";
+    {
+        QFile legacyFile(QString::fromStdString(legacyXmp));
+        const QByteArray body = QByteArrayLiteral("{ \"rating\": 2 }\n");
+        CHECK(legacyFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "open legacy json xmp");
+        CHECK(legacyFile.write(body) == static_cast<qint64>(body.size()), "write legacy json xmp");
+    }
+    rs.clearRating(legacy);
+    CHECK(ss.readSidecar(legacy) && rs.rating(legacy) == 2, "legacy JSON .xmp is read");
+    CHECK(fileExists(SidecarStore::sidecarPath(legacy)),
+          "legacy sidecar migrated to .mviewer.json");
+    CHECK(!fileExists(legacyXmp), "legacy JSON .xmp removed after migration");
+
+    {
+        QTemporaryDir importDir;
+        CHECK(importDir.isValid(), "import temp dir");
+        const std::string one = writeImage(importDir.path(), "one.png");
+        const std::string other = writeImage(importDir.path(), "other.png");
+        rs.setRating(one, 5);
+        CHECK(ss.writeSidecar(one), "import fixture sidecar");
+        rs.clearRating(one);
+        {
+            QFile otherXmp(QString::fromStdString(other + ".xmp"));
+            const QByteArray packet = QByteArrayLiteral("<x:xmpmeta></x:xmpmeta>\n");
+            CHECK(otherXmp.open(QIODevice::WriteOnly | QIODevice::Truncate), "open untouched xmp");
+            CHECK(otherXmp.write(packet) == static_cast<qint64>(packet.size()),
+                  "write untouched xmp");
+        }
+        const QByteArray otherBefore = readFileBytes(other + ".xmp");
+        CHECK(ss.importDirectory(importDir.path().toStdString()) == 1,
+              "importDirectory reads .mviewer.json and skips real XMP");
+        CHECK(rs.rating(one) == 5, "import restores the sidecar rating");
+        CHECK(rs.rating(other) == 0, "import ignores a third-party XMP");
+        CHECK(readFileBytes(other + ".xmp") == otherBefore, "import leaves third-party XMP bytes");
+        rs.clearRating(one);
+        ss.removeSidecar(one);
+    }
+
+    QTemporaryDir keys;
+    CHECK(keys.isValid(), "key normalization temp dir");
+    const QString ratingsPath = QDir(keys.path()).filePath(QStringLiteral("ratings.txt"));
+    {
+        QFile ratings(ratingsPath);
+        CHECK(ratings.open(QIODevice::WriteOnly | QIODevice::Truncate), "open crlf ratings");
+        const QByteArray line("4|C:\\Photos\\..\\Photos\\a.jpg\r\n");
+        CHECK(ratings.write(line) == static_cast<qint64>(line.size()), "write crlf ratings");
+    }
+    rs.setFilePath(ratingsPath.toStdString());
+    CHECK(rs.rating("C:/Photos/a.jpg") == 4, "CRLF rating reloads through normalizeKey");
+    const std::string folded = normalizeKey("C:\\Photos\\..\\Photos\\a.jpg");
+    CHECK(folded.find('\\') == std::string::npos, "normalizeKey folds backslashes");
+    CHECK(folded.find("..") == std::string::npos, "normalizeKey drops dot-dot segments");
+#ifdef _WIN32
+    CHECK(folded == normalizeKey("c:/photos/a.jpg"), "Windows keys compare case-insensitively");
+#endif
+
+    const QString tagsPath = QDir(keys.path()).filePath(QStringLiteral("tags.txt"));
+    {
+        QFile tagsFile(tagsPath);
+        CHECK(tagsFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "open crlf tags");
+        const QByteArray line("keep|C:\\Photos\\..\\Photos\\a.jpg\r\n");
+        CHECK(tagsFile.write(line) == static_cast<qint64>(line.size()), "write crlf tags");
+    }
+    ts.setFilePath(tagsPath.toStdString());
+    const std::string photo = "C:/Photos/a.jpg";
+    CHECK(ts.hasTag(photo, "keep"), "CRLF tag reloads through normalizeKey");
+    ts.addTag(photo, "a|b");
+    ts.addTag(photo, "a\nb");
+    CHECK(!ts.hasTag(photo, "a|b"), "tag containing '|' is rejected");
+    CHECK(!ts.hasTag(photo, "a\nb"), "tag containing a newline is rejected");
+    ts.setTags(photo, {"a|b", "a\nb"});
+    CHECK(ts.hasTag(photo, "keep"), "rejecting every tag does not clear stored tags");
+    CHECK(ts.save(), "save persists the kept tag");
+    {
+        QFile tagsFile(tagsPath);
+        CHECK(tagsFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "corrupt tags file");
+        const QByteArray stale("CORRUPT\n");
+        CHECK(tagsFile.write(stale) == static_cast<qint64>(stale.size()), "stale tags written");
+    }
+    CHECK(ts.save(), "save rewrites even when the dirty flag is clear");
+    const QString saved = QString::fromUtf8(readFileBytes(tagsPath.toStdString()));
+    CHECK(saved.contains(QStringLiteral("keep|")), "second save wrote the tag");
+    CHECK(!saved.contains(QStringLiteral("a|b")), "rejected pipe tag was not written");
+    CHECK(!saved.contains(QStringLiteral("CORRUPT")), "stale tags file was replaced");
+    CHECK(!saved.contains(QStringLiteral("a\nb")), "rejected newline tag was not written");
+    ts.setTags(photo, {});
+    CHECK(!ts.hasTag(photo, "keep"), "empty setTags clears tags");
+    ts.flushSave();
+    rs.flushSave();
 }
 
 int main()
@@ -376,6 +531,7 @@ int main()
 
     testPathKeyAndAtomicRelocate();
     testMetadataFollowsFile();
+    testAuditSidecarAndKeyNormalization();
 
     printf("\nratingstore_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;

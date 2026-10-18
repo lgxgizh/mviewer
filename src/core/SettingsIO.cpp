@@ -8,7 +8,9 @@
 #include <QSaveFile>
 #include <QSettings>
 #include <QVariant>
+
 #include <algorithm>
+#include <cmath>
 
 namespace mviewer::core
 {
@@ -67,6 +69,37 @@ QJsonObject dumpGroup(QSettings &s)
     return obj;
 }
 
+// Store a JSON number without truncating through an unchecked cast.
+// Integer values that fit in int / qint64 are stored as that integer.
+// Finite non-integers are stored as doubles. Anything else (NaN, infinity,
+// an integer that does not fit in 64 bits) is ignored so the existing
+// setting, or the application's default, stays in place.
+bool restoreNumber(QSettings &s, const QString &key, double d)
+{
+    if (!std::isfinite(d))
+        return false;
+    if (d == std::trunc(d))
+    {
+        const QString text = QString::number(d, 'f', 0);
+        bool ok = false;
+        const int asInt = text.toInt(&ok);
+        if (ok)
+        {
+            s.setValue(key, asInt);
+            return true;
+        }
+        const qlonglong asLong = text.toLongLong(&ok);
+        if (ok)
+        {
+            s.setValue(key, asLong);
+            return true;
+        }
+        return false;
+    }
+    s.setValue(key, d);
+    return true;
+}
+
 // Recursively restore a QJsonObject into QSettings.
 void restoreGroup(QSettings &s, const QJsonObject &obj)
 {
@@ -106,12 +139,9 @@ void restoreGroup(QSettings &s, const QJsonObject &obj)
         }
         else if (it.value().isDouble())
         {
-            // QJson stores ints as doubles; prefer int when exact.
-            const double d = it.value().toDouble();
-            if (d == static_cast<int>(d))
-                s.setValue(key, static_cast<int>(d));
-            else
-                s.setValue(key, d);
+            // QJson stores ints as doubles. Validate the range before storing;
+            // an out-of-range value is skipped (the previous setting remains).
+            (void)restoreNumber(s, key, it.value().toDouble());
         }
         else if (it.value().isBool())
         {
@@ -200,8 +230,11 @@ bool importSettings(const std::string &path, std::string *errorOut)
 void migrateSettingsIfNeeded()
 {
     QSettings s;
-    const int current = s.value(QStringLiteral("settingsSchemaVersion"), 0).toInt();
-    if (current >= kSettingsSchemaVersion)
+    bool ok = false;
+    const int current = s.value(QStringLiteral("settingsSchemaVersion"), 0).toInt(&ok);
+    // A non-numeric version is not a schema stamp. Ignore it and treat the
+    // store as the default (version 0) so migration can still run.
+    if (ok && current >= kSettingsSchemaVersion)
         return;
 
     // v0 → v1: no structural changes yet; just stamp the version so future

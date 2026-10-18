@@ -1,5 +1,9 @@
 #include "core/filesystem/Utf8Path.h"
 
+#include <QByteArrayView>
+#include <QDir>
+#include <QString>
+
 #include <limits>
 #include <stdexcept>
 
@@ -68,35 +72,38 @@ std::string pathToUtf8(const std::filesystem::path &path)
 #endif
 }
 
-std::string normalizePathKey(std::string path)
+std::string normalizeKey(std::string path)
 {
-    for (char &ch : path)
+    while (!path.empty() && (path.back() == '\r' || path.back() == '\n'))
+        path.pop_back();
+    if (path.empty())
+        return {};
+
+    // QString::fromUtf8 takes a signed size. A path that cannot be represented
+    // is not a usable store key; keep a slash-folded copy rather than truncate.
+    if (path.size() > static_cast<size_t>(std::numeric_limits<qsizetype>::max()))
     {
-        if (ch == '\\')
-            ch = '/';
+        for (char &ch : path)
+        {
+            if (ch == '\\')
+                ch = '/';
+        }
+        return path;
     }
+
+    QString q = QString::fromUtf8(QByteArrayView(path.data(), static_cast<qsizetype>(path.size())));
+    // fromNativeSeparators folds '\' only on Windows (and strips the \\?\
+    // prefix). Store keys use '/' on every platform, so fold first as well.
+    q.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    q = QDir::fromNativeSeparators(q);
+    q = QDir::cleanPath(q);
 #ifdef _WIN32
-    if (!path.empty())
-    {
-        try
-        {
-            std::wstring wide = pathFromUtf8(path).wstring();
-            if (!wide.empty())
-                CharLowerBuffW(wide.data(), static_cast<DWORD>(wide.size()));
-            path = pathToUtf8(std::filesystem::path(std::move(wide)));
-        }
-        catch (...)
-        {
-            // Keep the slash-normalized form when the path is not valid UTF-8.
-        }
-    }
+    q = q.toLower();
 #endif
-    for (char &ch : path)
-    {
-        if (ch == '\\')
-            ch = '/';
-    }
-    return path;
+    const QByteArray utf8 = q.toUtf8();
+    if (utf8.isEmpty())
+        return {};
+    return std::string(utf8.constData(), static_cast<size_t>(utf8.size()));
 }
 
 } // namespace mviewer::core

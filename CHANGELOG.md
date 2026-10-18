@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- 启动时的插件目录提示改用 `qInfo()` / `qWarning()` 输出，不再写 `std::cout`；Windows GUI 程序没有控制台，原来这几行既看不到也进不了文件日志（审计 #40）。
 - 插件探测出的 Analyzer 通过插件的 `destroyAnalyzer` 释放，不再在宿主里 `delete` 或把探测实例泄漏掉（审计 #36）。
 - 插件注册的分析器工厂返回 `unique_ptr<Analyzer, AnalyzerDeleter>`，析构时调用插件的 `destroyAnalyzer`，并在实例存活期间额外持有一份模块引用（审计 #37）。
 - `PluginManager::unloadAll` 在卸载前注销插件注册的 Importer，与单次 `unload` 走同一条注销路径（审计 #38）。
@@ -34,6 +35,12 @@
 - `MTFAnalyzer::analyze` / `analyzeRegion` 返回内部 `compute` 的失败状态。均匀图不再被当成成功的 MTF 结果（审计 #32）。
 - 批量分析 JSON 把 NaN/Inf 写成 `null`。CSV 指标走已有的 `csvEscape`（逗号、引号、CR、LF 加引号，内部引号加倍）。文件名多于结果行时不再越界读取（审计 #33）。
 - 比较直方图、`domain::Histogram` 和 `AnalysisEngine::ImageStats` 的 bin 计数与像素总数改为 `int64_t`，单 bin 可以超过 2^32（审计 #34）。
+- 导出预设名先去掉路径分隔符、`..` 和其它非法字符（保留字母、数字、空格、`-`、`_` 和中文），再用 `QSaveFile` 原子写入，读写预设目录时持有互斥锁（审计 #41）。
+- 新的评分边车写到 `<文件>.mviewer.json`；仍会读取本程序以前写过的 JSON `.xmp` 并迁走，第三方真正的 XMP 不会被覆盖或删除（审计 #42）。
+- 评分、旗标和标签在加载时去掉行尾 `\r`，路径键统一走 `normalizeKey`（`cleanPath`、反斜杠折成 `/`，Windows 上不区分大小写）（审计 #44）。
+- 标签文本含 `|` 或换行时拒绝写入；`TagStore::save()` 在改动之后总会落盘；标签文件路径在 `QCoreApplication` 存在后才解析到可写的应用数据目录（审计 #45）。
+- `pruneMissing` 只在锁内拷出键，到锁外检查文件是否存在，再在锁内删除缺失项（审计 #46）。
+- 导入设置时整型用 `toInt(&ok)` / `toLongLong(&ok)` 并检查范围，非法值保持原设置（审计 #47）。
 
 ### Changed
 
