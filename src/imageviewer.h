@@ -123,6 +123,8 @@ class ImageViewer : public QOpenGLWidget
     // M47: setImage body with a caller-side exception guard (an unexpected
     // error must never escape into the Qt event loop).
     void setImageImpl(const QString &path);
+    void resetSelectionForNewImage(const QString &path);
+    void recommitLockedSelection();
 
     // M47: true when the current image displays through the LOD/region raster
     // path (large source; the full-resolution frame is then only the analysis

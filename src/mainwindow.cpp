@@ -401,9 +401,8 @@ void MainWindow::onFlagsEdited(const QString &path, int label, bool rejected, bo
     Q_UNUSED(label);
     Q_UNUSED(rejected);
     Q_UNUSED(picked);
+    // invalidateRatings() re-applies the active filter (single pipeline).
     m_thumbnailPanel->invalidateRatings();
-    // Re-apply the active filter so gallery membership stays correct.
-    m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
 }
 
 void MainWindow::setCurrentColorLabel(int label)

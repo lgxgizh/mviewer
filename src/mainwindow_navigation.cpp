@@ -20,11 +20,8 @@ void MainWindow::scheduleSidecarImport(const QString &dir)
             if (context.isCancelled() || !alive->load(std::memory_order_acquire))
                 return;
             mviewer::core::SidecarStore::instance().importDirectory(
-                utf8Dir,
-                [alive, &context]
-                {
-                    return context.isCancelled() || !alive->load(std::memory_order_acquire);
-                });
+                utf8Dir, [alive, &context]
+                { return context.isCancelled() || !alive->load(std::memory_order_acquire); });
         },
         {}, std::chrono::steady_clock::time_point::max(),
         [guard, alive, expectedDir]()
@@ -45,9 +42,6 @@ void MainWindow::scheduleSidecarImport(const QString &dir)
                         // time. Re-run the active filter after import so a
                         // sidecar never requires a manual refresh to converge.
                         guard->m_thumbnailPanel->invalidateRatings();
-                        if (guard->m_ratingFilter)
-                            guard->m_thumbnailPanel->setRatingFilter(
-                                guard->m_ratingFilter->currentData().toInt());
                     }
                     if (guard->m_metadataPanel && !guard->currentImagePath().isEmpty())
                         guard->m_metadataPanel->setImage(guard->currentImagePath());
@@ -123,9 +117,8 @@ void MainWindow::navigate(int delta)
     // A filter may remove the currently displayed image. The next navigation
     // action must enter the current visible sequence, not skip its first item
     // by pretending the removed image was row zero.
-    const int next = idx < 0
-                         ? (delta < 0 ? list.size() - 1 : 0)
-                         : (idx + delta + list.size()) % list.size();
+    const int next =
+        idx < 0 ? (delta < 0 ? list.size() - 1 : 0) : (idx + delta + list.size()) % list.size();
 
     const QString path = list.at(next);
     // P0-2: single source of truth. onCurrentImageChanged() now also keeps the
@@ -145,13 +138,13 @@ void MainWindow::updateNavigationActions()
     if (m_actHistoryBack)
         m_actHistoryBack->setEnabled(m_historyIndex > 0);
     if (m_actHistoryForward)
-        m_actHistoryForward->setEnabled(
-            m_historyIndex >= 0 && m_historyIndex + 1 < m_history.size());
+        m_actHistoryForward->setEnabled(m_historyIndex >= 0 &&
+                                        m_historyIndex + 1 < m_history.size());
     if (m_actDirBack)
         m_actDirBack->setEnabled(m_dirHistoryIndex > 0);
     if (m_actDirForward)
-        m_actDirForward->setEnabled(
-            m_dirHistoryIndex >= 0 && m_dirHistoryIndex + 1 < m_dirHistory.size());
+        m_actDirForward->setEnabled(m_dirHistoryIndex >= 0 &&
+                                    m_dirHistoryIndex + 1 < m_dirHistory.size());
     if (m_actDirUp)
     {
         QDir parent(activeDir);

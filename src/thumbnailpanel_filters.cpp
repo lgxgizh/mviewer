@@ -187,9 +187,20 @@ void ThumbnailPanel::clearFlagFilters()
     scheduleFilter(false);
 }
 
+bool ThumbnailPanel::hasRatingOrFlagFilter() const
+{
+    return m_ratingFilter > 0 || m_labelFilter != 0 || m_rejectFilter || m_pickFilter;
+}
+
 void ThumbnailPanel::invalidateRatings()
 {
+    // Single rating/flag pipeline: every writer (keyboard 1..5/X/P/labels,
+    // gallery context menu, metadata panel) ends here, so gallery membership
+    // under an active rating/label/pick/reject filter is re-evaluated, not just
+    // the star overlay repainted.
     viewport()->update();
+    if (hasRatingOrFlagFilter() && !m_currentDir.isEmpty())
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::ensureMetaIndex()

@@ -141,6 +141,7 @@ void ImageViewer::setImageImpl(const QString &path)
     // the previous image's sample never lingers while the next decode runs —
     // including for empty/failing requests that never deliver a frame.
     clearPixelInfo();
+    resetSelectionForNewImage(path);
     const QString previousPath = m_currentPath;
     const std::optional<Viewport> reloadView =
         m_preserveViewOnReload ? std::optional<Viewport>(m_view) : std::nullopt;
@@ -371,6 +372,7 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
         preloadDisplayRasterNeighbors(path);
         update();
         emit imageReady(m_frame);
+        recommitLockedSelection();
         return;
     }
     m_view.screenW = width();
@@ -410,6 +412,35 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     preloadNeighbors(path);
     update();
     emit imageReady(m_frame);
+    recommitLockedSelection();
+}
+
+void ImageViewer::resetSelectionForNewImage(const QString &path)
+{
+    // A screen-space ROI only means the same image region on the next image
+    // when the zoom is locked (same scale, same centring). Otherwise the old
+    // rectangle would sit over unrelated pixels and the AnalysisPanel would
+    // keep reporting the previous image's region, so it is dropped here and an
+    // empty selection is published (panel falls back to whole-image stats).
+    if (browsePathEquals(path, m_currentPath))
+        return;
+    m_selecting = false;
+    if (m_lockZoom && hasRealSelection())
+        return; // kept; recommitLockedSelection() re-measures it on the new frame
+    const bool had = m_selStart != m_selEnd;
+    m_selStart = m_selEnd = QPoint();
+    cancelRoiStats();
+    if (had)
+    {
+        update();
+        emit selectionChanged(QRect());
+    }
+}
+
+void ImageViewer::recommitLockedSelection()
+{
+    if (m_lockZoom && !m_selecting && hasRealSelection())
+        commitSelectionDrag();
 }
 
 void ImageViewer::applyPendingView()
