@@ -100,6 +100,7 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 
 bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *event)
 {
+    trackCellPointerForExportMenu(idx, event);
     if (event->type() == QEvent::Enter)
     {
         m_hoverIdx = idx;
@@ -376,8 +377,13 @@ bool CompareWorkspace::handleCanvasRelease(QEvent *event)
     if (me->button() == Qt::RightButton && m_canvasSelecting)
     {
         m_canvasSelecting = false;
-        applySelectionToAll(!m_canvasSelectionMoved ? m_canvasSelectionOrigin : m_lastSelection);
+        const bool showMenu = !m_canvasSelectionMoved;
+        const int pane = m_canvasSelectionPane;
+        const QPoint globalPos = me->globalPosition().toPoint();
+        applySelectionToAll(showMenu ? m_canvasSelectionOrigin : m_lastSelection);
         m_canvasSelectionHandle = mviewer::domain::SelectionHandle::None;
+        if (showMenu)
+            queueCellExportMenu(pane, globalPos);
         me->accept();
         return true;
     }

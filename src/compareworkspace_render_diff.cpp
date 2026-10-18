@@ -100,20 +100,32 @@ std::string CompareWorkspace::adjustKey(const CellAdjust &a)
     put(a.cropY);
     put(a.cropW);
     put(a.cropH);
+    put(a.usmEnabled);
+    put(a.usmAmount);
+    put(a.usmRadius);
+    put(a.usmThreshold);
+    put(a.usmLumaOnly);
     return key;
 }
 
-ImageData CompareWorkspace::cachedAdjusted(const ImageData &src, const CellAdjust &adjust)
+ImageData CompareWorkspace::cachedAdjusted(const ImageData &src, const CellAdjust &adjust,
+                                           const std::function<bool()> &cancelled)
 {
+    if (cancelled && cancelled())
+        return {};
     if (src.isNull())
-        return CompareWorkspace::applyAdjusts(src, adjust);
+        return CompareWorkspace::applyAdjusts(src, adjust, cancelled);
     const std::string key = identityKey(src) + adjustKey(adjust);
     {
         const std::lock_guard<std::mutex> lock(g_diffCacheMutex);
         if (const AdjustedEntry *hit = findEntry(g_adjusted, key))
             return hit->adjusted;
     }
-    ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjust);
+    if (cancelled && cancelled())
+        return {};
+    ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjust, cancelled);
+    if (cancelled && cancelled())
+        return {};
     const std::lock_guard<std::mutex> lock(g_diffCacheMutex);
     storeEntry(g_adjusted, AdjustedEntry{src.buffer, key, adjusted}, kMaxAdjusted);
     return adjusted;
@@ -125,7 +137,8 @@ bool CompareWorkspace::computeDiffPair(mviewer::cw::DiffPair &out, const ImageDa
                                        const CellAdjust &adjust, const ImageData &basePixels,
                                        bool autoAlign, const TaskScheduler::TaskContext &context)
 {
-    out.target = CompareWorkspace::applyAdjusts(source, adjust);
+    out.target = CompareWorkspace::applyAdjusts(source, adjust,
+                                                [&context]() { return context.isCancelled(); });
     if (context.isCancelled())
         return false;
     if (out.target.isNull())
@@ -353,7 +366,8 @@ CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
         return CellAdjust{};
     };
     const ImageData basePixels = CompareWorkspace::cachedAdjusted(
-        pixels[static_cast<size_t>(baseIndex)], adjustFor(baseIndex));
+        pixels[static_cast<size_t>(baseIndex)], adjustFor(baseIndex),
+        [&context]() { return context.isCancelled(); });
     if (context.isCancelled())
         return result;
     if (basePixels.isNull())

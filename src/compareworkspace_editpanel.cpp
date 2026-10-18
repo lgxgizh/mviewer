@@ -11,6 +11,20 @@
 
 #include <QSaveFile>
 #include <algorithm>
+#include <initializer_list>
+
+namespace
+{
+bool anyAdjustSliderDown(std::initializer_list<QSlider *> sliders)
+{
+    for (QSlider *slider : sliders)
+    {
+        if (slider && slider->isSliderDown())
+            return true;
+    }
+    return false;
+}
+} // namespace
 
 mviewer::core::CompareAdjustmentState CompareWorkspace::reportAdjustment(const CellAdjust &adjust)
 {
@@ -31,9 +45,39 @@ mviewer::core::CompareAdjustmentState CompareWorkspace::reportAdjustment(const C
     return report;
 }
 
-ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a)
+mviewer::core::CellImageAdjust CompareWorkspace::toCellImageAdjust(const CellAdjust &adjust)
 {
-    return mviewer::core::applyCompareAdjustments(src, reportAdjustment(a));
+    mviewer::core::CellImageAdjust out;
+    out.brightness = adjust.brightness;
+    out.contrast = adjust.contrast;
+    out.gamma = adjust.gamma;
+    out.rGain = adjust.rGain;
+    out.bGain = adjust.bGain;
+    out.rotation = adjust.rotation;
+    out.flipH = adjust.flipH;
+    out.flipV = adjust.flipV;
+    out.hasCrop = adjust.hasCrop;
+    out.cropX = adjust.cropX;
+    out.cropY = adjust.cropY;
+    out.cropW = adjust.cropW;
+    out.cropH = adjust.cropH;
+    out.usmEnabled = adjust.usmEnabled;
+    out.usmAmount = adjust.usmAmount;
+    out.usmRadius = adjust.usmRadius;
+    out.usmThreshold = adjust.usmThreshold;
+    out.usmLumaOnly = adjust.usmLumaOnly;
+    return out;
+}
+
+bool CompareWorkspace::CellAdjust::isIdentity() const
+{
+    return CompareWorkspace::toCellImageAdjust(*this).isIdentity();
+}
+
+ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a,
+                                         const std::function<bool()> &cancelled)
+{
+    return mviewer::core::applyCellImageAdjust(src, toCellImageAdjust(a), cancelled);
 }
 
 void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
@@ -48,7 +92,8 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         QStringLiteral("font-weight:bold;color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     editLay->addWidget(m_editLabel);
-    auto *previewHint = new QLabel(tr("旋转/翻转仅预览，不覆盖原文件"), m_editPanel);
+    auto *previewHint =
+        new QLabel(tr("调优仅预览，不覆盖原文件；可导出为新的 PNG 或 TIFF"), m_editPanel);
     previewHint->setObjectName("previewOnlyHint");
     previewHint->setStyleSheet("color:#f0c060;font-size:11px;");
     previewHint->setWordWrap(true);
@@ -189,12 +234,15 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         connect(btnFlipH, &QPushButton::clicked, this, [this]() { flipCurrentCell(true); });
         connect(btnFlipV, &QPushButton::clicked, this, [this]() { flipCurrentCell(false); });
     }
+    buildUsmControls(editLay);
     m_resetAdjBtn = new QPushButton(tr("重置调整"), m_editPanel);
     m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
     editLay->addWidget(m_resetAdjBtn);
+    addAdjustedExportButton(editLay);
     for (QSlider *slider :
-         {m_brightSlider, m_contrastSlider, m_gammaSlider, m_rGainSlider, m_bGainSlider})
+         {m_brightSlider, m_contrastSlider, m_gammaSlider, m_rGainSlider, m_bGainSlider,
+          m_usmAmountSlider, m_usmRadiusSlider, m_usmThresholdSlider})
         connect(slider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
 }
 
@@ -247,6 +295,7 @@ void CompareWorkspace::onEditCellSelected(int cellIdx)
     m_bGainVal->setText(QString::number(a.bGain, 'f', 2));
     if (m_rotVal)
         m_rotVal->setText(QString::number(a.rotation) + "°");
+    syncUsmControls(a);
 
     const ImageFrame *img = m_engine.imageAt(cellIdx);
     m_editLabel->setText(img ? QString::fromStdString(img->metadata().fileName)
@@ -270,14 +319,22 @@ void CompareWorkspace::onAdjChanged()
     a.gamma = m_gammaSlider->value() / 100.0f;
     a.rGain = m_rGainSlider->value() / 100.0f;
     a.bGain = m_bGainSlider->value() / 100.0f;
+    if (m_usmChk)
+        a.usmEnabled = m_usmChk->isChecked();
+    if (m_usmAmountSlider)
+        a.usmAmount = m_usmAmountSlider->value() / 100.0;
+    if (m_usmRadiusSlider)
+        a.usmRadius = m_usmRadiusSlider->value() / 10.0;
+    if (m_usmThresholdSlider)
+        a.usmThreshold = m_usmThresholdSlider->value();
+    if (m_usmLumaChk)
+        a.usmLumaOnly = m_usmLumaChk->isChecked();
 
     applyAdjToCell(m_editIdx);
 
-    const bool sliderDown = (m_brightSlider && m_brightSlider->isSliderDown()) ||
-                            (m_contrastSlider && m_contrastSlider->isSliderDown()) ||
-                            (m_gammaSlider && m_gammaSlider->isSliderDown()) ||
-                            (m_rGainSlider && m_rGainSlider->isSliderDown()) ||
-                            (m_bGainSlider && m_bGainSlider->isSliderDown());
+    const bool sliderDown = anyAdjustSliderDown({m_brightSlider, m_contrastSlider, m_gammaSlider,
+                                                 m_rGainSlider, m_bGainSlider, m_usmAmountSlider,
+                                                 m_usmRadiusSlider, m_usmThresholdSlider});
     if (!sliderDown)
     {
         onAdjEditFinished();
@@ -490,6 +547,11 @@ void CompareWorkspace::onSavePreset()
             ao["cropW"] = a.cropW;
             ao["cropH"] = a.cropH;
         }
+        ao["usmEnabled"] = a.usmEnabled;
+        ao["usmAmount"] = a.usmAmount;
+        ao["usmRadius"] = a.usmRadius;
+        ao["usmThreshold"] = a.usmThreshold;
+        ao["usmLumaOnly"] = a.usmLumaOnly;
         adjArray.append(ao);
     }
     root["adjustments"] = adjArray;
@@ -621,6 +683,12 @@ void CompareWorkspace::restorePresetAdjustments(const QJsonObject &root)
         cell.rotation = mviewer::cw::clampRotation(ao[QStringLiteral("rotation")].toInt());
         cell.flipH = ao[QStringLiteral("flipH")].toBool();
         cell.flipV = ao[QStringLiteral("flipV")].toBool();
+        cell.usmEnabled = ao[QStringLiteral("usmEnabled")].toBool(false);
+        cell.usmAmount = mviewer::cw::clampUsmAmount(ao[QStringLiteral("usmAmount")].toDouble(1.5));
+        cell.usmRadius = mviewer::cw::clampUsmRadius(ao[QStringLiteral("usmRadius")].toDouble(1.5));
+        cell.usmThreshold =
+            mviewer::cw::clampUsmThreshold(ao[QStringLiteral("usmThreshold")].toInt(4));
+        cell.usmLumaOnly = ao[QStringLiteral("usmLumaOnly")].toBool(false);
         cell.hasCrop = ao[QStringLiteral("hasCrop")].toBool();
         if (!cell.hasCrop)
             continue;

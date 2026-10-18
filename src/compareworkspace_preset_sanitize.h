@@ -109,6 +109,39 @@ inline float clampGain(float value)
     return clampAdjustFloat(value, 1.0f, 0.01f, 5.0f);
 }
 
+// USM amount [0, 5] (slider 0..500 / 100). Non-finite falls back to 1.5.
+inline double clampUsmAmount(double value)
+{
+    if (!std::isfinite(value))
+        return 1.5;
+    if (value < 0.0)
+        return 0.0;
+    if (value > 5.0)
+        return 5.0;
+    return value;
+}
+
+// USM radius [0.1, 20] px (slider 1..200 / 10). Identity is the enable checkbox.
+inline double clampUsmRadius(double value)
+{
+    if (!std::isfinite(value))
+        return 1.5;
+    if (value < 0.1)
+        return 0.1;
+    if (value > 20.0)
+        return 20.0;
+    return value;
+}
+
+inline int clampUsmThreshold(int value)
+{
+    if (value < 0)
+        return 0;
+    if (value > 255)
+        return 255;
+    return value;
+}
+
 // Upper bound matches ImageViewer restored scale. The floor is the preset bound.
 inline double clampSharedScale(double value)
 {

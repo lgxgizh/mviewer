@@ -622,7 +622,8 @@ void CompareWorkspace::computeHistogramBatch(
         const ImageData &src = pixels[static_cast<size_t>(idx)];
         if (src.isNull())
             continue;
-        const ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjustFor(idx));
+        const ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjustFor(idx), [&ctx]()
+                                                                  { return ctx.isCancelled(); });
         if (ctx.isCancelled())
             return;
         if (adjusted.isNull())
