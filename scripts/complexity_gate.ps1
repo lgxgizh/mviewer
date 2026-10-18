@@ -56,10 +56,33 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
+
+function ConvertTo-RepoRelative([string]$FullName) {
+    $full = ([System.IO.Path]::GetFullPath($FullName) -replace '\\', '/')
+    $root = ([System.IO.Path]::GetFullPath($Repo) -replace '\\', '/').TrimEnd('/')
+    $prefix = $root + '/'
+    if (-not $full.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "complexity gate: '$FullName' is not under '$Repo'"
+    }
+    return $full.Substring($prefix.Length)
+}
+
+try {
+$Repo = (Resolve-Path -LiteralPath $Repo).Path
+$srcDir = Join-Path $Repo 'src'
+if (-not (Test-Path -LiteralPath $srcDir -PathType Container)) {
+    throw "complexity gate: missing source directory '$srcDir'"
+}
 
 # ---- collect source files (exclude build dirs, testdata, node_modules) -------
-$src = Get-ChildItem -Path (Join-Path $Repo 'src') -Recurse -Include *.cpp, *.h |
-    Where-Object { $_.FullName -notmatch '[\\/](build_msvc|build|build_sa|build_asan|build_ubsan|build_clazy|build_perf|testdata|node_modules)[\\/]' }
+# -Include is unreliable with -LiteralPath, so filter the extension after the
+# literal recursive listing. A missing or unreadable tree must fail the gate.
+$src = @(Get-ChildItem -LiteralPath $srcDir -Recurse -File -ErrorAction Stop |
+    Where-Object {
+        $_.Extension -in @('.cpp', '.h') -and
+        $_.FullName -notmatch '[\\/](build_msvc|build|build_sa|build_asan|build_ubsan|build_clazy|build_perf|testdata|node_modules)[\\/]'
+    })
 
 # ---- ADR-014 frozen per-file caps --------------------------------------------
 $adr014 = @{
@@ -91,6 +114,11 @@ $knownFunctionDebt = @{
     'src/core/image/ImageRepository_async.cpp::loadAsyncCancellable' = 'span 127'
     'src/core/metadata/MetadataIndexer.cpp::indexBatched'           = 'span 122'
     'src/core/filesystem/AtomicFile.cpp::atomicWriteFile'           = 'span 152'
+    # Surfaced by audit #59's reliable src walk (LiteralPath listing). Tracked
+    # under ADR-014 until the next pass that splits these bodies.
+    'src/core/SidecarStore.cpp::isAppSidecarContent'                = 'span 140'
+    'src/core/update/UpdateChecker.cpp::httpGet'                    = 'span 133'
+    'src/core/thumbnail/ThumbnailPipeline.h::enqueueLocked'         = 'span 130'
 }
 
 $fails = 0
@@ -127,13 +155,19 @@ function Get-FunctionName([string]$prefix) {
 }
 
 foreach ($f in $src) {
-    $rel = $f.FullName.Substring($Repo.Length).TrimStart('\', '/')
+    $rel = ConvertTo-RepoRelative $f.FullName
 
     # Benchmark / scripts / plugins are tooling, not product architecture —
     # exempt them from all limits.
     if ($rel -match '[\\/](benchmark|scripts|plugins)[\\/]') { continue }
 
-    $lines = @(Get-Content $f.FullName -Encoding UTF8)
+    try {
+        $rawLines = Get-Content -LiteralPath $f.FullName -Encoding UTF8 -ErrorAction Stop
+    }
+    catch {
+        throw "complexity gate: cannot read '$($f.FullName)': $($_.Exception.Message)"
+    }
+    if ($null -eq $rawLines) { $lines = @() } else { $lines = @($rawLines) }
     $n = $lines.Count
 
     # ---- effective file caps (ADR-014) ------------------------------------
@@ -290,8 +324,17 @@ $summary = [ordered]@{
 
 if ($Json) {
     $js = $summary | ConvertTo-Json -Depth 6
-    if ($OutJson) { Set-Content -Path $OutJson -Value $js -Encoding UTF8 }
+    if ([string]::IsNullOrWhiteSpace($js)) {
+        throw 'complexity gate: ConvertTo-Json produced no output'
+    }
+    if ($OutJson) {
+        Set-Content -LiteralPath $OutJson -Value $js -Encoding UTF8
+        if (-not (Test-Path -LiteralPath $OutJson)) {
+            throw "complexity gate: failed to write '$OutJson'"
+        }
+    }
     Write-Output $js
+    if ($Strict -and $fails -gt 0) { exit 1 }
 }
 else {
     Write-Host "=== Complexity Gate ==="
@@ -328,4 +371,9 @@ else {
         Write-Host "`nCOMPLEXITY: $fails hard-limit violation(s) (advisory - use -Strict to fail)"
     }
     Write-Host "`nCOMPLEXITY: OK (advisory)"
+}
+}
+catch {
+    [Console]::Error.WriteLine("complexity gate: $($_.Exception.Message)")
+    exit 1
 }

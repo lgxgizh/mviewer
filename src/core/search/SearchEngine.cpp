@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
 
 namespace mviewer::core
@@ -29,12 +30,10 @@ size_t findCaseInsensitive(std::string_view haystack, std::string_view needleLow
         return 0;
     if (needleLower.size() > haystack.size())
         return std::string_view::npos;
-    auto it = std::search(haystack.begin(), haystack.end(), needleLower.begin(), needleLower.end(),
-                          [](char ch1, char ch2)
-                          {
-                              return static_cast<char>(std::tolower(static_cast<unsigned char>(ch1))) ==
-                                     ch2;
-                          });
+    auto it = std::search(
+        haystack.begin(), haystack.end(), needleLower.begin(), needleLower.end(),
+        [](char ch1, char ch2)
+        { return static_cast<char>(std::tolower(static_cast<unsigned char>(ch1))) == ch2; });
     if (it != haystack.end())
         return static_cast<size_t>(std::distance(haystack.begin(), it));
     return std::string_view::npos;
@@ -50,16 +49,50 @@ bool contains(std::string_view haystack, std::string_view needle, std::string_vi
     return findCaseInsensitive(haystack, needleLower) != std::string_view::npos;
 }
 
+size_t locateMatch(std::string_view haystack, std::string_view needle, std::string_view needleLower,
+                   bool caseSensitive)
+{
+    if (needle.empty())
+        return 0;
+    if (caseSensitive)
+        return haystack.find(needle);
+    return findCaseInsensitive(haystack, needleLower);
+}
+
+// If `index` lands on a UTF-8 continuation byte, walk back to the lead byte.
+size_t utf8AlignStart(std::string_view s, size_t index)
+{
+    if (index > s.size())
+        index = s.size();
+    while (index > 0 && index < s.size() && (static_cast<unsigned char>(s[index]) & 0xC0) == 0x80)
+        --index;
+    return index;
+}
+
+// If the exclusive end splits a code point, include the rest of that sequence.
+size_t utf8AlignEnd(std::string_view s, size_t end)
+{
+    if (end > s.size())
+        return s.size();
+    while (end < s.size() && (static_cast<unsigned char>(s[end]) & 0xC0) == 0x80)
+        ++end;
+    return end;
+}
+
 std::string snippet(std::string_view haystack, std::string_view needle,
-                    std::string_view needleLower, size_t radius = 40)
+                    std::string_view needleLower, bool caseSensitive, size_t radius = 40)
 {
     if (needle.empty() || haystack.empty())
         return {};
-    const size_t pos = findCaseInsensitive(haystack, needleLower);
+    const size_t pos = locateMatch(haystack, needle, needleLower, caseSensitive);
     if (pos == std::string_view::npos)
         return {};
-    const size_t start = (pos > radius) ? (pos - radius) : 0;
-    const size_t end = std::min(pos + needle.size() + radius, haystack.size());
+    size_t start = (pos > radius) ? (pos - radius) : 0;
+    size_t end = std::min(pos + needle.size() + radius, haystack.size());
+    start = utf8AlignStart(haystack, start);
+    end = utf8AlignEnd(haystack, end);
+    if (end < start)
+        end = start;
     std::string snip(haystack.substr(start, end - start));
     if (start > 0)
         snip = "..." + snip;
@@ -194,15 +227,15 @@ SearchIndex::search(const domain::SearchQuery &query,
             (sep != std::string_view::npos) ? pathView.substr(sep + 1) : pathView;
         if (query.searchFilenames && contains(fname, term, termLower, query.caseSensitive))
         {
-            matches.push_back(
-                {domain::SearchMatch::Type::Filename, "", snippet(fname, term, termLower)});
+            matches.push_back({domain::SearchMatch::Type::Filename, "",
+                               snippet(fname, term, termLower, query.caseSensitive)});
         }
 
         // Path match.
         if (query.searchPaths && contains(pathView, term, termLower, query.caseSensitive))
         {
-            matches.push_back(
-                {domain::SearchMatch::Type::Path, "", snippet(pathView, term, termLower)});
+            matches.push_back({domain::SearchMatch::Type::Path, "",
+                               snippet(pathView, term, termLower, query.caseSensitive)});
         }
 
         // Blob (metadata + analysis) match.
@@ -215,10 +248,10 @@ SearchIndex::search(const domain::SearchQuery &query,
             {
                 if (query.searchMetadata)
                     matches.push_back({domain::SearchMatch::Type::Metadata, "",
-                                       snippet(entry.blob, term, termLower)});
+                                       snippet(entry.blob, term, termLower, query.caseSensitive)});
                 if (query.searchAnalysis)
                     matches.push_back({domain::SearchMatch::Type::Analysis, "",
-                                       snippet(entry.blob, term, termLower)});
+                                       snippet(entry.blob, term, termLower, query.caseSensitive)});
             }
         }
 

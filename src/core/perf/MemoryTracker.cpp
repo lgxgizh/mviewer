@@ -15,7 +15,7 @@
 #include <psapi.h>
 // clang-format on
 #elif defined(Q_OS_LINUX)
-#include <sys/resource.h>
+#include <fstream>
 #include <unistd.h>
 #endif
 
@@ -57,10 +57,18 @@ static size_t processWorkingSetKB()
         return static_cast<size_t>(pmc.WorkingSetSize / 1024);
     return 0;
 #elif defined(Q_OS_LINUX)
-    rusage ru{};
-    if (getrusage(RUSAGE_SELF, &ru) == 0)
-        return static_cast<size_t>(ru.ru_maxrss); // KB on Linux
-    return 0;
+    // ru_maxrss is the peak, not the current resident set. statm field 2 is
+    // the resident page count right now.
+    std::ifstream statm("/proc/self/statm");
+    unsigned long long totalPages = 0;
+    unsigned long long residentPages = 0;
+    if (!(statm >> totalPages >> residentPages))
+        return 0;
+    const long pageSize = sysconf(_SC_PAGESIZE);
+    if (pageSize <= 0)
+        return 0;
+    const unsigned long long bytes = residentPages * static_cast<unsigned long long>(pageSize);
+    return static_cast<size_t>(bytes / 1024ull);
 #else
     return 0;
 #endif

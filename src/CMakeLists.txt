@@ -2544,6 +2544,21 @@ add_test(NAME bench_enforce
 # remains parallelizable because it only proves the harness can execute.
 set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE)
 
+add_executable(audit_misc_tests
+    core/test_audit_misc.cpp
+)
+target_link_libraries(audit_misc_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(audit_misc_tests PRIVATE cxx_std_20)
+target_include_directories(audit_misc_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME audit_misc_tests COMMAND audit_misc_tests)
+set_tests_properties(audit_misc_tests PROPERTIES RUN_SERIAL TRUE)
+
 # M41: every CTest process gets a fresh, per-test runtime root before Qt or
 # QStandardPaths is initialized. The random configure id makes repeated
 # `build.ps1 Test` runs independent, while the test name prevents parallel

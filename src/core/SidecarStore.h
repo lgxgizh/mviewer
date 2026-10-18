@@ -22,6 +22,11 @@ class SidecarStore
 
     // Write sidecar for a single image path (reads data from RatingStore).
     bool writeSidecar(const std::string &imagePath);
+    // Same write on the IO pool. Per path, writes are serialized and a newer
+    // request supersedes one that has not been written yet. onFailure runs on
+    // the main thread (inline on the worker when no dispatcher is installed).
+    void writeSidecarAsync(const std::string &imagePath,
+                           std::function<void(const std::string &path)> onFailure = {});
     // Read sidecar and populate RatingStore if data differs.
     bool readSidecar(const std::string &imagePath);
     // Delete sidecar file.

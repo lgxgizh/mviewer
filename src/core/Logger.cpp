@@ -9,11 +9,9 @@
 #include <QFile>
 #include <QMutex>
 #include <QStandardPaths>
-#include <QTextStream>
 #include <QtGlobal>
 
 #include <cstdio>
-#include <mutex>
 
 namespace mviewer::core
 {
@@ -25,6 +23,8 @@ QString g_logPath;
 QFile *g_logFile = nullptr;
 QMutex g_logMtx;
 bool g_installed = false;
+bool g_handlerInstalled = false;
+QtMessageHandler g_previousHandler = nullptr;
 
 QString levelName(QtMsgType type)
 {
@@ -63,18 +63,21 @@ void messageHandler(QtMsgType type, const QMessageLogContext &ctx, const QString
         line += QStringLiteral("%1:%2  ").arg(QString::fromUtf8(base)).arg(ctx.line);
     }
     line += msg;
+    const QByteArray bytes = line.toUtf8();
+    const bool flushNow = type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg;
 
-    // Always mirror to stderr so console / CI runs stay useful.
-    fprintf(stderr, "%s\n", qPrintable(line));
-    fflush(stderr);
-
-    // Append to the log file under a mutex so concurrent threads don't interleave.
+    // stderr and the file share one lock so concurrent threads cannot interleave
+    // a line. Debug/info stay buffered; warning and above flush immediately.
     QMutexLocker lock(&g_logMtx);
+    std::fprintf(stderr, "%s\n", bytes.constData());
+    if (flushNow)
+        std::fflush(stderr);
     if (g_logFile && g_logFile->isOpen())
     {
-        QTextStream out(g_logFile);
-        out << line << '\n';
-        out.flush();
+        g_logFile->write(bytes);
+        g_logFile->write("\n", 1);
+        if (flushNow)
+            g_logFile->flush();
     }
 }
 
@@ -109,7 +112,11 @@ void installFileLogger(const std::string &appName)
         g_logFile = nullptr;
     }
 
-    qInstallMessageHandler(messageHandler);
+    if (!g_handlerInstalled)
+    {
+        g_previousHandler = qInstallMessageHandler(messageHandler);
+        g_handlerInstalled = true;
+    }
 
     // Emit a startup banner so the log always has a clear session boundary.
     // M24: version comes from the CMake-generated header (single source).
@@ -125,15 +132,22 @@ std::string currentLogPath()
 
 void shutdownFileLogger()
 {
-    if (!g_installed)
+    if (!g_installed && !g_handlerInstalled)
         return;
+
+    // Restore the previous handler before closing the file so a message that
+    // arrives during shutdown is not written into a file we are deleting.
+    // If install returned before replacing the handler, leave it alone.
+    if (g_handlerInstalled)
+    {
+        qInstallMessageHandler(g_previousHandler);
+        g_previousHandler = nullptr;
+        g_handlerInstalled = false;
+    }
     g_installed = false;
 
-    // Restore the default handler first: the file must not receive messages
-    // while it is being closed.
-    qInstallMessageHandler(nullptr);
-
     QMutexLocker lock(&g_logMtx);
+    std::fflush(stderr);
     if (g_logFile)
     {
         g_logFile->flush();

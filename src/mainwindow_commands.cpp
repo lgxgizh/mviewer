@@ -3,6 +3,8 @@
 #include "runtime_storage.h"
 #include "shortcutdigits.h"
 
+#include <QCoreApplication>
+
 namespace
 {
 struct ClipboardPasteState
@@ -10,6 +12,15 @@ struct ClipboardPasteState
     std::atomic<bool> saved{false};
     std::atomic<bool> cancelled{false};
 };
+
+QString clipboardPasteDirectory()
+{
+    const QString tempRoot = mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
+    if (tempRoot.isEmpty())
+        return {};
+    return QDir(tempRoot).filePath(
+        QStringLiteral("mviewer-clip-%1").arg(QCoreApplication::applicationPid()));
+}
 } // namespace
 
 namespace mviewer_keys
@@ -345,21 +356,30 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
 void MainWindow::startClipboardPaste(const QImage &img)
 {
     // Persist to a temp file so ImageViewer loads it on its normal async path.
-    const QString tempRoot = mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
-    if (tempRoot.isEmpty())
+    const QString tmpDir = clipboardPasteDirectory();
+    if (tmpDir.isEmpty())
     {
         statusBar()->showMessage("无法创建剪贴板临时文件", 3000);
         return;
     }
-    const QString tmpDir = QDir(tempRoot).filePath("mviewer-clip-paste");
     if (!QDir().mkpath(tmpDir))
     {
         statusBar()->showMessage("无法创建剪贴板临时目录", 3000);
         return;
     }
 
+    if (!m_clipboardPastePath.isEmpty())
+    {
+        QFile::remove(m_clipboardPastePath);
+        m_clipboardPastePath.clear();
+    }
     cancelClipboardPaste();
     cleanupClipboardPasteTemps();
+    if (!QDir().mkpath(tmpDir))
+    {
+        statusBar()->showMessage("无法创建剪贴板临时目录", 3000);
+        return;
+    }
     const QString tmpPath = QDir(tmpDir).filePath(
         QStringLiteral("paste_%1.png").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
     const uint64_t generation = ++m_clipboardPasteGeneration;
@@ -439,19 +459,21 @@ void MainWindow::cancelClipboardPaste()
 
 void MainWindow::cleanupClipboardPasteTemps()
 {
-    const QString tempRoot = mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
-    if (tempRoot.isEmpty())
+    const QString dirPath = clipboardPasteDirectory();
+    if (dirPath.isEmpty())
         return;
-    const QDir dir(QDir(tempRoot).filePath(QStringLiteral("mviewer-clip-paste")));
+    QDir dir(dirPath);
     if (!dir.exists())
         return;
-    const QDateTime cutoff = QDateTime::currentDateTime().addDays(-1);
+    const QString keep = QFileInfo(m_clipboardPastePath).absoluteFilePath();
     for (const QFileInfo &info :
          dir.entryInfoList(QStringList() << QStringLiteral("paste_*.png"), QDir::Files))
     {
-        if (info.absoluteFilePath() != m_clipboardPastePath && info.lastModified() < cutoff)
+        if (info.absoluteFilePath() != keep)
             QFile::remove(info.absoluteFilePath());
     }
+    if (dir.entryList(QDir::NoDotAndDotDot | QDir::AllEntries).isEmpty())
+        QDir().rmdir(dir.absolutePath());
 }
 
 bool MainWindow::handleViewerKey(QKeyEvent *event)

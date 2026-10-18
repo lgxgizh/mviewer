@@ -1,16 +1,21 @@
 // M17: SidecarStore implementation — per-image .mviewer.json sidecar file I/O.
 #include "SidecarStore.h"
 #include "RatingStore.h"
+#include "core/MainThreadDispatcher.h"
 #include "core/filesystem/AtomicFile.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/ImageFormats.h"
+#include "core/scheduler/TaskScheduler.h"
 #include <algorithm>
 #include <cctype>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <mutex>
 #include <sstream>
 #include <system_error>
+#include <unordered_map>
 
 namespace mviewer::core
 {
@@ -210,6 +215,75 @@ bool hasStemSibling(const std::filesystem::path &image)
     return false;
 }
 
+struct SidecarWriteState
+{
+    bool running = false;
+    bool dirty = false;
+    std::function<void(const std::string &)> onFailure;
+};
+
+std::mutex &sidecarWriteMutex()
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::unordered_map<std::string, SidecarWriteState> &sidecarWrites()
+{
+    static std::unordered_map<std::string, SidecarWriteState> writes;
+    return writes;
+}
+
+void runSidecarWrite(const std::string &imagePath)
+{
+    for (;;)
+    {
+        std::function<void(const std::string &)> onFailure;
+        {
+            std::lock_guard<std::mutex> lock(sidecarWriteMutex());
+            auto it = sidecarWrites().find(imagePath);
+            if (it == sidecarWrites().end())
+                return;
+            it->second.dirty = false;
+            onFailure = it->second.onFailure;
+        }
+
+        const bool ok = SidecarStore::instance().writeSidecar(imagePath);
+
+        bool again = false;
+        {
+            std::lock_guard<std::mutex> lock(sidecarWriteMutex());
+            auto it = sidecarWrites().find(imagePath);
+            if (it == sidecarWrites().end())
+                return;
+            if (it->second.dirty)
+            {
+                again = true;
+            }
+            else
+            {
+                sidecarWrites().erase(it);
+            }
+        }
+
+        if (!ok && !again && onFailure)
+        {
+            mvcore::postToMainThread([onFailure = std::move(onFailure), imagePath]()
+                                     { onFailure(imagePath); });
+        }
+        if (!again)
+            return;
+    }
+}
+
+void scheduleSidecarWrite(const std::string &imagePath)
+{
+    auto handle = TaskScheduler::instance().submit(TaskScheduler::IOPool,
+                                                   [imagePath]() { runSidecarWrite(imagePath); });
+    if (!handle)
+        runSidecarWrite(imagePath);
+}
+
 } // namespace
 
 SidecarStore &SidecarStore::instance()
@@ -325,6 +399,37 @@ bool SidecarStore::fromJson(const std::string &json, const std::string &imagePat
         rs.setRejected(imagePath, true);
 
     return true;
+}
+
+void SidecarStore::writeSidecarAsync(const std::string &imagePath,
+                                     std::function<void(const std::string &path)> onFailure)
+{
+    if (imagePath.empty())
+    {
+        if (onFailure)
+        {
+            mvcore::postToMainThread([onFailure = std::move(onFailure)]()
+                                     { onFailure(std::string{}); });
+        }
+        return;
+    }
+
+    bool start = false;
+    {
+        std::lock_guard<std::mutex> lock(sidecarWriteMutex());
+        SidecarWriteState &state = sidecarWrites()[imagePath];
+        state.onFailure = std::move(onFailure);
+        if (state.running)
+        {
+            state.dirty = true;
+            return;
+        }
+        state.running = true;
+        state.dirty = false;
+        start = true;
+    }
+    if (start)
+        scheduleSidecarWrite(imagePath);
 }
 
 bool SidecarStore::writeSidecar(const std::string &imagePath)

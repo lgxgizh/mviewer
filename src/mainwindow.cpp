@@ -25,6 +25,23 @@ QDialog *createFullscreenCompareHost(QWidget *parent, CompareWorkspace **viewOut
     return dlg;
 }
 
+void writeCurrentSidecarAsync(MainWindow *window, const QString &path)
+{
+    if (!window || path.isEmpty())
+        return;
+    QPointer<MainWindow> alive(window);
+    mviewer::core::SidecarStore::instance().writeSidecarAsync(
+        path.toUtf8().toStdString(),
+        [alive](const std::string &failedPath)
+        {
+            if (!alive)
+                return;
+            const QString name = QFileInfo(QString::fromStdString(failedPath)).fileName();
+            alive->statusBar()->showMessage(MainWindow::tr("无法写入 %1 的附属文件").arg(name),
+                                            4000);
+        });
+}
+
 void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const QStringList &imgs)
 {
     if (!compare || !viewer)
@@ -249,7 +266,10 @@ MainWindow::~MainWindow()
     delete m_imageViewer;
     m_imageViewer = nullptr;
     if (!m_clipboardPastePath.isEmpty())
+    {
         QFile::remove(m_clipboardPastePath);
+        m_clipboardPastePath.clear();
+    }
     cleanupClipboardPasteTemps();
 }
 
@@ -350,7 +370,7 @@ void MainWindow::rateCurrentImage(int stars)
                                                      stars);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
+    writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(
         QString("已为 %1 评分: %2 星").arg(QFileInfo(currentImagePath()).fileName()).arg(stars),
         3000);
@@ -413,7 +433,7 @@ void MainWindow::setCurrentColorLabel(int label)
                                                          label);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
+    writeCurrentSidecarAsync(this, currentImagePath());
     const QString name = QFileInfo(currentImagePath()).fileName();
     statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
                                         : QString("已为 %1 设置色标 %2").arg(name).arg(label),
@@ -429,7 +449,7 @@ void MainWindow::toggleCurrentPick()
     rs.setPicked(currentImagePath().toUtf8().toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
+    writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(
         v ? QString("已收藏 %1").arg(QFileInfo(currentImagePath()).fileName())
           : QString("已取消收藏 %1").arg(QFileInfo(currentImagePath()).fileName()),
@@ -445,7 +465,7 @@ void MainWindow::toggleCurrentReject()
     rs.setRejected(currentImagePath().toUtf8().toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
+    writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(
         v ? QString("已拒绝 %1").arg(QFileInfo(currentImagePath()).fileName())
           : QString("已取消拒绝 %1").arg(QFileInfo(currentImagePath()).fileName()),

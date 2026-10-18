@@ -362,6 +362,96 @@ int main(int argc, char *argv[])
         CHECK(edgeIdx.search(q).size() == 1, "Extension search matches filename");
     }
 
+    // ── Audit #48: snippet honors caseSensitive and UTF-8 boundaries ────
+    {
+        mviewer::core::SearchIndex idx;
+        const std::string blob = std::string("Alpha") + std::string(80, ' ') + "alpha";
+        idx.indexBlob("/photos/case.raw", blob);
+
+        mviewer::domain::SearchQuery q;
+        q.text = "alpha";
+        q.caseSensitive = true;
+        q.searchMetadata = true;
+        q.searchFilenames = false;
+        q.searchPaths = false;
+        q.searchAnalysis = false;
+        auto hit = idx.search(q);
+        CHECK(hit.size() == 1, "Case-sensitive snippet query finds the exact-case blob");
+        CHECK(!hit.empty() && !hit[0].matches.empty(), "Case-sensitive match present");
+        if (!hit.empty() && !hit[0].matches.empty())
+        {
+            const std::string &snip = hit[0].matches[0].snippet;
+            CHECK(snip.find("Alpha") == std::string::npos,
+                  "Case-sensitive snippet must not use the earlier different-case hit");
+            CHECK(snip.find("alpha") != std::string::npos,
+                  "Case-sensitive snippet includes the exact-case match");
+        }
+
+        q.caseSensitive = false;
+        auto folded = idx.search(q);
+        CHECK(!folded.empty() && !folded[0].matches.empty(), "Folded query still matches");
+        if (!folded.empty() && !folded[0].matches.empty())
+        {
+            CHECK(folded[0].matches[0].snippet.find("Alpha") != std::string::npos,
+                  "Case-insensitive snippet uses the first folded hit");
+        }
+    }
+    {
+        mviewer::core::SearchIndex idx;
+        // U+4E00 is E4 B8 80. A byte window of radius 40 starting at pos-40
+        // lands on the continuation byte 0xB8 unless the cut is aligned.
+        std::string blob = "\xE4\xB8\x80";
+        blob.append(38, 'x');
+        blob += "Match";
+        blob += "\xE5\xB0\xBE";
+        idx.indexBlob("/photos/utf8.raw", blob);
+
+        mviewer::domain::SearchQuery q;
+        q.text = "Match";
+        q.caseSensitive = true;
+        q.searchMetadata = true;
+        q.searchFilenames = false;
+        q.searchPaths = false;
+        q.searchAnalysis = false;
+        auto hit = idx.search(q);
+        CHECK(hit.size() == 1 && !hit[0].matches.empty(), "UTF-8 blob produces a snippet");
+        if (!hit.empty() && !hit[0].matches.empty())
+        {
+            const std::string &snip = hit[0].matches[0].snippet;
+            CHECK(snip.find("Match") != std::string::npos, "UTF-8 snippet contains the match");
+            auto validUtf8 = [](const std::string &s)
+            {
+                for (size_t i = 0; i < s.size();)
+                {
+                    const auto c = static_cast<unsigned char>(s[i]);
+                    size_t need = 1;
+                    if (c < 0x80)
+                        need = 1;
+                    else if ((c & 0xE0) == 0xC0)
+                        need = 2;
+                    else if ((c & 0xF0) == 0xE0)
+                        need = 3;
+                    else if ((c & 0xF8) == 0xF0)
+                        need = 4;
+                    else
+                        return false;
+                    if (i + need > s.size())
+                        return false;
+                    for (size_t k = 1; k < need; ++k)
+                    {
+                        if ((static_cast<unsigned char>(s[i + k]) & 0xC0) != 0x80)
+                            return false;
+                    }
+                    i += need;
+                }
+                return true;
+            };
+            CHECK(validUtf8(snip), "Snippet is cut on UTF-8 code point boundaries");
+            CHECK(snip.find("\xE4\xB8\x80") != std::string::npos,
+                  "Leading multi-byte character is kept whole");
+        }
+    }
+
     std::fprintf(stderr, "%s: %d failures\n", g_fail == 0 ? "All tests passed" : "Tests failed",
                  g_fail);
     return g_fail == 0 ? 0 : 1;

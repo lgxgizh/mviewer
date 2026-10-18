@@ -125,6 +125,13 @@ std::string httpGet(const std::string &url, std::string &error)
 
     DWORD secure = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
     WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &secure, sizeof(secure));
+    // HTTPS only, and never follow an https→http downgrade. Cap the hop count.
+    DWORD redirects = 5;
+    WinHttpSetOption(hSession, WINHTTP_OPTION_MAX_HTTP_AUTOMATIC_REDIRECTS, &redirects,
+                     sizeof(redirects));
+    DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
+    WinHttpSetOption(hSession, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy,
+                     sizeof(redirectPolicy));
     // resolve, connect, send, receive timeouts (ms)
     WinHttpSetTimeouts(hSession, 5000, 5000, 10000, 15000);
 
@@ -146,6 +153,12 @@ std::string httpGet(const std::string &url, std::string &error)
         error = "UpdateChecker: invalid URL";
         return {};
     }
+    if (parts.nScheme != INTERNET_SCHEME_HTTPS)
+    {
+        WinHttpCloseHandle(hSession);
+        error = "UpdateChecker: only HTTPS is allowed";
+        return {};
+    }
 
     std::wstring host(hostBuf, parts.dwHostNameLength);
     std::wstring path(pathBuf, parts.dwUrlPathLength);
@@ -153,7 +166,6 @@ std::string httpGet(const std::string &url, std::string &error)
         path.append(extraBuf, parts.dwExtraInfoLength);
     if (path.empty())
         path = L"/";
-    const bool https = (parts.nScheme == INTERNET_SCHEME_HTTPS);
 
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), parts.nPort, 0);
     if (!hConnect)
@@ -163,9 +175,8 @@ std::string httpGet(const std::string &url, std::string &error)
         return {};
     }
 
-    HINTERNET hRequest =
-        WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER, nullptr,
-                           https ? WINHTTP_FLAG_SECURE : 0);
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr,
+                                            WINHTTP_NO_REFERER, nullptr, WINHTTP_FLAG_SECURE);
     if (!hRequest)
     {
         WinHttpCloseHandle(hConnect);
@@ -185,11 +196,22 @@ std::string httpGet(const std::string &url, std::string &error)
     }
 
     DWORD status = 0, slen = sizeof(status);
-    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
-                            nullptr, &status, &slen, nullptr) &&
-        status != 200)
+    if (!WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                             nullptr, &status, &slen, nullptr))
+    {
+        error = "UpdateChecker: HTTP status unavailable";
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return {};
+    }
+    if (status != 200)
     {
         error = "UpdateChecker: HTTP " + std::to_string(status);
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return {};
     }
 
     std::string body;
