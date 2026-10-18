@@ -104,3 +104,38 @@ set_target_properties(example_importer PROPERTIES
     PREFIX ""
 )
 
+# Audit regression plugins. Not shipped. audit_analyzer counts create/destroy
+# calls; audit_legacy_mismatch has no ABI descriptor and a wrong legacy version.
+add_library(audit_analyzer SHARED
+    ${CMAKE_SOURCE_DIR}/tests/plugin/AuditAnalyzerPlugin.cpp
+)
+target_link_libraries(audit_analyzer PRIVATE mviewer_core)
+target_compile_features(audit_analyzer PRIVATE cxx_std_20)
+target_include_directories(audit_analyzer PRIVATE ${CMAKE_SOURCE_DIR}/src)
+set_target_properties(audit_analyzer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    PREFIX ""
+)
+
+add_library(audit_legacy_mismatch SHARED
+    ${CMAKE_SOURCE_DIR}/tests/plugin/AuditAnalyzerPlugin.cpp
+)
+target_link_libraries(audit_legacy_mismatch PRIVATE mviewer_core)
+target_compile_features(audit_legacy_mismatch PRIVATE cxx_std_20)
+target_include_directories(audit_legacy_mismatch PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(audit_legacy_mismatch PRIVATE AUDIT_PLUGIN_LEGACY_MISMATCH=1)
+set_target_properties(audit_legacy_mismatch PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    PREFIX ""
+)
+
+if(TARGET test_plugin_audit)
+    add_dependencies(test_plugin_audit
+        audit_analyzer
+        audit_legacy_mismatch
+        example_analyzer_badabi
+        example_importer)
+endif()
+

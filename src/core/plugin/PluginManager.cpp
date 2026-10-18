@@ -2,15 +2,18 @@
 #include "core/compare/ICompareAlgorithm.h"
 #include "core/export/ExporterRegistry.h"
 #include "core/export/IExporter.h"
+#include "core/filesystem/Utf8Path.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/IDecoder.h"
 #include "core/import/IImporter.h"
 #include "core/import/ImporterRegistry.h"
 #include "core/plugin/PluginABI.h"
-#include "core/filesystem/Utf8Path.h"
+
+#include <QDebug>
 
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #ifdef _WIN32
@@ -70,7 +73,6 @@ std::vector<std::string> PluginManager::scanDirectory(const std::string &dirPath
     return candidates;
 }
 
-
 namespace
 {
 using AbiFn = const PluginABI *(*)();
@@ -110,8 +112,7 @@ struct OpenPlugin
     PluginSymbols symbols;
 };
 
-template <typename Fn>
-Fn lookupSymbol(PluginHandle handle, const char *name)
+template <typename Fn> Fn lookupSymbol(PluginHandle handle, const char *name)
 {
 #ifdef _WIN32
     return reinterpret_cast<Fn>(GetProcAddress(static_cast<HMODULE>(handle), name));
@@ -131,27 +132,118 @@ void closePluginHandle(PluginHandle handle)
 #endif
 }
 
-bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
+void logRejectedPlugin(const std::string &path, const std::string &reason)
+{
+    qWarning().nospace().noquote()
+        << "[PluginManager] Rejected: " << QString::fromUtf8(path.c_str()) << ": "
+        << QString::fromUtf8(reason.c_str());
+}
+
+// One extra loader reference. The host's original dlopen/LoadLibrary is kept
+// for the process lifetime (ADR-017) and is never closed here. Dropping this
+// pin releases only the extra reference, so a live Analyzer deleter can keep
+// the module mapped even if the host handle were closed.
+struct PluginModulePin
+{
+    PluginHandle handle = nullptr;
+    PluginModulePin() = default;
+    ~PluginModulePin()
+    {
+        closePluginHandle(handle);
+    }
+    PluginModulePin(const PluginModulePin &) = delete;
+    PluginModulePin &operator=(const PluginModulePin &) = delete;
+};
+
+PluginHandle openPluginHandle(const std::string &path, std::string &error)
 {
 #ifdef _WIN32
     const std::filesystem::path nativePath = mviewer::core::pathFromUtf8(path);
-    plugin.handle = reinterpret_cast<PluginHandle>(LoadLibraryW(nativePath.native().c_str()));
-    if (!plugin.handle)
-    {
+    PluginHandle handle = reinterpret_cast<PluginHandle>(LoadLibraryW(nativePath.native().c_str()));
+    if (!handle)
         error = "LoadLibrary failed: " + std::to_string(GetLastError());
-        return false;
-    }
+    return handle;
 #else
-    plugin.handle = dlopen(path.c_str(), RTLD_LAZY);
-    if (!plugin.handle)
+    PluginHandle handle = dlopen(path.c_str(), RTLD_LAZY);
+    if (!handle)
     {
-        error = "dlopen failed: " + std::string(dlerror());
-        return false;
+        const char *reason = dlerror();
+        error = "dlopen failed: " + std::string(reason ? reason : "unknown");
     }
+    return handle;
 #endif
+}
+
+std::shared_ptr<PluginModulePin> pinPluginModule(const std::string &path)
+{
+    auto pin = std::make_shared<PluginModulePin>();
+    std::string ignored;
+    pin->handle = openPluginHandle(path, ignored);
+    if (!pin->handle)
+        return nullptr;
+    return pin;
+}
+
+AnalyzerDeleter makeAnalyzerDeleter(const std::shared_ptr<PluginModulePin> &module,
+                                    AnalyzerDestroyFn destroy)
+{
+    return [module, destroy](Analyzer *value)
+    {
+        // `module` owns an extra loader reference so destroyAnalyzer still
+        // runs inside the plugin while this instance exists.
+        if (!module || module->handle == nullptr || destroy == nullptr)
+            return;
+        if (value)
+            destroy(value);
+    };
+}
+
+bool rejectAbiMismatch(const std::string &path, OpenPlugin &plugin, const std::string &reason,
+                       std::string &error)
+{
+    error = reason;
+    logRejectedPlugin(path, reason);
+    closePluginHandle(plugin.handle);
+    plugin.handle = nullptr;
+    return false;
+}
+
+bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
+{
+    plugin.handle = openPluginHandle(path, error);
+    if (!plugin.handle)
+        return false;
+
     auto &s = plugin.symbols;
+    // Version gate first. No other plugin symbol is resolved or called until
+    // the ABI (or the legacy version export) is accepted.
     s.abi = lookupSymbol<AbiFn>(plugin.handle, "mviewer_plugin_abi");
     s.version = lookupSymbol<VersionFn>(plugin.handle, "mviewer_plugin_api_version");
+
+    if (s.abi)
+    {
+        const PluginABI *abi = s.abi();
+        if (!abi)
+            return rejectAbiMismatch(path, plugin, "plugin ABI descriptor is null", error);
+        if (!pluginABICompatible(hostPluginABI(), *abi))
+        {
+            const std::string reason =
+                "plugin ABI incompatible: host abi=" + std::to_string(hostPluginABI().abiVersion) +
+                " api=" + std::to_string(hostPluginABI().apiVersion) +
+                ", plugin abi=" + std::to_string(abi->abiVersion) +
+                " api=" + std::to_string(abi->apiVersion);
+            return rejectAbiMismatch(path, plugin, reason, error);
+        }
+        const std::string warning = pluginABIWarnings(hostPluginABI(), *abi);
+        if (!warning.empty())
+            std::cout << "[PluginManager] Warning: " << warning << '\n';
+    }
+    else if (s.version && s.version() != MVIEWER_PLUGIN_API_VERSION)
+    {
+        return rejectAbiMismatch(path, plugin, "plugin API version mismatch (legacy export)",
+                                 error);
+    }
+
     s.createAnalyzer = lookupSymbol<AnalyzerCreateFn>(plugin.handle, "createAnalyzer");
     s.destroyAnalyzer = lookupSymbol<AnalyzerDestroyFn>(plugin.handle, "destroyAnalyzer");
     s.createDecoder = lookupSymbol<DecoderCreateFn>(plugin.handle, "createDecoder");
@@ -163,34 +255,6 @@ bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
     s.createCompare = lookupSymbol<CompareCreateFn>(plugin.handle, "createCompareAlgorithm");
     s.destroyCompare = lookupSymbol<CompareDestroyFn>(plugin.handle, "destroyCompareAlgorithm");
     s.name = lookupSymbol<NameFn>(plugin.handle, "pluginName");
-
-    if (s.abi)
-    {
-        const PluginABI *abi = s.abi();
-        if (!pluginABICompatible(hostPluginABI(), *abi))
-        {
-            error = "plugin ABI incompatible: host abi=" +
-                    std::to_string(hostPluginABI().abiVersion) +
-                    " api=" + std::to_string(hostPluginABI().apiVersion) +
-                    ", plugin abi=" + std::to_string(abi->abiVersion) +
-                    " api=" + std::to_string(abi->apiVersion);
-            closePluginHandle(plugin.handle);
-            plugin.handle = nullptr;
-            return false;
-        }
-        const std::string warning = pluginABIWarnings(hostPluginABI(), *abi);
-        if (!warning.empty())
-            std::cout << "[PluginManager] Warning: " << warning << '\n';
-    }
-#ifdef _WIN32
-    else if (s.version && s.version() != MVIEWER_PLUGIN_API_VERSION)
-    {
-        error = "plugin API version mismatch (legacy export)";
-        closePluginHandle(plugin.handle);
-        plugin.handle = nullptr;
-        return false;
-    }
-#endif
     return true;
 }
 
@@ -215,45 +279,71 @@ bool registerAnalyzerPlugin(const std::string &path, const std::string &displayN
                             std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
                             std::string &error)
 {
-    Analyzer *probe = plugin.symbols.createAnalyzer();
+    const auto create = plugin.symbols.createAnalyzer;
+    const auto destroy = plugin.symbols.destroyAnalyzer;
+    if (!create || !destroy)
+    {
+        error = "destroyAnalyzer export not found for " + path;
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+
+    const std::shared_ptr<PluginModulePin> module = pinPluginModule(path);
+    if (!module)
+    {
+        error = "failed to pin plugin module for " + path;
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+
+    // Probe is destroyed through the plugin deleter, same as later instances.
+    std::unique_ptr<Analyzer, AnalyzerDeleter> probe(create(),
+                                                     makeAnalyzerDeleter(module, destroy));
     if (!probe)
     {
         error = "createAnalyzer returned null for " + path;
         closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
         return false;
     }
     const std::string id = probe->name();
-    delete probe;
-    const auto create = plugin.symbols.createAnalyzer;
-    const auto destroy = plugin.symbols.destroyAnalyzer;
+    probe.reset();
+
     AnalyzerRegistry::instance().registerAnalyzer(
         id,
-        [create, destroy]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        [module, create, destroy]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
         {
             Analyzer *analyzer = create();
             if (!analyzer)
                 return nullptr;
-            if (destroy)
-                return std::unique_ptr<Analyzer, AnalyzerDeleter>(
-                    analyzer,
-                    [destroy](Analyzer *value)
-                    {
-                        if (value)
-                            destroy(value);
-                    });
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(
-                analyzer, [](Analyzer *value) { delete value; });
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(analyzer,
+                                                              makeAnalyzerDeleter(module, destroy));
         });
     recordPlugin(path, displayName, plugin.handle, "analyzer", id,
                  &PluginManager::PluginEntry::analyzerId, plugins);
     return true;
 }
 
+void unregisterPlugin(const PluginManager::PluginEntry &entry)
+{
+    if (!entry.analyzerId.empty())
+        AnalyzerRegistry::instance().unregister(entry.analyzerId);
+    if (!entry.decoderId.empty())
+        DecoderRegistry::instance().unregister(entry.decoderId);
+    if (!entry.exporterId.empty())
+        ExporterRegistry::instance().unregister(entry.exporterId);
+    if (!entry.importerId.empty())
+        ImporterRegistry::instance().unregister(entry.importerId);
+    // Compare-algorithm plugins are probed for their id but not inserted into
+    // a registry, so there is no factory to drop for compareAlgorithmId.
+}
+
 template <typename Interface, typename CreateFn, typename DestroyFn, typename RegisterFn>
 bool registerSharedPlugin(const std::string &path, const std::string &displayName,
-                          OpenPlugin &plugin, const char *kind,
-                          CreateFn create, DestroyFn destroy, RegisterFn registerFn,
-                          std::string PluginManager::PluginEntry::*slot,
+                          OpenPlugin &plugin, const char *kind, CreateFn create, DestroyFn destroy,
+                          RegisterFn registerFn, std::string PluginManager::PluginEntry::*slot,
                           std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
                           std::string &error)
 {
@@ -266,13 +356,13 @@ bool registerSharedPlugin(const std::string &path, const std::string &displayNam
     }
     const std::string id = object->name();
     std::shared_ptr<Interface> owned =
-        destroy
-            ? std::shared_ptr<Interface>(object, [destroy](Interface *value)
-                                         {
-                                             if (value)
-                                                 destroy(value);
-                                         })
-            : std::shared_ptr<Interface>(object, [](Interface *value) { delete value; });
+        destroy ? std::shared_ptr<Interface>(object,
+                                             [destroy](Interface *value)
+                                             {
+                                                 if (value)
+                                                     destroy(value);
+                                             })
+                : std::shared_ptr<Interface>(object, [](Interface *value) { delete value; });
     registerFn(owned);
     recordPlugin(path, displayName, plugin.handle, kind, id, slot, plugins);
     return true;
@@ -306,7 +396,7 @@ bool finishPluginLoad(const std::string &path, OpenPlugin &plugin,
 {
     const std::string displayName =
         plugin.symbols.name ? plugin.symbols.name()
-                           : mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(path).stem());
+                            : mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(path).stem());
     if (plugin.symbols.createAnalyzer)
         return registerAnalyzerPlugin(path, displayName, plugin, plugins, error);
     if (plugin.symbols.createDecoder)
@@ -370,16 +460,10 @@ bool PluginManager::unload(const std::string &path)
     if (it == m_plugins.end())
         return false;
 
-    // Drop registry entries so no dangling factory (pointing into the plugin
-    // module) remains in any registry.
-    if (!it->second.analyzerId.empty())
-        AnalyzerRegistry::instance().unregister(it->second.analyzerId);
-    if (!it->second.decoderId.empty())
-        DecoderRegistry::instance().unregister(it->second.decoderId);
-    if (!it->second.exporterId.empty())
-        ExporterRegistry::instance().unregister(it->second.exporterId);
-    if (!it->second.importerId.empty())
-        ImporterRegistry::instance().unregister(it->second.importerId);
+    // Drop registry entries so no factory or instance still points into the
+    // plugin after it is released. Importers are included; unloadAll uses the
+    // same helper.
+    unregisterPlugin(it->second);
 
     // NOTE: we intentionally do NOT FreeLibrary/dlclose here. Unloading a
     // Qt-linking plugin DLL at runtime (or during process teardown) is unsafe
@@ -394,15 +478,8 @@ bool PluginManager::unload(const std::string &path)
 void PluginManager::unloadAll()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    for (auto &[path, entry] : m_plugins)
-    {
-        if (!entry.analyzerId.empty())
-            AnalyzerRegistry::instance().unregister(entry.analyzerId);
-        if (!entry.decoderId.empty())
-            DecoderRegistry::instance().unregister(entry.decoderId);
-        if (!entry.exporterId.empty())
-            ExporterRegistry::instance().unregister(entry.exporterId);
-    }
+    for (const auto &item : m_plugins)
+        unregisterPlugin(item.second);
     // Handles are intentionally NOT freed (see unload()). Plugins live for the
     // process lifetime; the OS reclaims them on exit.
     m_plugins.clear();

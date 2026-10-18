@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- 插件探测出的 Analyzer 通过插件的 `destroyAnalyzer` 释放，不再在宿主里 `delete` 或把探测实例泄漏掉（审计 #36）。
+- 插件注册的分析器工厂返回 `unique_ptr<Analyzer, AnalyzerDeleter>`，析构时调用插件的 `destroyAnalyzer`，并在实例存活期间额外持有一份模块引用（审计 #37）。
+- `PluginManager::unloadAll` 在卸载前注销插件注册的 Importer，与单次 `unload` 走同一条注销路径（审计 #38）。
+- 插件 ABI（以及旧版 `mviewer_plugin_api_version`）检查在所有平台上、调用其它插件符号之前执行；不匹配时用 `qWarning` 记下原因并拒绝加载（审计 #39）。
 - `EventBus::instance()` 与 `scope(Application)` 共用同一条总线；`scope()` 遇到越界枚举值时回退到 Application，不再越界访问总线数组（审计 #1）。
 - `AnalyzerRegistry` 的工厂表由互斥锁保护，创建分析器时先把工厂拷出锁外再调用；`registerBuiltins()` 用 `std::call_once` 只注册一次（审计 #2）。
 - `AnalyzerRegistry::runAnalyzer` 只等待自己提交的任务，不再排空整个共享 AnalysisPool；超时后的任务写入堆上的共享状态，不会写已销毁的栈对象（审计 #3）。
