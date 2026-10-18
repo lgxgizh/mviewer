@@ -177,7 +177,7 @@ class AnalysisPanel : public QWidget
     void updateMetadataPage();
     bool runLegacyAnalyzer(const QString &id);
     void runRoiAnalysis();
-    void renderChannel(QLabel *label, const int *hist, const QColor &color);
+    void renderChannel(QLabel *label, const int64_t *hist, const QColor &color);
     QString noiseLevelText(double variance);
 
     enum Page

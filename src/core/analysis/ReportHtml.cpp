@@ -221,11 +221,18 @@ void appendBatchHtml(std::ostringstream &os, const ReportContext &ctx)
         for (size_t i = 0; i < ctx.batch.filenames.size(); ++i)
         {
             os << "<tr><td>" << escapeHtml(ctx.batch.filenames[i]) << "</td>";
+            if (i >= ctx.batch.rows.size())
+            {
+                for (size_t c = 0; c < ctx.batch.columns.size(); ++c)
+                    os << "<td></td>";
+                os << "</tr>\n";
+                continue;
+            }
             for (const auto &c : ctx.batch.columns)
             {
                 os << "<td>";
                 auto it = ctx.batch.rows[i].find(c);
-                if (it != ctx.batch.rows[i].end())
+                if (it != ctx.batch.rows[i].end() && std::isfinite(it->second))
                     os << it->second;
                 os << "</td>";
             }

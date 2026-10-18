@@ -1,5 +1,6 @@
 #include "core/analysis/AnalysisEngine.h"
 
+#include "core/analyzer/PixelAccess.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/QtConvert.h"
 #include "domain/Selection.h"
@@ -33,8 +34,8 @@ void finalizeStatsHistogramMetrics(ImageStats &s)
     if (s.pixelCount <= 0)
         return;
 
-    auto calcChannel =
-        [](const int hist[256], int count, double mean, double &stdDev, int &minV, int &maxV)
+    auto calcChannel = [](const int64_t hist[256], int64_t count, double mean, double &stdDev,
+                          int &minV, int &maxV)
     {
         double varSum = 0.0;
         minV = 255;
@@ -42,7 +43,7 @@ void finalizeStatsHistogramMetrics(ImageStats &s)
         bool found = false;
         for (int i = 0; i < 256; ++i)
         {
-            const int cnt = hist[i];
+            const int64_t cnt = hist[i];
             if (cnt > 0)
             {
                 if (!found)
@@ -52,7 +53,7 @@ void finalizeStatsHistogramMetrics(ImageStats &s)
                 }
                 maxV = i;
                 const double d = static_cast<double>(i) - mean;
-                varSum += d * d * cnt;
+                varSum += d * d * static_cast<double>(cnt);
             }
         }
         if (!found)
@@ -60,7 +61,8 @@ void finalizeStatsHistogramMetrics(ImageStats &s)
             minV = 0;
             maxV = 0;
         }
-        stdDev = std::sqrt(std::max(0.0, varSum / count));
+        const double denom = static_cast<double>(count);
+        stdDev = denom > 0.0 ? std::sqrt(std::max(0.0, varSum / denom)) : 0.0;
     };
 
     calcChannel(s.histLum, s.pixelCount, s.lumMean, s.lumStdDev, s.lumMin, s.lumMax);
@@ -95,18 +97,18 @@ ImageStats computeStatsGrayscale(const ConstImageView &vbuf, int rx, int ry, int
     long long sum = 0;
     for (int i = 0; i < 256; ++i)
     {
-        const int cnt = s.histLum[i];
-        sum += static_cast<long long>(i) * cnt;
+        const int64_t cnt = s.histLum[i];
+        sum += static_cast<int64_t>(i) * cnt;
         s.histV[i] = cnt;
         s.histR[i] = cnt;
         s.histG[i] = cnt;
         s.histB[i] = cnt;
     }
-    const int count = rw * rh;
+    const int64_t count = static_cast<int64_t>(rw) * static_cast<int64_t>(rh);
     s.pixelCount = count;
     if (count > 0)
     {
-        const double mean = static_cast<double>(sum) / count;
+        const double mean = static_cast<double>(sum) / static_cast<double>(count);
         s.lumMean = mean;
         s.vMean = mean;
         s.rMean = mean;
@@ -122,7 +124,7 @@ ImageStats computeStatsFallback(const ImageData &imgData, int rx, int ry, int rw
     ImageStats s;
     const QImage image = mvcore::toQImage(imgData).convertToFormat(QImage::Format_RGB32);
     long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
-    int count = 0;
+    int64_t count = 0;
     for (int y = ry; y < ry + rh; ++y)
     {
         const QRgb *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
@@ -133,7 +135,7 @@ ImageStats computeStatsFallback(const ImageData &imgData, int rx, int ry, int rw
             sumR += r;
             sumG += g;
             sumB += b;
-            const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
+            const int lum = lumaRec601(Rgb8{r, g, b});
             sumL += lum;
             const int v = std::max({r, g, b});
             sumV += v;
@@ -148,11 +150,12 @@ ImageStats computeStatsFallback(const ImageData &imgData, int rx, int ry, int rw
     s.pixelCount = count;
     if (count > 0)
     {
-        s.lumMean = static_cast<double>(sumL) / count;
-        s.vMean = static_cast<double>(sumV) / count;
-        s.rMean = static_cast<double>(sumR) / count;
-        s.gMean = static_cast<double>(sumG) / count;
-        s.bMean = static_cast<double>(sumB) / count;
+        const double samples = static_cast<double>(count);
+        s.lumMean = static_cast<double>(sumL) / samples;
+        s.vMean = static_cast<double>(sumV) / samples;
+        s.rMean = static_cast<double>(sumR) / samples;
+        s.gMean = static_cast<double>(sumG) / samples;
+        s.bMean = static_cast<double>(sumB) / samples;
         finalizeStatsHistogramMetrics(s);
     }
     return s;
@@ -198,31 +201,28 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     {
         ImageStats s;
         const int cpp = vbuf.channelsPerPixel();
-        const bool isBGR = (isBgr24 || isBgra32);
-        const int rIdx = isBGR ? 2 : 0;
-        const int bIdx = isBGR ? 0 : 2;
         const bool skipClear = isRgba32 || isBgra32;
-        int counted = 0;
+        int64_t counted = 0;
+        auto accumulatePixel = [&](const uint8_t *p)
+        {
+            if (skipClear && p[3] == 0)
+                return;
+            const Rgb8 rgb = unpackRgb8(p, fmt);
+            const int lum = lumaRec601(rgb);
+            const int v = (std::max)(rgb.r, (std::max)(rgb.g, rgb.b));
+            ++s.histLum[lum];
+            ++s.histV[v];
+            ++s.histR[rgb.r];
+            ++s.histG[rgb.g];
+            ++s.histB[rgb.b];
+            ++counted;
+        };
         if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<ptrdiff_t>(rw) * cpp)
         {
             const uint8_t *p = vbuf.data + static_cast<size_t>(ry) * vbuf.stride();
-            const size_t total = static_cast<size_t>(rw) * rh;
+            const size_t total = static_cast<size_t>(rw) * static_cast<size_t>(rh);
             for (size_t i = 0; i < total; ++i, p += cpp)
-            {
-                if (skipClear && p[3] == 0)
-                    continue;
-                const int r = p[rIdx];
-                const int g = p[1];
-                const int b = p[bIdx];
-                const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
-                const int v = (std::max)(r, (std::max)(g, b));
-                ++s.histLum[lum];
-                ++s.histV[v];
-                ++s.histR[r];
-                ++s.histG[g];
-                ++s.histB[b];
-                ++counted;
-            }
+                accumulatePixel(p);
         }
         else
         {
@@ -231,41 +231,29 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
                 const uint8_t *p = vbuf.data + static_cast<size_t>(y) * vbuf.stride() +
                                    static_cast<size_t>(rx) * cpp;
                 for (int x = 0; x < rw; ++x, p += cpp)
-                {
-                    if (skipClear && p[3] == 0)
-                        continue;
-                    const int r = p[rIdx];
-                    const int g = p[1];
-                    const int b = p[bIdx];
-                    const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
-                    const int v = (std::max)(r, (std::max)(g, b));
-                    ++s.histLum[lum];
-                    ++s.histV[v];
-                    ++s.histR[r];
-                    ++s.histG[g];
-                    ++s.histB[b];
-                    ++counted;
-                }
+                    accumulatePixel(p);
             }
         }
-        const int count = counted;
+        const int64_t count = counted;
         s.pixelCount = count;
         if (count > 0)
         {
-            long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
+            int64_t sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
             for (int i = 0; i < 256; ++i)
             {
-                sumL += static_cast<long long>(i) * s.histLum[i];
-                sumV += static_cast<long long>(i) * s.histV[i];
-                sumR += static_cast<long long>(i) * s.histR[i];
-                sumG += static_cast<long long>(i) * s.histG[i];
-                sumB += static_cast<long long>(i) * s.histB[i];
+                const int64_t bin = i;
+                sumL += bin * s.histLum[i];
+                sumV += bin * s.histV[i];
+                sumR += bin * s.histR[i];
+                sumG += bin * s.histG[i];
+                sumB += bin * s.histB[i];
             }
-            s.lumMean = static_cast<double>(sumL) / count;
-            s.vMean = static_cast<double>(sumV) / count;
-            s.rMean = static_cast<double>(sumR) / count;
-            s.gMean = static_cast<double>(sumG) / count;
-            s.bMean = static_cast<double>(sumB) / count;
+            const double samples = static_cast<double>(count);
+            s.lumMean = static_cast<double>(sumL) / samples;
+            s.vMean = static_cast<double>(sumV) / samples;
+            s.rMean = static_cast<double>(sumR) / samples;
+            s.gMean = static_cast<double>(sumG) / samples;
+            s.bMean = static_cast<double>(sumB) / samples;
             finalizeStatsHistogramMetrics(s);
         }
         return s;

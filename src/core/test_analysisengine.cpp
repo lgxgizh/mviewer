@@ -345,6 +345,14 @@ void test_image_stats_extended()
     const std::string csv = s.toCsvRow();
     CHECK(!csv.empty());
     CHECK(csv.starts_with("16,")); // starts with pixelCount=16
+
+    ImageStats wide;
+    const int64_t hugeBin = int64_t{1} << 40;
+    const int64_t hugeCount = int64_t{1} << 33;
+    wide.histLum[3] = hugeBin;
+    wide.pixelCount = hugeCount;
+    CHECK(wide.histLum[3] == hugeBin);
+    CHECK(wide.pixelCount == hugeCount);
 }
 
 int main()

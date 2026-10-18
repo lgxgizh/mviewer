@@ -1,4 +1,5 @@
 #include "core/analyzer/MTFAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 
 #include <algorithm>
 #include <cmath>
@@ -74,13 +75,13 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            leftSum += pixelLuminanceAvg(p, v.format);
+            leftSum += lumaAverageF(unpackRgb8(p, v.format));
         }
         for (int x = x1 - qW; x < x1; ++x)
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            rightSum += pixelLuminanceAvg(p, v.format);
+            rightSum += lumaAverageF(unpackRgb8(p, v.format));
         }
     }
     const double diffX = std::abs((rightSum - leftSum) / (static_cast<double>(qW * h)));
@@ -91,13 +92,13 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            topSum += pixelLuminanceAvg(p, v.format);
+            topSum += lumaAverageF(unpackRgb8(p, v.format));
         }
         for (int y = y1 - qH; y < y1; ++y)
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            bottomSum += pixelLuminanceAvg(p, v.format);
+            bottomSum += lumaAverageF(unpackRgb8(p, v.format));
         }
     }
     const double diffY = std::abs((bottomSum - topSum) / (static_cast<double>(w * qH)));
@@ -117,7 +118,7 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
             {
                 const uint8_t *p =
                     v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-                col += pixelLuminanceAvg(p, v.format);
+                col += lumaAverageF(unpackRgb8(p, v.format));
             }
             profile[static_cast<size_t>(x - x0)] = col / h;
         }
@@ -131,7 +132,7 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
             {
                 const uint8_t *p =
                     v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-                row += pixelLuminanceAvg(p, v.format);
+                row += lumaAverageF(unpackRgb8(p, v.format));
             }
             profile[static_cast<size_t>(y - y0)] = row / w;
         }
@@ -255,8 +256,7 @@ bool MTFAnalyzer::analyze(const ImageFrame &frame)
     if (frame.pixels().isNull())
         return false;
     const ConstImageView v = frame.pixels().constView();
-    compute(v, 0, 0, v.width, v.height);
-    return true;
+    return compute(v, 0, 0, v.width, v.height);
 }
 
 bool MTFAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::Selection &region)
@@ -276,8 +276,7 @@ bool MTFAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::
     const int y1 = static_cast<int>(std::max(y0ll, y1ll));
     if (x1 <= x0 || y1 <= y0)
         return false;
-    compute(v, x0, y0, x1, y1);
-    return true;
+    return compute(v, x0, y0, x1, y1);
 }
 
 std::string MTFAnalyzer::resultText() const

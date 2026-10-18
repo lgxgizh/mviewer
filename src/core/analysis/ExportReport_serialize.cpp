@@ -426,13 +426,20 @@ std::string AnalysisBatchReport::toCsv() const
     for (size_t i = 0; i < filenames.size(); ++i)
     {
         os << csvEscape(filenames[i]);
+        if (i >= rows.size())
+        {
+            for (size_t c = 0; c < columns.size(); ++c)
+                os << ",";
+            os << "\n";
+            continue;
+        }
         const auto &row = rows[i];
         for (const auto &c : columns)
         {
             os << ",";
             auto it = row.find(c);
             if (it != row.end())
-                os << it->second;
+                os << csvEscape(csvNumber(it->second));
         }
         os << "\n";
     }
@@ -458,12 +465,18 @@ std::string AnalysisBatchReport::toJson() const
         if (i)
             os << ",";
         os << "\n    { \"filename\": \"" << jsonEscape(filenames[i]) << "\"";
-        const auto &row = rows[i];
-        for (const auto &c : columns)
+        if (i < rows.size())
         {
-            auto it = row.find(c);
-            if (it != row.end())
-                os << ", \"" << jsonEscape(c) << "\": " << it->second;
+            const auto &row = rows[i];
+            for (const auto &c : columns)
+            {
+                auto it = row.find(c);
+                if (it != row.end())
+                {
+                    os << ", \"" << jsonEscape(c) << "\": ";
+                    writeJsonNumber(os, it->second);
+                }
+            }
         }
         os << " }";
     }

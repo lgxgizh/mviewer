@@ -25,11 +25,11 @@ namespace mviewer::core
 // ImageStats. Partial alpha is counted at its stored RGB value.
 struct Histogram
 {
-    std::vector<long> r, g, b;
-    std::vector<long> luma; // Rec.601: 0.299 R + 0.587 G + 0.114 B
-    std::vector<long> v;    // HSV-V: max(R, G, B)
+    std::vector<int64_t> r, g, b;
+    std::vector<int64_t> luma; // Rec.601: 0.299 R + 0.587 G + 0.114 B
+    std::vector<int64_t> v;    // HSV-V: max(R, G, B)
     int bins = 256;
-    long total = 0; // samples that contributed; transparent pixels are not included
+    int64_t total = 0; // samples that contributed; transparent pixels are not included
 };
 
 namespace histogram_detail
@@ -54,11 +54,11 @@ inline Histogram makeEmpty(int bins)
     return h;
 }
 
-inline long accumulateGray256(const uint8_t *data, int64_t stride, int64_t x0, int64_t y0,
-                              int64_t x1, int64_t y1, int sx, int sy, long *rAcc, long *gAcc,
-                              long *bAcc, long *lumaAcc, long *vAcc)
+inline int64_t accumulateGray256(const uint8_t *data, int64_t stride, int64_t x0, int64_t y0,
+                                 int64_t x1, int64_t y1, int sx, int sy, int64_t *rAcc,
+                                 int64_t *gAcc, int64_t *bAcc, int64_t *lumaAcc, int64_t *vAcc)
 {
-    long samples = 0;
+    int64_t samples = 0;
     for (int64_t y = y0; y < y1; y += sy)
     {
         const uint8_t *row = data + static_cast<size_t>(y) * static_cast<size_t>(stride);
@@ -78,11 +78,11 @@ inline long accumulateGray256(const uint8_t *data, int64_t stride, int64_t x0, i
     return samples;
 }
 
-inline long accumulateBgr256(const uint8_t *data, int64_t stride, int cpp, int64_t x0, int64_t y0,
-                             int64_t x1, int64_t y1, int sx, int sy, long *rAcc, long *gAcc,
-                             long *bAcc, long *lumaAcc, long *vAcc)
+inline int64_t accumulateBgr256(const uint8_t *data, int64_t stride, int cpp, int64_t x0,
+                                int64_t y0, int64_t x1, int64_t y1, int sx, int sy, int64_t *rAcc,
+                                int64_t *gAcc, int64_t *bAcc, int64_t *lumaAcc, int64_t *vAcc)
 {
-    long samples = 0;
+    int64_t samples = 0;
     const size_t step = static_cast<size_t>(sx) * static_cast<size_t>(cpp);
     for (int64_t y = y0; y < y1; y += sy)
     {
@@ -109,11 +109,11 @@ inline long accumulateBgr256(const uint8_t *data, int64_t stride, int cpp, int64
     return samples;
 }
 
-inline long accumulateRgb256(const uint8_t *data, int64_t stride, int cpp, int64_t x0, int64_t y0,
-                             int64_t x1, int64_t y1, int sx, int sy, long *rAcc, long *gAcc,
-                             long *bAcc, long *lumaAcc, long *vAcc)
+inline int64_t accumulateRgb256(const uint8_t *data, int64_t stride, int cpp, int64_t x0,
+                                int64_t y0, int64_t x1, int64_t y1, int sx, int sy, int64_t *rAcc,
+                                int64_t *gAcc, int64_t *bAcc, int64_t *lumaAcc, int64_t *vAcc)
 {
-    long samples = 0;
+    int64_t samples = 0;
     const size_t step = static_cast<size_t>(sx) * static_cast<size_t>(cpp);
     for (int64_t y = y0; y < y1; y += sy)
     {
@@ -144,12 +144,12 @@ inline Histogram accumulate256(const ConstImageView &v, int64_t x0, int64_t y0, 
                                int64_t y1, int sx, int sy, bool gray, bool bgr)
 {
     Histogram h = makeEmpty(256);
-    alignas(16) long rAcc[256]{};
-    alignas(16) long gAcc[256]{};
-    alignas(16) long bAcc[256]{};
-    alignas(16) long lumaAcc[256]{};
-    alignas(16) long vAcc[256]{};
-    long samples = 0;
+    alignas(16) int64_t rAcc[256]{};
+    alignas(16) int64_t gAcc[256]{};
+    alignas(16) int64_t bAcc[256]{};
+    alignas(16) int64_t lumaAcc[256]{};
+    alignas(16) int64_t vAcc[256]{};
+    int64_t samples = 0;
     const int cpp = v.channelsPerPixel();
     if (gray)
         samples = accumulateGray256(v.data, v.stride(), x0, y0, x1, y1, sx, sy, rAcc, gAcc, bAcc,
@@ -175,7 +175,7 @@ inline Histogram accumulateNBins(const ConstImageView &v, int64_t x0, int64_t y0
     Histogram h = makeEmpty(bins);
     const int cpp = v.channelsPerPixel();
     const int maxBin = bins - 1;
-    long samples = 0;
+    int64_t samples = 0;
     for (int64_t y = y0; y < y1; y += sy)
     {
         const uint8_t *row = v.data + static_cast<size_t>(y) * static_cast<size_t>(v.stride());

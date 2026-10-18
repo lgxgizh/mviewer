@@ -293,17 +293,16 @@ void ImageViewer::scheduleRoiStats(const QRect &selection)
                     if (!viewer || viewer->m_roiRevision != revision || viewer->m_frame != frame ||
                         viewer->m_currentPath != path || !result->valid)
                         return;
-                    const QString text =
-                        QString("ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9")
-                            .arg(region.x)
-                            .arg(region.y)
-                            .arg(region.width)
-                            .arg(region.height)
-                            .arg(result->lumMean, 0, 'f', 1)
-                            .arg(result->vMean, 0, 'f', 1)
-                            .arg(result->rMean)
-                            .arg(result->gMean)
-                            .arg(result->bMean);
+                    const QString text = QString("ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9")
+                                             .arg(region.x)
+                                             .arg(region.y)
+                                             .arg(region.width)
+                                             .arg(region.height)
+                                             .arg(result->lumMean, 0, 'f', 1)
+                                             .arg(result->vMean, 0, 'f', 1)
+                                             .arg(result->rMean)
+                                             .arg(result->gMean)
+                                             .arg(result->bMean);
                     emit viewer->regionStats(text);
                 },
                 Qt::QueuedConnection);
@@ -522,8 +521,8 @@ void ImageViewer::zoomActual()
 void ImageViewer::setLockZoom(bool lock)
 {
     m_lockZoom = lock;
-    emit statusMessageRequested(
-        lock ? tr("已开启缩放锁定 (切图保持缩放比)") : tr("已关闭缩放锁定"), 2000);
+    emit statusMessageRequested(lock ? tr("已开启缩放锁定 (切图保持缩放比)") : tr("已关闭缩放锁定"),
+                                2000);
 }
 
 void ImageViewer::computeHistogram()
@@ -539,7 +538,8 @@ void ImageViewer::computeHistogram()
     }
     const auto &hist = m_frame->histogram();
     for (int i = 0; i < 256; ++i)
-        m_histogram[i] = std::min(hist.luminance[i], 0x7FFFFFFF);
+        m_histogram[i] = static_cast<int>(
+            std::min<int64_t>(hist.luminance[i], static_cast<int64_t>(0x7FFFFFFF)));
     m_hasHistogram = true;
 }
 
@@ -732,7 +732,10 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
     }
 }
 
-QRect ImageViewer::selectedRegion() const { return QRect(m_selStart, m_selEnd).normalized(); }
+QRect ImageViewer::selectedRegion() const
+{
+    return QRect(m_selStart, m_selEnd).normalized();
+}
 
 void ImageViewer::setSelectMode(bool on)
 {

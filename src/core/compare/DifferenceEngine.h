@@ -47,8 +47,10 @@ class DifferenceEngine
     };
 
     // Suggests an optimal difference threshold using Otsu's method on the
-    // difference distribution (maximizing between-class variance). Returns a
-    // value in 1..254 (or 0 if identical/null).
+    // full 0..255 difference histogram (bin 0 is included). A null or empty
+    // image returns 0. A histogram with every sample in one bin, or with no
+    // positive between-class variance, returns that bin. Class weights are
+    // 64-bit and a class mean is only divided when that class is non-empty.
     static uint8_t suggestThreshold(const ImageData &grayDiff);
 
     // Stats over the whole diff map. Returns default (all zero) on null input.

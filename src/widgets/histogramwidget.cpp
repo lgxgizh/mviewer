@@ -100,7 +100,7 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
         return;
 
     // Channel accessor: 0=R 1=G 2=B 3=Luma 4=V.
-    auto channelOf = [](const mviewer::core::Histogram &hist, int c) -> const std::vector<long> *
+    auto channelOf = [](const mviewer::core::Histogram &hist, int c) -> const std::vector<int64_t> *
     {
         switch (c)
         {
@@ -120,7 +120,7 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
     };
 
     // Y mapping: linear or log1p (log keeps small bins visible next to peaks).
-    auto mapVal = [this](long v) -> double
+    auto mapVal = [this](int64_t v) -> double
     { return m_logScale ? std::log1p(static_cast<double>(v)) : static_cast<double>(v); };
 
     // Shared scale across every histogram so channels/images are comparable.
@@ -133,7 +133,7 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
             const auto *ch = channelOf(hist, c);
             if (!ch)
                 continue;
-            for (long v : *ch)
+            for (int64_t v : *ch)
                 maxVal = std::max(maxVal, mapVal(v));
         }
 

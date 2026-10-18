@@ -94,9 +94,10 @@ bool AnalysisPanel::runLegacyAnalyzer(const QString &id)
                 if (ok)
                 {
                     ran = true;
-                    m_statsA.pixelCount = m_hasROI
-                                              ? std::max(0, m_roi.width) * std::max(0, m_roi.height)
-                                              : m_frameA->width() * m_frameA->height();
+                    m_statsA.pixelCount =
+                        m_hasROI ? static_cast<int64_t>(std::max(0, m_roi.width)) *
+                                       std::max(0, m_roi.height)
+                                 : static_cast<int64_t>(m_frameA->width()) * m_frameA->height();
                     const std::string text = analyzer->resultText();
                     const auto metrics = analyzer->resultMetrics();
                     const auto *hist = dynamic_cast<const HistogramAnalyzer *>(analyzer.get());

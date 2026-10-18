@@ -2,9 +2,12 @@
 #include "compare_live_diff.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageBuffer.h"
+#include "domain/Selection.h"
 #include <QApplication>
 #include <algorithm>
+#include <cstring>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 static int g_fail = 0;
@@ -224,6 +227,49 @@ int main(int argc, char **argv)
               "suggestThreshold identical is 0");
         const uint8_t suggested = DifferenceEngine::suggestThreshold(diff);
         CHECK(suggested > 0, "suggestThreshold on differing image produces positive threshold");
+    }
+
+    // Otsu covers bin 0 and returns the occupied bin when the histogram is degenerate.
+    {
+        auto fillGray = [](uint8_t value)
+        {
+            ImageData img = makeImageData(8, 8, PixelFormat::Grayscale8);
+            if (img.buffer)
+                std::memset(img.buffer->data(), value, img.buffer->size());
+            return img;
+        };
+        CHECK(DifferenceEngine::suggestThreshold(fillGray(0)) == 0,
+              "suggestThreshold all-zero is 0");
+        CHECK(DifferenceEngine::suggestThreshold(fillGray(200)) == 200,
+              "suggestThreshold single bin 200 returns 200");
+        CHECK(DifferenceEngine::suggestThreshold(fillGray(255)) == 255,
+              "suggestThreshold single bin 255 returns 255");
+
+        ImageData split = makeImageData(8, 8, PixelFormat::Grayscale8);
+        CHECK(split.buffer != nullptr, "split histogram image allocated");
+        if (split.buffer)
+        {
+            uint8_t *px = split.buffer->data();
+            std::memset(px, 0, 32);
+            std::memset(px + 32, 200, 32);
+            CHECK(DifferenceEngine::suggestThreshold(split) == 0,
+                  "suggestThreshold split 0/200 includes bin 0");
+            std::memset(px, 10, 32);
+            std::memset(px + 32, 200, 32);
+            CHECK(DifferenceEngine::suggestThreshold(split) == 10,
+                  "suggestThreshold two peaks returns the lower bin");
+        }
+
+        mviewer::domain::Selection wide;
+        wide.width = 100000;
+        wide.height = 100000;
+        const int64_t side = 100000;
+        CHECK(wide.area() == side * side, "Selection::area 100000^2 does not wrap");
+        const int64_t maxSide = std::numeric_limits<int>::max();
+        mviewer::domain::Selection huge;
+        huge.width = static_cast<int>(maxSide);
+        huge.height = static_cast<int>(maxSide);
+        CHECK(huge.area() == maxSide * maxSide, "Selection::area INT_MAX^2 does not wrap");
     }
 
     // M23: computeStats — ROI clipping

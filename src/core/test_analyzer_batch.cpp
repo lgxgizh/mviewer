@@ -3,13 +3,16 @@
 // registry, assemble an AnalysisBatchReport, and assert the structured metrics
 // + serialization are well-formed.
 #include "core/analysis/ExportReport.h"
+#include "core/analysis/ReportHtml.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/AnalyzerResult.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 
+#include <cmath>
 #include <cstdio>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -130,6 +133,49 @@ static void testUnknownAnalyzer()
     CHECK(contains(report.toCsv(), "filename"), "empty CSV still has header");
 }
 
+static void testBatchEscaping()
+{
+    printf("\n[batch CSV/JSON escaping]\n");
+    fflush(stdout);
+    mviewer::core::AnalysisBatchReport report;
+    report.analyzerId = "histogram";
+    report.columns = {"lumMean", "note"};
+    report.filenames = {"a,b.png",      "quote\"name.png", "line\nname.png",
+                        "cr\rname.png", "plain.png",       "extra.png"};
+    report.rows.resize(5);
+    report.rows[0]["lumMean"] = 12.0;
+    report.rows[0]["note"] = std::numeric_limits<double>::quiet_NaN();
+    report.rows[1]["lumMean"] = std::numeric_limits<double>::infinity();
+    report.rows[2]["lumMean"] = -std::numeric_limits<double>::infinity();
+    report.rows[3]["lumMean"] = 1.5;
+    report.rows[4]["lumMean"] = 3.0;
+    // filenames has one more entry than rows.
+
+    const std::string csv = report.toCsv();
+    CHECK(contains(csv, "\"a,b.png\""), "CSV quotes a comma");
+    CHECK(contains(csv, "\"quote\"\"name.png\""), "CSV doubles an inner quote");
+    CHECK(contains(csv, "\"line\nname.png\""), "CSV quotes a line feed");
+    CHECK(contains(csv, "\"cr\rname.png\""), "CSV quotes a carriage return");
+    CHECK(contains(csv, "12"), "CSV keeps a finite metric");
+    CHECK(csv.find("nan") == std::string::npos, "CSV omits a non-finite token");
+    CHECK(csv.find("inf") == std::string::npos, "CSV omits an infinity token");
+    CHECK(contains(csv, "extra.png"), "CSV emits a filename whose row is missing");
+
+    const std::string json = report.toJson();
+    CHECK(json.find("nan") == std::string::npos, "JSON does not emit nan");
+    CHECK(json.find("inf") == std::string::npos, "JSON does not emit inf");
+    CHECK(contains(json, "null"), "JSON emits null for a non-finite metric");
+    CHECK(contains(json, "12"), "JSON keeps a finite metric");
+    CHECK(contains(json, "extra.png"), "JSON emits a filename whose row is missing");
+
+    mviewer::core::ReportContext ctx;
+    ctx.hasBatch = true;
+    ctx.batch = report;
+    const std::string html = mviewer::core::buildReportHtml(ctx);
+    CHECK(contains(html, "extra.png"), "HTML emits a filename whose row is missing");
+    CHECK(html.find("nan") == std::string::npos, "HTML omits a non-finite token");
+}
+
 static void testAvailableAnalyzers()
 {
     printf("\n[registry availableAnalyzers]\n");
@@ -149,6 +195,7 @@ int main()
     fflush(stdout);
     testHistogramBatch();
     testUnknownAnalyzer();
+    testBatchEscaping();
     testAvailableAnalyzers();
     printf("\n=== M13.4 batch analyzer export: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

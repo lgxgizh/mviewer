@@ -145,7 +145,7 @@ void waitForHistogramPopulated(CompareWorkspace *ws, const QString &objectName,
 
 // P1 (async histogram contract): wait until a histogram widget's first entry
 // reports exactly the expected pixel total (e.g. an ROI-restricted 32x32).
-void waitForHistogramTotal(CompareWorkspace *ws, const QString &objectName, long expectedTotal,
+void waitForHistogramTotal(CompareWorkspace *ws, const QString &objectName, int64_t expectedTotal,
                            int timeoutMs = 15000)
 {
     QElapsedTimer t;

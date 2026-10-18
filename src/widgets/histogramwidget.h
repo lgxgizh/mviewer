@@ -4,6 +4,7 @@
 //
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include <QWidget>
@@ -27,7 +28,7 @@ class HistogramWidget : public QWidget
     {
         return static_cast<int>(m_hists.size());
     }
-    long histogramTotal(int index) const noexcept
+    int64_t histogramTotal(int index) const noexcept
     {
         if (index < 0 || index >= histogramCount())
             return 0;

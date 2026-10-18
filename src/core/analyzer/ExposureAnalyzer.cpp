@@ -1,4 +1,5 @@
 #include "core/analyzer/ExposureAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 
@@ -14,7 +15,6 @@ bool ExposureAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, 
 
     int64_t shadows = 0, highlights = 0;
     int64_t iSum = 0;
-    const bool isBGR = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
     const bool isGray = (v.format == PixelFormat::Grayscale8);
 
     if (isGray)
@@ -41,10 +41,7 @@ bool ExposureAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, 
             const uint8_t *p = line + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p += cpp)
             {
-                const int r = isBGR ? p[2] : p[0];
-                const int g = p[1];
-                const int b = isBGR ? p[0] : p[2];
-                const int l = (19595 * r + 38470 * g + 7471 * b) >> 16;
+                const int l = lumaRec601(unpackRgb8(p, v.format));
                 iSum += l;
                 if (l < 25)
                     ++shadows;

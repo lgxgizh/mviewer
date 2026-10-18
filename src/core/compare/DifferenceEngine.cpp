@@ -49,8 +49,7 @@ MV_TARGET_SSSE3_SSE41
 static inline int diffRGB24RowSIMD(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
                                    uint8_t threshold)
 {
-    const __m128i maskR =
-        _mm_setr_epi8(0, 3, 6, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
+    const __m128i maskR = _mm_setr_epi8(0, 3, 6, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
     const __m128i maskG =
         _mm_setr_epi8(1, 4, 7, 10, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
     const __m128i maskB =
@@ -88,12 +87,9 @@ static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *d
         for (int k = 0; k < 4; ++k)
         {
             const int idx = (x + k) * 3;
-            const int dr =
-                std::abs(static_cast<int>(la[idx + 0]) - static_cast<int>(lb[idx + 0]));
-            const int dg =
-                std::abs(static_cast<int>(la[idx + 1]) - static_cast<int>(lb[idx + 1]));
-            const int db =
-                std::abs(static_cast<int>(la[idx + 2]) - static_cast<int>(lb[idx + 2]));
+            const int dr = std::abs(static_cast<int>(la[idx + 0]) - static_cast<int>(lb[idx + 0]));
+            const int dg = std::abs(static_cast<int>(la[idx + 1]) - static_cast<int>(lb[idx + 1]));
+            const int db = std::abs(static_cast<int>(la[idx + 2]) - static_cast<int>(lb[idx + 2]));
             const int sum = dr + dg + db;
             const uint8_t diff = static_cast<uint8_t>((sum * kFixedPointDiv3Multiplier) >> 16);
             dst[x + k] = (diff >= threshold) ? diff : 0;
@@ -113,7 +109,7 @@ static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *d
 #if defined(MV_ARCH_X86)
 MV_TARGET_AVX2
 static inline int diffGrayscale8RowAVX2(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
-                                       uint8_t threshold)
+                                        uint8_t threshold)
 {
     int x = 0;
     const __m256i vthresh = _mm256_set1_epi8(static_cast<char>(threshold));
@@ -122,8 +118,7 @@ static inline int diffGrayscale8RowAVX2(const uint8_t *la, const uint8_t *lb, ui
     {
         const __m256i va = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(la + x));
         const __m256i vb = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(lb + x));
-        const __m256i diff =
-            _mm256_or_si256(_mm256_subs_epu8(va, vb), _mm256_subs_epu8(vb, va));
+        const __m256i diff = _mm256_or_si256(_mm256_subs_epu8(va, vb), _mm256_subs_epu8(vb, va));
         const __m256i under = _mm256_subs_epu8(vthresh, diff);
         const __m256i mask = _mm256_cmpeq_epi8(under, vzero);
         _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + x), _mm256_and_si256(diff, mask));
@@ -133,7 +128,7 @@ static inline int diffGrayscale8RowAVX2(const uint8_t *la, const uint8_t *lb, ui
 
 MV_TARGET_SSE2
 static inline int diffGrayscale8RowSSE2(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
-                                       int startX, uint8_t threshold)
+                                        int startX, uint8_t threshold)
 {
     int x = startX;
     const __m128i vthresh128 = _mm_set1_epi8(static_cast<char>(threshold));
@@ -196,10 +191,9 @@ static inline int diffRGBA32RowSIMD(const uint8_t *la, const uint8_t *lb, uint8_
     {
         const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
         const __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
-        const __m128i va1 =
-            _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + (x + 4) * 4));
-        const __m128i vb1 =
-            _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + (x + 4) * 4));
+        const ptrdiff_t off1 = static_cast<ptrdiff_t>(x + 4) * 4;
+        const __m128i va1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + off1));
+        const __m128i vb1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + off1));
 
         const __m128i diff0 = _mm_or_si128(_mm_subs_epu8(va0, vb0), _mm_subs_epu8(vb0, va0));
         const __m128i diff1 = _mm_or_si128(_mm_subs_epu8(va1, vb1), _mm_subs_epu8(vb1, va1));
@@ -239,12 +233,9 @@ static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *
         for (int k = 0; k < 4; ++k)
         {
             const int idx = (x + k) * 4;
-            const int dr =
-                std::abs(static_cast<int>(la[idx + 0]) - static_cast<int>(lb[idx + 0]));
-            const int dg =
-                std::abs(static_cast<int>(la[idx + 1]) - static_cast<int>(lb[idx + 1]));
-            const int db =
-                std::abs(static_cast<int>(la[idx + 2]) - static_cast<int>(lb[idx + 2]));
+            const int dr = std::abs(static_cast<int>(la[idx + 0]) - static_cast<int>(lb[idx + 0]));
+            const int dg = std::abs(static_cast<int>(la[idx + 1]) - static_cast<int>(lb[idx + 1]));
+            const int db = std::abs(static_cast<int>(la[idx + 2]) - static_cast<int>(lb[idx + 2]));
             const int sum = dr + db + dg;
             const uint8_t diff = static_cast<uint8_t>((sum * kFixedPointDiv3Multiplier) >> 16);
             dst[x + k] = (diff >= threshold) ? diff : 0;
@@ -604,54 +595,74 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
 
 uint8_t DifferenceEngine::suggestThreshold(const ImageData &grayDiff)
 {
-    if (grayDiff.isNull() || grayDiff.width <= 0 || grayDiff.height <= 0)
+    if (grayDiff.isNull() || grayDiff.width <= 0 || grayDiff.height <= 0 || !grayDiff.buffer)
         return 0;
 
-    int hist[256] = {0};
+    int64_t hist[256] = {};
     const int w = grayDiff.width;
     const int h = grayDiff.height;
     const int cpp = grayDiff.channelsPerPixel();
     const int ro = channelOffset(grayDiff.format, 0);
+    const bool grayDirect = (cpp == 1 && ro == 0);
 
     for (int y = 0; y < h; ++y)
     {
         const uint8_t *src = grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
         for (int x = 0; x < w; ++x)
         {
-            const uint8_t v = (cpp == 1 && ro == 0) ? src[x] : src[x * cpp + ro];
+            const size_t ix = static_cast<size_t>(x);
+            const uint8_t v =
+                grayDirect ? src[ix] : src[ix * static_cast<size_t>(cpp) + static_cast<size_t>(ro)];
             ++hist[v];
         }
     }
 
-    const int total = w * h;
-    const int nonZero = total - hist[0];
-    if (nonZero <= 0)
+    const int64_t total = static_cast<int64_t>(w) * static_cast<int64_t>(h);
+    if (total <= 0)
         return 0;
 
+    int modeBin = 0;
+    int occupied = 0;
+    int64_t modeCount = 0;
+    for (int i = 0; i < 256; ++i)
+    {
+        if (hist[i] <= 0)
+            continue;
+        ++occupied;
+        if (hist[i] > modeCount)
+        {
+            modeCount = hist[i];
+            modeBin = i;
+        }
+    }
+    // One occupied bin (all zeros, or every pixel equal) has no split.
+    if (occupied <= 1)
+        return static_cast<uint8_t>(modeBin);
+
     double sum = 0.0;
-    for (int i = 1; i < 256; ++i)
-        sum += static_cast<double>(i) * hist[i];
+    for (int i = 0; i < 256; ++i)
+        sum += static_cast<double>(i) * static_cast<double>(hist[i]);
 
     double sumB = 0.0;
-    int wB = 0;
-    double maxVar = -1.0;
-    int bestT = 1;
-
-    for (int t = 1; t < 255; ++t)
+    int64_t wB = 0;
+    double maxVar = 0.0;
+    int bestT = modeBin;
+    // t runs from bin 0. A threshold is only scored when both classes have
+    // samples, so the means are never divided by zero.
+    for (int t = 0; t < 256; ++t)
     {
         wB += hist[t];
-        if (wB == 0)
+        if (wB <= 0)
             continue;
-        const int wF = nonZero - wB;
-        if (wF == 0)
+        const int64_t wF = total - wB;
+        if (wF <= 0)
             break;
 
-        sumB += static_cast<double>(t) * hist[t];
-        const double mB = sumB / wB;
-        const double mF = (sum - sumB) / wF;
-
-        const double varBetween =
-            static_cast<double>(wB) * static_cast<double>(wF) * (mB - mF) * (mB - mF);
+        sumB += static_cast<double>(t) * static_cast<double>(hist[t]);
+        const double mB = sumB / static_cast<double>(wB);
+        const double mF = (sum - sumB) / static_cast<double>(wF);
+        const double delta = mB - mF;
+        const double varBetween = static_cast<double>(wB) * static_cast<double>(wF) * delta * delta;
         if (varBetween > maxVar)
         {
             maxVar = varBetween;
@@ -659,6 +670,7 @@ uint8_t DifferenceEngine::suggestThreshold(const ImageData &grayDiff)
         }
     }
 
-    return static_cast<uint8_t>(std::clamp(bestT, 1, 254));
+    if (!(maxVar > 0.0))
+        return static_cast<uint8_t>(modeBin);
+    return static_cast<uint8_t>(bestT);
 }
-

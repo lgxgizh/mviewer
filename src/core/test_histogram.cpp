@@ -7,7 +7,9 @@
 #include "core/compare/Histogram.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "domain/Histogram.h"
 
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -55,16 +57,16 @@ int main()
     CHECK(h.r[10] == 1 && h.r[40] == 1 && h.r[70] == 1 && h.r[100] == 1, "R bins correct");
     CHECK(h.g[20] == 1, "G bin correct");
     CHECK(h.b[120] == 1, "B bin correct");
-    long s = 0;
-    for (long v : h.r)
+    int64_t s = 0;
+    for (int64_t v : h.r)
         s += v;
     CHECK(s == 4, "R channel sums to total");
     s = 0;
-    for (long v : h.g)
+    for (int64_t v : h.g)
         s += v;
     CHECK(s == 4, "G channel sums to total");
     s = 0;
-    for (long v : h.b)
+    for (int64_t v : h.b)
         s += v;
     CHECK(s == 4, "B channel sums to total");
 
@@ -90,12 +92,12 @@ int main()
         CHECK(hw.luma[255] == 1, "white pixel -> luma 255");
         CHECK(hw.v.size() == 256, "HSV-V has 256 bins");
         CHECK(hw.v[255] == 1, "white pixel -> V 255");
-        long ls = 0;
-        for (long v : hw.luma)
+        int64_t ls = 0;
+        for (int64_t v : hw.luma)
             ls += v;
         CHECK(ls == hw.total, "luma sums to total");
-        long vs = 0;
-        for (long v : hw.v)
+        int64_t vs = 0;
+        for (int64_t v : hw.v)
             vs += v;
         CHECK(vs == hw.total, "V channel sums to total");
     }
@@ -221,8 +223,8 @@ int main()
         CHECK(h.v[60] == 1, "V is max(R,G,B)");
         const int luma = luminance(40, 50, 60);
         CHECK(h.luma[static_cast<size_t>(luma)] == 1, "luma is Rec.601 of the opaque pixel");
-        long redSum = 0;
-        for (long bin : h.r)
+        int64_t redSum = 0;
+        for (int64_t bin : h.r)
             redSum += bin;
         CHECK(redSum == h.total, "alpha byte is not counted as an extra colour sample");
 
@@ -275,6 +277,22 @@ int main()
         clearFrame.computeHistogram();
         CHECK(clearFrame.histogram().vMean == 0.0 && clearFrame.histogram().totalPixels() == 0,
               "all-transparent ImageFrame keeps zero means");
+    }
+
+    // Bin counters are 64-bit so a single bin can pass 2^32 samples.
+    {
+        const int64_t huge = int64_t{1} << 40;
+        Histogram wide;
+        wide.bins = 256;
+        wide.luma.assign(256, 0);
+        wide.luma[0] = huge;
+        wide.total = huge;
+        CHECK(wide.luma[0] == huge, "core histogram bin holds 2^40");
+        CHECK(wide.total == huge, "core histogram total holds 2^40");
+
+        mviewer::domain::Histogram dh;
+        dh.luminance[0] = huge;
+        CHECK(dh.totalPixels() == huge, "domain histogram totalPixels is 64-bit");
     }
 
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);
