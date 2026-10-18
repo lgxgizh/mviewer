@@ -3,7 +3,7 @@
 ## [Unreleased]
 
 ### Fixed
-- DiskCache：touch 使用 `MAX(ts+1, nowMs)`，避免与同毫秒 insert 并列时按 key 误淘汰刚访问的项（审计 #20 回归）。
+- DiskCache：touch 使用 `MAX(ts, nowMs)+1`，避免与同毫秒 insert 并列时按 key 误淘汰刚访问的项（审计 #20 回归）。
 
 - 启动时的插件目录提示改用 `qInfo()` / `qWarning()` 输出，不再写 `std::cout`；Windows GUI 程序没有控制台，原来这几行既看不到也进不了文件日志（审计 #40）。
 - 插件探测出的 Analyzer 通过插件的 `destroyAnalyzer` 释放，不再在宿主里 `delete` 或把探测实例泄漏掉（审计 #36）。
