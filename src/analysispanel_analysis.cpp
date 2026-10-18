@@ -61,20 +61,6 @@ void AnalysisPanel::reanalyze()
             scheduleAnalysis();
         return;
     }
-    if (id == "builtin_compare")
-    {
-        invalidateAnalysis();
-        clearAnalyzerResultSurface();
-        setReportAnalysisState(ReportAnalysisState::NoResult);
-        updateComparePage();
-        if (m_tabs && m_compareLabel)
-        {
-            const int tab = m_tabs->indexOf(m_compareLabel);
-            if (tab >= 0)
-                m_tabs->setCurrentIndex(tab);
-        }
-        return;
-    }
     if (m_frameA && m_frameA->isValid() && m_hasA && !m_imageA.isNull())
     {
         scheduleAnalyzerRun();
@@ -249,14 +235,12 @@ void AnalysisPanel::invalidateAnalysis()
 // as current while a newer automatic result is pending. Keeps the ROI state.
 void AnalysisPanel::resetImagePresentation()
 {
-    m_imageA = m_imageB = QImage();
-    m_hasA = m_hasB = false;
-    m_statsA = m_statsB = ImageStats();
+    m_imageA = QImage();
+    m_hasA = false;
+    m_statsA = ImageStats();
     m_noiseA = 0.0;
     m_noiseValid = false;
     m_statsLabel->clear();
-    m_compareLabel->clear();
-    m_diffPreview->clear();
     m_pluginResult->clear();
     m_histogramLabel->clear();
     m_rgbLabel->clear();
@@ -277,7 +261,7 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
     if (m_frameA.get() != r.frame.get())
         return; // stale frame identity
     if (!r.materialize && r.path != publishPath().toStdString())
-        return; // analyzer-only result no longer matches the current request path
+        return;     // analyzer-only result no longer matches the current request path
     m_task.reset(); // release the completed payload handle
     // Only an accepted MATERIALIZING delivery clears the dirty flag. An
     // analyzer-only delivery never runs while the frame is dirty (it is only
@@ -299,7 +283,6 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
         m_imageA = r.image;
         m_imagePath = QString::fromUtf8(r.path.data(), static_cast<int>(r.path.size()));
         m_hasA = true;
-        m_hasB = false;
         m_statsA = r.stats; // full-image stats, mirroring applyFrameImage
         m_noiseA = r.noise;
         m_noiseValid = r.noiseValid;
@@ -314,19 +297,6 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
         updateExposurePage();
         updateFocusPage();
         updateMetadataPage();
-
-        if (r.isBuiltinCompare)
-        {
-            updateComparePage(); // one-frame path: cheap 'Need two images to compare'
-            if (m_tabs && m_compareLabel)
-            {
-                const int tab = m_tabs->indexOf(m_compareLabel);
-                if (tab >= 0)
-                    m_tabs->setCurrentIndex(tab);
-            }
-            setReportAnalysisState(ReportAnalysisState::NoResult);
-            return;
-        }
     }
 
     if (r.analyzerFailed)
@@ -468,7 +438,7 @@ void AnalysisPanel::showAnalysisPending()
 }
 
 void AnalysisPanel::setReportAnalysisState(ReportAnalysisState state,
-                                            const QString &producerAnalyzerId)
+                                           const QString &producerAnalyzerId)
 {
     m_reportAnalysisState = state;
     m_reportAnalyzerId = state == ReportAnalysisState::Available ? producerAnalyzerId : QString();

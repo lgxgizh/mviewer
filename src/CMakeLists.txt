@@ -751,6 +751,25 @@ target_include_directories(mainwindow_commandstack_acceptance PRIVATE ${CMAKE_CU
 add_test(NAME mainwindow_commandstack_acceptance COMMAND mainwindow_commandstack_acceptance)
 set_tests_properties(mainwindow_commandstack_acceptance PROPERTIES RUN_SERIAL TRUE TIMEOUT 12)
 
+# Fullscreen viewer "分析" must leave fullscreen and show the analysis panel.
+add_executable(fullscreen_analysis_tests
+    test_fullscreen_analysis.cpp
+)
+
+target_link_libraries(fullscreen_analysis_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(fullscreen_analysis_tests PRIVATE cxx_std_20)
+target_include_directories(fullscreen_analysis_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME fullscreen_analysis_tests COMMAND fullscreen_analysis_tests)
+set_tests_properties(fullscreen_analysis_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
     test_rotate_selection.cpp

@@ -197,15 +197,15 @@ static void testPixelInspectorReadsFrame()
     CHECK(9999 >= view.width, "out-of-bounds x is correctly rejected by bounds check");
 }
 
-// Acceptance (P1 #6 / M3 Phase-2): Pixel Inspector shows Left RGB / Right RGB /
-// Delta / Difference. This reproduces the panel's pure delta math so the
-// computation is unit-tested without a QWidget.
+// Historical two-image pixel delta (per-channel difference and Euclidean
+// distance). AnalysisPanel no longer shows a second frame; two-image compare
+// lives in CompareWorkspace. The formula stays here as a pure unit check.
 static void testPixelInspectorDelta()
 {
     printf("\n[Pixel Inspector delta math]\n");
     fflush(stdout);
 
-    // Mirror AnalysisPanel::updateInspectorPage delta computation.
+    // Left RGB minus right RGB, then the Euclidean distance of that delta.
     auto delta =
         [](int lr, int lg, int lb, int rr, int rg, int rb, int &dR, int &dG, int &dB, double &dist)
     {

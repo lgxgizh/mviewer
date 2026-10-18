@@ -1,5 +1,9 @@
 # Workflow: Export (Analysis → Report file)
 
+This is **文件 → 导出报告** (`ExportReport`): the analysis / compare report.
+**文件 → 导出图片** CSV / JSON / HTML modes are an image metadata inventory
+(name, size, channel means), not this report.
+
 **Phase:** M13 / Product Beta — Phase 1 (Product Workflow verification)
 **Owner:** Hermes (commander)
 **Status:** VERIFIED (automated) — see `export_tests`

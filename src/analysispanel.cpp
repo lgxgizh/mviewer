@@ -3,11 +3,9 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/HistogramAnalyzer.h"
-#include "core/compare/Aligner.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "widgets/rawimageview.h"
 #include <QPointer>
-#include <QSettings>
 #include <QShowEvent>
 #include <QTimer>
 
@@ -312,68 +310,6 @@ void AnalysisPanel::updateFocusPage()
     m_focusLabel->setText(txt);
 }
 
-void AnalysisPanel::updateComparePage()
-{
-    if (!m_hasA || !m_hasB)
-    {
-        m_compareLabel->setText(tr("需要两张图片才能对比"));
-        return;
-    }
-    QSettings s;
-    const bool autoAlign = s.value("autoAlignBeforeDiff", false).toBool();
-
-    ImageData a = mvcore::fromQImage(m_imageA);
-    ImageData b = mvcore::fromQImage(m_imageB);
-    QPoint offset(0, 0);
-    bool aligned = false;
-    if (autoAlign)
-    {
-        // F3 (M22): register B to A before diff so PSNR/SSIM reflect signal,
-        // not mis-registration. Default off → no behavior change otherwise.
-        mviewer::AlignOffset off = mviewer::Aligner::estimate(a, b, 32);
-        offset = QPoint(off.x, off.y);
-        if (off.x != 0 || off.y != 0)
-        {
-            b = mviewer::Aligner::shift(b, off.x, off.y);
-            aligned = true;
-        }
-    }
-
-    double psnr = AnalysisEngine::psnr(a, b);
-    double ssim = AnalysisEngine::ssim(a, b);
-    double noiseA = AnalysisEngine::noiseEstimate(a);
-    double noiseB = AnalysisEngine::noiseEstimate(b);
-
-    QString txt = QString("<h3>%1</h3>").arg(tr("双图对比"));
-    txt += QString("<table>"
-                   "<tr><td>%2</td><td>%3 dB</td></tr>"
-                   "<tr><td>%4</td><td>%5</td></tr>"
-                   "<tr><td>%6</td><td>%7</td></tr>"
-                   "<tr><td>%8</td><td>%9</td></tr>"
-                   "</table>")
-               .arg(tr("PSNR"))
-               .arg(psnr, 0, 'f', 2)
-               .arg(tr("SSIM"))
-               .arg(ssim, 0, 'f', 4)
-               .arg(tr("噪声(A)"))
-               .arg(noiseLevelText(noiseA))
-               .arg(tr("噪声(B)"))
-               .arg(noiseLevelText(noiseB));
-    if (aligned)
-        txt += QString("<p><b>%1</b> dx=%2 dy=%3</p>")
-                   .arg(tr("已在对比前自动对齐"))
-                   .arg(offset.x())
-                   .arg(offset.y());
-    m_compareLabel->setText(txt);
-
-    QImage diff = computeDifferencePreview(m_imageA, mvcore::toQImageFast(b));
-    if (!diff.isNull())
-    {
-        m_diffPreview->setPixmap(QPixmap::fromImage(diff).scaled(
-            QSize(kPreviewSize, kPreviewSize), Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    }
-}
-
 void AnalysisPanel::updatePluginPage()
 {
     if (m_pluginIds.empty())
@@ -398,14 +334,6 @@ void AnalysisPanel::updatePluginPage()
                       .arg(QString::fromStdString(analyzer->name()))
                       .arg(QString::fromStdString(analyzer->description()));
     m_pluginResult->setText(txt);
-}
-
-QImage AnalysisPanel::computeDifferencePreview(const QImage &a, const QImage &b)
-{
-    ImageData diff = AnalysisEngine::differenceMap(mvcore::fromQImage(a), mvcore::fromQImage(b));
-    if (diff.isNull())
-        return QImage();
-    return mvcore::toQImageFast(diff);
 }
 
 QString AnalysisPanel::noiseLevelText(double variance)

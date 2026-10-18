@@ -156,16 +156,6 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     m_metaLabel->setWordWrap(true);
     m_metaLabel->setStyleSheet(analysisReadoutStyle(false));
     m_tabs->addTab(m_metaLabel, tr("元数据"));
-    m_compareLabel = new QLabel;
-    m_compareLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    m_compareLabel->setWordWrap(true);
-    m_compareLabel->setStyleSheet(analysisReadoutStyle(false));
-    m_tabs->addTab(m_compareLabel, tr("对比"));
-    m_diffPreview = new QLabel;
-    m_diffPreview->setMinimumHeight(kPreviewSize);
-    m_diffPreview->setAlignment(Qt::AlignCenter);
-    m_diffPreview->setStyleSheet("QLabel{background:#1e1e1e;}");
-    m_tabs->addTab(m_diffPreview, tr("差异图"));
     m_pluginResult = new QLabel;
     m_pluginResult->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_pluginResult->setWordWrap(true);

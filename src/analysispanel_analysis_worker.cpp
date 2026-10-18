@@ -40,7 +40,6 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
     r.frame = in.frame;
     r.path = in.path;
     r.id = in.id;
-    r.isBuiltinCompare = (in.id == "builtin_compare");
     r.materialize = in.materialize;
 
     // 1. Materializing request: create the RGB32 display copy and compute the
@@ -65,12 +64,7 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
             return r;
     }
 
-    // 2. builtin_compare: the one-frame path keeps the cheap 'Need two images'
-    //    behavior (compare itself stays a legacy synchronous two-image path).
-    if (r.isBuiltinCompare)
-        return r;
-
-    // 3. Analyzer creation failure on the UI thread is surfaced as an execution
+    // 2. Analyzer creation failure on the UI thread is surfaced as an execution
     //    error (M24 C#7 parity), never silently degraded into the base-stats /
     //    ROI fallback below. Base stats above still reach the delivery, exactly
     //    like the legacy applyFrameImage -> reanalyze error path.
@@ -80,7 +74,7 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
         return r;
     }
 
-    // 4. Execute the selected non-builtin analyzer over the frame (full or ROI,
+    // 3. Execute the selected analyzer over the frame (full or ROI,
     //    exactly matching the legacy reanalyze() semantics).
     if (in.analyzer)
     {
@@ -117,7 +111,7 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
         }
     }
 
-    // 5. Legacy ROI fallback: no analyzer ran successfully and an ROI is set.
+    // 4. Legacy ROI fallback: no analyzer ran successfully and an ROI is set.
     //    stats stays the FULL-image stats (the delivery renders RGB/Exposure/
     //    base pages from it first); only roiStats feeds the Histogram page, so
     //    the fallback changes exactly the same surfaces as the legacy path.
@@ -125,7 +119,8 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
     //    or the freshly created one (materializing) — never a UI-thread scan.
     if (in.hasROI)
     {
-        const ImageData roiData = in.materialize ? in.frame->pixels() : mvcore::fromQImage(in.image);
+        const ImageData roiData =
+            in.materialize ? in.frame->pixels() : mvcore::fromQImage(in.image);
         r.roiFallback = true;
         r.roiStats = AnalysisEngine::computeStatsROI(roiData, in.roi);
         r.hasRoiStats = true;
@@ -137,7 +132,7 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
         return r;
     }
 
-    // 6. No analyzer result and no ROI: the outcome is explicitly a no-result.
+    // 5. No analyzer result and no ROI: the outcome is explicitly a no-result.
     //    The delivery shows a note without fabricating a model result.
     r.noResult = true;
     return r;
@@ -151,29 +146,28 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
 // nullptr when the pool rejects the submission (paused / back-pressured).
 // Defined as a static member so the queued delivery can reach the private
 // applyAnalysisResult.
-TaskScheduler::TaskHandle
-AnalysisPanel::submitAnalysisJob(const AnalysisInput &in, QPointer<AnalysisPanel> guard)
+TaskScheduler::TaskHandle AnalysisPanel::submitAnalysisJob(const AnalysisInput &in,
+                                                           QPointer<AnalysisPanel> guard)
 {
-    return TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Analysis,
-        [in, guard](const TaskScheduler::TaskContext &ctx)
-        {
-            if (ctx.isCancelled())
-                return; // superseded while queued
-            AnalysisResult r = runAnalysis(in, ctx);
-            if (ctx.isCancelled())
-                return; // superseded during an expensive stage
-            QMetaObject::invokeMethod(
-                qApp,
-                [guard, r]()
-                {
-                    AnalysisPanel *panel = guard.data();
-                    if (!panel)
-                        return;
-                    panel->applyAnalysisResult(r);
-                },
-                Qt::QueuedConnection);
-        });
+    return TaskScheduler::instance().submit(TaskScheduler::Priority::Analysis,
+                                            [in, guard](const TaskScheduler::TaskContext &ctx)
+                                            {
+                                                if (ctx.isCancelled())
+                                                    return; // superseded while queued
+                                                AnalysisResult r = runAnalysis(in, ctx);
+                                                if (ctx.isCancelled())
+                                                    return; // superseded during an expensive stage
+                                                QMetaObject::invokeMethod(
+                                                    qApp,
+                                                    [guard, r]()
+                                                    {
+                                                        AnalysisPanel *panel = guard.data();
+                                                        if (!panel)
+                                                            return;
+                                                        panel->applyAnalysisResult(r);
+                                                    },
+                                                    Qt::QueuedConnection);
+                                            });
 }
 
 // Schedule exactly one latest-wins materializing AnalysisPool task for the
@@ -203,12 +197,14 @@ void AnalysisPanel::scheduleAnalysis()
 
     // Create the selected analyzer on the UI thread, preserving its custom
     // AnalyzerDeleter for safe (plugin-module) destruction on the worker.
-    if (!in.id.empty() && in.id != "builtin_compare")
+    // fillAnalyzerCombo already replaced a persisted builtin_compare selection
+    // with the first real analyzer, so the combo id read above is runnable.
+    if (!in.id.empty())
     {
         try
         {
-            auto created = m_pipeline ? m_pipeline->create(in.id)
-                                      : AnalyzerRegistry::instance().create(in.id);
+            auto created =
+                m_pipeline ? m_pipeline->create(in.id) : AnalyzerRegistry::instance().create(in.id);
             if (created)
                 in.analyzer = std::move(created); // shared_ptr adopts the deleter
         }
@@ -248,12 +244,11 @@ bool AnalysisPanel::scheduleAnalyzerRun()
         return false;
 
     // Capture and validate the selected analyzer id BEFORE any cancellation or
-    // generation bump: a defensive empty / builtin_compare id must not cancel a
-    // valid current job or leave pending state. builtin_compare is handled by
-    // reanalyze(), never here.
+    // generation bump: an empty id must not cancel a valid current job or
+    // leave pending state.
     const std::string id =
         m_analyzerCombo ? m_analyzerCombo->currentData().toString().toStdString() : std::string();
-    if (id.empty() || id == "builtin_compare")
+    if (id.empty())
         return false;
 
     // Latest-wins: cancel any in-flight task before starting a new generation.
@@ -284,8 +279,8 @@ bool AnalysisPanel::scheduleAnalyzerRun()
     // (plugin-module) destruction on the worker.
     try
     {
-        auto created = m_pipeline ? m_pipeline->create(in.id)
-                                  : AnalyzerRegistry::instance().create(in.id);
+        auto created =
+            m_pipeline ? m_pipeline->create(in.id) : AnalyzerRegistry::instance().create(in.id);
         if (created)
             in.analyzer = std::move(created);
     }

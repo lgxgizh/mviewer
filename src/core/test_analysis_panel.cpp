@@ -85,8 +85,8 @@ int main(int argc, char **argv)
 
     // Every SINGLE-IMAGE analyzer must run on the full frame and yield a
     // non-empty summary. MULTI-IMAGE analyzers (PSNR/SSIM) legitimately
-    // require a second frame and correctly return false on a single frame —
-    // the AnalysisPanel surfaces them in its Compare page instead.
+    // require a second frame and correctly return false on a single frame.
+    // Two-image comparison of those metrics lives in CompareWorkspace.
     int okFull = 0;
     int singleImg = 0;
     int multiImg = 0;
