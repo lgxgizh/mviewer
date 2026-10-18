@@ -5,7 +5,7 @@
 .DESCRIPTION
   Scans dist/ for shipping artifacts (portable zip, Setup.exe) and writes:
     dist/SHA256SUMS.txt          - standard "hash  filename" lines
-    dist/RELEASE_NOTES.md        - auto-extracted section from CHANGELOG.md
+    dist/RELEASE_NOTES.md        - the "## [<Version>]" section from CHANGELOG.md
 
   Safe to re-run; overwrites previous outputs. Does not modify CI workflows
   (AGENTS.md freezes release.yml); call this from package_release.ps1 or by hand.
@@ -18,8 +18,12 @@
   Directory containing the release artifacts (default: dist).
 
 .PARAMETER Strict
-  Require the exact versioned portable ZIP and NSIS installer. Missing files
+  Require the exact versioned portable ZIP and NSIS installer, and a non-empty
+  "## [<Version>]" section in CHANGELOG.md. Missing files or a missing section
   are hard failures instead of an empty/warning-only manifest.
+
+.PARAMETER ChangelogPath
+  Optional CHANGELOG.md override (tests). Defaults to <repo>/CHANGELOG.md.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts/release_manifest.ps1 -Version 1.0.3
@@ -27,7 +31,8 @@
 param(
     [string]$Version = "",
     [string]$OutDir  = "dist",
-    [switch]$Strict
+    [switch]$Strict,
+    [string]$ChangelogPath = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,35 +129,41 @@ if ($artifactCount -gt 0) {
 }
 
 # -- 2) RELEASE_NOTES.md from CHANGELOG.md ------------------------------------
-$changelog = Join-Path $root "CHANGELOG.md"
+$changelog = if ($ChangelogPath) { $ChangelogPath } else { Join-Path $root "CHANGELOG.md" }
 $notesPath = Join-Path $outAbs "RELEASE_NOTES.md"
 
-if (-not (Test-Path $changelog)) {
+if (-not (Test-Path -LiteralPath $changelog)) {
+    if ($Strict) { throw "Strict release manifest: CHANGELOG.md not found at $changelog" }
     Write-Warning "CHANGELOG.md not found; skipping RELEASE_NOTES.md"
     return
 }
 
-$raw = Get-Content -Path $changelog -Raw -Encoding utf8
-# Extract the first ## [X.Y.Z] section (or Unreleased) as the release notes body.
-# Match from the first version heading up to (but not including) the next ## heading.
+$raw = (Get-Content -LiteralPath $changelog -Raw -Encoding utf8) -replace "`r`n", "`n"
+# Pick the section whose heading is exactly "## [<Version>]" (never the first
+# heading: CHANGELOG keeps an empty "## [Unreleased]" on top, which produced
+# empty GitHub release notes for many tags). Body runs to the next "## ".
+# No build-date line: the section heading already carries the version date.
+$verRe = [regex]::Escape($Version)
+$sectionPattern = '(?ms)^## \[' + $verRe + '\]([^\n]*)\n(.*?)(?=^## |\z)'
 $section = $null
-if ($raw -match '(?ms)^## \[([^\]]+)\][^\n]*\n(.*?)(?=^## |\z)') {
-    $section = $Matches[0].TrimEnd()
+$m = [regex]::Match($raw, $sectionPattern)
+if ($m.Success) {
+    $section = $m.Value.TrimEnd()
+    if (-not $m.Groups[2].Value.Trim()) { $section = $null }
 }
 
-$header = @"
-# MViewer $Version
-
-Auto-generated from CHANGELOG.md on $(Get-Date -Format 'yyyy-MM-dd').
-
-"@
-
-if ($section) {
-    Set-Content -Path $notesPath -Value ($header + $section) -Encoding utf8
-    Write-Host "=== RELEASE_NOTES: $notesPath ==="
+if (-not $section) {
+    $msg = "CHANGELOG.md has no non-empty '## [$Version]' section"
+    if ($Strict) { throw "Strict release manifest: $msg" }
+    Write-Warning $msg
+    $header = "# MViewer $Version`n`n"
+    [IO.File]::WriteAllText($notesPath, ($header + "_No CHANGELOG section found for $Version._`n"), (New-Object System.Text.UTF8Encoding($false)))
 } else {
-    Set-Content -Path $notesPath -Value ($header + "_No CHANGELOG section found._") -Encoding utf8
-    Write-Warning "Could not parse a version section from CHANGELOG.md"
+    $header = "# MViewer $Version`n`n"
+    # No-BOM UTF-8: Windows PowerShell's Set-Content -Encoding utf8 writes a BOM
+    # that ends up as a stray U+FEFF at the top of the GitHub release body.
+    [IO.File]::WriteAllText($notesPath, ($header + $section + "`n"), (New-Object System.Text.UTF8Encoding($false)))
+    Write-Host "=== RELEASE_NOTES: $notesPath (section [$Version]) ==="
 }
 
 Write-Host "=== release_manifest complete (version $Version) ==="

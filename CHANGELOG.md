@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **发布说明不再为空**：`scripts/release_manifest.ps1` 按 tag 版本号精确选取 CHANGELOG 中的 `## [x.y.z]` 一节，不再取文件里第一个标题（通常是空的 `## [Unreleased]`）。正式发版（`-Strict`）时如果找不到该版本的非空章节会直接失败，不会再发布空说明。去掉了 “Auto-generated from CHANGELOG.md on <构建日期>” 一行（版本日期已在章节标题里），并改为无 BOM 的 UTF-8 输出，避免 GitHub 说明开头出现隐藏字符。`release_contract_tests` 覆盖了这些行为。
+
 ## [1.0.137] - 2026-10-18
 
 ### Release
