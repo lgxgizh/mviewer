@@ -25,7 +25,7 @@ inline ImageData adjustBrightness(const ImageData &src, int offset)
     if (adj == 0)
         return src;
 
-    ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     if (v.width <= 0 || v.height <= 0)
         return src;
 
@@ -84,7 +84,7 @@ inline ImageData adjustContrast(const ImageData &src, float factor)
     if (std::abs(f - 1.0f) < 1e-6f)
         return src;
 
-    ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     if (v.width <= 0 || v.height <= 0)
         return src;
 
@@ -145,7 +145,7 @@ inline ImageData adjustGamma(const ImageData &src, float gamma)
     if (std::abs(g - 1.0f) < 1e-6f)
         return src;
 
-    ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     if (v.width <= 0 || v.height <= 0)
         return src;
 
@@ -209,7 +209,7 @@ inline ImageData adjustWhiteBalance(const ImageData &src, float rGain, float bGa
     if (std::abs(r - 1.0f) < 1e-6f && std::abs(b - 1.0f) < 1e-6f)
         return src;
 
-    ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     if (v.width <= 0 || v.height <= 0)
         return src;
 
@@ -330,8 +330,8 @@ inline void buildCombinedLuts(int adj, float f, float g, float r, float b, bool 
     }
 }
 
-// Apply the precomputed fused LUTs to an ImageBuffer.
-inline void applyCombinedLuts(const ImageBuffer &v, ImageBuffer &d,
+// Apply the precomputed fused LUTs. Source is read-only; destination is written.
+inline void applyCombinedLuts(const ConstImageView &v, ImageBuffer &d,
                               const std::array<uint8_t, 256> &lutR,
                               const std::array<uint8_t, 256> &lutG,
                               const std::array<uint8_t, 256> &lutB, PixelFormat fmt, int cpp)
@@ -418,7 +418,7 @@ inline ImageData adjustCombinedLut(const ImageData &src, int brightness, float c
         return src;
     }
 
-    ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     if (v.width <= 0 || v.height <= 0)
         return src;
 

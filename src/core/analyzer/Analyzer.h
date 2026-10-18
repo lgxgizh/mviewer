@@ -8,6 +8,7 @@
 
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -116,5 +117,8 @@ class AnalyzerRegistry
     std::vector<std::string> queryByCapability(AnalyzerCapability required) const;
 
   private:
+    // Guards m_factories only. Copy a creator out before invoking it; never
+    // run an analyzer or call a factory while this lock is held.
+    mutable std::mutex m_factoriesMtx;
     std::unordered_map<std::string, AnalyzerCreator> m_factories;
 };

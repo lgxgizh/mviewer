@@ -52,7 +52,7 @@ class MTFAnalyzer : public Analyzer
 
   private:
     // Compute MTF50 over the given pixel rectangle. Returns true on success.
-    bool compute(const ImageBuffer &v, int x0, int y0, int x1, int y1);
+    bool compute(const ConstImageView &v, int x0, int y0, int x1, int y1);
 
     double m_mtf50 = 0.0;    // normalized to Nyquist (0..1]
     double m_mtf50Cps = 0.0; // cycles per pixel

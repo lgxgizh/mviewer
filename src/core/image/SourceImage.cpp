@@ -48,7 +48,7 @@ ImageData scaleNearest(const ImageData &src, int targetW, int targetH)
         return src;
     const int cpp = src.channelsPerPixel();
     ImageData dst = makeImageData(targetW, targetH, src.format);
-    const ImageBuffer v = src.view();
+    const ConstImageView v = src.constView();
     const ImageBuffer dv = dst.view();
     for (int y = 0; y < targetH; ++y)
     {

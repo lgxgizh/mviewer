@@ -4,14 +4,17 @@
 
 EventBus &EventBus::instance()
 {
-    static EventBus inst;
-    return inst;
+    return scope(EventBusScope::Application);
 }
 
 EventBus &EventBus::scope(EventBusScope s)
 {
     static EventBus buses[4];
-    return buses[static_cast<int>(s)];
+    constexpr int kCount = 4;
+    const int idx = static_cast<int>(s);
+    if (idx < 0 || idx >= kCount)
+        return buses[static_cast<int>(EventBusScope::Application)];
+    return buses[idx];
 }
 
 int EventBus::subscribe(const std::string &event, Handler h)

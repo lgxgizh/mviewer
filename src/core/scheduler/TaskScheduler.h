@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -56,6 +57,13 @@ class TaskScheduler
         Priority priority = Priority::Background;
         PoolType pool = MetadataPool;
 
+        // Queue accounting. Written only while TaskScheduler holds m_graphMtx.
+        // enqueuedAt is the moment the task was handed to a pool (dependency
+        // wait is not queue wait). started becomes true when a worker begins
+        // executing it, so cancelTree can tell queued from running.
+        std::chrono::steady_clock::time_point enqueuedAt{};
+        bool started = false;
+
         void requestCancel()
         {
             *cancel = true;
@@ -103,8 +111,12 @@ class TaskScheduler
         uint64_t cancelled{0};
         uint64_t deadline_exceeded{0};
         uint64_t backpressure_rejected{0};
+        // Sum of queue-wait (worker start time minus enqueue time), nanoseconds.
         uint64_t total_latency_ns{0};
+        // Tasks currently executing on a worker.
         size_t active_tasks{0};
+        // Accepted tasks handed to a pool that have not started yet.
+        // Cancel-before-start decrements this, not active_tasks.
         size_t queue_depth{0};
         // waiting = tasks submitted with dependencies that have not yet been
         // released to a pool (deferred). Tracked so cancelTree and the
@@ -235,6 +247,10 @@ class TaskScheduler
     };
     std::unordered_map<TaskId, DeferredEntry> m_deferred;
 
+    // Wakes waitForPoolDrained when a pool's pending and active_tasks hit zero.
+    // Always used together with m_graphMtx.
+    std::condition_variable m_drainCv;
+
     struct PoolState
     {
         PoolMetrics metrics;
@@ -266,7 +282,19 @@ class TaskScheduler
         return MetadataPool;
     }
 
-    void releaseReadyTasks(std::vector<std::pair<Priority, void *>> &out);
+    struct ReadyLaunch
+    {
+        Priority prio = Priority::Background;
+        TaskId id = 0;
+        void *runnable = nullptr;
+    };
+    void releaseReadyTasks(std::vector<ReadyLaunch> &out);
+    // Caller holds m_graphMtx. Increments queue_depth and hands the runnable
+    // to the pool. active_tasks rises later, when the worker starts it.
+    void launchQueued(const ReadyLaunch &item);
+    void noteTaskStarted(TaskId id, Priority prio);
+    // Caller holds m_graphMtx. Notifies m_drainCv if this pool is idle.
+    void notifyDrainIfIdle(int idx);
     bool rejectBackpressure(Priority prio);
     void enqueueTask(Priority prio, const std::shared_ptr<TaskContext> &ctx, QRunnable *runnable);
     // Returns false when the task was already finalized by cancelTree() (the

@@ -19,7 +19,7 @@ ImageData downscaleHalfBox(const ImageData &src)
 
     const int cpp = src.channelsPerPixel();
     ImageData dst = makeImageData(dw, dh, src.format);
-    const ImageBuffer sv = src.view();
+    const ConstImageView sv = src.constView();
     const ImageBuffer dv = dst.view();
 
     for (int y = 0; y < dh; ++y)
@@ -43,8 +43,9 @@ ImageData downscaleHalfBox(const ImageData &src)
                 uint8_t *q = dp + static_cast<size_t>(x) * 4;
                 for (int c = 0; c < 4; ++c)
                 {
-                    const unsigned sum = static_cast<unsigned>(p00[c]) + static_cast<unsigned>(p01[c]) +
-                                         static_cast<unsigned>(p10[c]) + static_cast<unsigned>(p11[c]);
+                    const unsigned sum =
+                        static_cast<unsigned>(p00[c]) + static_cast<unsigned>(p01[c]) +
+                        static_cast<unsigned>(p10[c]) + static_cast<unsigned>(p11[c]);
                     q[c] = static_cast<uint8_t>((sum + 2u) >> 2);
                 }
             }
@@ -62,8 +63,9 @@ ImageData downscaleHalfBox(const ImageData &src)
                 uint8_t *q = dp + static_cast<size_t>(x) * 3;
                 for (int c = 0; c < 3; ++c)
                 {
-                    const unsigned sum = static_cast<unsigned>(p00[c]) + static_cast<unsigned>(p01[c]) +
-                                         static_cast<unsigned>(p10[c]) + static_cast<unsigned>(p11[c]);
+                    const unsigned sum =
+                        static_cast<unsigned>(p00[c]) + static_cast<unsigned>(p01[c]) +
+                        static_cast<unsigned>(p10[c]) + static_cast<unsigned>(p11[c]);
                     q[c] = static_cast<uint8_t>((sum + 2u) >> 2);
                 }
             }
@@ -81,8 +83,9 @@ ImageData downscaleHalfBox(const ImageData &src)
                 uint8_t *q = dp + static_cast<size_t>(x) * cpp;
                 for (int c = 0; c < cpp; ++c)
                 {
-                    const unsigned sum = static_cast<unsigned>(p00[c]) + static_cast<unsigned>(p01[c]) +
-                                         static_cast<unsigned>(p10[c]) + static_cast<unsigned>(p11[c]);
+                    const unsigned sum =
+                        static_cast<unsigned>(p00[c]) + static_cast<unsigned>(p01[c]) +
+                        static_cast<unsigned>(p10[c]) + static_cast<unsigned>(p11[c]);
                     q[c] = static_cast<uint8_t>((sum + 2u) >> 2);
                 }
             }

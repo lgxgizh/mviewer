@@ -65,7 +65,7 @@ template <> struct PixelReader<PixelFormat::BGRA32>
 };
 
 template <PixelFormat Fmt>
-void accumulatePreview(const ImageBuffer &view, int x0, int x1, int y0, int y1, int64_t &sumR,
+void accumulatePreview(const ConstImageView &view, int x0, int x1, int y0, int y1, int64_t &sumR,
                        int64_t &sumG, int64_t &sumB, int64_t &sumL, int64_t &sumV, int64_t &count)
 {
     const ptrdiff_t stride = view.stride();
@@ -167,7 +167,7 @@ double circularHueMean(double sumSin, double sumCos, int64_t hueCount)
 }
 
 template <PixelFormat Fmt>
-void accumulateROI(const ImageBuffer &view, int x0, int x1, int y0, int y1,
+void accumulateROI(const ConstImageView &view, int x0, int x1, int y0, int y1,
                    const std::function<bool()> &isCancelled, RoiAccum &accum)
 {
     const ptrdiff_t stride = view.stride();
@@ -258,7 +258,7 @@ PreviewStats computePreviewStatsROI(const ImageData &img, const mviewer::domain:
     if (x1 <= x0 || y1 <= y0)
         return out;
 
-    const ImageBuffer view = img.view();
+    const ConstImageView view = img.constView();
     int64_t sumR = 0, sumG = 0, sumB = 0, sumL = 0, sumV = 0;
     int64_t count = 0;
 
@@ -327,7 +327,7 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
         return out;
 
     RoiAccum accum;
-    const ImageBuffer view = img.view();
+    const ConstImageView view = img.constView();
 
     switch (view.format)
     {

@@ -49,7 +49,7 @@ class DeadPixelAnalyzer : public Analyzer
     std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
-    bool compute(const ImageBuffer &v, int x0, int y0, int x1, int y1);
+    bool compute(const ConstImageView &v, int x0, int y0, int x1, int y1);
 
     int m_count = 0;
     int m_maxDev = 0;

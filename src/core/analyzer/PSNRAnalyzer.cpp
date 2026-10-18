@@ -14,8 +14,8 @@ bool PSNRAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain:
 {
     if (!m_ref || m_ref->pixels().isNull() || frame.pixels().isNull() || region.isEmpty())
         return false;
-    const ImageBuffer vR = m_ref->pixels().view();
-    const ImageBuffer vT = frame.pixels().view();
+    const ConstImageView vR = m_ref->pixels().constView();
+    const ConstImageView vT = frame.pixels().constView();
     const int w = std::min(vR.width, vT.width);
     const int h = std::min(vR.height, vT.height);
     const long long x0ll = std::clamp<long long>(region.x, 0, w);

@@ -37,7 +37,7 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
     uint64_t sumR = 0, sumG = 0, sumB = 0;
     uint64_t sumR2 = 0, sumG2 = 0, sumB2 = 0;
     int64_t pixelCount = 0;
-    const ImageBuffer view = img.view();
+    const ConstImageView view = img.constView();
     const int cpp = view.channelsPerPixel();
     const bool isBGR = (view.format == PixelFormat::BGR24 || view.format == PixelFormat::BGRA32);
     const bool isGray = (view.format == PixelFormat::Grayscale8);

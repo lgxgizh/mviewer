@@ -66,6 +66,27 @@ static void testEventBusUnsubscribe()
     CHECK(deliveries == 1, "no delivery after unsubscribe");
 }
 
+static void testInstanceIsApplicationScope()
+{
+    printf("\n[EventBusInstanceIsApplication]\n");
+    EventBus &app = EventBus::instance();
+    EventBus &scoped = EventBus::scope(EventBus::EventBusScope::Application);
+    CHECK(&app == &scoped, "instance() and scope(Application) are the same bus");
+
+    int hits = 0;
+    app.subscribe("DualSingletonProbe", [&](void *) { ++hits; });
+    scoped.publish("DualSingletonProbe");
+    CHECK(hits == 1, "publish on Application reaches an instance() subscriber");
+
+    // Intentional out-of-range value: production scope() must fall back.
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+    const auto bad = static_cast<EventBus::EventBusScope>(255);
+    EventBus &fallback = EventBus::scope(bad);
+    CHECK(&fallback == &app, "out-of-range scope falls back to Application");
+    fallback.publish("DualSingletonProbe");
+    CHECK(hits == 2, "fallback bus is the Application bus");
+}
+
 static void testEventBusScopeIsolation()
 {
     printf("\n[EventBusScopeIsolation]\n");
@@ -94,6 +115,7 @@ int main(int argc, char **argv)
 
     testEventBusPublishSubscribe();
     testEventBusUnsubscribe();
+    testInstanceIsApplicationScope();
     testEventBusScopeIsolation();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

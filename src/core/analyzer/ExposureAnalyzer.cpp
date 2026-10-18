@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cstdio>
 
-bool ExposureAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
+bool ExposureAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, int y1)
 {
     if (x1 <= x0 || y1 <= y0)
         return false;
@@ -67,7 +67,7 @@ bool ExposureAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
-    const ImageBuffer v = frame.pixels().view();
+    const ConstImageView v = frame.pixels().constView();
     return compute(v, 0, 0, v.width, v.height);
 }
 
@@ -76,7 +76,7 @@ bool ExposureAnalyzer::analyzeRegion(const ImageFrame &frame,
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
-    const ImageBuffer v = frame.pixels().view();
+    const ConstImageView v = frame.pixels().constView();
     const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
     const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
     const long long x1ll =

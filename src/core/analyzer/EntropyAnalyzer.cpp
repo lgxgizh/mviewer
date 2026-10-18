@@ -3,7 +3,8 @@
 #include <cmath>
 #include <cstring>
 
-double EntropyAnalyzer::computeEntropy(const ImageBuffer &v, int x0, int y0, int x1, int y1) const
+double EntropyAnalyzer::computeEntropy(const ConstImageView &v, int x0, int y0, int x1,
+                                       int y1) const
 {
     if (x1 <= x0 || y1 <= y0)
         return 0.0;
@@ -53,7 +54,7 @@ bool EntropyAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
-    const ImageBuffer v = frame.pixels().view();
+    const ConstImageView v = frame.pixels().constView();
     m_entropy = computeEntropy(v, 0, 0, v.width, v.height);
     return true;
 }
@@ -63,7 +64,7 @@ bool EntropyAnalyzer::analyzeRegion(const ImageFrame &frame,
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
-    const ImageBuffer v = frame.pixels().view();
+    const ConstImageView v = frame.pixels().constView();
     const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
     const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
     const long long x1ll =

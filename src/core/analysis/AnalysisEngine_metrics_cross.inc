@@ -9,8 +9,8 @@ bool accumulateCrossFormatSsd(const ImageData &aData, const ImageData &bData, in
         (aData.format == PixelFormat::BGR24 && bData.format == PixelFormat::RGB24);
     if (isCrossRgbBgr24)
     {
-        const ImageBuffer va = aData.view();
-        const ImageBuffer vb = bData.view();
+        const ConstImageView va = aData.constView();
+        const ConstImageView vb = bData.constView();
         for (int y = 0; y < h; ++y)
         {
             const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
@@ -32,8 +32,8 @@ bool accumulateCrossFormatSsd(const ImageData &aData, const ImageData &bData, in
         (aData.format == PixelFormat::BGRA32 && bData.format == PixelFormat::RGBA32);
     if (isCrossRgbaBgra32)
     {
-        const ImageBuffer va = aData.view();
-        const ImageBuffer vb = bData.view();
+        const ConstImageView va = aData.constView();
+        const ConstImageView vb = bData.constView();
         for (int y = 0; y < h; ++y)
         {
             const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
@@ -56,8 +56,8 @@ bool accumulateCrossFormatSsd(const ImageData &aData, const ImageData &bData, in
 void accumulateGenericSsd(const ImageData &aData, const ImageData &bData, int w, int h,
                           int64_t &sumSq)
 {
-    const ImageBuffer va = aData.view();
-    const ImageBuffer vb = bData.view();
+    const ConstImageView va = aData.constView();
+    const ConstImageView vb = bData.constView();
     const int cppa = aData.channelsPerPixel();
     const int cppb = bData.channelsPerPixel();
     for (int y = 0; y < h; ++y)
