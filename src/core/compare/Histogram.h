@@ -17,19 +17,30 @@
 namespace mviewer::core
 {
 
-// Per-channel 256-bin luminance/colour histogram of a decoded image.
-// M23: adds a Rec.601 luma channel alongside R/G/B.
+// Per-channel luminance/colour histogram of a decoded image.
+// Luma is Rec.601 (0.299 R + 0.587 G + 0.114 B), truncated to int.
+// V is max(R, G, B). On grayscale, V equals the gray sample.
+// The alpha byte of RGBA32 / BGRA32 is never a colour sample. A fully
+// transparent pixel (alpha == 0) is omitted, matching AnalysisEngine and
+// ImageStats. Partial alpha is counted at its stored RGB value.
 struct Histogram
 {
     std::vector<long> r, g, b;
     std::vector<long> luma; // Rec.601: 0.299 R + 0.587 G + 0.114 B
     std::vector<long> v;    // HSV-V: max(R, G, B)
     int bins = 256;
-    long total = 0;
+    long total = 0; // samples that contributed; transparent pixels are not included
 };
 
 namespace histogram_detail
 {
+
+// RGBA32 / BGRA32 store alpha in the fourth byte. Fully transparent pixels are
+// left out of every channel, including luma and V.
+inline bool omitTransparent(int cpp, const uint8_t *p)
+{
+    return cpp == 4 && p[3] == 0;
+}
 
 inline Histogram makeEmpty(int bins)
 {
@@ -80,6 +91,8 @@ inline long accumulateBgr256(const uint8_t *data, int64_t stride, int cpp, int64
         const uint8_t *end = row + static_cast<size_t>(x1) * static_cast<size_t>(cpp);
         for (; p < end; p += step)
         {
+            if (omitTransparent(cpp, p))
+                continue;
             const uint8_t B = p[0];
             const uint8_t G = p[1];
             const uint8_t R = p[2];
@@ -109,6 +122,8 @@ inline long accumulateRgb256(const uint8_t *data, int64_t stride, int cpp, int64
         const uint8_t *end = row + static_cast<size_t>(x1) * static_cast<size_t>(cpp);
         for (; p < end; p += step)
         {
+            if (omitTransparent(cpp, p))
+                continue;
             const uint8_t R = p[0];
             const uint8_t G = p[1];
             const uint8_t B = p[2];
@@ -167,6 +182,8 @@ inline Histogram accumulateNBins(const ConstImageView &v, int64_t x0, int64_t y0
         for (int64_t x = x0; x < x1; x += sx)
         {
             const uint8_t *p = row + static_cast<size_t>(x) * static_cast<size_t>(cpp);
+            if (omitTransparent(cpp, p))
+                continue;
             int R, G, B;
             if (gray)
             {

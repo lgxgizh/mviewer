@@ -5,6 +5,7 @@
 #include "core/image/DiskCache.h"
 #include "core/image/ExifOrientation.h"
 #include "core/image/QtMetadataSemantics.h"
+#include "core/image/decoder/QtDecoder.h"
 
 #include <QFileInfo>
 #include <QImageReader>
@@ -83,6 +84,7 @@ std::shared_ptr<std::vector<uint16_t>> captureRaw16(const std::string &path)
         return nullptr;
     const int orientation =
         mviewer::core::qtmetadata::orientationFromTransform(reader.transformation());
+    QtDecoder::noteFullImageRead();
     QImage image = reader.read();
     if (image.isNull())
         return nullptr;
@@ -214,10 +216,20 @@ void ImageRepository::restoreRaw16(ImageFrame &frame, const std::string &filePat
     restoreCachedRaw16(frame, key);
     if (filePath.empty() || frame.metadata().format == "RAW" || frame.hasRaw16())
         return;
-    auto samples = captureRaw16(filePath);
-    if (!samples)
-        return;
-    const int channels = (frame.metadata().channels == 1) ? 1 : 3;
+    int pendingChannels = 0;
+    auto samples = QtDecoder::takePendingRaw16(filePath, pendingChannels);
+    int channels = 0;
+    if (samples)
+    {
+        channels = pendingChannels == 1 ? 1 : 3;
+    }
+    else
+    {
+        samples = captureRaw16(filePath);
+        if (!samples)
+            return;
+        channels = (frame.metadata().channels == 1) ? 1 : 3;
+    }
     frame.setRaw16(samples, 65535, channels);
     CacheManager::instance().putRaw16(key, std::move(samples), channels, 65535);
 }

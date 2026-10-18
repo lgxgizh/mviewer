@@ -31,9 +31,9 @@ class RawDecoder : public IDecoder, public mviewer::core::ISourceImageCapabiliti
     // zero.
     static size_t lastPreviewFullFileCopyBytes();
 
-    // M53 diagnostic seam: peak bytes retained by the preview scanner while it
-    // searches the RAW container. This must stay bounded by the parser window
-    // plus the selected preview, rather than growing with the container.
+    // M53 diagnostic seam: peak bytes retained by the most recent preview scan
+    // or decode. A size probe stays inside the parser window (SOF only). A
+    // decode also retains one embedded JPEG at a time, not the container.
     static size_t lastPreviewPeakBufferedBytes();
 
     bool canDecode(const std::string &path) const override;

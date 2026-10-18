@@ -591,6 +591,36 @@ static void testMetadataLruAndHardening()
     mgr.clear();
 }
 
+static void testDiskCacheLruLowWater()
+{
+    printf("\n[DiskCache LRU low-water]\n");
+    DiskCache &disk = DiskCache::instance();
+    const int savedEntries = disk.maxEntries();
+    const size_t savedBytes = disk.maxBytes();
+    disk.clear();
+    disk.setMaxEntries(100000);
+    disk.setMaxBytes(static_cast<size_t>(64) * 1024 * 1024);
+
+    const ImageData img = mvcore::fromQImage(makeColorTest(8, 8, QColor(1, 2, 3)));
+    for (int i = 0; i < 20; ++i)
+    {
+        char name[8];
+        std::snprintf(name, sizeof(name), "k%02d", i);
+        disk.put(name, img);
+    }
+    ImageData out;
+    CHECK(disk.get("k00", out), "touch k00 before eviction");
+    disk.setMaxEntries(10);
+    CHECK(disk.entryCount() == 9, "prune stops at the 90% low-water mark");
+    CHECK(disk.get("k00", out), "touched k00 survives low-water eviction");
+    CHECK(disk.get("k19", out), "newest insert k19 survives");
+    CHECK(!disk.get("k01", out), "oldest untouched k01 is evicted");
+
+    disk.clear();
+    disk.setMaxEntries(savedEntries);
+    disk.setMaxBytes(savedBytes);
+}
+
 static void testDiskCacheBoundsHardening()
 {
     printf("\n[DiskCache Bounds Hardening]\n");
@@ -636,6 +666,7 @@ int main(int argc, char **argv)
     testOversizedItemDoesNotFlushCache();
     testO1LruScalability();
     testMetadataLruAndHardening();
+    testDiskCacheLruLowWater();
     testDiskCacheBoundsHardening();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

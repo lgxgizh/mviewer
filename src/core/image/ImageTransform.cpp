@@ -10,11 +10,13 @@
 #include <QImage>
 #include <QPainter>
 #include <QString>
+#include <QTemporaryDir>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <limits>
 
 namespace mviewer::core
 {
@@ -262,111 +264,188 @@ std::string applyRenamePattern(const std::string &pattern, const std::string &ba
     return toSafeFileName(out, baseName);
 }
 
+namespace
+{
+
+struct PdfPage
+{
+    QString path;
+    int w = 0;
+    int h = 0;
+    qint64 bytes = 0;
+};
+
+bool writeText(std::ofstream &ofs, const std::string &text)
+{
+    ofs.write(text.data(), static_cast<std::streamsize>(text.size()));
+    return static_cast<bool>(ofs);
+}
+
+bool beginObject(std::ofstream &ofs, std::vector<long> &offsets, int number,
+                 const std::string &dict)
+{
+    const std::streamoff pos = ofs.tellp();
+    if (pos < 0 || number < 0 || static_cast<size_t>(number) >= offsets.size())
+        return false;
+    offsets[static_cast<size_t>(number)] = static_cast<long>(pos);
+    return writeText(ofs, std::to_string(number) + " 0 obj\n" + dict);
+}
+
+bool copyJpegStream(std::ofstream &ofs, const PdfPage &page)
+{
+    QFile in(page.path);
+    if (!in.open(QIODevice::ReadOnly))
+        return false;
+    if (!writeText(ofs, "stream\n"))
+        return false;
+    qint64 left = page.bytes;
+    char chunk[64 * 1024];
+    while (left > 0)
+    {
+        const qint64 room = static_cast<qint64>(sizeof(chunk));
+        const qint64 want = left < room ? left : room;
+        const qint64 n = in.read(chunk, want);
+        if (n <= 0)
+            return false;
+        ofs.write(chunk, static_cast<std::streamsize>(n));
+        if (!ofs)
+            return false;
+        left -= n;
+    }
+    return writeText(ofs, "\nendstream\nendobj\n");
+}
+
+bool storePageJpeg(QTemporaryDir &tmp, int index, const std::vector<uint8_t> &jpg, PdfPage &page)
+{
+    if (jpg.empty() || jpg.data() == nullptr)
+        return false;
+    if (jpg.size() > static_cast<size_t>(std::numeric_limits<qint64>::max()))
+        return false;
+    page.path = tmp.filePath(QStringLiteral("p%1.jpg").arg(index));
+    QFile out(page.path);
+    if (!out.open(QIODevice::WriteOnly))
+        return false;
+    const auto n = static_cast<qint64>(jpg.size());
+    if (out.write(reinterpret_cast<const char *>(jpg.data()), n) != n)
+        return false;
+    page.bytes = n;
+    return true;
+}
+
+bool encodePdfPages(const std::vector<ImageData> &images, int quality, QTemporaryDir &tmp,
+                    std::vector<PdfPage> &pages)
+{
+    int index = 0;
+    for (const ImageData &im : images)
+    {
+        if (im.isNull())
+            continue;
+        const std::vector<uint8_t> jpg =
+            Encoder::encodeToBuffer(im, "jpeg", Encoder::Params{quality});
+        if (jpg.empty())
+            continue;
+        PdfPage page;
+        page.w = im.width;
+        page.h = im.height;
+        if (!storePageJpeg(tmp, index, jpg, page))
+            return false;
+        pages.push_back(std::move(page));
+        ++index;
+    }
+    return true;
+}
+
+bool writePageObjects(std::ofstream &ofs, std::vector<long> &offsets, const PdfPage &page, int k)
+{
+    const int pageNum = 3 + 3 * k;
+    const int contentNum = 4 + 3 * k;
+    const int imageNum = 5 + 3 * k;
+    const std::string pageDict = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " +
+                                 std::to_string(page.w) + " " + std::to_string(page.h) +
+                                 "] /Resources << /XObject << /Im0 " + std::to_string(imageNum) +
+                                 " 0 R >> >> /Contents " + std::to_string(contentNum) + " 0 R >>\n";
+    if (!beginObject(ofs, offsets, pageNum, pageDict) || !writeText(ofs, "endobj\n"))
+        return false;
+
+    const std::string content =
+        "q " + std::to_string(page.w) + " 0 0 " + std::to_string(page.h) + " 0 0 cm /Im0 Do Q\n";
+    const std::string contentDict = "<< /Length " + std::to_string(content.size()) + " >>\n";
+    if (!beginObject(ofs, offsets, contentNum, contentDict) || !writeText(ofs, "stream\n") ||
+        !writeText(ofs, content) || !writeText(ofs, "\nendstream\nendobj\n"))
+        return false;
+
+    const std::string imgDict =
+        "<< /Type /XObject /Subtype /Image /Width " + std::to_string(page.w) + " /Height " +
+        std::to_string(page.h) +
+        " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " +
+        std::to_string(static_cast<long long>(page.bytes)) + " >>\n";
+    if (!beginObject(ofs, offsets, imageNum, imgDict))
+        return false;
+    return copyJpegStream(ofs, page);
+}
+
+bool writeXref(std::ofstream &ofs, const std::vector<long> &offsets, int objectCount)
+{
+    const std::streamoff pos = ofs.tellp();
+    if (pos < 0)
+        return false;
+    const long xrefPos = static_cast<long>(pos);
+    std::string xref = "xref\n0 " + std::to_string(objectCount + 1) + "\n";
+    xref += "0000000000 65535 f \n";
+    for (int i = 1; i <= objectCount; ++i)
+    {
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%010ld 00000 n \n", offsets[static_cast<size_t>(i)]);
+        xref += buf;
+    }
+    xref += "trailer\n<< /Size " + std::to_string(objectCount + 1) + " /Root 1 0 R >>\nstartxref\n";
+    xref += std::to_string(xrefPos) + "\n%%EOF\n";
+    return writeText(ofs, xref);
+}
+
+} // namespace
+
 bool writePdf(const std::string &path, const std::vector<ImageData> &images, int quality)
 {
     if (images.empty())
         return false;
 
-    struct Page
-    {
-        std::vector<uint8_t> jpg;
-        int w = 0;
-        int h = 0;
-    };
-    std::vector<Page> pages;
-    for (const auto &im : images)
-    {
-        if (im.isNull())
-            continue;
-        std::vector<uint8_t> buf = Encoder::encodeToBuffer(im, "jpeg", Encoder::Params{quality});
-        if (buf.empty())
-            continue;
-        Page pg;
-        pg.jpg = std::move(buf);
-        pg.w = im.width;
-        pg.h = im.height;
-        pages.push_back(std::move(pg));
-    }
-    if (pages.empty())
+    // Encode one page at a time onto scratch files so the JPEG bytes and the
+    // PDF body are not all resident together. The export caller already writes
+    // this path as a temporary file and renames it into place.
+    QTemporaryDir scratch;
+    if (!scratch.isValid())
+        return false;
+    std::vector<PdfPage> pages;
+    if (!encodePdfPages(images, quality, scratch, pages) || pages.empty())
         return false;
 
-    const int K = static_cast<int>(pages.size());
-    const int M = 2 + 3 * K; // objects: 1 catalog, 2 pages, then 3 per image
-
-    std::string pdf = "%PDF-1.3\n";
-    std::vector<long> off(M + 1, 0); // 1-based object offsets
-
-    auto writeObj = [&](int num, const std::string &dict, const std::string &streamData)
-    {
-        off[num] = static_cast<long>(pdf.size());
-        pdf += std::to_string(num);
-        pdf += " 0 obj\n";
-        pdf += dict;
-        if (!streamData.empty())
-        {
-            pdf += "stream\n";
-            pdf.append(reinterpret_cast<const char *>(streamData.data()),
-                       static_cast<std::streamsize>(streamData.size()));
-            pdf += "\nendstream\n";
-        }
-        pdf += "endobj\n";
-    };
-
-    // 1: Catalog
-    writeObj(1, "<< /Type /Catalog /Pages 2 0 R >>\n", "");
-
-    // 2: Pages
-    std::string kids = "<< /Type /Pages /Kids [";
-    for (int k = 0; k < K; ++k)
-        kids += std::to_string(3 + 3 * k) + " 0 R ";
-    kids += "] /Count " + std::to_string(K) + " >>\n";
-    writeObj(2, kids, "");
-
-    // Per image: page, content, image xobject
-    for (int k = 0; k < K; ++k)
-    {
-        const Page &pg = pages[k];
-        const int pageNum = 3 + 3 * k;
-        const int contentNum = 4 + 3 * k;
-        const int imageNum = 5 + 3 * k;
-
-        const std::string pageDict =
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + std::to_string(pg.w) + " " +
-            std::to_string(pg.h) + "] /Resources << /XObject << /Im0 " + std::to_string(imageNum) +
-            " 0 R >> >> /Contents " + std::to_string(contentNum) + " 0 R >>\n";
-        writeObj(pageNum, pageDict, "");
-
-        const std::string content =
-            "q " + std::to_string(pg.w) + " 0 0 " + std::to_string(pg.h) + " 0 0 cm /Im0 Do Q\n";
-        const std::string contentDict = "<< /Length " + std::to_string(content.size()) + " >>\n";
-        writeObj(contentNum, contentDict, content);
-
-        const std::string imgDict =
-            "<< /Type /XObject /Subtype /Image /Width " + std::to_string(pg.w) + " /Height " +
-            std::to_string(pg.h) +
-            " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " +
-            std::to_string(pg.jpg.size()) + " >>\n";
-        writeObj(imageNum, imgDict, std::string(pg.jpg.begin(), pg.jpg.end()));
-    }
-
-    const long xrefPos = static_cast<long>(pdf.size());
-    std::string xref = "xref\n0 " + std::to_string(M + 1) + "\n";
-    xref += "0000000000 65535 f \n";
-    for (int i = 1; i <= M; ++i)
-    {
-        char buf[32];
-        std::snprintf(buf, sizeof(buf), "%010ld 00000 n \n", off[i]);
-        xref += buf;
-    }
-    pdf += xref;
-    pdf += "trailer\n<< /Size " + std::to_string(M + 1) + " /Root 1 0 R >>\nstartxref\n" +
-           std::to_string(xrefPos) + "\n%%EOF\n";
-
-    std::ofstream ofs(mviewer::core::pathFromUtf8(path), std::ios::binary);
+    const int pageCount = static_cast<int>(pages.size());
+    const int objectCount = 2 + 3 * pageCount; // catalog, pages, then 3 per image
+    std::ofstream ofs(pathFromUtf8(path), std::ios::binary);
     if (!ofs)
         return false;
-    ofs.write(pdf.data(), static_cast<std::streamsize>(pdf.size()));
-    return static_cast<bool>(ofs);
+    if (!writeText(ofs, "%PDF-1.3\n"))
+        return false;
+
+    std::vector<long> offsets(static_cast<size_t>(objectCount) + 1, 0);
+    if (!beginObject(ofs, offsets, 1, "<< /Type /Catalog /Pages 2 0 R >>\n") ||
+        !writeText(ofs, "endobj\n"))
+        return false;
+
+    std::string kids = "<< /Type /Pages /Kids [";
+    for (int k = 0; k < pageCount; ++k)
+        kids += std::to_string(3 + 3 * k) + " 0 R ";
+    kids += "] /Count " + std::to_string(pageCount) + " >>\n";
+    if (!beginObject(ofs, offsets, 2, kids) || !writeText(ofs, "endobj\n"))
+        return false;
+
+    for (int k = 0; k < pageCount; ++k)
+    {
+        if (!writePageObjects(ofs, offsets, pages[static_cast<size_t>(k)], k))
+            return false;
+    }
+    return writeXref(ofs, offsets, objectCount);
 }
 
 } // namespace mviewer::core

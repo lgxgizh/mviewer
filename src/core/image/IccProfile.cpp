@@ -1,9 +1,10 @@
 #include "core/image/IccProfile.h"
 
+#include <algorithm>
 #include <cstdint>
-#include <cstdio>
 #include <cstring>
 #include <string>
+#include <utility>
 
 namespace mviewer::core
 {
@@ -33,6 +34,70 @@ inline std::string trimNull(const std::string &s)
     return n == std::string::npos ? s : s.substr(0, n);
 }
 
+std::string utf16BeToUtf8(const unsigned char *bytes, uint32_t len)
+{
+    std::string out;
+    for (uint32_t j = 0; j + 1 < len; j += 2)
+    {
+        const uint16_t ch = be16(bytes + j);
+        if (ch == 0)
+            break;
+        if (ch < 0x80)
+            out.push_back(static_cast<char>(ch));
+        else if (ch < 0x800)
+        {
+            out.push_back(static_cast<char>(0xC0 | (ch >> 6)));
+            out.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
+        }
+        else
+        {
+            out.push_back(static_cast<char>(0xE0 | (ch >> 12)));
+            out.push_back(static_cast<char>(0x80 | ((ch >> 6) & 0x3F)));
+            out.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
+        }
+    }
+    return out;
+}
+
+// multiLocalizedUnicodeType records are 12 bytes: language, country, length,
+// offset. The offset is from the start of the tag. Prefer an "en" record.
+std::string parseMluc(const unsigned char *tagData, uint32_t tagSize)
+{
+    if (tagSize < 16)
+        return {};
+    const uint32_t recSize = be32(tagData + 12);
+    if (recSize < 12)
+        return {};
+    const uint64_t maxRec = (static_cast<uint64_t>(tagSize) - 16) / recSize;
+    const uint32_t recCount = be32(tagData + 8);
+    const uint32_t limit = recCount < maxRec ? recCount : static_cast<uint32_t>(maxRec);
+    std::string english;
+    std::string first;
+    for (uint32_t i = 0; i < limit; ++i)
+    {
+        const uint64_t recOff64 = 16ull + static_cast<uint64_t>(i) * recSize;
+        if (recOff64 > tagSize || static_cast<uint64_t>(tagSize) - recOff64 < 12)
+            break;
+        const auto recOff = static_cast<uint32_t>(recOff64);
+        const bool englishRecord = tagData[recOff] == 'e' && tagData[recOff + 1] == 'n';
+        const uint32_t len = be32(tagData + recOff + 4);
+        const uint32_t strOff = be32(tagData + recOff + 8);
+        if (len < 2 || strOff > tagSize || len > tagSize - strOff)
+            continue;
+        std::string decoded = utf16BeToUtf8(tagData + strOff, len);
+        if (decoded.empty())
+            continue;
+        if (first.empty())
+            first = decoded;
+        if (englishRecord)
+        {
+            english = std::move(decoded);
+            break;
+        }
+    }
+    return english.empty() ? first : english;
+}
+
 // Decode a desc/text/mluc tag payload into a UTF-8 string.
 std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
 {
@@ -59,58 +124,7 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
         return trimNull(std::string(tagData + 8, tagData + tagSize));
     }
     if (type == "mluc")
-    {
-        // mluc type: records of UTF-16BE strings. Reading the record size at
-        // offset 12 needs 16 bytes present, not 12.
-        if (tagSize < 16)
-            return {};
-        const uint32_t recSize = be32(tagData + 12);
-        if (recSize < 12 || tagSize < 16 + recSize)
-            return {};
-        // Bound the record count by what the tag payload can actually hold so a
-        // hostile/malformed recCount cannot spin this loop forever (or overflow).
-        const uint32_t maxRec = (tagSize - 16) / recSize;
-        const uint32_t recCount = be32(tagData + 8);
-        for (uint32_t i = 0; i < recCount && i < maxRec; ++i)
-        {
-            const uint32_t recOff = 16 + i * recSize;
-            // 16 bytes are needed, not 12: the string offset is read at
-            // recOff + 12, so a payload ending exactly at recOff + 12 would
-            // otherwise be over-read by 4 bytes.
-            if (recOff + 16 > tagSize)
-                break;
-            const uint32_t len = be32(tagData + recOff + 8);
-            const uint32_t strOff = be32(tagData + recOff + 12);
-            // Subtraction form: `strOff + len` wraps in 32-bit arithmetic for a
-            // hostile offset (0xFFFFFFFE + 2 == 0), which previously let a
-            // crafted profile read gigabytes past the tag payload.
-            if (len < 2 || strOff > tagSize || len > tagSize - strOff)
-                continue;
-            std::string out;
-            for (uint32_t j = 0; j + 1 < len; j += 2)
-            {
-                const uint16_t ch = be16(tagData + strOff + j);
-                if (ch == 0)
-                    break;
-                if (ch < 0x80)
-                    out.push_back(static_cast<char>(ch));
-                else if (ch < 0x800)
-                {
-                    out.push_back(static_cast<char>(0xC0 | (ch >> 6)));
-                    out.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
-                }
-                else
-                {
-                    out.push_back(static_cast<char>(0xE0 | (ch >> 12)));
-                    out.push_back(static_cast<char>(0x80 | ((ch >> 6) & 0x3F)));
-                    out.push_back(static_cast<char>(0x80 | (ch & 0x3F)));
-                }
-            }
-            if (!out.empty())
-                return out;
-        }
-        return {};
-    }
+        return parseMluc(tagData, tagSize);
     return {};
 }
 
@@ -189,12 +203,24 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
     // Need the 128-byte header plus the 4-byte tag count.
     if (!data || size < 132)
         return info;
+    // Profile size at offset 0 must cover the header and must not claim bytes
+    // past the buffer. Only the declared prefix is a profile.
+    const uint32_t declared = be32(data);
+    if (declared < 132 || static_cast<size_t>(declared) > size)
+        return info;
+    // Bytes 36-39 are the required profile signature 'acsp'.
+    if (sig4(data + 36) != "acsp")
+        return info;
+    // ICC.1 major versions in the wild are 2 and 4. Byte 8 is binary, not BCD.
+    const uint32_t major = data[8];
+    if (major != 2 && major != 4)
+        return info;
     info.valid = true;
+    const size_t profileSize = declared;
 
     // ICC version: byte8 = major (binary); byte9 = minor in the BCD high nibble;
     // byte10 = bugfix tens digit; byte11 = bugfix ones digit. The minor byte is
     // BCD (e.g. 0x10 means minor 1), so only the high nibble is the minor number.
-    const uint32_t major = data[8];
     const uint32_t minor = data[9] >> 4;
     const uint32_t bugfix = uint32_t(data[10]) * 10 + uint32_t(data[11]);
     info.version =
@@ -204,7 +230,8 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
     info.pcs = colorSpaceText(sig4(data + 20));
     info.renderingIntent = renderingIntentText(be32(data + 64));
 
-    const uint32_t maxTags = (size >= 144) ? static_cast<uint32_t>((size - 132) / 12) : 0;
+    const uint32_t maxTags =
+        (profileSize >= 144) ? static_cast<uint32_t>((profileSize - 132) / 12) : 0;
     const uint32_t tagCount = std::min(be32(data + 128), maxTags);
     for (uint32_t i = 0; i < tagCount; ++i)
     {
@@ -212,7 +239,8 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
         const std::string sig = sig4(e);
         const uint32_t off = be32(e + 4);
         const uint32_t sz = be32(e + 8);
-        if (sz < 4 || sz > size || off > size - sz)
+        const uint64_t tagEnd = static_cast<uint64_t>(off) + static_cast<uint64_t>(sz);
+        if (sz < 4 || tagEnd > profileSize)
             continue;
         const unsigned char *tagData = data + off;
         if (sig == "desc" || sig == "dscm" || (info.description.empty() && sig == "dmdd"))

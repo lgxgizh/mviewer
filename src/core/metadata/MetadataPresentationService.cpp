@@ -1,5 +1,6 @@
 #include "core/metadata/MetadataPresentationService.h"
 
+#include "core/FileIdentity.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/image/FrameSequence.h"
 #include "core/image/MetadataReader.h"
@@ -24,10 +25,7 @@ MetadataPresentationService &MetadataPresentationService::instance()
 
 std::string MetadataPresentationService::fileIdentity(const std::string &path)
 {
-    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-    if (!fi.exists())
-        return {};
-    return std::to_string(fi.lastModified().toMSecsSinceEpoch()) + "|" + std::to_string(fi.size());
+    return fileRevisionMs(path);
 }
 
 uint64_t MetadataPresentationService::request(const std::string &path, const std::string &consumer,

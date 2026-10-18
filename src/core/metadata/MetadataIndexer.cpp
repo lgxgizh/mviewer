@@ -1,5 +1,6 @@
 #include "core/metadata/MetadataIndexer.h"
 
+#include "core/FileIdentity.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/RawMetadata.h"
@@ -82,8 +83,7 @@ MetadataIndexer &MetadataIndexer::instance()
 
 std::string MetadataIndexer::fileIdentity(const std::string &path)
 {
-    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-    return std::to_string(fi.lastModified().toSecsSinceEpoch()) + "|" + std::to_string(fi.size());
+    return fileRevisionSec(path);
 }
 
 uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const EntryCallback &onEntry,

@@ -1,4 +1,5 @@
 #include "core/image/MetadataReader.h"
+#include "core/FileIdentity.h"
 #include "core/image/IccProfile.h"
 #include "core/image/QtMetadataSemantics.h"
 
@@ -11,6 +12,7 @@
 #include <algorithm>
 
 #include <cstring>
+#include <initializer_list>
 #include <utility>
 
 namespace mviewer::core
@@ -18,14 +20,7 @@ namespace mviewer::core
 
 std::string MetadataReader::key(const std::string &filePath)
 {
-    const QString qPath = QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size()));
-    const QFileInfo fi(qPath);
-    // Fields are separated: plain concatenation let two distinct files collide
-    // ("a.jpg" + 123 + T equals "a.jpg12" + 3 + T), which aliased their cache
-    // entries (metadata, memory tier and disk tier all key off this string).
-    const QString k = qPath + "|" + QString::number(fi.size()) + "|" +
-                      QString::number(fi.lastModified().toMSecsSinceEpoch());
-    return k.toStdString();
+    return fileIdentityKey(filePath);
 }
 
 void populateFileIdentity(mviewer::domain::ImageMetadata &meta, const std::string &filePath,
@@ -77,30 +72,69 @@ void populateImageInfo(mviewer::domain::ImageMetadata &meta, QImageReader &reade
         std::swap(meta.width, meta.height);
 }
 
+// MetadataDpi.cpp. True when an absolute DPI was copied onto `meta`.
+bool applyHeaderDpi(mviewer::domain::ImageMetadata &meta, const std::string &filePath);
+
+bool extensionIs(const QString &ext, std::initializer_list<const char *> names)
+{
+    for (const char *name : names)
+    {
+        if (ext == QLatin1String(name))
+            return true;
+    }
+    return false;
+}
+
 void populateDisplayMetadata(mviewer::domain::ImageMetadata &meta, const std::string &filePath)
 {
-    // DPI + embedded ICC profile require the decoded image's metadata. Read at
-    // a 1x1 scaled size so we get the headers/metadata cheaply without decoding
-    // full pixels (important for 100MP originals).
+    const QString qPath = QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size()));
+    const QString ext = QFileInfo(qPath).suffix().toLower();
+    const bool headerDpi = applyHeaderDpi(meta, filePath);
+
+    // JPEG ICC is in APP2. Scraping it avoids a 1x1 decode when colour is the
+    // only reason left to open the pixel stream. PNG/TIFF ICC stays on that
+    // fallback so a disk-hit still restores the display profile.
+    if (extensionIs(ext, {"jpg", "jpeg", "jpe"}))
     {
-        QImageReader dpiReader(
-            QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
-        dpiReader.setScaledSize(QSize(1, 1));
-        QImage img;
-        if (dpiReader.read(&img))
+        const std::vector<uint8_t> icc = MetadataReader::extractJpegIccProfile(filePath);
+        if (!icc.empty())
         {
-            if (meta.channels == 0 || meta.bitDepth == 0)
-                qtmetadata::applyRasterMetadata(img, meta);
-            else
-                qtmetadata::applyColorMetadata(img, meta);
-            const int dpmx = img.dotsPerMeterX();
-            const int dpmy = img.dotsPerMeterY();
-            if (dpmx > 0)
-                meta.dpiX = qRound(dpmx * 0.0254);
-            if (dpmy > 0)
-                meta.dpiY = qRound(dpmy * 0.0254);
+            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+            const QByteArray bytes(reinterpret_cast<const char *>(icc.data()),
+                                   static_cast<qsizetype>(icc.size()));
+            qtmetadata::applyIccProfileBytes(bytes, meta);
         }
     }
+
+    const bool expensive = extensionIs(
+        ext, {"jpg", "jpeg", "jpe", "png", "tif", "tiff", "webp", "gif", "heic", "avif"});
+    const bool needColor = meta.colorSpace.empty();
+    const bool needRaster = meta.channels == 0 || meta.bitDepth == 0;
+    // Unknown DPI falls back to a scaled read only for cheap formats. An
+    // expensive file is still read when colour or raster fields would be lost.
+    const bool needDpi = !headerDpi && !expensive;
+    if (!needColor && !needRaster && !needDpi)
+        return;
+    if (expensive && !needColor && !needRaster)
+        return;
+
+    QImageReader dpiReader(qPath);
+    dpiReader.setScaledSize(QSize(1, 1));
+    QImage img;
+    if (!dpiReader.read(&img))
+        return;
+    if (needRaster)
+        qtmetadata::applyRasterMetadata(img, meta);
+    else
+        qtmetadata::applyColorMetadata(img, meta);
+    if (headerDpi)
+        return;
+    const int dpmx = img.dotsPerMeterX();
+    const int dpmy = img.dotsPerMeterY();
+    if (dpmx > 0)
+        meta.dpiX = qRound(dpmx * 0.0254);
+    if (dpmy > 0)
+        meta.dpiY = qRound(dpmy * 0.0254);
 }
 
 void populateTextMetadata(mviewer::domain::ImageMetadata &meta, QImageReader &reader)
@@ -135,8 +169,7 @@ mviewer::domain::ImageMetadata MetadataReader::readHeaders(const std::string &fi
     populateImageInfo(meta, reader, fi);
     populateTextMetadata(meta, reader);
     readGps(meta, filePath);
-    meta.hash = filePath + "|" + std::to_string(meta.fileSize) + "|" +
-                std::to_string(meta.modifiedEpochSec);
+    meta.hash = fileIdentityCompositeSec(filePath, meta.fileSize, meta.modifiedEpochSec);
     return meta;
 }
 // ── P0: GPS IFD parser ───────────────────────────────────────────────────────

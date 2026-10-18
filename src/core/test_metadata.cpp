@@ -1,10 +1,13 @@
 // M6 unit tests: ImageMetadata enrichment (bitDepth/channels/colorSpace/
 // orientation/format) populated during decode, and registry dispatch of format.
+#include "core/FileIdentity.h"
 #include "core/image/Decoder.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/SourceImage.h"
+
 #include "core/image/decoder/DecoderRegistry.h"
+#include <QCryptographicHash>
 
 #include <QBuffer>
 #include <QByteArray>
@@ -403,6 +406,151 @@ static void testJpegIccHeaderScrape()
     CHECK(png != nullptr, "SourceImage opens PNG without 1x1 ICC probe");
 }
 
+static QByteArray exifResolutionApp1(uint32_t num, uint32_t den, uint16_t unit)
+{
+    auto le16 = [](uint16_t v)
+    {
+        QByteArray b;
+        b.append(static_cast<char>(v & 0xff));
+        b.append(static_cast<char>((v >> 8) & 0xff));
+        return b;
+    };
+    auto le32 = [](uint32_t v)
+    {
+        QByteArray b;
+        b.append(static_cast<char>(v & 0xff));
+        b.append(static_cast<char>((v >> 8) & 0xff));
+        b.append(static_cast<char>((v >> 16) & 0xff));
+        b.append(static_cast<char>((v >> 24) & 0xff));
+        return b;
+    };
+    QByteArray tiff;
+    tiff.append("II");
+    tiff.append(le16(42));
+    tiff.append(le32(8));
+    tiff.append(le16(3));
+    tiff.append(le16(0x011A));
+    tiff.append(le16(5));
+    tiff.append(le32(1));
+    tiff.append(le32(50));
+    tiff.append(le16(0x011B));
+    tiff.append(le16(5));
+    tiff.append(le32(1));
+    tiff.append(le32(58));
+    tiff.append(le16(0x0128));
+    tiff.append(le16(3));
+    tiff.append(le32(1));
+    tiff.append(le16(unit));
+    tiff.append(le16(0));
+    tiff.append(le32(0));
+    tiff.append(le32(num));
+    tiff.append(le32(den));
+    tiff.append(le32(num));
+    tiff.append(le32(den));
+    QByteArray payload;
+    payload.append(QByteArray("Exif\0\0", 6));
+    payload.append(tiff);
+    const int segment = static_cast<int>(payload.size() + 2);
+    QByteArray app1;
+    app1.append(static_cast<char>(0xff));
+    app1.append(static_cast<char>(0xe1));
+    app1.append(static_cast<char>((segment >> 8) & 0xff));
+    app1.append(static_cast<char>(segment & 0xff));
+    app1.append(payload);
+    return app1;
+}
+
+static void testHeaderDpi()
+{
+    printf("\n[MetadataReader header DPI]\n");
+    fflush(stdout);
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "dpi temp dir");
+    const int dpm300 = qRound(300.0 / 0.0254);
+    const int dpm96 = qRound(96.0 / 0.0254);
+
+    const QString jpegPath = dir.path() + "/dpi.jpg";
+    {
+        QImage img(32, 24, QImage::Format_RGB888);
+        img.fill(QColor(10, 20, 30));
+        img.setDotsPerMeterX(dpm300);
+        img.setDotsPerMeterY(dpm300);
+        CHECK(img.save(jpegPath, "JPEG", 90), "write 300 dpi JPEG");
+    }
+    const auto jpegMeta = mviewer::core::MetadataReader::read(jpegPath.toStdString());
+    CHECK(jpegMeta.dpiX == 300 && jpegMeta.dpiY == 300, "JFIF header DPI round-trips to 300");
+
+    const QString pngPath = dir.path() + "/dpi.png";
+    {
+        QImage img(32, 24, QImage::Format_RGB888);
+        img.fill(QColor(10, 20, 30));
+        img.setDotsPerMeterX(dpm300);
+        img.setDotsPerMeterY(dpm96);
+        CHECK(img.save(pngPath, "PNG"), "write PNG with pHYs");
+    }
+    const auto pngMeta = mviewer::core::MetadataReader::read(pngPath.toStdString());
+    CHECK(pngMeta.dpiX == qRound(dpm300 * 0.0254) && pngMeta.dpiY == qRound(dpm96 * 0.0254),
+          "PNG pHYs DPI matches dotsPerMeter rounding");
+
+    const QString exifPath = dir.path() + "/exif_dpi.jpg";
+    {
+        QFile in(jpegPath);
+        CHECK(in.open(QIODevice::ReadOnly), "reopen JFIF JPEG");
+        const QByteArray jpeg = in.readAll();
+        QFile out(exifPath);
+        CHECK(jpeg.size() > 2 && out.open(QIODevice::WriteOnly), "open EXIF JPEG for write");
+        out.write(jpeg.left(2));
+        out.write(exifResolutionApp1(72, 1, 2));
+        out.write(jpeg.mid(2));
+    }
+    const auto exifMeta = mviewer::core::MetadataReader::read(exifPath.toStdString());
+    CHECK(exifMeta.dpiX == 72 && exifMeta.dpiY == 72,
+          "EXIF XResolution wins over a different JFIF density");
+}
+
+static void testFileIdentity()
+{
+    printf("\n[File identity keys]\n");
+    fflush(stdout);
+
+    CHECK(mviewer::core::fileIdentityKey("a.jpg", 123, 9) !=
+              mviewer::core::fileIdentityKey("a.jpg12", 3, 9),
+          "identity separators stop path/size concatenation collisions");
+    CHECK(mviewer::core::fileIdentityKey("a.jpg", 123, 9) == "a.jpg|123|9",
+          "persisted key is path|size|mtimeMs");
+    CHECK(mviewer::core::fileIdentityCompositeSec("a.jpg", 123, 9) == "a.jpg|123|9",
+          "seconds composite keeps the original path bytes");
+    CHECK(mviewer::core::legacyUnseparatedIdentity("a.jpg", 123, 9) == "a.jpg1239",
+          "ImageObject preimage stays unseparated");
+    CHECK(mviewer::core::fileRevisionSec(9, 123) == "9|123", "indexer revision is mtimeSec|size");
+    CHECK(mviewer::core::fileRevisionMs(9, 123) == "9|123",
+          "presentation revision is mtimeMs|size");
+    CHECK(mviewer::core::fileRevisionMs("/no/such/mviewer-file-identity").empty(),
+          "missing file has no millisecond revision");
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "identity temp dir");
+    const QString path = dir.path() + "/id.png";
+    QImage img(4, 4, QImage::Format_RGB32);
+    img.fill(Qt::black);
+    CHECK(img.save(path), "identity fixture written");
+    const std::string utf8 = path.toStdString();
+    const mviewer::core::FileStamp stamp = mviewer::core::fileStamp(utf8);
+    CHECK(stamp.exists && stamp.sizeBytes > 0, "stamp sees the fixture");
+    CHECK(mviewer::core::MetadataReader::key(utf8) ==
+              mviewer::core::fileIdentityKey(utf8, stamp.sizeBytes, stamp.mtimeMs),
+          "MetadataReader::key matches fileIdentityKey");
+    const QByteArray prefix =
+        QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex();
+    const std::string expectedThumb =
+        std::string(prefix.constData(), static_cast<size_t>(prefix.size())) + "_" +
+        std::to_string(stamp.mtimeMs) + "_" + std::to_string(stamp.sizeBytes) + "_128_v5";
+    CHECK(mviewer::core::thumbnailDiskKey(utf8, 128, stamp.mtimeMs, stamp.sizeBytes, 5) ==
+              expectedThumb,
+          "thumbnail filename matches sha1_mtime_size_edge_v schema");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -414,6 +562,8 @@ int main(int argc, char **argv)
     testMetadataReader();
     testMetadataHostileOffsets();
     testJpegIccHeaderScrape();
+    testHeaderDpi();
+    testFileIdentity();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

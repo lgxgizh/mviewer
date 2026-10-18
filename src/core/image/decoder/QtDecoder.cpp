@@ -1,6 +1,7 @@
 #include "core/image/decoder/QtDecoder.h"
 #include "core/filesystem/Utf8Path.h"
 
+#include "core/image/ExifOrientation.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtMetadataSemantics.h"
@@ -10,11 +11,17 @@
 #include <QImage>
 #include <QImageReader>
 #include <QString>
+
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <vector>
+
+// Same transform QImageReader::read applies when autoTransform is set (Qt 6.8).
+Q_GUI_EXPORT void qt_imageTransform(QImage &src, QImageIOHandler::Transformations orient);
 
 #if defined(Q_OS_WIN)
 #define NOMINMAX
@@ -287,7 +294,146 @@ const std::vector<std::string> &supportedExts()
     return exts;
 }
 
+struct PendingRaw16
+{
+    std::string path;
+    std::shared_ptr<std::vector<uint16_t>> samples;
+    int channels = 0;
+};
+
+std::atomic<uint64_t> g_fullImageReads{0};
+thread_local PendingRaw16 g_pendingRaw16;
+
+void clearPendingRaw16()
+{
+    g_pendingRaw16.path.clear();
+    g_pendingRaw16.samples.reset();
+    g_pendingRaw16.channels = 0;
+}
+
+bool isSixteenBitFormat(QImage::Format format)
+{
+    return format == QImage::Format_RGBX64 || format == QImage::Format_RGBA64 ||
+           format == QImage::Format_Grayscale16;
+}
+
+std::shared_ptr<std::vector<uint16_t>> packGrayscale16(const QImage &image)
+{
+    const int width = image.width();
+    const int height = image.height();
+    if (width <= 0 || height <= 0)
+        return nullptr;
+    const size_t total = static_cast<size_t>(width) * static_cast<size_t>(height);
+    auto samples = std::make_shared<std::vector<uint16_t>>(total);
+    uint16_t *dst = samples->data();
+    for (int y = 0; y < height; ++y)
+    {
+        const auto *row = reinterpret_cast<const uint16_t *>(image.constScanLine(y));
+        if (row == nullptr)
+            return nullptr;
+        std::memcpy(dst + static_cast<size_t>(y) * static_cast<size_t>(width), row,
+                    static_cast<size_t>(width) * sizeof(uint16_t));
+    }
+    return samples;
+}
+
+std::shared_ptr<std::vector<uint16_t>> packRgb64(const QImage &image)
+{
+    const QImage source = image.format() == QImage::Format_RGBX64
+                              ? image
+                              : image.convertToFormat(QImage::Format_RGBX64);
+    if (source.isNull() || source.width() <= 0 || source.height() <= 0)
+        return nullptr;
+    const int width = source.width();
+    const int height = source.height();
+    const size_t total = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+    auto samples = std::make_shared<std::vector<uint16_t>>(total);
+    uint16_t *dst = samples->data();
+    for (int y = 0; y < height; ++y)
+    {
+        const auto *row = reinterpret_cast<const uint16_t *>(source.constScanLine(y));
+        if (row == nullptr)
+            return nullptr;
+        size_t rowDst = static_cast<size_t>(y) * static_cast<size_t>(width) * 3;
+        for (int x = 0; x < width; ++x)
+        {
+            const int pixel = x * 4;
+            dst[rowDst] = row[pixel];
+            dst[rowDst + 1] = row[pixel + 1];
+            dst[rowDst + 2] = row[pixel + 2];
+            rowDst += 3;
+        }
+    }
+    return samples;
+}
+
+std::shared_ptr<std::vector<uint16_t>> orientPacked(std::shared_ptr<std::vector<uint16_t>> samples,
+                                                    int width, int height, int channels,
+                                                    int orientation)
+{
+    if (!samples || samples->empty() || orientation <= 1 || orientation > 8)
+        return samples;
+    auto oriented =
+        mviewer::core::orientSampleGrid(samples->data(), width, height, channels, orientation);
+    if (oriented.empty())
+        return samples;
+    return std::make_shared<std::vector<uint16_t>>(std::move(oriented));
+}
+
+void publishRaw16(const std::string &path, const QImage &image, int orientation)
+{
+    std::shared_ptr<std::vector<uint16_t>> packed;
+    int channels = 3;
+    if (image.format() == QImage::Format_Grayscale16)
+    {
+        packed =
+            orientPacked(packGrayscale16(image), image.width(), image.height(), 1, orientation);
+        channels = 1;
+    }
+    else if (image.format() == QImage::Format_RGBX64 || image.format() == QImage::Format_RGBA64)
+    {
+        packed = orientPacked(packRgb64(image), image.width(), image.height(), 3, orientation);
+    }
+    else
+    {
+        return;
+    }
+    if (!packed)
+        return;
+    g_pendingRaw16.path = path;
+    g_pendingRaw16.samples = std::move(packed);
+    g_pendingRaw16.channels = channels;
+}
+
 } // namespace
+
+void QtDecoder::resetFullImageReadCount()
+{
+    g_fullImageReads.store(0, std::memory_order_relaxed);
+}
+
+uint64_t QtDecoder::fullImageReadCount()
+{
+    return g_fullImageReads.load(std::memory_order_relaxed);
+}
+
+void QtDecoder::noteFullImageRead()
+{
+    g_fullImageReads.fetch_add(1, std::memory_order_relaxed);
+}
+
+std::shared_ptr<std::vector<uint16_t>> QtDecoder::takePendingRaw16(const std::string &path,
+                                                                   int &channels)
+{
+    channels = 0;
+    if (g_pendingRaw16.path != path || !g_pendingRaw16.samples)
+        return nullptr;
+    channels = g_pendingRaw16.channels;
+    auto samples = std::move(g_pendingRaw16.samples);
+    g_pendingRaw16.path.clear();
+    g_pendingRaw16.channels = 0;
+    return samples;
+}
 
 bool QtDecoder::canDecode(const std::string &path) const
 {
@@ -336,10 +482,15 @@ QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetad
              path});
     }
 
+    clearPendingRaw16();
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImageReader reader(qPath);
-    reader.setAutoTransform(true); // 尊重 EXIF 方向
-    const QImage img = reader.read();
+    reader.setAutoTransform(false);
+    const bool sixteen = isSixteenBitFormat(reader.imageFormat());
+    if (!sixteen)
+        reader.setAutoTransform(true);
+    noteFullImageRead();
+    QImage img = reader.read();
     if (img.isNull())
     {
         const auto readerErr = reader.error();
@@ -363,6 +514,15 @@ QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetad
 
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
+    // One 16-bit read feeds both the display buffer and raw16. The 8-bit image
+    // is the same auto-transform Qt would have applied inside read().
+    if (sixteen)
+    {
+        const int orientation =
+            mviewer::core::qtmetadata::orientationFromTransform(reader.transformation());
+        publishRaw16(path, img, orientation);
+        qt_imageTransform(img, reader.transformation());
+    }
     fillMetadata(reader, img, outMeta);
     return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(toImageData(img));
 }

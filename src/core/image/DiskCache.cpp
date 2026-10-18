@@ -27,6 +27,79 @@ namespace
 // How many inserts may pass between two limit enforcements. Enforcing after
 // every single put meant one full-table aggregate per decoded image.
 constexpr int kEnforceInterval = 32;
+// One prune statement deletes at most this many rows. A byte overrun that is
+// still over its low-water mark continues on the next pass.
+constexpr qint64 kMaxPruneBatch = 100000;
+constexpr qint64 kMinBytePruneBatch = 512;
+
+struct CacheLimits
+{
+    bool entries = false;
+    bool bytes = false;
+    qint64 entryCap = 0;
+    qint64 entryLow = 0;
+    qint64 byteCap = 0;
+    qint64 byteLow = 0;
+};
+
+CacheLimits cacheLimits(int maxEntries, size_t maxBytes)
+{
+    CacheLimits lim;
+    if (maxEntries > 0)
+    {
+        lim.entries = true;
+        lim.entryCap = maxEntries;
+        // A 90% target of a tiny cap rounds to 0 and would wipe the cache.
+        lim.entryLow = maxEntries < 10 ? maxEntries : static_cast<qint64>(maxEntries) * 9 / 10;
+    }
+    if (maxBytes > 0 && maxBytes <= static_cast<size_t>(std::numeric_limits<qint64>::max()))
+    {
+        lim.bytes = true;
+        lim.byteCap = static_cast<qint64>(maxBytes);
+        lim.byteLow = lim.byteCap < 10 ? lim.byteCap : lim.byteCap * 9 / 10;
+    }
+    return lim;
+}
+
+qint64 pruneBatch(qint64 entries, bool aboveEntryLow, qint64 entryLow, bool aboveByteLow)
+{
+    qint64 batch = 1;
+    if (aboveEntryLow)
+    {
+        batch = entries - entryLow;
+        if (batch < 1)
+            batch = 1;
+    }
+    if (aboveByteLow)
+    {
+        qint64 byteBatch = entries / 10;
+        if (byteBatch < kMinBytePruneBatch)
+            byteBatch = kMinBytePruneBatch;
+        if (byteBatch > entries)
+            byteBatch = entries;
+        if (byteBatch > batch)
+            batch = byteBatch;
+    }
+    if (batch > kMaxPruneBatch)
+        batch = kMaxPruneBatch;
+    return batch;
+}
+
+// Last access is stored in milliseconds. Rows written by older builds store
+// seconds, which sort first and are evicted before any millisecond timestamp.
+// A same-millisecond hit uses ts+1 so the touched row is strictly newer than
+// an insert that landed in that same millisecond.
+void touchBlob(const QSqlDatabase &db, const std::string &key)
+{
+    QSqlQuery touch(db);
+    touch.prepare(QStringLiteral(
+        "UPDATE blobs SET ts = CASE WHEN ts + 1 > ? THEN ts + 1 ELSE ? END WHERE key = ?"));
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    touch.addBindValue(QVariant::fromValue<qint64>(nowMs));
+    touch.addBindValue(QVariant::fromValue<qint64>(nowMs));
+    touch.addBindValue(QString::fromStdString(key));
+    touch.exec();
+}
 
 std::atomic_uint64_t g_connectionSerial{0};
 
@@ -242,13 +315,13 @@ void DiskCache::enforceLimits(const QSqlDatabase &db)
 {
     if (!db.isOpen())
         return;
-    if (m_maxEntries <= 0 && m_maxBytes <= 0)
+    const CacheLimits lim = cacheLimits(m_maxEntries, m_maxBytes);
+    if (!lim.entries && !lim.bytes)
         return;
-    // Delete in chunks instead of one row per full-table aggregate. The old loop
-    // re-ran COUNT(*) + SUM(LENGTH(data)) after every single-row delete, so
-    // bringing a populated cache back under its cap cost O(n^2) table scans while
-    // holding the global cache mutex (all decode workers serialized behind it).
-    for (int pass = 0; pass < 64; ++pass)
+    // One statement per pass, down to the low-water mark, instead of a row at a
+    // time. The first pass returns immediately when the hard cap still holds so
+    // a cache sitting between 90% and 100% is left alone.
+    for (int pass = 0; pass < 8; ++pass)
     {
         QSqlQuery count(db);
         if (!count.exec(QStringLiteral("SELECT COUNT(*), COALESCE(SUM(LENGTH(data)), 0) "
@@ -257,13 +330,21 @@ void DiskCache::enforceLimits(const QSqlDatabase &db)
             return;
         const auto entries = count.value(0).toLongLong();
         const auto bytes = count.value(1).toLongLong();
-        const bool overEntries = m_maxEntries > 0 && entries > m_maxEntries;
-        const bool overBytes = m_maxBytes > 0 && bytes > static_cast<qint64>(m_maxBytes);
-        if (!overEntries && !overBytes)
+        const bool overEntries = lim.entries && entries > lim.entryCap;
+        const bool overBytes = lim.bytes && bytes > lim.byteCap;
+        if (pass == 0 && !overEntries && !overBytes)
             return;
+        const bool aboveEntryLow = lim.entries && entries > lim.entryLow;
+        const bool aboveByteLow = lim.bytes && bytes > lim.byteLow;
+        if (!aboveEntryLow && !aboveByteLow)
+            return;
+        const qint64 batch = pruneBatch(entries, aboveEntryLow, lim.entryLow, aboveByteLow);
         QSqlQuery del(db);
-        if (!del.exec(QStringLiteral("DELETE FROM blobs WHERE key IN "
-                                     "(SELECT key FROM blobs ORDER BY ts ASC, key ASC LIMIT 512)")))
+        const QString sql =
+            QStringLiteral("DELETE FROM blobs WHERE key IN "
+                           "(SELECT key FROM blobs ORDER BY ts ASC, key ASC LIMIT %1)")
+                .arg(batch);
+        if (!del.exec(sql))
             return;
         if (del.numRowsAffected() <= 0)
             return;
@@ -317,6 +398,7 @@ bool DiskCache::get(const std::string &key, ImageData &out)
         return false;
     }
     std::memcpy(out.buffer->data(), blob.constData(), out.byteSize());
+    touchBlob(connectionForThread(), key);
     return true;
 }
 
@@ -341,7 +423,7 @@ void DiskCache::put(const std::string &key, const ImageData &img)
     q.addBindValue(img.width);
     q.addBindValue(img.height);
     q.addBindValue(static_cast<int>(img.format));
-    q.addBindValue(QVariant::fromValue<qint64>(QDateTime::currentSecsSinceEpoch()));
+    q.addBindValue(QVariant::fromValue<qint64>(QDateTime::currentMSecsSinceEpoch()));
     q.addBindValue(QByteArray(reinterpret_cast<const char *>(img.buffer->data()),
                               static_cast<int>(img.byteSize())));
     if (!q.exec())

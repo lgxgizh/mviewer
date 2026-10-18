@@ -46,11 +46,10 @@ class MetadataReader
     // decode pixels; dimension is read cheaply via QImageReader::size().
     static mviewer::domain::ImageMetadata read(const std::string &filePath);
 
-    // Same as read() minus the display metadata (DPI, embedded ICC / colour
-    // space, raster channel fallback). Those need a 1x1 scaled decode, which
-    // for JPEG still walks the whole entropy stream (~33 ms at 12 MP, ~156 ms
-    // at 100 MP); everything left is header-only. For bulk indexing (search,
-    // gallery filters) that never shows DPI or ICC.
+    // Same as read() minus display metadata (DPI, embedded ICC / colour space).
+    // DPI comes from JFIF, EXIF, PNG pHYs or TIFF tags with no pixel decode.
+    // Colour for PNG/TIFF, and for JPEG without an APP2 profile, still uses a
+    // 1x1 scaled read. Bulk indexing (search, gallery filters) skips that.
     static mviewer::domain::ImageMetadata readHeaders(const std::string &filePath);
 
     // Extracts embedded JPEG thumbnail from EXIF IFD1 if present.
