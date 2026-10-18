@@ -528,8 +528,77 @@ ImageData RenderEngine::executeCommand(const RenderCommand &cmd) const
     return ImageData();
 }
 
+namespace
+{
+
+struct MarkerColor
+{
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+};
+
+void writeMarkerPixel(ImageBuffer &img, int x, int y, MarkerColor color)
+{
+    if (!img.data || x < 0 || y < 0 || x >= img.width || y >= img.height)
+        return;
+    const int cpp = img.channelsPerPixel();
+    uint8_t *pixel = img.data + static_cast<size_t>(y) * static_cast<size_t>(img.stride()) +
+                     static_cast<size_t>(x) * static_cast<size_t>(cpp);
+    switch (img.format)
+    {
+    case PixelFormat::RGB24:
+    case PixelFormat::RGBA32:
+        pixel[0] = color.r;
+        pixel[1] = color.g;
+        pixel[2] = color.b;
+        break;
+    case PixelFormat::BGR24:
+    case PixelFormat::BGRA32:
+        pixel[0] = color.b;
+        pixel[1] = color.g;
+        pixel[2] = color.r;
+        break;
+    case PixelFormat::Grayscale8:
+    {
+        const int lum = (static_cast<int>(color.r) * 77 + static_cast<int>(color.g) * 150 +
+                         static_cast<int>(color.b) * 29) >>
+                        8;
+        pixel[0] = static_cast<uint8_t>(lum);
+        break;
+    }
+    }
+}
+
+// Crosshair in the image buffer. The source is not mutated: the returned
+// image detaches when the marker actually changes pixels.
+ImageData compositePixelMarker(const ImageData &buffer, const RenderCommand &cmd)
+{
+    const int x = cmd.targetSize.width;
+    const int y = cmd.targetSize.height;
+    if (buffer.isNull() || x < 0 || y < 0 || x >= buffer.width || y >= buffer.height)
+        return buffer;
+    ImageData out = buffer;
+    out.detach();
+    ImageBuffer img = out.view();
+    const unsigned packed = static_cast<unsigned>(cmd.rgba);
+    const MarkerColor color{static_cast<uint8_t>((packed >> 16) & 0xFFu),
+                            static_cast<uint8_t>((packed >> 8) & 0xFFu),
+                            static_cast<uint8_t>(packed & 0xFFu)};
+    constexpr int kArm = 8;
+    for (int dx = -kArm; dx <= kArm; ++dx)
+        writeMarkerPixel(img, x + dx, y, color);
+    for (int dy = -kArm; dy <= kArm; ++dy)
+        writeMarkerPixel(img, x, y + dy, color);
+    return out;
+}
+
+} // namespace
+
 ImageData RenderEngine::executeCommand(const RenderCommand &cmd, const ImageData &buffer) const
 {
+    if (cmd.type == RenderCommandType::DrawPixelMarker)
+        return compositePixelMarker(buffer, cmd);
     ImageData produced = executeCommand(cmd);
     switch (cmd.type)
     {
@@ -580,6 +649,9 @@ void RenderEngine::executeCommand(QPainter &painter, const RenderCommand &cmd,
         break;
     case RenderCommandType::DrawHeatmap:
         executeDrawHeatmap(painter, cmd, viewport);
+        break;
+    case RenderCommandType::DrawPixelMarker:
+        executeDrawPixelMarker(painter, cmd, viewport);
         break;
     default:
         break;
@@ -671,6 +743,29 @@ void RenderEngine::executeDrawHistogram(QPainter &painter, const RenderCommand &
             painter.drawLine(prev, cur);
         prev = cur;
     }
+    painter.restore();
+}
+
+void RenderEngine::executeDrawPixelMarker(QPainter &painter, const RenderCommand &cmd,
+                                          const QRect &viewport)
+{
+    const int x = cmd.targetSize.width;
+    const int y = cmd.targetSize.height;
+    const unsigned packed = static_cast<unsigned>(cmd.rgba);
+    const QColor penColor(static_cast<int>((packed >> 16) & 0xFFu),
+                          static_cast<int>((packed >> 8) & 0xFFu),
+                          static_cast<int>(packed & 0xFFu));
+    painter.save();
+    painter.setClipRect(viewport);
+    painter.setRenderHint(QPainter::Antialiasing, false);
+    QPen pen(penColor);
+    pen.setWidth(1);
+    pen.setCosmetic(true);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    constexpr int kArm = 8;
+    painter.drawLine(x - kArm, y, x + kArm, y);
+    painter.drawLine(x, y - kArm, x, y + kArm);
     painter.restore();
 }
 

@@ -49,9 +49,15 @@ class GpuTileUploader
     // upload callbacks). Safe to call headless — never throws.
     static bool available();
 
-    // True when available() AND env MVIEWER_GPU is set to a truthy value
-    // ("1", "true", "yes", "on"). Opt-in only.
+    // True when available() AND acceleration is requested. Opt-in only.
     static bool enabled();
+
+    // Cached MVIEWER_GPU override, otherwise QSettings "gpuAcceleration"
+    // (default on). Does not look at the current GL context. The first read
+    // is cached; resetEnabledCache() drops it (preferences save, and tests
+    // that change the environment).
+    static bool accelerationRequested();
+    static void resetEnabledCache();
 
     // Ensure the tile is resident on the GPU. Returns true if a handle is
     // available after the call (upload or cache hit). Returns false when the
@@ -79,6 +85,12 @@ class GpuTileUploader
     int uploadCount() const
     {
         return m_uploads;
+    }
+
+    // Same-size content changes applied in place (texture object kept).
+    int replaceCount() const
+    {
+        return m_replaces;
     }
 
     // Mark these keys as still on screen before uploading newcomers. Eviction
@@ -120,5 +132,6 @@ class GpuTileUploader
     std::unordered_set<TileKey, TileKeyHash> m_pinned;
     size_t m_bytes = 0;
     int m_uploads = 0;
+    int m_replaces = 0;
     bool m_budgetLoaded = false;
 };

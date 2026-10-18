@@ -8,6 +8,10 @@
 #include "core/render/Viewport.h"
 #include "core/render/ZoomPercent.h"
 
+#include <QImage>
+#include <QPainter>
+#include <QRect>
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -334,6 +338,58 @@ static void testTileEdgeContinuity()
     CHECK(lodA.contentX == 1 && lodA.contentW == 256, "LOD1 placement samples the inner region");
 }
 
+static void testPixelMarker()
+{
+    printf("\n[DrawPixelMarker]\n");
+    fflush(stdout);
+    auto &engine = RenderEngine::instance();
+    ImageData img = makeImageData(32, 32, PixelFormat::RGB24);
+    const ImageData alone = engine.executeCommand(RenderCommand::drawPixelMarker(10, 12, 0xFF0000));
+    CHECK(alone.isNull(), "marker without a buffer has nothing to draw on");
+
+    const ImageData marked =
+        engine.executeCommand(RenderCommand::drawPixelMarker(10, 12, 0xFF0000), img);
+    const PixelRGBA center = samplePixel(marked, 10, 12);
+    const PixelRGBA arm = samplePixel(marked, 18, 12);
+    const PixelRGBA beyond = samplePixel(marked, 19, 12);
+    const PixelRGBA vertical = samplePixel(marked, 10, 4);
+    const PixelRGBA source = samplePixel(img, 10, 12);
+    CHECK(center.valid && center.r == 255 && center.g == 0 && center.b == 0,
+          "CPU marker paints red at the pixel");
+    CHECK(arm.valid && arm.r == 255 && arm.g == 0, "CPU marker paints the horizontal arm");
+    CHECK(vertical.valid && vertical.r == 255, "CPU marker paints the vertical arm");
+    CHECK(beyond.valid && beyond.r == 0 && beyond.g == 0 && beyond.b == 0,
+          "CPU marker stops at the arm");
+    CHECK(source.valid && source.r == 0 && source.g == 0 && source.b == 0,
+          "CPU marker does not mutate the source buffer");
+
+    const ImageData outside =
+        engine.executeCommand(RenderCommand::drawPixelMarker(-1, 0, 0xFFFFFF), img);
+    CHECK(outside.buffer.get() == img.buffer.get(), "out-of-range marker keeps the source buffer");
+
+    ImageData bgr = makeImageData(16, 16, PixelFormat::BGR24);
+    const ImageData bgrMarked =
+        engine.executeCommand(RenderCommand::drawPixelMarker(3, 3, 0xFF0000), bgr);
+    const PixelRGBA bgrCenter = samplePixel(bgrMarked, 3, 3);
+    CHECK(bgrCenter.valid && bgrCenter.r == 255 && bgrCenter.g == 0 && bgrCenter.b == 0,
+          "CPU marker writes red in BGR storage");
+
+    QImage canvas(32, 32, QImage::Format_RGB32);
+    canvas.fill(Qt::black);
+    {
+        QPainter painter(&canvas);
+        engine.executeCommand(painter, RenderCommand::drawPixelMarker(10, 12, 0x00FF00),
+                              QRect(0, 0, 32, 32));
+    }
+    const QRgb painted = canvas.pixel(10, 12);
+    const QRgb paintedArm = canvas.pixel(10, 4);
+    const QRgb paintedCorner = canvas.pixel(0, 0);
+    CHECK(qRed(painted) == 0 && qGreen(painted) == 255 && qBlue(painted) == 0,
+          "QPainter marker paints the center");
+    CHECK(qGreen(paintedArm) == 255, "QPainter marker paints an arm");
+    CHECK(qGreen(paintedCorner) == 0 && qRed(paintedCorner) == 0, "QPainter marker stays local");
+}
+
 static void testZoomPercentFormat()
 {
     printf("\n[zoom percent]\n");
@@ -363,6 +419,7 @@ int main()
     testTileGridBoundsAndClamping();
     testRenderEngineBoundsAndScaling();
     testTileEdgeContinuity();
+    testPixelMarker();
     testZoomPercentFormat();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
