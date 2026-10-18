@@ -2557,6 +2557,7 @@ target_link_libraries(audit_misc_tests
 target_compile_features(audit_misc_tests PRIVATE cxx_std_20)
 target_include_directories(audit_misc_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME audit_misc_tests COMMAND audit_misc_tests)
+set_tests_properties(audit_misc_tests PROPERTIES RUN_SERIAL TRUE)
 
 # M41: every CTest process gets a fresh, per-test runtime root before Qt or
 # QStandardPaths is initialized. The random configure id makes repeated

@@ -36,6 +36,15 @@ static void check(bool condition, const char *message)
     ++g_failures;
 }
 
+
+static std::string sidecarFileFor(const std::string &imagePath)
+{
+    const std::string modern = imagePath + ".mviewer.json";
+    if (std::ifstream(modern, std::ios::binary))
+        return modern;
+    return imagePath + ".xmp";
+}
+
 static std::string readFile(const std::string &path)
 {
     std::ifstream in(path, std::ios::binary);
@@ -93,7 +102,7 @@ static void testSidecarAsync()
     }
     check(TaskScheduler::instance().drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
           "sidecar burst drained");
-    check(readFile(path + ".xmp").find("\"rating\": 5") != std::string::npos,
+    check(readFile(sidecarFileFor(path)).find("\"rating\": 5") != std::string::npos,
           "later sidecar writes win for the same path");
 
     std::atomic<int> failures{0};
@@ -104,7 +113,7 @@ static void testSidecarAsync()
     check(TaskScheduler::instance().drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
           "failed sidecar write drained");
     check(failures.load() == 1, "sidecar write failure is reported");
-    check(readFile(path + ".xmp").find("\"rating\": 5") != std::string::npos,
+    check(readFile(sidecarFileFor(path)).find("\"rating\": 5") != std::string::npos,
           "a failed atomic write leaves the previous sidecar");
 
     mviewer::core::setAtomicWriteFaults({});
@@ -114,7 +123,7 @@ static void testSidecarAsync()
     check(TaskScheduler::instance().drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
           "sidecar retry drained");
     check(failures.load() == 1, "a successful sidecar write does not report failure");
-    check(readFile(path + ".xmp").find("\"rating\": 3") != std::string::npos,
+    check(readFile(sidecarFileFor(path)).find("\"rating\": 3") != std::string::npos,
           "sidecar retry writes the latest rating");
 
     ratings.clearRating(path);
