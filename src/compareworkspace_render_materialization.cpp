@@ -621,6 +621,19 @@ QSize CompareWorkspace::transformedSourceDims(const QSize &sourceDims,
     return QSize(swap ? crop.height : crop.width, swap ? crop.width : crop.height);
 }
 
+void CompareWorkspace::scaleUsmRadiusForDisplay(CellAdjust &adjust, const DisplayRequest &request,
+                                                int fallbackSourceWidth, int lodWidth)
+{
+    if (!adjust.usmEnabled || lodWidth <= 0)
+        return;
+    const int sourceWidth = (request.region && request.sourceRect.width() > 0)
+                                ? request.sourceRect.width()
+                                : fallbackSourceWidth;
+    if (sourceWidth <= 0 || sourceWidth == lodWidth)
+        return;
+    adjust.usmRadius *= static_cast<double>(lodWidth) / static_cast<double>(sourceWidth);
+}
+
 CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
     const std::vector<ImageData> &pixels,
     const std::vector<mviewer::domain::ImageMetadata> &metadata,
@@ -709,7 +722,9 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
             displayAdjust.cropW = static_cast<int>(std::lround(displayAdjust.cropW * sx));
             displayAdjust.cropH = static_cast<int>(std::lround(displayAdjust.cropH * sy));
         }
-        const ImageData adjusted = CompareWorkspace::applyAdjusts(lod, displayAdjust);
+        scaleUsmRadiusForDisplay(displayAdjust, request, sourceDims.width(), lod.width);
+        const ImageData adjusted = CompareWorkspace::applyAdjusts(
+            lod, displayAdjust, [&context]() { return context.isCancelled(); });
         if (context.isCancelled())
             return {};
         if (adjusted.isNull())

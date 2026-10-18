@@ -267,6 +267,7 @@ CompareWorkspace::~CompareWorkspace()
     // The batch cancellation below then also waits for any delivery that
     // already started, closing the decode-done vs destruction race.
     m_lifetime->invalidate();
+    cancelAdjustedExport();
     // A batch completion is bookkeeping, not cancellation. Every request is
     // accounted exactly once when a batch is superseded so a cancelled queued
     // decode cannot leave `remaining` permanently non-zero. The generation
@@ -760,4 +761,22 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
     update();
 }
 
-// ─── M16.2: Per-cell image adjustments ───────────────────────────────────────
+mviewer::ui::CompareSessionState *CompareWorkspace::sessionState() const
+{
+    return m_sessionState.get();
+}
+
+mviewer::ui::CompareRoiController *CompareWorkspace::roiController() const
+{
+    return m_roiController.get();
+}
+
+mviewer::ui::CompareDiffRenderer *CompareWorkspace::diffRenderer() const
+{
+    return m_diffRenderer.get();
+}
+
+mviewer::ui::CompareDisplayManager *CompareWorkspace::displayManager() const
+{
+    return m_displayManager.get();
+}

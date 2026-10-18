@@ -270,8 +270,10 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     bindMirror(sync->menu(), m_uniformScaleChk, "uniformScaleAction");
     syncButton = sync;
 
-    auto *adjust = makePopup(viewBar, "compareAdjustButton", tr("调整"),
-                             tr("亮度、对比度、伽马、增益、旋转与翻转（仅预览，不覆盖原文件）"));
+    auto *adjust =
+        makePopup(viewBar, "compareAdjustButton", tr("调整"),
+                  tr("亮度、对比度、伽马、增益、USM 锐化、旋转与翻转（仅预览，不覆盖原文件）；"
+                     "可导出此图调优结果"));
     if (m_editPanel && adjust->menu())
     {
         lift(m_editPanel);

@@ -8,6 +8,7 @@
 //   compareworkspace_controls.cpp            toolbar + mode controls          565
 //   compareworkspace_display_planner.cpp     fit/LOD planning (free functions) 174
 //   compareworkspace_editpanel.cpp           edit panel, adjustments, presets 650
+//   compareworkspace_adjust_export.cpp       per-cell USM controls + full-res export
 //   compareworkspace_interact.cpp            canvas mouse / pixel-link        704
 //   compareworkspace_keyboard.cpp            keyboard-first compare controls  245
 //   compareworkspace_nav.cpp                 pair navigation, layout presets  757

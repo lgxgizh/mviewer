@@ -17,6 +17,7 @@
 #include "core/compare/CompareEngine.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
+#include "core/image/CellImageAdjust.h"
 #include "core/image/DisplayColorContext.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
@@ -45,6 +46,7 @@
 #include <QWidget>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -66,7 +68,7 @@ class CompareSessionState;
 class CompareRoiController;
 class CompareDiffRenderer;
 class CompareDisplayManager;
-}
+} // namespace mviewer::ui
 
 // CompareWorkspace：多图同步比较工作区
 class CompareWorkspace : public QWidget
@@ -104,10 +106,10 @@ class CompareWorkspace : public QWidget
     void setSyncEnabled(bool on);
 
     CompareEngine &engine();
-    mviewer::ui::CompareSessionState *sessionState() const { return m_sessionState.get(); }
-    mviewer::ui::CompareRoiController *roiController() const { return m_roiController.get(); }
-    mviewer::ui::CompareDiffRenderer *diffRenderer() const { return m_diffRenderer.get(); }
-    mviewer::ui::CompareDisplayManager *displayManager() const { return m_displayManager.get(); }
+    mviewer::ui::CompareSessionState *sessionState() const;
+    mviewer::ui::CompareRoiController *roiController() const;
+    mviewer::ui::CompareDiffRenderer *diffRenderer() const;
+    mviewer::ui::CompareDisplayManager *displayManager() const;
 
     // Last ROI applied to the compare cells; empty means unset.
     mviewer::domain::Selection currentROI() const;
@@ -334,6 +336,9 @@ class CompareWorkspace : public QWidget
     QPoint m_lastMouse;
     QPoint m_dragStartPos;
     int m_dragIdx = -1;
+    bool m_cellMenuPress = false, m_cellMenuMoved = false;
+    QPoint m_cellMenuPressPos;
+    int m_cellMenuIdx = -1;
     mviewer::domain::Selection m_lastSelection; // M12.1: last applied ROI
 
     using ROIInput = mviewer::ui::ROIInput;
@@ -606,6 +611,8 @@ class CompareWorkspace : public QWidget
         const std::vector<int> &panes, int paneCount, uint64_t generation,
         const std::vector<std::string> &paths, const mviewer::core::DisplayColorContext &target,
         const TaskScheduler::TaskContext &context);
+    static void scaleUsmRadiusForDisplay(CellAdjust &adjust, const DisplayRequest &request,
+                                         int fallbackSourceWidth, int lodWidth);
     QSize displayLodTarget(int idx, const ImageData &source) const;
     QRect sourceVisibleRect(int pane) const;
     mviewer::ui::CompareDisplayPlanningInput displayPlanningInput(int pane) const;
@@ -651,13 +658,11 @@ class CompareWorkspace : public QWidget
         int rotation = 0;      // 0, 90, 180, 270
         bool flipH = false, flipV = false, hasCrop = false;
         int cropX = 0, cropY = 0, cropW = 0, cropH = 0;
+        bool usmEnabled = false, usmLumaOnly = false;
+        double usmAmount = 1.5, usmRadius = 1.5; // amount [0, 5], radius px [0.1, 20]
+        int usmThreshold = 4;                    // [0, 255]
 
-        bool isIdentity() const
-        {
-            return brightness == 0 && std::abs(contrast - 1.0f) < 1e-6f &&
-                   std::abs(gamma - 1.0f) < 1e-6f && std::abs(rGain - 1.0f) < 1e-6f &&
-                   std::abs(bGain - 1.0f) < 1e-6f && rotation == 0 && !flipH && !flipV && !hasCrop;
-        }
+        bool isIdentity() const;
     };
     std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
     // Identity of a pane's displayed content (source frame + adjustments).
@@ -666,9 +671,12 @@ class CompareWorkspace : public QWidget
     void tagPaneContent(int pane);
     int m_editIdx = -1, m_explicitEditIdx = -1; // currently selected cell for editing
     static mviewer::core::CompareAdjustmentState reportAdjustment(const CellAdjust &adjust);
-    static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
+    static mviewer::core::CellImageAdjust toCellImageAdjust(const CellAdjust &adjust);
+    static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a,
+                                  const std::function<bool()> &cancelled = {});
     static std::string adjustKey(const CellAdjust &a);
-    static ImageData cachedAdjusted(const ImageData &src, const CellAdjust &adjust);
+    static ImageData cachedAdjusted(const ImageData &src, const CellAdjust &adjust,
+                                    const std::function<bool()> &cancelled = {});
     static bool computeDiffPair(mviewer::cw::DiffPair &out, const ImageData &source,
                                 const CellAdjust &adjust, const ImageData &basePixels,
                                 bool autoAlign, const TaskScheduler::TaskContext &context);
@@ -680,6 +688,7 @@ class CompareWorkspace : public QWidget
     // Drops cached adjusted images / diff maps (new compare set, teardown).
     static void clearDiffCache();
     friend struct CompareDiffCacheTestAccess;
+    friend struct CellImageAdjustTestAccess;
 
   private:
     // Analysis samples deliberately bypass RawImageView::image(). That image
@@ -696,11 +705,31 @@ class CompareWorkspace : public QWidget
     QLabel *m_brightVal = nullptr, *m_contrastVal = nullptr, *m_gammaVal = nullptr;
     QLabel *m_rGainVal = nullptr, *m_bGainVal = nullptr, *m_rotVal = nullptr;
     QPushButton *m_resetAdjBtn = nullptr;
+    QCheckBox *m_usmChk = nullptr, *m_usmLumaChk = nullptr;
+    QSlider *m_usmAmountSlider = nullptr, *m_usmRadiusSlider = nullptr;
+    QSlider *m_usmThresholdSlider = nullptr;
+    QLabel *m_usmAmountVal = nullptr, *m_usmRadiusVal = nullptr, *m_usmThresholdVal = nullptr;
+    QPushButton *m_exportAdjustedBtn = nullptr;
+    uint64_t m_adjustExportGen = 0;
+    std::shared_ptr<std::atomic<bool>> m_adjustExportCancel;
+    mviewer::application::ImageLoadingService::AsyncRequestHandle m_adjustExportHandle;
+    TaskScheduler::TaskHandle m_adjustExportTask;
     void onEditCellSelected(int cellIdx);
     void onAdjChanged();
     void onResetAdj();
     void buildEditPanel(QVBoxLayout *sideLayout);
+    void buildUsmControls(QVBoxLayout *editLay);
+    void syncUsmControls(const CellAdjust &adjust);
+    void addAdjustedExportButton(QVBoxLayout *editLay);
     void applyAdjToCell(int cellIdx);
+    void trackCellPointerForExportMenu(int idx, QEvent *event);
+    void queueCellExportMenu(int idx, const QPoint &globalPos);
+    void showCellExportMenu(int idx, const QPoint &globalPos);
+    void exportCurrentCellAdjusted();
+    void exportCellAdjusted(int idx);
+    void cancelAdjustedExport();
+    void launchAdjustedExport(const std::string &sourcePath, int frameIndex, const QString &outPath,
+                              const mviewer::core::CellImageAdjust &adjust);
 
     // ── M16.4: quick PSNR/SSIM metrics ──
     QLabel *m_metricLabel = nullptr;

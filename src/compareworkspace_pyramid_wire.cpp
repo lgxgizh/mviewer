@@ -542,10 +542,15 @@ quint64 CompareWorkspace::paneContentKey(int pane) const
     {
         const CellAdjust &a = m_cellAdjusts[idx];
         const float gains[] = {a.contrast, a.gamma, a.rGain, a.bGain};
-        const int ints[] = {a.brightness,    a.rotation,        a.flipH ? 1 : 0,
-                            a.flipV ? 1 : 0, a.hasCrop ? 1 : 0, a.cropX,
-                            a.cropY,         a.cropW,           a.cropH};
+        const double usmDoubles[] = {a.usmAmount, a.usmRadius};
+        const int ints[] = {a.brightness,      a.rotation,
+                            a.flipH ? 1 : 0,   a.flipV ? 1 : 0,
+                            a.hasCrop ? 1 : 0, a.cropX,
+                            a.cropY,           a.cropW,
+                            a.cropH,           a.usmEnabled ? 1 : 0,
+                            a.usmThreshold,    a.usmLumaOnly ? 1 : 0};
         mix(gains, sizeof(gains));
+        mix(usmDoubles, sizeof(usmDoubles));
         mix(ints, sizeof(ints));
     }
     return h;

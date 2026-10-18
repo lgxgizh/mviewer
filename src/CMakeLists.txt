@@ -45,6 +45,7 @@ add_library(mviewer_core SHARED
     core/image/QtConvert.cpp
     core/image/ImageStats.cpp
     core/image/UsmSharpen.cpp
+    core/image/CellImageAdjust.cpp
     core/filesystem/FileSystem.cpp
     core/filesystem/DirectorySnapshot.cpp
     core/filesystem/AtomicFile.cpp
@@ -235,6 +236,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_progressive.cpp
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
+    compareworkspace_adjust_export.cpp
     compareworkspace_help.cpp
     compareworkspace_interact.cpp
     compareworkspace_keyboard.cpp
@@ -864,6 +866,22 @@ target_link_libraries(compare_diff_cache_tests
 target_compile_features(compare_diff_cache_tests PRIVATE cxx_std_20)
 target_include_directories(compare_diff_cache_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_diff_cache_tests COMMAND compare_diff_cache_tests)
+
+add_executable(cell_image_adjust_tests
+    core/test_cell_image_adjust.cpp
+)
+target_link_libraries(cell_image_adjust_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(cell_image_adjust_tests PRIVATE cxx_std_20)
+target_include_directories(cell_image_adjust_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME cell_image_adjust_tests COMMAND cell_image_adjust_tests)
+set_tests_properties(cell_image_adjust_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
 add_executable(analyze_acceptance_tests
     test_analyze_acceptance.cpp
