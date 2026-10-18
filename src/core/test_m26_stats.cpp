@@ -164,8 +164,11 @@ void testConstViewDoesNotConstCast()
     printf("\n[constView is a read-only alias]\n");
     fflush(stdout);
     ImageData d = makeImageData(2, 2, PixelFormat::Grayscale8);
-    d.view().data[0] = 42;
-    d.view().data[1] = 7;
+    CHECK(d.buffer && d.buffer->size() >= 2, "makeImageData allocates the grayscale buffer");
+    if (!d.buffer || d.buffer->size() < 2)
+        return;
+    (*d.buffer)[0] = 42;
+    (*d.buffer)[1] = 7;
     const ImageData &cd = d;
     const ConstImageView cv = cd.constView();
     static_assert(std::is_const_v<std::remove_pointer_t<decltype(cv.data)>>,
