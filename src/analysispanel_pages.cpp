@@ -39,31 +39,27 @@ static uint16_t clampSample16(int value)
     return static_cast<uint16_t>(value);
 }
 
-static QString formatPixelValues(mviewer::core::ColorSpace cs, int r, int g, int b,
-                                 bool hasTwoImages, bool raw16, int r16, int g16, int b16,
-                                 int rawMax)
+static QString formatPixelValues(mviewer::core::ColorSpace cs, int r, int g, int b, bool raw16,
+                                 int r16, int g16, int b16, int rawMax)
 {
     const char *csLabel = mviewer::core::colorSpaceLabel(cs);
     const mviewer::core::ColorTriple px = mviewer::core::displayedColorSpace(
         clampByte(r), clampByte(g), clampByte(b), raw16, clampSample16(r16), clampSample16(g16),
         clampSample16(b16), clampSample16(rawMax), cs);
-    const QString prefix = hasTwoImages ? QStringLiteral("左图 ") : QString();
     if (cs == mviewer::core::ColorSpace::HEX)
     {
         const QString hex = QString::fromStdString(mviewer::core::toHex(
             static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b)));
-        return QString("<span style='color:#e66;'>●</span> %1HEX: %2<br>").arg(prefix, hex);
+        return QString("<span style='color:#e66;'>●</span> HEX: %1<br>").arg(hex);
     }
     if (cs == mviewer::core::ColorSpace::XYZ)
     {
-        return QString("<span style='color:#e66;'>●</span> %1XYZ(%2, %3, %4)<br>")
-            .arg(prefix)
+        return QString("<span style='color:#e66;'>●</span> XYZ(%1, %2, %3)<br>")
             .arg(px.c1, 0, 'f', 3)
             .arg(px.c2, 0, 'f', 3)
             .arg(px.c3, 0, 'f', 3);
     }
-    return QString("<span style='color:#e66;'>●</span> %1%2(%3, %4, %5)<br>")
-        .arg(prefix)
+    return QString("<span style='color:#e66;'>●</span> %1(%2, %3, %4)<br>")
         .arg(csLabel)
         .arg(px.c1, 0, 'f', 1)
         .arg(px.c2, 0, 'f', 1)
@@ -81,8 +77,8 @@ void AnalysisPanel::updateInspectorPage()
     const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
     QString txt = QString("<h3>%1 — %2</h3>").arg(tr("像素检视"), csLabel);
     txt += QString("坐标: (%1, %2)<br>").arg(m_px).arg(m_py);
-    txt += formatPixelValues(m_colorSpace, m_pR, m_pG, m_pB, m_hasB && !m_imageB.isNull(),
-                             m_rawKind == 2, m_r16, m_g16, m_b16, m_rawMax);
+    txt += formatPixelValues(m_colorSpace, m_pR, m_pG, m_pB, m_rawKind == 2, m_r16, m_g16, m_b16,
+                             m_rawMax);
     if (m_pA >= 0 && m_pA < 255)
         txt += QString("Alpha: %1<br>").arg(m_pA);
 
@@ -147,36 +143,6 @@ void AnalysisPanel::updateInspectorPage()
         }
     }
 
-    if (m_hasB && !m_imageB.isNull() && m_px >= 0 && m_py >= 0 && m_px < m_imageB.width() &&
-        m_py < m_imageB.height())
-    {
-        const QRgb c = m_imageB.pixel(m_px, m_py);
-        const int rR = qRed(c), rG = qGreen(c), rB = qBlue(c);
-        const int dR = m_pR - rR, dG = m_pG - rG, dB = m_pB - rB;
-        const int vA = std::max({m_pR, m_pG, m_pB});
-        const int vB = std::max({rR, rG, rB});
-        const int dV = vA - vB;
-        const double dist = qSqrt(static_cast<double>(dR * dR + dG * dG + dB * dB));
-        const auto labA =
-            mviewer::core::toColorSpace(static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG),
-                                        static_cast<uint8_t>(m_pB), mviewer::core::ColorSpace::Lab);
-        const auto labB =
-            mviewer::core::toColorSpace(static_cast<uint8_t>(rR), static_cast<uint8_t>(rG),
-                                        static_cast<uint8_t>(rB), mviewer::core::ColorSpace::Lab);
-        const double dL = labB.c1 - labA.c1, da = labB.c2 - labA.c2, dbv = labB.c3 - labA.c3;
-        const double dE76 = std::sqrt(dL * dL + da * da + dbv * dbv);
-        txt += QString("<br><span style='color:#6e6;'>●</span> 右图 RGB(%1, %2, %3)  V %4<br>")
-                   .arg(rR)
-                   .arg(rG)
-                   .arg(rB)
-                   .arg(vB);
-        txt += QString("ΔRGB   (%1, %2, %3)  ΔV %4<br>").arg(dR).arg(dG).arg(dB).arg(dV);
-        txt += QString("距离: %1  色差 ΔE76: %2").arg(dist, 0, 'f', 2).arg(dE76, 0, 'f', 2);
-    }
-    else
-    {
-        txt += tr("<br><span style='color:gray;'>(加载第二张图像可对比左右差异 Δ/ΔE76)</span>");
-    }
     m_inspectorLabel->setText(txt);
 }
 

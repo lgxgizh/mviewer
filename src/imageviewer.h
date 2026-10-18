@@ -301,8 +301,9 @@ class ImageViewer : public QOpenGLWidget
     void zoomChanged(int percent);
 
     // A-7.3: user picked an analyzer from the context-menu "分析" submenu.
-    // MainWindow shows the AnalysisPanel and routes the run through it so
-    // results land in the unified Result tab (not a QMessageBox).
+    // MainWindow leaves viewer fullscreen when that request arrives from it,
+    // shows the AnalysisPanel, and routes the run through it so results land
+    // in the unified Result tab (not a QMessageBox).
     void analysisRequested(const QString &analyzerId);
     void frameChanged(int index, int count, bool playing);
     void playbackStateChanged(bool playing);

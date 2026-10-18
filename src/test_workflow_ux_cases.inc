@@ -4408,6 +4408,76 @@ void workflow5_export_current_output_directory(const QString &rootDir)
         {
             dirEdit->setText(outputDir.absolutePath());
             const int csvIndex = modeCombo->findData(QStringLiteral("csv"));
+            const int jsonIndex = modeCombo->findData(QStringLiteral("json"));
+            const int htmlIndex = modeCombo->findData(QStringLiteral("html"));
+            const int clipboardIndex = modeCombo->findData(QStringLiteral("clipboard"));
+            const int convertIndex = modeCombo->findData(QStringLiteral("convert"));
+            CHECK(csvIndex >= 0 &&
+                      modeCombo->itemText(csvIndex) == QStringLiteral("图像元数据清单 CSV"),
+                  "CSV inventory mode uses the metadata-list label");
+            CHECK(jsonIndex >= 0 &&
+                      modeCombo->itemText(jsonIndex) == QStringLiteral("图像元数据清单 JSON"),
+                  "JSON inventory mode uses the metadata-list label");
+            CHECK(htmlIndex >= 0 &&
+                      modeCombo->itemText(htmlIndex) == QStringLiteral("图像元数据清单 HTML"),
+                  "HTML inventory mode uses the metadata-list label");
+            bool oldReportLabel = false;
+            for (int i = 0; i < modeCombo->count(); ++i)
+            {
+                const QString text = modeCombo->itemText(i);
+                if (text == QStringLiteral("CSV 报告") || text == QStringLiteral("JSON 报告") ||
+                    text == QStringLiteral("HTML 报告"))
+                    oldReportLabel = true;
+            }
+            CHECK(!oldReportLabel, "inventory modes are not labeled as 报告");
+
+            auto groupTitled = [&dialog](const QString &title) -> QGroupBox *
+            {
+                for (QGroupBox *box : dialog.findChildren<QGroupBox *>())
+                {
+                    if (box && box->title() == title)
+                        return box;
+                }
+                return nullptr;
+            };
+            auto *outputRow =
+                dialog.findChild<QWidget *>(QStringLiteral("exportOutputDirectoryRow"));
+            auto *formatGroup = groupTitled(QStringLiteral("格式"));
+            auto *resizeGroup = groupTitled(QStringLiteral("缩放"));
+            auto *watermarkGroup = groupTitled(QStringLiteral("水印"));
+            auto *cropGroup = groupTitled(QStringLiteral("裁剪"));
+            auto *metadataGroup = groupTitled(QStringLiteral("元数据"));
+            auto *renameGroup = groupTitled(QStringLiteral("批量重命名 (留空=原名)"));
+            auto *contactGroup = groupTitled(QStringLiteral("联系表 / PDF 选项"));
+            CHECK(outputRow && formatGroup && resizeGroup && watermarkGroup && cropGroup &&
+                      metadataGroup && renameGroup && contactGroup,
+                  "export dialog exposes output and the image-transform groups");
+            // The dialog stays unshown; isHidden() is the explicit hide flag.
+            // isVisible() would stay false because the window itself is hidden.
+            auto imageControlsHidden = [&]()
+            {
+                return formatGroup->isHidden() && resizeGroup->isHidden() &&
+                       watermarkGroup->isHidden() && cropGroup->isHidden() &&
+                       metadataGroup->isHidden() && renameGroup->isHidden() &&
+                       contactGroup->isHidden();
+            };
+            if (outputRow && formatGroup && resizeGroup && watermarkGroup && cropGroup &&
+                metadataGroup && renameGroup && contactGroup && csvIndex >= 0 &&
+                clipboardIndex >= 0 && convertIndex >= 0)
+            {
+                modeCombo->setCurrentIndex(convertIndex);
+                CHECK(!outputRow->isHidden() && !imageControlsHidden(),
+                      "convert mode shows the output directory and image controls");
+                modeCombo->setCurrentIndex(csvIndex);
+                CHECK(!outputRow->isHidden() && imageControlsHidden(),
+                      "CSV inventory keeps the output directory and hides image controls");
+                modeCombo->setCurrentIndex(clipboardIndex);
+                CHECK(outputRow->isHidden() && imageControlsHidden(),
+                      "clipboard hides the output directory and image controls");
+                modeCombo->setCurrentIndex(convertIndex);
+                CHECK(!outputRow->isHidden() && !imageControlsHidden(),
+                      "switching back to convert restores the hidden controls");
+            }
             CHECK(csvIndex >= 0, "export offers CSV mode");
             if (csvIndex >= 0)
             {
@@ -5266,6 +5336,23 @@ void workflow18_shell_copy_and_export_text()
               "refresh drops a persisted builtin_compare selection");
         CHECK(combo->count() == 0 || combo->currentIndex() == 0,
               "missing analyzer id falls back to the first entry");
+    }
+    auto *tabs = panel.findChild<QTabWidget *>();
+    CHECK(tabs != nullptr, "analysis panel has result tabs");
+    if (tabs)
+    {
+        bool compareTab = false;
+        bool diffTab = false;
+        for (int i = 0; i < tabs->count(); ++i)
+        {
+            const QString title = tabs->tabText(i);
+            if (title == QStringLiteral("对比") || title == QStringLiteral("双图对比"))
+                compareTab = true;
+            if (title == QStringLiteral("差异图"))
+                diffTab = true;
+        }
+        CHECK(!compareTab, "analysis panel has no 对比 tab");
+        CHECK(!diffTab, "analysis panel has no 差异图 tab");
     }
     auto *stats = panel.findChild<QLabel *>(QStringLiteral("analysisStatsLabel"));
     CHECK(stats && stats->text().contains(QStringLiteral("未选择图片")),

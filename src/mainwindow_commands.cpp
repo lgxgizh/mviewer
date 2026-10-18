@@ -612,7 +612,8 @@ QString MainWindow::shortcutsHelpHtml()
         "(多图交换当前与基准) / 帮助</td></tr>"
         "<tr><td><kbd>ESC</kbd></td><td>有选区则清除选区，再按一次退出比较</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
-        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口）</td></tr>"
+        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口，单图；双图比较用比较模式）</td></tr>"
+        "<tr><td>查看器右键「分析」</td><td>全屏时先退出全屏，再在主窗口显示分析面板</td></tr>"
         "<tr><td>右键检视表</td><td>像素检视器一键复制 HEX (#RRGGBB) 与 RGB 颜色代码</td></tr>"
         "<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层（ESC 关闭；浮层内 Ctrl+C "
         "复制全部元数据）</td></tr>"
@@ -701,7 +702,8 @@ QString MainWindow::userGuideHtml()
         "<table border='1' cellpadding='4' cellspacing='0'>"
         "<tr><td><kbd>P</kbd> / <kbd>C</kbd></td><td>打开比较（需 2–8 张）</td></tr>"
         "<tr><td><kbd>Space</kbd></td><td>当前图与下一张快速比较</td></tr>"
-        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（打开即出直方图）</td></tr>"
+        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口，单图；打开即出直方图。"
+        "双图比较用比较模式）</td></tr>"
         "<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层</td></tr>"
         "<tr><td><kbd>S</kbd></td><td>幻灯片</td></tr>"
         "<tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+H</kbd></td>"
@@ -710,6 +712,8 @@ QString MainWindow::userGuideHtml()
         "<tr><td><kbd>Ctrl+Shift+A</kbd></td><td>取消选择</td></tr>"
         "<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>批量分析导出</td></tr>"
         "</table>"
+        "<p>查看器全屏时，右键「分析」会先退出全屏，再在主窗口打开分析面板。"
+        "分析面板只处理当前这一张图；两张图的 PSNR / SSIM 在比较模式里。</p>"
         "<p>完整快捷键表：菜单「帮助 → 键盘快捷键」或 <kbd>F1</kbd>。</p>");
 }
 

@@ -28,17 +28,17 @@
 // panel, model, widgets, registry, pipeline, or any QObject.
 struct AnalysisInput
 {
-    std::shared_ptr<ImageFrame> frame;   // holds the pixel buffer alive
-    std::string path;                    // publish path (setImage path wins, else frame metadata)
+    std::shared_ptr<ImageFrame> frame; // holds the pixel buffer alive
+    std::string path;                  // publish path (setImage path wins, else frame metadata)
     bool hasROI = false;
     mviewer::domain::Selection roi;
-    std::string id;                      // selected analyzer id (empty = none)
+    std::string id; // selected analyzer id (empty = none)
     uint64_t generation = 0;
-    std::shared_ptr<Analyzer> analyzer;  // created on the UI thread, worker-owned
-    bool creationFailed = false;         // pipeline/registry create() threw (M24 C#7)
-    bool materialize = false;            // full frame materialization (vs analyzer-only rerun)
-    QImage image; // already materialized RGB32, captured only for the legacy
-                  // ROI fallback (analyzer-only rerun; implicit sharing)
+    std::shared_ptr<Analyzer> analyzer; // created on the UI thread, worker-owned
+    bool creationFailed = false;        // pipeline/registry create() threw (M24 C#7)
+    bool materialize = false;           // full frame materialization (vs analyzer-only rerun)
+    QImage image;                       // already materialized RGB32, captured only for the legacy
+                                        // ROI fallback (analyzer-only rerun; implicit sharing)
 };
 
 // ── Worker output, marshalled to the UI thread via qApp ───────────────────
@@ -48,26 +48,25 @@ struct AnalysisInput
 struct AnalysisResult
 {
     uint64_t generation = 0;
-    std::shared_ptr<ImageFrame> frame;   // identity check on the UI thread
-    QImage image;                        // RGB32 (null = nothing to present)
+    std::shared_ptr<ImageFrame> frame; // identity check on the UI thread
+    QImage image;                      // RGB32 (null = nothing to present)
     std::string path;
     std::string id;
     ImageStats stats;
-    ImageStats roiStats;   // legacy ROI-fallback stats, kept separate from stats
+    ImageStats roiStats; // legacy ROI-fallback stats, kept separate from stats
     bool hasRoiStats = false;
     double noise = 0.0;
     bool noiseValid = false;
 
-    bool materialize = false;            // mirrors the request mode
-    bool isBuiltinCompare = false;
+    bool materialize = false; // mirrors the request mode
     bool analyzerOk = false;
-    bool analyzerFailed = false;         // analyzer threw (M24 C#7 degrade)
-    bool roiFallback = false;            // no analyzer result + ROI set (legacy fallback)
-    bool noResult = false;               // no analyzer result and no ROI — explicit note
+    bool analyzerFailed = false; // analyzer threw (M24 C#7 degrade)
+    bool roiFallback = false;    // no analyzer result + ROI set (legacy fallback)
+    bool noResult = false;       // no analyzer result and no ROI — explicit note
     std::string analyzerName;
     std::string resultText;
     std::unordered_map<std::string, double> metrics;
     mviewer::domain::Histogram histogram; // populated for HistogramAnalyzer
     bool hasHistogram = false;
-    std::string plainResult;             // plain ROI summary to publish
+    std::string plainResult; // plain ROI summary to publish
 };

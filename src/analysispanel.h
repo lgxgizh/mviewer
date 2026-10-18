@@ -31,12 +31,12 @@ class QVBoxLayout;
 struct AnalysisInput;
 struct AnalysisResult;
 
-// AnalysisPanel: multi-mode analysis panel
+// AnalysisPanel: single-image analysis panel
 //  - Histogram + stats (single image)
 //  - ROI stats
-//  - Dual-image compare (PSNR/SSIM/Noise/Diff)
 //  - AnalyzerRegistry plugin extensibility
 //  - M21: Analysis History + Pinned Result via AnalyzerModel
+// Two-image comparison lives in CompareWorkspace, not here.
 class AnalysisPanel : public QWidget
 {
     Q_OBJECT
@@ -83,7 +83,6 @@ class AnalysisPanel : public QWidget
     {
         return m_hasA && !m_imageA.isNull();
     }
-    void setImages(const QImage &a, const QImage &b);
     void clear();
 
     // M14-4: expose the histogram pixmap for report export.
@@ -133,8 +132,7 @@ class AnalysisPanel : public QWidget
 
     // Pixel Inspector (M3 Phase-2): live readout of the hovered pixel.
     // `left*` are the RGB read directly from the ImageFrame (passed by the
-    // viewer). When a second image is loaded, `right*` come from the compare
-    // image so the panel can show Left RGB / Right RGB / Delta / Difference.
+    // viewer).
     void showPixel(int x, int y, int leftR, int leftG, int leftB, int leftA, int r16, int g16,
                    int b16, int rawKind, bool valid);
 
@@ -171,7 +169,6 @@ class AnalysisPanel : public QWidget
     void buildInspectorTab();
     void buildInspectorActions(QVBoxLayout &layout);
     void updateHistogramPage();
-    void updateComparePage();
     void updatePluginPage();
     void updateInspectorPage();
     void updateRgbPage();
@@ -181,7 +178,6 @@ class AnalysisPanel : public QWidget
     bool runLegacyAnalyzer(const QString &id);
     void runRoiAnalysis();
     void renderChannel(QLabel *label, const int *hist, const QColor &color);
-    QImage computeDifferencePreview(const QImage &a, const QImage &b);
     QString noiseLevelText(double variance);
 
     enum Page
@@ -191,8 +187,6 @@ class AnalysisPanel : public QWidget
         ExposurePage,
         FocusPage,
         MetadataPage,
-        ComparePage,
-        DiffMapPage,
         PluginPage,
         InspectorPage
     };
@@ -207,20 +201,15 @@ class AnalysisPanel : public QWidget
     QLabel *m_exposureLabel = nullptr; // P1-1: exposure stats
     QLabel *m_focusLabel = nullptr;    // P1-1: focus / sharpness stats
     QLabel *m_metaLabel = nullptr;     // P1-1: metadata summary
-    QLabel *m_compareLabel = nullptr;
-    QLabel *m_diffPreview = nullptr;
     QLabel *m_pluginResult = nullptr;
     QLabel *m_inspectorLabel = nullptr; // Pixel Inspector readout
     std::unique_ptr<RawImageView> m_imageView;
 
     // Data
     QImage m_imageA;
-    QImage m_imageB;
     QString m_imagePath; // P1-1: source path for metadata extraction
     bool m_hasA = false;
-    bool m_hasB = false;
     ImageStats m_statsA;
-    ImageStats m_statsB;
     mviewer::domain::Selection m_roi;
     bool m_hasROI = false;
     // M28 P1-02/P1-04 + manual rerun: ONE panel-owned task + ONE monotonic
@@ -241,9 +230,9 @@ class AnalysisPanel : public QWidget
     //     recomputes base stats/noise, and the call returns immediately.
     // A stale async delivery is discarded unless its generation and frame
     // identity (and, for analyzer-only jobs, the publish path) still match.
-    // Legacy explicit paths (setImage/setImages/clear) cancel/invalidate any
-    // in-flight task so a stale async delivery can never overwrite them; the
-    // QImage-only panel (no valid ImageFrame) keeps its synchronous behavior.
+    // Legacy explicit paths (setImage/clear) cancel/invalidate any in-flight
+    // task so a stale async delivery can never overwrite them; the QImage-only
+    // panel (no valid ImageFrame) keeps its synchronous behavior.
     bool m_frameDirty = false;
     void invalidateAnalysis();
     void scheduleAnalysis();
@@ -264,8 +253,8 @@ class AnalysisPanel : public QWidget
     static TaskScheduler::TaskHandle submitAnalysisJob(const AnalysisInput &in,
                                                        QPointer<AnalysisPanel> guard);
     std::shared_ptr<ImageFrame> m_frameA; // left image frame for ROI analysis
-    TaskScheduler::TaskHandle m_task; // owned handle of the current analysis job
-    uint64_t m_gen = 0;               // monotonically increasing generation (latest-wins)
+    TaskScheduler::TaskHandle m_task;     // owned handle of the current analysis job
+    uint64_t m_gen = 0;                   // monotonically increasing generation (latest-wins)
     // Cached noise estimate so updateFocusPage never re-scans the image. The
     // async worker and the legacy synchronous paths both populate it before the
     // cheap page updates run.
@@ -310,6 +299,4 @@ class AnalysisPanel : public QWidget
     void onPinnedActivated();
     void onPinToggled();
     void publishResult(const QString &plainText, const QString &producerAnalyzerId = {});
-
-    static constexpr int kPreviewSize = 192;
 };

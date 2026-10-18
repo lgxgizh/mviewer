@@ -12,12 +12,14 @@
 |------|--------|-----------|
 | 1 | Open an image in the Viewer | `ImageViewer` |
 | 2 | Open the Analysis panel | `AnalysisPanel` |
-| 3 | Pick an analyzer (Histogram / RGB Mean / PSNR / SSIM / Sharpness / Noise / Entropy) | `AnalysisPanel` combo |
-| 4 | (For PSNR/SSIM) select a reference image | `AnalysisPanel` |
-| 5 | Read the result text | `AnalysisPanel` |
+| 3 | Pick an analyzer (Histogram / RGB Mean / Sharpness / Noise / Entropy) | `AnalysisPanel` combo |
+| 4 | (For two-image PSNR/SSIM) open the images in Compare | `CompareWorkspace` |
+| 5 | Read the result text | `AnalysisPanel` or Compare status |
 
 ## 2. Expected result
 
+- `AnalysisPanel` is single-image. Two-image PSNR/SSIM comparison is
+  `CompareWorkspace`, not a panel tab.
 - The `AnalyzerRegistry` resolves the requested analyzer by id and runs it on
   the `ImageFrame`.
 - At least the review-required analyzers (Histogram, RGB Mean, PSNR, SSIM,

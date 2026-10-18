@@ -409,14 +409,28 @@ void MainWindow::connectViewerSignals()
                     m_thumbnailPanel->setFocus(Qt::OtherFocusReason);
             });
     // A-7.3: viewer context-menu "分析" → show panel + run through unified entry.
+    // A fullscreen viewer covers the main window, so the panel would open
+    // behind it. Leave fullscreen on the viewer's own path, then raise the
+    // shell that owns the panel.
     connect(m_imageViewer, &ImageViewer::analysisRequested, this,
             [this](const QString &analyzerId)
             {
-                if (!m_analysisPanel)
+                if (!m_analysisPanel || !m_imageViewer)
                     return;
+                const bool fullscreen =
+                    m_imageViewer->property("mviewerFullscreenRequested").toBool() ||
+                    m_imageViewer->isFullScreen() ||
+                    m_imageViewer->windowState().testFlag(Qt::WindowFullScreen);
+                if (fullscreen)
+                    m_imageViewer->setFullscreenRequested(false);
                 m_analysisPanel->setVisible(true);
                 if (m_actToggleAnalysis)
                     m_actToggleAnalysis->setChecked(true);
+                if (fullscreen)
+                {
+                    raise();
+                    activateWindow();
+                }
                 m_analysisPanel->runAnalyzer(analyzerId);
             });
     connect(m_imageViewer, &ImageViewer::fileRotated, this,

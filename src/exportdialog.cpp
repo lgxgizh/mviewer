@@ -8,8 +8,8 @@
 
 #include <QApplication>
 #include <QCheckBox>
-#include <QCloseEvent>
 #include <QClipboard>
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -27,8 +27,8 @@
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QSpinBox>
-#include <QtConcurrent/QtConcurrent>
 #include <QVBoxLayout>
+#include <QtConcurrent/QtConcurrent>
 
 void ExportDialog::setOutputDir(const QString &dir)
 {
@@ -73,14 +73,18 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
 void ExportDialog::buildOutputSection(QVBoxLayout *root)
 {
     // ---- output directory ----
-    auto *dirRow = new QHBoxLayout();
-    m_dirEdit = new QLineEdit(this);
+    // Wrapped so clipboard mode (no file) can hide the whole row.
+    m_outputRow = new QWidget(this);
+    m_outputRow->setObjectName(QStringLiteral("exportOutputDirectoryRow"));
+    auto *dirRow = new QHBoxLayout(m_outputRow);
+    dirRow->setContentsMargins(0, 0, 0, 0);
+    m_dirEdit = new QLineEdit(m_outputRow);
     m_dirEdit->setObjectName(QStringLiteral("exportOutputDirectoryEdit"));
-    m_browseBtn = new QPushButton(tr("浏览..."), this);
-    dirRow->addWidget(new QLabel(tr("输出目录:")));
+    m_browseBtn = new QPushButton(tr("浏览..."), m_outputRow);
+    dirRow->addWidget(new QLabel(tr("输出目录:"), m_outputRow));
     dirRow->addWidget(m_dirEdit, 1);
     dirRow->addWidget(m_browseBtn);
-    root->addLayout(dirRow);
+    root->addWidget(m_outputRow);
 }
 
 void ExportDialog::buildModeSection(QVBoxLayout *root)
@@ -93,9 +97,9 @@ void ExportDialog::buildModeSection(QVBoxLayout *root)
     m_modeCombo->addItem(tr("转换 / 批量"), "convert");
     m_modeCombo->addItem(tr("联系表 (Contact Sheet)"), "contact");
     m_modeCombo->addItem(tr("PDF 文档"), "pdf");
-    m_modeCombo->addItem(tr("CSV 报告"), "csv");
-    m_modeCombo->addItem(tr("JSON 报告"), "json");
-    m_modeCombo->addItem(tr("HTML 报告"), "html");
+    m_modeCombo->addItem(tr("图像元数据清单 CSV"), "csv");
+    m_modeCombo->addItem(tr("图像元数据清单 JSON"), "json");
+    m_modeCombo->addItem(tr("图像元数据清单 HTML"), "html");
     m_modeCombo->addItem(tr("复制到剪贴板"), "clipboard");
     modeLay->addRow(tr("模式:"), m_modeCombo);
     root->addWidget(modeBox);
@@ -104,7 +108,8 @@ void ExportDialog::buildModeSection(QVBoxLayout *root)
 void ExportDialog::buildFormatSection(QVBoxLayout *root)
 {
     // ---- format ----
-    auto *fmtBox = new QGroupBox(tr("格式"));
+    m_formatGroup = new QGroupBox(tr("格式"));
+    auto *fmtBox = m_formatGroup;
     auto *fmtLay = new QFormLayout(fmtBox);
     m_formatCombo = new QComboBox(this);
     m_formatCombo->addItem("PNG", "png");
@@ -127,7 +132,8 @@ void ExportDialog::buildFormatSection(QVBoxLayout *root)
 void ExportDialog::buildResizeSection(QVBoxLayout *root)
 {
     // ---- resize ----
-    auto *rsBox = new QGroupBox(tr("缩放"));
+    m_resizeGroup = new QGroupBox(tr("缩放"));
+    auto *rsBox = m_resizeGroup;
     auto *rsLay = new QFormLayout(rsBox);
     m_resizeCombo = new QComboBox(this);
     m_resizeCombo->setObjectName(QStringLiteral("exportResizeModeCombo"));
@@ -177,7 +183,8 @@ void ExportDialog::syncResizeControls()
 void ExportDialog::buildWatermarkSection(QVBoxLayout *root)
 {
     // ---- watermark ----
-    auto *wmBox = new QGroupBox(tr("水印"));
+    m_watermarkGroup = new QGroupBox(tr("水印"));
+    auto *wmBox = m_watermarkGroup;
     auto *wmLay = new QFormLayout(wmBox);
     m_watermarkEdit = new QLineEdit(this);
     m_wmPosCombo = new QComboBox(this);
@@ -199,7 +206,8 @@ void ExportDialog::buildWatermarkSection(QVBoxLayout *root)
 void ExportDialog::buildCropSection(QVBoxLayout *root)
 {
     // ---- crop (P0 #⑦) ----
-    auto *cropBox = new QGroupBox(tr("裁剪"));
+    m_cropGroup = new QGroupBox(tr("裁剪"));
+    auto *cropBox = m_cropGroup;
     auto *cropLay = new QFormLayout(cropBox);
     m_cropCheck = new QCheckBox(tr("启用裁剪"), this);
     m_cropX = new QSpinBox(this);
@@ -227,7 +235,8 @@ void ExportDialog::buildCropSection(QVBoxLayout *root)
 void ExportDialog::buildMetadataSection(QVBoxLayout *root)
 {
     // ---- metadata (P0 #⑦) ----
-    auto *metaBox = new QGroupBox(tr("元数据"));
+    m_metadataGroup = new QGroupBox(tr("元数据"));
+    auto *metaBox = m_metadataGroup;
     auto *metaLay = new QFormLayout(metaBox);
     m_stripMetaCheck = new QCheckBox(tr("剥离元数据 (EXIF/ICC)"), this);
     m_stripMetaCheck->setChecked(true);
@@ -240,7 +249,8 @@ void ExportDialog::buildMetadataSection(QVBoxLayout *root)
 void ExportDialog::buildRenameSection(QVBoxLayout *root)
 {
     // ---- rename ----
-    auto *rnBox = new QGroupBox(tr("批量重命名 (留空=原名)"));
+    m_renameGroup = new QGroupBox(tr("批量重命名 (留空=原名)"));
+    auto *rnBox = m_renameGroup;
     auto *rnLay = new QVBoxLayout(rnBox);
     m_renamePanel = new BatchRenamePanel(rnBox);
     m_renamePanel->setSettingsGroup(QStringLiteral("exportRename"));
@@ -264,7 +274,8 @@ void ExportDialog::buildRenameSection(QVBoxLayout *root)
 void ExportDialog::buildContactSection(QVBoxLayout *root)
 {
     // ---- contact sheet / pdf ----
-    auto *csBox = new QGroupBox(tr("联系表 / PDF 选项"));
+    m_contactGroup = new QGroupBox(tr("联系表 / PDF 选项"));
+    auto *csBox = m_contactGroup;
     auto *csLay = new QFormLayout(csBox);
     m_colsSpin = new QSpinBox(this);
     m_colsSpin->setRange(1, 20);
@@ -297,8 +308,42 @@ void ExportDialog::buildButtonSection(QVBoxLayout *root)
     refreshExportButton();
 }
 
+void ExportDialog::syncModeControls()
+{
+    if (!m_modeCombo)
+        return;
+    const QString mode = m_modeCombo->currentData().toString();
+    // csv/json/html write an image metadata inventory (name, size, channel
+    // means). They do not encode, resize, watermark, crop, rename, or build a
+    // contact sheet. Clipboard decodes the first source and never writes a file,
+    // so the output directory does not apply either. Convert / contact / PDF
+    // keep the controls they already showed; contact and PDF still read quality
+    // and the contact-sheet options.
+    const bool inventory = mode == QLatin1String("csv") || mode == QLatin1String("json") ||
+                           mode == QLatin1String("html");
+    const bool clipboard = mode == QLatin1String("clipboard");
+    const bool hideImageControls = inventory || clipboard;
+    if (m_outputRow)
+        m_outputRow->setVisible(!clipboard);
+    if (m_formatGroup)
+        m_formatGroup->setVisible(!hideImageControls);
+    if (m_resizeGroup)
+        m_resizeGroup->setVisible(!hideImageControls);
+    if (m_watermarkGroup)
+        m_watermarkGroup->setVisible(!hideImageControls);
+    if (m_cropGroup)
+        m_cropGroup->setVisible(!hideImageControls);
+    if (m_metadataGroup)
+        m_metadataGroup->setVisible(!hideImageControls);
+    if (m_renameGroup)
+        m_renameGroup->setVisible(!hideImageControls);
+    if (m_contactGroup)
+        m_contactGroup->setVisible(!hideImageControls);
+}
+
 void ExportDialog::refreshExportButton()
 {
+    syncModeControls();
     const bool convert = m_modeCombo->currentData().toString() == QLatin1String("convert");
     if (!m_cancelFlag)
         m_exportBtn->setEnabled(!convert || m_renamePanel->isValid());
@@ -455,7 +500,6 @@ void ExportDialog::exportConvertBatch()
 
     startExportJob(std::move(cfg));
     return;
-
 }
 
 void ExportDialog::exportUnifiedMode(mviewer::exportjob::Mode mode)
@@ -496,8 +540,7 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
         m_progress->setWindowModality(Qt::WindowModal);
         m_progress->setAutoClose(true);
         m_progress->setMinimumDuration(0);
-        connect(m_progress, &QProgressDialog::canceled, this,
-                [this]() { cancelActiveExport(); });
+        connect(m_progress, &QProgressDialog::canceled, this, [this]() { cancelActiveExport(); });
     }
     m_progress->setRange(0, static_cast<int>(cfg.sources.size()));
     m_progress->setValue(0);
@@ -550,8 +593,7 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
                 if (dialog->m_progress)
                     dialog->m_progress->close();
                 dialog->m_exportBtn->setEnabled(true);
-                if (mode == mviewer::exportjob::Mode::Clipboard &&
-                    !result.clipboardImage.isNull())
+                if (mode == mviewer::exportjob::Mode::Clipboard && !result.clipboardImage.isNull())
                 {
                     // Owning conversion: the clipboard outlives `result`, so the
                     // non-owning toQImageRef() alias must never be handed out.
@@ -570,17 +612,17 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
                 {
                     if (!qApp)
                         return;
-                    QMetaObject::invokeMethod(
-                        qApp,
-                        [self, done, total, generation]()
-                        {
-                            ExportDialog *dialog = self->data();
-                            if (!dialog || generation != dialog->m_exportGeneration ||
-                                !dialog->m_progress)
-                                return;
-                            dialog->m_progress->setMaximum(total);
-                            dialog->m_progress->setValue(done);
-                        });
+                    QMetaObject::invokeMethod(qApp,
+                                              [self, done, total, generation]()
+                                              {
+                                                  ExportDialog *dialog = self->data();
+                                                  if (!dialog ||
+                                                      generation != dialog->m_exportGeneration ||
+                                                      !dialog->m_progress)
+                                                      return;
+                                                  dialog->m_progress->setMaximum(total);
+                                                  dialog->m_progress->setValue(done);
+                                              });
                 });
         }));
 }

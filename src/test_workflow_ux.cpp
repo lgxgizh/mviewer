@@ -98,6 +98,7 @@
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
+#include <QTabWidget>
 #include <QTableWidget>
 #include <QTextCursor>
 #include <QTextEdit>

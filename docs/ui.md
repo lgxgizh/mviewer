@@ -98,7 +98,7 @@ above is the main window only.
 | Fit to window | `0` (viewer; `Ctrl+0` shares the action) | Scale the image to the canvas |
 | Actual size | `1` (viewer) | 100% (1:1 pixel) |
 | Fullscreen | `F11` (viewer: `F` or `F11`) | Toggle fullscreen mode |
-| Analysis panel | `Alt+H` | Toggle the analysis panel (histogram by default) |
+| Analysis panel | `Alt+H` | Toggle the single-image analysis panel (histogram by default). Two-image compare stays in Compare. A fullscreen viewer's Analyze action exits fullscreen and shows this panel. |
 | Metadata panel | `Ctrl+I` | Toggle the metadata panel |
 | Search | `Ctrl+Shift+F` | Focus the search field |
 | Batch | `Ctrl+Shift+B` | Batch operations dialog |
@@ -178,7 +178,7 @@ above is the main window only.
 | `Ctrl+Shift+O` | Open file |
 | `P` / `C` | Open Compare (needs 2–8 selected images) |
 | `Space` | Quick compare: current image against the next one |
-| `Alt+H` | Analysis panel |
+| `Alt+H` | Single-image analysis panel. From a fullscreen viewer, Analyze exits fullscreen and shows this panel. |
 | `I` / `M` | Image-info overlay / metadata overlay |
 | `S` | Slideshow |
 | `F` | Fullscreen |

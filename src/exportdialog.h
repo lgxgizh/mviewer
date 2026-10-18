@@ -20,6 +20,8 @@ class QLabel;
 class QProgressDialog;
 class QCloseEvent;
 class QVBoxLayout;
+class QGroupBox;
+class QWidget;
 class BatchRenamePanel;
 
 // Batch / single image export dialog. Supports format conversion, resizing,
@@ -75,6 +77,8 @@ class ExportDialog : public QDialog
     void buildButtonSection(QVBoxLayout *root);
     // 「批量重命名」: invalid rename settings disable 导出 in convert mode.
     void refreshExportButton();
+    // Report inventory and clipboard modes ignore image-transform controls.
+    void syncModeControls();
 
     ImageData applyResize(const ImageData &d) const;
     ImageData applyWatermark(const ImageData &d) const;
@@ -94,12 +98,20 @@ class ExportDialog : public QDialog
     QString m_outDir;
     QStringList m_sources;
 
+    QWidget *m_outputRow = nullptr;
     QLineEdit *m_dirEdit = nullptr;
     QPushButton *m_browseBtn = nullptr;
+    QGroupBox *m_formatGroup = nullptr;
     QComboBox *m_formatCombo = nullptr;
     QSpinBox *m_qualitySpin = nullptr;
 
     QComboBox *m_modeCombo = nullptr;
+    QGroupBox *m_resizeGroup = nullptr;
+    QGroupBox *m_watermarkGroup = nullptr;
+    QGroupBox *m_cropGroup = nullptr;
+    QGroupBox *m_metadataGroup = nullptr;
+    QGroupBox *m_renameGroup = nullptr;
+    QGroupBox *m_contactGroup = nullptr;
     QComboBox *m_resizeCombo = nullptr;
     QSpinBox *m_resizeSpin = nullptr;
     QLineEdit *m_watermarkEdit = nullptr;

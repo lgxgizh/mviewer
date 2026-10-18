@@ -46,9 +46,13 @@ void AnalysisPanel::fillAnalyzerCombo(const QString &restoreId)
     }
     if (m_analyzerCombo->count() == 0)
         return;
-    // An empty id must not match a blank userData. A missing id, including a
-    // persisted builtin_compare entry, falls back to the first analyzer.
-    const int found = restoreId.isEmpty() ? -1 : m_analyzerCombo->findData(restoreId);
+    // An empty id must not match a blank userData. A persisted
+    // builtin_compare selection (the old AnalysisPanel two-image tab; compare
+    // now lives in CompareWorkspace) is not a real analyzer and falls back to
+    // the first one.
+    const bool staleCompare = restoreId == QLatin1String("builtin_compare");
+    const int found =
+        restoreId.isEmpty() || staleCompare ? -1 : m_analyzerCombo->findData(restoreId);
     m_analyzerCombo->setCurrentIndex(found >= 0 ? found : 0);
 }
 
@@ -90,7 +94,6 @@ void AnalysisPanel::applyFrameImage(const QImage &rgb32, const QString &path)
     m_imageA = rgb32;
     m_imagePath = path;
     m_hasA = true;
-    m_hasB = false;
     m_statsA = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageA));
     // Cache the noise estimate so the cheap page updates never re-scan the
     // image (updateFocusPage reads this cache).
@@ -103,41 +106,19 @@ void AnalysisPanel::applyFrameImage(const QImage &rgb32, const QString &path)
     updateMetadataPage();
 }
 
-void AnalysisPanel::setImages(const QImage &a, const QImage &b)
-{
-    if (a.isNull() || b.isNull())
-        return;
-    // Explicit legacy API: a stale async delivery must never overwrite the
-    // explicit compare state.
-    invalidateAnalysis();
-    // Clear the single-frame analyzer pending/result surface before rendering
-    // the compare state.
-    clearAnalyzerResultSurface();
-    m_frameDirty = false;
-    setReportAnalysisState(ReportAnalysisState::Unset);
-    m_imageA = a.convertToFormat(QImage::Format_RGB32);
-    m_imageB = b.convertToFormat(QImage::Format_RGB32);
-    m_hasA = m_hasB = true;
-    m_statsA = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageA));
-    m_statsB = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageB));
-    updateComparePage();
-}
-
 void AnalysisPanel::clear()
 {
     invalidateAnalysis();
     m_frameDirty = false;
     setReportAnalysisState(ReportAnalysisState::Unset);
     m_frameA = nullptr;
-    m_imageA = m_imageB = QImage();
-    m_hasA = m_hasB = false;
-    m_statsA = m_statsB = ImageStats();
+    m_imageA = QImage();
+    m_hasA = false;
+    m_statsA = ImageStats();
     m_noiseA = 0.0;
     m_noiseValid = false;
     m_hasROI = false;
     m_statsLabel->clear();
-    m_compareLabel->clear();
-    m_diffPreview->clear();
     m_pluginResult->clear();
     m_histogramLabel->clear();
     if (m_rgbLabel)
