@@ -1,4 +1,5 @@
 #include "core/analyzer/RGBMeanAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 
 #include "core/image/ImageStats.h"
 
@@ -39,7 +40,6 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
     int64_t pixelCount = 0;
     const ConstImageView view = img.constView();
     const int cpp = view.channelsPerPixel();
-    const bool isBGR = (view.format == PixelFormat::BGR24 || view.format == PixelFormat::BGRA32);
     const bool isGray = (view.format == PixelFormat::Grayscale8);
 
     for (int y = y0; y < y1; ++y)
@@ -88,15 +88,13 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
             const uint8_t *p = row + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p += cpp)
             {
-                const uint8_t r = isBGR ? p[2] : p[0];
-                const uint8_t g = p[1];
-                const uint8_t b = isBGR ? p[0] : p[2];
-                sumR += r;
-                sumG += g;
-                sumB += b;
-                sumR2 += static_cast<uint64_t>(r) * r;
-                sumG2 += static_cast<uint64_t>(g) * g;
-                sumB2 += static_cast<uint64_t>(b) * b;
+                const Rgb8 rgb = unpackRgb8(p, view.format);
+                sumR += static_cast<uint64_t>(rgb.r);
+                sumG += static_cast<uint64_t>(rgb.g);
+                sumB += static_cast<uint64_t>(rgb.b);
+                sumR2 += static_cast<uint64_t>(rgb.r) * static_cast<uint64_t>(rgb.r);
+                sumG2 += static_cast<uint64_t>(rgb.g) * static_cast<uint64_t>(rgb.g);
+                sumB2 += static_cast<uint64_t>(rgb.b) * static_cast<uint64_t>(rgb.b);
                 ++pixelCount;
             }
         }

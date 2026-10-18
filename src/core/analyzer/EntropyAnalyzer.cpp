@@ -1,4 +1,5 @@
 #include "core/analyzer/EntropyAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 
 #include <cmath>
 #include <cstring>
@@ -33,8 +34,7 @@ double EntropyAnalyzer::computeEntropy(const ConstImageView &v, int x0, int y0, 
             const uint8_t *p = line + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p += cpp)
             {
-                const int sum = static_cast<int>(p[0]) + p[1] + p[2];
-                const int lum = (sum * 21846) >> 16;
+                const int lum = lumaAverage(unpackRgb8(p, v.format));
                 ++hist[lum];
             }
         }

@@ -28,6 +28,12 @@
 - GPU 瓦片开关（`MVIEWER_GPU` 或设置里的 `gpuAcceleration`）只读一次并缓存，偏好设置保存后失效；瓦片指纹改为宽、高、通道数加全部像素的哈希，差一个字节也会重新上传（审计 #25）。
 - `DrawPixelMarker` 在 CPU 像素缓冲和 `QPainter` 路径都会画十字准星，不再被默认分支丢掉（审计 #26）。
 - `CpuFeatures` 在 x86-64 上用 eax/edx 读取 `XCR0`，并抽出共用的 `osSupportsYmm()`；AVX2 检测仍然要求 OSXSAVE 和 YMM 状态（审计 #28）。
+- `Selection::area()`、`suggestThreshold` 的像素总数，以及分析面板 ROI 像素数改为 `int64_t` 相乘，大图宽高乘积不再在 32 位里回绕（审计 #29）。
+- Otsu 阈值遍历 0..255，包含 bin 0。全图落在同一个 bin，或类间方差不为正时，返回该 bin，空类不再做除法（审计 #30）。
+- 分析器的 RGB 拆包和亮度系数收到 `PixelAccess.h`：Rec.601 整数系数与通道平均各自保留，BGR/RGB 走同一条拆包（审计 #31）。
+- `MTFAnalyzer::analyze` / `analyzeRegion` 返回内部 `compute` 的失败状态。均匀图不再被当成成功的 MTF 结果（审计 #32）。
+- 批量分析 JSON 把 NaN/Inf 写成 `null`。CSV 指标走已有的 `csvEscape`（逗号、引号、CR、LF 加引号，内部引号加倍）。文件名多于结果行时不再越界读取（审计 #33）。
+- 比较直方图、`domain::Histogram` 和 `AnalysisEngine::ImageStats` 的 bin 计数与像素总数改为 `int64_t`，单 bin 可以超过 2^32（审计 #34）。
 
 ### Changed
 

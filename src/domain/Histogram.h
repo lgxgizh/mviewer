@@ -9,11 +9,12 @@ namespace mviewer::domain
 struct Histogram
 {
     static constexpr int BINS = 256;
-    std::array<int, BINS> luminance{};
-    std::array<int, BINS> red{};
-    std::array<int, BINS> green{};
-    std::array<int, BINS> blue{};
-    std::array<int, BINS> v{};
+    // Bin counts are 64-bit so one bin can hold more than 2^31 samples.
+    std::array<int64_t, BINS> luminance{};
+    std::array<int64_t, BINS> red{};
+    std::array<int64_t, BINS> green{};
+    std::array<int64_t, BINS> blue{};
+    std::array<int64_t, BINS> v{};
 
     double lumMean = 0.0;
     double vMean = 0.0;
@@ -24,8 +25,8 @@ struct Histogram
     int64_t totalPixels() const noexcept
     {
         int64_t s = 0;
-        for (int val : luminance)
-            s += static_cast<int64_t>(val);
+        for (int64_t val : luminance)
+            s += val;
         return s;
     }
 

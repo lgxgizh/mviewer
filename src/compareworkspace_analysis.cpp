@@ -759,8 +759,10 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
             if (!r.main.empty() && r.main[0].total > 0 && r.main[0].bins == 256)
             {
                 const auto &h0 = r.main[0];
-                const double under = (100.0 * h0.luma[0]) / static_cast<double>(h0.total);
-                const double over = (100.0 * h0.luma[255]) / static_cast<double>(h0.total);
+                const double under =
+                    (100.0 * static_cast<double>(h0.luma[0])) / static_cast<double>(h0.total);
+                const double over =
+                    (100.0 * static_cast<double>(h0.luma[255])) / static_cast<double>(h0.total);
                 title += tr(" · 截断: 暗 %1% / 亮 %2%")
                              .arg(QString::number(under, 'f', under >= 0.1 ? 1 : 2),
                                   QString::number(over, 'f', over >= 0.1 ? 1 : 2));
@@ -772,14 +774,16 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
                         continue;
                     const int slot =
                         i < r.mainIndices.size() ? r.mainIndices[i] : static_cast<int>(i);
-                    const double u = (100.0 * h.luma[0]) / static_cast<double>(h.total);
-                    const double o = (100.0 * h.luma[255]) / static_cast<double>(h.total);
+                    const double u =
+                        (100.0 * static_cast<double>(h.luma[0])) / static_cast<double>(h.total);
+                    const double o =
+                        (100.0 * static_cast<double>(h.luma[255])) / static_cast<double>(h.total);
                     tipLines << tr("[%1] 像素 %2 · 暗部(Y=0): %3 (%4%) · 高光(Y=255): %5 (%6%)")
                                     .arg(QChar('A' + slot))
-                                    .arg(h.total)
-                                    .arg(h.luma[0])
+                                    .arg(static_cast<qlonglong>(h.total))
+                                    .arg(static_cast<qlonglong>(h.luma[0]))
                                     .arg(QString::number(u, 'f', 2))
-                                    .arg(h.luma[255])
+                                    .arg(static_cast<qlonglong>(h.luma[255]))
                                     .arg(QString::number(o, 'f', 2));
                 }
                 if (!tipLines.isEmpty())

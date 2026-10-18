@@ -92,6 +92,11 @@ static void testMtf()
     printf("    sharp MTF50=%.3f  blurred MTF50=%.3f\n", mtf.mtf50(), b2.mtf50());
     // The sharp step should resolve higher than the gentle ramp.
     CHECK(mtf.mtf50() >= b2.mtf50(), "sharp edge MTF50 >= blurred ramp MTF50");
+
+    auto flat = makeFrame(32, 32, [](uint8_t *p, int, int, int) { p[0] = p[1] = p[2] = 100; });
+    MTFAnalyzer flatMtf;
+    CHECK(!flatMtf.analyze(flat), "uniform image MTF analyze fails");
+    CHECK(flatMtf.mtf50() == 0.0, "uniform image MTF50 is 0");
 }
 
 static void testDeadPixel()
@@ -174,9 +179,18 @@ static void testRegistryHasNew()
     // runAnalyzer() returns a result for each new id.
     auto frame = makeFrame(32, 32, [](uint8_t *p, int, int, int) { p[0] = p[1] = p[2] = 100; });
     const auto res = ::AnalyzerRegistry::instance().runAnalyzer(frame);
-    CHECK(res.count("mtf") == 1, "runAnalyzer() returns mtft result");
+    CHECK(res.count("mtf") == 0, "runAnalyzer omits mtf on a uniform image");
     CHECK(res.count("deadpixel") == 1, "runAnalyzer() returns deadpixel result");
     CHECK(res.count("colorchecker") == 1, "runAnalyzer() returns colorchecker result");
+
+    auto edge = makeFrame(64, 64,
+                          [](uint8_t *p, int, int y, int)
+                          {
+                              const int v = y < 32 ? 20 : 220;
+                              p[0] = p[1] = p[2] = static_cast<uint8_t>(v);
+                          });
+    const auto edgeRes = ::AnalyzerRegistry::instance().runAnalyzer(edge);
+    CHECK(edgeRes.count("mtf") == 1, "runAnalyzer returns mtf on an edge image");
 }
 
 static void testRgbMean()
@@ -232,6 +246,32 @@ static void testBrightnessContrast()
     CHECK(std::abs(b.result().avgLum - 150.0) < 1e-3, "brightness avgLum == 150");
     CHECK(std::abs(b.result().minLum - 150.0) < 1e-3, "brightness minLum == 150");
     CHECK(std::abs(b.result().maxLum - 150.0) < 1e-3, "brightness maxLum == 150");
+
+    // Rec.601 integer luma is format-aware: BGR (B,G,R)=(180,90,30) matches RGB (30,90,180).
+    auto rgb = makeFrame(
+        8, 8,
+        [](uint8_t *p, int, int, int)
+        {
+            p[0] = 30;
+            p[1] = 90;
+            p[2] = 180;
+        },
+        PixelFormat::RGB24);
+    auto bgr = makeFrame(
+        8, 8,
+        [](uint8_t *p, int, int, int)
+        {
+            p[0] = 180;
+            p[1] = 90;
+            p[2] = 30;
+        },
+        PixelFormat::BGR24);
+    BrightnessAnalyzer br;
+    BrightnessAnalyzer bb;
+    CHECK(br.analyze(rgb), "brightness analyzed RGB");
+    CHECK(bb.analyze(bgr), "brightness analyzed BGR");
+    CHECK(std::abs(br.result().avgLum - 82.0) < 1e-6, "RGB luma is 82");
+    CHECK(std::abs(bb.result().avgLum - br.result().avgLum) < 1e-9, "BGR luma matches RGB");
 
     ContrastAnalyzer c;
     CHECK(c.analyze(gray), "contrast analyzed gray");

@@ -1,4 +1,5 @@
 #include "core/analyzer/DeadPixelAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 
 #include <algorithm>
 #include <array>
@@ -37,10 +38,6 @@ inline int median8(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a
     return a4;
 }
 
-inline int getAvgInt(const uint8_t *p)
-{
-    return (static_cast<int>(p[0]) + p[1] + p[2]) / 3;
-}
 } // namespace
 
 bool DeadPixelAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, int y1)
@@ -88,6 +85,8 @@ bool DeadPixelAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1,
     }
     else
     {
+        const PixelFormat format = v.format;
+        auto lumOf = [format](const uint8_t *p) { return lumaAverage(unpackRgb8(p, format)); };
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
@@ -98,10 +97,10 @@ bool DeadPixelAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1,
             const uint8_t *p2 = line2 + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p0 += cpp, p1 += cpp, p2 += cpp)
             {
-                const int lum = getAvgInt(p1);
-                const int med = median8(getAvgInt(p0 - cpp), getAvgInt(p0), getAvgInt(p0 + cpp),
-                                        getAvgInt(p1 - cpp), getAvgInt(p1 + cpp),
-                                        getAvgInt(p2 - cpp), getAvgInt(p2), getAvgInt(p2 + cpp));
+                const int lum = lumOf(p1);
+                const int med =
+                    median8(lumOf(p0 - cpp), lumOf(p0), lumOf(p0 + cpp), lumOf(p1 - cpp),
+                            lumOf(p1 + cpp), lumOf(p2 - cpp), lumOf(p2), lumOf(p2 + cpp));
                 const int dev = std::abs(lum - med);
                 if (dev > kThresh)
                 {

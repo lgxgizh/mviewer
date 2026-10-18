@@ -124,7 +124,7 @@ void AnalysisPanel::renderHistogramPixmap()
     constexpr int drawBins = 64;
     const double binW = static_cast<double>(bg.width()) / drawBins;
 
-    auto aggChannel = [](const int *hist, long long *agg, long long &maxVal)
+    auto aggChannel = [](const int64_t *hist, long long *agg, long long &maxVal)
     {
         for (int i = 0; i < drawBins; ++i)
         {
@@ -204,7 +204,7 @@ void AnalysisPanel::updateRgbPage()
     constexpr int drawBins = 64;
     const double binW = static_cast<double>(bg.width()) / drawBins;
 
-    auto aggChannel = [](const int *hist, long long *agg, long long &maxVal)
+    auto aggChannel = [](const int64_t *hist, long long *agg, long long &maxVal)
     {
         for (int i = 0; i < drawBins; ++i)
         {
@@ -405,7 +405,7 @@ void AnalysisPanel::renderHistogramPixmap(const mviewer::domain::Histogram &hist
     const int pad = 4;
     const QRect bg(pad, pad, W - pad * 2, H - pad * 2);
 
-    auto drawChannel = [&bg, &p](const int *histBins, const QColor &color)
+    auto drawChannel = [&bg, &p](const int64_t *histBins, const QColor &color)
     {
         constexpr int srcBins = 256;
         constexpr int drawBins = 64;

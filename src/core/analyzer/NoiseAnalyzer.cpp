@@ -1,17 +1,10 @@
 #include "core/analyzer/NoiseAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 
 #include "core/analysis/AnalysisEngine.h"
 
 #include <cmath>
 #include <unordered_map>
-
-namespace
-{
-inline int getAvgInt(const uint8_t *p)
-{
-    return (static_cast<int>(p[0]) + p[1] + p[2]) / 3;
-}
-} // namespace
 
 // Laplacian variance: |Laplacian(img)| variance, where L = [0 1 0; 1 -4 1; 0 1
 // 0].
@@ -58,6 +51,8 @@ double NoiseAnalyzer::estimateLaplacian(const ConstImageView &v, int x0, int y0,
     {
         int64_t iSum = 0;
         int64_t iSum2 = 0;
+        const PixelFormat format = v.format;
+        auto lumOf = [format](const uint8_t *p) { return lumaAverage(unpackRgb8(p, format)); };
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
@@ -68,9 +63,8 @@ double NoiseAnalyzer::estimateLaplacian(const ConstImageView &v, int x0, int y0,
             const uint8_t *p2 = line2 + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p0 += cpp, p1 += cpp, p2 += cpp)
             {
-                const int c = getAvgInt(p1) * 4;
-                const int n4 =
-                    getAvgInt(p0) + getAvgInt(p2) + getAvgInt(p1 - cpp) + getAvgInt(p1 + cpp);
+                const int c = lumOf(p1) * 4;
+                const int n4 = lumOf(p0) + lumOf(p2) + lumOf(p1 - cpp) + lumOf(p1 + cpp);
                 const int lap = c - n4;
                 iSum += lap;
                 iSum2 += static_cast<int64_t>(lap) * lap;

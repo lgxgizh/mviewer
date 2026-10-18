@@ -1,4 +1,5 @@
 #include "core/analyzer/ColorCastAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 
@@ -15,35 +16,18 @@ bool ColorCastAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1,
         return false;
     const int64_t n = static_cast<int64_t>(x1 - x0) * (y1 - y0);
 
-    const bool isBGR = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
     int64_t sumR = 0, sumG = 0, sumB = 0;
 
-    if (isBGR)
+    for (int y = y0; y < y1; ++y)
     {
-        for (int y = y0; y < y1; ++y)
+        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+        const uint8_t *p = line + static_cast<size_t>(x0) * cpp;
+        for (int x = x0; x < x1; ++x, p += cpp)
         {
-            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-            const uint8_t *p = line + static_cast<size_t>(x0) * cpp;
-            for (int x = x0; x < x1; ++x, p += cpp)
-            {
-                sumB += p[0];
-                sumG += p[1];
-                sumR += p[2];
-            }
-        }
-    }
-    else
-    {
-        for (int y = y0; y < y1; ++y)
-        {
-            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-            const uint8_t *p = line + static_cast<size_t>(x0) * cpp;
-            for (int x = x0; x < x1; ++x, p += cpp)
-            {
-                sumR += p[0];
-                sumG += p[1];
-                sumB += p[2];
-            }
+            const Rgb8 rgb = unpackRgb8(p, v.format);
+            sumR += rgb.r;
+            sumG += rgb.g;
+            sumB += rgb.b;
         }
     }
 

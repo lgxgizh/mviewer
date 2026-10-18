@@ -66,7 +66,7 @@ class ImageObject
     void rgbMeans(double &r, double &g, double &b);
     void rgbMeans(int &r, int &g, int &b);
 
-    const int *histogram() const;
+    const int64_t *histogram() const;
     DecodeState decodeState() const;
     void setDecodeState(DecodeState s);
     CacheState cacheState() const;
@@ -102,7 +102,7 @@ inline void ImageObject::setCacheState(ImageObject::CacheState s)
 {
     m_frame.setCacheState(static_cast<::CacheState>(static_cast<uint8_t>(s)));
 }
-inline const int *ImageObject::histogram() const
+inline const int64_t *ImageObject::histogram() const
 {
     return m_frame.hasHistogram() ? m_frame.histogram().luminance.data() : nullptr;
 }

@@ -1,16 +1,9 @@
 #include "core/analyzer/SharpnessAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 
 #include <cmath>
 #include <cstring>
 #include <unordered_map>
-
-namespace
-{
-inline int getAvgInt(const uint8_t *p)
-{
-    return (static_cast<int>(p[0]) + p[1] + p[2]) / 3;
-}
-} // namespace
 
 double SharpnessAnalyzer::computeSharpness(const ConstImageView &v, int x0, int y0, int x1,
                                            int y1) const
@@ -49,6 +42,8 @@ double SharpnessAnalyzer::computeSharpness(const ConstImageView &v, int x0, int 
     }
     else
     {
+        const PixelFormat format = v.format;
+        auto lumOf = [format](const uint8_t *p) { return lumaAverage(unpackRgb8(p, format)); };
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
@@ -59,11 +54,10 @@ double SharpnessAnalyzer::computeSharpness(const ConstImageView &v, int x0, int 
             const uint8_t *p2 = line2 + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p0 += cpp, p1 += cpp, p2 += cpp)
             {
-                const int gx =
-                    (getAvgInt(p0 + cpp) + 2 * getAvgInt(p1 + cpp) + getAvgInt(p2 + cpp)) -
-                    (getAvgInt(p0 - cpp) + 2 * getAvgInt(p1 - cpp) + getAvgInt(p2 - cpp));
-                const int gy = (getAvgInt(p2 - cpp) + 2 * getAvgInt(p2) + getAvgInt(p2 + cpp)) -
-                               (getAvgInt(p0 - cpp) + 2 * getAvgInt(p0) + getAvgInt(p0 + cpp));
+                const int gx = (lumOf(p0 + cpp) + 2 * lumOf(p1 + cpp) + lumOf(p2 + cpp)) -
+                               (lumOf(p0 - cpp) + 2 * lumOf(p1 - cpp) + lumOf(p2 - cpp));
+                const int gy = (lumOf(p2 - cpp) + 2 * lumOf(p2) + lumOf(p2 + cpp)) -
+                               (lumOf(p0 - cpp) + 2 * lumOf(p0) + lumOf(p0 + cpp));
                 sumG += std::sqrt(static_cast<double>(gx * gx + gy * gy));
             }
         }

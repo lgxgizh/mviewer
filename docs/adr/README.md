@@ -43,6 +43,7 @@
 | [003](003-why-compare-session-independent.md) | CompareSession 独立于浏览状态 | 比较是独立工作流，可随时进出 |
 | [009](009-why-split-compare-engine.md) | Compare 引擎独立 Controller | 与 UI 解耦，可测试 |
 | [025](025-histogram-transparent-pixels.md) | 直方图跳过 alpha 为 0 的像素，并记录 V | 与分析统计一致，alpha 不当成颜色通道 |
+| [026](026-histogram-otsu-int64.md) | 直方图计数与 Otsu 类权重用 `int64_t`，Otsu 覆盖 bin 0 | Windows 上 `long` 只有 32 位；退化直方图返回该 bin |
 | [005](005-why-plugin-analysis.md) | 分析能力走插件框架 | 核心不绑定具体算法 |
 | [013](013-p2-plugin-sdk-frozen.md) | Plugin SDK 冻结 | ABI 稳定性优先于灵活性 |
 

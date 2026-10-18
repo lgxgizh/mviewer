@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 
 namespace mviewer::domain
@@ -24,9 +25,11 @@ struct Selection
         return px >= x && static_cast<long long>(px) < right && py >= y &&
                static_cast<long long>(py) < bottom;
     }
-    int area() const noexcept
+    // Pixel count. The product is 64-bit so a large ROI (width and height
+    // near INT_MAX) does not wrap through a 32-bit multiply.
+    int64_t area() const noexcept
     {
-        return width * height;
+        return static_cast<int64_t>(width) * static_cast<int64_t>(height);
     }
     bool operator==(const Selection &other) const noexcept
     {

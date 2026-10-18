@@ -1,4 +1,5 @@
 #include "core/analyzer/BlurAnalyzer.h"
+#include "core/analyzer/PixelAccess.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 
@@ -8,12 +9,9 @@
 
 namespace
 {
-inline int getLumInt(const uint8_t *p, bool isBGR)
+inline int getLumInt(const uint8_t *p, PixelFormat format)
 {
-    const int r = isBGR ? p[2] : p[0];
-    const int g = p[1];
-    const int b = isBGR ? p[0] : p[2];
-    return (19595 * r + 38470 * g + 7471 * b) >> 16;
+    return lumaRec601(unpackRgb8(p, format));
 }
 } // namespace
 
@@ -28,7 +26,6 @@ bool BlurAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, int 
 
     int64_t iSum2 = 0;
     const bool isGray = (v.format == PixelFormat::Grayscale8);
-    const bool isBGR = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
 
     if (isGray)
     {
@@ -57,9 +54,9 @@ bool BlurAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1, int 
             const uint8_t *p2 = line2 + static_cast<size_t>(x0 + 1) * cpp;
             for (int x = x0 + 1; x < x1 - 1; ++x, p0 += cpp, p1 += cpp, p2 += cpp)
             {
-                const int lap = getLumInt(p0, isBGR) + getLumInt(p1 - cpp, isBGR) +
-                                getLumInt(p1 + cpp, isBGR) + getLumInt(p2, isBGR) -
-                                4 * getLumInt(p1, isBGR);
+                const int lap = getLumInt(p0, v.format) + getLumInt(p1 - cpp, v.format) +
+                                getLumInt(p1 + cpp, v.format) + getLumInt(p2, v.format) -
+                                4 * getLumInt(p1, v.format);
                 iSum2 += static_cast<int64_t>(lap) * lap;
             }
         }
