@@ -10,6 +10,8 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <fstream>
 #include <string>
 
 #if defined(_WIN32)
@@ -48,20 +50,34 @@ class BadAbiAnalyzer : public Analyzer
         return "bad";
     }
 };
+void markSymbolUsed(const char *symbol)
+{
+    // Test hook: the host must not call anything except the ABI/version query
+    // before rejecting this plugin. Set by plugin_audit_tests.
+    if (const char *path = std::getenv("MVIEWER_AUDIT_SYMBOL_MARKER"))
+    {
+        std::ofstream out(path, std::ios::app);
+        if (out)
+            out << symbol << '\n';
+    }
+}
 } // namespace
 
 extern "C"
 {
     MVIEWER_PLUGIN_EXPORT Analyzer *createAnalyzer()
     {
+        markSymbolUsed("createAnalyzer");
         return new BadAbiAnalyzer();
     }
     MVIEWER_PLUGIN_EXPORT void destroyAnalyzer(Analyzer *a)
     {
+        markSymbolUsed("destroyAnalyzer");
         delete a;
     }
     MVIEWER_PLUGIN_EXPORT const char *pluginName()
     {
+        markSymbolUsed("pluginName");
         return "example.bad_abi";
     }
 

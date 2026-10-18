@@ -1293,6 +1293,19 @@ target_include_directories(test_plugin_manager PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 add_test(NAME pluginloader_tests COMMAND test_plugin_loader)
 add_test(NAME pluginmanager_tests COMMAND test_plugin_manager)
 
+# Audit #36-#39: probe destroy, plugin deleter, importer unload, ABI gate.
+add_executable(test_plugin_audit
+    ${CMAKE_SOURCE_DIR}/tests/plugin/test_plugin_audit.cpp
+)
+target_link_libraries(test_plugin_audit
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(test_plugin_audit PRIVATE cxx_std_20)
+target_include_directories(test_plugin_audit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+add_test(NAME plugin_audit_tests COMMAND test_plugin_audit)
+
 # ─── UI fixture regression ─────────────────────────────────────────────
 
 add_executable(ui_fixture
