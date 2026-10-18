@@ -170,7 +170,10 @@ void testConstViewDoesNotConstCast()
     const ConstImageView cv = cd.constView();
     static_assert(std::is_const_v<std::remove_pointer_t<decltype(cv.data)>>,
                   "ConstImageView::data is const");
-    CHECK(cv.data != nullptr && cv.data[0] == 42 && cv.data[1] == 7,
+    CHECK(cv.data != nullptr, "constView data is non-null for a live buffer");
+    if (cv.data == nullptr)
+        return;
+    CHECK(cv.data[0] == 42 && cv.data[1] == 7,
           "constView reads the same pixels as the non-const alias");
     CHECK(cv.width == 2 && cv.height == 2, "constView keeps dimensions");
     CHECK(d.buffer.use_count() == 1, "constView does not copy the buffer");

@@ -78,6 +78,8 @@ static void testInstanceIsApplicationScope()
     scoped.publish("DualSingletonProbe");
     CHECK(hits == 1, "publish on Application reaches an instance() subscriber");
 
+    // Intentional out-of-range value: production scope() must fall back.
+    // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
     const auto bad = static_cast<EventBus::EventBusScope>(255);
     EventBus &fallback = EventBus::scope(bad);
     CHECK(&fallback == &app, "out-of-range scope falls back to Application");
