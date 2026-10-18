@@ -163,13 +163,63 @@ MetadataPresentationService::cached(const std::string &path) const
     auto it = m_cache.find(path);
     if (it == m_cache.end())
         return std::nullopt;
-    return it->second;
+    touchSnapshotLocked(it);
+    return it->second.snapshot;
 }
 
 size_t MetadataPresentationService::cacheSize() const
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     return m_cache.size();
+}
+
+void MetadataPresentationService::setCacheCapacity(size_t entries)
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_cacheCapacity = entries;
+    evictCacheOverflowLocked(m_cacheCapacity);
+}
+
+size_t MetadataPresentationService::cacheCapacity() const
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_cacheCapacity;
+}
+
+void MetadataPresentationService::touchSnapshotLocked(
+    std::unordered_map<std::string, CacheEntry>::iterator it) const
+{
+    m_cacheOrder.splice(m_cacheOrder.begin(), m_cacheOrder, it->second.orderIt);
+}
+
+void MetadataPresentationService::evictCacheOverflowLocked(size_t limit)
+{
+    while (m_cache.size() > limit && !m_cacheOrder.empty())
+    {
+        const std::string victim = m_cacheOrder.back();
+        m_cache.erase(victim);
+        m_cacheOrder.pop_back();
+    }
+}
+
+void MetadataPresentationService::storeSnapshotLocked(const std::string &path,
+                                                      const Snapshot &snapshot)
+{
+    auto it = m_cache.find(path);
+    if (it != m_cache.end())
+    {
+        it->second.snapshot = snapshot;
+        touchSnapshotLocked(it);
+        return;
+    }
+    if (m_cacheCapacity == 0)
+        return;
+    evictCacheOverflowLocked(m_cacheCapacity - 1);
+    m_cacheOrder.push_front(path);
+    CacheEntry entry;
+    entry.snapshot = snapshot;
+    entry.orderIt = m_cacheOrder.begin();
+    m_cache.emplace(path, std::move(entry));
 }
 
 void MetadataPresentationService::runFlight(const std::shared_ptr<Flight> &flight)
@@ -182,9 +232,10 @@ void MetadataPresentationService::runFlight(const std::shared_ptr<Flight> &fligh
     {
         std::lock_guard<std::mutex> lk(m_mutex);
         auto it = m_cache.find(flight->path);
-        if (it != m_cache.end() && !identity.empty() && it->second.identity == identity)
+        if (it != m_cache.end() && !identity.empty() && it->second.snapshot.identity == identity)
         {
-            snapshot = it->second;
+            touchSnapshotLocked(it);
+            snapshot = it->second.snapshot;
             fromCache = true;
         }
     }
@@ -210,7 +261,7 @@ void MetadataPresentationService::runFlight(const std::shared_ptr<Flight> &fligh
         if (snapshot.valid())
         {
             std::lock_guard<std::mutex> lk(m_mutex);
-            m_cache[flight->path] = snapshot;
+            storeSnapshotLocked(flight->path, snapshot);
         }
     }
 

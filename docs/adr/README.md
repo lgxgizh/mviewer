@@ -34,6 +34,7 @@
 | [021](021-compare-memory-current-pair-only.md) | 比较只在内存中保留屏幕上的这一对，离开即释放整图缓存并归还空闲堆 | 比较的图对一律手动选择，不需要预取或保留上一对 |
 | [007](007-why-priority-scheduler.md) | 优先级调度器 | 可视区域 > 预取 > 后台任务 |
 | [022](022-scheduler-queue-metrics-and-drain.md) | `queue_depth` 是未开始任务，`active_tasks` 是正在执行；drain 用条件变量 | 队列深度和在途任务不再被记成同一个数 |
+| [024](024-mip-lod-replace-accounting.md) | lod 0 写入丢掉该键的 mip 链；替换某一级 mip 时按差额记账 | 新的全图不能留下旧预览 mip，trim 也不会把同一级算两次 |
 
 ### Compare 与分析
 

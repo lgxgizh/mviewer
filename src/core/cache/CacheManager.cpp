@@ -257,17 +257,28 @@ void CacheManager::putMip(const std::string &baseKey, int lod, const ImageData &
         return;
     if (lod == 0)
     {
-        ImageCache::instance().put(ImageCache::Viewer, baseKey, img);
+        ImageCache &cache = ImageCache::instance();
+        cache.put(ImageCache::Viewer, baseKey, img);
+        // Oversized entries are refused and the previous Viewer value stays.
+        // Only a put that actually holds this raster drops the old chain.
+        ImageData stored;
+        if (cache.get(ImageCache::Viewer, baseKey, stored) && stored.buffer == img.buffer)
+            eraseMips(baseKey);
         return;
     }
-    ImageCache::instance().put(ImageCache::Preview, mipKey(baseKey, lod), img);
-    {
-        std::lock_guard<std::mutex> lock(m_mipMutex);
-        MipChainInfo &info = m_mipChains[baseKey];
-        if (lod > info.maxLod)
-            info.maxLod = lod;
-        info.bytes += img.byteSize();
-    }
+    const std::string key = mipKey(baseKey, lod);
+    ImageCache &cache = ImageCache::instance();
+    const size_t previous = cache.storedBytes(ImageCache::Preview, key);
+    cache.put(ImageCache::Preview, key, img);
+    const size_t now = cache.storedBytes(ImageCache::Preview, key);
+    if (previous == 0 && now == 0)
+        return;
+    std::lock_guard<std::mutex> lock(m_mipMutex);
+    MipChainInfo &info = m_mipChains[baseKey];
+    if (lod > info.maxLod)
+        info.maxLod = lod;
+    const size_t kept = info.bytes >= previous ? info.bytes - previous : 0;
+    info.bytes = kept + now;
 }
 
 bool CacheManager::getMip(const std::string &baseKey, int lod, ImageData &out)

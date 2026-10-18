@@ -6,6 +6,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <utility>
 #include <vector>
 
 // Structural tests for MemoryTracker (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
@@ -63,6 +64,56 @@ static void test_liveFrameCounter()
     CHECK(mt.peak().liveImageFrames >= before + static_cast<size_t>(K));
 }
 
+static void test_copyMoveFrameAccounting()
+{
+    auto &mt = MemoryTracker::instance();
+    const ImageFrame sentinel;
+    const size_t before = mt.sample().liveImageFrames;
+
+    mviewer::domain::ImageMetadata meta;
+    meta.filePath = "frame-account.png";
+    ImageData pixels = makeImageData(2, 2, PixelFormat::RGB24);
+    {
+        ImageFrame a(meta, pixels);
+        a.addTag("keep");
+        CHECK(mt.sample().liveImageFrames == before + 1);
+        ImageFrame b = a;
+        CHECK(mt.sample().liveImageFrames == before + 2);
+        CHECK(b.metadata().filePath == "frame-account.png" && b.hasTag("keep"));
+        CHECK(b.pixels().buffer == a.pixels().buffer);
+        ImageFrame c = std::move(b);
+        CHECK(mt.sample().liveImageFrames == before + 2);
+        CHECK(c.metadata().filePath == "frame-account.png" && c.hasTag("keep"));
+        b = a; // reassign the moved-from frame: copy-assign re-activates its count
+        CHECK(mt.sample().liveImageFrames == before + 3);
+        CHECK(b.hasTag("keep"));
+    }
+    CHECK(mt.sample().liveImageFrames == before);
+
+    {
+        ImageFrame a(meta, pixels);
+        ImageFrame b(meta, pixels);
+        const size_t both = mt.sample().liveImageFrames;
+        b = a;
+        CHECK(mt.sample().liveImageFrames == both);
+        a = std::move(b);
+        CHECK(mt.sample().liveImageFrames == both - 1);
+    }
+    CHECK(mt.sample().liveImageFrames == before);
+
+    {
+        std::vector<ImageFrame> frames;
+        frames.emplace_back(meta, pixels);
+        for (int i = 0; i < 16; ++i)
+        {
+            ImageFrame extra = frames.back();
+            frames.push_back(std::move(extra));
+        }
+        CHECK(mt.sample().liveImageFrames == before + frames.size());
+    }
+    CHECK(mt.sample().liveImageFrames == before);
+}
+
 static void test_externalAndPeak()
 {
     auto &mt = MemoryTracker::instance();
@@ -76,6 +127,13 @@ static void test_externalAndPeak()
     mt.removeExternal(512);
     MemorySnapshot s2 = mt.sample();
     CHECK(s2.externalBytes == 512);
+
+    mt.removeExternal(size_t{10} * size_t{1024});
+    CHECK(mt.sample().externalBytes == 0);
+    mt.addExternal(50);
+    mt.removeExternal(50);
+    mt.removeExternal(1);
+    CHECK(mt.sample().externalBytes == 0);
 
     mt.reset();
     CHECK(mt.peak().peakBytes == 0);
@@ -106,6 +164,7 @@ int memorytracker_suite()
 {
     test_samplesCacheManager();
     test_liveFrameCounter();
+    test_copyMoveFrameAccounting();
     test_externalAndPeak();
     test_timelineRing();
     return g_failures;

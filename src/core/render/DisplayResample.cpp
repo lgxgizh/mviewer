@@ -188,6 +188,12 @@ struct KernelScratch
             return;
         exchangeKernel(x, scratch->originX, scratch->countX, scratch->weightX);
         exchangeKernel(y, scratch->originY, scratch->countY, scratch->weightY);
+        shrinkOversizedScratch(scratch->originX, scratch->originX.size());
+        shrinkOversizedScratch(scratch->countX, scratch->countX.size());
+        shrinkOversizedScratch(scratch->weightX, scratch->weightX.size());
+        shrinkOversizedScratch(scratch->originY, scratch->originY.size());
+        shrinkOversizedScratch(scratch->countY, scratch->countY.size());
+        shrinkOversizedScratch(scratch->weightY, scratch->weightY.size());
     }
 
     KernelScratch(const KernelScratch &) = delete;

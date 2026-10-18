@@ -63,6 +63,18 @@ void ImageCache::put(Level level, const std::string &key, const ImageData &img)
     pool.curBytes += bytes;
 }
 
+size_t ImageCache::storedBytes(Level level, const std::string &key) const
+{
+    if (key.empty())
+        return 0;
+    const Pool &pool = m_pools[level];
+    std::lock_guard<std::mutex> lock(pool.mtx);
+    const auto it = pool.map.find(key);
+    if (it == pool.map.end())
+        return 0;
+    return it->second.bytes;
+}
+
 bool ImageCache::get(Level level, const std::string &key, ImageData &out)
 {
     if (key.empty())

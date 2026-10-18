@@ -414,6 +414,29 @@ int main()
     mviewer::core::setDisplayResampleIsaForTest(0);
     mviewer::core::releaseDisplayResampleCache();
 
+    {
+        // Sharp kernel tables live in the caller scratch (and in the compare
+        // pane's thread_local scratch). A later small target must drop a
+        // buffer that a huge target left behind.
+        mviewer::core::setDisplayResampleIsaForTest(1);
+        mviewer::core::DisplayResampleScratch scratch;
+        const ImageData src = solid(8, 8, 12, 34, 56);
+        const ImageData wide =
+            mviewer::core::resampleDisplay(src, fullRequest(src, 36000, 2), &scratch);
+        expect(!wide.isNull() && wide.width == 36000 && wide.height == 2,
+               "wide resample fills the scratch");
+        const size_t grown = scratch.weightX.capacity();
+        expect(grown * sizeof(int16_t) > size_t{1024} * size_t{1024},
+               "scratch weight capacity exceeds 1MB");
+        const ImageData small =
+            mviewer::core::resampleDisplay(src, fullRequest(src, 3, 2), &scratch);
+        expect(!small.isNull() && small.width == 3 && small.height == 2,
+               "small resample still runs");
+        expect(scratch.weightX.capacity() < grown / 2, "small resample releases oversized scratch");
+        mviewer::core::setDisplayResampleIsaForTest(0);
+        mviewer::core::releaseDisplayResampleCache();
+    }
+
     std::printf("=== Display resample tests: %s ===\n", g_failures == 0 ? "PASS" : "FAIL");
     return g_failures == 0 ? 0 : 1;
 }

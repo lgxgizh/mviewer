@@ -389,7 +389,18 @@ static void testNullAndBoundaryGuards()
     mviewer::applyOverlay(negImg, mviewer::OverlayMode::ChannelV, 2);
     mviewer::applyOverlay(negImg, mviewer::OverlayMode::FalseColor, 2);
     mviewer::applyOverlay(negImg, mviewer::OverlayMode::Zebra, 2);
-    CHECK(negImg.width < 0, "negative dimension image handled gracefully");
+    CHECK(negImg.isNull(), "negative dimension image is empty");
+    CHECK(negImg.width == 0 && negImg.height == 0, "negative dimensions do not keep a size");
+    CHECK(!negImg.buffer || negImg.buffer->empty(), "negative dimensions allocate nothing");
+
+    ImageData wideNeg = makeImageData(-1, 8, PixelFormat::RGB24);
+    CHECK(wideNeg.isNull() && (!wideNeg.buffer || wideNeg.buffer->empty()),
+          "one negative dimension does not wrap into a huge allocation");
+    ImageData zeroW = makeImageData(0, 4, PixelFormat::RGBA32);
+    CHECK(zeroW.isNull() && (!zeroW.buffer || zeroW.buffer->empty()),
+          "zero width does not allocate");
+    ImageData ok = makeImageData(2, 3, PixelFormat::RGB24);
+    CHECK(!ok.isNull() && ok.buffer && ok.buffer->size() == 18, "valid makeImageData byte count");
 }
 
 int main()

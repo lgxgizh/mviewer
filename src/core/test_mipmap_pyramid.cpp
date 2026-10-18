@@ -185,10 +185,11 @@ static void testDropAndTrimMips()
     const std::string keep = "mip-keep";
     const std::string cold = "mip-cold";
     ImageData full = makeRgbRamp(640, 480);
-    CHECK(mgr.ensureMips(keep, full) >= 2, "keep chain built");
-    CHECK(mgr.ensureMips(cold, full) >= 2, "cold chain built");
+    // lod 0 is stored first: a later putMip(0) would drop the chain.
     mgr.putMip(keep, 0, full);
     mgr.putMip(cold, 0, full);
+    CHECK(mgr.ensureMips(keep, full) >= 2, "keep chain built");
+    CHECK(mgr.ensureMips(cold, full) >= 2, "cold chain built");
 
     const size_t released = mgr.trimMipsToBudget(0, {keep});
     ImageData lod1;
@@ -217,6 +218,51 @@ static void testDropAndTrimMips()
     mgr.clearMemory();
 }
 
+static void testPutMipLod0DropsChain()
+{
+    printf("\n[CacheManager::putMip lod0 drops stale mips]\n");
+    CacheManager &mgr = CacheManager::instance();
+    CacheConfig cfg;
+    mgr.configure(cfg);
+    mgr.clearMemory();
+
+    const std::string key = "mip_lod0_replace";
+    ImageData full = makeRgbRamp(640, 480);
+    mgr.putMip(key, 0, full);
+    CHECK(mgr.ensureMips(key, full) >= 2, "chain built under lod0");
+    ImageData lod1;
+    CHECK(mgr.getMip(key, 1, lod1) && !lod1.isNull(), "lod1 present before replace");
+    ImageData other = makeRgbRamp(320, 200);
+    mgr.putMip(key, 0, other);
+    CHECK(!mgr.getMip(key, 1, lod1), "replacing lod0 erases stale preview mips");
+    ImageData lod0;
+    CHECK(mgr.getMip(key, 0, lod0) && lod0.width == other.width && lod0.height == other.height,
+          "lod0 is the replacement");
+    mgr.clearMemory();
+}
+
+static void testPutMipReplaceBytes()
+{
+    printf("\n[CacheManager::putMip replace keeps byte total]\n");
+    CacheManager &mgr = CacheManager::instance();
+    mgr.clearMemory();
+
+    const std::string key = "mip_byte_replace";
+    ImageData lod1 = makeRgbRamp(64, 64);
+    ImageData lod2 = makeRgbRamp(40, 40);
+    ImageData lod1b = makeRgbRamp(16, 16);
+    mgr.putMip(key, 1, lod1);
+    mgr.putMip(key, 2, lod2);
+    mgr.putMip(key, 1, lod1b);
+    ImageData got;
+    CHECK(mgr.getMip(key, 1, got) && got.width == 16, "lod1 replacement is stored");
+    CHECK(mgr.getMip(key, 2, got) && got.width == 40, "lod2 survives lod1 replace");
+    const size_t released = mgr.trimMipsToBudget(0);
+    const size_t expect = lod1b.byteSize() + lod2.byteSize();
+    CHECK(released == expect, "trim releases the replaced sizes, not the sum of both lod1s");
+    mgr.clearMemory();
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -226,6 +272,8 @@ int main(int argc, char **argv)
     testLazyBuildAndEviction();
     testEnsureMipsIdempotent();
     testDropAndTrimMips();
+    testPutMipLod0DropsChain();
+    testPutMipReplaceBytes();
     printf("\n%d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

@@ -34,6 +34,9 @@ class ImageCache
     void put(Level level, const std::string &key, const ImageData &img);
     bool get(Level level, const std::string &key, ImageData &out);
 
+    // 已存字节数；不存在则为 0。不更新 LRU。
+    size_t storedBytes(Level level, const std::string &key) const;
+
     // 删除单条条目（仓库释放/失效时使用）。
     void remove(Level level, const std::string &key);
 
