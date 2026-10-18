@@ -383,8 +383,8 @@ void MainWindow::connectViewerSignals()
     connect(m_imageViewer, &ImageViewer::selectionChanged, m_analysisPanel,
             [this](const QRect &sel)
             {
-                if (sel.isEmpty())
-                    return;
+                // An empty selection is propagated too, so the panel falls back
+                // to whole-image statistics instead of keeping a stale ROI.
                 mviewer::domain::Selection roi;
                 roi.x = sel.x();
                 roi.y = sel.y();
@@ -515,11 +515,9 @@ void MainWindow::connectFilterSignals()
             [this](const QString &path, int)
             {
                 Q_UNUSED(path);
+                // Same pipeline as keyboard and context-menu ratings: repaint
+                // and re-evaluate an active rating/flag filter.
                 m_thumbnailPanel->invalidateRatings();
-                // Re-apply the active filter so a rating change that moves an
-                // image out of the filter range immediately removes it from the
-                // gallery (and vice versa).
-                m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
             });
 }
 

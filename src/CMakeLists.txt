@@ -2278,6 +2278,24 @@ target_include_directories(m50_navigation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_D
 add_test(NAME m50_navigation_tests COMMAND m50_navigation_tests)
 set_tests_properties(m50_navigation_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# P0 product logic: single rating/flag pipeline re-evaluates gallery filters;
+# empty/new-image ROI reaches the AnalysisPanel.
+add_executable(p0_rating_roi_tests
+    test_p0_rating_roi.cpp
+)
+target_link_libraries(p0_rating_roi_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(p0_rating_roi_tests PRIVATE cxx_std_20)
+target_include_directories(p0_rating_roi_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME p0_rating_roi_tests COMMAND p0_rating_roi_tests)
+set_tests_properties(p0_rating_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # ─── M56: live-folder coherence / incremental Browse reconciliation ─────────
 # Snapshot/delta classification is UI-independent; the monitor and gallery
 # tests exercise debounce, bounded rescans, disappearance/recovery, selection
