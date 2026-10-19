@@ -2,8 +2,22 @@
 
 ## [Unreleased]
 
+## [1.0.138] - 2026-10-19
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.138** (English source language + zh_CN localization: #189–#191, #193; compare grid/order: #192; release notes fix: #188).
+
+### Added
+
+- **UI language setting** (#190): **Tools → Preferences... → UI language** offers Follow system (default), English and 简体中文 (settings key `uiLanguage`). English is the source language; Simplified Chinese ships as an embedded Qt translation (`translations/mviewer_zh_CN.ts`, 1225 messages, 0 unfinished). Restart MViewer to apply a change to every window.
+- **Localized help** (#193): the in-app keyboard-shortcut table and user guide come from `resources/help/*.{en,zh_CN}.html` and follow the current language. `docs/USER_GUIDE.md` is English, with `docs/USER_GUIDE.zh_CN.md` as the Chinese version.
+- **i18n source-language gate** (#193): `scripts/check_no_chinese.py` (CTest `i18n_source_gate`) fails when Chinese text appears in `src/` or CMake files outside an `i18n-allow` marker; `language_tests` covers English/zh_CN menus, compare shortcuts, file-operation errors and help pages.
+
 ### Changed
 
+- **English source text everywhere** (#190, #193): menus (including Tools/Preferences), commands, status messages, context menus, metadata overlay/model, panels, dialogs, compare shortcut table, ICC/analyzer names and file-operation errors are English in code and translated through `tr()` / `QT_TRANSLATE_NOOP`. The NSIS installer is English.
+- **English developer docs and comments** (#189, #191, #193): CHANGELOG, developer docs, core/domain/UI/test comments are English.
 - **Compare auto grid wastes fewer cells**: the Auto layout now uses `rows = floor(sqrt(n))`, `cols = ceil(n / rows)` (`CompareLayout::forCount`). 5 or 6 images get 2×3 instead of 2×4 with empty cells; 2 → 1×2, 3 → 1×3, 4 → 2×2, 7/8 → 2×4, 9 → 3×3. The Ctrl+2/4/8 pane presets use the same rule.
 - **Compare panes are ordered by file name**: images opened into Compare are now sorted in natural, case-insensitive file-name order (img2 before img10), the same comparator as the gallery's Name sort (moved to `naturalnameorder.{h,cpp}`). Previously panes followed the raw selection order (Ctrl/Shift/rubber-band pick order). Restored compare sessions keep their saved pane order.
 
