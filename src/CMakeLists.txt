@@ -1,554 +1,535 @@
-include(${CMAKE_SOURCE_DIR} / cmake / LibRaw.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/LibRaw.cmake)
 
-# ─── M13 Phase 5 : optional Perfetto - style trace instrumentation ────────────
-#OFF by default : the MV_TRACE_ *macros compile to no - ops and the green build
-#gains no dependency.When ON, hot - path spans are recorded and can be flushed
-#to a Chrome trace JSON(openable in ui.perfetto.dev / chrome: // tracing) via
-#mviewer::trace::flush().Build with - DMVIEWER_ENABLE_PERFETTO = ON to opt in.
-    option(MVIEWER_ENABLE_PERFETTO "Enable MV_TRACE_* instrumentation -> Chrome trace "
-                                   "JSON" OFF) if (MVIEWER_ENABLE_PERFETTO) add_compile_definitions(
-        MVIEWER_ENABLE_PERFETTO) endif()
+# ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
+# OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
+# gains no dependency. When ON, hot-path spans are recorded and can be flushed
+# to a Chrome trace JSON (openable in ui.perfetto.dev / chrome://tracing) via
+# mviewer::trace::flush(). Build with -DMVIEWER_ENABLE_PERFETTO=ON to opt in.
+option(MVIEWER_ENABLE_PERFETTO "Enable MV_TRACE_* instrumentation -> Chrome trace JSON" OFF)
+if(MVIEWER_ENABLE_PERFETTO)
+    add_compile_definitions(MVIEWER_ENABLE_PERFETTO)
+endif()
 
-        add_library(
-            mviewer_core SHARED runtime_storage.cpp core / EventBus.cpp core /
-            FileIdentity.cpp core / MainThreadDispatcher.cpp core / image / Decoder.cpp core /
-            image / decoder / QtDecoder.cpp core / image / decoder / QtFallbackDecoder.cpp core /
-            image / decoder / DecoderRegistry.cpp core / image / decoder / RawDecoder.cpp core /
-            image / decoder / RawDecoder_libraw.cpp core / image / ImageObject.cpp core / image /
-            ImageFrame.cpp core / image / ImageRepository.cpp core / image /
-            ImageRepository_async.cpp core / image / ImageRepository_dir.cpp core / image /
-            ImageRepository_load.cpp core / image / ImageRepository_frames.cpp core / image /
-            SourceImage.cpp core / image / DisplayMip.cpp core / image / IccProfile.cpp core /
-            image / MetadataReader.cpp core / image / MetadataDpi.cpp core / image /
-            RawMetadata.cpp core / image / ImageCache.cpp core / image / DiskCache.cpp core /
-            cache / CacheManager.cpp core / cache / MipmapPyramid.cpp core / image /
-            Encoder.cpp core / image / ImageFormats.cpp core / image / FrameSequence.cpp core /
-            image / FramePlaybackController.cpp core / image / ImageTransform.cpp core / image /
-            ImageFileRotate.cpp core / image / QtConvert.cpp core / image / ImageStats.cpp core /
-            image / UsmSharpen.cpp core / image / CellImageAdjust.cpp core / filesystem /
-            FileSystem.cpp core / filesystem / DirectorySnapshot.cpp core / filesystem /
-            AtomicFile.cpp core / filesystem / Utf8Path.cpp core / scheduler /
-            TaskScheduler.cpp core / compare / CompareEngine.cpp core / compare /
-            SyncController.cpp core / compare / BlinkController.cpp core / compare /
-            DifferenceEngine.cpp core / compare / DifferenceEngine_render.cpp core / compare /
-            Aligner.cpp core / RatingStore.cpp core / TagStore.cpp core / SidecarStore.cpp core /
-            FileMetadataRelocation.cpp core / CrashHandler.cpp core / Logger.cpp core /
-            MemoryTrim.cpp core / SelfTest.cpp core / SettingsIO.cpp core / analysis /
-            AnalysisEngine.cpp core / analysis / AnalysisEngine_metrics.cpp core / analysis /
-            PixelInspector.cpp core / analysis / PixelInspector_adjust.cpp core / analysis /
-            ExportReport.cpp core / analysis / ExportReport_serialize.cpp core / analysis /
-            ReportHtml.cpp core / workspace / WorkspaceSerializer.cpp core / project /
-            ProjectSerializer.cpp core / analyzer / Analyzer.cpp core / analyzer /
-            AnalyzerPipeline.cpp core / analyzer / HistogramAnalyzer.cpp core / analyzer /
-            RGBMeanAnalyzer.cpp core / analyzer / NoiseAnalyzer.cpp core / analyzer /
-            PSNRAnalyzer.cpp core / analyzer / SSIMAnalyzer.cpp core / analyzer /
-            EntropyAnalyzer.cpp core / analyzer / SharpnessAnalyzer.cpp core / analyzer /
-            MTFAnalyzer.cpp core / analyzer / DeadPixelAnalyzer.cpp core / analyzer /
-            ColorCheckerAnalyzer.cpp core / analyzer / BrightnessAnalyzer.cpp core / analyzer /
-            ContrastAnalyzer.cpp core / analyzer / BlurAnalyzer.cpp core / analyzer /
-            ColorCastAnalyzer.cpp core / analyzer / ExposureAnalyzer.cpp core / render /
-            RenderEngine.cpp core / render / BilinearScale.cpp core / render /
-            DisplayResample.cpp core / render / DisplayResampleScalar.cpp core / render /
-            DisplayResampleThread.cpp core / render / JpegBlockTiles.cpp core / render /
-            DisplayResamplePyramid.cpp core / render / DisplayResampleSimd.cpp core / render /
-            AsyncTileRequestManager.cpp core / thumbnail / ThumbnailPipeline.h core / plugin /
-            PluginLoader.cpp core / plugin / PluginManager.cpp core / export / IExporter.h core /
-            export / ExporterRegistry.cpp core / import / ImporterRegistry.cpp core / export /
-            ExportManager.cpp core / export / ExportJob.cpp core / export / ExportJob_run.cpp core /
-            search / SearchEngine.cpp core / search / MetadataFilter.h core / image /
-            ImageSortKeys.cpp core / metadata / MetadataIndexer.cpp core / metadata /
-            MetadataPresentationService.cpp core / batch / BatchProcessor.cpp core / batch /
-            BatchRename.cpp core / update /
-            UpdateChecker.cpp
+add_library(mviewer_core SHARED
+    runtime_storage.cpp
+    core/EventBus.cpp
+    core/FileIdentity.cpp
+    core/MainThreadDispatcher.cpp
+    core/image/Decoder.cpp
+    core/image/decoder/QtDecoder.cpp
+    core/image/decoder/QtFallbackDecoder.cpp
+    core/image/decoder/DecoderRegistry.cpp
+    core/image/decoder/RawDecoder.cpp
+    core/image/decoder/RawDecoder_libraw.cpp
+    core/image/ImageObject.cpp
+    core/image/ImageFrame.cpp
+    core/image/ImageRepository.cpp
+    core/image/ImageRepository_async.cpp
+    core/image/ImageRepository_dir.cpp
+    core/image/ImageRepository_load.cpp
+    core/image/ImageRepository_frames.cpp
+    core/image/SourceImage.cpp
+    core/image/DisplayMip.cpp
+    core/image/IccProfile.cpp
+    core/image/MetadataReader.cpp
+    core/image/MetadataDpi.cpp
+    core/image/RawMetadata.cpp
+    core/image/ImageCache.cpp
+    core/image/DiskCache.cpp
+    core/cache/CacheManager.cpp
+    core/cache/MipmapPyramid.cpp
+    core/image/Encoder.cpp
+    core/image/ImageFormats.cpp
+    core/image/FrameSequence.cpp
+    core/image/FramePlaybackController.cpp
+    core/image/ImageTransform.cpp
+    core/image/ImageFileRotate.cpp
+    core/image/QtConvert.cpp
+    core/image/ImageStats.cpp
+    core/image/UsmSharpen.cpp
+    core/image/CellImageAdjust.cpp
+    core/filesystem/FileSystem.cpp
+    core/filesystem/DirectorySnapshot.cpp
+    core/filesystem/AtomicFile.cpp
+    core/filesystem/Utf8Path.cpp
+    core/scheduler/TaskScheduler.cpp
+    core/compare/CompareEngine.cpp
+    core/compare/SyncController.cpp
+    core/compare/BlinkController.cpp
+    core/compare/DifferenceEngine.cpp
+    core/compare/DifferenceEngine_render.cpp
+    core/compare/Aligner.cpp
+    core/RatingStore.cpp
+    core/TagStore.cpp
+    core/SidecarStore.cpp
+    core/FileMetadataRelocation.cpp
+    core/CrashHandler.cpp
+    core/Logger.cpp
+    core/MemoryTrim.cpp
+    core/SelfTest.cpp
+    core/SettingsIO.cpp
+    core/analysis/AnalysisEngine.cpp
+    core/analysis/AnalysisEngine_metrics.cpp
+    core/analysis/PixelInspector.cpp
+    core/analysis/PixelInspector_adjust.cpp
+    core/analysis/ExportReport.cpp
+    core/analysis/ExportReport_serialize.cpp
+    core/analysis/ReportHtml.cpp
+    core/workspace/WorkspaceSerializer.cpp
+    core/project/ProjectSerializer.cpp
+    core/analyzer/Analyzer.cpp
+    core/analyzer/AnalyzerPipeline.cpp
+    core/analyzer/HistogramAnalyzer.cpp
+    core/analyzer/RGBMeanAnalyzer.cpp
+    core/analyzer/NoiseAnalyzer.cpp
+    core/analyzer/PSNRAnalyzer.cpp
+    core/analyzer/SSIMAnalyzer.cpp
+    core/analyzer/EntropyAnalyzer.cpp
+    core/analyzer/SharpnessAnalyzer.cpp
+    core/analyzer/MTFAnalyzer.cpp
+    core/analyzer/DeadPixelAnalyzer.cpp
+    core/analyzer/ColorCheckerAnalyzer.cpp
+    core/analyzer/BrightnessAnalyzer.cpp
+    core/analyzer/ContrastAnalyzer.cpp
+    core/analyzer/BlurAnalyzer.cpp
+    core/analyzer/ColorCastAnalyzer.cpp
+    core/analyzer/ExposureAnalyzer.cpp
+    core/render/RenderEngine.cpp
+    core/render/BilinearScale.cpp
+    core/render/DisplayResample.cpp
+    core/render/DisplayResampleScalar.cpp
+    core/render/DisplayResampleThread.cpp
+    core/render/JpegBlockTiles.cpp
+    core/render/DisplayResamplePyramid.cpp
+    core/render/DisplayResampleSimd.cpp
+    core/render/AsyncTileRequestManager.cpp
+    core/thumbnail/ThumbnailPipeline.h
+    core/plugin/PluginLoader.cpp
+    core/plugin/PluginManager.cpp
+    core/export/IExporter.h
+    core/export/ExporterRegistry.cpp
+    core/import/ImporterRegistry.cpp
+    core/export/ExportManager.cpp
+    core/export/ExportJob.cpp
+    core/export/ExportJob_run.cpp
+    core/search/SearchEngine.cpp
+    core/search/MetadataFilter.h
+    core/image/ImageSortKeys.cpp
+    core/metadata/MetadataIndexer.cpp
+    core/metadata/MetadataPresentationService.cpp
+    core/batch/BatchProcessor.cpp
+    core/batch/BatchRename.cpp
+    core/update/UpdateChecker.cpp
 
-                core /
-            command / CommandRegistry.cpp core / command / RotateCommand.cpp core / command /
-            CropCommand.cpp core / command / LabelCommand.cpp core / command /
-            OpenDirectoryCommand.cpp core / command / CompareCommand.cpp core / command /
-            RenameCommand.cpp core / command / DeleteCommand.cpp core / command /
-            FileDeleteCommand.cpp core / command / FileRenameCommand.cpp core / command /
-            FileMoveCommand.cpp core / command / FileSystemAdapter.cpp core / command /
-            ToggleHistogramCommand.cpp core / command / CallbackCommand.cpp core / benchmark /
-            Benchmark.cpp core / perf / MemoryTracker.cpp core / trace / TraceSink.cpp)
+    core/command/CommandRegistry.cpp
+    core/command/RotateCommand.cpp
+    core/command/CropCommand.cpp
+    core/command/LabelCommand.cpp
+    core/command/OpenDirectoryCommand.cpp
+    core/command/CompareCommand.cpp
+    core/command/RenameCommand.cpp
+    core/command/DeleteCommand.cpp
+    core/command/FileDeleteCommand.cpp
+    core/command/FileRenameCommand.cpp
+    core/command/FileMoveCommand.cpp
+    core/command/FileSystemAdapter.cpp
+    core/command/ToggleHistogramCommand.cpp
+    core/command/CallbackCommand.cpp
+    core/benchmark/Benchmark.cpp
+    core/perf/MemoryTracker.cpp
+    core/trace/TraceSink.cpp
+)
 
-            find_package(Qt6 REQUIRED COMPONENTS Widgets Sql OpenGL OpenGLWidgets)
-#psapi : provides GetProcessMemoryInfo used by core / perf / MemoryTracker for the
-#OS working - set(RSS) sample.Windows - only; harmless on other platforms.
-                target_link_libraries(
-                    mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
-                        $<$<PLATFORM_ID : Windows> : psapi; windowscodecs;
-                          ole32>) if (MVIEWER_HAS_LIBRAW) target_link_libraries(mviewer_core PRIVATE
-                                                                                    mviewer_libraw)
-                    target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_LIBRAW = 1) endif()
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql OpenGL OpenGLWidgets)
+# psapi: provides GetProcessMemoryInfo used by core/perf/MemoryTracker for the
+# OS working-set (RSS) sample. Windows-only; harmless on other platforms.
+target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
+    $<$<PLATFORM_ID:Windows>:psapi;windowscodecs;ole32>)
+if(MVIEWER_HAS_LIBRAW)
+    target_link_libraries(mviewer_core PRIVATE mviewer_libraw)
+    target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_LIBRAW=1)
+endif()
 
-                        target_compile_features(mviewer_core PUBLIC cxx_std_20)
+target_compile_features(mviewer_core PUBLIC cxx_std_20)
 
-#Plugin systems require a single, shared core so host and plugin share one
-#Analyzer / Command vtable(a static core would give each module its own vtable
-#copy and crash on cross - module delete / teardown).Auto - export all symbols
-#so consumers link without per - symbol declspec markup.
-                            set_target_properties(
-                                mviewer_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+# Plugin systems require a single, shared core so host and plugin share one
+# Analyzer/Command vtable (a static core would give each module its own vtable
+# copy and crash on cross-module delete / teardown). Auto-export all symbols
+# so consumers link without per-symbol declspec markup.
+set_target_properties(mviewer_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
-                                target_include_directories(mviewer_core PUBLIC ${
-                                    CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-                                    add_library(
-                                        mviewer_ui STATIC mainwindow.cpp mainwindow_ui
-                                            .cpp mainwindow_ui_layout.cpp mainwindow_emptystate
-                                            .cpp mainwindow_ui_chrome.cpp mainwindow_ui_menus
-                                            .cpp mainwindow_filetransform
-                                            .cpp mainwindow_ui_connections.cpp mainwindow_commands
-                                            .cpp mainwindow_navigation.cpp mainwindow_session
-                                            .cpp mainwindow_session_recovery
-                                            .cpp mainwindow_session_notifications
-                                            .cpp mainwindow_export.cpp mainwindow_view
-                                            .cpp mainwindow_keys.cpp selectionmodel
-                                            .cpp directorymodel.cpp imagelistmodel
-                                            .cpp workspacemodel.cpp analyzermodel.cpp appstate
-                                            .cpp imageviewer.cpp imageviewer_loading
-                                            .cpp imageviewer_multiframe.cpp imageviewer_lod
-                                            .cpp imageviewer_paint.cpp imageviewer_loadingbar
-                                            .cpp imageviewer_region_tiles
-                                            .cpp imageviewer_contextmenu.cpp imageviewer_transform
-                                            .cpp directorytree.cpp directorytree_navigate
-                                            .cpp directorymonitor.cpp breadcrumbbar
-                                            .cpp metadataoverlay.cpp thumbnailpanel
-                                            .cpp thumbnailpanel_live.cpp naturalnameorder
-                                            .cpp thumbnailpanel_async.cpp thumbnailpanel_scan_guard
-                                            .cpp thumbnailpanel_selection
-                                            .cpp thumbnailpanel_pipeline.cpp thumbnailpanel_filters
-                                            .cpp thumbnailpanel_fileops.cpp thumbnailpanel_delegates
-                                            .cpp thumbnailpanel_delegates_details
-                                            .cpp thumbnailpanel_viewmode
-                                            .cpp thumbnailpanel_contextmenu.cpp thumbnailprovider
-                                            .cpp display /
-                                        DisplayColorContextProvider.cpp previewpanel
-                                            .cpp thumbnailcache.cpp compareworkspace
-                                            .cpp compareworkspace_display_planner
-                                            .cpp compareworkspace_display_pyramid
-                                            .cpp compare_session_frame_pool
-                                            .cpp compare_session_state.cpp compare_roi_controller
-                                            .cpp compare_diff_renderer.cpp compare_display_manager
-                                            .cpp compareworkspace_controls
-                                            .cpp compareworkspace_toolbar
-                                            .cpp compareworkspace_pane_header
-                                            .cpp compareworkspace_render
-                                            .cpp compareworkspace_render_materialization
-                                            .cpp compareworkspace_pyramid_wire
-                                            .cpp compareworkspace_render_diff
-                                            .cpp compareworkspace_live_diff
-                                            .cpp compareworkspace_render_canvas
-                                            .cpp compareworkspace_roi
-                                            .cpp compareworkspace_roi_overlay
-                                            .cpp compareworkspace_temporary
-                                            .cpp compareworkspace_load.cpp compareworkspace_layout
-                                            .cpp compareworkspace_progressive
-                                            .cpp compareworkspace_analysis
-                                            .cpp compareworkspace_editpanel
-                                            .cpp compareworkspace_adjust_export
-                                            .cpp compareworkspace_help.cpp compareworkspace_interact
-                                            .cpp compareworkspace_keyboard
-                                            .cpp compareworkspace_snapshot.cpp compareworkspace_nav
-                                            .cpp analysispanel.cpp analysispanel_analysis
-                                            .cpp analysispanel_analysis_worker
-                                            .cpp analysispanel_actions.cpp analysispanel_buildui
-                                            .cpp analysispanel_pages.cpp analysispanel_history
-                                            .cpp exportdialog.cpp exportmessages.cpp fileopmessages
-                                            .cpp exportcommand.cpp metadatapanel.cpp metadatamodel
-                                            .cpp searchpanel.cpp batchdialog.cpp batchdialog_panels
-                                            .cpp batchrenamepanel.cpp widgets /
-                                        rawimageview.cpp widgets /
-                                        rawimageview_surface.cpp widgets /
-                                        ratingwidget.cpp widgets /
-                                        histogramwidget.cpp pluginsettings.cpp preferencesdialog
-                                            .cpp usmcomparedialog.cpp Theme.cpp Language
-                                            .cpp ThemeIcons.cpp hoverfade.cpp ${CMAKE_SOURCE_DIR} /
-                                        resources / mviewer.qrc analysisoverlaydialog.cpp gpu /
-                                        GpuTileUploader.cpp)
+add_library(mviewer_ui STATIC
+    mainwindow.cpp
+    mainwindow_ui.cpp
+    mainwindow_ui_layout.cpp
+    mainwindow_emptystate.cpp
+    mainwindow_ui_chrome.cpp
+    mainwindow_ui_menus.cpp
+    mainwindow_filetransform.cpp
+    mainwindow_ui_connections.cpp
+    mainwindow_commands.cpp
+    mainwindow_navigation.cpp
+    mainwindow_session.cpp
+    mainwindow_session_recovery.cpp
+    mainwindow_session_notifications.cpp
+    mainwindow_export.cpp
+    mainwindow_view.cpp
+    mainwindow_keys.cpp
+    selectionmodel.cpp
+    directorymodel.cpp
+    imagelistmodel.cpp
+    workspacemodel.cpp
+    analyzermodel.cpp
+    appstate.cpp
+    imageviewer.cpp
+    imageviewer_loading.cpp
+    imageviewer_multiframe.cpp
+    imageviewer_lod.cpp
+    imageviewer_paint.cpp
+    imageviewer_loadingbar.cpp
+    imageviewer_region_tiles.cpp
+    imageviewer_contextmenu.cpp
+    imageviewer_transform.cpp
+    directorytree.cpp
+    directorytree_navigate.cpp
+    directorymonitor.cpp
+    breadcrumbbar.cpp
+    metadataoverlay.cpp
+    thumbnailpanel.cpp
+    thumbnailpanel_live.cpp
+    naturalnameorder.cpp
+    thumbnailpanel_async.cpp
+    thumbnailpanel_scan_guard.cpp
+    thumbnailpanel_selection.cpp
+    thumbnailpanel_pipeline.cpp
+    thumbnailpanel_filters.cpp
+    thumbnailpanel_fileops.cpp
+    thumbnailpanel_delegates.cpp
+    thumbnailpanel_delegates_details.cpp
+    thumbnailpanel_viewmode.cpp
+    thumbnailpanel_contextmenu.cpp
+    thumbnailprovider.cpp
+    display/DisplayColorContextProvider.cpp
+    previewpanel.cpp
+    thumbnailcache.cpp
+    compareworkspace.cpp
+    compareworkspace_display_planner.cpp
+    compareworkspace_display_pyramid.cpp
+    compare_session_frame_pool.cpp
+    compare_session_state.cpp
+    compare_roi_controller.cpp
+    compare_diff_renderer.cpp
+    compare_display_manager.cpp
+    compareworkspace_controls.cpp
+    compareworkspace_toolbar.cpp
+    compareworkspace_pane_header.cpp
+    compareworkspace_render.cpp
+    compareworkspace_render_materialization.cpp
+    compareworkspace_pyramid_wire.cpp
+    compareworkspace_render_diff.cpp
+    compareworkspace_live_diff.cpp
+    compareworkspace_render_canvas.cpp
+    compareworkspace_roi.cpp
+    compareworkspace_roi_overlay.cpp
+    compareworkspace_temporary.cpp
+    compareworkspace_load.cpp
+    compareworkspace_layout.cpp
+    compareworkspace_progressive.cpp
+    compareworkspace_analysis.cpp
+    compareworkspace_editpanel.cpp
+    compareworkspace_adjust_export.cpp
+    compareworkspace_help.cpp
+    compareworkspace_interact.cpp
+    compareworkspace_keyboard.cpp
+    compareworkspace_snapshot.cpp
+    compareworkspace_nav.cpp
+    analysispanel.cpp
+    analysispanel_analysis.cpp
+    analysispanel_analysis_worker.cpp
+    analysispanel_actions.cpp
+    analysispanel_buildui.cpp
+    analysispanel_pages.cpp
+    analysispanel_history.cpp
+    exportdialog.cpp
+    exportmessages.cpp
+    fileopmessages.cpp
+    exportcommand.cpp
+    metadatapanel.cpp
+    metadatamodel.cpp
+    searchpanel.cpp
+    batchdialog.cpp
+    batchdialog_panels.cpp
+    batchrenamepanel.cpp
+    widgets/rawimageview.cpp
+    widgets/rawimageview_surface.cpp
+    widgets/ratingwidget.cpp
+    widgets/histogramwidget.cpp
+    pluginsettings.cpp
+    preferencesdialog.cpp
+    usmcomparedialog.cpp
+    Theme.cpp
+    Language.cpp
+    ThemeIcons.cpp
+    hoverfade.cpp
+    ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
+    analysisoverlaydialog.cpp
+    gpu/GpuTileUploader.cpp
+)
 
-                                        target_link_libraries(
-                                            mviewer_ui PUBLIC Qt6::Widgets Qt6::OpenGL
-                                                Qt6::OpenGLWidgets mviewer_core mviewer_application)
+target_link_libraries(mviewer_ui PUBLIC
+    Qt6::Widgets
+    Qt6::OpenGL
+    Qt6::OpenGLWidgets
+    mviewer_core
+    mviewer_application
+)
 
-                                            target_compile_features(mviewer_ui PUBLIC cxx_std_20)
+target_compile_features(mviewer_ui PUBLIC cxx_std_20)
 
-                                                target_include_directories(mviewer_ui PUBLIC ${
-                                                    CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mviewer_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-                                                    add_library(
-                                                        mviewer_application STATIC application /
-                                                        ExternalOpen.cpp application /
-                                                        OpenDirectoryUseCase.cpp application /
-                                                        Startup.cpp)
+add_library(mviewer_application STATIC
+    application/ExternalOpen.cpp
+    application/OpenDirectoryUseCase.cpp
+    application/Startup.cpp
+)
 
-                                                        target_link_libraries(
-                                                            mviewer_application PUBLIC mviewer_core Qt6::
-                                                                Gui) target_include_directories(mviewer_application PUBLIC ${
-                                                            CMAKE_CURRENT_SOURCE_DIR}) target_compile_features(mviewer_application
-                                                                                                                   PUBLIC cxx_std_20)
+target_link_libraries(mviewer_application PUBLIC mviewer_core Qt6::Gui)
+target_include_directories(mviewer_application PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(mviewer_application PUBLIC cxx_std_20)
 
-                                                            add_executable(MViewer main.cpp) if (
-                                                                WIN32) target_sources(MViewer PRIVATE
-                                                                                          ${CMAKE_SOURCE_DIR} /
-                                                                                      resources /
-                                                                                      mviewer.rc) endif()
+add_executable(MViewer
+    main.cpp
+)
+if(WIN32)
+    target_sources(MViewer PRIVATE ${CMAKE_SOURCE_DIR}/resources/mviewer.rc)
+endif()
 
-                                                                target_link_libraries(
-                                                                    MViewer
-                                                                        PRIVATE
-                                                                            Qt6::Widgets mviewer_core
-                                                                                mviewer_ui mviewer_application)
+target_link_libraries(MViewer
+    PRIVATE
+        Qt6::Widgets
+        mviewer_core
+        mviewer_ui
+        mviewer_application
+)
 
-                                                                    target_compile_features(MViewer PRIVATE cxx_std_20)
+target_compile_features(MViewer PRIVATE cxx_std_20)
 
-                                                                        target_include_directories(MViewer PRIVATE ${
-                                                                            CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(MViewer
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+)
 
-# ── Auto - deploy Qt runtime next to the executable(windeployqt) ───────────────
-#Fixes the recurring "missing DLL"(0xc0000135)errors when launching
-#build_msvc / bin / MViewer.exe directly.windeployqt copies exactly the Qt6 DLLs +
-#platform / imageformat / sqldrivers plugins the binary imports, so the exe becomes
-#self - contained(no Qt on PATH required).Runs on every build and is
-#build - frontend agnostic(build.ps1, CMakePresets, IDE).The MSVC CRT is deployed
-#separately by build.ps1(it knows the VS redist location and is more reliable).
-                                                                            if (WIN32 AND TARGET MViewer AND Qt6_FOUND) get_filename_component(
-                                                                                _qt_bin_dir
-                                                                                "${Qt6_DIR}/../../"
-                                                                                "../bin" ABSOLUTE)
-                                                                                find_program(
-                                                                                    WINDEPLOYQT_EXE
-                                                                                        NAMES
-                                                                                            windeployqt HINTS
-                                                                                    "${_qt_bin_"
-                                                                                    "dir}") if (WINDEPLOYQT_EXE)
-#Deploy against mviewer_core.dll too : the shared core links Qt6::Sql
-#(SQLite DiskCache) which MViewer.exe does not import directly, so
-#windeployqt on MViewer.exe alone can miss Qt6Sql.dll.
-                                                                                    add_custom_command(
-                                                                                        TARGET MViewer
-                                                                                            POST_BUILD COMMAND
-                                                                                        "${"
-                                                                                        "WINDEPLOYQ"
-                                                                                        "T_"
-                                                                                        "EXE"
-                                                                                        "}" --no -
-                                                                                        translations-- no -
-                                                                                        compiler -
-                                                                                        runtime
-                                                                                        "$<TARGET_"
-                                                                                        "FILE:"
-                                                                                        "MViewer"
-                                                                                        ">" COMMAND
-                                                                                        "${"
-                                                                                        "WINDEPLOYQ"
-                                                                                        "T_"
-                                                                                        "EXE"
-                                                                                        "}" --no -
-                                                                                        translations-- no -
-                                                                                        compiler -
-                                                                                        runtime
-                                                                                        "$<TARGET_"
-                                                                                        "FILE:"
-                                                                                        "mviewer_"
-                                                                                        "core"
-                                                                                        ">" COMMENT
-                                                                                        "Deploying "
-                                                                                        "Qt "
-                                                                                        "runtime "
-                                                                                        "via "
-                                                                                        "windeployq"
-                                                                                        "t" VERBATIM)
-#Safety net : ensure Qt6Sql.dll ships(DiskCache uses SQLite at runtime).
-                                                                                        if (EXISTS
-                                                                                            "${_qt_"
-                                                                                            "bin_"
-                                                                                            "dir}/"
-                                                                                            "Qt6Sql"
-                                                                                            ".dll")
-                                                                                            add_custom_command(
-                                                                                                TARGET MViewer
-                                                                                                    POST_BUILD COMMAND
-                                                                                                        ${CMAKE_COMMAND} -
-                                                                                                E copy_if_different
-                                                                                                "${"
-                                                                                                "_q"
-                                                                                                "t_"
-                                                                                                "bi"
-                                                                                                "n_"
-                                                                                                "di"
-                                                                                                "r}"
-                                                                                                "/Q"
-                                                                                                "t6"
-                                                                                                "Sq"
-                                                                                                "l."
-                                                                                                "dl"
-                                                                                                "l"
-                                                                                                "$<"
-                                                                                                "TA"
-                                                                                                "RG"
-                                                                                                "ET"
-                                                                                                "_F"
-                                                                                                "IL"
-                                                                                                "E_"
-                                                                                                "DI"
-                                                                                                "R:"
-                                                                                                "mv"
-                                                                                                "ie"
-                                                                                                "we"
-                                                                                                "r_"
-                                                                                                "co"
-                                                                                                "re"
-                                                                                                ">" VERBATIM)
-                                                                                                endif()
-#Safety net : headless tests run with QT_QPA_PLATFORM = offscreen.Once
-#windeployqt anchors Qt's prefix to bin/, the offscreen platform plugin
-#must also live in bin / platforms or every headless GUI test aborts with
-#"no Qt platform plugin could be initialized"(0xc0000409).
-                                                                                                    get_filename_component(
-                                                                                                        _qt_plugin_dir
-                                                                                                        "${_qt_bin_dir}/../plugins" ABSOLUTE) if (EXISTS
-                                                                                                                                                  "${_qt_plugin_dir}/platforms/qoffscreen.dll")
-                                                                                                        add_custom_command(
-                                                                                                            TARGET
-                                                                                                                MViewer POST_BUILD
-                                                                                                                    COMMAND ${
-                                                                                                                        CMAKE_COMMAND} -
-                                                                                                            E copy_if_different
-                                                                                                            "${_qt_plugin_dir}/platforms/qoffscreen.dll"
-                                                                                                            "$<TARGET_FILE_DIR:MViewer>/platforms" VERBATIM)
-                                                                                                            endif() else()
-                                                                                                                message(
-                                                                                                                    WARNING "windeployqt not found (expected at ${_qt_bin_dir}); "
-                                                                                                                            "MViewer.exe may fail to launch without Qt on PATH")
-                                                                                                                    endif() endif()
+# ── Auto-deploy Qt runtime next to the executable (windeployqt) ───────────────
+# Fixes the recurring "missing DLL" (0xc0000135) errors when launching
+# build_msvc/bin/MViewer.exe directly. windeployqt copies exactly the Qt6 DLLs +
+# platform/imageformat/sqldrivers plugins the binary imports, so the exe becomes
+# self-contained (no Qt on PATH required). Runs on every build and is
+# build-frontend agnostic (build.ps1, CMakePresets, IDE). The MSVC CRT is deployed
+# separately by build.ps1 (it knows the VS redist location and is more reliable).
+if(WIN32 AND TARGET MViewer AND Qt6_FOUND)
+    get_filename_component(_qt_bin_dir "${Qt6_DIR}/../../../bin" ABSOLUTE)
+    find_program(WINDEPLOYQT_EXE NAMES windeployqt HINTS "${_qt_bin_dir}")
+    if(WINDEPLOYQT_EXE)
+        # Deploy against mviewer_core.dll too: the shared core links Qt6::Sql
+        # (SQLite DiskCache) which MViewer.exe does not import directly, so
+        # windeployqt on MViewer.exe alone can miss Qt6Sql.dll.
+        add_custom_command(TARGET MViewer POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXE}" --no-translations --no-compiler-runtime "$<TARGET_FILE:MViewer>"
+            COMMAND "${WINDEPLOYQT_EXE}" --no-translations --no-compiler-runtime "$<TARGET_FILE:mviewer_core>"
+            COMMENT "Deploying Qt runtime via windeployqt"
+            VERBATIM)
+        # Safety net: ensure Qt6Sql.dll ships (DiskCache uses SQLite at runtime).
+        if(EXISTS "${_qt_bin_dir}/Qt6Sql.dll")
+            add_custom_command(TARGET MViewer POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_qt_bin_dir}/Qt6Sql.dll"
+                        "$<TARGET_FILE_DIR:mviewer_core>"
+                VERBATIM)
+        endif()
+        # Safety net: headless tests run with QT_QPA_PLATFORM=offscreen. Once
+        # windeployqt anchors Qt's prefix to bin/, the offscreen platform plugin
+        # must also live in bin/platforms or every headless GUI test aborts with
+        # "no Qt platform plugin could be initialized" (0xc0000409).
+        get_filename_component(_qt_plugin_dir "${_qt_bin_dir}/../plugins" ABSOLUTE)
+        if(EXISTS "${_qt_plugin_dir}/platforms/qoffscreen.dll")
+            add_custom_command(TARGET MViewer POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_qt_plugin_dir}/platforms/qoffscreen.dll"
+                        "$<TARGET_FILE_DIR:MViewer>/platforms"
+                VERBATIM)
+        endif()
+    else()
+        message(WARNING "windeployqt not found (expected at ${_qt_bin_dir}); "
+                        "MViewer.exe may fail to launch without Qt on PATH")
+    endif()
+endif()
 
-                                                                                                                        add_executable(
-                                                                                                                            core_tests
-                                                                                                                                core /
-                                                                                                                            test_compare
-                                                                                                                                .cpp core /
-                                                                                                                            test_m10
-                                                                                                                                .cpp
-#M10 suites(incremental isolation)
-                                                                                                                                    core /
-                                                                                                                            test_memorytracker
-                                                                                                                                .cpp core /
-                                                                                                                            test_benchmark
-                                                                                                                                .cpp core /
-                                                                                                                            perf /
-                                                                                                                            GpuTracker
-                                                                                                                                .cpp
-                                                                                                                                    benchmark /
-                                                                                                                            corpus
-                                                                                                                                .cpp
-                                                                                                                                    benchmark /
-                                                                                                                            scenarios
-                                                                                                                                .cpp)
+add_executable(core_tests
+    core/test_compare.cpp
+    core/test_m10.cpp
+    # M10 suites (incremental isolation)
+    core/test_memorytracker.cpp
+    core/test_benchmark.cpp
+    core/perf/GpuTracker.cpp
+    benchmark/corpus.cpp
+    benchmark/scenarios.cpp
+)
 
-                                                                                                                            target_link_libraries(core_tests
-                                                                                                                                                      PRIVATE
-                                                                                                                                                          Qt6::
-                                                                                                                                                              Widgets
-                                                                                                                                                                  mviewer_core)
+target_link_libraries(core_tests
+    PRIVATE
+        Qt6::Widgets
+        mviewer_core
+)
 
-                                                                                                                                target_compile_features(
-                                                                                                                                    core_tests PRIVATE cxx_std_20)
+target_compile_features(core_tests PRIVATE cxx_std_20)
 
-                                                                                                                                    target_include_directories(
-                                                                                                                                        core_tests
-                                                                                                                                            PRIVATE
-                                                                                                                                                ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-                                                                                                                                        add_executable(
-                                                                                                                                            mviewer_unit_tests
-                                                                                                                                                core /
-                                                                                                                                            test_core
-                                                                                                                                                .cpp)
+add_executable(mviewer_unit_tests
+    core/test_core.cpp
+)
 
-                                                                                                                                            target_link_libraries(
-                                                                                                                                                mviewer_unit_tests PRIVATE
-                                                                                                                                                    Qt6::Widgets
-                                                                                                                                                        mviewer_core)
+target_link_libraries(mviewer_unit_tests
+    PRIVATE
+        Qt6::Widgets
+        mviewer_core
+)
 
-                                                                                                                                                target_compile_features(
-                                                                                                                                                    mviewer_unit_tests PRIVATE cxx_std_20)
+target_compile_features(mviewer_unit_tests PRIVATE cxx_std_20)
 
-                                                                                                                                                    target_include_directories(
-                                                                                                                                                        mviewer_unit_tests PRIVATE
-                                                                                                                                                            ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mviewer_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-                                                                                                                                                        add_executable(
-                                                                                                                                                            test_appstate test_appstate
-                                                                                                                                                                .cpp
-                                                                                                                                                                    appstate
-                                                                                                                                                                .cpp)
+add_executable(test_appstate
+    test_appstate.cpp
+    appstate.cpp
+)
 
-                                                                                                                                                            target_link_libraries(
-                                                                                                                                                                test_appstate
-                                                                                                                                                                    PRIVATE
-                                                                                                                                                                        Qt6::
-                                                                                                                                                                            Widgets Qt6::
-                                                                                                                                                                                Core
-                                                                                                                                                                                    mviewer_core)
-                                                                                                                                                                target_compile_features(
-                                                                                                                                                                    test_appstate
-                                                                                                                                                                        PRIVATE
-                                                                                                                                                                            cxx_std_20)
-                                                                                                                                                                    target_include_directories(
-                                                                                                                                                                        test_appstate PRIVATE
-                                                                                                                                                                            ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_appstate
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(test_appstate PRIVATE cxx_std_20)
+target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-#M19 : UI models(Selection / Directory / ImageList / Workspace / Analyzer) headless unit test.
-                                                                                                                                                                        add_executable(
-                                                                                                                                                                            test_ui_models test_ui_models
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    naturalnameorder
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    runtime_storage
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    selectionmodel
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    directorymodel
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    imagelistmodel
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    workspacemodel
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    analyzermodel
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    Theme
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    Language
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    ThemeIcons
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    hoverfade
-                                                                                                                                                                                .cpp
-                                                                                                                                                                                    breadcrumbbar
-                                                                                                                                                                                .cpp ${
-                                                                                                                                                                                    CMAKE_SOURCE_DIR} /
-                                                                                                                                                                            resources /
-                                                                                                                                                                            mviewer
-                                                                                                                                                                                .qrc)
-                                                                                                                                                                            target_link_libraries(
-                                                                                                                                                                                test_ui_models PRIVATE
-                                                                                                                                                                                    Qt6::
-                                                                                                                                                                                        Widgets Qt6::Core) target_compile_features(test_ui_models
-                                                                                                                                                                                                                                       PRIVATE cxx_std_20) target_include_directories(test_ui_models PRIVATE ${
-                                                                                                                                                                                CMAKE_CURRENT_SOURCE_DIR})
+# M19: UI models (Selection / Directory / ImageList / Workspace / Analyzer) headless unit test.
+add_executable(test_ui_models
+    test_ui_models.cpp
+    naturalnameorder.cpp
+    runtime_storage.cpp
+    selectionmodel.cpp
+    directorymodel.cpp
+    imagelistmodel.cpp
+    workspacemodel.cpp
+    analyzermodel.cpp
+    Theme.cpp
+    Language.cpp
+    ThemeIcons.cpp
+    hoverfade.cpp
+    breadcrumbbar.cpp
+    ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
+)
+target_link_libraries(test_ui_models
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Core
+)
+target_compile_features(test_ui_models PRIVATE cxx_std_20)
+target_include_directories(test_ui_models PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-                                                                                                                                                                                add_executable(
-                                                                                                                                                                                    benchmark
-                                                                                                                                                                                        benchmark_main
-                                                                                                                                                                                            .cpp)
 
-#M16 : GpuTileUploader bookkeeping(headless; GL upload is a no - op
-#offscreen and activates only on real hardware with MVIEWER_GPU = 1).
-                                                                                                                                                                                    add_executable(test_gputile
-                                                                                                                                                                                                       core /
-                                                                                                                                                                                                   test_gputile
-                                                                                                                                                                                                       .cpp
-                                                                                                                                                                                                           gpu /
-                                                                                                                                                                                                   GpuTileUploader
-                                                                                                                                                                                                       .cpp) target_link_libraries(test_gputile PRIVATE Qt6::Widgets Qt6::Core
-                                                                                                                                                                                                                                       mviewer_core) target_compile_features(test_gputile PRIVATE
-                                                                                                                                                                                                                                                                                 cxx_std_20) target_include_directories(test_gputile PRIVATE ${
-                                                                                                                                                                                        CMAKE_CURRENT_SOURCE_DIR})
+add_executable(benchmark
+    benchmark_main.cpp
+)
 
-                                                                                                                                                                                        target_link_libraries(benchmark PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core)
+# M16: GpuTileUploader bookkeeping (headless; GL upload is a no-op
+# offscreen and activates only on real hardware with MVIEWER_GPU=1).
+add_executable(test_gputile
+    core/test_gputile.cpp
+    gpu/GpuTileUploader.cpp
+)
+target_link_libraries(test_gputile
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(test_gputile PRIVATE cxx_std_20)
+target_include_directories(test_gputile PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-                                                                                                                                                                                            target_compile_features(
-                                                                                                                                                                                                benchmark
-                                                                                                                                                                                                    PRIVATE cxx_std_20)
+target_link_libraries(benchmark
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
 
-                                                                                                                                                                                                target_include_directories(
-                                                                                                                                                                                                    benchmark
-                                                                                                                                                                                                        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(benchmark PRIVATE cxx_std_20)
 
-                                                                                                                                                                                                    add_executable(
-                                                                                                                                                                                                        test_m3m4m5
-                                                                                                                                                                                                            core /
-                                                                                                                                                                                                        test_m3m4m5
-                                                                                                                                                                                                            .cpp)
+target_include_directories(benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-                                                                                                                                                                                                        target_link_libraries(test_m3m4m5
-                                                                                                                                                                                                                                  PRIVATE
-                                                                                                                                                                                                                                      Qt6::Widgets
-                                                                                                                                                                                                                                          Qt6::Gui
-                                                                                                                                                                                                                                              Qt6::Core
-                                                                                                                                                                                                                                                  mviewer_core)
+add_executable(test_m3m4m5
+    core/test_m3m4m5.cpp
+)
 
-                                                                                                                                                                                                            target_compile_features(
-                                                                                                                                                                                                                test_m3m4m5 PRIVATE
-                                                                                                                                                                                                                    cxx_std_20)
+target_link_libraries(test_m3m4m5
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
 
-                                                                                                                                                                                                                target_include_directories(
-                                                                                                                                                                                                                    test_m3m4m5 PRIVATE
-                                                                                                                                                                                                                        ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 
-# ─── M6 split test suites(per - module) ────────────────────────────────────
-                                                                                                                                                                                                                    foreach (
-                                                                                                                                                                                                                        _t
-                                                                                                                                                                                                                            decoder
-                                                                                                                                                                                                                                cache
-                                                                                                                                                                                                                                    mipmap_pyramid repository scheduler
-                                                                                                                                                                                                                                        metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext
-                                                                                                                                                                                                                                            analyzer_batch raw_metadata
-                                                                                                                                                                                                                                                rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features) add_executable(test_${
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 _t} core /
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             test_${
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 _t}
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 .cpp) target_link_libraries(test_${
-                                                                                                                                                                                                                        _t} PRIVATE Qt6::
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 Widgets
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     Qt6::Gui Qt6::Core
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         mviewer_core) target_compile_features(test_${
-                                                                                                                                                                                                                        _t} PRIVATE cxx_std_20)
-                                                                                                                                                                                                                        target_include_directories(test_${
-                                                                                                                                                                                                                            _t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}) target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR =
-                                                                                                                                                                                                                                                                                                    "${CMAKE_SOURCE_DIR}")
-                                                                                                                                                                                                                            endforeach()
+target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-#M41 cache thread - affinity regression inspects the process - wide Qt SQL
-#connection registry directly.
-                                                                                                                                                                                                                                target_link_libraries(
-                                                                                                                                                                                                                                    test_cache
-                                                                                                                                                                                                                                        PRIVATE Qt6::Sql)
+# ─── M6 split test suites (per-module) ────────────────────────────────────
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
+    add_executable(test_${_t}
+        core/test_${_t}.cpp
+    )
+    target_link_libraries(test_${_t}
+        PRIVATE
+            Qt6::Widgets
+            Qt6::Gui
+            Qt6::Core
+            mviewer_core
+    )
+    target_compile_features(test_${_t} PRIVATE cxx_std_20)
+    target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+endforeach()
 
-#P5 : headless release self - test gate.Runs the full application with-- selftest,
-#which decodes a generated image through the real product path and exits 0 / 1.
-                                                                                                                                                                                                                                    add_test(
-                                                                                                                                                                                                                                        NAME
-                                                                                                                                                                                                                                            selftest
-                                                                                                                                                                                                                                                COMMAND MViewer-- selftest) set_tests_properties(selftest
-                                                                                                                                                                                                                                                                                                     PROPERTIES WORKING_DIRECTORY
-                                                                                                                                                                                                                                                                                                         ${CMAKE_CURRENT_BINARY_DIR})
+# M41 cache thread-affinity regression inspects the process-wide Qt SQL
+# connection registry directly.
+target_link_libraries(test_cache PRIVATE Qt6::Sql)
 
-#M24 : version - consistency gate — CMake project(VERSION) is the single source
-#of truth; fails if the generated version file, hard - coded literals, packaging
-#scripts, or STATUS.md disagree with it.
-                                                                                                                                                                                                                                        add_test(NAME version_consistency
-                                                                                                                                                                                                                                                     COMMAND
-                                                                                                                                                                                                                                                         powershell -
-                                                                                                                                                                                                                                                 NoProfile -
-                                                                                                                                                                                                                                                 ExecutionPolicy
-                                                                                                                                                                                                                                                     Bypass -
-                                                                                                                                                                                                                                                 File ${
-                                                                                                                                                                                                                                                     CMAKE_SOURCE_DIR} /
-                                                                                                                                                                                                                                                     scripts /
-                                                                                                                                                                                                                                                     version_gate
-                                                                                                                                                                                                                                                         .ps1 -
-                                                                                                                                                                                                                                                 SourceDir
-                                                                                                                                                                                                                                                     ${CMAKE_SOURCE_DIR} -
-                                                                                                                                                                                                                                                 BuildDir
-                                                                                                                                                                                                                                                     ${CMAKE_BINARY_DIR} -
-                                                                                                                                                                                                                                                 Version
-                                                                                                                                                                                                                                                     ${PROJECT_VERSION}) set_tests_properties(version_consistency PROPERTIES WORKING_DIRECTORY ${
-                                                                                                                                                                                                                                            CMAKE_BINARY_DIR})
+# P5: headless release self-test gate. Runs the full application with --selftest,
+# which decodes a generated image through the real product path and exits 0/1.
+add_test(NAME selftest COMMAND MViewer --selftest)
+set_tests_properties(selftest PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
-#i18n gate : C++ / CMake sources are English; Chinese lives only in
-#translations/*.ts and resources/help/*.zh_CN.html (see scripts/check_no_chinese.py).
+# M24: version-consistency gate — CMake project(VERSION) is the single source
+# of truth; fails if the generated version file, hard-coded literals, packaging
+# scripts, or STATUS.md disagree with it.
+add_test(NAME version_consistency
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+            -File ${CMAKE_SOURCE_DIR}/scripts/version_gate.ps1
+            -SourceDir ${CMAKE_SOURCE_DIR}
+            -BuildDir ${CMAKE_BINARY_DIR}
+            -Version ${PROJECT_VERSION})
+set_tests_properties(version_consistency PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
+# i18n gate: C++/CMake sources are English; Chinese lives only in
+# translations/*.ts and resources/help/*.zh_CN.html (see scripts/check_no_chinese.py).
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_Interpreter_FOUND)
     add_test(NAME i18n_source_gate
