@@ -91,6 +91,10 @@ class RawImageView : public QWidget
     {
         return !m_backdrop.isNull();
     }
+    const QImage &backdropImage() const
+    {
+        return m_backdrop;
+    }
     quint64 backdropKey() const noexcept
     {
         return m_backdropKey;
@@ -110,6 +114,11 @@ class RawImageView : public QWidget
     // Momentary Compare changes presentation only. It deliberately leaves the
     // owned image, transform, ROI, overlays, and all CompareEngine state intact.
     void setTransientDisplay(const QImage &img, const QSize &sourceSize, const QRect &sourceRect);
+    // Momentary Compare with the source pane's exact viewport (scale + offset +
+    // optional backdrop stand-in for uncovered edges of a region raster).
+    void setTransientDisplay(const QImage &img, const QSize &sourceSize, const QRect &sourceRect,
+                             double renderScale, const QPointF &renderOffset,
+                             const QImage &backdrop = {});
     // Paint-only scale for the transient raster. <= 0 keeps m_scale (pixel align).
     void setTransientRenderScale(double scale);
     void clearTransientDisplay();
@@ -351,6 +360,9 @@ class RawImageView : public QWidget
     QSize m_transientSourceSize;
     QRect m_transientSourceRect;
     double m_transientRenderScale = 0.0;
+    QPointF m_transientOffset;
+    bool m_hasTransientOffset = false;
+    QImage m_transientBackdrop;
     double m_scale = 1.0;
     double m_fitScale = 1.0;
     QPointF m_offset;

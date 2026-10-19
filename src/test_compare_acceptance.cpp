@@ -251,6 +251,7 @@ int main(int argc, char **argv)
     testCompareShortcutHelpSnapshot(dir, paths8[0], paths8[1]);
     testComparePresetSanitize();
     testPlainDigitsReservedForPreview(dir);
+    testLocalZoomAcceptance(paths8[0], paths8[1]);
 
     if (g_failures > 0)
     {

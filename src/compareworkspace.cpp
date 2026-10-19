@@ -688,34 +688,6 @@ void CompareWorkspace::onSideToggled(bool on)
     update();
 }
 
-void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)
-{
-    if (!view)
-        return;
-    // Track the hovered cell so the focus-lock button knows which cell to pin.
-    m_hoverIdx = view->cellIndex();
-
-    if (!m_crosshairChk || !m_crosshairChk->isChecked())
-        return;
-
-    const bool valid = pos.x() >= 0.0 && pos.y() >= 0.0;
-    const int n = m_engine.imageCount();
-    for (int i = 0; i < n; ++i)
-    {
-        if (i >= m_cellViews.size() || !m_cellViews[i])
-            continue;
-        if (valid)
-            m_cellViews[i]->setCrosshair(pos);
-        else
-            m_cellViews[i]->clearCrosshair();
-    }
-    // Sample every cell at the synced image-space point. M30: route through the
-    // coalescer so this crosshair path cannot double-render the inspector that
-    // the same hover's pixelInfo signal already requested.
-    if (valid && m_sidePanel && m_sidePanel->isVisible())
-        requestInspectorUpdate(qRound(pos.x()), qRound(pos.y()));
-}
-
 void CompareWorkspace::onFocusRequested(int cellIndex)
 {
     // Toggle the locked reference: re-clicking the focused cell clears it.

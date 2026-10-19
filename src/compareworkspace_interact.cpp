@@ -98,6 +98,23 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     return handleCellEvent(view, idx, event);
 }
 
+bool CompareWorkspace::handleCellWheel(RawImageView *view, int idx, QEvent *event)
+{
+    auto *we = static_cast<QWheelEvent *>(event);
+    const int wheelDelta = verticalWheelDelta(we);
+    if (wheelDelta == 0)
+        return true; // horizontal-only wheel: consume without zooming
+    noteCompareInteraction();
+    const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
+    // Transform anchors are center-relative (RawImageView pan delta).
+    const QPoint pos = we->position().toPoint();
+    const bool localOnly = (we->modifiers() & Qt::ControlModifier) != 0;
+    applyAnchorZoom(idx, pos.x() - view->width() / 2.0, pos.y() - view->height() / 2.0, factor,
+                    localOnly);
+    update();
+    return true;
+}
+
 bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *event)
 {
     trackCellPointerForExportMenu(idx, event);
@@ -114,21 +131,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
     }
 
     if (event->type() == QEvent::Wheel)
-    {
-        auto *we = static_cast<QWheelEvent *>(event);
-        const int wheelDelta = verticalWheelDelta(we);
-        if (wheelDelta == 0)
-            return true; // horizontal-only wheel: consume without zooming
-        noteCompareInteraction();
-        const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
-        // The transform anchors in CENTER-RELATIVE coordinates (RawImageView
-        // stores offset as a pan delta from the pane center), so convert the
-        // widget-local cursor position before applying the zoom.
-        const QPoint pos = we->position().toPoint();
-        applyAnchorZoom(idx, pos.x() - view->width() / 2.0, pos.y() - view->height() / 2.0, factor);
-        update();
-        return true;
-    }
+        return handleCellWheel(view, idx, event);
 
     if (event->type() == QEvent::MouseButtonPress)
     {
@@ -175,8 +178,16 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
             m_lastMouse = me->pos();
             if (m_syncDrag)
             {
-                const Vec2 o = m_engine.syncTransform().offset;
-                m_engine.setOffset(o.x + delta.x(), o.y + delta.y());
+                // L3: add the screen delta to each pane's own offset so local
+                // Ctrl+wheel anchor differences survive a sync pan.
+                const int count = m_engine.imageCount();
+                for (int i = 0; i < count; ++i)
+                {
+                    const Vec2 o = m_engine.cellTransform(i).offset;
+                    m_engine.setCellOffset(i, o.x + delta.x(), o.y + delta.y());
+                }
+                const Vec2 shared = m_engine.syncTransform().offset;
+                m_engine.setOffset(shared.x + delta.x(), shared.y + delta.y());
             }
             else
             {
@@ -229,24 +240,19 @@ bool CompareWorkspace::handleCanvasWheel(QEvent *event)
     if (delta == 0)
         return true;
     const double factor = delta > 0 ? 1.15 : 1.0 / 1.15;
+    const bool localOnly = (we->modifiers() & Qt::ControlModifier) != 0;
     const QRect cr = canvasRect();
     const QPoint pos = we->position().toPoint();
+    const int refIdx = canvasRefCellAt(pos);
     double anchorX = pos.x() - cr.width() / 2.0;
     double anchorY = pos.y() - cr.height() / 2.0;
     if (m_splitChk && m_splitChk->isChecked())
     {
-        const int midX = cr.width() / 2;
-        const bool left = pos.x() < midX;
-        const QRect half = left ? QRect(cr.left(), cr.top(), midX, cr.height())
-                                : QRect(cr.left() + midX, cr.top(), cr.width() - midX, cr.height());
+        const QRectF half = canvasPaneGeometry(refIdx);
         anchorX = pos.x() - (half.x() + half.width() / 2.0);
         anchorY = pos.y() - (half.y() + half.height() / 2.0);
-        applyAnchorZoom(left ? 0 : 1, anchorX, anchorY, factor);
     }
-    else
-    {
-        applyAnchorZoom(0, anchorX, anchorY, factor);
-    }
+    applyAnchorZoom(refIdx, anchorX, anchorY, factor, localOnly);
     if (m_compareCanvas)
         m_compareCanvas->update();
     update();
@@ -353,8 +359,14 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
         m_lastMouse = me->pos();
         if (m_syncDrag)
         {
-            const Vec2 offset = m_engine.syncTransform().offset;
-            m_engine.setOffset(offset.x + delta.x(), offset.y + delta.y());
+            const int count = m_engine.imageCount();
+            for (int i = 0; i < count; ++i)
+            {
+                const Vec2 o = m_engine.cellTransform(i).offset;
+                m_engine.setCellOffset(i, o.x + delta.x(), o.y + delta.y());
+            }
+            const Vec2 shared = m_engine.syncTransform().offset;
+            m_engine.setOffset(shared.x + delta.x(), shared.y + delta.y());
         }
         else
         {
@@ -501,11 +513,18 @@ bool CompareWorkspace::canvasEventFilter(QEvent *event)
 // other canvas mode uses the stable reference cell 0.
 int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
 {
+    const QRect cr = canvasRect();
     if (m_splitChk && m_splitChk->isChecked())
-    {
-        const QRect cr = canvasRect();
         return pos.x() < cr.width() / 2 ? 0 : 1;
+    if (m_swipeChk && m_swipeChk->isChecked())
+        return pos.x() < int(cr.width() * m_splitPos) ? 0 : 1;
+    if (m_checkerChk && m_checkerChk->isChecked())
+    {
+        const int bs = std::max(4, m_checkerSize);
+        return (((pos.x() / bs) + (pos.y() / bs)) & 1) != 0 ? 1 : 0;
     }
+    if (m_overlayChk && m_overlayChk->isChecked())
+        return (QApplication::keyboardModifiers() & Qt::AltModifier) ? 0 : 1;
     return 0;
 }
 
@@ -513,8 +532,35 @@ int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
 // derives the effective factor from that clamped target, so a limit hit derives
 // the offset from the clamped factor instead of recomputing it after the offset
 // was already applied. Respects all four syncZoom / syncDrag combinations.
-void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor)
+void CompareWorkspace::ensureLocalZoomMultipliers(int n)
 {
+    if (n < 0)
+        n = 0;
+    if (m_localZoomMultipliers.size() < n)
+        m_localZoomMultipliers.resize(n, 1.0);
+    else if (m_localZoomMultipliers.size() > n)
+        m_localZoomMultipliers.resize(n);
+}
+
+void CompareWorkspace::resetLocalZoomMultipliers()
+{
+    for (double &m : m_localZoomMultipliers)
+        m = 1.0;
+}
+
+double CompareWorkspace::localZoomMultiplier(int i) const
+{
+    if (i < 0 || i >= m_localZoomMultipliers.size())
+        return 1.0;
+    const double m = m_localZoomMultipliers.at(i);
+    return (std::isfinite(m) && m > 0.0) ? m : 1.0;
+}
+
+void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor,
+                                       bool localOnly)
+{
+    if (refIdx < 0 || refIdx >= m_engine.imageCount())
+        return;
     const double currentScale = m_engine.cellTransform(refIdx).scale;
     if (!(currentScale > 0.0) || !std::isfinite(currentScale))
         return; // invalid baseline: consume without zooming
@@ -526,12 +572,46 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
     // old offset around the anchor by the effective factor.
     const auto zoomedOffset = [effectiveFactor](double anchor, double oldOffset)
     { return anchor - (anchor - oldOffset) * effectiveFactor; };
-    // Core's SyncController is enabled only when zoom AND drag sync are
-    // both on, so for the mixed modes apply the transform paintEvent
-    // renders with the plain setters instead of relying on zoomAt dispatch.
     const int count = m_engine.imageCount();
-    if (m_syncZoom)
+    ensureLocalZoomMultipliers(count);
+
+    if (localOnly)
     {
+        // Ctrl+wheel: only the hovered pane's M_i / scale / offset move.
+        m_localZoomMultipliers[refIdx] *= effectiveFactor;
+        if (!(m_localZoomMultipliers[refIdx] > 0.0) ||
+            !std::isfinite(m_localZoomMultipliers[refIdx]))
+            m_localZoomMultipliers[refIdx] = 1.0;
+        m_engine.setCellScale(refIdx, targetScale);
+        const Vec2 o = m_engine.cellTransform(refIdx).offset;
+        m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
+        const int pct = static_cast<int>(std::round(targetScale * 100.0));
+        const QChar tag = QChar('A' + (refIdx % 26));
+        showCompareStatus(tr("Pane %1 local zoom: %2% (Ctrl+wheel)").arg(tag).arg(pct));
+    }
+    else if (!m_syncZoom)
+    {
+        // Independent zoom: only the hovered pane's scale changes.
+        m_engine.setCellScale(refIdx, targetScale);
+        if (m_syncDrag)
+        {
+            // Drag sync on: keep a single shared offset across panes (mixed-B).
+            const Vec2 o = m_engine.syncTransform().offset;
+            const double ox = zoomedOffset(anchorX, o.x);
+            const double oy = zoomedOffset(anchorY, o.y);
+            m_engine.setOffset(ox, oy);
+            for (int i = 0; i < count; ++i)
+                m_engine.setCellOffset(i, ox, oy);
+        }
+        else
+        {
+            const Vec2 o = m_engine.cellTransform(refIdx).offset;
+            m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
+        }
+    }
+    else
+    {
+        // Global wheel with sync zoom: update R_global; keep each M_i.
         QVector<double> oldScales;
         oldScales.reserve(count);
         for (int i = 0; i < count; ++i)
@@ -540,26 +620,8 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
         m_engine.setScale(m_sharedZoomRatio);
         for (int i = 0; i < count; ++i)
             m_engine.setCellScale(i, oldScales[i] * effectiveFactor);
-    }
-    else
-    {
-        m_engine.setCellScale(refIdx, targetScale);
-    }
-    if (m_syncDrag)
-    {
-        const Vec2 o = m_engine.syncTransform().offset;
-        const double ox = zoomedOffset(anchorX, o.x);
-        const double oy = zoomedOffset(anchorY, o.y);
-        m_engine.setOffset(ox, oy);
-        for (int i = 0; i < count; ++i)
-            m_engine.setCellOffset(i, ox, oy);
-    }
-    else if (m_syncZoom)
-    {
-        // Zoom sync on, drag sync off: zoom every cell's own offset
-        // independently around the anchor, then refresh the shared offset
-        // from the hovered cell without overwriting the cells (the
-        // controller is disabled because drag sync is off).
+        // L2: zoom each pane's own offset around the anchor. Never force every
+        // pane onto syncTransform().offset (that wipes local Ctrl+wheel anchors).
         for (int i = 0; i < count; ++i)
         {
             const Vec2 o = m_engine.cellTransform(i).offset;
@@ -568,13 +630,8 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
         const Vec2 h = m_engine.cellTransform(refIdx).offset;
         m_engine.setOffset(h.x, h.y);
     }
-    else
-    {
-        // Fully independent: zoom only the hovered cell's own offset.
-        const Vec2 o = m_engine.cellTransform(refIdx).offset;
-        m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
-    }
-    scheduleDisplayLodRefresh(refIdx);
+    // Local zoom: refresh that pane. Sync zoom: all panes scaled together.
+    scheduleDisplayLodRefresh(localOnly || !m_syncZoom ? refIdx : -1);
     noteCompareInteraction();
     positionROIHud();
 }

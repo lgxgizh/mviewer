@@ -37,6 +37,7 @@ void CompareWorkspace::setSyncRotate(bool on)
 
 void CompareWorkspace::setEditCellIndex(int cellIdx)
 {
+    m_hoverIdx = -1;
     m_explicitEditIdx = cellIdx;
     onEditCellSelected(cellIdx);
 }

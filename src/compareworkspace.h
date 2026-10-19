@@ -78,10 +78,8 @@ class CompareWorkspace : public QWidget
   public:
     explicit CompareWorkspace(QWidget *parent = nullptr);
     ~CompareWorkspace();
-
     // M34: deterministic split geometry contract: two adjacent rects covering canvas.
     static QPair<QRect, QRect> splitRects(const QRect &canvas);
-
     // Preferences / toolbar: integer-shift auto-align before diff. Syncs the
     // toolbar checkbox and recomputes the diff when the value changes.
     void setAutoAlignBeforeDiff(bool on);
@@ -93,27 +91,21 @@ class CompareWorkspace : public QWidget
     // session may provide one explicit frame index per pane.
     void setImages(const QStringList &paths);
     void setImages(const QStringList &paths, const QVector<int> &frameIndices);
-
     // Browse→Compare: queue an in-memory display bitmap (applied when panes exist).
     void seedWarmDisplay(const QString &path, const QImage &image, const QSize &sourceSize,
                          const QRect &sourceRect = QRect());
-
     // A target change re-materializes presentation rasters only.
     void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
     const mviewer::core::DisplayColorContext &displayColorContext() const;
-
     bool isSyncEnabled() const;
     void setSyncEnabled(bool on);
-
     CompareEngine &engine();
     mviewer::ui::CompareSessionState *sessionState() const;
     mviewer::ui::CompareRoiController *roiController() const;
     mviewer::ui::CompareDiffRenderer *diffRenderer() const;
     mviewer::ui::CompareDisplayManager *displayManager() const;
-
     // Last ROI applied to the compare cells; empty means unset.
     mviewer::domain::Selection currentROI() const;
-
     // Re-apply a persisted ROI.
     void applyROI(const mviewer::domain::Selection &sel);
     void clearROI();
@@ -313,6 +305,7 @@ class CompareWorkspace : public QWidget
     bool m_syncRotate = false;
     bool m_uniformScale = false; // H5: force all panes to one shared zoom
     QVector<double> m_fitScales;
+    QVector<double> m_localZoomMultipliers; // Ctrl+wheel M_i
     double m_sharedZoomRatio = 1.0;
     bool m_postLayoutFitPending = false;
     bool m_preserveFitPending = false;
@@ -400,6 +393,7 @@ class CompareWorkspace : public QWidget
     QRect canvasRect() const;
     bool canvasEventFilter(QEvent *event);
     bool handleCanvasWheel(QEvent *event);
+    bool handleCellWheel(RawImageView *view, int idx, QEvent *event);
     bool handleCanvasPress(QEvent *event);
     bool handleCanvasDoubleClick(QEvent *event);
     bool handleCanvasMove(QEvent *event);
@@ -411,7 +405,11 @@ class CompareWorkspace : public QWidget
     void drawCanvasROI(QPainter &p);
     void drawCanvasPixelGrid(QPainter &p);
     void drawCanvasInfoOverlays(QPainter &p);
-    void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor);
+    void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor,
+                         bool localOnly = false);
+    void ensureLocalZoomMultipliers(int n);
+    void resetLocalZoomMultipliers();
+    double localZoomMultiplier(int i) const;
     QRectF cellFullDestRect(int idx, const QRectF &geom) const;
     QRectF cellDestRect(int idx, const QRectF &geom) const;
 

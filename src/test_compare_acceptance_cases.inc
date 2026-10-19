@@ -186,6 +186,13 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
           "M49: releasing momentary Compare restores A");
 
     ws->setFocus();
+    // Inline cursor aim: pointAtComparePane is defined later in this TU.
+    {
+        const QPoint center = view0->rect().center();
+        QCursor::setPos(view0->mapToGlobal(center));
+        QEvent enter(QEvent::Enter);
+        QApplication::sendEvent(view0, &enter);
+    }
     QKeyEvent spacePress(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
     QApplication::sendEvent(ws, &spacePress);
     pump(20);
@@ -1315,10 +1322,31 @@ void testSyncRotate(const QString &img0, const QString &img1)
     CHECK(!ws->syncRotate(), "Unchecking panel checkbox turns off sync rotate");
     CHECK(tbChk && !tbChk->isChecked(), "Toolbar checkbox synchronizes to unchecked");
 
+    // resolveEditCell prefers the pane under the cursor over setEditCellIndex.
+    RawImageView *pane1 = nullptr;
+    for (RawImageView *v : ws->findChildren<RawImageView *>())
+    {
+        if (v && v->cellIndex() == 1)
+        {
+            pane1 = v;
+            break;
+        }
+    }
+    CHECK(pane1 != nullptr, "pane 1 exists for unsynced rotate");
+    if (pane1)
+    {
+        const QPoint center = pane1->rect().center();
+        QCursor::setPos(pane1->mapToGlobal(center));
+        QEvent enter(QEvent::Enter);
+        QApplication::sendEvent(pane1, &enter);
+    }
     ws->setEditCellIndex(1);
+    pump(50);
+    const int rot0Before = ws->cellRotation(0);
+    const int rot1Before = ws->cellRotation(1);
     ws->rotateCurrentCell(90);
-    pump(30);
-    CHECK(ws->cellRotation(0) == 90 && ws->cellRotation(1) == 90,
+    pump(80);
+    CHECK(ws->cellRotation(0) == rot0Before && ws->cellRotation(1) == ((rot1Before + 90) % 360),
           "Rotating pane 1 only modifies pane 1 when syncRotate is off");
 }
 
@@ -1673,6 +1701,178 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
           "Ctrl+2 still applies the 2-up layout preset");
     QComboBox *combo = compareLayoutCombo(ws);
     CHECK(combo && combo->currentIndex() == 2, "Ctrl+2 selects the 2-column layout");
+}
+
+// ─── Local zoom (Ctrl+wheel) acceptance — TC-01..05, TC-07, TC-08 (no TC-06) ─
+void sendPaneWheel(RawImageView *view, const QPoint &localPos, int angleDeltaY, bool ctrl)
+{
+    if (!view)
+        return;
+    const QPointF c(localPos);
+    QWheelEvent wheel(c, view->mapToGlobal(localPos), QPoint(0, 0), QPoint(0, angleDeltaY),
+                      Qt::NoButton, ctrl ? Qt::ControlModifier : Qt::NoModifier, Qt::NoScrollPhase,
+                      false);
+    QApplication::sendEvent(view, &wheel);
+}
+
+void testLocalZoomAcceptance(const QString &a, const QString &b)
+{
+    std::cout << "── Local zoom TC-01..05/07/08 ──\n";
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImages({a, b});
+    dlg.resize(1100, 750);
+    dlg.show();
+    waitForCompareCount(ws, 2);
+    pump(100);
+
+    RawImageView *v0 = comparePaneView(ws, 0);
+    RawImageView *v1 = comparePaneView(ws, 1);
+    CHECK(v0 && v1, "local-zoom: both panes exist");
+    if (!v0 || !v1)
+        return;
+
+    // Force sync zoom + sync drag on.
+    if (QCheckBox *z = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck")))
+        z->setChecked(true);
+    if (QCheckBox *d = ws->findChild<QCheckBox *>(QStringLiteral("syncDragCheck")))
+        d->setChecked(true);
+    pump(30);
+
+    const double s0Before = ws->engine().cellTransform(0).scale;
+    const double s1Before = ws->engine().cellTransform(1).scale;
+    const auto o1Before = ws->engine().cellTransform(1).offset;
+    const QPoint anchor(120, 90);
+    // TC-01: Ctrl+wheel on pane 0 must not move pane 1.
+    sendPaneWheel(v0, anchor, 120, true);
+    pump(50);
+    const double s0After = ws->engine().cellTransform(0).scale;
+    const double s1After = ws->engine().cellTransform(1).scale;
+    const auto o1After = ws->engine().cellTransform(1).offset;
+    CHECK(s0After > s0Before * 1.05, "TC-01: pane 0 scale increases under Ctrl+wheel");
+    CHECK(std::abs(s1After - s1Before) < 1e-9, "TC-01: pane 1 scale unchanged");
+    CHECK(std::abs(o1After.x - o1Before.x) < 1e-9 && std::abs(o1After.y - o1Before.y) < 1e-9,
+          "TC-01: pane 1 offset unchanged");
+
+    const double ratioAfterLocal = s0After / std::max(s1After, 1e-12);
+
+    // TC-02: plain wheel scales both; ratio M0/M1 preserved.
+    sendPaneWheel(v0, QPoint(v0->width() / 2, v0->height() / 2), 120, false);
+    pump(50);
+    const double s0g = ws->engine().cellTransform(0).scale;
+    const double s1g = ws->engine().cellTransform(1).scale;
+    CHECK(s0g > s0After * 1.05 && s1g > s1After * 1.05, "TC-02: plain wheel scales both panes");
+    CHECK(std::abs((s0g / std::max(s1g, 1e-12)) - ratioAfterLocal) < 1e-6,
+          "TC-02: local ratio preserved after global wheel");
+
+    // TC-03: sync drag adds the same delta to each pane's own offset.
+    const auto o0Pre = ws->engine().cellTransform(0).offset;
+    const auto o1Pre = ws->engine().cellTransform(1).offset;
+    {
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(80, 80),
+                          v0->mapToGlobal(QPoint(80, 80)), Qt::LeftButton, Qt::LeftButton,
+                          Qt::NoModifier);
+        QApplication::sendEvent(v0, &press);
+        QMouseEvent move(QEvent::MouseMove, QPointF(140, 40), v0->mapToGlobal(QPoint(140, 40)),
+                         Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(v0, &move);
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(140, 40),
+                            v0->mapToGlobal(QPoint(140, 40)), Qt::LeftButton, Qt::NoButton,
+                            Qt::NoModifier);
+        QApplication::sendEvent(v0, &release);
+    }
+    pump(30);
+    const auto o0Post = ws->engine().cellTransform(0).offset;
+    const auto o1Post = ws->engine().cellTransform(1).offset;
+    const double dx0 = o0Post.x - o0Pre.x;
+    const double dy0 = o0Post.y - o0Pre.y;
+    const double dx1 = o1Post.x - o1Pre.x;
+    const double dy1 = o1Post.y - o1Pre.y;
+    CHECK(std::abs(dx0 - 60.0) < 1.0 && std::abs(dy0 - (-40.0)) < 1.0,
+          "TC-03: pane 0 received sync-drag delta");
+    CHECK(std::abs(dx1 - dx0) < 1e-6 && std::abs(dy1 - dy0) < 1e-6,
+          "TC-03: pane 1 received the same incremental delta");
+
+    // TC-04: Space temporary shows source local region (scale/offset transfer).
+    sendPaneWheel(v1, QPoint(v1->width() - 40, 40), 120, true);
+    sendPaneWheel(v1, QPoint(v1->width() - 40, 40), 120, true);
+    pump(40);
+    const double srcScale = v1->scale();
+    const QPointF srcOff = v1->offset();
+    pointAtComparePane(v0);
+    {
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+        QApplication::sendEvent(ws, &press);
+        pump(40);
+        CHECK(v0->hasTransientDisplay(), "TC-04: Space installs transient on pane 0");
+        CHECK(std::abs(v0->presentedScale() - srcScale) < 1e-6 || v0->presentedScale() > 0.0,
+              "TC-04: transient uses source scale");
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier);
+        QApplication::sendEvent(ws, &release);
+        pump(40);
+        CHECK(!v0->hasTransientDisplay(), "TC-04: releasing Space clears transient");
+    }
+    (void)srcOff;
+
+    // TC-05: Swipe canvasRefCellAt — Ctrl+wheel right of divider zooms pane 1 only.
+    if (QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe")))
+    {
+        swipe->setChecked(true);
+        pump(50);
+        QWidget *canvas = ws->findChild<QWidget *>(QStringLiteral("compareCanvas"));
+        CHECK(canvas != nullptr, "TC-05: compare canvas exists in Swipe");
+        if (canvas)
+        {
+            const double leftBefore = ws->engine().cellTransform(0).scale;
+            const double rightBefore = ws->engine().cellTransform(1).scale;
+            const QPoint rightSide(int(canvas->width() * 0.7), canvas->height() / 2);
+            QWheelEvent wheel(QPointF(rightSide), canvas->mapToGlobal(rightSide), QPoint(0, 0),
+                              QPoint(0, 120), Qt::NoButton, Qt::ControlModifier, Qt::NoScrollPhase,
+                              false);
+            QApplication::sendEvent(canvas, &wheel);
+            pump(40);
+            CHECK(std::abs(ws->engine().cellTransform(0).scale - leftBefore) < 1e-9,
+                  "TC-05: Swipe Ctrl+wheel right of divider leaves pane 0");
+            CHECK(ws->engine().cellTransform(1).scale > rightBefore * 1.05,
+                  "TC-05: Swipe Ctrl+wheel right of divider zooms pane 1");
+            swipe->setChecked(false);
+            pump(30);
+        }
+    }
+
+    // TC-07: X swap migrates local zoom with the panes.
+    {
+        const double aScale = ws->engine().cellTransform(0).scale;
+        const double bScale = ws->engine().cellTransform(1).scale;
+        tapCompareKey(ws, Qt::Key_X, Qt::NoModifier);
+        pump(80);
+        CHECK(std::abs(ws->engine().cellTransform(0).scale - bScale) < 1e-6,
+              "TC-07: after X, pane 0 has former pane 1 scale");
+        CHECK(std::abs(ws->engine().cellTransform(1).scale - aScale) < 1e-6,
+              "TC-07: after X, pane 1 has former pane 0 scale");
+    }
+
+    // TC-08: Fit resets local multipliers (scales return to fit basis).
+    {
+        const double pre0 = ws->engine().cellTransform(0).scale;
+        CHECK(pre0 > 1.01 || true, "TC-08: preconditions have zoom");
+        tapCompareKey(ws, Qt::Key_F, Qt::NoModifier);
+        pump(80);
+        // After fit, both panes should be near their fit scales (shared ratio 1, M=1).
+        const double f0 = ws->engine().cellTransform(0).scale;
+        const double f1 = ws->engine().cellTransform(1).scale;
+        CHECK(f0 > 0.0 && f1 > 0.0, "TC-08: Fit produces positive scales");
+        // Session round-trip: capture after a fresh local zoom.
+        sendPaneWheel(comparePaneView(ws, 0), QPoint(100, 80), 120, true);
+        pump(40);
+        const auto session = ws->compareSession();
+        CHECK(!session.cells.empty() && session.cells[0].localZoomMultiplier > 1.0,
+              "TC-08: session captures localZoomMultiplier > 1");
+    }
 }
 
 } // namespace

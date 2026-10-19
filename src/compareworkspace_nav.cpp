@@ -31,7 +31,14 @@ void applyCellTransforms(CompareEngine &engine, const mviewer::domain::CompareSe
     if (syncOn && !s.uniformScale && fitScales.size() == engine.imageCount())
     {
         for (int i = 0; i < engine.imageCount(); ++i)
-            engine.setCellScale(i, fitScales[i] * sharedZoomRatio);
+        {
+            const double m = (static_cast<size_t>(i) < s.cells.size() &&
+                              std::isfinite(s.cells[static_cast<size_t>(i)].localZoomMultiplier) &&
+                              s.cells[static_cast<size_t>(i)].localZoomMultiplier > 0.0)
+                                 ? s.cells[static_cast<size_t>(i)].localZoomMultiplier
+                                 : 1.0;
+            engine.setCellScale(i, fitScales[i] * sharedZoomRatio * m);
+        }
     }
 }
 
@@ -92,6 +99,8 @@ mviewer::domain::CompareSession CompareWorkspace::compareSession() const
     s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
     s.customColumns = m_gridColsSpin ? m_gridColsSpin->value() : 2;
     s.uniformScale = m_uniformScale; // H5
+    for (size_t i = 0; i < s.cells.size(); ++i)
+        s.cells[i].localZoomMultiplier = localZoomMultiplier(static_cast<int>(i));
     return s;
 }
 
@@ -422,6 +431,16 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
 
     const bool syncOn = m_syncZoom && m_syncDrag;
     applyCellTransforms(m_engine, s, syncOn, m_fitScales, m_sharedZoomRatio);
+    ensureLocalZoomMultipliers(m_engine.imageCount());
+    for (int i = 0; i < m_engine.imageCount(); ++i)
+    {
+        const double m = (static_cast<size_t>(i) < s.cells.size() &&
+                          std::isfinite(s.cells[static_cast<size_t>(i)].localZoomMultiplier) &&
+                          s.cells[static_cast<size_t>(i)].localZoomMultiplier > 0.0)
+                             ? s.cells[static_cast<size_t>(i)].localZoomMultiplier
+                             : 1.0;
+        m_localZoomMultipliers[i] = m;
+    }
 
     // M15 P0#1: replay the UI-only state so the reopened view is identical.
     // HeatMap / Diff threshold. Block the slider's valueChanged handler (which

@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Compare local zoom (Ctrl+wheel)**: each pane keeps an independent multiplier `M_i` in `S_i = B_i × R_global × M_i`. Ctrl+wheel zooms only the pane under the cursor around the pointer; plain wheel with sync zoom still updates `R_global` for all panes while preserving each `M_i`. Sync pan adds the screen delta to every pane's own offset so local anchors survive. Space / 1–8 momentary compare and X swap replay the source pane's scale, offset and backdrop so the visible region stays locked. Swipe / Checkerboard / Overlay canvas hit-testing picks the correct pane for Ctrl+wheel. Fit (F / 0) resets all `M_i` to 1.0. Sessions optionally persist `localZoom` per cell. Image-pool ←/→ paging is intentionally not included.
 - **Paste images into the browsed folder**: when the thumbnail gallery has focus or the pointer is over it, `Ctrl+V` copies clipboard image files (or raw clipboard image data) into the current browse directory, refreshes the gallery, and selects the new file(s). File URLs keep their original names; raw image data is saved as `clipboard-YYYYMMDD-HHMMSS.png` (or `.jpg` when the clipboard provides JPEG). Existing names get `-2`, `-3`, … suffixes. Text fields still own `Ctrl+V`. Elsewhere, `Ctrl+V` keeps the previous behavior (temp file → open in the viewer).
 - **Open current folder in the file manager**: browse toolbar button **Open Folder** (next to Refresh) opens the directory currently shown in the gallery via `QDesktopServices` (Explorer on Windows, the desktop opener on Linux). Disabled when no folder is open.
 
