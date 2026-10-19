@@ -80,7 +80,7 @@ void MainWindow::setupCommands()
         },
         std::vector<CommandShortcut>{{Qt::Key_Return, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "fullscreen", "全屏 (F11)", [this]() { toggleFullscreen(); },
+        "fullscreen", "Fullscreen (F11)", [this]() { toggleFullscreen(); },
         std::vector<CommandShortcut>{{Qt::Key_F11, 0}}));
 
     // M18: file-management shortcuts for the selected gallery items.
@@ -316,7 +316,7 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
                 const QString nativePath = QDir::toNativeSeparators(currentImagePath());
                 QApplication::clipboard()->setText(nativePath);
                 if (statusBar())
-                    statusBar()->showMessage(tr("已复制路径: %1").arg(nativePath), 2000);
+                    statusBar()->showMessage(tr("Path copied: %1").arg(nativePath), 2000);
             }
         }
         else
@@ -325,8 +325,8 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
             if (copying)
                 copyCurrentImageToClipboard();
             if (statusBar())
-                statusBar()->showMessage(copying ? tr("正在复制图片到剪贴板...")
-                                                 : tr("没有可复制的图片"),
+                statusBar()->showMessage(copying ? tr("Copying image to clipboard...")
+                                                 : tr("No image available to copy"),
                                          copying ? 0 : 2000);
         }
         event->accept();
@@ -504,7 +504,7 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
         if (m_actCompare && m_actCompare->isEnabled())
             m_actCompare->trigger();
         else
-            statusBar()->showMessage(tr("需要选择 2-8 张图片才能比较"), 3000);
+            statusBar()->showMessage(tr("Select 2-8 images to compare"), 3000);
         event->accept();
         return true;
     }
@@ -665,7 +665,7 @@ QString MainWindow::shortcutsHelpHtml()
 void MainWindow::showShortcutsHelp()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("键盘快捷键"));
+    dlg.setWindowTitle(QStringLiteral("Keyboard shortcuts"));
     dlg.resize(480, 560);
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
@@ -682,7 +682,7 @@ void MainWindow::showShortcutsHelp()
 QString MainWindow::userGuideHtml()
 {
     return QStringLiteral(
-        "<h2>MViewer 使用说明</h2>"
+        "<h2>MViewer User Guide</h2>"
         "<p>图像算法工程师用的浏览 / 比较 / 分析工具。下面只写日常路径。</p>"
         "<h3>1. 浏览</h3>"
         "<ol>"
@@ -742,7 +742,7 @@ QString MainWindow::userGuideHtml()
 void MainWindow::showUserGuide()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("使用说明"));
+    dlg.setWindowTitle(QStringLiteral("User Guide"));
     dlg.resize(560, 640);
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
@@ -795,8 +795,8 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     if (m_compareView && !m_compareView->isHidden())
     {
         QMenu menu(this);
-        menu.addAction(tr("适应窗口 (F)"), this, [this]() { m_compareView->fitAll(); });
-        menu.addAction(tr("实际大小 100% (Ctrl+1)"), this,
+        menu.addAction(tr("Fit Window (F)"), this, [this]() { m_compareView->fitAll(); });
+        menu.addAction(tr("Actual size 100% (Ctrl+1)"), this,
                        [this]() { m_compareView->zoomActual(); });
         menu.exec(globalPos);
         return;
@@ -804,8 +804,8 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
         return;
     QMenu menu(this);
-    menu.addAction("适应窗口 (0 / F)", this, [this]() { m_imageViewer->zoomFit(); });
-    menu.addAction("实际大小 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
+    menu.addAction("Fit to window (0 / F)", this, [this]() { m_imageViewer->zoomFit(); });
+    menu.addAction("Actual Size 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
     menu.addSeparator();
     menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
     menu.addAction("200% (2)", this, [this]() { m_imageViewer->zoomTo(2.0); });

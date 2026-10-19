@@ -58,7 +58,7 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
     if (!target || !source || source->displayImage().isNull() || !source->sourceSize().isValid())
     {
         m_temporaryDigit = 0;
-        showCompareStatus(tr("这一侧还没有可切换的图像"));
+        showCompareStatus(tr("No image to switch to on this side yet"));
         return;
     }
     if (m_temporaryCompareActive && m_temporaryTargetPane >= 0 &&
@@ -113,19 +113,19 @@ void CompareWorkspace::beginTemporaryCompare()
     const auto decision = mviewer::ui::decidePairHold(m_engine.imageCount(), hovered);
     if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
     {
-        showCompareStatus(tr("超过 2 张时请按住数字键 1–N 临时换图"));
+        showCompareStatus(tr("With more than 2 images, hold number keys 1–N to switch temporarily"));
         return;
     }
     if (decision.action == mviewer::ui::TemporaryAction::HintMoveMouse)
     {
-        showCompareStatus(tr("将鼠标移到某一侧再按住 Space"));
+        showCompareStatus(tr("Move the mouse to one side, then hold Space"));
         return;
     }
     if (decision.action != mviewer::ui::TemporaryAction::ShowPair)
         return;
     if (temporaryHoldBlocked())
     {
-        showCompareStatus(tr("闪烁开启时不能临时切换"));
+        showCompareStatus(tr("Cannot temporarily switch while flicker is on"));
         return;
     }
     m_temporaryDigit = 0;
@@ -152,9 +152,9 @@ void CompareWorkspace::beginDigitTemporaryCompare(int digit)
     if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
     {
         if (count < 1)
-            showCompareStatus(tr("没有可切换的图像"));
+            showCompareStatus(tr("No images to switch"));
         else
-            showCompareStatus(tr("当前共 %1 张，按住 1–%2 临时换图").arg(count).arg(count));
+            showCompareStatus(tr("Currently %1 images; hold 1–%2 to switch temporarily").arg(count).arg(count));
         return;
     }
     if (decision.action != mviewer::ui::TemporaryAction::ShowDigit)
@@ -227,13 +227,13 @@ void CompareWorkspace::refreshCompareControlTooltips()
             return;
         widget->setToolTip(widget->isEnabled() ? enabledTip : disabledTip);
     };
-    setTip(m_swapBtn, tr("交换窗格顺序（快捷键 X）"),
-           loading ? tr("图片还在加载，暂时不能交换")
-                   : tr("至少需要 2 张图片才能交换（快捷键 X）"));
-    setTip(m_analyzeBtn, tr("打开比较检视面板"),
-           loading ? tr("图片还在加载，暂时不能分析") : tr("当前没有可分析的图像"));
-    setTip(m_exportReportBtn, tr("将对比结果导出为 HTML/Markdown/JSON 报告"),
-           count < 2 ? tr("至少需要 2 张图片才能导出报告") : tr("图片还在加载，暂时不能导出报告"));
+    setTip(m_swapBtn, tr("Swap pane order (shortcut X)"),
+           loading ? tr("Images are still loading; cannot swap yet")
+                   : tr("At least 2 images are required to swap (shortcut X)"));
+    setTip(m_analyzeBtn, tr("Open Comparison Inspection Panel"),
+           loading ? tr("Images are still loading; cannot analyze yet") : tr("No images available to analyze"));
+    setTip(m_exportReportBtn, tr("Export comparison results as an HTML/Markdown/JSON report"),
+           count < 2 ? tr("At least 2 images are required to export a report") : tr("Images are still loading; cannot export a report yet"));
     if (m_clearLinksBtn)
         m_clearLinksBtn->setToolTip(clearLinkTooltip());
     updateTemporaryCompareAvailability();
@@ -247,23 +247,23 @@ QString CompareWorkspace::temporaryCompareTooltip() const
         m_cellViews[0]->sourceSize().isValid() && m_cellViews[1]->sourceSize().isValid();
     if (m_engine.imageCount() > 2)
     {
-        return tr("超过 2 张时此按钮和 Space 不可用。按住数字键 1–N "
+        return tr("With more than 2 images, this button and Space are unavailable. Hold number keys 1–N "
                   "在鼠标所在窗格临时显示第 N 张（不在窗格上则用当前窗格）；松开恢复。"
                   "布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。");
     }
     if (!imagesReady)
-        return tr("需要恰好 2 张已显示的图片才能按住临时切换");
+        return tr("Exactly 2 displayed images are required to hold and switch temporarily");
     if (temporaryHoldBlocked())
-        return tr("闪烁开启时不能临时切换");
-    return tr("按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。");
+        return tr("Cannot temporarily switch while flicker is on");
+    return tr("While holding Space, the side under the mouse temporarily shows the other side's image; release to restore.");
 }
 
 QString CompareWorkspace::clearLinkTooltip() const
 {
     if (m_clearLinksBtn && m_clearLinksBtn->isEnabled())
-        return tr("清除全部像素连线标记");
+        return tr("Clear all Pixel Link markers");
     const bool linkOn = m_pixelLinkChk && m_pixelLinkChk->isChecked();
     if (!linkOn)
-        return tr("请先勾选「像素连线」（仅 2 张图片时可用）");
-    return tr("还没有标记点");
+        return tr("Check \"Pixel Link\" first (available only with 2 images)");
+    return tr("No markers yet");
 }

@@ -99,7 +99,7 @@ uint64_t ThumbnailPanel::beginFileOperationProgress(const QString &label)
 {
     m_fileOperationBusy = true;
     const uint64_t generation = ++m_fileOperationGeneration;
-    m_fileProgress = new QProgressDialog(label, QStringLiteral("取消"), 0, 100, this);
+    m_fileProgress = new QProgressDialog(label, QStringLiteral("Cancel"), 0, 100, this);
     m_fileProgress->setWindowModality(Qt::WindowModal);
     m_fileProgress->setAutoClose(false);
     m_fileProgress->setAutoReset(false);
@@ -244,8 +244,10 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                         const QString detail = mviewer::ui::fileOpErrorZh(error);
                         QMessageBox::warning(panel, label,
                                              state->cancelled
-                                                 ? label + QStringLiteral("已取消。\n") + detail
-                                                 : label + QStringLiteral("失败。\n") + detail);
+                                                 ? label + QStringLiteral("Cancelled.
+") + detail
+                                                 : label + QStringLiteral("Failed.
+") + detail);
                     }
 
                     if (!panel->m_currentDir.isEmpty())
@@ -268,7 +270,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
         onProgress);
 
     if (!m_fileOperationTask)
-        failFileOperationQueue(label, label + QStringLiteral("无法排队：后台任务队列已满。"));
+        failFileOperationQueue(label, label + QStringLiteral("Cannot queue: background task queue is full."));
 }
 
 void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
@@ -281,7 +283,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
     const QPointer<ThumbnailPanel> guard(this);
     auto state = std::make_shared<AsyncCopyState>();
     const auto fileSystem = mviewer::core::defaultFileSystemAdapter();
-    const uint64_t generation = beginFileOperationProgress(QStringLiteral("复制中…"));
+    const uint64_t generation = beginFileOperationProgress(QStringLiteral("Copying…"));
     const auto onProgress = makeFileOperationProgressHandler(generation);
 
     m_fileOperationTask = TaskScheduler::instance().submit(
@@ -359,28 +361,29 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                         panel->m_fileProgress = nullptr;
                     }
                     const QString summary =
-                        QStringLiteral("复制完成：成功 %1，失败 %2。%3")
+                        QStringLiteral("Copy complete: %1 succeeded, %2 failed.%3")
                             .arg(state->copied)
                             .arg(state->failures.size())
                             .arg(state->failures.isEmpty()
                                      ? QString()
                                      : QStringLiteral("\n") + state->failures.join("\n"));
                     if (state->cancelled)
-                        QMessageBox::warning(panel, QStringLiteral("复制"),
-                                             QStringLiteral("复制已取消。\n") + summary);
+                        QMessageBox::warning(panel, QStringLiteral("Copy"),
+                                             QStringLiteral("Copy cancelled.
+") + summary);
                     else if (state->failures.isEmpty())
                         emit panel->browseStatusChanged(
-                            QStringLiteral("已成功复制 %1 个文件").arg(state->copied));
+                            QStringLiteral("Successfully copied %1 files").arg(state->copied));
                     else
-                        QMessageBox::warning(panel, QStringLiteral("复制"), summary);
+                        QMessageBox::warning(panel, QStringLiteral("Copy"), summary);
                 },
                 Qt::QueuedConnection);
         },
         onProgress);
 
     if (!m_fileOperationTask)
-        failFileOperationQueue(QStringLiteral("复制"),
-                               QStringLiteral("复制无法排队：后台任务队列已满。"));
+        failFileOperationQueue(QStringLiteral("Copy"),
+                               QStringLiteral("Cannot queue copy: background task queue is full."));
 }
 
 void ThumbnailPanel::renameSelected()
@@ -391,8 +394,8 @@ void ThumbnailPanel::renameSelected()
     const QString oldPath = paths.first();
     const QFileInfo fi(oldPath);
     QInputDialog dialog(this);
-    dialog.setWindowTitle(tr("重命名"));
-    dialog.setLabelText(tr("新文件名:"));
+    dialog.setWindowTitle(tr("Rename"));
+    dialog.setLabelText(tr("New file name:"));
     dialog.setTextValue(fi.fileName());
     if (auto *lineEdit = dialog.findChild<QLineEdit *>())
     {
@@ -407,13 +410,13 @@ void ThumbnailPanel::renameSelected()
     const QString blocked = renameBlockedReason(fi.absolutePath(), fi.fileName(), newName);
     if (!blocked.isEmpty())
     {
-        QMessageBox::warning(this, QStringLiteral("重命名失败"), blocked);
+        QMessageBox::warning(this, QStringLiteral("Rename failed"), blocked);
         return;
     }
     const QString newSuffix = QFileInfo(newName).suffix();
     if (fi.suffix().compare(newSuffix, Qt::CaseInsensitive) != 0 &&
-        QMessageBox::question(this, QStringLiteral("重命名"),
-                              QStringLiteral("更改扩展名可能导致文件无法打开。仍要继续吗？"),
+        QMessageBox::question(this, QStringLiteral("Rename"),
+                              QStringLiteral("Changing the extension may prevent the file from opening. Continue anyway?"),
                               QMessageBox::Yes | QMessageBox::No,
                               QMessageBox::No) != QMessageBox::Yes)
         return;
@@ -426,7 +429,7 @@ void ThumbnailPanel::renameSelected()
                                                        newPath.toUtf8().toStdString());
         if (!m_cmdStack->execute(std::move(cmd)))
         {
-            QMessageBox::warning(this, "重命名失败",
+            QMessageBox::warning(this, "Rename failed",
                                  mviewer::ui::fileOpErrorZh(m_cmdStack->lastError()));
             return;
         }
@@ -438,7 +441,7 @@ void ThumbnailPanel::renameSelected()
         cmd->execute();
         if (!cmd->lastError().empty())
         {
-            QMessageBox::warning(this, tr("重命名失败"),
+            QMessageBox::warning(this, tr("Rename failed"),
                                  mviewer::ui::fileOpErrorZh(cmd->lastError()));
             return;
         }
@@ -476,10 +479,10 @@ void ThumbnailPanel::moveToTrashSelected()
     if (QSettings().value(QStringLiteral("confirmDelete"), true).toBool())
     {
         const QString prompt = paths.size() == 1
-                                   ? tr("确定将此文件移到回收站？")
-                                   : tr("确定将 %1 个文件移到回收站？").arg(paths.size());
+                                   ? tr("Are you sure you want to move this file to the Recycle Bin?")
+                                   : tr("Are you sure you want to move %1 files to the Recycle Bin?").arg(paths.size());
         const auto answer = QMessageBox::question(
-            this, tr("删除确认"), prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            this, tr("Delete confirmation"), prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
     }
@@ -488,7 +491,7 @@ void ThumbnailPanel::moveToTrashSelected()
     const QString trashDir = mviewerTrashDirectory();
     if (trashDir.isEmpty() || !QDir().mkpath(trashDir))
     {
-        QMessageBox::warning(this, tr("删除失败"), tr("无法创建回收目录。"));
+        QMessageBox::warning(this, tr("Delete failed"), tr("Unable to create the recycle directory."));
         return;
     }
 
@@ -496,7 +499,7 @@ void ThumbnailPanel::moveToTrashSelected()
     auto cmd =
         std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
     cmd->setSystemTrash(&moveToSystemTrash);
-    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("删除"));
+    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("Delete"));
 }
 
 void ThumbnailPanel::openTrashFolder()
@@ -517,7 +520,7 @@ void ThumbnailPanel::openTrashFolder()
     const QString trashDir = mviewerTrashDirectory();
     if (trashDir.isEmpty())
     {
-        QMessageBox::warning(this, tr("回收站"), tr("无法打开系统回收站。"));
+        QMessageBox::warning(this, tr("Recycle Bin"), tr("Cannot open the system Recycle Bin."));
         return;
     }
     QDir().mkpath(trashDir);
@@ -545,7 +548,7 @@ void ThumbnailPanel::moveSelectedTo()
         return;
 
     auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths), dir.toUtf8().toStdString());
-    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("移动"));
+    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("Move"));
 }
 
 void ThumbnailPanel::revealSelected()
@@ -573,8 +576,8 @@ void ThumbnailPanel::batchAnalyzeExport()
         paths = visiblePaths();
     if (paths.isEmpty())
     {
-        QMessageBox::information(this, tr("批量分析导出"),
-                                 tr("请先选择图片，或打开一个已过滤的目录。"));
+        QMessageBox::information(this, tr("Batch Analysis Export"),
+                                 tr("Please select an image first, or open a filtered directory."));
         return;
     }
 
@@ -582,7 +585,7 @@ void ThumbnailPanel::batchAnalyzeExport()
     const std::vector<std::string> ids = reg.availableAnalyzers();
     if (ids.empty())
     {
-        QMessageBox::warning(this, tr("批量分析导出"), tr("当前没有可用的分析器。"));
+        QMessageBox::warning(this, tr("Batch Analysis Export"), tr("No analyzer is currently available."));
         return;
     }
 
@@ -595,7 +598,7 @@ void ThumbnailPanel::batchAnalyzeExport()
     }
     bool ok = false;
     const QString chosen =
-        QInputDialog::getItem(this, tr("批量分析导出"), tr("选择分析器:"), labels, 0, false, &ok);
+        QInputDialog::getItem(this, tr("Batch Analysis Export"), tr("Select an analyzer:"), labels, 0, false, &ok);
     if (!ok || chosen.isEmpty())
         return;
     const int chosenIdx = labels.indexOf(chosen);
@@ -603,7 +606,7 @@ void ThumbnailPanel::batchAnalyzeExport()
         return;
     const std::string analyzerId = ids[static_cast<size_t>(chosenIdx)];
 
-    const QString out = QFileDialog::getSaveFileName(this, tr("导出分析结果"), QString(),
+    const QString out = QFileDialog::getSaveFileName(this, tr("Export analysis results"), QString(),
                                                      tr("CSV (*.csv);;JSON (*.json)"));
     if (out.isEmpty())
         return;
@@ -616,7 +619,7 @@ void ThumbnailPanel::ensureBatchProgressDialog()
 {
     if (m_batchProgress)
         return;
-    m_batchProgress = new QProgressDialog(tr("正在批量分析..."), tr("取消"), 0, 100, this);
+    m_batchProgress = new QProgressDialog(tr("Running batch analysis..."), tr("Cancel"), 0, 100, this);
     m_batchProgress->setWindowModality(Qt::WindowModal);
     m_batchProgress->setAutoClose(false);
     m_batchProgress->setMinimumDuration(0);
@@ -636,17 +639,17 @@ void ThumbnailPanel::finishBatchAnalyzeExport(bool cancelled, bool writeOk, size
         m_batchProgress->close();
     if (cancelled)
     {
-        QMessageBox::information(this, tr("批量分析导出"), tr("批量分析已取消。"));
+        QMessageBox::information(this, tr("Batch Analysis Export"), tr("Batch analysis cancelled."));
     }
     else if (!writeOk)
     {
-        QMessageBox::critical(this, tr("批量分析导出"), tr("无法写入：%1").arg(output));
+        QMessageBox::critical(this, tr("Batch Analysis Export"), tr("Cannot write: %1").arg(output));
     }
     else
     {
         QMessageBox::information(
-            this, tr("批量分析导出"),
-            tr("已导出 %1 条结果 → %2").arg(static_cast<qlonglong>(resultCount)).arg(output));
+            this, tr("Batch Analysis Export"),
+            tr("Exported %1 results → %2").arg(static_cast<qlonglong>(resultCount)).arg(output));
     }
 }
 
@@ -656,7 +659,7 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
 {
     if (m_batchTask)
     {
-        QMessageBox::information(this, tr("批量分析导出"), tr("已有批量分析正在运行。"));
+        QMessageBox::information(this, tr("Batch Analysis Export"), tr("A batch analysis is already running."));
         return;
     }
 
@@ -767,7 +770,7 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
     if (!m_batchTask)
     {
         m_batchProgress->close();
-        QMessageBox::warning(this, tr("批量分析导出"), tr("后台任务被调度器拒绝。"));
+        QMessageBox::warning(this, tr("Batch Analysis Export"), tr("Background task was rejected by the scheduler."));
     }
 }
 

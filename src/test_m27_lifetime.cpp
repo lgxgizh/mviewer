@@ -259,7 +259,7 @@ void testViewerABA()
     pump(1500);
     const QString title = viewer.windowTitle();
     CHECK(title.contains("img_00000"), "newest generation (A) delivered to the viewer");
-    CHECK(!title.contains("无法加载"), "viewer shows a loaded image, not a failure");
+    CHECK(!title.contains("Unable to Load"), "viewer shows a loaded image, not a failure");
     pump(1000);
     CHECK(viewer.windowTitle().contains("img_00000"), "no stale overwrite after settlement");
 
@@ -434,7 +434,7 @@ void testRejectionReachesTerminalState()
         viewer.resize(400, 300);
         viewer.setImage("C:/definitely/missing/viewer.png");
         pump(300);
-        CHECK(viewer.windowTitle().contains("无法加载"),
+        CHECK(viewer.windowTitle().contains("Unable to Load"),
               "rejected viewer request reaches the failure title (terminal state)");
         sched.resume(PoolType::DecodePool);
     }

@@ -419,12 +419,12 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         // when panes already show a prior pair, keep them visible (stale-
         // while-revalidate) instead of blanking to the full-page spinner.
         if (m_compareLoadingLabel)
-            m_compareLoadingLabel->setText(tr("正在加载 %1 张图片…").arg(requested));
+            m_compareLoadingLabel->setText(tr("Loading %1 images…").arg(requested));
         const bool softKeepGrid = m_engine.imageCount() > 0;
         m_softPairReload = softKeepGrid;
         if (softKeepGrid)
         {
-            showCompareStatus(tr("正在加载下一组…"), 2500);
+            showCompareStatus(tr("Loading next set…"), 2500);
             applySoftReloadPlaceholders(stdPaths);
         }
         else
@@ -507,8 +507,10 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     if (m_engine.imageCount() == 0 && m_compareLoadingLabel)
     {
         m_compareLoadingLabel->setText(
-            failedCount > 0 ? tr("没有可用的图片。\n请检查文件是否存在、完整且受支持。")
-                            : tr("没有可用的图片。\n请返回浏览器选择图片。"));
+            failedCount > 0 ? tr("No images available.
+Check that the files exist, are complete, and are supported.")
+                            : tr("No images available.
+Return to Browse and select images."));
     }
 
     // M24 (B#7): failed loads are dropped by the engine — tell the user why
@@ -523,7 +525,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     if (failedCount > 0)
     {
         emit loadWarning(
-            tr("%1 张图片无法加载（文件损坏、缺失或不支持），已保留 %2 张可用的进行对比。")
+            tr("%1 images could not be loaded (corrupt, missing, or unsupported). %2 usable images were kept for comparison.")
                 .arg(failedCount)
                 .arg(loaded));
     }
@@ -673,7 +675,7 @@ void CompareWorkspace::updateLayoutStatus()
     if (!m_layoutStatusLabel)
         return;
     const auto layout = m_engine.layout();
-    m_layoutStatusLabel->setText(tr("%1 行×%2 列").arg(layout.rows).arg(layout.cols));
+    m_layoutStatusLabel->setText(tr("%1 rows × %2 columns").arg(layout.rows).arg(layout.cols));
 }
 
 void CompareWorkspace::onSideToggled(bool on)
@@ -734,7 +736,7 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
         m_focusBtn->setChecked(locking);
     }
     if (m_focusLabel)
-        m_focusLabel->setText(locking ? tr("基准: %1").arg(newFocus + 1) : tr("基准: —"));
+        m_focusLabel->setText(locking ? tr("Reference: %1").arg(newFocus + 1) : tr("Reference: —"));
 
     // Resolve the actual compared pane before updating the global SelectionModel.
     // The navigation pool may contain images not present in a non-contiguous pair.

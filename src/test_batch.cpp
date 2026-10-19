@@ -601,7 +601,7 @@ int main(int argc, char *argv[])
 
     // ── Test 15: a missing Chinese output directory is created ──
     {
-        const QString dir = QDir::tempPath() + QStringLiteral("/mviewer_批处理_输出_") +
+        const QString dir = QDir::tempPath() + QStringLiteral("/mviewer_batch_output_") +
                             QUuid::createUuid().toString(QUuid::WithoutBraces);
         const QString srcDir = makeTempDir("mviewer_batch_cnsrc_");
         const QString input = writePngIn(srcDir, "cn.png", qRgb(4, 5, 6));

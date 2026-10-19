@@ -439,15 +439,15 @@ int main()
     // converted to native filesystem paths only at the I/O edge. Include
     // spaces, CJK, and an emoji in both directory and filename.
     const QString unicodeDir =
-        QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_路径 closure 😀/嵌套 目录"));
+        QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_path closure 😀/nested directory"));
     QDir().mkpath(unicodeDir);
-    const QString unicodeImage = QDir(unicodeDir).filePath(QStringLiteral("测试 image 😀.png"));
+    const QString unicodeImage = QDir(unicodeDir).filePath(QStringLiteral("test image 😀.png"));
     QImage unicodeFixture(8, 8, QImage::Format_RGB32);
     unicodeFixture.fill(Qt::blue);
     CHECK(unicodeFixture.save(unicodeImage, "PNG"), "Unicode fixture is written");
     const std::string unicodePath = unicodeImage.toUtf8().toStdString();
     const std::string unicodeRatings =
-        QDir(unicodeDir).filePath(QStringLiteral("评分 状态.txt")).toUtf8().toStdString();
+        QDir(unicodeDir).filePath(QStringLiteral("rating status.txt")).toUtf8().toStdString();
     const std::string roundTrip = pathToUtf8(pathFromUtf8(unicodePath));
     CHECK(roundTrip == unicodePath, "UTF-8 path round-trips without locale loss");
     s.setFilePath(unicodeRatings);
@@ -471,7 +471,7 @@ int main()
     CHECK(!QFileInfo::exists(sidecarPath), "Unicode sidecar removal reaches the native file");
     CHECK(!SidecarStore::instance().readSidecar(unicodePath + ".missing"),
           "missing Unicode sidecar is a handled failure");
-    QDir(QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_路径 closure 😀")))
+    QDir(QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_path closure 😀")))
         .removeRecursively();
 
 #ifdef _WIN32

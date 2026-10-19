@@ -76,7 +76,7 @@ QStackedLayout *CompareWorkspace::buildCanvasPage()
     loadingLay->setContentsMargins(24, 24, 24, 24);
     loadingLay->setSpacing(12);
     loadingLay->addStretch(1);
-    m_compareLoadingLabel = new QLabel(tr("正在加载比较图片…"), m_compareLoadingPage);
+    m_compareLoadingLabel = new QLabel(tr("Loading comparison images…"), m_compareLoadingPage);
     m_compareLoadingLabel->setObjectName("compareLoadingLabel");
     m_compareLoadingLabel->setAlignment(Qt::AlignCenter);
     loadingLay->addWidget(m_compareLoadingLabel);
@@ -463,7 +463,7 @@ void CompareWorkspace::zoomActual()
     if (currentScale > 0.0)
     {
         applyAnchorZoom(0, 0.0, 0.0, 1.0 / currentScale);
-        showCompareStatus(tr("视图缩放: 100% (原始大小)"));
+        showCompareStatus(tr("View zoom: 100% (original size)"));
         if (m_compareCanvas)
             m_compareCanvas->update();
         update();

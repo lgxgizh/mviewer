@@ -187,15 +187,15 @@ int main(int argc, char **argv)
         const QString started = w.statusBar()->currentMessage();
         printf("  R1: status right after call: '%s'\n", started.toUtf8().constData());
         std::fflush(stdout);
-        CHECK(started.contains(QStringLiteral("正在打开工作区")),
+        CHECK(started.contains(QStringLiteral("Opening workspace")),
               "R1: the async open announces itself immediately");
-        CHECK(!started.contains(QStringLiteral("工作区已打开")),
+        CHECK(!started.contains(QStringLiteral("Workspace Opened")),
               "R1: the restore is NOT applied synchronously (async worker path)");
         CHECK(waitTrue(
                   [&]
                   {
                       return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("工作区已打开"));
+                          QStringLiteral("Workspace Opened"));
                   },
                   30000),
               "R1: the parsed workspace lands on a later UI delivery");
@@ -216,7 +216,7 @@ int main(int argc, char **argv)
         CHECK(
             waitTrue(
                 [&]
-                { return w.statusBar()->currentMessage().contains(QStringLiteral("项目已打开")); },
+                { return w.statusBar()->currentMessage().contains(QStringLiteral("Project already open")); },
                 30000),
             "R1b: the project's embedded workspace restores");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
@@ -234,7 +234,7 @@ int main(int argc, char **argv)
                   [&]
                   {
                       return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("工作区已打开"));
+                          QStringLiteral("Workspace Opened"));
                   },
                   30000),
               "R2: baseline workspace applied");
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
                 [&]
                 {
                     return w.statusBar()->currentMessage().contains(
-                        QStringLiteral("打开工作区失败"));
+                        QStringLiteral("Failed to Open Workspace"));
                 },
                 15000);
             closer.stop();
@@ -264,7 +264,7 @@ int main(int argc, char **argv)
               "R2: a missing file does not change the current directory");
         CHECK(wm && wm->comparedImages() == cmpBefore,
               "R2: a missing file does not change the compare image set");
-        CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("打开工作区失败")),
+        CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("Failed to Open Workspace")),
               "R2: the failure terminal is reported (session untouched)");
 
         // Corrupt file: same transactional contract.
@@ -284,7 +284,7 @@ int main(int argc, char **argv)
                 [&]
                 {
                     return w.statusBar()->currentMessage().contains(
-                        QStringLiteral("打开工作区失败"));
+                        QStringLiteral("Failed to Open Workspace"));
                 },
                 15000);
             closer.stop();
@@ -309,7 +309,7 @@ int main(int argc, char **argv)
                   [&]
                   {
                       return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("工作区已打开"));
+                          QStringLiteral("Workspace Opened"));
                   },
                   30000),
               "R3: the final open lands");

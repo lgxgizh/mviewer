@@ -104,19 +104,19 @@ class ScopeWidget : public QWidget
 AnalysisOverlayDialog::AnalysisOverlayDialog(const QImage &image, QWidget *parent)
     : QDialog(parent), m_src(image)
 {
-    setWindowTitle(tr("分析叠加层 / 示波器"));
+    setWindowTitle(tr("Analysis Overlay / Scope"));
     resize(760, 560);
     QSettings s;
 
     m_mode = new QComboBox;
-    m_mode->addItem(tr("无"), 0);
-    m_mode->addItem(tr("过曝/欠曝斑马线"), 1);
-    m_mode->addItem(tr("伪彩色"), 2);
-    m_mode->addItem(tr("R 通道"), 3);
-    m_mode->addItem(tr("G 通道"), 4);
-    m_mode->addItem(tr("B 通道"), 5);
-    m_mode->addItem(tr("Y 亮度"), 6);
-    m_mode->addItem(tr("V 明度"), 7);
+    m_mode->addItem(tr("None"), 0);
+    m_mode->addItem(tr("Over/underexposure zebra"), 1);
+    m_mode->addItem(tr("False Color"), 2);
+    m_mode->addItem(tr("R Channel"), 3);
+    m_mode->addItem(tr("G Channel"), 4);
+    m_mode->addItem(tr("B Channel"), 5);
+    m_mode->addItem(tr("Y Luminance"), 6);
+    m_mode->addItem(tr("V Value"), 7);
     m_mode->setCurrentIndex(m_mode->findData(s.value("defaultAnalysisOverlay", 0).toInt()));
 
     m_threshold = new QSlider(Qt::Horizontal);
@@ -136,9 +136,9 @@ AnalysisOverlayDialog::AnalysisOverlayDialog(const QImage &image, QWidget *paren
     top->addWidget(m_scope);
 
     auto *ctrl = new QHBoxLayout;
-    ctrl->addWidget(new QLabel(tr("叠加层：")));
+    ctrl->addWidget(new QLabel(tr("Overlay:")));
     ctrl->addWidget(m_mode);
-    ctrl->addWidget(new QLabel(tr("斑马线阈值：")));
+    ctrl->addWidget(new QLabel(tr("Zebra threshold:")));
     ctrl->addWidget(m_threshold);
     ctrl->addStretch(1);
 

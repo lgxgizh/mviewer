@@ -31,25 +31,25 @@ SearchPanel::SearchPanel(QWidget *parent)
     // ── top bar: search input + reindex button ──────────────────────
     auto *topBar = new QHBoxLayout;
     m_searchEdit = new QLineEdit;
-    m_searchEdit->setPlaceholderText("搜索文件名、元数据、分析结果...");
+    m_searchEdit->setPlaceholderText("Search filename, metadata, analysis…");
     m_searchEdit->setClearButtonEnabled(true);
     topBar->addWidget(m_searchEdit);
 
     m_reindexBtn = new QPushButton("重建索引");
-    m_reindexBtn->setToolTip("重新扫描所有图像构建搜索索引");
+    m_reindexBtn->setToolTip("Rescan all images to build the search index");
     m_reindexBtn->setFixedWidth(72);
     topBar->addWidget(m_reindexBtn);
     mainLayout->addLayout(topBar);
 
     // ── scope checkboxes ────────────────────────────────────────────
     auto *scopeBar = new QHBoxLayout;
-    m_chkFilename = new QCheckBox("文件名");
+    m_chkFilename = new QCheckBox("File Name");
     m_chkFilename->setChecked(true);
-    m_chkMetadata = new QCheckBox("元数据");
+    m_chkMetadata = new QCheckBox("Metadata");
     m_chkMetadata->setChecked(true);
     m_chkAnalysis = new QCheckBox("分析结果");
     m_chkAnalysis->setChecked(true);
-    m_chkPaths = new QCheckBox("路径");
+    m_chkPaths = new QCheckBox("Path");
     m_chkPaths->setChecked(false);
     scopeBar->addWidget(m_chkFilename);
     scopeBar->addWidget(m_chkMetadata);
@@ -64,7 +64,7 @@ SearchPanel::SearchPanel(QWidget *parent)
 
     // ── result table ────────────────────────────────────────────────
     m_table = new QTableWidget(0, 3);
-    m_table->setHorizontalHeaderLabels({"类型", "文件名", "匹配片段"});
+    m_table->setHorizontalHeaderLabels({"Type", "File Name", "匹配片段"});
     m_table->horizontalHeader()->setStretchLastSection(true);
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -231,7 +231,7 @@ void SearchPanel::performSearch()
                     self->m_table->setRowCount(n);
                     if (n == 0)
                         self->m_countLabel->setText(
-                            "未找到匹配结果 — 试试其他关键词或勾选更多搜索范围");
+                            "No matching results — try other keywords or check more search scopes");
                     else
                         self->m_countLabel->setText(
                             QString("找到 %1 个结果（点击列头可排序）").arg(n));
@@ -242,7 +242,7 @@ void SearchPanel::performSearch()
         });
     if (!m_searchTask)
     {
-        m_countLabel->setText("搜索队列繁忙，请稍后重试");
+        m_countLabel->setText("Search queue busy, try again later");
     }
 }
 
@@ -308,13 +308,13 @@ QString SearchPanel::matchTypeLabel(mviewer::domain::SearchMatch::Type type) con
     switch (type)
     {
     case mviewer::domain::SearchMatch::Type::Filename:
-        return "文件名";
+        return "File Name";
     case mviewer::domain::SearchMatch::Type::Metadata:
-        return "元数据";
+        return "Metadata";
     case mviewer::domain::SearchMatch::Type::Analysis:
         return "分析结果";
     case mviewer::domain::SearchMatch::Type::Path:
-        return "路径";
+        return "Path";
     }
     return {};
 }

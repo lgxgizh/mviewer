@@ -56,8 +56,8 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
     : QDialog(parent), m_filePath(filePath), m_debounceTimer(new QTimer(this))
 {
     setWindowTitle(filePath.isEmpty()
-                       ? tr("USM 锐化前后对比")
-                       : tr("USM 锐化前后对比 - %1").arg(QFileInfo(filePath).fileName()));
+                       ? tr("USM sharpening before/after comparison")
+                       : tr("USM Sharpen Before/After - %1").arg(QFileInfo(filePath).fileName()));
     resize(1200, 780);
     setWindowFlags(windowFlags() | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
 
@@ -153,14 +153,14 @@ QWidget *UsmCompareDialog::createTopToolBar()
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(8);
 
-    m_btnFit = new QPushButton(tr("适应窗口 (0)"), bar);
+    m_btnFit = new QPushButton(tr("Fit window (0)"), bar);
     m_btn100 = new QPushButton(tr("100% (1)"), bar);
     m_btn200 = new QPushButton(tr("200% (2)"), bar);
-    m_syncCheck = new QCheckBox(tr("同步缩放/平移"), bar);
+    m_syncCheck = new QCheckBox(tr("Synchronize zoom/pan"), bar);
     m_syncCheck->setChecked(true);
-    m_btnHoldCompare = new QPushButton(tr("按住看原图 (Space)"), bar);
-    m_btnCopy = new QPushButton(tr("复制结果 (Ctrl+C)"), bar);
-    m_btnSave = new QPushButton(tr("另存为... (Ctrl+S)"), bar);
+    m_btnHoldCompare = new QPushButton(tr("Hold to View Original (Space)"), bar);
+    m_btnCopy = new QPushButton(tr("Copy result (Ctrl+C)"), bar);
+    m_btnSave = new QPushButton(tr("Save As... (Ctrl+S)"), bar);
 
     layout->addWidget(m_btnFit);
     layout->addWidget(m_btn100);
@@ -181,7 +181,7 @@ QWidget *UsmCompareDialog::createCenterCanvas()
     auto *leftLayout = new QVBoxLayout(leftPane);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(4);
-    auto *lblLeft = new QLabel(tr("原图 (Before)"), leftPane);
+    auto *lblLeft = new QLabel(tr("Original (Before)"), leftPane);
     lblLeft->setAlignment(Qt::AlignCenter);
     lblLeft->setStyleSheet(QStringLiteral("font-weight: bold; background: #2b2b2b; color: #e0e0e0; "
                                           "padding: 4px; border-radius: 2px;"));
@@ -192,7 +192,7 @@ QWidget *UsmCompareDialog::createCenterCanvas()
     auto *rightLayout = new QVBoxLayout(rightPane);
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(4);
-    auto *lblRight = new QLabel(tr("USM 锐化后 (After)"), rightPane);
+    auto *lblRight = new QLabel(tr("USM sharpened (After)"), rightPane);
     lblRight->setAlignment(Qt::AlignCenter);
     lblRight->setStyleSheet(
         QStringLiteral("font-weight: bold; background: #2b2b2b; color: #4fc3f7; "
@@ -215,13 +215,13 @@ QWidget *UsmCompareDialog::createBottomControls()
     grid->setHorizontalSpacing(10);
     grid->setVerticalSpacing(6);
 
-    auto *lblPreset = new QLabel(tr("预设模板:"), controls);
+    auto *lblPreset = new QLabel(tr("Preset template:"), controls);
     m_comboPreset = new QComboBox(controls);
-    m_comboPreset->addItems({tr("标准通用锐化"), tr("轻度细节唤醒"), tr("人像肤质保护"),
-                             tr("风景建筑清晰度"), tr("强力边缘增强"), tr("自定义")});
+    m_comboPreset->addItems({tr("Standard General Sharpen"), tr("Light detail boost"), tr("Portrait Skin Protection"),
+                             tr("Landscape and architecture clarity"), tr("Strong edge enhancement"), tr("Custom")});
     m_comboPreset->setCurrentIndex(0);
 
-    auto *lblAmount = new QLabel(tr("数量 (Amount):"), controls);
+    auto *lblAmount = new QLabel(tr("Amount (Amount):"), controls);
     m_sliderAmount = new QSlider(Qt::Horizontal, controls);
     m_sliderAmount->setRange(0, 500);
     m_sliderAmount->setValue(150);
@@ -230,7 +230,7 @@ QWidget *UsmCompareDialog::createBottomControls()
     m_spinAmount->setValue(150);
     m_spinAmount->setSuffix(QStringLiteral("%"));
 
-    auto *lblRadius = new QLabel(tr("半径 (Radius):"), controls);
+    auto *lblRadius = new QLabel(tr("Radius (Radius):"), controls);
     m_sliderRadius = new QSlider(Qt::Horizontal, controls);
     m_sliderRadius->setRange(1, 200);
     m_sliderRadius->setValue(10);
@@ -241,7 +241,7 @@ QWidget *UsmCompareDialog::createBottomControls()
     m_spinRadius->setValue(1.0);
     m_spinRadius->setSuffix(QStringLiteral(" px"));
 
-    auto *lblThreshold = new QLabel(tr("阈值 (Threshold):"), controls);
+    auto *lblThreshold = new QLabel(tr("Threshold:"), controls);
     m_sliderThreshold = new QSlider(Qt::Horizontal, controls);
     m_sliderThreshold->setRange(0, 255);
     m_sliderThreshold->setValue(0);
@@ -249,10 +249,10 @@ QWidget *UsmCompareDialog::createBottomControls()
     m_spinThreshold->setRange(0, 255);
     m_spinThreshold->setValue(0);
 
-    m_checkLumaOnly = new QCheckBox(tr("仅亮度通道锐化 (Luma Only)"), controls);
+    m_checkLumaOnly = new QCheckBox(tr("Sharpen Luma Channel Only (Luma Only)"), controls);
     m_checkLumaOnly->setChecked(true);
-    m_btnReset = new QPushButton(tr("重置"), controls);
-    m_btnApply = new QPushButton(tr("应用锐化"), controls);
+    m_btnReset = new QPushButton(tr("Reset"), controls);
+    m_btnApply = new QPushButton(tr("Apply sharpen"), controls);
 
     grid->addWidget(lblPreset, 0, 0);
     grid->addWidget(m_comboPreset, 0, 1);
@@ -282,7 +282,7 @@ QWidget *UsmCompareDialog::createStatusBarWidget()
     layout->setSpacing(12);
 
     m_lblImageInfo = new QLabel(statusWidget);
-    m_lblCalcStatus = new QLabel(tr("就绪"), statusWidget);
+    m_lblCalcStatus = new QLabel(tr("Ready"), statusWidget);
     m_lblMetrics = new QLabel(statusWidget);
 
     layout->addWidget(m_lblImageInfo);
@@ -418,7 +418,7 @@ void UsmCompareDialog::scheduleSharpen()
     params.threshold = m_spinThreshold->value();
     params.lumaOnly = m_checkLumaOnly->isChecked();
 
-    m_lblCalcStatus->setText(tr("正在计算锐化..."));
+    m_lblCalcStatus->setText(tr("Calculating sharpening..."));
 
     QPointer<UsmCompareDialog> guard(this);
     m_activeTask = TaskScheduler::instance().submit(
@@ -465,7 +465,7 @@ void UsmCompareDialog::scheduleSharpen()
 void UsmCompareDialog::updateStatusInfo(qint64 elapsedMs,
                                         const mviewer::core::UsmDiffSummary &summary)
 {
-    m_lblCalcStatus->setText(tr("计算完成 (耗时: %1 ms)").arg(elapsedMs));
+    m_lblCalcStatus->setText(tr("Calculation complete (time: %1 ms)").arg(elapsedMs));
     m_lblMetrics->setText(QString("PSNR: %1 dB | SSIM: %2 | Δ均值: %3 | Δ最大: %4 | 变化像素: %5%")
                               .arg(summary.psnr >= 100.0 ? QStringLiteral("∞")
                                                          : QString::number(summary.psnr, 'f', 2))
@@ -487,7 +487,7 @@ void UsmCompareDialog::copySharpenedToClipboard()
     if (m_sharpenedQImage.isNull())
         return;
     QApplication::clipboard()->setImage(m_sharpenedQImage);
-    m_lblCalcStatus->setText(tr("已复制锐化结果到剪贴板"));
+    m_lblCalcStatus->setText(tr("Sharpened result copied to clipboard"));
 }
 
 void UsmCompareDialog::saveSharpenedAs()
@@ -499,7 +499,7 @@ void UsmCompareDialog::saveSharpenedAs()
     const QString defaultName =
         fi.dir().filePath(fi.baseName() + "_usm." + (fi.suffix().isEmpty() ? "png" : fi.suffix()));
     const QString savePath =
-        QFileDialog::getSaveFileName(this, tr("另存为锐化图像"), defaultName,
+        QFileDialog::getSaveFileName(this, tr("Save As Sharpened Image"), defaultName,
                                      tr("Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"));
     if (savePath.isEmpty())
         return;
@@ -517,9 +517,9 @@ void UsmCompareDialog::saveSharpenedAs()
     }
     const bool ok = Encoder::encode(m_sharpenedData, savePath.toStdString(), params);
     if (ok)
-        m_lblCalcStatus->setText(tr("保存成功: %1").arg(QFileInfo(savePath).fileName()));
+        m_lblCalcStatus->setText(tr("Save successful: %1").arg(QFileInfo(savePath).fileName()));
     else
-        QMessageBox::warning(this, tr("保存失败"), tr("无法将图像保存至: %1").arg(savePath));
+        QMessageBox::warning(this, tr("Save failed"), tr("Unable to save the image to: %1").arg(savePath));
 }
 
 void UsmCompareDialog::zoomFit()

@@ -37,7 +37,7 @@ QWidget *makeCropPanel(QSpinBox *&x, QSpinBox *&y, QSpinBox *&w, QSpinBox *&h)
 {
     auto *panel = new QWidget;
     panel->setObjectName(QStringLiteral("batchCropPanel"));
-    panel->setToolTip("按像素矩形裁剪；超出图像范围时自动裁到有效区域");
+    panel->setToolTip("Crop by pixel rectangle; clamp to the valid region when outside the image");
     auto *grid = new QGridLayout(panel);
     grid->setContentsMargins(0, 0, 0, 0);
     x = new QSpinBox;
@@ -79,9 +79,9 @@ QWidget *makeWatermarkPanel(QLineEdit *&text, QComboBox *&pos, QDoubleSpinBox *&
     text = new QLineEdit;
     text->setPlaceholderText("© 2025");
     row1->addWidget(text, 1);
-    row1->addWidget(new QLabel("位置:"));
+    row1->addWidget(new QLabel("Position:"));
     pos = new QComboBox;
-    pos->addItems({"左上", "右上", "左下", "右下", "居中", "平铺"});
+    pos->addItems({"Top Left", "Top right", "Bottom Left", "Bottom Right", "Center", "Tile"});
     pos->setCurrentIndex(4);
     row1->addWidget(pos);
     lay->addLayout(row1);
@@ -115,7 +115,7 @@ QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&out
     format = new QComboBox;
     format->addItems({"png", "jpg", "bmp", "webp"});
     fmtRow->addWidget(format);
-    fmtRow->addWidget(new QLabel("质量:"));
+    fmtRow->addWidget(new QLabel("Quality:"));
     quality = new QSpinBox;
     quality->setRange(1, 100);
     quality->setValue(90);
@@ -123,12 +123,12 @@ QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&out
     fmtRow->addStretch();
     lay->addLayout(fmtRow);
     auto *outputRow = new QHBoxLayout;
-    outputRow->addWidget(new QLabel("输出目录:"));
+    outputRow->addWidget(new QLabel("Output directory:"));
     outputDir = new QLineEdit;
     outputDir->setObjectName(QStringLiteral("batchOutputDir"));
-    outputDir->setPlaceholderText("(留空=原目录)");
+    outputDir->setPlaceholderText("(Leave empty = original directory)");
     outputRow->addWidget(outputDir, 1);
-    browseBtn = new QPushButton("浏览...");
+    browseBtn = new QPushButton("Browse...");
     outputRow->addWidget(browseBtn);
     lay->addLayout(outputRow);
     overwriteExisting = new QCheckBox("覆盖已存在的文件");

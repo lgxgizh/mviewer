@@ -375,7 +375,7 @@ void CompareWorkspace::rebuildCells()
         if (m_focusBtn)
             m_focusBtn->setChecked(false);
         if (m_focusLabel)
-            m_focusLabel->setText(tr("基准: —"));
+            m_focusLabel->setText(tr("Reference: —"));
     }
     buildCompareCells(n, m_engine.layout().cols);
 
@@ -539,19 +539,19 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
     SourceDisplayResult result;
     if (path.empty())
     {
-        result.errorText = QStringLiteral("源路径为空");
+        result.errorText = QStringLiteral("Source path is empty");
         return result;
     }
     const auto source = mviewer::core::SourceImage::open(path);
     if (!source)
     {
-        result.errorText = QStringLiteral("源格式不支持或元数据读取失败");
+        result.errorText = QStringLiteral("Source format not supported or metadata read failed");
         return result;
     }
     result.sourceSize = QSize(source->metadata().width, source->metadata().height);
     if (result.sourceSize.isEmpty())
     {
-        result.errorText = QStringLiteral("源尺寸不可用");
+        result.errorText = QStringLiteral("Source size unavailable");
         return result;
     }
 
@@ -570,7 +570,7 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
             QRect(displayedCovered.x, displayedCovered.y, displayedCovered.w, displayedCovered.h);
         if (!decoded.ok)
         {
-            result.errorText = QStringLiteral("有界显示解码不可用");
+            result.errorText = QStringLiteral("Bounded display decode unavailable");
             return result;
         }
         result.pixels = decoded.pixels;
@@ -603,7 +603,7 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
     const auto decoded = source->decodeLod(wantEdge);
     if (!decoded.ok)
     {
-        result.errorText = QStringLiteral("有界显示解码不可用");
+        result.errorText = QStringLiteral("Bounded display decode unavailable");
         return result;
     }
     result.pixels = decoded.pixels;
@@ -685,7 +685,7 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
         {
             if (idx >= static_cast<int>(paths.size()))
             {
-                recordFailure(idx, QStringLiteral("源路径为空"));
+                recordFailure(idx, QStringLiteral("Source path is empty"));
                 continue;
             }
             const SourceDisplayResult sourceResult =
@@ -704,7 +704,7 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
             return {};
         if (lod.isNull())
         {
-            recordFailure(idx, QStringLiteral("显示栅格为空"));
+            recordFailure(idx, QStringLiteral("Display grid is empty"));
             continue;
         }
         if (sourceDims.isEmpty())
@@ -729,7 +729,7 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
             return {};
         if (adjusted.isNull())
         {
-            recordFailure(idx, QStringLiteral("显示调整失败"));
+            recordFailure(idx, QStringLiteral("Display adjustment failed"));
             continue;
         }
         DisplayBatchResult::CellImage cell;
@@ -752,7 +752,7 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
             return {};
         if (cell.image.isNull())
         {
-            recordFailure(idx, QStringLiteral("显示格式转换失败"));
+            recordFailure(idx, QStringLiteral("Display format conversion failed"));
             continue;
         }
         result.cells.push_back(std::move(cell));

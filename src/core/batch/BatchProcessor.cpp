@@ -482,7 +482,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
 
     if (m_cancelled.load())
     {
-        result.errorMessage = "已取消";
+        result.errorMessage = "Cancelled";
         return result;
     }
 
@@ -499,7 +499,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     auto decodeRes = Decoder::decodeFullResult(inputPath);
     if (m_cancelled.load())
     {
-        result.errorMessage = "已取消";
+        result.errorMessage = "Cancelled";
         return result;
     }
     if (!decodeRes.isOk() || decodeRes.value().isNull())
@@ -519,7 +519,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     {
         if (m_cancelled.load())
         {
-            result.errorMessage = "已取消";
+            result.errorMessage = "Cancelled";
             return result;
         }
 

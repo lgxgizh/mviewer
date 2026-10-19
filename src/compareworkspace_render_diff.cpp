@@ -547,7 +547,9 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
         {
             view->setMetricBadge(
                 QString("P: %1 dB | S: %2").arg(ov.psnr, 0, 'f', 2).arg(ov.ssim, 0, 'f', 3));
-            view->setToolTip(tr("对比基准: 图 %1\nPSNR: %2 dB\nSSIM: %3")
+            view->setToolTip(tr("Reference: image %1
+PSNR: %2 dB
+SSIM: %3")
                                  .arg(r.baseIdx + 1)
                                  .arg(ov.psnr, 0, 'f', 2)
                                  .arg(ov.ssim, 0, 'f', 4));
@@ -574,28 +576,33 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
         if (!r.metricsValid)
         {
             text =
-                r.sizeMismatch ? tr("PSNR: —  SSIM: —\n(图像尺寸不一致)") : tr("PSNR: —  SSIM: —");
+                r.sizeMismatch ? tr("PSNR: —  SSIM: —
+(Image sizes differ)") : tr("PSNR: —  SSIM: —");
         }
         else
         {
             const QString psnrStr = QString::number(r.psnr, 'f', 2) + " dB";
             const QString ssimStr = QString::number(r.ssim, 'f', 4);
-            text = tr("PSNR: %1    SSIM: %2\n（图 %3 vs 图 %4）")
+            text = tr("PSNR: %1    SSIM: %2
+(Image %3 vs image %4)")
                        .arg(psnrStr, ssimStr)
                        .arg(r.baseIdx + 1)
                        .arg(r.targetIdx + 1);
             if (r.diffGain > 1.0)
-                text += tr("  [增益: %1x]").arg(r.diffGain, 0, 'f', 0);
+                text += tr("  [Gain: %1x]").arg(r.diffGain, 0, 'f', 0);
             if (r.aligned)
-                text += tr("\n对齐: (%1, %2)").arg(r.alignX).arg(r.alignY);
+                text += tr("
+Alignment: (%1, %2)").arg(r.alignX).arg(r.alignY);
             if (r.hasStats)
             {
-                text += tr("\n差异: %1%  均值 %2  峰值 %3")
+                text += tr("
+Diff: %1%  Mean %2  Peak %3")
                             .arg(r.stats.diffRatio * 100.0, 0, 'f', 2)
                             .arg(r.stats.meanDiff, 0, 'f', 2)
                             .arg(r.stats.maxDiff);
                 if (r.hasRoiStats)
-                    text += tr("\nROI差异: %1%  均值 %2  峰值 %3")
+                    text += tr("
+ROI diff: %1%  Mean %2  Peak %3")
                                 .arg(r.roiStats.diffRatio * 100.0, 0, 'f', 2)
                                 .arg(r.roiStats.meanDiff, 0, 'f', 2)
                                 .arg(r.roiStats.maxDiff);

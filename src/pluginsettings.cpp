@@ -22,7 +22,7 @@
 
 PluginSettings::PluginSettings(QWidget *parent) : QDialog(parent)
 {
-    setWindowTitle(tr("插件管理"));
+    setWindowTitle(tr("Plugin Manager"));
     resize(600, 420);
     setupUi();
     loadSettings();
@@ -41,22 +41,22 @@ void PluginSettings::setupUi()
     // ── Buttons ──
     auto *btnLayout = new QHBoxLayout();
 
-    m_scanBtn = new QPushButton(tr("重新扫描"), this);
-    m_scanBtn->setToolTip(tr("从搜索路径重新加载插件，并刷新分析器列表"));
+    m_scanBtn = new QPushButton(tr("Rescan"), this);
+    m_scanBtn->setToolTip(tr("Reload plugins from the search paths and refresh the analyzer list"));
     connect(m_scanBtn, &QPushButton::clicked, this, &PluginSettings::rescanPlugins);
     btnLayout->addWidget(m_scanBtn);
 
-    m_toggleBtn = new QPushButton(tr("启用 / 禁用"), this);
+    m_toggleBtn = new QPushButton(tr("Enable / Disable"), this);
     connect(m_toggleBtn, &QPushButton::clicked, this, &PluginSettings::onTogglePlugin);
     btnLayout->addWidget(m_toggleBtn);
 
     btnLayout->addStretch();
 
-    m_addBtn = new QPushButton(tr("添加搜索路径..."), this);
+    m_addBtn = new QPushButton(tr("Add Search Path..."), this);
     connect(m_addBtn, &QPushButton::clicked, this, &PluginSettings::onAddPluginPath);
     btnLayout->addWidget(m_addBtn);
 
-    m_browseBtn = new QPushButton(tr("浏览搜索目录..."), this);
+    m_browseBtn = new QPushButton(tr("Browse Search Directory..."), this);
     connect(m_browseBtn, &QPushButton::clicked, this, &PluginSettings::onBrowsePluginDir);
     btnLayout->addWidget(m_browseBtn);
 
@@ -64,7 +64,7 @@ void PluginSettings::setupUi()
 
     // ── Search path display ──
     auto *pathLayout = new QHBoxLayout();
-    pathLayout->addWidget(new QLabel(tr("插件搜索路径:"), this));
+    pathLayout->addWidget(new QLabel(tr("Plugin search path:"), this));
     m_searchPath = new QLineEdit(this);
     m_searchPath->setReadOnly(true);
     pathLayout->addWidget(m_searchPath);
@@ -110,11 +110,11 @@ void PluginSettings::refreshList()
 
     if (plugins.empty())
     {
-        auto *item = new QListWidgetItem(tr("(未检测到任何插件)"));
+        auto *item = new QListWidgetItem(tr("(No plugins detected)"));
         item->setFlags(Qt::NoItemFlags);
         m_list->addItem(item);
         if (m_statusLabel)
-            m_statusLabel->setText(tr("已加载 0 个插件"));
+            m_statusLabel->setText(tr("Loaded 0 plugins"));
         return;
     }
 
@@ -130,18 +130,18 @@ void PluginSettings::refreshList()
         // Build capability description from the entry's IDs
         QStringList caps;
         if (!p.analyzerId.empty())
-            caps << tr("分析器");
+            caps << tr("Analyzer");
         if (!p.decoderId.empty())
-            caps << tr("解码器");
+            caps << tr("Decoder");
         if (!p.exporterId.empty())
-            caps << tr("导出器");
+            caps << tr("Exporter");
         if (!p.importerId.empty())
-            caps << tr("导入器");
-        const QString capStr = caps.isEmpty() ? tr("通用") : caps.join(", ");
+            caps << tr("Importer");
+        const QString capStr = caps.isEmpty() ? tr("General") : caps.join(", ");
 
         QString label;
         if (disabled)
-            label = tr("[已禁用] %1 [%2]").arg(pluginName, capStr);
+            label = tr("[Disabled] %1 [%2]").arg(pluginName, capStr);
         else
         {
             ++enabled;
@@ -157,7 +157,7 @@ void PluginSettings::refreshList()
         m_list->addItem(item);
     }
     if (m_statusLabel)
-        m_statusLabel->setText(tr("已加载 %1 个插件（启用 %2）").arg(plugins.size()).arg(enabled));
+        m_statusLabel->setText(tr("Loaded %1 plugins (%2 enabled)").arg(plugins.size()).arg(enabled));
 }
 
 void PluginSettings::rescanPlugins()
@@ -179,7 +179,7 @@ void PluginSettings::rescanPlugins()
 
     refreshList();
     if (m_statusLabel)
-        m_statusLabel->setText(m_statusLabel->text() + tr(" · 本次扫描加载 %1 个").arg(total));
+        m_statusLabel->setText(m_statusLabel->text() + tr(" · %1 loaded this scan").arg(total));
     emit pluginsChanged();
 }
 
@@ -204,7 +204,7 @@ void PluginSettings::onTogglePlugin()
 
 void PluginSettings::onAddPluginPath()
 {
-    const QString dir = QFileDialog::getExistingDirectory(this, tr("添加插件搜索目录"));
+    const QString dir = QFileDialog::getExistingDirectory(this, tr("Add Plugin Search Directory"));
     if (dir.isEmpty())
         return;
 

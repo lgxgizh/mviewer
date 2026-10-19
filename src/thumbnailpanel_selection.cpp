@@ -63,14 +63,14 @@ void ThumbnailPanel::onSelectionChanged()
     else
     {
         m_compareBtn->setVisible(true);
-        m_compareBtn->setText(QStringLiteral("比较 (P)"));
+        m_compareBtn->setText(QStringLiteral("Compare (P)"));
         m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
         m_compareBtn->adjustSize();
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
         m_compareBtn->setToolTip(
-            canCompare ? QStringLiteral("将选中的 %1 张图片送入对比").arg(n)
-                       : QStringLiteral("需要选择 2-8 张图片才能比较（当前 %1 张）").arg(n));
+            canCompare ? QStringLiteral("Send the selected %1 images to comparison").arg(n)
+                       : QStringLiteral("Select 2-8 images to compare (currently %1)").arg(n));
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }
@@ -313,19 +313,19 @@ void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)
     if (!menu)
         return;
     menu->addSeparator();
-    auto *rateMenu = menu->addMenu(tr("设置评级"));
+    auto *rateMenu = menu->addMenu(tr("Set rating"));
     for (int s = 5; s >= 1; --s)
     {
         QString stars;
         for (int i = 0; i < s; ++i)
             stars += QStringLiteral("★");
-        QAction *act = rateMenu->addAction(QStringLiteral("%1 (%2 星)").arg(stars).arg(s));
+        QAction *act = rateMenu->addAction(QStringLiteral("%1 (%2 stars)").arg(stars).arg(s));
         connect(act, &QAction::triggered, this, [this, s]() { batchRateSelected(s); });
     }
-    QAction *actClearRate = rateMenu->addAction(tr("清除评级"));
+    QAction *actClearRate = rateMenu->addAction(tr("Clear Rating"));
     connect(actClearRate, &QAction::triggered, this, [this]() { batchRateSelected(0); });
 
-    auto *labelMenu = menu->addMenu(tr("设置颜色标签"));
+    auto *labelMenu = menu->addMenu(tr("Set color label"));
     static const struct
     {
         const char *name;
@@ -339,15 +339,15 @@ void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)
         connect(act, &QAction::triggered, this,
                 [this, id = item.id]() { batchSetColorLabelSelected(id); });
     }
-    QAction *actClearLabel = labelMenu->addAction(tr("无标签"));
+    QAction *actClearLabel = labelMenu->addAction(tr("No label"));
     connect(actClearLabel, &QAction::triggered, this, [this]() { batchSetColorLabelSelected(0); });
 
-    auto *flagMenu = menu->addMenu(tr("设置标记"));
-    QAction *actPick = flagMenu->addAction(tr("标记为精选 (Pick)"));
+    auto *flagMenu = menu->addMenu(tr("Set Mark"));
+    QAction *actPick = flagMenu->addAction(tr("Mark as Pick (Pick)"));
     connect(actPick, &QAction::triggered, this, [this]() { batchSetFlagSelected(false, true); });
-    QAction *actReject = flagMenu->addAction(tr("标记为排除 (Reject)"));
+    QAction *actReject = flagMenu->addAction(tr("Mark as rejected (Reject)"));
     connect(actReject, &QAction::triggered, this, [this]() { batchSetFlagSelected(true, false); });
-    QAction *actClearFlag = flagMenu->addAction(tr("清除标记"));
+    QAction *actClearFlag = flagMenu->addAction(tr("Clear Markers"));
     connect(actClearFlag, &QAction::triggered, this,
             [this]() { batchSetFlagSelected(false, false); });
 }

@@ -23,7 +23,7 @@ void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &pat
         QFont f = painter->font();
         f.setPointSize(qMax(7, f.pointSize() - 1));
         painter->setFont(f);
-        painter->drawText(thumbR, Qt::AlignCenter, QStringLiteral("无法\n加载"));
+        painter->drawText(thumbR, Qt::AlignCenter, QStringLiteral("Cannot\\nload"));
     }
     else
     {
@@ -68,7 +68,7 @@ void drawDetailsLabel(QPainter *painter, const QRect &labelR, const QString &pat
                                                QColor(67, 160, 71),
                                                QColor(30, 136, 229),
                                                QColor(142, 36, 170)};
-        static const char *kLabelNames[7] = {"", "红", "橙", "黄", "绿", "蓝", "紫"};
+        static const char *kLabelNames[7] = {"", "Red", "Orange", "Yellow", "Green", "Blue", "Purple"};
         const QColor chip = kLabelColors[label];
         const int cs = 12;
         const QRect chipR(labelR.x(), labelR.y() + (labelR.height() - cs) / 2, cs, cs);

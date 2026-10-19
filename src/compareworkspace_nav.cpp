@@ -386,7 +386,7 @@ void CompareWorkspace::applyLayoutPreset(int n)
     const NavState saved = captureNavState();
     setImages(win);
     restoreNavState(saved);
-    showCompareStatus(tr("已切换至 %1 窗格对比布局").arg(n));
+    showCompareStatus(tr("Switched to %1-pane comparison layout").arg(n));
     update();
 }
 
@@ -623,7 +623,7 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
                                                              .arg(norm.y)
                                                              .arg(norm.width)
                                                              .arg(norm.height));
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle, tr("松开后测量源图 RGB"));
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle, tr("Measure source image RGB after release"));
         update();
         return;
     }
@@ -648,7 +648,7 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
                                                       .arg(m_lastSelection.width)
                                                       .arg(m_lastSelection.height)
                                                 : tr("ROI: —"));
-    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle, tr("松开后测量源图 RGB"));
+    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle, tr("Measure source image RGB after release"));
     update();
 }
 

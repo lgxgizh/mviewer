@@ -141,9 +141,9 @@ bool AnalysisPanel::runLegacyAnalyzer(const QString &id)
         {
             // M24 (C#7): analyzer failure (e.g. buggy plugin) — surface a
             // graceful note instead of propagating an exception into the UI.
-            const QString err = tr("分析器执行失败（%1）。").arg(id);
+            const QString err = tr("Analyzer execution failed (%1).").arg(id);
             m_statsLabel->setText(
-                QString("<h3>%1</h3><p>%2</p>").arg(QStringLiteral("分析失败")).arg(err));
+                QString("<h3>%1</h3><p>%2</p>").arg(QStringLiteral("Analysis failed")).arg(err));
             if (m_pluginResult)
                 m_pluginResult->setText(err);
             publishResult(err);
@@ -305,8 +305,8 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
         // M24 (C#7): analyzer failure -> graceful error note (same shape as the
         // legacy synchronous reanalyze() error path).
         const QString id = QString::fromStdString(r.id);
-        const QString err = tr("分析器执行失败（%1）。").arg(id);
-        m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("分析失败")).arg(err));
+        const QString err = tr("Analyzer execution failed (%1).").arg(id);
+        m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Analysis failed")).arg(err));
         if (m_pluginResult)
             m_pluginResult->setText(err);
         publishResult(err, QString::fromStdString(r.id));
@@ -398,8 +398,8 @@ void AnalysisPanel::renderRoiOutcome(const AnalysisResult &r)
 // successful result.
 void AnalysisPanel::renderNoResult()
 {
-    const QString msg = tr("分析器未产生结果。");
-    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("无结果")).arg(msg));
+    const QString msg = tr("The analyzer produced no results.");
+    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("No results")).arg(msg));
     if (m_pluginResult)
         m_pluginResult->setText(msg);
     setReportAnalysisState(ReportAnalysisState::NoResult);
@@ -411,8 +411,8 @@ void AnalysisPanel::renderNoResult()
 // model result; the image and base pages stay loaded.
 void AnalysisPanel::renderAnalysisUnavailable()
 {
-    const QString msg = tr("分析队列繁忙，请稍后重试。");
-    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("分析暂不可用")).arg(msg));
+    const QString msg = tr("Analysis queue is busy. Please try again later.");
+    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Analysis temporarily unavailable")).arg(msg));
     if (m_pluginResult)
         m_pluginResult->setText(msg);
     setReportAnalysisState(ReportAnalysisState::Unavailable);
@@ -431,8 +431,8 @@ void AnalysisPanel::clearAnalyzerResultSurface()
 // accepted terminal outcome replaces it.
 void AnalysisPanel::showAnalysisPending()
 {
-    const QString msg = tr("分析中…");
-    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("分析中")).arg(msg));
+    const QString msg = tr("Analyzing…");
+    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Analyzing")).arg(msg));
     if (m_pluginResult)
         m_pluginResult->setText(msg);
     setReportAnalysisState(ReportAnalysisState::Pending);

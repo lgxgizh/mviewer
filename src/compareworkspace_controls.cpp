@@ -30,8 +30,8 @@ void CompareWorkspace::setSyncRotate(bool on)
     }
     if (QAction *action = findChild<QAction *>(QStringLiteral("syncRotateAction")))
         action->setChecked(on);
-    showCompareStatus(on ? tr("已开启同步旋转：旋转将同时作用于所有图像")
-                         : tr("已关闭同步旋转：旋转仅对选中的图像生效"));
+    showCompareStatus(on ? tr("Sync rotation enabled: rotation applies to all images")
+                         : tr("Sync rotation disabled: rotation applies only to the selected image"));
 }
 
 void CompareWorkspace::setEditCellIndex(int cellIdx)
@@ -76,14 +76,14 @@ void CompareWorkspace::buildSyncControls()
     m_syncZoomChk = new QCheckBox(mviewer::cw::compareShortcutText("Z"), this);
     m_syncZoomChk->setObjectName("syncZoomCheck");
     m_syncZoomChk->setChecked(true);
-    m_syncZoomChk->setToolTip(tr("同步所有窗格的缩放倍率 (Z)"));
+    m_syncZoomChk->setToolTip(tr("Sync zoom across all panes (Z)"));
     m_syncDragChk = new QCheckBox(mviewer::cw::compareShortcutText("D"), this);
     m_syncDragChk->setObjectName("syncDragCheck");
     m_syncDragChk->setChecked(true);
-    m_syncDragChk->setToolTip(tr("同步所有窗格的平移拖动 (D)"));
+    m_syncDragChk->setToolTip(tr("Sync drag across all panes (D)"));
     m_syncRotateChk = new QCheckBox(mviewer::cw::compareShortcutText("Alt+R"), this);
     m_syncRotateChk->setObjectName("syncRotateCheck");
-    m_syncRotateChk->setToolTip(tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像 (Alt+R)"));
+    m_syncRotateChk->setToolTip(tr("When checked, rotation and flip are applied in sync to all images being compared (Alt+R)"));
     m_syncRotateChk->setChecked(m_syncRotate);
 
     auto applySync = [this](bool) { update(); };
@@ -113,9 +113,9 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     // H5: "统一像素倍率" — align every pane at the same zoom so images of
     // different resolutions can be compared 1:1 (pixel-corresponding). Independent
     // of the sync-zoom toggle; when on, Fit uses the shared (minimum) scale for all.
-    m_uniformScaleChk = new QCheckBox(tr("统一像素倍率"), this);
+    m_uniformScaleChk = new QCheckBox(tr("Uniform Pixel Scale"), this);
     m_uniformScaleChk->setChecked(false);
-    m_uniformScaleChk->setToolTip(tr("所有窗格以相同倍率显示，不同分辨率图像也能 1:1 像素对齐"));
+    m_uniformScaleChk->setToolTip(tr("Show all panes at the same scale so images of different resolutions stay 1:1 pixel-aligned"));
     connect(m_uniformScaleChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -132,7 +132,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     m_blinkChk = new QCheckBox(mviewer::cw::compareShortcutText("B"), this);
     m_blinkChk->setObjectName("blinkCompareToggle");
     m_blinkChk->setEnabled(false);
-    m_blinkChk->setToolTip(tr("点击开始/停止快速闪烁切换（快捷键: B）"));
+    m_blinkChk->setToolTip(tr("Click to start/stop rapid blink (Shortcut: B)"));
     connect(m_blinkChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -159,7 +159,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     m_splitChk = new QCheckBox(mviewer::cw::compareShortcutText("S"), this);
     m_splitChk->setEnabled(false);
     // M24 (B#8): a disabled control must say why it is unavailable.
-    m_splitChk->setToolTip(tr("仅 2 张图片时可用：左右并排对比（快捷键: S）"));
+    m_splitChk->setToolTip(tr("Available only with 2 images: side-by-side comparison (Shortcut: S)"));
     connect(m_splitChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -175,7 +175,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
 
     m_swipeChk = new QCheckBox(mviewer::cw::compareShortcutText("W"), this);
     m_swipeChk->setEnabled(false);
-    m_swipeChk->setToolTip(tr("仅 2 张图片时可用：滑动分割线对比（快捷键: W）"));
+    m_swipeChk->setToolTip(tr("Available only with 2 images: sliding split comparison (Shortcut: W)"));
     connect(m_swipeChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -206,7 +206,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_thresholdSlider->setRange(0, 255);
     m_thresholdSlider->setValue(0);
     m_thresholdSlider->setMaximumWidth(120);
-    m_thresholdSlider->setToolTip("差异阈值: 低于此值的像素将被隐藏");
+    m_thresholdSlider->setToolTip("Difference threshold: pixels below this value will be hidden");
     m_thresholdSlider->setEnabled(false);
     auto *sliderTimer = new QTimer(this);
     sliderTimer->setSingleShot(true);
@@ -237,7 +237,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             [this](int value) { m_thresholdLabel->setText(QString::number(value)); });
     toolLayout->addWidget(m_thresholdLabel);
 
-    m_autoThresholdBtn = new QPushButton(tr("自动"), this);
+    m_autoThresholdBtn = new QPushButton(tr("Auto"), this);
     m_autoThresholdBtn->setObjectName("diffAutoThresholdButton");
     m_autoThresholdBtn->setMaximumWidth(42);
     resetSuggestedThreshold();
@@ -246,11 +246,11 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     toolLayout->addWidget(m_autoThresholdBtn);
 
     // A-4.6: Diff highlight mode (red diffs / gray similar).
-    m_diffOverlayChk = new QCheckBox(tr("显示差异"), this);
+    m_diffOverlayChk = new QCheckBox(tr("Show Difference"), this);
     m_diffOverlayChk->setObjectName("diffOverlayToggle");
     m_diffOverlayChk->setChecked(false);
     m_diffOverlayChk->setEnabled(false);
-    m_diffOverlayChk->setToolTip(tr("显式叠加差异热力图；普通 Compare 始终显示原图"));
+    m_diffOverlayChk->setToolTip(tr("Explicitly overlay the difference heatmap; normal Compare always shows the original image"));
     connect(m_diffOverlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -264,7 +264,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_diffHighlightChk = new QCheckBox(mviewer::cw::compareShortcutText("H"), this);
     m_diffHighlightChk->setObjectName("diffHighlightToggle");
     m_diffHighlightChk->setEnabled(false);
-    m_diffHighlightChk->setToolTip(tr("差异区域红色高亮，相似区域灰度显示 (H)"));
+    m_diffHighlightChk->setToolTip(tr("Highlight differences in red; show similar areas in grayscale (H)"));
     connect(m_diffHighlightChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -294,7 +294,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             });
     toolLayout->addWidget(m_diffHighlightChk);
 
-    auto *gainLabel = new QLabel(tr("增益:"), this);
+    auto *gainLabel = new QLabel(tr("Gain:"), this);
     gainLabel->setObjectName("diffGainCaption");
     toolLayout->addWidget(gainLabel);
     m_diffGainCombo = new QComboBox(this);
@@ -302,7 +302,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_diffGainCombo->addItems({"1x", "2x", "4x", "8x", "16x", "32x"});
     m_diffGainCombo->setCurrentIndex(0);
     m_diffGainCombo->setEnabled(false);
-    m_diffGainCombo->setToolTip(tr("差异放大倍数（用于检查微弱噪点与压缩残差）"));
+    m_diffGainCombo->setToolTip(tr("Difference amplification (for inspecting faint noise and compression residuals)"));
     connect(m_diffGainCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int idx)
             {
@@ -321,15 +321,15 @@ void CompareWorkspace::buildPixelLinkControls(QHBoxLayout *toolLayout)
     m_pixelLinkChk = new QCheckBox(mviewer::cw::compareShortcutText("L"), this);
     m_pixelLinkChk->setObjectName("pixelLinkToggle");
     m_pixelLinkChk->setEnabled(false);
-    m_pixelLinkChk->setToolTip(tr("开启后点击图片添加标记点，显示各图 RGB 与差值 (L)"));
+    m_pixelLinkChk->setToolTip(tr("When enabled, click an image to add markers showing each image's RGB and the difference (L)"));
     connect(m_pixelLinkChk, &QCheckBox::toggled, this, &CompareWorkspace::onPixelLinkToggled);
     toolLayout->addWidget(m_pixelLinkChk);
-    m_clearLinksBtn = new QPushButton(tr("清除标记"), this);
+    m_clearLinksBtn = new QPushButton(tr("Clear Markers"), this);
     m_clearLinksBtn->setEnabled(false);
     m_clearLinksBtn->setToolTip(clearLinkTooltip());
     connect(m_clearLinksBtn, &QPushButton::clicked, this, &CompareWorkspace::clearLinkPoints);
     toolLayout->addWidget(m_clearLinksBtn);
-    m_linkInfoLabel = new QLabel(tr("标记: 0"), this);
+    m_linkInfoLabel = new QLabel(tr("Markers: 0"), this);
     m_linkInfoLabel->setMinimumWidth(48);
     m_linkInfoLabel->setStyleSheet(
         QStringLiteral("color:%1;")
@@ -340,33 +340,33 @@ void CompareWorkspace::buildPixelLinkControls(QHBoxLayout *toolLayout)
 void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
 {
     // P0 #③: explicit multi-layout selector (auto / single / 2-4 columns / row).
-    auto *layoutLabel = new QLabel(tr("布局:"), this);
+    auto *layoutLabel = new QLabel(tr("Layout:"), this);
     viewLayout->addWidget(layoutLabel);
     m_layoutCombo = new QComboBox(this);
     m_layoutCombo->addItems(
-        {tr("自动"), tr("单列"), tr("2 列"), tr("3 列"), tr("4 列"), tr("一行"), tr("自定义")});
+        {tr("Auto"), tr("Single column"), tr("2 columns"), tr("3 columns"), tr("4 columns"), tr("One row"), tr("Custom")});
     m_layoutCombo->setCurrentIndex(0);
     connect(m_layoutCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &CompareWorkspace::onLayoutChanged);
     viewLayout->addWidget(m_layoutCombo);
 
     // A-4.2: custom grid is column-driven. CompareEngine derives the row count.
-    auto *columnsLabel = new QLabel(tr("列:"), this);
+    auto *columnsLabel = new QLabel(tr("Columns:"), this);
     columnsLabel->setObjectName("compareColumnsCaption");
-    columnsLabel->setToolTip(tr("只设置列数；行数由当前图片数自动推导"));
+    columnsLabel->setToolTip(tr("Only set the column count; the row count is derived automatically from the current image count"));
     viewLayout->addWidget(columnsLabel);
     m_gridColsSpin = new QSpinBox(this);
     m_gridColsSpin->setRange(1, 8);
     m_gridColsSpin->setValue(2);
     m_gridColsSpin->setEnabled(false);
     m_gridColsSpin->setObjectName("compareColumnsSpin");
-    m_gridColsSpin->setToolTip(tr("只设置列数；行数由当前图片数自动推导"));
+    m_gridColsSpin->setToolTip(tr("Only set the column count; the row count is derived automatically from the current image count"));
     connect(m_gridColsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             &CompareWorkspace::onCustomGridChanged);
     viewLayout->addWidget(m_gridColsSpin);
     m_layoutStatusLabel = new QLabel(this);
     m_layoutStatusLabel->setObjectName("compareGridStatus");
-    m_layoutStatusLabel->setToolTip(tr("当前网格：行数由图片数和列数推导"));
+    m_layoutStatusLabel->setToolTip(tr("Current grid: row count is derived from the image count and column count"));
     viewLayout->addWidget(m_layoutStatusLabel);
 
     // P0 #③: inspector + histogram side panel toggle.
@@ -397,7 +397,7 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
 
     // M16.1: focus-lock / reference pin (n/1). Locks a cell as the comparison
     // reference; diff overlays and inspector deltas use it as the base.
-    m_focusBtn = new QPushButton(tr("锁定基准"), this);
+    m_focusBtn = new QPushButton(tr("Lock Reference"), this);
     m_focusBtn->setCheckable(true);
     connect(m_focusBtn, &QPushButton::toggled, this,
             [this](bool on)
@@ -408,14 +408,14 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
                 onFocusRequested(on ? idx : -1);
             });
     viewLayout->addWidget(m_focusBtn);
-    m_focusLabel = new QLabel(tr("基准: —"), this);
+    m_focusLabel = new QLabel(tr("Reference: —"), this);
     m_focusLabel->setMinimumWidth(48);
     viewLayout->addWidget(m_focusLabel);
 
     // M57: Compare is static by default, but a focused animated/page source
     // can be switched to an explicit frame/page without changing the Browse
     // file index. The control is hidden for ordinary single-frame sources.
-    m_frameLabel = new QLabel(tr("帧/页:"), this);
+    m_frameLabel = new QLabel(tr("Frame/Page:"), this);
     m_frameSpin = new QSpinBox(this);
     m_frameSpin->setObjectName(QStringLiteral("compareFrameSpin"));
     m_frameSpin->setRange(1, 1);
@@ -471,18 +471,18 @@ void CompareWorkspace::applyDisplayOverlayToViews()
 
 void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 {
-    m_paneHistOverlayChk = new QCheckBox(tr("直方图"), this);
+    m_paneHistOverlayChk = new QCheckBox(tr("Histogram"), this);
     m_paneHistOverlayChk->setObjectName("paneHistogramOverlayToggle");
     m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
-    m_paneHistOverlayChk->setToolTip(tr("在每张比较图左上角透明叠加当前直方图"));
+    m_paneHistOverlayChk->setToolTip(tr("Translucently overlay the current histogram at the top-left of each comparison image"));
     connect(m_paneHistOverlayChk, &QCheckBox::toggled, this,
             &CompareWorkspace::onPaneHistOverlayToggled);
     toolLayout->addWidget(m_paneHistOverlayChk);
 
-    m_filenameOverlayChk = new QCheckBox(tr("文件名"), this);
+    m_filenameOverlayChk = new QCheckBox(tr("File Name"), this);
     m_filenameOverlayChk->setObjectName("compareFilenameOverlayToggle");
     m_filenameOverlayChk->setChecked(m_filenameOverlay);
-    m_filenameOverlayChk->setToolTip(tr("显示或隐藏每张比较图上方的文件名，过长时换行"));
+    m_filenameOverlayChk->setToolTip(tr("Show or hide the filename above each comparison image, wrapping when too long"));
     connect(m_filenameOverlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -503,7 +503,7 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_channelCombo->addItem(tr("B (Shift+4)"), static_cast<int>(mviewer::OverlayMode::ChannelB));
     m_channelCombo->addItem(tr("Y (Shift+5)"), static_cast<int>(mviewer::OverlayMode::ChannelY));
     m_channelCombo->addItem(tr("V (Shift+6)"), static_cast<int>(mviewer::OverlayMode::ChannelV));
-    m_channelCombo->setToolTip(tr("隔离 R/G/B/Y/V 通道（Shift+1…6）"));
+    m_channelCombo->setToolTip(tr("Isolate R/G/B/Y/V channels (Shift+1…6)"));
     connect(m_channelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int)
             {
@@ -516,19 +516,19 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     toolLayout->addWidget(m_channelCombo);
 
     // M16.6: layout presets save/load + swap panes (sync bar right side)
-    m_savePresetBtn = new QPushButton(tr("存储布局"), this);
-    m_savePresetBtn->setToolTip(tr("将当前布局存储为预设"));
+    m_savePresetBtn = new QPushButton(tr("Save Layout"), this);
+    m_savePresetBtn->setToolTip(tr("Save the current layout as a preset"));
     connect(m_savePresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onSavePreset);
     toolLayout->addWidget(m_savePresetBtn);
 
-    m_loadPresetBtn = new QPushButton(tr("读取布局"), this);
-    m_loadPresetBtn->setToolTip(tr("从预设文件中读取布局"));
+    m_loadPresetBtn = new QPushButton(tr("Load Layout"), this);
+    m_loadPresetBtn->setToolTip(tr("Load a layout from a preset file"));
     connect(m_loadPresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onLoadPreset);
     toolLayout->addWidget(m_loadPresetBtn);
 
     m_swapBtn = new QPushButton(mviewer::cw::compareShortcutText("X"), this);
     m_swapBtn->setObjectName("compareSwapPanesButton");
-    m_swapBtn->setToolTip(tr("交换 A/B 窗格 (快捷键: X)"));
+    m_swapBtn->setToolTip(tr("Swap A/B panes (Shortcut: X)"));
     m_swapBtn->setEnabled(false);
     connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
     toolLayout->addWidget(m_swapBtn);
@@ -550,10 +550,10 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     addSnapshotButton(toolLayout);
 
     // P1 #④: Analyze & export buttons in the compare toolbar.
-    m_analyzeBtn = new QPushButton(tr("分析"), this);
+    m_analyzeBtn = new QPushButton(tr("Analyze"), this);
     m_analyzeBtn->setObjectName("analyzeCompareButton");
     m_analyzeBtn->setEnabled(false);
-    m_analyzeBtn->setToolTip(tr("打开比较检视面板"));
+    m_analyzeBtn->setToolTip(tr("Open Comparison Inspection Panel"));
     connect(m_analyzeBtn, &QPushButton::clicked, this,
             [this]()
             {
@@ -563,10 +563,10 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
             });
     toolLayout->addWidget(m_analyzeBtn);
 
-    m_exportReportBtn = new QPushButton(tr("导出报告"), this);
+    m_exportReportBtn = new QPushButton(tr("Export Report"), this);
     m_exportReportBtn->setObjectName("exportCompareReportButton");
     m_exportReportBtn->setEnabled(false);
-    m_exportReportBtn->setToolTip(tr("将对比结果导出为 HTML/Markdown/JSON 报告"));
+    m_exportReportBtn->setToolTip(tr("Export comparison results as an HTML/Markdown/JSON report"));
     connect(m_exportReportBtn, &QPushButton::clicked, this,
             &CompareWorkspace::exportReportRequested);
     toolLayout->addWidget(m_exportReportBtn);
@@ -579,13 +579,13 @@ void CompareWorkspace::addFitWindowButton(QHBoxLayout *toolLayout)
     // row is already at the 1100px budget, so this stays on the actions row.
     auto *fitBtn = new QPushButton(mviewer::cw::compareShortcutText("F"), this);
     fitBtn->setObjectName("fitWindowButton");
-    fitBtn->setToolTip(tr("适合窗口（快捷键: F）：勾选「统一像素倍率」时所有窗格用同一倍率适配；"
+    fitBtn->setToolTip(tr("Fit to window (Shortcut: F): when \"Uniform pixel scale\" is checked, all panes fit at the same scale;"
                           "不勾选时各窗格按自身分辨率适配，相同视野/宽高比的图显示为相近大小"));
     connect(fitBtn, &QPushButton::clicked, this,
             [this]()
             {
                 fitAll();
-                showCompareStatus(tr("视图自适应窗口 (Fit)"));
+                showCompareStatus(tr("View Fitted to Window (Fit)"));
                 if (m_compareCanvas)
                     m_compareCanvas->update();
                 update();
@@ -622,12 +622,12 @@ QWidget *CompareWorkspace::buildStatusStrip()
     presentDiffMetrics(tr("PSNR: —    SSIM: —"));
     lay->addWidget(m_metricLabel, 0);
 
-    m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
+    m_autoAlignChk = new QCheckBox(tr("Align"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
     m_autoAlignChk->setStyleSheet(
         QStringLiteral("color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
-    m_autoAlignChk->setToolTip(tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
+    m_autoAlignChk->setToolTip(tr("Before comparison, auto-align by integer-pixel translation to remove shift error, then compute PSNR/SSIM"));
     m_autoAlignBeforeDiff = QSettings().value("autoAlignBeforeDiff", false).toBool();
     m_autoAlignChk->setChecked(m_autoAlignBeforeDiff);
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
@@ -647,7 +647,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
     m_exitBtn = new QPushButton(mviewer::cw::compareShortcutText("Esc"), strip);
     m_exitBtn->setObjectName("exitCompareButton");
-    m_exitBtn->setToolTip(tr("关闭比较窗口（Esc；有选区时 Esc 先清除选区）"));
+    m_exitBtn->setToolTip(tr("Close the comparison window (Esc; with a selection, Esc clears it first)"));
     connect(m_exitBtn, &QPushButton::clicked, this, &CompareWorkspace::closeCompareHost);
     lay->addWidget(m_exitBtn);
     return strip;
@@ -696,7 +696,7 @@ void CompareWorkspace::onAutoThresholdClicked()
         return;
     const int value = static_cast<int>(m_suggestedThreshold);
     m_thresholdSlider->setValue(value);
-    showCompareStatus(tr("已应用自动阈值 %1").arg(value));
+    showCompareStatus(tr("Applied auto threshold %1").arg(value));
 }
 
 void CompareWorkspace::resetSuggestedThreshold()
@@ -706,7 +706,7 @@ void CompareWorkspace::resetSuggestedThreshold()
     if (!m_autoThresholdBtn)
         return;
     m_autoThresholdBtn->setEnabled(false);
-    m_autoThresholdBtn->setToolTip(tr("基于差异分布自动计算最佳分离阈值 (Otsu)"));
+    m_autoThresholdBtn->setToolTip(tr("Automatically compute the best separation threshold from the difference distribution (Otsu)"));
 }
 
 void CompareWorkspace::noteSuggestedThreshold(bool hasSuggestion, int value)
@@ -722,7 +722,7 @@ void CompareWorkspace::noteSuggestedThreshold(bool hasSuggestion, int value)
     if (!m_autoThresholdBtn)
         return;
     m_autoThresholdBtn->setToolTip(
-        tr("基于差异分布自动计算最佳分离阈值 (Otsu 建议: %1)").arg(clamped));
+        tr("Automatically compute the best separation threshold from the difference distribution (Otsu suggestion: %1)").arg(clamped));
     const bool diffOn = m_diffOverlayChk && m_diffOverlayChk->isChecked();
     m_autoThresholdBtn->setEnabled(diffOn);
 }
@@ -731,9 +731,9 @@ void CompareWorkspace::addSnapshotButton(QHBoxLayout *toolLayout)
 {
     auto *button = new QToolButton(this);
     button->setObjectName(QStringLiteral("compareSnapshotButton"));
-    button->setText(tr("截图"));
+    button->setText(tr("Screenshot"));
     button->setPopupMode(QToolButton::InstantPopup);
-    button->setToolTip(tr("复制或保存当前比较视图"));
+    button->setToolTip(tr("Copy or save the current comparison view"));
     auto *menu = new QMenu(button);
     auto *copyAction = menu->addAction(mviewer::cw::compareShortcutText("Ctrl+C"));
     copyAction->setObjectName(QStringLiteral("compareSnapshotCopyAction"));

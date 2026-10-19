@@ -75,7 +75,7 @@ static void testBatchGuardsAndDialog(const QString &p1)
         analyzed.success = true;
         analyzed.inputPath = "C:/in.png";
         CHECK(BatchDialog::formatResultLine(analyzed) ==
-                  QStringLiteral("[OK] C:/in.png（仅分析，未写出文件）"),
+                  QStringLiteral("[OK] C:/in.png (analysis only, file not written)"),
               "analysis-only success does not show an empty arrow");
         mviewer::domain::BatchFileResult exported;
         exported.success = true;
@@ -126,7 +126,7 @@ static void testBatchGuardsAndDialog(const QString &p1)
                                });
             start->click();
             CHECK(start->isEnabled(), "resize without 导出 does not start the batch");
-            CHECK(seen.contains(QStringLiteral("请勾选「导出」")),
+            CHECK(seen.contains(QStringLiteral("Please check Export")),
                   "resize without 导出 warns to check 导出");
             CHECK(log && !log->toPlainText().contains(QStringLiteral("[OK]")),
                   "resize without 导出 writes no result line");

@@ -222,8 +222,8 @@ int main(int argc, char **argv)
         return 1;
     const QDir dir(temporary.path());
     sourceRegionTruthTests(dir);
-    const QString a = writePattern(dir, QStringLiteral("A-long-算法图像.png"), 96, 72, 10);
-    const QString b = writePattern(dir, QStringLiteral("B-long-算法图像.png"), 96, 72, 60);
+    const QString a = writePattern(dir, QStringLiteral("A-long-algorithm-image.png"), 96, 72, 10);
+    const QString b = writePattern(dir, QStringLiteral("B-long-algorithm-image.png"), 96, 72, 60);
 
     QDialog dialog;
     auto *layout = new QVBoxLayout(&dialog);
@@ -375,10 +375,10 @@ int main(int argc, char **argv)
               resized.y + resized.height == fixedBottom,
           "corner resize preserves the opposite source-pixel corner");
 
-    QCheckBox *split = findCheckBox(workspace, QStringLiteral("左右分割"));
-    QCheckBox *overlay = findCheckBox(workspace, QStringLiteral("叠加对比"));
-    QCheckBox *swipe = findCheckBox(workspace, QStringLiteral("滑动对比"));
-    QCheckBox *checker = findCheckBox(workspace, QStringLiteral("棋盘对比"));
+    QCheckBox *split = findCheckBox(workspace, QStringLiteral("Side-by-Side Split"));
+    QCheckBox *overlay = findCheckBox(workspace, QStringLiteral("Overlay Compare"));
+    QCheckBox *swipe = findCheckBox(workspace, QStringLiteral("Swipe Compare"));
+    QCheckBox *checker = findCheckBox(workspace, QStringLiteral("Checkerboard Compare"));
     QWidget *canvas = workspace->findChild<QWidget *>("compareCanvas");
     CHECK(split && overlay && swipe && checker && canvas, "all Canvas modes and canvas exist");
     const QList<QCheckBox *> modes = {split, overlay, swipe, checker};
@@ -454,11 +454,11 @@ int main(int argc, char **argv)
     TaskScheduler::instance().pause(TaskScheduler::AnalysisPool);
     sendRightDrag(first, gridFrom, gridTo);
     QLabel *status = workspace->findChild<QLabel *>("roiStatusLabel");
-    CHECK(status && status->text().contains(QStringLiteral("繁忙稍后")),
+    CHECK(status && status->text().contains(QStringLiteral("Busy, try later")),
           "AnalysisPool rejection produces a visible Backpressured terminal state");
     TaskScheduler::instance().resume(TaskScheduler::AnalysisPool);
     sendRightDrag(first, gridFrom, gridTo);
-    CHECK(status && waitFor([&]() { return status->text().contains(QStringLiteral("就绪")); }),
+    CHECK(status && waitFor([&]() { return status->text().contains(QStringLiteral("Ready")); }),
           "a new release retries successfully after backpressure clears");
 
     {
@@ -481,7 +481,7 @@ int main(int argc, char **argv)
                           unequalA->sourcePointToWidget(QPointF(30, 25)).toPoint());
             QLabel *unequalStatus = unequal->findChild<QLabel *>("roiStatusLabel");
             CHECK(unequalB->selection().isEmpty() && unequalStatus &&
-                      unequalStatus->text().contains(QStringLiteral("图像尺寸不一致")),
+                      unequalStatus->text().contains(QStringLiteral("Image dimensions do not match")),
                   "unequal dimensions never fabricate linked measurement");
             const auto beforeNudge = unequalA->selection();
             CHECK(!beforeNudge.isEmpty(), "unequal pane 0 keeps its own ROI");
@@ -525,7 +525,7 @@ int main(int argc, char **argv)
                           pane0->sourcePointToWidget(QPointF(30, 25)).toPoint());
             QLabel *statusLabel = mismatch->findChild<QLabel *>("roiStatusLabel");
             CHECK(pane1->selection().isEmpty() && statusLabel &&
-                      statusLabel->text().contains(QStringLiteral("图像尺寸不一致")),
+                      statusLabel->text().contains(QStringLiteral("Image dimensions do not match")),
                   "mismatched horizontal/vertical pair initially reports differing dimensions");
             QTableWidget *initialTable = mismatch->findChild<QTableWidget *>("roiMeasurementTable");
             CHECK(initialTable &&
@@ -537,7 +537,7 @@ int main(int argc, char **argv)
                           }),
                   "drawing ROI on unequal pair computes valid statistics for the drawn pane");
             CHECK(initialTable->item(1, 10) &&
-                      initialTable->item(1, 10)->text() == QStringLiteral("未框选"),
+                      initialTable->item(1, 10)->text() == QStringLiteral("No selection"),
                   "undrawn pane in unequal pair is marked as unselected");
 
             // Click pane 1 and rotate it 90 degrees clockwise -> effective dimensions become 96x72
@@ -560,7 +560,7 @@ int main(int argc, char **argv)
                   "synchronized ROI geometry matches display selection");
             CHECK(
                 statusLabel &&
-                    waitFor([&]() { return statusLabel->text().contains(QStringLiteral("就绪")); }),
+                    waitFor([&]() { return statusLabel->text().contains(QStringLiteral("Ready")); }),
                 "rotated pane ROI measurement reaches Ready state");
             QTableWidget *measurementTable =
                 mismatch->findChild<QTableWidget *>("roiMeasurementTable");

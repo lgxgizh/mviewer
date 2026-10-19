@@ -79,9 +79,9 @@ bool shortcutMisbindsBatch(const QString &plain, const QString &shortcut)
         const QString span = shortcutSpan(plain, at, static_cast<int>(shortcut.size()));
         const QString lower = span.toLower();
         const int batch =
-            firstNeedle(span, lower, QStringLiteral("批量"), QStringLiteral("batch analy"));
+            firstNeedle(span, lower, QStringLiteral("Batch"), QStringLiteral("batch analy"));
         const int deselect =
-            firstNeedle(span, lower, QStringLiteral("取消"), QStringLiteral("deselect"));
+            firstNeedle(span, lower, QStringLiteral("Cancel"), QStringLiteral("deselect"));
         if (batch >= 0 && (deselect < 0 || batch < deselect))
             return true;
         from = at + static_cast<int>(shortcut.size());
@@ -107,21 +107,21 @@ void checkChinesePairGuidance(const char *surface, const QString &text, bool wan
     // surface may advertise P/N/PgUp/PgDn/arrow pair navigation.
     (void)wantP;
     (void)wantN;
-    reportGuidance(!plain.contains(QStringLiteral("上一对")) &&
-                       !plain.contains(QStringLiteral("下一对")),
+    reportGuidance(!plain.contains(QStringLiteral("Previous Pair")) &&
+                       !plain.contains(QStringLiteral("Next pair")),
                    surface, "no in-Compare previous/next pair navigation is advertised");
-    reportGuidance(!plain.contains(QStringLiteral("亚像素")), surface,
+    reportGuidance(!plain.contains(QStringLiteral("Sub-pixel")), surface,
                    "alignment is not described as sub-pixel");
-    if (plain.contains(QStringLiteral("对齐")))
+    if (plain.contains(QStringLiteral("Align")))
     {
-        reportGuidance(plain.contains(QStringLiteral("整数像素")), surface,
+        reportGuidance(plain.contains(QStringLiteral("Integer pixels")), surface,
                        "alignment is an integer-pixel translation");
     }
-    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Shift+A"), QStringLiteral("取消"),
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Shift+A"), QStringLiteral("Cancel"),
                                    QStringLiteral("deselect")) &&
                        !shortcutMisbindsBatch(plain, QStringLiteral("Ctrl+Shift+A")),
                    surface, "Ctrl+Shift+A deselects and is not batch analysis");
-    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("批量分析"),
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("Batch Analysis"),
                                    QStringLiteral("batch analy")),
                    surface, "Ctrl+Alt+A is batch analysis export");
 }
@@ -133,15 +133,15 @@ void checkEnglishShortcutMirror(const char *surface, const QString &text)
                        !plain.contains(QStringLiteral("Next pair")),
                    surface, "no in-Compare previous/next pair navigation is listed");
     const QString lower = plain.toLower();
-    reportGuidance(!plain.contains(QStringLiteral("亚像素")) &&
+    reportGuidance(!plain.contains(QStringLiteral("Sub-pixel")) &&
                        !lower.contains(QStringLiteral("sub-pixel")) &&
                        !lower.contains(QStringLiteral("subpixel")),
                    surface, "alignment is not described as sub-pixel");
-    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Shift+A"), QStringLiteral("取消"),
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Shift+A"), QStringLiteral("Cancel"),
                                    QStringLiteral("deselect")) &&
                        !shortcutMisbindsBatch(plain, QStringLiteral("Ctrl+Shift+A")),
                    surface, "Ctrl+Shift+A deselects and is not batch analysis");
-    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("批量分析"),
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("Batch Analysis"),
                                    QStringLiteral("batch analy")),
                    surface, "Ctrl+Alt+A is batch analysis export");
 }
@@ -168,37 +168,37 @@ void checkShippedGuidanceDocuments(const QString &helpHtml, const QString &guide
 
 bool statesOppositeSliderDirection(const QString &plain)
 {
-    return plain.contains(QStringLiteral("] 差异阈值 -5")) ||
-           plain.contains(QStringLiteral("[ 差异阈值 +5")) ||
-           plain.contains(QStringLiteral(". 叠加透明度 -5")) ||
-           plain.contains(QStringLiteral(", 叠加透明度 +5")) ||
-           plain.contains(QStringLiteral("] 降低")) || plain.contains(QStringLiteral("[ 提高")) ||
-           plain.contains(QStringLiteral(", 提高")) || plain.contains(QStringLiteral(". 降低"));
+    return plain.contains(QStringLiteral("] Difference threshold -5")) ||
+           plain.contains(QStringLiteral("[ Difference threshold +5")) ||
+           plain.contains(QStringLiteral(". Overlay opacity -5")) ||
+           plain.contains(QStringLiteral(", Overlay opacity +5")) ||
+           plain.contains(QStringLiteral("] Decrease")) || plain.contains(QStringLiteral("[ Increase")) ||
+           plain.contains(QStringLiteral(", Increase")) || plain.contains(QStringLiteral(". Decrease"));
 }
 
 void checkCompareModeKeyGuidance(const QString &helpHtml, const QString &guideHtml)
 {
     const QString help = guidancePlain(helpHtml);
     reportGuidance(help.contains(QStringLiteral("B / S / W / O / K")) &&
-                       help.contains(QStringLiteral("棋盘")),
+                       help.contains(QStringLiteral("Checkerboard")),
                    "F1 cheat sheet", "names K as checkerboard with B/S/W/O");
-    reportGuidance(help.contains(QStringLiteral("] 差异阈值 +5")) &&
-                       help.contains(QStringLiteral("[ 差异阈值 -5")),
+    reportGuidance(help.contains(QStringLiteral("] Diff threshold +5")) &&
+                       help.contains(QStringLiteral("[ Difference threshold -5")),
                    "F1 cheat sheet", "] raises and [ lowers the diff threshold by 5");
-    reportGuidance(help.contains(QStringLiteral(". 叠加透明度 +5")) &&
-                       help.contains(QStringLiteral(", 叠加透明度 -5")),
+    reportGuidance(help.contains(QStringLiteral(". Overlay opacity +5")) &&
+                       help.contains(QStringLiteral(", Overlay opacity -5")),
                    "F1 cheat sheet", ". raises and , lowers overlay opacity by 5");
     reportGuidance(!statesOppositeSliderDirection(help), "F1 cheat sheet",
                    "does not reverse slider direction");
 
     const QString guide = guidancePlain(guideHtml);
-    reportGuidance(guide.contains(QStringLiteral("K 棋盘")), "in-app user guide",
+    reportGuidance(guide.contains(QStringLiteral("K Checkerboard")), "in-app user guide",
                    "names K as checkerboard");
     reportGuidance(!statesOppositeSliderDirection(guide), "in-app user guide",
                    "does not reverse slider direction");
 
     const QString userGuide = guidancePlain(readRepoText("docs/USER_GUIDE.md"));
-    reportGuidance(userGuide.contains(QStringLiteral("K 棋盘")), "docs/USER_GUIDE.md",
+    reportGuidance(userGuide.contains(QStringLiteral("K Checkerboard")), "docs/USER_GUIDE.md",
                    "names K as checkerboard");
     reportGuidance(!statesOppositeSliderDirection(userGuide), "docs/USER_GUIDE.md",
                    "does not reverse slider direction");
@@ -215,7 +215,7 @@ void checkLiveSelectionShortcuts(MainWindow &window)
     bool batchOk = true;
     for (QAction *action : window.findChildren<QAction *>())
     {
-        if (!action || !action->text().contains(QStringLiteral("批量分析导出")))
+        if (!action || !action->text().contains(QStringLiteral("Batch Analysis Export")))
             continue;
         ++batchActions;
         const QString keys = action->shortcut().toString(QKeySequence::PortableText);
@@ -228,12 +228,12 @@ void checkLiveSelectionShortcuts(MainWindow &window)
     QCheckBox *align = nullptr;
     for (QCheckBox *box : prefs.findChildren<QCheckBox *>())
     {
-        if (box && box->text().contains(QStringLiteral("对齐")))
+        if (box && box->text().contains(QStringLiteral("Align")))
             align = box;
     }
     const QString alignText = align ? align->text() : QString();
-    reportGuidance(align && alignText.contains(QStringLiteral("整数像素")) &&
-                       !alignText.contains(QStringLiteral("亚像素")),
+    reportGuidance(align && alignText.contains(QStringLiteral("Integer pixels")) &&
+                       !alignText.contains(QStringLiteral("Sub-pixel")),
                    "preferences align checkbox", "describes an integer-pixel translation");
 }
 
@@ -344,7 +344,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *removeFavoriteAction = w.findChild<QAction *>("removeFavoriteAction");
     QAction *compareAction = nullptr;
     for (QAction *action : w.findChildren<QAction *>())
-        if (action && action->text().startsWith(QStringLiteral("比较模式")))
+        if (action && action->text().startsWith(QStringLiteral("Compare Mode")))
             compareAction = action;
     auto *browserToolBar = w.findChild<QToolBar *>("browserToolBar");
     auto *browseWorkspaceAction = w.findChild<QAction *>("browseWorkspaceAction");
@@ -721,7 +721,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         typeC(pathEdit, true);
         CHECK(pathEdit->text() == QStringLiteral("abc"),
               "typing C in the path editor is not a Compare shortcut");
-        CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("需要选择")),
+        CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("Selection required")),
               "path editor typing does not run the Compare shortcut");
         pathEdit->setText(QStringLiteral("ab"));
         pathEdit->setCursorPosition(pathEdit->text().size());
@@ -900,7 +900,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(helpHtml.contains("F1"), "cheat sheet documents the F1 help shortcut");
     CHECK(helpHtml.contains("<kbd>P</kbd>"), "cheat sheet documents P to open Compare");
     const QString guideHtml = MainWindow::userGuideHtml();
-    CHECK(guideHtml.contains("<kbd>P</kbd>") && guideHtml.contains(QStringLiteral("比较")),
+    CHECK(guideHtml.contains("<kbd>P</kbd>") && guideHtml.contains(QStringLiteral("Compare")),
           "user guide documents P to open Compare");
     checkShippedGuidanceDocuments(helpHtml, guideHtml);
     checkCompareModeKeyGuidance(helpHtml, guideHtml);
@@ -1085,19 +1085,19 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         sendKey(&w, Qt::Key_C);
         pump(40);
         CHECK(
-            w.statusBar()->currentMessage().contains(QStringLiteral("需要选择 2-8 张图片才能比较")),
+            w.statusBar()->currentMessage().contains(QStringLiteral("Select 2-8 images to compare")),
             "C explains that Compare needs a 2-8 image selection");
         w.statusBar()->clearMessage();
         sendKey(&w, Qt::Key_P);
         pump(40);
         CHECK(
-            w.statusBar()->currentMessage().contains(QStringLiteral("需要选择 2-8 张图片才能比较")),
+            w.statusBar()->currentMessage().contains(QStringLiteral("Select 2-8 images to compare")),
             "P explains that Compare needs a 2-8 image selection");
         bool compareOpenedFromOne = false;
         for (QWidget *top : QApplication::topLevelWidgets())
         {
             auto *dlg = qobject_cast<QDialog *>(top);
-            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("比较模式"))
+            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("Compare Mode"))
                 compareOpenedFromOne = true;
         }
         CHECK(!compareOpenedFromOne,
@@ -1118,7 +1118,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         for (QWidget *top : QApplication::topLevelWidgets())
         {
             auto *dlg = qobject_cast<QDialog *>(top);
-            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("比较模式"))
+            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("Compare Mode"))
                 compareFromP = dlg;
         }
         CHECK(compareFromP, "P opens Compare for a 2-image selection");
@@ -1746,13 +1746,13 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         sendKey(&w, Qt::Key_C);
         pump(100);
         CHECK(
-            w.statusBar()->currentMessage().contains(QStringLiteral("需要选择 2-8 张图片才能比较")),
+            w.statusBar()->currentMessage().contains(QStringLiteral("Select 2-8 images to compare")),
             "Compare keyboard command explains why a single-image folder cannot compare");
         bool compareOpened = false;
         for (QWidget *top : QApplication::topLevelWidgets())
         {
             auto *dlg = qobject_cast<QDialog *>(top);
-            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("比较模式"))
+            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("Compare Mode"))
             {
                 compareOpened = true;
                 break;
@@ -1999,11 +1999,11 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(sel.compared().size() == 2, "SelectionModel.compared mirrors the compare set (SSOT)");
     CHECK(!sel.focused().isEmpty(), "a default focus/reference image is set");
 
-    QCheckBox *blink = findChk(ws, QStringLiteral("闪烁对比"));
-    QCheckBox *split = findChk(ws, QStringLiteral("左右分割"));
-    QCheckBox *swipe = findChk(ws, QStringLiteral("滑动对比"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
-    QCheckBox *checker = findChk(ws, QStringLiteral("棋盘"));
+    QCheckBox *blink = findChk(ws, QStringLiteral("Flicker Compare"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Side-by-Side Split"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe Compare"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay Compare"));
+    QCheckBox *checker = findChk(ws, QStringLiteral("Checkerboard"));
     QPushButton *analyzeButton =
         ws->findChild<QPushButton *>(QStringLiteral("analyzeCompareButton"));
     QPushButton *exportReportButton =
@@ -2111,8 +2111,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     pump(30);
     CHECK(autoAlignChk && autoAlignChk->isVisible(),
           "auto-align lives on the compare chrome, not only in Preferences");
-    reportGuidance(autoAlignChk && autoAlignChk->toolTip().contains(QStringLiteral("整数像素")) &&
-                       !autoAlignChk->toolTip().contains(QStringLiteral("亚像素")),
+    reportGuidance(autoAlignChk && autoAlignChk->toolTip().contains(QStringLiteral("Integer pixels")) &&
+                       !autoAlignChk->toolTip().contains(QStringLiteral("Sub-pixel")),
                    "auto-align tooltip", "describes an integer-pixel translation");
     if (moreButton && moreButton->menu())
         moreButton->menu()->close();
@@ -2214,8 +2214,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(histOverlayChk && !histOverlayChk->isChecked(), "histogram overlay is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->isChecked(),
           "filename overlay is on by default");
-    CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("隐藏")) &&
-              filenameOverlayChk->toolTip().contains(QStringLiteral("换行")),
+    CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("Hide")) &&
+              filenameOverlayChk->toolTip().contains(QStringLiteral("New line")),
           "filename checkbox tooltip describes show/hide and wrapping");
     CHECK(ws->filenameOverlayVisible(), "filename overlay checkbox enables the overlay");
     auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
@@ -2420,7 +2420,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     // Diff visualization and highlight are separate preferences, but turning
     // highlight on must make the result visible immediately. Exercise both the
     // keyboard path and the real checkbox path without relying on pixel colors.
-    QCheckBox *diffHl = findChk(ws, QStringLiteral("高亮差异"));
+    QCheckBox *diffHl = findChk(ws, QStringLiteral("Highlight differences"));
     QCheckBox *diffOverlay = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
     CHECK(diffHl != nullptr, "diff-highlight control is discoverable for the H shortcut");
     CHECK(diffOverlay != nullptr && !diffOverlay->isChecked() && diffHl && !diffHl->isChecked(),
@@ -2546,7 +2546,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             QApplication::sendEvent(referenceView, &event);
             pump(20);
 
-            QPushButton *lockReference = findBtn(ws, QStringLiteral("锁定基准"));
+            QPushButton *lockReference = findBtn(ws, QStringLiteral("Lock Reference"));
             CHECK(lockReference != nullptr, "compare exposes the lock-reference button");
             if (lockReference)
                 lockReference->click();
@@ -2605,7 +2605,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         // repaints the live crosshair; none may re-rasterize the source image.
         quint64 before0 = first0;
         quint64 before1 = first1;
-        QCheckBox *crosshairChk = findChk(ws, QStringLiteral("同步准星"));
+        QCheckBox *crosshairChk = findChk(ws, QStringLiteral("Sync Crosshair"));
         CHECK(crosshairChk != nullptr, "cache gate: synced-crosshair control is discoverable");
         if (crosshairChk)
         {
@@ -2767,8 +2767,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             // (scale from the shared transform when zoom sync is on, offset from
             // the shared transform when drag sync is on), so the wheel must honor
             // each toggle independently through the real checkbox controls.
-            QCheckBox *zoomSyncChk = findChk(ws, QStringLiteral("同步缩放"));
-            QCheckBox *dragSyncChk = findChk(ws, QStringLiteral("同步拖动"));
+            QCheckBox *zoomSyncChk = findChk(ws, QStringLiteral("Sync Zoom"));
+            QCheckBox *dragSyncChk = findChk(ws, QStringLiteral("Synchronized drag"));
             CHECK(zoomSyncChk != nullptr && dragSyncChk != nullptr,
                   "wheel gate: both per-axis sync controls must exist for the mixed-mode gate");
             CHECK(zoomSyncChk && zoomSyncChk->text().contains(QStringLiteral("(Z)")),
@@ -3215,13 +3215,13 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                 linkPane1 = view;
         }
         CHECK(linkPane0 && linkPane1, "pixel-link gate: both real Compare panes are available");
-        QCheckBox *pixelLink = findChk(ws, QStringLiteral("像素连线"));
+        QCheckBox *pixelLink = findChk(ws, QStringLiteral("Pixel Link"));
         CHECK(pixelLink != nullptr, "pixel-link gate: real Pixel Link control is discoverable");
 
         QLabel *linkInfo = nullptr;
         for (QLabel *label : ws->findChildren<QLabel *>())
         {
-            if (label && label->text().startsWith(QStringLiteral("标记:")))
+            if (label && label->text().startsWith(QStringLiteral("Flag:")))
             {
                 linkInfo = label;
                 break;
@@ -3272,7 +3272,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                 {sourceFrame, std::make_shared<ImageFrame>(placeholderMeta, ImageData{})});
             pixelLink->setChecked(false);
             pixelLink->setChecked(true);
-            CHECK(linkInfo->toolTip().contains(QStringLiteral("[1] 无效")),
+            CHECK(linkInfo->toolTip().contains(QStringLiteral("[1] invalid")),
                   "pixel-link gate: metadata-only placeholder reports 无效");
             CHECK(!linkInfo->toolTip().contains(QStringLiteral("[1] RGB(0,0,0)")),
                   "pixel-link gate: placeholder never falls back to its display LOD");
@@ -3304,8 +3304,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     QProgressBar *failedLoadProgress =
         ws->findChild<QProgressBar *>(QStringLiteral("compareLoadingProgress"));
     CHECK(failedLoadPage && failedLoadPage->isVisible() && failedLoadLabel &&
-              (failedLoadLabel->text().contains(QStringLiteral("没有可用")) ||
-               failedLoadLabel->text().contains(QStringLiteral("无法加载"))),
+              (failedLoadLabel->text().contains(QStringLiteral("Not available")) ||
+               failedLoadLabel->text().contains(QStringLiteral("Unable to Load"))),
           "failed Compare load shows an actionable empty-state explanation");
     CHECK(failedLoadProgress && !failedLoadProgress->isVisible(),
           "failed Compare load hides the indeterminate progress indicator");
@@ -3342,7 +3342,7 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
           "fullscreen workflow: two-image selection remains authoritative");
     QAction *compareAction = nullptr;
     for (QAction *action : w.findChildren<QAction *>())
-        if (action && action->text().startsWith(QStringLiteral("比较模式")))
+        if (action && action->text().startsWith(QStringLiteral("Compare Mode")))
             compareAction = action;
     CHECK(compareAction != nullptr, "fullscreen workflow: Compare action is discoverable");
     if (!compareAction)
@@ -3369,7 +3369,7 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
     {
         const QString browseStatus = w.statusBar()->currentMessage();
         CompareWorkspace *compare = compareDialog->findChild<CompareWorkspace *>();
-        QCheckBox *pixelLink = compare ? findChk(compare, QStringLiteral("像素连线")) : nullptr;
+        QCheckBox *pixelLink = compare ? findChk(compare, QStringLiteral("Pixel Link")) : nullptr;
         RawImageView *linkPane = nullptr;
         if (compare)
         {
@@ -3402,7 +3402,7 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
 
             pixelLink->setChecked(true);
             sendLeftClick(linkPane, paneCenter);
-            CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("像素连线")),
+            CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("Pixel Link")),
                   "fullscreen workflow: Pixel Link publishes its transient status");
             CHECK(sel->selection() == expectedSelection,
                   "fullscreen workflow: Pixel Link click preserves the Browse pair selection");
@@ -3421,7 +3421,7 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
             }
         }
         CHECK(!compareDialog->isVisible(), "fullscreen workflow: Escape closes fullscreen Compare");
-        CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("像素连线")) &&
+        CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("Pixel Link")) &&
                   w.statusBar()->currentMessage() == expectedBrowseStatus,
               "fullscreen workflow: leaving Compare restores the current Browse identity");
     }
@@ -3489,7 +3489,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     QAction *compareAction = nullptr;
     for (QAction *action : w.findChildren<QAction *>())
     {
-        if (action && action->text().startsWith(QStringLiteral("比较模式")))
+        if (action && action->text().startsWith(QStringLiteral("Compare Mode")))
         {
             compareAction = action;
             break;
@@ -3534,8 +3534,8 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     if (compare)
     {
         for (QPushButton *button : compare->findChildren<QPushButton *>())
-            if (button->text().contains(QStringLiteral("上一对")) ||
-                button->text().contains(QStringLiteral("下一对")))
+            if (button->text().contains(QStringLiteral("Previous Pair")) ||
+                button->text().contains(QStringLiteral("Next pair")))
                 hasPairButton = true;
     }
     CHECK(compare && !hasPairButton, "Compare exposes no previous/next pair buttons");
@@ -3659,7 +3659,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         QAction *compareAction = nullptr;
         for (QAction *action : w.findChildren<QAction *>())
         {
-            if (action && action->text().startsWith(QStringLiteral("比较模式")))
+            if (action && action->text().startsWith(QStringLiteral("Compare Mode")))
             {
                 compareAction = action;
                 break;
@@ -3730,7 +3730,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         QPushButton *reportButton = nullptr;
         for (QPushButton *button : compareDialog->findChildren<QPushButton *>())
         {
-            if (button && button->text().startsWith(QStringLiteral("导出报告")))
+            if (button && button->text().startsWith(QStringLiteral("Export Report")))
             {
                 reportButton = button;
                 break;
@@ -3844,7 +3844,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         {
             for (QPushButton *button : progress->findChildren<QPushButton *>())
             {
-                if (button && button->text().startsWith(QStringLiteral("取消")))
+                if (button && button->text().startsWith(QStringLiteral("Cancel")))
                 {
                     cancelButton = button;
                     break;
@@ -3942,7 +3942,7 @@ void workflow12_compare_mixed_fit(const QString &dirPath)
         CHECK(qAbs(pane0->scale() / fit0 - pane1->scale() / fit1) < 0.05,
               "mixed-fit workflow starts with one shared relative zoom ratio");
 
-        QCheckBox *uniform = findChk(ws, QStringLiteral("统一像素倍率"));
+        QCheckBox *uniform = findChk(ws, QStringLiteral("Uniform Pixel Scale"));
         CHECK(uniform != nullptr, "mixed-fit workflow exposes Uniform Pixel Scale");
         if (uniform)
         {
@@ -4102,10 +4102,10 @@ void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
 
     QWidget *canvas = ws->findChild<QWidget *>("compareCanvas");
     QWidget *gridPage = ws->findChild<QWidget *>("compareGridPage");
-    QCheckBox *split = findChk(ws, QStringLiteral("左右分割"));
-    QCheckBox *swipe = findChk(ws, QStringLiteral("滑动对比"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
-    QCheckBox *checker = findChk(ws, QStringLiteral("棋盘对比"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Side-by-Side Split"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe Compare"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay Compare"));
+    QCheckBox *checker = findChk(ws, QStringLiteral("Checkerboard Compare"));
     CHECK(canvas != nullptr, "canvas workflow: compare exposes the compareCanvas widget");
     if (!canvas || !split || !swipe || !overlay || !checker)
         return; // planned canvas contract is absent — the check above is the red gate
@@ -4413,20 +4413,20 @@ void workflow5_export_current_output_directory(const QString &rootDir)
             const int clipboardIndex = modeCombo->findData(QStringLiteral("clipboard"));
             const int convertIndex = modeCombo->findData(QStringLiteral("convert"));
             CHECK(csvIndex >= 0 &&
-                      modeCombo->itemText(csvIndex) == QStringLiteral("图像元数据清单 CSV"),
+                      modeCombo->itemText(csvIndex) == QStringLiteral("Image Metadata Manifest CSV"),
                   "CSV inventory mode uses the metadata-list label");
             CHECK(jsonIndex >= 0 &&
-                      modeCombo->itemText(jsonIndex) == QStringLiteral("图像元数据清单 JSON"),
+                      modeCombo->itemText(jsonIndex) == QStringLiteral("Image metadata manifest JSON"),
                   "JSON inventory mode uses the metadata-list label");
             CHECK(htmlIndex >= 0 &&
-                      modeCombo->itemText(htmlIndex) == QStringLiteral("图像元数据清单 HTML"),
+                      modeCombo->itemText(htmlIndex) == QStringLiteral("Image Metadata List HTML"),
                   "HTML inventory mode uses the metadata-list label");
             bool oldReportLabel = false;
             for (int i = 0; i < modeCombo->count(); ++i)
             {
                 const QString text = modeCombo->itemText(i);
-                if (text == QStringLiteral("CSV 报告") || text == QStringLiteral("JSON 报告") ||
-                    text == QStringLiteral("HTML 报告"))
+                if (text == QStringLiteral("CSV report") || text == QStringLiteral("JSON report") ||
+                    text == QStringLiteral("HTML Report"))
                     oldReportLabel = true;
             }
             CHECK(!oldReportLabel, "inventory modes are not labeled as 报告");
@@ -4442,13 +4442,13 @@ void workflow5_export_current_output_directory(const QString &rootDir)
             };
             auto *outputRow =
                 dialog.findChild<QWidget *>(QStringLiteral("exportOutputDirectoryRow"));
-            auto *formatGroup = groupTitled(QStringLiteral("格式"));
-            auto *resizeGroup = groupTitled(QStringLiteral("缩放"));
-            auto *watermarkGroup = groupTitled(QStringLiteral("水印"));
-            auto *cropGroup = groupTitled(QStringLiteral("裁剪"));
-            auto *metadataGroup = groupTitled(QStringLiteral("元数据"));
-            auto *renameGroup = groupTitled(QStringLiteral("批量重命名 (留空=原名)"));
-            auto *contactGroup = groupTitled(QStringLiteral("联系表 / PDF 选项"));
+            auto *formatGroup = groupTitled(QStringLiteral("Format"));
+            auto *resizeGroup = groupTitled(QStringLiteral("Resize"));
+            auto *watermarkGroup = groupTitled(QStringLiteral("Watermark"));
+            auto *cropGroup = groupTitled(QStringLiteral("Crop"));
+            auto *metadataGroup = groupTitled(QStringLiteral("Metadata"));
+            auto *renameGroup = groupTitled(QStringLiteral("Batch Rename (leave blank = original name)"));
+            auto *contactGroup = groupTitled(QStringLiteral("Contact sheet / PDF options"));
             CHECK(outputRow && formatGroup && resizeGroup && watermarkGroup && cropGroup &&
                       metadataGroup && renameGroup && contactGroup,
                   "export dialog exposes output and the image-transform groups");
@@ -5053,17 +5053,17 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
     viewer.resize(320, 240);
     viewer.show();
     const ContextMenuSnapshot emptyMenu = contextMenuSnapshot(viewer);
-    CHECK(!emptyMenu.enabledLabels.contains(QStringLiteral("复制图片")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("复制路径")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("复制文件名")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("复制像素颜色 (#RRGGBB)")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("另存为...")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("放大 (+)")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("缩小 (-)")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("适应窗口 (0 / F)")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("实际大小 100% (1)")) &&
-              !emptyMenu.enabledLabels.contains(QStringLiteral("框选区域 (R)")) &&
-              emptyMenu.enabledLabels.contains(QStringLiteral("全屏 (F11)")),
+    CHECK(!emptyMenu.enabledLabels.contains(QStringLiteral("Copy image")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Copy path")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Copy filename")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Copy pixel color (#RRGGBB)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Save As...")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Zoom In (+)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Zoom out (-)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Fit to window (0 / F)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Actual Size 100% (1)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("Marquee selection (R)")) &&
+              emptyMenu.enabledLabels.contains(QStringLiteral("Fullscreen (F11)")),
           "empty viewer disables image-dependent context actions but keeps fullscreen available");
     viewer.setImage(path);
     {
@@ -5120,27 +5120,27 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
               viewer.accessibleDescription().contains(QStringLiteral("Space")),
           "frame status and playback shortcut remain available to assistive UI");
     const ContextMenuSnapshot frameMenu = contextMenuSnapshot(viewer);
-    CHECK(frameMenu.labels.contains(QStringLiteral("播放")) &&
-              frameMenu.labels.contains(QStringLiteral("重新开始")) &&
-              frameMenu.labels.contains(QStringLiteral("上一帧 (,)")) &&
-              frameMenu.labels.contains(QStringLiteral("下一帧 (.)")),
+    CHECK(frameMenu.labels.contains(QStringLiteral("Play")) &&
+              frameMenu.labels.contains(QStringLiteral("Restart")) &&
+              frameMenu.labels.contains(QStringLiteral("Previous Frame (,)")) &&
+              frameMenu.labels.contains(QStringLiteral("Next frame (.)")),
           "animated context menu keeps explicit playback and frame navigation");
-    CHECK(!frameMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
-              !frameMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+    CHECK(!frameMenu.enabledLabels.contains(QStringLiteral("Previous (←)")) &&
+              !frameMenu.enabledLabels.contains(QStringLiteral("Next (→)")),
           "standalone viewer disables file navigation without a browse sequence");
 
     viewer.setBrowseSequence(
         {path, path + QStringLiteral(".next"), path + QStringLiteral(".last")});
     const ContextMenuSnapshot firstFileMenu = contextMenuSnapshot(viewer);
-    CHECK(!firstFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
-              firstFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+    CHECK(!firstFileMenu.enabledLabels.contains(QStringLiteral("Previous (←)")) &&
+              firstFileMenu.enabledLabels.contains(QStringLiteral("Next (→)")),
           "browse sequence disables previous navigation at the first image");
 
     viewer.setBrowseSequence(
         {path + QStringLiteral(".first"), path, path + QStringLiteral(".last")});
     const ContextMenuSnapshot middleFileMenu = contextMenuSnapshot(viewer);
-    CHECK(middleFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
-              middleFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+    CHECK(middleFileMenu.enabledLabels.contains(QStringLiteral("Previous (←)")) &&
+              middleFileMenu.enabledLabels.contains(QStringLiteral("Next (→)")),
           "browse sequence enables both file directions in the middle");
 
     QString otherSlash = path;
@@ -5152,15 +5152,15 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
         {path + QStringLiteral(".first"), otherSlash, path + QStringLiteral(".last")});
     CHECK(viewer.browseIndex() == 1, "browse sequence index matches the other slash style");
     const ContextMenuSnapshot slashMenu = contextMenuSnapshot(viewer);
-    CHECK(slashMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
-              slashMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+    CHECK(slashMenu.enabledLabels.contains(QStringLiteral("Previous (←)")) &&
+              slashMenu.enabledLabels.contains(QStringLiteral("Next (→)")),
           "browse sequence keeps both directions when the path slash style differs");
 
     viewer.setBrowseSequence(
         {path + QStringLiteral(".first"), path + QStringLiteral(".middle"), path});
     const ContextMenuSnapshot lastFileMenu = contextMenuSnapshot(viewer);
-    CHECK(lastFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
-              !lastFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+    CHECK(lastFileMenu.enabledLabels.contains(QStringLiteral("Previous (←)")) &&
+              !lastFileMenu.enabledLabels.contains(QStringLiteral("Next (→)")),
           "browse sequence disables next navigation at the last image");
 
     viewer.close();
@@ -5182,16 +5182,16 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
     CHECK(pages.frameCount() == 3 && !pages.sequenceInfo().animated,
           "multi-page TIFF opens as a three-page document, not an animation");
     const ContextMenuSnapshot pageMenu = contextMenuSnapshot(pages);
-    CHECK(pageMenu.labels.contains(QStringLiteral("第一页")) &&
-              pageMenu.labels.contains(QStringLiteral("上一页 (,)")) &&
-              pageMenu.labels.contains(QStringLiteral("下一页 (.)")),
+    CHECK(pageMenu.labels.contains(QStringLiteral("First Page")) &&
+              pageMenu.labels.contains(QStringLiteral("Previous Page (,)")) &&
+              pageMenu.labels.contains(QStringLiteral("Next Page (.)")),
           "multi-page context menu exposes document-specific page navigation");
-    CHECK(!pageMenu.labels.contains(QStringLiteral("播放")) &&
-              !pageMenu.labels.contains(QStringLiteral("暂停")),
+    CHECK(!pageMenu.labels.contains(QStringLiteral("Play")) &&
+              !pageMenu.labels.contains(QStringLiteral("Pause")),
           "multi-page context menu does not expose a dead playback action");
-    CHECK(!pageMenu.enabledLabels.contains(QStringLiteral("第一页")) &&
-              !pageMenu.enabledLabels.contains(QStringLiteral("上一页 (,)")) &&
-              pageMenu.enabledLabels.contains(QStringLiteral("下一页 (.)")),
+    CHECK(!pageMenu.enabledLabels.contains(QStringLiteral("First Page")) &&
+              !pageMenu.enabledLabels.contains(QStringLiteral("Previous Page (,)")) &&
+              pageMenu.enabledLabels.contains(QStringLiteral("Next Page (.)")),
           "multi-page context menu communicates the first-page boundary");
 
     pages.setFrameIndex(2);
@@ -5202,9 +5202,9 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
             pump(25);
     }
     const ContextMenuSnapshot lastPageMenu = contextMenuSnapshot(pages);
-    CHECK(lastPageMenu.enabledLabels.contains(QStringLiteral("第一页")) &&
-              lastPageMenu.enabledLabels.contains(QStringLiteral("上一页 (,)")) &&
-              !lastPageMenu.enabledLabels.contains(QStringLiteral("下一页 (.)")),
+    CHECK(lastPageMenu.enabledLabels.contains(QStringLiteral("First Page")) &&
+              lastPageMenu.enabledLabels.contains(QStringLiteral("Previous Page (,)")) &&
+              !lastPageMenu.enabledLabels.contains(QStringLiteral("Next Page (.)")),
           "multi-page context menu communicates the last-page boundary");
 
     pages.close();
@@ -5232,10 +5232,10 @@ void workflow17_batch_dialog(const QString &rootDir)
     auto *opGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchOpGroup"));
     auto *paramGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchParamGroup"));
     auto *progressGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchProgressGroup"));
-    CHECK(fileGroup && fileGroup->title() == QStringLiteral("文件"), "batch has 文件 group");
-    CHECK(opGroup && opGroup->title() == QStringLiteral("操作"), "batch has 操作 group");
-    CHECK(paramGroup && paramGroup->title() == QStringLiteral("参数"), "batch has 参数 group");
-    CHECK(progressGroup && progressGroup->title() == QStringLiteral("进度"),
+    CHECK(fileGroup && fileGroup->title() == QStringLiteral("File"), "batch has 文件 group");
+    CHECK(opGroup && opGroup->title() == QStringLiteral("Operations"), "batch has 操作 group");
+    CHECK(paramGroup && paramGroup->title() == QStringLiteral("Parameters"), "batch has 参数 group");
+    CHECK(progressGroup && progressGroup->title() == QStringLiteral("Progress"),
           "batch has 进度 group");
 
     auto *resizePanel = dialog.findChild<QWidget *>(QStringLiteral("batchResizePanel"));
@@ -5297,11 +5297,11 @@ void workflow17_batch_dialog(const QString &rootDir)
             QElapsedTimer timer;
             timer.start();
             while (timer.elapsed() < 8000 &&
-                   (!startBtn->isEnabled() || !status->text().contains("完成")))
+                   (!startBtn->isEnabled() || !status->text().contains("Done")))
                 pump(25);
         }
         CHECK(startBtn->isEnabled(), "start is re-enabled after the batch finishes");
-        CHECK(status->text().contains(QStringLiteral("完成")), "status reports batch completion");
+        CHECK(status->text().contains(QStringLiteral("Done")), "status reports batch completion");
         CHECK(log->toPlainText().contains(QStringLiteral("[OK]")),
               "log streams a per-file OK line");
         CHECK(QFileInfo::exists(outputPath),
@@ -5346,16 +5346,16 @@ void workflow18_shell_copy_and_export_text()
         for (int i = 0; i < tabs->count(); ++i)
         {
             const QString title = tabs->tabText(i);
-            if (title == QStringLiteral("对比") || title == QStringLiteral("双图对比"))
+            if (title == QStringLiteral("Compare") || title == QStringLiteral("Two-image compare"))
                 compareTab = true;
-            if (title == QStringLiteral("差异图"))
+            if (title == QStringLiteral("Difference image"))
                 diffTab = true;
         }
         CHECK(!compareTab, "analysis panel has no 对比 tab");
         CHECK(!diffTab, "analysis panel has no 差异图 tab");
     }
     auto *stats = panel.findChild<QLabel *>(QStringLiteral("analysisStatsLabel"));
-    CHECK(stats && stats->text().contains(QStringLiteral("未选择图片")),
+    CHECK(stats && stats->text().contains(QStringLiteral("No Image Selected")),
           "empty analysis panel says no image is selected");
 
     MainWindow window;
@@ -5379,20 +5379,20 @@ void workflow18_shell_copy_and_export_text()
     summaryResult.failed = 1;
     summaryResult.message = "done 3 / 4 (failed 1): a.png; b.png (+1 more)";
     const QString summary = mviewer::ui::exportResultMessageZh(summaryResult);
-    CHECK(summary.contains(QStringLiteral("导出完成：3 / 4")), "done summary uses Chinese counts");
-    CHECK(summary.contains(QStringLiteral("，失败 1 个")), "done summary names the failure count");
+    CHECK(summary.contains(QStringLiteral("Export complete: 3 / 4")), "done summary uses Chinese counts");
+    CHECK(summary.contains(QStringLiteral(", 1 failed")), "done summary names the failure count");
     CHECK(summary.contains(QStringLiteral(": a.png; b.png (+1 more)")),
           "done summary keeps the named-failure tail");
 
     mviewer::exportjob::ExportJobResult conflict;
     conflict.message = "source/destination conflict";
-    CHECK(mviewer::ui::exportResultMessageZh(conflict) == QStringLiteral("源文件与目标文件冲突"),
+    CHECK(mviewer::ui::exportResultMessageZh(conflict) == QStringLiteral("Source file conflicts with target file"),
           "source/destination conflict is translated");
 
     mviewer::exportjob::ExportJobResult directory;
     directory.message = "cannot create output directory: E:/out";
     const QString directoryText = mviewer::ui::exportResultMessageZh(directory);
-    CHECK(directoryText == QStringLiteral("无法创建输出目录：E:/out"),
+    CHECK(directoryText == QStringLiteral("Cannot create output directory: E:/out"),
           "output directory errors keep the path suffix");
 
     mviewer::exportjob::ExportJobResult one;
@@ -5400,7 +5400,7 @@ void workflow18_shell_copy_and_export_text()
     one.total = 1;
     one.failed = 0;
     one.message = "done 1 output";
-    CHECK(mviewer::ui::exportResultMessageZh(one) == QStringLiteral("导出完成：1 / 1"),
+    CHECK(mviewer::ui::exportResultMessageZh(one) == QStringLiteral("Export complete: 1 / 1"),
           "done 1 output uses the numeric fields");
 
     mviewer::exportjob::ExportJobResult unknown;
@@ -5574,18 +5574,18 @@ void assertCompareControlsReachable(const QString &pathA, const QString &pathB)
         const std::string msg = std::string("compare control still exists: ") + name;
         CHECK(ws->findChild<QObject *>(QLatin1String(name)) != nullptr, msg.c_str());
     }
-    CHECK(findChk(ws, QStringLiteral("闪烁对比")) && findChk(ws, QStringLiteral("左右分割")) &&
-              findChk(ws, QStringLiteral("滑动对比")) && findChk(ws, QStringLiteral("叠加对比")) &&
-              findChk(ws, QStringLiteral("棋盘")) && findChk(ws, QStringLiteral("同步准星")) &&
-              findChk(ws, QStringLiteral("统一像素倍率")),
+    CHECK(findChk(ws, QStringLiteral("Flicker Compare")) && findChk(ws, QStringLiteral("Side-by-Side Split")) &&
+              findChk(ws, QStringLiteral("Swipe Compare")) && findChk(ws, QStringLiteral("Overlay Compare")) &&
+              findChk(ws, QStringLiteral("Checkerboard")) && findChk(ws, QStringLiteral("Sync Crosshair")) &&
+              findChk(ws, QStringLiteral("Uniform Pixel Scale")),
           "compare mode and sync labels stay reachable");
 
     auto *zoomBox = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck"));
     auto *dragBox = ws->findChild<QCheckBox *>(QStringLiteral("syncDragCheck"));
     auto *rotateBox = ws->findChild<QCheckBox *>(QStringLiteral("syncRotateCheck"));
-    auto *crossBox = findChk(ws, QStringLiteral("同步准星"));
+    auto *crossBox = findChk(ws, QStringLiteral("Sync Crosshair"));
     auto *linkBox = ws->findChild<QCheckBox *>(QStringLiteral("pixelLinkToggle"));
-    auto *uniformBox = findChk(ws, QStringLiteral("统一像素倍率"));
+    auto *uniformBox = findChk(ws, QStringLiteral("Uniform Pixel Scale"));
     const bool zoomWas = zoomBox && zoomBox->isChecked();
     const bool dragWas = dragBox && dragBox->isChecked();
     expectSyncMirror(zoomBox, ws->findChild<QAction *>(QStringLiteral("syncZoomAction")),

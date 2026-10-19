@@ -540,7 +540,7 @@ void testManualRejectedReplacement()
     CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
           "accepted gated manual job started and is blocked");
     CHECK(panel.hasLoadedImage(), "image stays loaded while the gated job runs");
-    CHECK(panel.analysisText().contains("分析中"),
+    CHECK(panel.analysisText().contains("Analyzing"),
           "accepted manual job shows a pending state");
     QPushButton *exportButton = reportButton(panel);
     CHECK(exportButton && !exportButton->isEnabled(),
@@ -554,7 +554,7 @@ void testManualRejectedReplacement()
         panel.runAnalyzer("brightness");
         CHECK(panel.hasLoadedImage(),
               "image stays loaded after the rejected replacement");
-        CHECK(!panel.analysisText().contains("分析中"),
+        CHECK(!panel.analysisText().contains("Analyzing"),
               "rejected replacement clears the pending state");
         CHECK(panel.analysisText().contains("请稍后重试"),
               "rejected replacement shows an explicit retryable unavailable message");
@@ -617,14 +617,14 @@ void testManualNoResultTerminal()
     panel.reanalyze();
     CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
           "no-result analyzer run submitted to the Analysis pool");
-    CHECK(panel.analysisText().contains("分析中"),
+    CHECK(panel.analysisText().contains("Analyzing"),
           "pending state shown while the no-result analyzer is blocked");
     QPushButton *exportButton = reportButton(panel);
     CHECK(exportButton && !exportButton->isEnabled(),
           "report export is disabled while the no-result request is pending");
 
     opener.open();
-    CHECK(waitFor([&panel]() { return !panel.analysisText().contains("分析中"); }, 5000),
+    CHECK(waitFor([&panel]() { return !panel.analysisText().contains("Analyzing"); }, 5000),
           "pending state is replaced by an explicit terminal");
     CHECK(panel.analysisText().contains("未产生结果"),
           "analysis surface shows the explicit no-result message");

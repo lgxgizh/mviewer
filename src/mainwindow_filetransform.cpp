@@ -71,10 +71,10 @@ class BatchFileProgress
     {
         if (total < 2 || parent == nullptr)
             return;
-        const QString label = kind == FileTransformKind::Rotate ? MainWindow::tr("正在旋转…")
-                                                                : MainWindow::tr("正在翻转…");
+        const QString label = kind == FileTransformKind::Rotate ? MainWindow::tr("Rotating…")
+                                                                : MainWindow::tr("Flipping…");
         m_dialog =
-            std::make_unique<ShownProgressDialog>(label, QStringLiteral("取消"), 0, total, parent);
+            std::make_unique<ShownProgressDialog>(label, QStringLiteral("Cancel"), 0, total, parent);
         m_dialog->setObjectName(QStringLiteral("batchRotateFlipProgress"));
         m_dialog->setWindowModality(Qt::WindowModal);
         m_dialog->setAutoClose(false);
@@ -120,8 +120,8 @@ class BatchFileProgress
     QString finishedLabel(int finished) const
     {
         return (m_kind == FileTransformKind::Rotate)
-                   ? MainWindow::tr("已旋转 %1 / %2").arg(finished).arg(m_total)
-                   : MainWindow::tr("已翻转 %1 / %2").arg(finished).arg(m_total);
+                   ? MainWindow::tr("Rotated %1 / %2").arg(finished).arg(m_total)
+                   : MainWindow::tr("Flipped %1 / %2").arg(finished).arg(m_total);
     }
 
     std::unique_ptr<ShownProgressDialog> m_dialog;
@@ -293,16 +293,16 @@ void showRotateSuccess(QStatusBar *bar, const QStringList &paths, const FileTran
     {
         showStatus(
             bar,
-            MainWindow::tr("已取消：成功旋转 %1 / %2 张").arg(batch.successCount).arg(paths.size()),
+            MainWindow::tr("Canceled: successfully rotated %1 / %2 images").arg(batch.successCount).arg(paths.size()),
             3000);
         return;
     }
     const int norm = normalizedDegrees(degrees);
     if (paths.size() == 1)
-        showStatus(bar, MainWindow::tr("已旋转并覆盖原文件 (%1°)").arg(norm), 2000);
+        showStatus(bar, MainWindow::tr("Rotated and overwrote the original file (%1°)").arg(norm), 2000);
     else
         showStatus(bar,
-                   MainWindow::tr("已旋转 %1 张图片并覆盖原文件 (%2°)").arg(paths.size()).arg(norm),
+                   MainWindow::tr("Rotated %1 images and overwrote the original files (%2°)").arg(paths.size()).arg(norm),
                    3000);
 }
 
@@ -311,14 +311,16 @@ void warnRotateFailures(QWidget *parent, const QStringList &paths, const FileTra
     const QStringList lines = transformFailureLines(batch);
     if (paths.size() == 1)
     {
-        QMessageBox::warning(parent, MainWindow::tr("旋转失败"),
-                             MainWindow::tr("无法旋转图片：%1\n%2")
+        QMessageBox::warning(parent, MainWindow::tr("Rotation failed"),
+                             MainWindow::tr("Unable to rotate image: %1
+%2")
                                  .arg(batch.failedPaths.first(), batch.failedErrors.first()));
         return;
     }
-    const QString title = batch.canceled ? MainWindow::tr("批量旋转已取消（含失败）")
-                                         : MainWindow::tr("批量旋转完成（含失败）");
-    const QString msg = MainWindow::tr("成功旋转 %1 张图片，%2 张失败：\n%3")
+    const QString title = batch.canceled ? MainWindow::tr("Batch rotate canceled (including failures)")
+                                         : MainWindow::tr("Batch rotation complete (including failures)");
+    const QString msg = MainWindow::tr("Successfully rotated %1 images, %2 failed:
+%3")
                             .arg(batch.successCount)
                             .arg(batch.failedPaths.size())
                             .arg(lines.join(QStringLiteral("\n")));
@@ -331,7 +333,7 @@ void showRotateFailureStatus(QStatusBar *bar, const QStringList &paths,
     if (batch.canceled)
     {
         showStatus(bar,
-                   MainWindow::tr("旋转已取消：%1 成功，%2 失败，%3 未处理")
+                   MainWindow::tr("Rotate canceled: %1 succeeded, %2 failed, %3 unprocessed")
                        .arg(batch.successCount)
                        .arg(batch.failedPaths.size())
                        .arg(skippedCount(paths, batch)),
@@ -339,7 +341,7 @@ void showRotateFailureStatus(QStatusBar *bar, const QStringList &paths,
         return;
     }
     showStatus(bar,
-               MainWindow::tr("旋转完成：%1 成功，%2 失败")
+               MainWindow::tr("Rotation complete: %1 succeeded, %2 failed")
                    .arg(batch.successCount)
                    .arg(batch.failedPaths.size()),
                3000);
@@ -364,21 +366,21 @@ void showFlipSuccess(QStatusBar *bar, const QStringList &paths, const FileTransf
     {
         showStatus(
             bar,
-            MainWindow::tr("已取消：成功翻转 %1 / %2 张").arg(batch.successCount).arg(paths.size()),
+            MainWindow::tr("Cancelled: successfully flipped %1 / %2").arg(batch.successCount).arg(paths.size()),
             3000);
         return;
     }
     if (paths.size() == 1)
     {
         showStatus(bar,
-                   horizontal ? MainWindow::tr("已水平翻转并覆盖原文件")
-                              : MainWindow::tr("已垂直翻转并覆盖原文件"),
+                   horizontal ? MainWindow::tr("Flipped horizontally and overwrote the original file")
+                              : MainWindow::tr("Flipped vertically and overwrote the original file"),
                    2000);
         return;
     }
     showStatus(bar,
-               horizontal ? MainWindow::tr("已水平翻转 %1 张图片并覆盖原文件").arg(paths.size())
-                          : MainWindow::tr("已垂直翻转 %1 张图片并覆盖原文件").arg(paths.size()),
+               horizontal ? MainWindow::tr("Horizontally flipped %1 images and overwrote the original files").arg(paths.size())
+                          : MainWindow::tr("Vertically flipped %1 images and overwrote the original files").arg(paths.size()),
                3000);
 }
 
@@ -387,14 +389,16 @@ void warnFlipFailures(QWidget *parent, const QStringList &paths, const FileTrans
     const QStringList lines = transformFailureLines(batch);
     if (paths.size() == 1)
     {
-        QMessageBox::warning(parent, MainWindow::tr("翻转失败"),
-                             MainWindow::tr("无法翻转图片：%1\n%2")
+        QMessageBox::warning(parent, MainWindow::tr("Flip failed"),
+                             MainWindow::tr("Unable to flip image: %1
+%2")
                                  .arg(batch.failedPaths.first(), batch.failedErrors.first()));
         return;
     }
-    const QString title = batch.canceled ? MainWindow::tr("批量翻转已取消（含失败）")
-                                         : MainWindow::tr("批量翻转完成（含失败）");
-    const QString msg = MainWindow::tr("成功翻转 %1 张图片，%2 张失败：\n%3")
+    const QString title = batch.canceled ? MainWindow::tr("Batch flip canceled (including failures)")
+                                         : MainWindow::tr("Batch flip complete (including failures)");
+    const QString msg = MainWindow::tr("Successfully flipped %1 images, %2 failed:
+%3")
                             .arg(batch.successCount)
                             .arg(batch.failedPaths.size())
                             .arg(lines.join(QStringLiteral("\n")));
@@ -407,7 +411,7 @@ void showFlipFailureStatus(QStatusBar *bar, const QStringList &paths,
     if (batch.canceled)
     {
         showStatus(bar,
-                   MainWindow::tr("翻转已取消：%1 成功，%2 失败，%3 未处理")
+                   MainWindow::tr("Flip canceled: %1 succeeded, %2 failed, %3 unprocessed")
                        .arg(batch.successCount)
                        .arg(batch.failedPaths.size())
                        .arg(skippedCount(paths, batch)),
@@ -415,7 +419,7 @@ void showFlipFailureStatus(QStatusBar *bar, const QStringList &paths,
         return;
     }
     showStatus(bar,
-               MainWindow::tr("翻转完成：%1 成功，%2 失败")
+               MainWindow::tr("Flip complete: %1 succeeded, %2 failed")
                    .arg(batch.successCount)
                    .arg(batch.failedPaths.size()),
                3000);
@@ -442,20 +446,24 @@ bool confirmTransform(QWidget *parent, const QStringList &paths, FileTransformKi
     const bool rotate = (kind == FileTransformKind::Rotate);
     const QString prompt =
         paths.size() == 1
-            ? (rotate ? MainWindow::tr("旋转将直接修改并覆盖原图像文件。\n是否继续？")
-                      : MainWindow::tr("翻转将直接修改并覆盖原图像文件。\n是否继续？"))
-            : (rotate ? MainWindow::tr("旋转将直接修改并覆盖选中的 %1 个图像文件。\n是否继续？")
+            ? (rotate ? MainWindow::tr("Rotation will directly modify and overwrite the original image file.
+Continue?")
+                      : MainWindow::tr("Flipping will directly modify and overwrite the original image file.
+Continue?"))
+            : (rotate ? MainWindow::tr("Rotation will directly modify and overwrite the %1 selected image files.
+Continue?")
                             .arg(paths.size())
-                      : MainWindow::tr("翻转将直接修改并覆盖选中的 %1 个图像文件。\n是否继续？")
+                      : MainWindow::tr("Flipping will directly modify and overwrite the selected %1 image files.
+Continue?")
                             .arg(paths.size()));
 
     QMessageBox box(parent);
     box.setIcon(QMessageBox::Question);
-    box.setWindowTitle(MainWindow::tr("修改原文件确认"));
+    box.setWindowTitle(MainWindow::tr("Confirm original file modification"));
     box.setText(prompt);
     box.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
     box.setDefaultButton(QMessageBox::Ok);
-    auto *cb = new QCheckBox(MainWindow::tr("不再提示"), &box);
+    auto *cb = new QCheckBox(MainWindow::tr("Don't show again"), &box);
     box.setCheckBox(cb);
 
     const int res = box.exec();
@@ -485,7 +493,7 @@ void MainWindow::rotateCurrentImage(int degrees)
         transformTargetPaths(m_selection, m_thumbnailPanel, currentImagePath());
     if (paths.isEmpty())
     {
-        showStatus(statusBar(), tr("没有可旋转的图片"), 2000);
+        showStatus(statusBar(), tr("No images available to rotate"), 2000);
         return;
     }
 
@@ -517,7 +525,7 @@ void MainWindow::flipCurrentImage(bool horizontal)
         transformTargetPaths(m_selection, m_thumbnailPanel, currentImagePath());
     if (paths.isEmpty())
     {
-        showStatus(statusBar(), tr("没有可翻转的图片"), 2000);
+        showStatus(statusBar(), tr("No images to flip"), 2000);
         return;
     }
 

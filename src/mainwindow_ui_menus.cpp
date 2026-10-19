@@ -66,10 +66,10 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
 {
     // ----- 编辑(&E) — A-10: Undo/Redo -----
     auto *editMenu = menuBar->addMenu("编辑(&E)");
-    m_actUndo = new QAction("撤销(&U)", this);
+    m_actUndo = new QAction("Undo(&U)", this);
     m_actUndo->setShortcut(QKeySequence::Undo); // Ctrl+Z
     m_actUndo->setEnabled(false);
-    m_actRedo = new QAction("重做(&R)", this);
+    m_actRedo = new QAction("Redo(&R)", this);
     m_actRedo->setShortcut(QKeySequence::Redo); // Ctrl+Y / Ctrl+Shift+Z
     m_actRedo->setEnabled(false);
     editMenu->addAction(m_actUndo);
@@ -109,13 +109,13 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
     buildEditTransformActions(editMenu);
 
     editMenu->addSeparator();
-    m_actSelectAll = new QAction(tr("全选(&A)"), this);
+    m_actSelectAll = new QAction(tr("Select All(&A)"), this);
     m_actSelectAll->setObjectName("selectAllAction");
     m_actSelectAll->setShortcut(QKeySequence::SelectAll);
-    m_actDeselectAll = new QAction(tr("取消选择(&D)"), this);
+    m_actDeselectAll = new QAction(tr("Deselect (&D)"), this);
     m_actDeselectAll->setObjectName("deselectAllAction");
     m_actDeselectAll->setShortcut(QKeySequence("Ctrl+Shift+A"));
-    m_actInvertSelection = new QAction(tr("反向选择(&I)"), this);
+    m_actInvertSelection = new QAction(tr("Invert Selection(&I)"), this);
     m_actInvertSelection->setObjectName("invertSelectionAction");
     m_actInvertSelection->setShortcut(QKeySequence("Ctrl+Shift+I"));
     editMenu->addAction(m_actSelectAll);
@@ -145,7 +145,7 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
 void MainWindow::addOpenTrashEditAction(QMenu *editMenu)
 {
     editMenu->addSeparator();
-    auto *openTrash = new QAction(tr("打开回收站"), this);
+    auto *openTrash = new QAction(tr("Open Recycle Bin"), this);
     openTrash->setObjectName(QStringLiteral("openTrashAction"));
     editMenu->addAction(openTrash);
     connect(openTrash, &QAction::triggered, this,
@@ -167,29 +167,29 @@ QString actTip(const QString &label, const QAction *action)
 void MainWindow::buildEditTransformActions(QMenu *editMenu)
 {
     editMenu->addSeparator();
-    m_actRotateCW = new QAction(tr("顺时针旋转 90°(&R)"), this);
+    m_actRotateCW = new QAction(tr("Rotate 90° Clockwise (&R)"), this);
     m_actRotateCW->setObjectName("rotateCWAction");
     m_actRotateCW->setShortcut(QKeySequence("Ctrl+R"));
-    m_actRotateCW->setToolTip(actTip(tr("顺时针旋转 90° 并覆盖原文件"), m_actRotateCW));
+    m_actRotateCW->setToolTip(actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
     m_actRotateCW->setEnabled(false);
-    m_actRotateCCW = new QAction(tr("逆时针旋转 90°(&L)"), this);
+    m_actRotateCCW = new QAction(tr("Rotate 90° Counterclockwise(&L)"), this);
     m_actRotateCCW->setObjectName("rotateCCWAction");
     m_actRotateCCW->setShortcut(QKeySequence("Ctrl+Shift+R"));
-    m_actRotateCCW->setToolTip(actTip(tr("逆时针旋转 90° 并覆盖原文件"), m_actRotateCCW));
+    m_actRotateCCW->setToolTip(actTip(tr("Rotate 90° counterclockwise and overwrite original file"), m_actRotateCCW));
     m_actRotateCCW->setEnabled(false);
     editMenu->addAction(m_actRotateCW);
     editMenu->addAction(m_actRotateCCW);
     connect(m_actRotateCW, &QAction::triggered, this, [this]() { rotateCurrentImage(90); });
     connect(m_actRotateCCW, &QAction::triggered, this, [this]() { rotateCurrentImage(-90); });
-    m_actFlipH = new QAction(tr("水平翻转(&H)"), this);
+    m_actFlipH = new QAction(tr("Flip Horizontal(&H)"), this);
     m_actFlipH->setObjectName("flipHAction");
     m_actFlipH->setShortcut(QKeySequence("Ctrl+Shift+H"));
-    m_actFlipH->setToolTip(actTip(tr("水平翻转并覆盖原文件"), m_actFlipH));
+    m_actFlipH->setToolTip(actTip(tr("Flip Horizontal and Overwrite Original File"), m_actFlipH));
     m_actFlipH->setEnabled(false);
-    m_actFlipV = new QAction(tr("垂直翻转(&V)"), this);
+    m_actFlipV = new QAction(tr("Flip Vertical(&V)"), this);
     m_actFlipV->setObjectName("flipVAction");
     m_actFlipV->setShortcut(QKeySequence("Ctrl+Shift+V"));
-    m_actFlipV->setToolTip(actTip(tr("垂直翻转并覆盖原文件"), m_actFlipV));
+    m_actFlipV->setToolTip(actTip(tr("Flip Vertically and Overwrite Original File"), m_actFlipV));
     m_actFlipV->setEnabled(false);
     editMenu->addAction(m_actFlipH);
     editMenu->addAction(m_actFlipV);
@@ -204,7 +204,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actCompare = new QAction("比较模式(&C)", this);
     m_actCompare->setObjectName("compareAction");
     m_actCompare->setShortcut(QKeySequence("P"));
-    m_actCompare->setToolTip(tr("选中 2–8 张图片后按 P 或 C 打开比较"));
+    m_actCompare->setToolTip(tr("Select 2–8 images, then press P or C to open Compare"));
     m_actToggleAnalysis = new QAction("分析面板(&H)", this);
     m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
     m_actToggleAnalysis->setCheckable(true);
@@ -218,10 +218,10 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actHistoryForward->setObjectName("historyForwardAction");
     m_actHistoryForward->setShortcut(QKeySequence::Forward); // Alt+Right
     // P0: Directory-level back/forward (independent of image history).
-    m_actDirBack = new QAction("上一个目录", this);
+    m_actDirBack = new QAction("Previous directory", this);
     m_actDirBack->setObjectName("directoryBackAction");
     m_actDirBack->setShortcut(QKeySequence("Ctrl+Alt+Left"));
-    m_actDirForward = new QAction("下一个目录", this);
+    m_actDirForward = new QAction("Next directory", this);
     m_actDirForward->setObjectName("directoryForwardAction");
     m_actDirForward->setShortcut(QKeySequence("Ctrl+Alt+Right"));
     viewMenu->addAction(m_actHistoryBack);
@@ -244,11 +244,11 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actFocusBrowse->setShortcutContext(Qt::WindowShortcut);
     viewMenu->addAction(m_actFocusBrowse);
     addAction(m_actFocusBrowse);
-    m_actBrowseWorkspace = new QAction(tr("浏览布局"), this);
+    m_actBrowseWorkspace = new QAction(tr("Browse Layout"), this);
     m_actBrowseWorkspace->setObjectName("browseWorkspaceAction");
     m_actBrowseWorkspace->setCheckable(true);
     m_actBrowseWorkspace->setChecked(true);
-    m_actBrowseWorkspace->setToolTip(tr("隐藏分析和搜索面板，保留文件夹与预览导航"));
+    m_actBrowseWorkspace->setToolTip(tr("Hide analysis and search panels, keep folder and preview navigation"));
     viewMenu->addAction(m_actBrowseWorkspace);
     m_actToggleMetadata = new QAction("图片信息(&I)", this);
     m_actToggleMetadata->setObjectName("toggleMetadataAction"); // stable test discovery
@@ -272,7 +272,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
     m_actZoomActual = new QAction("实际大小(&A)", this);
     m_actZoomActual->setObjectName("zoomActualAction");
-    m_actFullscreen = new QAction("全屏(&U)", this);
+    m_actFullscreen = new QAction("Full Screen(&U)", this);
     m_actFullscreen->setShortcut(QKeySequence("F11"));
     viewMenu->addAction(m_actZoomIn);
     viewMenu->addAction(m_actZoomOut);
@@ -292,12 +292,12 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actSlideshow->setCheckable(true);
     viewMenu->addAction(m_actSlideshow);
     viewMenu->addSeparator();
-    m_actColorManagement = new QAction(tr("色彩管理 (CMS)"), this);
+    m_actColorManagement = new QAction(tr("Color Management (CMS)"), this);
     m_actColorManagement->setObjectName("colorManagementAction");
     m_actColorManagement->setCheckable(true);
     m_actColorManagement->setChecked(DisplayColorContextProvider::isColorManagementEnabled());
     m_actColorManagement->setToolTip(
-        tr("启用时根据显示器 ICC 转换颜色；禁用时使用原生 RGB/sRGB（与 FastStone 一致）"));
+        tr("When enabled, convert colors using the display ICC profile; when disabled, use native RGB/sRGB (matches FastStone)"));
     viewMenu->addAction(m_actColorManagement);
     connect(m_actColorManagement, &QAction::toggled, this,
             [this](bool on)
@@ -320,7 +320,7 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
     toolsMenu->addAction(m_actBatch);
     // M17: batch analyzer export — same path as gallery context menu.
-    auto *actBatchAnalyze = new QAction(tr("批量分析导出(&A)..."), this);
+    auto *actBatchAnalyze = new QAction(tr("Batch Analysis Export(&A)..."), this);
     actBatchAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     toolsMenu->addAction(actBatchAnalyze);
     connect(actBatchAnalyze, &QAction::triggered, this,
@@ -340,7 +340,7 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     connect(actOverlay, &QAction::triggered, this, &MainWindow::openAnalysisOverlay);
     toolsMenu->addAction(actOverlay);
 
-    m_actUsmCompare = new QAction(tr("USM 锐化对比(&U)..."), this);
+    m_actUsmCompare = new QAction(tr("USM Sharpen Compare (&U)..."), this);
     m_actUsmCompare->setShortcut(QKeySequence("Ctrl+U"));
     connect(m_actUsmCompare, &QAction::triggered, this, [this]() { openUsmCompare(); });
     toolsMenu->addAction(m_actUsmCompare);
@@ -353,7 +353,7 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     toolsMenu->addSeparator();
     // M21: Memory Timeline snapshot (status bar + optional CSV dump).
     auto *actMemTimeline = new QAction("内存时间线(&M)...", this);
-    actMemTimeline->setToolTip(tr("采样 MemoryTracker 时间线并显示峰值/最近样本"));
+    actMemTimeline->setToolTip(tr("Sample the MemoryTracker timeline and show peak/recent samples"));
     connect(actMemTimeline, &QAction::triggered, this,
             [this]()
             {
@@ -389,7 +389,7 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
                     msg += "\n" + spark;
                 }
                 statusBar()->showMessage(msg, 8000);
-                QMessageBox::information(this, tr("内存时间线"), msg);
+                QMessageBox::information(this, tr("Memory Timeline"), msg);
             });
     toolsMenu->addAction(actMemTimeline);
 

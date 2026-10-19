@@ -30,9 +30,10 @@ QString previewText(const std::vector<mviewer::core::BatchRenameResult> &results
             QFileInfo(QString::fromStdString(result.originalPath)).fileName(),
             QString::fromStdString(result.newName));
     }
-    QString text = BatchRenamePanel::tr("预览: ") + lines.join(QStringLiteral("\n      "));
+    QString text = BatchRenamePanel::tr("Preview: ") + lines.join(QStringLiteral("\n      "));
     if (results.size() > static_cast<size_t>(kPreviewLines))
-        text += BatchRenamePanel::tr("\n      …（共 %1 个文件）").arg(results.size());
+        text += BatchRenamePanel::tr("
+      … (%1 files total)").arg(results.size());
     return text;
 }
 
@@ -46,11 +47,11 @@ BatchRenamePanel::BatchRenamePanel(QWidget *parent) : QWidget(parent)
     mainLay->setSpacing(mviewer::ui::metrics::kSpace8);
 
     auto *patternRow = new QHBoxLayout;
-    patternRow->addWidget(new QLabel(tr("重命名模式:")));
+    patternRow->addWidget(new QLabel(tr("Rename pattern:")));
     m_patternEdit = new QLineEdit;
     m_patternEdit->setObjectName(QStringLiteral("batchRenamePattern"));
     m_patternEdit->setPlaceholderText(QStringLiteral("{name}_batched_{seq:3}"));
-    m_patternEdit->setToolTip(tr("可用: {name} {ext} {n} {total} {seq:W}；"
+    m_patternEdit->setToolTip(tr("Available: {name} {ext} {n} {total} {seq:W};"
                                  "{name} 是查找替换之后的文件名；留空=保持文件名"));
     patternRow->addWidget(m_patternEdit, 1);
     mainLay->addLayout(patternRow);
@@ -82,24 +83,24 @@ void BatchRenamePanel::buildFindReplaceRows()
 {
     auto *mainLay = qobject_cast<QVBoxLayout *>(layout());
     auto *findRow = new QHBoxLayout;
-    findRow->addWidget(new QLabel(tr("查找:")));
+    findRow->addWidget(new QLabel(tr("Find:")));
     m_findEdit = new QLineEdit;
     m_findEdit->setObjectName(QStringLiteral("batchRenameFind"));
-    m_findEdit->setPlaceholderText(tr("在文件名（不含扩展名）中查找；留空=不替换"));
+    m_findEdit->setPlaceholderText(tr("Find in the file name (without extension); leave empty for no replacement"));
     findRow->addWidget(m_findEdit, 1);
-    findRow->addWidget(new QLabel(tr("替换为:")));
+    findRow->addWidget(new QLabel(tr("Replace with:")));
     m_replaceEdit = new QLineEdit;
     m_replaceEdit->setObjectName(QStringLiteral("batchRenameReplace"));
-    m_replaceEdit->setPlaceholderText(tr("留空=删除匹配内容"));
-    m_replaceEdit->setToolTip(tr("正则模式下可用 \\1、\\2 … 引用捕获组"));
+    m_replaceEdit->setPlaceholderText(tr("Leave empty to delete the match"));
+    m_replaceEdit->setToolTip(tr("In regex mode, use \\1, \\2, … to reference capture groups"));
     findRow->addWidget(m_replaceEdit, 1);
     mainLay->addLayout(findRow);
 
     auto *optionsRow = new QHBoxLayout;
-    m_useRegexCheck = new QCheckBox(tr("使用正则表达式"));
+    m_useRegexCheck = new QCheckBox(tr("Use regular expressions"));
     m_useRegexCheck->setObjectName(QStringLiteral("batchRenameRegex"));
-    m_useRegexCheck->setToolTip(tr("例：查找 IMG_(\\d+) 替换为 photo_\\1"));
-    m_caseSensitiveCheck = new QCheckBox(tr("区分大小写"));
+    m_useRegexCheck->setToolTip(tr("Example: find IMG_(\\d+) and replace with photo_\\1"));
+    m_caseSensitiveCheck = new QCheckBox(tr("Case sensitive"));
     m_caseSensitiveCheck->setObjectName(QStringLiteral("batchRenameCase"));
     optionsRow->addWidget(m_useRegexCheck);
     optionsRow->addWidget(m_caseSensitiveCheck);
@@ -197,7 +198,7 @@ void BatchRenamePanel::updatePreview()
     m_errorLabel->setVisible(!m_isValid);
     QString text = previewText(results);
     if (sample)
-        text += tr("（示例）");
+        text += tr("(Example)");
     m_previewLabel->setText(text);
     if (wasValid != m_isValid)
         emit validityChanged(m_isValid);

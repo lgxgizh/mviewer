@@ -74,15 +74,15 @@ QLabel *sectionHeaderLabel(QWidget *parent, const char *objectName, const QStrin
 
 void MainWindow::buildBrowserShell()
 {
-    m_actDirUp = new QAction(tr("上一级"), this);
+    m_actDirUp = new QAction(tr("Up one level"), this);
     m_actDirUp->setObjectName("directoryUpAction");
     m_actDirUp->setShortcut(QKeySequence("Alt+Up"));
-    m_actDirUp->setToolTip(actTip(tr("上一级目录"), m_actDirUp));
-    m_actRefresh = new QAction(tr("刷新"), this);
+    m_actDirUp->setToolTip(actTip(tr("Parent directory"), m_actDirUp));
+    m_actRefresh = new QAction(tr("Refresh"), this);
     m_actRefresh->setObjectName("refreshDirectoryAction");
     m_actRefresh->setShortcut(QKeySequence::Refresh);
-    m_actRefresh->setToolTip(actTip(tr("刷新目录与缩略图"), m_actRefresh));
-    auto *browserToolBar = new QToolBar(tr("浏览工具栏"), this);
+    m_actRefresh->setToolTip(actTip(tr("Refresh directory and thumbnails"), m_actRefresh));
+    auto *browserToolBar = new QToolBar(tr("Browse toolbar"), this);
     addToolBar(Qt::TopToolBarArea, browserToolBar);
     browserToolBar->setObjectName("browserToolBar");
     browserToolBar->setMovable(false);
@@ -99,42 +99,42 @@ void MainWindow::buildBrowserShell()
             action->setToolTip(tip);
         browserToolBar->addAction(action);
     };
-    addBrowserAction(m_actOpenDir, "open", actTip(tr("打开目录"), m_actOpenDir));
-    addBrowserAction(m_actDirBack, "back", actTip(tr("上一个目录"), m_actDirBack));
-    addBrowserAction(m_actDirForward, "forward", actTip(tr("下一个目录"), m_actDirForward));
+    addBrowserAction(m_actOpenDir, "open", actTip(tr("Open Directory"), m_actOpenDir));
+    addBrowserAction(m_actDirBack, "back", actTip(tr("Previous directory"), m_actDirBack));
+    addBrowserAction(m_actDirForward, "forward", actTip(tr("Next directory"), m_actDirForward));
     addBrowserAction(m_actDirUp, "up");
     addBrowserAction(m_actRefresh, "refresh");
     browserToolBar->addSeparator();
-    addBrowserAction(m_actAddFavorite, "favorite", actTip(tr("收藏当前目录"), m_actAddFavorite));
-    addBrowserAction(m_actToggleAnalysis, "analysis", actTip(tr("分析面板"), m_actToggleAnalysis));
-    addBrowserAction(m_actToggleSearch, "search", actTip(tr("全局搜索"), m_actToggleSearch));
+    addBrowserAction(m_actAddFavorite, "favorite", actTip(tr("Favorite Current Directory"), m_actAddFavorite));
+    addBrowserAction(m_actToggleAnalysis, "analysis", actTip(tr("Analysis panel"), m_actToggleAnalysis));
+    addBrowserAction(m_actToggleSearch, "search", actTip(tr("Global search"), m_actToggleSearch));
     browserToolBar->addSeparator();
     addBrowserAction(m_actBrowseWorkspace, "browse");
     browserToolBar->addSeparator();
     if (m_actRotateCCW)
     {
         m_actRotateCCW->setIcon(mviewer::ui::toolbarIcon("rotate_ccw"));
-        m_actRotateCCW->setToolTip(actTip(tr("逆时针旋转 90° 并覆盖原文件"), m_actRotateCCW));
+        m_actRotateCCW->setToolTip(actTip(tr("Rotate 90° counterclockwise and overwrite original file"), m_actRotateCCW));
         browserToolBar->addAction(m_actRotateCCW);
     }
     if (m_actRotateCW)
     {
         m_actRotateCW->setIcon(mviewer::ui::toolbarIcon("rotate_cw"));
-        m_actRotateCW->setToolTip(actTip(tr("顺时针旋转 90° 并覆盖原文件"), m_actRotateCW));
+        m_actRotateCW->setToolTip(actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
         browserToolBar->addAction(m_actRotateCW);
     }
     if (m_actCompare)
     {
         m_actCompare->setIcon(mviewer::ui::toolbarIcon("compare"));
         m_actCompare->setObjectName("compareAction");
-        m_actCompare->setToolTip(actTip(tr("选择 2–8 张图片进行比较"), m_actCompare));
+        m_actCompare->setToolTip(actTip(tr("Select 2–8 images to compare"), m_actCompare));
         browserToolBar->addAction(m_actCompare);
     }
     if (m_actUsmCompare)
     {
         m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analyze"));
         m_actUsmCompare->setObjectName("usmCompareAction");
-        m_actUsmCompare->setToolTip(actTip(tr("USM 锐化前后对比与导出 (Ctrl+U)"), m_actUsmCompare));
+        m_actUsmCompare->setToolTip(actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));
         browserToolBar->addAction(m_actUsmCompare);
     }
     browserToolBar->setIconSize(QSize(16, 16));
@@ -150,9 +150,9 @@ void MainWindow::buildBrowserShell()
     // ----- Path input bar (UX: type a path to jump to a directory) -----
     m_pathEdit = new SelectAllOnActivateLineEdit(this);
     m_pathEdit->setObjectName("pathEdit");
-    m_pathEdit->setPlaceholderText("输入目录路径并按 Enter 切换...");
+    m_pathEdit->setPlaceholderText("Enter a directory path and press Enter to switch...");
     m_pathEdit->setToolTip(
-        "输入或粘贴目录路径，按 Enter 键进入该目录（快捷键: Ctrl+F / Alt+D 聚焦）。");
+        "Type or paste a directory path and press Enter to open it (shortcut: Ctrl+F / Alt+D to focus).");
     m_pathEdit->setClearButtonEnabled(true);
     auto *actFocusPath = new QAction(this);
     actFocusPath->setObjectName("focusPathAction");
@@ -181,7 +181,7 @@ QWidget *MainWindow::buildNavigationPanel()
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg3)));
-    m_favoritesBar->setToolTip("收藏目录 — 右键移除，Ctrl+D 收藏当前目录");
+    m_favoritesBar->setToolTip("Favorites — Right-click to remove, Ctrl+D to favorite the current folder");
     connect(m_favoritesBar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item)
             { changeDirectory(item->data(Qt::UserRole).toString()); });
     m_favoritesBar->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -216,7 +216,7 @@ QWidget *MainWindow::buildNavigationPanel()
     foldersLayout->setContentsMargins(0, 0, 0, 0);
     foldersLayout->setSpacing(mviewer::ui::metrics::kSpace4);
     foldersLayout->addWidget(
-        sectionHeaderLabel(foldersSection, "foldersSectionLabel", tr("文件夹")));
+        sectionHeaderLabel(foldersSection, "foldersSectionLabel", tr("Folders")));
 
     m_directoryTree = new DirectoryTree(foldersSection);
     m_directoryTree->installEventFilter(this);
@@ -230,7 +230,7 @@ QWidget *MainWindow::buildNavigationPanel()
     auto *previewLayout = new QVBoxLayout(previewSection);
     previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(mviewer::ui::metrics::kSpace4);
-    previewLayout->addWidget(sectionHeaderLabel(previewSection, "previewSectionLabel", tr("预览")));
+    previewLayout->addWidget(sectionHeaderLabel(previewSection, "previewSectionLabel", tr("Preview")));
     m_previewPanel = new PreviewPanel(previewSection);
     m_previewPanel->installEventFilter(this);
     previewLayout->addWidget(m_previewPanel, 1);
@@ -309,14 +309,14 @@ void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLay
 {
     sortLayout->addWidget(new QLabel("排序：", sortBar));
     m_sortCombo = new QComboBox(sortBar);
-    m_sortCombo->addItem("文件名", ThumbnailPanel::SortName);
-    m_sortCombo->addItem("日期", ThumbnailPanel::SortDate);
-    m_sortCombo->addItem("大小", ThumbnailPanel::SortSize);
-    m_sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
-    m_sortCombo->addItem("类型", ThumbnailPanel::SortType);
-    m_sortCombo->addItem("评分", ThumbnailPanel::SortRating);
-    m_sortCombo->addItem("相机", ThumbnailPanel::SortCamera);
-    m_sortCombo->addItem("镜头", ThumbnailPanel::SortLens);
+    m_sortCombo->addItem("File Name", ThumbnailPanel::SortName);
+    m_sortCombo->addItem("Date", ThumbnailPanel::SortDate);
+    m_sortCombo->addItem("Size", ThumbnailPanel::SortSize);
+    m_sortCombo->addItem("Resolution", ThumbnailPanel::SortResolution);
+    m_sortCombo->addItem("Type", ThumbnailPanel::SortType);
+    m_sortCombo->addItem("Rating", ThumbnailPanel::SortRating);
+    m_sortCombo->addItem("Camera", ThumbnailPanel::SortCamera);
+    m_sortCombo->addItem("Lens", ThumbnailPanel::SortLens);
     sortLayout->addWidget(m_sortCombo);
 
     // A-2.2: sort direction toggle (ascending / descending).
@@ -325,7 +325,7 @@ void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLay
     m_sortDirBtn->setFixedWidth(28);
     m_sortDirBtn->setCheckable(true);
     m_sortDirBtn->setToolTip(
-        "↑升序：A→Z（数字按大小）、从早到晚、从小到大；↓相反。相同项仍按文件名");
+        "↑ Ascending: A→Z (numbers by value), earliest to latest, smallest to largest; ↓ the opposite. Identical items still sort by filename");
     sortLayout->addWidget(m_sortDirBtn);
     connect(m_sortDirBtn, &QPushButton::toggled, this,
             [this](bool descending)
@@ -344,19 +344,19 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     // A-2.3: file-type quick filter buttons.
     auto *typeFilterCombo = new QComboBox(sortBar);
     typeFilterCombo->setObjectName("typeFilterCombo");
-    typeFilterCombo->addItem("全部类型", "");
+    typeFilterCombo->addItem("All types", "");
     typeFilterCombo->addItem("JPG", "jpg,jpeg");
     typeFilterCombo->addItem("PNG", "png");
     typeFilterCombo->addItem("TIFF", "tif,tiff");
     typeFilterCombo->addItem("WebP", "webp");
     typeFilterCombo->addItem("RAW", "cr2,cr3,nef,nrw,arw,dng,orf,rw2,pef,raf");
-    typeFilterCombo->setToolTip("按文件类型过滤");
+    typeFilterCombo->setToolTip("Filter by file type");
 
     advancedLayout->addWidget(typeFilterCombo);
     auto *advancedFilterToggle = new QPushButton("高级筛选", sortBar);
     advancedFilterToggle->setObjectName("advancedFilterToggle");
     advancedFilterToggle->setCheckable(true);
-    advancedFilterToggle->setToolTip("显示相机、镜头、评分和元数据筛选");
+    advancedFilterToggle->setToolTip("Show camera, lens, rating, and metadata filters");
     sortLayout->addWidget(advancedFilterToggle);
     connect(advancedFilterToggle, &QPushButton::toggled, advancedFilterPanel, &QWidget::setVisible);
     auto *clearFilters = new QPushButton("清除筛选", sortBar);
@@ -365,21 +365,21 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
 
     // P0 #①: metadata filters — camera / lens (substring) and ISO (exact).
     auto *camEdit = new QLineEdit(sortBar);
-    camEdit->setPlaceholderText("相机");
+    camEdit->setPlaceholderText("Camera");
     camEdit->setFixedWidth(80);
     camEdit->setClearButtonEnabled(true);
-    camEdit->setToolTip(tr("按相机(品牌/型号)过滤，子串匹配"));
+    camEdit->setToolTip(tr("Filter by camera (brand/model), substring match"));
     advancedLayout->addWidget(camEdit);
     auto *lensEdit = new QLineEdit(sortBar);
-    lensEdit->setPlaceholderText("镜头");
+    lensEdit->setPlaceholderText("Lens");
     lensEdit->setFixedWidth(95);
     lensEdit->setClearButtonEnabled(true);
-    lensEdit->setToolTip(tr("按镜头型号过滤，子串匹配"));
+    lensEdit->setToolTip(tr("Filter by lens model, substring match"));
     advancedLayout->addWidget(lensEdit);
     auto *isoSpin = new QSpinBox(sortBar);
     isoSpin->setRange(0, 65535);
     isoSpin->setSpecialValueText("ISO");
-    isoSpin->setToolTip(tr("按 ISO 精确过滤 (0 = 全部)"));
+    isoSpin->setToolTip(tr("Filter by exact ISO (0 = all)"));
     isoSpin->setFixedWidth(72);
     advancedLayout->addWidget(isoSpin);
     connect(camEdit, &QLineEdit::textChanged, this,
@@ -391,10 +391,10 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
 
     // P0 #①: free-form tag filter.
     auto *tagEdit = new QLineEdit(sortBar);
-    tagEdit->setPlaceholderText("标签");
+    tagEdit->setPlaceholderText("Label");
     tagEdit->setFixedWidth(90);
     tagEdit->setClearButtonEnabled(true);
-    tagEdit->setToolTip(tr("按标签精确过滤 (空 = 全部)"));
+    tagEdit->setToolTip(tr("Filter by tag exactly (empty = all)"));
     advancedLayout->addWidget(tagEdit);
     connect(tagEdit, &QLineEdit::textChanged, this,
             [this](const QString &t) { m_thumbnailPanel->setTagFilter(t); });
@@ -427,14 +427,14 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     // P0-2: View mode switcher (Grid / Large / Small / Detail / Filmstrip / Compact)
     m_viewModeCombo = new QComboBox(sortBar);
     m_viewModeCombo->setObjectName("thumbnailViewModeCombo");
-    m_viewModeCombo->addItem("网格 (Ctrl+1)", ThumbnailPanel::Thumbnail);
-    m_viewModeCombo->addItem("大图标", ThumbnailPanel::LargeIcon);
-    m_viewModeCombo->addItem("小图标 (Ctrl+5)", ThumbnailPanel::SmallIcon);
-    m_viewModeCombo->addItem("列表 (Ctrl+2)", ThumbnailPanel::List);
-    m_viewModeCombo->addItem("详情 (Ctrl+3)", ThumbnailPanel::Details);
-    m_viewModeCombo->addItem("胶片条 (Ctrl+4)", ThumbnailPanel::Filmstrip);
-    m_viewModeCombo->addItem("紧凑 (Ctrl+6)", ThumbnailPanel::Compact);
-    m_viewModeCombo->setToolTip("切换缩略图视图模式（常用模式 Ctrl+1..6）");
+    m_viewModeCombo->addItem("Grid (Ctrl+1)", ThumbnailPanel::Thumbnail);
+    m_viewModeCombo->addItem("Large icons", ThumbnailPanel::LargeIcon);
+    m_viewModeCombo->addItem("Small icons (Ctrl+5)", ThumbnailPanel::SmallIcon);
+    m_viewModeCombo->addItem("List (Ctrl+2)", ThumbnailPanel::List);
+    m_viewModeCombo->addItem("Details (Ctrl+3)", ThumbnailPanel::Details);
+    m_viewModeCombo->addItem("Filmstrip (Ctrl+4)", ThumbnailPanel::Filmstrip);
+    m_viewModeCombo->addItem("Compact (Ctrl+6)", ThumbnailPanel::Compact);
+    m_viewModeCombo->setToolTip("Switch thumbnail view mode (common modes Ctrl+1..6)");
     sortLayout->addWidget(m_viewModeCombo);
     connect(m_viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this]()
@@ -447,7 +447,7 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     sortLayout->addWidget(new QLabel("搜索：", sortBar));
     m_searchEdit = new QLineEdit(sortBar);
     m_searchEdit->setObjectName("searchEdit");
-    m_searchEdit->setPlaceholderText("按文件名过滤...");
+    m_searchEdit->setPlaceholderText("Filter by filename...");
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->installEventFilter(this);
     sortLayout->addWidget(m_searchEdit, 1);
@@ -455,38 +455,38 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     advancedLayout->addWidget(m_searchRecursive);
 
     // P1: metadata-aware search (camera / lens / ISO / date / …).
-    m_searchMeta = new QCheckBox("元数据", sortBar);
+    m_searchMeta = new QCheckBox("Metadata", sortBar);
     advancedLayout->addWidget(m_searchMeta);
 
     // P1: star-rating filter.
-    advancedLayout->addWidget(new QLabel("评分:", advancedFilterPanel));
+    advancedLayout->addWidget(new QLabel("Rating:", advancedFilterPanel));
     m_ratingFilter = new QComboBox(sortBar);
-    m_ratingFilter->addItem("全部", 0);
-    m_ratingFilter->addItem("★ 及以上", 1);
-    m_ratingFilter->addItem("★★ 及以上", 2);
-    m_ratingFilter->addItem("★★★ 及以上", 3);
-    m_ratingFilter->addItem("★★★★ 及以上", 4);
+    m_ratingFilter->addItem("All", 0);
+    m_ratingFilter->addItem("★ and above", 1);
+    m_ratingFilter->addItem("★★ and above", 2);
+    m_ratingFilter->addItem("★★★ and above", 3);
+    m_ratingFilter->addItem("★★★★ and above", 4);
     m_ratingFilter->addItem("★★★★★", 5);
     advancedLayout->addWidget(m_ratingFilter);
 
     // P3 tail: color label / reject / pick / recents filter.
-    advancedLayout->addWidget(new QLabel("标记:", advancedFilterPanel));
+    advancedLayout->addWidget(new QLabel("Flag:", advancedFilterPanel));
     m_flagFilter = new QComboBox(sortBar);
-    m_flagFilter->addItem("全部", 0);
-    m_flagFilter->addItem("已收藏", 1);
-    m_flagFilter->addItem("已拒绝", 2);
-    m_flagFilter->addItem("最近浏览", 3);
-    m_flagFilter->addItem("红标", 11);
-    m_flagFilter->addItem("橙标", 12);
-    m_flagFilter->addItem("黄标", 13);
-    m_flagFilter->addItem("绿标", 14);
-    m_flagFilter->addItem("蓝标", 15);
-    m_flagFilter->addItem("紫标", 16);
+    m_flagFilter->addItem("All", 0);
+    m_flagFilter->addItem("Favorited", 1);
+    m_flagFilter->addItem("Rejected", 2);
+    m_flagFilter->addItem("Recently viewed", 3);
+    m_flagFilter->addItem("Red Label", 11);
+    m_flagFilter->addItem("Orange label", 12);
+    m_flagFilter->addItem("Yellow mark", 13);
+    m_flagFilter->addItem("Green Label", 14);
+    m_flagFilter->addItem("Blue label", 15);
+    m_flagFilter->addItem("Purple mark", 16);
     advancedLayout->addWidget(m_flagFilter);
 
-    auto *resetFilterBtn = new QPushButton(tr("重置筛选"), advancedFilterPanel);
+    auto *resetFilterBtn = new QPushButton(tr("Reset Filters"), advancedFilterPanel);
     resetFilterBtn->setObjectName("resetFiltersButton");
-    resetFilterBtn->setToolTip(tr("清除所有搜索和过滤条件"));
+    resetFilterBtn->setToolTip(tr("Clear all search and filter conditions"));
     connect(resetFilterBtn, &QPushButton::clicked, this, &MainWindow::clearAllFilters);
     advancedLayout->addWidget(resetFilterBtn);
 
@@ -625,7 +625,7 @@ void MainWindow::buildImageViewerUi()
 {
     // ----- Full image viewer window -----
     m_imageViewer = new ImageViewer(nullptr);
-    m_imageViewer->setWindowTitle("图片查看 - MViewer");
+    m_imageViewer->setWindowTitle("Image Viewer - MViewer");
     connect(m_imageViewer, &ImageViewer::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
 
@@ -656,9 +656,9 @@ void MainWindow::buildStatusBarUi()
     m_lblImage = new QLabel("—", this);
     m_lblCount = new QLabel("图片 0", this);
     m_lblSize = new QLabel("大小 0 B", this);
-    m_lblZoom = new QLabel("缩放 —", this);
-    m_lblCache = new QLabel("命中率 —", this);
-    m_lblCache->setToolTip(tr("缓存命中率: 提升连续大图切换与缩略图加载性能"));
+    m_lblZoom = new QLabel("Zoom", this);
+    m_lblCache = new QLabel("Hit rate —", this);
+    m_lblCache->setToolTip(tr("Cache hit rate: improves consecutive large-image switching and thumbnail loading"));
     for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
     {
         l->setContentsMargins(mviewer::ui::metrics::kSpace8, 0, mviewer::ui::metrics::kSpace8, 0);
@@ -687,7 +687,7 @@ void MainWindow::buildStatusBarUi()
                 if (!m_lblZoom)
                     return;
                 m_lblZoom->setText(
-                    pct < 0 ? QStringLiteral("缩放 —")
+                    pct < 0 ? QStringLiteral("Zoom")
                             : QString::fromLatin1(mviewer::core::formatZoomPercent(pct).c_str()));
             });
 
@@ -698,5 +698,5 @@ void MainWindow::buildStatusBarUi()
     // A-3.4: initial enablement for selection-dependent actions.
     updateSelectionActions();
 
-    statusBar()->showMessage("就绪", 2000);
+    statusBar()->showMessage("Ready", 2000);
 }

@@ -322,7 +322,7 @@ void MainWindow::rebuildRecentMenu()
                         rebuildRecentMenu();
                         if (statusBar())
                             statusBar()->showMessage(
-                                tr("目录不存在，已从最近记录中移除: %1").arg(qs), 3000);
+                                tr("Directory does not exist, removed from recent records: %1").arg(qs), 3000);
                         return;
                     }
                     changeDirectory(qs);
@@ -331,7 +331,7 @@ void MainWindow::rebuildRecentMenu()
     if (!m_recent.items().empty())
     {
         m_recentMenu->addSeparator();
-        auto *pruneAct = m_recentMenu->addAction(tr("清理失效目录"));
+        auto *pruneAct = m_recentMenu->addAction(tr("Clean Invalid Directories"));
         connect(pruneAct, &QAction::triggered, this,
                 [this]()
                 {
@@ -354,9 +354,9 @@ void MainWindow::rebuildRecentMenu()
                         rebuildRecentMenu();
                     }
                     if (statusBar())
-                        statusBar()->showMessage(tr("已清理 %1 条失效目录记录").arg(pruned), 2000);
+                        statusBar()->showMessage(tr("Cleared %1 stale directory entries").arg(pruned), 2000);
                 });
-        auto *clearAct = m_recentMenu->addAction(tr("清空最近目录"));
+        auto *clearAct = m_recentMenu->addAction(tr("Clear Recent Directories"));
         connect(clearAct, &QAction::triggered, this,
                 [this]()
                 {
@@ -366,7 +366,7 @@ void MainWindow::rebuildRecentMenu()
                         m_directory->setRecentFolders({});
                     rebuildRecentMenu();
                     if (statusBar())
-                        statusBar()->showMessage(tr("已清空最近目录记录"), 2000);
+                        statusBar()->showMessage(tr("Recent directory history cleared"), 2000);
                 });
     }
     if (m_recentMenu->isEmpty())
@@ -404,7 +404,7 @@ void MainWindow::rebuildRecentFilesMenu()
                         rebuildRecentFilesMenu();
                         if (statusBar())
                             statusBar()->showMessage(
-                                tr("文件不存在，已从最近记录中移除: %1").arg(qs), 3000);
+                                tr("File missing; removed from recent list: %1").arg(qs), 3000);
                         return;
                     }
                     onImageOpen(qs);
@@ -413,7 +413,7 @@ void MainWindow::rebuildRecentFilesMenu()
     if (!m_recentFiles.items().empty())
     {
         m_recentFileMenu->addSeparator();
-        auto *pruneAct = m_recentFileMenu->addAction(tr("清理失效文件"));
+        auto *pruneAct = m_recentFileMenu->addAction(tr("Clean Invalid Files"));
         connect(pruneAct, &QAction::triggered, this,
                 [this]()
                 {
@@ -434,9 +434,9 @@ void MainWindow::rebuildRecentFilesMenu()
                         rebuildRecentFilesMenu();
                     }
                     if (statusBar())
-                        statusBar()->showMessage(tr("已清理 %1 条失效文件记录").arg(pruned), 2000);
+                        statusBar()->showMessage(tr("Cleaned %1 invalid file records").arg(pruned), 2000);
                 });
-        auto *clearAct = m_recentFileMenu->addAction(tr("清空最近文件"));
+        auto *clearAct = m_recentFileMenu->addAction(tr("Clear recent files"));
         connect(clearAct, &QAction::triggered, this,
                 [this]()
                 {
@@ -444,7 +444,7 @@ void MainWindow::rebuildRecentFilesMenu()
                     m_appState.clearHistory();
                     rebuildRecentFilesMenu();
                     if (statusBar())
-                        statusBar()->showMessage(tr("已清空最近文件记录"), 2000);
+                        statusBar()->showMessage(tr("Recent file history cleared"), 2000);
                 });
     }
     if (m_recentFileMenu->isEmpty())
@@ -524,7 +524,7 @@ void MainWindow::clearAllFilters()
         m_thumbnailPanel->setRatingFilter(0);
         m_thumbnailPanel->setFilter(QString(), false);
     }
-    statusBar()->showMessage(tr("已清除所有筛选条件"), 2000);
+    statusBar()->showMessage(tr("All filters cleared"), 2000);
 }
 
 void MainWindow::resetFiltersOnFolderChange()

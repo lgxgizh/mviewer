@@ -65,7 +65,7 @@ void runRestoreFile(const QString &filePath, bool project, const TaskScheduler::
         auto ws = mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
         if (!ws || ws->empty())
         {
-            result.error = QStringLiteral("工作区文件无效或为空。");
+            result.error = QStringLiteral("The workspace file is invalid or empty.");
             return;
         }
         result.workspace = std::move(*ws);
@@ -76,7 +76,7 @@ void runRestoreFile(const QString &filePath, bool project, const TaskScheduler::
         if (!mviewer::core::deserializeProject(std::string(data.constData(), data.size()), proj) ||
             proj.workspace.empty())
         {
-            result.error = QStringLiteral("项目文件无效或为空。");
+            result.error = QStringLiteral("The project file is invalid or empty.");
             return;
         }
         result.workspace = std::move(proj.workspace);
@@ -214,7 +214,7 @@ void MainWindow::saveWorkspace()
 {
     if (currentDir().isEmpty())
     {
-        QMessageBox::information(this, "保存工作区", "请先打开一个图片目录。");
+        QMessageBox::information(this, "保存工作区", "Please open an image directory first.");
         return;
     }
     const QString filePath = QFileDialog::getSaveFileName(
@@ -257,7 +257,7 @@ void MainWindow::saveWorkspace()
     auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
     const uint64_t generation = ++m_persistenceGeneration;
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在后台保存工作区…"));
+    statusBar()->showMessage(QStringLiteral("Saving workspace in the background…"));
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
@@ -427,7 +427,7 @@ void MainWindow::saveProject()
 {
     if (currentDir().isEmpty())
     {
-        QMessageBox::information(this, "保存项目", "请先打开一个图片目录。");
+        QMessageBox::information(this, "保存项目", "Please open an image directory first.");
         return;
     }
     const QString filePath = QFileDialog::getSaveFileName(
@@ -469,7 +469,7 @@ void MainWindow::saveProject()
     auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
     const uint64_t generation = ++m_persistenceGeneration;
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在后台保存项目…"));
+    statusBar()->showMessage(QStringLiteral("Saving project in the background…"));
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
@@ -534,7 +534,7 @@ void MainWindow::openWorkspaceFile(const QString &filePath)
     const uint64_t generation = ++m_restoreGeneration;
     auto result = std::make_shared<RestoreFileResult>();
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在打开工作区…"));
+    statusBar()->showMessage(QStringLiteral("Opening workspace…"));
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [filePath, result](const TaskScheduler::TaskContext &ctx)
@@ -556,7 +556,7 @@ void MainWindow::openWorkspaceFile(const QString &filePath)
                     {
                         QMessageBox::critical(window, "打开工作区", result->error);
                         window->statusBar()->showMessage(
-                            QStringLiteral("打开工作区失败: %1").arg(result->error));
+                            QStringLiteral("Failed to open workspace: %1").arg(result->error));
                         return; // the live session is untouched
                     }
                     window->restoreWorkspaceState(result->workspace, result->filePath);
@@ -584,7 +584,7 @@ void MainWindow::openProjectFile(const QString &filePath)
     const uint64_t generation = ++m_restoreGeneration;
     auto result = std::make_shared<RestoreFileResult>();
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在打开项目…"));
+    statusBar()->showMessage(QStringLiteral("Opening project…"));
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [filePath, result](const TaskScheduler::TaskContext &ctx)
@@ -606,7 +606,7 @@ void MainWindow::openProjectFile(const QString &filePath)
                     {
                         QMessageBox::critical(window, "打开项目", result->error);
                         window->statusBar()->showMessage(
-                            QStringLiteral("打开项目失败: %1").arg(result->error));
+                            QStringLiteral("Failed to open project: %1").arg(result->error));
                         return; // the live session is untouched
                     }
                     window->restoreWorkspaceState(result->workspace, result->filePath);

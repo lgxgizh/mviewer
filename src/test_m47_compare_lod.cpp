@@ -437,7 +437,7 @@ int main(int argc, char **argv)
               "C6: pane 0 keeps its infeasible source geometry");
         CHECK(v1 && v1->sourceSize() == QSize(6000, 4000),
               "C6: pane 1 (feasible) keeps its full-frame geometry");
-        CHECK(cap.warned && cap.text.contains(QStringLiteral("1 张图片无法加载")),
+        CHECK(cap.warned && cap.text.contains(QStringLiteral("1 image could not be loaded")),
               "C6: the warning counts ONLY the real failure (not the skip)");
         CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },
                        15000),

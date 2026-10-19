@@ -43,8 +43,9 @@ void reportPersistFailures(QWidget *parent, const QStringList &failures)
         qWarning("MViewer could not save: %s", qUtf8Printable(failures.join(QStringLiteral(", "))));
         return;
     }
-    QMessageBox::warning(parent, QStringLiteral("设置未保存"),
-                         QStringLiteral("以下内容未能写入磁盘，下次启动可能丢失：\n%1")
+    QMessageBox::warning(parent, QStringLiteral("Settings not saved"),
+                         QStringLiteral("The following content could not be written to disk and may be lost on next startup:
+%1")
                              .arg(failures.join(QStringLiteral("、"))));
 }
 
@@ -257,7 +258,7 @@ void MainWindow::persistWindowLayoutOnClose(bool inBrowseWorkspace, QStringList 
     }
     settings.sync();
     if (settings.status() != QSettings::NoError)
-        failures.append(QStringLiteral("界面设置"));
+        failures.append(QStringLiteral("Interface settings"));
 }
 
 void MainWindow::closeEvent(QCloseEvent *event)
@@ -288,7 +289,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.navHistoryIndex = m_historyIndex;
     QStringList persistFailures;
     if (!m_appState.save())
-        persistFailures.append(QStringLiteral("会话状态"));
+        persistFailures.append(QStringLiteral("Session status"));
 
     // M16: persist analysis history / pinned results so they survive restart.
     if (m_analyzer)
@@ -303,7 +304,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
     // Persist the recent-folders LRU alongside app state.
     if (!commitNamedState(m_recent, QStringLiteral("recent.json")))
-        persistFailures.append(QStringLiteral("最近文件夹"));
+        persistFailures.append(QStringLiteral("Recent Folders"));
 
     // M13.5 / P1-3: persist window geometry/layout (QSettings, independent of workspace).
     persistWindowLayoutOnClose(inBrowseWorkspace, persistFailures);
@@ -392,7 +393,8 @@ void MainWindow::restoreSessionRecovery()
     if (qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
         return;
     const auto answer = QMessageBox::question(
-        this, tr("恢复上次会话"), tr("检测到上次会话未正常关闭。\n是否恢复上次浏览的图片和目录？"),
+        this, tr("Restore Last Session"), tr("The last session did not close normally.
+Restore the last viewed images and directory?"),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
     if (answer != QMessageBox::Yes)
     {
@@ -406,7 +408,7 @@ void MainWindow::restoreSessionRecovery()
         m_appState.save();
         updateSelectionActions();
         updateNavigationActions();
-        statusBar()->showMessage(tr("就绪"));
+        statusBar()->showMessage(tr("Ready"));
         activateWindow();
         raise();
         if (m_thumbnailPanel)

@@ -153,7 +153,7 @@ void MainWindow::exportReport()
     // reports are an independent snapshot and remain exportable meanwhile.
     if (!hasCompare && m_analysisPanel && m_analysisPanel->reportAnalysisPending())
     {
-        QMessageBox::information(this, tr("导出报告"), tr("分析仍在进行，请完成后再导出报告。"));
+        QMessageBox::information(this, tr("Export Report"), tr("Analysis is still in progress. Please complete it before exporting the report."));
         return;
     }
 
@@ -184,7 +184,7 @@ void MainWindow::exportReport()
     {
         if (currentImagePath().isEmpty())
         {
-            QMessageBox::information(this, tr("导出报告"), tr("请先打开一张图片。"));
+            QMessageBox::information(this, tr("Export Report"), tr("Please open an image first."));
             return;
         }
 
@@ -213,13 +213,13 @@ void MainWindow::exportReport()
     }
     if (ctx.imagePath.empty())
     {
-        QMessageBox::information(this, tr("导出报告"), tr("请先打开一张图片。"));
+        QMessageBox::information(this, tr("Export Report"), tr("Please open an image first."));
         return;
     }
 
     const QString out = QFileDialog::getSaveFileName(
-        this, tr("导出报告"), QString(),
-        tr("HTML 文件 (*.html);;Markdown 文件 (*.md);;JSON 文件 (*.json);;CSV 文件 (*.csv)"));
+        this, tr("Export Report"), QString(),
+        tr("HTML files (*.html);;Markdown files (*.md);;JSON files (*.json);;CSV files (*.csv)"));
     if (out.isEmpty())
         return;
     const QFileInfo fi(out);
@@ -240,7 +240,7 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx,
     state->suffix = suffix;
     const uint64_t generation = ++m_reportGeneration;
     QPointer<MainWindow> guard(this);
-    m_reportProgress = new QProgressDialog(tr("正在生成报告…"), tr("取消"), 0, 100, this);
+    m_reportProgress = new QProgressDialog(tr("Generating report…"), tr("Cancel"), 0, 100, this);
     m_reportProgress->setWindowModality(Qt::WindowModal);
     m_reportProgress->setAutoClose(false);
     m_reportProgress->setMinimumDuration(0);
@@ -272,12 +272,12 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx,
                         return;
                     if (!state->success)
                     {
-                        QMessageBox::critical(window, QObject::tr("导出报告"),
+                        QMessageBox::critical(window, QObject::tr("Export Report"),
                                               QString::fromUtf8(state->error.c_str()));
                         return;
                     }
-                    QMessageBox::information(window, QObject::tr("导出报告"),
-                                             QObject::tr("已导出：%1").arg(out));
+                    QMessageBox::information(window, QObject::tr("Export Report"),
+                                             QObject::tr("Exported: %1").arg(out));
                 },
                 Qt::QueuedConnection);
         },
@@ -299,7 +299,7 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx,
     if (!m_reportTask)
     {
         cancelReportExport();
-        QMessageBox::warning(this, tr("导出报告"), tr("后台任务被调度器拒绝。"));
+        QMessageBox::warning(this, tr("Export Report"), tr("Background task was rejected by the scheduler."));
     }
 }
 void MainWindow::exportImages()
@@ -314,13 +314,13 @@ void MainWindow::exportImages()
         paths = m_thumbnailPanel->pathList();
     if (paths.isEmpty())
     {
-        QMessageBox::information(this, tr("导出图片"), tr("请先打开一个图片目录。"));
+        QMessageBox::information(this, tr("Export Images"), tr("Please open an image directory first."));
         return;
     }
 
     ExportDialog dlg(this);
     dlg.setSources(paths);
-    dlg.setWindowTitle(tr("导出图片 — %1 张").arg(paths.size()));
+    dlg.setWindowTitle(tr("Export images — %1").arg(paths.size()));
     dlg.exec();
 }
 

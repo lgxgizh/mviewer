@@ -38,9 +38,9 @@ namespace
 QString batchFinishText(const mviewer::domain::BatchJobResult &result)
 {
     const QString counts =
-        QStringLiteral("%1 成功, %2 失败").arg(result.totalSucceeded).arg(result.totalFailed);
+        QStringLiteral("%1 succeeded, %2 failed").arg(result.totalSucceeded).arg(result.totalFailed);
     if (!result.cancelled && result.totalFailed <= 0)
-        return QStringLiteral("完成: %1").arg(counts);
+        return QStringLiteral("Completed: %1").arg(counts);
 
     QString names;
     int shown = 0;
@@ -66,12 +66,12 @@ QString batchFinishText(const mviewer::domain::BatchJobResult &result)
 
     if (result.cancelled)
     {
-        QString text = QStringLiteral("已取消: %1, %2 未处理").arg(counts).arg(result.totalSkipped);
+        QString text = QStringLiteral("Cancelled: %1, %2 not processed").arg(counts).arg(result.totalSkipped);
         if (!names.isEmpty())
             text += QStringLiteral("（%1）").arg(names);
         return text;
     }
-    return QStringLiteral("完成: %1（%2）").arg(counts, names);
+    return QStringLiteral("Completed: %1 (%2)").arg(counts, names);
 }
 
 int addSupportedImages(QListWidget *list, const QString &dir, bool recursive)
@@ -118,7 +118,7 @@ BatchDialog::~BatchDialog()
 BatchDialog::BatchDialog(QWidget *parent)
     : QDialog(parent), m_processor(std::make_unique<mviewer::core::BatchProcessor>())
 {
-    setWindowTitle("批量处理");
+    setWindowTitle("Batch Processing");
     setMinimumSize(720, 640);
     resize(760, 700);
     setSizeGripEnabled(true);
@@ -141,7 +141,7 @@ BatchDialog::BatchDialog(QWidget *parent)
 
 void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
 {
-    auto *fileBox = new QGroupBox("文件");
+    auto *fileBox = new QGroupBox("File");
     fileBox->setObjectName(QStringLiteral("batchFileGroup"));
     auto *fileLay = new QVBoxLayout(fileBox);
     fileLay->setSpacing(8);
@@ -157,7 +157,7 @@ void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
     m_addDirBtn = new QPushButton("添加目录...");
     m_removeBtn = new QPushButton("移除选中");
     m_chkRecursive = new QCheckBox("递归子目录");
-    m_chkRecursive->setToolTip("添加目录时扫描子文件夹中的图片");
+    m_chkRecursive->setToolTip("Scan subfolders for images when adding a directory");
     fileBtnBar->addWidget(m_addBtn);
     fileBtnBar->addWidget(m_addDirBtn);
     fileBtnBar->addWidget(m_removeBtn);
@@ -169,15 +169,15 @@ void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
 
 void BatchDialog::buildOperationControls(QVBoxLayout *mainLayout)
 {
-    auto *opBox = new QGroupBox("操作");
+    auto *opBox = new QGroupBox("Operations");
     opBox->setObjectName(QStringLiteral("batchOpGroup"));
     auto *opRow = new QHBoxLayout(opBox);
-    m_chkAnalyze = new QCheckBox("分析");
-    m_chkResize = new QCheckBox("缩放");
-    m_chkCrop = new QCheckBox("裁剪");
-    m_chkWatermark = new QCheckBox("水印");
-    m_chkRename = new QCheckBox("重命名");
-    m_chkExport = new QCheckBox("导出");
+    m_chkAnalyze = new QCheckBox("Analyze");
+    m_chkResize = new QCheckBox("Resize");
+    m_chkCrop = new QCheckBox("Crop");
+    m_chkWatermark = new QCheckBox("Watermark");
+    m_chkRename = new QCheckBox("Rename");
+    m_chkExport = new QCheckBox("Export");
     m_chkAnalyze->setObjectName(QStringLiteral("batchChkAnalyze"));
     m_chkResize->setObjectName(QStringLiteral("batchChkResize"));
     m_chkCrop->setObjectName(QStringLiteral("batchChkCrop"));
@@ -197,7 +197,7 @@ void BatchDialog::buildOperationControls(QVBoxLayout *mainLayout)
 
 void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
 {
-    auto *paramBox = new QGroupBox("参数");
+    auto *paramBox = new QGroupBox("Parameters");
     paramBox->setObjectName(QStringLiteral("batchParamGroup"));
     auto *paramLay = new QVBoxLayout(paramBox);
     paramLay->setSpacing(8);
@@ -234,7 +234,7 @@ void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
 
 void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
 {
-    auto *progressBox = new QGroupBox("进度");
+    auto *progressBox = new QGroupBox("Progress");
     progressBox->setObjectName(QStringLiteral("batchProgressGroup"));
     auto *progressLay = new QVBoxLayout(progressBox);
     progressLay->setSpacing(8);
@@ -243,7 +243,7 @@ void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
     m_progress->setObjectName(QStringLiteral("batchProgress"));
     m_progress->setFormat(tr("%p%"));
     progressLay->addWidget(m_progress);
-    m_statusLabel = new QLabel("就绪");
+    m_statusLabel = new QLabel("Ready");
     m_statusLabel->setObjectName(QStringLiteral("batchStatusLabel"));
     progressLay->addWidget(m_statusLabel);
     m_log = new QTextEdit;
@@ -255,16 +255,16 @@ void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
     auto *btnBar = new QHBoxLayout;
     m_startBtn = new QPushButton("开始");
     m_startBtn->setObjectName(QStringLiteral("batchStartButton"));
-    m_pauseBtn = new QPushButton("暂停");
+    m_pauseBtn = new QPushButton("Pause");
     m_pauseBtn->setObjectName(QStringLiteral("batchPauseButton"));
     m_pauseBtn->setEnabled(false);
-    m_pauseBtn->setToolTip(tr("暂停/恢复批处理（当前文件完成后生效）"));
+    m_pauseBtn->setToolTip(tr("Pause/resume batch processing (takes effect after the current file finishes)"));
     m_cancelBtn = new QPushButton("取消处理");
     m_cancelBtn->setObjectName(QStringLiteral("batchCancelButton"));
     m_cancelBtn->setEnabled(false);
     m_openOutputBtn = new QPushButton("打开输出目录");
     m_openOutputBtn->setEnabled(false);
-    m_openOutputBtn->setToolTip(tr("在资源管理器中打开上一个任务的输出目录"));
+    m_openOutputBtn->setToolTip(tr("Open the previous task's output folder in Explorer"));
     m_closeBtn = new QPushButton("关闭");
     btnBar->addStretch();
     btnBar->addWidget(m_openOutputBtn);
@@ -376,7 +376,7 @@ void BatchDialog::onAddDir() // P2 #⑦
     const int added = addSupportedImages(m_fileList, dir, m_chkRecursive->isChecked());
     syncFilesToRenamePanel();
     if (added == 0)
-        QMessageBox::information(this, "批量处理", "该目录下没有可识别的图片文件。");
+        QMessageBox::information(this, "Batch Processing", "该目录下没有可识别的图片文件。");
 }
 
 void BatchDialog::onRemoveSelected()
@@ -389,7 +389,7 @@ void BatchDialog::onRemoveSelected()
 
 void BatchDialog::onBrowseOutputDir()
 {
-    const auto dir = QFileDialog::getExistingDirectory(this, "选择输出目录");
+    const auto dir = QFileDialog::getExistingDirectory(this, "Select output directory");
     if (!dir.isEmpty())
         m_outputDir->setText(dir);
 }
@@ -445,12 +445,12 @@ bool BatchDialog::validateStart(const mviewer::domain::BatchJobConfig &config)
 {
     if (config.inputPaths.empty())
     {
-        QMessageBox::warning(this, "批量处理", "请先添加文件。");
+        QMessageBox::warning(this, "Batch Processing", "请先添加文件。");
         return false;
     }
     if (config.operations.empty())
     {
-        QMessageBox::warning(this, "批量处理", "请至少选择一个操作。");
+        QMessageBox::warning(this, "Batch Processing", "请至少选择一个操作。");
         return false;
     }
     const bool writesNothing = m_chkRename->isChecked() || m_chkResize->isChecked() ||
@@ -458,15 +458,15 @@ bool BatchDialog::validateStart(const mviewer::domain::BatchJobConfig &config)
     if (!m_chkExport->isChecked() && writesNothing)
     {
         QMessageBox::warning(
-            this, "批量处理",
+            this, "Batch Processing",
             "未勾选「导出」时，重命名/缩放/裁剪/水印不会生成任何文件。请勾选「导出」。");
         return false;
     }
     if (m_chkRename->isChecked() && !m_renamePanel->isValid())
     {
         QMessageBox::warning(
-            this, "批量处理",
-            QStringLiteral("重命名设置无效：%1").arg(m_renamePanel->errorMessage()));
+            this, "Batch Processing",
+            QStringLiteral("Invalid rename settings: %1").arg(m_renamePanel->errorMessage()));
         return false;
     }
     return true;
@@ -577,7 +577,7 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     catch (const std::exception &error)
     {
         m_progress->setValue(m_progress->maximum());
-        m_statusLabel->setText(tr("批量处理失败: %1").arg(QString::fromUtf8(error.what())));
+        m_statusLabel->setText(tr("Batch processing failed: %1").arg(QString::fromUtf8(error.what())));
         m_processor = std::make_unique<mviewer::core::BatchProcessor>();
         m_activeProcessor.reset();
         updateUiState(false);
@@ -587,7 +587,7 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     catch (...)
     {
         m_progress->setValue(m_progress->maximum());
-        m_statusLabel->setText(tr("批量处理失败: 未知错误"));
+        m_statusLabel->setText(tr("Batch processing failed: Unknown error"));
         m_processor = std::make_unique<mviewer::core::BatchProcessor>();
         m_activeProcessor.reset();
         updateUiState(false);
@@ -598,9 +598,9 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     m_progress->setValue(m_progress->maximum());
     m_statusLabel->setText(batchFinishText(result));
     if (result.cancelled)
-        m_log->append(QStringLiteral("[CANCEL] 未处理 %1 个文件").arg(result.totalSkipped));
+        m_log->append(QStringLiteral("[CANCEL] %1 files not processed").arg(result.totalSkipped));
     else if (result.totalFailed > 0)
-        m_log->append(QStringLiteral("[SUMMARY] %1 个文件失败").arg(result.totalFailed));
+        m_log->append(QStringLiteral("[SUMMARY] %1 files failed").arg(result.totalFailed));
 
     // Enable "open output dir" if any files were produced. An empty field means
     // each file was written beside its source; open the first one that landed.
@@ -629,9 +629,9 @@ void BatchDialog::onCancel()
     {
         m_activeProcessor->resume();
         m_isPaused = false;
-        m_pauseBtn->setText("暂停");
+        m_pauseBtn->setText("Pause");
     }
-    m_statusLabel->setText("正在取消...");
+    m_statusLabel->setText("Cancelling...");
 }
 
 void BatchDialog::onPauseResume()
@@ -642,16 +642,16 @@ void BatchDialog::onPauseResume()
     {
         m_activeProcessor->requestPause();
         m_isPaused = true;
-        m_pauseBtn->setText("恢复");
-        m_statusLabel->setText("已暂停（当前文件完成后生效）");
+        m_pauseBtn->setText("Resume");
+        m_statusLabel->setText("Paused (takes effect after the current file finishes)");
         m_log->append("[PAUSE] 批处理已暂停");
     }
     else
     {
         m_activeProcessor->resume();
         m_isPaused = false;
-        m_pauseBtn->setText("暂停");
-        m_statusLabel->setText("已恢复处理...");
+        m_pauseBtn->setText("Pause");
+        m_statusLabel->setText("Resumed processing...");
         m_log->append("[RESUME] 批处理已恢复");
     }
 }
@@ -690,6 +690,6 @@ void BatchDialog::updateUiState(bool running)
     if (!running)
     {
         m_isPaused = false;
-        m_pauseBtn->setText("暂停");
+        m_pauseBtn->setText("Pause");
     }
 }

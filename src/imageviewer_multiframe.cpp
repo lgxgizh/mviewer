@@ -198,12 +198,12 @@ void ImageViewer::applyLoadedFrame(const ImageLoadResult &result, int requestedF
     {
         if (m_playback.playing())
             pause();
-        setWindowTitle(QStringLiteral("%1 %2 %3失败 - %4 - MViewer")
+        setWindowTitle(QStringLiteral("%1 %2 %3 failed - %4 - MViewer")
                            .arg(sequenceLabel(m_sequence))
                            .arg(requestedFrame + 1)
                            .arg(sequenceLabel(m_sequence) == QStringLiteral("Page")
-                                    ? QStringLiteral("页")
-                                    : QStringLiteral("帧"))
+                                    ? QStringLiteral("Page")
+                                    : QStringLiteral("Frame"))
                            .arg(QFileInfo(m_currentPath).fileName()));
         emit loadFailed(m_currentPath);
         return;
@@ -531,7 +531,7 @@ void ImageViewer::persistWindowGeometry()
         settings.setValue(QStringLiteral("viewerScreen"), screen->name());
     settings.sync();
     if (settings.status() != QSettings::NoError && !property("mviewerClosing").toBool())
-        emit statusMessageRequested(QStringLiteral("查看器窗口位置未能保存"), 5000);
+        emit statusMessageRequested(QStringLiteral("Failed to save viewer window position"), 5000);
 }
 
 void ImageViewer::setFullscreenRequested(bool requested)

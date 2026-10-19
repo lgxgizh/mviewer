@@ -266,7 +266,7 @@ int main(int argc, char **argv)
               "F2: a failed LOD decode reaches the loadFailed terminal");
         CHECK(viewer.provisionalScreenRect().isEmpty(), "F2: failed load drops the warm thumbnail");
         CHECK(lastZoom < 0, "F2: failed load clears the zoom readout");
-        CHECK(viewer.windowTitle().contains(QStringLiteral("无法加载")),
+        CHECK(viewer.windowTitle().contains(QStringLiteral("Unable to Load")),
               "F2: failed load retitles the viewer");
         CHECK(waitTrue(schedulerIdle, 20000), "F2: pools drain after the terminal");
         installDefaults();
@@ -373,7 +373,7 @@ int main(int argc, char **argv)
         CHECK(waitTrue([&] { return failed; }, 15000), "F5: failed load reaches the terminal");
         CHECK(viewer.provisionalScreenRect().isEmpty(), "F5: warm thumbnail is dropped");
         CHECK(lastZoom < 0, "F5: zoom readout clears");
-        CHECK(viewer.windowTitle().contains(QStringLiteral("无法加载")), "F5: failure title");
+        CHECK(viewer.windowTitle().contains(QStringLiteral("Unable to Load")), "F5: failure title");
         CHECK(viewer.isFitMode(), "F5: failed load keeps fit mode");
 
         installDefaults();
@@ -439,7 +439,7 @@ int main(int argc, char **argv)
         CHECK(waitTrue([&] { return failed; }, 15000), "F6: failed load reaches the terminal");
         CHECK(!viewer.isFitMode(), "F6: failed load keeps the explicit zoom");
         CHECK(lastZoom < 0, "F6: zoom readout clears");
-        CHECK(viewer.windowTitle().contains(QStringLiteral("无法加载")), "F6: failure title");
+        CHECK(viewer.windowTitle().contains(QStringLiteral("Unable to Load")), "F6: failure title");
         CHECK(viewer.provisionalScreenRect().isEmpty(), "F6: warm thumbnail is dropped");
 
         installDefaults();

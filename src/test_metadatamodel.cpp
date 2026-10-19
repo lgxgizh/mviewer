@@ -64,9 +64,9 @@ int main(int argc, char **argv)
         MetadataModel m;
         m.clear();
         CHECK(m.rowCount() == 1, "empty model has one (hint) category");
-        QModelIndex hint = findCategory(&m, "提示");
+        QModelIndex hint = findCategory(&m, "Hint");
         CHECK(hint.isValid(), "empty model shows 提示 category");
-        CHECK(leafValue(&m, hint, "说明").contains("画廊"), "empty model hint mentions gallery");
+        CHECK(leafValue(&m, hint, "Description").contains("画廊"), "empty model hint mentions gallery");
         CHECK(m.columnCount() == 2, "model exposes 2 columns");
     }
 
@@ -95,24 +95,24 @@ int main(int argc, char **argv)
 
         CHECK(m.rowCount() == 3, "jpg+exif yields File/Image/EXIF (3) categories");
 
-        QModelIndex file = findCategory(&m, "文件信息");
+        QModelIndex file = findCategory(&m, "File information");
         CHECK(file.isValid(), "File category present");
-        CHECK(leafValue(&m, file, "文件名") == "sample.png", "file name leaf");
-        CHECK(leafValue(&m, file, "路径") == "/pics/sample.png", "file path leaf");
-        CHECK(leafValue(&m, file, "大小").contains("123456"), "file size leaf");
+        CHECK(leafValue(&m, file, "File Name") == "sample.png", "file name leaf");
+        CHECK(leafValue(&m, file, "Path") == "/pics/sample.png", "file path leaf");
+        CHECK(leafValue(&m, file, "Size").contains("123456"), "file size leaf");
 
-        QModelIndex img = findCategory(&m, "图像信息");
+        QModelIndex img = findCategory(&m, "Image Information");
         CHECK(img.isValid(), "Image category present");
-        CHECK(leafValue(&m, img, "格式") == "PNG", "format leaf");
-        CHECK(leafValue(&m, img, "尺寸").contains("1920"), "dimensions leaf shows width");
-        CHECK(leafValue(&m, img, "长宽比") == "16:9", "aspect ratio 16:9");
-        CHECK(leafValue(&m, img, "像素量").contains("2.07"), "megapixel leaf");
-        CHECK(leafValue(&m, img, "通道数") == "3", "channels leaf");
-        CHECK(leafValue(&m, img, "色彩空间") == "sRGB", "color space leaf");
-        CHECK(leafValue(&m, img, "方向").contains("90"), "orientation leaf mentions 90");
-        CHECK(leafValue(&m, img, "ICC 配置") == "已嵌入", "ICC leaf");
+        CHECK(leafValue(&m, img, "Format") == "PNG", "format leaf");
+        CHECK(leafValue(&m, img, "Dimensions").contains("1920"), "dimensions leaf shows width");
+        CHECK(leafValue(&m, img, "Aspect Ratio") == "16:9", "aspect ratio 16:9");
+        CHECK(leafValue(&m, img, "Megapixels").contains("2.07"), "megapixel leaf");
+        CHECK(leafValue(&m, img, "Channels") == "3", "channels leaf");
+        CHECK(leafValue(&m, img, "Color Space") == "sRGB", "color space leaf");
+        CHECK(leafValue(&m, img, "Orientation").contains("90"), "orientation leaf mentions 90");
+        CHECK(leafValue(&m, img, "ICC Profile") == "Embedded", "ICC leaf");
 
-        QModelIndex exif = findCategory(&m, "EXIF / 元数据");
+        QModelIndex exif = findCategory(&m, "EXIF / Metadata");
         CHECK(exif.isValid(), "EXIF category present");
         CHECK(leafValue(&m, exif, "Make") == "CameraCo", "exif make leaf");
         CHECK(leafValue(&m, exif, "Model") == "X100", "exif model leaf");
@@ -148,16 +148,16 @@ int main(int argc, char **argv)
         m.setRaw(rm);
 
         CHECK(m.rowCount() == 4, "file+image+exif+raw yields 4 categories");
-        QModelIndex raw = findCategory(&m, "RAW 传感器");
+        QModelIndex raw = findCategory(&m, "RAW Sensor");
         CHECK(raw.isValid(), "RAW category present");
-        CHECK(leafValue(&m, raw, "相机厂商") == "Canon", "raw make leaf");
-        CHECK(leafValue(&m, raw, "相机型号") == "EOS R5", "raw model leaf");
-        CHECK(leafValue(&m, raw, "镜头") == "RF 35mm F1.8", "raw lens leaf");
+        CHECK(leafValue(&m, raw, "Camera Make") == "Canon", "raw make leaf");
+        CHECK(leafValue(&m, raw, "Camera Model") == "EOS R5", "raw model leaf");
+        CHECK(leafValue(&m, raw, "Lens") == "RF 35mm F1.8", "raw lens leaf");
         CHECK(leafValue(&m, raw, "ISO") == "400", "raw iso leaf");
-        CHECK(leafValue(&m, raw, "光圈") == "f/2.8", "raw aperture leaf");
-        CHECK(leafValue(&m, raw, "焦距").contains("35"), "raw focal leaf");
-        CHECK(leafValue(&m, raw, "采样位深") == "14 位", "raw bits leaf");
-        CHECK(leafValue(&m, raw, "原始尺寸").contains("8192"), "raw size leaf");
+        CHECK(leafValue(&m, raw, "Aperture") == "f/2.8", "raw aperture leaf");
+        CHECK(leafValue(&m, raw, "Focal Length").contains("35"), "raw focal leaf");
+        CHECK(leafValue(&m, raw, "Bit Depth") == "14 位", "raw bits leaf");
+        CHECK(leafValue(&m, raw, "Original Size").contains("8192"), "raw size leaf");
     }
 
     // ── Parsed ICC profile details add the "ICC 配置详情" section (M-XX) ──────
@@ -182,15 +182,15 @@ int main(int argc, char **argv)
         m.setImage(meta);
 
         CHECK(m.rowCount() == 4, "file+image+exif+icc yields 4 categories");
-        QModelIndex icc = findCategory(&m, "ICC 配置详情");
+        QModelIndex icc = findCategory(&m, "ICC Profile Details");
         CHECK(icc.isValid(), "ICC 配置详情 category present");
-        CHECK(leafValue(&m, icc, "描述") == "sRGB IEC61966-2.1", "icc description leaf");
-        CHECK(leafValue(&m, icc, "版权") == "Public Domain", "icc copyright leaf");
-        CHECK(leafValue(&m, icc, "设备类别") == "显示器", "icc device class leaf");
-        CHECK(leafValue(&m, icc, "色彩空间") == "RGB", "icc color space leaf");
+        CHECK(leafValue(&m, icc, "Description") == "sRGB IEC61966-2.1", "icc description leaf");
+        CHECK(leafValue(&m, icc, "Copyright") == "Public Domain", "icc copyright leaf");
+        CHECK(leafValue(&m, icc, "Device Class") == "显示器", "icc device class leaf");
+        CHECK(leafValue(&m, icc, "Color Space") == "RGB", "icc color space leaf");
         CHECK(leafValue(&m, icc, "PCS") == "XYZ", "icc pcs leaf");
-        CHECK(leafValue(&m, icc, "渲染意图") == "感知 (Perceptual)", "icc rendering intent leaf");
-        CHECK(leafValue(&m, icc, "版本") == "2.1.0", "icc version leaf");
+        CHECK(leafValue(&m, icc, "Rendering Intent") == "感知 (Perceptual)", "icc rendering intent leaf");
+        CHECK(leafValue(&m, icc, "Version") == "2.1.0", "icc version leaf");
     }
 
     // ── clear() returns to the hint state ───────────────────────────────────
@@ -203,7 +203,7 @@ int main(int argc, char **argv)
         CHECK(m.rowCount() == 2, "pre-clear has File/Image categories");
         m.clear();
         CHECK(m.rowCount() == 1, "clear() resets to hint category");
-        CHECK(findCategory(&m, "提示").isValid(), "clear() shows hint again");
+        CHECK(findCategory(&m, "Hint").isValid(), "clear() shows hint again");
     }
 
     printf("\nMetadataModel tests: %d passed, %d failed\n", g_pass, g_fail);

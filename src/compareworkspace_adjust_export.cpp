@@ -48,7 +48,7 @@ void finishAdjustedExport(const ImageData &pixels, const AdjustedExportRequest &
     if (out.isNull())
     {
         if (request.status)
-            request.status(QStringLiteral("导出失败：调优处理失败"), 6000);
+            request.status(QStringLiteral("Export failed: adjustment processing failed"), 6000);
         return;
     }
     const bool wrote = Encoder::encode(out, request.outPath);
@@ -58,11 +58,11 @@ void finishAdjustedExport(const ImageData &pixels, const AdjustedExportRequest &
         return;
     if (!wrote)
     {
-        request.status(QStringLiteral("导出失败：无法写入文件"), 6000);
+        request.status(QStringLiteral("Export failed: cannot write file"), 6000);
         return;
     }
     const QString name = QFileInfo(QString::fromUtf8(request.outPath.c_str())).fileName();
-    request.status(QStringLiteral("已导出调优结果：%1").arg(name), 5000);
+    request.status(QStringLiteral("Tuning result exported: %1").arg(name), 5000);
 }
 
 void onAdjustedExportDecoded(const mviewer::application::ImageLoadingService::Result &res,
@@ -73,7 +73,7 @@ void onAdjustedExportDecoded(const mviewer::application::ImageLoadingService::Re
     if (!res.success() || !res.frame || res.frame->pixels().isNull())
     {
         if (request.status)
-            request.status(QStringLiteral("导出失败：无法解码全分辨率图像"), 6000);
+            request.status(QStringLiteral("Export failed: unable to decode the full-resolution image"), 6000);
         return;
     }
     const ImageData pixels = res.frame->pixels();
@@ -84,7 +84,7 @@ void onAdjustedExportDecoded(const mviewer::application::ImageLoadingService::Re
     if (!task)
     {
         if (request.status)
-            request.status(QStringLiteral("导出失败：调优处理失败"), 6000);
+            request.status(QStringLiteral("Export failed: adjustment processing failed"), 6000);
         return;
     }
     if (request.storeTask)
@@ -123,7 +123,7 @@ void setBlockedSlider(QSlider *slider, QLabel *label, int value, const QString &
 
 void CompareWorkspace::buildUsmControls(QVBoxLayout *editLay)
 {
-    m_usmChk = new QCheckBox(tr("USM 锐化"), m_editPanel);
+    m_usmChk = new QCheckBox(tr("USM Sharpen"), m_editPanel);
     m_usmChk->setObjectName(QStringLiteral("usmEnabledCheck"));
     editLay->addWidget(m_usmChk);
 
@@ -143,11 +143,11 @@ void CompareWorkspace::buildUsmControls(QVBoxLayout *editLay)
         row->addWidget(value);
         editLay->addLayout(row);
     };
-    addSlider(tr("数量"), m_usmAmountSlider, m_usmAmountVal, "usmAmountSlider", 0, 500, 150,
+    addSlider(tr("Quantity"), m_usmAmountSlider, m_usmAmountVal, "usmAmountSlider", 0, 500, 150,
               QStringLiteral("150%"));
-    addSlider(tr("半径"), m_usmRadiusSlider, m_usmRadiusVal, "usmRadiusSlider", 1, 200, 15,
+    addSlider(tr("Radius"), m_usmRadiusSlider, m_usmRadiusVal, "usmRadiusSlider", 1, 200, 15,
               QStringLiteral("1.5"));
-    addSlider(tr("阈值"), m_usmThresholdSlider, m_usmThresholdVal, "usmThresholdSlider", 0, 255, 4,
+    addSlider(tr("Threshold"), m_usmThresholdSlider, m_usmThresholdVal, "usmThresholdSlider", 0, 255, 4,
               QStringLiteral("4"));
     connect(m_usmAmountSlider, &QSlider::valueChanged, this,
             [this](int value)
@@ -171,7 +171,7 @@ void CompareWorkspace::buildUsmControls(QVBoxLayout *editLay)
                 onAdjChanged();
             });
 
-    m_usmLumaChk = new QCheckBox(tr("仅亮度"), m_editPanel);
+    m_usmLumaChk = new QCheckBox(tr("Brightness only"), m_editPanel);
     m_usmLumaChk->setObjectName(QStringLiteral("usmLumaOnlyCheck"));
     editLay->addWidget(m_usmLumaChk);
     connect(m_usmLumaChk, &QCheckBox::toggled, this, [this](bool) { onAdjChanged(); });
@@ -232,10 +232,10 @@ void CompareWorkspace::syncUsmControls(const CellAdjust &adjust)
 
 void CompareWorkspace::addAdjustedExportButton(QVBoxLayout *editLay)
 {
-    m_exportAdjustedBtn = new QPushButton(tr("导出此图调优结果..."), m_editPanel);
+    m_exportAdjustedBtn = new QPushButton(tr("Export adjusted result for this image..."), m_editPanel);
     m_exportAdjustedBtn->setObjectName(QStringLiteral("exportAdjustedButton"));
     m_exportAdjustedBtn->setToolTip(
-        tr("按全分辨率导出当前窗格套用亮度/对比度/伽马、白平衡、USM、旋转/翻转和裁剪后的 "
+        tr("Export current pane at full resolution with brightness/contrast/gamma, white balance, USM, rotate/flip, and crop applied "
            "PNG 或 TIFF，不覆盖原文件"));
     connect(m_exportAdjustedBtn, &QPushButton::clicked, this,
             &CompareWorkspace::exportCurrentCellAdjusted);
@@ -295,7 +295,7 @@ void CompareWorkspace::showCellExportMenu(int idx, const QPoint &globalPos)
         return;
     QMenu menu(this);
     menu.setObjectName(QStringLiteral("cellExportMenu"));
-    QAction *action = menu.addAction(tr("导出此图调优结果..."));
+    QAction *action = menu.addAction(tr("Export adjusted result for this image..."));
     action->setObjectName(QStringLiteral("exportAdjustedAction"));
     connect(action, &QAction::triggered, this, [this, idx]() { exportCellAdjusted(idx); });
     menu.exec(globalPos);
@@ -315,7 +315,7 @@ void CompareWorkspace::exportCellAdjusted(int idx)
 {
     if (idx < 0 || idx >= m_engine.imageCount())
     {
-        showCompareStatus(tr("导出失败：没有可导出的图像"), 6000);
+        showCompareStatus(tr("Export failed: no exportable images"), 6000);
         return;
     }
     const ImageFrame *img = m_engine.imageAt(idx);
@@ -326,13 +326,13 @@ void CompareWorkspace::exportCellAdjusted(int idx)
         sourcePath = m_comparePaths[static_cast<size_t>(idx)];
     if (sourcePath.empty())
     {
-        showCompareStatus(tr("导出失败：找不到源文件"), 6000);
+        showCompareStatus(tr("Export failed: source file not found"), 6000);
         return;
     }
     QString selectedFilter;
     const QString selected = QFileDialog::getSaveFileName(
-        this, tr("导出此图调优结果"), adjustedExportSuggestion(QString::fromStdString(sourcePath)),
-        tr("PNG 图片 (*.png);;TIFF 图片 (*.tif *.tiff)"), &selectedFilter);
+        this, tr("Export this image tuning result"), adjustedExportSuggestion(QString::fromStdString(sourcePath)),
+        tr("PNG Image (*.png);;TIFF Image (*.tif *.tiff)"), &selectedFilter);
     if (selected.isEmpty())
         return;
     const QString outPath = ensureAdjustedExportSuffix(selected, selectedFilter);
@@ -346,7 +346,7 @@ void CompareWorkspace::exportCellAdjusted(int idx)
         frameIndex = std::max(0, m_session->frameIndices[static_cast<size_t>(idx)]);
     else if (img)
         frameIndex = std::max(0, img->frameIndex());
-    showCompareStatus(tr("正在导出调优结果…"), 5000);
+    showCompareStatus(tr("Exporting tuning results…"), 5000);
     cancelAdjustedExport();
     launchAdjustedExport(sourcePath, frameIndex, outPath, toCellImageAdjust(adjust));
 }
@@ -420,5 +420,5 @@ void CompareWorkspace::launchAdjustedExport(const std::string &sourcePath, int f
         [request](const mviewer::application::ImageLoadingService::Result &res)
         { onAdjustedExportDecoded(res, request); }, opts, m_lifetime);
     if (!m_adjustExportHandle && request.status)
-        request.status(QStringLiteral("导出失败：无法解码全分辨率图像"), 6000);
+        request.status(QStringLiteral("Export failed: unable to decode the full-resolution image"), 6000);
 }
