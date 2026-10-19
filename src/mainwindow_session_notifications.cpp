@@ -3,8 +3,8 @@
 
 #include "runtime_storage.h"
 
-#include <QtConcurrent/QtConcurrent>
 #include <QThreadPool>
+#include <QtConcurrent/QtConcurrent>
 
 void MainWindow::checkForUpdates(bool silent)
 {
@@ -65,9 +65,18 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
                         .arg(QString::fromStdString(info.latestVersion),
                              QString::fromStdString(info.currentVersion)));
         box.setInformativeText(tr("Update recommended for the latest features and bug fixes."));
+        auto *dontAutoCheck = new QCheckBox(tr("Don't check for updates automatically"), &box);
+        dontAutoCheck->setObjectName(QStringLiteral("updateNagDisableAutoCheck"));
+        box.setCheckBox(dontAutoCheck);
         QPushButton *openBtn = box.addButton(tr("Go to Download Page"), QMessageBox::AcceptRole);
         box.addButton(tr("Later"), QMessageBox::RejectRole);
         box.exec();
+        if (box.checkBox() && box.checkBox()->isChecked())
+        {
+            QSettings settings;
+            settings.setValue(QStringLiteral("autoCheckUpdates"), false);
+            settings.sync();
+        }
         if (box.clickedButton() == openBtn)
             QDesktopServices::openUrl(QUrl(QString::fromStdString(info.releaseUrl)));
     }

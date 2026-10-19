@@ -43,6 +43,7 @@ class PreferencesDialog : public QDialog
     QCheckBox *m_autoAlign = nullptr;
     QCheckBox *m_gpuAcceleration = nullptr;
     QCheckBox *m_colorManagement = nullptr;
+    QCheckBox *m_autoCheckUpdates = nullptr;
     QComboBox *m_analysisOverlay = nullptr;
     QSlider *m_zebraThreshold = nullptr;
 };

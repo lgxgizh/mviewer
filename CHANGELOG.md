@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Preferences: automatic update check** — General tab checkbox **Automatically check for updates on startup** (`autoCheckUpdates`, default **true**). When off, the silent post-launch update check is skipped; **Help → Check for Updates** still works. The "New version available" dialog includes **Don't check for updates automatically**, which persists the same setting when checked (including with **Later**).
+
 ### Fixed
 
 - **Compare sticky low-res mosaic**: soft/warm first paint no longer claims full

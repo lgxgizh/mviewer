@@ -133,6 +133,13 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_colorManagement->setChecked(s.value("display/colorManagement", true).toBool());
     gl->addRow(m_colorManagement);
 
+    m_autoCheckUpdates = new QCheckBox(tr("Automatically check for updates on startup"));
+    m_autoCheckUpdates->setObjectName(QStringLiteral("preferencesAutoCheckUpdates"));
+    m_autoCheckUpdates->setToolTip(
+        tr("Only notifies when a newer release exists; Help → Check for Updates still works."));
+    m_autoCheckUpdates->setChecked(s.value(QStringLiteral("autoCheckUpdates"), true).toBool());
+    gl->addRow(m_autoCheckUpdates);
+
     return general;
 }
 
@@ -232,6 +239,7 @@ void PreferencesDialog::accept()
     s.setValue("zebraThreshold", m_zebraThreshold->value());
     const bool colorManagement = m_colorManagement->isChecked();
     s.setValue("display/colorManagement", colorManagement);
+    s.setValue(QStringLiteral("autoCheckUpdates"), m_autoCheckUpdates->isChecked());
     s.sync();
     GpuTileUploader::resetEnabledCache();
     DisplayColorContextProvider::setColorManagementEnabled(colorManagement);
