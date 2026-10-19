@@ -4,13 +4,17 @@
 #include "fileopmessages.h"
 #include "runtime_storage.h"
 
+#include <QClipboard>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QImage>
+#include <QMimeData>
 #include <QSettings>
 #include <QUrl>
+#include <QVariant>
 
 namespace
 {
@@ -76,6 +80,33 @@ void pruneInternalTrash(const QString &trashDir)
     }
 }
 
+QString uniqueDestinationPath(const QDir &dir, const QString &fileName)
+{
+    if (!dir.exists(fileName))
+        return dir.filePath(fileName);
+    const QFileInfo info(fileName);
+    const QString base = info.completeBaseName();
+    const QString suffix = info.suffix();
+    for (int n = 2; n < 10000; ++n)
+    {
+        const QString candidate = suffix.isEmpty()
+                                      ? QStringLiteral("%1-%2").arg(base).arg(n)
+                                      : QStringLiteral("%1-%2.%3").arg(base).arg(n).arg(suffix);
+        if (!dir.exists(candidate))
+            return dir.filePath(candidate);
+    }
+    return {};
+}
+
+bool isLocalImageUrl(const QUrl &url)
+{
+    if (!url.isLocalFile())
+        return false;
+    const QString path = url.toLocalFile();
+    if (path.isEmpty() || !QFileInfo::exists(path) || !QFileInfo(path).isFile())
+        return false;
+    return mviewer::core::ImageFormats::isSupportedPath(path.toUtf8().toStdString());
+}
 bool moveToSystemTrash(const std::string &source, std::string &pathInTrash)
 {
     QString trashed;
@@ -568,6 +599,86 @@ void ThumbnailPanel::revealSelected()
 #else
     QProcess::startDetached("xdg-open", QStringList() << QFileInfo(paths.first()).absolutePath());
 #endif
+}
+
+void ThumbnailPanel::openCurrentFolder()
+{
+    if (m_currentDir.isEmpty())
+        return;
+    const QFileInfo info(m_currentDir);
+    if (!info.exists() || !info.isDir())
+        return;
+    QDesktopServices::openUrl(QUrl::fromLocalFile(info.absoluteFilePath()));
+}
+
+QStringList ThumbnailPanel::pasteClipboardIntoCurrentDirectory()
+{
+    QStringList written;
+    if (m_currentDir.isEmpty())
+        return written;
+    const QDir destDir(m_currentDir);
+    if (!destDir.exists())
+        return written;
+
+    const QClipboard *clipboard = QApplication::clipboard();
+    if (!clipboard)
+        return written;
+    const QMimeData *mime = clipboard->mimeData();
+    if (!mime)
+        return written;
+
+    // Prefer file URLs so Explorer/Finder copies keep original names.
+    if (mime->hasUrls())
+    {
+        for (const QUrl &url : mime->urls())
+        {
+            if (!isLocalImageUrl(url))
+                continue;
+            const QString source = QFileInfo(url.toLocalFile()).absoluteFilePath();
+            const QString destPath = uniqueDestinationPath(destDir, QFileInfo(source).fileName());
+            // uniqueDestinationPath never returns an existing path, so pasting a
+            // file that already lives here creates foo-2.jpg instead of no-op.
+            if (destPath.isEmpty() || !QFile::copy(source, destPath))
+                continue;
+            written.append(destPath);
+        }
+    }
+
+    if (written.isEmpty() && mime->hasImage())
+    {
+        const QImage image = qvariant_cast<QImage>(mime->imageData());
+        if (!image.isNull())
+        {
+            const bool jpeg = mime->hasFormat(QStringLiteral("image/jpeg"));
+            const QString ext = jpeg ? QStringLiteral("jpg") : QStringLiteral("png");
+            const char *format = jpeg ? "JPEG" : "PNG";
+            const QString stamp =
+                QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"));
+            const QString fileName = QStringLiteral("clipboard-%1.%2").arg(stamp, ext);
+            const QString destPath = uniqueDestinationPath(destDir, fileName);
+            if (!destPath.isEmpty() && image.save(destPath, format))
+                written.append(destPath);
+        }
+    }
+
+    if (written.isEmpty())
+        return written;
+
+    if (m_liveDirectoryMonitoring)
+    {
+        emit directoryContentsChanged(m_currentDir);
+        selectPath(written.last());
+    }
+    else
+    {
+        mviewer::core::DirectoryDelta delta;
+        delta.path = m_currentDir.toUtf8().toStdString();
+        for (const QString &path : written)
+            delta.added.push_back(directoryEntryForPath(path));
+        applyDirectoryDelta(delta);
+        selectPaths(written, written.last());
+    }
+    return written;
 }
 
 void ThumbnailPanel::batchAnalyzeExport()

@@ -155,6 +155,7 @@ class MainWindow : public QMainWindow
     bool handleMetadataKey(QKeyEvent *event);
     bool handleViewModeKey(QKeyEvent *event);
     bool handleClipboardKey(QKeyEvent *event);
+    bool isThumbnailPanelPasteTarget() const;
     void startClipboardPaste(const QImage &image);
     void cancelClipboardPaste();
     void cleanupClipboardPasteTemps();
@@ -295,6 +296,7 @@ class MainWindow : public QMainWindow
     QAction *m_actBrowseWorkspace = nullptr;
     QAction *m_actDirUp = nullptr;
     QAction *m_actRefresh = nullptr;
+    QAction *m_actOpenCurrentFolder = nullptr;
     QAction *m_actToggleNavigation = nullptr;
     QAction *m_actBatch = nullptr;
     QAction *m_actUsmCompare = nullptr;

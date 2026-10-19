@@ -4,6 +4,8 @@
 #include "runtime_storage.h"
 #include "shortcutdigits.h"
 
+#include <QCursor>
+
 #include <QCoreApplication>
 
 namespace
@@ -41,8 +43,10 @@ bool textEntryOwnsKey(QWidget *widget, const QKeyEvent *key)
     if (!textEntryWidget(widget) || !key)
         return false;
     const auto mods = key->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
-    // Copy stays with the editor. Ctrl+Shift+C still copies the image path.
-    if (mods == Qt::ControlModifier && key->key() == Qt::Key_C)
+    // Clipboard shortcuts stay with the editor. Ctrl+Shift+C still copies the
+    // image path via MainWindow when the gallery owns the key.
+    if (mods == Qt::ControlModifier && (key->key() == Qt::Key_C || key->key() == Qt::Key_V ||
+                                        key->key() == Qt::Key_X || key->key() == Qt::Key_A))
         return true;
     if (mods != Qt::NoModifier && mods != Qt::ShiftModifier)
         return false;
@@ -304,6 +308,29 @@ bool MainWindow::handleViewModeKey(QKeyEvent *event)
     return false;
 }
 
+bool MainWindow::isThumbnailPanelPasteTarget() const
+{
+    if (!m_thumbnailPanel || m_thumbnailPanel->currentDir().isEmpty())
+        return false;
+    // Compare mode owns the canvas; keep the legacy temp-file paste there.
+    if (m_compareView && !m_compareView->isHidden())
+        return false;
+    QWidget *focus = QApplication::focusWidget();
+    if (focus && (focus == m_thumbnailPanel || m_thumbnailPanel->isAncestorOf(focus)))
+        return true;
+    if (m_thumbnailPanel->underMouse())
+        return true;
+    if (QWidget *viewport = m_thumbnailPanel->viewport())
+    {
+        if (viewport->underMouse())
+            return true;
+        const QPoint local = viewport->mapFromGlobal(QCursor::pos());
+        if (viewport->rect().contains(local))
+            return true;
+    }
+    return false;
+}
+
 bool MainWindow::handleClipboardKey(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
@@ -333,20 +360,42 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // Ctrl+V pastes a clipboard image and opens it in the viewer.
+    // Ctrl+V: when the gallery has focus or the pointer is over it, paste into
+    // the browsed folder. Otherwise keep the legacy temp-file → viewer path.
     if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_V && !(mod & Qt::ShiftModifier))
     {
+        if (mviewer_keys::textEntryWidget(QApplication::focusWidget()))
+            return false;
+        if (isThumbnailPanelPasteTarget())
+        {
+            const QStringList written = m_thumbnailPanel->pasteClipboardIntoCurrentDirectory();
+            if (written.isEmpty())
+            {
+                if (statusBar())
+                    statusBar()->showMessage(tr("No image data on the clipboard"), 3000);
+            }
+            else if (statusBar())
+            {
+                statusBar()->showMessage(
+                    written.size() == 1
+                        ? tr("Pasted into folder: %1").arg(QFileInfo(written.first()).fileName())
+                        : tr("Pasted %1 images into folder").arg(written.size()),
+                    3000);
+            }
+            event->accept();
+            return true;
+        }
         const QClipboard *cb = QApplication::clipboard();
-        const QMimeData *md = cb->mimeData();
+        const QMimeData *md = cb ? cb->mimeData() : nullptr;
         if (md && md->hasImage())
         {
             const QImage img = qvariant_cast<QImage>(md->imageData());
             if (!img.isNull())
                 startClipboardPaste(img);
-            else
+            else if (statusBar())
                 statusBar()->showMessage(tr("No image data on the clipboard"), 3000);
         }
-        else
+        else if (statusBar())
             statusBar()->showMessage(tr("No image data on the clipboard"), 3000);
         event->accept();
         return true;

@@ -29,7 +29,9 @@
 #include "thumbnailpanel.h"
 
 #include <QAbstractButton>
+#include <QAction>
 #include <QApplication>
+#include <QClipboard>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -712,6 +714,68 @@ void testViewerDropAndWindowFit()
     QSettings().remove(QStringLiteral("viewerScreen"));
 }
 
+void testPasteIntoFolderAndOpenAction(const QString &dirPath)
+{
+    std::cout << "── Browse: paste into folder + open-folder action ──\n";
+    QDir dir(dirPath);
+    writePng(dir, "paste_seed.png", QColor(10, 20, 30));
+
+    SelectionModel sel;
+    ThumbnailPanel panel;
+    panel.setSelectionModel(&sel);
+    panel.setDirectory(dirPath);
+    QElapsedTimer t;
+    t.start();
+    while (panel.entries().empty() && t.elapsed() < 8000)
+        pump(10);
+    CHECK(!panel.entries().empty(), "paste target directory has at least one image");
+
+    // Raw clipboard image → clipboard-*.png in the browsed folder.
+    QImage clip(24, 24, QImage::Format_RGB32);
+    clip.fill(QColor(90, 40, 20));
+    QApplication::clipboard()->setImage(clip);
+    const QStringList written = panel.pasteClipboardIntoCurrentDirectory();
+    CHECK(written.size() == 1, "clipboard image paste writes one file");
+    CHECK(QFile::exists(written.first()), "pasted clipboard image exists on disk");
+    CHECK(QFileInfo(written.first()).fileName().startsWith(QStringLiteral("clipboard-")),
+          "raw clipboard paste uses clipboard-YYYYMMDD-HHMMSS name");
+    CHECK(panel.selectedPaths().contains(written.first()),
+          "pasted clipboard image becomes the gallery selection");
+
+    // File URL paste keeps the original name (with -2 on collision).
+    const QString source = writePng(QDir(QDir::tempPath()), "paste_url_src.png", QColor(1, 2, 3));
+    auto *mime = new QMimeData;
+    mime->setUrls({QUrl::fromLocalFile(source)});
+    QApplication::clipboard()->setMimeData(mime);
+    const QStringList copied = panel.pasteClipboardIntoCurrentDirectory();
+    CHECK(copied.size() == 1, "file-URL paste copies one image");
+    CHECK(QFileInfo(copied.first()).fileName() == QStringLiteral("paste_url_src.png"),
+          "file-URL paste keeps the original file name");
+    CHECK(QFile::exists(copied.first()), "copied file exists in the browse directory");
+
+    // Collision: paste the same URL again → paste_url_src-2.png.
+    auto *mime2 = new QMimeData;
+    mime2->setUrls({QUrl::fromLocalFile(source)});
+    QApplication::clipboard()->setMimeData(mime2);
+    const QStringList dup = panel.pasteClipboardIntoCurrentDirectory();
+    CHECK(dup.size() == 1 &&
+              QFileInfo(dup.first()).fileName() == QStringLiteral("paste_url_src-2.png"),
+          "duplicate paste appends -2 before the extension");
+
+    // Open-folder toolbar action exists on MainWindow with the English source string.
+    MainWindow window;
+    window.show();
+    pump(50);
+    auto *openFolder = window.findChild<QAction *>(QStringLiteral("openCurrentFolderAction"));
+    CHECK(openFolder != nullptr, "browse toolbar exposes openCurrentFolderAction");
+    CHECK(openFolder->text() == QStringLiteral("Open Folder"),
+          "open-folder action uses the English source string");
+    // No-op when the gallery has no directory (must not crash).
+    ThumbnailPanel empty;
+    empty.openCurrentFolder();
+    panel.openCurrentFolder();
+}
+
 void testSettingsPersistence(const QString &directory)
 {
     std::cout << "── Browse: settings persistence ──\n";
@@ -771,6 +835,11 @@ int main(int argc, char **argv)
         testMetadataOverlayCurrent(dirPath, paths);
     }
     testViewerDropAndWindowFit();
+    {
+        QDir pasteDir(tmp.filePath("paste_folder"));
+        pasteDir.mkpath(".");
+        testPasteIntoFolderAndOpenAction(pasteDir.absolutePath());
+    }
     testSettingsPersistence(tmp.path());
 
     if (g_failures > 0)
