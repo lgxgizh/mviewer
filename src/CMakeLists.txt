@@ -526,6 +526,15 @@ add_test(NAME version_consistency
 set_tests_properties(version_consistency PROPERTIES
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# i18n gate: C++/CMake sources are English; Chinese lives only in
+# translations/*.ts and resources/help/*.zh_CN.html (see scripts/check_no_chinese.py).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME i18n_source_gate
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check_no_chinese.py
+                --root ${CMAKE_SOURCE_DIR})
+endif()
+
 # M35: the canonical local Test entry point must never turn a failing CTest
 # run into a successful process exit. Keep this static contract in CTest so a
 # future build-script edit cannot silently weaken every downstream gate.

@@ -15,7 +15,6 @@
 #   windows-build-and-test — MSVC + Qt 6.8.0, zero compiler warnings + CTest
 #   adr-gate               — architectural PRs must update an ADR
 #   known-issues           — bug issues linked to regression tests
-#   i18n-gate              — no Chinese text in src/ outside the i18n allowlist
 #
 # The Tier-2 (nightly) and Tier-3 (release) workflows live in nightly.yml and
 # release.yml respectively and intentionally do NOT block PRs.
@@ -398,28 +397,12 @@ jobs:
         run: ./scripts/known_issues_gate.ps1 -Strict
 
   # ---------------------------------------------------------------------------
-  # i18n-gate — English source language (REQUIRED, fast)
-  # C++ sources are English; Chinese lives only in translations/*.ts and
-  # resources/help/*.zh_CN.html. Legitimate cases (OS error text matching,
-  # Unicode path fixtures) carry an `i18n-allow` marker with a reason.
-  # ---------------------------------------------------------------------------
-  i18n-gate:
-    name: i18n source-language gate (required)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: No Chinese text in src/ outside the allowlist
-        run: python3 scripts/check_no_chinese.py
-
-  # ---------------------------------------------------------------------------
   # ci-gate — aggregate required statuses for branch protection
   # ---------------------------------------------------------------------------
   ci-gate:
     name: CI gate (Tier 1)
     runs-on: ubuntu-latest
-    needs: [format, cppcheck, clang-tidy, architecture-gate, build-linux, windows-build-and-test, adr-gate, known-issues, i18n-gate]
+    needs: [format, cppcheck, clang-tidy, architecture-gate, build-linux, windows-build-and-test, adr-gate, known-issues]
     if: always()
     steps:
       - name: All required jobs passed

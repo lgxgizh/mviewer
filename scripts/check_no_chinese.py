@@ -62,6 +62,9 @@ def scan_file(path: Path, rel: str) -> list[tuple[int, str]]:
 
 
 def main() -> int:
+    # Windows consoles may not be UTF-8; never crash while reporting.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--root", default=Path(__file__).resolve().parent.parent, type=Path)
     parser.add_argument("paths", nargs="*", default=["src", "CMakeLists.txt", "cmake"])
