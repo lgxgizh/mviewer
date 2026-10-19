@@ -76,14 +76,14 @@ void AnalysisPanel::updateInspectorPage()
 
     const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
     QString txt = QString("<h3>%1 — %2</h3>").arg(tr("Pixel Inspector"), csLabel);
-    txt += QString("坐标: (%1, %2)<br>").arg(m_px).arg(m_py);
+    txt += tr("Coordinates: (%1, %2)<br>").arg(m_px).arg(m_py);
     txt += formatPixelValues(m_colorSpace, m_pR, m_pG, m_pB, m_rawKind == 2, m_r16, m_g16, m_b16,
                              m_rawMax);
     if (m_pA >= 0 && m_pA < 255)
         txt += QString("Alpha: %1<br>").arg(m_pA);
 
     // P0-2/PixelInspector: original high-bit-depth readout.
-    txt += QString("<br><b>原始采样</b> ");
+    txt += tr("<br><b>Raw sample</b> ");
     if (m_rawKind == 2)
     {
         const double n = m_rawMax > 0 ? static_cast<double>(m_rawMax) : 65535.0;
@@ -92,18 +92,18 @@ void AnalysisPanel::updateInspectorPage()
                    .arg(m_g16)
                    .arg(m_b16)
                    .arg(m_rawMax);
-        txt += QString("归一化 R=%1 G=%2 B=%3")
+        txt += tr("Normalized R=%1 G=%2 B=%3")
                    .arg(m_r16 / n, 0, 'f', 4)
                    .arg(m_g16 / n, 0, 'f', 4)
                    .arg(m_b16 / n, 0, 'f', 4);
     }
     else if (m_rawKind == 1)
     {
-        txt += QString("RAW 预览 (demosaic 8-bit)，无线性 16-bit 采样");
+        txt += tr("RAW preview (demosaic 8-bit), no linear 16-bit sample");
     }
     else
     {
-        txt += QString("8-bit 源 归一化 R=%1 G=%2 B=%3")
+        txt += tr("8-bit source normalized R=%1 G=%2 B=%3")
                    .arg(m_pR / 255.0, 0, 'f', 4)
                    .arg(m_pG / 255.0, 0, 'f', 4)
                    .arg(m_pB / 255.0, 0, 'f', 4);
@@ -123,20 +123,20 @@ void AnalysisPanel::updateInspectorPage()
             // order), so the layout is stated explicitly.
             const mviewer::core::NeighborhoodStats s =
                 mviewer::core::neighborhoodStats(data, stride, w, h, m_px, m_py, m_kernel, 4);
-            txt += QString("<br><b>%1×%1 邻域统计</b> (亮度)<br>").arg(m_kernel);
+            txt += tr("<br><b>%1×%1 neighborhood statistics</b> (luminance)<br>").arg(m_kernel);
             txt +=
-                QString("均值: %1  标准差: %2<br>").arg(s.mean, 0, 'f', 1).arg(s.stdDev, 0, 'f', 1);
-            txt += QString("最小值: %1  最大值: %2  方差: %3  采样数: %4")
+                tr("Mean: %1  Std dev: %2<br>").arg(s.mean, 0, 'f', 1).arg(s.stdDev, 0, 'f', 1);
+            txt += tr("Min: %1  Max: %2  Variance: %3  Samples: %4")
                        .arg(s.min, 0, 'f', 0)
                        .arg(s.max, 0, 'f', 0)
                        .arg(s.variance, 0, 'f', 1)
                        .arg(s.count);
-            txt += QString("<br>通道均值: R %1  G %2  B %3  HSV-V %4")
+            txt += tr("<br>Channel means: R %1  G %2  B %3  HSV-V %4")
                        .arg(s.rMean, 0, 'f', 1)
                        .arg(s.gMean, 0, 'f', 1)
                        .arg(s.bMean, 0, 'f', 1)
                        .arg(s.vMean, 0, 'f', 1);
-            txt += QString("<br>通道标准差: R %1  G %2  B %3")
+            txt += tr("<br>Channel std dev: R %1  G %2  B %3")
                        .arg(s.rStdDev, 0, 'f', 1)
                        .arg(s.gStdDev, 0, 'f', 1)
                        .arg(s.bStdDev, 0, 'f', 1);

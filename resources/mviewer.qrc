@@ -6,6 +6,12 @@
     <qresource prefix="/i18n">
         <file alias="mviewer_zh_CN.qm">i18n/mviewer_zh_CN.qm</file>
     </qresource>
+    <qresource prefix="/help">
+        <file alias="shortcuts.en.html">help/shortcuts.en.html</file>
+        <file alias="shortcuts.zh_CN.html">help/shortcuts.zh_CN.html</file>
+        <file alias="guide.en.html">help/guide.en.html</file>
+        <file alias="guide.zh_CN.html">help/guide.zh_CN.html</file>
+    </qresource>
     <qresource prefix="/theme">
         <file alias="dark.qss">theme/dark.qss</file>
         <file alias="check.png">theme/check.png</file>

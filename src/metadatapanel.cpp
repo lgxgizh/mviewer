@@ -33,7 +33,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
 
     layout->addWidget(new QLabel(tr("Metadata (Metadata)"), this));
 
-    // "复制全部" button: dumps the full hierarchical model to the clipboard as
+    // "Copy All" button: dumps the full hierarchical model to the clipboard as
     // "Key: Value" lines — handy for sharing EXIF info or pasting into reports.
     // M24 (Phase 5): no dedicated shortcut here — Ctrl+Shift+C is reserved for
     // the gallery's copy-path action; a button + tooltip suffices for this

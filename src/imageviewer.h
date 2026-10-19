@@ -300,7 +300,7 @@ class ImageViewer : public QOpenGLWidget
     // zoom and on fit/resize.
     void zoomChanged(int percent);
 
-    // A-7.3: user picked an analyzer from the context-menu "分析" submenu.
+    // A-7.3: user picked an analyzer from the context-menu "Analyze" submenu.
     // MainWindow leaves viewer fullscreen when that request arrives from it,
     // shows the AnalysisPanel, and routes the run through it so results land
     // in the unified Result tab (not a QMessageBox).

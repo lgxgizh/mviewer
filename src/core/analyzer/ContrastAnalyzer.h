@@ -11,7 +11,7 @@ class ContrastAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "对比度 (RMS)";
+        return "Contrast (RMS)";
     }
     AnalyzerCapability capabilities() const override
     {

@@ -820,7 +820,7 @@ ScenarioResult scenarioHundredMpTiles()
     return r;
 }
 
-// ─── Post-M22 named scenarios (review "性能回归" asks) ───────────────────────
+// ─── Post-M22 named scenarios (review "performance regression" asks) ───────────────────
 namespace
 {
 // Render a deterministic gradient + noise frame (stand-in for a real photo/RAW).

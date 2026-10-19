@@ -12,7 +12,7 @@ class ColorCastAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "色偏检测";
+        return "Color cast detection";
     }
     AnalyzerCapability capabilities() const override
     {

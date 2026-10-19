@@ -1,5 +1,6 @@
 // MainWindow command registration and keyboard dispatch (M20 P0#1).
 #include "mainwindow_p.h"
+#include "Language.h"
 #include "runtime_storage.h"
 #include "shortcutdigits.h"
 
@@ -66,13 +67,13 @@ void MainWindow::setupCommands()
 
     // M9: Left/Right navigate, Enter opens the viewer, F11 toggles fullscreen.
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "navigate_prev", "上一张 (Left)", [this]() { navigate(-1); },
+        "navigate_prev", "Previous Image (Left)", [this]() { navigate(-1); },
         std::vector<CommandShortcut>{{Qt::Key_Left, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "navigate_next", "下一张 (Right)", [this]() { navigate(1); },
+        "navigate_next", "Next Image (Right)", [this]() { navigate(1); },
         std::vector<CommandShortcut>{{Qt::Key_Right, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "quick_preview", "在查看器中打开 (Enter)",
+        "quick_preview", "Open in Viewer (Enter)",
         [this]()
         {
             if (!currentImagePath().isEmpty())
@@ -85,27 +86,27 @@ void MainWindow::setupCommands()
 
     // M18: file-management shortcuts for the selected gallery items.
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_rename", "重命名 (F2)", [this]() { m_thumbnailPanel->renameSelected(); },
+        "file_rename", "Rename (F2)", [this]() { m_thumbnailPanel->renameSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_F2, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_delete", "删除到回收站 (Delete)",
+        "file_delete", "Move to Recycle Bin (Delete)",
         [this]() { m_thumbnailPanel->moveToTrashSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_Delete, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_copy", "复制到...", [this]() { m_thumbnailPanel->copySelectedTo(); },
+        "file_copy", "Copy To...", [this]() { m_thumbnailPanel->copySelectedTo(); },
         // No shortcut: global Ctrl+C copies the image to the clipboard
         // (handled before registry dispatch); binding it here too would be dead.
         std::vector<CommandShortcut>{}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_move", "移动到... (Ctrl+M)", [this]() { m_thumbnailPanel->moveSelectedTo(); },
+        "file_move", "Move To... (Ctrl+M)", [this]() { m_thumbnailPanel->moveSelectedTo(); },
         std::vector<CommandShortcut>{{Qt::Key_M, Qt::ControlModifier}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_reveal", "在资源管理器中显示 (Ctrl+E)",
+        "file_reveal", "Show in File Manager (Ctrl+E)",
         [this]() { m_thumbnailPanel->revealSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
     // Ctrl+F focuses the gallery address bar (pathEdit).
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "dir_filter", "地址栏 (Ctrl+F)", [this]() { focusAddressBar(); },
+        "dir_filter", "Address Bar (Ctrl+F)", [this]() { focusAddressBar(); },
         std::vector<CommandShortcut>{{Qt::Key_F, Qt::ControlModifier}}));
 }
 
@@ -343,10 +344,10 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
             if (!img.isNull())
                 startClipboardPaste(img);
             else
-                statusBar()->showMessage("剪贴板中无图片数据", 3000);
+                statusBar()->showMessage(tr("No image data on the clipboard"), 3000);
         }
         else
-            statusBar()->showMessage("剪贴板中无图片数据", 3000);
+            statusBar()->showMessage(tr("No image data on the clipboard"), 3000);
         event->accept();
         return true;
     }
@@ -359,12 +360,12 @@ void MainWindow::startClipboardPaste(const QImage &img)
     const QString tmpDir = clipboardPasteDirectory();
     if (tmpDir.isEmpty())
     {
-        statusBar()->showMessage("无法创建剪贴板临时文件", 3000);
+        statusBar()->showMessage(tr("Unable to create a temporary clipboard file"), 3000);
         return;
     }
     if (!QDir().mkpath(tmpDir))
     {
-        statusBar()->showMessage("无法创建剪贴板临时目录", 3000);
+        statusBar()->showMessage(tr("Unable to create a temporary clipboard folder"), 3000);
         return;
     }
 
@@ -377,7 +378,7 @@ void MainWindow::startClipboardPaste(const QImage &img)
     cleanupClipboardPasteTemps();
     if (!QDir().mkpath(tmpDir))
     {
-        statusBar()->showMessage("无法创建剪贴板临时目录", 3000);
+        statusBar()->showMessage(tr("Unable to create a temporary clipboard folder"), 3000);
         return;
     }
     const QString tmpPath = QDir(tmpDir).filePath(
@@ -425,14 +426,14 @@ void MainWindow::startClipboardPaste(const QImage &img)
                     {
                         window->m_clipboardPastePath = tmpPath;
                         window->onImageOpen(tmpPath);
-                        window->statusBar()->showMessage("已从剪贴板粘贴图片", 3000);
+                        window->statusBar()->showMessage(tr("Pasted image from clipboard"), 3000);
                     }
                     else
                     {
                         QFile::remove(tmpPath);
                         window->statusBar()->showMessage(
-                            state->cancelled.load(std::memory_order_relaxed) ? "剪贴板粘贴已取消"
-                                                                             : "无法保存剪贴板图片",
+                            state->cancelled.load(std::memory_order_relaxed) ? tr("Clipboard paste cancelled")
+                                                                             : tr("Unable to save the clipboard image"),
                             3000);
                     }
                 },
@@ -443,7 +444,7 @@ void MainWindow::startClipboardPaste(const QImage &img)
     {
         alive->store(false, std::memory_order_relaxed);
         QFile::remove(tmpPath);
-        statusBar()->showMessage("剪贴板粘贴无法排队", 3000);
+        statusBar()->showMessage(tr("Clipboard paste could not be queued"), 3000);
     }
 }
 
@@ -560,113 +561,14 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
 QString MainWindow::shortcutsHelpHtml()
 {
     // P1-8: a single, authoritative cheat sheet so users never have to guess.
-    return QStringLiteral(
-        "<style>td{padding:2px 14px 2px 0;} th{text-align:left;padding-top:8px;}"
-        "kbd{background:#333;color:#fff;border-radius:3px;padding:1px 5px;}</style>"
-        "<table>"
-        "<tr><th colspan='2'>文件与导航</th></tr>"
-        "<tr><td><kbd>Ctrl+O</kbd> / <kbd>Ctrl+Shift+O</kbd></td><td>打开目录 / 打开文件</td></tr>"
-        "<tr><td><kbd>Ctrl+F</kbd> / <kbd>Alt+D</kbd></td><td>聚焦地址栏（快速定位路径）</td></tr>"
-        "<tr><td><kbd>Alt+↑</kbd></td><td>返回上一级目录</td></tr>"
-        "<tr><td><kbd>Ctrl+V</kbd></td><td>从剪贴板粘贴图片（截图后直接查看）</td></tr>"
-        "<tr><td><kbd>Ctrl+D</kbd></td><td>收藏当前目录</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+F</kbd></td><td>全局搜索</td></tr>"
-        "<tr><td><kbd>F1</kbd></td><td>快捷键帮助</td></tr>"
-        "<tr><td><kbd>Ctrl+Q</kbd></td><td>退出</td></tr>"
-        "<tr><th colspan='2'>浏览与选择</th></tr>"
-        "<tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>上一张 / 下一张（循环）</td></tr>"
-        "<tr><td>鼠标侧键</td><td>上一个 / 下一个目录（历史后退/前进）</td></tr>"
-        "<tr><td><kbd>Alt+←</kbd> / <kbd>Alt+→</kbd></td><td>历史导航：上一步 / 下一步</td></tr>"
-        "<tr><td><kbd>Enter</kbd></td><td>在查看器中打开选中图片</td></tr>"
-        "<tr><td><kbd>Ctrl+A</kbd> / <kbd>Ctrl+Shift+A</kbd></td><td>Select all / "
-        "Cancel selection (deselect gallery)</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+I</kbd></td><td>反选画廊图片</td></tr>"
-        "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / "
-        "最后一张（查看器中同样有效）</td></tr>"
-        "<tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>上翻 / 下翻一页（10 "
-        "张，查看器中同样有效）</td></tr>"
-        "<tr><td><kbd>F5</kbd></td><td>刷新目录树与画廊</td></tr>"
-        "<tr><td><kbd>Ctrl+滚轮</kbd> / <kbd>Ctrl++</kbd> / "
-        "<kbd>Ctrl+-</kbd></td><td>画廊焦点调缩略图，查看器焦点缩放（<kbd>Ctrl+0</kbd> "
-        "重置缩略图或适应窗口）</td></tr>"
-        "<tr><td><kbd>Tab</kbd> / <kbd>Shift+Tab</kbd></td><td>专注浏览开关 / "
-        "反向移动焦点</td></tr>"
-        "<tr><th colspan='2'>缩放（查看器）</th></tr>"
-        "<tr><td><kbd>+</kbd> / <kbd>-</kbd>（或 <kbd>Ctrl++</kbd> / <kbd>Ctrl+-</kbd>）</td><td>"
-        "放大 / 缩小</td></tr>"
-        "<tr><td><kbd>0</kbd> / <kbd>1</kbd> / <kbd>2</kbd></td><td>适应窗口 / 实际大小(100%) / "
-        "200%</td></tr>"
-        "<tr><td><kbd>F</kbd></td><td>适应窗口</td></tr>"
-        "<tr><td><kbd>Ctrl+L</kbd></td><td>锁定缩放比</td></tr>"
-        "<tr><td><kbd>Shift+C</kbd> / <kbd>Shift+B</kbd></td><td>复制光标处颜色（HEX / "
-        "RGB）</td></tr>"
-        "<tr><td>双击</td><td>适应窗口 ↔ 100% 切换</td></tr>"
-        "<tr><td><kbd>F11</kbd></td><td>全屏切换</td></tr>"
-        "<tr><td><kbd>S</kbd></td><td>幻灯片放映（3 秒/张，循环）</td></tr>"
-        "<tr><td><kbd>ESC</kbd></td><td>退出全屏 / 关闭查看器 / 停止放映 / 关闭信息浮层</td></tr>"
-        "<tr><th colspan='2'>视图模式</th></tr>"
-        "<tr><td><kbd>G</kbd></td><td>缩略图视图</td></tr>"
-        "<tr><td><kbd>D</kbd></td><td>详情视图</td></tr>"
-        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+4</kbd></td><td>缩略图 / 列表 / 详情 / "
-        "胶片条</td></tr>"
-        "<tr><td><kbd>Ctrl+5</kbd> / <kbd>Ctrl+6</kbd></td><td>小图标 / 紧凑</td></tr>"
-        "<tr><th colspan='2'>比较（仅比较窗口）</th></tr>"
-        "<tr><td><kbd>P</kbd> / <kbd>C</kbd>（浏览窗口）</td><td>选中 2–8 张后打开比较</td></tr>"
-        "<tr><td><kbd>Space</kbd></td><td>浏览：快速比较当前选中；比较窗口：按住临时切换</td></tr>"
-        "<tr><td><kbd>B</kbd> / <kbd>S</kbd> / <kbd>W</kbd> / <kbd>O</kbd> / "
-        "<kbd>K</kbd></td><td>B / S / W / O / K — Flicker / Split / Swipe / Overlay / "
-        "Checkerboard</td></tr>"
-        "<tr><td><kbd>]</kbd> / <kbd>[</kbd></td>"
-        "<td>] Diff threshold +5 · [ Difference threshold -5</td></tr>"
-        "<tr><td><kbd>.</kbd> / <kbd>,</kbd></td>"
-        "<td>. Overlay opacity +5 · , Overlay opacity -5</td></tr>"
-        "<tr><td><kbd>H</kbd></td><td>Diff 高亮（比较窗口；浏览窗口请用 Alt+H 打开分析）</td></tr>"
-        "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
-        "<tr><td><kbd>R</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / "
-        "侧栏</td></tr>"
-        "<tr><td><kbd>1</kbd>~<kbd>8</kbd></td><td>按住临时看第 N "
-        "张（鼠标所在窗格，否则当前窗格）；松开恢复。超出张数仅提示。"
-        "100% 用 Ctrl+1。布局仅 Ctrl+2/4/8</td></tr>"
-        "<tr><td><kbd>Shift+0</kbd></td><td>重置通道叠加（还原完整 RGB）</td></tr>"
-        "<tr><td><kbd>Alt+R</kbd></td><td>切换同步旋转/翻转（勾选后作用于所有比较图）</td></tr>"
-        "<tr><td><kbd>Alt+方向键</kbd></td><td>微调 ROI 选区（Shift+Alt 步长 "
-        "10px；支持单格独立/全局联动）</td></tr>"
-        "<tr><td><kbd>F</kbd> / <kbd>X</kbd> / <kbd>?</kbd></td><td>Fit / 交换 A/B "
-        "(多图交换当前与基准) / 帮助</td></tr>"
-        "<tr><td><kbd>ESC</kbd></td><td>有选区则清除选区，再按一次退出比较</td></tr>"
-        "<tr><th colspan='2'>分析 / 信息</th></tr>"
-        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口，单图；双图比较用比较模式）</td></tr>"
-        "<tr><td>查看器右键「分析」</td><td>全屏时先退出全屏，再在主窗口显示分析面板</td></tr>"
-        "<tr><td>右键检视表</td><td>像素检视器一键复制 HEX (#RRGGBB) 与 RGB 颜色代码</td></tr>"
-        "<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层（ESC 关闭；浮层内 Ctrl+C "
-        "复制全部元数据）</td></tr>"
-        "<tr><th colspan='2'>评分 / 标签</th></tr>"
-        "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+5</kbd></td><td>评分（0 = 清除）</td></tr>"
-        "<tr><td><kbd>Alt+0</kbd>…<kbd>Alt+6</kbd></td><td>颜色标签（0 = "
-        "清除）</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+P</kbd> / <kbd>Ctrl+Shift+X</kbd></td><td>标记选中 / "
-        "拒绝</td></tr>"
-        "<tr><th colspan='2'>剪贴板</th></tr>"
-        "<tr><td><kbd>Ctrl+C</kbd> / <kbd>Ctrl+Shift+C</kbd></td><td>复制图片 / 复制路径</td></tr>"
-        "<tr><th colspan='2'>旋转 / 翻转</th></tr>"
-        "<tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+R</kbd></td>"
-        "<td>顺/逆时针 90°（浏览覆盖原文件；比较窗口仅预览当前窗格）</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+H</kbd> / <kbd>Ctrl+Shift+V</kbd></td>"
-        "<td>水平 / 垂直翻转（浏览覆盖原文件；比较窗口仅预览当前窗格）</td></tr>"
-        "<tr><th colspan='2'>文件操作</th></tr>"
-        "<tr><td><kbd>F2</kbd></td><td>重命名选中图片</td></tr>"
-        "<tr><td><kbd>Delete</kbd></td><td>删除到回收站</td></tr>"
-        "<tr><td><kbd>Ctrl+M</kbd></td><td>移动到...</td></tr>"
-        "<tr><td><kbd>Ctrl+E</kbd></td><td>在资源管理器中显示</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+B</kbd></td><td>批量处理</td></tr>"
-        "<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>Batch Analysis Export</td></tr>"
-        "</table>");
+    // The page lives in resources/help/ in every UI language.
+    return mviewer::ui::Language::localizedHelpHtml(QStringLiteral("shortcuts"));
 }
 
 void MainWindow::showShortcutsHelp()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("Keyboard shortcuts"));
+    dlg.setWindowTitle(tr("Keyboard Shortcuts"));
     dlg.resize(480, 560);
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
@@ -682,70 +584,13 @@ void MainWindow::showShortcutsHelp()
 
 QString MainWindow::userGuideHtml()
 {
-    return QStringLiteral(
-        "<h2>MViewer User Guide</h2>"
-        "<p>图像算法工程师用的浏览 / 比较 / 分析工具。下面只写日常路径。</p>"
-        "<h3>1. 浏览</h3>"
-        "<ol>"
-        "<li>打开一个图片目录（Ctrl+O）。缩略图会陆续出来。</li>"
-        "<li>单击看大图；Ctrl+单击 / Shift+单击多选。</li>"
-        "<li>滚轮缩放，双击在适应窗口和 100% 之间切换。</li>"
-        "</ol>"
-        "<h3>2. 比较（主路径）</h3>"
-        "<ol>"
-        "<li>在缩略图里选中 <b>2–8 张</b>图。</li>"
-        "<li>Press <kbd>P</kbd> or <kbd>C</kbd> to open Compare (toolbar or context menu also "
-        "work). "
-        "With fewer than 2 images, the status bar explains why.</li>"
-        "<li>默认同步缩放和拖动。底部状态条显示 <b>PSNR / SSIM</b>。</li>"
-        "<li>模式（仅 2 张时）：<kbd>B</kbd> 闪烁 · <kbd>S</kbd> 左右分割 · "
-        "<kbd>W</kbd> 滑动 · <kbd>O</kbd> 叠加 · <kbd>K</kbd> "
-        "Checkerboard. Overlay/checkerboard sliders appear when needed.</li>"
-        "<li>Check Show Difference for the heatmap; Align uses an integer-pixel translation "
-        "before metrics.</li>"
-        "<li>在图上<b>右键拖</b>画 ROI。每张图的选区旁显示该格 V 与 RGB "
-        "均值；完整表在检视面板。</li>"
-        "<li><kbd>Esc</kbd>：有选区先清框，再按退出。也可点「退出比较」。</li>"
-        "</ol>"
-        "<h3>3. 比较窗口常用键</h3>"
-        "<table border='1' cellpadding='4' cellspacing='0'>"
-        "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
-        "<tr><td><kbd>Space</kbd></"
-        "td><td>恰好两张：按住 Space "
-        "时，鼠标所在一侧临时显示另一侧的图；松开恢复。超过两张改用数字键</td></"
-        "tr>"
-        "<tr><td><kbd>H</kbd></td><td>差异高亮</td></tr>"
-        "<tr><td><kbd>R</kbd> / <kbd>L</kbd></td><td>同步准星 / 像素连线</td></tr>"
-        "<tr><td><kbd>Alt+R</kbd></td><td>切换同步旋转/翻转（作用于所有比较图）</td></tr>"
-        "<tr><td><kbd>Alt+方向键</kbd></td><td>微调 ROI 选区位置（Shift 步长 10px）</td></tr>"
-        "<tr><td><kbd>X</kbd></td><td>交换当前与基准图（多图对比直接对比任意图）</td></tr>"
-        "<tr><td><kbd>F</kbd></td><td>全部适应窗口</td></tr>"
-        "<tr><td><kbd>?</kbd></td><td>底部快捷键提示（不改窗口标题）</td></tr>"
-        "<tr><td><kbd>Shift+1</kbd>…<kbd>6</kbd></td><td>无叠加 / R / G / B / Y / V</td></tr>"
-        "</table>"
-        "<h3>4. 浏览窗口常用键</h3>"
-        "<table border='1' cellpadding='4' cellspacing='0'>"
-        "<tr><td><kbd>P</kbd> / <kbd>C</kbd></td><td>打开比较（需 2–8 张）</td></tr>"
-        "<tr><td><kbd>Space</kbd></td><td>当前图与下一张快速比较</td></tr>"
-        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口，单图；打开即出直方图。"
-        "双图比较用比较模式）</td></tr>"
-        "<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层</td></tr>"
-        "<tr><td><kbd>S</kbd></td><td>幻灯片</td></tr>"
-        "<tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+H</kbd></td>"
-        "<td>旋转 / 翻转并覆盖原文件</td></tr>"
-        "<tr><td><kbd>F1</kbd></td><td>完整快捷键表</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+A</kbd></td><td>Cancel selection (deselect)</td></tr>"
-        "<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>Batch Analysis Export</td></tr>"
-        "</table>"
-        "<p>查看器全屏时，右键「分析」会先退出全屏，再在主窗口打开分析面板。"
-        "分析面板只处理当前这一张图；两张图的 PSNR / SSIM 在比较模式里。</p>"
-        "<p>完整快捷键表：菜单「帮助 → 键盘快捷键」或 <kbd>F1</kbd>。</p>");
+    return mviewer::ui::Language::localizedHelpHtml(QStringLiteral("guide"));
 }
 
 void MainWindow::showUserGuide()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("User Guide"));
+    dlg.setWindowTitle(tr("User Guide"));
     dlg.resize(560, 640);
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
@@ -813,6 +658,6 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
     menu.addAction("200% (2)", this, [this]() { m_imageViewer->zoomTo(2.0); });
     menu.addAction("400%", this, [this]() { m_imageViewer->zoomTo(4.0); });
-    menu.addAction("800% (像素网格)", this, [this]() { m_imageViewer->zoomTo(8.0); });
+    menu.addAction(tr("800% (Pixel Grid)"), this, [this]() { m_imageViewer->zoomTo(8.0); });
     menu.exec(globalPos);
 }

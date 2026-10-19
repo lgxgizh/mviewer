@@ -75,7 +75,7 @@ class ExportDialog : public QDialog
     void buildRenameSection(QVBoxLayout *root);
     void buildContactSection(QVBoxLayout *root);
     void buildButtonSection(QVBoxLayout *root);
-    // 「批量重命名」: invalid rename settings disable 导出 in convert mode.
+    // "Batch Rename": invalid rename settings disable Export in convert mode.
     void refreshExportButton();
     // Report inventory and clipboard modes ignore image-transform controls.
     void syncModeControls();

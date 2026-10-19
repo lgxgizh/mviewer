@@ -92,12 +92,12 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         }
         result.state = result.stats.valid ? ROIPaneState::Ready : ROIPaneState::Failed;
         if (!result.stats.valid)
-            result.reason = "ROI 与源图像素没有交集";
+            result.reason = tr("The ROI does not intersect the source pixels");
         return result;
     }
     if (input.path.empty() || sourceRoi.isEmpty())
     {
-        result.reason = "源图像素不可用";
+        result.reason = tr("Source pixels are unavailable");
         return result;
     }
 
@@ -111,7 +111,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         const auto source = mviewer::core::SourceImage::open(input.path);
         if (!source)
         {
-            result.reason = "无法打开源图";
+            result.reason = tr("Unable to open the source image");
             return result;
         }
         const QSize displaySize(source->metadata().width, source->metadata().height);
@@ -120,7 +120,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         if (!displaySize.isValid() || sourceRoi.x < 0 || sourceRoi.y < 0 ||
             right > displaySize.width() || bottom > displaySize.height())
         {
-            result.reason = "ROI 超出源图范围";
+            result.reason = tr("The ROI is outside the source image");
             return result;
         }
         const mviewer::core::SourceRect displayed{sourceRoi.x, sourceRoi.y, sourceRoi.width,
@@ -143,7 +143,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         }
         if (!decoded.ok || decoded.pixels.isNull())
         {
-            result.reason = "源图区域解码失败";
+            result.reason = tr("Failed to decode the source region");
             return result;
         }
         const mviewer::domain::Selection decodedRegion{0, 0, decoded.pixels.width,
@@ -157,7 +157,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         }
         result.state = result.stats.valid ? ROIPaneState::Ready : ROIPaneState::Failed;
         if (!result.stats.valid)
-            result.reason = "解码区域没有源图像素";
+            result.reason = tr("The decoded region has no source pixels");
     }
     catch (const std::exception &error)
     {
@@ -165,7 +165,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
     }
     catch (...)
     {
-        result.reason = "未知的源图测量失败";
+        result.reason = tr("Unknown source measurement failure");
     }
     return result;
 }

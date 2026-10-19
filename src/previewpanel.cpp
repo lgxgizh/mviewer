@@ -411,7 +411,7 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
         QFont f = font();
         f.setPointSize(9);
         painter.setFont(f);
-        painter.drawText(rect(), Qt::AlignCenter, "拖放图片或文件夹到此处\n或按 Ctrl+O 打开目录");
+        painter.drawText(rect(), Qt::AlignCenter, tr("Drop images or folders here\nor press Ctrl+O to open a folder"));
         return;
     }
 
@@ -448,7 +448,7 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     // preview buffer, not the full image.
     painter.setPen(secondary);
     painter.drawText(txtArea.adjusted(0, 36, 0, 0), Qt::AlignTop | Qt::AlignLeft,
-                     QString("样本亮度 %1   RGB(%2,%3,%4)")
+                     tr("Sample luminance %1   RGB(%2,%3,%4)")
                          .arg(m_lumMean, 0, 'f', 1)
                          .arg(m_rMean)
                          .arg(m_gMean)

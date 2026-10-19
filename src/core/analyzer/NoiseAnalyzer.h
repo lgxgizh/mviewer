@@ -11,7 +11,7 @@ class NoiseAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "噪声估计 (Laplacian 方差)";
+        return "Noise estimate (Laplacian variance)";
     }
     AnalyzerCapability capabilities() const override
     {

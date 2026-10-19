@@ -12,7 +12,7 @@ class SharpnessAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "锐度 (梯度幅值)";
+        return "Sharpness (gradient magnitude)";
     }
 
     AnalyzerCapability capabilities() const override

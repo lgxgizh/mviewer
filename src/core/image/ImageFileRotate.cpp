@@ -95,6 +95,8 @@ ImageData applyFilePixelOp(const ImageData &src, FilePixelOp op, int degreesCw)
     return ImageData{};
 }
 
+// i18n-allow-begin: the Chinese tokens below match error text produced by a
+// zh-CN Windows/Qt runtime; they classify OS messages and are never shown.
 bool looksLikeSharing(const QString &lower)
 {
     return lower.contains(QLatin1String("sharing")) ||
@@ -109,6 +111,7 @@ bool looksLikeAccessDenied(const QString &lower)
     return lower.contains(QLatin1String("denied")) || lower.contains(QLatin1String("permission")) ||
            lower.contains(QString::fromUtf8("拒绝访问"));
 }
+// i18n-allow-end
 
 ImageRotateError classifySaveError(const QSaveFile &file, bool duringCommit)
 {

@@ -314,7 +314,7 @@ void MainWindow::toggleMetadataOverlay()
         if (m_metadataPanel)
             m_metadataPanel->hide();
     }
-    // P0-3: keep the "图片信息" toggle in the View menu in sync so every entry
+    // P0-3: keep the "Image Info" toggle in the View menu in sync so every entry
     // point (Ctrl+I, M key, ESC) agrees on the overlay's state.
     if (m_actToggleMetadata)
         m_actToggleMetadata->setChecked(show);
@@ -518,7 +518,7 @@ void MainWindow::toggleSlideshow()
     }
     if (currentImagePath().isEmpty() || currentDir().isEmpty())
     {
-        statusBar()->showMessage("请先选择一张图片再开始幻灯片放映", 3000);
+        statusBar()->showMessage(tr("Select an image before starting the slideshow"), 3000);
         if (m_actSlideshow)
             m_actSlideshow->setChecked(false);
         return;
@@ -556,7 +556,7 @@ void MainWindow::toggleSlideshow()
                         if (idx >= 0 && idx + 1 >= m_imageList->count())
                         {
                             stopSlideshow();
-                            statusBar()->showMessage("幻灯片放映已结束（已播至末尾）", 3000);
+                            statusBar()->showMessage(tr("Slideshow finished (reached the end)"), 3000);
                             return;
                         }
                     }
@@ -567,7 +567,7 @@ void MainWindow::toggleSlideshow()
                                                  ? QString(" [%1/%2]").arg(curIdx + 1).arg(total)
                                                  : QString();
                     statusBar()->showMessage(
-                        QString("幻灯片放映中%1 — 按 S 或 ESC 停止 (间隔 %2 秒)")
+                        tr("Slideshow%1 — press S or ESC to stop (interval %2 s)")
                             .arg(progress)
                             .arg(interval / 1000.0, 0, 'f', 1),
                         3000);
@@ -582,7 +582,7 @@ void MainWindow::toggleSlideshow()
     const QString startProg = (startIdx >= 0 && startTotal > 0)
                                   ? QString(" [%1/%2]").arg(startIdx + 1).arg(startTotal)
                                   : QString();
-    statusBar()->showMessage(QString("幻灯片放映中%1 — 按 S 或 ESC 停止 (间隔 %2 秒)")
+    statusBar()->showMessage(tr("Slideshow%1 — press S or ESC to stop (interval %2 s)")
                                  .arg(startProg)
                                  .arg(interval / 1000.0, 0, 'f', 1),
                              3000);
@@ -594,7 +594,7 @@ void MainWindow::stopSlideshow()
         m_slideshowTimer->stop();
     if (m_actSlideshow)
         m_actSlideshow->setChecked(false);
-    statusBar()->showMessage("幻灯片放映已停止", 2000);
+    statusBar()->showMessage(tr("Slideshow stopped"), 2000);
 }
 
 void MainWindow::openQuickCompare()
@@ -655,7 +655,7 @@ void MainWindow::updateCacheStat()
     else
     {
         const int pct = static_cast<int>(100.0 * hits / (hits + misses));
-        m_lblCache->setText(QString("命中率 %1%").arg(pct));
+        m_lblCache->setText(tr("Hit rate %1%").arg(pct));
         m_lblCache->setToolTip(tr("Cache hit rate: %1% (hits %2 / requests %3)")
                                    .arg(pct)
                                    .arg(hits)
@@ -750,7 +750,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (watched == m_imageViewer)
     {
         // Image-surface clicks and hover belong to pan / double-click Fit↔100%.
-        // Metadata overlay is I / M / 图片信息 only — a full-window overlay on
+        // Metadata overlay is I / M / Image Info only — a full-window overlay on
         // press or 600 ms hover stole those gestures.
         if (event->type() == QEvent::Leave && m_metadataHoverTimer)
             m_metadataHoverTimer->stop();

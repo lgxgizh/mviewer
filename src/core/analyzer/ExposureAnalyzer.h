@@ -12,7 +12,7 @@ class ExposureAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "曝光检测 (过曝/欠曝)";
+        return "Exposure check (over/under-exposure)";
     }
     AnalyzerCapability capabilities() const override
     {

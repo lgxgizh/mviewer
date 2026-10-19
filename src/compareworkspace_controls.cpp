@@ -112,7 +112,7 @@ void CompareWorkspace::buildSyncControls()
 
 void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *viewLayout)
 {
-    // H5: "统一像素倍率" — align every pane at the same zoom so images of
+    // H5: "Uniform Pixel Scale" — align every pane at the same zoom so images of
     // different resolutions can be compared 1:1 (pixel-corresponding). Independent
     // of the sync-zoom toggle; when on, Fit uses the shared (minimum) scale for all.
     m_uniformScaleChk = new QCheckBox(tr("Uniform Pixel Scale"), this);

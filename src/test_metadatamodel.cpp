@@ -157,11 +157,11 @@ int main(int argc, char **argv)
         CHECK(leafValue(&m, raw, "ISO") == "400", "raw iso leaf");
         CHECK(leafValue(&m, raw, "Aperture") == "f/2.8", "raw aperture leaf");
         CHECK(leafValue(&m, raw, "Focal Length").contains("35"), "raw focal leaf");
-        CHECK(leafValue(&m, raw, "Bit Depth") == "14 位", "raw bits leaf");
+        CHECK(leafValue(&m, raw, "Bit Depth") == "14-bit", "raw bits leaf");
         CHECK(leafValue(&m, raw, "Original Size").contains("8192"), "raw size leaf");
     }
 
-    // ── Parsed ICC profile details add the "ICC 配置详情" section (M-XX) ──────
+    // ── Parsed ICC profile details add the ICC profile details section (M-XX) ──────
     {
         mviewer::domain::ImageMetadata meta;
         meta.fileName = "srgb.png";
@@ -173,10 +173,10 @@ int main(int argc, char **argv)
         meta.hasIccProfile = true;
         meta.iccDescription = "sRGB IEC61966-2.1";
         meta.iccCopyright = "Public Domain";
-        meta.iccDeviceClass = "显示器";
+        meta.iccDeviceClass = "Display";
         meta.iccColorSpace = "RGB";
         meta.iccPcs = "XYZ";
-        meta.iccRenderingIntent = "感知 (Perceptual)";
+        meta.iccRenderingIntent = "Perceptual";
         meta.iccVersion = "2.1.0";
 
         MetadataModel m;
@@ -184,13 +184,13 @@ int main(int argc, char **argv)
 
         CHECK(m.rowCount() == 4, "file+image+exif+icc yields 4 categories");
         QModelIndex icc = findCategory(&m, "ICC Profile Details");
-        CHECK(icc.isValid(), "ICC 配置详情 category present");
+        CHECK(icc.isValid(), "ICC profile details category present");
         CHECK(leafValue(&m, icc, "Description") == "sRGB IEC61966-2.1", "icc description leaf");
         CHECK(leafValue(&m, icc, "Copyright") == "Public Domain", "icc copyright leaf");
-        CHECK(leafValue(&m, icc, "Device Class") == "显示器", "icc device class leaf");
+        CHECK(leafValue(&m, icc, "Device Class") == "Display", "icc device class leaf");
         CHECK(leafValue(&m, icc, "Color Space") == "RGB", "icc color space leaf");
         CHECK(leafValue(&m, icc, "PCS") == "XYZ", "icc pcs leaf");
-        CHECK(leafValue(&m, icc, "Rendering Intent") == "感知 (Perceptual)",
+        CHECK(leafValue(&m, icc, "Rendering Intent") == "Perceptual",
               "icc rendering intent leaf");
         CHECK(leafValue(&m, icc, "Version") == "2.1.0", "icc version leaf");
     }

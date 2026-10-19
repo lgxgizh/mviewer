@@ -422,8 +422,15 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QMod
     }
     if (label > 0)
     {
-        static const char *kLabelNames[7] = {"", "红色", "橙色", "黄色", "绿色", "蓝色", "紫色"};
-        metaTags << QString::fromUtf8(kLabelNames[label]) + QObject::tr("Label");
+        static const char *const kLabelNames[7] = {
+            "",
+            QT_TRANSLATE_NOOP("QObject", "Red"),
+            QT_TRANSLATE_NOOP("QObject", "Orange"),
+            QT_TRANSLATE_NOOP("QObject", "Yellow"),
+            QT_TRANSLATE_NOOP("QObject", "Green"),
+            QT_TRANSLATE_NOOP("QObject", "Blue"),
+            QT_TRANSLATE_NOOP("QObject", "Purple")};
+        metaTags << QObject::tr("%1 label").arg(QObject::tr(kLabelNames[label]));
     }
     if (rejected)
         metaTags << QObject::tr("Excluded (Rejected)");

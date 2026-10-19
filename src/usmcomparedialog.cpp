@@ -347,7 +347,7 @@ void UsmCompareDialog::onParametersChanged()
     if (!m_updatingPreset && m_comboPreset)
     {
         m_updatingPreset = true;
-        m_comboPreset->setCurrentIndex(5); // 自定义
+        m_comboPreset->setCurrentIndex(5); // Custom
         m_updatingPreset = false;
     }
     m_debounceTimer->start();
@@ -361,31 +361,31 @@ void UsmCompareDialog::onPresetSelected(int index)
     m_updatingPreset = true;
     switch (index)
     {
-    case 0: // 标准通用锐化
+    case 0: // Standard general sharpening
         m_spinAmount->setValue(150);
         m_spinRadius->setValue(1.0);
         m_spinThreshold->setValue(0);
         m_checkLumaOnly->setChecked(true);
         break;
-    case 1: // 轻度细节唤醒
+    case 1: // Light detail recovery
         m_spinAmount->setValue(80);
         m_spinRadius->setValue(0.8);
         m_spinThreshold->setValue(2);
         m_checkLumaOnly->setChecked(true);
         break;
-    case 2: // 人像肤质保护
+    case 2: // Portrait skin protection
         m_spinAmount->setValue(120);
         m_spinRadius->setValue(1.2);
         m_spinThreshold->setValue(6);
         m_checkLumaOnly->setChecked(true);
         break;
-    case 3: // 风景建筑清晰度
+    case 3: // Landscape / architecture clarity
         m_spinAmount->setValue(200);
         m_spinRadius->setValue(1.5);
         m_spinThreshold->setValue(1);
         m_checkLumaOnly->setChecked(false);
         break;
-    case 4: // 强力边缘增强
+    case 4: // Strong edge enhancement
         m_spinAmount->setValue(300);
         m_spinRadius->setValue(2.5);
         m_spinThreshold->setValue(0);
@@ -467,7 +467,7 @@ void UsmCompareDialog::updateStatusInfo(qint64 elapsedMs,
                                         const mviewer::core::UsmDiffSummary &summary)
 {
     m_lblCalcStatus->setText(tr("Calculation complete (time: %1 ms)").arg(elapsedMs));
-    m_lblMetrics->setText(QString("PSNR: %1 dB | SSIM: %2 | Δ均值: %3 | Δ最大: %4 | 变化像素: %5%")
+    m_lblMetrics->setText(tr("PSNR: %1 dB | SSIM: %2 | ΔMean: %3 | ΔMax: %4 | Changed pixels: %5%")
                               .arg(summary.psnr >= 100.0 ? QStringLiteral("∞")
                                                          : QString::number(summary.psnr, 'f', 2))
                               .arg(summary.ssim, 0, 'f', 4)

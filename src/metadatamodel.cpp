@@ -1,5 +1,6 @@
 #include "metadatamodel.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 
 namespace
@@ -24,28 +25,53 @@ QString ratioText(int w, int h)
     return QString("%1:%2").arg(w / g).arg(h / g);
 }
 
+// Core ICC parsing reports English names; listing them here keeps them in the
+// "IccProfile" translation context so the metadata view can localize them.
+[[maybe_unused]] constexpr const char *kIccProfileNames[] = {
+    QT_TRANSLATE_NOOP("IccProfile", "Scanner"),
+    QT_TRANSLATE_NOOP("IccProfile", "Display"),
+    QT_TRANSLATE_NOOP("IccProfile", "Printer"),
+    QT_TRANSLATE_NOOP("IccProfile", "Device Link"),
+    QT_TRANSLATE_NOOP("IccProfile", "Abstract"),
+    QT_TRANSLATE_NOOP("IccProfile", "Color Space"),
+    QT_TRANSLATE_NOOP("IccProfile", "Named Color"),
+    QT_TRANSLATE_NOOP("IccProfile", "Camera"),
+    QT_TRANSLATE_NOOP("IccProfile", "Video"),
+    QT_TRANSLATE_NOOP("IccProfile", "Gray"),
+    QT_TRANSLATE_NOOP("IccProfile", "Perceptual"),
+    QT_TRANSLATE_NOOP("IccProfile", "Media-Relative Colorimetric"),
+    QT_TRANSLATE_NOOP("IccProfile", "Saturation"),
+    QT_TRANSLATE_NOOP("IccProfile", "ICC-Absolute Colorimetric"),
+    QT_TRANSLATE_NOOP("IccProfile", "Unknown"),
+};
+
+QString iccText(const std::string &value)
+{
+    return QCoreApplication::translate("IccProfile", value.c_str());
+}
+
 QString orientationText(int o)
 {
     switch (o)
     {
     case 1:
-        return QString("正常 (1)");
+        return QCoreApplication::translate("MetadataModel", "Normal (1)");
     case 2:
-        return QString("水平翻转 (2)");
+        return QCoreApplication::translate("MetadataModel", "Flip Horizontal (2)");
     case 3:
-        return QString("旋转 180° (3)");
+        return QCoreApplication::translate("MetadataModel", "Rotate 180° (3)");
     case 4:
-        return QString("垂直翻转 (4)");
+        return QCoreApplication::translate("MetadataModel", "Flip Vertical (4)");
     case 5:
-        return QString("转置 90° (5)");
+        return QCoreApplication::translate("MetadataModel", "Transpose 90° (5)");
     case 6:
-        return QString("顺时针 90° (6)");
+        return QCoreApplication::translate("MetadataModel", "Rotate 90° CW (6)");
     case 7:
-        return QString("横轴转置 90° (7)");
+        return QCoreApplication::translate("MetadataModel", "Transverse 90° (7)");
     case 8:
-        return QString("逆时针 90° (8)");
+        return QCoreApplication::translate("MetadataModel", "Rotate 90° CCW (8)");
     default:
-        return QString("未知 (%1)").arg(o);
+        return QCoreApplication::translate("MetadataModel", "Unknown (%1)").arg(o);
     }
 }
 
@@ -60,7 +86,7 @@ QString colorSpaceText(const QString &cs)
     if (cs == "ProPhoto")
         return QString("ProPhoto RGB");
     if (cs.isEmpty())
-        return QString("未嵌入");
+        return QCoreApplication::translate("MetadataModel", "Not embedded");
     return cs;
 }
 } // namespace
@@ -146,7 +172,7 @@ void MetadataModel::buildFileSection()
     addLeaf(file, tr("File Name"), toQString(m_meta.fileName));
     addLeaf(file, tr("Path"), toQString(m_meta.filePath));
     addLeaf(file, tr("Size"),
-            m_meta.fileSize > 0 ? QString("%1 字节").arg(m_meta.fileSize) : tr("Unknown"));
+            m_meta.fileSize > 0 ? tr("%1 bytes").arg(m_meta.fileSize) : tr("Unknown"));
     if (m_meta.modifiedEpochSec > 0)
     {
         QDateTime t;
@@ -163,12 +189,12 @@ void MetadataModel::buildImageSection()
     {
         const double mp = m_meta.width * m_meta.height / 1000000.0;
         addLeaf(img, tr("Dimensions"),
-                QString("%1 × %2 像素").arg(m_meta.width).arg(m_meta.height));
+                tr("%1 × %2 pixels").arg(m_meta.width).arg(m_meta.height));
         addLeaf(img, tr("Aspect Ratio"), ratioText(m_meta.width, m_meta.height));
         addLeaf(img, tr("Megapixels"), QString("%1 MP").arg(mp, 0, 'f', 2));
     }
     addLeaf(img, tr("Bit Depth"),
-            m_meta.bitDepth > 0 ? QString("%1 位").arg(m_meta.bitDepth) : tr("Unknown"));
+            m_meta.bitDepth > 0 ? tr("%1-bit").arg(m_meta.bitDepth) : tr("Unknown"));
     addLeaf(img, tr("Channels"),
             m_meta.channels > 0 ? QString::number(m_meta.channels) : tr("Unknown"));
     addLeaf(img, tr("Color Space"), colorSpaceText(toQString(m_meta.colorSpace)));
@@ -240,13 +266,13 @@ void MetadataModel::buildIccSection()
     if (!m_meta.iccCopyright.empty())
         addLeaf(icc, tr("Copyright"), toQString(m_meta.iccCopyright));
     if (!m_meta.iccDeviceClass.empty())
-        addLeaf(icc, tr("Device Class"), toQString(m_meta.iccDeviceClass));
+        addLeaf(icc, tr("Device Class"), iccText(m_meta.iccDeviceClass));
     if (!m_meta.iccColorSpace.empty())
-        addLeaf(icc, tr("Color Space"), toQString(m_meta.iccColorSpace));
+        addLeaf(icc, tr("Color Space"), iccText(m_meta.iccColorSpace));
     if (!m_meta.iccPcs.empty())
         addLeaf(icc, tr("PCS"), toQString(m_meta.iccPcs));
     if (!m_meta.iccRenderingIntent.empty())
-        addLeaf(icc, tr("Rendering Intent"), toQString(m_meta.iccRenderingIntent));
+        addLeaf(icc, tr("Rendering Intent"), iccText(m_meta.iccRenderingIntent));
     if (!m_meta.iccVersion.empty())
         addLeaf(icc, tr("Version"), toQString(m_meta.iccVersion));
 }
@@ -288,7 +314,7 @@ void MetadataModel::buildRawSection()
     if (!m_raw.whiteBalance.empty())
         addLeaf(raw, tr("White Balance"), toQString(m_raw.whiteBalance));
     if (m_raw.bitsPerSample > 0)
-        addLeaf(raw, tr("Bit Depth"), QString("%1 位").arg(m_raw.bitsPerSample));
+        addLeaf(raw, tr("Bit Depth"), tr("%1-bit").arg(m_raw.bitsPerSample));
     if (m_raw.width > 0 && m_raw.height > 0)
         addLeaf(raw, tr("Original Size"), QString("%1 × %2").arg(m_raw.width).arg(m_raw.height));
     if (!m_raw.colorSpace.empty())

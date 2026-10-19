@@ -21,9 +21,9 @@ struct IccProfile
     std::string description;     // profile description, e.g. "sRGB IEC61966-2.1"
     std::string copyright;       // profile copyright notice
     std::string colorSpace;      // profile data color space, e.g. "RGB"
-    std::string deviceClass;     // profile device class, e.g. "显示器"
+    std::string deviceClass;     // profile device class, e.g. "Display"
     std::string pcs;             // profile connection space, e.g. "XYZ"
-    std::string renderingIntent; // e.g. "感知 (Perceptual)"
+    std::string renderingIntent; // e.g. "Perceptual"
     std::string version;         // profile version, e.g. "2.1.0"
 };
 

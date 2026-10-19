@@ -26,7 +26,7 @@ struct NavState
     bool checker = false; // M23
     int checkerSize = 64; // M23
     bool diffHighlight = false;
-    // Explicit heatmap ("显示差异"). Independent of diffHighlight: turning H on
+    // Explicit heatmap ("Show Difference"). Independent of diffHighlight: turning H on
     // may promote this, but a user who enabled the heatmap alone must keep it
     // across P/N pair navigation.
     bool diffOverlay = false;

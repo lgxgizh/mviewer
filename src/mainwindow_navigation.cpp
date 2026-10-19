@@ -233,7 +233,7 @@ void MainWindow::navigateHistory(int delta)
     m_selection->setCurrentImage(path);
     m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
     m_previewPanel->setImage(path); // async; off UI thread
-    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()), 3000);
+    statusBar()->showMessage(tr("Current: %1").arg(QFileInfo(path).fileName()), 3000);
     updateSelectionActions();
 }
 
@@ -373,7 +373,7 @@ void MainWindow::rebuildRecentMenu()
                 });
     }
     if (m_recentMenu->isEmpty())
-        m_recentMenu->addAction("(无)")->setEnabled(false);
+        m_recentMenu->addAction(tr("(None)"))->setEnabled(false);
 }
 
 void MainWindow::rebuildRecentFilesMenu()
@@ -385,7 +385,7 @@ void MainWindow::rebuildRecentFilesMenu()
     // styles that path waits for menu teardown before the first event loop.
     if (m_recentFiles.items().empty() && m_recentFileMenu->actions().isEmpty())
     {
-        m_recentFileMenu->addAction("(无)")->setEnabled(false);
+        m_recentFileMenu->addAction(tr("(None)"))->setEnabled(false);
         return;
     }
     m_recentFileMenu->clear();
@@ -452,7 +452,7 @@ void MainWindow::rebuildRecentFilesMenu()
                 });
     }
     if (m_recentFileMenu->isEmpty())
-        m_recentFileMenu->addAction("(无)")->setEnabled(false);
+        m_recentFileMenu->addAction(tr("(None)"))->setEnabled(false);
 }
 
 void MainWindow::rebuildFavoritesMenu()
@@ -467,14 +467,14 @@ void MainWindow::rebuildFavoritesMenu()
         connect(act, &QAction::triggered, this, [this, qs]() { changeDirectory(qs); });
     }
     if (m_favMenu->isEmpty())
-        m_favMenu->addAction("(无)")->setEnabled(false);
+        m_favMenu->addAction(tr("(None)"))->setEnabled(false);
 }
 
 void MainWindow::addFavoriteCurrent()
 {
     if (currentDir().isEmpty())
     {
-        statusBar()->showMessage("没有可收藏的目录", 3000);
+        statusBar()->showMessage(tr("No folder to add to favorites"), 3000);
         return;
     }
     m_appState.addFavorite(currentDir());
@@ -483,7 +483,7 @@ void MainWindow::addFavoriteCurrent()
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     updateSelectionActions();
-    statusBar()->showMessage(QString("已收藏: %1").arg(QFileInfo(currentDir()).fileName()), 3000);
+    statusBar()->showMessage(tr("Added to favorites: %1").arg(QFileInfo(currentDir()).fileName()), 3000);
 }
 
 void MainWindow::removeFavorite(const QString &dir)
@@ -497,7 +497,7 @@ void MainWindow::removeFavorite(const QString &dir)
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     updateSelectionActions();
-    statusBar()->showMessage(QString("已取消收藏: %1").arg(QFileInfo(target).fileName()), 3000);
+    statusBar()->showMessage(tr("Removed from favorites: %1").arg(QFileInfo(target).fileName()), 3000);
 }
 
 void MainWindow::rebuildFavoritesBar()

@@ -2,6 +2,7 @@
 #include "compareworkspace_shortcuts.h"
 
 #include <QAbstractItemView>
+#include <QCoreApplication>
 #include <QDialog>
 #include <QHeaderView>
 #include <QString>
@@ -21,7 +22,8 @@ void fillCompareShortcutTable(QTableWidget *table)
     table->setColumnCount(2);
     table->setRowCount(rows);
     table->setHorizontalHeaderLabels(
-        {QString::fromUtf8("快捷键"), QString::fromUtf8("Description")});
+        {QCoreApplication::translate("CompareWorkspace", "Shortcut"),
+         QCoreApplication::translate("CompareWorkspace", "Description")});
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionMode(QAbstractItemView::NoSelection);
     table->verticalHeader()->setVisible(false);
@@ -32,8 +34,9 @@ void fillCompareShortcutTable(QTableWidget *table)
         const mviewer::cw::CompareShortcut &entry =
             mviewer::cw::kCompareShortcuts[static_cast<size_t>(row)];
         table->setItem(row, 0, new QTableWidgetItem(QString::fromUtf8(entry.keys)));
-        const QString detail = QString::fromUtf8(entry.name) + QString::fromUtf8(" — ") +
-                               QString::fromUtf8(entry.description);
+        const QString detail = mviewer::cw::compareShortcutTr(entry.name) +
+                               QString::fromUtf8(" — ") +
+                               mviewer::cw::compareShortcutTr(entry.description);
         table->setItem(row, 1, new QTableWidgetItem(detail));
     }
 }
@@ -42,7 +45,7 @@ QDialog *createCompareShortcutHelp(QWidget *parent)
 {
     auto *dialog = new QDialog(parent);
     dialog->setObjectName(QStringLiteral("compareShortcutHelpDialog"));
-    dialog->setWindowTitle(QString::fromUtf8("比较模式快捷键"));
+    dialog->setWindowTitle(QCoreApplication::translate("CompareWorkspace", "Compare Mode Shortcuts"));
     dialog->setModal(false);
     auto *layout = new QVBoxLayout(dialog);
     auto *table = new QTableWidget(dialog);

@@ -11,7 +11,7 @@ class BrightnessAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "平均亮度";
+        return "Mean brightness";
     }
     AnalyzerCapability capabilities() const override
     {

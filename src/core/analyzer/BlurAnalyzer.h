@@ -12,7 +12,7 @@ class BlurAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "模糊检测 (Laplacian 方差)";
+        return "Blur detection (Laplacian variance)";
     }
     AnalyzerCapability capabilities() const override
     {

@@ -1,148 +1,157 @@
-# MViewer 使用说明
+# MViewer User Guide
 
-图像算法工程师专业视觉分析平台（Browse → Compare → Analyze → Report → Export → Workspace）。  
-应用内快捷访问：**帮助 → 使用说明**。完整按键表：**F1**。
+English | [简体中文](USER_GUIDE.zh_CN.md)
 
----
-
-## 1. 浏览模式（Browse）
-
-1. **Ctrl+O** 打开图片目录，缩略图网格将异步加载显示。
-2. **单击**看大图；**Ctrl+单击** / **Shift+单击** 多选。**Ctrl+Shift+A** Cancel selection (deselect).
-3. **视图缩放**：
-   - 滚轮自由缩放；双击在「适应窗口」与 100% 实际大小间切换。
-   - 快捷预设（视图菜单）：**50%**、**100%**、**200%**、**400%**、**800%**（像素网格级）。
-4. **几何变换**（覆盖原文件；JPEG 会按质量 95 重编码）：
-   - **Ctrl+R** / **Ctrl+Shift+R**：顺时针 / 逆时针旋转 90° 并覆盖原文件。
-   - **Ctrl+Shift+H** / **Ctrl+Shift+V**：水平 / 垂直镜像翻转并覆盖原文件。
-   - 无选中图片时菜单项禁用，状态栏提示原因（不会静默无操作）。
-5. **通道隔离与分析**：
-   - **Shift+1…6**：原图 RGB / 红色 (R) / 绿色 (G) / 蓝色 (B) / 亮度 (Y) / 明度 (HSV-V)。
-   - **Shift+C**：复制当前光标处像素颜色值（支持 Hex、RGB、Float 0-1、HSV 格式）。
-6. **色彩管理 (CMS)**：
-   - 「视图 → 色彩管理 (CMS)」：开启时按显示器 ICC 配置文件校色，关闭时直通 RGB（与 FastStone 行为一致）。
-7. **动图与多帧容器**：
-   - 支持 GIF、WebP 动画及多页 TIFF。
-   - **Space** 播放/暂停，**←** / **→** 单帧步进。
-8. **工作区与搜索**：
-   - **Tab**：专注浏览模式（隐藏侧边面板全屏看图）。
-   - **Ctrl+Shift+F**：全局搜索面板。
-   - **Alt+H**：算法分析面板（即时计算直方图、统计分布与质量指标）。面板只分析当前这一张图；两张图的对比在比较模式。
-   - 查看器全屏时，右键「分析」会先退出全屏，再回到主窗口打开该面板。
+A professional visual analysis platform for imaging algorithm engineers (Browse → Compare → Analyze → Report → Export → Workspace).  
+In the app: **Help → User Guide** (shown in the current UI language). Full key table: **F1**.
 
 ---
 
-## 2. 比较模式（Compare）
+## 1. Browse
 
-1. **进入比较**：
-   - 在缩略图里选中 **2–8 张**图片，按 **P** 或 **C** 进入比较模式（选不够 2 张时状态栏提示原因）。
-   - 单张浏览时按 **Space** 可与下一张图进行快速原位对比。
-2. **双图核心比较模式**（仅 2 张时）：
-   - **B** 闪烁比较（Blink）
-   - **S** 左右分割比较（Split）
-   - **W** 卷帘滑动比较（Swipe/Wipe）
-   - **O** 叠加透明比较（Overlay）
+1. **Ctrl+O** opens an image folder; the thumbnail grid loads asynchronously.
+2. **Click** to view large; **Ctrl+click** / **Shift+click** to multi-select. **Ctrl+Shift+A** Cancel selection (deselect).
+3. **View zoom**:
+   - Scroll to zoom freely; double-click toggles between "Fit to Window" and 100% actual size.
+   - Quick presets (View menu): **50%**, **100%**, **200%**, **400%**, **800%** (pixel-grid level).
+4. **Geometric transforms** (overwrite the original file; JPEG is re-encoded at quality 95):
+   - **Ctrl+R** / **Ctrl+Shift+R**: rotate 90° clockwise / counterclockwise and overwrite the original.
+   - **Ctrl+Shift+H** / **Ctrl+Shift+V**: flip horizontally / vertically and overwrite the original.
+   - With no image selected the menu items are disabled and the status bar explains why (never a silent no-op).
+5. **Channel isolation and analysis**:
+   - **Shift+1…6**: original RGB / red (R) / green (G) / blue (B) / luminance (Y) / value (HSV-V).
+   - **Shift+C**: copy the pixel color under the cursor (Hex, RGB, Float 0-1 and HSV formats).
+6. **Color management (CMS)**:
+   - "View → Color Management (CMS)": when on, colors are converted with the display ICC profile; when off, RGB passes straight through (same as FastStone).
+7. **Animations and multi-frame containers**:
+   - GIF, animated WebP and multi-page TIFF are supported.
+   - **Space** plays/pauses, **←** / **→** step one frame.
+8. **Workspace and search**:
+   - **Tab**: focus browse mode (hide the side panels and view full window).
+   - **Ctrl+Shift+F**: global search panel.
+   - **Alt+H**: analysis panel (histogram, statistics and quality metrics computed instantly). The panel analyzes the current image only; two-image comparison lives in Compare.
+   - When the viewer is full screen, the context-menu "Analyze" leaves full screen first and then opens the panel in the main window.
+
+---
+
+## 2. Compare
+
+1. **Entering Compare**:
+   - Select **2–8 images** in the thumbnails and press **P** or **C** (with fewer than 2 the status bar explains why).
+   - While browsing a single image, **Space** quick-compares it in place with the next image.
+2. **Two-image compare modes** (2 images only):
+   - **B** Flicker (blink)
+   - **S** Split (side by side)
+   - **W** Swipe (wipe)
+   - **O** Overlay (transparent overlay)
    - **K** Checkerboard interleaved compare
-   - 叠加透明度与棋盘格大小滑条随模式激活自动呈现。
-3. **差异与对齐分析**：
-   - **H**：高亮差异热力图。
-   - 底部状态栏实时计算并显示图像间 **PSNR / SSIM** 指标。
-   - 点击「对齐」可在计算指标前按整数像素平移配准。
-4. **感兴趣区域（ROI）交互**：
-   - 在图像上 **按住右键拖动** 绘制感兴趣区域（ROI）。
-   - 右键按下后不拖动再松开，会打开窗格菜单（可「导出此图调优结果...」）；拖动仍绘制 ROI。
-   - 框顶显示基准标识（A / B），HUD 实时显示该区域的像素均值、方差、极值与直方图。
-   - 支持多级同步框选与 TSV 测量数据导出。
-5. **临时换图与布局**：
-   - 按住 **1–8** 在鼠标所在窗格临时预览第 N 张图，松开恢复。指针不在窗格上时用当前焦点窗格，否则第 1 格。超出张数只提示。布局预设用 **Ctrl+2 / Ctrl+4 / Ctrl+8**。**Ctrl+1** 为 100% 实际大小，**0 / Ctrl+0** 为适应窗口。
-6. **同步与协同**：
-   - **Z** / **D**：切换同步缩放 / 同步平移拖拽。
-   - 工具操作行「适合窗口 (F)」（分析、导出报告旁；快捷键 **F** / **Ctrl+0**）：勾选「统一像素倍率」时所有窗格用同一倍率适配；不勾选时各窗格按自身分辨率适配窗口，相同视野的图显示为相近大小。临时切换、闪烁或换图后仍保持该屏幕大小。
-   - **R**：同步十字准星定位。
-   - **L**：像素连线标注（对比不同图中对应位置的像素 RGB 及 Δ 差值）。
-   - **X**：交换 A / B 视图窗格。
-   - 比较的两张图在浏览器中手动选择；比较模式内不再提供上一组 / 下一组切换。
-   - **Esc**：存在 ROI 选区时优先清除选区，再次按 Esc 退出比较模式。
-7. **比较中的旋转 / 翻转是预览**：
-   - 侧栏按钮或 **Ctrl+R** / **Ctrl+Shift+R** / **Ctrl+Shift+H** / **Ctrl+Shift+V** 只改当前窗格显示，**不覆盖原文件**。
-   - 目标窗格优先为已点选的编辑窗格，否则为光标所在窗格 / 锁定基准；没有目标时状态栏提示，不会默默改第 1 格。
-8. **每格调优与导出**：
-   - 调整面板可为当前窗格单独设置亮度、对比度、伽马、白平衡，以及 USM 锐化（数量 0%–500%，半径 0.1–20 px，阈值 0–255，可选仅亮度）。默认关闭。预览、差异和直方图使用同一套调优，**不覆盖原文件**。「重置调整」会一并关闭 USM。
-   - 「导出此图调优结果...」（窗格右键菜单或调整面板）按全分辨率把当前窗格的亮度/对比度/伽马、白平衡、USM、旋转/翻转和裁剪写入新的 PNG 或 TIFF。默认文件名为 `<原名>_adjusted.png`，保存在源文件旁边，或上次导出的目录。
+   - Overlay opacity and checkerboard size sliders appear automatically with their mode.
+3. **Difference and alignment**:
+   - **H**: difference highlight heatmap.
+   - The bottom status strip computes and shows **PSNR / SSIM** live.
+   - Click "Align" to register the images with an integer-pixel translation before metrics are computed.
+4. **Region of interest (ROI)**:
+   - **Right-drag** on an image to draw an ROI.
+   - A right-click without dragging opens the pane menu (including "Export Adjusted Image..."); dragging still draws an ROI.
+   - The box header shows the reference label (A / B); the HUD shows the region's pixel mean, variance, extremes and histogram live.
+   - Multi-level synchronized selection and TSV measurement export are supported.
+5. **Peek and layouts**:
+   - Hold **1–8** to temporarily preview image N in the pane under the cursor; release to restore. Without a pane under the cursor the focused pane is used, otherwise the first pane. Out-of-range digits only show a hint. Layout presets are **Ctrl+2 / Ctrl+4 / Ctrl+8**. **Ctrl+1** is 100% actual size, **0 / Ctrl+0** fits the window.
+6. **Synchronization**:
+   - **Z** / **D**: toggle sync zoom / sync pan.
+   - "Fit window (F)" on the tool row (next to Analyze and Export Report; shortcut **F** / **Ctrl+0**): with "Uniform Pixel Scale" checked, every pane fits at one shared scale; unchecked, each pane fits its own resolution so images with the same field of view appear at a similar size. Peek, flicker or image swaps keep that on-screen size.
+   - **R**: synchronized crosshair.
+   - **L**: pixel link markers (compare the RGB and Δ of corresponding pixels across images).
+   - **X**: swap the A / B panes.
+   - The images to compare are chosen in Browse; Compare no longer steps to a previous / next group.
+   - **Esc**: clears the ROI selection first; press Esc again to exit Compare.
+7. **Rotate / flip in Compare is a preview**:
+   - Side-panel buttons or **Ctrl+R** / **Ctrl+Shift+R** / **Ctrl+Shift+H** / **Ctrl+Shift+V** change only the current pane's display and **do not overwrite the original file**.
+   - The target is the pane picked for editing, otherwise the pane under the cursor / the locked reference; without a target the status bar says so instead of silently changing pane 1.
+8. **Per-pane adjustments and export**:
+   - The Adjust panel sets brightness, contrast, gamma, white balance and USM sharpening (amount 0%–500%, radius 0.1–20 px, threshold 0–255, optional luminance only) for the current pane. Off by default. Preview, difference and histogram use the same adjustments and **do not overwrite the original file**. "Reset Adjustments" also turns USM off.
+   - "Export Adjusted Image..." (pane context menu or Adjust panel) writes the current pane at full resolution with brightness/contrast/gamma, white balance, USM, rotate/flip and crop applied to a new PNG or TIFF. The default name is `<original>_adjusted.png`, saved next to the source or in the last export folder.
 
 ---
 
-## 3. 批量处理与报告导出（Batch & Export）
+## 3. Batch and export
 
-1. **批量格式转换与重命名**：
-   - 按 **Ctrl+Shift+B** 打开批量处理对话框。
-   - 支持格式转换（PNG、JPEG、WebP、TIFF 等）、批量缩放、色彩空间转换与灵活重命名模板。
-2. **批量算法分析导出**：
+1. **Batch format conversion and rename**:
+   - Press **Ctrl+Shift+B** to open the batch processing dialog.
+   - Supports format conversion (PNG, JPEG, WebP, TIFF and more), batch resize, color space conversion and flexible rename templates.
+2. **Batch analysis export**:
    - Press **Ctrl+Alt+A** (or gallery context menu Batch Analysis Export).
-   - 自动遍历选中图片运行当前激活的 Analyzer 算法流水线，结果一键输出 CSV / TSV。
-3. **专业分析报告**：
-   - 「文件 → 导出报告...」：生成包含原图预览、差异热力图、ROI 统计及 PSNR/SSIM 图表的独立 HTML 报告。
-4. **导出图片中的图像元数据清单**：
-   - 「文件 → 导出图片...」里的「图像元数据清单 CSV / JSON / HTML」写出每张图的文件名、尺寸和通道均值，不是上面的分析报告。
-   - 选这些模式或「复制到剪贴板」时，格式、质量、缩放、水印、裁剪和重命名不再出现。清单仍要选输出目录；剪贴板不写文件，因此不需要输出目录。
+   - Runs the active Analyzer pipeline over the selected images and writes CSV / TSV in one step.
+3. **Analysis report**:
+   - "File → Export Report...": generates a standalone HTML report with previews, difference heatmaps, ROI statistics and PSNR/SSIM charts.
+4. **Image metadata inventory in Export Images**:
+   - The "Image metadata inventory CSV / JSON / HTML" modes in "File → Export Images..." write each image's file name, size and channel means; this is not the analysis report above.
+   - With these modes or "Copy to clipboard", format, quality, resize, watermark, crop and rename are hidden. Inventories still need an output folder; the clipboard writes no file and needs none.
 
 ---
 
-## 4. 工程与工作区持久化（Workspace & Project）
+## 4. Workspace and project persistence
 
-1. **工作区保存与打开**（`.mvws`）：
-   - 保存当前打开目录、选中的比较图像集合、ROI 区域坐标及分析器状态。
-   - 支持跨机器或会话快速恢复工作现场。
-2. **工程文件**（`.mvproj`）：
-   - 保存完整数据集根目录集合、多组工作区以及定制的算法评估流水线配置。
-3. **异常退出自动恢复**：
-   - 若程序意外关闭或崩溃，下次启动时将自动检测未闭合的恢复标记并提示一键恢复上次现场。
+1. **Save and open a workspace** (`.mvws`):
+   - Stores the open folder, the selected compare set, ROI coordinates and analyzer state.
+   - Restores the working context quickly across sessions or machines.
+2. **Project files** (`.mvproj`):
+   - Store the full set of dataset roots, several workspaces and custom analysis pipeline configuration.
+3. **Crash recovery**:
+   - If the app closes unexpectedly, the next start detects the open recovery marker and offers to restore the last session.
 
 ---
 
-## 5. 快捷键速查表
+## 5. Language
 
-### 比较窗口快捷键
+- **Tools → Preferences... → UI language**: Follow system (default), English or 简体中文.
+- Restart MViewer after changing the language so every window uses it.
 
-| 按键 | 功能 |
+---
+
+## 6. Shortcut reference
+
+### Compare window
+
+| Key | Action |
 |---|---|
-| **Z** / **D** | 开启/关闭 同步缩放 / 同步平移 |
-| **Space**（长按） | 鼠标所在一侧临时显示另一侧的图；松开恢复 |
+| **Z** / **D** | Toggle sync zoom / sync pan |
+| **Space** (hold) | Show the other side under the cursor; release to restore |
 | **B** / **S** / **W** / **O** / **K** | Flicker / Split / Swipe / Overlay / Checkerboard |
-| **H** | 差异高亮与热力图 |
-| **R** / **L** | 同步准星定位 / 像素连线对比 |
-| **X** | 交换 A/B 窗格图片 |
-| **F** | 全局图像适应窗口 |
-| **1…8** | 按住临时预览第 N 张（鼠标所在窗格；否则当前焦点窗格或第 1 格）。超出张数只提示 |
-| **Ctrl+1** | 100% 实际大小 |
-| **0 / Ctrl+0** | 适应窗口（与 F 相同） |
-| **Ctrl+2 / Ctrl+4 / Ctrl+8** | 2 / 4 / 8 宫格布局 |
-| **[** / **]** | 调整差异分析阈值（±5） |
-| **,** / **.** | 调整叠加透明度（±5%） |
-| **Shift+1…6** | 单通道隔离：RGB / R / G / B / Y / HSV-V |
-| **Ctrl+R** / **Ctrl+Shift+R** | 预览旋转当前窗格（不写入文件） |
-| **Ctrl+Shift+H** / **Ctrl+Shift+V** | 预览翻转当前窗格（不写入文件） |
-| **Esc** | 清除 ROI 选区或退出比较窗口 |
-| **?** | 底部交互提示条 |
+| **H** | Difference highlight and heatmap |
+| **R** / **L** | Sync crosshair / pixel link |
+| **X** | Swap the A/B pane images |
+| **F** | Fit all images to the window |
+| **1…8** | Hold to preview image N (pane under the cursor; otherwise the focused pane or pane 1). Out-of-range digits only show a hint |
+| **Ctrl+1** | 100% actual size |
+| **0 / Ctrl+0** | Fit to window (same as F) |
+| **Ctrl+2 / Ctrl+4 / Ctrl+8** | 2 / 4 / 8 pane layouts |
+| **]** / **[** | Diff threshold +5 / -5 |
+| **.** / **,** | Overlay opacity +5% / -5% |
+| **Shift+1…6** | Single channel: RGB / R / G / B / Y / HSV-V |
+| **Ctrl+R** / **Ctrl+Shift+R** | Preview-rotate the current pane (file not written) |
+| **Ctrl+Shift+H** / **Ctrl+Shift+V** | Preview-flip the current pane (file not written) |
+| **Esc** | Clear the ROI selection or exit Compare |
+| **?** | Bottom hint strip |
 
-### 浏览窗口快捷键
+### Browse window
 
-| 按键 | 功能 |
+| Key | Action |
 |---|---|
-| **Ctrl+O** | 打开目录 |
-| **Ctrl+Shift+O** | 打开单个文件 |
-| **P** / **C** | 将选中的 2~8 张图片开启比较 |
-| **Space** | 快速对比当前图与下一张（或多帧动画播放/暂停） |
-| **Alt+H** | 打开/关闭 算法分析面板（单图；查看器全屏下右键「分析」会先退出全屏） |
-| **Ctrl+Shift+F** | 打开/关闭 全局搜索面板 |
-| **Ctrl+I** / **I** | 切换图片元数据 EXIF 浮层面板 |
-| **Ctrl+R** / **Ctrl+Shift+R** | 顺时针 / 逆时针旋转 90°（覆盖原文件；比较窗口仅预览） |
-| **Ctrl+Shift+H** / **Ctrl+Shift+V** | 水平 / 垂直镜像翻转（覆盖原文件；比较窗口仅预览） |
-| **Shift+C** | 提取并复制当前坐标像素色彩值 |
-| **Tab** | 开启/退出 专注大图浏览模式 |
-| **S** | 开启幻灯片放映 |
-| **Ctrl+Shift+B** | 打开批量处理对话框 |
+| **Ctrl+O** | Open folder |
+| **Ctrl+Shift+O** | Open a single file |
+| **P** / **C** | Compare the 2–8 selected images |
+| **Space** | Quick-compare the current image with the next (or play/pause an animation) |
+| **Alt+H** | Toggle the analysis panel (single image; in full-screen viewer, "Analyze" leaves full screen first) |
+| **Ctrl+Shift+F** | Toggle the global search panel |
+| **Ctrl+I** / **I** | Toggle the EXIF metadata overlay |
+| **Ctrl+R** / **Ctrl+Shift+R** | Rotate 90° clockwise / counterclockwise (overwrites the original; preview only in Compare) |
+| **Ctrl+Shift+H** / **Ctrl+Shift+V** | Flip horizontally / vertically (overwrites the original; preview only in Compare) |
+| **Shift+C** | Copy the pixel color at the cursor |
+| **Tab** | Toggle focus browse mode |
+| **S** | Start the slideshow |
+| **Ctrl+Shift+B** | Open the batch processing dialog |
 | **Ctrl+Shift+A** | Cancel selection (deselect) |
 | **Ctrl+Alt+A** | Batch Analysis Export |
-| **←** / **→** | 查看上一张 / 下一张图片 |
-| **F1** | 查看完整键盘快捷键表 |
+| **←** / **→** | Previous / next image |
+| **F1** | Full keyboard shortcut table |

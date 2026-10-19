@@ -17,7 +17,7 @@ class ColorCheckerAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "色卡/白平衡校验 (Delta-E vs 参考色)";
+        return "Color checker / white balance check (Delta-E vs reference)";
     }
 
     AnalyzerCapability capabilities() const override

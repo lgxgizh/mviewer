@@ -15,7 +15,7 @@ class SSIMAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "结构相似性 SSIM";
+        return "Structural similarity (SSIM)";
     }
     AnalyzerCapability capabilities() const override
     {

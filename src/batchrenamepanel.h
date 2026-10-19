@@ -11,7 +11,7 @@ class QLabel;
 class QLineEdit;
 
 // Rename pattern + find/replace editor with a live preview and inline errors.
-// Shared by BatchDialog (「重命名」) and ExportDialog (「批量重命名」). The host
+// Shared by BatchDialog ("Rename") and ExportDialog ("Batch Rename"). The host
 // restores the last confirmed settings with loadSettings() and saves them with
 // saveSettings() only when the user confirms the run.
 class BatchRenamePanel : public QWidget

@@ -12,7 +12,7 @@ class HistogramAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "亮度与RGB直方图";
+        return "Luminance and RGB histogram";
     }
 
     AnalyzerCapability capabilities() const override

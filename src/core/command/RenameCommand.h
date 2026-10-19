@@ -13,7 +13,7 @@ class RenameCommand : public ICommand
     }
     std::string description() const override
     {
-        return "重命名...";
+        return "Rename...";
     }
     void execute() override;
     bool canExecute() const override;

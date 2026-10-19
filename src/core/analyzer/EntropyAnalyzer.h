@@ -11,7 +11,7 @@ class EntropyAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "香农熵 (bits/px)";
+        return "Shannon entropy (bits/px)";
     }
     AnalyzerCapability capabilities() const override
     {

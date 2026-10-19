@@ -268,7 +268,7 @@ void CompareWorkspace::restoreNavState(const NavState &s)
     setOverlayMode(static_cast<mviewer::OverlayMode>(s.overlayMode));
     // Restore heatmap + highlight without going through the promote/demote
     // toggled handlers (those would fight each other and lose a manual
-    // "显示差异" that was never promoted by H).
+    // "Show Difference" that was never promoted by H).
     m_diffOverlayPromoted = s.diffOverlayPromoted;
     m_diffOverlayVisible = s.diffOverlay;
     m_diffHighlight = s.diffHighlight;
@@ -469,7 +469,7 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
     if (m_sideChk && m_sideChk->isChecked() != s.sidePanelVisible)
         m_sideChk->setChecked(s.sidePanelVisible);
 
-    // H5: "统一像素倍率" — restore the shared-zoom alignment flag and checkbox.
+    // H5: "Uniform Pixel Scale" — restore the shared-zoom alignment flag and checkbox.
     m_uniformScale = s.uniformScale;
     if (m_uniformScaleChk && m_uniformScaleChk->isChecked() != s.uniformScale)
         m_uniformScaleChk->setChecked(s.uniformScale);
@@ -579,7 +579,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         }
         m_cellViews[i]->setSelection(m_lastSelection);
     }
-    // M23: ROI + Histogram 联动 — histogram surfaces keep their ROI scope
+    // M23: ROI + Histogram linkage — histogram surfaces keep their ROI scope
     // even when the analysis side panel is collapsed.
     if (m_roiHistChk && m_roiHistChk->isChecked())
         refreshHistograms();

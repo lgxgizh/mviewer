@@ -241,7 +241,7 @@ CompareWorkspace::ROIStatsBatchResult CompareWorkspace::computeROIStatsBatch(
         {
             mviewer::ui::ROIPaneMeasurement unmeasured;
             unmeasured.state = mviewer::ui::ROIPaneState::Unsupported;
-            unmeasured.reason = "此窗格没有 ROI";
+            unmeasured.reason = tr("This pane has no ROI");
             result.panes.push_back(std::move(unmeasured));
             continue;
         }

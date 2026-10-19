@@ -13,7 +13,7 @@ class RGBMeanAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "RGB 均值/标准差";
+        return "RGB mean / standard deviation";
     }
     AnalyzerCapability capabilities() const override
     {

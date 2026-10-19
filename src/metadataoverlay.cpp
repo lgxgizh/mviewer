@@ -195,7 +195,7 @@ void MetadataOverlay::requestMetadata()
                     {
                         // The service delivers an empty snapshot for a deleted,
                         // corrupt or unsupported file; painting it showed
-                        // "尺寸: 0 B / 格式: " instead of clearing the overlay (its
+                        // "Size: 0 B / Format: " instead of clearing the overlay (its
                         // two sibling consumers already guard for this).
                         guard->m_lines.clear();
                         guard->update();
@@ -211,17 +211,17 @@ void MetadataOverlay::requestMetadata()
 void MetadataOverlay::appendFileInfo(const mviewer::domain::ImageMetadata &meta)
 {
     if (!m_shortName.isEmpty())
-        m_lines << QString("文件: %1").arg(m_shortName);
+        m_lines << tr("File: %1").arg(m_shortName);
 
     QString pathStr =
         QString::fromUtf8(meta.filePath.data(), static_cast<int>(meta.filePath.size()));
     if (pathStr.isEmpty())
         pathStr = m_requestedPath;
     if (!pathStr.isEmpty())
-        m_lines << QString("路径: %1").arg(pathStr);
+        m_lines << tr("Path: %1").arg(pathStr);
 
     if (meta.fileSize > 0)
-        m_lines << QString("尺寸: %1").arg(formatFileSize(meta.fileSize));
+        m_lines << tr("Size: %1").arg(formatFileSize(meta.fileSize));
 
     QString fmt = QString::fromStdString(meta.format);
     if (fmt.isEmpty() && !pathStr.isEmpty())
@@ -230,19 +230,19 @@ void MetadataOverlay::appendFileInfo(const mviewer::domain::ImageMetadata &meta)
         fmt = (ext == "JPG") ? "JPEG" : ext;
     }
     if (!fmt.isEmpty())
-        m_lines << QString("Format: %1").arg(fmt);
+        m_lines << tr("Format: %1").arg(fmt);
 
     if (meta.width > 0 && meta.height > 0)
-        m_lines << QString("分辨率: %1 × %2").arg(meta.width).arg(meta.height);
+        m_lines << tr("Resolution: %1 × %2").arg(meta.width).arg(meta.height);
 
     if (meta.channels > 0)
-        m_lines << QString("通道: %1 · 色深: %2-bit").arg(meta.channels).arg(meta.bitDepth);
+        m_lines << tr("Channels: %1 · Depth: %2-bit").arg(meta.channels).arg(meta.bitDepth);
 
     if (!meta.colorSpace.empty())
-        m_lines << QString("色彩空间: %1").arg(QString::fromStdString(meta.colorSpace));
+        m_lines << tr("Color space: %1").arg(QString::fromStdString(meta.colorSpace));
 
     if (meta.dpiX > 0 || meta.dpiY > 0)
-        m_lines << QString("DPI: %1 × %2").arg(meta.dpiX).arg(meta.dpiY);
+        m_lines << tr("DPI: %1 × %2").arg(meta.dpiX).arg(meta.dpiY);
 }
 
 void MetadataOverlay::appendExifInfo(const mviewer::domain::ImageMetadata &meta)
@@ -253,11 +253,11 @@ void MetadataOverlay::appendExifInfo(const mviewer::domain::ImageMetadata &meta)
     const auto make = lookup(meta.textKeys, "Make");
     const auto model = lookup(meta.textKeys, "Model");
     if (!make.isEmpty() || !model.isEmpty())
-        m_lines << QString("相机: %1 %2").arg(make, model).trimmed();
+        m_lines << tr("Camera: %1 %2").arg(make, model).trimmed();
 
     const auto dateTime = lookup(meta.textKeys, "DateTimeOriginal");
     if (!dateTime.isEmpty())
-        m_lines << QString("拍摄: %1").arg(dateTime);
+        m_lines << tr("Taken: %1").arg(dateTime);
 
     const auto iso = lookup(meta.textKeys, "ISOSpeedRatings");
     if (!iso.isEmpty())
@@ -265,24 +265,24 @@ void MetadataOverlay::appendExifInfo(const mviewer::domain::ImageMetadata &meta)
 
     const auto exp = lookup(meta.textKeys, "ExposureTime");
     if (!exp.isEmpty())
-        m_lines << QString("快门: %1s").arg(exp);
+        m_lines << tr("Shutter: %1s").arg(exp);
 
     const auto fnum = lookup(meta.textKeys, "FNumber");
     if (!fnum.isEmpty())
-        m_lines << QString("光圈: f/%1").arg(fnum);
+        m_lines << tr("Aperture: f/%1").arg(fnum);
 
     const auto fl = lookup(meta.textKeys, "FocalLength");
     if (!fl.isEmpty())
-        m_lines << QString("焦距: %1mm").arg(fl);
+        m_lines << tr("Focal length: %1mm").arg(fl);
 
     const auto lensModel = lookup(meta.textKeys, "LensModel");
     const auto lensMake = lookup(meta.textKeys, "LensMake");
     if (!lensModel.isEmpty() || !lensMake.isEmpty())
-        m_lines << QString("镜头: %1 %2").arg(lensMake, lensModel).trimmed();
+        m_lines << tr("Lens: %1 %2").arg(lensMake, lensModel).trimmed();
 
     const auto sw = lookup(meta.textKeys, "Software");
     if (!sw.isEmpty())
-        m_lines << QString("软件: %1").arg(sw);
+        m_lines << tr("Software: %1").arg(sw);
 }
 
 void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
@@ -293,7 +293,7 @@ void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
             std::any_of(m_lines.cbegin(), m_lines.cend(),
                         [](const QString &l) { return l.startsWith(QStringLiteral("Camera:")); });
         if (!hasCameraLine)
-            m_lines << QString("相机: %1 %2")
+            m_lines << tr("Camera: %1 %2")
                            .arg(QString::fromStdString(raw.make), QString::fromStdString(raw.model))
                            .trimmed();
     }
@@ -302,7 +302,7 @@ void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
         const bool hasLensLine = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
                                              { return l.startsWith(QStringLiteral("Lens:")); });
         if (!hasLensLine)
-            m_lines << QString("镜头: %1 %2")
+            m_lines << tr("Lens: %1 %2")
                            .arg(QString::fromStdString(raw.lensMaker),
                                 QString::fromStdString(raw.lens))
                            .trimmed();
@@ -319,11 +319,11 @@ void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
 void MetadataOverlay::appendLocationAndTimes(const mviewer::domain::ImageMetadata &meta)
 {
     if (meta.hasIccProfile)
-        m_lines << QString("ICC 配置: 已嵌入 (%1)")
+        m_lines << tr("ICC profile: embedded (%1)")
                        .arg(meta.colorSpace.empty() ? QStringLiteral("embedded")
                                                     : QString::fromStdString(meta.colorSpace));
     else if (!meta.colorSpace.empty())
-        m_lines << QString("色彩配置: %1").arg(QString::fromStdString(meta.colorSpace));
+        m_lines << tr("Color profile: %1").arg(QString::fromStdString(meta.colorSpace));
 
     if (meta.hasGps && std::isfinite(meta.gpsLatitude) && std::isfinite(meta.gpsLongitude) &&
         std::abs(meta.gpsLatitude) <= 90.0 && std::abs(meta.gpsLongitude) <= 180.0)
@@ -342,16 +342,16 @@ void MetadataOverlay::appendLocationAndTimes(const mviewer::domain::ImageMetadat
                 .arg(s, 2, 'f', 1)
                 .arg(isNeg ? neg : pos);
         };
-        m_lines << QString("GPS: %1  %2")
+        m_lines << tr("GPS: %1  %2")
                        .arg(toDms(meta.gpsLatitude, 'N', 'S'), toDms(meta.gpsLongitude, 'E', 'W'));
         if (meta.gpsAltitude != 0.0 && std::isfinite(meta.gpsAltitude))
-            m_lines << QString("海拔: %1 m").arg(meta.gpsAltitude, 0, 'f', 1);
+            m_lines << tr("Altitude: %1 m").arg(meta.gpsAltitude, 0, 'f', 1);
     }
 
     if (meta.modifiedEpochSec > 0)
     {
         const auto dt = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(meta.modifiedEpochSec));
-        m_lines << QString("修改: %1").arg(dt.toString("yyyy-MM-dd hh:mm:ss"));
+        m_lines << tr("Modified: %1").arg(dt.toString("yyyy-MM-dd hh:mm:ss"));
     }
 }
 
@@ -441,7 +441,7 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
     sf.setPixelSize(10);
     p.setFont(sf);
     p.drawText(QRect(x + padding, y + boxH - 16, boxW - padding * 2, 16),
-               Qt::AlignRight | Qt::AlignVCenter, "按 I / ESC 关闭");
+               Qt::AlignRight | Qt::AlignVCenter, tr("Press I / ESC to close"));
 }
 
 void MetadataOverlay::mousePressEvent(QMouseEvent *event)

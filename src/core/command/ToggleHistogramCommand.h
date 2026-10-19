@@ -13,7 +13,7 @@ class ToggleHistogramCommand : public ICommand
     }
     std::string description() const override
     {
-        return "切换直方图显示";
+        return "Toggle histogram display";
     }
     void execute() override;
     bool canExecute() const override;

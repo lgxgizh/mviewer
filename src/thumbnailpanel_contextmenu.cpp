@@ -42,20 +42,20 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
                                                                     const QStringList &selPaths)
 {
     ContextMenuActions acts;
-    acts.aOpen = menu.addAction("打开");
+    acts.aOpen = menu.addAction(tr("Open"));
     acts.aOpen->setShortcut(QKeySequence(Qt::Key_Return));
     acts.aRename = menu.addAction("Rename");
     acts.aRename->setShortcut(QKeySequence(Qt::Key_F2));
     // NOTE: no Ctrl+C here — the global binding copies the current image to
     // the clipboard; advertising the file-copy dialog on the same key would
     // be misleading (the dialog stays reachable via the menu item).
-    acts.aCopy = menu.addAction("复制...");
-    acts.aMove = menu.addAction("移动...");
+    acts.aCopy = menu.addAction(tr("Copy..."));
+    acts.aMove = menu.addAction(tr("Move..."));
     acts.aMove->setShortcut(QKeySequence("Ctrl+M"));
-    acts.aTrash = menu.addAction("移到回收站");
+    acts.aTrash = menu.addAction(tr("Move to Recycle Bin"));
     acts.aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
     acts.aOpenTrash = menu.addAction("Open Recycle Bin");
-    acts.aReveal = menu.addAction("在资源管理器中显示");
+    acts.aReveal = menu.addAction(tr("Show in File Manager"));
     acts.aReveal->setShortcut(QKeySequence("Ctrl+E"));
     acts.aCopyPath = menu.addAction("Copy path");
     acts.aCopyPath->setShortcut(QKeySequence("Ctrl+Shift+C"));
@@ -63,15 +63,15 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCompare = menu.addAction("Compare");
     acts.aCompare->setShortcut(QKeySequence("P"));
     acts.aCompare->setEnabled(selPaths.size() >= 2 && selPaths.size() <= 8);
-    acts.aUsmCompare = menu.addAction("USM 锐化对比...");
+    acts.aUsmCompare = menu.addAction(tr("USM Sharpen Compare..."));
     acts.aUsmCompare->setEnabled(selPaths.size() == 1);
     acts.aAnalyze = menu.addAction("Batch Analysis Export");
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     acts.aAnalyze->setEnabled(!selPaths.isEmpty());
     menu.addSeparator();
-    acts.aAddTag = menu.addAction("添加标签…");
+    acts.aAddTag = menu.addAction(tr("Add Tag…"));
     acts.aAddTag->setEnabled(!selPaths.isEmpty());
-    acts.rmTagMenu = menu.addMenu("移除所选标签");
+    acts.rmTagMenu = menu.addMenu(tr("Remove Tag from Selection"));
     populateRemoveTagMenu(acts.rmTagMenu, selPaths);
     return acts;
 }
