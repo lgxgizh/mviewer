@@ -198,7 +198,7 @@ QWidget *MainWindow::buildNavigationPanel()
                 if (!item)
                     return;
                 QMenu menu;
-                QAction *act = menu.addAction("移除收藏");
+                QAction *act = menu.addAction(tr("Remove from Favorites"));
                 if (menu.exec(m_favoritesBar->mapToGlobal(pos)) == act)
                     removeFavorite(item->data(Qt::UserRole).toString());
             });
@@ -284,7 +284,7 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
     auto *sortRootLayout = new QVBoxLayout(sortBar);
     sortRootLayout->setContentsMargins(0, 0, 0, 0);
     sortRootLayout->setSpacing(mviewer::ui::metrics::kSpace4);
-    // Address bar sits on the gallery toolbar strip, above 排序 / 高级筛选.
+    // Address bar sits on the gallery toolbar strip, above Sort / Advanced Filter.
     if (m_pathEdit)
     {
         m_pathEdit->setParent(sortBar);
@@ -314,7 +314,7 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
 
 void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLayout)
 {
-    sortLayout->addWidget(new QLabel("排序：", sortBar));
+    sortLayout->addWidget(new QLabel(tr("Sort:"), sortBar));
     m_sortCombo = new QComboBox(sortBar);
     m_sortCombo->addItem("File Name", ThumbnailPanel::SortName);
     m_sortCombo->addItem("Date", ThumbnailPanel::SortDate);
@@ -360,13 +360,13 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     typeFilterCombo->setToolTip("Filter by file type");
 
     advancedLayout->addWidget(typeFilterCombo);
-    auto *advancedFilterToggle = new QPushButton("高级筛选", sortBar);
+    auto *advancedFilterToggle = new QPushButton(tr("Advanced Filter"), sortBar);
     advancedFilterToggle->setObjectName("advancedFilterToggle");
     advancedFilterToggle->setCheckable(true);
     advancedFilterToggle->setToolTip("Show camera, lens, rating, and metadata filters");
     sortLayout->addWidget(advancedFilterToggle);
     connect(advancedFilterToggle, &QPushButton::toggled, advancedFilterPanel, &QWidget::setVisible);
-    auto *clearFilters = new QPushButton("清除筛选", sortBar);
+    auto *clearFilters = new QPushButton(tr("Clear Filters"), sortBar);
     clearFilters->setObjectName("clearFiltersButton");
     advancedLayout->addWidget(clearFilters);
 
@@ -451,14 +451,14 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
             });
 
     // M18: live search bar.
-    sortLayout->addWidget(new QLabel("搜索：", sortBar));
+    sortLayout->addWidget(new QLabel(tr("Search:"), sortBar));
     m_searchEdit = new QLineEdit(sortBar);
     m_searchEdit->setObjectName("searchEdit");
     m_searchEdit->setPlaceholderText("Filter by filename...");
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->installEventFilter(this);
     sortLayout->addWidget(m_searchEdit, 1);
-    m_searchRecursive = new QCheckBox("包含子目录", sortBar);
+    m_searchRecursive = new QCheckBox(tr("Include Subfolders"), sortBar);
     advancedLayout->addWidget(m_searchRecursive);
 
     // P1: metadata-aware search (camera / lens / ISO / date / …).
@@ -636,7 +636,7 @@ void MainWindow::buildImageViewerUi()
     connect(m_imageViewer, &ImageViewer::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
 
-    // P0-3: metadata overlay on the image viewer (toggle with I / M / 图片信息)
+    // P0-3: metadata overlay on the image viewer (toggle with I / M / Image Info)
     m_metadataOverlay = new MetadataOverlay(m_imageViewer);
     m_metadataOverlay->hide();
     // Overlay visibility stays aligned with the View menu and the histogram task.
@@ -661,8 +661,8 @@ void MainWindow::buildStatusBarUi()
     // P0 #①: real-time status bar — image count, total/selected size, viewer
     // zoom, and live cache hit-rate. Persistent (not transient showMessage).
     m_lblImage = new QLabel("—", this);
-    m_lblCount = new QLabel("图片 0", this);
-    m_lblSize = new QLabel("大小 0 B", this);
+    m_lblCount = new QLabel(tr("0 images"), this);
+    m_lblSize = new QLabel(tr("Size 0 B"), this);
     m_lblZoom = new QLabel("Zoom", this);
     m_lblCache = new QLabel("Hit rate —", this);
     m_lblCache->setToolTip(
@@ -681,12 +681,12 @@ void MainWindow::buildStatusBarUi()
             {
                 const int idx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
                 if (total > 0 && idx >= 0)
-                    m_lblCount->setText(QString("图片 %1 / %2").arg(idx + 1).arg(total));
+                    m_lblCount->setText(tr("Image %1 / %2").arg(idx + 1).arg(total));
                 else
-                    m_lblCount->setText(QString("图片 %1").arg(total));
+                    m_lblCount->setText(tr("%1 images").arg(total));
                 m_lblSize->setText(
-                    selected > 0 ? QString("已选 %1 · %2").arg(selected).arg(formatBytes(selBytes))
-                                 : QString("大小 %1").arg(formatBytes(totalBytes)));
+                    selected > 0 ? tr("%1 selected · %2").arg(selected).arg(formatBytes(selBytes))
+                                 : tr("Size %1").arg(formatBytes(totalBytes)));
                 updateCacheStat();
             });
     connect(m_imageViewer, &ImageViewer::zoomChanged, this,

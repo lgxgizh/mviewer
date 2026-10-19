@@ -352,7 +352,7 @@ static void test100MpVisibleOnly()
     // 10000x8000 ~= 80MP image. Tile base 256 -> at fit-into a 1280x1024
     // window the scale is ~0.128, so chooseLod -> LOD 3 (256*8=2048 src px
     // per coarse tile). Only the tiles intersecting the viewport are decoded, never
-    // the full bitmap. This is the "100MP 不卡" guarantee.
+    // the full bitmap. This is the "100 MP without stutter" guarantee.
     const int W = 10000, H = 8000;
     TileCache cache;
     TileGrid grid(W, H, 256);

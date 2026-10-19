@@ -21,30 +21,30 @@ void MainWindow::buildMenus()
 
 void MainWindow::buildFileMenu(QMenuBar *menuBar)
 {
-    // ----- 文件(&F) -----
-    auto *fileMenu = menuBar->addMenu("文件(&F)");
-    m_actOpenDir = new QAction("打开目录(&O)...", this);
+    // ----- File -----
+    auto *fileMenu = menuBar->addMenu(tr("&File"));
+    m_actOpenDir = new QAction(tr("&Open Folder..."), this);
     m_actOpenDir->setShortcut(QKeySequence::Open); // Ctrl+O
-    m_actOpenFile = new QAction("打开文件(&F)...", this);
+    m_actOpenFile = new QAction(tr("Open &File..."), this);
     m_actOpenFile->setShortcut(QKeySequence("Ctrl+Shift+O"));
-    m_actSaveWorkspace = new QAction("保存工作区(&S)", this);
-    m_actOpenWorkspace = new QAction("打开工作区(&W)", this);
-    m_actSaveProject = new QAction("保存项目(&P)", this);
-    m_actOpenProject = new QAction("打开项目(&J)", this);
-    m_actExit = new QAction("退出(&Q)", this);
+    m_actSaveWorkspace = new QAction(tr("&Save Workspace"), this);
+    m_actOpenWorkspace = new QAction(tr("Open &Workspace"), this);
+    m_actSaveProject = new QAction(tr("Save &Project"), this);
+    m_actOpenProject = new QAction(tr("Open Pro&ject"), this);
+    m_actExit = new QAction(tr("E&xit"), this);
     m_actExit->setShortcut(QKeySequence::Quit); // Ctrl+Q
     fileMenu->addAction(m_actOpenDir);
     fileMenu->addAction(m_actOpenFile);
     fileMenu->addSeparator();
 
     // P0: Recent folders (from core::RecentFiles LRU) + Favorites (pinned).
-    m_recentMenu = fileMenu->addMenu("最近目录(&R)");
-    m_recentFileMenu = fileMenu->addMenu("最近文件(&F)");
-    m_favMenu = fileMenu->addMenu("收藏目录(&V)");
-    m_actAddFavorite = new QAction("收藏当前目录(&D)", this);
+    m_recentMenu = fileMenu->addMenu(tr("&Recent Folders"));
+    m_recentFileMenu = fileMenu->addMenu(tr("Recent &Files"));
+    m_favMenu = fileMenu->addMenu(tr("Fa&vorite Folders"));
+    m_actAddFavorite = new QAction(tr("Add Current Folder to Favorites(&D)"), this);
     m_actAddFavorite->setObjectName("addFavoriteAction");
     m_actAddFavorite->setShortcut(QKeySequence("Ctrl+D")); // Ctrl+D
-    m_actRemoveFavorite = new QAction("取消收藏当前目录", this);
+    m_actRemoveFavorite = new QAction(tr("Remove Current Folder from Favorites"), this);
     m_actRemoveFavorite->setObjectName("removeFavoriteAction");
     fileMenu->addAction(m_actAddFavorite);
     fileMenu->addAction(m_actRemoveFavorite);
@@ -54,8 +54,8 @@ void MainWindow::buildFileMenu(QMenuBar *menuBar)
     fileMenu->addAction(m_actOpenWorkspace);
     fileMenu->addAction(m_actSaveProject);
     fileMenu->addAction(m_actOpenProject);
-    m_actExportReport = new QAction("导出报告(&R)...", this);
-    m_actExportImages = new QAction("导出图片(&E)...", this);
+    m_actExportReport = new QAction(tr("Export &Report..."), this);
+    m_actExportImages = new QAction(tr("&Export Images..."), this);
     fileMenu->addAction(m_actExportReport);
     fileMenu->addAction(m_actExportImages);
     fileMenu->addSeparator();
@@ -64,8 +64,8 @@ void MainWindow::buildFileMenu(QMenuBar *menuBar)
 
 void MainWindow::buildEditMenu(QMenuBar *menuBar)
 {
-    // ----- 编辑(&E) — A-10: Undo/Redo -----
-    auto *editMenu = menuBar->addMenu("编辑(&E)");
+    // ----- Edit — A-10: Undo/Redo -----
+    auto *editMenu = menuBar->addMenu(tr("&Edit"));
     m_actUndo = new QAction("Undo(&U)", this);
     m_actUndo->setShortcut(QKeySequence::Undo); // Ctrl+Z
     m_actUndo->setEnabled(false);
@@ -81,7 +81,8 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, "撤销失败", mviewer::ui::fileOpErrorZh(err));
+                        QMessageBox::warning(this, tr("Undo Failed"),
+                                             mviewer::ui::fileOpErrorText(err));
                     updateUndoRedoActions();
                     return;
                 }
@@ -96,7 +97,8 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, "重做失败", mviewer::ui::fileOpErrorZh(err));
+                        QMessageBox::warning(this, tr("Redo Failed"),
+                                             mviewer::ui::fileOpErrorText(err));
                     updateUndoRedoActions();
                     return;
                 }
@@ -201,22 +203,22 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)
 {
-    // ----- 视图(&V) -----
-    auto *viewMenu = menuBar->addMenu("视图(&V)");
+    // ----- View -----
+    auto *viewMenu = menuBar->addMenu(tr("&View"));
     m_actCompare = new QAction(tr("Compare Mode (&C)"), this);
     m_actCompare->setObjectName("compareAction");
     m_actCompare->setShortcut(QKeySequence("P"));
     m_actCompare->setToolTip(tr("Select 2–8 images, then press P or C to open Compare"));
-    m_actToggleAnalysis = new QAction("分析面板(&H)", this);
+    m_actToggleAnalysis = new QAction(tr("Analysis Panel(&H)"), this);
     m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
     m_actToggleAnalysis->setCheckable(true);
     m_actToggleAnalysis->setChecked(false);
     m_actToggleAnalysis->setShortcut(QKeySequence(QStringLiteral("Alt+H")));
     // P0: in-session browse history (browser-style back/forward).
-    m_actHistoryBack = new QAction("上一步(&B)", this);
+    m_actHistoryBack = new QAction(tr("&Back"), this);
     m_actHistoryBack->setObjectName("historyBackAction");
     m_actHistoryBack->setShortcut(QKeySequence::Back); // Alt+Left
-    m_actHistoryForward = new QAction("下一步(&N)", this);
+    m_actHistoryForward = new QAction(tr("Forward(&N)"), this);
     m_actHistoryForward->setObjectName("historyForwardAction");
     m_actHistoryForward->setShortcut(QKeySequence::Forward); // Alt+Right
     // P0: Directory-level back/forward (independent of image history).
@@ -233,13 +235,13 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     viewMenu->addAction(m_actDirForward);
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
-    m_actToggleSearch = new QAction("全局搜索(&S)", this);
+    m_actToggleSearch = new QAction(tr("Global &Search"), this);
     m_actToggleSearch->setObjectName("toggleSearchPanelAction");
     m_actToggleSearch->setCheckable(true);
     m_actToggleSearch->setChecked(false);
     m_actToggleSearch->setShortcut(QKeySequence("Ctrl+Shift+F"));
     viewMenu->addAction(m_actToggleSearch);
-    m_actFocusBrowse = new QAction("专注浏览模式 (Tab)", this);
+    m_actFocusBrowse = new QAction(tr("Focus Browse Mode (Tab)"), this);
     m_actFocusBrowse->setObjectName("focusBrowseAction");
     m_actFocusBrowse->setCheckable(true);
     m_actFocusBrowse->setShortcut(QKeySequence(Qt::Key_Tab));
@@ -253,7 +255,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actBrowseWorkspace->setToolTip(
         tr("Hide analysis and search panels, keep folder and preview navigation"));
     viewMenu->addAction(m_actBrowseWorkspace);
-    m_actToggleMetadata = new QAction("图片信息(&I)", this);
+    m_actToggleMetadata = new QAction(tr("Image &Info"), this);
     m_actToggleMetadata->setObjectName("toggleMetadataAction"); // stable test discovery
     m_actToggleMetadata->setCheckable(true);
     m_actToggleMetadata->setChecked(false);
@@ -264,16 +266,16 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     // in keyPressEvent; the Ctrl variants live on the actions so they show
     // in the menu. Fit/Actual use plain 0/1 (a QAction plain-key shortcut
     // would shadow text entry in the search box).
-    m_actZoomIn = new QAction("放大(&Z)", this);
+    m_actZoomIn = new QAction(tr("&Zoom In"), this);
     m_actZoomIn->setObjectName("zoomInAction");
     m_actZoomIn->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")});
-    m_actZoomOut = new QAction("缩小(&O)", this);
+    m_actZoomOut = new QAction(tr("Zoom &Out"), this);
     m_actZoomOut->setObjectName("zoomOutAction");
     m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
-    m_actZoomFit = new QAction("适应窗口(&F)", this);
+    m_actZoomFit = new QAction(tr("&Fit to Window"), this);
     m_actZoomFit->setObjectName("zoomFitAction");
     m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
-    m_actZoomActual = new QAction("实际大小(&A)", this);
+    m_actZoomActual = new QAction(tr("&Actual Size"), this);
     m_actZoomActual->setObjectName("zoomActualAction");
     m_actFullscreen = new QAction("Full Screen(&U)", this);
     m_actFullscreen->setShortcut(QKeySequence("F11"));
@@ -281,16 +283,16 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     viewMenu->addAction(m_actZoomOut);
     viewMenu->addAction(m_actZoomFit);
     viewMenu->addAction(m_actZoomActual);
-    m_zoomPresetsMenu = viewMenu->addMenu("缩放预设");
+    m_zoomPresetsMenu = viewMenu->addMenu(tr("Zoom Presets"));
     m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
     m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });
-    m_zoomPresetsMenu->addAction("100% (实际大小)", this, [this]() { zoomViewer(3); });
+    m_zoomPresetsMenu->addAction(tr("100% (Actual Size)"), this, [this]() { zoomViewer(3); });
     m_zoomPresetsMenu->addAction("200%", this, [this]() { zoomViewer(5); });
     m_zoomPresetsMenu->addAction("400%", this, [this]() { zoomViewer(6); });
-    m_zoomPresetsMenu->addAction("800% (像素网格)", this, [this]() { zoomViewer(7); });
+    m_zoomPresetsMenu->addAction(tr("800% (Pixel Grid)"), this, [this]() { zoomViewer(7); });
     viewMenu->addSeparator();
     viewMenu->addAction(m_actFullscreen);
-    m_actSlideshow = new QAction("幻灯片放映(&S) (S)", this);
+    m_actSlideshow = new QAction(tr("&Slideshow (S)"), this);
     m_actSlideshow->setObjectName("slideshowAction");
     m_actSlideshow->setCheckable(true);
     viewMenu->addAction(m_actSlideshow);
@@ -318,9 +320,9 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
 
 void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
 {
-    // ----- 工具(&T) -----
-    auto *toolsMenu = menuBar->addMenu("工具(&T)");
-    m_actBatch = new QAction("批量处理(&B)", this);
+    // ----- Tools -----
+    auto *toolsMenu = menuBar->addMenu(tr("&Tools"));
+    m_actBatch = new QAction(tr("&Batch Processing"), this);
     m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
     toolsMenu->addAction(m_actBatch);
     // M17: batch analyzer export — same path as gallery context menu.
@@ -333,14 +335,14 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
                 if (m_thumbnailPanel)
                     m_thumbnailPanel->batchAnalyzeExport();
             });
-    m_actPluginSettings = new QAction("插件管理(&P)...", this);
+    m_actPluginSettings = new QAction(tr("&Plugin Manager..."), this);
     toolsMenu->addAction(m_actPluginSettings);
 
-    QAction *actPrefs = new QAction("首选项(&O)...", this);
+    QAction *actPrefs = new QAction(tr("Preferences(&O)..."), this);
     connect(actPrefs, &QAction::triggered, this, &MainWindow::openPreferences);
     toolsMenu->addAction(actPrefs);
 
-    QAction *actOverlay = new QAction("分析叠加层/示波器...", this);
+    QAction *actOverlay = new QAction(tr("Analysis Overlay / Scopes..."), this);
     connect(actOverlay, &QAction::triggered, this, &MainWindow::openAnalysisOverlay);
     toolsMenu->addAction(actOverlay);
 
@@ -350,13 +352,13 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     toolsMenu->addAction(m_actUsmCompare);
 
     toolsMenu->addSeparator();
-    m_actExportSettings = new QAction("导出设置(&E)...", this);
-    m_actImportSettings = new QAction("导入设置(&I)...", this);
+    m_actExportSettings = new QAction(tr("&Export Settings..."), this);
+    m_actImportSettings = new QAction(tr("&Import Settings..."), this);
     toolsMenu->addAction(m_actExportSettings);
     toolsMenu->addAction(m_actImportSettings);
     toolsMenu->addSeparator();
     // M21: Memory Timeline snapshot (status bar + optional CSV dump).
-    auto *actMemTimeline = new QAction("内存时间线(&M)...", this);
+    auto *actMemTimeline = new QAction(tr("&Memory Timeline..."), this);
     actMemTimeline->setToolTip(
         tr("Sample the MemoryTracker timeline and show peak/recent samples"));
     connect(actMemTimeline, &QAction::triggered, this,
@@ -398,19 +400,19 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
             });
     toolsMenu->addAction(actMemTimeline);
 
-    // ----- 帮助(&H) -----
-    auto *helpMenu = menuBar->addMenu("帮助(&H)");
-    auto *actCheckUpdate = new QAction("检查更新...(&U)", this);
+    // ----- Help -----
+    auto *helpMenu = menuBar->addMenu(tr("&Help"));
+    auto *actCheckUpdate = new QAction(tr("Check for &Updates..."), this);
     connect(actCheckUpdate, &QAction::triggered, this, [this]() { checkForUpdates(false); });
     helpMenu->addAction(actCheckUpdate);
     helpMenu->addSeparator();
-    auto *actGuide = new QAction("使用说明(&G)", this);
+    auto *actGuide = new QAction(tr("User &Guide"), this);
     connect(actGuide, &QAction::triggered, this, &MainWindow::showUserGuide);
     helpMenu->addAction(actGuide);
-    auto *actShortcuts = new QAction("键盘快捷键(&K)", this);
+    auto *actShortcuts = new QAction(tr("&Keyboard Shortcuts"), this);
     actShortcuts->setShortcut(QKeySequence(Qt::Key_F1));
     connect(actShortcuts, &QAction::triggered, this, &MainWindow::showShortcutsHelp);
     helpMenu->addAction(actShortcuts);
-    m_actAbout = new QAction("关于(&A)", this);
+    m_actAbout = new QAction(tr("&About"), this);
     helpMenu->addAction(m_actAbout);
 }

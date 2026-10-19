@@ -1,0 +1,43 @@
+<h2>MViewer 使用说明</h2>
+<p>图像算法工程师用的浏览 / 比较 / 分析工具。下面只写日常路径。</p>
+<h3>1. 浏览</h3>
+<ol>
+<li>打开一个图片目录（Ctrl+O）。缩略图会陆续出来。</li>
+<li>单击看大图；Ctrl+单击 / Shift+单击多选。</li>
+<li>滚轮缩放，双击在适应窗口和 100% 之间切换。</li>
+</ol>
+<h3>2. 比较（主路径）</h3>
+<ol>
+<li>在缩略图里选中 <b>2–8 张</b>图。</li>
+<li>按 <kbd>P</kbd> 或 <kbd>C</kbd> 打开比较（也可用工具栏或右键菜单）。不足 2 张时状态栏会说明原因。</li>
+<li>默认同步缩放和拖动。底部状态条显示 <b>PSNR / SSIM</b>。</li>
+<li>模式（仅 2 张时）：<kbd>B</kbd> 闪烁 · <kbd>S</kbd> 左右分割 · <kbd>W</kbd> 滑动 · <kbd>O</kbd> 叠加 · <kbd>K</kbd> 棋盘格。需要时会出现叠加/棋盘格滑块。</li>
+<li>勾选「显示差异」查看热力图；「对齐」在计算指标前做整数像素平移。</li>
+<li>在图上<b>右键拖</b>画 ROI。每张图的选区旁显示该格 V 与 RGB 均值；完整表在检视面板。</li>
+<li><kbd>Esc</kbd>：有选区先清框，再按退出。也可点「退出」。</li>
+</ol>
+<h3>3. 比较窗口常用键</h3>
+<table border='1' cellpadding='4' cellspacing='0'><tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>
+<tr><td><kbd>Space</kbd></td><td>恰好两张：按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。超过两张改用数字键</td></tr>
+<tr><td><kbd>H</kbd></td><td>差异高亮</td></tr>
+<tr><td><kbd>R</kbd> / <kbd>L</kbd></td><td>同步准星 / 像素连线</td></tr>
+<tr><td><kbd>Alt+R</kbd></td><td>切换同步旋转/翻转（作用于所有比较图）</td></tr>
+<tr><td><kbd>Alt+方向键</kbd></td><td>微调 ROI 选区位置（Shift 步长 10px）</td></tr>
+<tr><td><kbd>X</kbd></td><td>交换当前与基准图（多图对比直接对比任意图）</td></tr>
+<tr><td><kbd>F</kbd></td><td>全部适应窗口</td></tr>
+<tr><td><kbd>?</kbd></td><td>底部快捷键提示（不改窗口标题）</td></tr>
+<tr><td><kbd>Shift+1</kbd>…<kbd>6</kbd></td><td>无叠加 / R / G / B / Y / V</td></tr>
+</table>
+<h3>4. 浏览窗口常用键</h3>
+<table border='1' cellpadding='4' cellspacing='0'><tr><td><kbd>P</kbd> / <kbd>C</kbd></td><td>打开比较（需 2–8 张）</td></tr>
+<tr><td><kbd>Space</kbd></td><td>当前图与下一张快速比较</td></tr>
+<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口，单图；打开即出直方图。双图比较用比较模式）</td></tr>
+<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层</td></tr>
+<tr><td><kbd>S</kbd></td><td>幻灯片</td></tr>
+<tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+H</kbd></td><td>旋转 / 翻转并覆盖原文件</td></tr>
+<tr><td><kbd>F1</kbd></td><td>完整快捷键表</td></tr>
+<tr><td><kbd>Ctrl+Shift+A</kbd></td><td>取消选择</td></tr>
+<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>批量分析导出</td></tr>
+</table>
+<p>查看器全屏时，右键「分析」会先退出全屏，再在主窗口打开分析面板。分析面板只处理当前这一张图；两张图的 PSNR / SSIM 在比较模式里。</p>
+<p>完整快捷键表：菜单「帮助 → 键盘快捷键」或 <kbd>F1</kbd>。</p>

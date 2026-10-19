@@ -155,7 +155,7 @@ void testMissingDirectory(Results &results)
     panel.setDirectory(missing);
     const bool failed = waitTrue(
         [&] { return statuses.contains(QStringLiteral("Failed to load directory")); }, 5000);
-    check(results, failed, "missing directory emits 目录加载失败");
+    check(results, failed, "missing directory emits a folder load failure");
     check(results, panel.entries().isEmpty(), "missing directory leaves the gallery empty");
     check(results, QApplication::overrideCursor() == nullptr,
           "missing directory does not stick the busy cursor");

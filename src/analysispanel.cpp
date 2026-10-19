@@ -5,6 +5,7 @@
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "widgets/rawimageview.h"
+#include <QCoreApplication>
 #include <QPointer>
 #include <QShowEvent>
 #include <QTimer>
@@ -25,6 +26,32 @@
 #include <cstdio>
 #include <string>
 #include <unordered_map>
+
+namespace
+{
+// Built-in analyzers describe themselves in English (core has no Qt
+// dependency); this list keeps those descriptions in the translation catalog.
+[[maybe_unused]] constexpr const char *kAnalyzerDescriptions[] = {
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Blur detection (Laplacian variance)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Mean brightness"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Color cast detection"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription",
+                      "Color checker / white balance check (Delta-E vs reference)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Contrast (RMS)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription",
+                      "Dead/hot pixel detection (neighborhood median deviation)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Shannon entropy (bits/px)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Exposure check (over/under-exposure)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Luminance and RGB histogram"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription",
+                      "Modulation transfer function (MTF50 spatial frequency)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Noise estimate (Laplacian variance)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Peak signal-to-noise ratio (dB)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "RGB mean / standard deviation"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Structural similarity (SSIM)"),
+    QT_TRANSLATE_NOOP("AnalyzerDescription", "Sharpness (gradient magnitude)"),
+};
+} // namespace
 
 void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, int leftA, int r16,
                               int g16, int b16, int rawKind, bool valid)
@@ -332,7 +359,8 @@ void AnalysisPanel::updatePluginPage()
     }
     QString txt = QString("<h3>%1</h3><p>%2</p>")
                       .arg(QString::fromStdString(analyzer->name()))
-                      .arg(QString::fromStdString(analyzer->description()));
+                      .arg(QCoreApplication::translate("AnalyzerDescription",
+                                                       analyzer->description().c_str()));
     m_pluginResult->setText(txt);
 }
 

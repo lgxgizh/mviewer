@@ -45,7 +45,7 @@
 //   mviewer_bench --history <f>   append results row to history CSV (M15 regression tracking)
 //   mviewer_bench --report  <f>   write markdown regression report to <f>
 //
-// Gate model (product力 #2 "稳得住"):
+// Gate model (product pillar #2 "stays stable"):
 //   --enforce applies HARD budgets to the scenarios in performance_budget.json
 //   ["scenario_map"] (B1-B9 + B11-B15). The default `auto` profile applies a
 //   small CPU-only adjustment on <=4 logical-core hosts; `base`/`ci` keep the
@@ -359,7 +359,7 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     items.push_back({"B9", [&]() { return mviewer::bench::scenarioSoakStability(corpus); }});
     // B10 does not need the corpus; it synthesizes a 100MP buffer in-process.
     items.push_back({"B10", [&]() { return mviewer::bench::scenarioHundredMpTiles(); }});
-    // Post-M22 named scenarios (review "性能回归" asks). All synthesized
+    // Post-M22 named scenarios (review "performance regression" asks). All synthesized
     // in-process, so they run headless and never OOM on a missing RAW sample.
     // They are report + baseline-regression (±10%) gated, not hard exit-fails,
     // to avoid CI flakiness on uncalibrated hardware.
@@ -396,7 +396,7 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     bool allPass = true;
     for (auto &r : results)
     {
-        // Data-driven hard gate (product力 #2 "稳得住"). Each scenario listed in
+        // Data-driven hard gate (product pillar #2 "stays stable"). Each scenario listed in
         // Budget::scenarioMap (B1-B9 + B11-B15, sourced from performance_budget.json)
         // is enforced against its budget limit. Scenarios NOT in the map
         // (B0/B10/TRACE) keep their structural verdict and are only

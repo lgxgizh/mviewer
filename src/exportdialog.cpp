@@ -121,7 +121,7 @@ void ExportDialog::buildFormatSection(QVBoxLayout *root)
     m_qualitySpin = new QSpinBox(this);
     m_qualitySpin->setRange(1, 100);
     m_qualitySpin->setValue(90);
-    // The old "批量(目录内全部图片)" checkbox was never read anywhere, so it could
+    // The old "Batch (all images in folder)" checkbox was never read anywhere, so it could
     // not affect what was exported; removed rather than left as a control that
     // silently does nothing.
     fmtLay->addRow(tr("Format:"), m_formatCombo);

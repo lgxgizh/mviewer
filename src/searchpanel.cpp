@@ -35,7 +35,7 @@ SearchPanel::SearchPanel(QWidget *parent)
     m_searchEdit->setClearButtonEnabled(true);
     topBar->addWidget(m_searchEdit);
 
-    m_reindexBtn = new QPushButton("重建索引");
+    m_reindexBtn = new QPushButton(tr("Rebuild Index"));
     m_reindexBtn->setToolTip("Rescan all images to build the search index");
     m_reindexBtn->setFixedWidth(72);
     topBar->addWidget(m_reindexBtn);
@@ -47,7 +47,7 @@ SearchPanel::SearchPanel(QWidget *parent)
     m_chkFilename->setChecked(true);
     m_chkMetadata = new QCheckBox("Metadata");
     m_chkMetadata->setChecked(true);
-    m_chkAnalysis = new QCheckBox("分析结果");
+    m_chkAnalysis = new QCheckBox(tr("Analysis Results"));
     m_chkAnalysis->setChecked(true);
     m_chkPaths = new QCheckBox("Path");
     m_chkPaths->setChecked(false);
@@ -64,7 +64,7 @@ SearchPanel::SearchPanel(QWidget *parent)
 
     // ── result table ────────────────────────────────────────────────
     m_table = new QTableWidget(0, 3);
-    m_table->setHorizontalHeaderLabels({"Type", "File Name", "匹配片段"});
+    m_table->setHorizontalHeaderLabels({tr("Type"), tr("File Name"), tr("Matched Snippet")});
     m_table->horizontalHeader()->setStretchLastSection(true);
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
@@ -234,7 +234,7 @@ void SearchPanel::performSearch()
                             "No matching results — try other keywords or check more search scopes");
                     else
                         self->m_countLabel->setText(
-                            QString("找到 %1 个结果（点击列头可排序）").arg(n));
+                            tr("Found %1 results (click a column header to sort)").arg(n));
                     QTimer::singleShot(0, self.data(), [self, generation]()
                                        { self->populateResultsChunk(generation, 0); });
                 },
@@ -312,7 +312,7 @@ QString SearchPanel::matchTypeLabel(mviewer::domain::SearchMatch::Type type) con
     case mviewer::domain::SearchMatch::Type::Metadata:
         return "Metadata";
     case mviewer::domain::SearchMatch::Type::Analysis:
-        return "分析结果";
+        return tr("Analysis Results");
     case mviewer::domain::SearchMatch::Type::Path:
         return "Path";
     }

@@ -41,10 +41,11 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
                           static_cast<int>(mviewer::ui::LanguageMode::System));
     m_uiLanguage->addItem(QStringLiteral("English"),
                           static_cast<int>(mviewer::ui::LanguageMode::English));
+    // i18n-allow: language endonym (always shown in its own script)
     m_uiLanguage->addItem(QStringLiteral("简体中文"),
                           static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
-    m_uiLanguage->setToolTip(tr("UI language. Applies immediately to newly opened windows; some "
-                                "open panels may need an app restart."));
+    m_uiLanguage->setToolTip(
+        tr("UI language. Restart MViewer to apply the change to every window."));
     {
         QSettings langSettings;
         const auto lang = mviewer::ui::Language::languageModeFromKey(
@@ -53,6 +54,9 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         m_uiLanguage->setCurrentIndex(langIdx >= 0 ? langIdx : 0);
     }
     gl->addRow(tr("UI language"), m_uiLanguage);
+    auto *languageHint = new QLabel(tr("Restart MViewer to apply a language change everywhere."));
+    languageHint->setObjectName(QStringLiteral("preferencesUiLanguageHint"));
+    gl->addRow(QString(), languageHint);
 
     m_viewMode = new QComboBox;
     struct VM
@@ -60,11 +64,13 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         const char *name;
         ThumbnailPanel::ViewMode v;
     };
-    static const VM kVM[] = {
-        {"缩略图", ThumbnailPanel::Thumbnail}, {"Large icons", ThumbnailPanel::LargeIcon},
-        {"小图标", ThumbnailPanel::SmallIcon}, {"详情", ThumbnailPanel::Details},
-        {"胶片", ThumbnailPanel::Filmstrip},   {"紧凑", ThumbnailPanel::Compact},
-        {"列表", ThumbnailPanel::List}};
+    static const VM kVM[] = {{QT_TR_NOOP("Thumbnails"), ThumbnailPanel::Thumbnail},
+                             {QT_TR_NOOP("Large icons"), ThumbnailPanel::LargeIcon},
+                             {QT_TR_NOOP("Small icons"), ThumbnailPanel::SmallIcon},
+                             {QT_TR_NOOP("Details"), ThumbnailPanel::Details},
+                             {QT_TR_NOOP("Filmstrip"), ThumbnailPanel::Filmstrip},
+                             {QT_TR_NOOP("Compact"), ThumbnailPanel::Compact},
+                             {QT_TR_NOOP("List"), ThumbnailPanel::List}};
     for (const auto &e : kVM)
         m_viewMode->addItem(tr(e.name), static_cast<int>(e.v));
     const int vmIdx = m_viewMode->findData(static_cast<int>(ThumbnailPanel::viewModeFromInt(

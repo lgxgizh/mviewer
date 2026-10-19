@@ -77,7 +77,7 @@ Section "Install"
 
   ; Register common image extensions for Open-With context menu
   !macro AssocExt ext
-    WriteRegStr HKCR "MViewer.${ext}" "" "MViewer 图片 (.${ext})"
+    WriteRegStr HKCR "MViewer.${ext}" "" "MViewer Image (.${ext})"
     WriteRegStr HKCR "MViewer.${ext}\shell\open" "FriendlyAppName" "MViewer"
     WriteRegStr HKCR "MViewer.${ext}\shell\open\command" "" '"$INSTDIR\MViewer.exe" "%1"'
     WriteRegStr HKCR ".${ext}\OpenWithProgids" "MViewer.${ext}" ""

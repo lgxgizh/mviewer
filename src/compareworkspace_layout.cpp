@@ -214,7 +214,7 @@ void CompareWorkspace::onLayoutChanged()
     if (!m_layoutCombo)
         return;
     const int idx = m_layoutCombo->currentIndex();
-    const bool custom = (idx == 6); // 自定义 M×N
+    const bool custom = (idx == 6); // custom M×N
     if (m_gridColsSpin)
         m_gridColsSpin->setEnabled(custom);
     syncContextualCompareControls();
@@ -226,26 +226,26 @@ void CompareWorkspace::onLayoutChanged()
     {
     case 1:
         cols = 1;
-        break; // 单列
+        break; // single column
     case 2:
         cols = 2;
-        break; // 2 列
+        break; // 2 columns
     case 3:
         cols = 3;
-        break; // 3 列
+        break; // 3 columns
     case 4:
         cols = 4;
-        break; // 4 列
+        break; // 4 columns
     case 5:
         cols = m_engine.imageCount();
-        break; // 一行
+        break; // one row
     case 6:
         // A-4.2: custom grid — columns from spin; rows derived by engine.
         cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
         break;
     default:
         cols = 0;
-        break; // 自动
+        break; // auto
     }
     m_engine.setColumns(cols);
     if (m_displayManager)

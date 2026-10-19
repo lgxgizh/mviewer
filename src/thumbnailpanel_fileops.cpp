@@ -241,7 +241,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
 
                     if (!state->succeeded)
                     {
-                        const QString detail = mviewer::ui::fileOpErrorZh(error);
+                        const QString detail = mviewer::ui::fileOpErrorText(error);
                         QMessageBox::warning(panel, label,
                                              state->cancelled
                                                  ? label + QStringLiteral("Cancelled.\n") + detail
@@ -307,7 +307,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                 if (destination.empty())
                 {
                     state->failures.append(path + ": " +
-                                           mviewer::ui::fileOpErrorZh(destinationError));
+                                           mviewer::ui::fileOpErrorText(destinationError));
                     continue;
                 }
 
@@ -327,7 +327,8 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                     ++state->copied;
                 else
                 {
-                    state->failures.append(path + ": " + mviewer::ui::fileOpErrorZh(result.error));
+                    state->failures.append(path + ": " +
+                                           mviewer::ui::fileOpErrorText(result.error));
                     if (ctx.isCancelled())
                     {
                         state->cancelled = true;
@@ -429,7 +430,7 @@ void ThumbnailPanel::renameSelected()
         if (!m_cmdStack->execute(std::move(cmd)))
         {
             QMessageBox::warning(this, "Rename failed",
-                                 mviewer::ui::fileOpErrorZh(m_cmdStack->lastError()));
+                                 mviewer::ui::fileOpErrorText(m_cmdStack->lastError()));
             return;
         }
     }
@@ -441,7 +442,7 @@ void ThumbnailPanel::renameSelected()
         if (!cmd->lastError().empty())
         {
             QMessageBox::warning(this, tr("Rename failed"),
-                                 mviewer::ui::fileOpErrorZh(cmd->lastError()));
+                                 mviewer::ui::fileOpErrorText(cmd->lastError()));
             return;
         }
     }
@@ -534,7 +535,7 @@ void ThumbnailPanel::copySelectedTo()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const QString dir = QFileDialog::getExistingDirectory(this, "复制到...");
+    const QString dir = QFileDialog::getExistingDirectory(this, tr("Copy To..."));
     if (dir.isEmpty())
         return;
     startCopyFileOperation(paths, dir);
@@ -545,7 +546,7 @@ void ThumbnailPanel::moveSelectedTo()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const QString dir = QFileDialog::getExistingDirectory(this, "移动到...");
+    const QString dir = QFileDialog::getExistingDirectory(this, tr("Move To..."));
     if (dir.isEmpty())
         return;
 

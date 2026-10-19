@@ -16,7 +16,7 @@ class DeadPixelAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "坏点/死点检测 (邻域中值偏差)";
+        return "Dead/hot pixel detection (neighborhood median deviation)";
     }
 
     AnalyzerCapability capabilities() const override

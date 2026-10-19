@@ -17,7 +17,7 @@ class MTFAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "调制传递函数 (MTF50 空间频率)";
+        return "Modulation transfer function (MTF50 spatial frequency)";
     }
 
     AnalyzerCapability capabilities() const override

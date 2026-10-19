@@ -340,7 +340,7 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
     p.restore();
 }
 
-// ── M23: checkerboard compare (棋盘格) ──────────────────────────────────────
+// ── M23: checkerboard compare ────────────────────────────────────────────────
 // Alternating blocks show image A and image B under the SAME synchronized
 // transform, so block seams reveal misalignment/color shifts instantly.
 

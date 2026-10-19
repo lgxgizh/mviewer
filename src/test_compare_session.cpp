@@ -1,6 +1,6 @@
 // M15 P0#1 — Compare Workspace session round-trip test.
 //
-// Acceptance: "保存 Workspace → 关闭软件 → 重新打开 → Compare 完全恢复".
+// Acceptance: "save Workspace -> close the app -> reopen -> Compare fully restored".
 //
 // This test exercises the REAL capture/restore path that previously hid a bug:
 // CompareEngine::session() used to leave the ROI/selection empty, so it was

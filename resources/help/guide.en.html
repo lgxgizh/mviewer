@@ -1,0 +1,45 @@
+<h2>MViewer User Guide</h2>
+<p>A browse / compare / analyze tool for imaging algorithm engineers. Only the everyday paths are covered here.</p>
+<h3>1. Browse</h3>
+<ol>
+<li>Open an image folder (Ctrl+O). Thumbnails appear progressively.</li>
+<li>Click to view large; Ctrl+click / Shift+click to multi-select.</li>
+<li>Scroll to zoom; double-click toggles between fit to window and 100%.</li>
+</ol>
+<h3>2. Compare (main path)</h3>
+<ol>
+<li>Select <b>2–8 images</b> in the thumbnails.</li>
+<li>Press <kbd>P</kbd> or <kbd>C</kbd> to open Compare (toolbar or context menu also work). With fewer than 2 images, the status bar explains why.</li>
+<li>Zoom and drag are synchronized by default. The bottom status strip shows <b>PSNR / SSIM</b>.</li>
+<li>Modes (2 images only): <kbd>B</kbd> Flicker · <kbd>S</kbd> Split · <kbd>W</kbd> Swipe · <kbd>O</kbd> Overlay · <kbd>K</kbd> Checkerboard. Overlay/checkerboard sliders appear when needed.</li>
+<li>Check Show Difference for the heatmap; Align uses an integer-pixel translation before metrics.</li>
+<li><b>Right-drag</b> on an image to draw an ROI. Each pane shows its V and RGB means next to the selection; the full table is in the inspector panel.</li>
+<li><kbd>Esc</kbd>: clears the selection first, press again to exit. You can also click "Exit".</li>
+</ol>
+<h3>3. Common keys in the Compare window</h3>
+<table border='1' cellpadding='4' cellspacing='0'>
+<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>Sync zoom / sync drag</td></tr>
+<tr><td><kbd>Space</kbd></td><td>Exactly two images: hold Space to show the other side under the cursor; release to restore. With more images use the digit keys</td></tr>
+<tr><td><kbd>H</kbd></td><td>Difference highlight</td></tr>
+<tr><td><kbd>R</kbd> / <kbd>L</kbd></td><td>Sync crosshair / pixel link</td></tr>
+<tr><td><kbd>Alt+R</kbd></td><td>Toggle sync rotate/flip (applies to all compared images)</td></tr>
+<tr><td><kbd>Alt+Arrow</kbd></td><td>Nudge the ROI position (Shift steps 10px)</td></tr>
+<tr><td><kbd>X</kbd></td><td>Swap the current and reference image (compare any pair among many)</td></tr>
+<tr><td><kbd>F</kbd></td><td>Fit all to window</td></tr>
+<tr><td><kbd>?</kbd></td><td>Shortcut hints at the bottom (window title unchanged)</td></tr>
+<tr><td><kbd>Shift+1</kbd>…<kbd>6</kbd></td><td>No overlay / R / G / B / Y / V</td></tr>
+</table>
+<h3>4. Common keys in the Browse window</h3>
+<table border='1' cellpadding='4' cellspacing='0'>
+<tr><td><kbd>P</kbd> / <kbd>C</kbd></td><td>Open Compare (needs 2–8 images)</td></tr>
+<tr><td><kbd>Space</kbd></td><td>Quick-compare the current image with the next one</td></tr>
+<tr><td><kbd>Alt+H</kbd></td><td>Analysis panel (Browse window, single image; the histogram appears on open. Use Compare for two images)</td></tr>
+<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>Image info overlay</td></tr>
+<tr><td><kbd>S</kbd></td><td>Slideshow</td></tr>
+<tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+H</kbd></td><td>Rotate / flip and overwrite the original</td></tr>
+<tr><td><kbd>F1</kbd></td><td>Full shortcut table</td></tr>
+<tr><td><kbd>Ctrl+Shift+A</kbd></td><td>Cancel selection (deselect)</td></tr>
+<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>Batch Analysis Export</td></tr>
+</table>
+<p>When the viewer is full screen, the context-menu "Analyze" leaves full screen first and then opens the analysis panel in the main window. The analysis panel works on the current image only; two-image PSNR / SSIM lives in Compare.</p>
+<p>Full shortcut table: menu "Help → Keyboard Shortcuts" or <kbd>F1</kbd>.</p>

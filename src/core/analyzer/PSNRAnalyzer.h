@@ -16,7 +16,7 @@ class PSNRAnalyzer : public Analyzer
     }
     std::string description() const override
     {
-        return "峰值信噪比 (dB)";
+        return "Peak signal-to-noise ratio (dB)";
     }
     AnalyzerCapability capabilities() const override
     {

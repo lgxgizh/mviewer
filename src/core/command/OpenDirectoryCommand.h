@@ -13,7 +13,7 @@ class OpenDirectoryCommand : public ICommand
     }
     std::string description() const override
     {
-        return "打开文件夹...";
+        return "Open folder...";
     }
     void execute() override;
     bool canExecute() const override;

@@ -1,4 +1,4 @@
-// Fullscreen ImageViewer "分析" must leave the viewer's fullscreen path and
+// Fullscreen ImageViewer "Analyze" must leave the viewer's fullscreen path and
 // show the main-window AnalysisPanel. The panel is a child of the shell, so a
 // fullscreen viewer would otherwise cover it.
 

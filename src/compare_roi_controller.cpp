@@ -4,6 +4,7 @@
 #include "core/image/ExifOrientation.h"
 #include "core/image/SourceImage.h"
 
+#include <QCoreApplication>
 #include <QSize>
 #include <algorithm>
 
@@ -92,12 +93,13 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         }
         result.state = result.stats.valid ? ROIPaneState::Ready : ROIPaneState::Failed;
         if (!result.stats.valid)
-            result.reason = "ROI 与源图像素没有交集";
+            result.reason =
+                QT_TRANSLATE_NOOP("CompareRoi", "The ROI does not intersect the source pixels");
         return result;
     }
     if (input.path.empty() || sourceRoi.isEmpty())
     {
-        result.reason = "源图像素不可用";
+        result.reason = QT_TRANSLATE_NOOP("CompareRoi", "Source pixels are unavailable");
         return result;
     }
 
@@ -111,7 +113,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         const auto source = mviewer::core::SourceImage::open(input.path);
         if (!source)
         {
-            result.reason = "无法打开源图";
+            result.reason = QT_TRANSLATE_NOOP("CompareRoi", "Unable to open the source image");
             return result;
         }
         const QSize displaySize(source->metadata().width, source->metadata().height);
@@ -120,7 +122,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         if (!displaySize.isValid() || sourceRoi.x < 0 || sourceRoi.y < 0 ||
             right > displaySize.width() || bottom > displaySize.height())
         {
-            result.reason = "ROI 超出源图范围";
+            result.reason = QT_TRANSLATE_NOOP("CompareRoi", "The ROI is outside the source image");
             return result;
         }
         const mviewer::core::SourceRect displayed{sourceRoi.x, sourceRoi.y, sourceRoi.width,
@@ -131,7 +133,8 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         if (result.decodePath == mviewer::core::SourceDecodePath::FullDecodeCrop)
         {
             result.state = ROIPaneState::Unsupported;
-            result.reason = "Cannot decode this region precisely from the source image";
+            result.reason = QT_TRANSLATE_NOOP(
+                "CompareRoi", "Cannot decode this region precisely from the source image");
             return result;
         }
         const auto decoded = source->decodeRegion(raw, std::max(1, raw.w), std::max(1, raw.h));
@@ -143,7 +146,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         }
         if (!decoded.ok || decoded.pixels.isNull())
         {
-            result.reason = "源图区域解码失败";
+            result.reason = QT_TRANSLATE_NOOP("CompareRoi", "Failed to decode the source region");
             return result;
         }
         const mviewer::domain::Selection decodedRegion{0, 0, decoded.pixels.width,
@@ -157,7 +160,8 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         }
         result.state = result.stats.valid ? ROIPaneState::Ready : ROIPaneState::Failed;
         if (!result.stats.valid)
-            result.reason = "解码区域没有源图像素";
+            result.reason =
+                QT_TRANSLATE_NOOP("CompareRoi", "The decoded region has no source pixels");
     }
     catch (const std::exception &error)
     {
@@ -165,7 +169,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
     }
     catch (...)
     {
-        result.reason = "未知的源图测量失败";
+        result.reason = QT_TRANSLATE_NOOP("CompareRoi", "Unknown source measurement failure");
     }
     return result;
 }

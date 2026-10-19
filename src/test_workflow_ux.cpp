@@ -1,22 +1,24 @@
-// Beta 回归 — 用户 Workflow 端到端测试（2026-07 外部评审落地，M58 维护）。
+// Beta regression — end-to-end user workflow tests (from the 2026-07 external review, maintained
+// since M58).
 //
-// 评审要求：不要只验证 "Compare 能不能打开"，而要验证 "Compare 好不好用"；
-// 每一条完整用户流程（Workflow）都要走一遍，检查等待/状态不同步/缩放错误。
+// Review requirement: do not only verify "can Compare open", verify "is Compare pleasant to use";
+// walk every complete user workflow and check for waits, out-of-sync state and zoom errors.
 //
-// Workflow 1（浏览主流程）——真实 MainWindow：
-//   打开目录 → 浏览图片 → 键盘切换（←/→/Home/End/PageUp/PageDown）
-//   → 放大（100%/放大）→ 恢复（Fit）→ 关闭。
-//   过滤重建还验证当前选择投影到可见序列、无匹配时清空 SSOT 与目录标题
-//   （由真实 ThumbnailPanel 选择驱动）。
-//   初始布局还验证 gallery 工具栏真正占位、可见且可用，并覆盖最小窗口。
-//   断言点：SelectionModel（SSOT）与导航状态始终同步、缩放数值正确、边界不越界。
+// Workflow 1 (main browse flow) — real MainWindow:
+//   open folder → browse images → keyboard navigation (←/→/Home/End/PageUp/PageDown)
+//   → zoom (100%/zoom in) → restore (Fit) → close.
+//   Filter rebuilds also verify the current selection projects onto the visible sequence and
+//   that no match clears the SSOT and folder title (driven by the real ThumbnailPanel selection).
+//   The initial layout also verifies the gallery toolbar takes space, is visible and usable, incl.
+//   the minimum window. Assertions: SelectionModel (SSOT) and navigation state stay in sync, zoom
+//   values are right, bounds hold.
 //
-// Workflow 2（比较主流程）——真实 CompareWorkspace + 真实键盘事件：
-//   两图 Compare → 模式切换：闪烁(B)/左右分割(S)/叠加(O)/棋盘(K)/差异高亮(H)
-//   → 互斥模式不残留（评审"状态不同步"检查）→ Space 临时闪烁
-//   → Esc 退出 Compare（QDialog 真实路径）→ 继续浏览。
+// Workflow 2 (main compare flow) — real CompareWorkspace + real key events:
+//   two-image Compare → mode switches: Flicker (B) / Split (S) / Overlay (O) / Checkerboard (K) /
+//   Highlight Diff (H) → exclusive modes leave nothing behind (review "out-of-sync state" check) →
+//   Space momentary flicker → Esc exits Compare (real QDialog path) → keep browsing.
 //
-// 与 docs/beta_checklist.md 的 "浏览体验 / Compare / View" 条目一一对应。
+// Maps one-to-one to the "Browsing / Compare / View" items of docs/beta_checklist.md.
 
 #include "analysispanel.h"
 #include "appstate.h"
@@ -197,7 +199,7 @@ void sendFocusedKey(Qt::Key key, Qt::KeyboardModifiers mods = Qt::NoModifier)
     pump(20);
 }
 
-// 只发 KeyPress（Space 按住场景）。
+// Sends KeyPress only (Space hold scenario).
 void sendKeyPressOnly(QWidget *w, Qt::Key key)
 {
     QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
@@ -608,7 +610,8 @@ bool writeFakeDng(const std::string &path, const std::string &make, const std::s
     return true;
 }
 
-// 按文本前缀查找 CompareWorkspace 的模式复选框（成员是私有的，文本是公共 UI 契约）。
+// Find a CompareWorkspace mode checkbox by text prefix (members are private; the text is a public
+// UI contract).
 QCheckBox *findChk(QWidget *root, const QString &textPrefix)
 {
     const auto boxes = root->findChildren<QCheckBox *>();
@@ -627,7 +630,7 @@ QPushButton *findBtn(QWidget *root, const QString &textPrefix)
     return nullptr;
 }
 
-// ─── Workflow 1: 打开目录 → 浏览 → 键盘切换 → 放大 → 恢复 → 关闭 ─────────────
+// ─── Workflow 1: open folder → browse → keyboard nav → zoom in → restore → close ─────────
 // M54 keeps selected preview work on the foreground Decode path; the included
 // workflow cases assert that contract along with the existing UX flows.
 // Workflow1/16 also verify empty-state command availability, Viewer zoom state,
@@ -641,10 +644,10 @@ int main(int argc, char **argv)
     QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication app(argc, argv);
 
-    // 状态隔离：MainWindow 启动会执行 restoreLastSession()（QSettings +
-    // AppState），如果读到真实用户/上一次测试的会话，会异步打开任意目录并
-    // 触发解码，与本测试的确定性流程竞争（曾导致 ~50% flaky）。测试必须在
-    // 干净的持久化状态下运行（先例：test_appstate.cpp）。
+    // State isolation: MainWindow startup runs restoreLastSession() (QSettings +
+    // AppState); reading a real user or previous-test session would asynchronously open some folder
+    // and trigger decodes that race this deterministic flow (once ~50% flaky). The test must run
+    // with clean persisted state (precedent: test_appstate.cpp).
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName("mviewer-workflow-ux-test");
     QCoreApplication::setApplicationName("mviewer-workflow-ux-test");
@@ -656,17 +659,18 @@ int main(int argc, char **argv)
             QDir(cfg).removeRecursively();
     }
 
-    // 平台限制规避（非产品逻辑）：offscreen 平台下多个 worker 线程并发执行
-    // 全分辨率 QImageReader::read() 会死锁 DecodePool（M3 起已知，见
-    // ImageRepository.cpp loadDirectoryAsyncImpl 注释）。本测试验证的是
-    // Workflow 状态机而不是解码并发，串行化解码池即可稳定复现用户流程。
+    // Platform workaround (not product logic): on the offscreen platform several worker threads
+    // running full-resolution QImageReader::read() concurrently deadlock the DecodePool (known
+    // since M3, see the ImageRepository.cpp loadDirectoryAsyncImpl comment). This test verifies the
+    // workflow state machine, not decode concurrency, so a serialized decode pool reproduces the
+    // flow reliably.
     auto &sched = TaskScheduler::instance();
     sched.setQueueMaxThreads(TaskScheduler::Priority::UI, 1);
     sched.setQueueMaxThreads(TaskScheduler::Priority::Decode, 1);
     sched.setQueueMaxThreads(TaskScheduler::Priority::Thumbnail, 1);
     sched.setQueueMaxThreads(TaskScheduler::Priority::Background, 1);
 
-    // 测试用临时目录：5 张不同颜色 PNG，文件名保证排序稳定。
+    // Test temp folder: 5 PNGs of different colors; file names keep the sort order stable.
     QDir tmp(QDir::tempPath());
     const QString dirName = QStringLiteral("mviewer_wf_ux");
     tmp.mkpath(dirName);

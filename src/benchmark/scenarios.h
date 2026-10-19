@@ -105,7 +105,7 @@ ScenarioResult scenarioSoakStability(const Corpus &corpus);
 ScenarioResult scenarioHundredMpTiles();
 
 // ─── Post-M22 / review follow-up: named performance scenarios ────────────────
-// These directly answer the review's "性能回归" asks (decode_8k_raw,
+// These directly answer the review's "performance regression" asks (decode_8k_raw,
 // decode_4k_jpeg, cache_hit_rate, first_frame_latency, zoom_latency). They are
 // all corpus/asset-free (synthesized in-process) so they run headless in CI and
 // never OOM on a missing RAW sample. Each is tracked against perf_baseline.json
@@ -146,7 +146,7 @@ ScenarioResult scenarioWorkflowSoak(const Corpus &corpus);
 
 // SCALE: corpus scaling tiers (100 / 1000 / 5000 images). Decodes `tierN` images
 // (capped by corpus size) and reports decode throughput (fps) plus peak cache
-// memory and GPU dedicated memory. Report-only; surfaces 内存/GPU/FPS at scale.
+// memory and GPU dedicated memory. Report-only; surfaces memory/GPU/FPS at scale.
 // `tierLabel` is the human-readable tier name ("100"/"1000"/"5000").
 ScenarioResult scenarioScaleTier(const Corpus &corpus, size_t tierN, const std::string &tierLabel);
 

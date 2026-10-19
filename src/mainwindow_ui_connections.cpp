@@ -293,7 +293,7 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
     if (!valid)
     {
         // Leaving the image restores the previous message; it does not clear it.
-        if (!sb->currentMessage().startsWith(QLatin1String("像素 [")))
+        if (!sb->currentMessage().startsWith(QLatin1String("Pixel [")))
             return;
         const QString base = sb->property("statusBase").toString();
         const qint64 until = sb->property("statusBaseUntil").toLongLong();
@@ -309,7 +309,7 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
             sb->showMessage(base);
         return;
     }
-    if (!sb->currentMessage().startsWith(QLatin1String("像素 [")))
+    if (!sb->currentMessage().startsWith(QLatin1String("Pixel [")))
     {
         const QString current = sb->currentMessage();
         sb->setProperty("statusBase", current);
@@ -346,7 +346,7 @@ void MainWindow::connectViewerSignals()
 {
     connect(m_imageViewer, &ImageViewer::regionStats, m_analysisPanel,
             &AnalysisPanel::setRegionStats);
-    // P0续: feed the decoded ImageFrame to the analysis panel once the async
+    // P0 (cont.): feed the decoded ImageFrame to the analysis panel once the async
     // load completes (no re-decode on the UI thread). This replaces the old
     // synchronous QImage(path) decode that blocked browsing.
     connect(m_imageViewer, &ImageViewer::imageReady, m_analysisPanel, &AnalysisPanel::setFrame);
@@ -398,7 +398,7 @@ void MainWindow::connectViewerSignals()
                 if (m_thumbnailPanel)
                     m_thumbnailPanel->setFocus(Qt::OtherFocusReason);
             });
-    // A-7.3: viewer context-menu "分析" → show panel + run through unified entry.
+    // A-7.3: viewer context-menu "Analyze" → show panel + run through unified entry.
     // A fullscreen viewer covers the main window, so the panel would open
     // behind it. Leave fullscreen on the viewer's own path, then raise the
     // shell that owns the panel.
@@ -567,7 +567,7 @@ void MainWindow::connectMenuSignals()
                     changeDirectory(QDir::cleanPath(text));
                 else
                 {
-                    statusBar()->showMessage(QString("路径不存在: %1").arg(text), 5000);
+                    statusBar()->showMessage(tr("Path does not exist: %1").arg(text), 5000);
                     if (!currentDir().isEmpty())
                         m_pathEdit->setText(QDir::toNativeSeparators(currentDir()));
                 }
@@ -575,12 +575,13 @@ void MainWindow::connectMenuSignals()
     connect(m_actOpenFile, &QAction::triggered, this,
             [this]()
             {
-                QString filter = "图片文件 (";
+                QString filter = tr("Image files (");
                 for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
                     filter += QString::fromStdString(w) + " ";
-                filter = filter.trimmed() + ");;所有文件 (*)";
+                filter = filter.trimmed() + ";;" + tr("All files (*)");
                 const QString file = QFileDialog::getOpenFileName(
-                    this, "打开图片", currentDir().isEmpty() ? QString() : currentDir(), filter);
+                    this, tr("Open Image"), currentDir().isEmpty() ? QString() : currentDir(),
+                    filter);
                 if (!file.isEmpty())
                     onImageOpen(file);
             });

@@ -581,13 +581,13 @@ void ImageViewer::drawEmptyState(QPainter &painter)
             return;
         }
         painter.setPen(QColor(180, 180, 180));
-        painter.drawText(rect(), Qt::AlignCenter, "加载中…");
+        painter.drawText(rect(), Qt::AlignCenter, tr("Loading…"));
         return;
     }
     if (!m_currentPath.isEmpty())
     {
         painter.setPen(Qt::white);
-        painter.drawText(rect(), Qt::AlignCenter, "Unable to load image");
+        painter.drawText(rect(), Qt::AlignCenter, tr("Unable to load image"));
         return;
     }
     painter.setPen(QColor(180, 180, 180));
@@ -595,9 +595,9 @@ void ImageViewer::drawEmptyState(QPainter &painter)
     font.setPointSize(font.pointSize() + 2);
     painter.setFont(font);
     painter.drawText(rect(), Qt::AlignCenter,
-                     "拖放图片或文件夹到此处\n"
-                     "或按 Ctrl+O 打开目录\n"
-                     "或双击缩略图查看");
+                     tr("Drop images or folders here\n"
+                        "or press Ctrl+O to open a folder\n"
+                        "or double-click a thumbnail to view"));
 }
 
 void ImageViewer::drawSelection(QPainter &painter)

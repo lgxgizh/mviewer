@@ -50,6 +50,8 @@ bool containsIoToken(const QString &text, const char *token)
     return text.contains(QLatin1String(token));
 }
 
+// i18n-allow-begin: the Chinese tokens below match error text produced by a
+// zh-CN Windows/Qt runtime; they classify OS messages and are never shown.
 LooseIo classifyLooseIo(const QString &error)
 {
     const QString lower = error.toLower();
@@ -63,6 +65,7 @@ LooseIo classifyLooseIo(const QString &error)
         return LooseIo::Network;
     return LooseIo::None;
 }
+// i18n-allow-end
 
 bool confirmImageViewerTransform(QWidget *parent, bool rotate)
 {

@@ -373,8 +373,7 @@ void MainWindow::rateCurrentImage(int stars)
     m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
     writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(
-        QString("已为 %1 评分: %2 星").arg(QFileInfo(currentImagePath()).fileName()).arg(stars),
-        3000);
+        tr("Rated %1: %2 stars").arg(QFileInfo(currentImagePath()).fileName()).arg(stars), 3000);
 }
 
 void MainWindow::onFlagFilterChanged(int)
@@ -436,8 +435,8 @@ void MainWindow::setCurrentColorLabel(int label)
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
     const QString name = QFileInfo(currentImagePath()).fileName();
-    statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
-                                        : QString("已为 %1 设置色标 %2").arg(name).arg(label),
+    statusBar()->showMessage(label == 0 ? tr("Cleared the color label of %1").arg(name)
+                                        : tr("Set color label %2 on %1").arg(name).arg(label),
                              3000);
 }
 
@@ -451,10 +450,9 @@ void MainWindow::toggleCurrentPick()
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
-    statusBar()->showMessage(
-        v ? QString("已收藏 %1").arg(QFileInfo(currentImagePath()).fileName())
-          : QString("已取消收藏 %1").arg(QFileInfo(currentImagePath()).fileName()),
-        3000);
+    statusBar()->showMessage(v ? tr("Picked %1").arg(QFileInfo(currentImagePath()).fileName())
+                               : tr("Unpicked %1").arg(QFileInfo(currentImagePath()).fileName()),
+                             3000);
 }
 
 void MainWindow::toggleCurrentReject()
@@ -467,10 +465,9 @@ void MainWindow::toggleCurrentReject()
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
-    statusBar()->showMessage(
-        v ? QString("已拒绝 %1").arg(QFileInfo(currentImagePath()).fileName())
-          : QString("已取消拒绝 %1").arg(QFileInfo(currentImagePath()).fileName()),
-        3000);
+    statusBar()->showMessage(v ? tr("Rejected %1").arg(QFileInfo(currentImagePath()).fileName())
+                               : tr("Unrejected %1").arg(QFileInfo(currentImagePath()).fileName()),
+                             3000);
 }
 
 void MainWindow::setOpenOnLaunch(const QString &path)
@@ -616,13 +613,12 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     const QString fileName = separator >= 0 ? path.mid(separator + 1) : path;
     setWindowTitle(QString("%1 - MViewer").arg(fileName));
     m_lblImage->setText(fileName);
-    statusBar()->showMessage(QString("当前: %1").arg(fileName), 3000);
+    statusBar()->showMessage(tr("Current: %1").arg(fileName), 3000);
     if (m_lblCount && m_imageList && m_imageList->count() > 0)
     {
         const int idx = m_imageList->indexOf(path);
-        m_lblCount->setText(idx >= 0
-                                ? QString("图片 %1 / %2").arg(idx + 1).arg(m_imageList->count())
-                                : QString("图片 %1").arg(m_imageList->count()));
+        m_lblCount->setText(idx >= 0 ? tr("Image %1 / %2").arg(idx + 1).arg(m_imageList->count())
+                                     : tr("%1 images").arg(m_imageList->count()));
     }
 
     ++m_statusMetadataGeneration;
@@ -702,7 +698,7 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     }
     QStringList imgs = images;
     // A-3: prefer the shared SelectionModel multi-selection when the caller
-    // didn't pass an explicit list (e.g. menu "比较模式").
+    // didn't pass an explicit list (e.g. the "Compare Mode" menu).
     if (imgs.isEmpty())
         imgs = resolveSelectedPaths(true);
     // Default pane order is natural file-name order (img2 before img10), the
@@ -766,7 +762,7 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                     QObject::disconnect(viewGuard.data(), nullptr, this, nullptr);
                 const QString current = currentImagePath();
                 if (!current.isEmpty())
-                    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(current).fileName()),
+                    statusBar()->showMessage(tr("Current: %1").arg(QFileInfo(current).fileName()),
                                              3000);
                 else if (m_imageList && m_imageList->count() > 0)
                     statusBar()->showMessage(

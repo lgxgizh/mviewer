@@ -36,6 +36,10 @@ class Language
     // Resolved effective language after System is expanded.
     static bool effectiveChinese();
 
+    // In-app help page ":/help/<name>.<lang>.html" for the effective language,
+    // falling back to English when no localized page exists.
+    static QString localizedHelpHtml(const QString &name);
+
   private:
     static QTranslator &translator();
 };

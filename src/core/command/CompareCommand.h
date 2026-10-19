@@ -13,7 +13,7 @@ class CompareCommand : public ICommand
     }
     std::string description() const override
     {
-        return "比较选中的图片...";
+        return "Compare selected images...";
     }
     void execute() override;
     bool canExecute() const override;

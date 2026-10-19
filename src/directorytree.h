@@ -97,7 +97,7 @@ class DirectoryTree : public QTreeView
     // Enter/Return opens the selected directory (same as double-click) so the
     // tree is fully keyboard-navigable.
     void keyPressEvent(QKeyEvent *event) override;
-    // Right-click context menu: "在资源管理器中显示" + "复制路径".
+    // Right-click context menu: "Show in File Manager" + "Copy Path".
     void contextMenuEvent(QContextMenuEvent *event) override;
     // Paint the current-directory highlight (bold + accent background).
     void drawRow(QPainter *painter, const QStyleOptionViewItem &option,

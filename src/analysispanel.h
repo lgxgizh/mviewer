@@ -63,7 +63,7 @@ class AnalysisPanel : public QWidget
     // through this pipeline instead of touching the registry directly, so the
     // MainWindow -> Analyzer coupling is removed. Adding a new analyzer only
     // needs registration in the AnalyzerFactory; MainWindow/Panel stay
-    // unchanged (acceptance: "新增 Analyzer 时 MainWindow 0 修改").
+    // unchanged (acceptance: "adding an Analyzer requires zero MainWindow changes").
     void setPipeline(std::unique_ptr<AnalyzerPipeline> pipeline)
     {
         m_pipeline = std::move(pipeline);
@@ -103,7 +103,7 @@ class AnalysisPanel : public QWidget
     // runtime-loaded plugins appear without restarting the app.
     void refreshAnalyzers();
     // A-7.1 / A-7.3: select an analyzer by registry id and run it. Used by the
-    // viewer context-menu "分析" submenu so every analyzer enters through the
+    // viewer context-menu "Analyze" submenu so every analyzer enters through the
     // same panel path (combo + Result tab), not a one-off dialog.
     void selectAnalyzer(const QString &id);
     void runAnalyzer(const QString &id);

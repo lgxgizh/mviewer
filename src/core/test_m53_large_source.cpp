@@ -160,6 +160,7 @@ int main(int argc, char **argv)
     // ── T4: Unicode + spaces remain source-backed path-safe ─────────────────
     {
         QTemporaryDir dir;
+        // i18n-allow: non-ASCII name fixture (exercises Unicode handling)
         const QString unicodePath = dir.path() + "/大图 space 🚀.tiff";
         const QString sourcePath = QString::fromStdString(fixture("large_tiff_16bit.tiff"));
         CHECK(QFile::copy(sourcePath, unicodePath),

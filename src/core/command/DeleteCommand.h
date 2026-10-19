@@ -13,7 +13,7 @@ class DeleteCommand : public ICommand
     }
     std::string description() const override
     {
-        return "删除到回收站";
+        return "Move to Recycle Bin";
     }
     void execute() override;
     bool canExecute() const override;

@@ -154,14 +154,14 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
             });
 
     // A-1.6: loading indicator label (shown briefly while expanding large dirs).
-    m_loadingLabel = new QLabel("  加载中...", this);
+    m_loadingLabel = new QLabel(tr("  Loading..."), this);
     m_loadingLabel->setStyleSheet(
         QStringLiteral("color:%1; font-style: italic; padding: 4px;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     m_loadingLabel->hide();
 
     // Directory name filter kept for programmatic clear-on-navigate / tests, but
-    // hidden — the visible 「搜索目录」 field was removed as redundant with the
+    // hidden — the visible "Search folders" field was removed as redundant with the
     // gallery address bar (pathEdit).
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setObjectName(QStringLiteral("directoryFilterEdit"));
@@ -238,8 +238,8 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
     }
 
     QMenu menu(this);
-    QAction *aOpen = menu.addAction("打开");
-    QAction *aReveal = menu.addAction("在资源管理器中显示");
+    QAction *aOpen = menu.addAction(tr("Open"));
+    QAction *aReveal = menu.addAction(tr("Show in File Manager"));
     QAction *aCopyPath = menu.addAction("Copy path");
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)

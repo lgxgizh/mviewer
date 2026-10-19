@@ -617,18 +617,20 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     if (!sel || !dirModel || !directoryTree)
         return;
 
-    // ImageViewer 是独立的顶层窗口（MainWindow::setupUi 创建，onImageOpen 时 show）。
-    // 整个测试进程只构造一次 MainWindow，setupUi 也只执行一次，因此这里抓到的
-    // 一定是 onImageOpen 实际使用的那个 m_imageViewer（早期版本因重复 setupUi
-    // 会泄漏第二个孤儿 viewer，导致抓取不确定而 flaky）。
+    // ImageViewer is a separate top-level window (created by MainWindow::setupUi, shown by
+    // onImageOpen). The test process constructs MainWindow once and setupUi runs once, so the
+    // viewer captured here is always the m_imageViewer that onImageOpen really uses (an early
+    // version leaked a second orphan viewer through a repeated setupUi, which made the capture
+    // nondeterministic and flaky).
     ImageViewer *viewer = nullptr;
     for (QWidget *top : QApplication::topLevelWidgets())
         if (auto *v = qobject_cast<ImageViewer *>(top))
             viewer = v;
     CHECK(viewer != nullptr, "image viewer window exists after setupUi");
 
-    // 模拟 main() 的真实启动顺序：窗口先构造完成，再设置命令行/文件关联路径。
-    // 事件循环必须驱动 queued open，不能直接调用 onImageOpen 绕过回归点。
+    // Mirror main()'s real startup order: the window is fully constructed before the command-line /
+    // file-association path is set. The event loop must drive the queued open; calling onImageOpen
+    // directly would bypass the regression point.
     w.setOpenOnLaunch(paths[0]);
     QElapsedTimer launchTimer;
     launchTimer.start();
@@ -649,12 +651,13 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
               zoomFitAction->isEnabled() && zoomActualAction->isEnabled(),
           "visible Viewer enables all menu zoom commands");
 
-    // 打开第一张图（真实产品入口 onImageOpen：双击文件 → 查看器）。
-    // 注意顺序：先打开单图、等首屏，再打开目录。offscreen 测试平台不允许
-    // 跨线程池并发全分辨率 QImageReader::read()（M3 已知平台限制，见
-    // ImageRepository.cpp），因此测试按真实用户节奏逐步推进而不是并发轰炸。
-    // Launch coverage above already opened the first image through the public
-    // setter; do not call onImageOpen directly and hide a duplicate-open bug.
+    // Open the first image (real product entry onImageOpen: double-click a file → viewer).
+    // Note the order: open the single image, wait for the first frame, then open the folder. The
+    // offscreen test platform does not allow concurrent full-resolution QImageReader::read() across
+    // thread pools (known M3 platform limit, see ImageRepository.cpp), so the test advances at a
+    // real user's pace instead of hammering concurrently. Launch coverage above already opened the
+    // first image through the public setter; do not call onImageOpen directly and hide a
+    // duplicate-open bug.
     pump(100);
     CHECK(sel->currentImage() == paths[0],
           "launch open keeps SelectionModel.currentImage synchronized");
@@ -909,7 +912,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     checkLiveSelectionShortcuts(w);
     if (viewer)
     {
-        // 首屏：异步解码必须在 5 秒内交付（评审"有没有等待"硬上限）。
+        // First frame: the async decode must deliver within 5 s (review hard limit on "is there a
+        // wait").
         QElapsedTimer t;
         t.start();
         while (!viewer->frame() && t.elapsed() < 5000)
@@ -917,12 +921,12 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         CHECK(viewer->frame() != nullptr, "first image decodes within 5s");
     }
 
-    // 打开目录（真实 SSOT 路径：DirectoryModel 广播给缩略图/面包屑等），
-    // 并等缩略图管线排空后再继续键盘浏览。
+    // Open the folder (real SSOT path: DirectoryModel broadcasts to thumbnails/breadcrumbs, etc.),
+    // and let the thumbnail pipeline drain before keyboard browsing continues.
     dirModel->setCurrentDirectory(dirPath);
     pump(100);
     CHECK(dirModel->currentDirectory() == dirPath, "open directory lands in DirectoryModel");
-    pump(400); // 5 张 32x32 缩略图解码窗口
+    pump(400); // decode window for 5 thumbnails of 32x32
 
     auto *imageList = w.findChild<ImageListModel *>();
     CHECK(imageList && thumbnailPanel && imageList->paths() == thumbnailPanel->pathList(),
@@ -1194,7 +1198,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(w.windowTitle() == QString("%1 - MViewer").arg(QFileInfo(paths.first()).fileName()),
           "selecting an image restores its filename title");
 
-    // 键盘浏览：→ → ← （评审"滚轮切换"的键盘等价路径 navigate()）。
+    // Keyboard browsing: → → ← (keyboard equivalent of the review's "wheel to switch", navigate()).
     sendKey(&w, Qt::Key_Right);
     CHECK(sel->currentImage() == paths[1], "Right arrow advances to image #2");
     sendKey(&w, Qt::Key_Right);
@@ -1202,12 +1206,12 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     sendKey(&w, Qt::Key_Left);
     CHECK(sel->currentImage() == paths[1], "Left arrow goes back to image #2");
 
-    // Home / End / PageUp / PageDown 边界（beta_checklist "浏览体验"）。
+    // Home / End / PageUp / PageDown bounds (beta_checklist "Browsing").
     sendKey(&w, Qt::Key_End);
     CHECK(sel->currentImage() == paths.last(), "End jumps to the last image");
     sendKey(&w, Qt::Key_Home);
     CHECK(sel->currentImage() == paths.first(), "Home jumps to the first image");
-    sendKey(&w, Qt::Key_PageUp); // 已在第一张：必须不越界、不崩溃
+    sendKey(&w, Qt::Key_PageUp); // already on the first image: must not overrun or crash
     CHECK(sel->currentImage() == paths.first(), "PageUp at first image does not underflow");
     sendKey(&w, Qt::Key_PageDown);
     CHECK(paths.contains(sel->currentImage()), "PageDown stays within the folder");
@@ -1240,7 +1244,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             sel->setCurrentImage(afterPaging);
     }
 
-    // 快速切图后视图不能卡在空白/旧帧（评审"快速切图"稳定性检查）。
+    // After fast switching the view must not stick on a blank/stale frame (review "fast switching"
+    // stability check).
     if (viewer)
     {
         QElapsedTimer t;
@@ -1251,7 +1256,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
               "after rapid keyboard navigation the viewer still shows a frame");
     }
 
-    // 缩放循环：Fit → 100% → 放大 → Fit（评审"双击放大 → 恢复"的核心状态机）。
+    // Zoom cycle: Fit → 100% → zoom in → Fit (core state machine of the review's "double-click zoom
+    // → restore").
     if (viewer)
     {
         viewer->resize(800, 600);
@@ -1294,7 +1300,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                   "zoomTo(8.0) sets scale to exactly 800%");
 
             // Wheel zoom keeps the image point under the cursor stationary
-            // (beta checklist “缩放中心：以鼠标点为中心”).
+            // (beta checklist "zoom center: zoom around the mouse point").
             {
                 viewer->zoomFit();
                 pump(20);
@@ -1420,7 +1426,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             }
 
             // Double-click toggles fit <-> 100% at the cursor (beta
-            // checklist "双击放大 -> 恢复"). A preceding left press must not
+            // checklist "double-click zoom -> restore"). A preceding left press must not
             // open the metadata overlay and steal the gesture.
             {
                 MetadataOverlay *overlay = viewer->findChild<MetadataOverlay *>();
@@ -1451,7 +1457,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             }
 
             // Mouse side buttons navigate directory history (cheat sheet
-            // "鼠标侧键：上一个 / 下一个目录").
+            // "mouse side buttons: previous / next folder").
             {
                 const QString origDir = directoryTree->currentPath();
                 QDir subQDir(origDir);
@@ -1486,7 +1492,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             }
 
             // I toggles the metadata overlay for the current image; ESC
-            // hides it (cheat sheet “I/M → 图片信息浮层，ESC 关闭”).
+            // hides it (cheat sheet "I/M → image info overlay, ESC closes").
             {
                 // The viewer (and its overlay) are a top-level window.
                 MetadataOverlay *overlay = nullptr;
@@ -1931,14 +1937,14 @@ void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
         QDir(configPath).removeRecursively();
 }
 
-// ─── Workflow 2: 两图 Compare → 模式切换 → 互斥 → 退出 → 继续浏览 ───────────
+// ─── Workflow 2: two-image Compare → mode switch → exclusivity → exit → keep browsing ─────
 void workflow2_compare(const QString &pathA, const QString &pathB)
 {
     std::cout << "── Workflow 2: compare ──\n";
 
     SelectionModel sel;
 
-    // 真实退出路径：CompareWorkspace 宿主是 QDialog，Esc → reject()。
+    // Real exit path: CompareWorkspace is hosted in a QDialog, Esc → reject().
     QDialog dlg;
     auto *lay = new QVBoxLayout(&dlg);
     auto *ws = new CompareWorkspace(&dlg);
@@ -1995,7 +2001,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "fit-window button is fully inside the Compare workspace, not clipped");
     }
 
-    // 默认状态（评审"默认值不合理"检查）。
+    // Default state (review "unreasonable defaults" check).
     CHECK(ws->comparedImageCount() == 2, "two images loaded into Compare");
     CHECK(ws->isSyncEnabled(), "sync zoom/pan is ON by default");
     CHECK(sel.compared().size() == 2, "SelectionModel.compared mirrors the compare set (SSOT)");
@@ -2121,20 +2127,20 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         moreButton->menu()->close();
     pump(10);
 
-    // 闪烁（B）开 → 关。
+    // Flicker (B) on → off.
     sendKey(ws, Qt::Key_B);
     CHECK(blink->isChecked(), "key B turns blink compare ON");
     sendKey(ws, Qt::Key_B);
     CHECK(!blink->isChecked(), "key B turns blink compare OFF again");
 
-    // 左右分割（S）→ 叠加（O）互斥：切换叠加后分割必须自动关闭。
+    // Split (S) → Overlay (O) are exclusive: switching to Overlay must turn Split off.
     sendKey(ws, Qt::Key_S);
     CHECK(split->isChecked(), "key S turns split compare ON");
     sendKey(ws, Qt::Key_O);
     CHECK(overlay->isChecked(), "key O turns overlay compare ON");
     CHECK(!split->isChecked(), "overlay auto-unchecks split (no stale mode state)");
 
-    // 棋盘格（K）→ 叠加自动关闭。
+    // Checkerboard (K) → Overlay turns off automatically.
     CHECK(checker && checker->isEnabled(), "PASS K reaches an enabled checkerboard control");
     if (checker && checker->isEnabled())
     {
@@ -2146,7 +2152,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     }
     else
     {
-        // overlay 仍开着：关闭，回到网格。
+        // overlay is still on: turn it off and return to the grid.
         sendKey(ws, Qt::Key_O);
         CHECK(!overlay->isChecked(), "key O turns overlay OFF again");
     }
@@ -2498,7 +2504,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         diffHl->click();
     }
 
-    // Space 按住 = momentary A<-B presentation; the continuous Blink state
+    // Space hold = momentary A<-B presentation; the continuous Blink state
     // remains independent and therefore must stay unchecked.
     auto *temporaryCompare = ws->findChild<QPushButton *>(QStringLiteral("temporaryCompareButton"));
     RawImageView *temporaryView0 = nullptr;
@@ -2524,7 +2530,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
           "releasing Space stops momentary Compare (no stuck state)");
     QCursor::setPos(cursorBefore);
 
-    // Compare 会话可快照（供退出→重进恢复；round-trip 细节由 compare_session_tests 覆盖）。
+    // The Compare session can be snapshotted (for exit → re-enter restore; round-trip details are
+    // covered by compare_session_tests).
     const auto session = ws->compareSession();
     CHECK(session.imageIds.size() == 2, "compareSession snapshots both images before exit");
 
@@ -2838,7 +2845,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         }
     }
 
-    // Esc 退出 Compare（真实 QDialog::reject 路径）。
+    // Esc exits Compare (real QDialog::reject path).
     QSlider *thresholdSlider = ws->findChild<QSlider *>("diffThresholdSlider");
     QLabel *thresholdValueLabel = ws->findChild<QLabel *>("diffThresholdValueLabel");
     QPushButton *autoThresholdBtn = ws->findChild<QPushButton *>("diffAutoThresholdButton");
@@ -3315,7 +3322,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     sendKey(ws, Qt::Key_Escape);
     CHECK(!dlg.isVisible(), "Esc closes the Compare dialog");
 
-    // 退出后继续浏览：SSOT 仍然可用且信号正常。
+    // After exit keep browsing: the SSOT is still usable and signals still fire.
     sel.setCurrentImage(pathA);
     CHECK(sel.currentImage() == pathA, "browsing continues after leaving Compare");
 }
@@ -3412,7 +3419,7 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
                   "fullscreen workflow: Pixel Link click preserves Browse current B");
         }
         const QString expectedBrowseStatus =
-            QString("当前: %1").arg(QFileInfo(sel->currentImage()).fileName());
+            QString("Current: %1").arg(QFileInfo(sel->currentImage()).fileName());
         {
             QElapsedTimer closeTimer;
             closeTimer.start();
@@ -3853,7 +3860,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
                 }
             }
         }
-        CHECK(cancelButton != nullptr, "report progress exposes the real 取消 button");
+        CHECK(cancelButton != nullptr, "report progress exposes the real Cancel button");
         const TaskScheduler::TaskId blockerId = blocker.task ? blocker.task->id : 0;
         auto reportHandle = newestBackgroundTask(blockerId);
         CHECK(reportHandle != nullptr,
@@ -4319,7 +4326,8 @@ void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
           "canvas workflow: leaving canvas modes restores the grid page");
 }
 
-// ─── Workflow 4: List 首屏只调度可见窗口，不能把全目录送入解码 ────────────────
+// ─── Workflow 4: the List first screen schedules only the visible window, never the whole folder
+// ───
 void workflow4_list_scaling(const QString &rootDir)
 {
     std::cout << "── Workflow 4: list scaling ──\n";
@@ -4431,7 +4439,7 @@ void workflow5_export_current_output_directory(const QString &rootDir)
                     text == QStringLiteral("HTML Report"))
                     oldReportLabel = true;
             }
-            CHECK(!oldReportLabel, "inventory modes are not labeled as 报告");
+            CHECK(!oldReportLabel, "inventory modes are not labeled as a report");
 
             auto groupTitled = [&dialog](const QString &title) -> QGroupBox *
             {
@@ -4511,12 +4519,12 @@ void workflow5_export_current_output_directory(const QString &rootDir)
     outputDir.removeRecursively();
 }
 
-// ─── Workflow 6: MetadataIndexer 双消费者（搜索重建 + Camera filter）────────
-// 打开大目录后 MainWindow 在 500ms 后触发搜索重建（reindexSearch），同时
-// ThumbnailPanel 的 Camera filter 也触发自己的元数据索引。两个真实消费者
-// 共用 MetadataIndexer：任何一方的新请求都不得静默取消另一方。
-// 回归点：面板索引在途时被 MainWindow 重建取消 → m_metaIndexing 永远 true →
-// Camera filter 永不生效（永久 loading）。
+// ─── Workflow 6: MetadataIndexer with two consumers (search rebuild + Camera filter) ─────
+// After a large folder opens, MainWindow triggers a search rebuild (reindexSearch) 500 ms later,
+// while the ThumbnailPanel Camera filter triggers its own metadata indexing. Both real consumers
+// share MetadataIndexer: neither side's new request may silently cancel the other.
+// Regression: the panel index in flight was cancelled by the MainWindow rebuild → m_metaIndexing
+// stays true → the Camera filter never applies (loading forever).
 void workflow6_metadata_dual_consumer(const QString &rootDir)
 {
     std::cout << "── Workflow 6: metadata dual-consumer (search + camera filter) ──\n";
@@ -5235,12 +5243,13 @@ void workflow17_batch_dialog(const QString &rootDir)
     auto *opGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchOpGroup"));
     auto *paramGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchParamGroup"));
     auto *progressGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchProgressGroup"));
-    CHECK(fileGroup && fileGroup->title() == QStringLiteral("File"), "batch has 文件 group");
-    CHECK(opGroup && opGroup->title() == QStringLiteral("Operations"), "batch has 操作 group");
+    CHECK(fileGroup && fileGroup->title() == QStringLiteral("File"), "batch has File group");
+    CHECK(opGroup && opGroup->title() == QStringLiteral("Operations"),
+          "batch has Operations group");
     CHECK(paramGroup && paramGroup->title() == QStringLiteral("Parameters"),
-          "batch has 参数 group");
+          "batch has Parameters group");
     CHECK(progressGroup && progressGroup->title() == QStringLiteral("Progress"),
-          "batch has 进度 group");
+          "batch has Progress group");
 
     auto *resizePanel = dialog.findChild<QWidget *>(QStringLiteral("batchResizePanel"));
     auto *cropPanel = dialog.findChild<QWidget *>(QStringLiteral("batchCropPanel"));
@@ -5274,11 +5283,11 @@ void workflow17_batch_dialog(const QString &rootDir)
         chkResize->setChecked(true);
         chkCrop->setChecked(true);
         CHECK(resizePanel->isVisible() && cropPanel->isVisible(),
-              "checking 缩放/裁剪 reveals their parameter rows");
+              "checking Resize/Crop reveals their parameter rows");
         chkResize->setChecked(false);
         chkCrop->setChecked(false);
         CHECK(!resizePanel->isVisible() && !cropPanel->isVisible(),
-              "unchecking 缩放/裁剪 hides their parameter rows again");
+              "unchecking Resize/Crop hides their parameter rows again");
     }
 
     auto *startBtn = dialog.findChild<QPushButton *>(QStringLiteral("batchStartButton"));
@@ -5356,8 +5365,8 @@ void workflow18_shell_copy_and_export_text()
             if (title == QStringLiteral("Difference image"))
                 diffTab = true;
         }
-        CHECK(!compareTab, "analysis panel has no 对比 tab");
-        CHECK(!diffTab, "analysis panel has no 差异图 tab");
+        CHECK(!compareTab, "analysis panel has no Compare tab");
+        CHECK(!diffTab, "analysis panel has no Diff Map tab");
     }
     auto *stats = panel.findChild<QLabel *>(QStringLiteral("analysisStatsLabel"));
     CHECK(stats && stats->text().contains(QStringLiteral("No Image Selected")),

@@ -70,7 +70,7 @@ class CompareDiffRenderer;
 class CompareDisplayManager;
 } // namespace mviewer::ui
 
-// CompareWorkspace：多图同步比较工作区
+// CompareWorkspace: synchronized multi-image compare workspace
 class CompareWorkspace : public QWidget
 {
     Q_OBJECT
@@ -307,7 +307,7 @@ class CompareWorkspace : public QWidget
     QCheckBox *m_syncDragChk = nullptr;
     QCheckBox *m_syncRotateChk = nullptr;
     QCheckBox *m_syncRotatePanelChk = nullptr;
-    QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率
+    QCheckBox *m_uniformScaleChk = nullptr; // H5: Uniform Pixel Scale
     bool m_syncZoom = true;
     bool m_syncDrag = true;
     bool m_syncRotate = false;
@@ -436,7 +436,7 @@ class CompareWorkspace : public QWidget
     void drawOverlayCompare(QPainter &p);
     void drawCellCompare(QPainter &p, int idx, const QRect &clipRect, const QRectF &geomRect);
 
-    // M23: checkerboard compare mode (棋盘格) — alternating A/B blocks.
+    // M23: checkerboard compare mode — alternating A/B blocks.
     QCheckBox *m_checkerChk = nullptr;
     QSlider *m_checkerSizeSlider = nullptr;
     QLabel *m_checkerSizeLabel = nullptr;
@@ -463,7 +463,7 @@ class CompareWorkspace : public QWidget
     QComboBox *m_diffGainCombo = nullptr;
     bool m_diffOverlayVisible = false;
     bool m_diffHighlight = false;
-    // 高亮差异 switched 显示差异 on by itself; switching highlight off undoes it.
+    // Highlight Diff switched Show Difference on by itself; switching highlight off undoes it.
     bool m_diffOverlayPromoted = false;
     double m_diffGain = 1.0;
 
@@ -544,8 +544,8 @@ class CompareWorkspace : public QWidget
     QPushButton *m_clearRoiBtn = nullptr, *m_copyRoiBtn = nullptr, *m_roiHud = nullptr;
 
     // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
-    QCheckBox *m_crosshairChk = nullptr; // 同步准星开关
-    QPushButton *m_focusBtn = nullptr;   // 锁定/解除基准
+    QCheckBox *m_crosshairChk = nullptr; // sync crosshair toggle
+    QPushButton *m_focusBtn = nullptr;   // lock/unlock reference
     QLabel *m_focusLabel = nullptr, *m_frameLabel = nullptr;
     QSpinBox *m_frameSpin = nullptr;
     int m_focusIndex = -1, m_hoverIdx = -1;

@@ -56,7 +56,7 @@ static int g_fail = 0;
         }                                                                                          \
     } while (0)
 
-// 生成测试图：纯色 + 渐变
+// Build test images: solid color + gradient
 static QImage makeTestImage(int w, int h, QColor base, bool gradient = false)
 {
     QImage img(w, h, QImage::Format_RGB32);

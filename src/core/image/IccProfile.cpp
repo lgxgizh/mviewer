@@ -131,23 +131,23 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
 const char *deviceClassText(const std::string &s)
 {
     if (s == "scnr")
-        return "扫描仪";
+        return "Scanner";
     if (s == "mntr")
-        return "显示器";
+        return "Display";
     if (s == "prtr")
-        return "打印机";
+        return "Printer";
     if (s == "link")
-        return "设备链接";
+        return "Device Link";
     if (s == "abst")
-        return "抽象";
+        return "Abstract";
     if (s == "spac")
         return "Color Space";
     if (s == "nmcl")
-        return "命名色";
+        return "Named Color";
     if (s == "camb")
         return "Camera";
     if (s == "vidm")
-        return "视频";
+        return "Video";
     return "Unknown";
 }
 
@@ -156,7 +156,7 @@ const char *colorSpaceText(const std::string &s)
     if (s == "RGB " || s.rfind("RGB", 0) == 0)
         return "RGB";
     if (s == "GRAY" || s.rfind("GRAY", 0) == 0)
-        return "灰度";
+        return "Gray";
     if (s == "CMYK")
         return "CMYK";
     if (s == "CMY " || s.rfind("CMY", 0) == 0)
@@ -183,13 +183,13 @@ const char *renderingIntentText(uint32_t v)
     switch (v)
     {
     case 0:
-        return "感知 (Perceptual)";
+        return "Perceptual";
     case 1:
-        return "相对色度 (Media-Relative Colorimetric)";
+        return "Media-Relative Colorimetric";
     case 2:
-        return "饱和度 (Saturation)";
+        return "Saturation";
     case 3:
-        return "绝对色度 (ICC-Absolute Colorimetric)";
+        return "ICC-Absolute Colorimetric";
     default:
         return "Unknown";
     }

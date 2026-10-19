@@ -107,7 +107,7 @@ static void executeReportExportTask(ReportExportState &state,
     task.reportProgress(85);
     if (state.body.empty())
     {
-        state.error = "报告内容为空。";
+        state.error = "The report is empty.";
         return;
     }
     if (task.isCancelled())
@@ -122,7 +122,7 @@ static void executeReportExportTask(ReportExportState &state,
         if (task.isCancelled())
             state.cancelled = true;
         else
-            state.error = "无法原子写入目标文件。";
+            state.error = "Could not atomically write the destination file.";
         return;
     }
     state.success = true;

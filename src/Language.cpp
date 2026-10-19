@@ -1,9 +1,15 @@
 #include "Language.h"
 
 #include <QCoreApplication>
+#include <QFile>
 #include <QLocale>
 #include <QSettings>
 #include <QTranslator>
+
+static void ensureLanguageResources()
+{
+    Q_INIT_RESOURCE(mviewer);
+}
 
 namespace mviewer::ui
 {
@@ -54,7 +60,7 @@ QString Language::languageModeName(LanguageMode mode)
     case LanguageMode::System:
         return QCoreApplication::translate("Language", "System default");
     case LanguageMode::ChineseSimplified:
-        return QStringLiteral("简体中文");
+        return QStringLiteral("简体中文"); // i18n-allow: language endonym
     case LanguageMode::English:
     default:
         return QStringLiteral("English");
@@ -104,6 +110,19 @@ void Language::apply(LanguageMode mode)
             app->installTranslator(&translator());
         }
     }
+}
+
+QString Language::localizedHelpHtml(const QString &name)
+{
+    ensureLanguageResources();
+    const QString suffix = effectiveChinese() ? QStringLiteral("zh_CN") : QStringLiteral("en");
+    for (const QString &lang : {suffix, QStringLiteral("en")})
+    {
+        QFile file(QStringLiteral(":/help/%1.%2.html").arg(name, lang));
+        if (file.open(QIODevice::ReadOnly))
+            return QString::fromUtf8(file.readAll());
+    }
+    return {};
 }
 
 } // namespace mviewer::ui

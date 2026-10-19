@@ -70,7 +70,7 @@ QString batchFinishText(const mviewer::domain::BatchJobResult &result)
         QString text =
             QStringLiteral("Cancelled: %1, %2 not processed").arg(counts).arg(result.totalSkipped);
         if (!names.isEmpty())
-            text += QStringLiteral("（%1）").arg(names);
+            text += QStringLiteral(" (%1)").arg(names);
         return text;
     }
     return QStringLiteral("Completed: %1 (%2)").arg(counts, names);
