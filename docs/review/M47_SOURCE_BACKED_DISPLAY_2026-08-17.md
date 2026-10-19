@@ -67,7 +67,7 @@ absolute convergence is not asserted).
   limit) rather than pretending a capability exists. Full TIFF LOD/tile decode
   is deferred beyond M47.
 - **Exact-source analysis on infeasible panes is unavailable by design**: the
-  Inspector shows 无效, diff metrics stay "—", and report pairs are recorded
+  Inspector shows invalid, diff metrics stay "—", and report pairs are recorded
   non-comparable until an explicit full materialization exists (Phase 4
   contract: analysis consumers never trigger implicit materialization).
 - **Native hardware qualification** (physical ICC, mixed-DPI, long-session GUI)

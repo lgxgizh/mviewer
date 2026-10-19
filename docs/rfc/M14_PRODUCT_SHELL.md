@@ -29,7 +29,7 @@ A full source-tree audit (after an initial misread was corrected) shows the
 image + thumbnail scroll). `core::RecentFiles` existed but was unused by the UI.
 
 **P0 delivered (this RFC):** Recent Folders menu (from `RecentFiles` LRU),
-Favorites menu + "收藏当前目录" (Ctrl+D), in-session History back/forward
+Favorites menu + "Favorite current directory" (Ctrl+D), in-session History back/forward
 (Alt+Left/Alt+Right), and cross-session restore of last folder + last image +
 thumbnail scroll position via a new `AppState` JSON (per-user config). Verified
 by `test_appstate` (persistence round-trip, all pass) and clean offscreen launch.

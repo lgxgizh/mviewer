@@ -4,77 +4,77 @@
 
 ### Fixed
 
-- **发布说明不再为空**：`scripts/release_manifest.ps1` 按 tag 版本号精确选取 CHANGELOG 中的 `## [x.y.z]` 一节，不再取文件里第一个标题（通常是空的 `## [Unreleased]`）。正式发版（`-Strict`）时如果找不到该版本的非空章节会直接失败，不会再发布空说明。去掉了 “Auto-generated from CHANGELOG.md on <构建日期>” 一行（版本日期已在章节标题里），并改为无 BOM 的 UTF-8 输出，避免 GitHub 说明开头出现隐藏字符。`release_contract_tests` 覆盖了这些行为。
+- **Release notes are no longer empty**: `scripts/release_manifest.ps1` now selects the exact `## [x.y.z]` section from CHANGELOG matching the tag version, instead of taking the first heading in the file (usually the empty `## [Unreleased]`). Formal releases (`-Strict`) fail immediately if a non-empty section for that version cannot be found, so empty notes are no longer published. Removed the "Auto-generated from CHANGELOG.md on <build date>" line (the version date is already in the section heading) and switched to BOM-less UTF-8 output so GitHub notes no longer start with a hidden character. `release_contract_tests` covers these behaviors.
 
 ## [1.0.137] - 2026-10-18
 
 ### Release
 
-- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.137**（60 项静态审计：#179–#186）。
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.137** (60 static-audit items: #179–#186).
 
 ### Fixed
 
-- DiskCache：touch 使用 `MAX(ts, nowMs)+1`，避免与同毫秒 insert 并列时按 key 误淘汰刚访问的项（审计 #20 回归）。
-- 启动时的插件目录提示改用 `qInfo()` / `qWarning()` 输出，不再写 `std::cout`；Windows GUI 程序没有控制台，原来这几行既看不到也进不了文件日志（审计 #40）。
-- 插件探测出的 Analyzer 通过插件的 `destroyAnalyzer` 释放，不再在宿主里 `delete` 或把探测实例泄漏掉（审计 #36）。
-- 插件注册的分析器工厂返回 `unique_ptr<Analyzer, AnalyzerDeleter>`，析构时调用插件的 `destroyAnalyzer`，并在实例存活期间额外持有一份模块引用（审计 #37）。
-- `PluginManager::unloadAll` 在卸载前注销插件注册的 Importer，与单次 `unload` 走同一条注销路径（审计 #38）。
-- 插件 ABI（以及旧版 `mviewer_plugin_api_version`）检查在所有平台上、调用其它插件符号之前执行；不匹配时用 `qWarning` 记下原因并拒绝加载（审计 #39）。
-- `EventBus::instance()` 与 `scope(Application)` 共用同一条总线；`scope()` 遇到越界枚举值时回退到 Application，不再越界访问总线数组（审计 #1）。
-- `AnalyzerRegistry` 的工厂表由互斥锁保护，创建分析器时先把工厂拷出锁外再调用；`registerBuiltins()` 用 `std::call_once` 只注册一次（审计 #2）。
-- `AnalyzerRegistry::runAnalyzer` 只等待自己提交的任务，不再排空整个共享 AnalysisPool；超时后的任务写入堆上的共享状态，不会写已销毁的栈对象（审计 #3）。
-- `TaskScheduler` 的 `queue_depth` 表示已入队但尚未开始的任务，`active_tasks` 表示正在执行的任务，`total_latency_ns` 累计排队等待时间（开始时刻减入队时刻）；背压仍用两者之和对比队列上限（审计 #4）。
-- `TaskScheduler::cancelTree` 用 `unordered_set` 记录已访问任务，避免 DFS 里对受害者列表做线性查找（审计 #5）。
-- `waitForPoolDrained` 改为条件变量等待，池里 pending 与 active 归零时唤醒，不再每 5 ms 轮询；超时后仍在释放图锁之后做剩余时间的 `waitForDone`（审计 #6）。
-- 只读像素路径统一走 `ConstImageView` / `constView()`，并删除 `ImageData::view() const`（不再 `const_cast`）。非 const `view()` 仍是不分离的可变别名，共享缓冲上的写入走 `mutableView()`（审计 #7）。
-- `ImageFrame` 补齐拷贝与移动：拷贝计入存活帧，移动把计数转给新对象，被移走的对象析构时不再扣一次，避免存活帧被多减（审计 #8）。
-- `MemoryTracker::removeExternal` 在外部字节不够扣时用一次 CAS 把计数降到 0，不再先写成 0 再 `fetch_sub` 把 `size_t` 绕回（审计 #9）。
-- `makeImageData` 在宽或高非正、或 `w*h*cpp` 乘积溢出 `size_t` 时返回空图，不再按无符号回绕去分配（审计 #10）。
-- 显示重采样的 scratch（含 SIMD 线程局部行缓冲）在容量超过本次需求两倍且大于 1MB 时交还多余容量，一次超大重采样不再长期占住内存（审计 #11）。
-- `CacheManager::putMip` 写入 lod 0 时丢掉该键已有的 mip 链；替换已有 lod 时按新旧字节差更新链的记账，`trimMipsToBudget` 不会把同一级算两次（审计 #12）。
-- 元数据展示缓存改为上限可配的 LRU（默认 256 条），命中时把该条提到最近使用（审计 #14）。
-- ICC 配置文件必须在偏移 36 处为 `acsp`，声明长度不得超出缓冲区，主版本只接受 2 或 4；`mluc` 按 12 字节记录解析（优先 `en`），标签 offset+size 越界则跳过（审计 #19）。
-- 磁盘缓存按最近访问淘汰：成功命中时更新访问时间；超过条目或字节上限时一批删除到上限的 90%（上限小于 10 时删到上限本身），而不是每次插入逐条扫描（审计 #20）。
-- 比较直方图与 `ImageFrame` 统计不再把 alpha 当作颜色通道；完全透明像素不计入，部分透明仍按 RGB 计入。`ImageFrame` 补上 V 通道和 `vMean`（审计 #22）。
-- 显示重采样线程池改为函数内静态指针，只初始化一次（故意不在退出时销毁，避免晚于 `QCoreApplication` 析构）；分块任务若抛异常仍会倒计时闩锁，异常不会逃进 `QThreadPool`（审计 #23）。
-- GPU 瓦片开关（`MVIEWER_GPU` 或设置里的 `gpuAcceleration`）只读一次并缓存，偏好设置保存后失效；瓦片指纹改为宽、高、通道数加全部像素的哈希，差一个字节也会重新上传（审计 #25）。
-- `DrawPixelMarker` 在 CPU 像素缓冲和 `QPainter` 路径都会画十字准星，不再被默认分支丢掉（审计 #26）。
-- `CpuFeatures` 在 x86-64 上用 eax/edx 读取 `XCR0`，并抽出共用的 `osSupportsYmm()`；AVX2 检测仍然要求 OSXSAVE 和 YMM 状态（审计 #28）。
-- `Selection::area()`、`suggestThreshold` 的像素总数，以及分析面板 ROI 像素数改为 `int64_t` 相乘，大图宽高乘积不再在 32 位里回绕（审计 #29）。
-- Otsu 阈值遍历 0..255，包含 bin 0。全图落在同一个 bin，或类间方差不为正时，返回该 bin，空类不再做除法（审计 #30）。
-- 分析器的 RGB 拆包和亮度系数收到 `PixelAccess.h`：Rec.601 整数系数与通道平均各自保留，BGR/RGB 走同一条拆包（审计 #31）。
-- `MTFAnalyzer::analyze` / `analyzeRegion` 返回内部 `compute` 的失败状态。均匀图不再被当成成功的 MTF 结果（审计 #32）。
-- 批量分析 JSON 把 NaN/Inf 写成 `null`。CSV 指标走已有的 `csvEscape`（逗号、引号、CR、LF 加引号，内部引号加倍）。文件名多于结果行时不再越界读取（审计 #33）。
-- 比较直方图、`domain::Histogram` 和 `AnalysisEngine::ImageStats` 的 bin 计数与像素总数改为 `int64_t`，单 bin 可以超过 2^32（审计 #34）。
-- 导出预设名先去掉路径分隔符、`..` 和其它非法字符（保留字母、数字、空格、`-`、`_` 和中文），再用 `QSaveFile` 原子写入，读写预设目录时持有互斥锁（审计 #41）。
-- 新的评分边车写到 `<文件>.mviewer.json`；仍会读取本程序以前写过的 JSON `.xmp` 并迁走，第三方真正的 XMP 不会被覆盖或删除（审计 #42）。
-- 评分、旗标和标签在加载时去掉行尾 `\r`，路径键统一走 `normalizeKey`（`cleanPath`、反斜杠折成 `/`，Windows 上不区分大小写）（审计 #44）。
-- 标签文本含 `|` 或换行时拒绝写入；`TagStore::save()` 在改动之后总会落盘；标签文件路径在 `QCoreApplication` 存在后才解析到可写的应用数据目录（审计 #45）。
-- `pruneMissing` 只在锁内拷出键，到锁外检查文件是否存在，再在锁内删除缺失项（审计 #46）。
-- 导入设置时整型用 `toInt(&ok)` / `toLongLong(&ok)` 并检查范围，非法值保持原设置（审计 #47）。
-- 搜索摘要按 `caseSensitive` 定位匹配，并在 UTF-8 码点边界截断，不再切开多字节字符（审计 #48）。
-- Windows 更新检查在 HTTP 状态不是 200，或读不到状态码时直接返回错误，不再解析响应体；只走 HTTPS，禁止降级到 HTTP，自动重定向最多 5 次（审计 #50）。
-- 评分、色标和旗标的附属文件改到 IO 池写入。同一路径串行，后一次覆盖尚未落盘的请求，失败回到界面线程报告（审计 #53）。
-- 剪贴板粘贴临时目录按进程号隔离（`mviewer-clip-<pid>`），下次复制和退出时清掉本进程的临时文件（审计 #54）。
-- 文件日志的 stderr 和文件写入共用一把锁；警告及以上以及关闭时才 flush；卸载时恢复 `qInstallMessageHandler` 返回的上一个处理函数（审计 #56）。
-- Linux 当前工作集改为读 `/proc/self/statm` 的驻留页乘页大小。`ru_maxrss` 是峰值，不再当作当前 RSS（审计 #57）。
-- 跟踪事件改为固定容量环形缓冲（默认 10 万条，丢掉最旧的）。JSON 转义引号、反斜杠，以及小于 `0x20` 的控制字符（审计 #58）。
-- 复杂度和架构门禁在源码目录缺失、文件读失败、路径不在仓库内或 JSON 写不出时返回非零。架构分层按规范化后的路径精确匹配（审计 #59、#60）。
+- DiskCache: `touch` uses `MAX(ts, nowMs)+1`, so an item just accessed is not evicted by key when it ties with an insert in the same millisecond (audit #20 regression).
+- Startup plugin-directory messages now go through `qInfo()` / `qWarning()` instead of `std::cout`. A Windows GUI process has no console, so those lines were neither visible nor written to the file log (audit #40).
+- Analyzers found by plugin probing are released through the plugin's `destroyAnalyzer`, instead of being `delete`d in the host or leaking the probe instance (audit #36).
+- Analyzer factories registered by plugins return `unique_ptr<Analyzer, AnalyzerDeleter>`, which calls the plugin's `destroyAnalyzer` on destruction and holds an extra module reference for the lifetime of the instance (audit #37).
+- `PluginManager::unloadAll` unregisters Importers registered by the plugin before unloading, using the same unregistration path as a single `unload` (audit #38).
+- The plugin ABI check (and the legacy `mviewer_plugin_api_version` check) runs on every platform before any other plugin symbol is called. On mismatch, the reason is logged with `qWarning` and the load is rejected (audit #39).
+- `EventBus::instance()` and `scope(Application)` share the same bus. `scope()` falls back to Application on an out-of-range enum value, and no longer indexes past the bus array (audit #1).
+- `AnalyzerRegistry`'s factory table is protected by a mutex. When creating an analyzer, the factory is copied out of the lock before it is called. `registerBuiltins()` registers only once via `std::call_once` (audit #2).
+- `AnalyzerRegistry::runAnalyzer` waits only for the task it submitted, and no longer drains the whole shared AnalysisPool. A task that finishes after timeout writes shared state on the heap and does not write a destroyed stack object (audit #3).
+- In `TaskScheduler`, `queue_depth` is tasks queued but not yet started, `active_tasks` is tasks currently running, and `total_latency_ns` accumulates queue wait time (start time minus enqueue time). Backpressure still compares the sum of the two counts with the queue limit (audit #4).
+- `TaskScheduler::cancelTree` records visited tasks in an `unordered_set`, avoiding a linear search of the victim list during DFS (audit #5).
+- `waitForPoolDrained` waits on a condition variable and wakes when the pool's pending and active counts reach zero, instead of polling every 5 ms. After a timeout it still calls `waitForDone` for the remaining time after releasing the graph lock (audit #6).
+- Read-only pixel paths all go through `ConstImageView` / `constView()`, and `ImageData::view() const` is removed (no more `const_cast`). The non-const `view()` is still a non-detaching mutable alias; writes to a shared buffer go through `mutableView()` (audit #7).
+- `ImageFrame` copy and move are completed: a copy counts as a live frame, a move transfers the count to the new object, and the moved-from object's destructor does not decrement again, so the live-frame count is not decremented an extra time (audit #8).
+- `MemoryTracker::removeExternal`, when the external bytes are not enough to subtract, uses one CAS to drop the count to 0, instead of writing 0 and then `fetch_sub`, which wrapped `size_t` (audit #9).
+- `makeImageData` returns an empty image when width or height is non-positive, or when the `w*h*cpp` product overflows `size_t`, instead of allocating from an unsigned wraparound (audit #10).
+- Display-resample scratch (including the SIMD thread-local row buffer) releases excess capacity when its capacity is more than twice the current need and greater than 1MB, so one oversized resample no longer holds that memory indefinitely (audit #11).
+- `CacheManager::putMip` drops the existing mip chain for a key when writing lod 0. When replacing an existing lod, chain accounting is updated by the byte difference between old and new, so `trimMipsToBudget` does not count the same level twice (audit #12).
+- The metadata display cache is now an LRU with a configurable limit (default 256 entries). A hit promotes that entry to most recently used (audit #14).
+- An ICC profile must contain `acsp` at offset 36, its declared length must not exceed the buffer, and only major versions 2 and 4 are accepted. `mluc` is parsed as 12-byte records (`en` preferred). A tag whose offset+size is out of range is skipped (audit #19).
+- The disk cache evicts by least recent access: a successful hit updates the access time. When the entry or byte limit is exceeded, entries are deleted in a batch down to 90% of the limit (down to the limit itself when the limit is below 10), instead of scanning one entry on every insert (audit #20).
+- Compare histograms and `ImageFrame` statistics no longer treat alpha as a color channel. Fully transparent pixels are excluded; partially transparent pixels are still counted as RGB. `ImageFrame` now includes the V channel and `vMean` (audit #22).
+- The display-resample thread pool is a function-local static pointer, initialized only once (intentionally not destroyed on exit, so it is not destroyed after `QCoreApplication`). If a tiled task throws, the countdown latch is still decremented, and the exception does not escape into `QThreadPool` (audit #23).
+- The GPU tile switch (`MVIEWER_GPU` or the `gpuAcceleration` setting) is read once and cached, and invalidated after preferences are saved. The tile fingerprint is now width, height, channel count, plus a hash of all pixels, so a one-byte difference forces a re-upload (audit #25).
+- `DrawPixelMarker` draws the crosshair on both the CPU pixel-buffer path and the `QPainter` path, and is no longer dropped by the default branch (audit #26).
+- On x86-64, `CpuFeatures` reads `XCR0` via eax/edx and factors out a shared `osSupportsYmm()`. AVX2 detection still requires OSXSAVE and YMM state (audit #28).
+- `Selection::area()`, the pixel total in `suggestThreshold`, and the analysis-panel ROI pixel count now multiply as `int64_t`, so a large image's width×height product no longer wraps in 32 bits (audit #29).
+- The Otsu threshold walks 0..255, including bin 0. If the whole image falls in a single bin, or the between-class variance is not positive, that bin is returned, and an empty class is no longer divided by (audit #30).
+- Analyzer RGB unpacking and luminance coefficients are centralized in `PixelAccess.h`: Rec.601 integer coefficients and channel averaging are each kept, and BGR/RGB share the same unpack path (audit #31).
+- `MTFAnalyzer::analyze` / `analyzeRegion` return the failure status from the internal `compute`. A uniform image is no longer treated as a successful MTF result (audit #32).
+- Batch-analysis JSON writes NaN/Inf as `null`. CSV metrics go through the existing `csvEscape` (commas, quotes, CR, and LF are quoted; internal quotes are doubled). When there are more filenames than result rows, reads no longer go out of bounds (audit #33).
+- Bin counts and pixel totals in the compare histogram, `domain::Histogram`, and `AnalysisEngine::ImageStats` are now `int64_t`, so a single bin can exceed 2^32 (audit #34).
+- Export preset names first strip path separators, `..`, and other illegal characters (letters, digits, spaces, `-`, `_`, and Chinese characters are kept), then are written atomically with `QSaveFile`. A mutex is held while reading or writing the preset directory (audit #41).
+- New rating sidecars are written to `<file>.mviewer.json`. JSON `.xmp` files previously written by this program are still read and migrated away. Genuine third-party XMP is neither overwritten nor deleted (audit #42).
+- Ratings, flags, and tags strip a trailing `\r` on load. Path keys all go through `normalizeKey` (`cleanPath`, backslashes folded to `/`, case-insensitive on Windows) (audit #44).
+- Tag text containing `|` or a newline is rejected on write. `TagStore::save()` always persists after a change. The tag file path is resolved to the writable application-data directory only after `QCoreApplication` exists (audit #45).
+- `pruneMissing` copies the keys out under the lock, checks whether the files exist outside the lock, then deletes missing entries under the lock (audit #46).
+- When importing settings, integers use `toInt(&ok)` / `toLongLong(&ok)` and are range-checked. Invalid values leave the existing setting unchanged (audit #47).
+- Search snippets locate the match according to `caseSensitive` and truncate on UTF-8 code-point boundaries, so multi-byte characters are no longer split (audit #48).
+- The Windows update check returns an error immediately when the HTTP status is not 200 or the status code cannot be read, and does not parse the response body. It uses HTTPS only, forbids a downgrade to HTTP, and follows at most 5 automatic redirects (audit #50).
+- Sidecar files for ratings, color labels, and flags are now written on the IO pool. The same path is serialized; a later request overwrites one that has not yet been flushed. Failures are reported back on the UI thread (audit #53).
+- The clipboard-paste temp directory is isolated by process id (`mviewer-clip-<pid>`). This process's temp files are cleared on the next copy and on exit (audit #54).
+- File-log writes to stderr and to the file share one lock. Flush happens only for warning and above, and on shutdown. On unload, the previous handler returned by `qInstallMessageHandler` is restored (audit #56).
+- On Linux, the current working set is the resident-page count from `/proc/self/statm` multiplied by the page size. `ru_maxrss` is a peak and is no longer treated as the current RSS (audit #57).
+- Trace events use a fixed-capacity ring buffer (default 100,000 entries, dropping the oldest). JSON escapes quotes, backslashes, and control characters below `0x20` (audit #58).
+- The complexity and architecture gates return non-zero when the source directory is missing, a file read fails, a path is outside the repository, or JSON cannot be written. Architecture layers match exactly on normalized paths (audit #59, #60).
 
 ### Changed
-- 复杂度门禁在更可靠的源码遍历下暴露的 3 个超长函数（`isAppSidecarContent` / `httpGet` / `enqueueLocked`）记入 ADR-014 `knownFunctionDebt`，门禁仍报警告但不计硬失败（审计 #59）。
+- Three over-long functions exposed by a more reliable source walk in the complexity gate (`isAppSidecarContent` / `httpGet` / `enqueueLocked`) are recorded in ADR-014 `knownFunctionDebt`. The gate still warns, but they do not count as a hard failure (audit #59).
 
-- 缩略图管线可以同时挂多个完成回调。`setResultFn` 只替换主回调，不再清掉其余订阅（审计 #52）。
+- The thumbnail pipeline can hold multiple completion callbacks at once. `setResultFn` replaces only the primary callback and no longer clears the other subscriptions (audit #52).
 
-- 路径 + 大小 + 修改时间组成的文件身份串统一由 `FileIdentity` 生成。磁盘缓存和元数据索引用的持久化格式保持原样（审计 #18）。
+- The file-identity string of path + size + modification time is now generated uniformly by `FileIdentity`. The persisted format used by the disk cache and the metadata index is unchanged (audit #18).
 
 ### Performance
 
-- RAW 内嵌 JPEG 的探测只读 SOF 宽高，预览在已知尺寸上用 `QImageReader::setScaledSize`，不再把最大内嵌 JPEG 整段拷进内存再全图解码（审计 #15）。
-- 16 位 PNG/TIFF 只解码一次，8 位显示缓冲从这次结果转出；内存缓存命中不再为了 raw16 重读文件（审计 #16）。
-- DPI 优先读 JFIF、EXIF、PNG pHYs 和 TIFF 头。只有仍缺 DPI，或还拿不到色彩信息时，才对便宜格式做 1×1 解码（审计 #17）。
-- 多页 PDF 逐页把 JPEG 写到临时文件再流式写出，不再同时持有全部页的 JPEG 和整份 PDF 字节（审计 #21）。
-- `writableDirectory()` 按存储位置缓存目录，互斥锁保护并发读取；测试改路径后调用 `resetWritableDirectoryCacheForTests()`（审计 #51）。
+- Probing a RAW embedded JPEG reads only the SOF width and height. The preview uses `QImageReader::setScaledSize` at the known size, instead of copying the largest embedded JPEG entirely into memory and decoding the full image (audit #15).
+- 16-bit PNG/TIFF is decoded once, and the 8-bit display buffer is produced from that result. A memory-cache hit no longer re-reads the file for raw16 (audit #16).
+- DPI is read first from JFIF, EXIF, PNG pHYs, and the TIFF header. A 1×1 decode of cheap formats runs only when DPI is still missing, or color information is still unavailable (audit #17).
+- Multi-page PDF writes each page's JPEG to a temporary file and then streams it out, instead of holding every page's JPEG and the entire PDF's bytes at the same time (audit #21).
+- `writableDirectory()` caches the directory by storage location, with a mutex protecting concurrent reads. Tests call `resetWritableDirectoryCacheForTests()` after changing the path (audit #51).
 
 ## [1.0.136] - 2026-10-18
 
@@ -84,19 +84,19 @@
 
 ### Added
 
-- 比较模式每个窗格可单独开启 USM 锐化（数量、半径、阈值、仅亮度），默认关闭，随调整面板、预设和重置一起生效，预览、差异和直方图使用同一套调优。
-- 比较窗格右键菜单和调整面板新增「导出此图调优结果...」，按全分辨率导出当前窗格套用亮度/对比度/伽马、白平衡、USM、旋转/翻转和裁剪后的 PNG 或 TIFF。
+- In compare mode, each pane can enable USM sharpening on its own (amount, radius, threshold, luminance only). It is off by default and takes effect with the adjustment panel, presets, and reset. Preview, difference, and histogram use the same tuning.
+- The compare-pane context menu and the adjustment panel add **Export tuned result for this image...**, which exports the current pane at full resolution as PNG or TIFF after applying brightness/contrast/gamma, white balance, USM, rotate/flip, and crop.
 
 ### Changed
 
-- 分析面板只保留单图分析，去掉「对比」和「差异图」页以及只为该页服务的第二张图。双图 PSNR/SSIM 仍在比较模式。以前保存的 `builtin_compare` 选择会回到第一个真实分析器。
-- 「导出图片」里的 CSV / JSON / HTML 改为「图像元数据清单」（文件名、尺寸、通道均值），不再称为报告。选清单或「复制到剪贴板」时隐藏格式、质量、缩放、水印、裁剪和重命名；清单仍选择输出目录，剪贴板不写文件。
+- The analysis panel keeps single-image analysis only. The **Compare** and **Difference** pages, and the second image that existed only for those pages, are removed. Two-image PSNR/SSIM remain in compare mode. A previously saved `builtin_compare` selection falls back to the first real analyzer.
+- In **Export Image**, CSV / JSON / HTML are now an **image metadata manifest** (filename, dimensions, per-channel mean) and are no longer called a report. Choosing the manifest or **Copy to clipboard** hides format, quality, scale, watermark, crop, and rename. The manifest still selects an output directory; the clipboard writes no file.
 
 ### Fixed
 
-- 评分 / 旗标统一走一条管线：键盘（Ctrl+Shift+0..5、Ctrl+Shift+P/X、Alt+0..6）、图库右键菜单批量操作、元数据面板改评分或旗标后，都会立即重新计算图库的评分 / 色标 / 收藏 / 拒绝筛选。之前只有元数据面板会刷新筛选，键盘和右键菜单只重绘星标，筛选结果要手动刷新才正确。
-- 清除浏览视图选区（空选区）后，分析面板回到整图统计，不再停留在旧选区。切换到新图片时，未锁定缩放的选区会被清除，并通知分析面板；锁定缩放时选区保留，并在新图上重新统计。
-- 查看器全屏时从右键「分析」打开分析，会先退出查看器全屏，再显示主窗口的分析面板并把它提到前面。
+- Rating and flag changes now go through one pipeline. After a keyboard shortcut (Ctrl+Shift+0..5, Ctrl+Shift+P/X, Alt+0..6), a batch action from the gallery context menu, or a rating or flag edit in the metadata panel, the gallery immediately recomputes the rating / color-label / pick / reject filters. Previously only the metadata panel refreshed those filters; keyboard and context-menu actions only redrew the stars, so the filter results stayed wrong until a manual refresh.
+- After the browse-view selection is cleared (empty selection), the analysis panel returns to whole-image statistics and no longer stays on the old selection. When switching to a new image, an unlocked-zoom selection is cleared and the analysis panel is notified; when zoom is locked, the selection is kept and statistics are recomputed on the new image.
+- Opening analysis from the context-menu **Analyze** item while the viewer is fullscreen first exits viewer fullscreen, then shows the main window's analysis panel and brings it to the front.
 
 ## [1.0.135] - 2026-10-17
 
@@ -106,10 +106,10 @@
 
 ### Bug Fixes & UX Enhancements
 
-- **对比模式截图与剪贴板高分屏/缩放画幅修正（High-DPI & Zoom Full-Coverage Comparison Snapshot）**：
-  - **缺陷根因**：自 v1.0.132 引入快照注释条以来，`grabComparisonView()` 依据 `target->grab()` 获取物理像素尺寸创建 `result` 画布，但未设置 `result.setDevicePixelRatio(dpr)`，导致在 Windows 高分屏缩放（如 125%、150%、175%、200%）或放大查看图片时，`QPainter::drawPixmap` 将高 DPI 像素缩小到逻辑视口大小（仅占画面的 $1/(\text{DPR}^2)$，即 25%~50%），其余区域呈现大片黑色死区；
-  - **全画幅高精渲染**：对快照结果缓冲区的设备像素比（`devicePixelRatio`）实施统一对齐与精准映射，按逻辑坐标 `QRect(0, 0, logW, logH)` 严丝合缝铺满视口画面，底栏快照标注信息（ROI 坐标、调参状态、对比图片名、指标等）与字号在高分屏下同步矢量清晰渲染；
-  - **测试防护**：在 `compare_three_pane_fit_tests` 中新增高 DPI 视口与 100% 放大模式下的真实画幅覆盖率回归断言，确保全屏快照与剪贴板复制（Ctrl+C）100% 满幅无黑边。
+- **Comparison-mode screenshot and clipboard high-DPI/zoom frame correction (High-DPI & Zoom Full-Coverage Comparison Snapshot)**:
+  - **Root cause**: Since the snapshot annotation bar was introduced in v1.0.132, `grabComparisonView()` creates the `result` canvas from the physical pixel size returned by `target->grab()`, but does not call `result.setDevicePixelRatio(dpr)`. On Windows high-DPI scaling (such as 125%, 150%, 175%, or 200%), or when an image is viewed zoomed in, `QPainter::drawPixmap` therefore scales the high-DPI pixels down to the logical viewport size (covering only $1/(\text{DPR}^2)$ of the frame, that is 25%~50%), and the remaining area shows a large black dead zone.
+  - **Full-frame high-precision rendering**: Align and precisely map the snapshot result buffer's device pixel ratio (`devicePixelRatio`) so the image fills the viewport exactly in logical coordinates `QRect(0, 0, logW, logH)`. Bottom-bar snapshot annotations (ROI coordinates, tuning status, comparison image names, metrics, and similar) and their font sizes are rendered sharply, in vector form, on high-DPI displays at the same time.
+  - **Test safeguard**: Add regression assertions in `compare_three_pane_fit_tests` for real frame coverage under a high-DPI viewport and in 100% zoom mode, so full-screen snapshots and clipboard copies (Ctrl+C) cover 100% of the frame with no black borders.
 
 ## [1.0.134] - 2026-10-17
 
@@ -119,36 +119,36 @@
 
 ### Core Engine & Architecture Fixes
 
-- **渐进式目录扫描筛选守卫与自然排序（Progressive Directory Scan Filtering & Sorting）**：
-  - 新增 `hasActiveBrowseFilter()` 全局守卫，覆盖关键字、格式类型、星级评分、颜色标签、Pick/Reject 标记、最近导入以及相机/镜头/ISO/标签等全量过滤维度，杜绝未过滤条目在异步阶段直接插入画廊且扫描完成时跳过筛选的问题；
-  - 统一 `scanProgressiveDirectory` 尾部批次排序与 `browseOrderedLess` / `compareNaturalName` 自然排序规则（数字自然排序，如 `img2` 位于 `img10` 之前）；
-  - `applyScanBatch` 改为 `replaceSources` 整体映射路径，保证缩略图管线任务索引与当前表格行号严格一致；并在渐进式完成分支中自动恢复 `m_pendingSelect` 选中项。
-- **编码器与透明通道保护（Lossless Alpha Channel Preservation & Quality Control）**：
-  - 修复 `Encoder::encode` 仅匹配 `"jpg"` 导致保存 `.jpeg` 文件时 `params.quality` 参数失效的逻辑缺陷；
-  - 新增 `mvcore::fromQImagePreservingAlpha` 接口，原图 90°/180°/270° 旋转、水平/垂直翻转、图像几何缩放与文字水印合成管线均完整保留 `PixelFormat::RGBA32` / `BGRA32` 透明通道，杜绝静默退化为不透明 24 位 RGB 导致的背景变黑问题。
-- **分析器与对齐引擎健壮性（Analyzer & Aligner Edge Robustness）**：
-  - `ColorCheckerAnalyzer`：增加 `maxPatch < 0` 初始守卫，彻底解决全图色块均未通过质量校验时返回未初始化色块索引的缺陷；
-  - `MTFAnalyzer`：放宽 `compute` 边界检查以完整支持极细长/高挑水平刀口 ROI 区域（如 4×16 / 8×4），并将边缘剖面有效判定阈值收敛至 8 采样点；
-  - `Analyzer`：异步分析调度捕获强引用共享快照 `std::make_shared<ImageFrame>(frame)`，彻底规避栈局部临时帧引用在异步线程执行期间悬空引起的 UAF 隐患；
-  - `Aligner`：对粗/精搜索循环区间双向施加参考图与移动图尺寸边界约束，彻底防止图像尺寸不一致或大位移时搜索窗越界引发崩溃。
-- **对比调参、报告与检视（Compare Parameter Sync, Report & Pixel Inspector）**：
-  - 对齐 `ImageAdjust.h` 熔合调参 LUT 构建公式与 `PixelInspector_adjust.cpp` 的阶梯四舍五入规则，保证 100% 逐位一致；
-  - `AnalysisEngine` 纯标准库实现：移除 `AnalysisEngine_metrics.cpp` 对 Qt 图像转化的隐式依赖，直接基于 `ImageBuffer` 内存布局高效计算均方误差；
-  - 导出报告序列化：在 HTML 与 JSON 分析报告中完整导出窗格水平翻转（`flipH`）与垂直翻转（`flipV`）调参字段；
-  - 直方图批处理与检视表：修正单窗格独立直方图在 tooltip 中的槽位标识（如 C 窗格显示 `[C]` 而非恒定 `[A]`）；检视表行更新无条件拉取最新文件名，并在 `#` 列 UserRole 中同步注入打包 RGB 颜色，打通右键 HEX/RGB 复制链路。
-- **文件覆盖确认逻辑兼容（Transform Confirmation Dialog Compatibility）**：
-  - 扩大原文件修改确认对话框的有效确认状态判断，防止非标准按钮映射或回车键确认被误判为取消。
+- **Progressive Directory Scan Filtering & Sorting**:
+  - Added a global `hasActiveBrowseFilter()` guard covering every filter dimension—keyword, format type, star rating, color label, Pick/Reject mark, recently imported, and camera/lens/ISO/tags—so entries stay filtered when they are inserted during the asynchronous phase and when the scan completes.
+  - Unified tail-batch ordering in `scanProgressiveDirectory` with the `browseOrderedLess` / `compareNaturalName` natural-sort rules (numeric natural order, for example `img2` before `img10`).
+  - Changed `applyScanBatch` to remap paths wholesale through `replaceSources`, so thumbnail-pipeline task indexes stay strictly aligned with current table row numbers. The progressive-completion branch also restores the `m_pendingSelect` selection.
+- **Lossless Alpha Channel Preservation & Quality Control**:
+  - Fixed the logic bug where `Encoder::encode` matched only `"jpg"`, so `params.quality` had no effect when saving `.jpeg` files.
+  - Added `mvcore::fromQImagePreservingAlpha`. Source-image rotation at 90°/180°/270°, horizontal and vertical flip, geometric scaling, and text-watermark compositing all keep the `PixelFormat::RGBA32` / `BGRA32` alpha channel, so the image does not silently fall back to opaque 24-bit RGB and turn the background black.
+- **Analyzer & Aligner Edge Robustness**:
+  - `ColorCheckerAnalyzer`: added an initial `maxPatch < 0` guard, so a patch index is no longer returned uninitialized when every patch in the image fails quality checks.
+  - `MTFAnalyzer`: relaxed the `compute` bounds check so very thin or tall horizontal knife-edge ROIs are fully supported (for example 4×16 / 8×4), and set the edge-profile validity threshold to 8 samples.
+  - `Analyzer`: asynchronous analysis dispatch now captures a strong shared snapshot with `std::make_shared<ImageFrame>(frame)`, so a stack-local temporary frame cannot dangle and cause a use-after-free while the async thread runs.
+  - `Aligner`: the coarse and fine search loop ranges are bounded in both directions by the reference-image and moving-image sizes, so the search window stays in range when image sizes differ or the displacement is large.
+- **Compare Parameter Sync, Report & Pixel Inspector**:
+  - Aligned the fused-adjustment LUT formula in `ImageAdjust.h` with the stepwise rounding rules in `PixelInspector_adjust.cpp`, so the two paths match bit for bit.
+  - `AnalysisEngine` is now a pure standard-library implementation: removed the implicit Qt image-conversion dependency from `AnalysisEngine_metrics.cpp`, and mean squared error is computed directly from the `ImageBuffer` memory layout.
+  - Report serialization: HTML and JSON analysis reports now export the pane horizontal-flip (`flipH`) and vertical-flip (`flipV`) adjustment fields.
+  - Histogram batching and the inspector table: single-pane histogram tooltips now show the correct slot label (pane C shows `[C]`, where it previously always showed `[A]`). Inspector-table row updates always take the latest filename, and packed RGB is written into the `#` column UserRole so the right-click HEX/RGB copy path works.
+- **Transform Confirmation Dialog Compatibility**:
+  - Broadened the accept-state check on the original-file modification confirmation dialog, so non-standard button mappings and Enter-key confirmation count as a valid accept.
 
 ### Product & UX Enhancements
 
-- **USM 锐化前后对比与导出升级（USM Sharpen Engine & Studio Enhancements）**：
-  - **核心计算极速优化**：建立 511 项预计算差值查找表（Delta LUT），彻底消除高斯差值锐化内层循环的浮点运算；水平滤波内域展开消除边界 clamp 检查，执行效率提升 2~3 倍；
-  - **量化差异全景评测**：新增 `computeUsmDiffSummary`，一次性输出 PSNR、SSIM、Δ均值、Δ最大以及像素变化百分比等多维客观评价指标；
-  - **5 大专业预设模板**：新增预设下拉框，提供“标准通用锐化”、“轻度细节唤醒”、“人像肤质保护”、“风景建筑清晰度”、“强力边缘增强”，并支持微调后无缝切入“自定义”模式；
-  - **剪贴板一键导出**：新增“复制结果 (Ctrl+C)”按钮与快捷键支持，瞬时将锐化图像推送到系统剪贴板；
-  - **全链路色彩管理与任务安全**：锐化渲染与显示严格遵照当前窗口色彩空间上下文，保存时完整继承源图 ICC Profile；异步计算任务严格受控于 `TaskScheduler`，弹窗关闭或参数连动时即刻取消旧任务，UI 回调引入 `QPointer` 守卫保障绝对安全。
-- **对比视图快照画幅增强（Snapshot Banner Context Enrichment）**：
-  - 对比工作区快照底栏摘要信息智能识别当前环境：激活 ROI 时自动附加 `[ROI: x,y w×h]` 选区坐标与几何尺寸，存在任意非恒等色彩/几何调整窗格时自动标注 `[已调参]` 标识。
+- **USM Sharpen Engine & Studio Enhancements**:
+  - **Core compute speedup**: built a 511-entry precomputed delta lookup table (Delta LUT), removing floating-point arithmetic from the inner loop of Gaussian-difference sharpening. Interior unrolling of the horizontal filter removes boundary clamp checks, and execution is about 2–3× faster.
+  - **Quantitative difference summary**: added `computeUsmDiffSummary`, which reports PSNR, SSIM, mean Δ, max Δ, and the percentage of changed pixels in one call.
+  - **Five professional presets**: added a preset dropdown with “Standard General Sharpen”, “Light Detail Revival”, “Portrait Skin Protection”, “Landscape & Architecture Clarity”, and “Strong Edge Enhancement”. Fine-tuning switches seamlessly into “Custom”.
+  - **One-click clipboard export**: added a “Copy Result (Ctrl+C)” button and shortcut that pushes the sharpened image to the system clipboard.
+  - **End-to-end color management and task safety**: sharpen rendering and display follow the current window color-space context, and save inherits the source image ICC profile. Async work is owned by `TaskScheduler`; the previous task is cancelled as soon as the dialog closes or parameters change together, and UI callbacks are guarded with `QPointer`.
+- **Snapshot Banner Context Enrichment**:
+  - The compare-workspace snapshot footer summary follows the current context. An active ROI appends `[ROI: x,y w×h]` with the selection origin and size. Any pane with a non-identity color or geometry adjustment is marked `[Adjusted]`.
 
 ## [1.0.133] - 2026-10-17
 
@@ -158,20 +158,20 @@
 
 ### Performance & User Experience Enhancements
 
-- **超大/网络服务器图片文件夹浏览体验与列表防闪优化（Large & Network Folder Smooth Browsing & Flicker Elimination）**：
-  - **渐进式扫描视口锚点位置动态补偿（Progressive Scan Scroll Anchor Stabilization）**：彻底解决在网络服务器（SMB/UNC）或数千张大图文件夹中向下滚轮时列表位置被持续推回、抵抗无法下拉的问题。在 `ThumbnailPanel::insertProgressiveRows` 和 `buildModel` 中引入精准视口锚点捕获（`captureScrollAnchor`）与视口像素位移补偿（`preserveScrollAnchor`），当新批次图片按字母排序插入到当前视口上方时，自动平移垂直/水平滚动条对应像素差，确保用户当前查看的照片在屏幕上纹丝不动，滚轮下拉如丝般顺滑；
-  - **扫描完成免重建机制（Seamless Progressive Scan Completion）**：当渐进式扫描自然完成且未附加筛选条件时，由于所有条目已按顺序插入模型中，直接更新源序列并跳过破坏性的全量模型重置（`setStringList`），彻底杜绝扫描结束瞬间画面剧烈重排与滚动条强制归零（跳回第一张）的问题；
-  - **缩略图增量刷新杜绝全屏闪烁（Zero-Flicker Dirty Region Updates）**：修复 `flushThumbUpdates` 原先全视口无条件重绘（`viewport()->update()`）及空角色 `dataChanged` 导致 Qt 频繁推翻整个布局的严重闪烁缺陷。将信号角色严格限制为 `{Qt::DecorationRole}`，并仅向视口提交实际发生缩略图变动的单元格脏区域（`viewport()->update(dirtyRegion)`），其余卡片与文字背景完全保持静止，彻底消除眼胀频闪；
-  - **首屏分批节奏优化（Coherent Initial Batching）**：优化 `scanProgressiveDirectory` 的批量发布节奏，第 1 张图片即刻发布以保证首张图毫秒级瞬时可见（满足 `firstGalleryRowMs` 性能指标），其余首屏图片整批（16 张）接入，消除初始 16 次逐张插入引发的高频剧烈抖动。
+- **Large & Network Folder Smooth Browsing & Flicker Elimination**:
+  - **Progressive Scan Scroll Anchor Stabilization**: Fully fixes the problem where, while wheel-scrolling down through an image folder on a network server (SMB/UNC) or a folder of thousands of large images, the list position is continually pushed back and resists scrolling downward. Precise viewport-anchor capture (`captureScrollAnchor`) and viewport pixel-offset compensation (`preserveScrollAnchor`) are introduced in `ThumbnailPanel::insertProgressiveRows` and `buildModel`. When a new batch of images is inserted above the current viewport in alphabetical order, the vertical and horizontal scrollbars are shifted by the corresponding pixel delta, so the photo the user is viewing stays perfectly still on screen and downward wheel scrolling stays smooth;
+  - **Seamless Progressive Scan Completion**: When a progressive scan finishes naturally and no filter is applied, every entry is already in the model in order, so the source sequence is updated directly and the destructive full model reset (`setStringList`) is skipped. This removes the violent reflow and the scrollbar being forced to zero (jumping back to the first image) at the moment the scan ends;
+  - **Zero-Flicker Dirty Region Updates**: Fixes a severe flicker defect in which `flushThumbUpdates` unconditionally repainted the whole viewport (`viewport()->update()`) and an empty-role `dataChanged` made Qt frequently invalidate the entire layout. Signal roles are strictly limited to `{Qt::DecorationRole}`, and only the dirty cell regions where thumbnails actually changed are submitted to the viewport (`viewport()->update(dirtyRegion)`). The remaining cards and text backgrounds stay completely still, eliminating eye-straining flicker;
+  - **Coherent Initial Batching**: Optimizes the batch-publish cadence of `scanProgressiveDirectory`. The first image is published immediately so it is visible within milliseconds (meeting the `firstGalleryRowMs` performance metric). The rest of the first screen is admitted as one batch (16 images), removing the high-frequency severe jitter caused by 16 one-by-one insertions at startup.
 
 ### Features & Capabilities
 
-- **USM 锐化前后对比与导出（USM Sharpen Before/After Comparison & Export）**：
-  - 核心算法引擎（`UsmSharpen.h` / `UsmSharpen.cpp`）：实现高精度二维可分离高斯滤波核（14-bit 定点数整数运算，`sum = 16384`）、可调阈值控制掩模（Threshold）以及快速仅亮度通道锐化路径（Luma-only，标准 ITU-R BT.601 权重 $Y = (19595R + 38470G + 7471B) \gg 16$），全面覆盖 `RGB24`、`BGR24`、`RGBA32`（Alpha 无损保留）、`BGRA32` 和 `Grayscale8` 等像素格式；
-  - 专属对比弹窗（`UsmCompareDialog`）：提供双 `RawImageView` 并列视图（`原图 (Before)` vs `USM 锐化后 (After)`）、默认双向同步平移/缩放、Space 快捷键瞬时按住看原图（`setTransientDisplay`）、顶部适应窗口 / 100% / 200% 快捷缩放，以及底部数量（Amount 0~500%）、半径（Radius 0.1~20.0px）、阈值（Threshold 0~255）微调控件与参数重置；
-  - 异步计算与量化评测：基于 `TaskScheduler` 交互优先级异步调度与去抖动触发计算，底部状态栏实时显示计算耗时、全图分辨率、色彩空间与 PSNR / SSIM 量化质量指标；
-  - 导出结果保存：提供 `Ctrl+S` / `另存为...` 功能，保存锐化后图像并完整继承源图像 ICC 配置文件；
-  - 入口全面接入：单图查看器右键菜单（`Ctrl+U`）、缩略图画廊右键菜单（单选图片）以及主窗口“工具(&T)”菜单（`Ctrl+U`）与主工具栏均新增快捷触发入口。
+- **USM Sharpen Before/After Comparison & Export**:
+  - Core algorithm engine (`UsmSharpen.h` / `UsmSharpen.cpp`): implements a high-precision 2D separable Gaussian filter kernel (14-bit fixed-point integer arithmetic, `sum = 16384`), an adjustable threshold control mask (Threshold), and a fast luma-only sharpening path (Luma-only, standard ITU-R BT.601 weights $Y = (19595R + 38470G + 7471B) \gg 16$), covering the pixel formats `RGB24`, `BGR24`, `RGBA32` (alpha preserved losslessly), `BGRA32`, and `Grayscale8`;
+  - Dedicated comparison dialog (`UsmCompareDialog`): side-by-side dual `RawImageView` views (Original (Before) vs USM sharpened (After)), bidirectional pan/zoom sync by default, a Space shortcut to hold and momentarily view the original (`setTransientDisplay`), top quick zoom for fit-to-window / 100% / 200%, and bottom fine controls for Amount (0–500%), Radius (0.1–20.0 px), and Threshold (0–255), plus parameter reset;
+  - Async computation and quantitative evaluation: interactive-priority async scheduling on `TaskScheduler` with debounced computation. The bottom status bar shows computation time, full-image resolution, color space, and PSNR / SSIM quantitative quality metrics in real time;
+  - Saving the exported result: `Ctrl+S` / `Save As...` saves the sharpened image and fully inherits the source image ICC profile;
+  - Entry points wired throughout: new shortcut triggers on the single-image viewer context menu (`Ctrl+U`), the thumbnail gallery context menu (single selected image), the main window **Tools(&T)** menu (`Ctrl+U`), and the main toolbar.
 
 ## [1.0.132] - 2026-10-16
 
@@ -181,13 +181,13 @@
 
 ### Product Quality, Safety & Capability Enhancements
 
-- **原图安全守护与确认弹窗（File Safety on Rotate / Flip）**：
-  - 旋转/翻转（Ctrl+R / Ctrl+Shift+R）覆写磁盘原图前增加确认提示弹窗，并提供“不再提示”复选框（配置项 `confirmModifyFile`，默认开启，可在“首选项 → 常规”中随时重新启用）；
-  - `ImageFileRotate` 在重写像素时完整保留源图片的 ICC Profile（`QColorSpace::iccProfile`）与文本元数据（EXIF/XMP/IPTC），并在 `Encoder::encode` / `encodeToBuffer` 中应用，杜绝旋转导致的 ICC 配置文件与元数据静默丢失。
-- **导出元数据剥离开关真闭环（Export Metadata Strip Realization）**：
-  - 导出/批处理管线（`ExportJob_run.cpp`）全面接通 `cfg.stripMetadata` 配置：当用户取消勾选“剥离元数据 (EXIF/ICC)”时，自动提取原图解码的 ICC Profile（`MViewer.DisplayICC.Base64`）和 `textKeys`，并写入导出的目标图片中，实现真正的元数据保留与剥离控制。
-- **专业对比带标快照（Annotated Comparison Snapshot）**：
-  - 全面升级对比模式截图功能（`CompareWorkspace::grabComparisonView`，Ctrl+C 复制 / Ctrl+S 保存）：截取的对比图片底部自动合成专业的数据评估摘要条，包含当前对比模式徽标（左右分割、卷帘、叠加、棋盘格、差异高亮、网格等）、像素缩放比例（100%、150% 等）、双图对比详情（`A: ... vs B: ...`）、PSNR / SSIM 量化评测指标以及时间戳水印，直接满足算法工程师日常发帖、汇报、缺陷单归档与评估需求。
+- **Original-image safety guard and confirmation dialog (File Safety on Rotate / Flip)**:
+  - Before rotate/flip (Ctrl+R / Ctrl+Shift+R) overwrites the original image on disk, a confirmation dialog is shown, with a "Don't show again" checkbox (setting `confirmModifyFile`, on by default; it can be turned back on at any time under Preferences → General).
+  - When `ImageFileRotate` rewrites pixels, it fully preserves the source image's ICC profile (`QColorSpace::iccProfile`) and text metadata (EXIF/XMP/IPTC), and applies them in `Encoder::encode` / `encodeToBuffer`, so rotation no longer silently drops the ICC profile or metadata.
+- **Export metadata-strip toggle fully wired through (Export Metadata Strip Realization)**:
+  - The export/batch pipeline (`ExportJob_run.cpp`) is fully connected to the `cfg.stripMetadata` setting: when the user unchecks "Strip metadata (EXIF/ICC)", the ICC profile decoded from the original image (`MViewer.DisplayICC.Base64`) and `textKeys` are extracted automatically and written into the exported target image, so metadata keep-or-strip is actually controlled.
+- **Professional annotated comparison snapshot (Annotated Comparison Snapshot)**:
+  - The comparison-mode screenshot (`CompareWorkspace::grabComparisonView`, Ctrl+C to copy / Ctrl+S to save) is fully upgraded: a professional evaluation summary bar is composited along the bottom of the captured comparison image. It includes the current comparison-mode badge (left-right split, wipe, overlay, checkerboard, difference highlight, grid, and others), the pixel zoom (100%, 150%, and so on), the dual-image comparison details (`A: ... vs B: ...`), quantitative PSNR / SSIM metrics, and a timestamp watermark, for algorithm engineers' day-to-day posts, reports, defect-ticket archives, and evaluations.
 
 ## [1.0.131] - 2026-10-16
 
@@ -197,20 +197,20 @@
 
 ### Bug Fixes & Algorithmic Robustness
 
-- **网络服务器共享路径（UNC）对比模式图片加载修复（Server / UNC Network Path Compare Fix）**：
-  - 修复 Windows 下 UTF-8 路径转换：在 `Utf8Path.cpp` 中将以 `//` 或 `\\` 开头的 UNC 共享路径规范化为标准 Windows 反斜杠格式，并在 `normalizePathKey` 保持正斜杠统一，确保 `std::filesystem::exists` 与 Win32 内核 API 正确解析网络共享；
-  - 在 `DecoderRegistry::decodeFullResult`、`QtDecoder::decodeFullResult` 及 `RawDecoder::decodeFullResult` 中增加网络路径保护，防止部分网络共享权限限制导致误报 `FileNotFound`；
-  - 修复 `MainWindow::showCompareDialog` 在 2 张图片对比且 `m_imageList` 尚未填充时未调用 `setImagePool` 的边界问题。
-- **图像对齐引擎精度与跨平台护栏（Aligner Accuracy & Cross-Platform Guards）**：
-  - 在 `Aligner::fineSearch` 中去除 `stepY` 跨行跳跃，使用中心 512×512 视窗与 `stepY = 1` 逐行搜索，彻底消除因采样相位失配导致的垂直微调误差；
-  - 引入 `CpuFeatures.h` 并使用 `MV_ARCH_X86` 严格包裹 SIMD 指令，避免 ARM64 / macOS 平台编译失败。
-- **MTF 分析算法边缘质心自适应加窗（MTF50 Adaptive Centroid Windowing）**：
-  - `MTFAnalyzer::calculateMtf50` 的 Hamming 窗由固定几何中心改为动态居中于边缘 LSF 峰值质心（`peakIdx`），消除 ROI 边缘偏移时的伪衰减，提升 MTF50 测量鲁棒性。
-- **缓存并发去重与缩略图尺寸隔离（Cache Details & Concurrency Fixes）**：
-  - `ThumbnailPipeline::findCached` 改造为精确 $O(1)$ 查找，移除全表前缀遍历回退，防止错误尺寸的缩略图污染 `m_thumbReady`；
-  - `QtConvert.cpp` 的 ICC Profile 环形缓存（`colorSpaceFromIcc`、`sourceColorSpace`）在加锁写槽前增加重复键校验，杜绝多线程并发解码同一张图时的重复占槽与过早淘汰。
-- **色卡分析器（ColorCheckerAnalyzer）暴露最大偏差色块**：
-  - 暴露 `maxDeltaEPatch()` 接口并在 `resultText()`、`resultMetrics()` 以及 `outputFields` 中完整输出该色块序号，补齐元数据读取闭环。
+- **UNC network share path compare-mode image loading fix (Server / UNC Network Path Compare Fix)**:
+  - Fix UTF-8 path conversion on Windows: in `Utf8Path.cpp`, normalize UNC share paths that start with `//` or `\\` to the standard Windows backslash form, while `normalizePathKey` keeps paths unified with forward slashes, so `std::filesystem::exists` and the Win32 kernel APIs resolve network shares correctly.
+  - Add network-path guards in `DecoderRegistry::decodeFullResult`, `QtDecoder::decodeFullResult`, and `RawDecoder::decodeFullResult` so restricted network-share permissions are not misreported as `FileNotFound`.
+  - Fix the edge case in `MainWindow::showCompareDialog` where `setImagePool` was not called when comparing 2 images and `m_imageList` had not yet been populated.
+- **Aligner accuracy and cross-platform guards (Aligner Accuracy & Cross-Platform Guards)**:
+  - In `Aligner::fineSearch`, remove the `stepY` cross-row stride and search row by row over a centered 512×512 window with `stepY = 1`, eliminating vertical fine-adjustment error caused by sampling-phase mismatch.
+  - Introduce `CpuFeatures.h` and strictly wrap SIMD instructions with `MV_ARCH_X86` so ARM64 / macOS builds do not fail to compile.
+- **MTF50 adaptive centroid windowing (MTF50 Adaptive Centroid Windowing)**:
+  - Change the Hamming window in `MTFAnalyzer::calculateMtf50` from a fixed geometric center to a window dynamically centered on the edge LSF peak centroid (`peakIdx`), removing spurious attenuation when the ROI edge is offset and improving MTF50 measurement robustness.
+- **Cache concurrency deduplication and thumbnail size isolation (Cache Details & Concurrency Fixes)**:
+  - Rework `ThumbnailPipeline::findCached` into an exact $O(1)$ lookup and remove the full-table prefix-scan fallback, so a thumbnail of the wrong size cannot pollute `m_thumbReady`.
+  - In the ICC profile ring cache in `QtConvert.cpp` (`colorSpaceFromIcc`, `sourceColorSpace`), check for a duplicate key before writing a slot under the lock, preventing duplicate slot occupancy and premature eviction when multiple threads decode the same image concurrently.
+- **ColorCheckerAnalyzer exposes the maximum-deviation patch**:
+  - Expose the `maxDeltaEPatch()` API and fully report that patch index in `resultText()`, `resultMetrics()`, and `outputFields`, closing the metadata read-back loop.
 
 ## [1.0.130] - 2026-10-16
 
@@ -220,9 +220,9 @@
 
 ### UI / UX Enhancements
 
-- **对比图片模式文件名显示放大与样式统一（Compare Mode Filename Overlay Enhancement）**：
-  - 放大对比模式文件名悬浮字体：`kFilenameOverlayPointSize` 由 13pt 提升至 15pt bold，最大高度扩充至 120px，提供更清晰易读的文件名呈现；
-  - 左右分割模式与多图网格模式视觉体验无缝统一：`ComparePaneHeader` 升级为黑色半透明气泡卡片风格（`background: rgba(0, 0, 0, 120)`，圆角 4px，纯白加粗文字 `#ffffff`，半透明高对比度序号徽标），完全对齐左右分割模式的文件名悬浮效果。
+- **Compare Mode Filename Overlay Enhancement**:
+  - Enlarged the compare-mode filename overlay font: `kFilenameOverlayPointSize` raised from 13pt to 15pt bold, with the maximum height expanded to 120px, for a clearer and more readable filename presentation.
+  - Seamlessly unified the visual experience of left-right split mode and multi-image grid mode: `ComparePaneHeader` upgraded to a black semi-transparent bubble-card style (`background: rgba(0, 0, 0, 120)`, 4px corner radius, pure white bold text `#ffffff`, semi-transparent high-contrast index badges), fully aligned with the filename overlay of left-right split mode.
 
 ## [1.0.129] - 2026-10-16
 
@@ -232,11 +232,11 @@
 
 ### Bug Fixes
 
-- **浏览模式列表/详细信息视图小缩略图白块与加载中断修复（Browse Thumbnail Loading Fix）**：
-  - 修复 `applyScanResult` 中标志重置时序（`m_scanProgressive = false` 移至 `applyFilter()` 前），确保扫描完成重构视图时使用 `updateSources` 保留首屏正在解码的缩略图任务，避免旧逻辑调用 `replaceSources` 误取消所有在飞任务；
-  - 优化 `ThumbnailPipeline::replaceSources`，改用 `cancelObsoleteHandlesLocked()` 与 `scheduleLocked(false)`，不再无条件丢弃视口内解码任务并即时补录视口需求；
-  - `ThumbnailPipeline::setSources` 重置 `m_visibleBegin = 0; m_visibleEnd = 0;`，彻底消除上一目录滚动偏移污染新目录可见范围导致的漏排队缺陷；
-  - `ThumbnailPanel::thumbReady` 新增跨层级检查 `ThumbnailPipeline` 内存缓存（`findCached`），并完善 DetailsDelegate 占位配色以适应暗色/浅色主题。
+- **Fix white blocks and interrupted loading of small thumbnails in Browse mode list and details views (Browse Thumbnail Loading Fix)**:
+  - Fix flag-reset timing in `applyScanResult` (move `m_scanProgressive = false` to before `applyFilter()`), so that when a completed scan rebuilds the view it uses `updateSources` to keep first-screen thumbnail decode tasks that are already in flight, avoiding the old logic that called `replaceSources` and incorrectly cancelled all in-flight tasks;
+  - Optimize `ThumbnailPipeline::replaceSources` to use `cancelObsoleteHandlesLocked()` and `scheduleLocked(false)`, so it no longer unconditionally discards in-viewport decode tasks and immediately re-records viewport demand;
+  - `ThumbnailPipeline::setSources` resets `m_visibleBegin = 0; m_visibleEnd = 0;`, fully eliminating the missed-enqueue defect where the previous directory's scroll offset polluted the new directory's visible range;
+  - `ThumbnailPanel::thumbReady` adds a cross-layer check of the `ThumbnailPipeline` memory cache (`findCached`), and improves DetailsDelegate placeholder coloring for dark and light themes.
 
 ## [1.0.128] - 2026-10-15
 
@@ -246,30 +246,30 @@
 
 ### Performance & Pipeline Optimization
 
-- **对比图像多参数调节 4 合 1 1D LUT 融合（Compare 4-in-1 LUT Fusion）**：
-  - 在 `ImageAdjust.h` 中实现 `adjustCombinedLut`，将亮度、对比度、伽马、白平衡（R/B 增益）4 步串行处理融合为单次 3×256 1D LUT 变换；
-  - `ExportReport.cpp` 对比图导出调节全幅内存分配与遍历带宽开销减少 75%，并在浮点域单次量化，消除多次级联 8-bit 截断造成的暗部色阶断裂（Banding）。
-- **RGB24 toGrayscale8 SSSE3 向量化加速**：
-  - 在 `AnalysisEngine_metrics.cpp` 为最常见的解码产物 RGB24 补齐 SSSE3 快速灰度转换路径（基于 `_mm_shuffle_epi8` 与 `_mm_maddubs_epi16`）；
-  - `ssim()` 与 `noiseEstimate()` 避免在 3 通道图像上退化为逐像素标量循环。
-- **AnalysisPanel Worker 零拷贝直通**：
-  - 在 `analysispanel_analysis_worker.cpp` 中去除多余的 `mvcore::fromQImage(img)` 格式来回转换与两遍整图拷贝，直接基于帧原生像素缓冲区计算直方图基础统计与噪声。
-- **瓦片色彩管理解析结果缓存（Tile Color Profile Caching）**：
-  - 在 `QtConvert.cpp` 中增加线程安全有限容量色彩空间缓存，杜绝屏幕各瓦片在视口渲染时重复解析 Base64 与 ICC Profile。
-- **DiskCache 巨型裸像素保护（Giant BLOB Guard）**：
-  - 在 `ImageRepository_load.cpp` 中对大于 16MB 的未压缩帧跳过 SQLite 同步写入，避免大图磁盘缓存耗时超过重新解码。
+- **Compare-image multi-parameter adjustment, 4-in-1 1D LUT fusion (Compare 4-in-1 LUT Fusion)**:
+  - Implemented `adjustCombinedLut` in `ImageAdjust.h`, fusing the four serial steps—brightness, contrast, gamma, and white balance (R/B gain)—into a single 3×256 1D LUT transform.
+  - Compare-image export adjustment in `ExportReport.cpp` reduces full-frame memory allocation and traversal-bandwidth overhead by 75%, and quantizes once in the floating-point domain, eliminating shadow banding caused by repeated cascaded 8-bit truncation.
+- **RGB24 toGrayscale8 SSSE3 vectorized acceleration**:
+  - Added an SSSE3 fast grayscale-conversion path in `AnalysisEngine_metrics.cpp` for the most common decoded output, RGB24 (based on `_mm_shuffle_epi8` and `_mm_maddubs_epi16`).
+  - `ssim()` and `noiseEstimate()` no longer fall back to a per-pixel scalar loop on 3-channel images.
+- **AnalysisPanel worker zero-copy passthrough**:
+  - Removed the redundant `mvcore::fromQImage(img)` format round-trip and two full-image copies in `analysispanel_analysis_worker.cpp`, computing basic histogram statistics and noise directly from the frame's native pixel buffer.
+- **Tile color-management parse-result cache (Tile Color Profile Caching)**:
+  - Added a thread-safe, bounded-capacity color-space cache in `QtConvert.cpp`, so each on-screen tile no longer re-parses Base64 and the ICC profile during viewport rendering.
+- **DiskCache giant raw-pixel guard (Giant BLOB Guard)**:
+  - In `ImageRepository_load.cpp`, uncompressed frames larger than 16MB skip synchronous SQLite writes, so disk caching of large images does not take longer than decoding them again.
 
 ### Algorithm & Analysis Precision
 
-- **Aligner 粗精两级高精度搜索（Aligner Coarse-to-Fine Search）**：
-  - 在 `Aligner.cpp` 实现粗精两级搜索：在 256px 缩略图粗搜索确定基准偏移后，在全分辨率灰度图 ±scale 窗口内执行 1px 精细搜索；
-  - 修正平均 SAD 浮点精度，消除整型除法截断为 0 导致错误偏移锁定的缺陷。
-- **ColorChecker 色差标准升级与中心区域采样**：
-  - `ColorCheckerAnalyzer` 全面采用标准 CIE76 $\Delta E^*_{ab}$（sRGB → XYZ → CIE L\*a\*b\*）度量色差；
-  - 取各色块中心 25% 面积进行均值采样，排除色卡边缘与暗角畸变，并新增 `maxDeltaE` 最大色差输出。
-- **MTF50 倾斜边缘自动判向与汉明窗抑制（MTF Edge Auto-Orientation & Windowing）**：
-  - `MTFAnalyzer` 自动计算水平与垂直边缘梯度强度以自适应选定投影方向；
-  - 在对 ESF 微分获得 LSF 后引入 Hamming 窗函数抑制频谱泄漏，显著提升复杂边缘下的频率交叉点解算稳定性。
+- **Aligner coarse-to-fine high-precision search (Aligner Coarse-to-Fine Search)**:
+  - Implemented a coarse-to-fine two-level search in `Aligner.cpp`: after a coarse search on the 256px thumbnail determines the base offset, a 1px fine search runs inside a ±scale window on the full-resolution grayscale image.
+  - Fixed mean-SAD floating-point precision, eliminating the defect where integer-division truncation to 0 locked in an incorrect offset.
+- **ColorChecker color-difference standard upgrade and center-region sampling**:
+  - `ColorCheckerAnalyzer` now fully uses the standard CIE76 $\Delta E^*_{ab}$ (sRGB → XYZ → CIE L\*a\*b\*) to measure color difference.
+  - Each patch is mean-sampled over its center 25% area, excluding chart edges and vignetting distortion, and a `maxDeltaE` maximum color-difference output was added.
+- **MTF50 slanted-edge auto-orientation and Hamming-window suppression (MTF Edge Auto-Orientation & Windowing)**:
+  - `MTFAnalyzer` automatically computes horizontal and vertical edge-gradient strength to adaptively select the projection direction.
+  - After differentiating the ESF to obtain the LSF, a Hamming window is applied to suppress spectral leakage, significantly improving the stability of frequency-crossover solving on complex edges.
 
 ## [1.0.127] - 2026-10-15
 
@@ -279,20 +279,20 @@
 
 ### SIMD & Cross-Platform (Bugfix)
 
-- **修复 `DifferenceEngine::applyThreshold` AVX2 目标属性缺失导致的 Linux GCC/Clang 编译失败**：
-  - 将行级 SIMD 运算提取为独立的 `applyThresholdRowAVX2`（标注 `MV_TARGET_AVX2`）与 `applyThresholdRowSSE2`（标注 `MV_TARGET_SSE2`），彻底消除外层非目标函数内联 AVX2 向量指令引起的 target-specific option mismatch 编译报错；
-  - 完整保留 `MV_ARCH_X86` 架构守卫与标量回退分支，确保 ARM64 及各平台下的跨架构构建鲁棒性。
+- **Fix the Linux GCC/Clang build failure caused by missing AVX2 target attributes on `DifferenceEngine::applyThreshold`**:
+  - Extract the row-level SIMD work into standalone `applyThresholdRowAVX2` (marked `MV_TARGET_AVX2`) and `applyThresholdRowSSE2` (marked `MV_TARGET_SSE2`), eliminating the target-specific option mismatch compile error that occurred when the outer non-target function inlined AVX2 vector instructions.
+  - Keep the `MV_ARCH_X86` architecture guard and the scalar fallback path intact, so cross-architecture builds stay robust on ARM64 and other platforms.
 
 ### Core Architecture & Code Hygiene (Refactor)
 
-- **修复 `compare_roi_controller.cpp` 命名空间内包含头文件导致的符号与全局命名空间污染**：
-  - 将 `PixelInspector.h`、`ExifOrientation.h`、`SourceImage.h` 移至文件头部全局范围，避免 `mviewer::ui` 命名空间内部嵌套包含污染。
-- **清除解码主链路与批处理中的三重冗余重试（Redundant Decode Fallback Cleanup）**：
-  - 移除 `DecoderRegistry::decodeFullResult` 内部已遍历全部解码器后的兜底 `decodeFull`；
-  - 移除 `ImageRepository_load.cpp` 与 `BatchProcessor.cpp` 在 `decodeRes` 失败后重复调用的 `Decoder::decodeFull`；
-  - 损坏文件与不支持格式不再触发 3 次重复 I/O 与解码重试，消除重复 Qt 警告日志并显著提升错误路径响应效率。
-- **完善 `ImageFrame` 状态同步与线程安全注释**：
-  - 纠正 `ImageFrame.h` 中关于状态原子的过时注释，明确说明缓存与解码状态变更必须在外部进行显式同步。
+- **Fix symbol and global-namespace pollution caused by including headers inside a namespace in `compare_roi_controller.cpp`**:
+  - Move `PixelInspector.h`, `ExifOrientation.h`, and `SourceImage.h` to global scope at the top of the file, so they are no longer nested inside the `mviewer::ui` namespace.
+- **Remove the triple redundant decode retry on the main decode path and in batch processing (Redundant Decode Fallback Cleanup)**:
+  - Remove the fallback `decodeFull` inside `DecoderRegistry::decodeFullResult` that ran after every decoder had already been tried.
+  - Remove the repeated `Decoder::decodeFull` calls in `ImageRepository_load.cpp` and `BatchProcessor.cpp` after `decodeRes` failed.
+  - Corrupt files and unsupported formats no longer trigger three repeated I/O and decode retries, which removes duplicate Qt warning logs and makes the error path respond faster.
+- **Clarify `ImageFrame` state-sync and thread-safety comments**:
+  - Correct the outdated comment in `ImageFrame.h` about the state atomics, making it clear that cache and decode state changes must be synchronized explicitly by the caller.
 
 ## [1.0.126] - 2026-10-15
 
@@ -302,15 +302,15 @@
 
 ### Compare Workspace (Bugfix)
 
-- **修复连续 4 次顺时针旋转导致下半截空白缺陷（Compare Rotation Sharp Planning）**：
-  - 根因：窗格经历 4 次 90° 旋转回到 0° 原方向时，`adjust.rotation` 归零，`input.hasCropOrRotation` 突变为 `false`；由于组件底层渲染请求在此时复用了尚未更新的控件旧尺寸（如 270° 旋转后的逆转长宽比），导致清晰层规划算法误按截断高度裁剪局部区域，渲染交付后下半截无像素呈现空白，直至鼠标拖拽触发二次重绘。
-  - 修复：在 `CompareWorkspace::displayPlanningInput` 中通过 `transformedSourceDims` 严格计算当前调整下的期望真实源图尺寸 `expectedSize`，并校验 `view->backdropKey() == paneContentKey(pane)` 与尺寸一致性；在内容或几何尚未同步交付时，禁用部分区域局部规划（`hasWidgetSourceSize = false`）并拉取全幅 LOD 栅格，确保全幅像素正确交付。
-  - 缓存强化：在 `ComparePanePyramidSlot` 中引入 `contentKey` 维度，杜绝跨旋转或色彩调整时复用过期金字塔各级栅格。
+- **Fixed the lower-half blank defect after four consecutive clockwise rotations (Compare Rotation Sharp Planning)**:
+  - Root cause: after a pane goes through four 90° rotations and returns to the original 0° orientation, `adjust.rotation` resets to zero and `input.hasCropOrRotation` flips to `false`. At that moment the component's underlying render request still reuses the widget's stale size (for example the swapped aspect ratio left by the 270° rotation), so the sharp-layer planning algorithm incorrectly crops a partial region using the truncated height. After the render is delivered, the lower half has no pixels and appears blank until a mouse drag triggers a second redraw.
+  - Fix: in `CompareWorkspace::displayPlanningInput`, compute the expected true source-image size `expectedSize` for the current adjustment strictly via `transformedSourceDims`, and check that `view->backdropKey() == paneContentKey(pane)` and that the sizes match. While content or geometry has not yet been delivered in sync, disable partial-region local planning (`hasWidgetSourceSize = false`) and fetch the full-frame LOD raster so the full-frame pixels are delivered correctly.
+  - Cache hardening: add a `contentKey` dimension in `ComparePanePyramidSlot` so stale pyramid rasters at every level are not reused across rotation or color adjustments.
 
 ### Test Suite Hardening
 
-- **补充对比连续 4 次 90° 旋转回归测试**：在 `test_rotate_selection.cpp` 中新增针对非对称比例图片在 Compare 窗格下连续 4 次旋转的端到端断言，确保全幅源矩形 `sourceRect == fullRect` 与完整渲染高度。
-- **加固浏览测试用例损坏缩略图等待逻辑**：在 `test_browse_acceptance.cpp` 中将固定延时改为谓词驱动 `while (!panel.thumbFailed(bad) && t.elapsed() < 10000)`，杜绝高负载并行测试调度时偶发的时序超时。
+- **Added a regression test for four consecutive 90° rotations in Compare**: in `test_rotate_selection.cpp`, add an end-to-end assertion for an asymmetric-aspect image rotated four times in a Compare pane, ensuring the full-frame source rectangle `sourceRect == fullRect` and the full rendered height.
+- **Hardened the corrupt-thumbnail wait logic in the browse test**: in `test_browse_acceptance.cpp`, replace the fixed delay with the predicate-driven `while (!panel.thumbFailed(bad) && t.elapsed() < 10000)` so occasional timing timeouts under high-load parallel test scheduling no longer occur.
 
 ## [1.0.125] - 2026-10-15
 
@@ -320,15 +320,15 @@
 
 ### Compare Workspace & Headless CI Hardening
 
-- **悬停窗格探测优先级与无头环境适配（fix/compare）**：
-  - 在 `CompareWorkspace::paneIndexAtGlobalPos` 中直接优先返回有效的 `m_hoverIdx`，避免依赖无头 CI 环境中无效的 `QCursor::pos()` 或窗口焦点导致的误测；
-  - 杜绝在多窗格对比按住数字键临时预览时将目标窗格误判定为窗格 0 的隐患。
+- **Hover-pane probe priority and headless-environment adaptation (fix/compare)**:
+  - In `CompareWorkspace::paneIndexAtGlobalPos`, return a valid `m_hoverIdx` first, so detection does not depend on an invalid `QCursor::pos()` or window focus in headless CI;
+  - Remove the failure mode where holding a digit key for temporary preview in multi-pane compare misidentifies the target pane as pane 0.
 
 ### Test Robustness
 
-- **对比验收套件数字临时预览测试稳定性加固**：
-  - 在 `pointAtComparePane` 后重发 `Enter` 事件以维持事件泵之后的悬停状态；
-  - 在 `testPlainDigitsReservedForPreview` 中为 `hasTransientDisplay()` 和释放恢复引入弹性等待循环，消除 GitHub Actions CI 虚拟显示环境中的时序抖动。
+- **Stability hardening for digit temporary-preview tests in the compare acceptance suite**:
+  - After `pointAtComparePane`, resend the `Enter` event so the hover state is preserved after the event pump;
+  - In `testPlainDigitsReservedForPreview`, add a resilient wait loop for `hasTransientDisplay()` and release-and-restore, eliminating timing jitter in the GitHub Actions CI virtual display environment.
 
 ## [1.0.124] - 2026-10-15
 
@@ -338,27 +338,27 @@
 
 ### Reliability & Architecture Refinement
 
-- **复杂度门禁冗余空间治理与子模块拆分（P3-02）**：
-  - 针对临近 800 行硬性门禁红线的文件实施预防性模块化拆解：
-    - `src/test_batch.cpp`（由 800 行降至 671 行）：抽取 `test_batch_dialog_cases.inc` 独立容纳导出守卫与设置持久化测试；
-    - `src/imageviewer_lod.cpp`（由 794 行降至 675 行）：抽取 `imageviewer_lod_overlay.inc` 独立容纳 ROI 统计调度与斑马线/伪彩色叠加派生逻辑；
-    - `src/core/compare/DifferenceEngine.cpp`（由 783 行降至 649 行）：抽取 `DifferenceEngine_simd.inc` 独立容纳 AVX2/SSE2 灰度统计向量内核；
-    - `src/core/analysis/AnalysisEngine_metrics.cpp`（由 788 行降至 715 行）：抽取 `AnalysisEngine_metrics_cross.inc` 独立容纳跨格式 SSD 与通用度量计算。
+- **Complexity-gate headroom management and submodule splits (P3-02)**:
+  - Preventive modular decomposition of files approaching the hard 800-line gate:
+    - `src/test_batch.cpp` (reduced from 800 to 671 lines): extracted `test_batch_dialog_cases.inc` to independently house export-guard and settings-persistence tests;
+    - `src/imageviewer_lod.cpp` (reduced from 794 to 675 lines): extracted `imageviewer_lod_overlay.inc` to independently house ROI statistics scheduling and zebra / false-color overlay derivation;
+    - `src/core/compare/DifferenceEngine.cpp` (reduced from 783 to 649 lines): extracted `DifferenceEngine_simd.inc` to independently house the AVX2/SSE2 grayscale-statistics vector kernels;
+    - `src/core/analysis/AnalysisEngine_metrics.cpp` (reduced from 788 to 715 lines): extracted `AnalysisEngine_metrics_cross.inc` to independently house cross-format SSD and generic metric computation.
 
 ### Componentization & UI Semantics
 
-- **CompareDiffRenderer 默认参数与方向对齐**：
-  - 将 `CompareDiffRenderer` 的内部默认分割方向 `m_splitOrientation` 由 `Qt::Vertical` 纠正为 `Qt::Horizontal`，与 `renderSplit` 默认实参和水平并排对比惯例严格对齐。
+- **CompareDiffRenderer default parameters and orientation alignment**:
+  - Corrected `CompareDiffRenderer`'s internal default split orientation `m_splitOrientation` from `Qt::Vertical` to `Qt::Horizontal`, strictly aligning it with the `renderSplit` default argument and the horizontal side-by-side comparison convention.
 
 ### Image Decoder Resilience
 
-- **QtDecoder 细分错误上下文映射**：
-  - 补充对 `QImageReader::DeviceError` 的精准拦截，映射为 `DecodeErrorCode::AccessDenied`，进一步完善结构化错误状态向 UI 和批处理链路的传导。
+- **QtDecoder fine-grained error-context mapping**:
+  - Added precise interception of `QImageReader::DeviceError`, mapped to `DecodeErrorCode::AccessDenied`, further completing propagation of structured error state to the UI and the batch-processing pipeline.
 
 ### Concurrency & Test Robustness
 
-- **对比最佳适配异步测试稳定性加固**：
-  - 在 `test_compare_best_fit.cpp` 中将硬编码轮询超时改造为弹性事件驱动等待循环，彻底消除 16 线程全量并行测试时偶发的微秒级瞬态状态判断抖动。
+- **Compare best-fit async test stability hardening**:
+  - In `test_compare_best_fit.cpp`, replaced the hardcoded polling timeout with a resilient event-driven wait loop, fully eliminating occasional microsecond-scale transient state-check jitter during full 16-thread parallel test runs.
 
 ## [1.0.123] - 2026-10-15
 
@@ -368,21 +368,21 @@
 
 ### Fixes & Reliability
 
-- **对比模式加载容错与批量加载计数修复**：
-  - 修复 `CompareWorkspace::accountLoadRequest` 中当解码结果失败或帧为空时未计入 `batch->failed` 的逻辑漏洞，确保图像加载异常时能够准确反馈失败状态并触发回退与提示；
-  - 在 `ImageRepository_load.cpp` 中增强解码容错机制：当 `Decoder::decodeFullResult` 抛出异常或返回空像素时，无缝回退至稳定基线解码链路 `Decoder::decodeFull`，彻底解决对比模式提示“没有可用的图片”的问题。
+- **Compare-mode load fault tolerance and batch-load counting fix**:
+  - Fixed a logic gap in `CompareWorkspace::accountLoadRequest` where a failed decode result or an empty frame was not counted in `batch->failed`, so image-load failures now report failure status accurately and trigger fallback and user notification.
+  - Strengthened decode fault tolerance in `ImageRepository_load.cpp`: when `Decoder::decodeFullResult` throws or returns empty pixels, fall back seamlessly to the stable baseline path `Decoder::decodeFull`, resolving the compare-mode message “No images available”.
 
 ### Image Decoder Resilience
 
-- **解码层 UTF-8 异常防护与全景降级策略**：
-  - 在 `DecoderRegistry::decodeFullResult`、`QtDecoder::decodeFullResult` 及 `RawDecoder::decodeFullResult` 中增加对 `mviewer::core::pathFromUtf8` 及 `std::filesystem::exists` 的全局 `try/catch` 保护，防止非 UTF-8 编码或非法路径导致直接抛出未捕获异常中断主线程；
-  - 当解码器返回 Ok 但像素为空（Null pixels）或异常时，主动回退到 `decodeFull`，并在 `BatchProcessor` 中同步引入双重容错链路。
+- **Decoder-layer UTF-8 exception guards and full-decode fallback**:
+  - Added global `try/catch` protection around `mviewer::core::pathFromUtf8` and `std::filesystem::exists` in `DecoderRegistry::decodeFullResult`, `QtDecoder::decodeFullResult`, and `RawDecoder::decodeFullResult`, so non-UTF-8 encodings or illegal paths no longer throw uncaught exceptions that interrupt the main thread.
+  - When a decoder returns Ok with null pixels, or throws, fall back proactively to `decodeFull`, and apply the same dual fault-tolerance path in `BatchProcessor`.
 
 ### Componentization & Clean Architecture
 
-- **CompareRoiController 接口扩展与契约收口**：
-  - 新增 `CompareRoiController::computeSourceROI(const QRectF&, const QSize&)` 辅助算法，将纯几何源区域计算逻辑内聚至控制器；
-  - 调整 `CompareWorkspace` 布局委托与切片职责分派，确保 `compareworkspace.cpp`（746 行）严格收敛在 800 行硬性门禁之下。
+- **CompareRoiController interface extension and contract closure**:
+  - Added the helper `CompareRoiController::computeSourceROI(const QRectF&, const QSize&)`, colocating pure geometric source-region calculation in the controller.
+  - Adjusted `CompareWorkspace` layout delegation and slice responsibility assignment so `compareworkspace.cpp` (746 lines) stays under the hard 800-line gate.
 
 ## [1.0.122] - 2026-10-15
 
@@ -392,23 +392,23 @@
 
 ### Architecture & Componentization
 
-- **Compare 组件深度接通与双向状态同步（P1-03, P2-01）**：
-  - 彻底打通 `CompareRoiController` 与 `CompareSessionState`，在 `applySelectionToAll`、`applySelectionFromView`、`clearROI` 以及布局切换时通过 `QSignalBlocker` 互保同步；
-  - `CompareWorkspace::clearROI()` 开放为公开接口，确保外部调用与组件内部遥测生命周期严格一致；
-  - `CompareSessionState` 增加 `layoutIndex()` / `setLayoutIndex()`，对齐 `CompareSession` 序列化协议语义。
+- **Deep integration of the Compare component and bidirectional state sync (P1-03, P2-01)**:
+  - Fully connect `CompareRoiController` and `CompareSessionState`, keeping them mutually in sync via `QSignalBlocker` during `applySelectionToAll`, `applySelectionFromView`, `clearROI`, and layout switches;
+  - Expose `CompareWorkspace::clearROI()` as a public API so external calls stay strictly consistent with the component's internal telemetry lifecycle;
+  - Add `layoutIndex()` / `setLayoutIndex()` to `CompareSessionState`, aligning with the `CompareSession` serialization protocol semantics.
 
 ### SIMD & Portability
 
-- **GCC / Clang 跨平台编译属性与架构隔离（P1-01, P1-02）**：
-  - 在 `CpuFeatures.h` 中为 GCC/Clang 提供统一的 `MV_TARGET_AVX2`、`MV_TARGET_SSSE3`、`MV_TARGET_SSE41` 宏定义与非 x86 安全回退，解决多目标指令集未定义编译错误；
-  - 全面用 `MV_ARCH_X86` 隔离 `DifferenceEngine.cpp`、`AnalysisEngine_metrics.cpp` 和 `QtConvert.cpp` 中的 `__m256i` / `__m128i` 裸用，为 ARM64 补充纯标量降级路径；
-  - 修复 `diffRGB24Row` 门控逻辑，要求 `hasSse41() && hasSsse3()` 同时满足才派发 `_mm_cvtepu8_epi16` 指令。
+- **GCC / Clang cross-platform compile attributes and architecture isolation (P1-01, P1-02)**:
+  - In `CpuFeatures.h`, provide unified `MV_TARGET_AVX2`, `MV_TARGET_SSSE3`, and `MV_TARGET_SSE41` macro definitions for GCC/Clang, plus a safe non-x86 fallback, fixing compile errors from undefined multi-target instruction-set attributes;
+  - Guard all bare uses of `__m256i` / `__m128i` in `DifferenceEngine.cpp`, `AnalysisEngine_metrics.cpp`, and `QtConvert.cpp` with `MV_ARCH_X86`, and add a pure scalar fallback path for ARM64;
+  - Fix the `diffRGB24Row` gating logic so `_mm_cvtepu8_epi16` is dispatched only when both `hasSse41() && hasSsse3()` are satisfied.
 
 ### Lifecycle & Reliability
 
-- **应用优雅退出与解码错误结构化传播（P2-02, P2-03）**：
-  - `main.cpp` 中通过局部作用域确保 `MainWindow` 栈对象在 `TaskScheduler::shutdown()` 与文件日志关闭前完全析构；
-  - 提供 `Decoder::decodeFullResult` 静态重载，并在 `ImageRepository_load` 与 `BatchProcessor` 中引入结构化错误日志，提升系统可观测性。
+- **Graceful application shutdown and structured propagation of decode errors (P2-02, P2-03)**:
+  - In `main.cpp`, use a local scope so the `MainWindow` stack object is fully destroyed before `TaskScheduler::shutdown()` and before the file log is closed;
+  - Provide a static overload of `Decoder::decodeFullResult`, and add structured error logging in `ImageRepository_load` and `BatchProcessor` to improve system observability.
 
 ## [1.0.121] - 2026-10-15
 
@@ -418,16 +418,16 @@
 
 ### Architecture & Componentization
 
-- **CompareDisplayManager 布局与视口管理组件抽离（ADR-014）**：
-  - 抽离出独立的 `CompareDisplayManager` QObject 组件，接管网格行列数、视口缩放与平移同步（Pan / Zoom Sync）、统一像素倍率（Uniform Pixel Scale）以及自适应最佳适配纯几何度量计算；
-  - 建立专有单元测试 `src/test_compare_display_manager.cpp`（`compare_display_manager_tests`），并与 `CompareWorkspace` 双向信号槽机制完全接通。
+- **CompareDisplayManager layout and viewport management extraction (ADR-014)**:
+  - Extracted a standalone `CompareDisplayManager` QObject that owns grid row and column counts, viewport pan and zoom synchronization (Pan / Zoom Sync), uniform pixel scale (Uniform Pixel Scale), and adaptive best-fit pure-geometry metric calculations.
+  - Added a dedicated unit test `src/test_compare_display_manager.cpp` (`compare_display_manager_tests`) and fully connected it to `CompareWorkspace` through a bidirectional signal-slot mechanism.
 
 ### Concurrency & Lifecycle
 
-- **TaskScheduler 优雅退出即时取消（Graceful Shutdown）**：
-  - 在 `TaskScheduler::shutdown()` 中遍历所有活跃任务句柄触发 `requestCancel()`，并即时唤醒前台条件变量 `g_foregroundCv`，确保后台 worker 线程在退出时不阻塞等待超时，秒级快速回收。
-- **DifferenceEngine 尾部与非 SSSE3 循环展开优化**：
-  - 在 `diffRGBA32Row` 中调整 4 像素展开标量循环范围，确保无论是 x86 非 SSSE3 场景还是 SIMD 计算后的剩余像素尾部均能享受到 4 像素流水线展开优化。
+- **TaskScheduler graceful shutdown with immediate cancellation (Graceful Shutdown)**:
+  - In `TaskScheduler::shutdown()`, iterate every active task handle and call `requestCancel()`, and immediately wake the foreground condition variable `g_foregroundCv`, so background worker threads do not block on a timeout while exiting and are reclaimed within seconds.
+- **DifferenceEngine tail and non-SSSE3 loop-unrolling optimization**:
+  - In `diffRGBA32Row`, adjusted the scalar loop range of the 4-pixel unroll so that both the x86 non-SSSE3 path and the leftover pixel tail after SIMD processing receive the 4-pixel pipelined unroll optimization.
 
 ## [1.0.120] - 2026-10-15
 
@@ -437,19 +437,19 @@
 
 ### Architecture & Componentization
 
-- **CompareWorkspace 核心组件接入主链路（ADR-014）**：
-  - 将 `CompareSessionState`、`CompareRoiController`、`CompareDiffRenderer` 三大独立解耦组件以 `std::unique_ptr` 聚合注入 `CompareWorkspace` 主工作区；
-  - 建立中介者模式信号槽通道，双向同步 ROI 选择、视口参数、滑动窗口图库及差异阈值，消除未接死代码并降低上帝类耦合。
-- **Split 视口分割方向标准化**：
-  - 统一 `CompareDiffRenderer::renderSplit` 与 Qt 标准坐标系惯例：`Qt::Horizontal` 沿水平 X 轴分割（左右对比），`Qt::Vertical` 沿垂直 Y 轴分割（上下对比），默认水平分割。
+- **CompareWorkspace core components wired into the main pipeline (ADR-014)**:
+  - Aggregate and inject the three independently decoupled components — `CompareSessionState`, `CompareRoiController`, and `CompareDiffRenderer` — into the `CompareWorkspace` main workspace via `std::unique_ptr`;
+  - Establish a mediator-pattern signal-slot channel that bidirectionally synchronizes ROI selection, viewport parameters, the sliding-window gallery, and the difference threshold, removing unwired dead code and reducing god-class coupling.
+- **Split viewport split-direction standardization**:
+  - Align `CompareDiffRenderer::renderSplit` with the Qt standard coordinate convention: `Qt::Horizontal` splits along the horizontal X axis (left-right compare), `Qt::Vertical` splits along the vertical Y axis (top-bottom compare), with horizontal split as the default.
 
 ### Modern C++ & Error Handling
 
-- **Result<T, E> 单子容器泛型解耦与右值引用增强**：
-  - 将特定领域的 `DecodeErrorCode` 与 `DecodeError` 彻底剥离至纯净的 `src/domain/DecodeError.h` 领域头文件，恢复 `Result.h` 基础容器的泛型纯度；
-  - 补充 `operator*()` 与 `operator->()` 的断言契约校验，完善 `map`、`and_then`、`map_error`、`value_or` 的右值引用重载（`&&`），全面支持移动语义及 `std::unique_ptr` 等 Move-only 负载类型。
-- **解码器管道结构化错误码映射与回退保障**：
-  - 在 `QtDecoder`、`QtFallbackDecoder` 与 `RawDecoder` 中全面接入 `decodeFullResult`，向调用者精准透传 `FileNotFound`、`UnsupportedFormat` 与 `CorruptData` 错误分类。
+- **Result<T, E> monadic container: generic decoupling and rvalue-reference enhancements**:
+  - Fully extract the domain-specific `DecodeErrorCode` and `DecodeError` into the clean domain header `src/domain/DecodeError.h`, restoring the generic purity of the `Result.h` base container;
+  - Add assertion-contract checks to `operator*()` and `operator->()`, and complete the rvalue-reference (`&&`) overloads of `map`, `and_then`, `map_error`, and `value_or`, fully supporting move semantics and move-only payload types such as `std::unique_ptr`.
+- **Decoder pipeline structured error-code mapping and fallback guarantees**:
+  - Fully adopt `decodeFullResult` in `QtDecoder`, `QtFallbackDecoder`, and `RawDecoder`, accurately propagating the `FileNotFound`, `UnsupportedFormat`, and `CorruptData` error classifications to callers.
 
 ## [1.0.119] - 2026-10-14
 
@@ -459,16 +459,16 @@
 
 ### Architecture & Componentization
 
-- **CompareDiffRenderer 独立渲染合成组件（ADR-014）**：
-  - 引入 `CompareDiffRenderer` 组件，抽离差异图计算、Swipe / Split 视口合成以及 Blink 动画状态管理；
-  - 建立纯组件单元测试 `src/test_compare_diff_renderer.cpp`（`compare_diff_renderer_tests`）接入 CTest 质量门禁，验证横向/纵向 Split 混合及纯度量渲染。
+- **CompareDiffRenderer standalone render-compositing component (ADR-014)**:
+  - Introduce the `CompareDiffRenderer` component, extracting difference-image computation, Swipe / Split viewport compositing, and Blink animation state management.
+  - Add a pure-component unit test `src/test_compare_diff_renderer.cpp` (`compare_diff_renderer_tests`) to the CTest quality gate, covering horizontal/vertical Split blending and metric-only rendering.
 
 ### Performance & Concurrency
 
-- **DifferenceEngine 尾部循环展开与跨平台流水线优化**：
-  - 在 `diffRGB24Row` 与 `diffRGBA32Row` 标量/非 SIMD 分支引入 4 像素循环展开，大幅提升 ARM64 及非对齐边界下的指令流水线吞吐与自动向量化效率。
-- **TaskScheduler 线程池生命周期与闲置回收**：
-  - 显式为全部 5 个优先级线程队列配置 5000ms 闲置过期回收（`setExpiryTimeout(5000)`），消除空闲线程长期占用系统句柄与栈内存的问题，缓解多线程池并发过度订阅。
+- **DifferenceEngine tail-loop unrolling and cross-platform pipeline optimization**:
+  - Add 4-pixel loop unrolling on the scalar / non-SIMD paths of `diffRGB24Row` and `diffRGBA32Row`, substantially improving instruction-pipeline throughput and auto-vectorization efficiency on ARM64 and at unaligned boundaries.
+- **TaskScheduler thread-pool lifetime and idle reclamation**:
+  - Explicitly set a 5000 ms idle expiry (`setExpiryTimeout(5000)`) on all 5 priority thread queues, so idle threads no longer hold system handles and stack memory indefinitely, and concurrent oversubscription across multiple thread pools is reduced.
 
 ## [1.0.118] - 2026-10-14
 
@@ -478,17 +478,17 @@
 
 ### Architecture & Componentization
 
-- **CompareWorkspace 职责解耦与组件化（ADR-014）**：
-  - 引入 `CompareSessionState` 独立组件，封装对比会话全部参数、输入路径与帧索引、视口变换与预设状态，支持与 `domain::CompareSession` 的双向序列化；
-  - 引入 `CompareRoiController` 独立组件，接管联动 ROI 选择框计算、有界微调（Nudge）以及实时度量遥测（Telemetry）代数轮次管理；
-  - 建立组件化架构测试套件 `src/test_compare_components.cpp`（`compare_components_tests`）接入 CTest 质量门禁。
+- **CompareWorkspace responsibility decoupling and componentization (ADR-014)**:
+  - Introduce the standalone `CompareSessionState` component, encapsulating all compare-session parameters, input paths and frame indices, viewport transforms, and preset state, with bidirectional serialization to and from `domain::CompareSession`;
+  - Introduce the standalone `CompareRoiController` component, taking over linked ROI selection-box computation, bounded nudge (Nudge), and generation-round management for real-time measurement telemetry (Telemetry);
+  - Add the componentized architecture test suite `src/test_compare_components.cpp` (`compare_components_tests`) to the CTest quality gate.
 
 ### Safety & Robustness
 
-- **DecoderRegistry 结构化单子错误处理与 Unicode 跨平台安全**：
-  - 在 `IDecoder` 与 `DecoderRegistry` 中引入基于 `Result<ImageData, DecodeError>` 的结构化返回接口 `decodeFullResult(...)`，精准区分 `FileNotFound`、`UnsupportedFormat` 与 `CorruptData`；
-  - 严格通过 `mviewer::core::pathFromUtf8` 执行 Windows 平台下 UTF-8 与原生宽字符（UTF-16）文件系统交互，消除非 ASCII/Unicode 路径解码隐患；
-  - 扩充 `test_decoder.cpp` 验证不存在文件结构化错误捕获与金样正常解码。
+- **DecoderRegistry structured monadic error handling and cross-platform Unicode safety**:
+  - Introduce the structured return interface `decodeFullResult(...)`, based on `Result<ImageData, DecodeError>`, in `IDecoder` and `DecoderRegistry`, precisely distinguishing `FileNotFound`, `UnsupportedFormat`, and `CorruptData`;
+  - Strictly perform Windows UTF-8 to native wide-character (UTF-16) filesystem interaction through `mviewer::core::pathFromUtf8`, eliminating non-ASCII/Unicode path decoding hazards;
+  - Extend `test_decoder.cpp` to verify structured error capture for missing files and normal decoding of golden samples.
 
 ## [1.0.117] - 2026-10-14
 
@@ -498,15 +498,15 @@
 
 ### Added & Architecture
 
-- **Domain 层现代 C++20 Result<T, E> 单子容器**：基于 C++23 `std::expected` 设计规范，在 `src/domain/Result.h` 引入纯标准库、零依赖的泛型容器 `Result<T, E = std::string>`，支持 `has_value()`、`value()`、`error()`、`value_or()`、`map()`、`and_then()`、`map_error()` 等链式单子操作，并针对无返回值操作提供 `Result<void, E>` 特化。
-- **结构化领域解码错误类型**：定义 `DecodeError` 与 `DecodeErrorCode`（`FileNotFound`, `AccessDenied`, `CorruptData`, `UnsupportedFormat`, `OutOfMemory`, `Unknown`），规范化算法与解码底层错误上下文传递；新增 `test_result.cpp` 单元测试套件并接入 CTest 质量门禁。
-- **跨平台 POSIX build.sh 自动适配**：重构 `build.sh`，在 Windows/WSL 环境下自动委托 `build.ps1`，在无 PowerShell 的原生 Linux/macOS POSIX 环境下原生调用 `cmake`、`cmake --build` 与 `ctest`，实现真正的跨平台一键构建。
-- **进程退出有序安全关闭（Graceful Shutdown）**：在 `main.cpp` 中将 `QCoreApplication::aboutToQuit` 信号显式连接到 `TaskScheduler::instance().shutdown()`，在 Qt 核心子系统析构前安全取消并排空后台任务线程池，消除进程退出时的死锁风险。
+- **Modern C++20 `Result<T, E>` monad in the domain layer**: Following the C++23 `std::expected` design, `src/domain/Result.h` introduces a standard-library-only, zero-dependency generic container `Result<T, E = std::string>`. It supports chained monadic operations including `has_value()`, `value()`, `error()`, `value_or()`, `map()`, `and_then()`, and `map_error()`, plus a `Result<void, E>` specialization for operations with no return value.
+- **Structured domain decode error types**: Defines `DecodeError` and `DecodeErrorCode` (`FileNotFound`, `AccessDenied`, `CorruptData`, `UnsupportedFormat`, `OutOfMemory`, `Unknown`) to standardize error-context propagation from algorithms and the decode layer. Adds the `test_result.cpp` unit-test suite and wires it into the CTest quality gate.
+- **Cross-platform POSIX `build.sh` auto-adaptation**: Refactors `build.sh` so that on Windows/WSL it delegates to `build.ps1`, and on native Linux/macOS POSIX environments without PowerShell it invokes `cmake`, `cmake --build`, and `ctest` directly, providing a true cross-platform one-command build.
+- **Ordered graceful shutdown on process exit**: In `main.cpp`, `QCoreApplication::aboutToQuit` is explicitly connected to `TaskScheduler::instance().shutdown()`, so background task-thread pools are cancelled and drained before Qt core subsystems are destroyed, removing the deadlock risk at process exit.
 
 ### Performance & Safety
 
-- **全管线全面推行零拷贝 QImage 视图**：在瓦片渲染绘制路径（`imageviewer_paint.cpp`）、缩略图回调（`thumbnailpanel.cpp`）、对比渐进式显示（`compareworkspace_progressive.cpp`）、分析面板与工作线程（`analysispanel.cpp` / `analysispanel_analysis_worker.cpp`）、主窗口视图与报告导出（`mainwindow_view.cpp` / `mainwindow_export.cpp`）、LOD 叠加层及过渡快照（`imageviewer_lod.cpp` / `imageviewer_loading.cpp`）等高频核心交互路径中全面采用带生命周期自动保活的 `toQImageFast`，彻底杜绝单帧几十兆内存的重复申请与 memcpy。
-- **重采样 SIMD 跨平台隔离与标量回退**：在 `DisplayResampleSimd.cpp` 中对 AVX2 / SSE4.1 x86 向量化实现全面施加 `MV_ARCH_X86` 体系结构隔离，并为 ARM64 及非 x86 平台提供安全保真的标量回退分支。
+- **Zero-copy `QImage` views across the full pipeline**: High-frequency core interaction paths now use lifetime-keeping `toQImageFast` throughout, including the tile render/paint path (`imageviewer_paint.cpp`), thumbnail callbacks (`thumbnailpanel.cpp`), compare progressive display (`compareworkspace_progressive.cpp`), the analysis panel and worker thread (`analysispanel.cpp` / `analysispanel_analysis_worker.cpp`), main-window view and report export (`mainwindow_view.cpp` / `mainwindow_export.cpp`), and LOD overlays plus transition snapshots (`imageviewer_lod.cpp` / `imageviewer_loading.cpp`). This eliminates per-frame reallocations and `memcpy` of tens of megabytes.
+- **Resample SIMD cross-platform isolation and scalar fallback**: In `DisplayResampleSimd.cpp`, AVX2 / SSE4.1 x86 vectorized implementations are fully gated by the `MV_ARCH_X86` architecture isolation, with a safe, bit-faithful scalar fallback for ARM64 and other non-x86 platforms.
 
 ## [1.0.116] - 2026-10-14
 
@@ -516,15 +516,15 @@
 
 ### Fixed
 
-- **生命周期与内存安全性**：`toQImageRef` 引入 `QImageCleanupFunction` 绑定源 `ImageData` 缓冲的 `std::shared_ptr` 引用计数，杜绝返回的 `QImage` 生命周期超出源数据时的野指针与悬空指针风险；`RawDecoder_libraw` 中 `libraw_processed_image_t` 资源改用 `std::unique_ptr` 自定义 RAII 删除器管理，防止异常或失败分支引发内存泄漏。
-- **SIMD 跨架构兼容性**：`CpuFeatures.h` 与 `DifferenceEngine.cpp` 增加体系结构隔离宏 `MV_ARCH_X86`，防止在 ARM64 或非 x86 架构下包含 x86 专用头文件（`<cpuid.h>` / `<immintrin.h>`）而编译报错。
+- **Lifecycle and memory safety**: `toQImageRef` uses a `QImageCleanupFunction` that holds a `std::shared_ptr` reference count on the source `ImageData` buffer, eliminating wild-pointer and dangling-pointer risks when the returned `QImage` outlives the source data. In `RawDecoder_libraw`, `libraw_processed_image_t` resources are managed with a `std::unique_ptr` and a custom RAII deleter, preventing memory leaks on exception or failure paths.
+- **SIMD cross-architecture compatibility**: `CpuFeatures.h` and `DifferenceEngine.cpp` add the architecture-isolation macro `MV_ARCH_X86`, so x86-only headers (`<cpuid.h>` / `<immintrin.h>`) are not included on ARM64 or other non-x86 architectures and do not cause compile errors.
 
 ### Performance & Architecture
 
-- **后台调度无忙等待**：`TaskScheduler::yieldToForeground` 废弃原 `std::this_thread::sleep_for(4ms)` 忙等待轮询，改用条件变量 `std::condition_variable` 通知配合前台引用计数，消除后台缩略图 worker 线程的自旋等待和多余上下文切换。
-- **写时复制（COW）与只读视图支持**：`ImageData` 引入 `makeUnique()`、`detach()`、`ConstImageBuffer`、`constView()` 与带自动分离机制的 `mutableView()`，提升 const 安全性与多组件共享缓冲区的独立性。
-- **高频路径零拷贝渲染**：比较模式差异叠加层（`compareworkspace_render_diff.cpp`）与快速预览面板（`previewpanel.cpp`）采用 `toQImageFast` 进行生命周期受保护的零拷贝视图转换，避免重复全尺寸内存申请与 memcpy。
-- **算法魔数语义化**：`DifferenceEngine` 与渲染模块将定点数乘数与色标阈值提取为语义明确的 `constexpr` 常量（如 `kFixedPointDiv3Multiplier = 21846` 等）。
+- **Background scheduling without busy-waiting**: `TaskScheduler::yieldToForeground` drops the previous `std::this_thread::sleep_for(4ms)` busy-wait poll and uses `std::condition_variable` notification together with a foreground reference count, removing spin-waiting and extra context switches on background thumbnail worker threads.
+- **Copy-on-write (COW) and read-only view support**: `ImageData` adds `makeUnique()`, `detach()`, `ConstImageBuffer`, `constView()`, and `mutableView()` with automatic detach, improving const-correctness and the independence of buffers shared across components.
+- **Zero-copy rendering on hot paths**: the compare-mode difference overlay (`compareworkspace_render_diff.cpp`) and the quick preview panel (`previewpanel.cpp`) use `toQImageFast` for lifecycle-protected zero-copy view conversion, avoiding repeated full-size allocations and memcpy.
+- **Named algorithm constants**: `DifferenceEngine` and the rendering modules extract fixed-point multipliers and color-scale thresholds into clearly named `constexpr` constants (for example `kFixedPointDiv3Multiplier = 21846`).
 
 ## [1.0.115] - 2026-10-14
 
@@ -534,11 +534,11 @@
 
 ### Changed
 
-- 比较模式不再提供「上一对 / 下一对」切换：去掉工具栏按钮，**P / N / PgUp / PgDn / ← / →** 在比较中不再换图，快捷键表、F1 速查、用户指南同步删除。要比较的两张图一律在浏览器中手动选择；**Ctrl+2/4/8** 布局预设不受影响。
+- Compare mode no longer offers previous-pair / next-pair switching: the toolbar buttons are removed, and **P / N / PgUp / PgDn / ← / →** no longer change images during a comparison. Those entries are removed from the shortcut table, the F1 quick reference, and the user guide. The two images to compare are always chosen manually in the browser; **Ctrl+2/4/8** layout presets are unaffected.
 
 ### Performance
 
-- 比较模式内存：会话帧池只保留当前这一对（上限按已载入图片大小计算，不再固定 384 MiB）；取消相邻图片预取；换一对或退出比较时，把离开屏幕的整图从全分辨率内存缓存中释放（磁盘缓存、缩略图不受影响），并在载入完成、退出比较后把空闲堆归还系统（Windows `_heapmin` + `SetProcessWorkingSetSize`，glibc `malloc_trim`）。4096×3072 JPG 文件夹中「选 2 张 → 比较 → 退出」重复 5 次（Linux）：比较中常驻约 453 → 321 MB，退出后约 380 → 189 MB，峰值约 511 → 353 MB。
+- Compare-mode memory: the session frame pool keeps only the current pair (the cap is computed from the size of loaded images, no longer a fixed 384 MiB); prefetch of adjacent images is removed; when switching pairs or leaving compare mode, full images that leave the screen are released from the full-resolution memory cache (the disk cache and thumbnails are unaffected), and after a load completes and after leaving compare mode, idle heap is returned to the system (Windows `_heapmin` + `SetProcessWorkingSetSize`, glibc `malloc_trim`). Repeating “select 2 images → compare → exit” 5 times in a folder of 4096×3072 JPGs (Linux): resident memory while comparing about 453 → 321 MB, after exit about 380 → 189 MB, peak about 511 → 353 MB.
 
 ## [1.0.114] - 2026-10-14
 
@@ -548,11 +548,11 @@
 
 ### Performance
 
-- EXIF 缩略图旋转（`orientThumbnail`）改用 `QImage::mirrored` / `transformed`，与原来的 `displayToRaw` 逐像素结果一致；256 像素约 0.49 ms → 0.02 ms。
-- `toDisplayImageData` 在无需色彩转换时直接共享源 `ImageData` 缓冲（常见的 RGB24 + sRGB），避免 ImageData→QImage→ImageData 双重拷贝；12MP 约 71 ms → 接近 0。预览面板与导出走同一路径。
-- `SourceImage` / `QtDecoder::probeMetadata` 不再为了 ICC 做 1×1 缩放解码（大 JPEG/PNG 仍会走完整压缩流，实测 12MP JPEG 约 47 ms、100MP 约 193 ms、48MP PNG 约 279 ms）。JPEG 改为只扫 APP2「ICC_PROFILE」段（约 0.01 ms）；PNG/TIFF 的 ICC 与缺省栅格字段在首次 `decodeLod`/`decodeFull` 时补齐。打开大图、LOD、比较窗格和 JPEG block tile 的 `SourceImage::open` 跟着变快。
-- 分析叠加对话框生成 zebra/伪彩工作图时，12MP→1024 的缩放改用 `FastTransformation`（约 37 ms → 3 ms），最终预览贴到控件仍用 Smooth。
-- 高清重采样线程池上限从「核心数」改为「核心数一半（至少 2）」，与 UI 队列配额一致；8 核上可运行线程上限约 30 → 26，减轻与解码抢核。
+- EXIF thumbnail rotation (`orientThumbnail`) now uses `QImage::mirrored` / `transformed`, with per-pixel results identical to the previous `displayToRaw`; ~0.49 ms → 0.02 ms at 256 pixels.
+- `toDisplayImageData` shares the source `ImageData` buffer directly when no color conversion is needed (the common RGB24 + sRGB case), avoiding the ImageData→QImage→ImageData double copy; ~71 ms → near 0 for 12MP. The preview panel and export take the same path.
+- `SourceImage` / `QtDecoder::probeMetadata` no longer does a 1×1 scaled decode for ICC (large JPEG/PNG still walked the full compressed stream; measured ~47 ms for a 12MP JPEG, ~193 ms for 100MP, and ~279 ms for a 48MP PNG). JPEG now only scans the APP2 "ICC_PROFILE" segment (~0.01 ms); PNG/TIFF ICC and default raster fields are filled in on the first `decodeLod`/`decodeFull`. `SourceImage::open` for large images, LOD, the compare pane, and JPEG block tiles is faster as a result.
+- When the analysis overlay dialog builds the zebra/false-color working image, the 12MP→1024 scale now uses `FastTransformation` (~37 ms → 3 ms); the final preview drawn onto the widget still uses Smooth.
+- The high-quality resampling thread-pool cap changed from the core count to half the core count (at least 2), matching the UI queue quota; on 8 cores the runnable-thread cap went from about 30 → 26, reducing core contention with decoding.
 
 ## [1.0.113] - 2026-10-13
 
@@ -562,7 +562,7 @@
 
 ### Fixed
 
-- 三图比较时最左侧图片显示很小：窗格标题里不能断行的长文件名（如 `DSC_2026_..._v3.jpg`）会把所在列撑宽、挤窄其它列，导致短文件名的窗格被压缩、适合窗口倍率偏小。文件名标签不再参与列宽计算，各列等宽；长文件名在 `_` `-` `.` 处可换行成两行或省略显示。
+- In three-image comparison, the leftmost image was shown very small: an unbreakable long filename in the pane title (such as `DSC_2026_..._v3.jpg`) widened its column and squeezed the other columns, so panes with short filenames were compressed and the fit-to-window scale was too small. Filename labels no longer take part in column-width calculation, and columns are equal width; long filenames can wrap to two lines at `_`, `-`, and `.`, or be shown with an ellipsis.
 
 ## [1.0.112] - 2026-10-13
 
@@ -572,10 +572,10 @@
 
 ### Fixed
 
-- 比较模式按 P/N 切换图片组时保留「显示差异」开关（以及高亮 promote 状态）；H 在控件禁用时不再能切换；差异结果落地时若可视化已关则强制清空热力图。
-- 重命名/移动时 `.xmp` 侧车先写到新路径再删旧文件，避免写失败丢元数据；`RatingStore`/`TagStore` 路径键在 Windows 上大小写不敏感（与浏览列表一致）。
-- Details 视图会启动元数据索引：切到详情模式时调用 `ensureMetaIndex()`，相机/镜头/ISO 列不再一直显示「-」（以前只有开了相机过滤或元数据搜索才会建索引）。
-- 删除进系统回收站后，菜单与帮助不再写「MViewer 回收站」；「打开回收站」优先打开系统回收站（Windows `shell:RecycleBinFolder`，其它平台 `trash:///`），打不开时才退回应用内备用目录。
+- Compare mode keeps the **Show differences** toggle (and the highlight promote state) when switching image groups with P/N; H can no longer toggle while the control is disabled; when a difference result is applied, the heatmap is force-cleared if visualization is already off.
+- On rename/move, the `.xmp` sidecar is written to the new path before the old file is deleted, so a failed write does not drop metadata; `RatingStore`/`TagStore` path keys are case-insensitive on Windows (matching the browse list).
+- The Details view now builds the metadata index: switching to details mode calls `ensureMetaIndex()`, so the camera/lens/ISO columns no longer stay on "-" (the index was previously built only when camera filtering or metadata search was enabled).
+- After delete-to-system-recycle-bin, menus and help no longer say "MViewer Recycle Bin"; **Open Recycle Bin** opens the system recycle bin first (Windows `shell:RecycleBinFolder`, other platforms `trash:///`) and falls back to the in-app spare directory only if that cannot be opened.
 
 ## [1.0.111] - 2026-10-13
 
@@ -585,13 +585,13 @@
 
 ### Fixed
 
-- JPEG 照片现在也能按相机、镜头、ISO 过滤和排序，搜索也能搜到相机型号：新增 `parseCaptureMetadata`，RAW 照旧解析，JPEG 只读 APP1「Exif」段里的 TIFF 结构（只走文件头，不碰压缩数据）。原来这些字段只从 RAW 文件里取，JPEG 相册里按相机过滤基本没有结果。信息面板的 RAW 区块不变。
+- JPEG photos can now be filtered and sorted by camera, lens, and ISO, and search can find the camera model: added `parseCaptureMetadata`. RAW parsing is unchanged; JPEG reads only the TIFF structure inside the APP1 “Exif” segment (file header only; compressed image data is left untouched). These fields used to come only from RAW files, so filtering a JPEG album by camera returned almost nothing. The info panel’s RAW section is unchanged.
 
 ### Performance
 
-- 整图放入内存缓存时不再同步生成整条 mipmap 链，改为第一次真正需要缩小级别时再生成（替换同名缓存时仍会丢弃旧链）。打开大图时解码完到可显示之间少了这一步：1200 万像素约 22 ms → 3 ms，一亿像素约 117 ms 且少占约 100 MB 内存。
-- 搜索索引和按相机/镜头/ISO 过滤读取元数据时，不再为了 DPI 和 ICC 做一次 1×1 缩放解码（JPEG 这一步仍要走完整个压缩流）：新增只读文件头的 `MetadataReader::readHeaders`，索引改用它。Linux 实测每张 1200 万像素 JPEG 从约 41 ms 降到约 0.05 ms，一亿像素从约 195 ms 降到约 0.05 ms；信息面板仍读取完整元数据。
-- 线程配额再收一档：UI 队列（文件操作、可见预取）上限从「核心数」降为「核心数一半（至少 2）」，后台队列（元数据索引、相邻预取）从「一半」降为「四分之一」。8 核机器上同时可运行的工作线程上限从 36 降到 30，比较模式高清重采样和当前图解码少被抢核。
+- Putting a full image into the memory cache no longer builds the entire mipmap chain synchronously. Levels are generated the first time a downscale is actually needed (replacing a same-named cache entry still discards the old chain). The step between decode and first display of a large image is gone: about 22 ms → 3 ms for 12 megapixels, and about 117 ms with roughly 100 MB less memory for 100 megapixels.
+- Building the search index and reading metadata for camera/lens/ISO filters no longer does a 1×1 scale decode just for DPI and ICC (for JPEG that step still had to walk the whole compressed stream): added header-only `MetadataReader::readHeaders`, and the index now uses it. On Linux, each 12-megapixel JPEG dropped from about 41 ms to about 0.05 ms, and each 100-megapixel JPEG from about 195 ms to about 0.05 ms. The info panel still reads full metadata.
+- Thread quotas tightened one more step: the UI queue (file operations, visible prefetch) cap went from “core count” to “half the core count (at least 2)”, and the background queue (metadata indexing, adjacent prefetch) went from “half” to “one quarter”. On an 8-core machine the cap on concurrently runnable worker threads fell from 36 to 30, so compare-mode high-quality resampling and decoding the current image are less likely to lose cores.
 
 ## [1.0.110] - 2026-10-13
 
@@ -601,12 +601,12 @@
 
 ### Performance
 
-- 缩略图磁盘缓存改存 JPEG（质量 90），只有真正带透明像素的缩略图才存 PNG（快速压缩档）。原来的 PNG「质量 1」其实是最慢的 zlib 9 档，一张 256 像素缩略图编码约 58 ms，现在约 0.2 ms；缓存文件也小约 8 倍。缓存版本升到 v5，旧的 `.png` 缓存在首次索引时自动清掉。
-- 后台线程配额：缩略图线程池上限从「核心数」降到「核心数的一半」，缩略图、分析和后台池以低于正常的系统优先级运行；当前图片解码或比较模式高清重采样进行时，缩略图任务会先短暂让路（每个任务最多等 200 ms，不影响取消和收尾）。
-- 比较模式拖动差异阈值滑块时，不再每一下都重算调整后的图、对齐、差异图、PSNR 和 SSIM：这些与阈值无关的结果按（图像、调整参数、对齐开关）缓存，阈值变化只重算统计和叠加层，结果与原来完全一致。两张 2400 万像素图在 Linux 上每次拖动从约 431 ms 降到约 152 ms。切换比较图组或关闭比较时缓存随之清空。
-- 大文件夹翻页：当前图片在浏览列表中的位置改用一次性建立的路径哈希索引查找，不再每按一次方向键就对每一行做两次路径规范化比对；判断规则不变（Windows 上不区分大小写）。
-- 文件夹渐进扫描时，新出现的缩略图直接插到最终排序（按名称自然排序、日期、大小、类型）的位置上，扫描结束时列表不再整体重排跳一下。
-- 放大查看大 JPEG 时，同一 1024 像素块里的 256 像素图块只解码一次再切开使用（最近 16 块缓存，多个线程同时请求同一块时只解一次）。JPEG 不能跳读，原来每个图块都要从文件开头重新解码；一亿像素图底部 12 个图块在 Linux 上实测从约 6.3 秒降到约 0.5 秒（约 12 倍），像素与原来逐块解码完全一致。
+- The thumbnail disk cache now stores JPEG (quality 90). Only thumbnails that actually contain transparent pixels are stored as PNG (fast compression level). The old PNG "quality 1" was in fact the slowest zlib level 9: encoding one 256-pixel thumbnail took about 58 ms, and now takes about 0.2 ms. Cache files are also about 8× smaller. The cache version is raised to v5, and old `.png` caches are cleared automatically on the first index.
+- Background thread quota: the thumbnail thread-pool cap is lowered from the core count to half the core count. The thumbnail, analysis, and background pools run at below-normal system priority. While the current image is decoding, or while compare-mode high-quality resampling is in progress, thumbnail tasks yield briefly first (each task waits at most 200 ms; cancellation and cleanup are unaffected).
+- Dragging the difference-threshold slider in compare mode no longer recomputes the adjusted image, alignment, difference image, PSNR, and SSIM on every movement. Results that do not depend on the threshold are cached by (image, adjustment parameters, alignment toggle). A threshold change recomputes only the statistics and the overlay, and the results stay identical to before. For two 24-megapixel images on Linux, each drag dropped from about 431 ms to about 152 ms. The cache is cleared when switching the compare image group or turning compare off.
+- Large-folder paging: the current image's position in the browse list is now found with a path-hash index built once, instead of two path-normalization comparisons against every row on each arrow-key press. The matching rules are unchanged (case-insensitive on Windows).
+- During progressive folder scanning, newly appearing thumbnails are inserted directly at their final sort position (natural sort by name, date, size, or type), so the list no longer jumps from a full reorder when the scan finishes.
+- When zooming into a large JPEG, the 256-pixel tiles inside the same 1024-pixel block are decoded once and then sliced for use (the most recent 16 blocks are cached; when several threads request the same block at once, it is decoded only once). JPEG cannot be skip-read, so previously every tile was decoded again from the start of the file. On Linux, the bottom 12 tiles of a 100-megapixel image measured about 6.3 s before and about 0.5 s now (about 12×), and the pixels match the previous per-tile decode exactly.
 
 ## [1.0.109] - 2026-10-12
 
@@ -616,22 +616,22 @@
 
 ### Fixed
 
-- 比较模式放大（如 200%）后拖动图片，新露出的一侧不再先显示黑边：清晰区域图下面始终垫着整图底图，拖动中也会节流重绘清晰区域，不必等松开鼠标。
-- 比较模式按 R（或勾选框、菜单）关闭同步准星后，各窗格里已画出的准星立即消失。
-- 缩放或拖动过程中关闭「显示差异」，热力图立即消失，不会等操作停下或被迟到的预览重新画回来。
-- 比较模式点「高亮差异」打开再关闭后，右侧窗格恢复显示原图：高亮会顺带打开「显示差异」，关闭高亮时现在一并关掉（用户自己打开的「显示差异」保持不变）。
-- 浅色主题下不再有写死的颜色：单图背景跟随主题（与比较窗格一致），缩略图占位块、预览面板次要文字、直方图底色与网格线都改用主题颜色。
-- 加载大图时去掉英文「Loading...」文字，只保留顶部细进度条。
-- 删除文件改为移到系统回收站，撤销时从回收站还原；只有系统回收站不可用时才退回程序自己的回收目录，并按 30 天 / 2 GB 自动清理。
-- 批量转换格式时，同名不同扩展名的源文件（如 `a.jpg` 和 `a.png`）输出不再互相覆盖，后一个自动命名为 `a (2).png`。
-- 在设置里点「确定」只应用真正改过的选项：不再把「列表」「紧凑」视图重置回缩略图，也不再重置手动打开的通道叠加；「默认视图模式」下拉框补齐全部 7 种视图，视图模式的有效范围统一由一处判断。
-- 主题只有在真正切换时才重新应用，点「确定」界面不再闪一下。
-- 设置里的「对比前自动对齐」与比较工具栏的「对齐」勾选框保持同步，改动后立即重算差异，不再每次计算都去读设置文件。
-- 缩略图默认尺寸统一为 140（设置页、应用设置和面板不再一处 140 一处 160）。
-- 比较模式按 P/N 切到下一组图时，上一组的同步准星会被清掉。
-- Shift+1…6（通道隔离）和 Ctrl+Shift+0…5（评分）在 Windows 上恢复响应：Windows 按住 Shift 时报告的是「!」「@」等符号键，现在统一按虚拟键码识别数字，并兼容美式键盘的符号映射。单图与比较模式共用同一张通道表。比较模式下不带修饰键的数字 1–8 仍用于切换图片。
-- 重命名、移动、删除文件后，星级、颜色标签、选中/排除标记、最近浏览记录和标签都会跟着文件走；撤销时一起回到原路径，`.xmp` 附属文件也同步改名或移动。
-- `.xmp` 附属文件改为「完整文件名 + .xmp」（如 `IMG_001.jpg.xmp`），同名不同扩展名的图片（`IMG_001.jpg` / `IMG_001.png`）不再共用、互相覆盖。旧的 `IMG_001.xmp` 只在能确定归属时读取，并自动迁移到新名字。
+- In compare mode, after zooming in (for example to 200%) and dragging the image, the newly revealed side no longer flashes a black edge first: a full-image base layer always sits under the sharp-region image, and the sharp region is redrawn on a throttle while dragging, without waiting for the mouse button to be released.
+- In compare mode, turning off the synced crosshair with R (or the checkbox or menu) removes crosshairs already drawn in every pane immediately.
+- Turning off **Show difference** while zooming or dragging removes the heatmap immediately. It no longer waits for the gesture to stop, and a late preview no longer paints it back.
+- In compare mode, turning **Highlight differences** on and then off restores the original image in the right pane. Highlighting also turns on **Show difference**; turning the highlight off now turns that off as well. A **Show difference** toggle the user enabled themselves is left unchanged.
+- The light theme no longer uses hardcoded colors. The single-image background follows the theme (matching the compare panes), and thumbnail placeholders, secondary text in the preview panel, and the histogram background and grid lines all use theme colors.
+- While a large image loads, the English "Loading..." text is removed. Only the thin progress bar at the top remains.
+- Deleting a file now moves it to the system recycle bin, and undo restores it from there. The app falls back to its own recycle directory only when the system recycle bin is unavailable, and that directory is cleaned automatically at 30 days / 2 GB.
+- During batch format conversion, source files that share a name but differ in extension (for example `a.jpg` and `a.png`) no longer overwrite each other's output. The later file is named `a (2).png` automatically.
+- Clicking **OK** in Settings applies only options that actually changed. **List** and **Compact** views are no longer reset to thumbnails, and a channel overlay opened manually is no longer reset. The **Default view mode** dropdown now lists all 7 views, and the valid range of view modes is checked in one place.
+- The theme is reapplied only when it actually changes, so clicking **OK** no longer flashes the UI.
+- **Auto-align before compare** in Settings stays in sync with the **Align** checkbox on the compare toolbar. A change recomputes the difference immediately, and each calculation no longer reads the settings file.
+- The default thumbnail size is unified at 140. The settings page, app settings, and panel no longer disagree between 140 and 160.
+- In compare mode, pressing P/N to move to the next image group clears the synced crosshair from the previous group.
+- Shift+1…6 (channel isolation) and Ctrl+Shift+0…5 (rating) respond again on Windows. With Shift held, Windows reports symbol keys such as "!" and "@"; digits are now identified by virtual key code, including the US keyboard symbol mapping. Single-image and compare mode share the same channel table. In compare mode, the unmodified digits 1–8 still switch images.
+- After a file is renamed, moved, or deleted, its star rating, color label, pick/reject marks, recent-view history, and tags follow the file. Undo restores them to the original path together, and the sidecar `.xmp` is renamed or moved with it.
+- Sidecar `.xmp` files now use the full filename plus `.xmp` (for example `IMG_001.jpg.xmp`). Images that share a name but differ in extension (`IMG_001.jpg` / `IMG_001.png`) no longer share or overwrite one sidecar. The old `IMG_001.xmp` is read only when its owner can be determined, and is migrated automatically to the new name.
 
 ## [1.0.108] - 2026-10-11
 
@@ -641,11 +641,11 @@
 
 ### Changed
 
-- 弹窗（设置、批量处理、导出、提示框等）统一套用新主题：确认按钮固定高亮，输入框、文本框、数值框加上悬停与按下反馈。
-- 缩略图悬停高亮改为约 120 ms 的淡入淡出；菜单、标签页、表头、滚动条补齐按下与选中状态。
-- 统一间距与尺寸刻度（4/8/12/16 px）：控件统一 28 px 高，弹窗与面板边距、间距、复选框尺寸、菜单内边距对齐同一套刻度。
-- 未打开文件夹时显示简洁的引导页，带「打开文件夹…」按钮；加载大图时看图窗口顶部显示细进度条，不再一片空白（150 ms 内加载完成的不显示）。
-- 新增浅色主题（与深色共用同一套设计变量）。首次启动默认跟随 Windows 应用深色/浅色设置并实时切换；设置 → 常规 → 界面主题可手动选「跟随系统 / 深色 / 浅色」，选择会被记住。工具栏图标与面板颜色随主题即时切换。
+- Dialogs (Settings, batch processing, export, message boxes, and similar) now share the new theme: confirm buttons stay highlighted, and line edits, text areas, and numeric fields have hover and pressed feedback.
+- Thumbnail hover highlight is now a fade of about 120 ms. Menus, tabs, table headers, and scrollbars now include pressed and selected states.
+- Spacing and sizing follow one scale (4/8/12/16 px): controls are a uniform 28 px tall, and dialog and panel margins, spacing, checkbox size, and menu padding all use that scale.
+- When no folder is open, a simple guide page is shown with an "Open Folder…" button. While a large image loads, a thin progress bar appears at the top of the viewer instead of a blank area (loads that finish within 150 ms are not shown).
+- A light theme was added (it shares the same design variables as the dark theme). On first launch, the app follows the Windows app light/dark setting and switches live. Under Settings → General → Interface theme you can choose "Follow system / Dark / Light", and the choice is remembered. Toolbar icons and panel colors switch with the theme immediately.
 
 ## [1.0.107] - 2026-10-11
 
@@ -655,15 +655,15 @@
 
 ### Changed
 
-- 比较模式高质量缩放提速（多线程、先粗后精、SIMD、渐进显示）.
-- 全新深色扁平主题与线性图标。
-- 界面布局现代化（比较工具栏分组、侧栏可折叠、状态栏精简、信息卡片）。
+- Faster high-quality scaling in compare mode (multithreaded, coarse-to-fine, SIMD, progressive display).
+- New dark flat theme and linear icons.
+- Modernized UI layout (grouped compare toolbar, collapsible sidebar, streamlined status bar, info cards).
 
 ### Fixed
 
-- 网格浏览中框选松开鼠标后选框会正确结束.
-- 双击打开图片后按一次 Esc 即可退出看图.
-- F11 在看图和浏览下仍切换全屏；退出看图不再把全屏帧写进窗口状态。
+- In grid browsing, releasing the mouse after a marquee selection now correctly ends the selection box.
+- After double-clicking to open an image, pressing Esc once exits the viewer.
+- F11 still toggles fullscreen in both viewer and browse modes; exiting the viewer no longer writes the fullscreen frame into window state.
 
 ## [1.0.106] - 2026-10-10
 
@@ -673,24 +673,24 @@
 
 ### Fixed
 
-- 比较模式缩小显示改为一次高质量重采样，细线更清晰。
-- 比较模式 ROI 测量面板的状态、按钮、提示与失败原因改为中文。
-- 目录树「在资源管理器中显示」改为与看图、缩略图相同的定位参数，能打开并选中该文件夹。
-- 删除、移动、复制、重命名以及撤销/重做失败时，常见错误改为中文；无法识别的原文仍原样显示。
-- 读取比较预设时，亮度、对比度、伽马、白平衡增益和统一缩放会被限制在控件允许的范围内。
-- 恢复缩略图视图模式时，无法识别的值会回到缩略图模式。
+- Compare-mode downscaling now uses a single high-quality resample, so fine lines are clearer.
+- Compare-mode ROI measurement panel status, buttons, prompts, and failure reasons are now in Chinese.
+- Directory tree "Show in Explorer" now uses the same locate parameters as the viewer and thumbnails, so it can open and select that folder.
+- When delete, move, copy, rename, and undo/redo fail, common errors are now shown in Chinese; unrecognized original text is still displayed as-is.
+- When reading compare presets, brightness, contrast, gamma, white-balance gain, and uniform scale are clamped to the ranges the controls allow.
+- When restoring the thumbnail view mode, unrecognized values fall back to thumbnail mode.
 
 ### Changed
 
-- 单图缩放菜单改为「适应窗口 (0 / F)」「实际大小 100% (1)」「200% (2)」；查看器右键菜单的适应窗口与实际大小提示与之对齐。比较模式仍使用 Ctrl+1。
-- 缩略图右键菜单与「编辑」菜单新增「打开 MViewer 回收站」，在系统文件管理器中打开应用回收目录。无法定位数据目录时给出简短提示。
-- 首选项「常规」新增「启用色彩管理 (CMS)」，与视图菜单共用 `display/colorManagement`（默认开启）。确认后立即更新当前会话，无需重启。
-- 启动与插件加载日志不再使用 `std::endl`，避免每次输出都刷新。
+- The single-image zoom menu is now "Fit Window (0 / F)", "Actual Size 100% (1)", and "200% (2)"; the viewer's context-menu hints for fit window and actual size match these. Compare mode still uses Ctrl+1.
+- The thumbnail context menu and the Edit menu add "Open MViewer Recycle Bin", which opens the application's recycle directory in the system file manager. A short message is shown when the data directory cannot be located.
+- Preferences "General" adds "Enable color management (CMS)", sharing `display/colorManagement` with the View menu (on by default). After confirmation, the current session updates immediately, with no restart required.
+- Startup and plugin-loading logs no longer use `std::endl`, avoiding a flush on every write.
 
 ### Removed
 
-- 移除已编译但从未接入界面的 `CompareImagesUseCase`、`RenameImageUseCase` 与 `DeleteImageUseCase`。打开目录、外部打开与启动加载保持不变。
-- 缩略图详情行委托拆到独立源文件，使委托实现低于 800 行上限。
+- Removed `CompareImagesUseCase`, `RenameImageUseCase`, and `DeleteImageUseCase`, which were compiled but never wired into the UI. Opening a directory, external open, and startup loading are unchanged.
+- The thumbnail detail-row delegate was split into its own source file so the delegate implementation stays under the 800-line limit.
 
 ## [1.0.105] - 2026-10-09
 
@@ -700,35 +700,33 @@
 
 ### Added
 
-- 比较模式新增「截图」按钮（复制到剪贴板 Ctrl+C / 保存为 PNG Ctrl+S）。
-- 按 ? / F1 弹出比较模式快捷键速查表。
-
+- Compare mode adds a Screenshot button (copy to clipboard with Ctrl+C / save as PNG with Ctrl+S).
+- Press ? / F1 to open the compare mode keyboard-shortcut cheat sheet.
 ### Fixed
 
-- 分析面板移除始终无结果的「双图对比」分析器（比较请使用比较模式）；
-- 分析面板与导出结果提示改为中文；
-- 工具栏提示中的快捷键改为根据实际快捷键自动生成。
-- **单图瓦片接缝**：放大后不再出现把画面切成一块块的黑线。相邻瓦片的屏幕边按同一套变换取整对齐，上传时带上邻接的 1 像素，边缘的线性采样用到真实邻域像素；最近邻高倍放大时瓦片边界的像素也保持连续。
-- **滚轮缩放不再在清晰和发糊之间来回跳**：小幅滚轮不再把已经清晰的画面换成更糊的级别。新级别没准备好之前继续显示当前清晰画面，LOD 选择带滞后，滚轮过程中也不再切到更糊的快速采样。
-- **缩放百分比**：看图时状态栏和画面右上角显示当前缩放（如 125%），比较模式每个窗格左下角同样显示。适应窗口、滚轮、键盘和 100% 都会更新。图片加载失败时状态栏仍为「缩放 —」。
+- The analysis panel no longer includes the “Dual-image compare” analyzer, which never produced a result. Use Compare mode to compare images.
+- Messages in the analysis panel and in export results are now in Chinese.
+- Shortcut text in toolbar tooltips is now generated from the actual shortcuts.
+- **Single-image tile seams**: Zooming in no longer draws black lines that split the view into blocks. Screen edges of adjacent tiles are integer-aligned with the same transform. Each upload includes a 1-pixel border from the neighboring tile, so linear sampling at the edge uses real neighboring pixels. At high nearest-neighbor magnification, pixels along tile boundaries stay continuous.
+- **Wheel zoom no longer flips between sharp and blurry**: A small wheel step no longer replaces an already sharp view with a blurrier level. The current sharp view stays on screen until the new level is ready. LOD selection uses hysteresis, and wheel movement no longer switches to blurrier fast sampling.
+- **Zoom percentage**: While viewing, the status bar and the top-right corner of the view show the current zoom (for example, 125%). Compare mode shows the same value at the bottom-left of each pane. Fit to window, the wheel, the keyboard, and 100% all update it. If the image fails to load, the status bar still shows “Zoom —”.
 
-- 批量处理「输出目录」留空时改为输出到源文件所在目录（此前会写到程序当前目录）；
-- 中文输出目录可正常自动创建；
-- 不再覆盖源文件，目标已存在时默认跳过，新增「覆盖已存在的文件」选项；输出改为先写临时文件再原子替换；
-- 未勾选「导出」时阻止无输出的批处理；
-- 目录扫描与文件对话框使用同一份格式列表；
-- 单文件重命名与批量重命名共用文件名校验；
-- 超大图片给出明确提示。
-- **比较模式数字键只换图**：单独按 1–8 时，按住在鼠标所在窗格临时预览第 N 张图（指针不在窗格上时用当前焦点窗格，否则第 1 格），松开恢复。超出图片张数只在状态栏提示。100% 实际大小为 Ctrl+1；0 / Ctrl+0 仍为适应窗口。布局预设为 Ctrl+2 / Ctrl+4 / Ctrl+8。
-- **比较模式「最适合」并入「适合窗口 (F)」**：去掉单独的「最适合」按钮和缩放菜单项（它会自动关闭「统一像素倍率」）。比较工具操作行改为一个「适合窗口 (F)」按钮，与 **F** / **Ctrl+0** 行为一致：勾选「统一像素倍率」时所有窗格用同一倍率适配，不勾选时各窗格按自身分辨率适配（相同视野的图显示为相近大小），是否统一倍率由用户自己勾选决定。
-- 比较模式按钮、提示与帮助的快捷键文案统一（滑动对比 W 等），补全遗漏的快捷键说明。
-- 「自动」阈值在换图后不再沿用上一对图的建议值，无建议时按钮禁用。
-- 读取比较布局预设时对旋转、阈值、闪烁间隔、列数、裁剪与图片数做范围校验。
-
+- When the batch-processing “Output directory” is left empty, files are written to the source file’s directory. They were previously written to the program’s current directory.
+- Output directories with Chinese names are created automatically.
+- Source files are no longer overwritten. An existing target is skipped by default, and an “Overwrite existing files” option was added. Output is written to a temporary file and then replaced atomically.
+- A batch run with no output is blocked when “Export” is unchecked.
+- Directory scanning and the file dialog use the same format list.
+- Single-file rename and batch rename share filename validation.
+- Oversized images now show a clear message.
+- **Compare mode: number keys only switch images**: Pressing 1–8 alone temporarily previews image N in the pane under the pointer while the key is held. If the pointer is not over a pane, the focused pane is used; otherwise pane 1 is used. Releasing the key restores the previous image. If N is past the image count, only the status bar reports it. Actual size (100%) is Ctrl+1. 0 / Ctrl+0 still fits the window. Layout presets are Ctrl+2 / Ctrl+4 / Ctrl+8.
+- **Compare mode: “Best fit” merged into “Fit to window (F)”**: The separate “Best fit” button and zoom-menu item were removed. That action turned off “Uniform pixel scale” automatically. The compare toolbar now has a single “Fit to window (F)” button, with the same behavior as **F** / **Ctrl+0**. When “Uniform pixel scale” is checked, every pane fits at the same scale. When it is unchecked, each pane fits to its own resolution, so images with the same field of view appear at a similar size. The user chooses whether the scale is uniform.
+- Shortcut wording on compare-mode buttons, tooltips, and help is now consistent, including swipe compare on W, and missing shortcut descriptions were added.
+- After switching images, the “Auto” threshold no longer keeps the suggested value from the previous pair. The button is disabled when there is no suggestion.
+- Loading a compare-layout preset now range-checks rotation, threshold, flicker interval, column count, crop, and image count.
 ### Changed
 
-- 批量旋转/翻转逻辑拆分到独立源文件，等待方式由轮询改为事件驱动；
-- 为缩略图面板头文件腾出行数余量。
+- Split the batch rotate/flip logic into its own source file, and switched waiting from polling to event-driven.
+- Freed line-count headroom in the thumbnail panel header.
 
 ## [1.0.104] - 2026-10-08
 
@@ -738,9 +736,9 @@
 
 ### Added
 
-- **对比模式优化 (Compare Mode Polish)**：差异热力图引入感知自适应渐变映射（微小差异琥珀警戒过渡至剧烈差异深红），在严格保持红色显著性通道契约的同时大幅提升细微瑕疵的可辨识度；新增基于大津法 (Otsu) 的自适应差异阈值推荐算法 `DifferenceEngine::suggestThreshold`；对比工作区阈值控制区新增「自动」按钮（`diffAutoThresholdButton`），根据当前两图差异分布一键自动匹配并填充最佳分割阈值。
-- **像素检视与定量分析扩展 (Pixel Inspector & Analysis)**：`ImageStats` 与 `NeighborhoodStats` 全面补充各颜色通道与亮度维度的标准差（stdDev）、极值（min/max）及方差统计；提供 `ImageStats::toSummaryString()`、`toCsvRow()` 与 `csvHeader()` 结构化导出与分析辅助接口；像素检视器面板支持 8-bit 源图像 `[0..1]` 归一化浮点采样值展示，邻域统计直观显示 RGB 各通道标准差。
-- **算法导出与定量分析报告 (Export & Report Enhancement)**：扩充比较分析报告上下文，HTML 比较报告丰富呈现参考图与目标图的均值、各通道均值差（ΔRGB）、高斯/拉普拉斯噪声估计与 PSNR/SSIM 完整定量指标矩阵；`formatDiffStats` 支持输出差异分布标准差。
+- **Compare Mode Polish**: The difference heatmap now uses a perceptually adaptive gradient mapping (subtle differences shown as an amber warning, transitioning to deep red for severe differences), substantially improving the visibility of fine defects while strictly preserving the red saliency-channel contract. Added an Otsu-based adaptive difference-threshold recommendation algorithm, `DifferenceEngine::suggestThreshold`. The compare workspace threshold controls add an **Auto** button (`diffAutoThresholdButton`) that, from the current difference distribution of the two images, automatically matches and fills the optimal segmentation threshold in one click.
+- **Pixel Inspector & Analysis**: `ImageStats` and `NeighborhoodStats` now fully include standard deviation (stdDev), extrema (min/max), and variance statistics for each color channel and the luminance dimension. Added structured export and analysis helper APIs: `ImageStats::toSummaryString()`, `toCsvRow()`, and `csvHeader()`. The pixel inspector panel can display normalized floating-point sample values in `[0..1]` for 8-bit source images, and neighborhood statistics clearly show the standard deviation of each RGB channel.
+- **Export & Report Enhancement**: Expanded the comparative analysis report context. The HTML comparison report now presents, in full, the means of the reference and target images, per-channel mean differences (ΔRGB), Gaussian/Laplacian noise estimates, and the complete PSNR/SSIM quantitative metric matrix. `formatDiffStats` supports outputting the standard deviation of the difference distribution.
 
 ## [1.0.103] - 2026-10-08
 
@@ -750,12 +748,12 @@
 
 ### Added
 
-- **批量重命名支持查找/替换（正则）并记住上次设置**：「批量处理 → 重命名」与「导出图片 → 批量重命名」新增「查找」「替换为」输入框及「使用正则表达式」「区分大小写」选项；先对文件名（不含扩展名）做查找替换，再套用重命名模式；正则模式全局替换并支持 `\1`、`\2` 捕获组引用；实时预览前几个文件的新名称；正则无效、替换后文件名为空或含非法字符、目标重名时显示行内错误并禁用开始/导出按钮；全部重命名设置在确认执行时保存，下次打开对话框自动恢复（两处对话框各自记忆）。
+- **Batch rename supports find/replace (regex) and remembers the last settings**: “Batch process → Rename” and “Export images → Batch rename” add “Find” and “Replace with” fields, plus “Use regular expression” and “Match case” options. Find/replace runs on the filename (excluding the extension) first, then the rename pattern is applied. Regex mode replaces globally and supports `\1` and `\2` capture-group references. A live preview shows the new names of the first few files. If the regex is invalid, the resulting filename is empty or contains illegal characters, or the target name already exists, an inline error is shown and the Start/Export button is disabled. All rename settings are saved when the action is confirmed and restored the next time the dialog opens (each of the two dialogs remembers its own settings).
 
 ### Fixed
 
-- **画廊比较工具栏按钮**：浏览/画廊页面工具栏在旋转图片按钮旁新增「比较」快捷按钮，复用右键菜单比较流程与相同图标样式；依据选中图片数量动态更新可用状态（选中 2–8 张时启用并提示「比较 (P)」，少于 2 张或多于 8 张时禁用并显示「选择 2–8 张图片进行比较」）。
-- **对比模式与界面控件快捷键提示**：对比模式缩放与适应选项（「适应窗口 (F)」、「实际大小 100% (1)」）、通道隔离项（Shift+1…6）、各对比模式开关（闪烁 B、左右分割 S、滑动 W、叠加 O、棋盘 K、差异高亮 H）、同步联动控件（同步缩放 Z、同步拖动 D、同步旋转 Alt+R、同步准星 R、像素连线 L、检视面板 I、交换 A/B X、临时切换 Space、退出比较 Esc）以及窗格旋转翻转按钮全量补齐真实绑定的键盘快捷键提示；画廊工具栏图标按钮工具提示与视图模式下拉项同步展示真实快捷键。
+- **Gallery compare toolbar button**: The browse/gallery page toolbar adds a “Compare” shortcut button next to the rotate-image button, reusing the context-menu compare flow and the same icon style. Its enabled state updates from the selection count (enabled with the hint “Compare (P)” when 2–8 images are selected; disabled with “Select 2–8 images to compare” when fewer than 2 or more than 8 are selected).
+- **Compare mode and UI control shortcut hints**: Shortcut hints that match the real key bindings are filled in for compare-mode zoom and fit options (“Fit window (F)”, “Actual size 100% (1)”), channel isolation items (Shift+1…6), each compare-mode toggle (flicker B, left-right split S, wipe W, overlay O, checkerboard K, difference highlight H), sync controls (sync zoom Z, sync pan D, sync rotation Alt+R, sync crosshair R, pixel link L, inspect panel I, swap A/B X, temporary toggle Space, exit compare Esc), and the pane rotate/flip buttons. Gallery toolbar icon-button tooltips and view-mode dropdown items also show the real shortcuts.
 
 ## [1.0.102] - 2026-10-06
 
@@ -765,24 +763,24 @@
 
 ### Fixed
 
-- **EXIF 与 GPS 解析安全强化**：`MetadataReader` 中解析 TIFF/EXIF 头部校验字节序标记（`II`/`MM`），修复大端模式下 GPS IFD 偏移解析错误；在解析 GPS 经纬度与海拔时增加除零保护，避免分母为 0 导致错误记录零经纬度/零海拔；修复解析 EXIF 缩略图时的字节序匹配与越界保护。
-- **信息叠加层空字段降级保护**：`MetadataOverlay` 中短文件名、文件路径或尺寸为空或缺失时提供安全降级展示与路径解析，避免因元数据不全导致界面渲染空标签（如「文件: 」「路径: 」「格式: 」等占位无内容异常）。
-- **全屏状态检测与右键菜单同步**：`ImageViewer` 全屏切换逻辑补齐原生 `isFullScreen()` 状态判断，确保通过系统或窗口管理器全屏时也能可靠退出；图片查看器右键菜单动态同步「全屏 (F11)」与「退出全屏 (F11)」文案；主窗口全屏快捷动作文案同步更新。
-- **首选项配置越界值钳制与防护**：`PreferencesDialog` 与主窗口加载偏好设置时，严格校验并钳制持久化参数（缩略图尺寸限制在 64–512、幻灯片间隔限制在 500–30000 ms、斑马线阈值限制在 1–40），对视图模式与分析覆盖模式等枚举索引越界值进行安全回退，防止非法或损坏配置破坏界面布局。
-- **工作区与对比会话反序列化校验**：`WorkspaceSerializer` 加载会话与工作区时，对同步模式、缩放比例（必须为正且有限浮点数）、差异阈值（0–255）、闪烁间隔（50–10000 ms）、布局列数（1–8）、闪烁索引、选区尺寸以及子单元变换矩阵进行全面范围校验与钳制，防止载入损坏数据引发崩溃或异常渲染。
-- **EXIF 坐标变换空矩形与无效尺寸保护**：`ExifOrientation` 中 `orientedRectToRaw` 与 `rawRectToOriented` 增加空矩形与非正尺寸校验，防止空 ROI 选区被错误扩展为有效偏移；对变换后的坐标严格钳制在目标显示区域内。
-- **搜索输入与键盘操作**：搜索面板输入框支持按 Esc 清空筛选文本；按 Enter/Return 立即执行检索而无需等待防抖延迟；搜索结果表格支持通过 Enter 激活打开结果；在输入框按向下方向键直接切换焦点至结果列表第一行。
-- **切换文件夹清除筛选**：在画廊切换目录时同步重置搜索输入框与评分/标记筛选下拉框，彻底消除画廊展示全部图片但搜索框仍残留旧关键词的显示脱节问题。
-- **最近文件与目录强化**：最近记录反序列化时严格限制条目上限；支持主动移除单个记录；点击已不存在的失效目录或文件时自动清理并给出明确提示，最近菜单新增「清理失效目录」与「清理失效文件」一键整理功能；根目录或盘符路径在最近菜单中正常显示完整路径，不再出现空白项。
-- **路径与文件名复制一致性**：图片查看器右键复制路径统一转换为 Windows 原生反斜杠分隔符；画廊缩略图右键菜单与图片查看器右键菜单统一新增「复制文件名」选项，便于快速提取文件名。
-- **目录模型接口补全**：为 DirectoryModel 补齐 removeRecentFolder 接口及信号通知，支持最近目录在失效清理时精确移除单条记录。
-- **直方图分箱计算修复**：修复 `computeHistogram` 自定义 bin 数量（非 256 bin）时错误将像素值直接截断至 `maxBin` 导致数据堆积在末尾区间的 Bug，按目标 bin 范围正确等比缩放分箱。
-- **分析面板重置与多通道比例**：分析面板清空时彻底重置当前帧指针、各页面标签、RGB 像素检视器与十字准星，避免旧图残留；直方图与 RGB 通道多曲线叠加绘制时采用全局统一最大高度归一化，直观准确呈现各颜色通道的真实能量比例。
-- **面包屑导航路径解析与根目录修复**：重构面包屑栏分段重建算法，点击 Windows 盘符根目录（如 `C:`）正确导向根目录路径 `C:/`；修复 Unix 与 UNC 共享路径拼接产生双斜杠的问题；提供完整的路径分段索引解析。
-- **幻灯片循环控制与进度指示**：首选项新增「幻灯片循环播放」配置项；关闭循环播放时播至末尾自动优雅停止并提示；幻灯片放映中状态栏动态展示 `[当前/总数]` 实时进度指示。
-- **失效评分与标签自动清理**：`RatingStore` 与 `TagStore` 新增 `pruneMissing()` 接口，安全检测并清理磁盘已删除失效文件的残留评分、色标、标记、最近记录与标签数据。
-- **画廊操作与对比同步控件优化**：画廊缩略图右键菜单根据选中数量动态控制「比较」（2–8 张）、「批量分析导出」与「添加标签…」的可用状态；对比工作区同步拖动复选框补齐对象名与悬停提示。
-- **评分与标签清理编译修复**：修复 `RatingStore` 与 `TagStore` 中 `pruneMissing()` 误用未定义标识符 `utf8ToPath` 的编译错误，统一采用 `pathFromUtf8`。
+- **EXIF and GPS parsing safety hardening**: In `MetadataReader`, TIFF/EXIF header parsing now validates the byte-order marker (`II`/`MM`), fixing incorrect GPS IFD offset parsing in big-endian mode. Division-by-zero protection was added when parsing GPS latitude, longitude, and altitude so a zero denominator no longer records erroneous zero coordinates or zero altitude. Byte-order matching and bounds checks were also fixed when parsing EXIF thumbnails.
+- **Empty-field fallback for the metadata overlay**: In `MetadataOverlay`, missing or empty short file names, file paths, or dimensions now fall back to a safe display and path resolution, so incomplete metadata no longer renders empty labels (such as "File: ", "Path: ", or "Format: ").
+- **Fullscreen state detection and context-menu sync**: `ImageViewer` fullscreen toggle logic now checks the native `isFullScreen()` state, so fullscreen entered via the system or window manager can still be exited reliably. The image viewer context menu dynamically switches between "Fullscreen (F11)" and "Exit Fullscreen (F11)", and the main window fullscreen shortcut label stays in sync.
+- **Out-of-range preference clamping and guards**: When `PreferencesDialog` and the main window load preferences, persisted values are strictly validated and clamped (thumbnail size 64–512, slideshow interval 500–30000 ms, zebra threshold 1–40). Out-of-range enum indexes for view mode and analysis overlay mode fall back safely, so invalid or corrupt settings cannot break the layout.
+- **Workspace and comparison session deserialization checks**: When `WorkspaceSerializer` loads a session or workspace, it validates and clamps sync mode, zoom (must be a positive finite float), difference threshold (0–255), blink interval (50–10000 ms), layout column count (1–8), blink index, selection size, and child-cell transform matrices, so corrupt data cannot crash the app or render incorrectly.
+- **Empty-rect and invalid-size guards for EXIF coordinate transforms**: `orientedRectToRaw` and `rawRectToOriented` in `ExifOrientation` now reject empty rectangles and non-positive sizes, so an empty ROI is not incorrectly expanded into a valid offset. Transformed coordinates are strictly clamped to the target display area.
+- **Search input and keyboard actions**: The search panel field clears the filter text on Esc. Enter/Return runs the search immediately without waiting for the debounce delay. Enter activates and opens the selected row in the results table. Down arrow from the input moves focus to the first row of the results list.
+- **Clear filters when switching folders**: Changing directory in the gallery resets the search field and the rating/flag filter dropdowns, so the gallery no longer shows every image while the search box still holds an old keyword.
+- **Recent files and folders hardening**: Deserialization of recent entries now enforces a strict item limit. Individual entries can be removed. Clicking a missing directory or file removes it and shows a clear notice. The recent menu adds one-click "Clean invalid folders" and "Clean invalid files" actions. Root or drive-letter paths display their full path in the recent menu, with no blank items.
+- **Consistent path and filename copy**: Copy Path from the image viewer context menu always uses Windows native backslash separators. Both the gallery thumbnail context menu and the image viewer context menu add a "Copy filename" action for quick filename extraction.
+- **Directory model API completion**: `DirectoryModel` now provides `removeRecentFolder` and a matching signal, so a single recent-folder entry can be removed precisely during invalid-entry cleanup.
+- **Histogram binning fix**: Fixed a bug in `computeHistogram` where a custom bin count (not 256 bins) truncated pixel values directly to `maxBin`, piling data into the last bin. Values are now scaled proportionally into the target bin range.
+- **Analysis panel reset and multi-channel scale**: Clearing the analysis panel fully resets the current frame pointer, page labels, RGB pixel inspector, and crosshair, so nothing from the previous image remains. When histogram and RGB channel curves are drawn together, they share one global maximum-height normalization so each channel's relative energy is shown accurately.
+- **Breadcrumb path resolution and root-directory fix**: The breadcrumb bar segment rebuild was reworked. Clicking a Windows drive root (for example `C:`) now navigates to the root path `C:/`. Double slashes from joining Unix and UNC share paths were fixed. Full path-segment index resolution is provided.
+- **Slideshow loop control and progress indicator**: Preferences add a "Loop slideshow" setting. With looping off, playback stops cleanly at the end and shows a notice. During a slideshow, the status bar shows live progress as `[current/total]`.
+- **Automatic cleanup of stale ratings and tags**: `RatingStore` and `TagStore` add `pruneMissing()`, which safely detects and removes leftover ratings, color labels, flags, recent entries, and tag data for files that no longer exist on disk.
+- **Gallery actions and comparison sync controls**: The gallery thumbnail context menu enables "Compare" (2–8 images), "Batch analysis export", and "Add tags…" according to the selection count. The comparison workspace sync-drag checkbox now has an object name and a hover tooltip.
+- **Compile fix for rating and tag cleanup**: Fixed a compile error where `pruneMissing()` in `RatingStore` and `TagStore` used the undefined identifier `utf8ToPath`. Both now use `pathFromUtf8`.
 
 ## [1.0.101] - 2026-10-05
 
@@ -792,73 +790,73 @@
 
 ### Fixed
 
-- **批量取消**：批处理在开始前就被取消时不再被清掉；做到一半取消的文件记为失败而不是成功。结束时区分成功、失败和未处理，并列出失败的文件名。
-- **导出失败**：转换有部分文件失败时，结果说明里写出失败的源路径（最多三条，其余只计数）。
-- **比较缩放**：只同步缩放时，每个窗格按自己的平移绕光标缩放，不再从左上角撑开。只同步拖动时，滚轮只放大当前窗格，平移仍一起动。非法缩放倍数不会改坏比例。
-- **加载回调**：消费者已经销毁（不只是标记失效）时，迟到的解码结果和提交失败都不再调用回调。
-- **目录重建**：正在浏览的文件夹被删除后，改为监视它的上一级。文件夹重新出现时画廊会自己更新，不用手动刷新。
-- **16 位方向**：16 位采样按 EXIF 方向转到与显示一致的坐标，像素检视的原始采样对得上画面。
-- **16 位色度**：像素检视的 HSV/Lab/YUV/YCbCr/XYZ 在有 16 位采样时按满位深归一化，不再先量化成 8 位。RGB 与 HEX 仍显示 8 位。
-- **透明像素**：直方图、ROI 均值和邻域统计跳过 alpha 为 0 的像素。alpha 不是 255 时，浏览检视写出 Alpha。
-- **选区溢出**：选区坐标相加越过 int 边界时，统计和裁剪按 64 位夹到图像内。零面积选区仍为空。
-- **嵌入缩略图方向**：嵌入 JPEG 没有自己的方向，且长宽比更接近传感器而不是显示方向（仅方向 5–8）时，才套用主图方向。
-- **画廊缩放键**：焦点在画廊时，Ctrl+加号、Ctrl+减号和 Ctrl+0 调整或重置缩略图。
-- **改写失败提示**：改写图片失败时区分路径过长、网络不可达和找不到文件。过长路径在对话框里中间省略。窗口正在关闭或不可见时不再弹出模态框。
-- **快捷键说明**：快捷键表写明 Tab 是专注浏览、Shift+Tab 仍移动焦点，并按焦点区分 Ctrl+0。
-- **无障碍名称**：画廊和直方图带有可读的无障碍名称。
-- **动态图延时**：GIF/WebP 单帧延时不超过 10 毫秒时按 100 毫秒播放，避免 0 延时动画以定时器最快速度空转。
-- **动态图解码**：连续播放下一帧时接着上次的解码位置读，不再每次从第 0 帧重解；切图、关闭或覆盖写入前放开文件。
-- **动态图隐藏**：查看器隐藏或窗口最小化时暂停时间轴，重新显示后从当前帧继续，不会把隐藏期间的时间快进掉。有限循环播完后停在最后一帧。
-- **比较对调**：交换窗格时缩放和平移跟着图像走，不再被重置成适应窗口。
-- **缩放锁定**：加载失败不再关掉适应窗口。锁定开着时，下一张成功的图仍按窗口适应，而不是沿用失败前的比例；已经手动锁定的比例保持不变。失败时仍去掉缩略图，标题为无法加载，缩放显示为「缩放 —」，下一张成功后读数会回来。暖缩略图也不会把已锁定的手动缩放改回适应窗口。
-- **快速翻图**：切到下一张时，过渡画面持有一份按窗口缩小的副本，不再引用即将释放的整幅像素，也不会在界面线程复制整张照片。
-- **导出缩放**：选择「按比例 (%)」时数值改成百分比，不再把默认的 1920 像素当成 1920%。选「无」时数值不可改。
-- **画廊排序**：升序是名称 A 到 Z（数字按大小）、日期从早到晚、从小到大。降序只反转这一项；大小或日期相同的文件仍按文件名再按路径，不再整表颠倒。
-- **重命名**：拒绝空名、Windows 非法字符、保留设备名和已有文件名。更改扩展名前先确认。
-- **拖入查看器**：把文件拖到查看器窗口上，和拖到画廊一样打开。
-- **再次打开查看器**：关闭后再双击或用方向键翻图，画面会重新解码，不再停在空白。
-- **状态栏**：评分、当前文件、扫描和比较结束的提示会自动消失。鼠标离开画面后，像素读数还原刚才的提示，不再把状态栏清掉。
-- **窗口位置**：进入全屏前记住原来的窗口，退出全屏和关闭后再打开都回到那一块。窗口落到屏幕外时拉回可见区域。
-- **设置保存**：关闭时如果会话、最近文件夹或界面设置没有写上，会提示。导出写不进去、导入后保存失败也会说明原因。
-- **胶片条方向键**：单行胶片条里，上/下、PageUp/PageDown 和 Home/End 沿胶片移动。
-- **大图适应窗口**：只有降采样光栅、没有全分辨率帧时（约 60MP 以上），改变窗口大小仍重新适应。
-- **加载失败**：解码失败后不再把缩略图留在画布上；查看器标题改为无法加载，状态栏缩放回到「缩放 —」。
-- **比较色彩**：比较窗口嵌在对话框里时仍按所在屏幕的显示配置着色，拖到另一块屏幕后跟着更新。
-- **比较画布快捷键**：分割、滑动、叠加或棋盘下，焦点在画布或窗格上时，模式、缩放、方向键和 Esc 仍交给比较窗口。
-- **触控板缩放**：查看器、比较窗格和缩略图 Ctrl+滚轮在只有 pixelDelta 时仍按方向缩放或调整大小；angleDelta 为 0 不再被当成缩小。
-- **查看器序列**：浏览列表和当前路径的 `/` 与 `\`（Windows 上大小写）视为同一文件。标题序号、邻图预加载、右键上一张/下一张，以及从查看器带入比较的预览，都对得上。
-- **评分与标签过滤**：画廊过滤用的快照按与存储相同的斜杠规则查找。Windows 下反斜杠路径不再被当成未评分或无标签。
-- **相机/镜头过滤**：元数据索引按统一路径键查找。实况改名或另一种斜杠写法之后，过滤、排序和详情列仍命中。
-- **收藏与最近**：同一文件夹或同一张图的不同斜杠（Windows 上大小写）不重复加入收藏、最近文件夹和图片历史；移除和「已收藏」状态能对上。同一文件夹只换斜杠不会重新扫描。
-- **幻灯片**：手动上一张、下一张或翻页后重新计算间隔，不会马上再自动跳过一张。
-- **目录可用性**：目录监视器路径与当前文件夹只差斜杠或大小写时，仍提示目录暂不可用或已恢复。
-- **删除确认**：偏好「删除前确认」默认开启时，移到回收站前会询问；关闭后仍立即删除。
-- **复制到剪贴板**：Ctrl+C 先显示「正在复制…」，成功或失败都等复制结束后再更新状态栏。
-- **幻灯片 Esc**：播放中按 Esc 先停止幻灯片，再走原来的退出全屏 / 关闭查看器。
-- **查看器焦点快捷键**：焦点在查看器时，Ctrl+F 仍聚焦地址栏，Ctrl+1 / Ctrl+2 仍切换视图模式。
-- **多选标签**：右键添加或移除标签作用于全部已选文件。
-- **大图检查器**：约 60MP 以上用已有降采样显示光栅做悬停读数、ROI 统计和取色，不加载全分辨率分析帧。
-- **旋转/翻转**：编码改到后台，窗口在写入期间保持响应；幻灯片在操作完成前不自动切图。
-- **比较滚轮**：连续滚轮缩放复用离屏表面，不再每个刻度都整幅重绘。
-- **文本框输入**：在单行框、多行框和数值框里打字，以及 Ctrl+C，留给控件自己。不再被比较、缩放或「复制图片」抢走。
-- **胶片条像素滚轮**：触控板给出 pixelDelta 时，胶片条按像素滚动横向滚动条；只有 angleDelta 时仍按滚轮角度滚动。
-- **过滤后翻页**：当前图片不在可见列表里时，Home / PageUp / PageDown 进入第一张可见图片，不再跳过第一页；End 仍到最后一张。
-- **地址栏快捷键**：聚焦地址栏改为 Ctrl+F / Alt+D。Ctrl+L 只锁定查看器缩放，不再同时聚焦地址栏。
-- **查看器 Esc**：先清除选区，再退出全屏，最后才关闭查看器。
-- **查看器 Shift+0**：重置通道叠加，还原完整 RGB（与比较窗口一致）。
-- **Ctrl+1**：不再绑定「实际大小」，留给缩略图视图模式；100% 仍用数字键 1。
-- **查看器 F5**：焦点在查看器时同样刷新目录树与画廊。
-- **选区复位**：关闭查看器时退出选区模式并清除选框，再次打开不会留下十字光标。
-- **文件名搜索**：搜索框里的字母、数字和空格会进入过滤词，不再被当成快捷键。
-- **查看器焦点快捷键**：I/M 信息、评分、色标、收藏/拒绝、F2、Delete 在查看器窗口同样生效；数字 2 为 200%；Ctrl+L 锁定缩放；动态图上 Space 播放/暂停。
-- **浏览序列路径**：`/` 与 `\`（Windows 上大小写）视为同一文件，左右切换、翻页、快速比较、删除和图片历史不再对不上。
-- **对比窗口复制路径**：Ctrl+Shift+C 复制当前焦点图路径；Ctrl+C 仍复制对比视图。
-- **通道快捷键说明**：帮助与提示改为 Shift+1…6 = 无叠加 / R / G / B / Y / V（与代码和菜单一致）。
-- **画廊实时增量**：目录快照与画廊行的 `/` 和 `\` 视为同一路径（Windows 上大小写不敏感）。删除、重命名、修改能命中对应行，已删除文件不再残留，重命名不再重复一行。
-- **未联动 ROI 微调**：两图尺寸不一致时，Alt/Shift+方向键微调焦点窗格自己的选区，不再无响应，也不会清掉其他窗格。尺寸一致时的联动微调保持不变。
-- **胶片条滚轮**：胶片条模式下，滚轮滚动横向滚动条（Ctrl+滚轮仍调整缩略图大小）。
-- **F 与 F11**：F 适应窗口，F11 切换全屏，与快捷键表一致。画廊拥有焦点时 F11 仍能全屏；没有当前图片时 F 不会误进全屏。
-- **快捷键说明**：Ctrl+F 的说明改为聚焦地址栏。
+- **Batch cancel**: A batch cancelled before it starts is no longer dropped. Files cancelled partway through are recorded as failed, not successful. The summary separates succeeded, failed, and not processed, and lists the failed file names.
+- **Export failure**: When some files fail to convert, the result text includes the failed source paths (at most three; any further failures are only counted).
+- **Compare zoom**: When only zoom is synced, each pane zooms around the cursor using its own pan, instead of expanding from the top-left. When only pan is synced, the wheel zooms only the current pane, while pan still moves together. An invalid zoom factor does not corrupt the scale.
+- **Load callback**: Once the consumer has been destroyed, and not merely marked invalid, a late decode result or a failed submit no longer invokes the callback.
+- **Directory rebuild**: After the folder being browsed is deleted, its parent is watched instead. When the folder reappears, the gallery updates on its own, without a manual refresh.
+- **16-bit orientation**: 16-bit samples are transformed by the EXIF orientation into coordinates that match the display, so the raw samples in the pixel inspector line up with the image.
+- **16-bit color**: With 16-bit samples, HSV/Lab/YUV/YCbCr/XYZ in the pixel inspector are normalized to the full bit depth, and are no longer quantized to 8-bit first. RGB and HEX still show 8-bit values.
+- **Transparent pixels**: The histogram, ROI mean, and neighborhood statistics skip pixels whose alpha is 0. When alpha is not 255, the browse inspector reports Alpha.
+- **Selection overflow**: When adding selection coordinates overflows `int`, statistics and cropping clamp into the image in 64-bit. A zero-area selection stays empty.
+- **Embedded thumbnail orientation**: The primary image orientation is applied only when the embedded JPEG has no orientation of its own and its aspect ratio is closer to the sensor than to the displayed orientation (orientations 5–8 only).
+- **Gallery zoom keys**: With focus in the gallery, Ctrl+Plus, Ctrl+Minus, and Ctrl+0 adjust or reset the thumbnails.
+- **Rewrite failure message**: A failed image rewrite distinguishes path too long, network unreachable, and file not found. An overlong path is middle-ellipsized in the dialog. No modal is shown while the window is closing or not visible.
+- **Shortcut help**: The shortcut table states that Tab is focused browsing, that Shift+Tab still moves focus, and that Ctrl+0 depends on which control has focus.
+- **Accessible names**: The gallery and the histogram have readable accessible names.
+- **Animation delay**: A GIF/WebP frame delay of 10 ms or less is played as 100 ms, so a 0-delay animation does not spin the timer at its maximum rate.
+- **Animation decode**: The next frame of continuous playback is read from the last decode position, instead of decoding again from frame 0 every time. The file is released before switching images, closing, or overwriting.
+- **Hidden animation**: When the viewer is hidden or the window is minimized, the timeline pauses. After it is shown again, playback continues from the current frame and does not fast-forward through the time spent hidden. A finite loop stops on the last frame.
+- **Compare swap**: When panes are swapped, zoom and pan stay with the image and are not reset to fit-to-window.
+- **Zoom lock**: A failed load no longer turns off fit-to-window. While lock is on, the next image that loads successfully still fits the window, rather than keeping the scale from before the failure. A scale that was locked manually stays unchanged. On failure the thumbnail is still removed, the title is "Unable to load", and the zoom reads "Zoom —". The readout returns after the next success. A warmed thumbnail does not change an already locked manual zoom back to fit-to-window.
+- **Fast paging**: When moving to the next image, the transition frame holds a copy scaled to the window. It no longer references the full pixel buffer that is about to be released, and it does not copy the whole photo on the UI thread.
+- **Export scale**: With "By percentage (%)" selected, the value is a percentage, and the default of 1920 pixels is no longer treated as 1920%. With "None" selected, the value cannot be edited.
+- **Gallery sort**: Ascending order is name A to Z (numbers by numeric value), date from earliest to latest, and size from small to large. Descending reverses only that key. Files with the same size or date stay ordered by file name and then by path, and the whole list is not reversed.
+- **Rename**: Empty names, illegal Windows characters, reserved device names, and names that already exist are rejected. Changing the extension asks for confirmation first.
+- **Drop onto the viewer**: Dropping files onto the viewer window opens them the same way as dropping them onto the gallery.
+- **Reopen the viewer**: After the viewer is closed, a double-click or arrow-key paging decodes the image again, and the view no longer stays blank.
+- **Status bar**: Hints for rating, the current file, scan completion, and compare completion disappear on their own. After the pointer leaves the image, the pixel readout restores the previous hint and does not clear the status bar.
+- **Window position**: The placement from before fullscreen is remembered. Leaving fullscreen, and opening the window again after it is closed, both return to that place. A window that lands off-screen is moved back into the visible area.
+- **Settings save**: On close, a notice is shown if the session, recent folders, or UI settings were not written. A failed export write, and a failed save after import, also state the reason.
+- **Filmstrip arrow keys**: In a single-row filmstrip, Up/Down, PageUp/PageDown, and Home/End move along the strip.
+- **Fit large images**: When only a downsampled raster is available and there is no full-resolution frame (about 60MP and above), resizing the window still refits the image.
+- **Load failure**: After a decode failure, the thumbnail is no longer left on the canvas. The viewer title changes to "Unable to load", and the status-bar zoom returns to "Zoom —".
+- **Compare color**: When the compare window is embedded in a dialog, it is still color-managed with the display profile of the screen it is on, and it updates after being dragged to another screen.
+- **Compare canvas shortcuts**: In split, slide, overlay, or checkerboard mode, with focus on the canvas or a pane, mode, zoom, arrow keys, and Esc are still handled by the compare window.
+- **Trackpad zoom**: In the viewer, a compare pane, and the thumbnails, Ctrl+wheel still zooms or resizes by direction when only `pixelDelta` is present. An `angleDelta` of 0 is no longer treated as zoom out.
+- **Viewer sequence**: `/` and `\` in the browse list and the current path (case-insensitive on Windows) are the same file. The title index, neighbor preload, context-menu Previous/Next, and the preview brought from the viewer into compare all agree.
+- **Rating and tag filter**: The snapshot used for gallery filtering looks up paths with the same slash rules as storage. On Windows, a backslash path is no longer treated as unrated or untagged.
+- **Camera/lens filter**: The metadata index looks up a canonical path key. After a live rename or another slash spelling, filtering, sorting, and the details column still match.
+- **Favorites and recents**: A different slash form of the same folder or image (case-insensitive on Windows) is not added again to favorites, recent folders, or image history. Removal and the "Favorited" state match. Changing only the slashes of the same folder does not scan it again.
+- **Slideshow**: After a manual previous, next, or page change, the interval is recalculated, so another image is not auto-advanced immediately.
+- **Directory availability**: When the directory watcher path and the current folder differ only by slash or case, the UI still reports that the directory is temporarily unavailable or has recovered.
+- **Delete confirmation**: With "Confirm before delete" on, which is the default, the app asks before moving a file to the Recycle Bin. With it off, deletion is still immediate.
+- **Copy to clipboard**: Ctrl+C first shows "Copying…". On both success and failure, the status bar updates only after the copy finishes.
+- **Slideshow Esc**: During playback, Esc stops the slideshow first, then continues with the existing exit-fullscreen / close-viewer behavior.
+- **Viewer focus shortcuts**: With focus in the viewer, Ctrl+F still focuses the address bar, and Ctrl+1 / Ctrl+2 still switch view modes.
+- **Multi-select tags**: Adding or removing a tag from the context menu applies to every selected file.
+- **Large-image inspector**: Above about 60MP, hover readouts, ROI statistics, and color picks use the existing downsampled display raster and do not load a full-resolution analysis frame.
+- **Rotate/flip**: Encoding runs in the background, and the window stays responsive while the file is written. The slideshow does not advance until the operation finishes.
+- **Compare wheel**: Continuous wheel zoom reuses the offscreen surface and does not redraw the whole image on every step.
+- **Text input**: Typing in a single-line box, a multi-line box, or a numeric box, and Ctrl+C, are left to the control. Compare, zoom, and "Copy image" no longer take those keys.
+- **Filmstrip pixel wheel**: When a trackpad reports `pixelDelta`, the filmstrip scrolls the horizontal scrollbar by pixels. When only `angleDelta` is present, it still scrolls by wheel angle.
+- **Paging after a filter**: When the current image is not in the visible list, Home / PageUp / PageDown go to the first visible image and no longer skip the first page. End still goes to the last image.
+- **Address bar shortcuts**: The address bar is focused with Ctrl+F / Alt+D. Ctrl+L only locks viewer zoom and does not also focus the address bar.
+- **Viewer Esc**: Esc clears the selection first, then exits fullscreen, and closes the viewer last.
+- **Viewer Shift+0**: Resets the channel overlay and restores full RGB, matching the compare window.
+- **Ctrl+1**: Ctrl+1 is no longer bound to "Actual size" and is left to the thumbnail view mode. 100% still uses the 1 key.
+- **Viewer F5**: With focus in the viewer, F5 also refreshes the directory tree and the gallery.
+- **Selection reset**: Closing the viewer leaves selection mode and clears the marquee, so opening it again does not leave a crosshair.
+- **Filename search**: Letters, digits, and spaces typed in the search box go into the filter text and are not treated as shortcuts.
+- **Viewer focus shortcuts**: I/M info, rating, color label, favorite/reject, F2, and Delete also work in the viewer window. The 2 key is 200%. Ctrl+L locks zoom. Space on an animation plays or pauses.
+- **Browse sequence paths**: `/` and `\` (case-insensitive on Windows) are the same file, so previous/next, paging, quick compare, delete, and image history stay in agreement.
+- **Copy path in compare**: Ctrl+Shift+C copies the path of the focused image. Ctrl+C still copies the compare view.
+- **Channel shortcut help**: Help and tooltips now say Shift+1…6 = no overlay / R / G / B / Y / V, matching the code and the menus.
+- **Gallery live updates**: `/` and `\` in the directory snapshot and gallery rows are the same path (case-insensitive on Windows). Delete, rename, and modify hit the matching row. A deleted file no longer remains, and a rename no longer adds a duplicate row.
+- **Unlinked ROI nudge**: When the two images differ in size, Alt/Shift+arrow keys nudge the focused pane's own selection. They no longer do nothing, and they do not clear the other panes. Linked nudging when the sizes match is unchanged.
+- **Filmstrip wheel**: In filmstrip mode, the wheel scrolls the horizontal scrollbar (Ctrl+wheel still changes thumbnail size).
+- **F and F11**: F fits the window and F11 toggles fullscreen, matching the shortcut table. F11 can still enter fullscreen while the gallery has focus. With no current image, F does not enter fullscreen by mistake.
+- **Shortcut help**: The description of Ctrl+F now says focus the address bar.
 
 ## [1.0.100] - 2026-10-04
 
@@ -938,19 +936,19 @@
 - **Complexity Gate Conformance (`scripts/complexity_gate.ps1`)**:
   - Reduced TU line counts and function body lengths across `rawimageview.cpp`, `imageviewer_loading.cpp`, `imageviewer.cpp`, and `imageviewer_contextmenu.cpp` to strictly satisfy all complexity gates with 0 hard fails.
 
-### 交互流畅性与详情缩略图修复（v1.0.93）
+### Interaction Fluency and Details Thumbnail Fixes (v1.0.93)
 
-1. **修复详情模式最左侧小缩略图白灰 Bug（`thumbnailpanel_viewmode.cpp`, `thumbnailpanel_pipeline.cpp`, `thumbnailpanel.cpp`）**：
-   - 彻底修复用户反馈的“进入新文件夹时，详情模式下一栏最左侧小缩略图一直是白灰色占位底色”的问题。
-   - 修复 Qt `setViewMode(ListMode)` 隐式将 `verticalScrollMode` 重置为 `ScrollPerItem` 导致的可见行算术范围（像素偏移除以行高）计算失真；显式强制 `ScrollPerPixel`。
-   - 修复 `flushThumbUpdates` 在目录模型未就绪（`rowCount <= 0` 或路径未入行表）时直接丢弃脏路径的异步时序竞态；保留未就绪路径并在 `buildModel` 完成后立即触发刷新。
-   - 缩略图缓存增加任意已就绪尺寸内存退化复用机制（降采样缩放至 48×48 展示），避免死等特定尺寸解码。
-2. **多图对比 Blink 闪烁与抖动消除（`compareworkspace_render_canvas.cpp`）**：将 Blink 模式每次切换时的动态 `addWidget/removeWidget` 重构为常驻预分配单元格 + `setVisible` 显隐切换，彻底根除 UI 布局重算卡顿与重排闪烁。
-3. **对比视图平移旁路优化（`rawimageview.cpp`, `rawimageview.h`）**：视口平移拖拽期间增加状态旁路，跳过每帧对 4K 内存 `m_baseSurface.fill` 的重复内存清空与重绘，直绘视口实现 60fps 丝滑平移。
-4. **切图无缝过渡与防黑屏（`imageviewer.cpp`, `imageviewer_loading.cpp`, `imageviewer_paint.cpp`）**：引入过渡帧保持机制（`m_transitionImage`），在切图与后台解码期间将上一张图片保持在屏幕上，待新图解码完成后平滑交接，彻底杜绝切图黑屏闪烁。
-5. **缩放锁定 Lock Zoom（`imageviewer.cpp`, `imageviewer_contextmenu.cpp`）**：新增 `Ctrl+L` 快捷键与右键菜单“锁定缩放比”功能，切图时保持用户指定的缩放比例并自适应居中。
-6. **评分标签单锁单次查询合并（`RatingStore.cpp`, `RatingStore.h`）**：为缩略图委托渲染新增 `fileFlags` 接口，单次加锁即可完成星级、颜色标签与排除标记的全量查询，消除热点锁竞争。
-7. **全工程复杂度门禁硬指标合规（`rawimageview.cpp`, `imageviewer_loading.cpp`, `imageviewer.cpp`, `imageviewer_contextmenu.cpp`）**：重构并精简超标文件与超长函数，严格达成 0 hard fails 标准。
+1. **Details mode leftmost small thumbnail white-gray bug fix (`thumbnailpanel_viewmode.cpp`, `thumbnailpanel_pipeline.cpp`, `thumbnailpanel.cpp`)**:
+   - Fully fixed the user-reported issue where, on entering a new folder, the leftmost small thumbnail in the Details mode column stayed on the white-gray placeholder background.
+   - Fixed distorted visible-row arithmetic range calculations (pixel offset divided by row height) caused by Qt `setViewMode(ListMode)` implicitly resetting `verticalScrollMode` to `ScrollPerItem`; explicitly forced `ScrollPerPixel`.
+   - Fixed the async timing race where `flushThumbUpdates` discarded dirty paths outright when the directory model was not ready (`rowCount <= 0` or the path was not yet in the row table); retained not-ready paths and triggered a refresh immediately after `buildModel` completed.
+   - Added an in-memory degraded-reuse path in the thumbnail cache for any already-ready size (downsampled and scaled to 48×48 for display), so display no longer waits on a specific size to finish decoding.
+2. **Multi-image compare Blink flicker and jitter elimination (`compareworkspace_render_canvas.cpp`)**: Refactored Blink mode's per-switch dynamic `addWidget/removeWidget` into resident pre-allocated cells plus `setVisible` show/hide toggling, fully eliminating UI layout recalculation stalls and reflow flicker.
+3. **Compare view pan bypass optimization (`rawimageview.cpp`, `rawimageview.h`)**: Added a state bypass during viewport pan drags that skips the per-frame repeated memory clear and redraw of the 4K in-memory `m_baseSurface.fill`, painting the viewport directly for smooth 60fps panning.
+4. **Seamless image-switch transitions and black-screen prevention (`imageviewer.cpp`, `imageviewer_loading.cpp`, `imageviewer_paint.cpp`)**: Introduced a transition-frame retention mechanism (`m_transitionImage`) that keeps the previous image on screen during image switches and background decoding, then hands off smoothly once the new image finishes decoding, fully eliminating black-screen flashes on image switch.
+5. **Lock Zoom (`imageviewer.cpp`, `imageviewer_contextmenu.cpp`)**: Added a `Ctrl+L` shortcut and a context-menu "Lock zoom ratio" action that preserves the user-specified zoom scale and recenters adaptively across image switches.
+6. **Rating label single-lock single-query consolidation (`RatingStore.cpp`, `RatingStore.h`)**: Added a `fileFlags` interface for thumbnail delegate rendering so one lock covers the full query of star rating, color label, and rejected flag, eliminating hot-lock contention.
+7. **Whole-project complexity gate hard-metric conformance (`rawimageview.cpp`, `imageviewer_loading.cpp`, `imageviewer.cpp`, `imageviewer_contextmenu.cpp`)**: Refactored and trimmed over-limit files and over-long functions to strictly meet the 0 hard fails standard.
 
 ## [1.0.92] - 2026-10-02
 
@@ -971,20 +969,20 @@
   11. **Directory monitor path normalization fast-path (`directorymonitor.cpp`)**: Added fast-path equality checks to skip redundant path normalization and monitor resets when the target directory hasn't changed.
   12. **Test suite resilience & decode pool drain alignment (`test_m47_viewer_lod.cpp`, `test_m61_roi_workflow.cpp`)**: Explicitly checked decode pool convergence distinct from background tile prefetching and stabilized asynchronous frame loading in ROI workflow tests.
 
-### 性能优化与产品力增强（12 项优化）
+### Performance & Product Enhancement (12 Optimizations)
 
-1. **多图对比指标去重复用（`compareworkspace_render_diff.cpp`）**：在 `computeDiffMetrics` 中复用 `buildDiffOverlays` 已计算的 PSNR/SSIM 缓存结果，消除每帧重绘时底图与各对比图之间重复的图像全分辨率差值矩阵遍历与指标重复核算。
-2. **差分图低增益零拷贝旁路（`DifferenceEngine.cpp`）**：在 `amplify()` 增益 <= 1.0 时直接返回原图引用，省去整张全分辨率图像逐像素的额外内存分配、拷贝和遍历。
-3. **图像对齐批量快速行复制与零位移短路（`Aligner.cpp`）**：在图像对齐逻辑中增加 `dx == 0 && dy == 0` 零位移零耗时直接返回；对于平移操作，由原本逐像素赋值重构为整行 `std::memcpy` 与边缘批量 `std::memset`，对齐吞吐效率大幅提升。
-4. **直方图统计加法循环外提与线性内存加速（`AnalysisEngine.cpp`）**：将原每像素循环内的 5 次浮点/整数累加求和提至 256 桶直方图生成后的外层轻量统计；针对内存连续对齐图像提供单层平铺循环快速路径，大幅降低缓存颠簸。
-5. **灰度转换 SSSE3 SIMD 向量化加速（`AnalysisEngine_metrics.cpp`）**：在 `toGrayscale8` 中引入 SSSE3 `_mm_maddubs_epi16` 与 `_mm_hadd_epi16` 指令级向量化处理，单次并行吞吐 4 像素定点 Rec. 601 亮度加权，大幅加速 PSNR/SSIM 指标计算前置的灰度转换开销。
-6. **文件名搜索无分配 `string_view` 与预转小写（`SearchEngine.cpp`）**：将每轮过滤遍历中的堆分配 `std::string fname` 替换为零拷贝 `std::string_view`，并预先小写化搜索词，避免每次匹配对搜索目标反复执行内存分配与小写化转换。
-7. **高频鼠标悬停像素去重与视口广播节流（`rawimageview.cpp`, `imageviewer.cpp`）**：在像素检视器与图像视图鼠标移动事件中记录上一次悬停像素坐标（`m_lastHoverPixelX/Y` 与 `m_lastHoverX/Y`），当鼠标在同一像素内微幅移动时直接跳过重复的颜色采样、表格刷新与十字线视口广播，彻底消除高频鼠标移动时的 UI 线程微卡顿。
-8. **缩略图缓存 MRU 命中加速与后缀提取零分配（`thumbnailpanel_delegates.cpp`）**：在 `displayPhoto` 与 `cachedScaledPixmap` 列表中增加头部快速命中检测与向首位交换机制，将最常访问的缩略图查询复杂度降至 $O(1)$；重构 `fileSuffixFromPath`，改用直接索引切片取代临时 `QString` 子串构造。
-9. **检视器静态列文本格式化与分配消除（`compareworkspace_analysis.cpp`）**：像素检视器表格渲染时，仅在行数改变或初次加载时填充序号列与文件名列，避免每次鼠标悬停取样时对全部对比图重复执行字符串构造与路径提取。
-10. **像素邻域统计定点整数运算（`PixelInspector_adjust.cpp`）**：在 `neighborhoodStats` 亮度统计核心循环中，将原浮点 Rec. 709 亮度系数计算全面替换为 `(13933*r + 46871*g + 4732*b + 32768) >> 16` 32位定点整数运算，彻底消除热点分析代码中的浮点乘法与类型转换。
-11. **目录监视路径快速全等短路（`directorymonitor.cpp`）**：在 `setActiveDirectory` 与 `notifyDirectoryChanged` 入口处先进行字符串直接比较，避免相同路径重复触发耗时的路径规范化、斜杠清理与冗余系统监视重建。
-12. **LOD 测试调度池精准排空与测试流程稳定性强化（`test_m47_viewer_lod.cpp`, `test_m61_roi_workflow.cpp`）**：精准对齐 `test_m47_viewer_lod` 对解码池排空检测的语义，区分解码专用池与后台背景瓦片预取池，消除长耗时瓦片等待；为 ROI 画布与异步尺寸加载添加前置状态就绪等待与事件泵送，确保测试套件 100% 稳定高可靠运行。
+1. **Deduplicated reuse of multi-image compare metrics (`compareworkspace_render_diff.cpp`)**: In `computeDiffMetrics`, reuse the PSNR/SSIM results already cached by `buildDiffOverlays`, eliminating repeated full-resolution difference-matrix traversals and duplicate metric calculations between the base image and each comparison image on every frame redraw.
+2. **Zero-copy bypass for low-gain difference images (`DifferenceEngine.cpp`)**: When the `amplify()` gain is <= 1.0, return a reference to the original image directly, skipping the extra per-pixel allocation, copy, and traversal of the full-resolution image.
+3. **Bulk fast row copy and zero-shift short-circuit in image alignment (`Aligner.cpp`)**: Added a zero-cost immediate return when `dx == 0 && dy == 0`. For translations, replaced per-pixel assignment with whole-row `std::memcpy` and bulk edge `std::memset`, substantially raising alignment throughput.
+4. **Histogram sum hoisted out of the loop, with linear-memory acceleration (`AnalysisEngine.cpp`)**: Moved the five floating-point/integer accumulations per pixel out of the inner loop into a lightweight outer tally after the 256-bin histogram is built. Added a single-level flat-loop fast path for contiguous, aligned images, greatly reducing cache thrashing.
+5. **SSSE3 SIMD vectorized acceleration for grayscale conversion (`AnalysisEngine_metrics.cpp`)**: In `toGrayscale8`, added SSSE3 instruction-level vectorization with `_mm_maddubs_epi16` and `_mm_hadd_epi16`, processing 4 pixels per iteration with fixed-point Rec. 601 luma weighting and greatly cutting the grayscale-conversion cost that precedes PSNR/SSIM.
+6. **Allocation-free `string_view` filename search with a pre-lowercased needle (`SearchEngine.cpp`)**: Replaced the heap-allocated `std::string fname` on each filter pass with a zero-copy `std::string_view`, and pre-lowercased the search term so each match no longer allocates and lowercases the search target again.
+7. **High-frequency hover pixel deduplication and viewport broadcast throttling (`rawimageview.cpp`, `imageviewer.cpp`)**: Mouse-move handlers in the pixel inspector and image view record the last hover pixel (`m_lastHoverPixelX/Y` and `m_lastHoverX/Y`). Small moves that stay inside the same pixel skip repeated color sampling, table refresh, and crosshair viewport broadcasts, removing UI-thread micro-stutter during high-frequency mouse motion.
+8. **Thumbnail-cache MRU hit acceleration and allocation-free suffix extraction (`thumbnailpanel_delegates.cpp`)**: Added a head fast-hit check and move-to-front swap on the `displayPhoto` and `cachedScaledPixmap` lists, bringing lookups of the most frequently accessed thumbnails down to $O(1)$. Reworked `fileSuffixFromPath` to slice by direct index instead of constructing temporary `QString` substrings.
+9. **Static-column text formatting and allocation removal in the inspector (`compareworkspace_analysis.cpp`)**: When rendering the pixel inspector table, fill the index column and filename column only when the row count changes or on first load, so each hover sample no longer rebuilds strings and extracts paths for every comparison image.
+10. **Fixed-point integer arithmetic for pixel neighborhood statistics (`PixelInspector_adjust.cpp`)**: In the luma core loop of `neighborhoodStats`, replaced floating-point Rec. 709 coefficients with 32-bit fixed-point integer arithmetic `(13933*r + 46871*g + 4732*b + 32768) >> 16`, removing floating-point multiplies and type conversions from the hot analysis path.
+11. **Fast path-equality short-circuit for directory monitoring (`directorymonitor.cpp`)**: At the entries of `setActiveDirectory` and `notifyDirectoryChanged`, compare the path strings first so an unchanged path does not repeat expensive path normalization, slash cleanup, and redundant system-monitor rebuilds.
+12. **Precise decode-pool drain for LOD tests and stronger test-flow stability (`test_m47_viewer_lod.cpp`, `test_m61_roi_workflow.cpp`)**: Aligned the decode-pool drain checks in `test_m47_viewer_lod` so the dedicated decode pool is distinct from the background tile-prefetch pool, removing long tile waits. Added readiness waits and event pumping ahead of the ROI canvas and asynchronous size loading so the test suite runs fully stably and reliably.
 
 ## [1.0.91] - 2026-10-01
 
@@ -998,22 +996,22 @@
 - **Interactive ROI Resize/Move Cursor Feedback (`rawimageview.cpp`)**: Added contextual hover mouse cursors (`SizeAllCursor`, `SizeHorCursor`, `SizeVerCursor`, `SizeFDiagCursor`, `SizeBDiagCursor`) when hovering over ROI borders and resize handles, providing immediate interactive tactile feedback.
 - **Directory Tree Search Traversal Depth Limiter (`directorytree.h/.cpp`)**: Added a 4-level recursion depth bound in `DirectoryProxyModel::hasAcceptedDescendant` to prevent deep recursion freezes when typing folder name search filters on deep or network drive folder hierarchies.
 - **Quick Swap Focused Pane with Reference in Multi-Compare (`compareworkspace_editpanel.cpp`)**: Pressing `X` in multi-image comparisons (3+ images) now intelligently swaps the currently focused pane with reference pane 0 (or pane 1 if pane 0 is focused), enabling rapid reference comparison against any image.
-- **Image Scaling & Zoom Level Readout in StatusBar (`mainwindow_ui_layout.cpp`)**: Enhanced status bar zoom readout in single-image browsing mode to explicitly indicate `(自适应)` when in fit-to-window mode.
+- **Image Scaling & Zoom Level Readout in StatusBar (`mainwindow_ui_layout.cpp`)**: Enhanced status bar zoom readout in single-image browsing mode to explicitly indicate `(Adaptive)` when in fit-to-window mode.
 - **ROI Keyboard Nudge Active Pane Indicator (`compareworkspace_keyboard.cpp`)**: Enhanced keyboard arrow nudging (`Alt+Arrow` / `Shift+Alt+Arrow`) when unlinked ROI mode is active, correctly targeting the active/focused pane and displaying pane index indicators in status feedback.
 - **Shortcut Cheat Sheet & User Guide Modernization (`mainwindow_commands.cpp`)**: Documented `Alt+R` (Sync Rotate), `Alt+Arrow` (ROI nudge), `X` (multi-image swap), and Pixel Inspector right-click color copy in the F1 shortcut dialog and user guide.
 
-### 性能优化与产品力增强（10 项优化）
+### Performance Optimizations and Product-Capability Enhancements (10 Optimizations)
 
-1. **多图对比独立指标角标与浮窗提示（`compareworkspace_render_diff.cpp` / `rawimageview.cpp`）**：针对 3 张及以上多图对比场景，各非基准窗格现均独立并行计算相对于基准图（图 1）的 PSNR 与 SSIM，并在各窗格右上角展示优雅紧凑的指标角标 HUD（`P: xx dB | S: 0.xxx`）及悬停详细信息，彻底解决此前多图模式下仅底部栏显示一对指标、用户无法获知其余图片质量评分的问题。
-2. **同步旋转/翻转全局快捷键 `Alt+R`（`compareworkspace_keyboard.cpp`）**：在比较模式下引入 `Alt+R` 一键切换「同步所有图」旋转状态，结合原有的 `Ctrl+R`（顺时针）与 `Ctrl+Shift+R`（逆时针），无需频繁点击右侧面板复选框即可快速完成全部图片的同向校正。
-3. **像素检视器一键复制 HEX / RGB 颜色代码（`compareworkspace_analysis.cpp`）**：算法工程师在右侧像素检视器表格中右键单击任意行时，新增「复制 HEX 颜色 (#RRGGBB)」和「复制 RGB 格式 (rgb(r,g,b))」菜单项，大幅提高图像调色、色彩空间分析与标注提取的生产力。
-4. **正方形缩略图加速直通路径（`thumbnailprovider.cpp`）**：在 `ThumbnailProvider::squareFitImage` 中，若图像等比缩放后已恰好符合目标正方形尺寸，直接转换为目标格式返回，避免无谓的二次内存分配、透明底色填充及 QPainter 绘制重采样开销。
-5. **ROI 交互光标动态反馈（`rawimageview.cpp`）**：鼠标悬停在 ROI 选区各边缘与四角调节手柄以及选区内部时，动态切换为对应的调整尺寸光标（水平、垂直、对角线双向及全向移动光标），提供明确细腻的交互指引。
-6. **目录树过滤遍历深度限制（`directorytree.cpp` / `directorytree.h`）**：为 `DirectoryProxyModel::hasAcceptedDescendant` 增加深度上限限制（最深 4 层），彻底根治在深层嵌套目录或 NAS 网络磁盘下键入目录过滤词时发生的 UI 线程深度递归卡顿。
-7. **多图对比聚焦窗格一键交换为基准图 `X`（`compareworkspace_editpanel.cpp`）**：在 3~8 张图片同时对比时，按键盘 `X` 键即可将当前点击聚焦的任意窗格直接与图 1（基准图）互换位置，极大方便在多张生成图或曝光序列中轮流以某一张为参照物进行对比。
-8. **状态栏自适应缩放模式状态指示（`mainwindow_ui_layout.cpp`）**：单图浏览模式下，状态栏缩放读数在适应窗口状态下动态显示为 `缩放 XX% (自适应)`，与手动定比缩放清晰区分。
-9. **独立 ROI 键盘微调与窗格标识（`compareworkspace_keyboard.cpp`）**：当用户取消勾选 ROI 同步联动时，通过 `Alt+方向键`（1px）或 `Shift+Alt+方向键`（10px）微调选区将智能作用于当前选中的单格，并在状态栏明确提示微调的目标窗格编号。
-10. **F1 快捷键速查表与用户指南全面同步（`mainwindow_commands.cpp`）**：全面更新了 F1 帮助对话框与帮助说明，补充完整了 `Alt+R` 同步旋转、鼠标侧键目录历史回退/前进、多图 X 交换以及 ROI 键盘微调说明。
+1. **Independent metric corner badges and floating tooltips for multi-image comparison (`compareworkspace_render_diff.cpp` / `rawimageview.cpp`)**: For comparisons of 3 or more images, each non-reference pane now independently computes, in parallel, PSNR and SSIM relative to the reference image (image 1), and shows an elegant, compact metric badge HUD (`P: xx dB | S: 0.xxx`) in the top-right corner of each pane together with detailed information on hover. This fully resolves the previous multi-image behavior in which the bottom bar showed only one pair of metrics, so users could not see quality scores for the remaining images.
+2. **Global shortcut `Alt+R` for synchronized rotation/flipping (`compareworkspace_keyboard.cpp`)**: Comparison mode now has `Alt+R` to toggle the "Sync All Images" rotation state in one keystroke. Combined with the existing `Ctrl+R` (clockwise) and `Ctrl+Shift+R` (counterclockwise), every image can be corrected to the same orientation quickly without repeatedly clicking the checkbox on the right panel.
+3. **One-click copy of HEX / RGB color codes in the Pixel Inspector (`compareworkspace_analysis.cpp`)**: When an algorithm engineer right-clicks any row in the Pixel Inspector table on the right, new menu items "Copy HEX Color (#RRGGBB)" and "Copy RGB Format (rgb(r,g,b))" are available, greatly improving productivity for image color grading, color-space analysis, and annotation extraction.
+4. **Fast pass-through path for square thumbnails (`thumbnailprovider.cpp`)**: In `ThumbnailProvider::squareFitImage`, if the image already exactly matches the target square size after aspect-ratio-preserving scaling, it is converted to the target format and returned directly, avoiding needless secondary memory allocation, transparent background fill, and QPainter draw-resample overhead.
+5. **Dynamic cursor feedback for ROI interaction (`rawimageview.cpp`)**: When the mouse hovers over any edge of the ROI selection, the four corner resize handles, or the interior of the selection, the cursor dynamically switches to the matching resize cursor (horizontal, vertical, both diagonal directions, and the all-direction move cursor), providing clear, fine-grained interaction guidance.
+6. **Traversal depth limit for directory-tree filtering (`directorytree.cpp` / `directorytree.h`)**: Added a depth cap (4 levels at most) to `DirectoryProxyModel::hasAcceptedDescendant`, fully eliminating UI-thread deep-recursion freezes that occurred when typing a directory filter on deeply nested folders or NAS network drives.
+7. **One-key swap of the focused pane with the reference image via `X` in multi-image comparison (`compareworkspace_editpanel.cpp`)**: When comparing 3–8 images at once, pressing `X` swaps the currently clicked, focused pane directly with image 1 (the reference image). This makes it much easier to take turns using any one image as the reference among multiple generated images or an exposure sequence.
+8. **Status bar indicator for adaptive zoom mode (`mainwindow_ui_layout.cpp`)**: In single-image browsing mode, while fit-to-window is active, the status bar zoom readout dynamically displays `Zoom XX% (Adaptive)`, clearly distinguished from manual fixed-ratio zoom.
+9. **Independent ROI keyboard nudge and pane indicator (`compareworkspace_keyboard.cpp`)**: When the user unchecks ROI sync linking, nudging the selection with `Alt+Arrow` (1 px) or `Shift+Alt+Arrow` (10 px) intelligently applies to the currently selected single pane, and the status bar clearly reports the index of the pane being nudged.
+10. **Full sync of the F1 shortcut cheat sheet and user guide (`mainwindow_commands.cpp`)**: Fully updated the F1 help dialog and help text, completing coverage of `Alt+R` sync rotate, mouse side-button directory history back/forward, multi-image X swap, and ROI keyboard nudge.
 
 ## [1.0.90] - 2026-10-01
 
@@ -1024,11 +1022,11 @@
 - **Direct navigation delegation for `openDirectory` (`mainwindow.cpp`)**: Routed `MainWindow::openDirectory(dir)` directly to `changeDirectory(dir)`, ensuring all folder opens cleanly trigger the committed directory transition and thumbnail pipeline.
 - **Accelerate initial directory thumbnail decoding (`ThumbnailPipeline.h`)**: Increased `kVisibleFirstWave` from `4` to `16`. When entering a directory for the first time, all visible screen cells are immediately dispatched in parallel across available CPU worker threads instead of being throttled in 4-task sequential ripples, dramatically cutting perceived wait time for the first screen of thumbnails.
 
-### 性能优化与目录树稳定性修复
+### Performance optimizations and directory tree stability fixes
 
-- **消除目录树子文件夹及平级文件夹强制展开（`directorytree.cpp`）**：修复了在进入或切换目录时，当前目录及平级目录被强制调用 `expand` 展开的问题。`expandAncestors` 规范为仅向上展开父级祖先链以确保目标可见，目标节点自身保持折叠未展开状态，彻底避免目录树层级被全部铺开、平级文件夹残留展开的视觉混乱；移除了导航时的多余 `scheduleFetchMore` 调用，消除与画廊扫描之间的文件系统 I/O 争抢。
-- **首屏可见缩略图并发解码提速（`ThumbnailPipeline.h`）**：将首波可见缩略图调度并发上限 `kVisibleFirstWave` 由 4 提升至 16。初次进入包含数十张图片的目录时，首屏视野内的所有缩略图能够立刻全量分发至多核 CPU 线程池并发解码，终结此前 4 张一批轮询排队等待的卡顿感，大幅提升首屏加载流畅度。
-- **文件夹打开动作统一化（`mainwindow.cpp`）**：将 `MainWindow::openDirectory` 统一委托至 `changeDirectory`，确保任何方式打开目录均完整走通画廊重置与缩略图加载链路。
+- **Stop forced expansion of directory-tree subfolders and sibling folders (`directorytree.cpp`)**: Fixed forced `expand` of the current directory and sibling directories when entering or switching directories. `expandAncestors` now only expands the parent ancestor chain upward so the target stays visible, while the target node itself remains collapsed and unexpanded. This avoids unrolling the whole directory-tree hierarchy and the visual clutter of sibling folders left expanded. Removed redundant `scheduleFetchMore` calls during navigation, eliminating filesystem I/O contention with gallery scanning.
+- **Speed up concurrent decoding of first-screen visible thumbnails (`ThumbnailPipeline.h`)**: Raised the first-wave visible-thumbnail scheduling concurrency cap `kVisibleFirstWave` from 4 to 16. On first entry into a directory with dozens of images, every thumbnail in the first-screen viewport is dispatched at once to the multi-core CPU thread pool for concurrent decoding, ending the previous stall of waiting in batches of four and greatly improving first-screen load smoothness.
+- **Unify the folder-open action (`mainwindow.cpp`)**: `MainWindow::openDirectory` now delegates uniformly to `changeDirectory`, so opening a directory by any means fully runs the gallery reset and thumbnail loading pipeline.
 
 ## [1.0.89] - 2026-10-01
 
@@ -1043,14 +1041,14 @@
 - **Native dark indicators for CheckBox and RadioButton (`Theme.cpp`)**: Removed CSS overrides that suppressed checkmarks and radio dots, restoring Qt Fusion's antialiased indicators with dark theme highlight palette.
 - **Release tag trigger alignment**: Explicitly documented and tagged `v1.0.89` to properly trigger GitHub Actions Tier 3 Release pipeline (`release.yml`).
 
-### 用户体验与UI审美优化
+### User Experience and UI Aesthetic Optimization
 
-- **主工具栏矢量图标系统（`mainwindow_ui_layout.cpp`）**：全量重塑主工具栏动作图标，采用纯矢量抗锯齿绘制规范（1.5px 线宽，优雅银白 `#dcdcdc`），彻底终结无资源时的文本回退割裂，全 DPI 缩放与深色主题下极致清晰。
-- **左侧导航栏分类标题条层级增强（`Theme.cpp`）**：为「文件夹」与「预览」标题栏定制 `#202024` 质感底色与立体分割线（上边框 `#333338`、下边框 `#2d2d32`），显著强化侧边栏各功能区的视觉分割。
-- **预览面板样本数据对比度提升（`previewpanel.cpp`）**：将底部样本亮度与 RGB 均值数据提升至高对比浅灰 `#a1a1aa`（满足 WCAG AAA 严苛对比度标准），暗光环境下数据阅读轻松自如。
-- **画廊空状态居中卡片化（`mainwindow_ui_layout.cpp`）**：将画廊首屏空白提示与空文件夹提示重构为现代居中拟态卡片（`#1c1c1f` 背景、微边框、8px 圆角），快捷键附带键帽高亮标签，提供舒适的引导感知。
-- **多图对比差异指标 HUD 科技感面板（`compareworkspace_controls.cpp`）**：将 PSNR/SSIM 及统计数值升级为天蓝色 `#38bdf8` 等宽字体与 `#18181b` 微边框胶囊面板，对比状态栏顶部增加精致分割线。
-- **复选框与单选框勾选标记恢复（`Theme.cpp`）**：移除了破坏原生指示符的 QSS 覆写，完全保留 Qt 6 Fusion 风格原生细腻白色勾选对勾与居中圆点。
+- **Main toolbar vector icon system (`mainwindow_ui_layout.cpp`)**: Fully redesigned the main toolbar action icons to a pure-vector antialiased drawing standard (1.5px stroke, elegant silver-white `#dcdcdc`), ending the disjointed text fallback when resources are missing and staying crisp at every DPI scale under the dark theme.
+- **Left sidebar section header hierarchy (`Theme.cpp`)**: Applied a `#202024` surface and dimensional dividers (top border `#333338`, bottom border `#2d2d32`) to the "Folders" and "Preview" title bars, strengthening the visual separation between sidebar sections.
+- **Preview panel sample-data contrast (`previewpanel.cpp`)**: Raised the bottom sample luminance and RGB mean values to high-contrast light gray `#a1a1aa` (WCAG AAA), so the figures stay easy to read in low light.
+- **Gallery empty state as a centered card (`mainwindow_ui_layout.cpp`)**: Rebuilt the gallery first-screen empty prompt and the empty-folder prompt as a modern centered card (`#1c1c1f` background, subtle border, 8px radius), with shortcuts shown as highlighted keycap labels for clearer guidance.
+- **Multi-image compare diff-metrics HUD (`compareworkspace_controls.cpp`)**: Upgraded PSNR/SSIM and the statistics to sky-blue `#38bdf8` monospace text inside an `#18181b` subtly bordered pill panel, and added a refined separator along the top of the compare status bar.
+- **Checkbox and radio indicator restoration (`Theme.cpp`)**: Removed the QSS overrides that broke the native indicators, preserving Qt 6 Fusion's native fine white checkmarks and centered dots.
 
 ## [1.0.88] - 2026-10-01
 
@@ -1062,18 +1060,18 @@
 - **One-click comparison viewport copy (`CompareWorkspace_interact.cpp`, `CompareWorkspace.h`)**: Added `Ctrl+C` shortcut and `copyComparisonViewToClipboard()` in Compare mode to grab the current comparison viewport directly into the clipboard for rapid sharing.
 - **Compact comparison toolbar layout (`CompareWorkspace_controls.cpp`)**: Tightened vertical margins and layout spacing across comparison mode, view, and tool toolbars, maximizing visual comparison area on standard 1080p and high-DPI displays.
 - **Prioritized Pixel Inspector in Analysis panel (`AnalysisPanel_buildui.cpp`)**: Placed the Pixel Inspector tab immediately after the Histogram tab (position 2), preventing it from being pushed off-screen into overflow on narrow sidebars, and localized copy actions to Chinese.
-- **Markdown table export in Pixel Inspector (`CompareWorkspace_analysis.cpp`)**: Added "复制为 Markdown 表格" (Copy as Markdown Table) to the pixel inspector context menu in Compare mode for direct pasting into PRs, issues, and technical documentation.
-- **Detailed cache hit-rate status tooltip (`MainWindow_ui_layout.cpp`, `MainWindow_view.cpp`)**: Added informative tooltips and exact hit/request count breakdowns (`命中率: X% (命中 A / 请求 B)`) to the permanent status bar cache indicator.
+- **Markdown table export in Pixel Inspector (`CompareWorkspace_analysis.cpp`)**: Added "Copy as Markdown Table" to the pixel inspector context menu in Compare mode for direct pasting into PRs, issues, and technical documentation.
+- **Detailed cache hit-rate status tooltip (`MainWindow_ui_layout.cpp`, `MainWindow_view.cpp`)**: Added informative tooltips and exact hit/request count breakdowns (`Hit rate: X% (Hits A / Requests B)`) to the permanent status bar cache indicator.
 
-### 用户体验优化
+### User Experience Improvements
 
-- **画廊多选一键对比（`ThumbnailPanel.cpp`）**：在缩略图网格中选中 2 至 8 张图片后直接按下回车键（`Enter` / `Return`）立即进入多图对比工作区，符合用户直觉操作习惯。
-- **100% 缩放快捷键全局对齐（`CompareWorkspace_keyboard.cpp`）**：对比模式下快捷键 `1`（及 `Ctrl+1`）统一映射为 100% 原始像素大小（与 `0` 适应窗口对齐），窗格预设切换统一映射至 `2` 至 `8`，消除单图与多图模式下的认知冲突。
-- **对比视口一键截图复制（`CompareWorkspace_interact.cpp` / `.h`）**：对比模式支持快捷键 `Ctrl+C` 直接将当前对比画布（网格/分割/滑动/热力图视口）渲染并复制到系统剪贴板，方便算法评测快速分享与汇报。
-- **对比模式工具栏高度紧凑化（`CompareWorkspace_controls.cpp`）**：优化模式栏、视图栏与分析工具栏的内边距与垂直间距，在 1080p 与高分屏上释放更多垂直图像对比视野。
-- **分析面板像素检视标签前置与本地化（`AnalysisPanel_buildui.cpp`）**：将「像素检视」标签页提升至第 2 位（紧跟「直方图」），解决窄边栏折叠隐藏的问题；同时完善复制操作按钮本地化（复制 RGB/HEX/XYZ）。
-- **像素检视表格 Markdown 格式复制（`CompareWorkspace_analysis.cpp`）**：对比工作区像素检视表格右键菜单新增「复制为 Markdown 表格」，便于算法工程师直接将对比数值表格粘贴至 GitHub PR、GitLab Issue 或周报文档中。
-- **状态栏缓存命中率详细统计与提示（`MainWindow_ui_layout.cpp` / `MainWindow_view.cpp`）**：状态栏常驻命中率指标增加详细悬停说明与精准计数（命中数 / 总请求数），为算法排查与大图浏览性能分析提供明确上下文。
+- **One-click multi-selection compare in the Gallery (`ThumbnailPanel.cpp`)**: After selecting 2 to 8 images in the thumbnail grid, pressing Enter (`Enter` / `Return`) immediately opens the multi-image Compare workspace, matching intuitive user habits.
+- **Globally aligned 100% zoom shortcut (`CompareWorkspace_keyboard.cpp`)**: In Compare mode, shortcut `1` (and `Ctrl+1`) is uniformly mapped to 100% original pixel size (aligned with `0` for fit-to-window), and pane preset switching is uniformly mapped to `2` through `8`, removing the cognitive conflict between single-image and multi-image modes.
+- **One-click comparison viewport screenshot copy (`CompareWorkspace_interact.cpp` / `.h`)**: Compare mode supports `Ctrl+C` to render the current comparison canvas (grid/split/swipe/heatmap viewport) and copy it to the system clipboard, for quick sharing and reporting during algorithm evaluation.
+- **Compact comparison-mode toolbar height (`CompareWorkspace_controls.cpp`)**: Tightened padding and vertical spacing of the mode bar, view bar, and analysis toolbar, freeing more vertical image-comparison area on 1080p and high-resolution displays.
+- **Pixel Inspector tab moved forward and localized in the Analysis panel (`AnalysisPanel_buildui.cpp`)**: Moved the "Pixel Inspector" tab to position 2 (immediately after "Histogram"), fixing the problem of it being collapsed and hidden on narrow sidebars; also completed localization of the copy-action buttons (Copy RGB/HEX/XYZ).
+- **Markdown-format copy of the Pixel Inspector table (`CompareWorkspace_analysis.cpp`)**: Added "Copy as Markdown Table" to the right-click menu of the pixel inspector table in the Compare workspace, so algorithm engineers can paste comparison value tables directly into GitHub PRs, GitLab issues, or weekly report documents.
+- **Detailed cache hit-rate statistics and tooltips in the status bar (`MainWindow_ui_layout.cpp` / `MainWindow_view.cpp`)**: The permanent hit-rate indicator in the status bar now includes a detailed hover explanation and exact counts (hit count / total request count), giving clear context for algorithm troubleshooting and large-image browsing performance analysis.
 
 ## [1.0.87] - 2026-10-01
 
@@ -1093,20 +1091,20 @@
 - **Single-image histogram compute acceleration (`ImageFrame.cpp`)**: Hoisted pixel format branching out of inner loops, eliminated duplicate `luminance()` evaluations, and removed redundant clamp branches.
 - **Bilinear scaler clamp branch elimination (`BilinearScale.cpp`)**: Eliminated 12 redundant `std::clamp` operations per 4 pixels across SSE2 and scalar rasterizers using mathematically proven $[0, 255]$ closed-form pixel packing.
 
-### 性能与体验优化
+### Performance
 
-- **零拷贝 RGBA32 视口呈现（`QtConvert.cpp`）**：`toQImageRef` 针对 `PixelFormat::RGBA32` 格式直接返回 `QImage::Format_RGBA8888` 包装，彻底消除看图、平移、缩放与瓦片渲染时对 RGBA 图像进行多余的全图深拷贝与重排。
-- **重叠区缩放绝对上界早停裁剪（`Aligner.cpp`）**：在 `Aligner::estimate` 的 SAD 穷举对齐搜索中引入行前预知的数学早停边界 `maxAllowedSad = bestSAD * overlap`，累加超界立即跳出，在对齐搜索中裁剪 80%+ 无效像素差值运算。
-- **零堆分配不区分大小写字符串检索（`SearchEngine.cpp`）**：`SearchEngine` 检索重构为基于 `std::string_view` 与 `std::search` + 自定义 ASCII 大小写无关谓词，彻底消除每次关键词检索时的重复 `std::string` 堆分配。
-- **差异热力图单通道融合核（`DifferenceEngine.h` / `.cpp`）**：新增 `visualizeOverlay` 融合计算核，将增益查表（`amplify`）、阈值二值化（`applyThreshold`）与色彩映射（`colorMap`）三步串行流程融合成单趟访存完成，避免产生多份全分辨率中间图像。
-- **比较工作区差异图渲染流水线优化（`compareworkspace_render_diff.cpp`）**：`buildDiffOverlays` 全面接入 `visualizeOverlay` 融合核，在保持视觉输出严格一致的前提下，显著削减差异比较模式下高分辨率大图的内存吞吐与处理耗时。
-- **金字塔降采样行指针悬挂与位移运算（`MipmapPyramid.cpp`）**：`downscaleHalfBox` 增加 4 通道与 3 通道专用快速展开路径，行指针在列循环前预先提取，除法以整数算术右移（`>> 2`）替代，显著加速金字塔瓦片预生成速度。
-- **SSIM 与噪声估计灰度快速提取（`AnalysisEngine_metrics.cpp`）**：`AnalysisEngine::ssim` 与 `AnalysisEngine::noiseEstimate` 采用单趟直接像素转灰度提取器 `toGrayscale8`，替代开销巨大的 `toQImage -> convertToFormat(Format_Grayscale8)`，避免复杂的 Qt 图像格式转换包装与中间内存分配。
-- **ROI 统计循环指针扁平化与极值优化（`AnalysisEngine.cpp`）**：消除 `computeStatsROI` 中逐像素计算乘法的行偏移寻址，引入连续步进指针，并将三通道极值计算 `std::max({r, g, b})` 替换为二元比较，消除数百万次 `std::initializer_list` 的栈分配与迭代。
-- **文件系统大目录枚举开销降低（`FileSystem.cpp`）**：`FileSystem::listImages` 将 `entryInfoList` 改为 `entryList`，避免遍历目录中成千上万个文件时为每个文件触发昂贵的系统 stat/属性查询；同时对过滤器列表预分配容量，显著提升超大图库扫描加载速度。
-- **直方图多通道累加向量化与指针优化（`Histogram.h`）**：`accumulateGray256`、`accumulateBgr256`、`accumulateRgb256` 消除每像素乘法计算，统一改用行首指针步进；三通道峰值 $V$ 计算消除 `std::initializer_list` 构造，大幅降低直方图计算时钟周期。
-- **单图直方图全分辨率计算流水线优化（`ImageFrame.cpp`）**：`ImageFrame::computeHistogram` 将格式分支（灰度 / BGR / RGB）提升至行循环外部，合并重复的 `luminance()` 计算，移除单字节无符号整数多余的 `std::clamp` 边界检查，实现数倍计算提速。
-- **双线性缩放像素打包与分支精简（`BilinearScale.cpp`）**：严格数学证明双线性插值权重加权和在 $[0, 255]$ 范围内单调封闭，移除 SSE2 和标量循环中每 4 像素高达 12 次的多余 `std::clamp` 分支，采用高效无分支位运算打包像素输出。
+- **Zero-copy RGBA32 viewport presentation (`QtConvert.cpp`)**: For `PixelFormat::RGBA32`, `toQImageRef` directly returns a `QImage::Format_RGBA8888` wrapper, completely eliminating redundant full-image deep copies and rearrangements of RGBA images during viewing, panning, scaling, and tile rendering.
+- **Overlap-scaled absolute upper-bound early-exit pruning (`Aligner.cpp`)**: The SAD exhaustive alignment search in `Aligner::estimate` now uses a mathematical early-exit bound known before each row, `maxAllowedSad = bestSAD * overlap`. Accumulation that exceeds the bound breaks out immediately, pruning 80%+ of useless pixel-difference operations during alignment search.
+- **Zero-heap case-insensitive string search (`SearchEngine.cpp`)**: `SearchEngine` search was rebuilt on `std::string_view` and `std::search` with a custom ASCII case-insensitive predicate, completely eliminating repeated `std::string` heap allocations on every keyword query.
+- **Single-pass fused difference heatmap kernel (`DifferenceEngine.h` / `.cpp`)**: Added the `visualizeOverlay` fused kernel, collapsing gain table lookup (`amplify`), threshold binarization (`applyThreshold`), and colormap application (`colorMap`) from three serial steps into a single memory pass, so multiple full-resolution intermediate images are no longer produced.
+- **Compare workspace diff-image render pipeline optimization (`compareworkspace_render_diff.cpp`)**: `buildDiffOverlays` fully adopts the fused `visualizeOverlay` kernel. Visual output stays strictly identical, while memory traffic and processing time for high-resolution large images in diff-compare mode drop significantly.
+- **Pyramid downscale row-pointer hoisting and shift arithmetic (`MipmapPyramid.cpp`)**: `downscaleHalfBox` adds dedicated fast unrolled paths for 4-channel and 3-channel buffers. Row pointers are extracted before the column loop, and division is replaced by an integer arithmetic right shift (`>> 2`), substantially speeding pyramid tile pre-generation.
+- **Fast grayscale extraction for SSIM and noise estimation (`AnalysisEngine_metrics.cpp`)**: `AnalysisEngine::ssim` and `AnalysisEngine::noiseEstimate` use the single-pass direct pixel-to-grayscale extractor `toGrayscale8` in place of the expensive `toQImage -> convertToFormat(Format_Grayscale8)` path, avoiding heavy Qt image-format conversion wrappers and intermediate memory allocations.
+- **ROI stats loop pointer flattening and extrema optimization (`AnalysisEngine.cpp`)**: Removed per-pixel multiplicative row-offset addressing in `computeStatsROI` in favor of contiguous stepping pointers, and replaced the three-channel extrema calculation `std::max({r, g, b})` with binary comparisons, eliminating millions of `std::initializer_list` stack allocations and iterations.
+- **Lower large-directory enumeration cost (`FileSystem.cpp`)**: `FileSystem::listImages` switches from `entryInfoList` to `entryList`, so walking a directory no longer issues an expensive OS stat/attribute query for each of tens of thousands of files. Filter lists are capacity-reserved in advance, markedly improving scan and load speed for very large image libraries.
+- **Multi-channel histogram accumulation vectorization and pointer optimization (`Histogram.h`)**: `accumulateGray256`, `accumulateBgr256`, and `accumulateRgb256` drop per-pixel multiplications and step uniformly from the row-start pointer. The three-channel peak $V$ calculation no longer constructs `std::initializer_list`, greatly reducing histogram compute cycles.
+- **Full-resolution single-image histogram compute pipeline optimization (`ImageFrame.cpp`)**: `ImageFrame::computeHistogram` hoists the format branch (grayscale / BGR / RGB) out of the row loop, merges duplicate `luminance()` evaluations, and removes redundant `std::clamp` bounds checks on single-byte unsigned integers, for a several-times compute speedup.
+- **Bilinear scale pixel packing and branch reduction (`BilinearScale.cpp`)**: The bilinear interpolation weighted sum is rigorously shown to be monotonically closed on $[0, 255]$. Up to 12 redundant `std::clamp` branches per 4 pixels are removed from the SSE2 and scalar loops, and pixel output is packed with efficient branchless bitwise operations.
 
 ## [1.0.86] - 2026-10-01
 
@@ -1117,25 +1115,25 @@
 - **Directory tree filter recursion fix**: Fixed redundant double-recursive subtree traversal in `DirectoryProxyModel::hasAcceptedDescendant`, significantly accelerating directory search in large directory hierarchies.
 - **Gallery format filter acceleration**: Pre-parsed type query candidates and replaced per-item `QFileInfo` parsing with zero-allocation `QStringView` suffix comparisons in `ThumbnailPanel::evaluateFilterSnapshot`.
 - **Live difference threshold slider**: Added a debounced 35ms preview timer to the difference threshold slider so users see real-time diff heatmap updates while actively dragging.
-- **Status bar image index indicator**: The permanent status bar image count label now shows the current viewing index (e.g. `图片 12 / 100`) across browsing, filtering, and keyboard navigation.
+- **Status bar image index indicator**: The permanent status bar image count label now shows the current viewing index (e.g. `Image 12 / 100`) across browsing, filtering, and keyboard navigation.
 - **Status bar zoom integration for Compare Mode**: Compare mode now fully integrates with the status bar zoom label (`m_lblZoom`), supporting double-click fit (`fitAll()`) and contextual comparison zoom menus.
 - **Pixel Inspector localization & polish**: Localized neighborhood statistics and English prompts in `AnalysisPanel`, and cleaned up single-image vs dual-image comparative labels (eliminating unconditional "Left" prefixes).
 - **Pixel inspector cursor leave cleanup**: Clears sticky "Cursor outside image" text from the status bar when the mouse leaves the viewer canvas, preserving existing operational status.
-- **Contextual pixel coordinate copying**: Added a "坐标 (x, y)" copy action to the image viewer context menu for convenient coordinate export into Python/OpenCV workflows.
+- **Contextual pixel coordinate copying**: Added a "Coordinates (x, y)" copy action to the image viewer context menu for convenient coordinate export into Python/OpenCV workflows.
 - **Compare keyboard ergonomics**: Added standard `F1` shortcut help trigger and single-key `0` view fit (`fitAll()`) parity with single image mode.
 
-### 性能与体验优化
+### Performance and Experience Optimizations
 
-- **批量评级 XMP Sidecar 异步持久化**：批量设置星级、颜色标签与排除标记时，将循环写盘与原子重命名的 I/O 操作移入后台工作线程执行，内存与 UI 瞬间响应，彻底解决多图评级卡死界面的问题。
-- **目录树过滤遍历算法优化**：修复 `DirectoryProxyModel` 在向下递归检索匹配目录时对每个子节点重复调用双重递归的问题，大幅降低深层目录树过滤时的 CPU 开销与交互延迟。
-- **画廊文件格式过滤加速**：在 `ThumbnailPanel::evaluateFilterSnapshot` 中预解析多类型候选列表，并在逐条记录比对时采用零堆分配的 `QStringView` 提取后缀，避免千图大目录下每次过滤重复切分字符串和解析 `QFileInfo`。
-- **差异阈值滑动条实时响应**：在比较模式下为差异阈值滑块增加 35ms 轻量防抖预览定时器，拖动滑块时可流畅实时预览差异热力图变化，告别松开鼠标才能看效果的滞后感。
-- **状态栏图片定位索引显示**：状态栏常驻图片统计标签全面升级为 `图片 X / Y` 格式（如 `图片 15 / 120`），选图、切图、翻页、过滤时实时联动，文件夹浏览位置一目了然。
-- **比较模式状态栏缩放联动**：状态栏缩放指示标签支持比较模式，双击直接调用比较全屏自适应（`fitAll()`），点击弹出比较专属自适应菜单，打通单图与对比工作流体验。
-- **像素检视器本地化与单图规范**：规范像素检视器在单图模式下的文本标识（去除不适用的 "Left" 前缀），统一将邻域统计指标（均值、标准差、最小、最大、方差、采样数）及提示信息全面中文化。
-- **像素探针光标移出清理**：光标离开图像边界时自动清理状态栏临时像素读数，消除驻留并遮挡其他系统通知的“光标不在图像上”多余提示。
-- **右键复制像素坐标 (x, y)**：单图查看器右键“复制像素值”菜单中新增“坐标 (x, y)”选项，方便图像算法工程师一键提取像素坐标至算法脚本。
-- **比较快捷键体验统一**：比较模式支持通过标准 `F1` 键查看快捷键帮助条，并支持按单键 `0` 直接触发视图自适应，与单图浏览模式的操作习惯保持高度一致。
+- **Asynchronous persistence of batch-rating XMP sidecars**: When batch-setting star ratings, color labels, and exclusion flags, looping disk writes and atomic-rename I/O are moved onto background worker threads. Memory and the UI respond instantly, fully resolving the interface freeze when rating many images.
+- **Directory tree filter traversal algorithm optimization**: Fixed `DirectoryProxyModel` repeatedly invoking double recursion on every child node while recursively searching downward for matching directories, greatly reducing CPU overhead and interaction latency when filtering deep directory trees.
+- **Gallery file-format filter acceleration**: In `ThumbnailPanel::evaluateFilterSnapshot`, pre-parse the multi-type candidate list and, when comparing each record, extract the suffix with zero-heap-allocation `QStringView`, avoiding repeated string splitting and `QFileInfo` parsing on every filter pass in large directories of thousands of images.
+- **Real-time difference threshold slider**: In compare mode, added a lightweight 35ms debounce preview timer to the difference threshold slider so dragging it smoothly previews difference heatmap changes in real time, removing the lag of seeing the effect only after releasing the mouse.
+- **Status bar image position index**: The permanent status bar image-count label is fully upgraded to the `Image X / Y` format (e.g. `Image 15 / 120`) and stays in sync in real time when selecting, switching, paging, and filtering, so the folder browsing position is immediately clear.
+- **Compare mode status bar zoom integration**: The status bar zoom indicator now supports compare mode. Double-click directly calls compare fit-all (`fitAll()`), and a click opens a compare-specific fit menu, unifying the single-image and comparison workflows.
+- **Pixel inspector localization and single-image labeling**: Standardized pixel inspector text labels in single-image mode (removing inapplicable "Left" prefixes), and fully localized neighborhood statistics (mean, standard deviation, minimum, maximum, variance, sample count) and prompt messages into Chinese.
+- **Pixel probe cursor-leave cleanup**: When the cursor leaves the image bounds, automatically clear the temporary pixel readout on the status bar, removing the lingering "Cursor is not on the image" notice that stayed and obscured other system notifications.
+- **Right-click copy pixel coordinates (x, y)**: Added a "Coordinates (x, y)" option to the single-image viewer's right-click "Copy Pixel Value" menu, so image algorithm engineers can extract pixel coordinates into algorithm scripts in one click.
+- **Unified compare shortcut experience**: Compare mode supports viewing the shortcut help bar with the standard `F1` key and triggering view fit directly with the single key `0`, keeping the interaction habits highly consistent with single-image browsing mode.
 
 ## [1.0.85] - 2026-09-30
 
@@ -1149,14 +1147,14 @@
 - **Non-blocking copy feedback (P2)**: Replaced modal success dialog on file copy with non-intrusive status bar notifications.
 - **Canvas comparison Space hold support (P2)**: Enabled hold-to-compare (Space key) in canvas modes (Split, Swipe, Overlay, Checkerboard), allowing instantaneous single-image inspection and seamless restoration.
 
-### 性能与体验优化
+### Performance and experience optimizations
 
-- **旋转与翻转异步化（防卡顿）**：单图及批量旋转/翻转操作的文件编解码与原子写盘全面移至后台工作线程，主线程在等待期间显示等待光标并持续泵送事件，彻底消除大图处理时的界面冻结和系统“未响应”现象。
-- **画廊排序算法优化**：按扩展名排序改用零内存分配的 `QStringView`，按评分排序预先建立 $O(N)$ 评分映射，杜绝排序比较器在循环中数万次构造 `QFileInfo` 及重复堆分配。
-- **批量文件操作收尾异步化**：删除与移动完成后的文件存在性磁盘 stat 扫描移至后台任务收尾阶段完成，主线程仅接收纯内存结果，消除批量操作完成时的瞬时卡顿。
-- **重命名文件名主干选中**：弹窗重命名时默认仅高亮选中主文件名（stem），光标停在扩展名前，避免打字误删后缀。
-- **复制文件成功通知轻量化**：文件复制成功后由非模态状态栏提示替代强制点击的模态对话框，保持看图操作连续性。
-- **画布模式临时对比**：在分割（Split）、滑动（Swipe）、叠加（Overlay）、棋盘（Checkerboard）模式下支持按住空格键临时切回单侧完整原图，松开即刻恢复分割视图。
+- **Asynchronous rotate and flip (anti-stall)**: File encode/decode and atomic disk writes for single-image and batch rotate/flip are fully moved to background worker threads. While waiting, the main thread shows a wait cursor and keeps pumping events, eliminating UI freezes and the OS "Not Responding" state on large images.
+- **Gallery sort optimization**: Sorting by extension uses zero-allocation `QStringView`, and sorting by rating prebuilds an $O(N)$ rating map, eliminating tens of thousands of `QFileInfo` constructions and repeated heap allocations inside the sort-comparator loop.
+- **Async wrap-up for batch file operations**: Disk stat scans that check file existence after deletes and moves now run in the background task's completion phase. The main thread receives in-memory results only, removing the momentary stall when a batch operation finishes.
+- **Rename selects the filename stem**: The rename dialog highlights only the filename stem by default and places the cursor before the extension, preventing accidental deletion of the suffix while typing.
+- **Lighter copy-success notification**: After a successful file copy, a modeless status-bar notice replaces the modal dialog that required a click, so image viewing continues without interruption.
+- **Temporary compare in canvas modes**: In Split, Swipe, Overlay, and Checkerboard modes, holding Space temporarily switches back to the full original image on one side; releasing it restores the comparison view immediately.
 
 ## [1.0.84] - 2026-09-30
 
@@ -1166,10 +1164,10 @@
 - **Compare ROI orientation alignment**: Images with mismatched orientations (e.g. horizontal 4096×3072 vs vertical 3072×4096) correctly enable synchronized ROI selection and statistics after rotating to align viewports.
 - **Compare ROI HUD viewport tracking**: Floating ROI statistics chips dynamically follow selection boxes during viewport panning and dragging.
 
-### 比较
+### Compare
 
-- **旋转与跨方向图像选区统计同步**：修复横竖不同方向（如左图 4096×3072 横向、右图 3072×4096 竖向）图片对比时，旋转竖向图片对齐方向后，框选选区无法联动同步到对侧且无统计结果的问题。联动判定采用旋转与裁剪后的窗格有效尺寸，计算统计时各窗格根据各自的调整参数逆向映射至源像素坐标系进行采样。
-- **选区统计悬浮条平移实时跟随**：修复在比较模式下框选 ROI 后左右拖动画布平移时，统计结果悬浮标签（ROI HUD Chip）停留在原位未跟随画面框选位置移动的问题。视口平移与拖拽过程中实时重算并更新浮动标签位置。
+- **Rotation and cross-orientation selection statistics sync**: Fixed an issue where, when comparing images with different orientations (e.g. left image 4096×3072 horizontal, right image 3072×4096 vertical), rotating the vertical image to align orientation left the selection unable to sync to the opposite pane and produced no statistics. Linkage now uses the effective pane size after rotation and cropping; when computing statistics, each pane inverse-maps to the source pixel coordinate system according to its own adjustment parameters for sampling.
+- **Selection statistics floating bar follows pan in real time**: Fixed an issue in compare mode where, after selecting an ROI and dragging the canvas left or right to pan, the statistics floating label (ROI HUD Chip) stayed in place and did not follow the on-screen selection. During viewport panning and dragging, the floating label position is recalculated and updated in real time.
 
 ## [1.0.83] - 2026-09-30
 
@@ -1178,9 +1176,9 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.83**.
 - **Compare Space hold scale fix**: Momentary compare (holding Space) on images of the same resolution preserves the target pane's current scale directly instead of recalculating a tight fit without deadband, eliminating image shrinkage during flicker compare.
 
-### 比较
+### Compare
 
-- 修复同分辨率图片按住空格进行临时比较（Hold-to-Compare）时画面出现微缩抖动的问题。当对比双方分辨率相同时直接保持目标窗格的当前缩放比例，实现 1:1 无缝原位闪烁对比。
+- Fixed the slight shrink-and-jitter that appeared when holding Space for momentary compare (Hold-to-Compare) on images of the same resolution. When both images have the same resolution, the target pane's current scale is kept directly, enabling a seamless 1:1 in-place flicker compare.
 
 ## [1.0.82] - 2026-09-29
 
@@ -1189,27 +1187,27 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.82**.
 - **Browse first paint**: Opening a folder shows the first gallery rows, the image list, and the bottom-left preview as soon as the first images are found. A small folder no longer stays blank until every file has been scanned and every thumbnail has started decoding. A thumbnail that fails to decode no longer freezes the gallery.
 
-### 浏览
+### Browse
 
-- 打开文件夹后，找到第一张图就显示画廊行、图片列表和左下角预览。小文件夹不再等到全部文件扫完、全部缩略图开始解码才出画面。解码失败的缩略图不再把画廊卡住。
+- After a folder is opened, the gallery rows, the image list, and the bottom-left preview appear as soon as the first image is found. A small folder no longer stays blank until every file has been scanned and every thumbnail has started decoding. A thumbnail that fails to decode no longer freezes the gallery.
 
 ## [1.0.81] - 2026-09-29
 
 ### Release
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.81**.
-- **First-open stall fix (#69)**: opening/restoring a directory whose images never load no longer freezes the UI; FS probes and latency checks run off the GUI thread; busy cursor and failed-thumb loops are bounded; status shows「目录加载失败」/「暂无图片」.
+- **First-open stall fix (#69)**: opening/restoring a directory whose images never load no longer freezes the UI; FS probes and latency checks run off the GUI thread; busy cursor and failed-thumb loops are bounded; status shows "Directory load failed" / "No images".
 - **Small-directory filter selection (#69)**: filename filter on ≤256 images updates selection synchronously so still-visible images stay selected.
 - **Compare filename overlay (#68)**: pane filenames stay above the image (default on); long names wrap instead of eliding.
 
-### 浏览
+### Browse
 
-- 首次打开或恢复图片目录时，如果目录里的图全部加载不出来（失败、卡住、网络盘或空扫描），界面不再卡死。根因是主线程在 `DirectoryTree::navigateTo` 里同步调用 `QFileSystemModel::index` / `QFileInfo::exists`，并在 `ThumbnailPanel::setDirectory` 里同步调用 `isHighLatencyBrowsePath`（`QStorageInfo` / `GetDriveTypeW`）；扫描中断时忙碌光标不释放，失败缩略图还会被反复解码。现在目录确认和延迟探测都在后台进行，扫描可被新目录取代，失败或超时会结束忙碌状态并提示「目录加载失败」或「暂无图片」。
-- 小目录（不超过 256 张）按文件名筛选时，结果和选中在同一次操作里更新。仍在列表里的图片保持选中，不再先被清空再等防抖定时器恢复。递归子目录搜索仍异步进行。
+- Opening or restoring a picture directory for the first time no longer freezes the UI when none of the images can be loaded (failure, hang, network drive, or an empty scan). The root cause was the main thread synchronously calling `QFileSystemModel::index` / `QFileInfo::exists` in `DirectoryTree::navigateTo`, and synchronously calling `isHighLatencyBrowsePath` (`QStorageInfo` / `GetDriveTypeW`) in `ThumbnailPanel::setDirectory`. An interrupted scan left the busy cursor set, and failed thumbnails were decoded repeatedly. Directory confirmation and latency probes now run in the background. A scan can be superseded by a new directory. Failure or timeout ends the busy state and shows "Directory load failed" or "No images".
+- Filtering a small directory (at most 256 images) by filename updates the results and the selection in the same operation. Images that remain in the list stay selected. They are no longer cleared first and then restored when the debounce timer fires. Recursive subdirectory search still runs asynchronously.
 
-### 比较
+### Compare
 
-- 比较窗格的文件名固定显示在图片上方。「文件名」只负责显示或隐藏，不再在图片下方和上方之间切换。打开比较时默认显示文件名。名字过长时换行，不再用省略号截断。
+- Filenames in the compare panes stay fixed above the image. "Filename" only shows or hides the name; it no longer switches the name between below and above the image. Filenames are shown by default when Compare is opened. Names that are too long wrap instead of being truncated with an ellipsis.
 
 ## [1.0.80] - 2026-09-28
 
@@ -1217,15 +1215,15 @@
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.80**.
 - **Batch rotate/flip progress (#65)**: multi-select rotate/flip shows progress (and cancel) instead of freezing the UI; single-select stays silent.
-- **Compare best-fit + persist FOV scale (#66)**: toolbar「最适合」FOV-matches pane scales to the window; Space/blink/same-FOV image switch keep that matched size (not raw ~100%).
+- **Compare best-fit + persist FOV scale (#66)**: toolbar "Best fit" FOV-matches pane scales to the window; Space/blink/same-FOV image switch keep that matched size (not raw ~100%).
 
-### 浏览
+### Browse
 
-- 多选两张及以上图片后旋转或翻转时，会立刻显示进度（「正在旋转…」/「已旋转 3 / 15」，翻转同理），可以取消尚未处理的文件；只选一张时不弹出进度框。
+- When two or more images are selected and then rotated or flipped, progress appears immediately ("Rotating…" / "Rotated 3 / 15"; for flip, "Flipping…" / "Flipped 3 / 15"). Files that have not yet been processed can be cancelled. When only one image is selected, no progress dialog appears.
 
-### 比较
+### Compare
 
-- 比较工具操作行（与分析、导出报告同一行）提供「最适合」：关闭「统一像素倍率」，各窗格按自身分辨率适配当前窗口。相同视野（宽高比）的图显示为相近大小，例如 400×600 与 800×1200 并排时，低分辨率一侧大约是高分辨率一侧的 2 倍缩放。按住 Space /「临时切换」、闪烁，或换成同视野的另一分辨率之后，仍保持这套视野对齐的屏幕大小，不会跳回约 100% 像素大小。**F** / **Ctrl+0** 仍按当前模式适应窗口。
+- The compare tool action row (the same row as Analyze and Export Report) offers "Best fit": it turns off "Uniform pixel scale", and each pane fits the current window to its own resolution. Images with the same field of view (aspect ratio) appear at a similar size. For example, when 400×600 and 800×1200 are shown side by side, the lower-resolution side is shown at about twice the scale of the higher-resolution side. After holding Space / "temporary switch", blinking, or switching to another resolution with the same field of view, that field-of-view-aligned screen size is kept and does not jump back to about 100% pixel size. **F** / **Ctrl+0** still fit the window according to the current mode.
 
 ## [1.0.79] - 2026-09-28
 
@@ -1235,10 +1233,10 @@
 - **Compare Space target pane (#62)**: with exactly two images, Space hold temporarily shows the other pane's image on the mouse-hovered pane (was inverted).
 - **Compare ROI chip stats (#64)**: linked ROI chips/table show R/G, B/G, and H/S/V means (not RGB means alone).
 
-### 比较
+### Compare
 
-- 恰好两张图时，按住 Space：鼠标所在一侧临时显示另一侧的图，松开恢复。此前方向反了，会把鼠标所在的图换到另一侧。鼠标不在窗格上，以及工具栏「临时切换」，仍把右侧图临时显示到左侧。
-- 框选后，各窗格旁的 ROI chip 直接显示 **R/G**、**B/G** 以及 **H / S / V** 均值（两行）。绿通道接近 0 时比值显示为 —。侧栏测量表和 Δ 增加 H Mean、S Mean，原有 V / R / G / B / R/G / B/G 保留。H 为色相的圆周均值（度），S 为饱和度均值（0–100），V 仍是 max(R,G,B) 均值。
+- With exactly two images, hold Space: the pane under the mouse temporarily shows the other pane's image, and release restores it. Previously the direction was reversed, swapping the image under the mouse onto the other side. When the mouse is not over a pane, and for the toolbar "temporary switch", the right image is still temporarily shown on the left.
+- After a box selection, the ROI chip beside each pane shows **R/G**, **B/G**, and **H / S / V** means directly (two lines). When the green channel is near 0, ratios display as —. The sidebar measurement table and Δ add H Mean and S Mean; existing V / R / G / B / R/G / B/G are kept. H is the circular mean of hue (degrees), S is the mean saturation (0–100), and V remains the mean of max(R,G,B).
 
 ## [1.0.78] - 2026-09-28
 
@@ -1247,15 +1245,15 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.78**.
 - **Stability / memory / feel (#60)**: early session frame-pool release, targeted Preview mip drop, visible-tile-first scheduling, Browse cancel on directory change, Viewer tile/GPU generation harden; Analysis priority kept for load/threshold diff batches.
 
-### 稳定性 / 内存 / 体感
+### Stability / Memory / Feel
 
-- 比较窗口析构时，在取消等待之前清空会话 frame pool 与窗格金字塔，关闭后不再留着约 384 MiB 的会话图。
-- `CacheManager::dropMips` / `trimMipsToBudget` 只丢掉 Preview 池里 lod≥1 的 mip。离开大图或关掉比较时调用，缩略图和元数据不动。
-- 放大后的视口瓦片先以 Decode 调度画面内的块，周围一圈走 Background，并且限制同时在途的预取数量。
-- 换目录时取消旧目录的缩略图请求，以及搜索、画廊各自的元数据索引；两个消费者仍然互不取消。
-- Viewer 换图或销毁时停止接收瓦片回调，并清掉 Stage A GPU 纹理。迟到的瓦片不会画到新图上。
-- 比较里下一组还在软加载时，settle 的直方图和全精度差异降到 Background；当次加载和阈值调整的差异批次仍走 Analysis。
-- 邻对预取会先把对得上的句柄交给当前组，其余在聚焦窗格占 Decode 之前取消。
+- On compare-window destruction, clear the session frame pool and pane pyramids before the cancel wait, so close no longer retains about 384 MiB of session images.
+- `CacheManager::dropMips` / `trimMipsToBudget` drop only mips with lod≥1 in the Preview pool. Called when leaving a large image or closing Compare; thumbnails and metadata are left untouched.
+- For zoomed viewport tiles, schedule in-view blocks on Decode first, send the surrounding ring to Background, and limit how many prefetches are in flight at once.
+- On directory change, cancel thumbnail requests for the old directory, plus Search’s and Gallery’s own metadata indexes; the two consumers still do not cancel each other.
+- When the Viewer changes image or is destroyed, stop accepting tile callbacks and clear Stage A GPU textures. Late tiles are not drawn onto the new image.
+- While the next group in Compare is still soft-loading, demote the settled histogram and full-precision diff to Background; diff batches for the current load and for threshold adjustments still run as Analysis.
+- Neighbor-pair prefetch first hands matching handles to the current group, and cancels the rest before the focused pane takes Decode.
 
 ## [1.0.77] - 2026-09-27
 
@@ -1264,11 +1262,11 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.77**.
 - **Viewport region-tile + GPU Stage A + LibRaw (#58)**: zoomed-in viewport tile schedule, resident Stage A GPU uploads across pan, LibRaw half/full demosaic when embedded preview is short.
 
-### 性能
+### Performance
 
-- **视口区域瓦片**：放大（无全帧）时按可见区域调度 `decodeRegion`（`canNativeRegion` 优先，否则有界裁剪），并预取一圈邻瓦；TileCache 键不变。已在内存中的 1:1 全帧仍直接缩放，不按瓦片重开文件。
-- **GPU Stage A**：`GpuTileUploader` 对已缓存瓦片跳过重复上传，同尺寸用 `glTexSubImage2D` 替换；按张数和字节预算淘汰（默认 256 MiB，`gpuTileBudgetMb` / `MVIEWER_GPU_BUDGET_MB`），`pinVisible` 保护当前画面。未实现 Stage B GPU 缩放。CPU 路径仍是默认。
-- **LibRaw（LGPL-2.1 / CDDL-1.0）**：嵌入 JPEG 仍是够用时的快路径；预览短于请求且 `maxEdge` 不超过传感器一半时走 half-size demosaic；仅在全尺寸解码且没有可用预览时做 full demosaic。不把 RAW 声称为 native region，LOD 也不会先全图 demosaic 再缩小。
+- **Viewport region tiles**: When zoomed in (no full frame), schedule `decodeRegion` for the visible area (`canNativeRegion` preferred, otherwise a bounded crop) and prefetch one ring of neighboring tiles; TileCache keys are unchanged. A 1:1 full frame already in memory is still scaled directly, and the file is not reopened per tile.
+- **GPU Stage A**: `GpuTileUploader` skips re-uploading tiles already in the cache and replaces same-size tiles with `glTexSubImage2D`; eviction is by tile count and byte budget (default 256 MiB, `gpuTileBudgetMb` / `MVIEWER_GPU_BUDGET_MB`), and `pinVisible` protects the current view. Stage B GPU scaling is not implemented. The CPU path remains the default.
+- **LibRaw (LGPL-2.1 / CDDL-1.0)**: Embedded JPEG remains the fast path when it is sufficient; when the preview is shorter than the request and `maxEdge` does not exceed half the sensor, use half-size demosaic; full demosaic runs only for a full-size decode with no usable preview. RAW is not claimed as a native region, and LOD does not demosaic the full image and then scale it down.
 
 ## [1.0.76] - 2026-09-27
 
@@ -1277,11 +1275,11 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.76**.
 - **Remaining deferred Compare/cache perf (#56)**: decoder-native disk-LOD (RAW embedded JPEG DCT), interactive low-prec live diff, TileCache prefer mip/`decodeLod`.
 
-### 性能
+### Performance
 
-- **解码器原生 disk-LOD**：`RawDecoder` 实现 `ISourceImageCapabilities`，嵌入 JPEG 预览经 `QImageReader::setScaledSize`（DCT）作为 NativeLod；`canNativeLod` 如实声明（非 libraw half demosaic）。`QtFallbackDecoder` 提供 `decodeLod` 缩放路径但不声称 native（插件格式无证据）。
-- **交互期低精度 live diff**：缩放/平移时若差异叠加开启，先对 ~384 边廉价栅格跑 `DifferenceEngine` 显示临时 overlay；松手/`flushDeferredCompareAnalysis` 再全精度替换。直方图仍推迟到 settle。
-- **TileCache/Viewer 粗瓦片**：`decodeTilePreferReduced` 优先 `getBestMip` → `SourceImage::decodeLod`/`decodeRegion`，再回退从全帧 `scaleRegion`。
+- **Decoder-native disk-LOD**: `RawDecoder` implements `ISourceImageCapabilities`. The embedded JPEG preview is decoded via `QImageReader::setScaledSize` (DCT) as NativeLod; `canNativeLod` reports this truthfully (not libraw half demosaic). `QtFallbackDecoder` provides a `decodeLod` scale path but does not claim native (plugin formats have no evidence).
+- **Interactive low-precision live diff**: While zooming or panning with the difference overlay enabled, run `DifferenceEngine` first on a cheap raster of about a 384-pixel edge and show a temporary overlay; on release / `flushDeferredCompareAnalysis`, replace it with the full-precision result. The histogram is still deferred until settle.
+- **TileCache/Viewer coarse tiles**: `decodeTilePreferReduced` prefers `getBestMip` → `SourceImage::decodeLod` / `decodeRegion`, then falls back to `scaleRegion` from the full frame.
 
 ## [1.0.75] - 2026-09-27
 
@@ -1290,10 +1288,10 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.75**.
 - **True in-memory mipmap (#54)**: CacheManager power-of-two mip chain; Compare prefers cached mips; B6 peak_cache_bytes 512→896 MiB.
 
-### 性能 / 缓存
+### Performance / Cache
 
-- CacheManager 真 in-memory mipmap 链：`FullImage` put 或懒 `getBestMip` 生成 power-of-two 层级（lod0=全分辨率，越大越粗）；Compare 物化优先取 mip，减少反复从全图缩放/解码。
-- B6 `peak_cache_bytes` 预算重标定 **512 MiB → 896 MiB**：真 mipmap 的 lod≥1 占用 Preview 池（256 MiB），与 Viewer（512 MiB）合计后峰值约 768 MiB；硬门限留余量。
+- CacheManager true in-memory mipmap chain: a `FullImage` put, or a lazy `getBestMip`, builds power-of-two levels (lod0 = full resolution; higher lods are coarser). Compare materialization prefers mips, reducing repeated scaling and decoding from the full image.
+- B6 `peak_cache_bytes` budget recalibrated **512 MiB → 896 MiB**: lod≥1 of the true mipmap occupies the Preview pool (256 MiB); together with Viewer (512 MiB) the peak is about 768 MiB, leaving headroom under the hard limit.
 
 ## [1.0.74] - 2026-09-26
 
@@ -1302,26 +1300,26 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.74**.
 - **Compare extreme-speed Tier-1+2 (#52)**: multi-LOD display pyramid, Decode priority + aggressive cancel, session frame pool; predictive gesture LOD, focus-first multi-pane, Browse warm handoff.
 
-### 比较
+### Compare
 
-- 多级显示金字塔：保留 ~1/4、1/2、1× 等就绪 LOD，缩放/平移可立刻画出较粗层级再细化（扩展 display_planner / materialization）。
-- 硬解码优先级：可见比较窗格物化走 Decode；邻对 preload 仍 Background；hist/diff/ROI 仍 Analysis；换对时取消 display/hist/diff/roi，避免后台饿死前台。
-- 比较会话帧池：按 path+frameIndex 在会话内 LRU 保留已解码帧（有条目/字节预算），下一对/上一对更常命中内存。
-- 手势预测 LOD：滚轮缩放时强制 Decode 优先级，便于 settle 前爬升预测档。
-- 交互期仍推迟全精度 hist/diff，松手后刷新（懒叠加）。
-- 多窗格物化优先焦点/编辑窗格；金字塔缓存命中时先铺底。
-- Browse→Compare：当前显示栅格 + Viewer warm 邻帧交接（QImage 隐式共享，保留 softLoading 以便升级）。
-- 极致快速（#49）：空白窗格先以廉价 LOD（~640 边）上屏，再异步升级到视口质量；廉价首帧物化走 Decode 优先级，质量升级/实时调整仍走 Analysis。
-- Browse→Compare 交接：若 Viewer 已有同路径显示栅格，进入比较时立即铺底，再升级。
-- 画布手势（拖动/交互忙碌）期间关闭 SmoothPixmapTransform，松手恢复。
-- 换对/换窗时保留当前网格画面（不再整页转圈空白），状态栏提示「正在加载下一组…」。
-- 当前对加载完成后后台预取上一对/下一对，换对更容易命中缓存。
-- 交换窗格在非闪烁模式下原地对调像素与标题，避免销毁重建全部窗格。
-- 拖动平移时暂时关闭平滑缩放过滤，松手后恢复，交互更跟手。
-- 换对渐进首帧：提前更新窗格标题，命中预览缓存时立刻铺底图，窗格角显示「加载中」而不整页漂白。
-- 下一对/上一对优先 promote 邻对预取为前台解码，暖缓存成为常见路径。
-- 窗格数量不变时 finishLoad 原地换帧（不销毁 RawImageView）；列数/布局预设仅重排网格。
-- 缩放/平移/交互期间推迟直方图与差异叠加，停手后恢复全质量。
+- Multi-level display pyramid: keep ready LODs at ~1/4, 1/2, 1×, and similar scales, so zoom/pan can draw a coarser level immediately and then refine (extends display_planner / materialization).
+- Hard decode priority: materialization of visible Compare panes uses Decode; neighbor-pair preload stays Background; hist/diff/ROI stay Analysis; on pair change, cancel display/hist/diff/roi so background work does not starve the foreground.
+- Compare session frame pool: LRU-retain decoded frames within the session by path+frameIndex (entry and byte budgets), so the next/previous pair hits memory more often.
+- Predictive gesture LOD: force Decode priority during wheel zoom so the predicted tier can climb before settle.
+- During interaction, full-precision hist/diff stays deferred and refreshes on release (lazy overlay).
+- Multi-pane materialization prefers the focused/editing pane; on a pyramid cache hit, paint the base layer first.
+- Browse→Compare: hand off the current display raster plus Viewer-warmed neighbor frames (QImage implicit sharing; keep softLoading so they can be upgraded).
+- Extreme speed (#49): a blank pane first shows a cheap LOD (~640 px on an edge), then asynchronously upgrades to viewport quality; cheap first-frame materialization uses Decode priority, while quality upgrades and live adjustments stay on Analysis.
+- Browse→Compare handoff: if the Viewer already has a display raster for the same path, paint the base immediately on entering Compare, then upgrade.
+- During canvas gestures (drag / interaction busy), disable SmoothPixmapTransform and restore it on release.
+- On pair or window change, keep the current grid image (no full-page spinner blank); the status bar shows “Loading next set…”.
+- After the current pair finishes loading, prefetch the previous and next pairs in the background so pair changes hit the cache more often.
+- In non-flicker mode, swapping panes exchanges pixels and titles in place, avoiding destroy-and-recreate of every pane.
+- While drag-panning, temporarily disable smooth scale filtering and restore it on release, so interaction tracks the pointer more closely.
+- Progressive first frame on pair change: update pane titles early; on a preview-cache hit, paint the base image immediately; show “Loading” in the pane corner instead of blanking the whole page white.
+- Next/previous pair preferentially promotes the neighbor-pair prefetch to foreground decode, so a warm cache is the common path.
+- When the pane count is unchanged, finishLoad swaps frames in place (does not destroy RawImageView); column count and layout presets only rearrange the grid.
+- During zoom, pan, and interaction, defer histogram and difference overlays, and restore full quality after the gesture stops.
 
 ## [1.0.71] - 2026-09-26
 
@@ -1330,13 +1328,13 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.71**.
 - **Compare UX (#44)**: stabilized the compare toolbar, added ROI statistics overlays, and reworked temporary image switching.
 
-### 比较
+### Compare
 
-- 顶栏的阈值、增益、叠加透明度、棋盘大小和自定义列数改为始终占位，只用启用/禁用来切换，勾选差异或叠加时主按钮不再被挤开。
-- 上一对、下一对、交换、临时切换、分析、导出报告、清除标记在不可用时用提示说明原因。
-- 联动 ROI 的 V 与 RGB 均值显示在每个窗格选区旁边，不再堆在画面右下角。
-- 恰好两张图时，按住 Space 或「临时切换」可临时换图，松开恢复。当时鼠标所在一侧保持不动、图被换到另一侧，方向在后续修正。
-- 超过两张图时 Space 和「临时切换」禁用。窗格角上有淡色编号；鼠标在某格上按住数字键 1–N，该格临时显示第 N 张图。鼠标不在窗格上时数字键仍切换布局。Ctrl+2 / Ctrl+4 / Ctrl+8 布局预设不变。
+- Threshold, gain, overlay opacity, checkerboard size, and custom column count in the top bar now always reserve their space and are toggled only by enable/disable, so the main buttons are no longer pushed aside when difference or overlay is checked.
+- Previous pair, next pair, swap, temporary switch, analyze, export report, and clear markers show a tooltip explaining why when they are unavailable.
+- Linked-ROI V and RGB means are shown beside the selection in each pane, no longer stacked in the bottom-right corner of the view.
+- With exactly two images, holding Space or “Temporary switch” temporarily swaps the images and releasing restores them. At the time, the side under the pointer stayed in place and the image was swapped to the other side; the direction was corrected in a follow-up.
+- With more than two images, Space and “Temporary switch” are disabled. Each pane shows a faint index in the corner; while the pointer is over a pane, holding a number key 1–N temporarily shows image N in that pane. When the pointer is not over a pane, the number keys still switch the layout. The Ctrl+2 / Ctrl+4 / Ctrl+8 layout presets are unchanged.
 
 ## [1.0.70] - 2026-09-24
 
@@ -1351,7 +1349,7 @@
 ### Release
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.69**.
-- **Browse address bar (#40)**: pathEdit moved onto the gallery toolbar strip above 「排序」「高级筛选」; left-tree 「搜索目录」 hidden as redundant; click/focus selects all for replace/copy; Ctrl+F focuses the address bar.
+- **Browse address bar (#40)**: pathEdit moved onto the gallery toolbar strip above "Sort" and "Advanced Filter"; the left-tree "Search Directory" was hidden as redundant; click/focus selects all for replace/copy; Ctrl+F focuses the address bar.
 - **Multi-select survives Browse rotate (#40)**: model rebuild uses `NoUpdate` when restoring current so batch rotate/flip keeps the same selected paths.
 
 ## [1.0.68] - 2026-09-24
@@ -1373,7 +1371,7 @@
 
 ### Bug Fixes
 
-- **Shortcut guidance matches the shipped controls**: F1, the in-app 使用说明, the Compare ? status tip, pair-button tooltips, and the user guide state that P, PageUp, and Left step to the previous pair and N, PageDown, and Right step to the next pair. Deselect-all is Ctrl+Shift+A and batch analysis export is Ctrl+Alt+A. Alignment is described as an integer-pixel translation.
+- **Shortcut guidance matches the shipped controls**: F1, the in-app usage instructions, the Compare ? status tip, pair-button tooltips, and the user guide state that P, PageUp, and Left step to the previous pair and N, PageDown, and Right step to the next pair. Deselect-all is Ctrl+Shift+A and batch analysis export is Ctrl+Alt+A. Alignment is described as an integer-pixel translation.
 - **Compare mode keys on the F1 sheet**: F1 lists K with B/S/W/O as checkerboard, ] / [ as diff-threshold +5 / -5, and . / , as overlay-opacity +5 / -5.
 - **Gallery Shift-click range**: A plain Shift-click selects only the inclusive range from the anchor. A shorter second Shift-click drops images that are no longer inside that range. Ctrl+Shift-click still adds the range and keeps images already selected outside it.
 - **Stable distant preview size**: Clicking an image whose pixel size is not probed yet no longer shows the square gallery thumbnail small and then snaps it larger. The gallery cell, selection preview, and viewer fit the photo instead of the black letterbox mat, and the preview keeps that size when the sharper frame arrives.
@@ -1384,7 +1382,7 @@
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.65**.
 - **Browse flip follows SelectionModel (#36)**: `Ctrl+Shift+H` / `Ctrl+Shift+V` rewrite the gallery current image (ADR-012) even when Viewer is closed; actions disable with no selection instead of silently doing nothing.
-- **Overwrite is explicit (#36)**: Browse rotate/flip tooltips, F1, and the status bar say the original file is overwritten; Compare side panel shows “仅预览，不覆盖原文件”.
+- **Overwrite is explicit (#36)**: Browse rotate/flip tooltips, F1, and the status bar say the original file is overwritten; Compare side panel shows “Preview only; original file is not overwritten”.
 - **Compare transform target (#36)**: rotate/flip no longer default to pane 0. They use the clicked edit pane, else hover/focus; after load the pane matching the current image is selected. No target → status prompt, no silent no-op.
 - **Viewer shortcuts match labels (#36)**: context menu and keys use `Ctrl+Shift+H` / `Ctrl+Shift+V` (plain `H`/`V` no longer overwrite the file). Flip uses the same retrying file rewrite path as rotate.
 
@@ -1401,7 +1399,7 @@
 ### Release
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.63**.
-- **Image rotate harden (#29)**: Browse/Viewer 顺时针/逆时针 90° persist via `rotateImageFile` (exact 90°-step rewrite, atomic `QSaveFile`), toolbar actions, and `imagerotate_tests` coverage.
+- **Image rotate harden (#29)**: Browse/Viewer clockwise/counterclockwise 90° persist via `rotateImageFile` (exact 90°-step rewrite, atomic `QSaveFile`), toolbar actions, and `imagerotate_tests` coverage.
 - **Details column resize (#30)**: Explorer-style drag-resize for Browse Details headers; aligned cells, elided names, widths persisted via QSettings.
 - **m46 B2 filter/model rebuild**: Clearing the text filter on tiny directories evaluates immediately (no debounce race); progressive scan mode drops after convergence so filter rebuilds use `updateSources` and keep paint-cache thumbs (fixes post-merge `m46_browse_tests` B2).
 - **Network browse opt (#31)**: Tight predictive thumbnail window on high-latency UNC/SMB/nfs paths; skip full-directory header probe for Thumbnail/LargeIcon; disk-cache identity hints and EXIF thumb open skip.
@@ -1516,9 +1514,9 @@
 - **Batch dialog layout torn down on open (`BatchDialog`)**: The constructor
   stack-allocated `QVBoxLayout mainLayout(this)`, so `~QLayout` ran when the
   constructor returned and left every control piled in the corner. The dialog
-  now heap-owns the layout, uses 文件 / 操作 / 参数 / 进度 group boxes with
+  now heap-owns the layout, uses File / Operation / Parameter / Progress group boxes with
   stretch on the file list and log (minimum size 720×640), shows parameter
-  rows only for checked operations, and exposes crop X/Y/宽/高. Adding a
+  rows only for checked operations, and exposes crop X/Y/Width/Height. Adding a
   directory lists image files immediately; `BatchProcessor` also expands
   leftover directory paths when recursive scan is off.
 
@@ -1826,7 +1824,7 @@
 
 - **Session Recovery Dialog Freeze on "No" (`MainWindow`, `mainwindow_session_recovery.cpp`, `mainwindow.cpp`)**:
   - **Suppressed Startup Race**: Prevented dual session restoration race where `restoreLastSession()` was loading `lastDir` and `CompareWorkspace` in the background before the user answered the recovery prompt.
-  - **Clean State & Window Re-activation**: When clicking "否" (No), thoroughly purged stale directory paths and comparison settings from memory and `QSettings`, activated and raised `MainWindow`, and focused the thumbnail gallery.
+  - **Clean State & Window Re-activation**: When clicking "No", thoroughly purged stale directory paths and comparison settings from memory and `QSettings`, activated and raised `MainWindow`, and focused the thumbnail gallery.
   - **Decoupled Modal Dialog Chaining**: Resolved a Windows native modal activation deadlock by decoupling `maybeShowCrashReport()` from the recovery callback turn via a deferred timer.
 - **Bottom-Left Preview Thumbnail Jump (`PreviewPanel`, `previewpanel.cpp`)**:
   - **Proportional Square Unpadding**: Added `unpadSquareThumbnail` helper to trim transparent letterbox margins from gallery thumbnails. The provisional preview immediately conforms to the true source image aspect ratio and fits the panel box without jarring size jumps or bounding-box snaps when navigating to distant images.
@@ -1834,41 +1832,41 @@
   - **Full Pane Support in Bottom-Right HUD**: Expanded floating `m_roiHud` to display measurements for all compared images (A, B, C, D...) up to 8 panes, resolving an artificial 2-pane cap that previously omitted panes C and D when performing 4-image comparisons.
   - **Comfortable HUD Geometry**: Dynamically widened the HUD layout to preserve clear alignment across multiple panes.
 - **Browse Command Bar Clutter Removal (`MainWindow`, `mainwindow_ui_layout.cpp`, `mainwindow.h`, `mainwindow_session_recovery.cpp`)**:
-  - **Eliminated Non-Interactive Slider**: Removed the redundant "缩略图：" slider from the top search and sort bar, reclaiming valuable horizontal space for file queries while relying on the View Mode combo and keyboard shortcuts (`Ctrl++`, `Ctrl+-`, `Ctrl+0`) for gallery sizing.
+  - **Eliminated Non-Interactive Slider**: Removed the redundant "Thumbnail:" slider from the top search and sort bar, reclaiming valuable horizontal space for file queries while relying on the View Mode combo and keyboard shortcuts (`Ctrl++`, `Ctrl+-`, `Ctrl+0`) for gallery sizing.
 
 ### UX, Ergonomics & Interaction Polish (Top 30 Touchpoints)
 
 - **Navigation & Path Bar (`MainWindow`, `mainwindow_ui_layout.cpp`, `mainwindow_view.cpp`, `mainwindow_navigation.cpp`)**:
   - **Global Address Bar Focus (`Ctrl+L` / `Alt+D`)**: Standard browser shortcut instantly focuses the path line edit and selects all text for immediate typing or path pasting.
   - **Smooth Search Navigation**: Pressing `Enter` in the search filter jumps focus directly to the gallery thumbnails; pressing `Escape` clears active filter text and refocuses the gallery.
-  - **Directory Up Shortcut & Tooltip (`Alt+Up`)**: Added `Alt+Up` global shortcut and clear keyboard tooltips to the "返回上一级" toolbar button.
+  - **Directory Up Shortcut & Tooltip (`Alt+Up`)**: Added `Alt+Up` global shortcut and clear keyboard tooltips to the "Up One Level" toolbar button.
   - **Refresh Directory Shortcut (`F5`)**: Attached standard `F5` / `QKeySequence::Refresh` shortcut to the reload directory button.
-  - **Reset All Filters Action**: Added "重置筛选" button and `clearAllFilters` method that resets search text, rating filter, label filter, and state toggles in a single click with status bar feedback.
+  - **Reset All Filters Action**: Added "Reset Filters" button and `clearAllFilters` method that resets search text, rating filter, label filter, and state toggles in a single click with status bar feedback.
 - **Gallery & Thumbnail Panel (`ThumbnailPanel`, `thumbnailpanel.cpp`, `thumbnailpanel_selection.cpp`, `thumbnailpanel_fileops.cpp`, `mainwindow_ui_menus.cpp`)**:
   - **Keyboard Thumbnail Resizing**: Added `Ctrl++` (zoom in), `Ctrl+-` (zoom out), and `Ctrl+0` (reset to default 140px) keyboard shortcuts for smooth gallery density adjustments.
   - **Batch Multi-Image Path Copying**: Copying paths (`Ctrl+Shift+C`) with multiple gallery selections copies all paths formatted with native separators and separated by newlines.
-  - **Batch Rating Context Submenu**: Added "设置评级" context menu submenu (0–5 stars) that applies rating to all selected images simultaneously.
-  - **Batch Color Label Context Submenu**: Added "设置颜色标签" context menu submenu (None, Red, Orange, Yellow, Green, Blue, Purple) applying to all selected images simultaneously.
-  - **Batch Pick & Reject Context Submenu**: Added "设置标记" submenu ("标记为选中 (Pick)", "标记为拒绝 (Reject)", "清除标记") for bulk triage workflows.
-  - **Shortcut Collision Resolution**: Reassigned "批量分析导出" menu action from `Ctrl+Shift+A` to `Ctrl+Alt+A`, freeing `Ctrl+Shift+A` for "取消选择 (Deselect All)".
+  - **Batch Rating Context Submenu**: Added "Set Rating" context menu submenu (0–5 stars) that applies rating to all selected images simultaneously.
+  - **Batch Color Label Context Submenu**: Added "Set Color Label" context menu submenu (None, Red, Orange, Yellow, Green, Blue, Purple) applying to all selected images simultaneously.
+  - **Batch Pick & Reject Context Submenu**: Added "Set Flag" submenu ("Mark as Pick", "Mark as Reject", "Clear Flag") for bulk triage workflows.
+  - **Shortcut Collision Resolution**: Reassigned "Batch Analysis Export" menu action from `Ctrl+Shift+A` to `Ctrl+Alt+A`, freeing `Ctrl+Shift+A` for "Deselect All".
   - **Thumbnail Enter Key Navigation**: Pressing `Enter` / `Return` on a focused gallery thumbnail opens the image directly in the viewer.
 - **Single-Image Viewer (`ImageViewer`, `imageviewer.cpp`, `imageviewer_contextmenu.cpp`, `mainwindow_ui_menus.cpp`)**:
   - **Viewer `F` Key Fit-to-Window**: Pressing `F` instantly triggers `zoomFit()`, complementing existing `0` and double-click gestures.
   - **Viewer `2` Key 200% Zoom**: Pressing `2` jumps directly to 200% zoom level.
   - **Viewer Navigation Keys (`PageUp` / `PageDown` / `Backspace` / `Space`)**: Added `PageUp` / `Backspace` (previous image) and `PageDown` / `Space` (next image) for one-handed image navigation.
   - **Viewer First/Last Keys (`Home` / `End`)**: Forwarded `Home` and `End` keys through `MainWindow::eventFilter` to jump to first and last images in the current folder.
-  - **View Menu Shortcuts Alignment**: Aligned menu shortcuts for "适应窗口 (`Ctrl+0`)" and "实际大小 100% (`Ctrl+1`)".
+  - **View Menu Shortcuts Alignment**: Aligned menu shortcuts for "Fit to Window (`Ctrl+0`)" and "Actual Size 100% (`Ctrl+1`)".
   - **Immediate Status Bar Feedback on Transform**: Added status bar toast notifications when rotating (90° CW/CCW) or flipping (Horizontal/Vertical) images.
 - **Compare Workspace (`CompareWorkspace`, `compareworkspace_controls.cpp`, `compareworkspace_keyboard.cpp`, `compareworkspace_nav.cpp`)**:
-  - **Swap A/B Tooltip Shortcut Hint**: Added `(快捷键: X)` to the Swap A/B button tooltip.
+  - **Swap A/B Tooltip Shortcut Hint**: Added `(Shortcut: X)` to the Swap A/B button tooltip.
   - **Compare Pair Navigation (`P` / `N`)**: Added `P` (previous pair) and `N` (next pair) keys for continuous sequential comparison.
   - **Channel Reset Shortcut (`Shift+0`)**: Added `Shift+0` shortcut to immediately reset channel overlays back to full RGB.
-  - **Layout Preset Feedback Toast**: Switching layout presets (1–8 panes) displays an exact pane count toast: `已切换至 N 窗格对比布局`.
-  - **Keyboard Zoom Live Percent Toast**: Zooming with keyboard displays live scale percent (e.g. `视图放大 (115%)`).
+  - **Layout Preset Feedback Toast**: Switching layout presets (1–8 panes) displays an exact pane count toast: `Switched to N-pane compare layout`.
+  - **Keyboard Zoom Live Percent Toast**: Zooming with keyboard displays live scale percent (e.g. `View zoomed in (115%)`).
   - **Diff Threshold Tooltip**: Enhanced the difference threshold slider tooltip with clear threshold ranges and operational explanations.
   - **Continuous Pair Navigation Boundary Feedback**: Reaching start or end of pair sequences displays clear status toasts without jarring stops.
 - **Metadata, Analysis & Window Ergonomics (`MetadataPanel`, `metadatapanel.cpp`, `analysispanel_buildui.cpp`, `mainwindow.cpp`, `mainwindow_commands.cpp`)**:
-  - **Metadata Tree View Context Menu**: Right-clicking any row in the metadata tree brings up a context menu offering "复制数值", "复制项 (键值对)", and "复制全部元数据".
+  - **Metadata Tree View Context Menu**: Right-clicking any row in the metadata tree brings up a context menu offering "Copy Value", "Copy Item (Key-Value Pair)", and "Copy All Metadata".
   - **Metadata Tree View Double-Click Quick Copy**: Double-clicking any metadata value row instantly copies the value to clipboard and shows a tooltip notification.
   - **Pixel Inspector Text Selection**: Enabled `TextSelectableByMouse` on the Pixel Inspector readout in the Analysis Panel, allowing engineers to highlight and copy pixel color values, delta values, and kernel statistics.
   - **Window Navigation & Title State Synchronization**: Guaranteed strict SSOT title and status bar formatting contracts across filtering, browsing, and image transitions.
@@ -1882,10 +1880,10 @@
   - **Comprehensive Multi-Property Tooltips**: Added formatted HTML tooltips across all thumbnail gallery view modes (`ThumbDelegate`, `DetailsDelegate`, `ListDelegate`). Displays filename, resolution with calculated megapixels (MP), image format, human-readable file size, modification timestamp, rating stars (★), color label flags, rejection status, and cached EXIF camera/lens/ISO parameters with full native path.
   - **Zero Disk I/O Overhead**: Tooltip data is resolved purely from the in-memory metadata cache (`entryForPath`, `RatingStore`, and cached EXIF metadata) without blocking disk access or re-reading files on hover.
 - **Batch Selection Ergonomics (`MainWindow`, `ThumbnailPanel`, `mainwindow_ui_menus.cpp`, `thumbnailpanel_selection.cpp`)**:
-  - **Invert Selection & Selection Menu Actions**: Added "全选 (Select All, Ctrl+A)", "取消选择 (Deselect All, Ctrl+Shift+A)", and "反向选择 (Invert Selection, Ctrl+Shift+I)" to the top-level Edit (`编辑`) menu, matching standard file manager conventions and facilitating rapid bulk image selection for comparison and batch export.
+  - **Invert Selection & Selection Menu Actions**: Added "Select All (Ctrl+A)", "Deselect All (Ctrl+Shift+A)", and "Invert Selection (Ctrl+Shift+I)" to the top-level Edit menu, matching standard file manager conventions and facilitating rapid bulk image selection for comparison and batch export.
 - **Compare Workspace Keyboard Zoom Controls (`CompareWorkspace`, `compareworkspace_keyboard.cpp`, `compareworkspace_interact.cpp`)**:
   - **Standard Zoom Shortcuts**: Added `+` / `=` / `Ctrl++` (zoom in by 15%), `-` / `_` / `Ctrl+-` (zoom out by 15%), `Ctrl+0` (fit all panes to window), and `Ctrl+1` (100% actual pixel size) shortcuts to CompareWorkspace.
-  - **Updated Shortcut HUD**: Refreshed the comparison workspace shortcut tooltip (`?`) to explicitly guide users to `F/Ctrl+0 Fit · Ctrl+1 100% · +/- 缩放`.
+  - **Updated Shortcut HUD**: Refreshed the comparison workspace shortcut tooltip (`?`) to explicitly guide users to `F/Ctrl+0 Fit · Ctrl+1 100% · +/- Zoom`.
 - **Image Copy & Pixel Inspection Status Feedback (`ImageViewer`, `imageviewer_contextmenu.cpp`, `mainwindow_ui_connections.cpp`)**:
   - **Immediate Status Bar Notifications**: Added `statusMessageRequested` signal to `ImageViewer`, relaying copy actions (pixel values in Hex/RGB/Float/HSV, image frame copying, and full file path copying) to `statusBar()->showMessage` with immediate clear visual feedback.
 
@@ -1894,12 +1892,12 @@
 ### UX, Ergonomics & Interaction Polish
 
 - **Compare Canvas Natural Interaction (`CompareWorkspace`, `compareworkspace_interact.cpp`)**:
-  - **Swipe Divider Quick Reset**: In swipe comparison mode (`m_swipeChk`), double-clicking on or near the divider line resets the split position to exact center (50%) with toast HUD feedback (`滑动卷帘已重置居中 (50%)`), making comparison recalibration instantaneous without fine drag adjustments.
+  - **Swipe Divider Quick Reset**: In swipe comparison mode (`m_swipeChk`), double-clicking on or near the divider line resets the split position to exact center (50%) with toast HUD feedback (`Swipe divider reset to center (50%)`), making comparison recalibration instantaneous without fine drag adjustments.
   - **Canvas Fit ↔ 100% Zoom Toggle**: Double-clicking anywhere on the comparison canvas toggles between Fit to Window (`fitAll()`) and 100% zoom anchored at the cursor point (`applyAnchorZoom`), seamlessly aligning the multi-image comparison canvas with standard single-image viewer gestures.
 - **Recent Items Management (`MainWindow`, `mainwindow_navigation.cpp`)**:
-  - Added dedicated **清空最近目录 (Clear Recent Directories)** and **清空最近文件 (Clear Recent Files)** actions to the respective menus, enabling users to clear navigation history with immediate status bar confirmation while maintaining directory model synchronization.
+  - Added dedicated **Clear Recent Directories** and **Clear Recent Files** actions to the respective menus, enabling users to clear navigation history with immediate status bar confirmation while maintaining directory model synchronization.
 - **Clipboard & Navigation Status Feedback (`MainWindow`, `mainwindow_commands.cpp`)**:
-  - Added immediate status bar feedback (`tr("已复制路径: %1")` / `tr("已复制图片到剪贴板")`) when triggering path copy (`Ctrl+Shift+C`) and image copy (`Ctrl+C`), giving algorithm engineers clear feedback without guesswork.
+  - Added immediate status bar feedback (`tr("Copied path: %1")` / `tr("Copied image to clipboard")`) when triggering path copy (`Ctrl+Shift+C`) and image copy (`Ctrl+C`), giving algorithm engineers clear feedback without guesswork.
 - **Status Bar Metadata Enrichment (`MainWindow`, `mainwindow.cpp`)**:
   - Enriched the permanent image dimension status bar label (`m_lblImage`) to display the detected container format in uppercase alongside dimensions and file size (e.g. `1920x1080 · PNG · 2.4 MB`), providing instant container format visibility without opening metadata dialogs.
 
@@ -1939,9 +1937,9 @@
   - Implemented cohesive dark theme using a tuned charcoal/zinc palette (`#1e1e20` window, `#141416` base, `#27272a` panels, `#2563eb` accent blue) reducing eye fatigue during prolonged visual analysis.
   - Modernized UI controls: slim non-intrusive scrollbars (10px rounded handle with hover state), flat toolbar buttons, clean popup menus, and crisp focus rings.
   - Extended dark styling to all standard controls: `QHeaderView`, `QTreeView`, `QTableView`, `QListView` (clean row hover `#27272e`, selection `#2563eb`), horizontal `QSlider` (slim track and accent handle), `QProgressBar`, and custom dark checkboxes/radios.
-  - Added theme selection dropdown to **首选项 (Preferences)** with live switching between "深色模式 (Dark)" and "系统默认 (System)".
+  - Added theme selection dropdown to **Preferences** with live switching between "Dark" and "System".
 - **Workflow Ergonomics & User Habits**:
-  - **Explorer Reveal & Shortcut**: Added `Ctrl+E` shortcut and "在资源管理器中显示" action in ImageViewer; corrected Windows Explorer command arguments (`/select,"<path>"`) so target files are reliably selected and highlighted.
+  - **Explorer Reveal & Shortcut**: Added `Ctrl+E` shortcut and "Show in Explorer" action in ImageViewer; corrected Windows Explorer command arguments (`/select,"<path>"`) so target files are reliably selected and highlighted.
   - **Interactive Status Bar**: Left-clicking the image filename in the status bar reveals the file in Windows Explorer; right-clicking copies the native path to the clipboard with visual confirmation.
   - **Compare Mode HUD Feedback**: Added immediate HUD toast overlay feedback when toggling compare modes (`B`/`S`/`W`/`O`/`K`/`H`) and zoom presets (`Z`/`D`/`R`/`L`/`I`/`F`/`X`).
   - **Alpha-Aware Pixel Copying**: Added 4-channel alpha preservation to `copyPixelValue` (`#RRGGBBAA`, `RGBA(r, g, b, a)`, and normalized `(r, g, b, a)`) when inspecting transparent or semi-transparent images.
@@ -2062,7 +2060,7 @@
 
 - **Compare Workspace Pixel Inspector Table Context Menu & Copy Actions**:
   - Enabled row selection and contextual interactions for the Pixel Inspector table in Compare Workspace.
-  - Added rich right-click context menu supporting "复制单元格内容" (Copy Cell Content), "复制该行数据" (Copy Row TSV), and "复制全部表格数据" (Copy Entire Table TSV), streamlining reporting and spreadsheet data export for image algorithm engineers.
+  - Added rich right-click context menu supporting "Copy Cell Content", "Copy Row TSV", and "Copy Entire Table TSV", streamlining reporting and spreadsheet data export for image algorithm engineers.
 - **Architectural Complexity Compression**:
   - Re-compacted member variable declarations across `src/compareworkspace.h`, maintaining its line count at 761 lines (well below the 800-line strict complexity cap) while expanding feature capabilities.
 
@@ -2087,7 +2085,7 @@
 - **Compare Workspace Diff Gain Amplification ($1\times - 32\times$)**:
   - Added Diff Gain selector (`1x`, `2x`, `4x`, `8x`, `16x`, `32x`) to CompareWorkspace diff toolbar, allowing image algorithm engineers to instantly amplify subtle compression artifacts, quantization noise, and sub-5 intensity discrepancies.
   - Diff Gain control is contextually synchronized, auto-hiding when diff overlay mode is inactive to preserve clean toolbar layout.
-  - Integrated active gain indication (`[增益: Nx]`) directly into CompareWorkspace difference metrics display.
+  - Integrated active gain indication (`[Gain: Nx]`) directly into CompareWorkspace difference metrics display.
   - Added full navigation state capture and restoration (`NavState::diffGainIndex`) across image pool windowing and layout changes.
 
 ### Bug Fixes & Stability
@@ -2168,7 +2166,7 @@
   - **Vectorized Format Conversion**: Replaced scalar nested per-pixel assignment loops in `QtConvert::toQImage` with `std::memcpy` for contiguous `PixelFormat::RGB24` to `Format_RGB888`.
 
 - **Phase 3: Hardware Acceleration & GPU Preferences Control**:
-  - **GPU Acceleration Preference Toggle**: Added "启用 GPU 硬件加速渲染" checkbox in Preferences Dialog General tab, backed by `QSettings("gpuAcceleration")`.
+  - **GPU Acceleration Preference Toggle**: Added "Enable GPU Hardware-Accelerated Rendering" checkbox in Preferences Dialog General tab, backed by `QSettings("gpuAcceleration")`.
   - **Dynamic GPU Tile Upload**: Updated `GpuTileUploader::enabled()` to query user configuration while honoring headless test environment guards (`available()`) and `MVIEWER_GPU` environment override.
 
 ## [1.0.36] - 2026-09-15
@@ -2177,8 +2175,8 @@
 
 - **Channel V (HSV Value / Max Brightness) Isolation & Multi-Channel Histogram**:
   - **Channel V Isolation Overlay**: Added `ChannelV` (`Shift+6`) to `mviewer::OverlayMode`, displaying the grayscale representation of HSV-V ($\max(R, G, B)$) across both Browse Mode and Compare Workspace.
-  - **Context Menu & Channel Selector Integration**: Added "V 明度 (Shift+6)" to ImageViewer context menu, Compare Workspace channel combo box (`RGB/R/G/B/Y/V`), and Analysis Overlay Dialog.
-  - **Multi-Channel Histogram Support**: Added HSV-V channel (`v`) to `core::Histogram` and `domain::Histogram`; added channel 4 checkbox ("V(明度)") with Amber/Gold curve visualization in `HistogramWidget` and Compare Workspace side panel.
+  - **Context Menu & Channel Selector Integration**: Added "V Brightness (Shift+6)" to ImageViewer context menu, Compare Workspace channel combo box (`RGB/R/G/B/Y/V`), and Analysis Overlay Dialog.
+  - **Multi-Channel Histogram Support**: Added HSV-V channel (`v`) to `core::Histogram` and `domain::Histogram`; added channel 4 checkbox ("V (Brightness)") with Amber/Gold curve visualization in `HistogramWidget` and Compare Workspace side panel.
   - **Analysis Panel & Dual-Image Delta V**: Displaying HSV-V mean in AnalysisPanel full-image stats table and dual-image inspection readout with $\Delta V$ brightness delta.
   - **Selectable Diff Metrics**: Enabled mouse text selection (`Qt::TextSelectableByMouse`) on `diffMetricsLabel` so algorithm engineers can copy PSNR, SSIM, and difference values directly.
 
@@ -2202,7 +2200,7 @@
 
 - **HSV-V Brightness in Neighborhood Inspection & Persistent ROI Dimensions**:
   - **Neighborhood HSV-V Mean**: Added $V = \max(R,G,B)$ mean statistics (`vMean`) across $N \times N$ kernels in `NeighborhoodStats` for both raw buffer and source-backed adjusted pixel sampling.
-  - **Analysis Panel & Compare Status Readout**: Displaying `HSV-V` kernel mean in AnalysisPanel ROI channel averages and CompareWorkspace neighborhood statistics readout (`· V均值 xx.x`).
+  - **Analysis Panel & Compare Status Readout**: Displaying `HSV-V` kernel mean in AnalysisPanel ROI channel averages and CompareWorkspace neighborhood statistics readout (`· V mean xx.x`).
   - **Persistent ROI Selection Dimensions**: Selected ROI region pixel dimensions (`W×H`) remain visible on the canvas after releasing the mouse, allowing engineers to confirm the exact cropped area dimensions at all times.
 
 ## [1.0.34] - 2026-09-15
@@ -2211,8 +2209,8 @@
 
 - **Quick Zoom Presets & Viewport UX**:
   - **Direct Zoom Presets**: Added `ImageViewer::zoomTo(double)` supporting instant scaling to 50%, 100% (Actual), 200%, 400%, and 800% (Pixel Grid) with viewport center preservation.
-  - **Right-Click Context Menu**: Added "缩放预设" submenu in ImageViewer for one-click jumping to 50%, 100%, 200%, 400%, or 800%.
-  - **View Menu Presets**: Added "缩放预设" submenu under View (视图) menu with 50%, 100%, 200%, 400%, 800%.
+  - **Right-Click Context Menu**: Added a "Zoom Presets" submenu in ImageViewer for one-click jumps to 50%, 100%, 200%, 400%, or 800%.
+  - **View Menu Presets**: Added a "Zoom Presets" submenu under the View menu with 50%, 100%, 200%, 400%, and 800%.
   - **Interactive Status Bar Zoom Label**: Click the zoom indicator in the status bar to pop up the zoom presets menu; double-click to instantly toggle between Fit and 100% Actual Size.
 
 ## [1.0.33] - 2026-09-15
@@ -2220,11 +2218,11 @@
 ### Added
 
 - **Multi-format Pixel Color Copying**:
-  - Expanded ImageViewer right-click menu with a dedicated "复制像素值" submenu:
-    - 十六进制 (`#RRGGBB`) (with `Shift+C` shortcut)
-    - RGB 值 `RGB(r, g, b)`
-    - 归一化浮点 `(0.xxx, 0.yyy, 0.zzz)`
-    - HSV 值 `HSV(h°, s%, v%)`
+  - Expanded ImageViewer right-click menu with a dedicated "Copy Pixel Value" submenu:
+    - Hexadecimal (`#RRGGBB`) (with `Shift+C` shortcut)
+    - RGB values `RGB(r, g, b)`
+    - Normalized floating-point `(0.xxx, 0.yyy, 0.zzz)`
+    - HSV values `HSV(h°, s%, v%)`
   - Added `Shift+C` global viewer shortcut to instantly copy current hover pixel's hex color.
   - Added `Ctrl+C` (copy image) and `Ctrl+Shift+C` (copy image path) direct shortcuts in ImageViewer.
 
@@ -2239,8 +2237,8 @@
 ### Added
 
 - **Image Flipping (Horizontal & Vertical Mirror)**:
-  - **Browse Mode (看图)**: added Horizontal Flip (`H` or `Ctrl+Shift+H`) and Vertical Flip (`V` or `Ctrl+Shift+V`), available in Edit menu and right-click context menu. Atomic overwrite on disk with automatic cache invalidation and live viewer reload.
-  - **Compare Mode (比较视图)**: added in-memory Horizontal/Vertical Flip (`Ctrl+Shift+H` / `Ctrl+Shift+V`, Edit menu, Edit panel `⇄ 水平` and `⇅ 垂直` buttons). Temporary preview only; does not mutate source files on disk.
+  - **Browse Mode**: added Horizontal Flip (`H` or `Ctrl+Shift+H`) and Vertical Flip (`V` or `Ctrl+Shift+V`), available in the Edit menu and the right-click context menu. Atomic overwrite on disk with automatic cache invalidation and live viewer reload.
+  - **Compare Mode**: added in-memory Horizontal/Vertical Flip (`Ctrl+Shift+H` / `Ctrl+Shift+V`, Edit menu, Edit panel `⇄ Horizontal` and `⇅ Vertical` buttons). Temporary preview only; does not mutate source files on disk.
   - **Core Pipeline & Analysis**: added `flipHorizontal` and `flipVertical` to `ImageBuffer.h`, integrated into `CompareAdjustmentState`, `applyCompareAdjustments`, `AnalysisAdjustment`, `sampleAnalysisPixel`, and linked ROI coordinate projections in `PixelInspector`. Preset serialization (`*.mvc`) persists flip states.
 
 ## [1.0.31] - 2026-09-14
@@ -2248,10 +2246,10 @@
 ### Added
 
 - **Image Rotation**:
-  - **Browse Mode (看图)**: added CW and CCW 90° rotation (`Ctrl+R` / `Ctrl+Shift+R`, Edit menu, right-click context menu). Rotated image is saved and overwrites the source file on disk with automatic cache invalidation and live viewer reload.
-  - **Compare Mode (比较视图)**: added in-memory rotation (`Ctrl+R` / `Ctrl+Shift+R`, Edit menu, Edit panel rotation buttons). Temporary preview only; does not mutate source files on disk.
+  - **Browse Mode**: added CW and CCW 90° rotation (`Ctrl+R` / `Ctrl+Shift+R`, Edit menu, right-click context menu). Rotated image is saved and overwrites the source file on disk with automatic cache invalidation and live viewer reload.
+  - **Compare Mode**: added in-memory rotation (`Ctrl+R` / `Ctrl+Shift+R`, Edit menu, Edit panel rotation buttons). Temporary preview only; does not mutate source files on disk.
 - **Color Management (CMS) Toggle**:
-  - Added View menu toggle "色彩管理 (CMS)" (`DisplayColorContextProvider`) allowing users to switch between Color-Managed display and Raw RGB display. When disabled, images render raw RGB pixel-for-pixel matching FastStone Image Viewer without ICC color shifts.
+  - Added View menu toggle "Color Management (CMS)" (`DisplayColorContextProvider`) allowing users to switch between Color-Managed display and Raw RGB display. When disabled, images render raw RGB pixel-for-pixel matching FastStone Image Viewer without ICC color shifts.
 - **HSV-V Brightness Statistics**:
   - Added HSV brightness ($V = \max(R,G,B)$) statistics to ROI selection, PreviewStats, ROIChannelStats, AnalysisPanel (RGB Channels and Exposure pages), ImageViewer HUD/banner, and CompareWorkspace linked ROI measurement table (including delta $\Delta V$).
 
@@ -2353,14 +2351,14 @@ state.
 ### Added
 
 - **P opens Compare:** with 2–8 images selected, P (or C) starts Compare. Help
-  → 使用说明 is a short Chinese guide; F1 still lists every shortcut.
+  → User Guide is a short Chinese guide; F1 still lists every shortcut.
 
 ## [1.0.27] - 2026-09-12
 
 ### Changed
 
 - **Compare contextual controls:** overlay opacity, checker size, and diff
-  threshold appear only while that mode is on. 列数 appears only for custom
+  threshold appear only while that mode is on. Column count appears only for custom
   layout. Analyze opens the Compare inspector. Shortcut help uses the status
   strip instead of replacing the window title.
 
@@ -2405,7 +2403,7 @@ state.
 ### Added
 
 - **Compare status strip:** PSNR/SSIM stay visible without opening the analysis
-  panel. Auto-align is a compare checkbox, Swap A/B is enabled, and 退出比较
+  panel. Auto-align is a compare checkbox, Swap A/B is enabled, and Exit Compare
   closes the window. Metrics and report export work for 3–8 images vs the
   reference pane.
 - **Browse toolbar icons** matching the application mark.
@@ -2442,10 +2440,10 @@ state.
 
 ### Added
 
-- **Compare histogram overlay:** a 直方图 checkbox overlays the current pane's
+- **Compare histogram overlay:** a histogram checkbox overlays the current pane's
   RGB histogram at the top-left of each compared image with a transparent
   background. Split/Overlay/Swipe/Checkerboard paint the same overlay.
-- **Compare filename overlay:** a 文件名 checkbox floats the current filename
+- **Compare filename overlay:** a filename checkbox floats the current filename
   at the top of each image. Long names wrap onto additional lines instead of
   being elided.
 
@@ -2459,52 +2457,27 @@ state.
 
 ### Added
 
-- **Channel isolation:** Viewer and Compare can display the R, G, B, or Y
-  plane as grayscale. Compare uses a compact 通道 combo and `Shift+1…5`;
-  Viewer uses the same keys plus the context menu. Pixel Inspector, ROI
-  measurement, and analysis remain source RGB.
-- **Pixel grid at 800%+:** Viewer and Compare draw a source-pixel lattice
-  once each pixel occupies eight or more screen pixels, so 1:1 inspection
-  is readable without guessing boundaries.
-- **Compare visual auto-align:** the existing “对比前自动对齐” preference now
-  registers the target pane before PSNR/SSIM and the difference heatmap, and
-  the metrics label reports the detected `(dx, dy)` offset.
+- **Channel isolation:** Viewer and Compare can display the R, G, B, or Y plane as grayscale. Compare uses a compact channel combo and `Shift+1…5`; Viewer uses the same keys plus the context menu. Pixel Inspector, ROI measurement, and analysis remain source RGB.
+- **Pixel grid at 800%+:** Viewer and Compare draw a source-pixel lattice once each pixel occupies eight or more screen pixels, so 1:1 inspection is readable without guessing boundaries.
+- **Compare visual auto-align:** the existing “Auto-align before compare” preference now registers the target pane before PSNR/SSIM and the difference heatmap, and the metrics label reports the detected `(dx, dy)` offset.
 
 ### Verification
 
-- Overlay unit tests cover R/G/B/Y isolation and the 800% pixel-grid
-  threshold. Aligner tests assert that an aligned pair produces a smaller
-  visual difference than the unaligned pair. Workflow UX covers the Compare
-  channel combo and `Shift+1/2`.
+- Overlay unit tests cover R/G/B/Y isolation and the 800% pixel-grid threshold. Aligner tests assert that an aligned pair produces a smaller visual difference than the unaligned pair. Workflow UX covers the Compare channel combo and `Shift+1/2`.
 
 ## [1.0.19] - 2026-09-05
 
 ### Fixed
 
-- **Viewer pan and double-click zoom:** the standalone Viewer no longer opens the
-  full-window metadata overlay on left-click or hover. Image information stays
-  on `I` / `M` / the 图片信息 command, so pan and Fit↔100% double-click work on
-  the first gesture.
-- **Compare entry:** toolbar, menu, and `C` now match 比较选中 — enabled only
-  for a 2–8 image selection. A 1-image selection in a larger folder no longer
-  silently compares the first 8 files. Space still compares current+next unless
-  2–8 images are already selected.
-- **Linked ROI after crop/rotation:** the drawn rectangle is mapped back to
-  original source pixels before measurement, and each pane overlay is projected
-  from that canonical source ROI. A Canvas drag that clips to empty now clears
-  the engine selection instead of resurrecting the previous box.
-- **Rename:** file names that contain path separators or `..` are rejected so a
-  rename cannot leave the gallery directory.
-- **Release test credibility:** M58 large-directory query, compare-session, and
-  project round-trip gates now use live `CHECK` counters so Release `/DNDEBUG`
-  cannot compile the contracts out.
+- **Viewer pan and double-click zoom:** the standalone Viewer no longer opens the full-window metadata overlay on left-click or hover. Image information stays on `I` / `M` / the Image Info command, so pan and Fit↔100% double-click work on the first gesture.
+- **Compare entry:** toolbar, menu, and `C` now match Compare Selected — enabled only for a 2–8 image selection. A 1-image selection in a larger folder no longer silently compares the first 8 files. Space still compares current+next unless 2–8 images are already selected.
+- **Linked ROI after crop/rotation:** the drawn rectangle is mapped back to original source pixels before measurement, and each pane overlay is projected from that canonical source ROI. A Canvas drag that clips to empty now clears the engine selection instead of resurrecting the previous box.
+- **Rename:** file names that contain path separators or `..` are rejected so a rename cannot leave the gallery directory.
+- **Release test credibility:** M58 large-directory query, compare-session, and project round-trip gates now use live `CHECK` counters so Release `/DNDEBUG` cannot compile the contracts out.
 
 ### Verification
 
-- Workflow UX covers Viewer left-click vs overlay, double-click zoom after a
-  real press, and Compare enablement with a 1-image selection in a multi-image
-  folder. Pixel Inspector mapping tests cover identity/crop/90° ROI round-trips
-  plus source RGB means; M61 covers Canvas empty-release.
+- Workflow UX covers Viewer left-click vs overlay, double-click zoom after a real press, and Compare enablement with a 1-image selection in a multi-image folder. Pixel Inspector mapping tests cover identity/crop/90° ROI round-trips plus source RGB means; M61 covers Canvas empty-release.
 
 ## [1.0.18] - 2026-09-02
 
@@ -2805,7 +2778,7 @@ state.
 - **Compare layout and presentation:** default two-pane Compare is exactly
   half-and-half, long captions elide with a full-name tooltip, and the layout
   indicator is columns-driven with derived row counts.
-- **Momentary Compare:** the visible `临时切换` button and Space key now show B
+- **Momentary Compare:** the visible `Temporary Switch` button and Space key now show B
   in pane A only while held, restore A on every release/focus/mode teardown
   path, and leave Blink, engine order, selection, ROI, analysis, and session
   state untouched.
@@ -2839,7 +2812,7 @@ state.
   (e.g. large TIFF) honestly stay blank until full materialization is feasible.
 - **Exact-source consumers stay full-resolution (P0):** with source-backed
   panes present, the Pixel Inspector still samples the exact full-resolution
-  source pixel (never the display LOD) and reports 无效 for infeasible panes;
+  source pixel (never the display LOD) and reports invalid for infeasible panes;
   diff/PSNR/SSIM degrade to "—" on an all-infeasible pair without any decode;
   report export records placeholder pairs non-comparable in the requested pane
   order without ever materializing the infeasible source.
@@ -2891,7 +2864,7 @@ state.
   clears its engine state. Canvas-to-Grid transitions now defer Fit until the
   normal grid geometry is settled. The visible compare page can no longer
   remain on a static canvas while the toolbar reports that blinking is active.
-- **Compare diff visibility:** enabling “高亮差异” now also enables “显示差异”
+- **Compare diff visibility:** enabling "Highlight Differences" now also enables "Show Differences"
   so the highlighted result is immediately visible; turning highlight off keeps
   the ordinary diff overlay, while hiding and reopening the overlay preserves
   the highlight preference.
@@ -2986,7 +2959,7 @@ state.
   transfers with progress, atomic verification, rollback, and lifecycle guards.
 - Clipboard image paste encodes PNG off the UI thread with generation-safe
   delivery and bounded temporary-file cleanup.
-- Delete UI text now says **MViewer 回收站**; native Windows Recycle Bin
+- Delete UI text now says **MViewer Recycle Bin**; native Windows Recycle Bin
   semantics are not claimed by this release line.
 - Analyze → Report export now captures the per-image producer analyzer id and
   result text from `AnalyzerModel`, with valid single-image JSON/CSV output
@@ -3164,20 +3137,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed — M35 Compare visual correctness and Browse responsiveness
 
-- Compare opens fullscreen, fits every image to its own final pane geometry,
-  and synchronizes zoom as a ratio relative to each pane's Fit. Uniform Pixel
-  Scale remains a separate opt-in absolute-scale mode.
-- Difference metrics no longer imply a visible heatmap. Ordinary Compare shows
-  original display pixels; users explicitly enable `显示差异` for heatmap or
-  highlight visualization, with latest-wins cancellation preserved.
-- Preview selection no longer clears the pane before the next decode. A warm
-  gallery thumbnail is usable synchronously and the background <=512 px result
-  upgrades it atomically without stale delivery.
-- Embedded ICC profiles are retained beside analysis pixels and applied only
-  when a display copy is materialized. Analysis bytes and metrics are unchanged.
-- The canonical `build.ps1 Test` entry point now returns a non-zero CTest exit
-  code on any test failure, guarded by `build_test_exit_gate`.
-
+- Compare opens fullscreen, fits every image to its own final pane geometry, and synchronizes zoom as a ratio relative to each pane's Fit. Uniform Pixel Scale remains a separate opt-in absolute-scale mode.
+- Difference metrics no longer imply a visible heatmap. Ordinary Compare shows original display pixels; users explicitly enable `Show Difference` for heatmap or highlight visualization, with latest-wins cancellation preserved.
+- Preview selection no longer clears the pane before the next decode. A warm gallery thumbnail is usable synchronously and the background <=512 px result upgrades it atomically without stale delivery.
+- Embedded ICC profiles are retained beside analysis pixels and applied only when a display copy is materialized. Analysis bytes and metrics are unchanged.
+- The canonical `build.ps1 Test` entry point now returns a non-zero CTest exit code on any test failure, guarded by `build_test_exit_gate`.
 ### Added — Dedicated compare canvas page (split / swipe / overlay / checkerboard)
 
 - Compare canvas modes now render on a dedicated `compareCanvas` widget shown via
@@ -3299,22 +3263,9 @@ All notable changes to this project are documented here. The format is based on
 
 ### Changed — AnalysisPanel automatic frame refresh is async and cancellation-safe
 
-- Opening images and showing the Analysis panel no longer block on large-image
-  analysis: the frame is materialized and analyzed on a cancellable, latest-wins
-  AnalysisPool task, so rapid A→B navigation never freezes the UI or records a
-  stale A result as B.
-- Results stay path-keyed and current even when you switch analyzer or ROI while
-  a refresh is pending: the pending job is superseded and the current frame is
-  always materialized, so the panel never shows a stale or blank state. Hidden
-  panels still submit no work until shown.
-- On an already loaded frame, switching analyzer or ROI, the context-menu
-  "分析" run, and the manual reanalyze are non-blocking and latest-wins as well:
-  the selected analyzer (and any legacy ROI fallback) runs on the Analysis pool
-  without re-materializing the image or recomputing the base stats/noise, the
-  call returns immediately, and a stale result never overwrites the current
-  one — the result surface shows a pending state until the accepted outcome
-  lands.
-
+- Opening images and showing the Analysis panel no longer block on large-image analysis: the frame is materialized and analyzed on a cancellable, latest-wins AnalysisPool task, so rapid A→B navigation never freezes the UI or records a stale A result as B.
+- Results stay path-keyed and current even when you switch analyzer or ROI while a refresh is pending: the pending job is superseded and the current frame is always materialized, so the panel never shows a stale or blank state. Hidden panels still submit no work until shown.
+- On an already loaded frame, switching analyzer or ROI, the context-menu "Analyze" run, and the manual reanalyze are non-blocking and latest-wins as well: the selected analyzer (and any legacy ROI fallback) runs on the Analysis pool without re-materializing the image or recomputing the base stats/noise, the call returns immediately, and a stale result never overwrites the current one — the result surface shows a pending state until the accepted outcome lands.
 ### Changed — metadata overlay histogram is async and navigation-safe
 
 - The metadata-overlay mini histogram is now computed only on the Analysis pool
@@ -3553,7 +3504,7 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 
 - **Gallery empty-state hint:** with no directory open, the gallery shows a
-  centered call-to-action (“打开一个文件夹以开始浏览” + Ctrl+O /
+  centered call-to-action (“Open a folder to start browsing” + Ctrl+O /
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
@@ -3561,7 +3512,7 @@ All notable changes to this project are documented here. The format is based on
   show/hide cycle for the image-information overlay was untested at the
   key level; now machine-locked (I shows, ESC hides).
 - **Mouse side-button navigation regression (`workflow_ux_tests`):** the
-  cheat-sheet-documented “鼠标侧键” prev/next gesture had no coverage; now
+  cheat-sheet-documented mouse side-button prev/next gesture had no coverage; now
   machine-locked (back button goes to the previous image, forward returns).
 - **Fullscreen toggle regression (`workflow_ux_tests`):** the cheat-sheet
   documented F / F11 fullscreen switch (the visible viewer, or the main
@@ -3573,7 +3524,7 @@ All notable changes to this project are documented here. The format is based on
   chain (index → query → result → open) now machine-locked.
 - **Double-click zoom regression coverage (`workflow_ux_tests`):** the
   standard fit↔100%↔fit double-click gesture was untested; now
-  machine-locked (beta checklist “双击放大→恢复”).
+  machine-locked (beta checklist “double-click to zoom in → restore”).
 - **Slideshow regression coverage (`workflow_ux_tests`):** the shipped
   slideshow workflow (S starts, S stops, timer advances through the folder)
   previously had no tests; now machine-locked with a min-interval run.
@@ -3582,42 +3533,18 @@ All notable changes to this project are documented here. The format is based on
   under the mouse cursor stays stationary while the scale grows.
 - **Gallery empty-folder hint:** when a directory is open but nothing is
   displayable (no image files, or every entry is hidden by filters), the
-  gallery shows a “此文件夹中没有可显示的图片” hint instead of a
+  gallery shows a “No displayable images in this folder” hint instead of a
   silent blank grid. The hint is deferred past the pre-scan zero so it
   never flashes during a normal scan, and it clears as soon as content
   arrives or the directory changes. Covered by `workflow_ux_tests`
   (empty folder shows the hint; a real folder clears it).
-
 ### Fixed
 
-- **Compare input guard:** pressing C with fewer than two images used to
-  open a degenerate one-pane compare dialog (or silently do nothing);
-  oversized folder fallbacks could exceed the documented 2-8 image range.
-  openCompare now trims to the first 8 and shows a status-bar message
-  when <2 images are available. Covered by workflow_ux_tests.
-- **Ctrl+C double binding:** the gallery context menu and the command
-  registry advertised “Ctrl+C = 复制文件对话框”, but the global
-  binding actually copies the current image to the clipboard (handled
-  before registry dispatch). Removed the misleading shortcut from both
-  places; workflow_ux_tests now asserts Ctrl+C puts an image on the
-  clipboard and never opens a file dialog.
-- **Shortcut cheat sheet drift:** the F1 help now documents the `Ctrl+F`
-  directory-tree-filter shortcut and the `F1` help trigger itself (both
-  were working but missing from the sheet). `workflow_ux_tests` opens the
-  cheat sheet via F1 and asserts those rows exist, so the sheet can no
-  longer drift from the registered commands.
-- **Deterministic metadata supersede test (`m26_metadata_tests`):** the
-  cancelRequest isolation check now holds the single Background worker with a
-  release-gated blocker (submitted after the fixtures, released only after
-  the stale request is cancelled), so both index requests are guaranteed to
-  be queued when cancelRequest runs — no wall-clock assumptions. The
-  previous time-based blocker could expire under parallel CTest load and
-  still failed spuriously.
-- **Plugin home self-heal:** on first run the app creates the `plugins/`
-  directory next to the executable instead of printing “Plugin directory
-  not found”, so portable/installer installs are quiet and third-party
-  plugins have a documented drop-in location.
-
+- **Compare input guard:** pressing C with fewer than two images used to open a degenerate one-pane compare dialog (or silently do nothing); oversized folder fallbacks could exceed the documented 2-8 image range. openCompare now trims to the first 8 and shows a status-bar message when fewer than 2 images are available. Covered by workflow_ux_tests.
+- **Ctrl+C double binding:** the gallery context menu and the command registry advertised “Ctrl+C = Copy File dialog”, but the global binding actually copies the current image to the clipboard (handled before registry dispatch). Removed the misleading shortcut from both places; workflow_ux_tests now asserts Ctrl+C puts an image on the clipboard and never opens a file dialog.
+- **Shortcut cheat sheet drift:** the F1 help now documents the `Ctrl+F` directory-tree-filter shortcut and the `F1` help trigger itself (both were working but missing from the sheet). `workflow_ux_tests` opens the cheat sheet via F1 and asserts those rows exist, so the sheet can no longer drift from the registered commands.
+- **Deterministic metadata supersede test (`m26_metadata_tests`):** the cancelRequest isolation check now holds the single Background worker with a release-gated blocker (submitted after the fixtures, released only after the stale request is cancelled), so both index requests are guaranteed to be queued when cancelRequest runs — no wall-clock assumptions. The previous time-based blocker could expire under parallel CTest load and still failed spuriously.
+- **Plugin home self-heal:** on first run the app creates the `plugins/` directory next to the executable instead of printing “Plugin directory not found”, so portable/installer installs are quiet and third-party plugins have a documented drop-in location.
 ### Changed — RC reliability closure (M26)
 
 - **Scheduler lifecycle exactly-once (M26):** every task now finalizes through
@@ -3786,7 +3713,7 @@ All notable changes to this project are documented here. The format is based on
   CSV/JSON special characters are escaped correctly. Existing two-image report
   APIs remain compatible.
 
-### M24 — 版本单一来源 (Version SSOT)
+### M24 — Single source of truth for the version (Version SSOT)
 
 - **One version source:** `CMakeLists.txt` `project(VERSION)` (now 1.0.6)
   generates `build/generated/MViewerVersion.h` consumed by the About dialog,
@@ -3803,215 +3730,89 @@ All notable changes to this project are documented here. The format is based on
   code (RAW preview is shipped via `RawDecoder`; demosaic deferred to M18).
 - **About dialog** now shows the real version and the product positioning
   instead of "a simple image viewer".
+### M24 — Stability & Workflow Convergence
 
-### M24 — 稳定性与工作流收敛 (Stability & Workflow Convergence)
+- **Async lifetime:** ThumbnailPanel's detached `std::thread`s (directory scan and dimension parsing) are replaced by a bounded `QThreadPool` (max 2), with `QPointer` / alive-token results posted back through `qApp`. The busy cursor is restored on the scan-abort path as well. UpdateChecker now uses a single-thread bounded pool. BatchDialog progress callbacks are guarded by `QPointer` and request cancellation on destruction. Added `async_lifetime_tests` (create-then-destroy, 50 rapid directory switches, close the window during a large-directory scan, switch views during dimension parsing, out-of-order completion, thread-pool convergence).
+- **Large-directory stall fix (P1):** `updateVisibleRange` called `indexAt()` immediately after `buildModel`, which forced a full layout on a 10,000-row IconMode view and froze the UI for about 2.7 seconds on every directory entry. Computing the visible range directly from grid geometry cuts 10,000-image directory load from 3.6s to 1.1s and the longest UI stall from 2753ms to 184ms (re-measure with the new non-gating soak tool `mviewer_m24_soak`). Thumbnail `dataChanged` notifications are coalesced to once per event loop.
+- **Browse workflow (A#8/A#9):** After a rename, selection follows the new file (pending-select; this also fixes a session-restore race). Corrupt files no longer stay on "Loading" forever — the pipeline returns a failure result and draws a placeholder (the broken failure-placeholder path is fixed).
+- **Compare workflow (B#7/B#8):** Images that fail to load no longer shrink silently — the status bar reports the failure count. When split/swipe/overlay are disabled, a tooltip states that they are available only for two images.
+- **Analyze workflow (C#7):** `runAnalyzer` no longer starts one `std::async` thread per analyzer; it uses a bounded `TaskScheduler` AnalysisPool (this also fixes a dangling reference caused by an async lambda capturing a structured binding by reference). Analyzers that fail or throw are isolated and no longer take down the application.
+- **Export workflow (D#2/D#3/D#7/D#8):** Export writes a temporary file and replaces the destination atomically, so a failure no longer leaves a partial file that looks successful. Unknown formats now report an explicit error (they were previously converted to PNG with no message). Batch conversion runs off the UI thread (`QProgressDialog` plus a cancel token).
+- **UI subtraction:** The Ctrl+Shift+C conflict between the metadata panel and the gallery is collapsed to a single entry point. Rendering verified at 100/125/150/200% DPI.
+- **Test credibility:** The `docs/test_matrix.md` generator now emits a CTest inventory (name/command/RUN_SERIAL/UI-linked). Removed the unreferenced fake UI golden (`golden/ui/main_window_default.png`). After a clean Phase 8 rebuild, C4530 warnings dropped from 47 to 0 (MSVC default `/EHsc` restored).
+### Added — Three-tier CI architecture (PR / Nightly / Release)
 
-- **异步生命周期:** ThumbnailPanel 的 detached `std::thread`（目录扫描、尺寸
-  解析）全部替换为有界 `QThreadPool`（max 2）+ `QPointer`/alive-token 经
-  `qApp` 回传；忙碌光标在扫描中止路径也保证恢复；UpdateChecker 改用单线程
-  有界池；BatchDialog 进度回调改为 QPointer 保护并在析构时请求取消。新增
-  `async_lifetime_tests`（创建即销毁、50 次快速切目录、大目录扫描中关窗、
-  尺寸解析中切换视图、乱序完成、线程池收敛）。
-- **大目录卡顿修复（P1）:** `updateVisibleRange` 原先在 `buildModel` 后立即
-  调用 `indexAt()`，在 10000 行 IconMode 视图上强制全量布局，每次进目录 UI
-  卡死约 2.7 秒；改为按网格几何直接计算可见区间后，10000 图目录加载
-  3.6s → 1.1s，UI 最长 stall 2753ms → 184ms（新增非门禁 soak 工具
-  `mviewer_m24_soak` 可复测）。缩略图 `dataChanged` 合并为每事件循环一次。
-- **浏览工作流（A#8/A#9）:** 重命名后选择跟随新文件（pending-select 机制，
-  顺带修复会话恢复竞态）；损坏文件不再永远显示“加载中”——管线会回传失败
-  结果并绘制占位符（修复了失效的失败占位机制）。
-- **Compare 工作流（B#7/B#8）:** 无法加载的图片不再静默缩水——状态栏明确
-  提示失败数量；split/swipe/overlay 禁用时以 tooltip 说明仅 2 图可用。
-- **Analyze 工作流（C#7）:** `runAnalyzer` 从每分析器一个 `std::async` 线程
-  改为有界 `TaskScheduler` AnalysisPool（同时修复 async lambda 按引用捕获
-  结构化绑定导致的悬垂引用）；失败/抛异常的分析器被隔离，不再拖垮应用。
-- **Export 工作流（D#2/D#3/D#7/D#8）:** 导出改为临时文件 + 原子替换，失败
-  不再留下看似成功的半成品；未知格式显式报错（原为静默转 PNG）；批量转换
-  移出 UI 线程（QProgressDialog + 取消 token）。
-- **UI 减法:** 元数据面板与图库的 Ctrl+Shift+C 冲突收敛为单一入口；DPI
-  100/125/150/200% 渲染验证通过。
-- **测试可信度:** `docs/test_matrix.md` 生成器新增 CTest 清单
-  （name/command/RUN_SERIAL/UI-linked）；删除未被引用的伪 UI golden
-  （`golden/ui/main_window_default.png`）；Phase 8 干净重建后 C4530 警告
-  47 → 0（MSVC 默认 /EHsc 恢复）。
+- **Tier 1 `ci.yml` (required on every PR; target 5–10 minutes; all jobs must pass)**: `format` (clang-format + markdownlint), `cppcheck` (new; incremental gate for warning/performance/portability), `clang-tidy` (promoted from advisory to **required**; checks only bugprone/performance/clang-analyzer findings in files changed by the PR), `build` (MSVC + Qt 6.8.0; zero warnings via warnings-as-errors), `test` (CTest, including the `bench_enforce` hard performance gate and `golden_image` regression). `ci-gate` aggregates these required statuses for branch protection.
+- **Tier 2 `nightly.yml` (daily schedule and manual dispatch; does not block PRs)**: `asan` (clang-cl AddressSanitizer, including LeakSanitizer), `ubsan` (UndefinedBehaviorSanitizer), `clazy` (advisory), `quality` (MSVC build, benchmark regression against the baseline with a ±10% alert, and Golden Image regression), `perfetto` (best-effort Chrome-trace JSON capture).
+- **Tier 3 `release.yml` (on `v*` tags or manual dispatch; full quality scan)**: `performance-report` (full benchmarks and dashboard), `ui-regression` (full Golden Image UI regression), `dr-memory` (Windows memory errors, best-effort), `package` (portable zip and NSIS installer), `release` (draft GitHub Release that collects the artifacts).
+- **Project-specific gates reuse the existing `mviewer_bench` scenarios B1–B15** (Decode / Thumbnail / Cache-Hit / Compare / GPU-Upload / Memory-Peak); no new code is required. `MVIEWER_ENABLE_PERFETTO` is already integrated in core/trace for Nightly trace capture.
+- Added `scripts/cppcheck-suppressions.txt`: suppresses noise from system, Qt, and STL headers and reports findings only under `src/`.
+### Added — M23 Quality Automation
 
-### Added — CI 三层架构（PR / Nightly / Release）
+Per the review direction, this phase **adds no new product features** and only builds engineering capability (ADR-015): every quality metric is produced automatically by CI, not maintained by hand.
 
-- **第一层 `ci.yml`（PR 必跑，目标 5–10 分钟，全部必须通过）**：`format`
-  （clang-format + markdownlint）、`cppcheck`（新增，warning/performance/portability
-  增量门禁）、`clang-tidy`（由 advisory 提升为**必过**，仅检查 PR 改动文件的
-  bugprone/performance/clang-analyzer 发现）、`build`（MSVC + Qt 6.8.0，零警告
-  = warnings-as-errors）、`test`（CTest，已内含 `bench_enforce` 性能硬门禁与
-  `golden_image` 回归）。`ci-gate` 聚合上述必过状态供分支保护依赖。
-- **第二层 `nightly.yml`（每日定时 + 手动，不阻塞 PR）**：`asan`（clang-cl
-  AddressSanitizer，含 LeakSanitizer）、`ubsan`（UndefinedBehaviorSanitizer）、
-  `clazy`（advisory）、`quality`（MSVC 构建 + 基准回归 vs 基线 ±10% 报警 +
-  Golden Image 回归）、`perfetto`（best-effort 采集 Chrome-trace JSON）。
-- **第三层 `release.yml`（打 `v*` 标签或手动，全量质量扫描）**：`performance-report`
-  （完整基准 + 仪表盘）、`ui-regression`（完整 Golden Image UI 回归）、`dr-memory`
-  （Windows 内存错误，best-effort）、`package`（便携 zip + NSIS 安装包）、`release`
-  （草稿 GitHub Release 汇总产物）。
-- **项目专属 Gate 复用现有 `mviewer_bench` 场景 B1–B15**（Decode / Thumbnail /
-  Cache-Hit / Compare / GPU-Upload / Memory-Peak），无需新代码；`MVIEWER_ENABLE_PERFETTO`
-  已在 core/trace 集成，供 Nightly 采集 trace。
-- 新增 `scripts/cppcheck-suppressions.txt`：抑制系统/Qt/STL 头噪音，仅对 `src/`
-  报错。
+- **`adr_gate.ps1` (required, wired into `ci-gate`)**: Any PR that changes `src/core/{repository,cache,scheduler}` or `src/compare` **must add or update an ADR** (`docs/adr/`). Otherwise the merge is rejected, to prevent slow architectural decay.
+- **`known_issues_gate.ps1` (Bug Gate, required, wired into `ci-gate`)**: Every **open** issue under `docs/known_issues/` must be linked to a **regression test that actually exists** (or a CI job), or the gate fails — so every defect fix ships with a regression test. Added a structured failure catalog: `README.md` + `known_issues.json` (`Issue-001` MSVC ASan and `Issue-002` MainWindow double `setupUi` both have landed regressions).
+- **`test_matrix.ps1` (auto-generates `docs/test_matrix.md`)**: Scans `tests/`, `src/*test*`, and `src/benchmark`, and generates the test matrix by Feature × test type (Unit/Integration/Benchmark/UI/Vision). No longer written by hand.
+- **`benchmark_trend.ps1` (auto-generates trends)**: Each nightly run appends `benchmark_report.json` to the rolling history `benchmark/report/trend.json` and renders SVG sparkline trends in `benchmark/report/index.html` (Decode 120→118→… at a glance).
+- **Complexity gate upgrade (`complexity_gate.ps1`)**: Added **cyclomatic complexity** (>15 WARN / >25 FAIL), function length (>80 WARN / >120 FAIL), and class length (>1000 WARN). Files over 800 lines remain FAIL. Nightly runs with `-Strict` to surface existing debt.
+- **Coverage report enhancement (nightly `coverage`)**: OpenCppCoverage now exports both **Cobertura and HTML**. The HTML report is uploaded as an artifact so review can see uncovered code directly.
+- **`publish-health` (nightly auto-commit)**: After nightly runs `health_score` + `benchmark_trend` + `test_matrix`, it **auto-commits back to master** (with `[skip ci]`) `docs/quality/*`, `docs/test_matrix.md`, `docs/known_issues/*`, and `benchmark/report/*`, so the dashboard stays current with no manual upkeep.
+- Added `docs/adr/ADR-015-quality-automation.md` recording this milestone decision.
+### Changed — Performance gate folded into `ci.yml` (standalone `perf-gate.yml` removed)
 
-### Added — M23 质量自动化（Quality Automation）
+- The old `perf-gate.yml` (`mviewer_bench --enforce --budget`) and the `bench_enforce` CTest in `ci.yml` ran **the exact same command** and were duplicates. That workflow has been removed. The hard performance gate now runs from the `test` job in `ci.yml` via the `bench_enforce` ctest (single source of truth).
+- **Fix a broken test gate in `ci.yml`**: `build.ps1 Test` only emitted `Write-Warning` on CTest failure and did not exit non-zero, so the `test` job passed even when `bench_enforce` exceeded its budget. The `test` job now runs `ctest` explicitly and guards on `$LASTEXITCODE`, so any unit-test failure or performance overrun actually blocks the PR. The `build` job now runs `build.ps1 Release` (compile plus the zero-warning check only), so CTest no longer runs twice per PR.
+- Each PR to `master` now skips one full MSVC build (the extra one `perf-gate.yml` used to do), and CTest runs only once, so the PR gate is faster and more trustworthy.
+### Fixed — Double `setupUi()` on MainWindow created a duplicate ImageViewer
 
-按评审方向，本阶段**不再新增业务功能**，只建设项目工程化能力（ADR-015）：
-所有质量指标都由 CI 自动产生，而非人工维护。
+- **Root cause**: The `MainWindow` constructor already called `setupUi()` at the end, and every caller (`test_workflow_ux`, `demo_workflow`, `demo_render`, `ui_screenshot`) called `w.setupUi()` again. `setupUi()` therefore ran twice: the second call pointed `m_imageViewer` at a newly created instance, and the ImageViewer from the first call was orphaned and leaked. On the offscreen test platform, the `viewer` obtained via `QApplication::topLevelWidgets()` was whichever of the two the unspecified sort order returned, so the first-screen assertion in `workflow_ux_tests` hit the orphan about 50% of the time and flaked.
+- **Fix**: Removed the extra `w.setupUi();` from the four callers so the UI is built once by the `MainWindow` constructor (UI construction order and the `setupCommands()` call are unchanged). This eliminates the double build and the ImageViewer leak. `workflow_ux_tests` now passes stably across 15/15 consecutive runs, and the full gate passes 64/64.
+### Added — Metadata panel: embedded ICC profile details
 
-- **`adr_gate.ps1`（必需，接入 `ci-gate`）**：任何改动
-  `src/core/{repository,cache,scheduler}` 或 `src/compare` 的 PR **必须新增或更新
-  ADR**（`docs/adr/`），否则拒绝合并，防止架构缓慢腐化。
-- **`known_issues_gate.ps1`（Bug Gate，必需，接入 `ci-gate`）**：`docs/known_issues/`
-  中每个 **open** 问题都必须关联一个**真实存在的回归测试**（或 CI 任务），否则门禁
-  失败——保证修缺陷必带回归测试。新增结构化失败库：`README.md` + `known_issues.json`
-  （`Issue-001` MSVC ASan、`Issue-002` MainWindow 双重 `setupUi` 均已落回归）。
-- **`test_matrix.ps1`（自动生成 `docs/test_matrix.md`）**：扫描 `tests/`、`src/*test*`、
-  `src/benchmark`，按 Feature × 测试类型（Unit/Integration/Benchmark/UI/Vision）生成
-  测试矩阵，不再手写。
-- **`benchmark_trend.ps1`（自动生成趋势）**：每次 nightly 将 `benchmark_report.json`
-  追加进滚动历史 `benchmark/report/trend.json`，并渲染
-  `benchmark/report/index.html` 的 SVG 迷你趋势图（Decode 120→118→… 一目了然）。
-- **复杂度门禁升级（`complexity_gate.ps1`）**：新增**圈复杂度**（>15 WARN / >25 FAIL）、
-  函数长度（>80 WARN / >120 FAIL）、类长度（>1000 WARN）；文件 >800 仍为 FAIL。Nightly
-  以 `-Strict` 运行以暴露存量债务。
-- **覆盖率报告增强（nightly `coverage`）**：OpenCppCoverage 同时导出 **cobertura +
-  HTML**，HTML 报告作为 artifact 上传，Review 可直接看到未覆盖代码。
-- **`publish-health`（nightly 自动提交）**：nightly 运行 `health_score` +
-  `benchmark_trend` + `test_matrix` 后，将 `docs/quality/*`、`docs/test_matrix.md`、
-  `docs/known_issues/*`、`benchmark/report/*` **自动提交回 master**（带 `[skip ci]`），
-  仪表盘永远最新、无需人工维护。
-- 新增 `docs/adr/ADR-015-quality-automation.md` 记录该里程碑决策。
+- **ICC profile detail parsing**: On load, `MetadataReader` reads the embedded ICC bytes from the decoded image's `QColorSpace`. The new `core/image/IccProfile.{h,cpp}` (pure std, no Qt dependency) parses the header and tag directory and fills the new `ImageMetadata` fields in `domain/Image.h` (`iccDescription` / `iccCopyright` / `iccColorSpace` / `iccDeviceClass` / `iccPcs` / `iccRenderingIntent` / `iccVersion`).
+- **New "ICC Profile Details" group on the panel**: When `hasIccProfile` is set and fields have been parsed, `MetadataModel` adds an "ICC Profile Details" category showing description / copyright / device class / color space / PCS / rendering intent / version. The existing "ICC profile: embedded/none" leaf under the Image group is unchanged.
+- Unit tests cover each leaf of the "ICC Profile Details" group and are included in `metadatamodel_tests`.
+### Added — Benchmark scaling (100 / 1000 / 5000; memory / GPU / FPS)
 
-### Changed — 性能门禁收编进 `ci.yml`（删除独立 `perf-gate.yml`）
+- **Scale-tier scenario `scenarioScaleTier`**: `mviewer_bench --scale` decodes each of the 100 / 1000 / 5000 tiers and reports `scale_decode_fps` (decode throughput), while sampling `peak_cache_mb` (peak cache memory), `rss_mb` (peak working set), and `gpu_dedicated_mb` (GPU dedicated memory, best-effort). The cache is cleared after each window to cap peak memory and avoid an OOM at the 5000 tier. All three tiers are report-only (`report-only`) and do not gate CI.
+- **Render FPS scenario B16 `scenarioRenderFps`**: a synthetic viewport zoom loop that reports `render_fps` (zoom hot-path frame rate). Report-only.
+- **GPU probe `core/perf/GpuTracker.{h,cpp}`**: Windows / DXGI best-effort sampling of dedicated video memory. When no GPU is present the value is 0 and annotated `(gpu:unavailable)`, and the run continues.
+- Scale-tier ceilings are limited by the generated corpus size. For a full 5000 tier, pass `--corpus-size 1667 --scale` (the corpus is 3 formats × N images).
+### Added — Automated Release Checklist
 
-- 原 `perf-gate.yml`（`mviewer_bench --enforce --budget`）与 `ci.yml` 的
-  `bench_enforce` CTest **命令完全相同**，属重复；已删除该工作流，性能硬门禁现由
-  `ci.yml` 的 `test` job 通过 `bench_enforce` ctest 统一执行（单一来源）。
-- **修复 `ci.yml` 测试门禁失效**：`build.ps1 Test` 在 CTest 失败时仅 `Write-Warning`
-  而不退出非 0，导致 `test` job 即使 `bench_enforce` 越界也会判通过。`test` job 现
-  改为显式运行 `ctest` 并加 `$LASTEXITCODE` 守卫，任何单元测试或性能越界都会真正阻断
-  PR。`build` job 改为 `build.ps1 Release`（仅编译 + 零警告检查），避免 CTest 每 PR
-  跑两遍。
-- 每次 PR 到 `master` 现少一次完整 MSVC 编译（原 `perf-gate.yml` 独立一次），且 CTest
-  只执行一次，PR 门禁更快也更可信。
+- **`scripts/run_release_checklist.ps1`**: Runs the 7 steps in `docs/release/RELEASE_CHECKLIST.md` in one command (build / core tests / `--selftest` / performance gate `--smoke` `--enforce` / crash-diagnostics environment variables / packaging / manifest). Prints `[PASS]/[FAIL]/[WARN]/[SKIP]` for each step and writes `release_checklist_report.md`. Exits with a non-zero status if any hard step fails. Supports `-Package`, `-SkipBench`, and `-Steps`.
+### Added — P0-2 Unified selection state (SelectionModel absorbs Focused / Hovered / Compared)
 
-### Fixed — MainWindow 双重 `setupUi()` 导致重复创建 ImageViewer
+- **SelectionModel extended with three states**: On top of the existing Current / Selected states, add `focused` (locked comparison baseline), `hovered` (thumbnail hover), and `compared` (every image loaded into the comparison workspace). Each has a getter, a setter, and a `*Changed` signal. `clear()` also resets focused and compared (hovered is transient and is not cleared with the selection).
+- **Comparison context folded into a single source of truth**: After `CompareWorkspace::setImages` loads images, it immediately publishes the `compared` set and the `focused` baseline to SelectionModel. `onFocusRequested` updates `focused` when a lock is requested. Metadata / Analysis / Export can then read SelectionModel directly and no longer keep their own comparison state (this supports the review goal of "managing ~1000 images with almost no UI changes").
+- **Thumbnail hover wired into SelectionModel**: `ThumbnailPanel` adds a `hovered` signal driven by `QListView::entered`. Through the app-level SelectionModel injected via `setSelectionModel`, it publishes `hovered`, so hover is unified on the same source of truth.
+- Added unit tests covering the focused / hovered / compared states and `clear()` behavior.
+### Added — Pixel Inspector 16-bit / RAW raw-sample readout (review ★★★★★ — most wanted)
 
-- **根因**：`MainWindow` 构造函数在末尾已调用 `setupUi()`，而所有调用方
-  （`test_workflow_ux`、`demo_workflow`、`demo_render`、`ui_screenshot`）又显式调一次
-  `w.setupUi()`，使 `setupUi()` 执行两次：第二次把 `m_imageViewer` 指向新建实例，第一次
-  创建的 ImageViewer 成为孤儿并泄漏。在 offscreen 测试平台下，测试用
-  `QApplication::topLevelWidgets()` 抓到的 `viewer` 是两者排序不确定的那个，于是
-  `workflow_ux_tests` 首屏断言以约 50% 概率抓到孤儿实例而 flaky。
-- **修复**：删除四个调用方多余的 `w.setupUi();`，统一由 `MainWindow` 构造函数构建一次 UI
-  （UI 构建顺序与 `setupCommands()` 调用保持不变）。彻底消除重复构建与 ImageViewer 泄漏，
-  `workflow_ux_tests` 现在 15/15 连跑稳定通过，全量门禁 64/64 通过。
+- **True high-bit-depth readout**: The decode pipeline normalizes everything to 8 bits. For 16-bit sources (16-bit PNG/TIFF/RGBX64), `ImageRepository::load` captures the original 16-bit integer samples in parallel at load time and stores them on `ImageFrame` (new `hasRaw16` / `raw16At` / `raw16Max` / `raw16Channels`). The display path is unchanged. Values are persisted through `CacheManager` (`putRaw16` / `getRaw16`, separate object store, cap of 2000 entries), so reopening an image still keeps the high-bit-depth readout.
+- **Single-image view**: The color picker in `ImageViewer` reads `m_frame->raw16At` directly and passes the values out through `pixelInfo`. `AnalysisPanel` adds a "Raw samples" block that shows `16-bit R/G/B (0..65535)` alongside the normalized values, and the status bar shows the 16-bit values as well.
+- **Compare view**: The pixel inspector table in `CompareWorkspace` adds a `16bit` column that shows the original 16-bit values for each image.
+- **Honest RAW labeling**: RAW files are currently demosaiced from the preview JPEG to 8 bits and have no linear 16-bit buffer. The Inspector labels this truthfully as "RAW preview (demosaic 8-bit); no linear 16-bit samples" and does not fabricate values.
+- Unit tests cover `ImageFrame::raw16At` (RGB / grayscale / out of bounds) and are included in `pixelinspector_tests`.
+### Added — M23 Professional Analysis (Review P0: Pixel Inspector / Diff Engine / ROI+Histogram)
 
-### Added — Metadata 面板：嵌入 ICC 配置详情展示
-
-- **ICC 配置详情解析**：`MetadataReader` 在加载处读取解码图 `QColorSpace` 的嵌入
-  ICC 字节，经新增的 `core/image/IccProfile.{h,cpp}`（纯 std、无 Qt 依赖）解析
-  头与标签目录，填充 `domain/Image.h` 的 `ImageMetadata` 新增字段（`iccDescription` /
-  `iccCopyright` / `iccColorSpace` / `iccDeviceClass` / `iccPcs` / `iccRenderingIntent`
-  / `iccVersion`）。
-- **面板新增「ICC 配置详情」分组**：`MetadataModel` 在 `hasIccProfile` 且已解析出字段时
-  新增「ICC 配置详情」分类，展示描述 / 版权 / 设备类别 / 色彩空间 / PCS / 渲染意图 /
-  版本；Image 分组下原有的「ICC 配置：已嵌入/无」叶节点保持不变。
-- 单测覆盖「ICC 配置详情」分组各叶节点，并入 `metadatamodel_tests`。
-
-### Added — Benchmark 规模化（100 / 1000 / 5000，内存 / GPU / FPS）
-
-- **规模分层场景 `scenarioScaleTier`**：`mviewer_bench --scale` 对 100 / 1000 / 5000
-  三档分别解码并报告 `scale_decode_fps`（解码吞吐），同时采样 `peak_cache_mb`（峰值缓存
-  内存）、`rss_mb`（峰值工作集）与 `gpu_dedicated_mb`（GPU 专用显存，best-effort）。每窗口
-  清缓存以限制峰值内存，避免 5000 档 OOM。三档为报告项（`report-only`），不卡 CI。
-- **渲染 FPS 场景 B16 `scenarioRenderFps`**：合成视口缩放循环，报告 `render_fps`（缩放热路径
-  帧率），报告项。
-- **GPU 探针 `core/perf/GpuTracker.{h,cpp}`**：Windows / DXGI best-effort 采样专用显存，
-  无 GPU 时数值为 0 并标注 `(gpu:unavailable)`，不中断运行。
-- 规模档上限受生成语料规模约束；如需完整 5000 档，传 `--corpus-size 1667 --scale`
-  （语料为 3 格式 ×N 张）。
-
-### Added — Release Checklist 自动跑
-
-- **`scripts/run_release_checklist.ps1`**：一键执行 `docs/release/RELEASE_CHECKLIST.md`
-  的 7 步（构建 / 核心测试 / `--selftest` / 性能门禁 `--smoke` `--enforce` / 崩溃诊断环境变量
-  / 打包 / 清单），逐步输出 `[PASS]/[FAIL]/[WARN]/[SKIP]` 并写入 `release_checklist_report.md`，
-  任一硬步骤失败以非零退出码结束。支持 `-Package` / `-SkipBench` / `-Steps` 参数。
-
-### Added — P0-2 选择状态统一（SelectionModel 收编 Focused / Hovered / Compared）
-
-- **SelectionModel 扩展三态**：在既有 Current / Selected 之上新增 `focused`
-  （对比锁定基准）、`hovered`（缩略图悬停）、`compared`（对比工作区载入的全部
-  图像）。三者均带 getter / setter / `*Changed` 信号，`clear()` 同时重置
-  focused / compared（hovered 为瞬态不随选择清空）。
-- **对比上下文收编进统一真源**：`CompareWorkspace::setImages` 装入图后立即向
-  SelectionModel 发布 `compared` 集合与 `focused` 基准；`onFocusRequested`
-  锁定时同步更新 `focused`。后续 Metadata / Analysis / Export 直接读 SelectionModel
-  即可，不再各自持有对比状态（服务于评审中的"1000 张图片管理几乎不用改 UI"）。
-- **缩略图悬停接入 SelectionModel**：`ThumbnailPanel` 新增 `hovered` 信号，由
-  `QListView::entered` 驱动，经 `setSelectionModel` 注入的 app 级 SelectionModel
-  发布 `hovered`，悬停即统一到同一真源。
-- 新增单测覆盖 focused / hovered / compared 三态及 `clear()` 行为。
-
-### Added — Pixel Inspector 16-bit / RAW 原始采样读出（评审 ★★★★★ 最想做）
-
-- **真实高比特深读出**：解码管线把一切归一化到 8 位，对 16 位源（16-bit PNG/TIFF/
-  RGBX64）`ImageRepository::load` 在加载处并行捕获原始 16 位整数样本，存入
-  `ImageFrame`（新增 `hasRaw16` / `raw16At` / `raw16Max` / `raw16Channels`），
-  display 路径完全不动。经 `CacheManager` 持久化（`putRaw16` / `getRaw16`，独立对象
-  存储、上限 2000 项），重复打开仍保留高比特深读出。
-- **单图视图**：`ImageViewer` 取色处直接读 `m_frame->raw16At` 经 `pixelInfo` 传出；
-  `AnalysisPanel` 新增"原始采样"块，显示 `16-bit R/G/B (0..65535)` 与归一化值，状态栏
-  同步展示 16bit。
-- **对比视图**：`CompareWorkspace` 像素检视表新增 `16bit` 列，逐图显示原始 16 位值。
-- **RAW 诚实标注**：RAW 文件当前经预览 JPEG demosaic 为 8 位，无线性 16 位缓冲；
-  Inspector 如实标注 "RAW 预览 (demosaic 8-bit)，无线性 16-bit 采样"，不伪造数值。
-- 单测覆盖 `ImageFrame::raw16At`（RGB/灰度/越界），并入 `pixelinspector_tests`。
-
-### Added — M23 专业分析能力（评审 P0：Pixel Inspector / Diff Engine / ROI+Histogram）
-
-- **Pixel Inspector Pro（像素检视升级）**：Compare 侧栏的像素检视表新增
-  色彩空间选择（RGB / HEX / HSV / Lab / YUV / YCbCr / XYZ），表头随空间切换，
-  鼠标移动实时刷新；新增坐标读出 `(x, y)` 与邻域统计
-  （1×1/3×3/5×5/7×7 核，基准格亮度 μ/σ/min/max + RGB 均值）。核心数学复用
-  `core/analysis/PixelInspector`（已有单测），UI 首次接入。
-- **Checkerboard 棋盘格对比模式**：继 Blink / Side-by-side / Split / Swipe /
-  Overlay / Diff-Heatmap 之后补齐评审清单的最后一种对比模式。A/B 图像按可调
-  块大小（16–256px）交替渲染，共享同步缩放/平移变换，块缝即错位；快捷键 `K`，
-  与其他画布模式互斥，随导航状态（NavState）保存恢复。
-- **Diff 统计（DifferenceEngine::computeStats）**：差异指标面板在 PSNR/SSIM
-  之外新增量化差异统计——差异像素占比、灰度差均值、峰值（阈值感知），并在存在
-  ROI 时同时给出 ROI 内统计。核心为 Qt-free 静态函数 + 单元测试。
-- **ROI + Histogram 联动**：`computeHistogram` 新增 ROI 重载（矩形裁剪）与
-  Rec.601 亮度通道；直方图区新增 R/G/B/亮度通道开关、Log 纵轴与 "ROI" 开关。
-  勾选 ROI 后框选区域即时重算直方图（标题显示 ROI 几何），拖动新 ROI 自动刷新，
-  差异指标同步更新。
-
+- **Pixel Inspector Pro (pixel inspection upgrade)**: The pixel inspection table in the Compare sidebar adds color-space selection (RGB / HEX / HSV / Lab / YUV / YCbCr / XYZ). Column headers follow the active space and refresh live as the mouse moves. Added a coordinate readout `(x, y)` and neighborhood statistics (1×1 / 3×3 / 5×5 / 7×7 kernels: reference-cell luminance μ/σ/min/max plus RGB means). Core math reuses `core/analysis/PixelInspector` (existing unit tests); this is the first UI integration.
+- **Checkerboard comparison mode**: Completes the review checklist as the last comparison mode after Blink / Side-by-side / Split / Swipe / Overlay / Diff-Heatmap. A/B images are rendered in alternating tiles of adjustable size (16–256 px) under a shared, synchronized zoom/pan transform; tile seams show misalignment. Shortcut `K`. Mutually exclusive with the other canvas modes, and saved and restored with navigation state (NavState).
+- **Diff statistics (`DifferenceEngine::computeStats`)**: Beyond PSNR/SSIM, the difference-metrics panel adds quantitative diff statistics — differing-pixel ratio, mean grayscale difference, and peak (threshold-aware). When an ROI is present, the same statistics are also reported inside the ROI. The core is a Qt-free static function with unit tests.
+- **ROI + Histogram linkage**: `computeHistogram` gains an ROI overload (rectangular crop) and a Rec.601 luminance channel. The histogram area adds R/G/B/luminance channel toggles, a log Y-axis, and an "ROI" toggle. With ROI enabled, the selected region recomputes the histogram immediately (the title shows the ROI geometry). Dragging a new ROI refreshes it automatically, and the difference metrics update in sync.
 ### Fixed — M23
 
-- **CompareSession `uniformScale` 反序列化缺失**：`serializeCompareSession`
-  已写入 H5 统一缩放字段，但解析循环缺少对应分支，未知 key 走字符串跳过导致
-  `workspace_persist_tests` / `product_workflow_gate` 解析崩溃。补上
-  `uniformScale` 解析分支。
-- **`export_job_tests` 在本地环境稳定失败**：测试进程未创建 `QCoreApplication`，
-  Qt 无法以 exe 目录解析 imageformats 插件（qjpeg），JPEG 编码静默失败。
-  测试入口补建 app 对象。
-- **ADR 014 行数护栏回归**：`compareworkspace.cpp` 802 → 686 行。侧栏分析面板
-  迁入新职责 TU `compareworkspace_analysis.cpp`，`rebuildCells()` 迁入
-  `compareworkspace_render.cpp`。
-
-### Fixed — M17 Installer / Release Engineering (产品力 #1：装得上)
+- **CompareSession `uniformScale` deserialization missing**: `serializeCompareSession` already writes the H5 unified-scale field, but the parse loop has no matching branch. Unknown keys take the string-skip path, which crashes parsing in `workspace_persist_tests` / `product_workflow_gate`. Added the `uniformScale` parse branch.
+- **`export_job_tests` fails consistently in the local environment**: The test process does not create a `QCoreApplication`, so Qt cannot resolve the imageformats plugin (qjpeg) from the executable directory and JPEG encoding fails silently. The test entry point now creates the application object.
+- **ADR 014 line-count guardrail regression**: `compareworkspace.cpp` reduced from 802 to 686 lines. The sidebar analysis panel moved into the new translation unit `compareworkspace_analysis.cpp`, and `rebuildCells()` moved into `compareworkspace_render.cpp`.
+### Fixed — M17 Installer / Release Engineering (Product capability #1: installs successfully)
 
 - **Installer now actually builds end-to-end.** `installer/MViewer.nsi` had no
   UTF-8 BOM, so `makensis` decoded its Chinese comments / box-drawing as the
   system ACP (GBK) and aborted with "Bad text encoding". Added the BOM;
   `scripts/package_release.ps1` now produces `dist/MViewer-<ver>-Setup.exe`.
-- **VC++ runtime was never bundled** (a real "装得上但起不来" bug).
+- **VC++ runtime was never bundled** (a real "installs but fails to launch" bug).
   `scripts/package_portable.ps1` looked for a fixed `x64/Microsoft.VC140.CRT`
   folder, but VS2022 ships `Microsoft.VC143.CRT` (and `VC145.CRT`) under a
   *versioned* `MSVC` subdir, so the copy silently failed. Switched to a glob
@@ -4036,8 +3837,7 @@ All notable changes to this project are documented here. The format is based on
   The exe is now self-contained for every build entry point (`build.ps1`, IDE,
   CMakePresets), and the test executables no longer need a hand-set PATH to avoid
   `0xc0000135`.
-
-### Fixed — M13.3 Performance budget as a real CI hard gate (产品力 #2：稳得住)
+### Fixed — M13.3 Performance budget as a real CI hard gate (Product capability #2: stays stable)
 
 - **`--enforce` was gating only 4 of the 14 scenarios.** The harness hardcoded
   budget checks for B2/B8/B9/B10 only; B1/B3/B4/B5/B6/B7/B11/B12/B13/B14/B15 were
@@ -4062,56 +3862,21 @@ All notable changes to this project are documented here. The format is based on
   → B1-B9 + B11-B15 all PASS, `exit 0`. (The baseline-regression axis shows
   drift vs the padded `perf_baseline.json`; it is non-gating and left as-is —
   recalibrating would strip the deliberate +50% padding on B11/B14/B15.)
+### Fixed — A-2 Browse details (Product capability #4: feels great to use)
 
-### Fixed — A-2 Browse details (产品力 #4：用得爽)
+- **Details view “Resolution” column is fully scrambled after filtering or sorting (H1).** `DetailsDelegate::paint` read the resolution with `entries().at(index.row())`, but `index.row()` is the row in the filtered model while `entries()` is the unfiltered full list. The two indexes diverge, so after filtering or sorting the whole column maps to the wrong images. The resolution is now taken from the correct `Entry` in `m_allEntries` via `rowForPath(path)`, so it always matches the current row.
+- **Camera, lens, and ISO metadata filters leak across directories after a directory change (H2).** `setDirectory()` synchronously cleared `m_allEntries`, `m_paths`, and `m_rowByPath`, but left `m_metaIndex` and `m_metaIso` in place (they were cleared only in the scan-finished callback). Changing directory while a metadata filter stayed active therefore briefly matched entries from the previous directory. `setDirectory()` now synchronously clears the metadata index and the new `m_metaCamera` and `m_metaLens` maps.
+- **`DirectoryTree::navigateTo` synthesized a click through `QTreeView::clicked()` (H3).** It now calls `emit directoryChanged(normalized)` directly, the same path used by keyboard and context-menu navigation, which removes the click-to-`directoryChanged` re-entrancy risk. `m_currentPath` and `watchPath` were already set before the emit, so the result is equivalent and more stable.
+- **Details view adds Camera, Lens, and ISO EXIF columns (Product capability #4 polish).** These EXIF fields were already collected by `ensureMetaIndex()` and used only for filtering; they were never shown. The Details view now displays each image’s camera model, lens model, and ISO so imaging-algorithm engineers can compare them across rows. When the columns exceed the viewport, the view scrolls horizontally instead of overlapping, and the header includes the three new titles.
+### Fixed — A-4 Compare workspace (Product capability #4: accurate comparison / clear viewing)
 
-- **Details 视图「分辨率」列在过滤/排序后整列错乱 (H1).** `DetailsDelegate::paint`
-  用 `entries().at(index.row())` 取分辨率，但 `index.row()` 是过滤后的模型行，而
-  `entries()` 是未过滤的全量列表，二者错位 → 过滤/排序后整列对应到错误的图。改为
-  通过 `rowForPath(path)` 按路径取回 `m_allEntries` 中正确的 `Entry`，现在分辨率始终
-  对应当前行。
-- **切换目录后相机/镜头/ISO 元数据过滤串味 (H2).** `setDirectory()` 同步清掉了
-  `m_allEntries/m_paths/m_rowByPath`，却没清 `m_metaIndex/m_metaIso`（依赖扫描完成回调
-  才清），导致切换目录且仍激活元数据过滤时短暂匹配到上一个目录的条目。`setDirectory()`
-  现在同步清空元数据索引与新增的 `m_metaCamera/m_metaLens`。
-- **`DirectoryTree::navigateTo` 用 `QTreeView::clicked()` 伪造点击 (H3).** 改为直接
-  `emit directoryChanged(normalized)`，与键盘/右键导航路径一致，消除
-  click→directoryChanged 的回环风险；`m_currentPath`/`watchPath` 在之前已设置，等价且更稳。
-- **Details 视图新增「相机 / 镜头 / ISO」EXIF 列 (产品力 #4 打磨).** 这些 EXIF 早已由
-  `ensureMetaIndex()` 采集、却只在过滤时用，从没展示出来。现在 Details 视图直接显示每张
-  图的相机机型、镜头型号与 ISO，方便图像算法工程师横向对照；列宽超出视口时视图启用横向
-  滚动而非重叠，表头同步增加三列标题。
-
-### Fixed — A-4 Compare workspace (产品力 #4：比得准/看得清)
-
-- **ROI 在切换布局/交换/预设/停止 blink 后丢失 (M3).** `rebuildCells()` 每次销毁并重建
-  所有单元视图，导致用户画好的红色 ROI 选区消失。`rebuildCells()` 末尾现在用
-  `applySelectionToAll(m_lastSelection)` 重新套用上一次选区，ROI 在网格重排后仍保留。
-- **Diff 阈值语义与提示不符 (H2).** 阈值提示写「低于此值的像素将被隐藏」，代码却用
-  `diff > threshold` 隐藏（边界值 `diff == threshold` 被误隐藏）。改为 `>=`，与提示一致；
-  `differenceMap` / `applyThreshold` / `highlightMap` 三处一并修正。
-- **Blink 基准不尊重锁定的参考图 (M1).** `applyBlink` 硬编码以第 0 张为基准，与 Diff/
-  检查器（都用 `diffBaseIndex()`）不一致。现统一用 `diffBaseIndex()` 作为闪烁基准
-  （未锁定时回退为 0，行为兼容），2 图与 3+ 图两种情况都已修正。
-- **尺寸不符时 Diff 静默消失 (H1).** 当某格与基准图分辨率不同，`refreshCellDiff` 直接清空
-  叠加层，用户会误以为「无差异」。现改为在单元左上角显示红色「尺寸不匹配」角标，明确提示
-  Diff 因尺寸不同而跳过；`RawImageView` 新增 `setSizeMismatch()` 与角标绘制。
-- **自定义网格「行」spinbox 是无效控件 (M4).** 引擎按列填充、行数由列数自动推导，但该
-  spinbox 一直禁用且不解释，容易误导。现加 tooltip 标注「行数由列数自动推导（按列填充，
-  无法单独设置）」，明确它是信息性控件。
-- **Split/Swipe/Overlay 模式丢弃缩放/平移与 Diff 层 (H3).** 三种模式原本用
-  `drawFitImage` 把图像重新 fit 到半屏，导致用户在普通模式下的 zoom/pan 完全丢失，
-  且 Overlay 模式的 Diff 叠加层直接消失（算法工程师最痛的点）。现抽出 `drawCellCompare`，
-  复用与普通模式完全一致的引擎同步变换（scale+offset，受 syncZoom/syncDrag 开关控制）
-  投影到各自半区并裁剪；Overlay 模式在混合图像之上继续绘制 Diff 叠加层。`RawImageView`
-  新增 `overlay()` / `overlayOpacity()` 供对比模式复用。
-- **不同分辨率图像无法 1:1 像素对齐 (H5).** `fitAll` 仅在「同步缩放」开启时才用各窗
-  最小 scale 统一倍率；若该开关关闭，每窗独立 fit 到自身单元格，导致不同分辨率图像
-  各自缩放、失去跨窗像素对应关系（算法工程师做分辨率不一致对比时最易踩坑）。现新增
-  「统一像素倍率」复选框：勾选后 `fitAll` 强制所有窗格使用同一（最小）倍率并左上角对齐，
-  与「同步缩放」相互独立；该状态写入 `CompareSession` 并随会话存档 / 恢复（序列化
-  `uniformScale` 字段），连续导航与崩溃恢复后保持一致。
-
+- **ROI lost after layout switch / swap / preset / stop blink (M3).** `rebuildCells()` destroyed and recreated every cell view, so a user-drawn red ROI selection disappeared. At the end of `rebuildCells()`, the last selection is now reapplied with `applySelectionToAll(m_lastSelection)`, so the ROI survives grid rearrangement.
+- **Diff threshold semantics disagreed with the hint (H2).** The threshold hint said “pixels below this value will be hidden,” but the code hid pixels with `diff > threshold` (the boundary `diff == threshold` was incorrectly hidden). The comparison is now `>=`, matching the hint. `differenceMap`, `applyThreshold`, and `highlightMap` are all corrected.
+- **Blink base ignored the locked reference image (M1).** `applyBlink` hardcoded image 0 as the base, unlike Diff and the inspector, which both use `diffBaseIndex()`. Blink now uses `diffBaseIndex()` as its base (falling back to 0 when nothing is locked, so existing behavior is preserved). Both the 2-image and 3+-image cases are fixed.
+- **Diff silently vanished on size mismatch (H1).** When a cell’s resolution differed from the base image, `refreshCellDiff` cleared the overlay, so users could mistake that for “no difference.” A red “size mismatch” badge is now drawn in the cell’s top-left corner, stating that Diff was skipped because the sizes differ. `RawImageView` adds `setSizeMismatch()` and badge drawing.
+- **Custom-grid “Rows” spinbox was a dead control (M4).** The engine fills by column and derives the row count from the column count, but the spinbox stayed disabled with no explanation and was easy to misread. It now has a tooltip: “Row count is derived from the column count (fill by column; cannot be set independently),” making clear that it is informational.
+- **Split/Swipe/Overlay dropped zoom/pan and the Diff layer (H3).** All three modes used `drawFitImage` to refit the image into a half-pane, so zoom/pan from normal mode was lost entirely, and Overlay dropped the Diff overlay (the most painful case for algorithm engineers). A shared `drawCellCompare` now reuses the same engine-synced transform as normal mode (scale + offset, gated by the syncZoom/syncDrag switches), projects it into each half-region, and clips. Overlay continues to draw the Diff overlay on top of the blended image. `RawImageView` adds `overlay()` / `overlayOpacity()` for compare modes to reuse.
+- **Images of different resolutions could not be aligned 1:1 in pixels (H5).** `fitAll` applied a single scale (the minimum across windows) only when “sync zoom” was on. With that switch off, each window fit independently to its own cell, so different-resolution images scaled separately and lost cross-window pixel correspondence (a common pitfall when algorithm engineers compare mismatched resolutions). A new “uniform pixel scale” checkbox forces `fitAll` to use one shared (minimum) scale for every pane and align them to the top-left, independent of “sync zoom.” The state is stored on `CompareSession` and persisted / restored with the session (serialized `uniformScale` field), so it stays consistent across continuous navigation and crash recovery.
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 
 - **God-object UI files split by responsibility** (ADR 014, no behavior
@@ -4130,13 +3895,12 @@ All notable changes to this project are documented here. The format is based on
   (`thumbnailprovider.{h,cpp}`). `ThumbnailPanel` now only routes the finished
   pixmap into its per-panel ready map and owns lifecycle; the core TU dropped
   680 → 670. This is a genuine class boundary, not a TU split, and is the first
-  step of the reviewer's "abc 都需要" directive (b scenarios and c Phase-3
-  analysis were already verified).
+  step of the reviewer's "a, b, and c are all required" directive (b scenarios
+  and c Phase-3 analysis were already verified).
 - **Golden image regression gate:** `golden_main --compare` now scores every
   reference image with PSNR (≥45 dB), global SSIM (≥0.99) and per-pixel diff
   (≤1%), covers all four committed goldens, and runs in ctest as
   `golden_image` — so `.\build.ps1 Test` fails on any render drift.
-
 ### Changed — M23 Product Experience (P2)
 
 - **First-screen responsiveness:** `ThumbnailPanel::setDirectory` now paints the
@@ -4144,32 +3908,19 @@ All notable changes to this project are documented here. The format is based on
   background thread, streaming entries in once ready. This directly serves the
   review's "1000-image folder < 1 s to show the directory" target; visible-range
   thumbnail decode was already streamed and is unchanged.
-- **Selection → compare UX:** the 比较选中 button is now always discoverable —
-  it shows the live selection count (`比较选中 (N)`), enables once 2–8 images are
+- **Selection → compare UX:** the Compare Selected button is now always discoverable —
+  it shows the live selection count (`Compare Selected (N)`), enables once 2–8 images are
   picked, and dims with a hint when fewer than 2 are selected. Native
   Ctrl/Shift multi-select (already `ExtendedSelection`) plus the `C` shortcut and
-  status-bar "已选 N" feedback make the compare workflow the image-tool "soul" the
+  status-bar "N selected" feedback make the compare workflow the image-tool "soul" the
   review called for.
+### Changed — M23 Performance Closure (review "performance regression")
 
-### Changed — M23 Performance Closure (review "性能回归")
-
-- **Named benchmark scenarios (B11–B15):** added `decode_4k_jpeg` (B11),
-  `decode_8k` (B12, synthesized 8K frame stand-in for 8K RAW), `cache_hit_rate`
-  (B13, wraps B5), `first_frame_latency` (B14, wraps B2) and `zoom_frame`
-  (B15, 8K→1080p rescale hot-path proxy). All are corpus/asset-free (synthesized
-  in-process) so they run headless in CI. Each is regression-tracked in
-  `benchmark/perf_baseline.json` via the same ±10% gate as B0–B10, and
-  B11/B12/B14/B15 carry generous hard budgets in `performance_budget.json`.
-- Recalibrated `perf_baseline.json` to the dev host (the prior baseline
-  `a930682` was captured on a faster machine, so cross-host numbers tripped the
-  gate). Noisy metrics are seeded at padded values so run-to-run jitter stays
-  under the gate. Note: on this dev box run-to-run variance can exceed 10% on
-  B0/B2/B3 (CPU scaling / AV scanning the temp corpus); the canonical
-  `.\build.ps1 Test` run is green.
-
+- **Named benchmark scenarios (B11–B15):** added `decode_4k_jpeg` (B11), `decode_8k` (B12, synthesized 8K frame stand-in for 8K RAW), `cache_hit_rate` (B13, wraps B5), `first_frame_latency` (B14, wraps B2), and `zoom_frame` (B15, 8K→1080p rescale hot-path proxy). All are corpus/asset-free (synthesized in-process) so they run headless in CI. Each is regression-tracked in `benchmark/perf_baseline.json` via the same ±10% gate as B0–B10, and B11/B12/B14/B15 carry generous hard budgets in `performance_budget.json`.
+- Recalibrated `perf_baseline.json` to the dev host (the prior baseline `a930682` was captured on a faster machine, so cross-host numbers tripped the gate). Noisy metrics are seeded at padded values so run-to-run jitter stays under the gate. Note: on this dev box, run-to-run variance can exceed 10% on B0/B2/B3 (CPU scaling / AV scanning the temp corpus); the canonical `.\build.ps1 Test` run is green.
 ### Added — M22 Product Polish (F1–F4)
 
-- **F1 Centralized Preferences:** a new 首选项 dialog (Tools menu) gathers the
+- **F1 Centralized Preferences:** a new Preferences dialog (Tools menu) gathers the
   previously scattered view / sort / slideshow / compare / analysis settings and
   applies changes live.
 - **F2 Wider decode coverage:** `QtDecoder` now claims every format Qt can
@@ -4181,7 +3932,7 @@ All notable changes to this project are documented here. The format is based on
 - **F4 Live analysis overlays:** zebra (over/under-exposure clip) and
   false-color can be toggled directly on the zoomable `ImageViewer` via the
   right-click menu. The overlay is applied on a deep-copied tile so the
-  TileCache buffer is never mutated; the standalone 分析叠加层/示波器 dialog
+  TileCache buffer is never mutated; the standalone Analysis Overlay / Scopes dialog
   keeps the waveform / vectorscope.
 - **F4 overlay unified:** the standalone dialog now reuses the same
   `mviewer::applyOverlay` implementation as the live viewer (single source of
@@ -4189,10 +3940,9 @@ All notable changes to this project are documented here. The format is based on
   the two can never drift. Its zebra threshold now matches the viewer's
   raw 0–255 semantics.
 - **F4 zebra threshold shared:** the zebra threshold is now a single persisted
-  preference (`zebraThreshold`), exposed as a slider in 首选项 → 分析 and shared
-  by both the live F4 viewer and the 分析叠加层/示波器 dialog. Changing it in
+  preference (`zebraThreshold`), exposed as a slider in Preferences → Analysis and shared
+  by both the live F4 viewer and the Analysis Overlay / Scopes dialog. Changing it in
   either place re-renders the open viewer live via `ImageViewer::setZebraThreshold`.
-
 ### Added — M16 Professional Analysis & M17 Professional Productivity
 
 - **Analysis history persists across restarts:** `AnalyzerModel` now serializes
@@ -4202,53 +3952,31 @@ All notable changes to this project are documented here. The format is based on
   restart.
 - **Auto-update checker:** `UpdateChecker` now performs a real update check
   against GitHub Releases (via WinHTTP on Windows) instead of the previous stub.
-  Help → 检查更新… shows the result; on launch a quiet background check (8s)
+  Help → Check for Updates… shows the result; on launch a quiet background check (8s)
   notifies only when a newer version is available and offers to open the
   download page.
-- **Crash report on relaunch:** after an unclean exit, a one-time 崩溃报告 dialog
+- **Crash report on relaunch:** after an unclean exit, a one-time crash report dialog
   appears on next launch offering to open the `%APPDATA%/MViewer/crash-reports`
   directory (the always-on minidump handler already writes dumps there).
-
 ### Added — P0 Product Polish (Browser, Selection, Overlay)
 
-- **Directory tree auto-locate:** the tree now automatically expands
-  ancestors and scrolls to the image's parent folder on `currentImageChanged`
-  (no manual tree navigation needed when browsing across directories).
-- **Directory search:** `Ctrl+F` on the directory tree filters folders by
-  name in-place; matching branches keep their ancestor chain visible so the
-  tree structure remains navigable.
-- **Favorites bar:** a compact `QListWidget` in the left sidebar shows
-  pinned directories; single-click navigates, right-click removes. Synced
-  with the existing File → 收藏 directory / AppState storage.
-- **Directory-level back/forward:** `Ctrl+Alt+Left/Right` navigates directory
-  history (independent of image-level history). Automatically pushed on
-  `changeDirectory`, `onBreadcrumbPath`, and tree node clicks.
-- **RAW filter alias:** the thumbnail type filter now accepts `raw` as a
-  single token that expands to 20 common RAW extensions (cr2/nef/arw/dng/…),
-  and `tiff` expands to `tif`+`tiff`.
-- **SelectionModel unification:** `CompareWorkspace` now writes the focused
-  reference cell back to the app-wide `SelectionModel` via
-  `setSelectionModel()`, so the global "current image" stays unique. Panel
-  synchronization (`MetadataPanel` directly listens to
-  `SelectionModel::currentImageChanged`) eliminates "each widget keeps its
-  own current" copies.
-- **Metadata GPS:** `domain::ImageMetadata` gains `hasGps`,
-  `gpsLatitude/gpsLongitude/gpsAltitude`. `MetadataReader::readGps()` parses
-  the JPEG EXIF GPS IFD (tag 0x8825, no third-party lib). Overlay and
-  MetadataPanel display coordinates as D°M'S" with N/S/E/W hemispheres.
-- **Overlay mini histogram:** `MetadataOverlay` now embeds a
-  `HistogramWidget` child below the EXIF lines. Histogram is computed lazily
-  from the `ImageViewer`'s already-decoded frame on show, no extra decode.
-
+- **Directory tree auto-locate:** the tree now automatically expands ancestors and scrolls to the image's parent folder on `currentImageChanged` (no manual tree navigation needed when browsing across directories).
+- **Directory search:** `Ctrl+F` on the directory tree filters folders by name in-place; matching branches keep their ancestor chain visible so the tree structure remains navigable.
+- **Favorites bar:** a compact `QListWidget` in the left sidebar shows pinned directories; single-click navigates, right-click removes. Synced with the existing File → Favorites directory action and AppState storage.
+- **Directory-level back/forward:** `Ctrl+Alt+Left/Right` navigates directory history (independent of image-level history). Automatically pushed on `changeDirectory`, `onBreadcrumbPath`, and tree node clicks.
+- **RAW filter alias:** the thumbnail type filter now accepts `raw` as a single token that expands to 20 common RAW extensions (cr2/nef/arw/dng/…), and `tiff` expands to `tif`+`tiff`.
+- **SelectionModel unification:** `CompareWorkspace` now writes the focused reference cell back to the app-wide `SelectionModel` via `setSelectionModel()`, so the global "current image" stays unique. Panel synchronization (`MetadataPanel` directly listens to `SelectionModel::currentImageChanged`) eliminates separate per-widget copies of the current image.
+- **Metadata GPS:** `domain::ImageMetadata` gains `hasGps`, `gpsLatitude`/`gpsLongitude`/`gpsAltitude`. `MetadataReader::readGps()` parses the JPEG EXIF GPS IFD (tag 0x8825, no third-party library). The overlay and MetadataPanel display coordinates as D°M'S" with N/S/E/W hemispheres.
+- **Overlay mini histogram:** `MetadataOverlay` now embeds a `HistogramWidget` child below the EXIF lines. The histogram is computed lazily from the `ImageViewer`'s already-decoded frame on show, with no extra decode.
 ### Added — P0 Browser & Inspector polish (review follow-up)
 
 - **View shortcuts `Ctrl+1..4`:** rebind to the four primary browse modes —
-  Thumbnail (缩略图), Large Icon (大图标), Details (详情), Filmstrip (胶片条).
+  Thumbnail, Large Icon, Details, and Filmstrip.
   The extra Small Icon / Compact modes remain reachable at `Ctrl+5/6`.
-- **Sort by Camera / Lens:** the sort combo gains 相机 / 镜头 entries; ordering
+- **Sort by Camera / Lens:** the sort combo gains Camera / Lens entries; ordering
   uses the EXIF make+model / lens string (resolved on demand).
 - **Metadata filters (Camera / Lens / ISO):** three compact widgets on the
-  toolbar filter the thumbnail grid — camera & lens by case-insensitive
+  toolbar filter the thumbnail grid — camera and lens by case-insensitive
   substring against the EXIF index, ISO by exact value. Combine with the other
   filters via AND.
 - **Pixel Inspector — XYZ & HEX:** the color-space combo now includes `XYZ`
@@ -4258,55 +3986,43 @@ All notable changes to this project are documented here. The format is based on
   pixel on screen while the mouse moves away (useful for ISP screenshots).
 - **Pixel Inspector — ROI channel averages:** the kernel stats now also report
   per-channel R/G/B mean, in addition to the existing luminance mean/std/min/max.
-- **Export — Crop & Strip Metadata:** the export dialog gains a 裁剪 group
-  (X/Y/W/H) applied before encode, and a 剥离元数据 (EXIF/ICC) toggle. Re-encoding
+- **Export — Crop & Strip Metadata:** the export dialog gains a Crop group
+  (X/Y/W/H) applied before encode, and a Strip Metadata (EXIF/ICC) toggle. Re-encoding
   from raw pixels already drops metadata; the flag records explicit intent.
-
 ### Added — Review M14 follow-up (Browse & Inspector gaps)
 
 - **Browse — `List` view mode:** a new `List` view mode (Windows-Explorer-style
   icon + name, wrapping into columns) joins the existing
   Thumbnail/LargeIcon/SmallIcon/Details/Filmstrip/Compact modes. `Ctrl+1..4`
-  now map to 缩略图 / 列表 / 详情 / 胶片条; the extra 小图标 / 紧凑 modes remain
+  now map to Thumbnail / List / Details / Filmstrip; the extra SmallIcon / Compact modes remain
   at `Ctrl+5/6`.
 - **Pixel Inspector — crosshair:** the inspected pixel is now marked with a
   crosshair on the panel image, following the cursor and clearing when the
   pointer leaves the image — so an ISP engineer can screenshot the exact
   inspection point.
 - **Filter by Tag:** a new `TagStore` (persisted to a local `tags.txt`) plus a
-  tag filter field in the browse toolbar and a right-click “添加标签… / 移除标签”
+  tag filter field in the browse toolbar and a right-click “Add Tag… / Remove Tag”
   menu on thumbnails. Tags combine with the other filters via AND.
 - **Compare — `Tab` toggles overlay:** `Tab` now toggles the overlay/sync mode
   in addition to `O`, per the review's keyboard spec.
-
 ### Added — M16 Compare layout presets (1~8)
 
 - **N-up layout presets via `1`~`8`:** pressing a plain digit key `1`–`8` in
   `CompareWorkspace` now loads an N-up compare preset — key `N` compares N
   images — choosing a near-square grid (1→1col, 2/3/4→2/3/2col, 5/6/7/8→3/4col)
-  and syncing the 布局 combo. Replaces the previous 1–7→combo-index mapping.
+  and syncing the layout combo. Replaces the previous 1–7→combo-index mapping.
   `Ctrl+2/4/8` remain as aliases for the 2/4/8 presets.
 - **Compare shortcut help:** the `?` help and the main-window shortcut sheet now
   document `1~8` as N-up layout presets.
-
 ### Added — M16 Compare editing ↔ metrics integration
 
-- **Editing now feeds reference/difference metrics:** `updateMetrics()` computes
-  PSNR/SSIM on the *adjusted* pixels of the reference and target cells, so
-  brightness/contrast/gamma/white-balance edits change the numbers (previously
-  computed only on the original decoded pixels).
-- **Editing now feeds the diff overlay:** new `refreshCellDiff()` computes the
-  per-cell difference map from adjusted pixels and overlays it, so the heatmap /
-  highlight diff reflects in-cell edits. Editing a cell refreshes its diff live;
-  editing the reference refreshes all panes on slider release (`onAdjEditFinished`).
-- **Per-pane histogram overlay:** each compare cell can show its own histogram
-  (new "每格直方图叠加" checkbox in the side panel), positioned bottom-right and
-  kept in sync with edits and window resize.
-
+- **Editing now feeds reference/difference metrics:** `updateMetrics()` computes PSNR/SSIM on the *adjusted* pixels of the reference and target cells, so brightness/contrast/gamma/white-balance edits change the numbers (previously computed only on the original decoded pixels).
+- **Editing now feeds the diff overlay:** new `refreshCellDiff()` computes the per-cell difference map from adjusted pixels and overlays it, so the heatmap / highlight diff reflects in-cell edits. Editing a cell refreshes its diff live; editing the reference refreshes all panes on slider release (`onAdjEditFinished`).
+- **Per-pane histogram overlay:** each compare cell can show its own histogram (new "Per-cell histogram overlay" checkbox in the side panel), positioned bottom-right and kept in sync with edits and window resize.
 ### Added — P1 Product Workflow (Compare, Analyzer, Report)
 
 - **Compare → Analyze/Export buttons (P1-④):** Two toolbar buttons
-  (分析 / 导出报告) added to `CompareWorkspace`. "Analyze" sends the
+  (Analyze / Export Report) added to `CompareWorkspace`. "Analyze" sends the
   focused reference cell's image to the AnalysisPanel; "Export Report"
   triggers the full export pipeline — closing the Compare→Analyze→Export
   loop without switching windows.
@@ -4315,30 +4031,16 @@ All notable changes to this project are documented here. The format is based on
   analyzer). For a typical run with 10+ analyzers, this reduces wall-clock
   analysis time by 3–5× compared to the previous serial loop.
 - **Markdown report export (P1-⑥):** `exportReport()` now supports
-  `Markdown 文件 (*.md)` format. Outputs a structured `.md` file with
+  `Markdown file (*.md)` format. Outputs a structured `.md` file with
   title, histogram (base64 PNG), and compare diff block.
-
 ### Added — P2 Release Readiness (Batch, Plugin SDK, Dashboard, Release)
 
-- **Batch retry + recursive (P2-⑦):** `BatchProcessor` supports per-file
-  retry (`retryCount` + `retryDelayMs`) in `execute()`. Directory inputs in
-  `BatchDialog` ("添加目录...") expand via `recursive_directory_iterator`
-  when `recursiveScan` is enabled.
-- **Batch Crop operation (P2-⑦):** New `BatchOp::Crop` crops to
-  `{cropX, cropY, cropW, cropH}` before subsequent operations.
-- **Plugin SDK frozen (P2-⑧):** Decoder / Analyzer / Exporter / Importer
-  interfaces formally frozen as ABI v1. See
-  [ADR 013](docs/adr/013-p2-plugin-sdk-frozen.md).
-- **Nightly Dashboard confirmed (P2-⑨):** The existing
-  `scripts/benchmark_dashboard.ps1` generates an HTML dashboard with
-  sparklines, a 28-slot trend CSV, and CI jobs for Nightly / Release /
-  Performance Gate. No code changes needed.
-- **Auto Update Checker (P2-⑩):** New `core/update/UpdateChecker` parses
-  GitHub Releases `tag_name` and compares semver tags.
-- **NSIS file associations (P2-⑩):** Installer registers `.mviewer`
-  workspace files and 15 image extensions (jpg/png/raw/etc.) in the
-  Windows Open-With menu. Clean unregistration on uninstall.
-
+- **Batch retry + recursive (P2-⑦):** `BatchProcessor` supports per-file retry (`retryCount` + `retryDelayMs`) in `execute()`. Directory inputs in `BatchDialog` ("Add Directory...") expand via `recursive_directory_iterator` when `recursiveScan` is enabled.
+- **Batch Crop operation (P2-⑦):** New `BatchOp::Crop` crops to `{cropX, cropY, cropW, cropH}` before subsequent operations.
+- **Plugin SDK frozen (P2-⑧):** Decoder / Analyzer / Exporter / Importer interfaces formally frozen as ABI v1. See [ADR 013](docs/adr/013-p2-plugin-sdk-frozen.md).
+- **Nightly Dashboard confirmed (P2-⑨):** The existing `scripts/benchmark_dashboard.ps1` generates an HTML dashboard with sparklines, a 28-slot trend CSV, and CI jobs for Nightly / Release / Performance Gate. No code changes needed.
+- **Auto Update Checker (P2-⑩):** New `core/update/UpdateChecker` parses GitHub Releases `tag_name` and compares semver tags.
+- **NSIS file associations (P2-⑩):** Installer registers `.mviewer` workspace files and 15 image extensions (jpg/png/raw/etc.) in the Windows Open-With menu. Clean unregistration on uninstall.
 ### Removed
 
 - **NavSidebar:** removed the left-side Favorites/Recent/History tree that
@@ -4361,10 +4063,9 @@ All notable changes to this project are documented here. The format is based on
 - **ExportJob (M21):** unified Convert runner (`core/export/ExportJob`);
   ExportDialog Convert path delegates to it.
 - **Memory Timeline (M21):** MemoryTracker ring buffer (300 samples);
-  Tools → 内存时间线 shows peak + sparkline.
+  Tools → Memory Timeline shows peak + sparkline.
 - **Benchmark Dashboard (M21):** `scripts/benchmark_dashboard.ps1` fixed table
   binding + Canvas sparklines for trend metrics.
-
 ### Added — Product Experience & Professional Workflow
 
 - **Thumbnail fuzzy search:** search bar accepts `*` / `?` wildcards
@@ -4372,12 +4073,12 @@ All notable changes to this project are documented here. The format is based on
 - **Pixel Inspector Copy:** Copy RGB / Copy HEX / Copy XYZ buttons in the
   Inspector tab; XYZ uses sRGB→linear→D65 conversion.
 - **Batch pause/resume:** `BatchProcessor::requestPause()` / `resume()` with
-  condition-variable wait between files; BatchDialog UI exposes 暂停/恢复.
+  condition-variable wait between files; BatchDialog UI exposes Pause/Resume.
 - **Structured file logging:** `core/Logger` installs a Qt message handler
   writing to `%APPDATA%/MViewer/logs/mviewer-YYYYMMDD.log`.
 - **CrashHandler always-on:** minidumps land in
   `%APPDATA%/MViewer/crash-reports/` without requiring `MVIEWER_CRASH_DUMP`.
-- **Settings import/export:** Tools menu → 导出设置 / 导入设置
+- **Settings import/export:** Tools menu → Export Settings / Import Settings
   (`.mvs` JSON); schema version migration via `migrateSettingsIfNeeded()`.
 - **Compare Algorithm plugin interface:** `ICompareAlgorithm` +
   `createCompareAlgorithm` / `destroyCompareAlgorithm` C exports;
@@ -4395,297 +4096,171 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added — 1.0 Release Preparation (v1.0.4)
 
-- **性能基线更新:** `benchmark/perf_baseline.json` 更新为 2026-07-24 实测值
-  （commit `a930682`，1000-image corpus，全部场景 PASS）。
-  关键指标：B0 冷启动 6.2ms、B2 首缩略图 17.6ms、B8 切换 p50 0.24ms、
-  B10 100MP 视口 710ms。历史记录写入 `benchmark/report/history.csv`，
-  回归报告写入 `benchmark/report/regression_2026-07-24.md`。
-- **安装包验收:** portable zip (24.7 MB) + NSIS installer (24.8 MB) 构建通过，
-  SHA256SUMS + RELEASE_NOTES 自动生成。`qtiff.dll` 确认包含在 imageformats 中。
+- **Performance baseline update:** `benchmark/perf_baseline.json` updated to measured values from 2026-07-24 (commit `a930682`, 1000-image corpus, all scenarios PASS). Key metrics: B0 cold start 6.2ms, B2 first thumbnail 17.6ms, B8 switch p50 0.24ms, B10 100MP viewport 710ms. History is written to `benchmark/report/history.csv`, and the regression report is written to `benchmark/report/regression_2026-07-24.md`.
+- **Package acceptance:** portable zip (24.7 MB) + NSIS installer (24.8 MB) built successfully; SHA256SUMS + RELEASE_NOTES generated automatically. `qtiff.dll` confirmed included in imageformats.
 
 ### Added — Release automation (M14.8 / B7)
 
-- **SHA256SUMS + 发布说明:** `scripts/release_manifest.ps1` 扫描 `dist/` 产物，
-  生成 `SHA256SUMS.txt`（标准 hash 文件名格式）与 `RELEASE_NOTES.md`
-  （从 CHANGELOG 抽取最新版本段）。`package_release.ps1` 打包结束后自动调用。
-  不修改冻结的 `release.yml`（AGENTS.md）。
+- **SHA256SUMS + release notes:** `scripts/release_manifest.ps1` scans `dist/` artifacts and generates `SHA256SUMS.txt` (standard hash-filename format) and `RELEASE_NOTES.md` (latest version section extracted from the CHANGELOG). `package_release.ps1` invokes it automatically when packaging finishes. Does not modify the frozen `release.yml` (AGENTS.md).
 
-### Improved — Asset / Analyzer 工作流 (M17 高价值子集)
+### Improved — Asset / Analyzer workflow (M17 high-value subset)
 
-- **批量分析导出:** 支持选择分析器 → `runBatch` → CSV/JSON（`buildBatchReport`）；
-  无选中时回落当前过滤可见集；工具菜单 `Ctrl+Shift+A` + 右键入口。
-- **插件管理:** 「重新扫描」真正 `loadDirectory`；启用/禁用与扫描后发出
-  `pluginsChanged`，分析面板自动 `refreshAnalyzers()`；显示导入器能力与状态栏。
-- **导出尊重过滤:** 导出图片优先 Selection → 评分/标签过滤后的可见集。
-- **分析面板:** 增加「运行」按钮，统一分析入口更可发现。
+- **Batch analysis export:** select analyzers → `runBatch` → CSV/JSON (`buildBatchReport`); when nothing is selected, falls back to the currently filtered visible set; Tools menu `Ctrl+Shift+A` plus a context-menu entry.
+- **Plugin management:** "Rescan" actually calls `loadDirectory`; enable/disable and scan emit `pluginsChanged`, and the analysis panel automatically calls `refreshAnalyzers()`; importer capabilities and a status bar are shown.
+- **Export respects filters:** image export prefers Selection, then the visible set after rating/tag filters.
+- **Analysis panel:** added a "Run" button so the unified analysis entry point is easier to discover.
 
-### Improved — Browse 体验门禁 (M15 / A-1~A-3)
+### Improved — Browse experience gates (M15 / A-1~A-3)
 
-- **Selection 统一:** Export / Batch / Compare 优先消费 `SelectionModel`；
-  菜单动作随选中数量启用/禁用（`resolveSelectedPaths` / `updateSelectionActions`）。
-- **大目录异步:** DirectoryTree 对 ≥500 子项目录使用渐进式 `fetchMore`
-  （`scheduleFetchMore` 让出事件循环），展开/导航不再卡死 UI。
-- **万级缩略图:** 可见区优先解码；预测窗口随目录规模自适应（48/64/96）。
+- **Unified Selection:** Export / Batch / Compare prefer `SelectionModel`; menu actions enable or disable based on the selection count (`resolveSelectedPaths` / `updateSelectionActions`).
+- **Async large directories:** DirectoryTree uses progressive `fetchMore` for directories with ≥500 children (`scheduleFetchMore` yields the event loop), so expand and navigation no longer freeze the UI.
+- **10k-scale thumbnails:** the visible region is decoded first; the prediction window adapts to directory size (48/64/96).
 
-### Added — Professional Compare 收尾 (M16 / A-4)
+### Added — Professional Compare wrap-up (M16 / A-4)
 
-- **像素连线 (Pixel Link):** 比较工作区新增「像素连线」模式（快捷键 L）。
-  开启后点击任意图片添加共享图像坐标标记点，各窗格显示编号圆点，两图之间
-  绘制虚线连接；悬停「标记」标签可查看每点 RGB 与相对基准的 Δ。
-  (`src/compareworkspace.{h,cpp}`, `src/widgets/rawimageview.{h,cpp}`)
-- **叠加不透明度滑块:** 叠加对比模式支持 0–100% 上层透明度调节（此前写死 0.45）。
-- **差异高亮模式:** 「高亮差异」开关 — 差异区域红色高亮、相似区域灰度显示
-  （`DifferenceEngine::highlightMap`）。
-- **自定义 M×N 网格:** 布局下拉新增「自定义」，行/列 SpinBox 可设 1–8。
-- **坐标映射修正:** `RawImageView::widgetToImage` 改为与绘制一致的左上角原点，
-  像素检视 / 准星 / 连线标记共用同一坐标系。
+- **Pixel Link:** the compare workspace adds a "Pixel Link" mode (shortcut L). When enabled, clicking any image adds a shared image-coordinate marker; each pane shows a numbered dot, and a dashed line connects the two images. Hovering the "Markers" label shows each point's RGB and the Δ relative to the reference. (`src/compareworkspace.{h,cpp}`, `src/widgets/rawimageview.{h,cpp}`)
+- **Overlay opacity slider:** overlay compare mode supports 0–100% top-layer opacity (previously hardcoded to 0.45).
+- **Difference highlight mode:** "Highlight differences" toggle — differing regions are highlighted in red and similar regions are shown in grayscale (`DifferenceEngine::highlightMap`).
+- **Custom M×N grid:** the layout dropdown adds "Custom"; row/column SpinBoxes can be set from 1–8.
+- **Coordinate mapping fix:** `RawImageView::widgetToImage` now uses a top-left origin consistent with painting, so pixel inspect, the crosshair, and link markers share the same coordinate system.
 
 ### Added — GPU Stage A (M13 / A-8.1)
 
-- **QOpenGLWidget 查看器:** `ImageViewer` 改为继承 `QOpenGLWidget`，为 GPU
-  tile 上传提供真实 GL 上下文。(`src/imageviewer.h`, `src/imageviewer.cpp`)
-- **真实 GL 纹理上传:** `GpuTileUploader` 在 `MVIEWER_GPU=1` 且上下文可用时
-  通过 `glTexImage2D` 上传 tile，并用 `QOpenGLTextureBlitter` 合成；失败或
-  未开启时回退 CPU `drawImage`。(`src/gpu/GpuTileUploader.{h,cpp}`)
-- **链接 Qt OpenGL:** `mviewer_ui` 链接 `Qt6::OpenGL` / `Qt6::OpenGLWidgets`。
+- **QOpenGLWidget viewer:** `ImageViewer` now subclasses `QOpenGLWidget`, providing a real GL context for GPU tile upload. (`src/imageviewer.h`, `src/imageviewer.cpp`)
+- **Real GL texture upload:** when `MVIEWER_GPU=1` and a context is available, `GpuTileUploader` uploads tiles via `glTexImage2D` and composites them with `QOpenGLTextureBlitter`; on failure or when disabled, it falls back to CPU `drawImage`. (`src/gpu/GpuTileUploader.{h,cpp}`)
+- **Link Qt OpenGL:** `mviewer_ui` links `Qt6::OpenGL` / `Qt6::OpenGLWidgets`.
 
-### Fixed — 体验问题修复
+### Fixed — UX fixes
 
-- **菜单打开目录后目录树不更新:** 点击菜单"打开目录"选择新目录后，左侧目录树、
-  面包屑导航、缩略图面板等现在会正确同步更新。新增统一的 `changeDirectory()`
-  方法，菜单打开目录、路径输入框都走同一更新链路。
-  (`src/mainwindow.cpp`, `src/mainwindow.h`)
-- **图片比较弹窗不显示对比图片:** 比较弹窗打开后图片空白，需要手动点击"左右分割"
-  或"滑动对比"才能看到图片。根因是 `setImages()` 在对话框布局完成前调用，导致
-  `fitAll()` 因 cell 尺寸为零而跳过所有图片。修复为在 `dlg->show()` 后通过
-  `QTimer::singleShot(0, ...)` 延迟加载，确保布局完成后再计算适配缩放。
-  (`src/mainwindow.cpp`)
-- **闪烁对比效果不可见:** 修复 `fitAll()` 时序问题后图片正常显示，同时改进
-  `applyBlink()` 使两张图闪烁时活动图片全屏居中显示，效果更明显。
-  (`src/compareworkspace.cpp`)
-- **按住空格临时闪烁恢复正常:** 空格键临时闪烁功能在图片不可见时也无法感知，
-  随 `fitAll()` 修复一并恢复。(`src/compareworkspace.cpp`)
+- **Directory tree not updating after Open Directory from the menu:** after choosing a new directory via the "Open Directory" menu, the left directory tree, breadcrumb navigation, thumbnail panel, and related views now stay in sync. Added a unified `changeDirectory()` method; both the Open Directory menu and the path input box use the same update path. (`src/mainwindow.cpp`, `src/mainwindow.h`)
+- **Compare dialog not showing images:** after the compare dialog opened, images were blank until the user manually clicked "Side-by-side" or "Swipe compare". Root cause: `setImages()` ran before dialog layout finished, so `fitAll()` skipped every image because the cell size was zero. Fixed by deferring the load with `QTimer::singleShot(0, ...)` after `dlg->show()`, so the fit scale is computed only after layout completes. (`src/mainwindow.cpp`)
+- **Blink compare effect not visible:** after the `fitAll()` timing fix, images display normally. `applyBlink()` was also improved so the active image is shown fullscreen and centered while blinking, making the effect clearer. (`src/compareworkspace.cpp`)
+- **Hold-Space temporary blink works again:** temporary blink on the Space key was imperceptible while images were invisible; it is restored together with the `fitAll()` fix. (`src/compareworkspace.cpp`)
 
-### Added — 新功能
+### Added — New features
 
-- **路径输入框:** 图片展示区域上方新增当前文件夹路径输入框，实时显示当前路径，
-  输入新路径按 Enter 即可切换目录（等效于菜单"打开目录"）。路径不存在时在状态栏
-  提示并恢复原路径。(`src/mainwindow.cpp`, `src/mainwindow.h`)
-- **闪烁对比快捷键 B:** 按 B 键可快速切换闪烁对比开关，闪烁间隔固定为 150ms
-  实现快速切换效果。(`src/compareworkspace.cpp`)
+- **Path input box:** a current-folder path field was added above the image view. It shows the current path live; enter a new path and press Enter to switch directories (equivalent to the "Open Directory" menu). If the path does not exist, the status bar reports it and the original path is restored. (`src/mainwindow.cpp`, `src/mainwindow.h`)
+- **Blink compare shortcut B:** press B to toggle blink compare. The blink interval is fixed at 150ms for a fast switch. (`src/compareworkspace.cpp`)
 
 ## [1.0.2] - 2026-07-24
 
-### Added — 基础功能打磨第八轮 (Polish Round 8)
+### Added — Core polish, round 8
 
-- **中键拖拽平移:** ImageViewer 现在支持鼠标中键拖拽平移图片（与左键拖拽相同），
-  符合专业图像工具（Photoshop、GIMP）的操作习惯。(`src/imageviewer.cpp`)
-- **Ctrl+0/Ctrl+1 缩放快捷键:** 除了无修饰键的 0/1 外，Ctrl+0 重置适应窗口、
-  Ctrl+1 设置 100% 缩放也同时可用。(`src/imageviewer.cpp`)
-- **右键菜单新增三项:** "复制像素颜色 (#RRGGBB)"、"另存为..."、"框选区域 (R)"
-  切换项。(`src/imageviewer.cpp`)
-- **R 键切换选区模式:** 按 R 键可切换框选区域模式，此前该功能有实现但无 UI 入口。
-  (`src/imageviewer.cpp`)
-- **全屏光标自动隐藏:** ImageViewer 全屏模式下，鼠标静止 2.5 秒后光标自动隐藏，
-  移动后恢复。(`src/imageviewer.cpp`)
-- **幻灯片间隔可配置:** 幻灯片间隔从硬编码 3 秒改为从 QSettings 读取
-  （`slideshowInterval`，默认 3000ms，范围 500ms-60s）。(`src/mainwindow.cpp`)
-- **选区拖拽实时尺寸标注:** 框选区域时在选框右下角实时显示图像像素尺寸
-  （如 `1280×720`）。(`src/imageviewer.cpp`)
-- **像素检查器显示 Alpha 通道:** RGBA 图像（如带透明的 PNG/WebP）的像素检查器
-  现在显示 `RGBA(r,g,b,a)` 格式，光标离开图像时显示"光标不在图像上"。
-  (`src/imageviewer.cpp`, `src/mainwindow.cpp`)
-- **搜索防抖:** 搜索面板输入延迟 250ms 后才执行搜索，避免大索引下连续按键
-  导致卡顿。(`src/searchpanel.cpp`)
-- **ESC 清除搜索:** 按 ESC 键清除搜索框内容。(`src/searchpanel.cpp`)
+- **Middle-button drag to pan:** ImageViewer now supports panning the image by dragging with the middle mouse button (same behavior as left-button drag), matching the convention in professional image tools such as Photoshop and GIMP. (`src/imageviewer.cpp`)
+- **Ctrl+0 / Ctrl+1 zoom shortcuts:** In addition to the unmodified 0 and 1 keys, Ctrl+0 resets zoom to fit the window and Ctrl+1 sets zoom to 100%. (`src/imageviewer.cpp`)
+- **Three new context-menu items:** "Copy pixel color (#RRGGBB)", "Save As...", and a "Select region (R)" toggle. (`src/imageviewer.cpp`)
+- **R key toggles selection mode:** Press R to toggle region-selection mode. The feature was already implemented but had no UI entry point. (`src/imageviewer.cpp`)
+- **Auto-hide cursor in fullscreen:** In ImageViewer fullscreen mode, the cursor hides after the mouse is idle for 2.5 seconds and reappears when the mouse moves. (`src/imageviewer.cpp`)
+- **Configurable slideshow interval:** The slideshow interval is no longer hardcoded to 3 seconds. It is read from QSettings (`slideshowInterval`, default 3000 ms, range 500 ms–60 s). (`src/mainwindow.cpp`)
+- **Live size label while dragging a selection:** While drawing a region selection, the image size in pixels is shown live at the bottom-right of the selection rectangle (for example, `1280×720`). (`src/imageviewer.cpp`)
+- **Pixel inspector shows the alpha channel:** For RGBA images (such as PNGs or WebPs with transparency), the pixel inspector now shows `RGBA(r,g,b,a)`. When the cursor leaves the image, it shows "Cursor is not over the image". (`src/imageviewer.cpp`, `src/mainwindow.cpp`)
+- **Search debounce:** The search panel waits 250 ms after input before running a search, so rapid keystrokes do not stall the UI on a large index. (`src/searchpanel.cpp`)
+- **ESC clears search:** Press ESC to clear the search box. (`src/searchpanel.cpp`)
+### Fixed — Basic functionality polish, round 8 (Polish Round 8)
 
-### Fixed — 基础功能打磨第八轮 (Polish Round 8)
-
-- **批量处理取消按钮空指针崩溃:** `BatchDialog::onCancel` 访问已被 `std::move`
-  的 `m_processor` 导致空指针崩溃。改用 `shared_ptr` 控制句柄 `m_activeProcessor`。
+- **Null-pointer crash on the batch-processing Cancel button:** `BatchDialog::onCancel` accessed `m_processor` after it had been `std::move`d, causing a null-pointer crash. The processor is now held by the `shared_ptr` control handle `m_activeProcessor`.
   (`src/batchdialog.cpp/h`)
+### Fixed — Basic functionality polish, round 7
 
-### Fixed — 基础功能打磨第七轮 (Polish Round 7)
+- **Thumbnail size adjustment had no effect (functional bug):** `setThumbSize` called `setViewMode(m_viewMode)` to update `gridSize`, but the early return at the start of `setViewMode` (`if (m_viewMode == mode) return;`) skipped the update. After a Ctrl+scroll resize, `gridSize` never changed, so thumbnails overlapped or had incorrect spacing. The fix updates `gridSize` directly. (`src/thumbnailpanel.cpp`)
+- **Multi-selection lost on sort change (functional bug):** `buildModel` called `setStringList`, which fully rebuilt the model and cleared the current selection and current index. Selected paths are now saved before the rebuild and restored afterward by remapping them through `m_rowByPath`. (`src/thumbnailpanel.cpp`)
+- **ESC did not exit main-window fullscreen:** In main-window fullscreen, ESC exited fullscreen only when the viewer had focus. When the main window itself had focus, ESC did nothing. An `isFullScreen()` check was added. (`src/mainwindow.cpp`)
+- **Division-by-zero risk in `QtFallbackDecoder`:** `meta.bitDepth = img.depth() / meta.channels` lacked a `meta.channels > 0` guard, unlike `QtDecoder::fillMetadata`. (`src/core/image/decoder/QtFallbackDecoder.cpp`)
+- **`loadDirectory` permanently changed global thread-pool state:** `setMaxQueueDepth(DecodePool, 0)` was not restored when `loadDirectory` finished, so later `DecodePool` submissions lost backpressure protection. The depth is now restored to the default of 1000 before return. (`src/core/image/ImageRepository.cpp`)
+- **Decode failure produced no error message:** `QtDecoder::decodeFull` returned an empty `ImageData` when `reader.read()` returned an empty `QImage`, without logging `QImageReader::errorString()`, which made failures hard to diagnose. A `qWarning` was added. (`src/core/image/decoder/QtDecoder.cpp`)
+### Added — Foundational polish, round 7
 
-- **缩略图大小调整无效 bug (功能 bug):** `setThumbSize` 调用 `setViewMode(m_viewMode)`
-  试图更新 gridSize，但 `setViewMode` 开头的 `if (m_viewMode == mode) return;` 会
-  直接返回，导致 Ctrl+滚轮 调整大小后 gridSize 永远不更新，缩略图重叠或间距错误。
-  改为直接更新 gridSize。(`src/thumbnailpanel.cpp`)
-- **排序变更时多选丢失 (功能 bug):** `buildModel` 调用 `setStringList` 完全重建
-  模型，导致当前选择和当前索引全部丢失。在重建前保存选中路径，重建后通过
-  `m_rowByPath` 重新映射并恢复选择。(`src/thumbnailpanel.cpp`)
-- **ESC 无法退出主窗口全屏:** 主窗口全屏时 ESC 只在查看器有焦点时退出全屏，
-  主窗口本身有焦点时无法退出。新增 `isFullScreen()` 检查。(`src/mainwindow.cpp`)
-- **QtFallbackDecoder 除零风险:** `meta.bitDepth = img.depth() / meta.channels`
-  缺少 `meta.channels > 0` 保护，与 `QtDecoder::fillMetadata` 不一致。
-  (`src/core/image/decoder/QtFallbackDecoder.cpp`)
-- **loadDirectory 永久改变全局线程池状态:** `setMaxQueueDepth(DecodePool, 0)`
-  在 `loadDirectory` 结束后未恢复，导致后续所有 DecodePool 提交失去背压保护。
-  在返回前恢复为默认值 1000。(`src/core/image/ImageRepository.cpp`)
-- **解码失败无错误信息:** `QtDecoder::decodeFull` 在 `reader.read()` 返回空
-  QImage 时直接返回空 `ImageData`，不输出 `QImageReader::errorString()`，
-  难以诊断失败原因。添加 `qWarning` 输出。(`src/core/image/decoder/QtDecoder.cpp`)
+- **Thumbnail size persistence:** Thumbnail size (adjusted with Ctrl+scroll wheel or the slider) is now saved to QSettings on close and restored automatically at startup. (`src/mainwindow.cpp/h`)
+- **Search panel visibility persistence:** The search panel's shown or hidden state is now saved on close and restored at startup. (`src/mainwindow.cpp`)
+- **Open File dialog default path:** The Open File dialog now starts in the directory currently being browsed, reducing navigation. (`src/mainwindow.cpp`)
+- **Shortcut help completed:** The F1 quick-reference sheet now includes Ctrl+D (favorite directory), Ctrl+Shift+F (global search), F2 (rename), Delete (delete to Recycle Bin), Ctrl+M (Move to...), Ctrl+E (Show in File Explorer), Ctrl+Shift+B (batch processing), and Alt+Left/Right (history navigation). (`src/mainwindow.cpp`)
+### Fixed — CI ASan switched from MSVC to clang-cl + LLVM ASan/UBSan
 
-### Added — 基础功能打磨第七轮 (Polish Round 7)
-
-- **缩略图大小持久化:** 缩略图大小（Ctrl+滚轮或滑块调整）现在在关闭时保存到
-  QSettings，启动时自动恢复。(`src/mainwindow.cpp/h`)
-- **搜索面板可见性持久化:** 搜索面板的显示/隐藏状态现在在关闭时保存并启动时恢复。
-  (`src/mainwindow.cpp`)
-- **打开文件对话框默认路径:** "打开文件"对话框现在以当前浏览的目录为起始路径，
-  减少导航操作。(`src/mainwindow.cpp`)
-- **快捷键帮助补全:** F1 速查表新增 Ctrl+D（收藏目录）、Ctrl+Shift+F（全局搜索）、
-  F2（重命名）、Delete（删除到回收站）、Ctrl+M（移动到...）、Ctrl+E（在资源管理器
-  中显示）、Ctrl+Shift+B（批量处理）、Alt+←/→（历史导航）。
-  (`src/mainwindow.cpp`)
-
-### Fixed — CI ASan 从 MSVC 切换到 clang-cl + LLVM ASan/UBSan
-
-- CI 中的 `asan` job 从 MSVC `/fsanitize=address`（experimental）切换为
-  clang-cl + LLVM ASan/UBSan。MSVC ASan 在每次运行中都因 `shared_ptr`
-  instrumentation 的工具链 bug 而 crash（access-violation at near-null
-  address），而 clang-cl + LLVM ASan 在 nightly job 中已验证通过全部 CTest
-  测试。ASan job 仍为 advisory（`continue-on-error: true`）。
+- The CI `asan` job switched from MSVC `/fsanitize=address` (experimental) to
+  clang-cl + LLVM ASan/UBSan. MSVC ASan crashed on every run because of a
+  toolchain bug in `shared_ptr` instrumentation (access violation at a
+  near-null address). clang-cl + LLVM ASan has been verified to pass the full
+  CTest suite in the nightly job. The ASan job remains advisory
+  (`continue-on-error: true`).
   (`.github/workflows/ci.yml`, `docs/known_issues/MSVC_ASAN.md`)
+### Added — Core Feature Polish, Round 5 (Navigation & Feedback Polish)
 
-### Added — 基础功能打磨第五轮 (Navigation & Feedback Polish)
-
-- **导航键全面打通:** `Home`/`End`（第一张/最后一张）、`PageUp`/`PageDown`（翻页 10 张）
-  加入 eventFilter 全局转发列表，在查看器、画廊、目录树等任意焦点状态下均有效。
-  之前这些键只在 MainWindow 自身有焦点时工作（几乎不会发生）。
+- **Navigation keys fully wired:** `Home`/`End` (first/last image) and `PageUp`/`PageDown` (step by 10 images) are added to the eventFilter global forwarding list, so they work in any focus state—the viewer, gallery, directory tree, and elsewhere. Previously these keys worked only when MainWindow itself had focus (which almost never happens).
   (`src/mainwindow.cpp`, `src/imageviewer.cpp`)
-- **评分联动画廊过滤:** MetadataPanel 中修改评分后，除了重绘星标覆盖层，还会重新
-  应用当前的评级过滤器——如把 3 星改为 1 星后图片立即从"3 星以上"过滤中移除。
+- **Rating changes drive gallery filtering:** After a rating is changed in MetadataPanel, the star overlay is redrawn and the current rating filter is reapplied—for example, changing an image from 3 stars to 1 star immediately removes it from a "3 stars and above" filter.
   (`src/mainwindow.cpp`)
-- **查看器空状态引导:** 未加载图片时，查看器显示"拖放图片或文件夹到此处 / 按 Ctrl+O
-  打开目录 / 双击缩略图查看"引导文字，而非空黑色面板。
+- **Viewer empty-state guidance:** When no image is loaded, the viewer shows guidance text—"Drop an image or folder here / Press Ctrl+O to open a directory / Double-click a thumbnail to view"—instead of an empty black panel.
   (`src/imageviewer.cpp`)
-- **拖放视觉反馈:** 拖放文件到窗口时，窗口边框高亮显示（使用系统强调色 4px 边框），
-  drop 或 dragLeave 后消失，给用户明确的"可放下"视觉确认。
+- **Drag-and-drop visual feedback:** While files are dragged over the window, the window border highlights with a 4px border in the system accent color. The highlight clears on drop or dragLeave, giving a clear visual confirmation that the content can be dropped.
   (`src/mainwindow.cpp/h`)
-- **窗口位置屏幕有效性检查:** `restoreGeometry` 后检查窗口是否在可见屏幕范围内
-  （多显示器断开后窗口可能恢复到屏幕外），如果不在任何屏幕上则重新居中到主屏幕。
+- **Window position screen-validity check:** After `restoreGeometry`, the app checks whether the window lies within a visible screen (a window can restore off-screen after a monitor is disconnected). If it is not on any screen, it is recentered on the primary screen.
   (`src/mainwindow.cpp`)
+### Added — Basic feature polish, round 4 (Shortcut Fix & Panel Polish)
 
-### Added — 基础功能打磨第四轮 (Shortcut Fix & Panel Polish)
-
-- **快捷键冲突修复 (功能 bug):** `Ctrl+1..5` 原先被评分拦截，导致视图模式 1–5（网格/
-  大图标/小图标/详情/胶片条）永远无法通过快捷键切换，只有 `Ctrl+6`（紧凑）可达。
-  评分快捷键改为 `Ctrl+Shift+0..5`，颜色标签改为 `Alt+0..6`，`Ctrl+1..6` 专用于
-  视图模式切换。F1 速查表同步更新。
+- **Shortcut conflict fix (functional bug):** `Ctrl+1..5` was previously intercepted by the rating shortcuts, so view modes 1–5 (grid / large icons / small icons / details / filmstrip) could never be switched by shortcut. Only `Ctrl+6` (compact) was reachable. Rating shortcuts are now `Ctrl+Shift+0..5`, color labels are now `Alt+0..6`, and `Ctrl+1..6` is reserved for view-mode switching. The F1 cheat sheet is updated to match.
   (`src/mainwindow.cpp`)
-- **排序模式持久化:** 排序模式（文件名/日期/大小/分辨率）现在在关闭时保存到 QSettings，
-  启动时自动恢复，不再每次重置为"文件名"。
+- **Sort mode persistence:** The sort mode (filename / date / size / resolution) is now saved to QSettings on close and restored on startup, instead of resetting to "filename" every time.
   (`src/mainwindow.cpp/h`)
-- **启动初始焦点:** 构造函数末尾将焦点设置到画廊，启动后即可用方向键导航，无需先点击。
+- **Initial focus on startup:** Focus is set on the gallery at the end of the constructor, so arrow-key navigation works immediately after launch without a prior click.
   (`src/mainwindow.cpp`)
-- **窗口最小尺寸:** 主窗口设置 `setMinimumSize(800, 500)`；中央分隔条设为不可折叠
-  （`setChildrenCollapsible(false)`），各子面板设置最小宽度（200/320/200/180），
-  防止缩到极小时布局崩溃。
+- **Window minimum size:** The main window calls `setMinimumSize(800, 500)`. The central splitter is non-collapsible (`setChildrenCollapsible(false)`), and each child panel has a minimum width (200/320/200/180), so the layout does not collapse when the window is shrunk to an extreme size.
   (`src/mainwindow.cpp`)
-- **查看器右键上下文菜单:** ImageViewer 新增 `contextMenuEvent`，右键菜单包含
-  复制图片、复制路径、放大/缩小/适应窗口/实际大小、上一张/下一张、全屏切换。
+- **Viewer right-click context menu:** ImageViewer now implements `contextMenuEvent`. The menu includes copy image, copy path, zoom in / zoom out / fit to window / actual size, previous / next, and toggle fullscreen.
   (`src/imageviewer.cpp/h`)
-- **缩略图加载失败占位图:** 解码失败的图片现在显示深灰色背景+"无法加载"文字，
-  与"正在加载"的浅灰色占位区分开。新增 `m_thumbFailed` 集合和 `thumbFailed()` 方法。
+- **Failed-thumbnail placeholder:** Images that fail to decode now show a dark-gray background with the text "Unable to load", distinct from the light-gray "Loading" placeholder. Adds the `m_thumbFailed` set and the `thumbFailed()` method.
   (`src/thumbnailpanel.cpp/h`)
+### Added — Core Polish, Round 3 (Interaction & Workflow Polish)
 
-### Added — 基础功能打磨第三轮 (Interaction & Workflow Polish)
-
-- **拖放体验统一:** MainWindow 补 `dragMoveEvent`，拖动文件到窗口任意区域（分隔条、
-  状态栏边缘等）均保持"可放置"光标，不再出现"禁止"闪烁。
+- **Unified drag-and-drop:** MainWindow now implements `dragMoveEvent`, so dragging a file over any part of the window (splitter bars, status-bar edges, and similar areas) keeps the “can drop” cursor and no longer flashes the “forbidden” cursor.
   (`src/mainwindow.cpp/h`)
-- **大目录滚动流畅度:** ThumbnailPanel 设置 `setBatchSize(256)`，1000+ 张图片时
-  滚动到末尾的批量布局延迟降低。
+- **Smoother scrolling in large directories:** ThumbnailPanel calls `setBatchSize(256)`, which cuts the batched layout delay when scrolling to the end of 1000+ images.
   (`src/thumbnailpanel.cpp`)
-- **剪贴板图片粘贴 (`Ctrl+V`):** 从剪贴板粘贴图片（截图后直接查看），自动保存为
-  临时 PNG 文件并通过正常的异步解码路径加载，保持直方图/解码一致。
+- **Paste image from clipboard (`Ctrl+V`):** Paste an image from the clipboard (for example, open a screenshot immediately). It is saved as a temporary PNG and loaded through the normal async decode path, so histogram and decode behavior stay consistent.
   (`src/mainwindow.cpp`)
-- **删除后自动跳转:** 画廊中删除图片后发出 `pathsRemoved` 信号；若当前查看器正在
-  显示被删图片，自动跳转到下一张，避免查看已不存在的图片。
+- **Auto-advance after delete:** Deleting images in the gallery emits `pathsRemoved`. If the viewer is showing a deleted image, it advances to the next one instead of staying on a file that no longer exists.
   (`src/thumbnailpanel.cpp/h`, `src/mainwindow.cpp`)
-- **F1 速查表:** 新增 `Ctrl+V` 粘贴快捷键说明。
+- **F1 cheat sheet:** Added the `Ctrl+V` paste shortcut.
+### Added — Fine UX Polish, Round 2 (Panel & Workflow Polish)
 
-### Added — 精细 UX 打磨第二轮 (Panel & Workflow Polish)
-
-- **预览面板空状态引导:** 无图片时显示"拖放图片或文件夹到此处 / 按 Ctrl+O 打开目录"
-  引导文案，而非仅"未选择图片"。
+- **Preview panel empty-state guidance:** When no image is present, show the hint "Drop an image or folder here / Press Ctrl+O to open a directory" instead of only "No image selected".
   (`src/previewpanel.cpp`)
-- **目录树键盘与右键增强:** `Enter`/`Return` 打开选中目录（与双击一致）；右键菜单新增
-  "在资源管理器中显示"和"复制路径"。
+- **Directory tree keyboard and context-menu improvements:** `Enter`/`Return` opens the selected directory (same as double-click); the context menu adds "Show in Explorer" and "Copy Path".
   (`src/directorytree.cpp/h`)
-- **元数据复制:** 信息浮层（`MetadataOverlay`）支持 `Ctrl+C` 一键复制全部元数据到剪贴板；
-  元数据面板（`MetadataPanel`）新增"复制全部"按钮（`Ctrl+Shift+C`），输出带分组层级的
-  "Key: Value"文本。
+- **Metadata copy:** The info overlay (`MetadataOverlay`) supports `Ctrl+C` to copy all metadata to the clipboard in one step; the metadata panel (`MetadataPanel`) adds a "Copy All" button (`Ctrl+Shift+C`) that writes grouped, hierarchical "Key: Value" text.
   (`src/metadataoverlay.cpp`, `src/metadatapanel.cpp/h`)
-- **搜索结果排序与空提示:** 搜索结果表启用 `setSortingEnabled`，点击列头可排序；无结果
-  时显示友好提示文案。
+- **Search result sorting and empty hint:** The search results table enables `setSortingEnabled`, so clicking a column header sorts the rows; when there are no results, a friendly hint is shown.
   (`src/searchpanel.cpp`)
-- **崩溃恢复确认对话框:** 启动时检测到 `recovery.json`（上次未正常退出）会弹出确认框，
-  用户可选"恢复"或"跳过"；正常退出时自动清理 `recovery.json`，避免每次启动都弹框。
+- **Crash-recovery confirmation dialog:** On startup, if `recovery.json` is found (the previous session did not exit cleanly), a confirmation dialog lets the user choose "Recover" or "Skip"; on a normal exit, `recovery.json` is removed automatically so the dialog does not appear on every launch.
   (`src/mainwindow.cpp`)
-- **比较窗口数字键布局切换:** 比较窗口内按 `1`–`6` 切换布局预设（与布局下拉框同步），
-  无需鼠标操作。
+- **Compare window number-key layout switching:** In the compare window, `1`–`6` switch layout presets (kept in sync with the layout combo box), with no mouse required.
   (`src/compareworkspace.cpp`)
-- **批量处理对话框增强:** 进度条显示百分比（`%p%`）；任务完成后"打开输出目录"按钮可用，
-  点击在资源管理器中打开输出目录。
+- **Batch processing dialog improvements:** The progress bar shows a percentage (`%p%`); after the task finishes, the "Open Output Directory" button is enabled and opens the output directory in Explorer.
   (`src/batchdialog.cpp/h`)
-- **F1 速查表同步:** 收录比较窗口布局键、浮层复制、ESC 关闭比较等新快捷键。
+- **F1 quick-reference sync:** Adds the new shortcuts, including compare-window layout keys, overlay copy, and Esc to close Compare.
+### Added — Foundational UX polish (Viewer & Browse UX Polish)
 
-### Added — 基础用户体验打磨 (Viewer & Browse UX Polish)
-
-- **查看器缩放命令体系:** `ImageViewer` 新增 `zoomIn()/zoomOut()/zoomFit()/zoomActual()`
-  公共槽；快捷键 `+`/`-`(主键盘或 `Ctrl++`/`Ctrl+-`)放大缩小、`0` 适应窗口、`1` 实际
-  大小;双击在「适应窗口 ↔ 光标处 100%」之间切换;视图菜单新增对应菜单项。
+- **Viewer zoom commands:** `ImageViewer` adds the public slots `zoomIn()`, `zoomOut()`, `zoomFit()`, and `zoomActual()`. Shortcuts: `+` / `-` (main keyboard, or `Ctrl++` / `Ctrl+-`) zoom in and out, `0` fits the window, and `1` shows actual size. Double-click toggles between fit-to-window and 100% at the cursor. Matching actions are added to the View menu.
   (`src/imageviewer.cpp`, `src/mainwindow.cpp`)
-- **适应窗口跟随 resize:** 新增 `m_fitMode` 状态——处于适应窗口模式时,窗口缩放会持续
-  重新适配;任何显式缩放(滚轮/键盘/双击)退出该模式。修复了旧逻辑仅 `m_currentIndex<0`
-  时才 refit 导致浏览中窗口缩放图片不跟随的问题。
-- **查看器键盘/鼠标完善:** `F`/`F11` 全屏切换;`ESC` 退出全屏或关闭查看器;鼠标侧键
-  (Back/Forward) 翻页;窗口标题实时显示「文件名 (宽x高) [序号/总数] - MViewer」。
-- **幻灯片放映:** `S` 键或视图菜单切换,3 秒/张循环播放,自动全屏查看器;`S`/`ESC`
-  停止(查看器关闭时自动停止)。配合新增的首尾循环导航(上一张/下一张到达边界后环绕)。
-- **主窗口快捷键补齐:** 打开目录 `Ctrl+O`、新增「打开文件...」`Ctrl+Shift+O`、退出
-  `Ctrl+Q`、比较模式 `C`、全屏 `F11`;缩放命令加入视图菜单(Ctrl 系快捷键见菜单,
-  纯字母键走 keyPressEvent,避免 QAction 快捷键遮蔽搜索框输入)。
-- **画廊键盘导航闭环:** `Enter` 在查看器中打开选中图片(`activated` 信号);方向键移动
-  当前项时经 `currentChanged` 联动共享 `SelectionModel`,预览/状态栏/元数据无需鼠标
-  即可跟随(SelectionModel 同路径去重,无回环风险)。
-- **画廊交互:** `Ctrl+滚轮` 调整缩略图大小(48–512px 步进 16);缩略图面板直接接受
-  外部文件/文件夹拖放(与主窗口同一 `handleDroppedPaths` 逻辑:多图进比较、目录打开、
-  单图查看);右键菜单新增「复制路径」并补齐各项快捷键标注;打开目录时显示忙碌光标。
-- **状态栏与反馈:** 新增当前图片「宽x高 · 文件大小」永久指示;窗口标题随当前图片/
-  目录更新;图片解码失败不再静默——查看器发出 `loadFailed` 信号,主窗口状态栏给出
-  明确提示;F1 快捷键速查表同步收录全部新按键。
-
+- **Fit-to-window tracks resize:** New `m_fitMode` state. While fit-to-window is active, resizing the window keeps refitting the image. Any explicit zoom (wheel, keyboard, or double-click) leaves the mode. This fixes the old logic that refit only when `m_currentIndex < 0`, so resizing the window while browsing did not keep the image fitted.
+- **Viewer keyboard and mouse:** `F` / `F11` toggle fullscreen. `ESC` exits fullscreen or closes the viewer. Mouse side buttons (Back/Forward) move to the previous or next image. The window title updates live as `filename (width×height) [index/total] - MViewer`.
+- **Slideshow:** Toggled with `S` or the View menu. Plays in a loop at 3 seconds per image and automatically fullscreens the viewer. `S` / `ESC` stop playback (it also stops when the viewer closes). Works with the new wraparound navigation: previous and next wrap when they reach either end.
+- **Main-window shortcuts:** Open a directory with `Ctrl+O`, the new "Open File..." action with `Ctrl+Shift+O`, quit with `Ctrl+Q`, compare mode with `C`, and fullscreen with `F11`. Zoom commands are added to the View menu. Ctrl-chord shortcuts are shown on the menu; letter-only keys are handled in `keyPressEvent` so `QAction` shortcuts do not swallow search-box input.
+- **Gallery keyboard navigation, end to end:** `Enter` opens the selected image in the viewer (`activated` signal). Arrow keys that move the current item update the shared `SelectionModel` through `currentChanged`, so the preview, status bar, and metadata follow without the mouse. The `SelectionModel` deduplicates the same path, so there is no feedback-loop risk.
+- **Gallery interaction:** `Ctrl+wheel` resizes thumbnails (48–512 px, step 16). The thumbnail panel accepts dropped files and folders directly, using the same `handleDroppedPaths` logic as the main window: multiple images enter compare mode, a directory is opened, and a single image is viewed. The context menu adds "Copy Path" and shortcut labels on each item. Opening a directory shows a busy cursor.
+- **Status bar and feedback:** A permanent indicator shows the current image as `width×height · file size`. The window title updates with the current image or directory. Decode failures are no longer silent: the viewer emits `loadFailed`, and the main-window status bar shows an explicit message. The F1 shortcut sheet lists every new key.
 ### Added — M16 Professional Compare (P0#3 Sync)
 
-- **同步准星 (cursor-sync crosshair, n/n):** 对比网格中悬停任意格，会在所有被比较的格内
-  同一图像空间坐标处绘制同步十字准星（`RawImageView::setCrosshair/clearCrosshair`）。
-  同步栏新增「同步准星」开关；开启时检视面板会在该点对所有格采样，一次看全各格像素值。
-  (`src/widgets/rawimageview.cpp`, `src/compareworkspace.cpp`)
-- **焦点锁定 / 基准钉 (focus-lock / reference pin, n/1):** 双击任意格（或点击「锁定基准」
-  按钮锁定光标所在格）将其设为对比基准，高亮金色边框；差异热力图与检视面板 delta 列
-  均以该基准为参考，实现 n 张图对 1 张基准的对比。再次双击同一格解除锁定。
-  `CompareWorkspace::onFocusRequested` + `RawImageView::setFocused`，图片集变化时自动
-  清除越界锁定。
-
+- **Sync crosshair (cursor-sync crosshair, n/n):** Hovering any cell in the compare grid draws a synchronized crosshair at the same image-space coordinate in every compared cell (`RawImageView::setCrosshair/clearCrosshair`). The sync bar adds a "Sync crosshair" toggle. When it is on, the inspector panel samples every cell at that point so all cells' pixel values are visible at once. (`src/widgets/rawimageview.cpp`, `src/compareworkspace.cpp`)
+- **Focus lock / reference pin (focus-lock / reference pin, n/1):** Double-click any cell (or click "Lock reference" to lock the cell under the cursor) to set it as the compare reference, highlighted with a gold border. The difference heatmap and the inspector panel's delta column both use that reference, comparing n images against 1 reference. Double-click the same cell again to clear the lock. `CompareWorkspace::onFocusRequested` + `RawImageView::setFocused`. Out-of-range locks are cleared automatically when the image set changes.
 ### Added — M15 Product Shell (P0 Browse Workflow)
 
-- **Breadcrumb导航栏:** 路径分段面包屑导航，点击任意段直接跳转，溢出路径显示"..."溢出菜单
-  (`src/breadcrumbbar.h/.cpp`)。集成到 MainWindow，位于菜单栏下方、内容区上方。
-- **动态缩略图大小:** QSlider 调节缩略图尺寸（48–512px），即时生效，无需重建视图。
-  `ThumbnailPanel::setThumbSize(int)` 同步更新 `ThumbnailPipeline` 和 delegate。
-- **视图模式切换器:** 下拉菜单支持四种模式——网格、详情、胶片条、紧凑。每模式独立
-  grid size 计算，即时切换无延迟。
-  - **胶片条模式:** 单行水平滚动，禁用换行，thumb size 缩放。
-  - **紧凑模式:** 密集网格（1/3 thumb size），最小间距，最大化可视缩略图数。
-- **MetadataOverlay:** 半透明信息叠加层，在 Viewer 上按 `I` 键显示关键 EXIF 元数据
-  （文件名、路径、尺寸、格式、分辨率、相机/ISO/快门/光圈/焦距、色彩空间、DPI、
-  ICC 配置、修改时间）。深色圆角背景 + 按 `I`/`ESC`/点击 关闭。
-  (`src/metadataoverlay.h/.cpp`)
-- `ThumbDelegate` 重构为动态读取 `ThumbnailPanel::thumbSize()`，不再使用固定 int。
-
+- **Breadcrumb bar:** Segmented path breadcrumbs. Click any segment to jump directly to it. Paths that overflow show a "..." overflow menu (`src/breadcrumbbar.h/.cpp`). Integrated into MainWindow, below the menu bar and above the content area.
+- **Dynamic thumbnail size:** A QSlider adjusts thumbnail size (48–512 px). Changes apply immediately, without rebuilding the view. `ThumbnailPanel::setThumbSize(int)` updates `ThumbnailPipeline` and the delegate together.
+- **View mode switcher:** A dropdown offers four modes — grid, details, filmstrip, and compact. Each mode computes its grid size independently, and switching is instant with no delay.
+  - **Filmstrip mode:** Single-row horizontal scrolling, wrapping disabled, thumbnail size scales.
+  - **Compact mode:** Dense grid (1/3 of the thumbnail size), minimum spacing, maximizing the number of visible thumbnails.
+- **MetadataOverlay:** A semi-transparent information overlay. Press `I` in the Viewer to show key EXIF metadata (filename, path, size, format, resolution, camera/ISO/shutter/aperture/focal length, color space, DPI, ICC profile, modification time). Dark rounded background; dismiss with `I`, `ESC`, or a click. (`src/metadataoverlay.h/.cpp`)
+- `ThumbDelegate` now reads `ThumbnailPanel::thumbSize()` dynamically instead of a fixed int.
 ### Fixed
 
 - **P0-1 — TaskScheduler PoolMetrics data race:** `submit(PoolType, void*)` and
@@ -4720,17 +4295,17 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
-- **M15 Sprint 2-4 — Compare Regression (性能回归检测):** 增强 `mviewer_bench`，新增 `--history <file>` 标志将每次运行结果追加到 CSV（日期/场景/指标/值/百分位/回归百分比），新增 `--report <file>` 标志生成 Markdown 回归报告。`--enforce` 模式下自动加载 `benchmark/perf_baseline.json` 作为基线，实现开箱即用的 CI 回归检测。回归输出增强为 per-metric delta + 分级 verdict（>10% 失败，>5% 警告）。更新 `nightly.yml` 的 Dashboard/Benchmark 作业以启用自动基线对比和历史追踪。关闭 M15 产品工作流缺口 "CI 尚未对比基线或拒绝回归"。
+- **M15 Sprint 2-4 — Compare Regression (performance regression detection):** `mviewer_bench` is extended with a `--history <file>` flag that appends each run to a CSV (date/scenario/metric/value/percentile/regression percentage) and a `--report <file>` flag that writes a Markdown regression report. In `--enforce` mode it automatically loads `benchmark/perf_baseline.json` as the baseline, so CI regression detection works out of the box. Regression output is now a per-metric delta plus a tiered verdict (>10% fail, >5% warn). The Dashboard and Benchmark jobs in `nightly.yml` enable automatic baseline comparison and history tracking. Closes the M15 product-workflow gap "CI does not yet compare against a baseline or reject regressions".
 
-- **M15 Sprint 2-3 — Analyzer Library Expansion (分析器库扩充):** 新增 5 个单帧分析器：`BrightnessAnalyzer`（亮度均值/最小/最大）、`ContrastAnalyzer`（RMS 对比度与均值亮度）、`BlurAnalyzer`（3x3 Laplacian 方差评估模糊度）、`ColorCastAnalyzer`（RGB 偏色检测与偏色幅度）、`ExposureAnalyzer`（阴影/高光像素百分比与平均亮度）。全部注册到 `AnalyzerRegistry`（ID: brightness/contrast/blur/colorcast/exposure），遵循 `AnalyzerPipeline` 解耦架构——MainWindow/AnalysisPanel 零改动即可自动发现和使用。
+- **M15 Sprint 2-3 — Analyzer Library Expansion:** five new single-frame analyzers: `BrightnessAnalyzer` (brightness mean/min/max), `ContrastAnalyzer` (RMS contrast and mean brightness), `BlurAnalyzer` (blur estimated from 3x3 Laplacian variance), `ColorCastAnalyzer` (RGB color-cast detection and cast magnitude), and `ExposureAnalyzer` (shadow/highlight pixel percentages and mean brightness). All are registered in `AnalyzerRegistry` (ID: brightness/contrast/blur/colorcast/exposure) and follow the decoupled `AnalyzerPipeline` architecture, so `MainWindow` and `AnalysisPanel` discover and use them with zero changes.
 
-- **M15 Sprint 2-2 — Batch Workflow (批量处理流水线):** 新增 `BatchProcessor`（`core/batch/`）支持对多图像批量执行解码→变换（缩放、水印）→分析→重命名→导出流水线，进度回调与取消支持。Domain 层新增 `BatchJob.h`（`BatchJobConfig`/`BatchJobResult`/`BatchFileResult`/`BatchOp` 枚举）。UI 层新增 `BatchDialog` 对话框，集成到 MainWindow 工具菜单（`Ctrl+Shift+B`），自动预填充当前目录图像列表。新增 `batch_tests` (ctest) 覆盖缩放导出、进度回调、重命名模式、无效文件、空操作、取消等边界场景。
+- **M15 Sprint 2-2 — Batch Workflow:** new `BatchProcessor` (`core/batch/`) runs a multi-image pipeline of decode → transform (resize, watermark) → analyze → rename → export, with progress callbacks and cancellation. The domain layer adds `BatchJob.h` (`BatchJobConfig`/`BatchJobResult`/`BatchFileResult`/`BatchOp` enum). The UI adds a `BatchDialog`, integrated into the MainWindow Tools menu (`Ctrl+Shift+B`), which pre-fills the current directory's image list. New `batch_tests` (ctest) cover resize export, progress callbacks, rename patterns, invalid files, empty operations, cancellation, and related edge cases.
 
-- **M15 Sprint 2-1 — Search (全局检索):** 新增 `SearchEngine` / `SearchIndex`（`core/search/`）作为 Qt-free 的核心检索引擎，对工作区所有图像的文件名、EXIF/相机元数据、分析器输出建立可搜索文本索引，按相关度排序返回 `SearchResult`。Domain 层新增 `SearchQuery` / `SearchResult` / `SearchMatch` DTO（纯 std 类型）。UI 层新增 `SearchPanel` 面板（搜索栏 + 作用域复选框 + 结果表格），集成到 MainWindow 5 列分栏最右侧，支持 `Ctrl+Shift+F` 快捷键聚焦。目录切换时自动重建索引，双击结果行打开对应图像。新增 `search_tests` (ctest) 覆盖索引增删改、文件名/元数据/分析结果多作用域查询、排序与空查询边界。
+- **M15 Sprint 2-1 — Search (global search):** new `SearchEngine` / `SearchIndex` (`core/search/`), a Qt-free core search engine, build a searchable text index over filenames, EXIF/camera metadata, and analyzer output for every image in the workspace, and return relevance-ranked `SearchResult`s. The domain layer adds `SearchQuery` / `SearchResult` / `SearchMatch` DTOs (pure `std` types). The UI adds a `SearchPanel` (search bar + scope checkboxes + results table) as the rightmost column of MainWindow's 5-column layout, focused with `Ctrl+Shift+F`. The index rebuilds automatically on directory change; double-clicking a result row opens the corresponding image. New `search_tests` (ctest) cover index insert/update/delete, multi-scope queries (filename/metadata/analysis results), ranking, and the empty-query edge case.
 
 - **M15 P0#3 — Analyzer Pipeline (decoupling):** introduced `AnalyzerPipeline`, a thin, Qt-free orchestration layer (`core/analyzer/AnalyzerPipeline.{h,cpp}`) that sits between the UI and `AnalyzerRegistry`. `AnalysisPanel` now depends on the pipeline (via `setPipeline()`), not on the registry directly, and `MainWindow` only constructs and injects the pipeline — it never lists or creates analyzers itself. This removes the MainWindow → Analyzer coupling flagged in the review and satisfies the acceptance criterion: **adding a new analyzer only requires registering it in the `AnalyzerFactory`; neither `MainWindow` nor `AnalysisPanel` changes**. A new headless `analyzer_pipeline_tests` (ctest) registers a brand-new analyzer and verifies the pipeline surfaces, creates, and runs it with zero `MainWindow` code change.
 
-- **M15 P0#1 — Compare Workspace 真正完成 (评审补齐):** 之前 Compare 会话的 ROI 在 `CompareEngine::session()` 中未被捕获（恒为 `[0,0,0,0]`），且 HeatMap 阈值 / Blink 间隔 / 检视面板 / 布局下拉框未持久化，崩溃恢复也不含 Compare。`CompareSession` 新增 `threshold`/`blinkIntervalMs`/`sidePanelVisible`/`layoutIndex` 字段并序列化；`CompareEngine::session()` 现正确捕获 ROI；`CompareWorkspace::compareSession()`/`applySession()` 现回放全部 UI 状态；`MainWindow` 的 `autosaveSession`/`restoreSessionRecovery` 现纳入完整 Compare 会话。新增 `compare_session_tests` (ctest) 走 **真实** `engine.session()` → 序列化 → 反序列化 → `applySession` 端到端链路，防止 ROI 回归。验收「保存 → 关闭 → 重开 → Compare 完全恢复」现已满足。
+- **M15 P0#1 — Compare Workspace actually complete (review gaps closed):** previously a Compare session's ROI was not captured in `CompareEngine::session()` (always `[0,0,0,0]`), and the heatmap threshold / blink interval / inspector panel / layout dropdown were not persisted; crash recovery also omitted Compare. `CompareSession` adds `threshold`/`blinkIntervalMs`/`sidePanelVisible`/`layoutIndex` and serializes them; `CompareEngine::session()` now captures the ROI correctly; `CompareWorkspace::compareSession()`/`applySession()` now replay the full UI state; `MainWindow`'s `autosaveSession`/`restoreSessionRecovery` now include the complete Compare session. New `compare_session_tests` (ctest) exercise the **real** `engine.session()` → serialize → deserialize → `applySession` end-to-end path, guarding against an ROI regression. The acceptance criterion "save → close → reopen → Compare fully restored" is now met.
 
 - **M14.2 — Plugin ABI freeze:** the plugin ABI is now frozen for the v1.x line. Plugins export a `PluginABI` descriptor (`mviewer_plugin_abi()`) carrying `apiVersion` / `abiVersion` / `sdkVersion`; the loader rejects any plugin whose `abiVersion` mismatches or whose `apiVersion` is newer than the host, and warns (never blocks) on `sdkVersion` drift. `docs/sdk/PLUGIN_ABI.md` is the contract; `pluginabi_tests` covers the gate end-to-end (including a deliberately incompatible `example_analyzer_badabi` plugin).
 
@@ -4753,7 +4328,7 @@ All notable changes to this project are documented here. The format is based on
     profile, and any EXIF/XMP text keys the Qt plugin exposes. `MetadataReader`
     enriched (reads at 1×1 to get DPI/ICC cheaply; no new dependency).
   - **Live search bar** in the gallery sort bar: filename substring filter with
-    a "包含子目录" (recursive subfolder) option that enumerates and appends
+    an "Include subfolders" (recursive) option that enumerates and appends
     matches. Drives `ThumbnailPanel::setFilter`.
   - **File actions** on the gallery context menu + keyboard shortcuts:
     rename (F2), move to recycle bin (Delete), copy to… (Ctrl+C), move to…
@@ -4776,7 +4351,7 @@ All notable changes to this project are documented here. The format is based on
   from `CacheManager::levelStats`. Acceptance target: 10,000 images, no scroll jank, CPU<20%,
   stable memory.
 - **P0 #③ — Compare workflow enhancements (multi-layout + inspector + histogram):**
-  - **Multi-layout selector** in the compare toolbar: Auto / 单列 / 2 列 / 3 列 / 4 列 / 一行.
+  - **Multi-layout selector** in the compare toolbar: Auto / Single column / 2 columns / 3 columns / 4 columns / Single row.
     `CompareEngine::setColumns(int)` forces a column count; the existing sync-zoom, blink,
     diff heatmap + threshold, ROI select and per-cell pixel readout all continue to work in any
     layout. Diffs stay async, so pan/zoom stays at interactive frame rates (60 FPS target).
@@ -4786,15 +4361,15 @@ All notable changes to this project are documented here. The format is based on
   - **RGB histogram** side panel: `core/compare/Histogram.h` computes a domain-free per-channel
     histogram over decoded pixels; `HistogramWidget` overlays all compared images' R/G/B
     histograms for quick exposure/colour comparison.
-  - Side panel toggled by a "检视面板" checkbox; histogram is recomputed lazily when shown.
+  - Side panel toggled by an "Inspector panel" checkbox; histogram is recomputed lazily when shown.
 - **P1 — Metadata search + star rating:**
-  - **Metadata-aware search:** the gallery search bar gains a "元数据" checkbox. When on, the
+  - **Metadata-aware search:** the gallery search bar gains a "Metadata" checkbox. When on, the
     filter matches the embedded EXIF/IPTC/XMP text keys **and** RAW make/model/lens/ISO (lazy
     indexed on first metadata search), not just filenames.
   - **Star rating (0–5):** new `core/RatingStore` (Qt-free, persisted to
     `%LOCALAPPDATA%/mviewer/ratings.txt`) with a UI `RatingWidget`. The thumbnail delegate draws
     rating stars; the metadata panel shows/edits the current image's rating; `Ctrl+1…5` (and
-    `Ctrl+0` to clear) rate the current image; a "评分" combo in the sort bar filters the gallery
+    `Ctrl+0` to clear) rate the current image; a "Rating" combo in the sort bar filters the gallery
     by minimum stars.
   - Added core unit tests: `histogram_tests` (channel order, null, sums) and `ratingstore_tests`
     (clamp, persistence round-trip).
@@ -4809,7 +4384,7 @@ All notable changes to this project are documented here. The format is based on
   - **`RatingStore`** extended (separate `flags.txt` so the ratings format/tests stay intact):
     color label (6 colors), reject, pick (favorite) and a capped recents (recently-viewed) list.
   - **`MetadataPanel`** gains a color-label selector and reject/pick toggles; `ThumbnailPanel`
-    delegate draws a color-label bar, a reject overlay and a pick marker; a new "标记" toolbar
+    delegate draws a color-label bar, a reject overlay and a pick marker; a new "Marks" toolbar
     filter (favorite / rejected / recents / color label) is wired in `MainWindow`.
   - Shortcuts: `Ctrl+Shift+1..6` set a color label (0 clears), `Ctrl+Shift+P` pick,
     `Ctrl+Shift+X` reject. Viewing an image records it in recents.
@@ -4823,7 +4398,7 @@ All notable changes to this project are documented here. The format is based on
   - **`ExportDialog`** extended: mode selector (Convert/Batch · Contact Sheet · PDF), resize (fit-long-edge
     / scale %), text watermark (position + opacity), batch rename pattern, contact-sheet columns/thumbnail
     size. The legacy single/batch `ExportCommand` path is preserved via a delegating constructor.
-  - New **"导出图片…"** menu action feeds the current gallery selection (or whole directory) into the
+  - New **"Export Images…"** menu action feeds the current gallery selection (or whole directory) into the
     pipeline.
   - Added `export_pipeline_tests` (16 checks: resize dims, watermark dims, contact-sheet grid, rename
     tokens, PDF header + existence).
@@ -5015,7 +4590,6 @@ All notable changes to this project are documented here. The format is based on
   directly from the `ImageFrame` pixels (not `QImage`). Wired to the main-window status bar.
 - `m3pipeline_tests` acceptance suite covering repository→frame, 4-format decode,
   Viewer LRU cache hit, and pixel-inspector reads.
-
 ### Fixed
 
 - **M14.3 — fix plugin teardown segfault:** `PluginManager`'s destructor no longer calls
@@ -5269,3 +4843,4 @@ All notable changes to this project are documented here. The format is based on
 - TaskScheduler: 5 independent priority queues
 - Analyzer plugin interface + 7 built-in analyzers
 - Core test suite (compare, layout, sync, diff) and unit tests
+

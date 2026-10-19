@@ -86,7 +86,7 @@
 
 ## 1.0.28 — User guide and P to Compare (2026-09-12)
 
-- Selecting 2–8 images and pressing P (or C) opens Compare. Help → 使用说明
+- Selecting 2–8 images and pressing P (or C) opens Compare. Help → User Guide
   and `docs/USER_GUIDE.md` cover Compare and shortcuts.
 
 ## 1.0.27 — Compare contextual chrome (2026-09-12)
@@ -142,9 +142,9 @@
 
 ## 1.0.19 — Browse/Compare/ROI correctness patch (2026-09-05)
 
-- Viewer metadata overlay is `I` / `M` / 图片信息 only. Left-click and hover no
+- Viewer metadata overlay is `I` / `M` / Image Info only. Left-click and hover no
   longer cover the image and steal pan or Fit↔100% double-click.
-- Compare toolbar/menu/`C` require a 2–8 image selection, matching 比较选中.
+- Compare toolbar/menu/`C` require a 2–8 image selection, matching Compare Selected.
   Folder-first-8 fallback is gone. Space uses the current 2–8 selection when
   present, otherwise current+next.
 - Linked ROI geometry stays in original source pixels through crop/rotation
@@ -518,7 +518,7 @@
   decode. New CTest `m47_compare_lod_tests` (6 groups); gate 101/101.
 - **Phase 4 — exact-source consumers:** with source-backed panes present, the
   Pixel Inspector reports the exact full-resolution pixel for feasible panes
-  and 无效 (never the display LOD) for infeasible ones; diff/PSNR/SSIM on an
+  and invalid (never the display LOD) for infeasible ones; diff/PSNR/SSIM on an
   all-infeasible pair degrade to "—" with zero decodes; report export records
   placeholder pairs non-comparable in the requested pane order without
   materializing the infeasible source. New CTest `m47_exact_source_tests`
@@ -612,7 +612,7 @@
 - **Production UI:** MainWindow Undo/Redo registration, rename/undo/redo,
   and asynchronous clipboard paste are covered by the isolated UI acceptance.
 - **Delete semantics:** the current implementation is explicitly **MViewer
-  回收站**, a per-user reversible staging directory. Native Windows Recycle Bin
+  Trash**, a per-user reversible staging directory. Native Windows Recycle Bin
   integration is not claimed.
 - **Manual sign-off:** Native Release GUI, physical ICC, mixed DPI, two-volume
   behavior, native dialogs, and long-session observations remain **MANUAL /
@@ -745,7 +745,7 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 
 - Ordinary Compare presents source images without an implicit heatmap;
   PSNR/SSIM/statistics still run asynchronously, while the explicit
-  `显示差异` state controls visualization.
+  `Show Diff` state controls visualization.
 - Compare opens fullscreen and performs one coalesced post-layout Fit. Each
   pane fits its own viewport; synchronized zoom shares the relative ratio to
   Fit, while Uniform Pixel Scale remains an explicit independent mode.
@@ -830,10 +830,10 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
   Exporter, Importer; reference examples in `plugins/example` (round-trip
   verified by `pluginregistry_tests`).
 - **Robustness**: always-on Windows minidump crash handler (`CrashHandler`;
-  dumps in `%APPDATA%/MViewer/crash-reports/`); one-time 崩溃报告 dialog on
+  dumps in `%APPDATA%/MViewer/crash-reports/`); one-time crash-report dialog on
   next launch; `--selftest` headless decode→metadata gate (CTest `selftest`).
 - **Update check**: `UpdateChecker` (WinHTTP, GitHub Releases), Help menu
-  「检查更新」 + silent check 8 s after startup; current version from
+  "Check for Updates" + silent check 8 s after startup; current version from
   `MViewerVersion.h` (M24).
 - **Browse**: Directory tree + breadcrumb + recent/favorites/history,
   filter/sort/search, Thumbnail/List/Detail/Filmstrip views, unified Selection
@@ -886,23 +886,23 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
 
 ## Product-force progress (2026-08-05 state)
 
-| 工作项 | 状态 | 说明 |
-|--------|------|------|
-| A-1~A-10 对账 | ✅ | `docs/review/A_ITEMS_COMPLETION_AUDIT_2026-07-24.md` (~91%) |
-| M16 Compare 收尾 | ✅ | Pixel Link / Overlay 透明度 / Diff 高亮 / 1~8 布局预设 / 编辑↔指标联动 / 每格直方图叠加 |
-| Browse 门禁 | ✅ | Selection 统一 + 大目录渐进 fetch + 万级缩略图预测窗口 |
-| M19 UI Model 收敛 | ✅ | `DirectoryModel` / `ImageListModel` / `WorkspaceModel` / `AnalyzerModel`；Metadata Overlay `I`/`ESC` + Lens/ICC |
-| M20 Compare 键盘流 | ✅ | Ctrl+2/4/8 布局预设；B/S/W/O/H/Z/D/C/L 模式键；连续导航保留模式/ROI；`?` 快捷键帮助 |
-| M21 Analysis+Export | ✅ | AnalysisPanel↔AnalyzerModel History/Pin；`ExportJob` 统一路径；Memory Timeline；Dashboard |
-| Workspace 恢复 | ✅ | 布局/缩放/Compare/崩溃恢复（A-6 已落地） |
-| M17 高价值子项 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
-| M16 分析持久化 | ✅ | `AnalyzerModel` 历史/钉住/结果序列化，重启保留 |
-| M17 自动更新 | ✅ | `UpdateChecker`（GitHub Releases，WinHTTP），版本来自 CMake SSOT（M24）；离线 `updatechecker_tests` 覆盖 JSON、点分版本、传输错误与安全下载链接策略 |
-| M23 质量自动化 | ✅ | ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend（ADR-015） |
-| M24 稳定性收敛 | ✅ | 2026-08-05 完成：70/70 CTest、干净环境打包、异步生命周期/工作流验收/测试可信度/性能/RC 验证（verdict: READY WITH NON-BLOCKING LIMITATIONS） |
-| M25 RC 收敛 | ✅ 完成（2026-08-09） | Compare 顶栏三行防溢出；`thumbnailpanel.cpp` 682 行（ADR-014 内）；S1–S9 + T1–T4 Release 压测双配置 PASS；73/73 本地门禁（新增 `browse_convergence_tests` / `browse_convergence_ui_tests`）；缩略图缓存身份（path+mtime+size+requestedSize+schema）、generation 级取消、worker 纯 QImage、UI 线程零缩略图磁盘 I/O；格式 SSOT 统一（RAW/WebP/GIF 全链路一致）；MetadataIndexer 异步索引 + 排序键单次计算 + 字段级 Camera/Lens/ISO 过滤；Browse 关闭持久化；乱码修复。**剩余：目标硬件与人工 UX 签名**（见 `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`） |
-| M26 RC 可靠性收口 | ✅ 自动化完成 | 2026-08-09 完成：**78/78 CTest 全绿**。TaskScheduler exactly-once finalize（deadline/cancel/deferred/reject 全路径）、依赖反向图 cancelTree（transitive dependents）、metrics 无 underflow（修复后不再静默拒绝后续提交）、callback 线程契约 worker-thread 并文档化；MetadataIndexer per-request ownership（搜索重建与 Camera/Lens 过滤并发互不取消）、bounded cache、value-semantics cache 读取；ThumbnailPipeline 切换代际真正取消 + pending/handle 有界；ImageRepository 饱和/拒绝下 exactly-once 回调 + 有界同步加载（不再改全局 queue depth）；Preview 全图统计移出 UI 线程（worker-side `ImageStats`）。见 `docs/review/M26_RC_RELIABILITY_2026-08-09.md` |
-| M27 异步生命周期收尾 | ✅ 自动化完成 | 2026-08-10 完成：**84/84 CTest 全绿**。TaskScheduler 故障注入（work/onProgress/done 异常不外逃、空 work 拒绝、cancelTree 抑制 done、drain 墙钟、graphMetrics、execution/callback failures）；ImageRepository 拒绝 exactly-once + 同步预算超时安全；QObject 析构时序（子进程崩溃检测、A→B→A、24MP UI 延迟）；100 轮生命周期压力（RSS/句柄/线程泄漏检查）。另含 UX 收尾：空状态/空文件夹提示、缩放中心回归、快捷键速查表与 Ctrl+C 双绑定修复、比较 2-8 守卫。 |
+| Work item | Status | Notes |
+|-----------|--------|-------|
+| A-1~A-10 reconciliation | ✅ | `docs/review/A_ITEMS_COMPLETION_AUDIT_2026-07-24.md` (~91%) |
+| M16 Compare wrap-up | ✅ | Pixel Link / Overlay opacity / Diff highlight / 1–8 layout presets / edit↔metrics linkage / per-pane histogram overlay |
+| Browse gate | ✅ | Unified Selection + progressive fetch for large directories + predictive thumbnail window at 10k+ scale |
+| M19 UI Model convergence | ✅ | `DirectoryModel` / `ImageListModel` / `WorkspaceModel` / `AnalyzerModel`; Metadata Overlay `I`/`ESC` + Lens/ICC |
+| M20 Compare keyboard flow | ✅ | Ctrl+2/4/8 layout presets; B/S/W/O/H/Z/D/C/L mode keys; continuous navigation keeps mode/ROI; `?` shortcut help |
+| M21 Analysis+Export | ✅ | AnalysisPanel↔AnalyzerModel History/Pin; unified `ExportJob` path; Memory Timeline; Dashboard |
+| Workspace restore | ✅ | Layout/zoom/Compare/crash recovery (A-6 landed) |
+| M17 high-value sub-items | ✅ | Batch analysis export / plugin rescan / rating-filtered export |
+| M16 analysis persistence | ✅ | `AnalyzerModel` history/pin/result serialization retained across restarts |
+| M17 auto-update | ✅ | `UpdateChecker` (GitHub Releases, WinHTTP); version from CMake SSOT (M24); offline `updatechecker_tests` cover JSON, dotted versions, transport errors, and safe download URL policy |
+| M23 quality automation | ✅ | ADR/Bug gates, auto dashboard, test matrix, benchmark trend (ADR-015) |
+| M24 stability convergence | ✅ | Done 2026-08-05: 70/70 CTest, clean-env packaging, async lifetime / workflow acceptance / test credibility / performance / RC verification (verdict: READY WITH NON-BLOCKING LIMITATIONS) |
+| M25 RC convergence | ✅ Done (2026-08-09) | Compare top bar three-row overflow fixed; `thumbnailpanel.cpp` 682 lines (within ADR-014); S1–S9 + T1–T4 Release stress PASS on both configs; 73/73 local gates (added `browse_convergence_tests`) |
+| M26 RC reliability closure | ✅ Automated done | Done 2026-08-09: **78/78 CTest green**. TaskScheduler exactly-once finalize (deadline/cancel/deferred/reject paths), reverse-dep cancelTree (transitive) |
+| M27 async lifetime wrap-up | ✅ Automated done | Done 2026-08-10: **84/84 CTest green**. TaskScheduler fault injection (work/onProgress/done exceptions contained, empty work rejected, cancelTree suppresses done, drain wall-clock, graphMetrics) |
 
 ### M25 closure addendum (2026-08-09)
 

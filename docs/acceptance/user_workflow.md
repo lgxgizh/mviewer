@@ -38,7 +38,7 @@ Two frozen files remain off-limits per AGENTS.md: `build.ps1`,
 | Analysis (Histogram/RGBMean/PSNR/SSIM/Sharpness/Noise/Entropy) | `src/core/analyzer/` (7 analyzers) + `AnalyzerRegistry` (factory, plugin-safe) | Driven from `AnalysisPanel` |
 | Pixel Inspector | `analysispanel.cpp:93` "Pixel Inspector tab (M3 Phase-2)"; `RawImageView::pixelInfo` → `CompareWorkspace::pixelInfo` | Live hovered-pixel RGB readout |
 | Export report (JSON/CSV/PNG diff) | `ExportCommand` → `core::buildCompareReport` + `Encoder` | `export_tests` 13/13 |
-| Workspace save/load | `WorkspaceSerializer` (round-trip) + `MainWindow` 保存/打开工作区 (commit `6e45b57`) | Saves `.mvws`; reopens gallery root |
+| Workspace save/load | `WorkspaceSerializer` (round-trip) + `MainWindow` save/open workspace (commit `6e45b57`) | Saves `.mvws`; reopens gallery root |
 | Benchmark tiers | `mviewer_bench --emit-data` + `benchmark/generate_bench_data.ps1` + `benchmark/data/README.md` (commit `57bab0d`) | small/medium/large reproducible on D: |
 | Performance targets defined | `docs/performance.md` (first thumbnail <100ms, switch preloaded <16ms, etc.) | M12.2 = measure against these |
 | Portable zip | `pack_portable.ps1` → `dist/MViewer-portable-1.0.0-rc.zip` (commit `57bab0d`) | windeployqt + Compress-Archive |
@@ -55,7 +55,7 @@ features.
 
 ### Scenario A — Algorithm-result inspection *(corrected from review)*
 
-**Review premise:** "1000 张 YUV 转 JPEG".
+**Review premise:** "1000 YUV frames to JPEG".
 **Tree reality:** MViewer has **no `.yuv` file decoder** (only a `RawImageView`
 preview widget, not YUV decode). Adopting the YUV premise would make this a
 *new feature* — out of M11.1/M12 scope and contradicting the "don't add formats

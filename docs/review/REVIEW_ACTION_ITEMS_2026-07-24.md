@@ -1,3 +1,5 @@
+> **Note (historical):** This review document retains Chinese prose from the original milestone write-up. Treat it as a historical record; current product status is in `STATUS.md` (English).
+
 # 评审行动项 — 2026-07-24
 
 > 来源：产品评审（Directory Tree / Thumbnail View / Selection / Compare / Analyzer / Workspace）

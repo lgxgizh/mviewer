@@ -21,7 +21,7 @@ extensions** rather than modifying existing interfaces.
 
 ## Rationale
 
-Per external review: "建议不要继续改，而是冻结接口". The plugin SDK has
+Per external review: "suggest freezing the interface rather than keeping changes going". The plugin SDK has
 reached a maturity level where further iteration yields diminishing returns.
 Stable interfaces enable:
 

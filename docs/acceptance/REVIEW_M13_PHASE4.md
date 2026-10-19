@@ -21,7 +21,7 @@ REAL engine path (verified by reading the sources — `ImageRepository::
 loadDirectoryAsync`, `ThumbnailPipeline`, `AnalyzerRegistry`, `Encoder`,
 `QJson` workspace round-trip). `product_workflow_gate` chains them in user
 order and passed 5/5. This closes the review's top risk: *"modules exist but
-workflow not串起来."*
+workflow not wired end-to-end."*
 
 **Hard perf numbers (the review's biggest worry) are now MET, not just
 claimed.** Local bench on the real `benchmark/data/medium` (1000 JPEG) tier:

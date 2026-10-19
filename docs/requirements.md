@@ -1,161 +1,161 @@
-# 图像查看与分析软件 — 需求规格说明书
+# Image Viewing and Analysis Software — Requirements Specification
 
-## 项目背景
+## Project Background
 
-图像算法工程师需要快速对比多张图片（如前后效果图、算法输出对比等），并测量特定区域的亮度、RGB 通道和像素统计数据。本项目旨在提供一款**以 Compare → Analyze → Export 为核心**的视觉分析平台。
-
----
-
-## 1. 项目概述
-
-开发一款 Windows 平台下、面向图像算法工程师的视觉分析平台。支持高效浏览目录中的图片、多图并排比较、亮度直方图显示、像素/ROI 分析、报告与结果导出。
-
-**技术栈**：C++ / Qt 6 Widgets
+Image algorithm engineers need to quickly compare multiple images (for example, before-and-after results and algorithm output comparisons) and measure luminance, RGB channels, and pixel statistics for specific regions. This project aims to provide a visual analysis platform **centered on Compare → Analyze → Export**.
 
 ---
 
-## 2. 界面布局
+## 1. Project Overview
 
-整体布局分为三个区域：
+Develop a visual analysis platform on Windows for image algorithm engineers. It supports efficient browsing of images in a directory, side-by-side multi-image comparison, luminance histogram display, pixel/ROI analysis, and export of reports and results.
+
+**Technology stack**: C++ / Qt 6 Widgets
+
+---
+
+## 2. Interface Layout
+
+The overall layout is divided into three areas:
 
 ```
 ┌──────────┬───────────────────────────────────┐
 │          │                                   │
-│  目录树  │         主图片视窗                │
+│ Dir tree │       Main image viewport         │
 │          │                                   │
 │          │                                   │
 ├──────────┤                                   │
-│ 缩略图   │                                   │
-│ 列表     │                                   │
+│Thumbnail │                                   │
+│   list   │                                   │
 └──────────┴───────────────────────────────────┘
 ```
 
-- **左侧上部**：目录树，浏览文件系统
-- **左侧下部**：缩略图列表，显示当前目录中的图片
-- **右侧**：主图片视窗，显示当前选中图片或比较视图
+- **Upper left**: directory tree for browsing the file system
+- **Lower left**: thumbnail list showing images in the current directory
+- **Right**: main image viewport showing the currently selected image or the comparison view
 
 ---
 
-## 3. 核心功能
+## 3. Core Features
 
-### 3.1 目录浏览
+### 3.1 Directory Browsing
 
-- 目录树支持展开/折叠
-- 点击目录后，缩略图列表显示该目录下的所有图片
-- 目录规模：单目录 ≤ 1000 张图片
-- 排序方式：默认按文件名排序，支持按修改日期、文件大小、分辨率排序（点击列头切换）
+- The directory tree supports expand and collapse
+- After a directory is clicked, the thumbnail list shows all images in that directory
+- Directory scale: ≤ 1000 images per directory
+- Sort order: file name by default; sorting by modification date, file size, and resolution is supported (switch by clicking the column header)
 
-### 3.2 缩略图列表
+### 3.2 Thumbnail List
 
-- 仅显示当前目录中的所有图片（非选中某个才显示，而是切换目录就刷新）
-- 按目录中图片顺序排列
-- 点击缩略图时，主视窗显示对应图片
+- Shows all images in the current directory only (the list refreshes when the directory changes; it is not shown only after an item is selected)
+- Arranged in the image order of the directory
+- When a thumbnail is clicked, the main viewport displays the corresponding image
 
-### 3.3 图片查看
+### 3.3 Image Viewing
 
-- 支持格式：JPEG、BMP、PNG、TIFF、WebP、GIF 以及当前已接入的 RAW 格式
-- 默认显示：适应窗口大小
-- 缩放：鼠标滚轮
-- 拖动：鼠标左键按住拖动
-- 响应时间：点击后 < 100ms 显示完整视图
+- Supported formats: JPEG, BMP, PNG, TIFF, WebP, GIF, and RAW formats currently integrated
+- Default display: fit to window
+- Zoom: mouse wheel
+- Pan: hold the left mouse button and drag
+- Response time: the complete view is shown in < 100 ms after a click
 
-### 3.4 多图比较
+### 3.4 Multi-Image Comparison
 
-#### 进入方式
+#### How to enter
 
-- 在缩略图列表中选中 2~8 张图片
-- 点击"比较"按钮进入比较模式
+- Select 2–8 images in the thumbnail list
+- Click the "Compare" button to enter comparison mode
 
-#### 布局规则（用户不可更改）
+#### Layout rules (not user-changeable)
 
-| 图片数量 | 布局 |
+| Image count | Layout |
 | --------- | ------ |
-| 2 张 | 左右并排 |
-| 3 张 | 左中右并排 |
-| 4 张 | 2×2 网格 |
-| 5~8 张 | 2×4 网格 |
+| 2 | Left-right side by side |
+| 3 | Left-center-right side by side |
+| 4 | 2×2 grid |
+| 5–8 | 2×4 grid |
 
-#### 同步控制
+#### Synchronized control
 
-UI 上有一个勾选框，控制同步状态：
+The UI provides a checkbox that controls the synchronization state:
 
-- **缩放同步**：
-  - 勾选时：所有比较图片同步缩放
-  - 未勾选时：仅鼠标当前所在图片缩放
-- **拖动同步**：
-  - 勾选时：所有比较图片同步移动
-  - 未勾选时：仅鼠标当前所在图片移动
+- **Zoom sync**:
+  - Checked: all compared images zoom together
+  - Unchecked: only the image currently under the mouse zooms
+- **Pan sync**:
+  - Checked: all compared images move together
+  - Unchecked: only the image currently under the mouse moves
 
-### 3.5 直方图
+### 3.5 Histogram
 
-- 仅显示亮度直方图
-- 半透明叠加显示在图片角落
-- 比较模式下，所有图片均显示直方图
+- Display the luminance histogram only
+- Shown as a semi-transparent overlay in a corner of the image
+- In comparison mode, every image displays a histogram
 
-### 3.6 框选区域统计
+### 3.6 Region Selection Statistics
 
-- 框选形状：矩形
-- 统计量：亮度均值、RGB 均值（R均值、G均值、B均值）
-- 展示方式：在 UI 固定角落显示统计结果面板
-- 比较模式下：对所有比较图片的同一区域进行统计并显示
-
----
-
-## 4. 性能要求
-
-### 4.1 图片尺寸
-
-- 常见尺寸：4096 × 3072
-- 最大尺寸：16384 × 12288（4倍于常见尺寸）
-
-### 4.2 预加载
-
-- 当前图片的前后相邻图片需要预加载
-- 保证切换图片时快速显示
-
-### 4.3 内存缓存
-
-- 内存中缓存约 5 张已解码的图片
-- 采用 LRU 策略管理
-
-### 4.4 磁盘缓存
-
-- 缩略图持久化到磁盘
-- 下次打开同一目录时秒开
+- Selection shape: rectangle
+- Statistics: mean luminance and RGB means (R mean, G mean, B mean)
+- Presentation: a statistics panel displayed in a fixed corner of the UI
+- In comparison mode: compute and display statistics for the same region on every compared image
 
 ---
 
-## 5. 文件操作
+## 4. Performance Requirements
 
-| 操作 | 说明 |
+### 4.1 Image Dimensions
+
+- Common size: 4096 × 3072
+- Maximum size: 16384 × 12288 (4× the common size)
+
+### 4.2 Preloading
+
+- The images immediately before and after the current image must be preloaded
+- Ensures fast display when switching images
+
+### 4.3 Memory Cache
+
+- Cache about 5 decoded images in memory
+- Managed with an LRU policy
+
+### 4.4 Disk Cache
+
+- Persist thumbnails to disk
+- Opening the same directory again is near-instant
+
+---
+
+## 5. File Operations
+
+| Operation | Description |
 | ----- | ------ |
-| 删除 | 移入 **MViewer 回收站**，支持可恢复 Undo；不等同于 Windows 系统回收站 |
-| 重命名 | 弹出对话框修改文件名 |
-| 复制 | 支持后台、可取消、带进度的原子复制 |
-| 移动 | 支持同卷移动与跨卷安全 fallback，可撤销 |
-| 拖拽打开 | 支持将文件/目录拖入主窗口 |
+| Delete | Move the item into the **MViewer Recycle Bin**, with recoverable Undo; this is not the Windows system Recycle Bin |
+| Rename | Open a dialog to change the file name |
+| Copy | Background, cancellable, progress-reporting atomic copy |
+| Move | Same-volume move and a safe cross-volume fallback; undoable |
+| Drag-and-drop open | Files and directories can be dragged into the main window |
 
 ---
 
-## 6. 其他需求
+## 6. Other Requirements
 
-| 项目 | 说明 |
+| Item | Description |
 | ----- | ------ |
-| 界面语言 | 中文 |
-| 多显示器 | 支持跨显示器 |
-| GIF | 支持 |
-| 截图保存 | 支持通过 Copy Image / Save As / Export 工作流完成 |
-| 导出统计 | 支持 CSV、JSON、HTML 与报告导出 |
+| UI language | Chinese |
+| Multiple monitors | Supports spanning monitors |
+| GIF | Supported |
+| Screenshot save | Supported through the Copy Image / Save As / Export workflow |
+| Statistics export | CSV, JSON, HTML, and report export are supported |
 
 ---
 
-## 7. 技术约束
+## 7. Technical Constraints
 
-- 平台：Windows
-- 语言：C++
-- GUI：Qt 6 Widgets
-- 编译：CMake + Ninja
-- 编译器：MSVC（Windows）
+- Platform: Windows
+- Language: C++
+- GUI: Qt 6 Widgets
+- Build: CMake + Ninja
+- Compiler: MSVC (Windows)
 ### M45 qualification requirements
 
 - CommandStack callbacks must be safe for immediate state queries and must not
@@ -164,5 +164,5 @@ UI 上有一个勾选框，控制同步状态：
   lifecycle-guarded, and retain recoverable state on partial failure.
 - Clipboard image paste must encode PNG off the UI thread and discard stale
   generations safely.
-- Product copy must call the current delete destination **MViewer 回收站**;
+- Product copy must call the current delete destination **MViewer Recycle Bin**;
   native Windows Recycle Bin behavior requires a separate qualified adapter.

@@ -1,3 +1,5 @@
+> **Note (historical):** This review document retains Chinese prose from the original milestone write-up. Treat it as a historical record; current product status is in `STATUS.md` (English).
+
 # A-1 ~ A-10 完成度对账 — 2026-07-24
 
 > 对照 `REVIEW_ACTION_ITEMS_2026-07-24.md` 与当前 `master` 源码。  

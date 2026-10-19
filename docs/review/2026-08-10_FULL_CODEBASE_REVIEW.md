@@ -1,3 +1,5 @@
+> **Note (historical):** This review document retains Chinese prose from the original milestone write-up. Treat it as a historical record; current product status is in `STATUS.md` (English).
+
 ﻿# MViewer 全量 Codebase Review Report
 
 - 日期: 2026-08-10

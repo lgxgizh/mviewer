@@ -14,7 +14,7 @@
 |----|----------|---------|-------|--------|
 | B1 | FAIL | Version string chaos: `0.11.0` vs `1.0.0` | `README.md`, `release.yml` | ✅ Fixed (M14.1) |
 | B2 | FAIL | RAW status self-contradicts (shipped vs deferred) | `CHANGELOG.md`, `STATUS.md`, `ROADMAP_PUBLIC.md` | ✅ Fixed (M14.1) |
-| B3 | FAIL | `STATUS.md` frozen at "v0.1 浏览器原型" | `STATUS.md` | ✅ Fixed (M14.1) |
+| B3 | FAIL | `STATUS.md` frozen at "v0.1 browser prototype" | `STATUS.md` | ✅ Fixed (M14.1) |
 | B4 | FAIL | Duplicate + broken packaging scripts at repo root | `pack_installer.ps1`, `pack_portable.ps1` | ✅ Fixed (M14.1) |
 | B5 | WARN | Qt version mismatch README (`6.11`) vs CI (`6.8.0`) | `README.md` vs `ci.yml` | ✅ Fixed (M14.1) |
 | B6 | ✅ RESOLVED | SDK lacked `apiVersion`/`sdkVersion`/`abiVersion` | `docs/sdk/PLUGIN_SDK.md` (→ M14.2) | ✅ Done (M14.2) |
@@ -41,7 +41,7 @@
 - A new `M14.2` entry records the Plugin ABI freeze under `[Unreleased]`.
 
 ### 4. STATUS — ✅ PASS (was FAIL)
-- Rewritten as a `v1.0.0 RC` snapshot: positioning, frozen architecture, shipped capabilities, deferred/future items, known gaps, CI matrix, release process. No longer claims "v0.1 浏览器原型" or a static `mviewer_core`.
+- Rewritten as a `v1.0.0 RC` snapshot: positioning, frozen architecture, shipped capabilities, deferred/future items, known gaps, CI matrix, release process. No longer claims "v0.1 browser prototype" or a static `mviewer_core`.
 
 ### 5. LICENSE — ✅ PASS
 - MIT, `Copyright (c) 2026 MViewer Contributors`. Matches the CI packaging glob `LICENSE*`. No action.

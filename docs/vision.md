@@ -425,4 +425,4 @@ MViewer's desktop workflow is qualified as Browse → Viewer → Compare → Ana
 → Export → File Operations only where the evidence says so. Automated tests do
 not substitute for native Windows DPI, ICC, multi-volume, dialog, or long-
 session evidence. Deletion is presented honestly as the reversible **MViewer
-回收站** staging area until native Shell Recycle Bin integration is qualified.
+Trash** staging area until native Shell Recycle Bin integration is qualified.
