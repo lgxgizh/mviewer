@@ -786,12 +786,12 @@ void MainWindow::connectSettingsSignals()
     connect(m_actAbout, &QAction::triggered, this,
             [this]()
             {
-                QMessageBox::about(
-                    this, tr("About MViewer"),
-                    tr("MViewer "
-                       "%1\n\nVisual analysis platform for imaging algorithm engineers: browse, compare, analyze, export.\n\nBuild: %2")
-                        .arg(QStringLiteral(MVIEWER_VERSION_STRING),
-                             QStringLiteral(MVIEWER_VERSION_FULL)));
+                QMessageBox::about(this, tr("About MViewer"),
+                                   tr("MViewer "
+                                      "%1\n\nVisual analysis platform for imaging algorithm "
+                                      "engineers: browse, compare, analyze, export.\n\nBuild: %2")
+                                       .arg(QStringLiteral(MVIEWER_VERSION_STRING),
+                                            QStringLiteral(MVIEWER_VERSION_FULL)));
             });
     // P0: recent / favorites / history wiring.
     connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);
