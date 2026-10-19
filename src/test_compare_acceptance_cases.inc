@@ -1322,21 +1322,31 @@ void testSyncRotate(const QString &img0, const QString &img1)
     CHECK(!ws->syncRotate(), "Unchecking panel checkbox turns off sync rotate");
     CHECK(tbChk && !tbChk->isChecked(), "Toolbar checkbox synchronizes to unchecked");
 
-    ws->setEditCellIndex(1);
-    // resolveEditCell prefers the pane under the cursor; pin it to pane 1 so
-    // headless CI (where QCursor may still sit on pane 0) matches the API intent.
+    // resolveEditCell prefers the pane under the cursor over setEditCellIndex.
+    RawImageView *pane1 = nullptr;
+    for (RawImageView *v : ws->findChildren<RawImageView *>())
     {
-        const auto views = ws->findChildren<RawImageView *>();
-        if (views.size() > 1 && views.at(1) && views.at(1)->isVisible())
-            QCursor::setPos(views.at(1)->mapToGlobal(views.at(1)->rect().center()));
+        if (v && v->cellIndex() == 1)
+        {
+            pane1 = v;
+            break;
+        }
     }
+    CHECK(pane1 != nullptr, "pane 1 exists for unsynced rotate");
+    if (pane1)
+    {
+        const QPoint center = pane1->rect().center();
+        QCursor::setPos(pane1->mapToGlobal(center));
+        QEvent enter(QEvent::Enter);
+        QApplication::sendEvent(pane1, &enter);
+    }
+    ws->setEditCellIndex(1);
     pump(50);
     const int rot0Before = ws->cellRotation(0);
     const int rot1Before = ws->cellRotation(1);
     ws->rotateCurrentCell(90);
     pump(80);
-    CHECK(ws->cellRotation(0) == rot0Before &&
-              ws->cellRotation(1) == ((rot1Before + 90) % 360),
+    CHECK(ws->cellRotation(0) == rot0Before && ws->cellRotation(1) == ((rot1Before + 90) % 360),
           "Rotating pane 1 only modifies pane 1 when syncRotate is off");
 }
 
