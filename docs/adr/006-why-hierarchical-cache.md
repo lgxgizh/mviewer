@@ -134,3 +134,8 @@ and Metadata, which Browse still needs on the next folder.
 - ✅ The open image (or an explicit keep list) is not trimmed
 - ✅ Thumbnail and Metadata caches survive the release
 - ❌ FullImage lod 0 stays until ordinary FullImage eviction
+
+## Comment language
+
+Header/implementation comments in `src/core/cache/` were Englishized for the
+English-source project policy; behavior and ownership described above are unchanged.

@@ -67,13 +67,14 @@ struct CompareSession
 
     // M15 P0#1 (review): additional UI state that must survive a save/close/reopen
     // cycle so the Compare view is fully restored, not just its geometry.
-    uint8_t threshold = 0;         // HeatMap / Diff 阈值 (0-255)
-    int blinkIntervalMs = 500;     // Blink 间隔 (硬编码 500 改为可持久化)
-    bool sidePanelVisible = false; // 检视面板开关
-    int layoutIndex = 0;           // 布局下拉框选中项 (0=自动,1=单列,2=2列,3=3列,4=4列,5=一行,6=自定义)
-    int customColumns = 2;         // 自定义布局列数 (行数由图片数自动推导)
+    uint8_t threshold = 0;         // HeatMap / Diff threshold (0-255)
+    int blinkIntervalMs = 500;     // Blink interval (was hardcoded 500; now persistable)
+    bool sidePanelVisible = false; // Inspector panel visibility
+    int layoutIndex =
+        0; // Layout combo selection (0=auto,1=1-col,2=2-col,3=3-col,4=4-col,5=single-row,6=custom)
+    int customColumns = 2; // Custom layout column count (rows derived from image count)
 
-    // H5: "统一像素倍率" — force every pane to the same zoom so images of
+    // H5: "uniform pixel scale" — force every pane to the same zoom so images of
     // different resolutions line up 1:1 in pixel scale (not fitted independently).
     bool uniformScale = false;
 

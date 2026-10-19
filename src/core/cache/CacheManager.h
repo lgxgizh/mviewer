@@ -14,16 +14,17 @@
 #include <unordered_map>
 #include <vector>
 
-// 分层缓存的统一中枢（CacheManager 是「所有者」）。
-// 内存级（Metadata / Thumbnail / Preview / FullImage）委托给既有 ImageCache
-// （每级独立容量/淘汰/生命周期/互斥）；磁盘级委托给既有 DiskCache（SQLite）。
-// CacheManager 不自己持有存储，而是负责：路由、跨级回退、淘汰预算、预取协调、
-// 以及逐层统计。所有对外接口只暴露 std 类型。
+// Unified hub of the hierarchical cache (CacheManager is the "owner").
+// Memory tiers (Metadata / Thumbnail / Preview / FullImage) are delegated to the existing
+// ImageCache (Independent capacity/eviction/lifetime/mutex per level); the disk level is delegated
+// to the existing DiskCache (SQLite). CacheManager does not hold storage itself, but is responsible
+// for: routing, cross-tier fallback, eviction budget, prefetch coordination, and per-level
+// statistics. All public interfaces expose only std types.
 //
-// 真 mipmap（in-memory）：FullImage put 后可生成/懒填充 power-of-two 链。
-// 键方案：baseKey + "#mip:" + lod（lod≥1）；lod 0 即 FullImage 本体。
-// lod 约定与 TileCache 一致：0=最细，越大越粗。mip 像素住在 Preview 池，
-// 受 Preview 字节预算约束（与其它 Preview 条目共享淘汰）。
+// True mipmap (in-memory): after a FullImage put, a power-of-two chain can be generated or lazily
+// filled. Key scheme: baseKey + "#mip:" + lod (lod≥1); lod 0 is the FullImage itself. lod
+// convention matches TileCache: 0 = finest, larger is coarser. mip pixels live in the Preview pool,
+// Bounded by the Preview byte budget (shares eviction with other Preview entries).
 enum class CacheLevel : uint8_t
 {
     Metadata,
@@ -33,7 +34,7 @@ enum class CacheLevel : uint8_t
     Disk
 };
 
-// 分层容量配置（RFC-003）。
+// Hierarchical capacity configuration (RFC-003).
 struct CacheConfig
 {
     size_t metadataCacheSize = 16 * 1024 * 1024;  // 16MB
@@ -41,11 +42,11 @@ struct CacheConfig
     size_t previewCacheSize = 256 * 1024 * 1024;  // 256MB
     size_t viewerCacheSize = 512 * 1024 * 1024;   // 512MB
     size_t raw16CacheSize = 256 * 1024 * 1024;    // 256MB (16-bit inspector samples)
-    size_t diskCacheSize = 1024 * 1024 * 1024;    // 1GB（精确 byte 上限）
+    size_t diskCacheSize = size_t{1024} * 1024 * 1024; // 1GB exact byte cap
     int maxDiskCacheEntries = 100000;
 };
 
-// 单级统计快照。
+// Single-level statistics snapshot.
 struct CacheLevelStats
 {
     size_t bytes = 0;
@@ -59,41 +60,44 @@ class CacheManager
   public:
     static CacheManager &instance();
 
-    // 应用容量配置（在构造后调用一次；默认配置见 CacheConfig）。
+    // Apply capacity configuration (call once after construction; see CacheConfig for the default
+    // configuration).
     void configure(const CacheConfig &cfg);
     const CacheConfig &config() const
     {
         return m_config;
     }
 
-    // 内存级（LRU 淘汰由 ImageCache 负责）
+    // Memory level (LRU eviction is handled by ImageCache)
     void putMemory(CacheLevel level, const std::string &key, const ImageData &img);
     bool getMemory(CacheLevel level, const std::string &key, ImageData &out);
 
-    // 磁盘级
+    // Disk tier
     void putDisk(const std::string &key, const ImageData &img);
     bool getDisk(const std::string &key, ImageData &out);
 
-    // 组合：内存优先，未命中回退磁盘（命中后回填内存）
+    // Composite: memory first, fall back to disk on miss (backfill memory after a hit)
     bool get(CacheLevel level, const std::string &key, ImageData &out);
     void put(CacheLevel level, const std::string &key, const ImageData &img);
 
-    // 从所有层级删除某 key（仓库释放/失效时使用）。
+    // Delete a key from all levels (used when the repository is released or invalidated).
     void erase(const std::string &key);
     // Drop only the in-memory full-resolution entry (Viewer level) for `key`.
     // Disk cache, thumbnails, previews and metadata are kept.
     void dropFullImage(const std::string &key);
 
-    // 逐层统计
+    // Per-level statistics
     CacheLevelStats levelStats(CacheLevel level) const;
 
-    // 元数据对象缓存层（RFC-003 的 Metadata 级，存 ImageMetadata 而非像素）。
+    // Metadata object cache layer (RFC-003 Metadata level; stores ImageMetadata rather than
+    // pixels).
     void putMetadata(const std::string &key, const mviewer::domain::ImageMetadata &meta);
     bool getMetadata(const std::string &key, mviewer::domain::ImageMetadata &out) const;
     bool hasMetadata(const std::string &key) const;
 
-    // 原始 16-bit 采样缓冲缓存（Pixel Inspector 高比特深读取）。仅在源位深>8 时
-    // 存在，独立于像素池，按 vector 已分配 capacity 单独上限保护内存。
+    // Raw 16-bit sample-buffer cache (Pixel Inspector high-bit-depth reads). Only when source bit
+    // depth > 8 Present, independent of the pixel pool; a separate cap on the vector's allocated
+    // capacity protects memory.
     void putRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> buf, int channels,
                   uint16_t maxSample);
     bool getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,
@@ -128,18 +132,18 @@ class CacheManager
     // until tracked mip bytes are within maxBytes. Does not wipe other pools.
     size_t trimMipsToBudget(size_t maxBytes, const std::vector<std::string> &keepBaseKeys = {});
 
-    // 管理
+    // Management
     void clear();
     void clearMemory();
     void clearDisk();
-    // 移除某 key 在全部层级（内存像素池 + 元数据对象 + 磁盘 + mips）的缓存。
+    // Remove a key's cache from all tiers (memory pixel pool + metadata objects + disk + mips).
     void invalidate(const std::string &key);
     size_t memoryUsageBytes() const;
     size_t raw16UsageBytes() const;
     size_t raw16EntryCount() const;
     size_t diskUsageBytes() const;
 
-    // 预取：把给定 key 预热到指定内存级（默认 FullImage）。
+    // Prefetch: warm the given key into the specified memory level (default FullImage).
     void prefetch(std::function<std::vector<std::string>()> nextKeys,
                   CacheLevel level = CacheLevel::FullImage);
     void prefetch(const std::vector<std::string> &keys, CacheLevel level = CacheLevel::FullImage);
@@ -164,7 +168,7 @@ class CacheManager
     mutable std::atomic<uint64_t> m_hits[5] = {};
     mutable std::atomic<uint64_t> m_misses[5] = {};
 
-    // Metadata 级的对象存储（ImageMetadata，独立于像素池）。
+    // Metadata-level object store (ImageMetadata, independent of the pixel pool).
     mutable std::mutex m_metaMutex;
     struct MetaEntry
     {
@@ -175,7 +179,7 @@ class CacheManager
     mutable std::list<std::string> m_metaOrder;
     static constexpr size_t kMetaMaxEntries = 50000;
 
-    // 原始 16-bit 采样缓冲对象存储（独立于像素池）。
+    // Raw 16-bit sample-buffer object store (independent of the pixel pool).
     mutable std::mutex m_raw16Mutex;
     struct Raw16Entry
     {

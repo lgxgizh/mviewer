@@ -15,7 +15,7 @@
 class Decoder
 {
   public:
-    // 全图解码
+    // Full-image decode
     static ImageData decodeFull(const std::string &path);
 
     // Modern Result-based decode returning rich error context when decode fails.
@@ -24,14 +24,14 @@ class Decoder
     static mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
     decodeFullResult(const std::string &path, mviewer::domain::ImageMetadata &outMeta);
 
-    // 缩放到 maxEdge 以内的解码（保持比例）
+    // Decode scaled to within maxEdge (preserve aspect ratio)
     static ImageData decodeScaled(const std::string &path, int maxEdge);
     static ImageData decodeScaled(const std::string &path, int maxEdge,
                                   mviewer::domain::ImageMetadata &outMeta);
 
-    // 全图解码并填充元数据（M6 扩展）
+    // Full-image decode and fill metadata (M6 extension)
     static ImageData decodeFull(const std::string &path, mviewer::domain::ImageMetadata &outMeta);
 
-    // 支持的图像后缀（与 UI 过滤保持一致）
+    // Supported image suffixes (kept consistent with UI filtering)
     static std::vector<std::string> supportedExtensions();
 };

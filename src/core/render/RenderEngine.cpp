@@ -720,7 +720,7 @@ void RenderEngine::executeDrawHistogram(QPainter &painter, const RenderCommand &
         return;
     painter.save();
     painter.setClipRect(viewport);
-    // 小黑底
+    // small black mat
     painter.setBrush(QColor(0, 0, 0, 150));
     painter.setPen(Qt::NoPen);
     painter.drawRect(r);
@@ -729,7 +729,7 @@ void RenderEngine::executeDrawHistogram(QPainter &painter, const RenderCommand &
     for (int i = 0; i < n; ++i)
         if (cmd.histData[i] > maxV)
             maxV = cmd.histData[i];
-    // 白色半透明折线
+    // white translucent polyline
     painter.setPen(QColor(255, 255, 255, 180));
     painter.setBrush(Qt::NoBrush);
     QPointF prev;
