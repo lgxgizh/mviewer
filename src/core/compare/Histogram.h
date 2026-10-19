@@ -223,7 +223,7 @@ inline Histogram accumulateNBins(const ConstImageView &v, int64_t x0, int64_t y0
 
 } // namespace histogram_detail
 
-// M23 (ROI + Histogram 联动): compute an RGB+luma histogram over a rectangular
+// M23 (ROI + Histogram linkage): compute an RGB+luma histogram over a rectangular
 // region of @p img (image coordinates, clipped to bounds). A degenerate ROI
 // (w/h <= 0 or fully outside) yields an all-zero histogram.
 // Handles RGB24 / BGR24 / RGBA32 / BGRA32 / Grayscale8 layouts.

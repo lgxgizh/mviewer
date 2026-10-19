@@ -42,9 +42,9 @@ struct ImageMetadata
     std::string iccDescription;     // profile description, e.g. "sRGB IEC61966-2.1"
     std::string iccCopyright;       // profile copyright notice
     std::string iccColorSpace;      // profile data color space, e.g. "RGB"
-    std::string iccDeviceClass;     // profile device class, e.g. "显示器"
+    std::string iccDeviceClass;     // profile device class, e.g. "Display"
     std::string iccPcs;             // profile connection space, e.g. "XYZ"
-    std::string iccRenderingIntent; // e.g. "感知 (Perceptual)"
+    std::string iccRenderingIntent; // e.g. "Perceptual"
     std::string iccVersion;         // profile version, e.g. "2.1.0"
     std::string format;             // container format, e.g. "JPEG","PNG","BMP","TIFF"
     int dpiX = 0, dpiY = 0;         // physical resolution in DPI (0 = unknown)

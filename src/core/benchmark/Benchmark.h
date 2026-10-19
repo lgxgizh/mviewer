@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-// 简易基准测试框架
+// Simple benchmark framework
 class Benchmark
 {
   public:
@@ -36,7 +36,7 @@ class Benchmark
     std::vector<Result> m_results;
 };
 
-// 计时辅助类
+// Timing helper class
 class Timer
 {
   public:

@@ -69,7 +69,7 @@ function Import-MSVCEnvironment {
 Import-MSVCEnvironment | Out-Null
 
 # Ninja's MSVC dependency scanner recognizes the English /showIncludes
-# markers.  A localized developer shell emits (for example) "注意: 包含文件",
+# markers.  A localized developer shell emits (for example) "Note: including file",
 # which silently drops header dependencies and lets stale translation units
 # survive an incremental build.  Pin the compiler diagnostics language for the
 # build process so header edits always invalidate every dependent TU.

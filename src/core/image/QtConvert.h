@@ -1,9 +1,9 @@
 #pragma once
-// 内部 core 助手：ImageData <-> QImage 转换。
-// 本头文件是 core 中**被点名允许包含 Qt 的适配头**之一（另一个是
-// QtMetadataSemantics.h，见 docs/adr/011 与 architecture_gate.ps1 的 R5）。
-// 它可以被 core 的 .cpp 与 UI 的私有头（*_p.h）包含；除此之外的 core/domain
-// 头文件必须保持不含 Qt include。
+// Internal core helper: ImageData <-> QImage conversion.
+// This header is one of the adapter headers in core **explicitly allowed to include Qt** (the other
+// is QtMetadataSemantics.h, see docs/adr/011 and R5 of architecture_gate.ps1). It may be included
+// by core .cpp files and UI private headers (*_p.h); other than that, core/domain Header files must
+// remain free of Qt includes.
 #include "core/image/DisplayColorContext.h"
 #include "core/image/ImageBuffer.h"
 #include "domain/Image.h"
@@ -13,7 +13,7 @@
 namespace mvcore
 {
 
-// ImageData -> QImage（格式感知：Grayscale8/RGB24/RGBA32 各自映射）
+// ImageData -> QImage (format-aware: Grayscale8/RGB24/RGBA32 each mapped separately)
 QImage toQImage(const ImageData &src);
 
 // M28 P1-03: Zero-copy QImage view over the ImageData buffer where the byte
@@ -49,10 +49,12 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
                              const mviewer::core::DisplayColorContext &target);
 
-// QImage -> ImageData（格式感知：Grayscale8 保留为灰度，其余转 RGB24）
+// QImage -> ImageData (format-aware: Grayscale8 is kept as grayscale, the rest are converted to
+// RGB24)
 ImageData fromQImage(const QImage &src);
 
-// QImage -> ImageData（保留 Alpha 通道：有 Alpha 时转 RGBA32 / BGRA32，无 Alpha 时等同 fromQImage）
+// QImage -> ImageData (preserve the Alpha channel: convert to RGBA32 / BGRA32 when Alpha is
+// present, equivalent to fromQImage when there is no Alpha)
 ImageData fromQImagePreservingAlpha(const QImage &src);
 
 } // namespace mvcore
