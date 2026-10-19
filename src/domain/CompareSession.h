@@ -12,6 +12,8 @@ struct CellTransform
     double scale = 1.0;
     double offsetX = 0.0;
     double offsetY = 0.0;
+    // Ctrl+wheel per-pane multiplier M_i in S_i = B_i * R_global * M_i.
+    double localZoomMultiplier = 1.0;
 };
 
 // Session-level sync state

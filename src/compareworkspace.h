@@ -313,6 +313,8 @@ class CompareWorkspace : public QWidget
     bool m_syncRotate = false;
     bool m_uniformScale = false; // H5: force all panes to one shared zoom
     QVector<double> m_fitScales;
+    // Per-pane Ctrl+wheel multipliers M_i (default 1.0).
+    QVector<double> m_localZoomMultipliers;
     double m_sharedZoomRatio = 1.0;
     bool m_postLayoutFitPending = false;
     bool m_preserveFitPending = false;
@@ -411,7 +413,11 @@ class CompareWorkspace : public QWidget
     void drawCanvasROI(QPainter &p);
     void drawCanvasPixelGrid(QPainter &p);
     void drawCanvasInfoOverlays(QPainter &p);
-    void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor);
+    void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor,
+                         bool localOnly = false);
+    void ensureLocalZoomMultipliers(int n);
+    void resetLocalZoomMultipliers();
+    double localZoomMultiplier(int i) const;
     QRectF cellFullDestRect(int idx, const QRectF &geom) const;
     QRectF cellDestRect(int idx, const QRectF &geom) const;
 

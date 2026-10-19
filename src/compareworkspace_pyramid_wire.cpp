@@ -456,7 +456,7 @@ void CompareWorkspace::queueDisplayLod(int requestedPane)
         if (previewShown || !rasterCoversView(pane, desired))
             dirty.push_back(pane);
     };
-    if (requestedPane >= 0 && !m_syncZoom)
+    if (requestedPane >= 0)
         addIfNeeded(requestedPane);
     else
     {
@@ -495,7 +495,7 @@ void CompareWorkspace::queueFastPreview(int requestedPane)
             return;
         dirty.push_back(pane);
     };
-    if (requestedPane >= 0 && !m_syncZoom)
+    if (requestedPane >= 0)
         consider(requestedPane);
     else
     {

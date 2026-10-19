@@ -134,7 +134,26 @@ void RawImageView::setTransientDisplay(const QImage &img, const QSize &sourceSiz
     m_transientSourceSize = fullSize;
     m_transientSourceRect = covered;
     m_transientRenderScale = 0.0;
+    m_hasTransientOffset = false;
+    m_transientOffset = {};
+    m_transientBackdrop = QImage();
     rebuildFilteredDisplay();
+    releaseBaseSurface();
+    update();
+}
+
+void RawImageView::setTransientDisplay(const QImage &img, const QSize &sourceSize,
+                                       const QRect &sourceRect, double renderScale,
+                                       const QPointF &renderOffset, const QImage &backdrop)
+{
+    setTransientDisplay(img, sourceSize, sourceRect);
+    if (img.isNull())
+        return;
+    if (std::isfinite(renderScale) && renderScale > 0.0)
+        m_transientRenderScale = renderScale;
+    m_transientOffset = renderOffset;
+    m_hasTransientOffset = true;
+    m_transientBackdrop = backdrop;
     releaseBaseSurface();
     update();
 }
@@ -152,12 +171,16 @@ void RawImageView::setTransientRenderScale(double scale)
 
 void RawImageView::clearTransientDisplay()
 {
-    if (m_transientImage.isNull() && !(m_transientRenderScale > 0.0))
+    if (m_transientImage.isNull() && !(m_transientRenderScale > 0.0) && !m_hasTransientOffset &&
+        m_transientBackdrop.isNull())
         return;
     m_transientImage = QImage();
     m_transientSourceSize = {};
     m_transientSourceRect = {};
     m_transientRenderScale = 0.0;
+    m_hasTransientOffset = false;
+    m_transientOffset = {};
+    m_transientBackdrop = QImage();
     rebuildFilteredDisplay();
     releaseBaseSurface();
     update();
@@ -227,20 +250,32 @@ void RawImageView::swapBackdrop(RawImageView &other) noexcept
 void RawImageView::paintBackdrop(QPainter &p, const QRectF &fullDest,
                                  const QRectF &coveredDest) const
 {
-    // Only a region raster needs the stand-in; a full-frame raster already
-    // covers every pixel of the image. Momentary Compare shows B, never A's
-    // backdrop.
-    if (m_backdrop.isNull() || !m_transientImage.isNull() || m_backdropSourceSize != m_sourceSize ||
-        m_sourceRect == QRect(QPoint(0, 0), m_sourceSize) || fullDest.isEmpty())
+    // Region rasters need a stand-in for uncovered edges. Momentary Compare
+    // (Space / 1-8) may supply the source pane's backdrop explicitly.
+    const QImage *standIn = nullptr;
+    if (!m_transientImage.isNull())
+    {
+        if (!m_transientBackdrop.isNull())
+            standIn = &m_transientBackdrop;
+        else
+            return;
+    }
+    else if (!m_backdrop.isNull() && m_backdropSourceSize == m_sourceSize &&
+             m_sourceRect != QRect(QPoint(0, 0), m_sourceSize))
+    {
+        standIn = &m_backdrop;
+    }
+    if (!standIn || fullDest.isEmpty())
         return;
     const QRectF visible =
         p.hasClipping() ? p.clipBoundingRect()
                         : QRectF(QPointF(0, 0), QSizeF(p.device()->width(), p.device()->height()));
     if (coveredDest.contains(visible.intersected(fullDest)))
         return;
-    const bool filtered =
-        m_displayOverlay != mviewer::OverlayMode::None && !m_filteredBackdrop.isNull();
-    mviewer::ui::blitDeviceImage(p, fullDest, filtered ? m_filteredBackdrop : m_backdrop);
+    const bool filtered = standIn == &m_backdrop &&
+                          m_displayOverlay != mviewer::OverlayMode::None &&
+                          !m_filteredBackdrop.isNull();
+    mviewer::ui::blitDeviceImage(p, fullDest, filtered ? m_filteredBackdrop : *standIn);
 }
 
 QSize RawImageView::renderSourceSize() const
@@ -512,8 +547,10 @@ void RawImageView::drawBaseLayer(QPainter &p)
 
     // Center in widget, then apply pan offset, then scale. The base raster is
     // already the physical size when zoomed below 100%, so it is drawn 1:1.
-    const double cx = width() / 2.0 + m_offset.x();
-    const double cy = height() / 2.0 + m_offset.y();
+    // Momentary Compare may override the pan with the source pane's offset.
+    const QPointF activeOffset = m_hasTransientOffset ? m_transientOffset : m_offset;
+    const double cx = width() / 2.0 + activeOffset.x();
+    const double cy = height() / 2.0 + activeOffset.y();
     const int dw = qRound(sourceSize.width() * scale);
     const int dh = qRound(sourceSize.height() * scale);
     const double sourceLeft = cx - dw / 2.0;

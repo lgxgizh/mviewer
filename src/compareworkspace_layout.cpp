@@ -175,6 +175,9 @@ void CompareWorkspace::onSwapPanes()
             swapSessionPaneSlots(*m_session, a, b);
         if (a < m_fitScales.size() && b < m_fitScales.size())
             std::swap(m_fitScales[a], m_fitScales[b]);
+        ensureLocalZoomMultipliers(n);
+        if (a < m_localZoomMultipliers.size() && b < m_localZoomMultipliers.size())
+            std::swap(m_localZoomMultipliers[a], m_localZoomMultipliers[b]);
 
         RawImageView *va = m_cellViews.value(a, nullptr);
         RawImageView *vb = m_cellViews.value(b, nullptr);

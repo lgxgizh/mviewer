@@ -239,8 +239,10 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
     {
         if (i)
             os << ',';
-        os << '[' << s.cells[i].scale << ',' << s.cells[i].offsetX << ',' << s.cells[i].offsetY
-           << ']';
+        os << '[' << s.cells[i].scale << ',' << s.cells[i].offsetX << ',' << s.cells[i].offsetY;
+        if (std::abs(s.cells[i].localZoomMultiplier - 1.0) > 1e-12)
+            os << ',' << s.cells[i].localZoomMultiplier;
+        os << ']';
     }
     os << "],\"syncMode\":" << static_cast<int>(s.syncMode) << ",\"blink\":" << s.blinkIndex
        << ",\"sharedScale\":" << s.sharedScale << ",\"sharedOffsetX\":" << s.sharedOffsetX
@@ -280,8 +282,7 @@ struct CompareParseState
 };
 
 static bool parseCompareCollections(Parser &p, const std::string &key,
-                                    mviewer::domain::CompareSession &out,
-                                    CompareParseState &state)
+                                    mviewer::domain::CompareSession &out, CompareParseState &state)
 {
     if (key == "imageIds")
     {
@@ -322,6 +323,11 @@ static bool parseCompareCollections(Parser &p, const std::string &key,
             p.eat(',');
             const double oy = static_cast<double>(p.parseDouble());
             ct.offsetY = std::isfinite(oy) ? oy : 0.0;
+            if (p.eat(','))
+            {
+                const double lm = static_cast<double>(p.parseDouble());
+                ct.localZoomMultiplier = (std::isfinite(lm) && lm > 0.0) ? lm : 1.0;
+            }
             if (!p.eat(']'))
                 return false;
             out.cells.push_back(ct);
@@ -382,8 +388,7 @@ static bool parseCompareTransform(Parser &p, const std::string &key, ComparePars
     return true;
 }
 
-static bool parseComparePresentation(Parser &p, const std::string &key,
-                                     CompareParseState &state)
+static bool parseComparePresentation(Parser &p, const std::string &key, CompareParseState &state)
 {
     if (key == "threshold")
         state.threshold = p.parseNumber();

@@ -4,6 +4,7 @@
 #include "core/image/SourceImage.h"
 
 #include <QResizeEvent>
+#include <algorithm>
 #include <cmath>
 
 namespace
@@ -173,12 +174,12 @@ QRectF CompareWorkspace::cellFullDestRect(int idx, const QRectF &geom) const
     {
         const double canvasFit =
             std::min(geom.width() / sourceSize.width(), geom.height() / sourceSize.height());
-        sc = canvasFit * m_sharedZoomRatio;
+        sc = canvasFit * m_sharedZoomRatio * localZoomMultiplier(idx);
     }
     if (!(sc > 0.0) || !std::isfinite(sc))
         return {};
-    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
-    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
+    const double ox = ct.offset.x;
+    const double oy = ct.offset.y;
     const double dw = sourceSize.width() * sc;
     const double dh = sourceSize.height() * sc;
     const QPointF center(geom.x() + geom.width() / 2.0 + ox, geom.y() + geom.height() / 2.0 + oy);
@@ -243,8 +244,8 @@ mviewer::ui::CompareDisplayPlanningInput CompareWorkspace::displayPlanningInput(
     const CellAdjust adjust = (pane < static_cast<int>(m_cellAdjusts.size()))
                                   ? m_cellAdjusts[static_cast<size_t>(pane)]
                                   : CellAdjust{};
-    const QSize expectedSize = baseSize.isValid() ? transformedSourceDims(baseSize, adjust)
-                                                  : viewSourceSize;
+    const QSize expectedSize =
+        baseSize.isValid() ? transformedSourceDims(baseSize, adjust) : viewSourceSize;
     if (!expectedSize.isValid())
         return input;
 
@@ -255,8 +256,7 @@ mviewer::ui::CompareDisplayPlanningInput CompareWorkspace::displayPlanningInput(
     input.viewportHeight = view->height();
     input.devicePixelRatio = view->devicePixelRatioF();
 
-    const bool contentMatches = viewSourceSize.isValid() &&
-                                viewSourceSize == expectedSize &&
+    const bool contentMatches = viewSourceSize.isValid() && viewSourceSize == expectedSize &&
                                 view->backdropKey() == paneContentKey(pane);
     input.hasWidgetSourceSize = contentMatches;
     input.uniformScale = m_uniformScale;
@@ -399,6 +399,8 @@ void CompareWorkspace::fitAll()
     bool first = true;
     const int n = m_engine.imageCount();
     m_fitScales.fill(1.0, n);
+    ensureLocalZoomMultipliers(n);
+    resetLocalZoomMultipliers();
     m_sharedZoomRatio = 1.0;
     for (int i = 0; i < n; ++i)
     {
@@ -488,7 +490,7 @@ double CompareWorkspace::scaleForPaneSource(int pane, int sourceW, int sourceH) 
         const double cell = pane < m_engine.imageCount() ? m_engine.cellTransform(pane).scale : fit;
         return (cell > 0.0 && std::isfinite(cell)) ? cell : fit;
     }
-    return fit * sharedZoomRatio(m_sharedZoomRatio);
+    return fit * sharedZoomRatio(m_sharedZoomRatio) * localZoomMultiplier(pane);
 }
 
 double CompareWorkspace::scaleKeepingFit(int pane, double engineScale)
@@ -513,7 +515,7 @@ double CompareWorkspace::scaleKeepingFit(int pane, double engineScale)
     const double rel = fitNow / m_fitScales[pane];
     if (!std::isfinite(rel) || std::abs(rel - 1.0) <= kStaleFitRatio)
         return engineScale;
-    const double scale = fitNow * sharedZoomRatio(m_sharedZoomRatio);
+    const double scale = fitNow * sharedZoomRatio(m_sharedZoomRatio) * localZoomMultiplier(pane);
     m_fitScales[pane] = fitNow;
     m_engine.setCellScale(pane, scale);
     return scale;
@@ -561,7 +563,7 @@ void CompareWorkspace::reapplyFitPreservingRatio()
         const double base =
             (!m_syncZoom) ? m_fitScales.at(i) : (m_uniformScale ? sharedFit : m_fitScales.at(i));
         const double applied = m_syncZoom ? ratio : 1.0;
-        m_engine.setCellScale(i, base * applied);
+        m_engine.setCellScale(i, base * applied * localZoomMultiplier(i));
     }
     update();
 }
@@ -627,10 +629,17 @@ void CompareWorkspace::schedulePostLayoutFit()
                 return;
             const double requestedScale = ws->m_engine.syncTransform().scale;
             const double requestedRatio = ws->m_sharedZoomRatio;
+            const QVector<double> savedLocal = ws->m_localZoomMultipliers;
             const bool preserveZoom =
                 (std::isfinite(requestedScale) && std::abs(requestedScale - 1.0) > 1e-9) ||
-                (std::isfinite(requestedRatio) && std::abs(requestedRatio - 1.0) > 1e-9);
+                (std::isfinite(requestedRatio) && std::abs(requestedRatio - 1.0) > 1e-9) ||
+                std::any_of(savedLocal.begin(), savedLocal.end(),
+                            [](double m) { return std::isfinite(m) && std::abs(m - 1.0) > 1e-9; });
             ws->fitAll();
+            // fitAll resets M_i; restore Ctrl+wheel multipliers across layout.
+            ws->ensureLocalZoomMultipliers(ws->m_engine.imageCount());
+            for (int i = 0; i < ws->m_localZoomMultipliers.size() && i < savedLocal.size(); ++i)
+                ws->m_localZoomMultipliers[i] = savedLocal[i];
             if (preserveZoom)
             {
                 const double ratio =
@@ -651,7 +660,7 @@ void CompareWorkspace::schedulePostLayoutFit()
                         continue;
                     const double fit =
                         ws->m_uniformScale ? commonFit : ws->m_fitScales.value(i, 1.0);
-                    ws->m_engine.setCellScale(i, fit * ratio);
+                    ws->m_engine.setCellScale(i, fit * ratio * ws->localZoomMultiplier(i));
                 }
             }
             ws->scheduleDisplayLodRefresh();

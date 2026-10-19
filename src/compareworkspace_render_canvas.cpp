@@ -193,9 +193,9 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
             continue;
         const auto &ct = m_engine.cellTransform(i);
         const double sc = scaleKeepingFit(i, ct.scale);
-        const QPointF off = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
-                                                 m_engine.syncTransform().offset.y)
-                                       : QPointF(ct.offset.x, ct.offset.y);
+        // L2: always use the per-cell offset. Sync drag accumulates into each
+        // cell; forcing syncTransform().offset here wiped Ctrl+wheel anchors.
+        const QPointF off(ct.offset.x, ct.offset.y);
         m_cellViews[i]->setTransform(sc, off);
     }
 

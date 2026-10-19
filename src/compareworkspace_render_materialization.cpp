@@ -231,7 +231,21 @@ void CompareWorkspace::paintCompareCanvas()
         QPainter base(&m_canvasBaseSurface);
         base.setRenderHint(QPainter::SmoothPixmapTransform, true);
         if (m_canvasTemporaryPane >= 0)
-            drawCellCompare(base, m_canvasTemporaryPane, r, QRectF(r));
+        {
+            // L6: in Split, Space must stay in the hovered half — not full canvas
+            // (full-canvas was a 2x jump of center and scale).
+            if (m_splitChk && m_splitChk->isChecked())
+            {
+                const int targetPane = 1 - m_canvasTemporaryPane;
+                const QRectF half = canvasPaneGeometry(targetPane >= 0 ? targetPane : 0);
+                const QRect clip = half.toRect().intersected(r);
+                drawCellCompare(base, m_canvasTemporaryPane, clip, half);
+            }
+            else
+            {
+                drawCellCompare(base, m_canvasTemporaryPane, r, QRectF(r));
+            }
+        }
         else if (m_splitChk && m_splitChk->isChecked())
             drawSplitCompare(base);
         else if (m_swipeChk && m_swipeChk->isChecked())

@@ -65,18 +65,26 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
         m_temporaryTargetPane != targetPane && m_temporaryTargetPane < m_cellViews.size() &&
         m_cellViews[m_temporaryTargetPane])
         m_cellViews[m_temporaryTargetPane]->clearTransientDisplay();
-    target->setTransientDisplay(source->displayImage(), source->sourceSize(), source->sourceRect());
-    // The target pane's scale matches its own source. A different-resolution
-    // stand-in must use the scale that keeps the same on-screen footprint.
-    // Uniform pixel scale keeps the target's absolute scale (render scale 0).
-    // Same-resolution images preserve target pane scale directly without re-fitting.
+    // L4/L5: replay the source pane's exact viewport (scale + offset + backdrop)
+    // so Space / 1-8 shows the same local region the user was inspecting.
+    const double srcScale = source->presentedScale();
+    const QPointF srcOffset = source->offset();
+    QImage backdrop;
+    if (source->hasBackdrop())
+        backdrop = source->backdropImage();
+    double renderScale = srcScale;
+    QPointF renderOffset = srcOffset;
     if (!m_uniformScale && m_syncZoom && source->sourceSize() != target->sourceSize())
     {
         const QSize src = source->sourceSize();
-        const double render = scaleForPaneSource(targetPane, src.width(), src.height());
-        if (render > 0.0)
-            target->setTransientRenderScale(render);
+        const double fitted = scaleForPaneSource(targetPane, src.width(), src.height());
+        if (fitted > 0.0)
+            renderScale = fitted;
     }
+    // If pane geometries differ, keep the source offset (screen-space) so the
+    // same local feature stays under the same relative viewport center.
+    target->setTransientDisplay(source->displayImage(), source->sourceSize(), source->sourceRect(),
+                                renderScale, renderOffset, backdrop);
     m_temporaryCompareActive = true;
     m_temporaryTargetPane = targetPane;
     if (m_temporaryCompareButton && m_temporaryDigit == 0)

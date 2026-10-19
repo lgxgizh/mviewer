@@ -1179,7 +1179,11 @@
 </context>
 <context>
     <name>CompareWorkspace</name>
-    <message>
+        <message>
+        <source>Pane %1 local zoom: %2% (Ctrl+wheel)</source>
+        <translation>窗格 %1 局部缩放: %2% (Ctrl+滚轮)</translation>
+    </message>
+<message>
         <location filename="../src/compareworkspace.cpp" line="422"/>
         <source>Loading %1 images…</source>
         <translation>正在加载 %1 张图片…</translation>
