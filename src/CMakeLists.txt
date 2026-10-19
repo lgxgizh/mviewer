@@ -2088,6 +2088,19 @@ target_include_directories(compare_display_pyramid_tests PRIVATE ${CMAKE_CURRENT
 add_test(NAME compare_display_pyramid_tests COMMAND compare_display_pyramid_tests)
 set_tests_properties(compare_display_pyramid_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
+# Soft/warm compare paint geometry: thumbs must not claim full sourceSize.
+add_executable(compare_warm_soft_geometry_tests
+    test_compare_warm_soft_geometry.cpp
+)
+target_link_libraries(compare_warm_soft_geometry_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+)
+target_compile_features(compare_warm_soft_geometry_tests PRIVATE cxx_std_20)
+target_include_directories(compare_warm_soft_geometry_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_warm_soft_geometry_tests COMMAND compare_warm_soft_geometry_tests)
+
 # Compare in-session decoded frame LRU pool (path+frameIndex).
 add_executable(compare_session_frame_pool_tests
     test_compare_session_frame_pool.cpp

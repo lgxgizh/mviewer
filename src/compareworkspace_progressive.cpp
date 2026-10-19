@@ -117,6 +117,8 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
             continue;
 
         // Fast first paint: warm Browse/Preview thumbnail when available.
+        // Use the thumb's real pixel size — claiming full source geometry here
+        // makes nearest-neighbour blit look like a low-res mosaic.
         ImageData preview;
         const std::string key = PreviewPanel::previewCacheKey(path);
         if (!svc.getPreviewCache(key, preview) || preview.isNull())
@@ -124,13 +126,13 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
         const QImage q = mvcore::toQImageFast(preview);
         if (q.isNull())
             continue;
-        const QSize srcSize = view->sourceSize().isValid() ? view->sourceSize() : q.size();
+        const auto paint = mviewer::ui::softPaintGeometry(q.size(), q.size());
         const double oldScale = view->scale();
         const QPointF oldOffset = view->offset();
         const QSize oldSource = view->sourceSize();
         tagPaneContent(i);
-        view->setImage(q, srcSize, QRect(QPoint(0, 0), srcSize));
-        if (oldSource.isValid() && oldSource == srcSize)
+        view->setImage(q, paint.sourceSize, paint.sourceRect);
+        if (oldSource.isValid() && oldSource == paint.sourceSize)
             view->setTransform(oldScale, oldOffset);
     }
     update();
@@ -162,7 +164,10 @@ void CompareWorkspace::applyFramesToExistingPanes()
         }
         if (RawImageView *view = m_cellViews[i])
         {
-            view->setSoftLoading(false);
+            // Keep softLoading until applyDisplayBatchResult lands a real display
+            // raster. Clearing here marks blankPane=false while a warm thumb is
+            // still showing, so scheduleDisplayMaterialization may skip the
+            // cheap→upgrade path and leave a sticky mosaic with no Loading badge.
             view->setPaneTag(QString(QChar('A' + i)));
             if (img)
                 view->setFilenameOverlay(name, m_filenameOverlay);
@@ -245,8 +250,10 @@ void CompareWorkspace::applyPendingWarmSeeds()
             view->setSoftLoading(true);
             view->setMetricBadge(QString());
             tagPaneContent(i);
-            view->setImage(seed.image, seed.sourceSize, seed.sourceRect);
-            if (oldSource.isValid() && oldSource == seed.sourceSize)
+            const auto paint =
+                mviewer::ui::softPaintGeometry(seed.image.size(), seed.sourceSize, seed.sourceRect);
+            view->setImage(seed.image, paint.sourceSize, paint.sourceRect);
+            if (oldSource.isValid() && oldSource == paint.sourceSize)
                 view->setTransform(oldScale, oldOffset);
         }
     }

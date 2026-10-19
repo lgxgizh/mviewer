@@ -600,6 +600,14 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
     ImageData mip = tryCacheBestMip(path, wantEdge);
     if (!mip.isNull())
     {
+        const int mipEdge = std::max(mip.width, mip.height);
+        // Reject a Browse/Preview-sized cache hit for a much larger viewport
+        // request — accepting it paints a sticky nearest-neighbour mosaic.
+        if (wantEdge > 0 && mipEdge * 2 < wantEdge)
+            mip = ImageData{};
+    }
+    if (!mip.isNull())
+    {
         if (request.target.isValid() &&
             (mip.width > request.target.width() || mip.height > request.target.height()))
         {
