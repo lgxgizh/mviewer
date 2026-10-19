@@ -749,6 +749,25 @@ target_include_directories(browse_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME browse_acceptance_tests COMMAND browse_acceptance_tests)
 set_tests_properties(browse_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
+# Browse: paste clipboard into current folder + open-folder toolbar action
+add_executable(browse_paste_acceptance
+    test_browse_paste.cpp
+)
+
+target_link_libraries(browse_paste_acceptance
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(browse_paste_acceptance PRIVATE cxx_std_20)
+target_include_directories(browse_paste_acceptance PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME browse_paste_acceptance COMMAND browse_paste_acceptance)
+set_tests_properties(browse_paste_acceptance PROPERTIES RUN_SERIAL TRUE)
+
 # ─── M45: real MainWindow CommandStack callback + async file-op surface ─────
 add_executable(mainwindow_commandstack_acceptance
     test_mainwindow_commandstack.cpp

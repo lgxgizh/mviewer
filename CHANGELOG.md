@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Paste images into the browsed folder**: when the thumbnail gallery has focus or the pointer is over it, `Ctrl+V` copies clipboard image files (or raw clipboard image data) into the current browse directory, refreshes the gallery, and selects the new file(s). File URLs keep their original names; raw image data is saved as `clipboard-YYYYMMDD-HHMMSS.png` (or `.jpg` when the clipboard provides JPEG). Existing names get `-2`, `-3`, … suffixes. Text fields still own `Ctrl+V`. Elsewhere, `Ctrl+V` keeps the previous behavior (temp file → open in the viewer).
+- **Open current folder in the file manager**: browse toolbar button **Open Folder** (next to Refresh) opens the directory currently shown in the gallery via `QDesktopServices` (Explorer on Windows, the desktop opener on Linux). Disabled when no folder is open.
+
 ## [1.0.138] - 2026-10-19
 
 ### Release

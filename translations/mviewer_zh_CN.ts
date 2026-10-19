@@ -3593,19 +3593,19 @@ or double-click a thumbnail to view</source>
     <message>
         <location filename="../src/mainwindow.cpp" line="616"/>
         <location filename="../src/mainwindow.cpp" line="765"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="236"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="238"/>
         <source>Current: %1</source>
         <translation>当前: %1</translation>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="620"/>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="684"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="691"/>
         <source>Image %1 / %2</source>
         <translation>图片 %1 / %2</translation>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="621"/>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="686"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="693"/>
         <source>%1 images</source>
         <translation>图片 %1</translation>
     </message>
@@ -3616,7 +3616,7 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="720"/>
-        <location filename="../src/mainwindow_commands.cpp" line="509"/>
+        <location filename="../src/mainwindow_commands.cpp" line="558"/>
         <source>Select 2-8 images to compare</source>
         <translation>需要选择 2-8 张图片才能比较</translation>
     </message>
@@ -3633,84 +3633,95 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/mainwindow.cpp" line="877"/>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="134"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="141"/>
         <source>Select 2–8 images to compare</source>
         <translation>选择 2–8 张图片进行比较</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="320"/>
+        <location filename="../src/mainwindow_commands.cpp" line="348"/>
         <source>Path copied: %1</source>
         <translation>已复制路径: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="329"/>
+        <location filename="../src/mainwindow_commands.cpp" line="357"/>
         <source>Copying image to clipboard...</source>
         <translation>正在复制图片到剪贴板...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="330"/>
+        <location filename="../src/mainwindow_commands.cpp" line="358"/>
         <source>No image available to copy</source>
         <translation>没有可复制的图片</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="347"/>
-        <location filename="../src/mainwindow_commands.cpp" line="350"/>
+        <location filename="../src/mainwindow_commands.cpp" line="376"/>
+        <location filename="../src/mainwindow_commands.cpp" line="396"/>
+        <location filename="../src/mainwindow_commands.cpp" line="399"/>
         <source>No image data on the clipboard</source>
         <translation>剪贴板中无图片数据</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="363"/>
+        <location filename="../src/mainwindow_commands.cpp" line="381"/>
+        <source>Pasted into folder: %1</source>
+        <translation>已粘贴到文件夹：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_commands.cpp" line="382"/>
+        <source>Pasted %1 images into folder</source>
+        <translation>已将 %1 张图片粘贴到文件夹</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_commands.cpp" line="412"/>
         <source>Unable to create a temporary clipboard file</source>
         <translation>无法创建剪贴板临时文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="368"/>
-        <location filename="../src/mainwindow_commands.cpp" line="381"/>
+        <location filename="../src/mainwindow_commands.cpp" line="417"/>
+        <location filename="../src/mainwindow_commands.cpp" line="430"/>
         <source>Unable to create a temporary clipboard folder</source>
         <translation>无法创建剪贴板临时目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="429"/>
+        <location filename="../src/mainwindow_commands.cpp" line="478"/>
         <source>Pasted image from clipboard</source>
         <translation>已从剪贴板粘贴图片</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="436"/>
+        <location filename="../src/mainwindow_commands.cpp" line="485"/>
         <source>Clipboard paste cancelled</source>
         <translation>剪贴板粘贴已取消</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="437"/>
+        <location filename="../src/mainwindow_commands.cpp" line="486"/>
         <source>Unable to save the clipboard image</source>
         <translation>无法保存剪贴板图片</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="448"/>
+        <location filename="../src/mainwindow_commands.cpp" line="497"/>
         <source>Clipboard paste could not be queued</source>
         <translation>剪贴板粘贴无法排队</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="572"/>
+        <location filename="../src/mainwindow_commands.cpp" line="621"/>
         <source>Keyboard Shortcuts</source>
         <translation>键盘快捷键</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="594"/>
+        <location filename="../src/mainwindow_commands.cpp" line="643"/>
         <source>User Guide</source>
         <translation>使用说明</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="647"/>
+        <location filename="../src/mainwindow_commands.cpp" line="696"/>
         <source>Fit Window (F)</source>
         <translation>适应窗口 (F)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="648"/>
+        <location filename="../src/mainwindow_commands.cpp" line="697"/>
         <source>Actual size 100% (Ctrl+1)</source>
         <translation>实际大小 100% (Ctrl+1)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_commands.cpp" line="662"/>
+        <location filename="../src/mainwindow_commands.cpp" line="711"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="292"/>
         <source>800% (Pixel Grid)</source>
         <translation>800% (像素网格)</translation>
@@ -3923,80 +3934,80 @@ or double-click a thumbnail to view</source>
         <translation>不再提示</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="325"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="327"/>
         <source>Directory does not exist, removed from recent records: %1</source>
         <translation>目录不存在，已从最近记录中移除: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="336"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="338"/>
         <source>Clean Invalid Directories</source>
         <translation>清理失效目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="360"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="362"/>
         <source>Cleared %1 stale directory entries</source>
         <translation>已清理 %1 条失效目录记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="362"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="364"/>
         <source>Clear Recent Directories</source>
         <translation>清空最近目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="372"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="374"/>
         <source>Recent directory history cleared</source>
         <translation>已清空最近目录记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="376"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="388"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="455"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="470"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="378"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="390"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="457"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="472"/>
         <source>(None)</source>
         <translation>(无)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="410"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="412"/>
         <source>File missing; removed from recent list: %1</source>
         <translation>文件不存在，已从最近记录中移除: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="419"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="421"/>
         <source>Clean Invalid Files</source>
         <translation>清理失效文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="440"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="442"/>
         <source>Cleaned %1 invalid file records</source>
         <translation>已清理 %1 条失效文件记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="443"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="445"/>
         <source>Clear recent files</source>
         <translation>清空最近文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="451"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="453"/>
         <source>Recent file history cleared</source>
         <translation>已清空最近文件记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="477"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="479"/>
         <source>No folder to add to favorites</source>
         <translation>没有可收藏的目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="486"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="488"/>
         <source>Added to favorites: %1</source>
         <translation>已收藏: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="501"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="503"/>
         <source>Removed from favorites: %1</source>
         <translation>已取消收藏: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="533"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="535"/>
         <source>All filters cleared</source>
         <translation>已清除所有筛选条件</translation>
     </message>
@@ -4072,67 +4083,67 @@ or double-click a thumbnail to view</source>
         <translation>点击在资源管理器中定位当前文件，右键复制完整路径</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="570"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="576"/>
         <source>Path does not exist: %1</source>
         <translation>路径不存在: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="578"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="584"/>
         <source>Image files (</source>
         <translation>图片文件 (</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="581"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="587"/>
         <source>All files (*)</source>
         <translation>所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="583"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="589"/>
         <source>Open Image</source>
         <translation>打开图片</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="741"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="747"/>
         <source>Plugin list updated</source>
         <translation>插件列表已更新</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="756"/>
         <location filename="../src/mainwindow_ui_connections.cpp" line="762"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="765"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="768"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="771"/>
         <source>Export Settings</source>
         <translation>导出设置</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="757"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="773"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="763"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="779"/>
         <source>MViewer Settings File (*.mvs);;All Files (*)</source>
         <translation>MViewer 设置文件 (*.mvs);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="763"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="769"/>
         <source>Settings exported to %1</source>
         <translation>设置已导出至 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="766"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="772"/>
         <source>Export failed: %1</source>
         <translation>导出失败：%1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="772"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="779"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="784"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="778"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="785"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="790"/>
         <source>Import Settings</source>
         <translation>导入设置</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="780"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="786"/>
         <source>Settings imported. Some changes require restarting MViewer to take effect.</source>
         <translation>设置已导入。部分更改需要重启 MViewer 才能生效。</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="785"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="791"/>
         <source>Import failed: %1</source>
         <translation>导入失败：%1</translation>
     </message>
@@ -4158,148 +4169,159 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_layout.cpp" line="85"/>
+        <source>Open Folder</source>
+        <translation>打开文件夹</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="88"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="112"/>
+        <source>Open the current folder in the file manager</source>
+        <translation>在文件管理器中打开当前文件夹</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="89"/>
         <source>Browse toolbar</source>
         <translation>浏览工具栏</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="102"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="106"/>
         <source>Open Directory</source>
         <translation>打开目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="103"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="107"/>
         <source>Previous directory</source>
         <translation>上一个目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="104"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="108"/>
         <source>Next directory</source>
         <translation>下一个目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="109"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="116"/>
         <source>Favorite Current Directory</source>
         <translation>收藏当前目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="111"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="118"/>
         <source>Analysis panel</source>
         <translation>分析面板</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="112"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="119"/>
         <source>Global search</source>
         <translation>全局搜索</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="120"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="127"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="182"/>
         <source>Rotate 90° counterclockwise and overwrite original file</source>
         <translation>逆时针旋转 90° 并覆盖原文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="127"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="134"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="176"/>
         <source>Rotate 90° clockwise and overwrite the original file</source>
         <translation>顺时针旋转 90° 并覆盖原文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="142"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="149"/>
         <source>USM sharpen before/after comparison and export (Ctrl+U)</source>
         <translation>USM 锐化前后对比与导出 (Ctrl+U)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="201"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="208"/>
         <source>Remove from Favorites</source>
         <translation>移除收藏</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="225"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="232"/>
         <source>Folders</source>
         <translation>文件夹</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="240"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="247"/>
         <source>Preview</source>
         <translation>预览</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="317"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="324"/>
         <source>Sort:</source>
         <translation>排序：</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="363"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="370"/>
         <source>Advanced Filter</source>
         <translation>高级筛选</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="369"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="376"/>
         <source>Clear Filters</source>
         <translation>清除筛选</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="378"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="385"/>
         <source>Filter by camera (brand/model), substring match</source>
         <translation>按相机(品牌/型号)过滤，子串匹配</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="384"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="391"/>
         <source>Filter by lens model, substring match</source>
         <translation>按镜头型号过滤，子串匹配</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="389"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="396"/>
         <source>Filter by exact ISO (0 = all)</source>
         <translation>按 ISO 精确过滤 (0 = 全部)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="404"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="411"/>
         <source>Filter by tag exactly (empty = all)</source>
         <translation>按标签精确过滤 (空 = 全部)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="454"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="461"/>
         <source>Search:</source>
         <translation>搜索：</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="461"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="468"/>
         <source>Include Subfolders</source>
         <translation>包含子目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="494"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="501"/>
         <source>Reset Filters</source>
         <translation>重置筛选</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="496"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="503"/>
         <source>Clear all search and filter conditions</source>
         <translation>清除所有搜索和过滤条件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="664"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="671"/>
         <source>0 images</source>
         <translation>图片 0</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="665"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="672"/>
         <source>Size 0 B</source>
         <translation>大小 0 B</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="669"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="676"/>
         <source>Cache hit rate: improves consecutive large-image switching and thumbnail loading</source>
         <translation>缓存命中率: 提升连续大图切换与缩略图加载性能</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="688"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="695"/>
         <source>%1 selected · %2</source>
         <translation>已选 %1 · %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="689"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="696"/>
         <source>Size %1</source>
         <translation>大小 %1</translation>
     </message>
@@ -4821,12 +4843,12 @@ Restore the last viewed images and directory?</source>
         <translation>比较模式(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="790"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="796"/>
         <source>About MViewer</source>
         <translation>关于 MViewer</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="791"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="797"/>
         <source>MViewer %1
 
 Visual analysis platform for imaging algorithm engineers: browse, compare, analyze, export.
@@ -6135,134 +6157,134 @@ Continue?</source>
         <translation>清除标记</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="396"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="428"/>
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="397"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="429"/>
         <source>New file name:</source>
         <translation>新文件名:</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="444"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="476"/>
         <source>Rename failed</source>
         <translation>重命名失败</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="482"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="514"/>
         <source>Are you sure you want to move this file to the Recycle Bin?</source>
         <translation>确定将此文件移到回收站？</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="483"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="515"/>
         <source>Are you sure you want to move %1 files to the Recycle Bin?</source>
         <translation>确定将 %1 个文件移到回收站？</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="486"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="518"/>
         <source>Delete confirmation</source>
         <translation>删除确认</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="496"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="528"/>
         <source>Delete failed</source>
         <translation>删除失败</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="497"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="529"/>
         <source>Unable to create the recycle directory.</source>
         <translation>无法创建回收目录。</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="526"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="558"/>
         <source>Recycle Bin</source>
         <translation>回收站</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="526"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="558"/>
         <source>Cannot open the system Recycle Bin.</source>
         <translation>无法打开系统回收站。</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="538"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="570"/>
         <source>Copy To...</source>
         <translation>复制到...</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="549"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="581"/>
         <source>Move To...</source>
         <translation>移动到...</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="582"/>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="591"/>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="604"/>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="647"/>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="652"/>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="658"/>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="669"/>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="781"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="695"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="704"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="717"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="760"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="765"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="771"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="782"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="894"/>
         <source>Batch Analysis Export</source>
         <translation>批量分析导出</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="583"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="696"/>
         <source>Please select an image first, or open a filtered directory.</source>
         <translation>请先选择图片，或打开一个已过滤的目录。</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="592"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="705"/>
         <source>No analyzer is currently available.</source>
         <translation>当前没有可用的分析器。</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="605"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="718"/>
         <source>Select an analyzer:</source>
         <translation>选择分析器:</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="613"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="726"/>
         <source>Export analysis results</source>
         <translation>导出分析结果</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="614"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="727"/>
         <source>CSV (*.csv);;JSON (*.json)</source>
         <translation>CSV (*.csv);;JSON (*.json)</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="627"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="740"/>
         <source>Running batch analysis...</source>
         <translation>正在批量分析...</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="627"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="740"/>
         <source>Cancel</source>
         <translation>取消</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="648"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="761"/>
         <source>Batch analysis cancelled.</source>
         <translation>批量分析已取消。</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="653"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="766"/>
         <source>Cannot write: %1</source>
         <translation>无法写入：%1</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="659"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="772"/>
         <source>Exported %1 results → %2</source>
         <translation>已导出 %1 条结果 → %2</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="670"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="783"/>
         <source>A batch analysis is already running.</source>
         <translation>已有批量分析正在运行。</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_fileops.cpp" line="782"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="895"/>
         <source>Background task was rejected by the scheduler.</source>
         <translation>后台任务被调度器拒绝。</translation>
     </message>

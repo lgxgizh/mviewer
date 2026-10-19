@@ -82,6 +82,10 @@ void MainWindow::buildBrowserShell()
     m_actRefresh->setObjectName("refreshDirectoryAction");
     m_actRefresh->setShortcut(QKeySequence::Refresh);
     m_actRefresh->setToolTip(actTip(tr("Refresh directory and thumbnails"), m_actRefresh));
+    m_actOpenCurrentFolder = new QAction(tr("Open Folder"), this);
+    m_actOpenCurrentFolder->setObjectName("openCurrentFolderAction");
+    m_actOpenCurrentFolder->setToolTip(
+        actTip(tr("Open the current folder in the file manager"), m_actOpenCurrentFolder));
     auto *browserToolBar = new QToolBar(tr("Browse toolbar"), this);
     addToolBar(Qt::TopToolBarArea, browserToolBar);
     browserToolBar->setObjectName("browserToolBar");
@@ -104,6 +108,9 @@ void MainWindow::buildBrowserShell()
     addBrowserAction(m_actDirForward, "forward", actTip(tr("Next directory"), m_actDirForward));
     addBrowserAction(m_actDirUp, "up");
     addBrowserAction(m_actRefresh, "refresh");
+    addBrowserAction(
+        m_actOpenCurrentFolder, "browse",
+        actTip(tr("Open the current folder in the file manager"), m_actOpenCurrentFolder));
     browserToolBar->addSeparator();
     addBrowserAction(m_actAddFavorite, "favorite",
                      actTip(tr("Favorite Current Directory"), m_actAddFavorite));

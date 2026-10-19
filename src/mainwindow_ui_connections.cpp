@@ -552,6 +552,12 @@ void MainWindow::connectMenuSignals()
                 if (m_directoryMonitor)
                     m_directoryMonitor->reconcileNow();
             });
+    connect(m_actOpenCurrentFolder, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->openCurrentFolder();
+            });
 
     // Path input bar: pressing Enter navigates to the typed directory.
     connect(m_pathEdit, &QLineEdit::returnPressed, this,

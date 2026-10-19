@@ -152,6 +152,8 @@ void MainWindow::updateNavigationActions()
     }
     if (m_actRefresh)
         m_actRefresh->setEnabled(hasDirectory);
+    if (m_actOpenCurrentFolder)
+        m_actOpenCurrentFolder->setEnabled(hasDirectory);
     const bool isFavorite = m_directory && m_directory->hasFavorite(activeDir);
     if (m_actAddFavorite)
         m_actAddFavorite->setEnabled(hasDirectory && !isFavorite);
@@ -309,26 +311,26 @@ void MainWindow::rebuildRecentMenu()
         const QString label = fn.isEmpty() ? QDir::toNativeSeparators(qs) : fn;
         auto *act = m_recentMenu->addAction(label);
         act->setToolTip(qs);
-        connect(act, &QAction::triggered, this,
-                [this, qs]()
+        connect(
+            act, &QAction::triggered, this,
+            [this, qs]()
+            {
+                if (!QDir(qs).exists())
                 {
-                    if (!QDir(qs).exists())
-                    {
-                        m_recent.remove(qs.toStdString());
-                        m_appState.recentFolders.removeAll(qs);
-                        if (m_directory)
-                            m_directory->removeRecentFolder(qs);
-                        m_appState.save();
-                        rebuildRecentMenu();
-                        if (statusBar())
-                            statusBar()->showMessage(
-                                tr("Directory does not exist, removed from recent records: %1")
-                                    .arg(qs),
-                                3000);
-                        return;
-                    }
-                    changeDirectory(qs);
-                });
+                    m_recent.remove(qs.toStdString());
+                    m_appState.recentFolders.removeAll(qs);
+                    if (m_directory)
+                        m_directory->removeRecentFolder(qs);
+                    m_appState.save();
+                    rebuildRecentMenu();
+                    if (statusBar())
+                        statusBar()->showMessage(
+                            tr("Directory does not exist, removed from recent records: %1").arg(qs),
+                            3000);
+                    return;
+                }
+                changeDirectory(qs);
+            });
     }
     if (!m_recent.items().empty())
     {
