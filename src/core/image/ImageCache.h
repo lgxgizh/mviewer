@@ -69,7 +69,7 @@ class ImageCache
     {
         size_t maxBytes = 0;
         size_t curBytes = 0;
-        std::list<std::string> order; // 最近使用在前
+        std::list<std::string> order; // most-recent first
         std::unordered_map<std::string, Entry> map;
         mutable std::mutex mtx;
     };

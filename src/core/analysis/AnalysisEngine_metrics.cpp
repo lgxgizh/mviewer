@@ -604,7 +604,7 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 
     const double mse = static_cast<double>(sumSq) / (1.0 * w * h * channels);
     if (mse <= 1e-10)
-        return 100.0; // 完美一致(而非 inf)
+        return 100.0; // perfect match (not inf)
     return 10.0 * std::log10(65025.0 / mse);
 }
 

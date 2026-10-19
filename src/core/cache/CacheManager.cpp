@@ -57,7 +57,7 @@ ImageCache::Level CacheManager::toImageCacheLevel(CacheLevel level) const
     case CacheLevel::FullImage:
         return ImageCache::Viewer;
     case CacheLevel::Disk:
-        return ImageCache::Viewer; // 内存路径不会走到这里
+        return ImageCache::Viewer; // memory path never reaches here
     }
     return ImageCache::Viewer;
 }
@@ -619,7 +619,7 @@ void CacheManager::prefetch(std::function<std::vector<std::string>()> nextKeys, 
 void CacheManager::prefetch(const std::vector<std::string> &keys, CacheLevel level)
 {
     if (level == CacheLevel::Disk)
-        return; // 磁盘层无需预热
+        return; // disk tier needs no warmup
     for (const std::string &key : keys)
     {
         ImageData img;

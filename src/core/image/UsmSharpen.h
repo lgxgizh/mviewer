@@ -9,10 +9,10 @@ namespace mviewer::core
 
 struct UsmParams
 {
-    double amount = 1.5;   // 锐化强度 [0.0, 5.0]，对应 UI 0% ~ 500%
-    double radius = 1.5;   // 高斯模糊标准差 sigma [0.1, 20.0] px
-    int threshold = 4;     // 边缘反差触发阈值 [0, 255]
-    bool lumaOnly = false; // 是否仅作用于亮度通道
+    double amount = 1.5;   // sharpen amount [0.0, 5.0]; UI 0%–500%
+    double radius = 1.5;   // Gaussian sigma [0.1, 20.0] px
+    int threshold = 4;     // edge-contrast threshold [0, 255]
+    bool lumaOnly = false; // luma-only
 
     bool isIdentity() const noexcept
     {
