@@ -178,16 +178,16 @@ int main(int argc, char **argv)
     const auto boxes = ws->findChildren<QCheckBox *>();
     for (QCheckBox *box : boxes)
     {
-        if (box->text().startsWith(QStringLiteral("统一像素倍率")))
+        if (box->text().startsWith(QStringLiteral("Uniform Pixel Scale")))
             uniform = box;
     }
     auto *button = ws->findChild<QPushButton *>(QStringLiteral("fitWindowButton"));
     auto *viewBar = ws->findChild<QWidget *>(QStringLiteral("compareViewToolbar"));
-    check(button && button->text() == QStringLiteral("适合窗口 (F)"),
+    check(button && button->text() == QStringLiteral("Fit window (F)"),
           "toolbar button「适合窗口 (F)」shows its shortcut");
     check(button && button->isVisible() && viewBar && viewBar->isAncestorOf(button),
           "button sits on the view toolbar");
-    check(button && button->toolTip().contains(QStringLiteral("统一像素倍率")),
+    check(button && button->toolTip().contains(QStringLiteral("Uniform Pixel Scale")),
           "tooltip says 统一像素倍率 decides shared vs per-pane fit");
     check(uniform && !uniform->isChecked(), "uniform pixel scale starts off");
     if (!button || !uniform || !lowFrame || !highFrame)
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
     pump(30);
 
     auto *status = ws->findChild<QLabel *>(QStringLiteral("compareStatusLabel"));
-    check(status && status->text() == QStringLiteral("视图自适应窗口 (Fit)"),
+    check(status && status->text() == QStringLiteral("View Fitted to Window (Fit)"),
           "status toast reports the fit");
 
     check(waitForDisplayed(ws, 20000), "both panes have a display raster");
@@ -457,7 +457,7 @@ int main(int argc, char **argv)
     const auto dragBoxes = ws->findChildren<QCheckBox *>();
     for (QCheckBox *box : dragBoxes)
     {
-        if (box->text().contains(QStringLiteral("同步拖动")))
+        if (box->text().contains(QStringLiteral("Synchronized drag")))
             box->setChecked(false);
     }
     ws->engine().setCellScale(0, 2.25);

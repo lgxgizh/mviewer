@@ -80,7 +80,7 @@ void MainWindow::setupCommands()
         },
         std::vector<CommandShortcut>{{Qt::Key_Return, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "fullscreen", "全屏 (F11)", [this]() { toggleFullscreen(); },
+        "fullscreen", "Fullscreen (F11)", [this]() { toggleFullscreen(); },
         std::vector<CommandShortcut>{{Qt::Key_F11, 0}}));
 
     // M18: file-management shortcuts for the selected gallery items.
@@ -316,7 +316,7 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
                 const QString nativePath = QDir::toNativeSeparators(currentImagePath());
                 QApplication::clipboard()->setText(nativePath);
                 if (statusBar())
-                    statusBar()->showMessage(tr("已复制路径: %1").arg(nativePath), 2000);
+                    statusBar()->showMessage(tr("Path copied: %1").arg(nativePath), 2000);
             }
         }
         else
@@ -325,8 +325,8 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
             if (copying)
                 copyCurrentImageToClipboard();
             if (statusBar())
-                statusBar()->showMessage(copying ? tr("正在复制图片到剪贴板...")
-                                                 : tr("没有可复制的图片"),
+                statusBar()->showMessage(copying ? tr("Copying image to clipboard...")
+                                                 : tr("No image available to copy"),
                                          copying ? 0 : 2000);
         }
         event->accept();
@@ -504,7 +504,7 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
         if (m_actCompare && m_actCompare->isEnabled())
             m_actCompare->trigger();
         else
-            statusBar()->showMessage(tr("需要选择 2-8 张图片才能比较"), 3000);
+            statusBar()->showMessage(tr("Select 2-8 images to compare"), 3000);
         event->accept();
         return true;
     }
@@ -578,8 +578,8 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td>鼠标侧键</td><td>上一个 / 下一个目录（历史后退/前进）</td></tr>"
         "<tr><td><kbd>Alt+←</kbd> / <kbd>Alt+→</kbd></td><td>历史导航：上一步 / 下一步</td></tr>"
         "<tr><td><kbd>Enter</kbd></td><td>在查看器中打开选中图片</td></tr>"
-        "<tr><td><kbd>Ctrl+A</kbd> / <kbd>Ctrl+Shift+A</kbd></td><td>全选 / "
-        "取消全选画廊图片</td></tr>"
+        "<tr><td><kbd>Ctrl+A</kbd> / <kbd>Ctrl+Shift+A</kbd></td><td>Select all / "
+        "Cancel selection (deselect gallery)</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+I</kbd></td><td>反选画廊图片</td></tr>"
         "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / "
         "最后一张（查看器中同样有效）</td></tr>"
@@ -614,11 +614,12 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>P</kbd> / <kbd>C</kbd>（浏览窗口）</td><td>选中 2–8 张后打开比较</td></tr>"
         "<tr><td><kbd>Space</kbd></td><td>浏览：快速比较当前选中；比较窗口：按住临时切换</td></tr>"
         "<tr><td><kbd>B</kbd> / <kbd>S</kbd> / <kbd>W</kbd> / <kbd>O</kbd> / "
-        "<kbd>K</kbd></td><td>闪烁 / 分割 / 滑动 / 叠加 / 棋盘</td></tr>"
+        "<kbd>K</kbd></td><td>B / S / W / O / K — Flicker / Split / Swipe / Overlay / "
+        "Checkerboard</td></tr>"
         "<tr><td><kbd>]</kbd> / <kbd>[</kbd></td>"
-        "<td>] 差异阈值 +5 · [ 差异阈值 -5</td></tr>"
+        "<td>] Diff threshold +5 · [ Difference threshold -5</td></tr>"
         "<tr><td><kbd>.</kbd> / <kbd>,</kbd></td>"
-        "<td>. 叠加透明度 +5 · , 叠加透明度 -5</td></tr>"
+        "<td>. Overlay opacity +5 · , Overlay opacity -5</td></tr>"
         "<tr><td><kbd>H</kbd></td><td>Diff 高亮（比较窗口；浏览窗口请用 Alt+H 打开分析）</td></tr>"
         "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
         "<tr><td><kbd>R</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / "
@@ -658,14 +659,14 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>Ctrl+M</kbd></td><td>移动到...</td></tr>"
         "<tr><td><kbd>Ctrl+E</kbd></td><td>在资源管理器中显示</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+B</kbd></td><td>批量处理</td></tr>"
-        "<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>批量分析导出</td></tr>"
+        "<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>Batch Analysis Export</td></tr>"
         "</table>");
 }
 
 void MainWindow::showShortcutsHelp()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("键盘快捷键"));
+    dlg.setWindowTitle(QStringLiteral("Keyboard shortcuts"));
     dlg.resize(480, 560);
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
@@ -682,7 +683,7 @@ void MainWindow::showShortcutsHelp()
 QString MainWindow::userGuideHtml()
 {
     return QStringLiteral(
-        "<h2>MViewer 使用说明</h2>"
+        "<h2>MViewer User Guide</h2>"
         "<p>图像算法工程师用的浏览 / 比较 / 分析工具。下面只写日常路径。</p>"
         "<h3>1. 浏览</h3>"
         "<ol>"
@@ -693,13 +694,15 @@ QString MainWindow::userGuideHtml()
         "<h3>2. 比较（主路径）</h3>"
         "<ol>"
         "<li>在缩略图里选中 <b>2–8 张</b>图。</li>"
-        "<li>按 <kbd>P</kbd> 或 <kbd>C</kbd> 进入比较（也可点工具栏「比较」或右键「比较」）。"
-        "选不够 2 张时，状态栏会提示原因。</li>"
+        "<li>Press <kbd>P</kbd> or <kbd>C</kbd> to open Compare (toolbar or context menu also "
+        "work). "
+        "With fewer than 2 images, the status bar explains why.</li>"
         "<li>默认同步缩放和拖动。底部状态条显示 <b>PSNR / SSIM</b>。</li>"
         "<li>模式（仅 2 张时）：<kbd>B</kbd> 闪烁 · <kbd>S</kbd> 左右分割 · "
         "<kbd>W</kbd> 滑动 · <kbd>O</kbd> 叠加 · <kbd>K</kbd> "
-        "棋盘。叠加/棋盘的滑条用到才出现。</li>"
-        "<li>勾选「显示差异」看热力图；「对齐」按整数像素平移配准后再算指标。</li>"
+        "Checkerboard. Overlay/checkerboard sliders appear when needed.</li>"
+        "<li>Check Show Difference for the heatmap; Align uses an integer-pixel translation "
+        "before metrics.</li>"
         "<li>在图上<b>右键拖</b>画 ROI。每张图的选区旁显示该格 V 与 RGB "
         "均值；完整表在检视面板。</li>"
         "<li><kbd>Esc</kbd>：有选区先清框，再按退出。也可点「退出比较」。</li>"
@@ -731,8 +734,8 @@ QString MainWindow::userGuideHtml()
         "<tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+H</kbd></td>"
         "<td>旋转 / 翻转并覆盖原文件</td></tr>"
         "<tr><td><kbd>F1</kbd></td><td>完整快捷键表</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+A</kbd></td><td>取消选择</td></tr>"
-        "<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>批量分析导出</td></tr>"
+        "<tr><td><kbd>Ctrl+Shift+A</kbd></td><td>Cancel selection (deselect)</td></tr>"
+        "<tr><td><kbd>Ctrl+Alt+A</kbd></td><td>Batch Analysis Export</td></tr>"
         "</table>"
         "<p>查看器全屏时，右键「分析」会先退出全屏，再在主窗口打开分析面板。"
         "分析面板只处理当前这一张图；两张图的 PSNR / SSIM 在比较模式里。</p>"
@@ -742,7 +745,7 @@ QString MainWindow::userGuideHtml()
 void MainWindow::showUserGuide()
 {
     QDialog dlg(this);
-    dlg.setWindowTitle(QStringLiteral("使用说明"));
+    dlg.setWindowTitle(QStringLiteral("User Guide"));
     dlg.resize(560, 640);
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
@@ -795,8 +798,8 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     if (m_compareView && !m_compareView->isHidden())
     {
         QMenu menu(this);
-        menu.addAction(tr("适应窗口 (F)"), this, [this]() { m_compareView->fitAll(); });
-        menu.addAction(tr("实际大小 100% (Ctrl+1)"), this,
+        menu.addAction(tr("Fit Window (F)"), this, [this]() { m_compareView->fitAll(); });
+        menu.addAction(tr("Actual size 100% (Ctrl+1)"), this,
                        [this]() { m_compareView->zoomActual(); });
         menu.exec(globalPos);
         return;
@@ -804,8 +807,8 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
         return;
     QMenu menu(this);
-    menu.addAction("适应窗口 (0 / F)", this, [this]() { m_imageViewer->zoomFit(); });
-    menu.addAction("实际大小 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
+    menu.addAction("Fit to window (0 / F)", this, [this]() { m_imageViewer->zoomFit(); });
+    menu.addAction("Actual Size 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
     menu.addSeparator();
     menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
     menu.addAction("200% (2)", this, [this]() { m_imageViewer->zoomTo(2.0); });

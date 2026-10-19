@@ -15,7 +15,7 @@ class ExportCommand : public ICommand
     }
     std::string description() const override
     {
-        return "导出图片";
+        return "Export Images";
     }
     void execute() override;
     bool canExecute() const override;

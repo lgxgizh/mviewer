@@ -70,12 +70,12 @@ void AnalysisPanel::updateInspectorPage()
 {
     if (!m_pValid)
     {
-        m_inspectorLabel->setText(tr("将鼠标悬停在图像上以检视像素。"));
+        m_inspectorLabel->setText(tr("Hover over the image to inspect pixels."));
         return;
     }
 
     const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
-    QString txt = QString("<h3>%1 — %2</h3>").arg(tr("像素检视"), csLabel);
+    QString txt = QString("<h3>%1 — %2</h3>").arg(tr("Pixel Inspector"), csLabel);
     txt += QString("坐标: (%1, %2)<br>").arg(m_px).arg(m_py);
     txt += formatPixelValues(m_colorSpace, m_pR, m_pG, m_pB, m_rawKind == 2, m_r16, m_g16, m_b16,
                              m_rawMax);
@@ -171,23 +171,23 @@ void AnalysisPanel::updateMetadataPage()
 {
     if (!m_hasA)
     {
-        m_metaLabel->setText(tr("未选择图片"));
+        m_metaLabel->setText(tr("No Image Selected"));
         return;
     }
-    QString txt = QString("<h3>%1</h3>").arg(tr("元数据"));
+    QString txt = QString("<h3>%1</h3>").arg(tr("Metadata"));
     txt += QString("<table>"
                    "<tr><td>%1</td><td>%2 x %3</td></tr>"
                    "<tr><td>%4</td><td>%5</td></tr>"
                    "<tr><td>%6</td><td>%7</td></tr>"
                    "</table>")
-               .arg(tr("尺寸"))
+               .arg(tr("Dimensions"))
                .arg(m_imageA.width())
                .arg(m_imageA.height())
-               .arg(tr("格式"))
+               .arg(tr("Format"))
                .arg(formatToString(m_imageA.format()))
-               .arg(tr("位深"))
+               .arg(tr("Bit Depth"))
                .arg(m_imageA.depth());
     if (!m_imagePath.isEmpty())
-        txt += QString("<br><b>%1</b> %2").arg(tr("路径：")).arg(m_imagePath);
+        txt += QString("<br><b>%1</b> %2").arg(tr("Path:")).arg(m_imagePath);
     m_metaLabel->setText(txt);
 }

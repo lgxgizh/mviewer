@@ -131,7 +131,7 @@ ROIPaneMeasurement CompareRoiController::computeSourceROI(const ROIInput &input,
         if (result.decodePath == mviewer::core::SourceDecodePath::FullDecodeCrop)
         {
             result.state = ROIPaneState::Unsupported;
-            result.reason = "无法按源图精确解码该区域";
+            result.reason = "Cannot decode this region precisely from the source image";
             return result;
         }
         const auto decoded = source->decodeRegion(raw, std::max(1, raw.w), std::max(1, raw.h));

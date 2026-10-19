@@ -45,16 +45,16 @@ void addFrameContextActions(QMenu &menu, bool animated, bool playing, int frameI
 {
     if (animated)
     {
-        play = menu.addAction(playing ? "暂停" : "播放");
-        restart = menu.addAction("重新开始");
-        previous = menu.addAction("上一帧 (,)");
-        next = menu.addAction("下一帧 (.)");
+        play = menu.addAction(playing ? "Pause" : "Play");
+        restart = menu.addAction("Restart");
+        previous = menu.addAction("Previous Frame (,)");
+        next = menu.addAction("Next frame (.)");
         return;
     }
 
-    restart = menu.addAction("第一页");
-    previous = menu.addAction("上一页 (,)");
-    next = menu.addAction("下一页 (.)");
+    restart = menu.addAction("First Page");
+    previous = menu.addAction("Previous Page (,)");
+    next = menu.addAction("Next Page (.)");
     restart->setEnabled(frameIndex > 0);
     previous->setEnabled(frameIndex > 0);
     next->setEnabled(frameIndex + 1 < frameCount);
@@ -91,10 +91,10 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
                                     QAction *&selectRegion)
 {
     menu.addSeparator();
-    zoomIn = menu.addAction("放大 (+)");
-    zoomOut = menu.addAction("缩小 (-)");
-    zoomFit = menu.addAction("适应窗口 (0 / F)");
-    zoomActual = menu.addAction("实际大小 100% (1)");
+    zoomIn = menu.addAction("Zoom In (+)");
+    zoomOut = menu.addAction("Zoom out (-)");
+    zoomFit = menu.addAction("Fit to window (0 / F)");
+    zoomActual = menu.addAction("Actual Size 100% (1)");
     lockZoomAction = menu.addAction("锁定缩放比 (Ctrl+L)");
     lockZoomAction->setCheckable(true);
     lockZoomAction->setChecked(lockZoom);
@@ -108,7 +108,7 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
                           std::make_pair("800% (像素网格)", 8.0)})
         mZoomPresets->addAction(p.first)->setData(p.second);
     menu.addSeparator();
-    selectRegion = menu.addAction("框选区域 (R)");
+    selectRegion = menu.addAction("Marquee selection (R)");
     selectRegion->setCheckable(true);
     selectRegion->setChecked(selectMode);
     selectRegion->setEnabled(hasDisplay);
@@ -121,7 +121,7 @@ void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAct
 {
     copy = menu.addAction("复制图片 (Ctrl+C)");
     copyPath = menu.addAction("复制路径 (Ctrl+Shift+C)");
-    copyName = menu.addAction("复制文件名");
+    copyName = menu.addAction("Copy filename");
     reveal = menu.addAction("在资源管理器中显示 (Ctrl+E)");
     colorMenu = menu.addMenu("复制像素值");
     copyHex = colorMenu->addAction("十六进制 (#RRGGBB) (Shift+C)");
@@ -202,7 +202,7 @@ QString copyPixelValue(const PixelRGBA &px, int format, int x = -1, int y = -1)
 void populateAnalyzeSubmenu(QMenu &menu, const std::shared_ptr<ImageFrame> &frame,
                             QList<QAction *> &analyzeActions)
 {
-    QMenu *analyzeMenu = menu.addMenu("分析");
+    QMenu *analyzeMenu = menu.addMenu("Analyze");
     if (frame)
     {
         const auto ids = AnalyzerRegistry::instance().availableAnalyzers();
@@ -241,8 +241,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     addCopyContextActions(menu, aCopy, aCopyPath, aCopyName, aReveal, mCopyColor, aCopyHex,
                           aCopyRgb, aCopyFloat, aCopyHsv, aCopyCoord);
     menu.addSeparator();
-    QAction *aSaveAs = menu.addAction("另存为...");
-    QAction *aUsmCompare = menu.addAction(tr("USM 锐化对比(&U)... (Ctrl+U)"));
+    QAction *aSaveAs = menu.addAction("Save As...");
+    QAction *aUsmCompare = menu.addAction(tr("USM Sharpen Compare(&U)... (Ctrl+U)"));
     QAction *aRotateCW = menu.addAction("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)");
     QAction *aRotateCCW = menu.addAction("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)");
     QAction *aFlipH = menu.addAction("水平翻转并覆盖原文件 (Ctrl+Shift+H)");
@@ -276,14 +276,15 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QList<QAction *> analyzeActions;
     populateAnalyzeSubmenu(menu, m_frame, analyzeActions);
     menu.addSeparator();
-    QAction *aNext = menu.addAction("下一张 (→)");
-    QAction *aPrev = menu.addAction("上一张 (←)");
+    QAction *aNext = menu.addAction("Next (→)");
+    QAction *aPrev = menu.addAction("Previous (←)");
     const bool hasBrowsePosition = m_currentIndex >= 0 && m_currentIndex < m_fileList.size();
     aNext->setEnabled(hasBrowsePosition && m_currentIndex + 1 < m_fileList.size());
     aPrev->setEnabled(hasBrowsePosition && m_currentIndex > 0);
     menu.addSeparator();
     const bool isFull = property("mviewerFullscreenRequested").toBool() || isFullScreen();
-    QAction *aFullscreen = menu.addAction(isFull ? tr("退出全屏 (F11)") : tr("全屏 (F11)"));
+    QAction *aFullscreen =
+        menu.addAction(isFull ? tr("Exit Fullscreen (F11)") : tr("Fullscreen (F11)"));
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
@@ -347,19 +348,19 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
     if (chosen == copy)
     {
         copyToClipboard();
-        emit statusMessageRequested(tr("正在复制图片到剪贴板..."));
+        emit statusMessageRequested(tr("Copying image to clipboard..."));
         return true;
     }
     if (chosen == copyPath)
     {
         QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
-        emit statusMessageRequested(tr("已复制图片完整路径到剪贴板"));
+        emit statusMessageRequested(tr("Copied the full image path to the clipboard"));
         return true;
     }
     if (chosen == copyName)
     {
         QApplication::clipboard()->setText(QFileInfo(m_currentPath).fileName());
-        emit statusMessageRequested(tr("已复制图片文件名到剪贴板"));
+        emit statusMessageRequested(tr("Copied image filename to clipboard"));
         return true;
     }
     if (chosen == reveal)
@@ -389,7 +390,7 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
             px = m_lastHoverPixel;
         const QString copied = copyPixelValue(px, format, ix, iy);
         if (!copied.isEmpty())
-            emit statusMessageRequested(tr("已复制像素值: %1").arg(copied));
+            emit statusMessageRequested(tr("Copied pixel value: %1").arg(copied));
         return true;
     }
     return false;
@@ -438,14 +439,14 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
             const int format = key == Qt::Key_B ? 1 : 0;
             const QString copied = copyPixelValue(px, format);
             if (!copied.isEmpty())
-                emit statusMessageRequested(tr("已复制像素值: %1").arg(copied));
+                emit statusMessageRequested(tr("Copied pixel value: %1").arg(copied));
             return true;
         }
     }
     if (ctrl && key == Qt::Key_C)
     {
         copyToClipboard();
-        emit statusMessageRequested(tr("正在复制图片到剪贴板..."));
+        emit statusMessageRequested(tr("Copying image to clipboard..."));
         return true;
     }
     if (ctrl && key == Qt::Key_E)
@@ -458,7 +459,7 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         if (!m_currentPath.isEmpty())
         {
             QApplication::clipboard()->setText(QDir::toNativeSeparators(m_currentPath));
-            emit statusMessageRequested(tr("已复制图片完整路径到剪贴板"));
+            emit statusMessageRequested(tr("Copied the full image path to the clipboard"));
             return true;
         }
     }

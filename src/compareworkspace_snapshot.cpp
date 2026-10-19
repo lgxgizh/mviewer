@@ -121,18 +121,18 @@ QString snapshotModeText(const QCheckBox *split, const QCheckBox *swipe, const Q
                          const QCheckBox *checker, const QCheckBox *diff, const QCheckBox *blink)
 {
     if (split && split->isChecked())
-        return QObject::tr("左右分割");
+        return QObject::tr("Side-by-Side Split");
     if (swipe && swipe->isChecked())
-        return QObject::tr("卷帘对比");
+        return QObject::tr("Swipe compare");
     if (overlay && overlay->isChecked())
-        return QObject::tr("叠加对比");
+        return QObject::tr("Overlay Compare");
     if (checker && checker->isChecked())
-        return QObject::tr("棋盘格");
+        return QObject::tr("Checkerboard");
     if (diff && diff->isChecked())
-        return QObject::tr("差异高亮");
+        return QObject::tr("Difference highlight");
     if (blink && blink->isChecked())
-        return QObject::tr("闪烁对比");
-    return QObject::tr("网格对比");
+        return QObject::tr("Flicker Compare");
+    return QObject::tr("Grid compare");
 }
 
 int snapshotZoomPercent(const QList<RawImageView *> &views, double sharedZoom)
@@ -152,7 +152,7 @@ QString snapshotComparedDetail(const QStringList &imgs)
             .arg(QFileInfo(imgs[0]).fileName(), QFileInfo(imgs[1]).fileName());
     }
     if (imgs.size() > 2)
-        return QObject::tr("%1 张图片对比").arg(imgs.size());
+        return QObject::tr("%1 images compared").arg(imgs.size());
     return {};
 }
 
@@ -187,7 +187,7 @@ QPixmap CompareWorkspace::grabComparisonView()
     const bool hasAdjust = std::any_of(m_cellAdjusts.cbegin(), m_cellAdjusts.cend(),
                                        [](const CellAdjust &adj) { return !adj.isIdentity(); });
     if (hasAdjust)
-        a.compDetail += QStringLiteral("  [已调参]");
+        a.compDetail += QStringLiteral("  [Adjusted]");
 
     if (m_metricLabel && !m_metricLabel->text().isEmpty())
     {
@@ -225,7 +225,7 @@ void CompareWorkspace::copyComparisonViewToClipboard()
     if (pm.isNull())
         return;
     QApplication::clipboard()->setPixmap(pm);
-    showCompareStatus(tr("已将当前对比视图复制到剪贴板"));
+    showCompareStatus(tr("Current comparison view copied to clipboard"));
 }
 
 bool CompareWorkspace::saveComparisonViewTo(const QString &path)
@@ -240,18 +240,18 @@ bool CompareWorkspace::saveComparisonViewTo(const QString &path)
 
 void CompareWorkspace::saveComparisonViewToFile()
 {
-    const QString path = QFileDialog::getSaveFileName(this, tr("保存比较截图"),
-                                                      snapshotSuggestion(), tr("PNG 图片 (*.png)"));
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Save comparison screenshot"), snapshotSuggestion(), tr("PNG image (*.png)"));
     if (path.isEmpty())
         return;
     const QString native = QDir::toNativeSeparators(path);
     if (!saveComparisonViewTo(path))
     {
-        showCompareStatus(tr("保存截图失败：%1").arg(native));
+        showCompareStatus(tr("Failed to save screenshot: %1").arg(native));
         return;
     }
     QSettings().setValue(QStringLiteral("compare/snapshotDir"), QFileInfo(path).absolutePath());
-    showCompareStatus(tr("已保存截图：%1").arg(native));
+    showCompareStatus(tr("Screenshot saved: %1").arg(native));
 }
 
 bool CompareWorkspace::handleClipboardCompareKey(QKeyEvent *event)
@@ -268,11 +268,11 @@ bool CompareWorkspace::handleClipboardCompareKey(QKeyEvent *event)
         {
             const QString native = QDir::toNativeSeparators(path);
             QApplication::clipboard()->setText(native);
-            showCompareStatus(tr("已复制路径: %1").arg(native));
+            showCompareStatus(tr("Path copied: %1").arg(native));
         }
         else
         {
-            showCompareStatus(tr("没有可复制的路径"));
+            showCompareStatus(tr("No path to copy"));
         }
         event->accept();
         return true;

@@ -332,7 +332,7 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
             continue;
         if (!cell.errorText.isEmpty())
         {
-            const QString message = tr("无法显示此源：%1").arg(cell.errorText);
+            const QString message = tr("Cannot display this source: %1").arg(cell.errorText);
             view->setToolTip(message);
             if (view->image().isNull() && cell.index < m_cellLabels.size())
                 setComparePaneCaptionStatus(m_cellLabels[cell.index], message);

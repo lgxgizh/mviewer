@@ -161,5 +161,6 @@ void AnalysisPanel::selectAnalyzer(const QString &id)
 
 void AnalysisPanel::setRegionStats(const QString &text)
 {
-    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("选区统计")).arg(text));
+    m_statsLabel->setText(
+        QString("<h3>%1</h3><p>%2</p>").arg(tr("Selection statistics")).arg(text));
 }

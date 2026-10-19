@@ -12,7 +12,7 @@ void MainWindow::checkForUpdates(bool silent)
         return;
     m_updateChecking = true;
     if (!silent)
-        statusBar()->showMessage(tr("正在检查更新..."), 2000);
+        statusBar()->showMessage(tr("Checking for updates..."), 2000);
 
     // M24: bounded pool (max 1 thread) instead of a detached std::thread.
     // checkGitHub() performs a synchronous network request (WinHttp timeouts
@@ -51,31 +51,31 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
     if (!info.error.empty())
     {
         if (!silent)
-            QMessageBox::warning(
-                this, tr("检查更新失败"),
-                tr("无法获取更新信息：\n%1").arg(QString::fromStdString(info.error)));
+            QMessageBox::warning(this, tr("Update check failed"),
+                                 tr("Could not retrieve update information:\n%1")
+                                     .arg(QString::fromStdString(info.error)));
         return;
     }
     if (info.hasUpdate)
     {
         QMessageBox box(this);
         box.setIcon(QMessageBox::Information);
-        box.setWindowTitle(tr("发现新版本"));
-        box.setText(tr("发现新版本 %1（当前 %2）。")
+        box.setWindowTitle(tr("New version available"));
+        box.setText(tr("New version %1 is available (current %2).")
                         .arg(QString::fromStdString(info.latestVersion),
                              QString::fromStdString(info.currentVersion)));
-        box.setInformativeText(tr("建议更新以获得最新功能与缺陷修复。"));
-        QPushButton *openBtn = box.addButton(tr("前往下载页"), QMessageBox::AcceptRole);
-        box.addButton(tr("稍后"), QMessageBox::RejectRole);
+        box.setInformativeText(tr("Update recommended for the latest features and bug fixes."));
+        QPushButton *openBtn = box.addButton(tr("Go to Download Page"), QMessageBox::AcceptRole);
+        box.addButton(tr("Later"), QMessageBox::RejectRole);
         box.exec();
         if (box.clickedButton() == openBtn)
             QDesktopServices::openUrl(QUrl(QString::fromStdString(info.releaseUrl)));
     }
     else if (!silent)
     {
-        QMessageBox::information(
-            this, tr("已是最新"),
-            tr("当前已是最新版本（%1）。").arg(QString::fromStdString(info.currentVersion)));
+        QMessageBox::information(this, tr("Up to Date"),
+                                 tr("You are on the latest version (%1).")
+                                     .arg(QString::fromStdString(info.currentVersion)));
     }
 }
 
@@ -105,12 +105,13 @@ void MainWindow::maybeShowCrashReport()
 
     QMessageBox box(this);
     box.setIcon(QMessageBox::Warning);
-    box.setWindowTitle(tr("崩溃报告"));
-    box.setText(tr("检测到一次应用崩溃（%1）。\n崩溃转储已保存到：\n%2")
+    box.setWindowTitle(tr("Crash Report"));
+    box.setText(tr("An application crash was detected (%1).\nThe crash dump was saved to:\n%2")
                     .arg(newest.lastModified().toString(), newest.absoluteFilePath()));
-    box.setInformativeText(tr("可将此文件连同问题描述发送给开发者，以帮助定位并修复问题。"));
-    QPushButton *openBtn = box.addButton(tr("打开崩溃目录"), QMessageBox::ActionRole);
-    box.addButton(tr("忽略"), QMessageBox::RejectRole);
+    box.setInformativeText(tr("You can send this file with a problem description to the developers "
+                              "to help locate and fix the issue."));
+    QPushButton *openBtn = box.addButton(tr("Open Crash Folder"), QMessageBox::ActionRole);
+    box.addButton(tr("Ignore"), QMessageBox::RejectRole);
     box.exec();
     if (box.clickedButton() == openBtn)
         QDesktopServices::openUrl(QUrl::fromLocalFile(dir));

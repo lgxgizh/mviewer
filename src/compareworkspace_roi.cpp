@@ -63,19 +63,19 @@ QString measurementStateText(mviewer::ui::ROIMeasurementState state)
     switch (state)
     {
     case State::Idle:
-        return CompareWorkspace::tr("空闲");
+        return CompareWorkspace::tr("Idle");
     case State::Measuring:
-        return CompareWorkspace::tr("测量中…");
+        return CompareWorkspace::tr("Measuring…");
     case State::Ready:
-        return CompareWorkspace::tr("就绪");
+        return CompareWorkspace::tr("Ready");
     case State::Unsupported:
-        return CompareWorkspace::tr("不支持");
+        return CompareWorkspace::tr("Unsupported");
     case State::Failed:
-        return CompareWorkspace::tr("失败");
+        return CompareWorkspace::tr("Failed");
     case State::Backpressured:
-        return CompareWorkspace::tr("繁忙稍后");
+        return CompareWorkspace::tr("Busy, try later");
     }
-    return CompareWorkspace::tr("空闲");
+    return CompareWorkspace::tr("Idle");
 }
 
 QString paneStateText(const mviewer::ui::ROIPaneMeasurement &pane)
@@ -84,15 +84,15 @@ QString paneStateText(const mviewer::ui::ROIPaneMeasurement &pane)
     switch (pane.state)
     {
     case State::Ready:
-        return CompareWorkspace::tr("就绪");
+        return CompareWorkspace::tr("Ready");
     case State::Unsupported:
-        return CompareWorkspace::tr("不支持: %1").arg(QString::fromStdString(pane.reason));
+        return CompareWorkspace::tr("Unsupported: %1").arg(QString::fromStdString(pane.reason));
     case State::Failed:
-        return CompareWorkspace::tr("失败: %1").arg(QString::fromStdString(pane.reason));
+        return CompareWorkspace::tr("Failed: %1").arg(QString::fromStdString(pane.reason));
     case State::Cancelled:
-        return CompareWorkspace::tr("已取消");
+        return CompareWorkspace::tr("Cancelled");
     }
-    return CompareWorkspace::tr("失败");
+    return CompareWorkspace::tr("Failed");
 }
 
 QString paneName(const mviewer::domain::ImageMetadata &metadata, int index)
@@ -106,19 +106,19 @@ QString paneName(const mviewer::domain::ImageMetadata &metadata, int index)
 void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
 {
     auto *roiHeader = new QHBoxLayout();
-    auto *roiTitle = new QLabel(tr("ROI 测量 — 源图 RGB / HSV"), this);
+    auto *roiTitle = new QLabel(tr("ROI Measurement — Source RGB / HSV"), this);
     roiTitle->setObjectName("roiMeasurementTitle");
     roiHeader->addWidget(roiTitle);
     roiHeader->addStretch(1);
-    m_copyRoiBtn = new QPushButton(tr("复制"), this);
+    m_copyRoiBtn = new QPushButton(tr("Copy"), this);
     m_copyRoiBtn->setObjectName("copyRoiMeasurementsButton");
-    m_copyRoiBtn->setToolTip(tr("将 ROI 测量结果复制为 TSV"));
+    m_copyRoiBtn->setToolTip(tr("Copy ROI measurement results as TSV"));
     m_copyRoiBtn->setEnabled(false);
     connect(m_copyRoiBtn, &QPushButton::clicked, this, &CompareWorkspace::copyROIMeasurements);
     roiHeader->addWidget(m_copyRoiBtn);
-    m_clearRoiBtn = new QPushButton(tr("清除 ROI"), this);
+    m_clearRoiBtn = new QPushButton(tr("Clear ROI"), this);
     m_clearRoiBtn->setObjectName("clearRoiButton");
-    m_clearRoiBtn->setToolTip(tr("清除当前 ROI"));
+    m_clearRoiBtn->setToolTip(tr("Clear the current ROI"));
     m_clearRoiBtn->setEnabled(false);
     connect(m_clearRoiBtn, &QPushButton::clicked, this, &CompareWorkspace::clearROI);
     roiHeader->addWidget(m_clearRoiBtn);
@@ -139,9 +139,9 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiTable->setObjectName("roiMeasurementTable");
     m_roiTable->setColumnCount(11);
     m_roiTable->setHorizontalHeaderLabels(
-        {tr("图像"), QStringLiteral("H Mean"), QStringLiteral("S Mean"), QStringLiteral("V Mean"),
+        {tr("Image"), QStringLiteral("H Mean"), QStringLiteral("S Mean"), QStringLiteral("V Mean"),
          QStringLiteral("R Mean"), QStringLiteral("G Mean"), QStringLiteral("B Mean"),
-         QStringLiteral("R/G"), QStringLiteral("B/G"), tr("像素"), tr("状态")});
+         QStringLiteral("R/G"), QStringLiteral("B/G"), tr("Pixels"), tr("Status")});
     m_roiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_roiTable->setSelectionMode(QAbstractItemView::NoSelection);
     m_roiTable->setTextElideMode(Qt::ElideMiddle);
@@ -154,7 +154,7 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiTable->setMaximumHeight(200);
     sideLay->addWidget(m_roiTable);
 
-    m_roiDeltaLabel = new QLabel(tr("差值 (B − A): —"), this);
+    m_roiDeltaLabel = new QLabel(tr("Delta (B − A): —"), this);
     m_roiDeltaLabel->setObjectName("roiDeltaLabel");
     m_roiDeltaLabel->setWordWrap(true);
     m_roiDeltaLabel->setStyleSheet(
@@ -317,11 +317,13 @@ void CompareWorkspace::scheduleROIMeasurement()
     }
 
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Measuring,
-                           linked ? tr("源图 RGB · 8 位分析") : tr("独立选区 · 源像素 RGB 分析"));
+                           linked ? tr("Source RGB · 8-bit analysis")
+                                  : tr("Independent selection · Source pixel RGB analysis"));
     m_roiTask = startROIStatsBatch(inputs, m_lastSelection, linked, m_roiGen, QPointer(this));
     if (!m_roiTask)
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Backpressured,
-                               tr("分析队列繁忙 — 调整或松开 ROI 后重试"));
+        setROIMeasurementState(
+            mviewer::ui::ROIMeasurementState::Backpressured,
+            tr("Analysis queue busy — retry after adjusting or releasing the ROI"));
 }
 
 void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &result)
@@ -350,7 +352,7 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         const mviewer::domain::ImageMetadata metadata =
             frame ? frame->metadata() : mviewer::domain::ImageMetadata{};
         const QString stateText =
-            (!result.linked && !pane.stats.valid) ? tr("未框选") : paneStateText(pane);
+            (!result.linked && !pane.stats.valid) ? tr("No selection") : paneStateText(pane);
         const QStringList cells = {
             paneName(metadata, row),
             pane.stats.valid ? meanText(pane.stats.hMean) : QStringLiteral("—"),
@@ -393,8 +395,9 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         if (result.panes.size() == 2)
         {
             const auto &b = result.panes[1].stats;
-            m_roiDeltaLabel->setText(b.valid ? tr("差值 (B − A): %1").arg(roiDeltaMetrics(a, b))
-                                             : tr("差值 (B − A): —"));
+            m_roiDeltaLabel->setText(b.valid
+                                         ? tr("Difference (B − A): %1").arg(roiDeltaMetrics(a, b))
+                                         : tr("Delta (B − A): —"));
         }
         else
         {
@@ -414,18 +417,20 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
     }
     else if (m_roiDeltaLabel)
     {
-        m_roiDeltaLabel->setText(tr("差值 (B − A): —"));
+        m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
     }
 
     if (failed)
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Failed, tr("部分源图测量失败"));
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Failed,
+                               tr("Some source images failed to measure"));
     else if (unsupported)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                               tr("无法按源图精确解码该区域"));
+                               tr("Cannot decode this region precisely from the source image"));
     else if (hasAnyValid)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Ready,
-                               result.linked ? tr("源图 RGB · 全分辨率坐标 · 8 位分析")
-                                             : tr("独立选区 · 源像素 RGB 分析"));
+                               result.linked
+                                   ? tr("Source RGB · Full-resolution coordinates · 8-bit analysis")
+                                   : tr("Independent selection · Source pixel RGB analysis"));
     else
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
 
@@ -438,7 +443,7 @@ void CompareWorkspace::clearROIStatsDisplay()
     if (m_roiTable)
         m_roiTable->setRowCount(0);
     if (m_roiDeltaLabel)
-        m_roiDeltaLabel->setText(tr("差值 (B − A): —"));
+        m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
     if (m_copyRoiBtn)
         m_copyRoiBtn->setEnabled(false);
 }
@@ -461,13 +466,13 @@ void CompareWorkspace::updateROIAvailabilityStatus()
                     : std::any_of(m_cellViews.begin(), m_cellViews.end(),
                                   [](RawImageView *v) { return v && !v->selection().isEmpty(); });
     if (m_engine.imageCount() < 2)
-        detail = tr("无法联动 ROI — 至少需要两张图");
+        detail = tr("Cannot link ROI — at least two images are required");
     else if (!linkedROIAvailable())
-        detail = tr("无法联动 ROI — 图像尺寸不一致");
+        detail = tr("Cannot link ROI — Image dimensions do not match");
     else if (m_lastSelection.isEmpty())
-        detail = tr("联动 ROI 就绪 — 源图坐标");
+        detail = tr("Linked ROI ready — source coordinates");
     else if (detail.isEmpty())
-        detail = tr("源图 RGB · 8 位分析");
+        detail = tr("Source RGB · 8-bit analysis");
     if (m_roiStatusLabel)
         m_roiStatusLabel->setText(
             QStringLiteral("%1 — %2").arg(measurementStateText(m_roiState), detail));
@@ -492,7 +497,7 @@ void CompareWorkspace::copyROIMeasurements()
                                                     : QString());
         lines << cells.join('\t');
     }
-    lines << QStringLiteral("ROI\tX=%1\tY=%2\tW=%3\tH=%4\t像素=%5")
+    lines << QStringLiteral("ROI	X=%1	Y=%2	W=%3	H=%4	Pixels=%5")
                  .arg(m_lastSelection.x)
                  .arg(m_lastSelection.y)
                  .arg(m_lastSelection.width)

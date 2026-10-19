@@ -3,6 +3,8 @@
 
 #include <QDateTime>
 
+#include <vector>
+
 void MainWindow::connectUiSignals()
 {
     connectNavigationSignals();
@@ -33,32 +35,19 @@ void MainWindow::connectNavigationSignals()
             [this](const mviewer::core::DirectoryDelta &delta)
             {
                 QStringList sidecarImages;
-                for (const auto &entry : delta.sidecarAdded)
+                const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
+                    &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
+                for (const auto *list : lists)
                 {
-                    const QString sidecar =
-                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
-                    const QString base = QFileInfo(sidecar).completeBaseName();
-                    for (const auto &image : m_thumbnailPanel->entries())
-                        if (QFileInfo(image.path).completeBaseName() == base)
-                            sidecarImages.append(image.path);
-                }
-                for (const auto &entry : delta.sidecarModified)
-                {
-                    const QString sidecar =
-                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
-                    const QString base = QFileInfo(sidecar).completeBaseName();
-                    for (const auto &image : m_thumbnailPanel->entries())
-                        if (QFileInfo(image.path).completeBaseName() == base)
-                            sidecarImages.append(image.path);
-                }
-                for (const auto &entry : delta.sidecarRemoved)
-                {
-                    const QString sidecar =
-                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
-                    const QString base = QFileInfo(sidecar).completeBaseName();
-                    for (const auto &image : m_thumbnailPanel->entries())
-                        if (QFileInfo(image.path).completeBaseName() == base)
-                            sidecarImages.append(image.path);
+                    for (const auto &entry : *list)
+                    {
+                        const QString sidecar = QString::fromUtf8(
+                            entry.path.data(), static_cast<int>(entry.path.size()));
+                        const QString base = QFileInfo(sidecar).completeBaseName();
+                        for (const auto &image : m_thumbnailPanel->entries())
+                            if (QFileInfo(image.path).completeBaseName() == base)
+                                sidecarImages.append(image.path);
+                    }
                 }
                 sidecarImages.removeDuplicates();
                 scheduleSidecarImportPaths(sidecarImages);
@@ -70,8 +59,10 @@ void MainWindow::connectNavigationSignals()
                     !DirectoryTree::equivalentPath(m_directory->currentDirectory(), path))
                     return;
                 if (!available)
-                    statusBar()->showMessage(QStringLiteral("目录暂不可用: %1").arg(path));
-                else if (statusBar()->currentMessage().startsWith(QStringLiteral("目录暂不可用")))
+                    statusBar()->showMessage(
+                        QStringLiteral("Directory temporarily unavailable: %1").arg(path));
+                else if (statusBar()->currentMessage().startsWith(
+                             QStringLiteral("Directory temporarily unavailable")))
                     statusBar()->clearMessage();
             });
     // M37: the asynchronous gallery scan publishes the final visible sequence
@@ -85,7 +76,7 @@ void MainWindow::connectNavigationSignals()
                 m_imageList->setPaths(paths, directory);
                 if (!paths.isEmpty() && m_directory &&
                     DirectoryTree::equivalentPath(m_directory->currentDirectory(), directory))
-                    statusBar()->showMessage(QStringLiteral("已载入 %1 张").arg(paths.size()),
+                    statusBar()->showMessage(QStringLiteral("Loaded %1 images").arg(paths.size()),
                                              2500);
             });
     connect(m_imageList, &ImageListModel::pathsChanged, m_imageViewer,
@@ -124,7 +115,7 @@ void MainWindow::connectNavigationSignals()
                 // import for every navigation entry point, including tree
                 // clicks/Enter, breadcrumb, Back/Forward, refresh, and restore.
                 scheduleSidecarImport(path);
-                statusBar()->showMessage(QStringLiteral("正在扫描…"), 8000);
+                statusBar()->showMessage(QStringLiteral("Scanning…"), 8000);
                 // With no image selected yet, the title carries the folder.
                 if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
@@ -137,7 +128,6 @@ void MainWindow::connectNavigationSignals()
                 updateSelectionActions();
             });
 }
-
 void MainWindow::connectGallerySignals()
 {
     // Tree highlight waits for this so the first gallery batch is not queued
@@ -225,7 +215,7 @@ void MainWindow::connectSelectionSignals()
                 if (m_actToggleMetadata)
                     m_actToggleMetadata->setChecked(false);
                 if (m_lblImage)
-                    m_lblImage->setText(tr("未选择图像"));
+                    m_lblImage->setText(tr("No image selected"));
                 const QString activeDir = m_directory ? m_directory->currentDirectory() : QString();
                 setWindowTitle(activeDir.isEmpty()
                                    ? QStringLiteral("MViewer")
@@ -323,7 +313,7 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
     {
         const QString current = sb->currentMessage();
         sb->setProperty("statusBase", current);
-        const bool sticky = current.startsWith(QStringLiteral("目录暂不可用"));
+        const bool sticky = current.startsWith(QStringLiteral("Directory temporarily unavailable"));
         const qint64 untilMs =
             current.isEmpty() || sticky ? qint64{0} : QDateTime::currentMSecsSinceEpoch() + 4000;
         sb->setProperty("statusBaseUntil", untilMs);
@@ -333,7 +323,7 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
                             .arg(g, 2, 16, QChar('0'))
                             .arg(b, 2, 16, QChar('0'))
                             .toUpper();
-    QString text = QStringLiteral("像素 [%1,%2]  ").arg(x).arg(y);
+    QString text = QStringLiteral("Pixel [%1,%2]").arg(x).arg(y);
     if (rawKind == 2)
         text += QStringLiteral("RGB(%1,%2,%3)  16bit(%4,%5,%6)  %7")
                     .arg(r)
@@ -457,13 +447,15 @@ void MainWindow::connectViewerSignals()
     if (m_lblZoom)
     {
         m_lblZoom->setCursor(Qt::PointingHandCursor);
-        m_lblZoom->setToolTip(tr("点击打开缩放预设菜单，双击切换 适应/100%"));
+        m_lblZoom->setToolTip(
+            tr("Click to open the zoom preset menu, double-click to toggle Fit/100%"));
         m_lblZoom->installEventFilter(this);
     }
     if (m_lblImage)
     {
         m_lblImage->setCursor(Qt::PointingHandCursor);
-        m_lblImage->setToolTip(tr("点击在资源管理器中定位当前文件，右键复制完整路径"));
+        m_lblImage->setToolTip(tr("Click to locate the current file in File Explorer; right-click "
+                                  "to copy the full path"));
         m_lblImage->installEventFilter(this);
     }
 }
@@ -541,7 +533,7 @@ void MainWindow::connectMenuSignals()
     connect(m_actOpenDir, &QAction::triggered, this,
             [this]()
             {
-                const QString dir = QFileDialog::getExistingDirectory(this, "打开目录");
+                const QString dir = QFileDialog::getExistingDirectory(this, "Open Directory");
                 if (!dir.isEmpty())
                     changeDirectory(dir);
             });
@@ -603,7 +595,7 @@ void MainWindow::connectMenuSignals()
             [this](const QString &path)
             {
                 statusBar()->showMessage(
-                    QString("无法加载图片: %1").arg(QFileInfo(path).fileName()), 5000);
+                    QString("Unable to load image: %1").arg(QFileInfo(path).fileName()), 5000);
             });
     connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
             [this](const QString &msg, int timeoutMs)
@@ -745,7 +737,7 @@ void MainWindow::connectPanelSignals()
                             {
                                 if (m_analysisPanel)
                                     m_analysisPanel->refreshAnalyzers();
-                                statusBar()->showMessage(tr("插件列表已更新"), 3000);
+                                statusBar()->showMessage(tr("Plugin list updated"), 3000);
                             });
                 }
                 m_pluginSettings->show();
@@ -760,42 +752,46 @@ void MainWindow::connectSettingsSignals()
             [this]()
             {
                 const QString path = QFileDialog::getSaveFileName(
-                    this, tr("导出设置"), QString(), tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
+                    this, tr("Export Settings"), QString(),
+                    tr("MViewer Settings File (*.mvs);;All Files (*)"));
                 if (path.isEmpty())
                     return;
                 std::string err;
                 if (mviewer::core::exportSettings(path.toStdString(), &err))
-                    QMessageBox::information(this, tr("导出设置"), tr("设置已导出至 %1").arg(path));
+                    QMessageBox::information(this, tr("Export Settings"),
+                                             tr("Settings exported to %1").arg(path));
                 else
-                    QMessageBox::warning(this, tr("导出设置"),
-                                         tr("导出失败：%1").arg(QString::fromStdString(err)));
+                    QMessageBox::warning(this, tr("Export Settings"),
+                                         tr("Export failed: %1").arg(QString::fromStdString(err)));
             });
     connect(m_actImportSettings, &QAction::triggered, this,
             [this]()
             {
                 const QString path = QFileDialog::getOpenFileName(
-                    this, tr("导入设置"), QString(), tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
+                    this, tr("Import Settings"), QString(),
+                    tr("MViewer Settings File (*.mvs);;All Files (*)"));
                 if (path.isEmpty())
                     return;
                 std::string err;
                 if (mviewer::core::importSettings(path.toStdString(), &err))
                 {
-                    QMessageBox::information(this, tr("导入设置"),
-                                             tr("设置已导入。部分更改需要重启 MViewer 才能生效。"));
+                    QMessageBox::information(this, tr("Import Settings"),
+                                             tr("Settings imported. Some changes require "
+                                                "restarting MViewer to take effect."));
                 }
                 else
-                    QMessageBox::warning(this, tr("导入设置"),
-                                         tr("导入失败：%1").arg(QString::fromStdString(err)));
+                    QMessageBox::warning(this, tr("Import Settings"),
+                                         tr("Import failed: %1").arg(QString::fromStdString(err)));
             });
     connect(m_actAbout, &QAction::triggered, this,
             [this]()
             {
-                QMessageBox::about(
-                    this, "关于 MViewer",
-                    tr("MViewer "
-                       "%1\n\n图像算法工程师的可视化分析平台：浏览、对比、分析、导出。\n\n构建: %2")
-                        .arg(QStringLiteral(MVIEWER_VERSION_STRING),
-                             QStringLiteral(MVIEWER_VERSION_FULL)));
+                QMessageBox::about(this, tr("About MViewer"),
+                                   tr("MViewer "
+                                      "%1\n\nVisual analysis platform for imaging algorithm "
+                                      "engineers: browse, compare, analyze, export.\n\nBuild: %2")
+                                       .arg(QStringLiteral(MVIEWER_VERSION_STRING),
+                                            QStringLiteral(MVIEWER_VERSION_FULL)));
             });
     // P0: recent / favorites / history wiring.
     connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);

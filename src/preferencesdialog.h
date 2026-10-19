@@ -32,6 +32,7 @@ class PreferencesDialog : public QDialog
     QWidget *buildAnalysisTab(QSettings &s);
 
     QComboBox *m_uiTheme = nullptr;
+    QComboBox *m_uiLanguage = nullptr;
     QComboBox *m_viewMode = nullptr;
     QComboBox *m_sortMode = nullptr;
     QSpinBox *m_thumbSize = nullptr;

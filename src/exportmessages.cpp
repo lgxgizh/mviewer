@@ -11,37 +11,39 @@ namespace
 struct ExportMessagePrefix
 {
     const char *english;
-    const char *chinese;
+    const char *translated;
 };
 
 // Longer prefixes precede shorter ones. A prefix that ends in ": " already
 // includes that separator in the Chinese text; the remainder is appended raw.
 constexpr ExportMessagePrefix kExportMessagePrefixes[] = {
-    {"duplicate destination conflict", "目标路径重复冲突"},
-    {"source/destination conflict", "源文件与目标文件冲突"},
-    {"no source image decoded", "没有解码成功的源图片"},
-    {"explicit destination requires one source", "指定目标文件时只能有一个源文件"},
-    {"cannot create output directory: ", "无法创建输出目录："},
-    {"source directory enumeration failed: ", "源目录枚举失败："},
-    {"contact sheet exceeds the compositing budget (", "联系表超出合成预算（"},
-    {"staging memory budget exceeded", "暂存内存超出预算"},
-    {"clipboard source decode failed", "剪贴板源图解码失败"},
-    {"invalid path encoding: ", "路径编码无效："},
-    {"output generation failed", "输出生成失败"},
-    {"output commit failed: ", "输出写入失败："},
-    {"clipboard image ready", "剪贴板图片已就绪"},
-    {"no output directory", "没有输出目录"},
-    {"unsupported format: ", "不支持的格式："},
-    {"report write failed", "报告写入失败"},
-    {"cancelled after ", "已取消，完成 "},
-    {"no sources", "没有源文件"},
+    {"duplicate destination conflict", "Duplicate destination path conflict"},
+    {"source/destination conflict", "Source file conflicts with target file"},
+    {"no source image decoded", "No source image decoded successfully"},
+    {"explicit destination requires one source",
+     "Explicit destination requires a single source file"},
+    {"cannot create output directory: ", "Cannot create output directory: "},
+    {"source directory enumeration failed: ", "Source directory enumeration failed: "},
+    {"contact sheet exceeds the compositing budget (",
+     "Contact sheet exceeds the compositing budget ("},
+    {"staging memory budget exceeded", "Staging memory budget exceeded"},
+    {"clipboard source decode failed", "Clipboard source decode failed"},
+    {"invalid path encoding: ", "Invalid path encoding: "},
+    {"output generation failed", "Output generation failed"},
+    {"output commit failed: ", "Output commit failed: "},
+    {"clipboard image ready", "Clipboard image ready"},
+    {"no output directory", "No output directory"},
+    {"unsupported format: ", "Unsupported format: "},
+    {"report write failed", "Report write failed"},
+    {"cancelled after ", "Cancelled after "},
+    {"no sources", "No sources"},
 };
 
 QString doneSummary(const mviewer::exportjob::ExportJobResult &result, const QString &message)
 {
-    QString text = QStringLiteral("导出完成：%1 / %2").arg(result.done).arg(result.total);
+    QString text = QStringLiteral("Export complete: %1 / %2").arg(result.done).arg(result.total);
     if (result.failed > 0)
-        text += QStringLiteral("，失败 %1 个").arg(result.failed);
+        text += QStringLiteral(", %1 failed").arg(result.failed);
     const qsizetype colon = message.indexOf(QStringLiteral(": "));
     if (colon >= 0)
         text += message.mid(colon);
@@ -55,7 +57,7 @@ QString translateKnown(const QString &message)
         const QLatin1String prefix(row.english);
         if (!message.startsWith(prefix))
             continue;
-        QString text = QString::fromUtf8(row.chinese);
+        QString text = QString::fromUtf8(row.translated);
         if (prefix.size() < message.size())
             text += message.mid(prefix.size());
         return text;

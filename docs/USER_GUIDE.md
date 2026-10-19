@@ -8,7 +8,7 @@
 ## 1. 浏览模式（Browse）
 
 1. **Ctrl+O** 打开图片目录，缩略图网格将异步加载显示。
-2. **单击**看大图；**Ctrl+单击** / **Shift+单击** 多选。**Ctrl+Shift+A** 取消选择。
+2. **单击**看大图；**Ctrl+单击** / **Shift+单击** 多选。**Ctrl+Shift+A** Cancel selection (deselect).
 3. **视图缩放**：
    - 滚轮自由缩放；双击在「适应窗口」与 100% 实际大小间切换。
    - 快捷预设（视图菜单）：**50%**、**100%**、**200%**、**400%**、**800%**（像素网格级）。
@@ -42,7 +42,7 @@
    - **S** 左右分割比较（Split）
    - **W** 卷帘滑动比较（Swipe/Wipe）
    - **O** 叠加透明比较（Overlay）
-   - **K** 棋盘格交错比较（Checkerboard）
+   - **K** Checkerboard interleaved compare
    - 叠加透明度与棋盘格大小滑条随模式激活自动呈现。
 3. **差异与对齐分析**：
    - **H**：高亮差异热力图。
@@ -78,7 +78,7 @@
    - 按 **Ctrl+Shift+B** 打开批量处理对话框。
    - 支持格式转换（PNG、JPEG、WebP、TIFF 等）、批量缩放、色彩空间转换与灵活重命名模板。
 2. **批量算法分析导出**：
-   - 按 **Ctrl+Alt+A**（或缩略图右键「批量分析导出」）。
+   - Press **Ctrl+Alt+A** (or gallery context menu Batch Analysis Export).
    - 自动遍历选中图片运行当前激活的 Analyzer 算法流水线，结果一键输出 CSV / TSV。
 3. **专业分析报告**：
    - 「文件 → 导出报告...」：生成包含原图预览、差异热力图、ROI 统计及 PSNR/SSIM 图表的独立 HTML 报告。
@@ -108,7 +108,7 @@
 |---|---|
 | **Z** / **D** | 开启/关闭 同步缩放 / 同步平移 |
 | **Space**（长按） | 鼠标所在一侧临时显示另一侧的图；松开恢复 |
-| **B** / **S** / **W** / **O** / **K** | 闪烁 / 分割 / 滑动 / 叠加 / 棋盘格 模式切换 |
+| **B** / **S** / **W** / **O** / **K** | Flicker / Split / Swipe / Overlay / Checkerboard |
 | **H** | 差异高亮与热力图 |
 | **R** / **L** | 同步准星定位 / 像素连线对比 |
 | **X** | 交换 A/B 窗格图片 |
@@ -142,7 +142,7 @@
 | **Tab** | 开启/退出 专注大图浏览模式 |
 | **S** | 开启幻灯片放映 |
 | **Ctrl+Shift+B** | 打开批量处理对话框 |
-| **Ctrl+Shift+A** | 取消选择 |
-| **Ctrl+Alt+A** | 批量分析导出 |
+| **Ctrl+Shift+A** | Cancel selection (deselect) |
+| **Ctrl+Alt+A** | Batch Analysis Export |
 | **←** / **→** | 查看上一张 / 下一张图片 |
 | **F1** | 查看完整键盘快捷键表 |

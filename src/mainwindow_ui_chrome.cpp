@@ -14,11 +14,11 @@
 
 void MainWindow::installNavigationCollapse()
 {
-    m_actToggleNavigation = new QAction(tr("侧栏"), this);
+    m_actToggleNavigation = new QAction(tr("Sidebar"), this);
     m_actToggleNavigation->setObjectName(QStringLiteral("toggleNavigationPanelAction"));
     m_actToggleNavigation->setCheckable(true);
     m_actToggleNavigation->setChecked(true);
-    m_actToggleNavigation->setToolTip(tr("显示或隐藏文件夹与预览侧栏"));
+    m_actToggleNavigation->setToolTip(tr("Show or hide the folder and preview sidebars"));
     if (auto *bar = findChild<QToolBar *>(QStringLiteral("browserToolBar")))
     {
         bar->setIconSize(QSize(16, 16));
@@ -96,7 +96,7 @@ void MainWindow::placeGalleryCompareButton(QWidget *sortBar)
     if (!row)
         return;
     button->setParent(sortBar);
-    button->setText(QStringLiteral("比较 (P)"));
+    button->setText(QStringLiteral("Compare (P)"));
     button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     button->adjustSize();
     row->addWidget(button);

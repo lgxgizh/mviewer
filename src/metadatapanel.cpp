@@ -31,7 +31,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
                                mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
     layout->setSpacing(4);
 
-    layout->addWidget(new QLabel(tr("元数据 (Metadata)"), this));
+    layout->addWidget(new QLabel(tr("Metadata (Metadata)"), this));
 
     // "复制全部" button: dumps the full hierarchical model to the clipboard as
     // "Key: Value" lines — handy for sharing EXIF info or pasting into reports.
@@ -40,8 +40,8 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     // low-frequency diagnostic action.
     auto *topBar = new QHBoxLayout();
     topBar->addStretch(1);
-    auto *copyBtn = new QPushButton(tr("复制全部"), this);
-    copyBtn->setToolTip(tr("复制全部元数据到剪贴板"));
+    auto *copyBtn = new QPushButton(tr("Copy all"), this);
+    copyBtn->setToolTip(tr("Copy all metadata to clipboard"));
     topBar->addWidget(copyBtn);
     connect(copyBtn, &QPushButton::clicked, this, &MetadataPanel::copyAll);
     layout->addLayout(topBar);
@@ -66,7 +66,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     auto *ratingLay = new QHBoxLayout(ratingBox);
     ratingLay->setContentsMargins(0, 0, 0, 0);
     ratingLay->setSpacing(mviewer::ui::metrics::kSpace8);
-    ratingLay->addWidget(new QLabel(tr("评分:"), this));
+    ratingLay->addWidget(new QLabel(tr("Rating:"), this));
     m_rating = new RatingWidget(this);
     ratingLay->addWidget(m_rating);
     ratingLay->addStretch(1);
@@ -94,19 +94,19 @@ QWidget *MetadataPanel::buildFlagsBox()
     auto *flagLay = new QHBoxLayout(flagBox);
     flagLay->setContentsMargins(0, 0, 0, 0);
     flagLay->setSpacing(mviewer::ui::metrics::kSpace8);
-    flagLay->addWidget(new QLabel(tr("色标:"), this));
+    flagLay->addWidget(new QLabel(tr("Color scale:"), this));
     m_colorLabel = new QComboBox(this);
-    m_colorLabel->addItem(tr("无"), 0);
-    m_colorLabel->addItem(tr("红"), 1);
-    m_colorLabel->addItem(tr("橙"), 2);
-    m_colorLabel->addItem(tr("黄"), 3);
-    m_colorLabel->addItem(tr("绿"), 4);
-    m_colorLabel->addItem(tr("蓝"), 5);
-    m_colorLabel->addItem(tr("紫"), 6);
+    m_colorLabel->addItem(tr("None"), 0);
+    m_colorLabel->addItem(tr("Red"), 1);
+    m_colorLabel->addItem(tr("Orange"), 2);
+    m_colorLabel->addItem(tr("Yellow"), 3);
+    m_colorLabel->addItem(tr("Green"), 4);
+    m_colorLabel->addItem(tr("Blue"), 5);
+    m_colorLabel->addItem(tr("Purple"), 6);
     flagLay->addWidget(m_colorLabel);
-    m_rejectBtn = new QPushButton(tr("拒绝"), this);
+    m_rejectBtn = new QPushButton(tr("Reject"), this);
     m_rejectBtn->setCheckable(true);
-    m_pickBtn = new QPushButton(tr("收藏"), this);
+    m_pickBtn = new QPushButton(tr("Favorite"), this);
     m_pickBtn->setCheckable(true);
     flagLay->addWidget(m_rejectBtn);
     flagLay->addWidget(m_pickBtn);
@@ -325,7 +325,7 @@ void MetadataPanel::onTreeContextMenu(const QPoint &pos)
             if (!valStr.isEmpty())
             {
                 const QString displayVal = valStr.length() > 20 ? valStr.left(17) + "..." : valStr;
-                menu.addAction(tr("复制数值 (\"%1\")").arg(displayVal), this,
+                menu.addAction(tr("Copy value (\"%1\")").arg(displayVal), this,
                                [valStr]() { QApplication::clipboard()->setText(valStr); });
             }
             if (!keyStr.isEmpty() && !valStr.isEmpty())
@@ -334,14 +334,14 @@ void MetadataPanel::onTreeContextMenu(const QPoint &pos)
                 const QString displayKv =
                     preview.length() > 25 ? preview.left(22) + "..." : preview;
                 menu.addAction(
-                    tr("复制项 (\"%1\")").arg(displayKv), this, [keyStr, valStr]()
+                    tr("Copy item (\"%1\")").arg(displayKv), this, [keyStr, valStr]()
                     { QApplication::clipboard()->setText(QString("%1: %2").arg(keyStr, valStr)); });
             }
             menu.addSeparator();
         }
     }
 
-    menu.addAction(tr("复制全部元数据"), this, &MetadataPanel::copyAll);
+    menu.addAction(tr("Copy all metadata"), this, &MetadataPanel::copyAll);
     menu.exec(m_tree->viewport()->mapToGlobal(pos));
 }
 
@@ -357,5 +357,5 @@ void MetadataPanel::onTreeDoubleClicked(const QModelIndex &index)
     if (valStr.isEmpty())
         return;
     QApplication::clipboard()->setText(valStr);
-    QToolTip::showText(QCursor::pos(), tr("已复制数值: %1").arg(valStr), m_tree);
+    QToolTip::showText(QCursor::pos(), tr("Copied value: %1").arg(valStr), m_tree);
 }

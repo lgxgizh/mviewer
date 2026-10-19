@@ -341,7 +341,7 @@ int main(int argc, char **argv)
     dismiss.stop();
     dismissMessageBoxes();
     CHECK(progressSpy.seen, "multi-select rotate shows a progress dialog");
-    CHECK(progressSpy.lastLabel.contains(QStringLiteral("旋转")),
+    CHECK(progressSpy.lastLabel.contains(QStringLiteral("Rotate")),
           "rotate progress label describes rotate");
     CHECK(progressSpy.sawCount, "rotate progress label reports finished/total");
     CHECK(!batchProgressLeft(&window), "rotate progress dialog is closed after the batch");
@@ -386,7 +386,7 @@ int main(int argc, char **argv)
     dismiss.stop();
     dismissMessageBoxes();
     CHECK(progressSpy.seen, "multi-select flip shows a progress dialog");
-    CHECK(progressSpy.lastLabel.contains(QStringLiteral("翻转")),
+    CHECK(progressSpy.lastLabel.contains(QStringLiteral("Flip")),
           "flip progress label describes flip");
     CHECK(progressSpy.sawCount, "flip progress label reports finished/total");
     CHECK(!batchProgressLeft(&window), "flip progress dialog is closed after the batch");

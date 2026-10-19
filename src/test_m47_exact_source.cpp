@@ -240,7 +240,7 @@ int main(int argc, char **argv)
         // The source-backed pane's row must report invalid — the Inspector may
         // not fall back to sampling its LOD raster.
         CHECK(table->rowCount() >= 2 && table->item(1, 2) &&
-                  table->item(1, 2)->text() == QStringLiteral("无效"),
+                  table->item(1, 2)->text() == QStringLiteral("Invalid"),
               "E1: the infeasible pane's inspector row is 无效 (never the LOD)");
         const auto &c = SourceDecodeStats::instance().counters();
         CHECK(c.fullDecodeScaled.load() == 0 && c.fullDecodeCrop.load() == 0 &&

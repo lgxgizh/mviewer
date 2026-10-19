@@ -230,7 +230,7 @@ void MetadataOverlay::appendFileInfo(const mviewer::domain::ImageMetadata &meta)
         fmt = (ext == "JPG") ? "JPEG" : ext;
     }
     if (!fmt.isEmpty())
-        m_lines << QString("格式: %1").arg(fmt);
+        m_lines << QString("Format: %1").arg(fmt);
 
     if (meta.width > 0 && meta.height > 0)
         m_lines << QString("分辨率: %1 × %2").arg(meta.width).arg(meta.height);
@@ -291,7 +291,7 @@ void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
     {
         const bool hasCameraLine =
             std::any_of(m_lines.cbegin(), m_lines.cend(),
-                        [](const QString &l) { return l.startsWith(QStringLiteral("相机:")); });
+                        [](const QString &l) { return l.startsWith(QStringLiteral("Camera:")); });
         if (!hasCameraLine)
             m_lines << QString("相机: %1 %2")
                            .arg(QString::fromStdString(raw.make), QString::fromStdString(raw.model))
@@ -300,7 +300,7 @@ void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
     if (!raw.lens.empty() || !raw.lensMaker.empty())
     {
         const bool hasLensLine = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
-                                             { return l.startsWith(QStringLiteral("镜头:")); });
+                                             { return l.startsWith(QStringLiteral("Lens:")); });
         if (!hasLensLine)
             m_lines << QString("镜头: %1 %2")
                            .arg(QString::fromStdString(raw.lensMaker),

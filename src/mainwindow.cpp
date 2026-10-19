@@ -13,7 +13,7 @@ QDialog *createFullscreenCompareHost(QWidget *parent, CompareWorkspace **viewOut
     // visible on one edge.
     auto *dlg = new QDialog(parent, Qt::Window);
     dlg->setObjectName("compareDialog");
-    dlg->setWindowTitle("比较模式 - MViewer");
+    dlg->setWindowTitle("Compare Mode - MViewer");
     auto *layout = new QVBoxLayout(dlg);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -38,8 +38,8 @@ void writeCurrentSidecarAsync(MainWindow *window, const QString &path)
             if (!alive)
                 return;
             const QString name = QFileInfo(QString::fromStdString(failedPath)).fileName();
-            alive->statusBar()->showMessage(MainWindow::tr("无法写入 %1 的附属文件").arg(name),
-                                            4000);
+            alive->statusBar()->showMessage(
+                MainWindow::tr("Cannot write the sidecar file for %1").arg(name), 4000);
         });
 }
 
@@ -716,11 +716,12 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     if (imgs.size() > 8)
     {
         imgs = imgs.mid(0, 8);
-        statusBar()->showMessage(tr("最多支持 8 张图片对比，已使用前 8 张"), 5000);
+        statusBar()->showMessage(tr("At most 8 images can be compared; the first 8 were used"),
+                                 5000);
     }
     if (imgs.size() < 2)
     {
-        statusBar()->showMessage(tr("需要选择 2-8 张图片才能比较"), 5000);
+        statusBar()->showMessage(tr("Select 2-8 images to compare"), 5000);
         return;
     }
     showCompareDialog(imgs, sessionJson);
@@ -769,9 +770,9 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                                              3000);
                 else if (m_imageList && m_imageList->count() > 0)
                     statusBar()->showMessage(
-                        QStringLiteral("已载入 %1 张").arg(m_imageList->count()), 2500);
+                        QStringLiteral("Loaded %1 images").arg(m_imageList->count()), 2500);
                 else
-                    statusBar()->showMessage(tr("就绪"), 2000);
+                    statusBar()->showMessage(tr("Ready"), 2000);
             });
     // P1 #④: Compare → Analyze workflow (Analyze button in Compare toolbar).
     connect(
@@ -876,9 +877,9 @@ void MainWindow::updateSelectionActions()
     {
         const bool canCompare = (n >= 2 && n <= 8);
         m_actCompare->setEnabled(canCompare);
-        m_actCompare->setToolTip(
-            mviewer::ui::appendShortcutHint(canCompare ? tr("比较") : tr("选择 2–8 张图片进行比较"),
-                                            mviewer::ui::actionShortcutHint(m_actCompare)));
+        m_actCompare->setToolTip(mviewer::ui::appendShortcutHint(
+            canCompare ? tr("Compare") : tr("Select 2–8 images to compare"),
+            mviewer::ui::actionShortcutHint(m_actCompare)));
     }
     if (m_actExportImages)
         m_actExportImages->setEnabled(n >= 1 || hasImages);

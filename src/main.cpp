@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 
+#include "Language.h"
 #include "MViewerVersion.h"
 #include "Theme.h"
 #include "application/CommandLine.h"
@@ -8,8 +9,8 @@
 #include "core/Logger.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
-#include "core/scheduler/TaskScheduler.h"
 #include "core/SettingsIO.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "runtime_storage.h"
 
 #include <QApplication>
@@ -63,6 +64,7 @@ int main(int argc, char *argv[])
     mviewer::runtime::configureSettings();
     mviewer::ui::Theme::seedDefaultThemeChoice();
     mviewer::ui::Theme::initTheme();
+    mviewer::ui::Language::applyFromSettings();
     app.setWindowIcon(QIcon(QStringLiteral(":/app/mviewer.png")));
 
     // Core producers (metadata indexing, metadata presentation) deliver their

@@ -65,7 +65,7 @@ void runRestoreFile(const QString &filePath, bool project, const TaskScheduler::
         auto ws = mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
         if (!ws || ws->empty())
         {
-            result.error = QStringLiteral("工作区文件无效或为空。");
+            result.error = QStringLiteral("The workspace file is invalid or empty.");
             return;
         }
         result.workspace = std::move(*ws);
@@ -76,7 +76,7 @@ void runRestoreFile(const QString &filePath, bool project, const TaskScheduler::
         if (!mviewer::core::deserializeProject(std::string(data.constData(), data.size()), proj) ||
             proj.workspace.empty())
         {
-            result.error = QStringLiteral("项目文件无效或为空。");
+            result.error = QStringLiteral("The project file is invalid or empty.");
             return;
         }
         result.workspace = std::move(proj.workspace);
@@ -146,7 +146,7 @@ void runPersistence(const PersistenceSnapshot &snapshot, const TaskScheduler::Ta
             ImageRepository::instance().loadWorkspace(snapshot.rootPath);
         if (ws.empty())
         {
-            result.error = "当前目录没有可保存的图片。";
+            result.error = "The current directory has no images to save.";
             return;
         }
         applyPersistedCompareContext(ws, snapshot);
@@ -181,7 +181,7 @@ void runPersistence(const PersistenceSnapshot &snapshot, const TaskScheduler::Ta
         }
         if (!mviewer::exportjob::writeTextAtomically(snapshot.outputPath, body))
         {
-            result.error = "无法原子写入目标文件。";
+            result.error = "Could not atomically write the destination file.";
             return;
         }
         result.imageCount = ws.imageCount();
@@ -194,7 +194,7 @@ void runPersistence(const PersistenceSnapshot &snapshot, const TaskScheduler::Ta
     }
     catch (...)
     {
-        result.error = "后台持久化任务失败。";
+        result.error = "The background persistence task failed.";
     }
 }
 
@@ -214,11 +214,13 @@ void MainWindow::saveWorkspace()
 {
     if (currentDir().isEmpty())
     {
-        QMessageBox::information(this, "保存工作区", "请先打开一个图片目录。");
+        QMessageBox::information(this, tr("Save Workspace"),
+                                 tr("Please open an image directory first."));
         return;
     }
-    const QString filePath = QFileDialog::getSaveFileName(
-        this, "保存工作区", currentDir() + "/workspace.mvws", "MViewer 工作区 (*.mvws)");
+    const QString filePath =
+        QFileDialog::getSaveFileName(this, tr("Save Workspace"), currentDir() + "/workspace.mvws",
+                                     tr("MViewer Workspace (*.mvws)"));
     if (filePath.isEmpty())
         return;
 
@@ -257,7 +259,7 @@ void MainWindow::saveWorkspace()
     auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
     const uint64_t generation = ++m_persistenceGeneration;
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在后台保存工作区…"));
+    statusBar()->showMessage(QStringLiteral("Saving workspace in the background…"));
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
@@ -280,12 +282,12 @@ void MainWindow::saveWorkspace()
                         return;
                     if (!state->success)
                     {
-                        QMessageBox::critical(window, "保存工作区",
+                        QMessageBox::critical(window, tr("Save Workspace"),
                                               QString::fromUtf8(state->error.c_str()));
                         return;
                     }
                     window->statusBar()->showMessage(
-                        QString("工作区已保存: %1 (%2 张图片, %3 个目录)")
+                        tr("Workspace saved: %1 (%2 images, %3 folders)")
                             .arg(QFileInfo(filePath).fileName())
                             .arg(static_cast<int>(state->imageCount))
                             .arg(static_cast<int>(state->folderCount)));
@@ -295,14 +297,15 @@ void MainWindow::saveWorkspace()
     if (!m_persistenceTask)
     {
         m_persistenceCancel.reset();
-        QMessageBox::warning(this, "保存工作区", "后台保存任务被调度器拒绝。");
+        QMessageBox::warning(this, tr("Save Workspace"),
+                             tr("The scheduler rejected the background save task."));
     }
 }
 
 void MainWindow::openWorkspace()
 {
-    const QString filePath =
-        QFileDialog::getOpenFileName(this, "打开工作区", QString(), "MViewer 工作区 (*.mvws)");
+    const QString filePath = QFileDialog::getOpenFileName(this, tr("Open Workspace"), QString(),
+                                                          tr("MViewer Workspace (*.mvws)"));
     if (filePath.isEmpty())
         return;
     openWorkspaceFile(filePath);
@@ -418,7 +421,7 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
             m_compareView->applyROI(restoredRoi);
     }
 
-    statusBar()->showMessage(QString("工作区已打开: %1 (%2 张图片, %3 个目录)")
+    statusBar()->showMessage(tr("Workspace opened: %1 (%2 images, %3 folders)")
                                  .arg(QFileInfo(filePath).fileName())
                                  .arg(static_cast<int>(ws.imageCount()))
                                  .arg(static_cast<int>(ws.folderCount())));
@@ -427,11 +430,13 @@ void MainWindow::saveProject()
 {
     if (currentDir().isEmpty())
     {
-        QMessageBox::information(this, "保存项目", "请先打开一个图片目录。");
+        QMessageBox::information(this, tr("Save Project"),
+                                 tr("Please open an image directory first."));
         return;
     }
-    const QString filePath = QFileDialog::getSaveFileName(
-        this, "保存项目", currentDir() + "/project.mvproj", "MViewer 项目 (*.mvproj)");
+    const QString filePath =
+        QFileDialog::getSaveFileName(this, tr("Save Project"), currentDir() + "/project.mvproj",
+                                     tr("MViewer Project (*.mvproj)"));
     if (filePath.isEmpty())
         return;
 
@@ -469,7 +474,7 @@ void MainWindow::saveProject()
     auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
     const uint64_t generation = ++m_persistenceGeneration;
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在后台保存项目…"));
+    statusBar()->showMessage(QStringLiteral("Saving project in the background…"));
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
@@ -492,12 +497,12 @@ void MainWindow::saveProject()
                         return;
                     if (!state->success)
                     {
-                        QMessageBox::critical(window, "保存项目",
+                        QMessageBox::critical(window, tr("Save Project"),
                                               QString::fromUtf8(state->error.c_str()));
                         return;
                     }
                     window->statusBar()->showMessage(
-                        QString("项目已保存: %1 (%2 张图片, %3 个目录)")
+                        tr("Project saved: %1 (%2 images, %3 folders)")
                             .arg(QFileInfo(filePath).fileName())
                             .arg(static_cast<int>(state->imageCount))
                             .arg(static_cast<int>(state->folderCount)));
@@ -507,14 +512,15 @@ void MainWindow::saveProject()
     if (!m_persistenceTask)
     {
         m_persistenceCancel.reset();
-        QMessageBox::warning(this, "保存项目", "后台保存任务被调度器拒绝。");
+        QMessageBox::warning(this, tr("Save Project"),
+                             tr("The scheduler rejected the background save task."));
     }
 }
 
 void MainWindow::openProject()
 {
-    const QString filePath =
-        QFileDialog::getOpenFileName(this, "打开项目", QString(), "MViewer 项目 (*.mvproj)");
+    const QString filePath = QFileDialog::getOpenFileName(this, tr("Open Project"), QString(),
+                                                          tr("MViewer Project (*.mvproj)"));
     if (filePath.isEmpty())
         return;
     openProjectFile(filePath);
@@ -534,7 +540,7 @@ void MainWindow::openWorkspaceFile(const QString &filePath)
     const uint64_t generation = ++m_restoreGeneration;
     auto result = std::make_shared<RestoreFileResult>();
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在打开工作区…"));
+    statusBar()->showMessage(tr("Opening workspace…"));
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [filePath, result](const TaskScheduler::TaskContext &ctx)
@@ -554,9 +560,9 @@ void MainWindow::openWorkspaceFile(const QString &filePath)
                     window->m_restoreTask.reset();
                     if (!result->ok)
                     {
-                        QMessageBox::critical(window, "打开工作区", result->error);
+                        QMessageBox::critical(window, tr("Open Workspace"), result->error);
                         window->statusBar()->showMessage(
-                            QStringLiteral("打开工作区失败: %1").arg(result->error));
+                            tr("Failed to open workspace: %1").arg(result->error));
                         return; // the live session is untouched
                     }
                     window->restoreWorkspaceState(result->workspace, result->filePath);
@@ -567,7 +573,8 @@ void MainWindow::openWorkspaceFile(const QString &filePath)
     {
         // submit() refused the task (pool paused / back-pressured): keep the
         // current session untouched and tell the user.
-        QMessageBox::warning(this, "打开工作区", "后台打开任务被调度器拒绝。");
+        QMessageBox::warning(this, tr("Open Workspace"),
+                             tr("The scheduler rejected the background open task."));
         return;
     }
     m_restoreTask = handle;
@@ -584,7 +591,7 @@ void MainWindow::openProjectFile(const QString &filePath)
     const uint64_t generation = ++m_restoreGeneration;
     auto result = std::make_shared<RestoreFileResult>();
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("正在打开项目…"));
+    statusBar()->showMessage(QStringLiteral("Opening project…"));
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [filePath, result](const TaskScheduler::TaskContext &ctx)
@@ -604,14 +611,14 @@ void MainWindow::openProjectFile(const QString &filePath)
                     window->m_restoreTask.reset();
                     if (!result->ok)
                     {
-                        QMessageBox::critical(window, "打开项目", result->error);
+                        QMessageBox::critical(window, tr("Open Project"), result->error);
                         window->statusBar()->showMessage(
-                            QStringLiteral("打开项目失败: %1").arg(result->error));
+                            QStringLiteral("Failed to open project: %1").arg(result->error));
                         return; // the live session is untouched
                     }
                     window->restoreWorkspaceState(result->workspace, result->filePath);
                     window->statusBar()->showMessage(
-                        QString("项目已打开: %1 (%2 张图片, %3 个目录)")
+                        tr("Project opened: %1 (%2 images, %3 folders)")
                             .arg(QFileInfo(result->filePath).fileName())
                             .arg(static_cast<int>(result->workspace.imageCount()))
                             .arg(static_cast<int>(result->workspace.folderCount())));
@@ -620,7 +627,8 @@ void MainWindow::openProjectFile(const QString &filePath)
         });
     if (!handle)
     {
-        QMessageBox::warning(this, "打开项目", "后台打开任务被调度器拒绝。");
+        QMessageBox::warning(this, tr("Open Project"),
+                             tr("The scheduler rejected the background open task."));
         return;
     }
     m_restoreTask = handle;

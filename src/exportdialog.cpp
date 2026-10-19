@@ -56,7 +56,7 @@ ExportDialog::ExportDialog(const QStringList &sources, QWidget *parent) : Export
 
 ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
 {
-    setWindowTitle(tr("导出图片"));
+    setWindowTitle(tr("Export Images"));
     resize(460, 520);
     auto *root = new QVBoxLayout(this);
     buildOutputSection(root);
@@ -80,8 +80,8 @@ void ExportDialog::buildOutputSection(QVBoxLayout *root)
     dirRow->setContentsMargins(0, 0, 0, 0);
     m_dirEdit = new QLineEdit(m_outputRow);
     m_dirEdit->setObjectName(QStringLiteral("exportOutputDirectoryEdit"));
-    m_browseBtn = new QPushButton(tr("浏览..."), m_outputRow);
-    dirRow->addWidget(new QLabel(tr("输出目录:"), m_outputRow));
+    m_browseBtn = new QPushButton(tr("Browse..."), m_outputRow);
+    dirRow->addWidget(new QLabel(tr("Output directory:"), m_outputRow));
     dirRow->addWidget(m_dirEdit, 1);
     dirRow->addWidget(m_browseBtn);
     root->addWidget(m_outputRow);
@@ -90,25 +90,25 @@ void ExportDialog::buildOutputSection(QVBoxLayout *root)
 void ExportDialog::buildModeSection(QVBoxLayout *root)
 {
     // ---- mode ----
-    auto *modeBox = new QGroupBox(tr("导出模式"));
+    auto *modeBox = new QGroupBox(tr("Export mode"));
     auto *modeLay = new QFormLayout(modeBox);
     m_modeCombo = new QComboBox(this);
     m_modeCombo->setObjectName(QStringLiteral("exportModeCombo"));
-    m_modeCombo->addItem(tr("转换 / 批量"), "convert");
-    m_modeCombo->addItem(tr("联系表 (Contact Sheet)"), "contact");
-    m_modeCombo->addItem(tr("PDF 文档"), "pdf");
-    m_modeCombo->addItem(tr("图像元数据清单 CSV"), "csv");
-    m_modeCombo->addItem(tr("图像元数据清单 JSON"), "json");
-    m_modeCombo->addItem(tr("图像元数据清单 HTML"), "html");
-    m_modeCombo->addItem(tr("复制到剪贴板"), "clipboard");
-    modeLay->addRow(tr("模式:"), m_modeCombo);
+    m_modeCombo->addItem(tr("Convert / Batch"), "convert");
+    m_modeCombo->addItem(tr("Contact Sheet"), "contact");
+    m_modeCombo->addItem(tr("PDF Document"), "pdf");
+    m_modeCombo->addItem(tr("Image Metadata Manifest CSV"), "csv");
+    m_modeCombo->addItem(tr("Image metadata manifest JSON"), "json");
+    m_modeCombo->addItem(tr("Image Metadata List HTML"), "html");
+    m_modeCombo->addItem(tr("Copy to clipboard"), "clipboard");
+    modeLay->addRow(tr("Mode:"), m_modeCombo);
     root->addWidget(modeBox);
 }
 
 void ExportDialog::buildFormatSection(QVBoxLayout *root)
 {
     // ---- format ----
-    m_formatGroup = new QGroupBox(tr("格式"));
+    m_formatGroup = new QGroupBox(tr("Format"));
     auto *fmtBox = m_formatGroup;
     auto *fmtLay = new QFormLayout(fmtBox);
     m_formatCombo = new QComboBox(this);
@@ -124,28 +124,28 @@ void ExportDialog::buildFormatSection(QVBoxLayout *root)
     // The old "批量(目录内全部图片)" checkbox was never read anywhere, so it could
     // not affect what was exported; removed rather than left as a control that
     // silently does nothing.
-    fmtLay->addRow(tr("格式:"), m_formatCombo);
-    fmtLay->addRow(tr("质量:"), m_qualitySpin);
+    fmtLay->addRow(tr("Format:"), m_formatCombo);
+    fmtLay->addRow(tr("Quality:"), m_qualitySpin);
     root->addWidget(fmtBox);
 }
 
 void ExportDialog::buildResizeSection(QVBoxLayout *root)
 {
     // ---- resize ----
-    m_resizeGroup = new QGroupBox(tr("缩放"));
+    m_resizeGroup = new QGroupBox(tr("Resize"));
     auto *rsBox = m_resizeGroup;
     auto *rsLay = new QFormLayout(rsBox);
     m_resizeCombo = new QComboBox(this);
     m_resizeCombo->setObjectName(QStringLiteral("exportResizeModeCombo"));
-    m_resizeCombo->addItem(tr("无"), "none");
-    m_resizeCombo->addItem(tr("适应长边 (px)"), "fit");
-    m_resizeCombo->addItem(tr("按比例 (%)"), "scale");
+    m_resizeCombo->addItem(tr("None"), "none");
+    m_resizeCombo->addItem(tr("Fit Long Edge (px)"), "fit");
+    m_resizeCombo->addItem(tr("Proportional (%)"), "scale");
     m_resizeSpin = new QSpinBox(this);
     m_resizeSpin->setObjectName(QStringLiteral("exportResizeValueSpin"));
     m_resizeSpin->setRange(1, 100000);
     m_resizeSpin->setValue(1920);
-    rsLay->addRow(tr("方式:"), m_resizeCombo);
-    rsLay->addRow(tr("数值:"), m_resizeSpin);
+    rsLay->addRow(tr("Method:"), m_resizeCombo);
+    rsLay->addRow(tr("Value:"), m_resizeSpin);
     root->addWidget(rsBox);
     connect(m_resizeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &ExportDialog::syncResizeControls);
@@ -183,33 +183,33 @@ void ExportDialog::syncResizeControls()
 void ExportDialog::buildWatermarkSection(QVBoxLayout *root)
 {
     // ---- watermark ----
-    m_watermarkGroup = new QGroupBox(tr("水印"));
+    m_watermarkGroup = new QGroupBox(tr("Watermark"));
     auto *wmBox = m_watermarkGroup;
     auto *wmLay = new QFormLayout(wmBox);
     m_watermarkEdit = new QLineEdit(this);
     m_wmPosCombo = new QComboBox(this);
-    m_wmPosCombo->addItem(tr("左上"));
-    m_wmPosCombo->addItem(tr("右上"));
-    m_wmPosCombo->addItem(tr("左下"));
-    m_wmPosCombo->addItem(tr("右下"));
-    m_wmPosCombo->addItem(tr("居中"));
-    m_wmPosCombo->addItem(tr("平铺"));
+    m_wmPosCombo->addItem(tr("Top Left"));
+    m_wmPosCombo->addItem(tr("Top right"));
+    m_wmPosCombo->addItem(tr("Bottom Left"));
+    m_wmPosCombo->addItem(tr("Bottom Right"));
+    m_wmPosCombo->addItem(tr("Center"));
+    m_wmPosCombo->addItem(tr("Tile"));
     m_wmOpacitySpin = new QSpinBox(this);
     m_wmOpacitySpin->setRange(0, 100);
     m_wmOpacitySpin->setValue(40);
-    wmLay->addRow(tr("文字:"), m_watermarkEdit);
-    wmLay->addRow(tr("位置:"), m_wmPosCombo);
-    wmLay->addRow(tr("不透明度(%):"), m_wmOpacitySpin);
+    wmLay->addRow(tr("Text:"), m_watermarkEdit);
+    wmLay->addRow(tr("Position:"), m_wmPosCombo);
+    wmLay->addRow(tr("Opacity (%):"), m_wmOpacitySpin);
     root->addWidget(wmBox);
 }
 
 void ExportDialog::buildCropSection(QVBoxLayout *root)
 {
     // ---- crop (P0 #⑦) ----
-    m_cropGroup = new QGroupBox(tr("裁剪"));
+    m_cropGroup = new QGroupBox(tr("Crop"));
     auto *cropBox = m_cropGroup;
     auto *cropLay = new QFormLayout(cropBox);
-    m_cropCheck = new QCheckBox(tr("启用裁剪"), this);
+    m_cropCheck = new QCheckBox(tr("Enable Cropping"), this);
     m_cropX = new QSpinBox(this);
     m_cropY = new QSpinBox(this);
     m_cropW = new QSpinBox(this);
@@ -223,9 +223,9 @@ void ExportDialog::buildCropSection(QVBoxLayout *root)
     cropGrid->addWidget(m_cropX, 0, 1);
     cropGrid->addWidget(new QLabel(tr("Y")), 0, 2);
     cropGrid->addWidget(m_cropY, 0, 3);
-    cropGrid->addWidget(new QLabel(tr("宽")), 1, 0);
+    cropGrid->addWidget(new QLabel(tr("Width")), 1, 0);
     cropGrid->addWidget(m_cropW, 1, 1);
-    cropGrid->addWidget(new QLabel(tr("高")), 1, 2);
+    cropGrid->addWidget(new QLabel(tr("Height")), 1, 2);
     cropGrid->addWidget(m_cropH, 1, 3);
     cropLay->addRow(m_cropCheck);
     cropLay->addRow(cropGrid);
@@ -235,13 +235,13 @@ void ExportDialog::buildCropSection(QVBoxLayout *root)
 void ExportDialog::buildMetadataSection(QVBoxLayout *root)
 {
     // ---- metadata (P0 #⑦) ----
-    m_metadataGroup = new QGroupBox(tr("元数据"));
+    m_metadataGroup = new QGroupBox(tr("Metadata"));
     auto *metaBox = m_metadataGroup;
     auto *metaLay = new QFormLayout(metaBox);
-    m_stripMetaCheck = new QCheckBox(tr("剥离元数据 (EXIF/ICC)"), this);
+    m_stripMetaCheck = new QCheckBox(tr("Strip Metadata (EXIF/ICC)"), this);
     m_stripMetaCheck->setChecked(true);
-    m_stripMetaCheck->setToolTip(
-        tr("重新编码为原始像素时已默认不包含元数据；此选项记录你的明确意图。"));
+    m_stripMetaCheck->setToolTip(tr("When re-encoding to original pixels, metadata is excluded by "
+                                    "default; this option records your explicit intent."));
     metaLay->addRow(m_stripMetaCheck);
     root->addWidget(metaBox);
 }
@@ -249,7 +249,7 @@ void ExportDialog::buildMetadataSection(QVBoxLayout *root)
 void ExportDialog::buildRenameSection(QVBoxLayout *root)
 {
     // ---- rename ----
-    m_renameGroup = new QGroupBox(tr("批量重命名 (留空=原名)"));
+    m_renameGroup = new QGroupBox(tr("Batch Rename (leave blank = original name)"));
     auto *rnBox = m_renameGroup;
     auto *rnLay = new QVBoxLayout(rnBox);
     m_renamePanel = new BatchRenamePanel(rnBox);
@@ -257,7 +257,7 @@ void ExportDialog::buildRenameSection(QVBoxLayout *root)
     m_renameEdit = m_renamePanel->patternEdit();
     m_renameEdit->setPlaceholderText("{name}_{seq:3}");
     rnLay->addWidget(m_renamePanel);
-    rnLay->addWidget(new QLabel(tr("可用: {name} {ext} {n} {total} {seq:W}")));
+    rnLay->addWidget(new QLabel(tr("Available: {name} {ext} {n} {total} {seq:W}")));
     root->addWidget(rnBox);
     // The preview shows the encoded extension; the last confirmed settings return.
     const auto syncExtension = [this]()
@@ -274,7 +274,7 @@ void ExportDialog::buildRenameSection(QVBoxLayout *root)
 void ExportDialog::buildContactSection(QVBoxLayout *root)
 {
     // ---- contact sheet / pdf ----
-    m_contactGroup = new QGroupBox(tr("联系表 / PDF 选项"));
+    m_contactGroup = new QGroupBox(tr("Contact sheet / PDF options"));
     auto *csBox = m_contactGroup;
     auto *csLay = new QFormLayout(csBox);
     m_colsSpin = new QSpinBox(this);
@@ -283,8 +283,8 @@ void ExportDialog::buildContactSection(QVBoxLayout *root)
     m_thumbSpin = new QSpinBox(this);
     m_thumbSpin->setRange(16, 2000);
     m_thumbSpin->setValue(200);
-    csLay->addRow(tr("列数:"), m_colsSpin);
-    csLay->addRow(tr("缩略图边长(px):"), m_thumbSpin);
+    csLay->addRow(tr("Columns:"), m_colsSpin);
+    csLay->addRow(tr("Thumbnail side length (px):"), m_thumbSpin);
     root->addWidget(csBox);
 }
 
@@ -292,11 +292,11 @@ void ExportDialog::buildButtonSection(QVBoxLayout *root)
 {
     // ---- buttons ----
     auto *box = new QDialogButtonBox(this);
-    m_exportBtn = box->addButton(tr("导出"), QDialogButtonBox::AcceptRole);
+    m_exportBtn = box->addButton(tr("Export"), QDialogButtonBox::AcceptRole);
     box->addButton(QDialogButtonBox::Cancel);
     root->addWidget(box);
 
-    m_statusLabel = new QLabel(tr("就绪"), this);
+    m_statusLabel = new QLabel(tr("Ready"), this);
     root->addWidget(m_statusLabel);
 
     connect(m_browseBtn, &QPushButton::clicked, this, &ExportDialog::onBrowse);
@@ -393,7 +393,7 @@ ImageData ExportDialog::applyWatermark(const ImageData &d) const
 void ExportDialog::onBrowse()
 {
     const QString dir =
-        QFileDialog::getExistingDirectory(this, tr("选择输出目录"), m_dirEdit->text());
+        QFileDialog::getExistingDirectory(this, tr("Select output directory"), m_dirEdit->text());
     if (!dir.isEmpty())
     {
         m_outDir = dir;
@@ -418,7 +418,8 @@ void ExportDialog::onExportClicked()
     }
     if (outDir.isEmpty() || !QDir(outDir).exists())
     {
-        QMessageBox::warning(this, tr("导出"), tr("请先选择有效的输出目录。"));
+        QMessageBox::warning(this, tr("Export"),
+                             tr("Please select a valid output directory first."));
         return;
     }
 
@@ -448,7 +449,7 @@ void ExportDialog::exportConvertBatch()
     const QStringList files = collectSources();
     if (files.isEmpty() && m_outDir.isEmpty())
     {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
+        m_statusLabel->setText(tr("No images available to export."));
         return;
     }
 
@@ -461,7 +462,8 @@ void ExportDialog::exportConvertBatch()
     cfg.quality = m_qualitySpin->value();
     if (!m_renamePanel->isValid())
     {
-        m_statusLabel->setText(tr("重命名设置无效：%1").arg(m_renamePanel->errorMessage()));
+        m_statusLabel->setText(
+            tr("Invalid rename settings: %1").arg(m_renamePanel->errorMessage()));
         return;
     }
     const auto rename = m_renamePanel->options();
@@ -507,7 +509,7 @@ void ExportDialog::exportUnifiedMode(mviewer::exportjob::Mode mode)
     const QStringList files = collectSources();
     if (files.isEmpty() && m_outDir.isEmpty())
     {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
+        m_statusLabel->setText(tr("No images available to export."));
         return;
     }
 
@@ -536,7 +538,7 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
     m_exportBtn->setEnabled(false);
     if (!m_progress)
     {
-        m_progress = new QProgressDialog(tr("正在导出..."), tr("取消"), 0, 0, this);
+        m_progress = new QProgressDialog(tr("Exporting..."), tr("Cancel"), 0, 0, this);
         m_progress->setWindowModality(Qt::WindowModal);
         m_progress->setAutoClose(true);
         m_progress->setMinimumDuration(0);
@@ -569,7 +571,7 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
                             failed->m_progress->close();
                         failed->m_exportBtn->setEnabled(true);
                         failed->m_statusLabel->setText(
-                            tr("导出失败: %1").arg(QString::fromUtf8(error.what())));
+                            tr("Export failed: %1").arg(QString::fromUtf8(error.what())));
                     }
                     return;
                 }
@@ -582,7 +584,7 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
                         if (failed->m_progress)
                             failed->m_progress->close();
                         failed->m_exportBtn->setEnabled(true);
-                        failed->m_statusLabel->setText(tr("导出失败: 未知错误"));
+                        failed->m_statusLabel->setText(tr("Export failed: Unknown error"));
                     }
                     return;
                 }

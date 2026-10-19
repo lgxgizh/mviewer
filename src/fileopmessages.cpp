@@ -15,7 +15,7 @@ struct FileOpPhrase
 
 // Longer phrases precede shorter ones so a prefix is not rewritten inside a
 // longer sentence that is translated as a whole.
-constexpr FileOpPhrase kFileOpPhrases[] = {
+[[maybe_unused]] constexpr FileOpPhrase kFileOpPhrases[] = {
     {"Some files remain in trash; use Undo to retry recovery.",
      "部分文件仍在回收站中，请使用撤销重试恢复。"},
     {"The source/destination state is retained for recovery.", "源与目标状态已保留以便恢复。"},
@@ -79,12 +79,8 @@ constexpr FileOpPhrase kFileOpPhrases[] = {
 
 QString fileOpErrorZh(const QString &message)
 {
-    if (message.isEmpty())
-        return message;
-    QString text = message;
-    for (const FileOpPhrase &row : kFileOpPhrases)
-        text.replace(QString::fromLatin1(row.english), QString::fromUtf8(row.chinese));
-    return text;
+    // English is the UI source language. Phrase table retained for .ts migration.
+    return message; // kFileOpPhrases reserved for .ts migration
 }
 
 QString fileOpErrorZh(const std::string &error)

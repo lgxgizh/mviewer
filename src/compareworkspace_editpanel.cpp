@@ -87,13 +87,14 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     editLay->setContentsMargins(0, 4, 0, 0);
     editLay->setSpacing(mviewer::ui::metrics::kSpace4);
 
-    m_editLabel = new QLabel(tr("— 选中窗格后可编辑 —"), m_editPanel);
+    m_editLabel = new QLabel(tr("— Select a pane to edit —"), m_editPanel);
     m_editLabel->setStyleSheet(
         QStringLiteral("font-weight:bold;color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     editLay->addWidget(m_editLabel);
-    auto *previewHint =
-        new QLabel(tr("调优仅预览，不覆盖原文件；可导出为新的 PNG 或 TIFF"), m_editPanel);
+    auto *previewHint = new QLabel(tr("Adjustments are preview-only and do not overwrite the "
+                                      "original file; export as a new PNG or TIFF"),
+                                   m_editPanel);
     previewHint->setObjectName("previewOnlyHint");
     previewHint->setStyleSheet("color:#f0c060;font-size:11px;");
     previewHint->setWordWrap(true);
@@ -102,7 +103,7 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     // Brightness slider [-255, 255]; 0=identity
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("亮度"), m_editPanel));
+        row->addWidget(new QLabel(tr("Brightness"), m_editPanel));
         m_brightSlider = new QSlider(Qt::Horizontal, m_editPanel);
         m_brightSlider->setObjectName("brightnessSlider");
         m_brightSlider->setRange(-255, 255);
@@ -123,7 +124,7 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     // Contrast slider [0..300] → float [0.0..3.0]; 100=identity
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("对比度"), m_editPanel));
+        row->addWidget(new QLabel(tr("Contrast"), m_editPanel));
         m_contrastSlider = new QSlider(Qt::Horizontal, m_editPanel);
         m_contrastSlider->setRange(0, 300);
         m_contrastSlider->setValue(100);
@@ -143,7 +144,7 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     // Gamma slider [5..800] → float [0.05..8.0]; 100=identity
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("伽马"), m_editPanel));
+        row->addWidget(new QLabel(tr("Gamma"), m_editPanel));
         m_gammaSlider = new QSlider(Qt::Horizontal, m_editPanel);
         m_gammaSlider->setRange(5, 800);
         m_gammaSlider->setValue(100);
@@ -196,19 +197,21 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
             });
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("旋转"), m_editPanel));
-        auto *btnCCW = new QPushButton(tr("↺ 逆时针 (Ctrl+Shift+R)"), m_editPanel);
+        row->addWidget(new QLabel(tr("Rotate"), m_editPanel));
+        auto *btnCCW = new QPushButton(tr("↺ Counterclockwise (Ctrl+Shift+R)"), m_editPanel);
         btnCCW->setObjectName("rotateCCWButton");
-        btnCCW->setToolTip(tr("逆时针旋转 90°（仅预览，不修改原文件）"));
-        auto *btnCW = new QPushButton(tr("↻ 顺时针 (Ctrl+R)"), m_editPanel);
+        btnCCW->setToolTip(
+            tr("Rotate 90° counterclockwise (preview only, does not modify the original file)"));
+        auto *btnCW = new QPushButton(tr("↻ Clockwise (Ctrl+R)"), m_editPanel);
         btnCW->setObjectName("rotateCWButton");
-        btnCW->setToolTip(tr("顺时针旋转 90°（仅预览，不修改原文件）"));
+        btnCW->setToolTip(
+            tr("Rotate 90° clockwise (preview only, does not modify the original file)"));
         m_rotVal = new QLabel("0°", m_editPanel);
         m_rotVal->setMinimumWidth(30);
-        m_syncRotatePanelChk = new QCheckBox(tr("同步所有图 (Alt+R)"), m_editPanel);
+        m_syncRotatePanelChk = new QCheckBox(tr("Sync all images (Alt+R)"), m_editPanel);
         m_syncRotatePanelChk->setObjectName("syncRotatePanelCheck");
-        m_syncRotatePanelChk->setToolTip(
-            tr("勾选后，旋转与翻转将同步作用于所有正在比较的图像 (Alt+R)"));
+        m_syncRotatePanelChk->setToolTip(tr("When checked, rotation and flip are applied in sync "
+                                            "to all images being compared (Alt+R)"));
         m_syncRotatePanelChk->setChecked(m_syncRotate);
         connect(m_syncRotatePanelChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
         row->addWidget(btnCCW);
@@ -221,13 +224,15 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
     }
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("翻转"), m_editPanel));
-        auto *btnFlipH = new QPushButton(tr("⇄ 水平 (Ctrl+Shift+H)"), m_editPanel);
+        row->addWidget(new QLabel(tr("Flip"), m_editPanel));
+        auto *btnFlipH = new QPushButton(tr("⇄ Horizontal (Ctrl+Shift+H)"), m_editPanel);
         btnFlipH->setObjectName("flipHButton");
-        btnFlipH->setToolTip(tr("水平翻转当前窗格 (Ctrl+Shift+H，仅预览，不修改原文件)"));
-        auto *btnFlipV = new QPushButton(tr("⇅ 垂直 (Ctrl+Shift+V)"), m_editPanel);
+        btnFlipH->setToolTip(tr("Flip current pane horizontally (Ctrl+Shift+H, preview only, does "
+                                "not modify the original file)"));
+        auto *btnFlipV = new QPushButton(tr("⇅ Vertical (Ctrl+Shift+V)"), m_editPanel);
         btnFlipV->setObjectName("flipVButton");
-        btnFlipV->setToolTip(tr("垂直翻转当前窗格 (Ctrl+Shift+V，仅预览，不修改原文件)"));
+        btnFlipV->setToolTip(tr("Flip current pane vertically (Ctrl+Shift+V, preview only, does "
+                                "not modify the original file)"));
         row->addWidget(btnFlipH);
         row->addWidget(btnFlipV);
         editLay->addLayout(row);
@@ -235,7 +240,7 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         connect(btnFlipV, &QPushButton::clicked, this, [this]() { flipCurrentCell(false); });
     }
     buildUsmControls(editLay);
-    m_resetAdjBtn = new QPushButton(tr("重置调整"), m_editPanel);
+    m_resetAdjBtn = new QPushButton(tr("Reset adjustments"), m_editPanel);
     m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
     editLay->addWidget(m_resetAdjBtn);
@@ -299,7 +304,7 @@ void CompareWorkspace::onEditCellSelected(int cellIdx)
 
     const ImageFrame *img = m_engine.imageAt(cellIdx);
     m_editLabel->setText(img ? QString::fromStdString(img->metadata().fileName)
-                             : tr("窗格 %1").arg(cellIdx + 1));
+                             : tr("Pane %1").arg(cellIdx + 1));
     // Selecting a pane does not change the cursor's sample position. Repaint the
     // Inspector from the cached hover coordinate so a pane click immediately
     // reflects the current adjusted display without requiring another mouse move.
@@ -518,8 +523,9 @@ void CompareWorkspace::ensurePresetDir()
 void CompareWorkspace::onSavePreset()
 {
     ensurePresetDir();
-    const QString fileName = QFileDialog::getSaveFileName(
-        this, tr("存储对比布局"), m_presetDir, tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
+    const QString fileName =
+        QFileDialog::getSaveFileName(this, tr("Save Comparison Layout"), m_presetDir,
+                                     tr("Compare Layout Files (*.mvc)\nAll Files (*.*)"));
     if (fileName.isEmpty())
         return;
 
@@ -595,31 +601,33 @@ void CompareWorkspace::onSavePreset()
     QSaveFile f(fileName);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
     {
-        QMessageBox::warning(this, tr("存储失败"), tr("无法写入文件:\n%1").arg(fileName));
+        QMessageBox::warning(this, tr("Save failed"), tr("Cannot write file:\n%1").arg(fileName));
         return;
     }
     if (f.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !f.commit())
-        QMessageBox::warning(this, tr("存储失败"), tr("无法提交文件:\n%1").arg(fileName));
+        QMessageBox::warning(this, tr("Save failed"), tr("Cannot commit file:\n%1").arg(fileName));
 }
 
 void CompareWorkspace::onLoadPreset()
 {
     ensurePresetDir();
-    const QString fileName = QFileDialog::getOpenFileName(
-        this, tr("读取对比布局"), m_presetDir, tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
+    const QString fileName =
+        QFileDialog::getOpenFileName(this, tr("Load Comparison Layout"), m_presetDir,
+                                     tr("Compare Layout Files (*.mvc)\nAll Files (*.*)"));
     if (fileName.isEmpty())
         return;
 
     QFile f(fileName);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        QMessageBox::warning(this, tr("读取失败"), tr("无法打开文件:\n%1").arg(fileName));
+        QMessageBox::warning(this, tr("Read Failed"), tr("Cannot open file:\n%1").arg(fileName));
         return;
     }
     constexpr qint64 kMaxPresetFileBytes = 16LL * 1024 * 1024;
     if (f.size() > kMaxPresetFileBytes)
     {
-        QMessageBox::warning(this, tr("读取失败"), tr("预设文件过大:\n%1").arg(fileName));
+        QMessageBox::warning(this, tr("Read Failed"),
+                             tr("Preset file is too large:\n%1").arg(fileName));
         return;
     }
     const QJsonDocument doc =

@@ -153,13 +153,13 @@ inline bool readBoundedStateFile(QFile &file, const QString &path, qint64 maxByt
     if (!file.exists() || !file.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         if (error)
-            *error = QStringLiteral("无法读取文件：%1").arg(path);
+            *error = QStringLiteral("Cannot read file: %1").arg(path);
         return false;
     }
     if (file.size() > maxBytes)
     {
         if (error)
-            *error = QStringLiteral("文件过大，无法作为状态文件读取：%1").arg(path);
+            *error = QStringLiteral("File is too large to read as a state file: %1").arg(path);
         return false;
     }
     out = file.read(std::min<qint64>(file.size(), maxBytes));

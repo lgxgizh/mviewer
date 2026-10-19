@@ -13,7 +13,7 @@ namespace
 
 QString unsupportedError(const QString &path)
 {
-    return QStringLiteral("不支持的打开目标: %1").arg(path);
+    return QStringLiteral("Unsupported open target: %1").arg(path);
 }
 
 } // namespace
@@ -36,14 +36,14 @@ ExternalOpenTarget classifyExternalOpenTarget(const QString &rawPath)
     target.path = normalizeExternalOpenPath(rawPath);
     if (target.path.isEmpty())
     {
-        target.error = QStringLiteral("打开目标为空");
+        target.error = QStringLiteral("Open target is empty");
         return target;
     }
 
     const QFileInfo info(target.path);
     if (!info.exists())
     {
-        target.error = QStringLiteral("打开目标不存在: %1").arg(rawPath);
+        target.error = QStringLiteral("Open target does not exist: %1").arg(rawPath);
         return target;
     }
     if (info.isDir())
@@ -53,7 +53,8 @@ ExternalOpenTarget classifyExternalOpenTarget(const QString &rawPath)
     }
     if (!info.isFile())
     {
-        target.error = QStringLiteral("打开目标不是普通文件或目录: %1").arg(rawPath);
+        target.error =
+            QStringLiteral("Open target is not a regular file or directory: %1").arg(rawPath);
         return target;
     }
 
@@ -74,7 +75,7 @@ ExternalOpenPlan planExternalOpen(const QStringList &rawPaths)
     ExternalOpenPlan plan;
     if (rawPaths.isEmpty())
     {
-        plan.error = QStringLiteral("没有可打开的目标");
+        plan.error = QStringLiteral("Nothing to open");
         return plan;
     }
 
@@ -102,7 +103,7 @@ ExternalOpenPlan planExternalOpen(const QStringList &rawPaths)
     {
         if (target.kind != ExternalOpenKind::Image)
         {
-            plan.error = QStringLiteral("多个打开目标必须全部是受支持的图片");
+            plan.error = QStringLiteral("Multiple open targets must all be supported images");
             return plan;
         }
         plan.paths.append(target.path);

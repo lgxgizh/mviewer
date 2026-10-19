@@ -1,4 +1,5 @@
 #include "preferencesdialog.h"
+#include "Language.h"
 #include "Theme.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
@@ -24,13 +25,34 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
 
     m_uiTheme = new QComboBox;
     m_uiTheme->setObjectName(QStringLiteral("preferencesUiTheme"));
-    m_uiTheme->addItem(tr("跟随系统 (默认)"), static_cast<int>(mviewer::ui::ThemeMode::System));
-    m_uiTheme->addItem(tr("深色模式"), static_cast<int>(mviewer::ui::ThemeMode::Dark));
-    m_uiTheme->addItem(tr("浅色模式"), static_cast<int>(mviewer::ui::ThemeMode::Light));
-    m_uiTheme->setToolTip(tr("跟随系统会随 Windows「应用模式」的深色/浅色设置自动切换"));
+    m_uiTheme->addItem(tr("Follow system (default)"),
+                       static_cast<int>(mviewer::ui::ThemeMode::System));
+    m_uiTheme->addItem(tr("Dark mode"), static_cast<int>(mviewer::ui::ThemeMode::Dark));
+    m_uiTheme->addItem(tr("Light mode"), static_cast<int>(mviewer::ui::ThemeMode::Light));
+    m_uiTheme->setToolTip(tr(
+        "Follow system switches automatically with the Windows \"app mode\" dark/light setting"));
     m_uiTheme->setCurrentIndex(
         m_uiTheme->findData(static_cast<int>(mviewer::ui::Theme::currentTheme())));
-    gl->addRow(tr("界面主题"), m_uiTheme);
+    gl->addRow(tr("Interface theme"), m_uiTheme);
+
+    m_uiLanguage = new QComboBox;
+    m_uiLanguage->setObjectName(QStringLiteral("preferencesUiLanguage"));
+    m_uiLanguage->addItem(tr("Follow system (default)"),
+                          static_cast<int>(mviewer::ui::LanguageMode::System));
+    m_uiLanguage->addItem(QStringLiteral("English"),
+                          static_cast<int>(mviewer::ui::LanguageMode::English));
+    m_uiLanguage->addItem(QStringLiteral("简体中文"),
+                          static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
+    m_uiLanguage->setToolTip(tr("UI language. Applies immediately to newly opened windows; some "
+                                "open panels may need an app restart."));
+    {
+        QSettings langSettings;
+        const auto lang = mviewer::ui::Language::languageModeFromKey(
+            langSettings.value(QStringLiteral("uiLanguage"), QStringLiteral("system")).toString());
+        const int langIdx = m_uiLanguage->findData(static_cast<int>(lang));
+        m_uiLanguage->setCurrentIndex(langIdx >= 0 ? langIdx : 0);
+    }
+    gl->addRow(tr("UI language"), m_uiLanguage);
 
     m_viewMode = new QComboBox;
     struct VM
@@ -39,7 +61,7 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         ThumbnailPanel::ViewMode v;
     };
     static const VM kVM[] = {
-        {"缩略图", ThumbnailPanel::Thumbnail}, {"大图标", ThumbnailPanel::LargeIcon},
+        {"缩略图", ThumbnailPanel::Thumbnail}, {"Large icons", ThumbnailPanel::LargeIcon},
         {"小图标", ThumbnailPanel::SmallIcon}, {"详情", ThumbnailPanel::Details},
         {"胶片", ThumbnailPanel::Filmstrip},   {"紧凑", ThumbnailPanel::Compact},
         {"列表", ThumbnailPanel::List}};
@@ -48,7 +70,7 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     const int vmIdx = m_viewMode->findData(static_cast<int>(ThumbnailPanel::viewModeFromInt(
         s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt())));
     m_viewMode->setCurrentIndex(vmIdx >= 0 ? vmIdx : 0);
-    gl->addRow(tr("默认视图模式"), m_viewMode);
+    gl->addRow(tr("Default view mode"), m_viewMode);
 
     m_sortMode = new QComboBox;
     struct SM
@@ -57,49 +79,51 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         ThumbnailPanel::SortMode v;
     };
     static const SM kSM[] = {
-        {"文件名", ThumbnailPanel::SortName}, {"日期", ThumbnailPanel::SortDate},
-        {"大小", ThumbnailPanel::SortSize},   {"分辨率", ThumbnailPanel::SortResolution},
-        {"类型", ThumbnailPanel::SortType},   {"评分", ThumbnailPanel::SortRating},
-        {"相机", ThumbnailPanel::SortCamera}, {"镜头", ThumbnailPanel::SortLens}};
+        {"File Name", ThumbnailPanel::SortName}, {"Date", ThumbnailPanel::SortDate},
+        {"Size", ThumbnailPanel::SortSize},      {"Resolution", ThumbnailPanel::SortResolution},
+        {"Type", ThumbnailPanel::SortType},      {"Rating", ThumbnailPanel::SortRating},
+        {"Camera", ThumbnailPanel::SortCamera},  {"Lens", ThumbnailPanel::SortLens}};
     for (const auto &e : kSM)
         m_sortMode->addItem(tr(e.name), static_cast<int>(e.v));
     const int smIdx =
         m_sortMode->findData(s.value("thumbSortMode", ThumbnailPanel::SortName).toInt());
     m_sortMode->setCurrentIndex(smIdx >= 0 ? smIdx : 0);
-    gl->addRow(tr("默认排序"), m_sortMode);
+    gl->addRow(tr("Default sort"), m_sortMode);
 
     m_thumbSize = new QSpinBox;
     m_thumbSize->setRange(ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
     m_thumbSize->setValue(
         std::clamp(s.value("thumbSize", ThumbnailPanel::kDefaultThumbSize).toInt(),
                    ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize));
-    gl->addRow(tr("缩略图尺寸"), m_thumbSize);
+    gl->addRow(tr("Thumbnail size"), m_thumbSize);
 
     m_slideshowInterval = new QSpinBox;
     m_slideshowInterval->setRange(500, 30000);
     m_slideshowInterval->setSingleStep(500);
     m_slideshowInterval->setValue(
         std::clamp(s.value("slideshowInterval", 3000).toInt(), 500, 30000));
-    gl->addRow(tr("幻灯片间隔(ms)"), m_slideshowInterval);
+    gl->addRow(tr("Slideshow interval (ms)"), m_slideshowInterval);
 
-    m_slideshowWrap = new QCheckBox(tr("幻灯片循环播放"));
+    m_slideshowWrap = new QCheckBox(tr("Loop slideshow"));
     m_slideshowWrap->setChecked(s.value("slideshowWrap", true).toBool());
     gl->addRow(m_slideshowWrap);
 
-    m_confirmDelete = new QCheckBox(tr("删除前确认"));
+    m_confirmDelete = new QCheckBox(tr("Confirm before delete"));
     m_confirmDelete->setChecked(s.value("confirmDelete", true).toBool());
     gl->addRow(m_confirmDelete);
 
-    m_confirmModifyFile = new QCheckBox(tr("修改原文件前确认（旋转/翻转）"));
+    m_confirmModifyFile =
+        new QCheckBox(tr("Confirm before modifying the original file (rotate/flip)"));
     m_confirmModifyFile->setChecked(s.value("confirmModifyFile", true).toBool());
     gl->addRow(m_confirmModifyFile);
 
-    m_gpuAcceleration = new QCheckBox(tr("启用 GPU 硬件加速渲染"));
+    m_gpuAcceleration = new QCheckBox(tr("Enable GPU hardware-accelerated rendering"));
     m_gpuAcceleration->setChecked(s.value("gpuAcceleration", true).toBool());
     gl->addRow(m_gpuAcceleration);
 
-    m_colorManagement = new QCheckBox(tr("启用色彩管理 (CMS)"));
-    m_colorManagement->setToolTip(tr("启用时根据显示器 ICC 转换颜色；禁用时使用原生 RGB/sRGB"));
+    m_colorManagement = new QCheckBox(tr("Enable color management (CMS)"));
+    m_colorManagement->setToolTip(tr("When enabled, convert colors using the display ICC profile; "
+                                     "when disabled, use native RGB/sRGB"));
     m_colorManagement->setChecked(s.value("display/colorManagement", true).toBool());
     gl->addRow(m_colorManagement);
 
@@ -110,7 +134,8 @@ QWidget *PreferencesDialog::buildCompareTab(QSettings &s)
 {
     auto *compare = new QWidget;
     auto *cl = new QFormLayout(compare);
-    m_autoAlign = new QCheckBox(tr("对比前按整数像素平移自动对齐（消除平移错位）"));
+    m_autoAlign = new QCheckBox(tr("Auto-align by integer-pixel shift before comparison (eliminate "
+                                   "translation misalignment)"));
     m_autoAlign->setChecked(s.value("autoAlignBeforeDiff", false).toBool());
     cl->addRow(m_autoAlign);
     return compare;
@@ -121,16 +146,16 @@ QWidget *PreferencesDialog::buildAnalysisTab(QSettings &s)
     auto *analysis = new QWidget;
     auto *al = new QFormLayout(analysis);
     m_analysisOverlay = new QComboBox;
-    m_analysisOverlay->addItem(tr("无"), 0);
-    m_analysisOverlay->addItem(tr("过曝/欠曝斑马线"), 1);
-    m_analysisOverlay->addItem(tr("伪彩色"), 2);
-    m_analysisOverlay->addItem(tr("R 通道"), 3);
-    m_analysisOverlay->addItem(tr("G 通道"), 4);
-    m_analysisOverlay->addItem(tr("B 通道"), 5);
-    m_analysisOverlay->addItem(tr("Y 亮度"), 6);
+    m_analysisOverlay->addItem(tr("None"), 0);
+    m_analysisOverlay->addItem(tr("Over/underexposure zebra"), 1);
+    m_analysisOverlay->addItem(tr("False Color"), 2);
+    m_analysisOverlay->addItem(tr("R Channel"), 3);
+    m_analysisOverlay->addItem(tr("G Channel"), 4);
+    m_analysisOverlay->addItem(tr("B Channel"), 5);
+    m_analysisOverlay->addItem(tr("Y Luminance"), 6);
     const int ovIdx = m_analysisOverlay->findData(s.value("defaultAnalysisOverlay", 0).toInt());
     m_analysisOverlay->setCurrentIndex(ovIdx >= 0 ? ovIdx : 0);
-    al->addRow(tr("默认分析叠加层"), m_analysisOverlay);
+    al->addRow(tr("Default analysis overlay"), m_analysisOverlay);
 
     // F4 (M22): shared zebra threshold (1–40), persisted as "zebraThreshold".
     m_zebraThreshold = new QSlider(Qt::Horizontal);
@@ -144,7 +169,7 @@ QWidget *PreferencesDialog::buildAnalysisTab(QSettings &s)
     zbL->addWidget(zbVal);
     connect(m_zebraThreshold, &QSlider::valueChanged, zbVal,
             [zbVal](int v) { zbVal->setText(QString::number(v)); });
-    al->addRow(tr("斑马线阈值（1–40）"), zbBox);
+    al->addRow(tr("Zebra threshold (1–40)"), zbBox);
 
     return analysis;
 }
@@ -152,14 +177,14 @@ QWidget *PreferencesDialog::buildAnalysisTab(QSettings &s)
 // F1 (M22) Preferences dialog.
 PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
 {
-    setWindowTitle(tr("首选项"));
+    setWindowTitle(tr("Preferences"));
     resize(440, 380);
     QSettings s;
 
     auto *tabs = new QTabWidget(this);
-    tabs->addTab(buildGeneralTab(s), tr("常规"));
-    tabs->addTab(buildCompareTab(s), tr("对比"));
-    tabs->addTab(buildAnalysisTab(s), tr("分析"));
+    tabs->addTab(buildGeneralTab(s), tr("General"));
+    tabs->addTab(buildCompareTab(s), tr("Compare"));
+    tabs->addTab(buildAnalysisTab(s), tr("Analyze"));
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &PreferencesDialog::accept);
@@ -180,6 +205,13 @@ void PreferencesDialog::accept()
         const auto mode = static_cast<mviewer::ui::ThemeMode>(m_uiTheme->currentData().toInt());
         if (mode != mviewer::ui::Theme::currentTheme())
             mviewer::ui::Theme::applyTheme(mode);
+    }
+    if (m_uiLanguage)
+    {
+        const auto lang =
+            static_cast<mviewer::ui::LanguageMode>(m_uiLanguage->currentData().toInt());
+        if (lang != mviewer::ui::Language::current())
+            mviewer::ui::Language::apply(lang);
     }
     s.setValue("thumbViewMode", m_viewMode->currentData().toInt());
     s.setValue("thumbSortMode", m_sortMode->currentData().toInt());

@@ -350,7 +350,8 @@ void CompareWorkspace::buildOverlayControls(QHBoxLayout *lay)
         return;
     m_overlayChk = new QCheckBox(mviewer::cw::compareShortcutText("O"), this);
     m_overlayChk->setEnabled(false);
-    m_overlayChk->setToolTip(tr("仅 2 张图片时可用：半透明叠加对比（快捷键: O）"));
+    m_overlayChk->setToolTip(
+        tr("Available only with 2 images: semi-transparent overlay comparison (shortcut: O)"));
     connect(m_overlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -369,7 +370,7 @@ void CompareWorkspace::buildOverlayControls(QHBoxLayout *lay)
     m_overlayAlphaSlider->setValue(m_overlayAlpha);
     m_overlayAlphaSlider->setMaximumWidth(80);
     m_overlayAlphaSlider->setEnabled(false);
-    m_overlayAlphaSlider->setToolTip(tr("叠加不透明度（上层图片）"));
+    m_overlayAlphaSlider->setToolTip(tr("Overlay opacity (upper image)"));
     connect(m_overlayAlphaSlider, &QSlider::valueChanged, this,
             [this](int v)
             {
@@ -390,7 +391,8 @@ void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
         return;
     m_checkerChk = new QCheckBox(mviewer::cw::compareShortcutText("K"), this);
     m_checkerChk->setEnabled(false);
-    m_checkerChk->setToolTip(tr("棋盘格交替显示两张图像（快捷键 K），块大小可调"));
+    m_checkerChk->setToolTip(
+        tr("Checkerboard alternates two images (shortcut K); block size is adjustable"));
     connect(m_checkerChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -409,7 +411,7 @@ void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
     m_checkerSizeSlider->setValue(m_checkerSize);
     m_checkerSizeSlider->setFixedWidth(70);
     m_checkerSizeSlider->setEnabled(false);
-    m_checkerSizeSlider->setToolTip(tr("棋盘块边长（像素）"));
+    m_checkerSizeSlider->setToolTip(tr("Checkerboard block side length (pixels)"));
     connect(m_checkerSizeSlider, &QSlider::valueChanged, this,
             [this](int v)
             {

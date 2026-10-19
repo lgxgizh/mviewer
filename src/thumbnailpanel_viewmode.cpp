@@ -478,15 +478,15 @@ void DetailsHeader::paintEvent(QPaintEvent *)
             p.drawText(rect, flags, text);
     };
 
-    drawCol(L.name, QStringLiteral("名称"), ThumbnailPanel::SortName);
-    drawCol(L.res, QStringLiteral("分辨率"), ThumbnailPanel::SortResolution);
-    drawCol(L.size, QStringLiteral("大小"), ThumbnailPanel::SortSize);
-    drawCol(L.date, QStringLiteral("修改日期"), ThumbnailPanel::SortDate);
-    drawCol(L.fmt, QStringLiteral("格式"), ThumbnailPanel::SortType);
-    drawCol(L.rate, QStringLiteral("评分"), ThumbnailPanel::SortRating);
-    p.drawText(L.label, flags, QStringLiteral("标签"));
-    drawCol(L.camera, QStringLiteral("相机"), ThumbnailPanel::SortCamera);
-    drawCol(L.lens, QStringLiteral("镜头"), ThumbnailPanel::SortLens);
+    drawCol(L.name, QStringLiteral("Name"), ThumbnailPanel::SortName);
+    drawCol(L.res, QStringLiteral("Resolution"), ThumbnailPanel::SortResolution);
+    drawCol(L.size, QStringLiteral("Size"), ThumbnailPanel::SortSize);
+    drawCol(L.date, QStringLiteral("Date modified"), ThumbnailPanel::SortDate);
+    drawCol(L.fmt, QStringLiteral("Format"), ThumbnailPanel::SortType);
+    drawCol(L.rate, QStringLiteral("Rating"), ThumbnailPanel::SortRating);
+    p.drawText(L.label, flags, QStringLiteral("Label"));
+    drawCol(L.camera, QStringLiteral("Camera"), ThumbnailPanel::SortCamera);
+    drawCol(L.lens, QStringLiteral("Lens"), ThumbnailPanel::SortLens);
     p.drawText(L.iso, flags, QStringLiteral("ISO"));
 }
 

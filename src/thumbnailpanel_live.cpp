@@ -721,5 +721,5 @@ QString renameBlockedReason(const QString &directory, const QString &oldName,
     const QString newCanonical = destination.canonicalFilePath();
     if (!oldCanonical.isEmpty() && oldCanonical == newCanonical)
         return {};
-    return QStringLiteral("同名文件已存在。");
+    return QStringLiteral("A file with the same name already exists.");
 }

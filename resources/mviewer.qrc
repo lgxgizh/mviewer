@@ -3,6 +3,9 @@
     <qresource prefix="/app">
         <file>mviewer.png</file>
     </qresource>
+    <qresource prefix="/i18n">
+        <file alias="mviewer_zh_CN.qm">i18n/mviewer_zh_CN.qm</file>
+    </qresource>
     <qresource prefix="/theme">
         <file alias="dark.qss">theme/dark.qss</file>
         <file alias="check.png">theme/check.png</file>
