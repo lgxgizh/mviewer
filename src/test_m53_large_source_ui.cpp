@@ -207,16 +207,15 @@ int main(int argc, char **argv)
 
         // Exercise the same controls users use in Compare. Each mode is
         // presentation-only and must not trigger a fresh full-source decode.
-        for (const QString &label :
-             {QStringLiteral("Side-by-Side Split"), QStringLiteral("Overlay Compare"),
-              QStringLiteral("Flicker Compare"), QStringLiteral("Show Difference")})
+        for (const QString &label : {QStringLiteral("Split"), QStringLiteral("Overlay"),
+                                     QStringLiteral("Flicker"), QStringLiteral("Show Difference")})
         {
             QCheckBox *check = modeCheck(&workspace, label);
             CHECK(check != nullptr, "Compare exposes the requested large-source mode");
             if (check)
             {
                 check->setChecked(true);
-                pump(label == QStringLiteral("Flicker Compare") ? 220 : 50);
+                pump(label == QStringLiteral("Flicker") ? 220 : 50);
                 CHECK(check->isChecked(), "Compare mode remains enabled after activation");
                 check->setChecked(false);
                 pump(50);

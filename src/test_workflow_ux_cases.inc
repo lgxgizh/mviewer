@@ -2001,10 +2001,10 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(sel.compared().size() == 2, "SelectionModel.compared mirrors the compare set (SSOT)");
     CHECK(!sel.focused().isEmpty(), "a default focus/reference image is set");
 
-    QCheckBox *blink = findChk(ws, QStringLiteral("Flicker Compare"));
-    QCheckBox *split = findChk(ws, QStringLiteral("Side-by-Side Split"));
-    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe Compare"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay Compare"));
+    QCheckBox *blink = findChk(ws, QStringLiteral("Flicker"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Split"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay"));
     QCheckBox *checker = findChk(ws, QStringLiteral("Checkerboard"));
     QPushButton *analyzeButton =
         ws->findChild<QPushButton *>(QStringLiteral("analyzeCompareButton"));
@@ -2423,7 +2423,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     // Diff visualization and highlight are separate preferences, but turning
     // highlight on must make the result visible immediately. Exercise both the
     // keyboard path and the real checkbox path without relying on pixel colors.
-    QCheckBox *diffHl = findChk(ws, QStringLiteral("Highlight differences"));
+    QCheckBox *diffHl = findChk(ws, QStringLiteral("Highlight Diff"));
     QCheckBox *diffOverlay = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
     CHECK(diffHl != nullptr, "diff-highlight control is discoverable for the H shortcut");
     CHECK(diffOverlay != nullptr && !diffOverlay->isChecked() && diffHl && !diffHl->isChecked(),
@@ -4104,10 +4104,10 @@ void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
 
     QWidget *canvas = ws->findChild<QWidget *>("compareCanvas");
     QWidget *gridPage = ws->findChild<QWidget *>("compareGridPage");
-    QCheckBox *split = findChk(ws, QStringLiteral("Side-by-Side Split"));
-    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe Compare"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay Compare"));
-    QCheckBox *checker = findChk(ws, QStringLiteral("Checkerboard Compare"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Split"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay"));
+    QCheckBox *checker = findChk(ws, QStringLiteral("Checkerboard"));
     CHECK(canvas != nullptr, "canvas workflow: compare exposes the compareCanvas widget");
     if (!canvas || !split || !swipe || !overlay || !checker)
         return; // planned canvas contract is absent — the check above is the red gate
@@ -5581,10 +5581,8 @@ void assertCompareControlsReachable(const QString &pathA, const QString &pathB)
         const std::string msg = std::string("compare control still exists: ") + name;
         CHECK(ws->findChild<QObject *>(QLatin1String(name)) != nullptr, msg.c_str());
     }
-    CHECK(findChk(ws, QStringLiteral("Flicker Compare")) &&
-              findChk(ws, QStringLiteral("Side-by-Side Split")) &&
-              findChk(ws, QStringLiteral("Swipe Compare")) &&
-              findChk(ws, QStringLiteral("Overlay Compare")) &&
+    CHECK(findChk(ws, QStringLiteral("Flicker")) && findChk(ws, QStringLiteral("Split")) &&
+              findChk(ws, QStringLiteral("Swipe")) && findChk(ws, QStringLiteral("Overlay")) &&
               findChk(ws, QStringLiteral("Checkerboard")) &&
               findChk(ws, QStringLiteral("Sync Crosshair")) &&
               findChk(ws, QStringLiteral("Uniform Pixel Scale")),

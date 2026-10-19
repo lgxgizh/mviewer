@@ -375,10 +375,10 @@ int main(int argc, char **argv)
               resized.y + resized.height == fixedBottom,
           "corner resize preserves the opposite source-pixel corner");
 
-    QCheckBox *split = findCheckBox(workspace, QStringLiteral("Side-by-Side Split"));
-    QCheckBox *overlay = findCheckBox(workspace, QStringLiteral("Overlay Compare"));
-    QCheckBox *swipe = findCheckBox(workspace, QStringLiteral("Swipe Compare"));
-    QCheckBox *checker = findCheckBox(workspace, QStringLiteral("Checkerboard Compare"));
+    QCheckBox *split = findCheckBox(workspace, QStringLiteral("Split"));
+    QCheckBox *overlay = findCheckBox(workspace, QStringLiteral("Overlay"));
+    QCheckBox *swipe = findCheckBox(workspace, QStringLiteral("Swipe"));
+    QCheckBox *checker = findCheckBox(workspace, QStringLiteral("Checkerboard"));
     QWidget *canvas = workspace->findChild<QWidget *>("compareCanvas");
     CHECK(split && overlay && swipe && checker && canvas, "all Canvas modes and canvas exist");
     const QList<QCheckBox *> modes = {split, overlay, swipe, checker};

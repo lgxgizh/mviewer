@@ -86,7 +86,7 @@ QString compareShortcutName(const char *keys)
 
 QString compareModeStatus(const char *keys)
 {
-    return QString::fromUtf8("模式: ") + mviewer::cw::compareShortcutText(keys);
+    return QString::fromUtf8("Mode: ") + mviewer::cw::compareShortcutText(keys);
 }
 
 QString compareToggleStatus(const char *keys, bool on, const char *whenOn, const char *whenOff)
@@ -291,7 +291,7 @@ bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
     if (digit == 0)
     {
         setOverlayMode(mviewer::OverlayMode::None);
-        showCompareStatus(QString::fromUtf8("已重置为") + compareShortcutName("Shift+0"));
+        showCompareStatus(QString::fromUtf8("Reset to ") + compareShortcutName("Shift+0"));
         event->accept();
         return true;
     }
@@ -313,14 +313,14 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_Z && m_syncZoomChk)
     {
         m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
-        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_D && m_syncDragChk)
     {
         m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
-        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
@@ -328,21 +328,21 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_R && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
-        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_L && m_pixelLinkChk)
     {
         m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
-        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_I && m_sideChk)
     {
         m_sideChk->setChecked(!m_sideChk->isChecked());
-        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(), "展开", "收起"));
+        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(), "Shown", "Hidden"));
         event->accept();
         return true;
     }
@@ -697,7 +697,7 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
     if (alt && key == Qt::Key_R)
     {
         setSyncRotate(!m_syncRotate);
-        showCompareStatus(compareToggleStatus("Alt+R", m_syncRotate, "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("Alt+R", m_syncRotate, "On", "Off"));
         event->accept();
         return true;
     }

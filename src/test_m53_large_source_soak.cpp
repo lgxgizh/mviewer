@@ -147,7 +147,7 @@ int main(int argc, char **argv)
             workspace.show();
             workspace.setImages({tiff, tiff});
             CHECK(waitForPanes(&workspace, 2), "soak Compare materializes both TIFF panes");
-            if (QCheckBox *split = findMode(&workspace, QStringLiteral("Side-by-Side Split")))
+            if (QCheckBox *split = findMode(&workspace, QStringLiteral("Split")))
             {
                 split->setChecked(true);
                 pump(80);

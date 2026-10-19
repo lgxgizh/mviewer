@@ -17,8 +17,8 @@ void testMultiImageEntry(const QStringList &paths8)
     waitForCompareCount(ws, 4);
     CHECK(ws->comparedImageCount() == 4, "B#1: 4-image compare entry loads 4 images");
 
-    QCheckBox *split = findChk(ws, QStringLiteral("Side-by-Side Split"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay Compare"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Split"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay"));
     QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe"));
     CHECK(split && overlay, "B#8: split/overlay controls exist");
     if (split && overlay)
@@ -73,9 +73,9 @@ void testModePreservesState(const QString &a, const QString &b)
     ws->applyROI({40, 30, 200, 120});
     pump(30);
 
-    QCheckBox *blink = findChk(ws, QStringLiteral("Flicker Compare"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay Compare"));
-    QCheckBox *split = findChk(ws, QStringLiteral("Side-by-Side Split"));
+    QCheckBox *blink = findChk(ws, QStringLiteral("Flicker"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Split"));
     CHECK(blink && overlay && split, "B#4: blink/overlay/split controls present");
     if (!blink || !overlay || !split)
         return;
@@ -273,7 +273,7 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     auto *perPane = ws->findChild<QCheckBox *>("perPaneHistogramToggle");
     auto *overlay = ws->findChild<QCheckBox *>("paneHistogramOverlayToggle");
     auto *roi = ws->findChild<QCheckBox *>("roiHistogramToggle");
-    auto *blink = findChk(ws, QStringLiteral("Flicker Compare"));
+    auto *blink = findChk(ws, QStringLiteral("Flicker"));
     CHECK(perPane && overlay && roi && blink, "P1: histogram and blink controls are discoverable");
     if (!perPane || !overlay || !roi || !blink)
         return;
@@ -1208,7 +1208,7 @@ void testCanvasDoubleClickGestures(const QString &a, const QString &b)
     waitForCompareCount(ws, 2);
     pump(100);
 
-    auto *swipe = findChk(ws, QStringLiteral("Swipe Compare"));
+    auto *swipe = findChk(ws, QStringLiteral("Swipe"));
     CHECK(swipe && swipe->isEnabled(), "Canvas double-click: swipe mode is available");
     if (!swipe)
         return;
@@ -1353,7 +1353,7 @@ void testCompareShortcutHelpSnapshot(const QDir &dir, const QString &img0, const
     dlg.show();
     pump(30);
 
-    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe Compare"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe"));
     const mviewer::cw::CompareShortcut *swipeKeys = mviewer::cw::findCompareShortcut("W");
     QString swipeName;
     if (swipe)

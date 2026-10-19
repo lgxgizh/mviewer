@@ -670,7 +670,8 @@ void CompareWorkspace::updateLayoutStatus()
     if (!m_layoutStatusLabel)
         return;
     const auto layout = m_engine.layout();
-    m_layoutStatusLabel->setText(tr("%1 rows × %2 columns").arg(layout.rows).arg(layout.cols));
+    m_layoutStatusLabel->setText(
+        tr("%1 × %2", "compare grid rows × columns").arg(layout.rows).arg(layout.cols));
 }
 
 void CompareWorkspace::onSideToggled(bool on)

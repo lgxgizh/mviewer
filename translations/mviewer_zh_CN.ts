@@ -832,11 +832,6 @@
     </message>
     <message>
         <location filename="../src/compareworkspace_controls.cpp" line="353"/>
-        <source>Single column</source>
-        <translation>单列</translation>
-    </message>
-    <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="353"/>
         <source>2 columns</source>
         <translation>2 列</translation>
     </message>
@@ -846,19 +841,24 @@
         <translation>3 列</translation>
     </message>
     <message>
+        <location filename="../src/compareworkspace_controls.cpp" line="353"/>
+        <source>1 column</source>
+        <translation>单列</translation>
+    </message>
+    <message>
         <location filename="../src/compareworkspace_controls.cpp" line="354"/>
         <source>4 columns</source>
         <translation>4 列</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_controls.cpp" line="354"/>
-        <source>One row</source>
-        <translation>一行</translation>
+        <source>Custom</source>
+        <translation>自定义</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_controls.cpp" line="354"/>
-        <source>Custom</source>
-        <translation>自定义</translation>
+        <source>1 row</source>
+        <translation>单行</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_controls.cpp" line="361"/>
@@ -882,7 +882,7 @@
         <translation>锁定基准</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="734"/>
+        <location filename="../src/compareworkspace.cpp" line="735"/>
         <location filename="../src/compareworkspace_controls.cpp" line="421"/>
         <location filename="../src/compareworkspace_render_materialization.cpp" line="378"/>
         <source>Reference: —</source>
@@ -1703,12 +1703,13 @@ Return to Browse and select images.</source>
         <translation>张图片</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="673"/>
-        <source>%1 rows × %2 columns</source>
+        <location filename="../src/compareworkspace.cpp" line="674"/>
+        <source>%1 × %2</source>
+        <comment>compare grid rows × columns</comment>
         <translation>%1 行×%2 列</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="734"/>
+        <location filename="../src/compareworkspace.cpp" line="735"/>
         <source>Reference: %1</source>
         <translation>基准: %1</translation>
     </message>
@@ -2420,8 +2421,8 @@ ROI diff: %1%  Mean %2  Peak %3</source>
     </message>
     <message>
         <location filename="../src/mainwindow_export.cpp" line="321"/>
-        <location filename="../src/mainwindow_session.cpp" line="217"/>
-        <location filename="../src/mainwindow_session.cpp" line="430"/>
+        <location filename="../src/mainwindow_session.cpp" line="218"/>
+        <location filename="../src/mainwindow_session.cpp" line="434"/>
         <source>Please open an image directory first.</source>
         <translation>请先打开一个图片目录。</translation>
     </message>
@@ -3107,85 +3108,85 @@ Build: %2</source>
     </message>
     <message>
         <location filename="../src/mainwindow_session.cpp" line="217"/>
-        <location filename="../src/mainwindow_session.cpp" line="221"/>
-        <location filename="../src/mainwindow_session.cpp" line="283"/>
-        <location filename="../src/mainwindow_session.cpp" line="298"/>
+        <location filename="../src/mainwindow_session.cpp" line="222"/>
+        <location filename="../src/mainwindow_session.cpp" line="285"/>
+        <location filename="../src/mainwindow_session.cpp" line="300"/>
         <source>Save Workspace</source>
         <translation>保存工作区</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="221"/>
-        <location filename="../src/mainwindow_session.cpp" line="305"/>
+        <location filename="../src/mainwindow_session.cpp" line="223"/>
+        <location filename="../src/mainwindow_session.cpp" line="308"/>
         <source>MViewer Workspace (*.mvws)</source>
         <translation>MViewer 工作区 (*.mvws)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="288"/>
+        <location filename="../src/mainwindow_session.cpp" line="290"/>
         <source>Workspace saved: %1 (%2 images, %3 folders)</source>
         <translation>工作区已保存: %1 (%2 张图片, %3 个目录)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="298"/>
-        <location filename="../src/mainwindow_session.cpp" line="510"/>
+        <location filename="../src/mainwindow_session.cpp" line="301"/>
+        <location filename="../src/mainwindow_session.cpp" line="516"/>
         <source>The scheduler rejected the background save task.</source>
         <translation>后台保存任务被调度器拒绝。</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="305"/>
-        <location filename="../src/mainwindow_session.cpp" line="557"/>
-        <location filename="../src/mainwindow_session.cpp" line="570"/>
+        <location filename="../src/mainwindow_session.cpp" line="307"/>
+        <location filename="../src/mainwindow_session.cpp" line="563"/>
+        <location filename="../src/mainwindow_session.cpp" line="576"/>
         <source>Open Workspace</source>
         <translation>打开工作区</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="421"/>
+        <location filename="../src/mainwindow_session.cpp" line="424"/>
         <source>Workspace opened: %1 (%2 images, %3 folders)</source>
         <translation>工作区已打开: %1 (%2 张图片, %3 个目录)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="430"/>
-        <location filename="../src/mainwindow_session.cpp" line="434"/>
-        <location filename="../src/mainwindow_session.cpp" line="495"/>
-        <location filename="../src/mainwindow_session.cpp" line="510"/>
+        <location filename="../src/mainwindow_session.cpp" line="433"/>
+        <location filename="../src/mainwindow_session.cpp" line="438"/>
+        <location filename="../src/mainwindow_session.cpp" line="500"/>
+        <location filename="../src/mainwindow_session.cpp" line="515"/>
         <source>Save Project</source>
         <translation>保存项目</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="434"/>
-        <location filename="../src/mainwindow_session.cpp" line="517"/>
+        <location filename="../src/mainwindow_session.cpp" line="439"/>
+        <location filename="../src/mainwindow_session.cpp" line="523"/>
         <source>MViewer Project (*.mvproj)</source>
         <translation>MViewer 项目 (*.mvproj)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="500"/>
+        <location filename="../src/mainwindow_session.cpp" line="505"/>
         <source>Project saved: %1 (%2 images, %3 folders)</source>
         <translation>项目已保存: %1 (%2 张图片, %3 个目录)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="517"/>
-        <location filename="../src/mainwindow_session.cpp" line="607"/>
-        <location filename="../src/mainwindow_session.cpp" line="623"/>
+        <location filename="../src/mainwindow_session.cpp" line="522"/>
+        <location filename="../src/mainwindow_session.cpp" line="614"/>
+        <location filename="../src/mainwindow_session.cpp" line="630"/>
         <source>Open Project</source>
         <translation>打开项目</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="537"/>
+        <location filename="../src/mainwindow_session.cpp" line="543"/>
         <source>Opening workspace…</source>
         <translation>正在打开工作区…</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="559"/>
+        <location filename="../src/mainwindow_session.cpp" line="565"/>
         <source>Failed to open workspace: %1</source>
         <translation>打开工作区失败: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="570"/>
-        <location filename="../src/mainwindow_session.cpp" line="623"/>
+        <location filename="../src/mainwindow_session.cpp" line="577"/>
+        <location filename="../src/mainwindow_session.cpp" line="631"/>
         <source>The scheduler rejected the background open task.</source>
         <translation>后台打开任务被调度器拒绝。</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_session.cpp" line="614"/>
+        <location filename="../src/mainwindow_session.cpp" line="621"/>
         <source>Project opened: %1 (%2 images, %3 folders)</source>
         <translation>项目已打开: %1 (%2 张图片, %3 个目录)</translation>
     </message>
@@ -3750,72 +3751,72 @@ Build: %2</source>
         <translation>启用时根据显示器 ICC 转换颜色；禁用时使用原生 RGB/sRGB</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="138"/>
+        <location filename="../src/preferencesdialog.cpp" line="137"/>
         <source>Auto-align by integer-pixel shift before comparison (eliminate translation misalignment)</source>
         <translation>比较前按整数像素平移自动对齐（消除平移错位）</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="150"/>
+        <location filename="../src/preferencesdialog.cpp" line="149"/>
         <source>None</source>
         <translation>无</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="151"/>
+        <location filename="../src/preferencesdialog.cpp" line="150"/>
         <source>Over/underexposure zebra</source>
         <translation>过曝/欠曝斑马线</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="152"/>
+        <location filename="../src/preferencesdialog.cpp" line="151"/>
         <source>False Color</source>
         <translation>伪彩色</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="153"/>
+        <location filename="../src/preferencesdialog.cpp" line="152"/>
         <source>R Channel</source>
         <translation>R 通道</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="154"/>
+        <location filename="../src/preferencesdialog.cpp" line="153"/>
         <source>G Channel</source>
         <translation>G 通道</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="155"/>
+        <location filename="../src/preferencesdialog.cpp" line="154"/>
         <source>B Channel</source>
         <translation>B 通道</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="156"/>
+        <location filename="../src/preferencesdialog.cpp" line="155"/>
         <source>Y Luminance</source>
         <translation>Y 亮度</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="159"/>
+        <location filename="../src/preferencesdialog.cpp" line="158"/>
         <source>Default analysis overlay</source>
         <translation>默认分析叠加层</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="173"/>
+        <location filename="../src/preferencesdialog.cpp" line="172"/>
         <source>Zebra threshold (1–40)</source>
         <translation>斑马线阈值（1–40）</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="181"/>
+        <location filename="../src/preferencesdialog.cpp" line="180"/>
         <source>Preferences</source>
         <translation>首选项</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="186"/>
+        <location filename="../src/preferencesdialog.cpp" line="185"/>
         <source>General</source>
         <translation>通用</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="187"/>
+        <location filename="../src/preferencesdialog.cpp" line="186"/>
         <source>Compare</source>
         <translation>比较</translation>
     </message>
     <message>
-        <location filename="../src/preferencesdialog.cpp" line="188"/>
+        <location filename="../src/preferencesdialog.cpp" line="187"/>
         <source>Analyze</source>
         <translation>分析</translation>
     </message>

@@ -17,24 +17,23 @@ struct CompareShortcut
 };
 
 // Every key handled by CompareWorkspace::keyPressEvent / keyReleaseEvent.
-// W is Swipe Compare. The same action name is reused when several chords share an action.
+// W is Swipe. The same action name is reused when several chords share an action.
 inline constexpr CompareShortcut kCompareShortcuts[] = {
-    {"Space", "Temporary Swap",
+    {"Space", "Peek",
      "With two images, hold to temporarily show the other side under the cursor; release to "
      "restore"},
-    {"Esc", "Exit Compare",
-     "Clears the selection first if one exists; restores images while Temporary Swap is active"},
+    {"Esc", "Exit",
+     "Clears the selection first if one exists; restores images while Peek is active"},
     {"Alt+Arrow", "Nudge ROI", "Move the current selection by 1 pixel"},
     {"Shift+Arrow", "Nudge ROI", "Move the current selection by 10 pixels"},
     {"Ctrl+Alt+Arrow", "Resize ROI", "Grow or shrink the selection with the arrow keys"},
-    {"B", "Flicker Compare", "Rapidly blink between two images"},
-    {"S", "Side-by-Side Split", "Split comparison side by side"},
-    {"W", "Swipe Compare", "Swipe along a divider to compare"},
-    {"O", "Overlay Compare", "Semi-transparent overlay; Tab toggles the same mode"},
-    {"Tab", "Overlay Compare", "Same as O"},
-    {"K", "Checkerboard Compare", "Checkerboard alternation between two images"},
-    {"H", "Highlight differences",
-     "Highlight differing regions in red; similar regions in grayscale"},
+    {"B", "Flicker", "Rapidly blink between two images"},
+    {"S", "Split", "Split comparison side by side"},
+    {"W", "Swipe", "Swipe along a divider to compare"},
+    {"O", "Overlay", "Semi-transparent overlay; Tab toggles the same mode"},
+    {"Tab", "Overlay", "Same as O"},
+    {"K", "Checkerboard", "Checkerboard alternation between two images"},
+    {"H", "Highlight Diff", "Highlight differing regions in red; similar regions in grayscale"},
     {"Shift+0", "All Color Channels", "Restore full RGB"},
     {"Shift+1", "All Color Channels", "Same as Shift+0 — show RGB"},
     {"Shift+2", "R Channel", "Show the red channel only"},
@@ -46,7 +45,7 @@ inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"D", "Synchronized drag", "Synchronize panning across all panes"},
     {"R", "Sync Crosshair", "Show a crosshair at the same image coordinates in every pane"},
     {"L", "Pixel Link", "Click to add marker points and compare RGB"},
-    {"I", "Inspector Panel", "Show or hide the analysis side panel"},
+    {"I", "Inspector", "Show or hide the analysis side panel"},
     {"F", "Fit window",
      "Fit to the window; whether scale is shared is controlled by Uniform Pixel Scale"},
     {"0", "Fit window", "Same as F"},

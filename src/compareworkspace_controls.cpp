@@ -350,8 +350,8 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     auto *layoutLabel = new QLabel(tr("Layout:"), this);
     viewLayout->addWidget(layoutLabel);
     m_layoutCombo = new QComboBox(this);
-    m_layoutCombo->addItems({tr("Auto"), tr("Single column"), tr("2 columns"), tr("3 columns"),
-                             tr("4 columns"), tr("One row"), tr("Custom")});
+    m_layoutCombo->addItems({tr("Auto"), tr("1 column"), tr("2 columns"), tr("3 columns"),
+                             tr("4 columns"), tr("1 row"), tr("Custom")});
     m_layoutCombo->setCurrentIndex(0);
     connect(m_layoutCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &CompareWorkspace::onLayoutChanged);
