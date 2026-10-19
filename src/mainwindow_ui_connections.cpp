@@ -3,6 +3,8 @@
 
 #include <QDateTime>
 
+#include <vector>
+
 void MainWindow::connectUiSignals()
 {
     connectNavigationSignals();
@@ -33,8 +35,8 @@ void MainWindow::connectNavigationSignals()
             [this](const mviewer::core::DirectoryDelta &delta)
             {
                 QStringList sidecarImages;
-                const auto *lists[] = {&delta.sidecarAdded, &delta.sidecarModified,
-                                       &delta.sidecarRemoved};
+                const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
+                    &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
                 for (const auto *list : lists)
                 {
                     for (const auto &entry : *list)
