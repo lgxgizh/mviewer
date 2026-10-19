@@ -26,17 +26,20 @@ static void testBatchGuardsAndDialog(const QString &p1)
         const auto tooWide =
             exportFile(writeBytes(dir + QStringLiteral("/huge.png"), pngClaim(wide)), hugeOut,
                        "x_{name}", false);
-        CHECK(tooWide.errorMessage == "Image too large (20000x8); batch processing is not supported",
+        CHECK(tooWide.errorMessage ==
+                  "Image too large (20000x8); batch processing is not supported",
               "an image wider than 16384 reports Image too large");
         const auto tooHeavy =
             exportFile(writeBytes(dir + QStringLiteral("/heavy.png"), pngClaim(heavy)), hugeOut,
                        "y_{name}", false);
-        CHECK(tooHeavy.errorMessage == "Image too large (9000x9000); batch processing is not supported",
+        CHECK(tooHeavy.errorMessage ==
+                  "Image too large (9000x9000); batch processing is not supported",
               "an image over 256MB reports Image too large");
         const auto undecoded =
             exportFile(writeBytes(dir + QStringLiteral("/junk.png"), QByteArray("not a png")),
                        hugeOut, "z_{name}", false);
-        CHECK(undecoded.errorMessage == "Unable to decode image", "undecodable image reports Unable to decode image");
+        CHECK(undecoded.errorMessage == "Unable to decode image",
+              "undecodable image reports Unable to decode image");
         QDir(dir).removeRecursively();
     }
 
