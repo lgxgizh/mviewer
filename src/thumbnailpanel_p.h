@@ -19,6 +19,8 @@
 
 #include "thumbnailpanel.h"
 
+#include "naturalnameorder.h"
+
 #include "core/RatingStore.h"
 #include "core/analysis/ExportReport.h"
 #include "core/analyzer/Analyzer.h"
@@ -266,8 +268,6 @@ namespace mviewer::core
 struct ImageSortKey;
 }
 
-// Natural name order (img2 before img10). Text chunks stay case-insensitive.
-int compareNaturalName(QStringView left, QStringView right);
 // Primary key follows `ascending`. Equal keys stay name-then-path, A→Z.
 bool browseOrderedLess(int primary, QStringView nameA, QStringView nameB, const QString &pathA,
                        const QString &pathB, bool ascending);

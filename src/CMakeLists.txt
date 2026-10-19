@@ -199,6 +199,7 @@ add_library(mviewer_ui STATIC
     metadataoverlay.cpp
     thumbnailpanel.cpp
     thumbnailpanel_live.cpp
+    naturalnameorder.cpp
     thumbnailpanel_async.cpp
     thumbnailpanel_scan_guard.cpp
     thumbnailpanel_selection.cpp
@@ -417,6 +418,7 @@ target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 # M19: UI models (Selection / Directory / ImageList / Workspace / Analyzer) headless unit test.
 add_executable(test_ui_models
     test_ui_models.cpp
+    naturalnameorder.cpp
     runtime_storage.cpp
     selectionmodel.cpp
     directorymodel.cpp
