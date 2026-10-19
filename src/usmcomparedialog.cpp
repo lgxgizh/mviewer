@@ -1,5 +1,6 @@
 #include "usmcomparedialog.h"
 
+#include "compareworkspace_temporary.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/Encoder.h"
 #include "core/image/QtConvert.h"
@@ -11,6 +12,7 @@
 #include <QClipboard>
 #include <QColorSpace>
 #include <QComboBox>
+#include <QCursor>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -70,6 +72,11 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
     setupUi();
     setupConnections();
     loadImageSource(filePath, initialData);
+
+    // Prefer maximized over exclusive fullscreen: USM keeps the parameter strip
+    // and status bar usable. Compare Mode uses a dedicated fullscreen host without
+    // those controls.
+    setWindowState(windowState() | Qt::WindowMaximized);
 
     if (!m_sourceData.isNull())
         scheduleSharpen();
@@ -158,7 +165,10 @@ QWidget *UsmCompareDialog::createTopToolBar()
     m_btn200 = new QPushButton(tr("200% (2)"), bar);
     m_syncCheck = new QCheckBox(tr("Synchronize zoom/pan"), bar);
     m_syncCheck->setChecked(true);
-    m_btnHoldCompare = new QPushButton(tr("Hold to View Original (Space)"), bar);
+    m_btnHoldCompare = new QPushButton(tr("Hold to compare other side (Space)"), bar);
+    m_btnHoldCompare->setToolTip(
+        tr("While holding Space, the side under the mouse temporarily shows the other side's "
+           "image; release to restore."));
     m_btnCopy = new QPushButton(tr("Copy result (Ctrl+C)"), bar);
     m_btnSave = new QPushButton(tr("Save As... (Ctrl+S)"), bar);
 
@@ -306,15 +316,8 @@ void UsmCompareDialog::setupConnections()
     connect(m_comboPreset, qOverload<int>(&QComboBox::currentIndexChanged), this,
             &UsmCompareDialog::onPresetSelected);
 
-    connect(m_btnHoldCompare, &QPushButton::pressed, this,
-            [this]()
-            {
-                if (!m_origQImage.isNull())
-                    m_rightView->setTransientDisplay(m_origQImage, m_origQImage.size(),
-                                                     m_origQImage.rect());
-            });
-    connect(m_btnHoldCompare, &QPushButton::released, this,
-            [this]() { m_rightView->clearTransientDisplay(); });
+    connect(m_btnHoldCompare, &QPushButton::pressed, this, &UsmCompareDialog::beginTemporaryHold);
+    connect(m_btnHoldCompare, &QPushButton::released, this, &UsmCompareDialog::endTemporaryHold);
 
     connect(m_leftView, &RawImageView::transformChanged, this,
             [this]() { syncTransforms(m_leftView, m_rightView); });
@@ -551,15 +554,73 @@ void UsmCompareDialog::syncTransforms(RawImageView *source, RawImageView *target
     m_syncing = false;
 }
 
+int UsmCompareDialog::paneIndexAtGlobalPos(const QPoint &globalPos) const
+{
+    if (m_leftView && m_leftView->isVisible() &&
+        m_leftView->rect().contains(m_leftView->mapFromGlobal(globalPos)))
+        return 0;
+    if (m_rightView && m_rightView->isVisible() &&
+        m_rightView->rect().contains(m_rightView->mapFromGlobal(globalPos)))
+        return 1;
+    return -1;
+}
+
+void UsmCompareDialog::applyTemporaryDisplay(RawImageView *target, RawImageView *source)
+{
+    if (!target || !source || source->displayImage().isNull() || !source->sourceSize().isValid())
+    {
+        if (m_lblCalcStatus)
+            m_lblCalcStatus->setText(tr("No image to switch to on this side yet"));
+        return;
+    }
+    if (m_temporaryHoldActive && m_temporaryTarget && m_temporaryTarget != target)
+        m_temporaryTarget->clearTransientDisplay();
+
+    // Match CompareWorkspace::applyTemporaryDisplay: replay the other side's
+    // presented scale + offset so the same local region stays under the viewport.
+    target->setTransientDisplay(source->displayImage(), source->sourceSize(), source->sourceRect(),
+                                source->presentedScale(), source->offset());
+    m_temporaryHoldActive = true;
+    m_temporaryTarget = target;
+    if (m_btnHoldCompare)
+        m_btnHoldCompare->setDown(true);
+}
+
+void UsmCompareDialog::beginTemporaryHold()
+{
+    const int hovered = paneIndexAtGlobalPos(QCursor::pos());
+    const auto decision = mviewer::ui::decidePairHold(2, hovered);
+    if (decision.action == mviewer::ui::TemporaryAction::HintMoveMouse)
+    {
+        if (m_lblCalcStatus)
+            m_lblCalcStatus->setText(tr("Move the mouse to one side, then hold Space"));
+        return;
+    }
+    if (decision.action != mviewer::ui::TemporaryAction::ShowPair)
+        return;
+
+    RawImageView *target = decision.targetPane == 0 ? m_leftView : m_rightView;
+    RawImageView *source = decision.sourcePane == 0 ? m_leftView : m_rightView;
+    applyTemporaryDisplay(target, source);
+}
+
+void UsmCompareDialog::endTemporaryHold()
+{
+    if (!m_temporaryHoldActive)
+        return;
+    if (m_temporaryTarget)
+        m_temporaryTarget->clearTransientDisplay();
+    m_temporaryHoldActive = false;
+    m_temporaryTarget = nullptr;
+    if (m_btnHoldCompare)
+        m_btnHoldCompare->setDown(false);
+}
+
 void UsmCompareDialog::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
     {
-        if (!m_origQImage.isNull())
-            m_rightView->setTransientDisplay(m_origQImage, m_origQImage.size(),
-                                             m_origQImage.rect());
-        if (m_btnHoldCompare)
-            m_btnHoldCompare->setDown(true);
+        beginTemporaryHold();
         event->accept();
         return;
     }
@@ -600,9 +661,7 @@ void UsmCompareDialog::keyReleaseEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
     {
-        m_rightView->clearTransientDisplay();
-        if (m_btnHoldCompare)
-            m_btnHoldCompare->setDown(false);
+        endTemporaryHold();
         event->accept();
         return;
     }

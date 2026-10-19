@@ -60,6 +60,12 @@ class UsmCompareDialog : public QDialog
     void updateStatusInfo(qint64 elapsedMs, const mviewer::core::UsmDiffSummary &summary);
     void loadImageSource(const QString &filePath, const ImageData &initialData);
 
+    // Momentary Space / hold-button compare (aligned with CompareWorkspace pair hold).
+    int paneIndexAtGlobalPos(const QPoint &globalPos) const;
+    void applyTemporaryDisplay(RawImageView *target, RawImageView *source);
+    void beginTemporaryHold();
+    void endTemporaryHold();
+
     QString m_filePath;
     ImageData m_sourceData;
     ImageData m_sharpenedData;
@@ -97,6 +103,8 @@ class UsmCompareDialog : public QDialog
     QTimer *m_debounceTimer = nullptr;
     bool m_syncing = false;
     bool m_updatingPreset = false;
+    bool m_temporaryHoldActive = false;
+    RawImageView *m_temporaryTarget = nullptr;
     uint64_t m_currentGen = 0;
     std::shared_ptr<std::atomic<bool>> m_currentCancel;
     TaskScheduler::TaskHandle m_activeTask;

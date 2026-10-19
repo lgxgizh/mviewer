@@ -16,6 +16,10 @@
   mips (`edge * 2 < wantEdge`) are rejected in `materializeSourceDisplay` so a
   thumb cannot satisfy a viewport LOD request.
 
+### Changed
+
+- **USM sharpen compare dialog**: opens maximized by default (not exclusive fullscreen, so the parameter strip and status bar stay usable). Space and the hold button now use the same mouse-aware pair-hold as normal Compare Mode: the pane under the cursor temporarily shows the other side (with matching presented scale/offset); off-pane Space keeps classic A←B via `decidePairHold`. Button label/tooltip updated accordingly.
+
 ## [1.0.139] - 2026-10-19
 
 ### Release
