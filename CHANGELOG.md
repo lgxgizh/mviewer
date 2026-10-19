@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Compare sticky low-res mosaic**: soft/warm first paint no longer claims full
+  source geometry for a Browse/Preview thumbnail (nearest-neighbour blit was
+  stretching ~640px thumbs into a pixel mosaic). `softLoading` stays set until
+  `applyDisplayBatchResult` lands a real display raster, so the cheap→upgrade
+  path cannot be skipped when a display batch is cancelled. Undersized cache
+  mips (`edge * 2 < wantEdge`) are rejected in `materializeSourceDisplay` so a
+  thumb cannot satisfy a viewport LOD request.
+
 ## [1.0.139] - 2026-10-19
 
 ### Release
