@@ -513,7 +513,7 @@ static void testCompareControllers()
     CompareLayout layout4 = CompareLayout::forCount(4);
     CHECK(layout4.cols == 2 && layout4.rows == 2, "Layout for 4 = 2x2");
     CompareLayout layout6 = CompareLayout::forCount(6);
-    CHECK(layout6.cols == 4 && layout6.rows == 2, "Layout for 6 = 4x2");
+    CHECK(layout6.cols == 3 && layout6.rows == 2, "Layout for 6 = 3x2");
 
     CellSize vp{800, 600};
     CellPoint p0 = layout.cellPos(0, vp);

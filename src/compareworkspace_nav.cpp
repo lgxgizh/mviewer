@@ -374,7 +374,7 @@ void CompareWorkspace::applyLayoutPreset(int n)
         return;
     // Columns before setImages so finishLoad (in-place or rebuild) sees the
     // preset grid; avoid a redundant rebuildCells on the still-old frames.
-    const int cols = (n <= 1) ? 1 : (n == 2) ? 2 : (n == 3) ? 3 : (n == 4) ? 2 : (n <= 6) ? 3 : 4;
+    const int cols = CompareLayout::forCount(n).cols;
     m_engine.setColumns(cols);
     if (m_layoutCombo)
     {

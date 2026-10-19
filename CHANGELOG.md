@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Compare auto grid wastes fewer cells**: the Auto layout now uses `rows = floor(sqrt(n))`, `cols = ceil(n / rows)` (`CompareLayout::forCount`). 5 or 6 images get 2×3 instead of 2×4 with empty cells; 2 → 1×2, 3 → 1×3, 4 → 2×2, 7/8 → 2×4, 9 → 3×3. The Ctrl+2/4/8 pane presets use the same rule.
+- **Compare panes are ordered by file name**: images opened into Compare are now sorted in natural, case-insensitive file-name order (img2 before img10), the same comparator as the gallery's Name sort (moved to `naturalnameorder.{h,cpp}`). Previously panes followed the raw selection order (Ctrl/Shift/rubber-band pick order). Restored compare sessions keep their saved pane order.
+
 ### Fixed
 
 - **Release notes are no longer empty**: `scripts/release_manifest.ps1` now selects the exact `## [x.y.z]` section from CHANGELOG matching the tag version, instead of taking the first heading in the file (usually the empty `## [Unreleased]`). Formal releases (`-Strict`) fail immediately if a non-empty section for that version cannot be found, so empty notes are no longer published. Removed the "Auto-generated from CHANGELOG.md on <build date>" line (the version date is already in the section heading) and switched to BOM-less UTF-8 output so GitHub notes no longer start with a hidden character. `release_contract_tests` covers these behaviors.

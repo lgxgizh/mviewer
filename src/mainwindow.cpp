@@ -1,6 +1,7 @@
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
+#include "naturalnameorder.h"
 #include "runtime_storage.h"
 
 namespace
@@ -700,6 +701,12 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     // didn't pass an explicit list (e.g. the "Compare Mode" menu).
     if (imgs.isEmpty())
         imgs = resolveSelectedPaths(true);
+    // Default pane order is natural file-name order (img2 before img10), the
+    // same comparator as the gallery's Name sort. The raw selection order is
+    // whatever order Ctrl/Shift/rubber-band picks produced. A restored session
+    // keeps its saved order because per-pane state is stored by index.
+    if (sessionJson.isEmpty())
+        imgs = sortPathsByNaturalFileName(imgs);
     // Compare is a 2-8 image selection. Do not substitute the first 8 files
     // of the folder when the user has 0-1 images selected.
     if (imgs.size() > 8)
