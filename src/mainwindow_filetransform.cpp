@@ -73,8 +73,8 @@ class BatchFileProgress
             return;
         const QString label = kind == FileTransformKind::Rotate ? MainWindow::tr("Rotating…")
                                                                 : MainWindow::tr("Flipping…");
-        m_dialog =
-            std::make_unique<ShownProgressDialog>(label, QStringLiteral("Cancel"), 0, total, parent);
+        m_dialog = std::make_unique<ShownProgressDialog>(label, QStringLiteral("Cancel"), 0, total,
+                                                         parent);
         m_dialog->setObjectName(QStringLiteral("batchRotateFlipProgress"));
         m_dialog->setWindowModality(Qt::WindowModal);
         m_dialog->setAutoClose(false);
@@ -291,18 +291,22 @@ void showRotateSuccess(QStatusBar *bar, const QStringList &paths, const FileTran
 {
     if (batch.canceled)
     {
-        showStatus(
-            bar,
-            MainWindow::tr("Canceled: successfully rotated %1 / %2 images").arg(batch.successCount).arg(paths.size()),
-            3000);
+        showStatus(bar,
+                   MainWindow::tr("Canceled: successfully rotated %1 / %2 images")
+                       .arg(batch.successCount)
+                       .arg(paths.size()),
+                   3000);
         return;
     }
     const int norm = normalizedDegrees(degrees);
     if (paths.size() == 1)
-        showStatus(bar, MainWindow::tr("Rotated and overwrote the original file (%1°)").arg(norm), 2000);
+        showStatus(bar, MainWindow::tr("Rotated and overwrote the original file (%1°)").arg(norm),
+                   2000);
     else
         showStatus(bar,
-                   MainWindow::tr("Rotated %1 images and overwrote the original files (%2°)").arg(paths.size()).arg(norm),
+                   MainWindow::tr("Rotated %1 images and overwrote the original files (%2°)")
+                       .arg(paths.size())
+                       .arg(norm),
                    3000);
 }
 
@@ -312,15 +316,14 @@ void warnRotateFailures(QWidget *parent, const QStringList &paths, const FileTra
     if (paths.size() == 1)
     {
         QMessageBox::warning(parent, MainWindow::tr("Rotation failed"),
-                             MainWindow::tr("Unable to rotate image: %1
-%2")
+                             MainWindow::tr("Unable to rotate image: %1\n%2")
                                  .arg(batch.failedPaths.first(), batch.failedErrors.first()));
         return;
     }
-    const QString title = batch.canceled ? MainWindow::tr("Batch rotate canceled (including failures)")
-                                         : MainWindow::tr("Batch rotation complete (including failures)");
-    const QString msg = MainWindow::tr("Successfully rotated %1 images, %2 failed:
-%3")
+    const QString title = batch.canceled
+                              ? MainWindow::tr("Batch rotate canceled (including failures)")
+                              : MainWindow::tr("Batch rotation complete (including failures)");
+    const QString msg = MainWindow::tr("Successfully rotated %1 images, %2 failed:\n%3")
                             .arg(batch.successCount)
                             .arg(batch.failedPaths.size())
                             .arg(lines.join(QStringLiteral("\n")));
@@ -364,24 +367,30 @@ void showFlipSuccess(QStatusBar *bar, const QStringList &paths, const FileTransf
 {
     if (batch.canceled)
     {
-        showStatus(
-            bar,
-            MainWindow::tr("Cancelled: successfully flipped %1 / %2").arg(batch.successCount).arg(paths.size()),
-            3000);
+        showStatus(bar,
+                   MainWindow::tr("Cancelled: successfully flipped %1 / %2")
+                       .arg(batch.successCount)
+                       .arg(paths.size()),
+                   3000);
         return;
     }
     if (paths.size() == 1)
     {
         showStatus(bar,
-                   horizontal ? MainWindow::tr("Flipped horizontally and overwrote the original file")
-                              : MainWindow::tr("Flipped vertically and overwrote the original file"),
+                   horizontal
+                       ? MainWindow::tr("Flipped horizontally and overwrote the original file")
+                       : MainWindow::tr("Flipped vertically and overwrote the original file"),
                    2000);
         return;
     }
-    showStatus(bar,
-               horizontal ? MainWindow::tr("Horizontally flipped %1 images and overwrote the original files").arg(paths.size())
-                          : MainWindow::tr("Vertically flipped %1 images and overwrote the original files").arg(paths.size()),
-               3000);
+    showStatus(
+        bar,
+        horizontal
+            ? MainWindow::tr("Horizontally flipped %1 images and overwrote the original files")
+                  .arg(paths.size())
+            : MainWindow::tr("Vertically flipped %1 images and overwrote the original files")
+                  .arg(paths.size()),
+        3000);
 }
 
 void warnFlipFailures(QWidget *parent, const QStringList &paths, const FileTransformBatch &batch)
@@ -390,15 +399,14 @@ void warnFlipFailures(QWidget *parent, const QStringList &paths, const FileTrans
     if (paths.size() == 1)
     {
         QMessageBox::warning(parent, MainWindow::tr("Flip failed"),
-                             MainWindow::tr("Unable to flip image: %1
-%2")
+                             MainWindow::tr("Unable to flip image: %1\n%2")
                                  .arg(batch.failedPaths.first(), batch.failedErrors.first()));
         return;
     }
-    const QString title = batch.canceled ? MainWindow::tr("Batch flip canceled (including failures)")
-                                         : MainWindow::tr("Batch flip complete (including failures)");
-    const QString msg = MainWindow::tr("Successfully flipped %1 images, %2 failed:
-%3")
+    const QString title = batch.canceled
+                              ? MainWindow::tr("Batch flip canceled (including failures)")
+                              : MainWindow::tr("Batch flip complete (including failures)");
+    const QString msg = MainWindow::tr("Successfully flipped %1 images, %2 failed:\n%3")
                             .arg(batch.successCount)
                             .arg(batch.failedPaths.size())
                             .arg(lines.join(QStringLiteral("\n")));
@@ -445,17 +453,16 @@ bool confirmTransform(QWidget *parent, const QStringList &paths, FileTransformKi
 
     const bool rotate = (kind == FileTransformKind::Rotate);
     const QString prompt =
-        paths.size() == 1
-            ? (rotate ? MainWindow::tr("Rotation will directly modify and overwrite the original image file.
-Continue?")
-                      : MainWindow::tr("Flipping will directly modify and overwrite the original image file.
-Continue?"))
-            : (rotate ? MainWindow::tr("Rotation will directly modify and overwrite the %1 selected image files.
-Continue?")
-                            .arg(paths.size())
-                      : MainWindow::tr("Flipping will directly modify and overwrite the selected %1 image files.
-Continue?")
-                            .arg(paths.size()));
+        paths.size() == 1 ? (rotate ? MainWindow::tr("Rotation will directly modify and overwrite "
+                                                     "the original image file.\nContinue?")
+                                    : MainWindow::tr("Flipping will directly modify and overwrite "
+                                                     "the original image file.\nContinue?"))
+                          : (rotate ? MainWindow::tr("Rotation will directly modify and overwrite "
+                                                     "the %1 selected image files.\nContinue?")
+                                          .arg(paths.size())
+                                    : MainWindow::tr("Flipping will directly modify and overwrite "
+                                                     "the selected %1 image files.\nContinue?")
+                                          .arg(paths.size()));
 
     QMessageBox box(parent);
     box.setIcon(QMessageBox::Question);

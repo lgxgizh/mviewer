@@ -170,12 +170,14 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
     m_actRotateCW = new QAction(tr("Rotate 90° Clockwise (&R)"), this);
     m_actRotateCW->setObjectName("rotateCWAction");
     m_actRotateCW->setShortcut(QKeySequence("Ctrl+R"));
-    m_actRotateCW->setToolTip(actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
+    m_actRotateCW->setToolTip(
+        actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
     m_actRotateCW->setEnabled(false);
     m_actRotateCCW = new QAction(tr("Rotate 90° Counterclockwise(&L)"), this);
     m_actRotateCCW->setObjectName("rotateCCWAction");
     m_actRotateCCW->setShortcut(QKeySequence("Ctrl+Shift+R"));
-    m_actRotateCCW->setToolTip(actTip(tr("Rotate 90° counterclockwise and overwrite original file"), m_actRotateCCW));
+    m_actRotateCCW->setToolTip(
+        actTip(tr("Rotate 90° counterclockwise and overwrite original file"), m_actRotateCCW));
     m_actRotateCCW->setEnabled(false);
     editMenu->addAction(m_actRotateCW);
     editMenu->addAction(m_actRotateCCW);
@@ -248,7 +250,8 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actBrowseWorkspace->setObjectName("browseWorkspaceAction");
     m_actBrowseWorkspace->setCheckable(true);
     m_actBrowseWorkspace->setChecked(true);
-    m_actBrowseWorkspace->setToolTip(tr("Hide analysis and search panels, keep folder and preview navigation"));
+    m_actBrowseWorkspace->setToolTip(
+        tr("Hide analysis and search panels, keep folder and preview navigation"));
     viewMenu->addAction(m_actBrowseWorkspace);
     m_actToggleMetadata = new QAction("图片信息(&I)", this);
     m_actToggleMetadata->setObjectName("toggleMetadataAction"); // stable test discovery
@@ -297,7 +300,8 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actColorManagement->setCheckable(true);
     m_actColorManagement->setChecked(DisplayColorContextProvider::isColorManagementEnabled());
     m_actColorManagement->setToolTip(
-        tr("When enabled, convert colors using the display ICC profile; when disabled, use native RGB/sRGB (matches FastStone)"));
+        tr("When enabled, convert colors using the display ICC profile; when disabled, use native "
+           "RGB/sRGB (matches FastStone)"));
     viewMenu->addAction(m_actColorManagement);
     connect(m_actColorManagement, &QAction::toggled, this,
             [this](bool on)
@@ -353,7 +357,8 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     toolsMenu->addSeparator();
     // M21: Memory Timeline snapshot (status bar + optional CSV dump).
     auto *actMemTimeline = new QAction("内存时间线(&M)...", this);
-    actMemTimeline->setToolTip(tr("Sample the MemoryTracker timeline and show peak/recent samples"));
+    actMemTimeline->setToolTip(
+        tr("Sample the MemoryTracker timeline and show peak/recent samples"));
     connect(actMemTimeline, &QAction::triggered, this,
             [this]()
             {

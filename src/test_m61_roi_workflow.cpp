@@ -480,9 +480,10 @@ int main(int argc, char **argv)
             sendRightDrag(unequalA, unequalA->sourcePointToWidget(QPointF(5, 5)).toPoint(),
                           unequalA->sourcePointToWidget(QPointF(30, 25)).toPoint());
             QLabel *unequalStatus = unequal->findChild<QLabel *>("roiStatusLabel");
-            CHECK(unequalB->selection().isEmpty() && unequalStatus &&
-                      unequalStatus->text().contains(QStringLiteral("Image dimensions do not match")),
-                  "unequal dimensions never fabricate linked measurement");
+            CHECK(
+                unequalB->selection().isEmpty() && unequalStatus &&
+                    unequalStatus->text().contains(QStringLiteral("Image dimensions do not match")),
+                "unequal dimensions never fabricate linked measurement");
             const auto beforeNudge = unequalA->selection();
             CHECK(!beforeNudge.isEmpty(), "unequal pane 0 keeps its own ROI");
             QKeyEvent unequalAltRight(QEvent::KeyPress, Qt::Key_Right, Qt::AltModifier);
@@ -558,10 +559,10 @@ int main(int argc, char **argv)
                       pane1->selection().width == pane0->selection().width &&
                       pane1->selection().height == pane0->selection().height,
                   "synchronized ROI geometry matches display selection");
-            CHECK(
-                statusLabel &&
-                    waitFor([&]() { return statusLabel->text().contains(QStringLiteral("Ready")); }),
-                "rotated pane ROI measurement reaches Ready state");
+            CHECK(statusLabel &&
+                      waitFor([&]()
+                              { return statusLabel->text().contains(QStringLiteral("Ready")); }),
+                  "rotated pane ROI measurement reaches Ready state");
             QTableWidget *measurementTable =
                 mismatch->findChild<QTableWidget *>("roiMeasurementTable");
             CHECK(measurementTable && waitFor([&]() { return measurementTable->rowCount() == 2; }),

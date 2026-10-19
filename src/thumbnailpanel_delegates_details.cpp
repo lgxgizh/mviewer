@@ -68,7 +68,8 @@ void drawDetailsLabel(QPainter *painter, const QRect &labelR, const QString &pat
                                                QColor(67, 160, 71),
                                                QColor(30, 136, 229),
                                                QColor(142, 36, 170)};
-        static const char *kLabelNames[7] = {"", "Red", "Orange", "Yellow", "Green", "Blue", "Purple"};
+        static const char *kLabelNames[7] = {"",      "Red",  "Orange", "Yellow",
+                                             "Green", "Blue", "Purple"};
         const QColor chip = kLabelColors[label];
         const int cs = 12;
         const QRect chipR(labelR.x(), labelR.y() + (labelR.height() - cs) / 2, cs, cs);

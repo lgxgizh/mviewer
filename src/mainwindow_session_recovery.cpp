@@ -44,8 +44,8 @@ void reportPersistFailures(QWidget *parent, const QStringList &failures)
         return;
     }
     QMessageBox::warning(parent, QStringLiteral("Settings not saved"),
-                         QStringLiteral("The following content could not be written to disk and may be lost on next startup:
-%1")
+                         QStringLiteral("The following content could not be written to disk and "
+                                        "may be lost on next startup:\n%1")
                              .arg(failures.join(QStringLiteral("、"))));
 }
 
@@ -392,10 +392,11 @@ void MainWindow::restoreSessionRecovery()
         return;
     if (qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
         return;
-    const auto answer = QMessageBox::question(
-        this, tr("Restore Last Session"), tr("The last session did not close normally.
-Restore the last viewed images and directory?"),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    const auto answer =
+        QMessageBox::question(this, tr("Restore Last Session"),
+                              tr("The last session did not close normally.\nRestore the last "
+                                 "viewed images and directory?"),
+                              QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
     if (answer != QMessageBox::Yes)
     {
         QFile::remove(recoveryPath);

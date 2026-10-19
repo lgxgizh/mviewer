@@ -113,7 +113,8 @@ void CompareWorkspace::beginTemporaryCompare()
     const auto decision = mviewer::ui::decidePairHold(m_engine.imageCount(), hovered);
     if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
     {
-        showCompareStatus(tr("With more than 2 images, hold number keys 1–N to switch temporarily"));
+        showCompareStatus(
+            tr("With more than 2 images, hold number keys 1–N to switch temporarily"));
         return;
     }
     if (decision.action == mviewer::ui::TemporaryAction::HintMoveMouse)
@@ -154,7 +155,8 @@ void CompareWorkspace::beginDigitTemporaryCompare(int digit)
         if (count < 1)
             showCompareStatus(tr("No images to switch"));
         else
-            showCompareStatus(tr("Currently %1 images; hold 1–%2 to switch temporarily").arg(count).arg(count));
+            showCompareStatus(
+                tr("Currently %1 images; hold 1–%2 to switch temporarily").arg(count).arg(count));
         return;
     }
     if (decision.action != mviewer::ui::TemporaryAction::ShowDigit)
@@ -231,9 +233,11 @@ void CompareWorkspace::refreshCompareControlTooltips()
            loading ? tr("Images are still loading; cannot swap yet")
                    : tr("At least 2 images are required to swap (shortcut X)"));
     setTip(m_analyzeBtn, tr("Open Comparison Inspection Panel"),
-           loading ? tr("Images are still loading; cannot analyze yet") : tr("No images available to analyze"));
+           loading ? tr("Images are still loading; cannot analyze yet")
+                   : tr("No images available to analyze"));
     setTip(m_exportReportBtn, tr("Export comparison results as an HTML/Markdown/JSON report"),
-           count < 2 ? tr("At least 2 images are required to export a report") : tr("Images are still loading; cannot export a report yet"));
+           count < 2 ? tr("At least 2 images are required to export a report")
+                     : tr("Images are still loading; cannot export a report yet"));
     if (m_clearLinksBtn)
         m_clearLinksBtn->setToolTip(clearLinkTooltip());
     updateTemporaryCompareAvailability();
@@ -247,15 +251,17 @@ QString CompareWorkspace::temporaryCompareTooltip() const
         m_cellViews[0]->sourceSize().isValid() && m_cellViews[1]->sourceSize().isValid();
     if (m_engine.imageCount() > 2)
     {
-        return tr("With more than 2 images, this button and Space are unavailable. Hold number keys 1–N "
-                  "在鼠标所在窗格临时显示第 N 张（不在窗格上则用当前窗格）；松开恢复。"
-                  "布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。");
+        return tr(
+            "With more than 2 images, this button and Space are unavailable. Hold number keys 1–N "
+            "在鼠标所在窗格临时显示第 N 张（不在窗格上则用当前窗格）；松开恢复。"
+            "布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。");
     }
     if (!imagesReady)
         return tr("Exactly 2 displayed images are required to hold and switch temporarily");
     if (temporaryHoldBlocked())
         return tr("Cannot temporarily switch while flicker is on");
-    return tr("While holding Space, the side under the mouse temporarily shows the other side's image; release to restore.");
+    return tr("While holding Space, the side under the mouse temporarily shows the other side's "
+              "image; release to restore.");
 }
 
 QString CompareWorkspace::clearLinkTooltip() const

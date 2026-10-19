@@ -396,7 +396,8 @@ void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool c
                         emit viewer->statusMessageRequested(
                             clipboardOk
                                 ? viewer->tr("Copied image to clipboard")
-                                : (detail.isEmpty() ? viewer->tr("Failed to copy to clipboard") : detail),
+                                : (detail.isEmpty() ? viewer->tr("Failed to copy to clipboard")
+                                                    : detail),
                             clipboardOk ? 2000 : 4000);
                     }
                     Q_UNUSED(destination);
@@ -521,8 +522,10 @@ void ImageViewer::zoomActual()
 void ImageViewer::setLockZoom(bool lock)
 {
     m_lockZoom = lock;
-    emit statusMessageRequested(lock ? tr("Zoom lock enabled (keep zoom ratio when switching images)") : tr("Zoom lock disabled"),
-                                2000);
+    emit statusMessageRequested(
+        lock ? tr("Zoom lock enabled (keep zoom ratio when switching images)")
+             : tr("Zoom lock disabled"),
+        2000);
 }
 
 void ImageViewer::computeHistogram()

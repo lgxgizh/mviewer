@@ -270,10 +270,10 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     bindMirror(sync->menu(), m_uniformScaleChk, "uniformScaleAction");
     syncButton = sync;
 
-    auto *adjust =
-        makePopup(viewBar, "compareAdjustButton", tr("Adjust"),
-                  tr("Brightness, contrast, gamma, gain, USM sharpening, rotation and flip (preview only, does not overwrite the original file);"
-                     "可导出此图调优结果"));
+    auto *adjust = makePopup(viewBar, "compareAdjustButton", tr("Adjust"),
+                             tr("Brightness, contrast, gamma, gain, USM sharpening, rotation and "
+                                "flip (preview only, does not overwrite the original file);"
+                                "可导出此图调优结果"));
     if (m_editPanel && adjust->menu())
     {
         lift(m_editPanel);
@@ -288,7 +288,8 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     adjustButton = adjust;
 
     auto *more = makePopup(toolBar, "compareMoreButton", tr("⋯ More"),
-                           tr("Save layout, load layout, align, lock reference, markers, and other comparison options"));
+                           tr("Save layout, load layout, align, lock reference, markers, and other "
+                              "comparison options"));
     auto *morePanel = new QWidget(more);
     auto *moreLay = new QVBoxLayout(morePanel);
     moreLay->setContentsMargins(8, 8, 8, 8);

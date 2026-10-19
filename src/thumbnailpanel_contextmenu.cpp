@@ -79,8 +79,9 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
 void ThumbnailPanel::addTagToSelected()
 {
     bool ok = false;
-    const QString tag = QInputDialog::getText(this, tr("Add tag"), tr("Add a tag to the selected images:"),
-                                              QLineEdit::Normal, QString(), &ok);
+    const QString tag =
+        QInputDialog::getText(this, tr("Add tag"), tr("Add a tag to the selected images:"),
+                              QLineEdit::Normal, QString(), &ok);
     if (ok && !tag.trimmed().isEmpty())
     {
         const std::string tagStd = tag.trimmed().toStdString();

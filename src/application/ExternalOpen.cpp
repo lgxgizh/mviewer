@@ -53,7 +53,8 @@ ExternalOpenTarget classifyExternalOpenTarget(const QString &rawPath)
     }
     if (!info.isFile())
     {
-        target.error = QStringLiteral("Open target is not a regular file or directory: %1").arg(rawPath);
+        target.error =
+            QStringLiteral("Open target is not a regular file or directory: %1").arg(rawPath);
         return target;
     }
 

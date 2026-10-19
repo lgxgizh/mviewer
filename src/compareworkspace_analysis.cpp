@@ -136,7 +136,8 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                     QApplication::clipboard()->setText(lines.join('\n'));
                 };
                 menu.addAction(QObject::tr("Copy all table data"), [=]() { copyFormatted(false); });
-                menu.addAction(QObject::tr("Copy as Markdown table"), [=]() { copyFormatted(true); });
+                menu.addAction(QObject::tr("Copy as Markdown table"),
+                               [=]() { copyFormatted(true); });
             }
             if (!menu.isEmpty())
                 menu.exec(inspector->viewport()->mapToGlobal(pos));
@@ -184,7 +185,8 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_kernelCombo->addItems({QStringLiteral("1×1"), QStringLiteral("3×3"), QStringLiteral("5×5"),
                              QStringLiteral("7×7")});
     m_kernelCombo->setCurrentIndex(1); // 3×3 by default
-    m_kernelCombo->setToolTip(tr("Neighborhood stats kernel size (base cell luminance mean/variance)"));
+    m_kernelCombo->setToolTip(
+        tr("Neighborhood stats kernel size (base cell luminance mean/variance)"));
     connect(m_kernelCombo, &QComboBox::currentIndexChanged, this,
             [this](int)
             {
@@ -259,7 +261,8 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
 
     m_roiHistChk = new QCheckBox(QStringLiteral("ROI"), this);
     m_roiHistChk->setObjectName("roiHistogramToggle");
-    m_roiHistChk->setToolTip(tr("Count only pixels inside the current ROI (box-select an ROI on the image first)"));
+    m_roiHistChk->setToolTip(
+        tr("Count only pixels inside the current ROI (box-select an ROI on the image first)"));
     connect(m_roiHistChk, &QCheckBox::toggled, this, [this](bool) { refreshHistograms(); });
     histOpts->addWidget(m_roiHistChk);
     histOpts->addStretch(1);
@@ -376,17 +379,17 @@ void CompareWorkspace::updateInspector(int x, int y)
                       : mviewer::core::NeighborhoodStats{};
         if (stats.count > 0)
         {
-            m_statsLabel->setText(
-                tr("Neighborhood %1×%1: luminance μ=%2 σ=%3 [%4, %5] · RGB mean (%6, %7, %8) · V mean %9")
-                    .arg(kernel)
-                    .arg(stats.mean, 0, 'f', 1)
-                    .arg(stats.stdDev, 0, 'f', 1)
-                    .arg(static_cast<int>(stats.min))
-                    .arg(static_cast<int>(stats.max))
-                    .arg(stats.rMean, 0, 'f', 1)
-                    .arg(stats.gMean, 0, 'f', 1)
-                    .arg(stats.bMean, 0, 'f', 1)
-                    .arg(stats.vMean, 0, 'f', 1));
+            m_statsLabel->setText(tr("Neighborhood %1×%1: luminance μ=%2 σ=%3 [%4, %5] · RGB mean "
+                                     "(%6, %7, %8) · V mean %9")
+                                      .arg(kernel)
+                                      .arg(stats.mean, 0, 'f', 1)
+                                      .arg(stats.stdDev, 0, 'f', 1)
+                                      .arg(static_cast<int>(stats.min))
+                                      .arg(static_cast<int>(stats.max))
+                                      .arg(stats.rMean, 0, 'f', 1)
+                                      .arg(stats.gMean, 0, 'f', 1)
+                                      .arg(stats.bMean, 0, 'f', 1)
+                                      .arg(stats.vMean, 0, 'f', 1));
         }
         else
             m_statsLabel->setText(tr("Neighborhood statistics: —"));
@@ -465,7 +468,8 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             {
                 delta = (space == ColorSpace::Lab) ? QString::number(dE76, 'f', 1)
                                                    : QString::number(dist, 'f', 0);
-                deltaTip = tr("Compared to baseline: ΔR=%1, ΔG=%2, ΔB=%3 (Euclidean distance: %4, ΔE76: %5)")
+                deltaTip = tr("Compared to baseline: ΔR=%1, ΔG=%2, ΔB=%3 (Euclidean distance: %4, "
+                              "ΔE76: %5)")
                                .arg(dr >= 0 ? QString("+%1").arg(dr) : QString::number(dr))
                                .arg(dg >= 0 ? QString("+%1").arg(dg) : QString::number(dg))
                                .arg(db >= 0 ? QString("+%1").arg(db) : QString::number(db))
@@ -510,7 +514,11 @@ QString CompareWorkspace::histogramTitleText(bool roiEnabled,
                                              const mviewer::domain::Selection &roi) const
 {
     if (roiEnabled && !roi.isEmpty())
-        return tr("Histogram (ROI %1,%2 %3×%4)").arg(roi.x).arg(roi.y).arg(roi.width).arg(roi.height);
+        return tr("Histogram (ROI %1,%2 %3×%4)")
+            .arg(roi.x)
+            .arg(roi.y)
+            .arg(roi.width)
+            .arg(roi.height);
     return tr("Histogram (full image)");
 }
 
@@ -778,7 +786,8 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
                         (100.0 * static_cast<double>(h.luma[0])) / static_cast<double>(h.total);
                     const double o =
                         (100.0 * static_cast<double>(h.luma[255])) / static_cast<double>(h.total);
-                    tipLines << tr("[%1] pixels %2 · shadows (Y=0): %3 (%4%) · highlights (Y=255): %5 (%6%)")
+                    tipLines << tr("[%1] pixels %2 · shadows (Y=0): %3 (%4%) · highlights (Y=255): "
+                                   "%5 (%6%)")
                                     .arg(QChar('A' + slot))
                                     .arg(static_cast<qlonglong>(h.total))
                                     .arg(static_cast<qlonglong>(h.luma[0]))

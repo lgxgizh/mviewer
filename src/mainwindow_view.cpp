@@ -100,7 +100,8 @@ void MainWindow::openExternalTargets(const QStringList &paths)
     const auto plan = mviewer::application::planExternalOpen(paths);
     if (!plan.isValid())
     {
-        const QString message = plan.error.isEmpty() ? QStringLiteral("Unable to open target") : plan.error;
+        const QString message =
+            plan.error.isEmpty() ? QStringLiteral("Unable to open target") : plan.error;
         statusBar()->showMessage(message, 5000);
         qWarning().noquote() << message;
         return;
@@ -499,7 +500,9 @@ void MainWindow::openAnalysisOverlay()
     }
     if (img.isNull())
     {
-        QMessageBox::information(this, tr("Analysis Overlay"), tr("The current image has not finished decoding. Please try again later."));
+        QMessageBox::information(
+            this, tr("Analysis Overlay"),
+            tr("The current image has not finished decoding. Please try again later."));
         return;
     }
     AnalysisOverlayDialog dlg(img, this);
@@ -653,12 +656,15 @@ void MainWindow::updateCacheStat()
     {
         const int pct = static_cast<int>(100.0 * hits / (hits + misses));
         m_lblCache->setText(QString("命中率 %1%").arg(pct));
-        m_lblCache->setToolTip(
-            tr("Cache hit rate: %1% (hits %2 / requests %3)").arg(pct).arg(hits).arg(hits + misses));
+        m_lblCache->setToolTip(tr("Cache hit rate: %1% (hits %2 / requests %3)")
+                                   .arg(pct)
+                                   .arg(hits)
+                                   .arg(hits + misses));
     }
     if (!m_lblImage)
         return;
-    QString tip = tr("Click to locate the current file in File Explorer; right-click to copy the full path");
+    QString tip =
+        tr("Click to locate the current file in File Explorer; right-click to copy the full path");
     if (!m_lblCache->toolTip().isEmpty())
         tip += QLatin1Char('\n') + m_lblCache->toolTip();
     if (m_lblSize && !m_lblSize->text().isEmpty())

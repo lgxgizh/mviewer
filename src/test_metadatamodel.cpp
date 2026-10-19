@@ -66,7 +66,8 @@ int main(int argc, char **argv)
         CHECK(m.rowCount() == 1, "empty model has one (hint) category");
         QModelIndex hint = findCategory(&m, "Hint");
         CHECK(hint.isValid(), "empty model shows 提示 category");
-        CHECK(leafValue(&m, hint, "Description").contains("画廊"), "empty model hint mentions gallery");
+        CHECK(leafValue(&m, hint, "Description").contains("画廊"),
+              "empty model hint mentions gallery");
         CHECK(m.columnCount() == 2, "model exposes 2 columns");
     }
 
@@ -189,7 +190,8 @@ int main(int argc, char **argv)
         CHECK(leafValue(&m, icc, "Device Class") == "显示器", "icc device class leaf");
         CHECK(leafValue(&m, icc, "Color Space") == "RGB", "icc color space leaf");
         CHECK(leafValue(&m, icc, "PCS") == "XYZ", "icc pcs leaf");
-        CHECK(leafValue(&m, icc, "Rendering Intent") == "感知 (Perceptual)", "icc rendering intent leaf");
+        CHECK(leafValue(&m, icc, "Rendering Intent") == "感知 (Perceptual)",
+              "icc rendering intent leaf");
         CHECK(leafValue(&m, icc, "Version") == "2.1.0", "icc version leaf");
     }
 

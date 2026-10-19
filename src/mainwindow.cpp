@@ -37,8 +37,8 @@ void writeCurrentSidecarAsync(MainWindow *window, const QString &path)
             if (!alive)
                 return;
             const QString name = QFileInfo(QString::fromStdString(failedPath)).fileName();
-            alive->statusBar()->showMessage(MainWindow::tr("Cannot write the sidecar file for %1").arg(name),
-                                            4000);
+            alive->statusBar()->showMessage(
+                MainWindow::tr("Cannot write the sidecar file for %1").arg(name), 4000);
         });
 }
 
@@ -709,7 +709,8 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     if (imgs.size() > 8)
     {
         imgs = imgs.mid(0, 8);
-        statusBar()->showMessage(tr("At most 8 images can be compared; the first 8 were used"), 5000);
+        statusBar()->showMessage(tr("At most 8 images can be compared; the first 8 were used"),
+                                 5000);
     }
     if (imgs.size() < 2)
     {
@@ -869,9 +870,9 @@ void MainWindow::updateSelectionActions()
     {
         const bool canCompare = (n >= 2 && n <= 8);
         m_actCompare->setEnabled(canCompare);
-        m_actCompare->setToolTip(
-            mviewer::ui::appendShortcutHint(canCompare ? tr("Compare") : tr("Select 2–8 images to compare"),
-                                            mviewer::ui::actionShortcutHint(m_actCompare)));
+        m_actCompare->setToolTip(mviewer::ui::appendShortcutHint(
+            canCompare ? tr("Compare") : tr("Select 2–8 images to compare"),
+            mviewer::ui::actionShortcutHint(m_actCompare)));
     }
     if (m_actExportImages)
         m_actExportImages->setEnabled(n >= 1 || hasImages);

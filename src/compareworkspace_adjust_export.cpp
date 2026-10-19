@@ -73,7 +73,8 @@ void onAdjustedExportDecoded(const mviewer::application::ImageLoadingService::Re
     if (!res.success() || !res.frame || res.frame->pixels().isNull())
     {
         if (request.status)
-            request.status(QStringLiteral("Export failed: unable to decode the full-resolution image"), 6000);
+            request.status(
+                QStringLiteral("Export failed: unable to decode the full-resolution image"), 6000);
         return;
     }
     const ImageData pixels = res.frame->pixels();
@@ -147,8 +148,8 @@ void CompareWorkspace::buildUsmControls(QVBoxLayout *editLay)
               QStringLiteral("150%"));
     addSlider(tr("Radius"), m_usmRadiusSlider, m_usmRadiusVal, "usmRadiusSlider", 1, 200, 15,
               QStringLiteral("1.5"));
-    addSlider(tr("Threshold"), m_usmThresholdSlider, m_usmThresholdVal, "usmThresholdSlider", 0, 255, 4,
-              QStringLiteral("4"));
+    addSlider(tr("Threshold"), m_usmThresholdSlider, m_usmThresholdVal, "usmThresholdSlider", 0,
+              255, 4, QStringLiteral("4"));
     connect(m_usmAmountSlider, &QSlider::valueChanged, this,
             [this](int value)
             {
@@ -232,10 +233,12 @@ void CompareWorkspace::syncUsmControls(const CellAdjust &adjust)
 
 void CompareWorkspace::addAdjustedExportButton(QVBoxLayout *editLay)
 {
-    m_exportAdjustedBtn = new QPushButton(tr("Export adjusted result for this image..."), m_editPanel);
+    m_exportAdjustedBtn =
+        new QPushButton(tr("Export adjusted result for this image..."), m_editPanel);
     m_exportAdjustedBtn->setObjectName(QStringLiteral("exportAdjustedButton"));
     m_exportAdjustedBtn->setToolTip(
-        tr("Export current pane at full resolution with brightness/contrast/gamma, white balance, USM, rotate/flip, and crop applied "
+        tr("Export current pane at full resolution with brightness/contrast/gamma, white balance, "
+           "USM, rotate/flip, and crop applied "
            "PNG 或 TIFF，不覆盖原文件"));
     connect(m_exportAdjustedBtn, &QPushButton::clicked, this,
             &CompareWorkspace::exportCurrentCellAdjusted);
@@ -331,7 +334,8 @@ void CompareWorkspace::exportCellAdjusted(int idx)
     }
     QString selectedFilter;
     const QString selected = QFileDialog::getSaveFileName(
-        this, tr("Export this image tuning result"), adjustedExportSuggestion(QString::fromStdString(sourcePath)),
+        this, tr("Export this image tuning result"),
+        adjustedExportSuggestion(QString::fromStdString(sourcePath)),
         tr("PNG Image (*.png);;TIFF Image (*.tif *.tiff)"), &selectedFilter);
     if (selected.isEmpty())
         return;
@@ -420,5 +424,6 @@ void CompareWorkspace::launchAdjustedExport(const std::string &sourcePath, int f
         [request](const mviewer::application::ImageLoadingService::Result &res)
         { onAdjustedExportDecoded(res, request); }, opts, m_lifetime);
     if (!m_adjustExportHandle && request.status)
-        request.status(QStringLiteral("Export failed: unable to decode the full-resolution image"), 6000);
+        request.status(QStringLiteral("Export failed: unable to decode the full-resolution image"),
+                       6000);
 }

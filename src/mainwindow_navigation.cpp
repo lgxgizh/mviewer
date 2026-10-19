@@ -322,7 +322,9 @@ void MainWindow::rebuildRecentMenu()
                         rebuildRecentMenu();
                         if (statusBar())
                             statusBar()->showMessage(
-                                tr("Directory does not exist, removed from recent records: %1").arg(qs), 3000);
+                                tr("Directory does not exist, removed from recent records: %1")
+                                    .arg(qs),
+                                3000);
                         return;
                     }
                     changeDirectory(qs);
@@ -354,7 +356,8 @@ void MainWindow::rebuildRecentMenu()
                         rebuildRecentMenu();
                     }
                     if (statusBar())
-                        statusBar()->showMessage(tr("Cleared %1 stale directory entries").arg(pruned), 2000);
+                        statusBar()->showMessage(
+                            tr("Cleared %1 stale directory entries").arg(pruned), 2000);
                 });
         auto *clearAct = m_recentMenu->addAction(tr("Clear Recent Directories"));
         connect(clearAct, &QAction::triggered, this,
@@ -434,7 +437,8 @@ void MainWindow::rebuildRecentFilesMenu()
                         rebuildRecentFilesMenu();
                     }
                     if (statusBar())
-                        statusBar()->showMessage(tr("Cleaned %1 invalid file records").arg(pruned), 2000);
+                        statusBar()->showMessage(tr("Cleaned %1 invalid file records").arg(pruned),
+                                                 2000);
                 });
         auto *clearAct = m_recentFileMenu->addAction(tr("Clear recent files"));
         connect(clearAct, &QAction::triggered, this,

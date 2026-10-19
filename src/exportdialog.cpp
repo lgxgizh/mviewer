@@ -240,8 +240,8 @@ void ExportDialog::buildMetadataSection(QVBoxLayout *root)
     auto *metaLay = new QFormLayout(metaBox);
     m_stripMetaCheck = new QCheckBox(tr("Strip Metadata (EXIF/ICC)"), this);
     m_stripMetaCheck->setChecked(true);
-    m_stripMetaCheck->setToolTip(
-        tr("When re-encoding to original pixels, metadata is excluded by default; this option records your explicit intent."));
+    m_stripMetaCheck->setToolTip(tr("When re-encoding to original pixels, metadata is excluded by "
+                                    "default; this option records your explicit intent."));
     metaLay->addRow(m_stripMetaCheck);
     root->addWidget(metaBox);
 }
@@ -418,7 +418,8 @@ void ExportDialog::onExportClicked()
     }
     if (outDir.isEmpty() || !QDir(outDir).exists())
     {
-        QMessageBox::warning(this, tr("Export"), tr("Please select a valid output directory first."));
+        QMessageBox::warning(this, tr("Export"),
+                             tr("Please select a valid output directory first."));
         return;
     }
 
@@ -461,7 +462,8 @@ void ExportDialog::exportConvertBatch()
     cfg.quality = m_qualitySpin->value();
     if (!m_renamePanel->isValid())
     {
-        m_statusLabel->setText(tr("Invalid rename settings: %1").arg(m_renamePanel->errorMessage()));
+        m_statusLabel->setText(
+            tr("Invalid rename settings: %1").arg(m_renamePanel->errorMessage()));
         return;
     }
     const auto rename = m_renamePanel->options();

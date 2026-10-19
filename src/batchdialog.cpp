@@ -37,8 +37,9 @@ namespace
 
 QString batchFinishText(const mviewer::domain::BatchJobResult &result)
 {
-    const QString counts =
-        QStringLiteral("%1 succeeded, %2 failed").arg(result.totalSucceeded).arg(result.totalFailed);
+    const QString counts = QStringLiteral("%1 succeeded, %2 failed")
+                               .arg(result.totalSucceeded)
+                               .arg(result.totalFailed);
     if (!result.cancelled && result.totalFailed <= 0)
         return QStringLiteral("Completed: %1").arg(counts);
 
@@ -66,7 +67,8 @@ QString batchFinishText(const mviewer::domain::BatchJobResult &result)
 
     if (result.cancelled)
     {
-        QString text = QStringLiteral("Cancelled: %1, %2 not processed").arg(counts).arg(result.totalSkipped);
+        QString text =
+            QStringLiteral("Cancelled: %1, %2 not processed").arg(counts).arg(result.totalSkipped);
         if (!names.isEmpty())
             text += QStringLiteral("（%1）").arg(names);
         return text;
@@ -258,7 +260,8 @@ void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
     m_pauseBtn = new QPushButton("Pause");
     m_pauseBtn->setObjectName(QStringLiteral("batchPauseButton"));
     m_pauseBtn->setEnabled(false);
-    m_pauseBtn->setToolTip(tr("Pause/resume batch processing (takes effect after the current file finishes)"));
+    m_pauseBtn->setToolTip(
+        tr("Pause/resume batch processing (takes effect after the current file finishes)"));
     m_cancelBtn = new QPushButton("取消处理");
     m_cancelBtn->setObjectName(QStringLiteral("batchCancelButton"));
     m_cancelBtn->setEnabled(false);
@@ -577,7 +580,8 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     catch (const std::exception &error)
     {
         m_progress->setValue(m_progress->maximum());
-        m_statusLabel->setText(tr("Batch processing failed: %1").arg(QString::fromUtf8(error.what())));
+        m_statusLabel->setText(
+            tr("Batch processing failed: %1").arg(QString::fromUtf8(error.what())));
         m_processor = std::make_unique<mviewer::core::BatchProcessor>();
         m_activeProcessor.reset();
         updateUiState(false);

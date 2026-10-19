@@ -540,8 +540,7 @@ void testManualRejectedReplacement()
     CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
           "accepted gated manual job started and is blocked");
     CHECK(panel.hasLoadedImage(), "image stays loaded while the gated job runs");
-    CHECK(panel.analysisText().contains("Analyzing"),
-          "accepted manual job shows a pending state");
+    CHECK(panel.analysisText().contains("Analyzing"), "accepted manual job shows a pending state");
     QPushButton *exportButton = reportButton(panel);
     CHECK(exportButton && !exportButton->isEnabled(),
           "report export is disabled for the accepted pending request");

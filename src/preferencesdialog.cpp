@@ -1,6 +1,6 @@
 #include "preferencesdialog.h"
-#include "Theme.h"
 #include "Language.h"
+#include "Theme.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
 #include "thumbnailpanel.h"
@@ -25,20 +25,26 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
 
     m_uiTheme = new QComboBox;
     m_uiTheme->setObjectName(QStringLiteral("preferencesUiTheme"));
-    m_uiTheme->addItem(tr("Follow system (default)"), static_cast<int>(mviewer::ui::ThemeMode::System));
+    m_uiTheme->addItem(tr("Follow system (default)"),
+                       static_cast<int>(mviewer::ui::ThemeMode::System));
     m_uiTheme->addItem(tr("Dark mode"), static_cast<int>(mviewer::ui::ThemeMode::Dark));
     m_uiTheme->addItem(tr("Light mode"), static_cast<int>(mviewer::ui::ThemeMode::Light));
-    m_uiTheme->setToolTip(tr("Follow system switches automatically with the Windows \"app mode\" dark/light setting"));
+    m_uiTheme->setToolTip(tr(
+        "Follow system switches automatically with the Windows \"app mode\" dark/light setting"));
     m_uiTheme->setCurrentIndex(
         m_uiTheme->findData(static_cast<int>(mviewer::ui::Theme::currentTheme())));
     gl->addRow(tr("Interface theme"), m_uiTheme);
 
     m_uiLanguage = new QComboBox;
     m_uiLanguage->setObjectName(QStringLiteral("preferencesUiLanguage"));
-    m_uiLanguage->addItem(tr("Follow system (default)"), static_cast<int>(mviewer::ui::LanguageMode::System));
-    m_uiLanguage->addItem(QStringLiteral("English"), static_cast<int>(mviewer::ui::LanguageMode::English));
-    m_uiLanguage->addItem(QStringLiteral("简体中文"), static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
-    m_uiLanguage->setToolTip(tr("UI language. Applies immediately to newly opened windows; some open panels may need an app restart."));
+    m_uiLanguage->addItem(tr("Follow system (default)"),
+                          static_cast<int>(mviewer::ui::LanguageMode::System));
+    m_uiLanguage->addItem(QStringLiteral("English"),
+                          static_cast<int>(mviewer::ui::LanguageMode::English));
+    m_uiLanguage->addItem(QStringLiteral("简体中文"),
+                          static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
+    m_uiLanguage->setToolTip(tr("UI language. Applies immediately to newly opened windows; some "
+                                "open panels may need an app restart."));
     {
         QSettings langSettings;
         const auto lang = mviewer::ui::Language::languageModeFromKey(
@@ -74,9 +80,9 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     };
     static const SM kSM[] = {
         {"File Name", ThumbnailPanel::SortName}, {"Date", ThumbnailPanel::SortDate},
-        {"Size", ThumbnailPanel::SortSize},   {"Resolution", ThumbnailPanel::SortResolution},
-        {"Type", ThumbnailPanel::SortType},   {"Rating", ThumbnailPanel::SortRating},
-        {"Camera", ThumbnailPanel::SortCamera}, {"Lens", ThumbnailPanel::SortLens}};
+        {"Size", ThumbnailPanel::SortSize},      {"Resolution", ThumbnailPanel::SortResolution},
+        {"Type", ThumbnailPanel::SortType},      {"Rating", ThumbnailPanel::SortRating},
+        {"Camera", ThumbnailPanel::SortCamera},  {"Lens", ThumbnailPanel::SortLens}};
     for (const auto &e : kSM)
         m_sortMode->addItem(tr(e.name), static_cast<int>(e.v));
     const int smIdx =
@@ -106,7 +112,8 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_confirmDelete->setChecked(s.value("confirmDelete", true).toBool());
     gl->addRow(m_confirmDelete);
 
-    m_confirmModifyFile = new QCheckBox(tr("Confirm before modifying the original file (rotate/flip)"));
+    m_confirmModifyFile =
+        new QCheckBox(tr("Confirm before modifying the original file (rotate/flip)"));
     m_confirmModifyFile->setChecked(s.value("confirmModifyFile", true).toBool());
     gl->addRow(m_confirmModifyFile);
 
@@ -115,7 +122,8 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     gl->addRow(m_gpuAcceleration);
 
     m_colorManagement = new QCheckBox(tr("Enable color management (CMS)"));
-    m_colorManagement->setToolTip(tr("When enabled, convert colors using the display ICC profile; when disabled, use native RGB/sRGB"));
+    m_colorManagement->setToolTip(tr("When enabled, convert colors using the display ICC profile; "
+                                     "when disabled, use native RGB/sRGB"));
     m_colorManagement->setChecked(s.value("display/colorManagement", true).toBool());
     gl->addRow(m_colorManagement);
 
@@ -126,7 +134,8 @@ QWidget *PreferencesDialog::buildCompareTab(QSettings &s)
 {
     auto *compare = new QWidget;
     auto *cl = new QFormLayout(compare);
-    m_autoAlign = new QCheckBox(tr("Auto-align by integer-pixel shift before comparison (eliminate translation misalignment)"));
+    m_autoAlign = new QCheckBox(tr("Auto-align by integer-pixel shift before comparison (eliminate "
+                                   "translation misalignment)"));
     m_autoAlign->setChecked(s.value("autoAlignBeforeDiff", false).toBool());
     cl->addRow(m_autoAlign);
     return compare;
@@ -199,7 +208,8 @@ void PreferencesDialog::accept()
     }
     if (m_uiLanguage)
     {
-        const auto lang = static_cast<mviewer::ui::LanguageMode>(m_uiLanguage->currentData().toInt());
+        const auto lang =
+            static_cast<mviewer::ui::LanguageMode>(m_uiLanguage->currentData().toInt());
         if (lang != mviewer::ui::Language::current())
             mviewer::ui::Language::apply(lang);
     }

@@ -153,7 +153,9 @@ void MainWindow::exportReport()
     // reports are an independent snapshot and remain exportable meanwhile.
     if (!hasCompare && m_analysisPanel && m_analysisPanel->reportAnalysisPending())
     {
-        QMessageBox::information(this, tr("Export Report"), tr("Analysis is still in progress. Please complete it before exporting the report."));
+        QMessageBox::information(
+            this, tr("Export Report"),
+            tr("Analysis is still in progress. Please complete it before exporting the report."));
         return;
     }
 
@@ -299,7 +301,8 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx,
     if (!m_reportTask)
     {
         cancelReportExport();
-        QMessageBox::warning(this, tr("Export Report"), tr("Background task was rejected by the scheduler."));
+        QMessageBox::warning(this, tr("Export Report"),
+                             tr("Background task was rejected by the scheduler."));
     }
 }
 void MainWindow::exportImages()
@@ -314,7 +317,8 @@ void MainWindow::exportImages()
         paths = m_thumbnailPanel->pathList();
     if (paths.isEmpty())
     {
-        QMessageBox::information(this, tr("Export Images"), tr("Please open an image directory first."));
+        QMessageBox::information(this, tr("Export Images"),
+                                 tr("Please open an image directory first."));
         return;
     }
 

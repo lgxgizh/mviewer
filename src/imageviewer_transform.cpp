@@ -70,10 +70,12 @@ bool confirmImageViewerTransform(QWidget *parent, bool rotate)
     if (!settings.value(QStringLiteral("confirmModifyFile"), true).toBool())
         return true;
 
-    const QString prompt = rotate ? QObject::tr("Rotation will directly modify and overwrite the original image file.
-Continue?")
-                                  : QObject::tr("Flipping will directly modify and overwrite the original image file.
-Continue?");
+    const QString prompt =
+        rotate
+            ? QObject::tr(
+                  "Rotation will directly modify and overwrite the original image file.\nContinue?")
+            : QObject::tr("Flipping will directly modify and overwrite the original image "
+                          "file.\nContinue?");
 
     QMessageBox box(parent);
     box.setIcon(QMessageBox::Question);
@@ -136,7 +138,8 @@ void submitFileTransform(ImageViewer *viewer, const QString &path, const QString
         if (QApplication::overrideCursor())
             QApplication::restoreOverrideCursor();
         if (transformDialogAllowed(viewer))
-            QMessageBox::warning(viewer, failureTitle, viewer->tr("Background task was rejected by the scheduler."));
+            QMessageBox::warning(viewer, failureTitle,
+                                 viewer->tr("Background task was rejected by the scheduler."));
         if (viewer->currentPath() == path)
             viewer->refreshSource(path);
     }
@@ -220,13 +223,14 @@ void ImageViewer::completeFileTransform(const QString &path,
         const bool permission = rawLower.contains(QLatin1String("denied")) ||
                                 rawLower.contains(QLatin1String("permission")) ||
                                 rawLower.contains(QString::fromUtf8("Reject"));
-        if (path.size() >= 260 && !permission && (detail == rawError || detail == tr("Unknown error")))
+        if (path.size() >= 260 && !permission &&
+            (detail == rawError || detail == tr("Unknown error")))
             detail = tr("Path is too long; the system cannot open or write");
         if (transformDialogAllowed(this))
         {
-            QMessageBox::warning(this, failureTitle,
-                                 tr("Unable to rewrite image: %1
-%2").arg(elidePathMiddle(path), detail));
+            QMessageBox::warning(
+                this, failureTitle,
+                tr("Unable to rewrite image: %1\n%2").arg(elidePathMiddle(path), detail));
         }
         if (m_currentPath == path)
             refreshSource(path);
@@ -272,7 +276,8 @@ bool ImageViewer::rotateImage(int angle)
         return true;
     emit statusMessageRequested(tr("Rotating…"));
     const std::string utf8 = path.toUtf8().toStdString();
-    submitFileTransform(this, path, tr("Rotation failed"), tr("Rotated and overwrote the original file (%1°)").arg(normAngle),
+    submitFileTransform(this, path, tr("Rotation failed"),
+                        tr("Rotated and overwrote the original file (%1°)").arg(normAngle),
                         [utf8, normAngle]()
                         { return mviewer::core::rotateImageFile(utf8, normAngle); });
     return true;
@@ -303,8 +308,8 @@ bool ImageViewer::flipImage(bool horizontal)
         return true;
     emit statusMessageRequested(tr("Flipping…"));
     const std::string utf8 = path.toUtf8().toStdString();
-    const QString success =
-        horizontal ? tr("Flipped horizontally and overwrote the original file") : tr("Flipped vertically and overwrote the original file");
+    const QString success = horizontal ? tr("Flipped horizontally and overwrote the original file")
+                                       : tr("Flipped vertically and overwrote the original file");
     submitFileTransform(this, path, tr("Flip failed"), success, [utf8, horizontal]()
                         { return mviewer::core::flipImageFile(utf8, horizontal); });
     return true;

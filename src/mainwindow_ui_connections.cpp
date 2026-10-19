@@ -70,8 +70,10 @@ void MainWindow::connectNavigationSignals()
                     !DirectoryTree::equivalentPath(m_directory->currentDirectory(), path))
                     return;
                 if (!available)
-                    statusBar()->showMessage(QStringLiteral("Directory temporarily unavailable: %1").arg(path));
-                else if (statusBar()->currentMessage().startsWith(QStringLiteral("Directory temporarily unavailable")))
+                    statusBar()->showMessage(
+                        QStringLiteral("Directory temporarily unavailable: %1").arg(path));
+                else if (statusBar()->currentMessage().startsWith(
+                             QStringLiteral("Directory temporarily unavailable")))
                     statusBar()->clearMessage();
             });
     // M37: the asynchronous gallery scan publishes the final visible sequence
@@ -457,13 +459,15 @@ void MainWindow::connectViewerSignals()
     if (m_lblZoom)
     {
         m_lblZoom->setCursor(Qt::PointingHandCursor);
-        m_lblZoom->setToolTip(tr("Click to open the zoom preset menu, double-click to toggle Fit/100%"));
+        m_lblZoom->setToolTip(
+            tr("Click to open the zoom preset menu, double-click to toggle Fit/100%"));
         m_lblZoom->installEventFilter(this);
     }
     if (m_lblImage)
     {
         m_lblImage->setCursor(Qt::PointingHandCursor);
-        m_lblImage->setToolTip(tr("Click to locate the current file in File Explorer; right-click to copy the full path"));
+        m_lblImage->setToolTip(tr("Click to locate the current file in File Explorer; right-click "
+                                  "to copy the full path"));
         m_lblImage->installEventFilter(this);
     }
 }
@@ -760,12 +764,14 @@ void MainWindow::connectSettingsSignals()
             [this]()
             {
                 const QString path = QFileDialog::getSaveFileName(
-                    this, tr("Export Settings"), QString(), tr("MViewer Settings File (*.mvs);;All Files (*)"));
+                    this, tr("Export Settings"), QString(),
+                    tr("MViewer Settings File (*.mvs);;All Files (*)"));
                 if (path.isEmpty())
                     return;
                 std::string err;
                 if (mviewer::core::exportSettings(path.toStdString(), &err))
-                    QMessageBox::information(this, tr("Export Settings"), tr("Settings exported to %1").arg(path));
+                    QMessageBox::information(this, tr("Export Settings"),
+                                             tr("Settings exported to %1").arg(path));
                 else
                     QMessageBox::warning(this, tr("Export Settings"),
                                          tr("Export failed: %1").arg(QString::fromStdString(err)));
@@ -774,14 +780,16 @@ void MainWindow::connectSettingsSignals()
             [this]()
             {
                 const QString path = QFileDialog::getOpenFileName(
-                    this, tr("Import Settings"), QString(), tr("MViewer Settings File (*.mvs);;All Files (*)"));
+                    this, tr("Import Settings"), QString(),
+                    tr("MViewer Settings File (*.mvs);;All Files (*)"));
                 if (path.isEmpty())
                     return;
                 std::string err;
                 if (mviewer::core::importSettings(path.toStdString(), &err))
                 {
                     QMessageBox::information(this, tr("Import Settings"),
-                                             tr("Settings imported. Some changes require restarting MViewer to take effect."));
+                                             tr("Settings imported. Some changes require "
+                                                "restarting MViewer to take effect."));
                 }
                 else
                     QMessageBox::warning(this, tr("Import Settings"),

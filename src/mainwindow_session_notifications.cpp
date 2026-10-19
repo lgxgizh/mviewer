@@ -51,10 +51,9 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
     if (!info.error.empty())
     {
         if (!silent)
-            QMessageBox::warning(
-                this, tr("Update check failed"),
-                tr("Could not retrieve update information:
-%1").arg(QString::fromStdString(info.error)));
+            QMessageBox::warning(this, tr("Update check failed"),
+                                 tr("Could not retrieve update information:\n%1")
+                                     .arg(QString::fromStdString(info.error)));
         return;
     }
     if (info.hasUpdate)
@@ -74,9 +73,9 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
     }
     else if (!silent)
     {
-        QMessageBox::information(
-            this, tr("Up to Date"),
-            tr("You are on the latest version (%1).").arg(QString::fromStdString(info.currentVersion)));
+        QMessageBox::information(this, tr("Up to Date"),
+                                 tr("You are on the latest version (%1).")
+                                     .arg(QString::fromStdString(info.currentVersion)));
     }
 }
 
@@ -107,11 +106,10 @@ void MainWindow::maybeShowCrashReport()
     QMessageBox box(this);
     box.setIcon(QMessageBox::Warning);
     box.setWindowTitle(tr("Crash Report"));
-    box.setText(tr("An application crash was detected (%1).
-The crash dump was saved to:
-%2")
+    box.setText(tr("An application crash was detected (%1).\nThe crash dump was saved to:\n%2")
                     .arg(newest.lastModified().toString(), newest.absoluteFilePath()));
-    box.setInformativeText(tr("You can send this file with a problem description to the developers to help locate and fix the issue."));
+    box.setInformativeText(tr("You can send this file with a problem description to the developers "
+                              "to help locate and fix the issue."));
     QPushButton *openBtn = box.addButton(tr("Open Crash Folder"), QMessageBox::ActionRole);
     box.addButton(tr("Ignore"), QMessageBox::RejectRole);
     box.exec();

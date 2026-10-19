@@ -350,7 +350,8 @@ void CompareWorkspace::buildOverlayControls(QHBoxLayout *lay)
         return;
     m_overlayChk = new QCheckBox(mviewer::cw::compareShortcutText("O"), this);
     m_overlayChk->setEnabled(false);
-    m_overlayChk->setToolTip(tr("Available only with 2 images: semi-transparent overlay comparison (shortcut: O)"));
+    m_overlayChk->setToolTip(
+        tr("Available only with 2 images: semi-transparent overlay comparison (shortcut: O)"));
     connect(m_overlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -390,7 +391,8 @@ void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
         return;
     m_checkerChk = new QCheckBox(mviewer::cw::compareShortcutText("K"), this);
     m_checkerChk->setEnabled(false);
-    m_checkerChk->setToolTip(tr("Checkerboard alternates two images (shortcut K); block size is adjustable"));
+    m_checkerChk->setToolTip(
+        tr("Checkerboard alternates two images (shortcut K); block size is adjustable"));
     connect(m_checkerChk, &QCheckBox::toggled, this,
             [this](bool on)
             {

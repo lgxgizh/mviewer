@@ -118,8 +118,8 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
 {
     std::cout << "── M49: exact grid + momentary Compare ──\n";
     const QString longA = writePng(
-        dir, QStringLiteral("a very long Chinese filename for caption elision 0123456789.png"), 80, 60,
-        QColor(240, 40, 40));
+        dir, QStringLiteral("a very long Chinese filename for caption elision 0123456789.png"), 80,
+        60, QColor(240, 40, 40));
     const QString b = writePng(dir, QStringLiteral("B blue.png"), 80, 60, QColor(40, 80, 240));
 
     SelectionModel sel;
@@ -1559,7 +1559,8 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
                              QString::fromUtf8(entry.description ? entry.description : "");
         if (keys == QLatin1String("1") && text.contains(QStringLiteral("Actual Size")))
             plainOneIsZoom = true;
-        if (text.contains(QStringLiteral("Apply grid")) || text.contains(QStringLiteral("Change layout")))
+        if (text.contains(QStringLiteral("Apply grid")) ||
+            text.contains(QStringLiteral("Change layout")))
             digitsChangeLayout = true;
         if (keys == QLatin1String("Ctrl+1") && text.contains(QStringLiteral("100%")))
             ctrl1IsActual = true;

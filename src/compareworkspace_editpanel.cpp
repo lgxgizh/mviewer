@@ -92,8 +92,9 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         QStringLiteral("font-weight:bold;color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     editLay->addWidget(m_editLabel);
-    auto *previewHint =
-        new QLabel(tr("Adjustments are preview-only and do not overwrite the original file; export as a new PNG or TIFF"), m_editPanel);
+    auto *previewHint = new QLabel(tr("Adjustments are preview-only and do not overwrite the "
+                                      "original file; export as a new PNG or TIFF"),
+                                   m_editPanel);
     previewHint->setObjectName("previewOnlyHint");
     previewHint->setStyleSheet("color:#f0c060;font-size:11px;");
     previewHint->setWordWrap(true);
@@ -199,16 +200,18 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         row->addWidget(new QLabel(tr("Rotate"), m_editPanel));
         auto *btnCCW = new QPushButton(tr("↺ Counterclockwise (Ctrl+Shift+R)"), m_editPanel);
         btnCCW->setObjectName("rotateCCWButton");
-        btnCCW->setToolTip(tr("Rotate 90° counterclockwise (preview only, does not modify the original file)"));
+        btnCCW->setToolTip(
+            tr("Rotate 90° counterclockwise (preview only, does not modify the original file)"));
         auto *btnCW = new QPushButton(tr("↻ Clockwise (Ctrl+R)"), m_editPanel);
         btnCW->setObjectName("rotateCWButton");
-        btnCW->setToolTip(tr("Rotate 90° clockwise (preview only, does not modify the original file)"));
+        btnCW->setToolTip(
+            tr("Rotate 90° clockwise (preview only, does not modify the original file)"));
         m_rotVal = new QLabel("0°", m_editPanel);
         m_rotVal->setMinimumWidth(30);
         m_syncRotatePanelChk = new QCheckBox(tr("Sync all images (Alt+R)"), m_editPanel);
         m_syncRotatePanelChk->setObjectName("syncRotatePanelCheck");
-        m_syncRotatePanelChk->setToolTip(
-            tr("When checked, rotation and flip are applied in sync to all images being compared (Alt+R)"));
+        m_syncRotatePanelChk->setToolTip(tr("When checked, rotation and flip are applied in sync "
+                                            "to all images being compared (Alt+R)"));
         m_syncRotatePanelChk->setChecked(m_syncRotate);
         connect(m_syncRotatePanelChk, &QCheckBox::toggled, this, &CompareWorkspace::setSyncRotate);
         row->addWidget(btnCCW);
@@ -224,10 +227,12 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         row->addWidget(new QLabel(tr("Flip"), m_editPanel));
         auto *btnFlipH = new QPushButton(tr("⇄ Horizontal (Ctrl+Shift+H)"), m_editPanel);
         btnFlipH->setObjectName("flipHButton");
-        btnFlipH->setToolTip(tr("Flip current pane horizontally (Ctrl+Shift+H, preview only, does not modify the original file)"));
+        btnFlipH->setToolTip(tr("Flip current pane horizontally (Ctrl+Shift+H, preview only, does "
+                                "not modify the original file)"));
         auto *btnFlipV = new QPushButton(tr("⇅ Vertical (Ctrl+Shift+V)"), m_editPanel);
         btnFlipV->setObjectName("flipVButton");
-        btnFlipV->setToolTip(tr("Flip current pane vertically (Ctrl+Shift+V, preview only, does not modify the original file)"));
+        btnFlipV->setToolTip(tr("Flip current pane vertically (Ctrl+Shift+V, preview only, does "
+                                "not modify the original file)"));
         row->addWidget(btnFlipH);
         row->addWidget(btnFlipV);
         editLay->addLayout(row);
@@ -518,9 +523,9 @@ void CompareWorkspace::ensurePresetDir()
 void CompareWorkspace::onSavePreset()
 {
     ensurePresetDir();
-    const QString fileName = QFileDialog::getSaveFileName(
-        this, tr("Save Comparison Layout"), m_presetDir, tr("Compare Layout Files (*.mvc)
-All Files (*.*)"));
+    const QString fileName =
+        QFileDialog::getSaveFileName(this, tr("Save Comparison Layout"), m_presetDir,
+                                     tr("Compare Layout Files (*.mvc)\nAll Files (*.*)"));
     if (fileName.isEmpty())
         return;
 
@@ -596,36 +601,33 @@ All Files (*.*)"));
     QSaveFile f(fileName);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
     {
-        QMessageBox::warning(this, tr("Save failed"), tr("Cannot write file:
-%1").arg(fileName));
+        QMessageBox::warning(this, tr("Save failed"), tr("Cannot write file:\n%1").arg(fileName));
         return;
     }
     if (f.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !f.commit())
-        QMessageBox::warning(this, tr("Save failed"), tr("Cannot commit file:
-%1").arg(fileName));
+        QMessageBox::warning(this, tr("Save failed"), tr("Cannot commit file:\n%1").arg(fileName));
 }
 
 void CompareWorkspace::onLoadPreset()
 {
     ensurePresetDir();
-    const QString fileName = QFileDialog::getOpenFileName(
-        this, tr("Load Comparison Layout"), m_presetDir, tr("Compare Layout Files (*.mvc)
-All Files (*.*)"));
+    const QString fileName =
+        QFileDialog::getOpenFileName(this, tr("Load Comparison Layout"), m_presetDir,
+                                     tr("Compare Layout Files (*.mvc)\nAll Files (*.*)"));
     if (fileName.isEmpty())
         return;
 
     QFile f(fileName);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        QMessageBox::warning(this, tr("Read Failed"), tr("Cannot open file:
-%1").arg(fileName));
+        QMessageBox::warning(this, tr("Read Failed"), tr("Cannot open file:\n%1").arg(fileName));
         return;
     }
     constexpr qint64 kMaxPresetFileBytes = 16LL * 1024 * 1024;
     if (f.size() > kMaxPresetFileBytes)
     {
-        QMessageBox::warning(this, tr("Read Failed"), tr("Preset file is too large:
-%1").arg(fileName));
+        QMessageBox::warning(this, tr("Read Failed"),
+                             tr("Preset file is too large:\n%1").arg(fileName));
         return;
     }
     const QJsonDocument doc =

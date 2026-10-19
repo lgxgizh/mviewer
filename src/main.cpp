@@ -1,16 +1,16 @@
 #include "mainwindow.h"
 
+#include "Language.h"
 #include "MViewerVersion.h"
 #include "Theme.h"
-#include "Language.h"
 #include "application/CommandLine.h"
 #include "application/Startup.h"
 #include "core/CrashHandler.h"
 #include "core/Logger.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
-#include "core/scheduler/TaskScheduler.h"
 #include "core/SettingsIO.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "runtime_storage.h"
 
 #include <QApplication>

@@ -217,8 +217,9 @@ QWidget *UsmCompareDialog::createBottomControls()
 
     auto *lblPreset = new QLabel(tr("Preset template:"), controls);
     m_comboPreset = new QComboBox(controls);
-    m_comboPreset->addItems({tr("Standard General Sharpen"), tr("Light detail boost"), tr("Portrait Skin Protection"),
-                             tr("Landscape and architecture clarity"), tr("Strong edge enhancement"), tr("Custom")});
+    m_comboPreset->addItems(
+        {tr("Standard General Sharpen"), tr("Light detail boost"), tr("Portrait Skin Protection"),
+         tr("Landscape and architecture clarity"), tr("Strong edge enhancement"), tr("Custom")});
     m_comboPreset->setCurrentIndex(0);
 
     auto *lblAmount = new QLabel(tr("Amount (Amount):"), controls);
@@ -519,7 +520,8 @@ void UsmCompareDialog::saveSharpenedAs()
     if (ok)
         m_lblCalcStatus->setText(tr("Save successful: %1").arg(QFileInfo(savePath).fileName()));
     else
-        QMessageBox::warning(this, tr("Save failed"), tr("Unable to save the image to: %1").arg(savePath));
+        QMessageBox::warning(this, tr("Save failed"),
+                             tr("Unable to save the image to: %1").arg(savePath));
 }
 
 void UsmCompareDialog::zoomFit()

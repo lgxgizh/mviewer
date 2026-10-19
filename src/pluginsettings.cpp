@@ -157,7 +157,8 @@ void PluginSettings::refreshList()
         m_list->addItem(item);
     }
     if (m_statusLabel)
-        m_statusLabel->setText(tr("Loaded %1 plugins (%2 enabled)").arg(plugins.size()).arg(enabled));
+        m_statusLabel->setText(
+            tr("Loaded %1 plugins (%2 enabled)").arg(plugins.size()).arg(enabled));
 }
 
 void PluginSettings::rescanPlugins()

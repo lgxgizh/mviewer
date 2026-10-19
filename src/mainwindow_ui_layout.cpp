@@ -105,8 +105,10 @@ void MainWindow::buildBrowserShell()
     addBrowserAction(m_actDirUp, "up");
     addBrowserAction(m_actRefresh, "refresh");
     browserToolBar->addSeparator();
-    addBrowserAction(m_actAddFavorite, "favorite", actTip(tr("Favorite Current Directory"), m_actAddFavorite));
-    addBrowserAction(m_actToggleAnalysis, "analysis", actTip(tr("Analysis panel"), m_actToggleAnalysis));
+    addBrowserAction(m_actAddFavorite, "favorite",
+                     actTip(tr("Favorite Current Directory"), m_actAddFavorite));
+    addBrowserAction(m_actToggleAnalysis, "analysis",
+                     actTip(tr("Analysis panel"), m_actToggleAnalysis));
     addBrowserAction(m_actToggleSearch, "search", actTip(tr("Global search"), m_actToggleSearch));
     browserToolBar->addSeparator();
     addBrowserAction(m_actBrowseWorkspace, "browse");
@@ -114,13 +116,15 @@ void MainWindow::buildBrowserShell()
     if (m_actRotateCCW)
     {
         m_actRotateCCW->setIcon(mviewer::ui::toolbarIcon("rotate_ccw"));
-        m_actRotateCCW->setToolTip(actTip(tr("Rotate 90° counterclockwise and overwrite original file"), m_actRotateCCW));
+        m_actRotateCCW->setToolTip(
+            actTip(tr("Rotate 90° counterclockwise and overwrite original file"), m_actRotateCCW));
         browserToolBar->addAction(m_actRotateCCW);
     }
     if (m_actRotateCW)
     {
         m_actRotateCW->setIcon(mviewer::ui::toolbarIcon("rotate_cw"));
-        m_actRotateCW->setToolTip(actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
+        m_actRotateCW->setToolTip(
+            actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
         browserToolBar->addAction(m_actRotateCW);
     }
     if (m_actCompare)
@@ -134,7 +138,8 @@ void MainWindow::buildBrowserShell()
     {
         m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analyze"));
         m_actUsmCompare->setObjectName("usmCompareAction");
-        m_actUsmCompare->setToolTip(actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));
+        m_actUsmCompare->setToolTip(
+            actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));
         browserToolBar->addAction(m_actUsmCompare);
     }
     browserToolBar->setIconSize(QSize(16, 16));
@@ -151,8 +156,8 @@ void MainWindow::buildBrowserShell()
     m_pathEdit = new SelectAllOnActivateLineEdit(this);
     m_pathEdit->setObjectName("pathEdit");
     m_pathEdit->setPlaceholderText("Enter a directory path and press Enter to switch...");
-    m_pathEdit->setToolTip(
-        "Type or paste a directory path and press Enter to open it (shortcut: Ctrl+F / Alt+D to focus).");
+    m_pathEdit->setToolTip("Type or paste a directory path and press Enter to open it (shortcut: "
+                           "Ctrl+F / Alt+D to focus).");
     m_pathEdit->setClearButtonEnabled(true);
     auto *actFocusPath = new QAction(this);
     actFocusPath->setObjectName("focusPathAction");
@@ -181,7 +186,8 @@ QWidget *MainWindow::buildNavigationPanel()
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg3)));
-    m_favoritesBar->setToolTip("Favorites — Right-click to remove, Ctrl+D to favorite the current folder");
+    m_favoritesBar->setToolTip(
+        "Favorites — Right-click to remove, Ctrl+D to favorite the current folder");
     connect(m_favoritesBar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item)
             { changeDirectory(item->data(Qt::UserRole).toString()); });
     m_favoritesBar->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -230,7 +236,8 @@ QWidget *MainWindow::buildNavigationPanel()
     auto *previewLayout = new QVBoxLayout(previewSection);
     previewLayout->setContentsMargins(0, 0, 0, 0);
     previewLayout->setSpacing(mviewer::ui::metrics::kSpace4);
-    previewLayout->addWidget(sectionHeaderLabel(previewSection, "previewSectionLabel", tr("Preview")));
+    previewLayout->addWidget(
+        sectionHeaderLabel(previewSection, "previewSectionLabel", tr("Preview")));
     m_previewPanel = new PreviewPanel(previewSection);
     m_previewPanel->installEventFilter(this);
     previewLayout->addWidget(m_previewPanel, 1);
@@ -324,8 +331,8 @@ void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLay
     m_sortDirBtn->setObjectName("sortDirBtn");
     m_sortDirBtn->setFixedWidth(28);
     m_sortDirBtn->setCheckable(true);
-    m_sortDirBtn->setToolTip(
-        "↑ Ascending: A→Z (numbers by value), earliest to latest, smallest to largest; ↓ the opposite. Identical items still sort by filename");
+    m_sortDirBtn->setToolTip("↑ Ascending: A→Z (numbers by value), earliest to latest, smallest to "
+                             "largest; ↓ the opposite. Identical items still sort by filename");
     sortLayout->addWidget(m_sortDirBtn);
     connect(m_sortDirBtn, &QPushButton::toggled, this,
             [this](bool descending)
@@ -658,7 +665,8 @@ void MainWindow::buildStatusBarUi()
     m_lblSize = new QLabel("大小 0 B", this);
     m_lblZoom = new QLabel("Zoom", this);
     m_lblCache = new QLabel("Hit rate —", this);
-    m_lblCache->setToolTip(tr("Cache hit rate: improves consecutive large-image switching and thumbnail loading"));
+    m_lblCache->setToolTip(
+        tr("Cache hit rate: improves consecutive large-image switching and thumbnail loading"));
     for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
     {
         l->setContentsMargins(mviewer::ui::metrics::kSpace8, 0, mviewer::ui::metrics::kSpace8, 0);

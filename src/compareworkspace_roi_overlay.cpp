@@ -53,7 +53,8 @@ void CompareWorkspace::updateROISurfaces()
     if (m_roiHud)
     {
         m_roiHud->setVisible(false);
-        m_roiHud->setToolTip(tr("Full statistics are in the Inspector panel; R/G, B/G, and H/S/V are shown beside each pane's selection."));
+        m_roiHud->setToolTip(tr("Full statistics are in the Inspector panel; R/G, B/G, and H/S/V "
+                                "are shown beside each pane's selection."));
     }
     positionROIHud();
 }

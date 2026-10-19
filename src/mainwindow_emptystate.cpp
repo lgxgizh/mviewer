@@ -55,8 +55,9 @@ QLabel *makeHintLabel(QWidget *parent, const QString &objectName, const QString 
 void MainWindow::buildEmptyStateUi()
 {
     // Guide page: shown until the first directory is opened.
-    const QString guideBody = tr("%1 Open folder &nbsp;·&nbsp; You can also drag images or folders into the window")
-                                  .arg(keyCap(QStringLiteral("Ctrl+O")));
+    const QString guideBody =
+        tr("%1 Open folder &nbsp;·&nbsp; You can also drag images or folders into the window")
+            .arg(keyCap(QStringLiteral("Ctrl+O")));
     m_emptyState = makeHintLabel(m_thumbnailPanel, QStringLiteral("emptyStateLabel"),
                                  hintCardHtml(tr("Open a folder to start browsing"), guideBody));
     m_emptyState->show();
@@ -80,9 +81,10 @@ void MainWindow::buildEmptyStateUi()
     // Empty-folder hint: a directory is open but nothing is displayable
     // (no image files, or every entry is hidden by filters). Deferred via
     // a short timer so the transient pre-scan zero cannot flash it.
-    m_emptyFolderLabel = makeHintLabel(
-        m_thumbnailPanel, QStringLiteral("emptyFolderLabel"),
-        hintCardHtml(tr("No images to display in this folder"), tr("Try clearing the filter or choosing another folder")));
+    m_emptyFolderLabel =
+        makeHintLabel(m_thumbnailPanel, QStringLiteral("emptyFolderLabel"),
+                      hintCardHtml(tr("No images to display in this folder"),
+                                   tr("Try clearing the filter or choosing another folder")));
     m_emptyFolderLabel->hide();
 }
 

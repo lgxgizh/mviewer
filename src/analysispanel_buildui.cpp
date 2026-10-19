@@ -78,7 +78,8 @@ void AnalysisPanel::buildHistorySection(QVBoxLayout &layout)
     auto *history = new QListWidget;
     m_historyList = history;
     history->setMaximumHeight(72);
-    history->setToolTip(tr("Analysis history (last 50) — double-click to open the image and restore the result"));
+    history->setToolTip(
+        tr("Analysis history (last 50) — double-click to open the image and restore the result"));
     connect(history, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem *) { onHistoryActivated(); });
 

@@ -244,10 +244,8 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                         const QString detail = mviewer::ui::fileOpErrorZh(error);
                         QMessageBox::warning(panel, label,
                                              state->cancelled
-                                                 ? label + QStringLiteral("Cancelled.
-") + detail
-                                                 : label + QStringLiteral("Failed.
-") + detail);
+                                                 ? label + QStringLiteral("Cancelled.\n") + detail
+                                                 : label + QStringLiteral("Failed.\n") + detail);
                     }
 
                     if (!panel->m_currentDir.isEmpty())
@@ -270,7 +268,8 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
         onProgress);
 
     if (!m_fileOperationTask)
-        failFileOperationQueue(label, label + QStringLiteral("Cannot queue: background task queue is full."));
+        failFileOperationQueue(
+            label, label + QStringLiteral("Cannot queue: background task queue is full."));
 }
 
 void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
@@ -369,8 +368,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                                      : QStringLiteral("\n") + state->failures.join("\n"));
                     if (state->cancelled)
                         QMessageBox::warning(panel, QStringLiteral("Copy"),
-                                             QStringLiteral("Copy cancelled.
-") + summary);
+                                             QStringLiteral("Copy cancelled.\n") + summary);
                     else if (state->failures.isEmpty())
                         emit panel->browseStatusChanged(
                             QStringLiteral("Successfully copied %1 files").arg(state->copied));
@@ -415,10 +413,11 @@ void ThumbnailPanel::renameSelected()
     }
     const QString newSuffix = QFileInfo(newName).suffix();
     if (fi.suffix().compare(newSuffix, Qt::CaseInsensitive) != 0 &&
-        QMessageBox::question(this, QStringLiteral("Rename"),
-                              QStringLiteral("Changing the extension may prevent the file from opening. Continue anyway?"),
-                              QMessageBox::Yes | QMessageBox::No,
-                              QMessageBox::No) != QMessageBox::Yes)
+        QMessageBox::question(
+            this, QStringLiteral("Rename"),
+            QStringLiteral(
+                "Changing the extension may prevent the file from opening. Continue anyway?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
     const QString newPath = QDir(fi.absolutePath()).filePath(newName);
 
@@ -478,11 +477,13 @@ void ThumbnailPanel::moveToTrashSelected()
         return;
     if (QSettings().value(QStringLiteral("confirmDelete"), true).toBool())
     {
-        const QString prompt = paths.size() == 1
-                                   ? tr("Are you sure you want to move this file to the Recycle Bin?")
-                                   : tr("Are you sure you want to move %1 files to the Recycle Bin?").arg(paths.size());
-        const auto answer = QMessageBox::question(
-            this, tr("Delete confirmation"), prompt, QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        const QString prompt =
+            paths.size() == 1 ? tr("Are you sure you want to move this file to the Recycle Bin?")
+                              : tr("Are you sure you want to move %1 files to the Recycle Bin?")
+                                    .arg(paths.size());
+        const auto answer =
+            QMessageBox::question(this, tr("Delete confirmation"), prompt,
+                                  QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
         if (answer != QMessageBox::Yes)
             return;
     }
@@ -491,7 +492,8 @@ void ThumbnailPanel::moveToTrashSelected()
     const QString trashDir = mviewerTrashDirectory();
     if (trashDir.isEmpty() || !QDir().mkpath(trashDir))
     {
-        QMessageBox::warning(this, tr("Delete failed"), tr("Unable to create the recycle directory."));
+        QMessageBox::warning(this, tr("Delete failed"),
+                             tr("Unable to create the recycle directory."));
         return;
     }
 
@@ -585,7 +587,8 @@ void ThumbnailPanel::batchAnalyzeExport()
     const std::vector<std::string> ids = reg.availableAnalyzers();
     if (ids.empty())
     {
-        QMessageBox::warning(this, tr("Batch Analysis Export"), tr("No analyzer is currently available."));
+        QMessageBox::warning(this, tr("Batch Analysis Export"),
+                             tr("No analyzer is currently available."));
         return;
     }
 
@@ -597,8 +600,8 @@ void ThumbnailPanel::batchAnalyzeExport()
         labels << (info ? QString::fromStdString(info->name) : QString::fromStdString(id));
     }
     bool ok = false;
-    const QString chosen =
-        QInputDialog::getItem(this, tr("Batch Analysis Export"), tr("Select an analyzer:"), labels, 0, false, &ok);
+    const QString chosen = QInputDialog::getItem(this, tr("Batch Analysis Export"),
+                                                 tr("Select an analyzer:"), labels, 0, false, &ok);
     if (!ok || chosen.isEmpty())
         return;
     const int chosenIdx = labels.indexOf(chosen);
@@ -619,7 +622,8 @@ void ThumbnailPanel::ensureBatchProgressDialog()
 {
     if (m_batchProgress)
         return;
-    m_batchProgress = new QProgressDialog(tr("Running batch analysis..."), tr("Cancel"), 0, 100, this);
+    m_batchProgress =
+        new QProgressDialog(tr("Running batch analysis..."), tr("Cancel"), 0, 100, this);
     m_batchProgress->setWindowModality(Qt::WindowModal);
     m_batchProgress->setAutoClose(false);
     m_batchProgress->setMinimumDuration(0);
@@ -639,11 +643,13 @@ void ThumbnailPanel::finishBatchAnalyzeExport(bool cancelled, bool writeOk, size
         m_batchProgress->close();
     if (cancelled)
     {
-        QMessageBox::information(this, tr("Batch Analysis Export"), tr("Batch analysis cancelled."));
+        QMessageBox::information(this, tr("Batch Analysis Export"),
+                                 tr("Batch analysis cancelled."));
     }
     else if (!writeOk)
     {
-        QMessageBox::critical(this, tr("Batch Analysis Export"), tr("Cannot write: %1").arg(output));
+        QMessageBox::critical(this, tr("Batch Analysis Export"),
+                              tr("Cannot write: %1").arg(output));
     }
     else
     {
@@ -659,7 +665,8 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
 {
     if (m_batchTask)
     {
-        QMessageBox::information(this, tr("Batch Analysis Export"), tr("A batch analysis is already running."));
+        QMessageBox::information(this, tr("Batch Analysis Export"),
+                                 tr("A batch analysis is already running."));
         return;
     }
 
@@ -770,7 +777,8 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
     if (!m_batchTask)
     {
         m_batchProgress->close();
-        QMessageBox::warning(this, tr("Batch Analysis Export"), tr("Background task was rejected by the scheduler."));
+        QMessageBox::warning(this, tr("Batch Analysis Export"),
+                             tr("Background task was rejected by the scheduler."));
     }
 }
 

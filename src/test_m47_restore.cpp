@@ -213,12 +213,14 @@ int main(int argc, char **argv)
         MainWindow w;
         w.show();
         w.openProjectFile(projA);
-        CHECK(
-            waitTrue(
-                [&]
-                { return w.statusBar()->currentMessage().contains(QStringLiteral("Project already open")); },
-                30000),
-            "R1b: the project's embedded workspace restores");
+        CHECK(waitTrue(
+                  [&]
+                  {
+                      return w.statusBar()->currentMessage().contains(
+                          QStringLiteral("Project already open"));
+                  },
+                  30000),
+              "R1b: the project's embedded workspace restores");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
         CHECK(model && model->currentDirectory() == rootA,
               "R1b: the project restores the browsing directory");

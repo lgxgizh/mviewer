@@ -153,8 +153,8 @@ void testMissingDirectory(Results &results)
                             QString::number(QCoreApplication::applicationPid());
     QDir(missing).removeRecursively();
     panel.setDirectory(missing);
-    const bool failed =
-        waitTrue([&] { return statuses.contains(QStringLiteral("Failed to load directory")); }, 5000);
+    const bool failed = waitTrue(
+        [&] { return statuses.contains(QStringLiteral("Failed to load directory")); }, 5000);
     check(results, failed, "missing directory emits 目录加载失败");
     check(results, panel.entries().isEmpty(), "missing directory leaves the gallery empty");
     check(results, QApplication::overrideCursor() == nullptr,

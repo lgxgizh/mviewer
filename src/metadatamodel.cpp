@@ -162,7 +162,8 @@ void MetadataModel::buildImageSection()
     if (m_meta.width > 0 && m_meta.height > 0)
     {
         const double mp = m_meta.width * m_meta.height / 1000000.0;
-        addLeaf(img, tr("Dimensions"), QString("%1 × %2 像素").arg(m_meta.width).arg(m_meta.height));
+        addLeaf(img, tr("Dimensions"),
+                QString("%1 × %2 像素").arg(m_meta.width).arg(m_meta.height));
         addLeaf(img, tr("Aspect Ratio"), ratioText(m_meta.width, m_meta.height));
         addLeaf(img, tr("Megapixels"), QString("%1 MP").arg(mp, 0, 'f', 2));
     }
@@ -276,7 +277,8 @@ void MetadataModel::buildRawSection()
     if (m_raw.focalLength > 0.0)
         addLeaf(raw, tr("Focal Length"), QString("%1 mm").arg(m_raw.focalLength, 0, 'f', 1));
     if (m_raw.focalLength35mm > 0.0)
-        addLeaf(raw, tr("Equivalent Focal Length"), QString("%1 mm").arg(m_raw.focalLength35mm, 0, 'f', 1));
+        addLeaf(raw, tr("Equivalent Focal Length"),
+                QString("%1 mm").arg(m_raw.focalLength35mm, 0, 'f', 1));
     if (!m_raw.bayerPattern.empty())
         addLeaf(raw, tr("Bayer Pattern"), toQString(m_raw.bayerPattern));
     if (m_raw.blackLevel > 0)

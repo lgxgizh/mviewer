@@ -240,8 +240,8 @@ bool CompareWorkspace::saveComparisonViewTo(const QString &path)
 
 void CompareWorkspace::saveComparisonViewToFile()
 {
-    const QString path = QFileDialog::getSaveFileName(this, tr("Save comparison screenshot"),
-                                                      snapshotSuggestion(), tr("PNG image (*.png)"));
+    const QString path = QFileDialog::getSaveFileName(
+        this, tr("Save comparison screenshot"), snapshotSuggestion(), tr("PNG image (*.png)"));
     if (path.isEmpty())
         return;
     const QString native = QDir::toNativeSeparators(path);

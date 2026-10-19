@@ -397,7 +397,8 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
         applyAnchorZoom(0, 0.0, 0.0, factor);
         const double currentScale = m_engine.cellTransform(0).scale;
         const int pct = static_cast<int>(std::round(currentScale * 100.0));
-        showCompareStatus(isZoomIn ? tr("View zoomed in (%1%)").arg(pct) : tr("View zoomed out (%1%)").arg(pct));
+        showCompareStatus(isZoomIn ? tr("View zoomed in (%1%)").arg(pct)
+                                   : tr("View zoomed out (%1%)").arg(pct));
         if (m_compareCanvas)
             m_compareCanvas->update();
         update();
@@ -589,7 +590,8 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
     const int idx = resolveEditCell();
     if (idx < 0)
     {
-        showCompareStatus(tr("Click a pane to rotate first (preview only, does not modify the original file)"));
+        showCompareStatus(
+            tr("Click a pane to rotate first (preview only, does not modify the original file)"));
         return;
     }
     const int needed = idx + 1;
@@ -648,15 +650,18 @@ void CompareWorkspace::flipCurrentCell(bool horizontal)
         scheduleDisplayMaterialization(dirty);
         onAdjEditFinished();
         update();
-        showCompareStatus(horizontal ? tr("Flipped all comparison images horizontally in sync (not written to file)")
-                                     : tr("Flipped all comparison images vertically in sync (not written to file)"));
+        showCompareStatus(
+            horizontal
+                ? tr("Flipped all comparison images horizontally in sync (not written to file)")
+                : tr("Flipped all comparison images vertically in sync (not written to file)"));
         return;
     }
 
     const int idx = resolveEditCell();
     if (idx < 0)
     {
-        showCompareStatus(tr("Click a pane to flip first (preview only, does not modify the original file)"));
+        showCompareStatus(
+            tr("Click a pane to flip first (preview only, does not modify the original file)"));
         return;
     }
     const int needed = idx + 1;
@@ -677,8 +682,9 @@ void CompareWorkspace::flipCurrentCell(bool horizontal)
     const ImageFrame *img = m_engine.imageAt(idx);
     const QString name =
         img ? QString::fromStdString(img->metadata().fileName) : tr("Pane %1").arg(idx + 1);
-    showCompareStatus(horizontal ? tr("Previewed horizontal flip of %1 (not written to file)").arg(name)
-                                 : tr("Previewed vertical flip of %1 (not written to file)").arg(name));
+    showCompareStatus(horizontal
+                          ? tr("Previewed horizontal flip of %1 (not written to file)").arg(name)
+                          : tr("Previewed vertical flip of %1 (not written to file)").arg(name));
 }
 
 bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)

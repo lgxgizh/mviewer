@@ -623,7 +623,8 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
                                                              .arg(norm.y)
                                                              .arg(norm.width)
                                                              .arg(norm.height));
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle, tr("Measure source image RGB after release"));
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle,
+                               tr("Measure source image RGB after release"));
         update();
         return;
     }
@@ -648,7 +649,8 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
                                                       .arg(m_lastSelection.width)
                                                       .arg(m_lastSelection.height)
                                                 : tr("ROI: —"));
-    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle, tr("Measure source image RGB after release"));
+    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle,
+                           tr("Measure source image RGB after release"));
     update();
 }
 

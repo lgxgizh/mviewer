@@ -507,10 +507,9 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     if (m_engine.imageCount() == 0 && m_compareLoadingLabel)
     {
         m_compareLoadingLabel->setText(
-            failedCount > 0 ? tr("No images available.
-Check that the files exist, are complete, and are supported.")
-                            : tr("No images available.
-Return to Browse and select images."));
+            failedCount > 0 ? tr("No images available.\nCheck that the files exist, are complete, "
+                                 "and are supported.")
+                            : tr("No images available.\nReturn to Browse and select images."));
     }
 
     // M24 (B#7): failed loads are dropped by the engine — tell the user why
@@ -524,10 +523,10 @@ Return to Browse and select images."));
     const int loaded = m_engine.imageCount() - m_infeasibleCount;
     if (failedCount > 0)
     {
-        emit loadWarning(
-            tr("%1 images could not be loaded (corrupt, missing, or unsupported). %2 usable images were kept for comparison.")
-                .arg(failedCount)
-                .arg(loaded));
+        emit loadWarning(tr("%1 images could not be loaded (corrupt, missing, or unsupported). %2 "
+                            "usable images were kept for comparison.")
+                             .arg(failedCount)
+                             .arg(loaded));
     }
     // A-4: loading a fresh comparison set should not inherit adjustments from
     // the previous session; applySession will repopulate persisted values.

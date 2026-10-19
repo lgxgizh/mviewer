@@ -412,7 +412,8 @@ void AnalysisPanel::renderNoResult()
 void AnalysisPanel::renderAnalysisUnavailable()
 {
     const QString msg = tr("Analysis queue is busy. Please try again later.");
-    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Analysis temporarily unavailable")).arg(msg));
+    m_statsLabel->setText(
+        QString("<h3>%1</h3><p>%2</p>").arg(tr("Analysis temporarily unavailable")).arg(msg));
     if (m_pluginResult)
         m_pluginResult->setText(msg);
     setReportAnalysisState(ReportAnalysisState::Unavailable);

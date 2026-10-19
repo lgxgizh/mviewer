@@ -121,8 +121,8 @@ void checkChinesePairGuidance(const char *surface, const QString &text, bool wan
                                    QStringLiteral("deselect")) &&
                        !shortcutMisbindsBatch(plain, QStringLiteral("Ctrl+Shift+A")),
                    surface, "Ctrl+Shift+A deselects and is not batch analysis");
-    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("Batch Analysis"),
-                                   QStringLiteral("batch analy")),
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"),
+                                   QStringLiteral("Batch Analysis"), QStringLiteral("batch analy")),
                    surface, "Ctrl+Alt+A is batch analysis export");
 }
 
@@ -141,8 +141,8 @@ void checkEnglishShortcutMirror(const char *surface, const QString &text)
                                    QStringLiteral("deselect")) &&
                        !shortcutMisbindsBatch(plain, QStringLiteral("Ctrl+Shift+A")),
                    surface, "Ctrl+Shift+A deselects and is not batch analysis");
-    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("Batch Analysis"),
-                                   QStringLiteral("batch analy")),
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"),
+                                   QStringLiteral("Batch Analysis"), QStringLiteral("batch analy")),
                    surface, "Ctrl+Alt+A is batch analysis export");
 }
 
@@ -172,8 +172,10 @@ bool statesOppositeSliderDirection(const QString &plain)
            plain.contains(QStringLiteral("[ Difference threshold +5")) ||
            plain.contains(QStringLiteral(". Overlay opacity -5")) ||
            plain.contains(QStringLiteral(", Overlay opacity +5")) ||
-           plain.contains(QStringLiteral("] Decrease")) || plain.contains(QStringLiteral("[ Increase")) ||
-           plain.contains(QStringLiteral(", Increase")) || plain.contains(QStringLiteral(". Decrease"));
+           plain.contains(QStringLiteral("] Decrease")) ||
+           plain.contains(QStringLiteral("[ Increase")) ||
+           plain.contains(QStringLiteral(", Increase")) ||
+           plain.contains(QStringLiteral(". Decrease"));
 }
 
 void checkCompareModeKeyGuidance(const QString &helpHtml, const QString &guideHtml)
@@ -1084,15 +1086,15 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         w.statusBar()->clearMessage();
         sendKey(&w, Qt::Key_C);
         pump(40);
-        CHECK(
-            w.statusBar()->currentMessage().contains(QStringLiteral("Select 2-8 images to compare")),
-            "C explains that Compare needs a 2-8 image selection");
+        CHECK(w.statusBar()->currentMessage().contains(
+                  QStringLiteral("Select 2-8 images to compare")),
+              "C explains that Compare needs a 2-8 image selection");
         w.statusBar()->clearMessage();
         sendKey(&w, Qt::Key_P);
         pump(40);
-        CHECK(
-            w.statusBar()->currentMessage().contains(QStringLiteral("Select 2-8 images to compare")),
-            "P explains that Compare needs a 2-8 image selection");
+        CHECK(w.statusBar()->currentMessage().contains(
+                  QStringLiteral("Select 2-8 images to compare")),
+              "P explains that Compare needs a 2-8 image selection");
         bool compareOpenedFromOne = false;
         for (QWidget *top : QApplication::topLevelWidgets())
         {
@@ -1745,9 +1747,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         w.statusBar()->clearMessage();
         sendKey(&w, Qt::Key_C);
         pump(100);
-        CHECK(
-            w.statusBar()->currentMessage().contains(QStringLiteral("Select 2-8 images to compare")),
-            "Compare keyboard command explains why a single-image folder cannot compare");
+        CHECK(w.statusBar()->currentMessage().contains(
+                  QStringLiteral("Select 2-8 images to compare")),
+              "Compare keyboard command explains why a single-image folder cannot compare");
         bool compareOpened = false;
         for (QWidget *top : QApplication::topLevelWidgets())
         {
@@ -2111,7 +2113,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     pump(30);
     CHECK(autoAlignChk && autoAlignChk->isVisible(),
           "auto-align lives on the compare chrome, not only in Preferences");
-    reportGuidance(autoAlignChk && autoAlignChk->toolTip().contains(QStringLiteral("Integer pixels")) &&
+    reportGuidance(autoAlignChk &&
+                       autoAlignChk->toolTip().contains(QStringLiteral("Integer pixels")) &&
                        !autoAlignChk->toolTip().contains(QStringLiteral("Sub-pixel")),
                    "auto-align tooltip", "describes an integer-pixel translation");
     if (moreButton && moreButton->menu())
@@ -4412,11 +4415,11 @@ void workflow5_export_current_output_directory(const QString &rootDir)
             const int htmlIndex = modeCombo->findData(QStringLiteral("html"));
             const int clipboardIndex = modeCombo->findData(QStringLiteral("clipboard"));
             const int convertIndex = modeCombo->findData(QStringLiteral("convert"));
-            CHECK(csvIndex >= 0 &&
-                      modeCombo->itemText(csvIndex) == QStringLiteral("Image Metadata Manifest CSV"),
+            CHECK(csvIndex >= 0 && modeCombo->itemText(csvIndex) ==
+                                       QStringLiteral("Image Metadata Manifest CSV"),
                   "CSV inventory mode uses the metadata-list label");
-            CHECK(jsonIndex >= 0 &&
-                      modeCombo->itemText(jsonIndex) == QStringLiteral("Image metadata manifest JSON"),
+            CHECK(jsonIndex >= 0 && modeCombo->itemText(jsonIndex) ==
+                                        QStringLiteral("Image metadata manifest JSON"),
                   "JSON inventory mode uses the metadata-list label");
             CHECK(htmlIndex >= 0 &&
                       modeCombo->itemText(htmlIndex) == QStringLiteral("Image Metadata List HTML"),
@@ -4447,7 +4450,8 @@ void workflow5_export_current_output_directory(const QString &rootDir)
             auto *watermarkGroup = groupTitled(QStringLiteral("Watermark"));
             auto *cropGroup = groupTitled(QStringLiteral("Crop"));
             auto *metadataGroup = groupTitled(QStringLiteral("Metadata"));
-            auto *renameGroup = groupTitled(QStringLiteral("Batch Rename (leave blank = original name)"));
+            auto *renameGroup =
+                groupTitled(QStringLiteral("Batch Rename (leave blank = original name)"));
             auto *contactGroup = groupTitled(QStringLiteral("Contact sheet / PDF options"));
             CHECK(outputRow && formatGroup && resizeGroup && watermarkGroup && cropGroup &&
                       metadataGroup && renameGroup && contactGroup,
@@ -5234,7 +5238,8 @@ void workflow17_batch_dialog(const QString &rootDir)
     auto *progressGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchProgressGroup"));
     CHECK(fileGroup && fileGroup->title() == QStringLiteral("File"), "batch has 文件 group");
     CHECK(opGroup && opGroup->title() == QStringLiteral("Operations"), "batch has 操作 group");
-    CHECK(paramGroup && paramGroup->title() == QStringLiteral("Parameters"), "batch has 参数 group");
+    CHECK(paramGroup && paramGroup->title() == QStringLiteral("Parameters"),
+          "batch has 参数 group");
     CHECK(progressGroup && progressGroup->title() == QStringLiteral("Progress"),
           "batch has 进度 group");
 
@@ -5379,14 +5384,16 @@ void workflow18_shell_copy_and_export_text()
     summaryResult.failed = 1;
     summaryResult.message = "done 3 / 4 (failed 1): a.png; b.png (+1 more)";
     const QString summary = mviewer::ui::exportResultMessageZh(summaryResult);
-    CHECK(summary.contains(QStringLiteral("Export complete: 3 / 4")), "done summary uses Chinese counts");
+    CHECK(summary.contains(QStringLiteral("Export complete: 3 / 4")),
+          "done summary uses Chinese counts");
     CHECK(summary.contains(QStringLiteral(", 1 failed")), "done summary names the failure count");
     CHECK(summary.contains(QStringLiteral(": a.png; b.png (+1 more)")),
           "done summary keeps the named-failure tail");
 
     mviewer::exportjob::ExportJobResult conflict;
     conflict.message = "source/destination conflict";
-    CHECK(mviewer::ui::exportResultMessageZh(conflict) == QStringLiteral("Source file conflicts with target file"),
+    CHECK(mviewer::ui::exportResultMessageZh(conflict) ==
+              QStringLiteral("Source file conflicts with target file"),
           "source/destination conflict is translated");
 
     mviewer::exportjob::ExportJobResult directory;
@@ -5574,9 +5581,12 @@ void assertCompareControlsReachable(const QString &pathA, const QString &pathB)
         const std::string msg = std::string("compare control still exists: ") + name;
         CHECK(ws->findChild<QObject *>(QLatin1String(name)) != nullptr, msg.c_str());
     }
-    CHECK(findChk(ws, QStringLiteral("Flicker Compare")) && findChk(ws, QStringLiteral("Side-by-Side Split")) &&
-              findChk(ws, QStringLiteral("Swipe Compare")) && findChk(ws, QStringLiteral("Overlay Compare")) &&
-              findChk(ws, QStringLiteral("Checkerboard")) && findChk(ws, QStringLiteral("Sync Crosshair")) &&
+    CHECK(findChk(ws, QStringLiteral("Flicker Compare")) &&
+              findChk(ws, QStringLiteral("Side-by-Side Split")) &&
+              findChk(ws, QStringLiteral("Swipe Compare")) &&
+              findChk(ws, QStringLiteral("Overlay Compare")) &&
+              findChk(ws, QStringLiteral("Checkerboard")) &&
+              findChk(ws, QStringLiteral("Sync Crosshair")) &&
               findChk(ws, QStringLiteral("Uniform Pixel Scale")),
           "compare mode and sync labels stay reachable");
 

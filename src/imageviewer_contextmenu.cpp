@@ -283,7 +283,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     aPrev->setEnabled(hasBrowsePosition && m_currentIndex > 0);
     menu.addSeparator();
     const bool isFull = property("mviewerFullscreenRequested").toBool() || isFullScreen();
-    QAction *aFullscreen = menu.addAction(isFull ? tr("Exit Fullscreen (F11)") : tr("Fullscreen (F11)"));
+    QAction *aFullscreen =
+        menu.addAction(isFull ? tr("Exit Fullscreen (F11)") : tr("Fullscreen (F11)"));
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;

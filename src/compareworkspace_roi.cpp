@@ -317,11 +317,13 @@ void CompareWorkspace::scheduleROIMeasurement()
     }
 
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Measuring,
-                           linked ? tr("Source RGB · 8-bit analysis") : tr("Independent selection · Source pixel RGB analysis"));
+                           linked ? tr("Source RGB · 8-bit analysis")
+                                  : tr("Independent selection · Source pixel RGB analysis"));
     m_roiTask = startROIStatsBatch(inputs, m_lastSelection, linked, m_roiGen, QPointer(this));
     if (!m_roiTask)
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Backpressured,
-                               tr("Analysis queue busy — retry after adjusting or releasing the ROI"));
+        setROIMeasurementState(
+            mviewer::ui::ROIMeasurementState::Backpressured,
+            tr("Analysis queue busy — retry after adjusting or releasing the ROI"));
 }
 
 void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &result)
@@ -393,8 +395,9 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         if (result.panes.size() == 2)
         {
             const auto &b = result.panes[1].stats;
-            m_roiDeltaLabel->setText(b.valid ? tr("Difference (B − A): %1").arg(roiDeltaMetrics(a, b))
-                                             : tr("Delta (B − A): —"));
+            m_roiDeltaLabel->setText(b.valid
+                                         ? tr("Difference (B − A): %1").arg(roiDeltaMetrics(a, b))
+                                         : tr("Delta (B − A): —"));
         }
         else
         {
@@ -418,14 +421,16 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
     }
 
     if (failed)
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Failed, tr("Some source images failed to measure"));
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Failed,
+                               tr("Some source images failed to measure"));
     else if (unsupported)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
                                tr("Cannot decode this region precisely from the source image"));
     else if (hasAnyValid)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Ready,
-                               result.linked ? tr("Source RGB · Full-resolution coordinates · 8-bit analysis")
-                                             : tr("Independent selection · Source pixel RGB analysis"));
+                               result.linked
+                                   ? tr("Source RGB · Full-resolution coordinates · 8-bit analysis")
+                                   : tr("Independent selection · Source pixel RGB analysis"));
     else
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
 

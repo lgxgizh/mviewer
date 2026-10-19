@@ -30,8 +30,9 @@ void CompareWorkspace::setSyncRotate(bool on)
     }
     if (QAction *action = findChild<QAction *>(QStringLiteral("syncRotateAction")))
         action->setChecked(on);
-    showCompareStatus(on ? tr("Sync rotation enabled: rotation applies to all images")
-                         : tr("Sync rotation disabled: rotation applies only to the selected image"));
+    showCompareStatus(
+        on ? tr("Sync rotation enabled: rotation applies to all images")
+           : tr("Sync rotation disabled: rotation applies only to the selected image"));
 }
 
 void CompareWorkspace::setEditCellIndex(int cellIdx)
@@ -83,7 +84,8 @@ void CompareWorkspace::buildSyncControls()
     m_syncDragChk->setToolTip(tr("Sync drag across all panes (D)"));
     m_syncRotateChk = new QCheckBox(mviewer::cw::compareShortcutText("Alt+R"), this);
     m_syncRotateChk->setObjectName("syncRotateCheck");
-    m_syncRotateChk->setToolTip(tr("When checked, rotation and flip are applied in sync to all images being compared (Alt+R)"));
+    m_syncRotateChk->setToolTip(tr("When checked, rotation and flip are applied in sync to all "
+                                   "images being compared (Alt+R)"));
     m_syncRotateChk->setChecked(m_syncRotate);
 
     auto applySync = [this](bool) { update(); };
@@ -115,7 +117,8 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     // of the sync-zoom toggle; when on, Fit uses the shared (minimum) scale for all.
     m_uniformScaleChk = new QCheckBox(tr("Uniform Pixel Scale"), this);
     m_uniformScaleChk->setChecked(false);
-    m_uniformScaleChk->setToolTip(tr("Show all panes at the same scale so images of different resolutions stay 1:1 pixel-aligned"));
+    m_uniformScaleChk->setToolTip(tr("Show all panes at the same scale so images of different "
+                                     "resolutions stay 1:1 pixel-aligned"));
     connect(m_uniformScaleChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -159,7 +162,8 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     m_splitChk = new QCheckBox(mviewer::cw::compareShortcutText("S"), this);
     m_splitChk->setEnabled(false);
     // M24 (B#8): a disabled control must say why it is unavailable.
-    m_splitChk->setToolTip(tr("Available only with 2 images: side-by-side comparison (Shortcut: S)"));
+    m_splitChk->setToolTip(
+        tr("Available only with 2 images: side-by-side comparison (Shortcut: S)"));
     connect(m_splitChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -175,7 +179,8 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
 
     m_swipeChk = new QCheckBox(mviewer::cw::compareShortcutText("W"), this);
     m_swipeChk->setEnabled(false);
-    m_swipeChk->setToolTip(tr("Available only with 2 images: sliding split comparison (Shortcut: W)"));
+    m_swipeChk->setToolTip(
+        tr("Available only with 2 images: sliding split comparison (Shortcut: W)"));
     connect(m_swipeChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -250,7 +255,8 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_diffOverlayChk->setObjectName("diffOverlayToggle");
     m_diffOverlayChk->setChecked(false);
     m_diffOverlayChk->setEnabled(false);
-    m_diffOverlayChk->setToolTip(tr("Explicitly overlay the difference heatmap; normal Compare always shows the original image"));
+    m_diffOverlayChk->setToolTip(tr("Explicitly overlay the difference heatmap; normal Compare "
+                                    "always shows the original image"));
     connect(m_diffOverlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -264,7 +270,8 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_diffHighlightChk = new QCheckBox(mviewer::cw::compareShortcutText("H"), this);
     m_diffHighlightChk->setObjectName("diffHighlightToggle");
     m_diffHighlightChk->setEnabled(false);
-    m_diffHighlightChk->setToolTip(tr("Highlight differences in red; show similar areas in grayscale (H)"));
+    m_diffHighlightChk->setToolTip(
+        tr("Highlight differences in red; show similar areas in grayscale (H)"));
     connect(m_diffHighlightChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -302,7 +309,8 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_diffGainCombo->addItems({"1x", "2x", "4x", "8x", "16x", "32x"});
     m_diffGainCombo->setCurrentIndex(0);
     m_diffGainCombo->setEnabled(false);
-    m_diffGainCombo->setToolTip(tr("Difference amplification (for inspecting faint noise and compression residuals)"));
+    m_diffGainCombo->setToolTip(
+        tr("Difference amplification (for inspecting faint noise and compression residuals)"));
     connect(m_diffGainCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int idx)
             {
@@ -321,7 +329,8 @@ void CompareWorkspace::buildPixelLinkControls(QHBoxLayout *toolLayout)
     m_pixelLinkChk = new QCheckBox(mviewer::cw::compareShortcutText("L"), this);
     m_pixelLinkChk->setObjectName("pixelLinkToggle");
     m_pixelLinkChk->setEnabled(false);
-    m_pixelLinkChk->setToolTip(tr("When enabled, click an image to add markers showing each image's RGB and the difference (L)"));
+    m_pixelLinkChk->setToolTip(tr("When enabled, click an image to add markers showing each "
+                                  "image's RGB and the difference (L)"));
     connect(m_pixelLinkChk, &QCheckBox::toggled, this, &CompareWorkspace::onPixelLinkToggled);
     toolLayout->addWidget(m_pixelLinkChk);
     m_clearLinksBtn = new QPushButton(tr("Clear Markers"), this);
@@ -343,8 +352,8 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     auto *layoutLabel = new QLabel(tr("Layout:"), this);
     viewLayout->addWidget(layoutLabel);
     m_layoutCombo = new QComboBox(this);
-    m_layoutCombo->addItems(
-        {tr("Auto"), tr("Single column"), tr("2 columns"), tr("3 columns"), tr("4 columns"), tr("One row"), tr("Custom")});
+    m_layoutCombo->addItems({tr("Auto"), tr("Single column"), tr("2 columns"), tr("3 columns"),
+                             tr("4 columns"), tr("One row"), tr("Custom")});
     m_layoutCombo->setCurrentIndex(0);
     connect(m_layoutCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &CompareWorkspace::onLayoutChanged);
@@ -353,20 +362,23 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     // A-4.2: custom grid is column-driven. CompareEngine derives the row count.
     auto *columnsLabel = new QLabel(tr("Columns:"), this);
     columnsLabel->setObjectName("compareColumnsCaption");
-    columnsLabel->setToolTip(tr("Only set the column count; the row count is derived automatically from the current image count"));
+    columnsLabel->setToolTip(tr("Only set the column count; the row count is derived automatically "
+                                "from the current image count"));
     viewLayout->addWidget(columnsLabel);
     m_gridColsSpin = new QSpinBox(this);
     m_gridColsSpin->setRange(1, 8);
     m_gridColsSpin->setValue(2);
     m_gridColsSpin->setEnabled(false);
     m_gridColsSpin->setObjectName("compareColumnsSpin");
-    m_gridColsSpin->setToolTip(tr("Only set the column count; the row count is derived automatically from the current image count"));
+    m_gridColsSpin->setToolTip(tr("Only set the column count; the row count is derived "
+                                  "automatically from the current image count"));
     connect(m_gridColsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             &CompareWorkspace::onCustomGridChanged);
     viewLayout->addWidget(m_gridColsSpin);
     m_layoutStatusLabel = new QLabel(this);
     m_layoutStatusLabel->setObjectName("compareGridStatus");
-    m_layoutStatusLabel->setToolTip(tr("Current grid: row count is derived from the image count and column count"));
+    m_layoutStatusLabel->setToolTip(
+        tr("Current grid: row count is derived from the image count and column count"));
     viewLayout->addWidget(m_layoutStatusLabel);
 
     // P0 #③: inspector + histogram side panel toggle.
@@ -474,7 +486,8 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_paneHistOverlayChk = new QCheckBox(tr("Histogram"), this);
     m_paneHistOverlayChk->setObjectName("paneHistogramOverlayToggle");
     m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
-    m_paneHistOverlayChk->setToolTip(tr("Translucently overlay the current histogram at the top-left of each comparison image"));
+    m_paneHistOverlayChk->setToolTip(
+        tr("Translucently overlay the current histogram at the top-left of each comparison image"));
     connect(m_paneHistOverlayChk, &QCheckBox::toggled, this,
             &CompareWorkspace::onPaneHistOverlayToggled);
     toolLayout->addWidget(m_paneHistOverlayChk);
@@ -482,7 +495,8 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_filenameOverlayChk = new QCheckBox(tr("File Name"), this);
     m_filenameOverlayChk->setObjectName("compareFilenameOverlayToggle");
     m_filenameOverlayChk->setChecked(m_filenameOverlay);
-    m_filenameOverlayChk->setToolTip(tr("Show or hide the filename above each comparison image, wrapping when too long"));
+    m_filenameOverlayChk->setToolTip(
+        tr("Show or hide the filename above each comparison image, wrapping when too long"));
     connect(m_filenameOverlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -579,7 +593,8 @@ void CompareWorkspace::addFitWindowButton(QHBoxLayout *toolLayout)
     // row is already at the 1100px budget, so this stays on the actions row.
     auto *fitBtn = new QPushButton(mviewer::cw::compareShortcutText("F"), this);
     fitBtn->setObjectName("fitWindowButton");
-    fitBtn->setToolTip(tr("Fit to window (Shortcut: F): when \"Uniform pixel scale\" is checked, all panes fit at the same scale;"
+    fitBtn->setToolTip(tr("Fit to window (Shortcut: F): when \"Uniform pixel scale\" is checked, "
+                          "all panes fit at the same scale;"
                           "不勾选时各窗格按自身分辨率适配，相同视野/宽高比的图显示为相近大小"));
     connect(fitBtn, &QPushButton::clicked, this,
             [this]()
@@ -627,7 +642,8 @@ QWidget *CompareWorkspace::buildStatusStrip()
     m_autoAlignChk->setStyleSheet(
         QStringLiteral("color:%1;")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
-    m_autoAlignChk->setToolTip(tr("Before comparison, auto-align by integer-pixel translation to remove shift error, then compute PSNR/SSIM"));
+    m_autoAlignChk->setToolTip(tr("Before comparison, auto-align by integer-pixel translation to "
+                                  "remove shift error, then compute PSNR/SSIM"));
     m_autoAlignBeforeDiff = QSettings().value("autoAlignBeforeDiff", false).toBool();
     m_autoAlignChk->setChecked(m_autoAlignBeforeDiff);
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
@@ -647,7 +663,8 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
     m_exitBtn = new QPushButton(mviewer::cw::compareShortcutText("Esc"), strip);
     m_exitBtn->setObjectName("exitCompareButton");
-    m_exitBtn->setToolTip(tr("Close the comparison window (Esc; with a selection, Esc clears it first)"));
+    m_exitBtn->setToolTip(
+        tr("Close the comparison window (Esc; with a selection, Esc clears it first)"));
     connect(m_exitBtn, &QPushButton::clicked, this, &CompareWorkspace::closeCompareHost);
     lay->addWidget(m_exitBtn);
     return strip;
@@ -706,7 +723,8 @@ void CompareWorkspace::resetSuggestedThreshold()
     if (!m_autoThresholdBtn)
         return;
     m_autoThresholdBtn->setEnabled(false);
-    m_autoThresholdBtn->setToolTip(tr("Automatically compute the best separation threshold from the difference distribution (Otsu)"));
+    m_autoThresholdBtn->setToolTip(tr("Automatically compute the best separation threshold from "
+                                      "the difference distribution (Otsu)"));
 }
 
 void CompareWorkspace::noteSuggestedThreshold(bool hasSuggestion, int value)
@@ -721,8 +739,9 @@ void CompareWorkspace::noteSuggestedThreshold(bool hasSuggestion, int value)
     m_hasSuggestedThreshold = true;
     if (!m_autoThresholdBtn)
         return;
-    m_autoThresholdBtn->setToolTip(
-        tr("Automatically compute the best separation threshold from the difference distribution (Otsu suggestion: %1)").arg(clamped));
+    m_autoThresholdBtn->setToolTip(tr("Automatically compute the best separation threshold from "
+                                      "the difference distribution (Otsu suggestion: %1)")
+                                       .arg(clamped));
     const bool diffOn = m_diffOverlayChk && m_diffOverlayChk->isChecked();
     m_autoThresholdBtn->setEnabled(diffOn);
 }

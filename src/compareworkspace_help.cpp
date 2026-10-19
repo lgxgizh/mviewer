@@ -20,7 +20,8 @@ void fillCompareShortcutTable(QTableWidget *table)
     const int rows = static_cast<int>(std::size(mviewer::cw::kCompareShortcuts));
     table->setColumnCount(2);
     table->setRowCount(rows);
-    table->setHorizontalHeaderLabels({QString::fromUtf8("快捷键"), QString::fromUtf8("Description")});
+    table->setHorizontalHeaderLabels(
+        {QString::fromUtf8("快捷键"), QString::fromUtf8("Description")});
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionMode(QAbstractItemView::NoSelection);
     table->verticalHeader()->setVisible(false);

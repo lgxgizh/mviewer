@@ -32,8 +32,7 @@ QString previewText(const std::vector<mviewer::core::BatchRenameResult> &results
     }
     QString text = BatchRenamePanel::tr("Preview: ") + lines.join(QStringLiteral("\n      "));
     if (results.size() > static_cast<size_t>(kPreviewLines))
-        text += BatchRenamePanel::tr("
-      … (%1 files total)").arg(results.size());
+        text += BatchRenamePanel::tr("\n      … (%1 files total)").arg(results.size());
     return text;
 }
 
@@ -86,7 +85,8 @@ void BatchRenamePanel::buildFindReplaceRows()
     findRow->addWidget(new QLabel(tr("Find:")));
     m_findEdit = new QLineEdit;
     m_findEdit->setObjectName(QStringLiteral("batchRenameFind"));
-    m_findEdit->setPlaceholderText(tr("Find in the file name (without extension); leave empty for no replacement"));
+    m_findEdit->setPlaceholderText(
+        tr("Find in the file name (without extension); leave empty for no replacement"));
     findRow->addWidget(m_findEdit, 1);
     findRow->addWidget(new QLabel(tr("Replace with:")));
     m_replaceEdit = new QLineEdit;
