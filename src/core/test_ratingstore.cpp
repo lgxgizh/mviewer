@@ -455,7 +455,7 @@ int main()
     s.setColorLabel(unicodePath, 4);
     s.setPicked(unicodePath, true);
     const std::string unicodeSidecar = SidecarStore::sidecarPath(unicodePath);
-    CHECK(unicodeSidecar.find("测试 image") != std::string::npos,
+    CHECK(unicodeSidecar.find("test image") != std::string::npos,
           "sidecar identity keeps the Unicode filename");
     CHECK(SidecarStore::instance().writeSidecar(unicodePath), "Unicode sidecar write succeeds");
     const QString sidecarPath =

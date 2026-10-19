@@ -23,7 +23,7 @@ QWidget *makeResizePanel(QSpinBox *&maxEdge)
     panel->setObjectName(QStringLiteral("batchResizePanel"));
     auto *row = new QHBoxLayout(panel);
     row->setContentsMargins(0, 0, 0, 0);
-    row->addWidget(new QLabel("缩放最大边:"));
+    row->addWidget(new QLabel("Max edge:"));
     maxEdge = new QSpinBox;
     maxEdge->setRange(64, 32768);
     maxEdge->setValue(1920);
@@ -58,9 +58,9 @@ QWidget *makeCropPanel(QSpinBox *&x, QSpinBox *&y, QSpinBox *&w, QSpinBox *&h)
     grid->addWidget(x, 0, 1);
     grid->addWidget(new QLabel("Y:"), 0, 2);
     grid->addWidget(y, 0, 3);
-    grid->addWidget(new QLabel("宽:"), 1, 0);
+    grid->addWidget(new QLabel("W:"), 1, 0);
     grid->addWidget(w, 1, 1);
-    grid->addWidget(new QLabel("高:"), 1, 2);
+    grid->addWidget(new QLabel("H:"), 1, 2);
     grid->addWidget(h, 1, 3);
     grid->setColumnStretch(4, 1);
     return panel;
@@ -75,7 +75,7 @@ QWidget *makeWatermarkPanel(QLineEdit *&text, QComboBox *&pos, QDoubleSpinBox *&
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(mviewer::ui::metrics::kSpace8);
     auto *row1 = new QHBoxLayout;
-    row1->addWidget(new QLabel("水印文字:"));
+    row1->addWidget(new QLabel("Watermark text:"));
     text = new QLineEdit;
     text->setPlaceholderText("© 2025");
     row1->addWidget(text, 1);
@@ -86,13 +86,13 @@ QWidget *makeWatermarkPanel(QLineEdit *&text, QComboBox *&pos, QDoubleSpinBox *&
     row1->addWidget(pos);
     lay->addLayout(row1);
     auto *row2 = new QHBoxLayout;
-    row2->addWidget(new QLabel("不透明度:"));
+    row2->addWidget(new QLabel("Opacity:"));
     opacity = new QDoubleSpinBox;
     opacity->setRange(0.0, 1.0);
     opacity->setSingleStep(0.05);
     opacity->setValue(0.3);
     row2->addWidget(opacity);
-    row2->addWidget(new QLabel("字号:"));
+    row2->addWidget(new QLabel("Font size:"));
     fontSize = new QSpinBox;
     fontSize->setRange(8, 200);
     fontSize->setValue(24);
@@ -111,7 +111,7 @@ QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&out
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(mviewer::ui::metrics::kSpace8);
     auto *fmtRow = new QHBoxLayout;
-    fmtRow->addWidget(new QLabel("导出格式:"));
+    fmtRow->addWidget(new QLabel("Export format:"));
     format = new QComboBox;
     format->addItems({"png", "jpg", "bmp", "webp"});
     fmtRow->addWidget(format);
@@ -131,7 +131,7 @@ QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&out
     browseBtn = new QPushButton("Browse...");
     outputRow->addWidget(browseBtn);
     lay->addLayout(outputRow);
-    overwriteExisting = new QCheckBox("覆盖已存在的文件");
+    overwriteExisting = new QCheckBox("Overwrite existing files");
     overwriteExisting->setObjectName(QStringLiteral("batchOverwriteExisting"));
     lay->addWidget(overwriteExisting);
     return panel;

@@ -65,8 +65,8 @@ int main(int argc, char **argv)
         m.clear();
         CHECK(m.rowCount() == 1, "empty model has one (hint) category");
         QModelIndex hint = findCategory(&m, "Hint");
-        CHECK(hint.isValid(), "empty model shows 提示 category");
-        CHECK(leafValue(&m, hint, "Description").contains("画廊"),
+        CHECK(hint.isValid(), "empty model shows Hint category");
+        CHECK(leafValue(&m, hint, "Description").contains("gallery"),
               "empty model hint mentions gallery");
         CHECK(m.columnCount() == 2, "model exposes 2 columns");
     }

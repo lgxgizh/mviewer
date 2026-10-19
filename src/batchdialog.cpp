@@ -155,10 +155,10 @@ void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
     fileLay->addWidget(m_fileList, 1);
 
     auto *fileBtnBar = new QHBoxLayout;
-    m_addBtn = new QPushButton("添加文件...");
-    m_addDirBtn = new QPushButton("添加目录...");
-    m_removeBtn = new QPushButton("移除选中");
-    m_chkRecursive = new QCheckBox("递归子目录");
+    m_addBtn = new QPushButton("Add Files...");
+    m_addDirBtn = new QPushButton("Add Directory...");
+    m_removeBtn = new QPushButton("Remove Selected");
+    m_chkRecursive = new QCheckBox("Include subdirectories");
     m_chkRecursive->setToolTip("Scan subfolders for images when adding a directory");
     fileBtnBar->addWidget(m_addBtn);
     fileBtnBar->addWidget(m_addDirBtn);
@@ -205,12 +205,12 @@ void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
     paramLay->setSpacing(8);
 
     auto *retryRow = new QHBoxLayout;
-    retryRow->addWidget(new QLabel("重试次数:"));
+    retryRow->addWidget(new QLabel("Retry count:"));
     m_retryCount = new QSpinBox;
     m_retryCount->setRange(0, 10);
     m_retryCount->setValue(0);
     retryRow->addWidget(m_retryCount);
-    retryRow->addWidget(new QLabel("重试间隔 (ms):"));
+    retryRow->addWidget(new QLabel("Retry interval (ms):"));
     m_retryDelay = new QSpinBox;
     m_retryDelay->setRange(0, 30000);
     m_retryDelay->setSingleStep(100);
@@ -255,20 +255,20 @@ void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
     progressLay->addWidget(m_log, 1);
 
     auto *btnBar = new QHBoxLayout;
-    m_startBtn = new QPushButton("开始");
+    m_startBtn = new QPushButton("Start");
     m_startBtn->setObjectName(QStringLiteral("batchStartButton"));
     m_pauseBtn = new QPushButton("Pause");
     m_pauseBtn->setObjectName(QStringLiteral("batchPauseButton"));
     m_pauseBtn->setEnabled(false);
     m_pauseBtn->setToolTip(
         tr("Pause/resume batch processing (takes effect after the current file finishes)"));
-    m_cancelBtn = new QPushButton("取消处理");
+    m_cancelBtn = new QPushButton("Cancel Processing");
     m_cancelBtn->setObjectName(QStringLiteral("batchCancelButton"));
     m_cancelBtn->setEnabled(false);
-    m_openOutputBtn = new QPushButton("打开输出目录");
+    m_openOutputBtn = new QPushButton("Open Output Directory");
     m_openOutputBtn->setEnabled(false);
     m_openOutputBtn->setToolTip(tr("Open the previous task's output folder in Explorer"));
-    m_closeBtn = new QPushButton("关闭");
+    m_closeBtn = new QPushButton("Close");
     btnBar->addStretch();
     btnBar->addWidget(m_openOutputBtn);
     btnBar->addSpacing(12);
@@ -300,7 +300,7 @@ void BatchDialog::connectControls()
     connect(m_chkExport, &QCheckBox::toggled, this, syncParams);
 
     // Rename settings: live preview uses the export format; an invalid rename
-    // (bad regex, illegal or duplicate names) disables 开始 while 重命名 is on.
+    // (bad regex, illegal or duplicate names) disables Start while Rename is on.
     connect(m_chkRename, &QCheckBox::toggled, this, &BatchDialog::refreshStartButton);
     connect(m_renamePanel, &BatchRenamePanel::validityChanged, this,
             &BatchDialog::refreshStartButton);
@@ -365,7 +365,7 @@ void BatchDialog::onAddFiles()
     for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
         filter += QString::fromStdString(w) + " ";
     filter = filter.trimmed() + ")";
-    const auto files = QFileDialog::getOpenFileNames(this, "选择文件", {}, filter);
+    const auto files = QFileDialog::getOpenFileNames(this, "Select Files", {}, filter);
     for (const auto &f : files)
         m_fileList->addItem(f);
     syncFilesToRenamePanel();
@@ -373,13 +373,14 @@ void BatchDialog::onAddFiles()
 
 void BatchDialog::onAddDir() // P2 #⑦
 {
-    const auto dir = QFileDialog::getExistingDirectory(this, "选择图片目录");
+    const auto dir = QFileDialog::getExistingDirectory(this, "Select Image Directory");
     if (dir.isEmpty())
         return;
     const int added = addSupportedImages(m_fileList, dir, m_chkRecursive->isChecked());
     syncFilesToRenamePanel();
     if (added == 0)
-        QMessageBox::information(this, "Batch Processing", "该目录下没有可识别的图片文件。");
+        QMessageBox::information(this, "Batch Processing",
+                                 "No recognizable image files in this directory.");
 }
 
 void BatchDialog::onRemoveSelected()
@@ -448,21 +449,21 @@ bool BatchDialog::validateStart(const mviewer::domain::BatchJobConfig &config)
 {
     if (config.inputPaths.empty())
     {
-        QMessageBox::warning(this, "Batch Processing", "请先添加文件。");
+        QMessageBox::warning(this, "Batch Processing", "Please add files first.");
         return false;
     }
     if (config.operations.empty())
     {
-        QMessageBox::warning(this, "Batch Processing", "请至少选择一个操作。");
+        QMessageBox::warning(this, "Batch Processing", "Please select at least one operation.");
         return false;
     }
     const bool writesNothing = m_chkRename->isChecked() || m_chkResize->isChecked() ||
                                m_chkCrop->isChecked() || m_chkWatermark->isChecked();
     if (!m_chkExport->isChecked() && writesNothing)
     {
-        QMessageBox::warning(
-            this, "Batch Processing",
-            "未勾选「导出」时，重命名/缩放/裁剪/水印不会生成任何文件。请勾选「导出」。");
+        QMessageBox::warning(this, "Batch Processing",
+                             "With Export unchecked, rename/resize/crop/watermark will not write "
+                             "any files. Please check Export.");
         return false;
     }
     if (m_chkRename->isChecked() && !m_renamePanel->isValid())
@@ -512,7 +513,7 @@ void BatchDialog::onStart()
                     if (!path.empty())
                     {
                         self->m_statusLabel->setText(
-                            QString("处理中 (%1/%2): %3")
+                            QString("Processing (%1/%2): %3")
                                 .arg(current + 1)
                                 .arg(total)
                                 .arg(
@@ -563,7 +564,7 @@ QString BatchDialog::formatResultLine(const mviewer::domain::BatchFileResult &re
     if (!result.success)
         return QString("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
     if (outputPath.isEmpty())
-        return QString("[OK] %1（仅分析，未写出文件）").arg(inputPath);
+        return QString("[OK] %1 (analysis only, file not written)").arg(inputPath);
     return QString("[OK] %1 → %2").arg(inputPath).arg(outputPath);
 }
 
@@ -648,7 +649,7 @@ void BatchDialog::onPauseResume()
         m_isPaused = true;
         m_pauseBtn->setText("Resume");
         m_statusLabel->setText("Paused (takes effect after the current file finishes)");
-        m_log->append("[PAUSE] 批处理已暂停");
+        m_log->append("[PAUSE] Batch paused");
     }
     else
     {
@@ -656,7 +657,7 @@ void BatchDialog::onPauseResume()
         m_isPaused = false;
         m_pauseBtn->setText("Pause");
         m_statusLabel->setText("Resumed processing...");
-        m_log->append("[RESUME] 批处理已恢复");
+        m_log->append("[RESUME] Batch resumed");
     }
 }
 

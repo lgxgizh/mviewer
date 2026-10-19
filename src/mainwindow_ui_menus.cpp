@@ -203,7 +203,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
 {
     // ----- 视图(&V) -----
     auto *viewMenu = menuBar->addMenu("视图(&V)");
-    m_actCompare = new QAction("比较模式(&C)", this);
+    m_actCompare = new QAction(tr("Compare Mode (&C)"), this);
     m_actCompare->setObjectName("compareAction");
     m_actCompare->setShortcut(QKeySequence("P"));
     m_actCompare->setToolTip(tr("Select 2–8 images, then press P or C to open Compare"));

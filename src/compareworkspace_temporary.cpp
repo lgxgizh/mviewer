@@ -155,8 +155,9 @@ void CompareWorkspace::beginDigitTemporaryCompare(int digit)
         if (count < 1)
             showCompareStatus(tr("No images to switch"));
         else
-            showCompareStatus(
-                tr("Currently %1 images; hold 1–%2 to switch temporarily").arg(count).arg(count));
+            showCompareStatus(tr("Currently %1 images in total; hold 1–%2 to switch temporarily")
+                                  .arg(count)
+                                  .arg(count));
         return;
     }
     if (decision.action != mviewer::ui::TemporaryAction::ShowDigit)

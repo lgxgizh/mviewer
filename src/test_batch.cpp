@@ -463,7 +463,7 @@ int main(int argc, char *argv[])
         opts.find = "([0-9]+"; // invalid unclosed parenthesis
         auto res3 = applyBatchRename("C:/photos/raw_photo.png", opts, 0, 1);
         CHECK(!res3.valid, "applyBatchRename invalid regex is marked invalid");
-        CHECK(res3.errorMessage.find("正则表达式无效：") != std::string::npos,
+        CHECK(res3.errorMessage.find("Invalid regular expression: ") != std::string::npos,
               "Error message indicates invalid regex");
 
         // Invalid Windows filename characters in replacement
@@ -481,7 +481,7 @@ int main(int argc, char *argv[])
         auto dupResults = validateBatchRename({"C:/img1.jpg", "C:/img2.jpg"}, dupOpts, &aggErr);
         CHECK(dupResults.size() == 2, "validateBatchRename returns result for all inputs");
         CHECK(!dupResults[0].valid && !dupResults[1].valid, "Duplicate filenames marked invalid");
-        CHECK(!aggErr.empty() && aggErr.find("重复") != std::string::npos,
+        CHECK(!aggErr.empty() && aggErr.find("Duplicate") != std::string::npos,
               "Aggregate error detects duplicates");
 
         // Re-encoded output: the target extension replaces the source one
@@ -503,7 +503,7 @@ int main(int argc, char *argv[])
         BatchRenameOptions badRegex;
         badRegex.find = "(";
         badRegex.useRegex = true;
-        CHECK(mviewer::core::findReplaceError(badRegex).find("正则表达式无效：") == 0,
+        CHECK(mviewer::core::findReplaceError(badRegex).find("Invalid regular expression: ") == 0,
               "findReplaceError reports invalid regex");
         badRegex.useRegex = false;
         CHECK(mviewer::core::findReplaceError(badRegex).empty(),
@@ -625,12 +625,13 @@ int main(int argc, char *argv[])
         const QString sourceDir = QFileInfo(input).absolutePath();
         const auto blocked = exportFile(input, sourceDir, "", false);
         CHECK(!blocked.success, "export onto the source is not a success");
-        CHECK(blocked.errorMessage == "目标与源文件相同，已跳过",
+        CHECK(blocked.errorMessage == "Destination is the same as the source; skipped",
               "export onto the source reports the conflict");
         CHECK(readAllBytes(input) == before, "source bytes stay unchanged");
         CHECK(!hasMviewerTemp(dir), "source conflict leaves no .mviewer-tmp file");
         const auto forced = exportFile(input, sourceDir, "", true);
-        CHECK(!forced.success && forced.errorMessage == "目标与源文件相同，已跳过",
+        CHECK(!forced.success &&
+                  forced.errorMessage == "Destination is the same as the source; skipped",
               "overwrite still refuses to replace the source");
         CHECK(readAllBytes(input) == before, "source bytes stay unchanged when overwrite is on");
         QDir(dir).removeRecursively();
@@ -645,7 +646,7 @@ int main(int argc, char *argv[])
         const QByteArray before = readAllBytes(existing);
         const auto skipped = exportFile(input, dstDir, "", false);
         CHECK(!skipped.success, "existing destination is skipped");
-        CHECK(skipped.errorMessage == "目标文件已存在：keep.png",
+        CHECK(skipped.errorMessage == "Destination file already exists: keep.png",
               "existing destination names the file");
         CHECK(readAllBytes(existing) == before, "skipped destination bytes stay unchanged");
         CHECK(!hasMviewerTemp(dstDir), "skipped destination leaves no .mviewer-tmp file");

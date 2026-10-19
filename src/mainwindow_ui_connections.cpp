@@ -33,32 +33,19 @@ void MainWindow::connectNavigationSignals()
             [this](const mviewer::core::DirectoryDelta &delta)
             {
                 QStringList sidecarImages;
-                for (const auto &entry : delta.sidecarAdded)
+                const auto *lists[] = {&delta.sidecarAdded, &delta.sidecarModified,
+                                       &delta.sidecarRemoved};
+                for (const auto *list : lists)
                 {
-                    const QString sidecar =
-                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
-                    const QString base = QFileInfo(sidecar).completeBaseName();
-                    for (const auto &image : m_thumbnailPanel->entries())
-                        if (QFileInfo(image.path).completeBaseName() == base)
-                            sidecarImages.append(image.path);
-                }
-                for (const auto &entry : delta.sidecarModified)
-                {
-                    const QString sidecar =
-                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
-                    const QString base = QFileInfo(sidecar).completeBaseName();
-                    for (const auto &image : m_thumbnailPanel->entries())
-                        if (QFileInfo(image.path).completeBaseName() == base)
-                            sidecarImages.append(image.path);
-                }
-                for (const auto &entry : delta.sidecarRemoved)
-                {
-                    const QString sidecar =
-                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
-                    const QString base = QFileInfo(sidecar).completeBaseName();
-                    for (const auto &image : m_thumbnailPanel->entries())
-                        if (QFileInfo(image.path).completeBaseName() == base)
-                            sidecarImages.append(image.path);
+                    for (const auto &entry : *list)
+                    {
+                        const QString sidecar = QString::fromUtf8(
+                            entry.path.data(), static_cast<int>(entry.path.size()));
+                        const QString base = QFileInfo(sidecar).completeBaseName();
+                        for (const auto &image : m_thumbnailPanel->entries())
+                            if (QFileInfo(image.path).completeBaseName() == base)
+                                sidecarImages.append(image.path);
+                    }
                 }
                 sidecarImages.removeDuplicates();
                 scheduleSidecarImportPaths(sidecarImages);
@@ -139,7 +126,6 @@ void MainWindow::connectNavigationSignals()
                 updateSelectionActions();
             });
 }
-
 void MainWindow::connectGallerySignals()
 {
     // Tree highlight waits for this so the first gallery batch is not queued
@@ -607,7 +593,7 @@ void MainWindow::connectMenuSignals()
             [this](const QString &path)
             {
                 statusBar()->showMessage(
-                    QString("无法加载图片: %1").arg(QFileInfo(path).fileName()), 5000);
+                    QString("Unable to load image: %1").arg(QFileInfo(path).fileName()), 5000);
             });
     connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
             [this](const QString &msg, int timeoutMs)

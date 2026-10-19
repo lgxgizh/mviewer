@@ -555,7 +555,7 @@ void testManualRejectedReplacement()
               "image stays loaded after the rejected replacement");
         CHECK(!panel.analysisText().contains("Analyzing"),
               "rejected replacement clears the pending state");
-        CHECK(panel.analysisText().contains("请稍后重试"),
+        CHECK(panel.analysisText().contains("Please try again later"),
               "rejected replacement shows an explicit retryable unavailable message");
         CHECK(exportButton && exportButton->isEnabled() &&
                   panel.reportAnalysisState() == AnalysisPanel::ReportAnalysisState::Unavailable,
@@ -576,7 +576,7 @@ void testManualRejectedReplacement()
                                                          std::chrono::milliseconds(5000));
     CHECK(drained, "Analysis pool drains after the rejected replacement");
     pump(300); // let any stale queued delivery attempt and be discarded
-    CHECK(panel.analysisText().contains("请稍后重试"),
+    CHECK(panel.analysisText().contains("Please try again later"),
           "stale accepted job never overwrites the rejected unavailable state");
     CHECK(!model.resultText(path).contains("m28 gated result"),
           "stale accepted job never publishes its gated result");
@@ -625,7 +625,7 @@ void testManualNoResultTerminal()
     opener.open();
     CHECK(waitFor([&panel]() { return !panel.analysisText().contains("Analyzing"); }, 5000),
           "pending state is replaced by an explicit terminal");
-    CHECK(panel.analysisText().contains("未产生结果"),
+    CHECK(panel.analysisText().contains("no results"),
           "analysis surface shows the explicit no-result message");
     CHECK(exportButton && exportButton->isEnabled() &&
               panel.reportAnalysisState() == AnalysisPanel::ReportAnalysisState::NoResult &&

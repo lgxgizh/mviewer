@@ -35,7 +35,7 @@ std::string applyFindReplace(const std::string &baseName, const std::string &fin
                              std::string *errorMessage = nullptr);
 
 // Empty when the options can be applied; otherwise a Chinese message such as
-// 「正则表达式无效：…」.
+// "Invalid regular expression: …".
 std::string findReplaceError(const BatchRenameOptions &options);
 
 // Empty when `fileName` is a usable Windows file name; otherwise a Chinese

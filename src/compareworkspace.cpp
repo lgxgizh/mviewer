@@ -511,21 +511,17 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
                                  "and are supported.")
                             : tr("No images available.\nReturn to Browse and select images."));
     }
-
     // M24 (B#7): failed loads are dropped by the engine — tell the user why
     // the grid has fewer cells than requested instead of silently shrinking.
-    // M47: sources skipped as analysis-infeasible display through the source-
-    // backed LOD path (their panes are NOT empty; the engine holds a
-    // metadata-only placeholder for them) and are excluded from the failure
-    // accounting above, so `failedCount` here is exactly the real failure
-    // count and the placeholder panes never trigger a warning.
-    const int requested = static_cast<int>(frames.size());
+    // M47: analysis-infeasible sources keep metadata placeholders and are
+    // excluded from failedCount, so the warning counts only real failures.
     const int loaded = m_engine.imageCount() - m_infeasibleCount;
     if (failedCount > 0)
     {
-        emit loadWarning(tr("%1 images could not be loaded (corrupt, missing, or unsupported). %2 "
+        emit loadWarning(tr("%1 %2 could not be loaded (corrupt, missing, or unsupported). %3 "
                             "usable images were kept for comparison.")
                              .arg(failedCount)
+                             .arg(failedCount == 1 ? tr("image") : tr("images"))
                              .arg(loaded));
     }
     // A-4: loading a fresh comparison set should not inherit adjustments from

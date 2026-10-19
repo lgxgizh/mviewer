@@ -18,7 +18,7 @@ namespace mviewer::core
 namespace
 {
 
-const char *const kInvalidRegexPrefix = "正则表达式无效：";
+const char *const kInvalidRegexPrefix = "Invalid regular expression: ";
 
 // Compiles the find/replace options once so a whole file list can be renamed
 // without rebuilding the regular expression per file.
@@ -96,9 +96,9 @@ std::string withExtension(const std::string &name, const std::string &ext)
 std::string stemError(const QString &stem)
 {
     if (stem.isEmpty())
-        return "替换后的文件名为空。";
+        return "The replacement file name is empty.";
     if (hasForbiddenCharacter(stem))
-        return "替换结果包含 Windows 不允许的字符（\\ / : * ? \" < > |）。";
+        return "The replacement contains characters not allowed on Windows (\\ / : * ? \" < > |).";
     return {};
 }
 
@@ -155,7 +155,7 @@ void markDuplicates(std::vector<BatchRenameResult> &results)
             seen.insert(key, i);
             continue;
         }
-        const std::string message = "存在重复的目标文件名：" + results[i].newName;
+        const std::string message = "Duplicate destination file name: " + results[i].newName;
         for (const size_t index : {it.value(), i})
         {
             if (!results[index].valid)
@@ -203,17 +203,17 @@ std::string fileNameError(const std::string &fileName)
 {
     const QString name = QString::fromStdString(fileName);
     if (name.isEmpty() || name == QLatin1String(".") || name == QLatin1String(".."))
-        return "文件名不能为空。";
+        return "File name cannot be empty.";
     if (name.size() > 255)
-        return "文件名不能超过 255 个字符。";
+        return "File name cannot exceed 255 characters.";
     if (name != name.trimmed() || name.endsWith(QLatin1Char('.')))
-        return "文件名不能以空格或句点开头或结尾。";
+        return "File name cannot start or end with a space or period.";
     if (hasForbiddenCharacter(name))
-        return "文件名包含 Windows 不允许的字符（\\ / : * ? \" < > |）。";
+        return "File name contains characters not allowed on Windows (\\ / : * ? \" < > |).";
     if (isReservedWindowsStem(name))
-        return "文件名是 Windows 保留设备名。";
+        return "File name is a Windows reserved device name.";
     if (QFileInfo(name).fileName() != name)
-        return "文件名不能包含路径。";
+        return "File name cannot contain a path.";
     return {};
 }
 

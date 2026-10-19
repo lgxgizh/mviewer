@@ -241,7 +241,6 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     connect(m_thresholdSlider, &QSlider::valueChanged, this,
             [this](int value) { m_thresholdLabel->setText(QString::number(value)); });
     toolLayout->addWidget(m_thresholdLabel);
-
     m_autoThresholdBtn = new QPushButton(tr("Auto"), this);
     m_autoThresholdBtn->setObjectName("diffAutoThresholdButton");
     m_autoThresholdBtn->setMaximumWidth(42);
@@ -249,7 +248,6 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     connect(m_autoThresholdBtn, &QPushButton::clicked, this,
             &CompareWorkspace::onAutoThresholdClicked);
     toolLayout->addWidget(m_autoThresholdBtn);
-
     // A-4.6: Diff highlight mode (red diffs / gray similar).
     m_diffOverlayChk = new QCheckBox(tr("Show Difference"), this);
     m_diffOverlayChk->setObjectName("diffOverlayToggle");
@@ -589,13 +587,14 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 
 void CompareWorkspace::addFitWindowButton(QHBoxLayout *toolLayout)
 {
-    // Fit to window (F). 统一像素倍率 decides shared vs per-pane scale. The view
+    // Fit to window (F). Uniform pixel scale decides shared vs per-pane scale. The view
     // row is already at the 1100px budget, so this stays on the actions row.
     auto *fitBtn = new QPushButton(mviewer::cw::compareShortcutText("F"), this);
     fitBtn->setObjectName("fitWindowButton");
-    fitBtn->setToolTip(tr("Fit to window (Shortcut: F): when \"Uniform pixel scale\" is checked, "
+    fitBtn->setToolTip(tr("Fit to window (Shortcut: F): when \"Uniform Pixel Scale\" is checked, "
                           "all panes fit at the same scale;"
-                          "不勾选时各窗格按自身分辨率适配，相同视野/宽高比的图显示为相近大小"));
+                          "when unchecked, each pane fits its own resolution so images with "
+                          "similar FOV/aspect appear similar in size"));
     connect(fitBtn, &QPushButton::clicked, this,
             [this]()
             {

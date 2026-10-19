@@ -69,7 +69,7 @@ void ThumbnailPanel::onSelectionChanged()
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
         m_compareBtn->setToolTip(
-            canCompare ? QStringLiteral("Send the selected %1 images to comparison").arg(n)
+            canCompare ? QStringLiteral("Send the %1 selected images to compare").arg(n)
                        : QStringLiteral("Select 2-8 images to compare (currently %1)").arg(n));
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);

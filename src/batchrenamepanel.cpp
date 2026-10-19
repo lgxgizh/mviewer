@@ -50,8 +50,9 @@ BatchRenamePanel::BatchRenamePanel(QWidget *parent) : QWidget(parent)
     m_patternEdit = new QLineEdit;
     m_patternEdit->setObjectName(QStringLiteral("batchRenamePattern"));
     m_patternEdit->setPlaceholderText(QStringLiteral("{name}_batched_{seq:3}"));
-    m_patternEdit->setToolTip(tr("Available: {name} {ext} {n} {total} {seq:W};"
-                                 "{name} 是查找替换之后的文件名；留空=保持文件名"));
+    m_patternEdit->setToolTip(
+        tr("Available: {name} {ext} {n} {total} {seq:W};"
+           "{name} is the file name after find/replace; leave empty to keep the name"));
     patternRow->addWidget(m_patternEdit, 1);
     mainLay->addLayout(patternRow);
 

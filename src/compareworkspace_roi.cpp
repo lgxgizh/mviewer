@@ -468,7 +468,7 @@ void CompareWorkspace::updateROIAvailabilityStatus()
     if (m_engine.imageCount() < 2)
         detail = tr("Cannot link ROI — at least two images are required");
     else if (!linkedROIAvailable())
-        detail = tr("Cannot link ROI — image sizes do not match");
+        detail = tr("Cannot link ROI — Image dimensions do not match");
     else if (m_lastSelection.isEmpty())
         detail = tr("Linked ROI ready — source coordinates");
     else if (detail.isEmpty())
