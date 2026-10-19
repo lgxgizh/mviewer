@@ -701,7 +701,7 @@ QString MainWindow::userGuideHtml()
         "<li>模式（仅 2 张时）：<kbd>B</kbd> 闪烁 · <kbd>S</kbd> 左右分割 · "
         "<kbd>W</kbd> 滑动 · <kbd>O</kbd> 叠加 · <kbd>K</kbd> "
         "Checkerboard. Overlay/checkerboard sliders appear when needed.</li>"
-        "<li>Check Show Difference for the heatmap; Align uses an Integer pixels translation "
+        "<li>Check Show Difference for the heatmap; Align uses an integer-pixel translation "
         "before metrics.</li>"
         "<li>在图上<b>右键拖</b>画 ROI。每张图的选区旁显示该格 V 与 RGB "
         "均值；完整表在检视面板。</li>"

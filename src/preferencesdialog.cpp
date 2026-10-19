@@ -134,9 +134,8 @@ QWidget *PreferencesDialog::buildCompareTab(QSettings &s)
 {
     auto *compare = new QWidget;
     auto *cl = new QFormLayout(compare);
-    m_autoAlign =
-        new QCheckBox(tr("Auto-align by Integer pixels shift before comparison (eliminate "
-                         "translation misalignment)"));
+    m_autoAlign = new QCheckBox(tr("Auto-align by integer-pixel shift before comparison (eliminate "
+                                   "translation misalignment)"));
     m_autoAlign->setChecked(s.value("autoAlignBeforeDiff", false).toBool());
     cl->addRow(m_autoAlign);
     return compare;

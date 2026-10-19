@@ -474,7 +474,7 @@ void testDegradedImages(const QDir &dir)
 
     CHECK(ws->comparedImageCount() == 3,
           "B#7: corrupt image is excluded from compare without crashing");
-    CHECK(warning.contains("Unable to Load") || warning.contains("Unable to Load"),
+    CHECK(warning.contains("could not be loaded"),
           "B#7: the load failure is surfaced to the user (loadWarning)");
     ws->engine().setScale(2.0);
     pump(30);

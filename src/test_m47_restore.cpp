@@ -189,13 +189,13 @@ int main(int argc, char **argv)
         std::fflush(stdout);
         CHECK(started.contains(QStringLiteral("Opening workspace")),
               "R1: the async open announces itself immediately");
-        CHECK(!started.contains(QStringLiteral("Workspace Opened")),
+        CHECK(!started.contains(QStringLiteral("Workspace opened")),
               "R1: the restore is NOT applied synchronously (async worker path)");
         CHECK(waitTrue(
                   [&]
                   {
                       return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Workspace Opened"));
+                          QStringLiteral("Workspace opened"));
                   },
                   30000),
               "R1: the parsed workspace lands on a later UI delivery");
@@ -217,7 +217,7 @@ int main(int argc, char **argv)
                   [&]
                   {
                       return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Project already open"));
+                          QStringLiteral("Project opened"));
                   },
                   30000),
               "R1b: the project's embedded workspace restores");
@@ -236,7 +236,7 @@ int main(int argc, char **argv)
                   [&]
                   {
                       return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Workspace Opened"));
+                          QStringLiteral("Workspace opened"));
                   },
                   30000),
               "R2: baseline workspace applied");
@@ -257,7 +257,7 @@ int main(int argc, char **argv)
                 [&]
                 {
                     return w.statusBar()->currentMessage().contains(
-                        QStringLiteral("Failed to Open Workspace"));
+                        QStringLiteral("Failed to open workspace"));
                 },
                 15000);
             closer.stop();
@@ -266,7 +266,7 @@ int main(int argc, char **argv)
               "R2: a missing file does not change the current directory");
         CHECK(wm && wm->comparedImages() == cmpBefore,
               "R2: a missing file does not change the compare image set");
-        CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("Failed to Open Workspace")),
+        CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("Failed to open workspace")),
               "R2: the failure terminal is reported (session untouched)");
 
         // Corrupt file: same transactional contract.
@@ -286,7 +286,7 @@ int main(int argc, char **argv)
                 [&]
                 {
                     return w.statusBar()->currentMessage().contains(
-                        QStringLiteral("Failed to Open Workspace"));
+                        QStringLiteral("Failed to open workspace"));
                 },
                 15000);
             closer.stop();
@@ -311,7 +311,7 @@ int main(int argc, char **argv)
                   [&]
                   {
                       return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Workspace Opened"));
+                          QStringLiteral("Workspace opened"));
                   },
                   30000),
               "R3: the final open lands");

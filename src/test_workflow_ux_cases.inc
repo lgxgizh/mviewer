@@ -114,7 +114,7 @@ void checkChinesePairGuidance(const char *surface, const QString &text, bool wan
                    "alignment is not described as sub-pixel");
     if (plain.contains(QStringLiteral("Align")))
     {
-        reportGuidance(plain.contains(QStringLiteral("Integer pixels")), surface,
+        reportGuidance(plain.contains(QStringLiteral("integer-pixel")), surface,
                        "alignment is an integer-pixel translation");
     }
     reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Shift+A"), QStringLiteral("Cancel"),
@@ -230,11 +230,11 @@ void checkLiveSelectionShortcuts(MainWindow &window)
     QCheckBox *align = nullptr;
     for (QCheckBox *box : prefs.findChildren<QCheckBox *>())
     {
-        if (box && box->text().contains(QStringLiteral("Align")))
+        if (box && box->text().contains(QStringLiteral("align"), Qt::CaseInsensitive))
             align = box;
     }
     const QString alignText = align ? align->text() : QString();
-    reportGuidance(align && alignText.contains(QStringLiteral("Integer pixels")) &&
+    reportGuidance(align && alignText.contains(QStringLiteral("integer-pixel")) &&
                        !alignText.contains(QStringLiteral("Sub-pixel")),
                    "preferences align checkbox", "describes an integer-pixel translation");
 }
@@ -2114,7 +2114,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(autoAlignChk && autoAlignChk->isVisible(),
           "auto-align lives on the compare chrome, not only in Preferences");
     reportGuidance(autoAlignChk &&
-                       autoAlignChk->toolTip().contains(QStringLiteral("Integer pixels")) &&
+                       autoAlignChk->toolTip().contains(QStringLiteral("integer-pixel")) &&
                        !autoAlignChk->toolTip().contains(QStringLiteral("Sub-pixel")),
                    "auto-align tooltip", "describes an integer-pixel translation");
     if (moreButton && moreButton->menu())
@@ -2217,8 +2217,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(histOverlayChk && !histOverlayChk->isChecked(), "histogram overlay is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->isChecked(),
           "filename overlay is on by default");
-    CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("Hide")) &&
-              filenameOverlayChk->toolTip().contains(QStringLiteral("New line")),
+    CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("hide")) &&
+              filenameOverlayChk->toolTip().contains(QStringLiteral("wrapping")),
           "filename checkbox tooltip describes show/hide and wrapping");
     CHECK(ws->filenameOverlayVisible(), "filename overlay checkbox enables the overlay");
     auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
@@ -3224,7 +3224,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         QLabel *linkInfo = nullptr;
         for (QLabel *label : ws->findChildren<QLabel *>())
         {
-            if (label && label->text().startsWith(QStringLiteral("Flag:")))
+            if (label && label->text().startsWith(QStringLiteral("Markers:")))
             {
                 linkInfo = label;
                 break;
@@ -3307,8 +3307,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     QProgressBar *failedLoadProgress =
         ws->findChild<QProgressBar *>(QStringLiteral("compareLoadingProgress"));
     CHECK(failedLoadPage && failedLoadPage->isVisible() && failedLoadLabel &&
-              (failedLoadLabel->text().contains(QStringLiteral("Not available")) ||
-               failedLoadLabel->text().contains(QStringLiteral("Unable to Load"))),
+              failedLoadLabel->text().contains(QStringLiteral("No images available")),
           "failed Compare load shows an actionable empty-state explanation");
     CHECK(failedLoadProgress && !failedLoadProgress->isVisible(),
           "failed Compare load hides the indeterminate progress indicator");
@@ -5302,11 +5301,12 @@ void workflow17_batch_dialog(const QString &rootDir)
             QElapsedTimer timer;
             timer.start();
             while (timer.elapsed() < 8000 &&
-                   (!startBtn->isEnabled() || !status->text().contains("Done")))
+                   (!startBtn->isEnabled() || !status->text().contains("Completed")))
                 pump(25);
         }
         CHECK(startBtn->isEnabled(), "start is re-enabled after the batch finishes");
-        CHECK(status->text().contains(QStringLiteral("Done")), "status reports batch completion");
+        CHECK(status->text().contains(QStringLiteral("Completed")),
+              "status reports batch completion");
         CHECK(log->toPlainText().contains(QStringLiteral("[OK]")),
               "log streams a per-file OK line");
         CHECK(QFileInfo::exists(outputPath),
