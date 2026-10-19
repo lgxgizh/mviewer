@@ -1187,6 +1187,16 @@
         <translation>#%1 (%2,%3)</translation>
     </message>
     <message>
+        <location filename="../src/compareworkspace_interact.cpp" line="717"/>
+        <source>  [%1] invalid</source>
+        <translation>  [%1] 无效</translation>
+    </message>
+    <message>
+        <location filename="../src/compareworkspace_interact.cpp" line="740"/>
+        <source>  [%1] RGB(%2,%3,%4) Δinvalid</source>
+        <translation>  [%1] RGB(%2,%3,%4) Δ无效</translation>
+    </message>
+    <message>
         <location filename="../src/compareworkspace_interact.cpp" line="749"/>
         <source>Markers: %1</source>
         <translation>标记: %1</translation>

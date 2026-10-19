@@ -714,7 +714,7 @@ void CompareWorkspace::updateLinkInfo()
             const LinkSample &sample = samples[static_cast<size_t>(c)];
             if (!sample.valid)
             {
-                line += QString("  [%1] 无效").arg(c);
+                line += tr("  [%1] invalid").arg(c);
             }
             else if (c == baseIdx)
             {
@@ -737,7 +737,7 @@ void CompareWorkspace::updateLinkInfo()
             }
             else
             {
-                line += QString("  [%1] RGB(%2,%3,%4) Δ无效")
+                line += tr("  [%1] RGB(%2,%3,%4) Δinvalid")
                             .arg(c)
                             .arg(sample.r)
                             .arg(sample.g)

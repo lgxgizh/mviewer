@@ -3276,7 +3276,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             pixelLink->setChecked(false);
             pixelLink->setChecked(true);
             CHECK(linkInfo->toolTip().contains(QStringLiteral("[1] invalid")),
-                  "pixel-link gate: metadata-only placeholder reports 无效");
+                  "pixel-link gate: metadata-only placeholder reports invalid");
             CHECK(!linkInfo->toolTip().contains(QStringLiteral("[1] RGB(0,0,0)")),
                   "pixel-link gate: placeholder never falls back to its display LOD");
             ws->engine().setFrames(originalFrames);
