@@ -2,6 +2,7 @@
 
 #include "MViewerVersion.h"
 #include "Theme.h"
+#include "Language.h"
 #include "application/CommandLine.h"
 #include "application/Startup.h"
 #include "core/CrashHandler.h"
@@ -63,6 +64,7 @@ int main(int argc, char *argv[])
     mviewer::runtime::configureSettings();
     mviewer::ui::Theme::seedDefaultThemeChoice();
     mviewer::ui::Theme::initTheme();
+    mviewer::ui::Language::applyFromSettings();
     app.setWindowIcon(QIcon(QStringLiteral(":/app/mviewer.png")));
 
     // Core producers (metadata indexing, metadata presentation) deliver their

@@ -1,5 +1,6 @@
 #include "preferencesdialog.h"
 #include "Theme.h"
+#include "Language.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
 #include "thumbnailpanel.h"
@@ -31,6 +32,21 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_uiTheme->setCurrentIndex(
         m_uiTheme->findData(static_cast<int>(mviewer::ui::Theme::currentTheme())));
     gl->addRow(tr("界面主题"), m_uiTheme);
+
+    m_uiLanguage = new QComboBox;
+    m_uiLanguage->setObjectName(QStringLiteral("preferencesUiLanguage"));
+    m_uiLanguage->addItem(tr("跟随系统 (默认)"), static_cast<int>(mviewer::ui::LanguageMode::System));
+    m_uiLanguage->addItem(QStringLiteral("English"), static_cast<int>(mviewer::ui::LanguageMode::English));
+    m_uiLanguage->addItem(QStringLiteral("简体中文"), static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
+    m_uiLanguage->setToolTip(tr("界面语言。切换后对新打开的窗口立即生效；部分已打开面板可能需重启应用。"));
+    {
+        QSettings langSettings;
+        const auto lang = mviewer::ui::Language::languageModeFromKey(
+            langSettings.value(QStringLiteral("uiLanguage"), QStringLiteral("system")).toString());
+        const int langIdx = m_uiLanguage->findData(static_cast<int>(lang));
+        m_uiLanguage->setCurrentIndex(langIdx >= 0 ? langIdx : 0);
+    }
+    gl->addRow(tr("界面语言"), m_uiLanguage);
 
     m_viewMode = new QComboBox;
     struct VM
@@ -180,6 +196,12 @@ void PreferencesDialog::accept()
         const auto mode = static_cast<mviewer::ui::ThemeMode>(m_uiTheme->currentData().toInt());
         if (mode != mviewer::ui::Theme::currentTheme())
             mviewer::ui::Theme::applyTheme(mode);
+    }
+    if (m_uiLanguage)
+    {
+        const auto lang = static_cast<mviewer::ui::LanguageMode>(m_uiLanguage->currentData().toInt());
+        if (lang != mviewer::ui::Language::current())
+            mviewer::ui::Language::apply(lang);
     }
     s.setValue("thumbViewMode", m_viewMode->currentData().toInt());
     s.setValue("thumbSortMode", m_sortMode->currentData().toInt());

@@ -269,6 +269,7 @@ add_library(mviewer_ui STATIC
     preferencesdialog.cpp
     usmcomparedialog.cpp
     Theme.cpp
+    Language.cpp
     ThemeIcons.cpp
     hoverfade.cpp
     ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
@@ -424,6 +425,7 @@ add_executable(test_ui_models
     workspacemodel.cpp
     analyzermodel.cpp
     Theme.cpp
+    Language.cpp
     ThemeIcons.cpp
     hoverfade.cpp
     breadcrumbbar.cpp
