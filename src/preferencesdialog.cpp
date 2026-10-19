@@ -18,11 +18,8 @@
 #include <QVBoxLayout>
 #include <algorithm>
 
-QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
+void PreferencesDialog::addUiAppearanceRows(QFormLayout *gl)
 {
-    auto *general = new QWidget;
-    auto *gl = new QFormLayout(general);
-
     m_uiTheme = new QComboBox;
     m_uiTheme->setObjectName(QStringLiteral("preferencesUiTheme"));
     m_uiTheme->addItem(tr("Follow system (default)"),
@@ -57,6 +54,14 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     auto *languageHint = new QLabel(tr("Restart MViewer to apply a language change everywhere."));
     languageHint->setObjectName(QStringLiteral("preferencesUiLanguageHint"));
     gl->addRow(QString(), languageHint);
+}
+
+QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
+{
+    auto *general = new QWidget;
+    auto *gl = new QFormLayout(general);
+
+    addUiAppearanceRows(gl);
 
     m_viewMode = new QComboBox;
     struct VM
