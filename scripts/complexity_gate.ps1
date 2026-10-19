@@ -2,7 +2,7 @@
 #
 # Enforces file-size, function-length, cyclomatic-complexity and class-size
 # limits so the codebase cannot silently grow into unmaintainable monsters
-# (the product owner's "以后：不会再出现：5000 行 MainWindow").
+# (the product owner's "From now on: it will never appear again: a 5000-line MainWindow").
 #
 # Rules (all configurable):
 #   * Per-file line count:

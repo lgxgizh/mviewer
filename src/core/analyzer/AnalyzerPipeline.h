@@ -16,8 +16,8 @@
 //   * AnalysisPanel depends on the pipeline, not on AnalyzerRegistry directly
 //     (removes the MainWindow/Panel -> AnalyzerRegistry coupling).
 //   * Adding a new analyzer only requires registering it in the AnalyzerFactory;
-//     neither MainWindow nor AnalysisPanel needs to change (acceptance: "新增
-//     Analyzer 时 MainWindow 0 修改").
+//     neither MainWindow nor AnalysisPanel needs to change (acceptance: "Adding
+//     Analyzer when MainWindow 0 modifications").
 //
 // Header is Qt-free (core/domain law). The pipeline is a thin, UI-agnostic
 // facade over AnalyzerRegistry; it does not own analyzer state, only drives

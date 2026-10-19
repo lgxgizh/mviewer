@@ -6,12 +6,12 @@
 #include <utility>
 #include <vector>
 
-// 图像编码器：封装 QImageWriter，支持
-//  - JPEG（可调质量）
-//  - PNG（可调压缩级别）
-//  - BMP（无压缩）
-//  - WebP（可调质量）
-// 接口层只暴露 std 类型，QImage 仅作为内部实现细节。
+// Image encoder: wraps QImageWriter and supports
+//  - JPEG (adjustable quality)
+//  - PNG (adjustable compression level)
+//  - BMP (uncompressed)
+//  - WebP (adjustable quality)
+// The interface layer exposes only std types; QImage is only an internal implementation detail.
 class Encoder
 {
   public:
@@ -32,20 +32,20 @@ class Encoder
         }
     };
 
-    // 默认编码参数（clang-cl 需要具名默认实参；inline 定义避免跨 DLL 导出问题）
+    // Default encoding parameters (clang-cl requires named default arguments; inline definitions avoid cross-DLL export issues)
     static inline const Params kDefaultParams{90, 6};
 
-    // 编码到文件
+    // Encode to file
     static bool encode(const ImageData &img, const std::string &path,
                        const Params &params = kDefaultParams);
 
-    // 编码到内存缓冲区
+    // Encode into a memory buffer
     static std::vector<uint8_t> encodeToBuffer(const ImageData &img, const std::string &format,
                                                const Params &params = kDefaultParams);
 
-    // 根据文件扩展名推断格式
+    // Infer the format from the file extension
     static std::string formatForExtension(const std::string &ext);
 
-    // 支持的输出格式
+    // Supported output formats
     static std::vector<std::string> supportedOutputFormats();
 };

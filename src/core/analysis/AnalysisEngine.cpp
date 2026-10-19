@@ -12,12 +12,12 @@
 #include <cstring>
 #include <sstream>
 
-// 内部实现：把 ImageData 转成 QImage 做像素级统计，算法逻辑保持不变。
-// header 不暴露 Qt；这里在 .cpp 内部使用 Qt 作为实现细节。
+// Internal implementation: convert ImageData to QImage for pixel-level statistics; the algorithm logic stays the same.
+// The header does not expose Qt; Qt is used inside the .cpp as an implementation detail.
 
 ImageStats AnalysisEngine::computeStats(const ImageData &imgData)
 {
-    // 全图统计：ROI 设为整图
+    // Full-image statistics: set the ROI to the entire image
     mviewer::domain::Selection full;
     full.x = 0;
     full.y = 0;
@@ -173,7 +173,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     if (w <= 0 || h <= 0)
         return {};
 
-    // 裁剪 ROI 到图像边界 (64位防溢出)
+    // Clip the ROI to the image bounds (64-bit to prevent overflow)
     const long long x0ll = std::clamp<long long>(region.x, 0, w);
     const long long y0ll = std::clamp<long long>(region.y, 0, h);
     const long long x1ll =

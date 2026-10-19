@@ -115,7 +115,7 @@ bool CacheManager::get(CacheLevel level, const std::string &key, ImageData &out)
         recordHit(level);
         return true;
     }
-    // 回退到磁盘层
+    // Fall back to the disk layer
     if (getDisk(key, out))
     {
         putMemory(level, key, out);
