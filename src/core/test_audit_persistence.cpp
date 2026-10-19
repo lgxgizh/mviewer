@@ -109,6 +109,7 @@ static void testPresetPaths(const std::string &suffix)
     CHECK(manager.loadPreset(spaced.name).quality == 64, "spaced preset round-trips");
 
     ExportManager::Preset cjk;
+    // i18n-allow: non-ASCII name fixture (exercises Unicode handling)
     cjk.name = std::string("预设") + suffix;
     cjk.format = "jpeg";
     cjk.quality = 70;

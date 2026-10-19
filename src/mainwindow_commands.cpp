@@ -1,6 +1,6 @@
 // MainWindow command registration and keyboard dispatch (M20 P0#1).
-#include "mainwindow_p.h"
 #include "Language.h"
+#include "mainwindow_p.h"
 #include "runtime_storage.h"
 #include "shortcutdigits.h"
 
@@ -432,8 +432,9 @@ void MainWindow::startClipboardPaste(const QImage &img)
                     {
                         QFile::remove(tmpPath);
                         window->statusBar()->showMessage(
-                            state->cancelled.load(std::memory_order_relaxed) ? tr("Clipboard paste cancelled")
-                                                                             : tr("Unable to save the clipboard image"),
+                            state->cancelled.load(std::memory_order_relaxed)
+                                ? tr("Clipboard paste cancelled")
+                                : tr("Unable to save the clipboard image"),
                             3000);
                     }
                 },

@@ -44,7 +44,8 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     // i18n-allow: language endonym (always shown in its own script)
     m_uiLanguage->addItem(QStringLiteral("简体中文"),
                           static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
-    m_uiLanguage->setToolTip(tr("UI language. Restart MViewer to apply the change to every window."));
+    m_uiLanguage->setToolTip(
+        tr("UI language. Restart MViewer to apply the change to every window."));
     {
         QSettings langSettings;
         const auto lang = mviewer::ui::Language::languageModeFromKey(
@@ -63,14 +64,13 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         const char *name;
         ThumbnailPanel::ViewMode v;
     };
-    static const VM kVM[] = {
-        {QT_TR_NOOP("Thumbnails"), ThumbnailPanel::Thumbnail},
-        {QT_TR_NOOP("Large icons"), ThumbnailPanel::LargeIcon},
-        {QT_TR_NOOP("Small icons"), ThumbnailPanel::SmallIcon},
-        {QT_TR_NOOP("Details"), ThumbnailPanel::Details},
-        {QT_TR_NOOP("Filmstrip"), ThumbnailPanel::Filmstrip},
-        {QT_TR_NOOP("Compact"), ThumbnailPanel::Compact},
-        {QT_TR_NOOP("List"), ThumbnailPanel::List}};
+    static const VM kVM[] = {{QT_TR_NOOP("Thumbnails"), ThumbnailPanel::Thumbnail},
+                             {QT_TR_NOOP("Large icons"), ThumbnailPanel::LargeIcon},
+                             {QT_TR_NOOP("Small icons"), ThumbnailPanel::SmallIcon},
+                             {QT_TR_NOOP("Details"), ThumbnailPanel::Details},
+                             {QT_TR_NOOP("Filmstrip"), ThumbnailPanel::Filmstrip},
+                             {QT_TR_NOOP("Compact"), ThumbnailPanel::Compact},
+                             {QT_TR_NOOP("List"), ThumbnailPanel::List}};
     for (const auto &e : kVM)
         m_viewMode->addItem(tr(e.name), static_cast<int>(e.v));
     const int vmIdx = m_viewMode->findData(static_cast<int>(ThumbnailPanel::viewModeFromInt(

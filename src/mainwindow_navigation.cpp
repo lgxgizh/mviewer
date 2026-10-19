@@ -483,7 +483,8 @@ void MainWindow::addFavoriteCurrent()
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     updateSelectionActions();
-    statusBar()->showMessage(tr("Added to favorites: %1").arg(QFileInfo(currentDir()).fileName()), 3000);
+    statusBar()->showMessage(tr("Added to favorites: %1").arg(QFileInfo(currentDir()).fileName()),
+                             3000);
 }
 
 void MainWindow::removeFavorite(const QString &dir)
@@ -497,7 +498,8 @@ void MainWindow::removeFavorite(const QString &dir)
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     updateSelectionActions();
-    statusBar()->showMessage(tr("Removed from favorites: %1").arg(QFileInfo(target).fileName()), 3000);
+    statusBar()->showMessage(tr("Removed from favorites: %1").arg(QFileInfo(target).fileName()),
+                             3000);
 }
 
 void MainWindow::rebuildFavoritesBar()

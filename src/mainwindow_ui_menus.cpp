@@ -81,7 +81,8 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, tr("Undo Failed"), mviewer::ui::fileOpErrorText(err));
+                        QMessageBox::warning(this, tr("Undo Failed"),
+                                             mviewer::ui::fileOpErrorText(err));
                     updateUndoRedoActions();
                     return;
                 }
@@ -96,7 +97,8 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, tr("Redo Failed"), mviewer::ui::fileOpErrorText(err));
+                        QMessageBox::warning(this, tr("Redo Failed"),
+                                             mviewer::ui::fileOpErrorText(err));
                     updateUndoRedoActions();
                     return;
                 }

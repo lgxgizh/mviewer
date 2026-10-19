@@ -1,6 +1,6 @@
 // M15 P0#3 — Analyzer Pipeline acceptance test.
 //
-// Acceptance: "新增一个 Analyzer，MainWindow 0 修改".
+// Acceptance: "add a new Analyzer with zero MainWindow changes".
 //
 // This test proves the decoupling by registering a brand-new analyzer through
 // the AnalyzerRegistry and verifying that the AnalyzerPipeline picks it up

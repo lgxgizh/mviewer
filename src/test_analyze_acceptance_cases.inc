@@ -47,7 +47,7 @@ void testC7FailingAnalyzer()
 
 void testC2C4C5PanelAndModel(const QString &pathA, const QString &pathB)
 {
-    std::cout << "鈹€鈹€ Analyze C#2/C#4/C#5: panel + model currency 鈹€鈹€\n";
+    std::cout << "-- Analyze C#2/C#4/C#5: panel + model currency --\n";
 
     AnalyzerModel model;
     model.clearAllResults();
@@ -101,7 +101,7 @@ void testC2C4C5PanelAndModel(const QString &pathA, const QString &pathB)
 
 void testC6PersistenceRoundTrip()
 {
-    std::cout << "鈹€鈹€ Analyze C#6: persistence round-trip 鈹€鈹€\n";
+    std::cout << "-- Analyze C#6: persistence round-trip --\n";
     const QString file = historyStoragePath();
     QDir().mkpath(QFileInfo(file).absolutePath());
     QFile::remove(file);

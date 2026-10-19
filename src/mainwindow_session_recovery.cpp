@@ -43,12 +43,11 @@ void reportPersistFailures(QWidget *parent, const QStringList &failures)
         qWarning("MViewer could not save: %s", qUtf8Printable(failures.join(QStringLiteral(", "))));
         return;
     }
-    QMessageBox::warning(
-        parent, QCoreApplication::translate("MainWindow", "Settings not saved"),
-        QCoreApplication::translate("MainWindow",
-                                    "The following content could not be written to disk and "
-                                    "may be lost on next startup:\n%1")
-            .arg(failures.join(QCoreApplication::translate("MainWindow", ", "))));
+    QMessageBox::warning(parent, QCoreApplication::translate("MainWindow", "Settings not saved"),
+                         QCoreApplication::translate(
+                             "MainWindow", "The following content could not be written to disk and "
+                                           "may be lost on next startup:\n%1")
+                             .arg(failures.join(QCoreApplication::translate("MainWindow", ", "))));
 }
 
 } // namespace

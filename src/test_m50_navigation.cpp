@@ -141,6 +141,7 @@ int main(int argc, char **argv)
         return 1;
 
     const QDir root(temporary.path());
+    // i18n-allow-begin: non-ASCII path fixtures (exercise Unicode file and folder names)
     const QString unicodeName = QStringLiteral("中文 空格 😀");
     const QString aPath = root.filePath(unicodeName + QStringLiteral("/目录-A"));
     const QString bPath = root.filePath(unicodeName + QStringLiteral("/目录-B"));
@@ -158,6 +159,7 @@ int main(int argc, char **argv)
     const QString disappearing =
         writeImage(dirC, QStringLiteral("导航中消失.png"), QColor(90, 90, 30));
     const QString unsupported = root.filePath(QStringLiteral("说明 😀.txt"));
+    // i18n-allow-end
     {
         QFile file(unsupported);
         CHECK(file.open(QIODevice::WriteOnly), "write an unsupported external-open fixture");

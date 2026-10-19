@@ -411,7 +411,8 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
         QFont f = font();
         f.setPointSize(9);
         painter.setFont(f);
-        painter.drawText(rect(), Qt::AlignCenter, tr("Drop images or folders here\nor press Ctrl+O to open a folder"));
+        painter.drawText(rect(), Qt::AlignCenter,
+                         tr("Drop images or folders here\nor press Ctrl+O to open a folder"));
         return;
     }
 

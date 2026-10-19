@@ -378,7 +378,7 @@ void CompareWorkspace::applyLayoutPreset(int n)
     m_engine.setColumns(cols);
     if (m_layoutCombo)
     {
-        // Combo indices: 单列=1, 2列=2, 3列=3, 4列=4.
+        // Combo indices: Single=1, 2 columns=2, 3 columns=3, 4 columns=4.
         const QSignalBlocker block(m_layoutCombo);
         if (cols < m_layoutCombo->count())
             m_layoutCombo->setCurrentIndex(cols);

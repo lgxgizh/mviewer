@@ -331,7 +331,7 @@ void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)
         const char *name;
         int id;
     } kLabels[] = {
-        {QT_TR_NOOP("Red"), 1},  {QT_TR_NOOP("Orange"), 2}, {QT_TR_NOOP("Yellow"), 3},
+        {QT_TR_NOOP("Red"), 1},   {QT_TR_NOOP("Orange"), 2}, {QT_TR_NOOP("Yellow"), 3},
         {QT_TR_NOOP("Green"), 4}, {QT_TR_NOOP("Blue"), 5},   {QT_TR_NOOP("Purple"), 6},
     };
     for (const auto &item : kLabels)

@@ -8,6 +8,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QHeaderView>
 #include <QMetaObject>
 #include <QTableWidget>
@@ -78,6 +79,13 @@ QString measurementStateText(mviewer::ui::ROIMeasurementState state)
     return CompareWorkspace::tr("Idle");
 }
 
+// ROI reasons are English QT_TRANSLATE_NOOP("CompareRoi", ...) literals set on
+// the worker thread (or an exception message); translate them for display.
+QString roiReasonText(const std::string &reason)
+{
+    return QCoreApplication::translate("CompareRoi", reason.c_str());
+}
+
 QString paneStateText(const mviewer::ui::ROIPaneMeasurement &pane)
 {
     using State = mviewer::ui::ROIPaneState;
@@ -86,9 +94,9 @@ QString paneStateText(const mviewer::ui::ROIPaneMeasurement &pane)
     case State::Ready:
         return CompareWorkspace::tr("Ready");
     case State::Unsupported:
-        return CompareWorkspace::tr("Unsupported: %1").arg(QString::fromStdString(pane.reason));
+        return CompareWorkspace::tr("Unsupported: %1").arg(roiReasonText(pane.reason));
     case State::Failed:
-        return CompareWorkspace::tr("Failed: %1").arg(QString::fromStdString(pane.reason));
+        return CompareWorkspace::tr("Failed: %1").arg(roiReasonText(pane.reason));
     case State::Cancelled:
         return CompareWorkspace::tr("Cancelled");
     }
@@ -241,7 +249,7 @@ CompareWorkspace::ROIStatsBatchResult CompareWorkspace::computeROIStatsBatch(
         {
             mviewer::ui::ROIPaneMeasurement unmeasured;
             unmeasured.state = mviewer::ui::ROIPaneState::Unsupported;
-            unmeasured.reason = tr("This pane has no ROI");
+            unmeasured.reason = QT_TRANSLATE_NOOP("CompareRoi", "This pane has no ROI");
             result.panes.push_back(std::move(unmeasured));
             continue;
         }

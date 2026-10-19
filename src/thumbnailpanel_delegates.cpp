@@ -422,14 +422,13 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QMod
     }
     if (label > 0)
     {
-        static const char *const kLabelNames[7] = {
-            "",
-            QT_TRANSLATE_NOOP("QObject", "Red"),
-            QT_TRANSLATE_NOOP("QObject", "Orange"),
-            QT_TRANSLATE_NOOP("QObject", "Yellow"),
-            QT_TRANSLATE_NOOP("QObject", "Green"),
-            QT_TRANSLATE_NOOP("QObject", "Blue"),
-            QT_TRANSLATE_NOOP("QObject", "Purple")};
+        static const char *const kLabelNames[7] = {"",
+                                                   QT_TRANSLATE_NOOP("QObject", "Red"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Orange"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Yellow"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Green"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Blue"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Purple")};
         metaTags << QObject::tr("%1 label").arg(QObject::tr(kLabelNames[label]));
     }
     if (rejected)

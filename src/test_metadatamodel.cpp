@@ -190,8 +190,7 @@ int main(int argc, char **argv)
         CHECK(leafValue(&m, icc, "Device Class") == "Display", "icc device class leaf");
         CHECK(leafValue(&m, icc, "Color Space") == "RGB", "icc color space leaf");
         CHECK(leafValue(&m, icc, "PCS") == "XYZ", "icc pcs leaf");
-        CHECK(leafValue(&m, icc, "Rendering Intent") == "Perceptual",
-              "icc rendering intent leaf");
+        CHECK(leafValue(&m, icc, "Rendering Intent") == "Perceptual", "icc rendering intent leaf");
         CHECK(leafValue(&m, icc, "Version") == "2.1.0", "icc version leaf");
     }
 

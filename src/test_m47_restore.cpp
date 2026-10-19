@@ -5,7 +5,7 @@
 // a background worker, and the UI applies the parsed document atomically for
 // the CURRENT generation only.
 //   R1  async success + ordering: the call returns BEFORE the restore is
-//       applied (status shows "正在打开…"), the apply lands on a later UI
+//       applied (status shows "Opening…"), the apply lands on a later UI
 //       delivery, and the directory + compare context come back.
 //   R1b project variant: openProjectFile restores the embedded workspace and
 //       reports the project terminal message.
@@ -281,7 +281,7 @@ int main(int argc, char **argv)
             closer.start();
             w.openWorkspaceFile(bad);
             // Same bounded terminal wait: a corrupt document reports through the
-            // same failure path (mainwindow_session.cpp: "工作区文件无效或为空。").
+            // same failure path (mainwindow_session.cpp: invalid or empty workspace file).
             (void)waitTrue(
                 [&]
                 {

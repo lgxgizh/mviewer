@@ -580,7 +580,8 @@ void MainWindow::connectMenuSignals()
                     filter += QString::fromStdString(w) + " ";
                 filter = filter.trimmed() + ";;" + tr("All files (*)");
                 const QString file = QFileDialog::getOpenFileName(
-                    this, tr("Open Image"), currentDir().isEmpty() ? QString() : currentDir(), filter);
+                    this, tr("Open Image"), currentDir().isEmpty() ? QString() : currentDir(),
+                    filter);
                 if (!file.isEmpty())
                     onImageOpen(file);
             });

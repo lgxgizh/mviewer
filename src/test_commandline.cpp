@@ -45,6 +45,7 @@ int main(int argc, char **argv)
     if (fixture.isValid())
     {
         const QDir root(fixture.path());
+        // i18n-allow: non-ASCII name fixture (exercises Unicode handling)
         const QString unicodeDir = root.filePath(QStringLiteral("中文 空格 😀"));
         check(QDir().mkpath(unicodeDir), "Unicode directory fixture is created");
         const QString image = QDir(unicodeDir).filePath(QStringLiteral("sample image.PNG"));

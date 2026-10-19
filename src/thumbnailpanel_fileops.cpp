@@ -327,7 +327,8 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                     ++state->copied;
                 else
                 {
-                    state->failures.append(path + ": " + mviewer::ui::fileOpErrorText(result.error));
+                    state->failures.append(path + ": " +
+                                           mviewer::ui::fileOpErrorText(result.error));
                     if (ctx.isCancelled())
                     {
                         state->cancelled = true;

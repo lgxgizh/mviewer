@@ -1,4 +1,4 @@
-// 「适合窗口 (F)」with 统一像素倍率 off fits each compare pane to its own resolution.
+// "Fit window (F)" with Uniform Pixel Scale off fits each compare pane to its own resolution.
 // Same aspect, different size — 400×600 beside 800×1200 — must land at about 2×.
 
 #include "compareworkspace.h"
@@ -184,11 +184,11 @@ int main(int argc, char **argv)
     auto *button = ws->findChild<QPushButton *>(QStringLiteral("fitWindowButton"));
     auto *viewBar = ws->findChild<QWidget *>(QStringLiteral("compareViewToolbar"));
     check(button && button->text() == QStringLiteral("Fit window (F)"),
-          "toolbar button「适合窗口 (F)」shows its shortcut");
+          "toolbar button \"Fit window (F)\" shows its shortcut");
     check(button && button->isVisible() && viewBar && viewBar->isAncestorOf(button),
           "button sits on the view toolbar");
     check(button && button->toolTip().contains(QStringLiteral("Uniform Pixel Scale")),
-          "tooltip says 统一像素倍率 decides shared vs per-pane fit");
+          "tooltip says Uniform Pixel Scale decides shared vs per-pane fit");
     check(uniform && !uniform->isChecked(), "uniform pixel scale starts off");
     if (!button || !uniform || !lowFrame || !highFrame)
         return 1;
@@ -212,15 +212,15 @@ int main(int argc, char **argv)
     // F stays Fit: it must not turn uniform pixel scale off.
     QKeyEvent fitKey(QEvent::KeyPress, Qt::Key_F, Qt::NoModifier);
     QApplication::sendEvent(ws, &fitKey);
-    check(uniform->isChecked(), "F keeps 统一像素倍率 checked");
+    check(uniform->isChecked(), "F keeps Uniform Pixel Scale checked");
     check(std::abs(ws->engine().cellScale(0) - ws->engine().cellScale(1)) < 1e-9,
           "F refits inside uniform pixel scale");
 
-    // 最适合 merged into 适合窗口: the user turns 统一像素倍率 off, then fits.
+    // Best Fit merged into Fit window: the user turns Uniform Pixel Scale off, then fits.
     uniform->setChecked(false);
     button->click();
     pump(30);
-    check(!uniform->isChecked(), "适合窗口 leaves 统一像素倍率 off");
+    check(!uniform->isChecked(), "Fit window leaves Uniform Pixel Scale off");
     lowView = paneView(ws, "comparePane0");
     highView = paneView(ws, "comparePane1");
     const double curLowFit = fitScale(lowView->width(), lowView->height(), 400, 600);
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
     QApplication::sendEvent(ws, &perPaneFitKey);
     check(std::abs(ws->engine().cellScale(0) - curLowFit) < 1e-6 &&
               std::abs(ws->engine().cellScale(1) - curHighFit) < 1e-6,
-          "F with 统一像素倍率 off matches the 适合窗口 button");
+          "F with Uniform Pixel Scale off matches the Fit window button");
     button->click();
     pump(30);
 
@@ -306,7 +306,7 @@ int main(int argc, char **argv)
               "presented scale matches the owned scale after the hold");
     }
 
-    // 统一像素倍率 stays pixel-aligned across the same hold.
+    // Uniform Pixel Scale stays pixel-aligned across the same hold.
     uniform->setChecked(true);
     pump(40);
     waitForDisplayed(ws, 5000);
@@ -333,13 +333,13 @@ int main(int argc, char **argv)
     }
     button->click();
     pump(30);
-    check(uniform->isChecked(), "适合窗口 keeps 统一像素倍率 checked");
+    check(uniform->isChecked(), "Fit window keeps Uniform Pixel Scale checked");
     check(std::abs(ws->engine().cellScale(0) - ws->engine().cellScale(1)) < 1e-9,
-          "适合窗口 with 统一像素倍率 shares one zoom");
+          "Fit window with Uniform Pixel Scale shares one zoom");
     uniform->setChecked(false);
     button->click();
     pump(30);
-    check(!uniform->isChecked(), "统一像素倍率 is off again for per-pane fit");
+    check(!uniform->isChecked(), "Uniform Pixel Scale is off again for per-pane fit");
 
     // Tall window: each half pane is width-limited, blink's full-width cell is not.
     host.setMinimumSize(400, 400);

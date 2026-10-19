@@ -67,7 +67,8 @@ void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&
                               QAction *&channelV)
 {
     none = menu.addAction(QCoreApplication::translate("ImageViewer", "No Overlay (Shift+1)"));
-    zebra = menu.addAction(QCoreApplication::translate("ImageViewer", "Over/Under-Exposure &Zebra"));
+    zebra =
+        menu.addAction(QCoreApplication::translate("ImageViewer", "Over/Under-Exposure &Zebra"));
     falseColor = menu.addAction(QCoreApplication::translate("ImageViewer", "False &Color"));
     channelR = menu.addAction(QCoreApplication::translate("ImageViewer", "R Channel (Shift+2)"));
     channelG = menu.addAction(QCoreApplication::translate("ImageViewer", "G Channel (Shift+3)"));
@@ -96,7 +97,8 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
     zoomOut = menu.addAction(QCoreApplication::translate("ImageViewer", "Zoom out (-)"));
     zoomFit = menu.addAction(QCoreApplication::translate("ImageViewer", "Fit to window (0 / F)"));
     zoomActual = menu.addAction(QCoreApplication::translate("ImageViewer", "Actual Size 100% (1)"));
-    lockZoomAction = menu.addAction(QCoreApplication::translate("ImageViewer", "Lock Zoom Ratio (Ctrl+L)"));
+    lockZoomAction =
+        menu.addAction(QCoreApplication::translate("ImageViewer", "Lock Zoom Ratio (Ctrl+L)"));
     lockZoomAction->setCheckable(true);
     lockZoomAction->setChecked(lockZoom);
     lockZoomAction->setEnabled(hasDisplay);
@@ -104,12 +106,16 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
         a->setEnabled(hasDisplay);
     QMenu *mZoomPresets = menu.addMenu(QCoreApplication::translate("ImageViewer", "Zoom Presets"));
     mZoomPresets->menuAction()->setEnabled(hasDisplay);
-    for (const auto &p : {std::make_pair("50%", 0.5), std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "100% (Actual Size)"), 1.0),
-                          std::make_pair("200%", 2.0), std::make_pair("400%", 4.0),
-                          std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "800% (Pixel Grid)"), 8.0)})
-        mZoomPresets->addAction(QCoreApplication::translate("ImageViewer", p.first))->setData(p.second);
+    for (const auto &p :
+         {std::make_pair("50%", 0.5),
+          std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "100% (Actual Size)"), 1.0),
+          std::make_pair("200%", 2.0), std::make_pair("400%", 4.0),
+          std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "800% (Pixel Grid)"), 8.0)})
+        mZoomPresets->addAction(QCoreApplication::translate("ImageViewer", p.first))
+            ->setData(p.second);
     menu.addSeparator();
-    selectRegion = menu.addAction(QCoreApplication::translate("ImageViewer", "Marquee selection (R)"));
+    selectRegion =
+        menu.addAction(QCoreApplication::translate("ImageViewer", "Marquee selection (R)"));
     selectRegion->setCheckable(true);
     selectRegion->setChecked(selectMode);
     selectRegion->setEnabled(hasDisplay);
@@ -121,15 +127,22 @@ void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAct
                            QAction *&copyCoord)
 {
     copy = menu.addAction(QCoreApplication::translate("ImageViewer", "Copy Image (Ctrl+C)"));
-    copyPath = menu.addAction(QCoreApplication::translate("ImageViewer", "Copy Path (Ctrl+Shift+C)"));
+    copyPath =
+        menu.addAction(QCoreApplication::translate("ImageViewer", "Copy Path (Ctrl+Shift+C)"));
     copyName = menu.addAction(QCoreApplication::translate("ImageViewer", "Copy filename"));
-    reveal = menu.addAction(QCoreApplication::translate("ImageViewer", "Show in File Manager (Ctrl+E)"));
+    reveal =
+        menu.addAction(QCoreApplication::translate("ImageViewer", "Show in File Manager (Ctrl+E)"));
     colorMenu = menu.addMenu(QCoreApplication::translate("ImageViewer", "Copy Pixel Value"));
-    copyHex = colorMenu->addAction(QCoreApplication::translate("ImageViewer", "Hex (#RRGGBB) (Shift+C)"));
-    copyRgb = colorMenu->addAction(QCoreApplication::translate("ImageViewer", "RGB Value RGB(r, g, b) (Shift+B)"));
-    copyCoord = colorMenu->addAction(QCoreApplication::translate("ImageViewer", "Coordinates (x, y)"));
-    copyFloat = colorMenu->addAction(QCoreApplication::translate("ImageViewer", "Normalized Float (0.xxx, 0.yyy, 0.zzz)"));
-    copyHsv = colorMenu->addAction(QCoreApplication::translate("ImageViewer", "HSV Value HSV(h°, s%, v%)"));
+    copyHex =
+        colorMenu->addAction(QCoreApplication::translate("ImageViewer", "Hex (#RRGGBB) (Shift+C)"));
+    copyRgb = colorMenu->addAction(
+        QCoreApplication::translate("ImageViewer", "RGB Value RGB(r, g, b) (Shift+B)"));
+    copyCoord =
+        colorMenu->addAction(QCoreApplication::translate("ImageViewer", "Coordinates (x, y)"));
+    copyFloat = colorMenu->addAction(
+        QCoreApplication::translate("ImageViewer", "Normalized Float (0.xxx, 0.yyy, 0.zzz)"));
+    copyHsv = colorMenu->addAction(
+        QCoreApplication::translate("ImageViewer", "HSV Value HSV(h°, s%, v%)"));
 }
 
 QString copyPixelValue(const PixelRGBA &px, int format, int x = -1, int y = -1)
@@ -217,11 +230,14 @@ void populateAnalyzeSubmenu(QMenu &menu, const std::shared_ptr<ImageFrame> &fram
             analyzeActions.append(a);
         }
         if (analyzeActions.isEmpty())
-            analyzeMenu->addAction(QCoreApplication::translate("ImageViewer", "(No analyzers available)"))->setEnabled(false);
+            analyzeMenu
+                ->addAction(QCoreApplication::translate("ImageViewer", "(No analyzers available)"))
+                ->setEnabled(false);
     }
     else
     {
-        analyzeMenu->addAction(QCoreApplication::translate("ImageViewer", "(Open an image first)"))->setEnabled(false);
+        analyzeMenu->addAction(QCoreApplication::translate("ImageViewer", "(Open an image first)"))
+            ->setEnabled(false);
     }
 }
 } // namespace
@@ -245,7 +261,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aSaveAs = menu.addAction("Save As...");
     QAction *aUsmCompare = menu.addAction(tr("USM Sharpen Compare(&U)... (Ctrl+U)"));
     QAction *aRotateCW = menu.addAction(tr("Rotate 90° Clockwise and Overwrite Original (Ctrl+R)"));
-    QAction *aRotateCCW = menu.addAction(tr("Rotate 90° Counterclockwise and Overwrite Original (Ctrl+Shift+R)"));
+    QAction *aRotateCCW =
+        menu.addAction(tr("Rotate 90° Counterclockwise and Overwrite Original (Ctrl+Shift+R)"));
     QAction *aFlipH = menu.addAction(tr("Flip Horizontal and Overwrite Original (Ctrl+Shift+H)"));
     QAction *aFlipV = menu.addAction(tr("Flip Vertical and Overwrite Original (Ctrl+Shift+V)"));
     const bool hasPath = !m_currentPath.isEmpty();
@@ -682,8 +699,8 @@ bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAc
         {
             const QString defaultName = QFileInfo(m_currentPath).completeBaseName() + "_copy.png";
             const QString path = QFileDialog::getSaveFileName(
-                this, isMultiFrame() ? tr("Save Current Frame/Page As") : tr("Save As"), defaultName,
-                "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");
+                this, isMultiFrame() ? tr("Save Current Frame/Page As") : tr("Save As"),
+                defaultName, "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");
             if (!path.isEmpty())
                 saveToPath(path);
         }

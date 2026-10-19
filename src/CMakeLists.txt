@@ -671,10 +671,10 @@ target_include_directories(compare_session_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_compile_definitions(compare_session_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME compare_session_tests COMMAND compare_session_tests)
 
-# ─── Beta 回归 — 用户 Workflow 端到端测试（2026-07 外部评审）─────────────────
-# Workflow 1: 打开目录→浏览→键盘切换→放大→恢复→关闭（真实 MainWindow）
-# Workflow 2: 两图 Compare→模式切换/互斥→Esc 退出→继续浏览（真实键盘事件）
-# 映射 docs/beta_checklist.md 的 浏览体验 / Compare / View 条目。
+# ─── Beta regression — end-to-end user workflow tests (2026-07 external review) ───
+# Workflow 1: open folder → browse → keyboard nav → zoom in → restore → close (real MainWindow)
+# Workflow 2: two-image Compare → mode switch/exclusivity → Esc exit → keep browsing (real key events)
+# Maps to the Browsing / Compare / View items of docs/beta_checklist.md.
 add_executable(workflow_ux_tests
     test_workflow_ux.cpp
 )
@@ -692,8 +692,8 @@ target_compile_features(workflow_ux_tests PRIVATE cxx_std_20)
 target_include_directories(workflow_ux_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(workflow_ux_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME workflow_ux_tests COMMAND workflow_ux_tests)
-# 端到端 UI 流程含真实异步解码等待，必须独占运行：
-# 与 bench_* 并行时 CPU 饱和会把"首屏 ≤ 预算"检查变成噪声。
+# The end-to-end UI flow waits on real async decodes and must run alone:
+# next to bench_* the saturated CPU turns the "first frame within budget" check into noise.
 set_tests_properties(workflow_ux_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ─── M24: async lifetime & concurrency regressions ─────────────────────────
@@ -757,7 +757,7 @@ target_include_directories(mainwindow_commandstack_acceptance PRIVATE ${CMAKE_CU
 add_test(NAME mainwindow_commandstack_acceptance COMMAND mainwindow_commandstack_acceptance)
 set_tests_properties(mainwindow_commandstack_acceptance PROPERTIES RUN_SERIAL TRUE TIMEOUT 12)
 
-# Fullscreen viewer "分析" must leave fullscreen and show the analysis panel.
+# Fullscreen viewer "Analyze" must leave fullscreen and show the analysis panel.
 add_executable(fullscreen_analysis_tests
     test_fullscreen_analysis.cpp
 )
@@ -775,6 +775,25 @@ target_compile_features(fullscreen_analysis_tests PRIVATE cxx_std_20)
 target_include_directories(fullscreen_analysis_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME fullscreen_analysis_tests COMMAND fullscreen_analysis_tests)
 set_tests_properties(fullscreen_analysis_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
+# UI language: English source text, zh_CN translator and localized help pages.
+add_executable(language_tests
+    test_language.cpp
+)
+
+target_link_libraries(language_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(language_tests PRIVATE cxx_std_20)
+target_include_directories(language_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME language_tests COMMAND language_tests)
+set_tests_properties(language_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
@@ -815,7 +834,7 @@ target_include_directories(compare_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOUR
 add_test(NAME compare_acceptance_tests COMMAND compare_acceptance_tests)
 set_tests_properties(compare_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
-# 「适合窗口 (F)」, 统一像素倍率 off: same-aspect, different-resolution panes scale
+# "Fit window (F)" with Uniform Pixel Scale off: same-aspect, different-resolution panes scale
 # inversely to size.
 add_executable(compare_best_fit_tests
     test_compare_best_fit.cpp

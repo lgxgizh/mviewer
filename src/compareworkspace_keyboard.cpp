@@ -296,7 +296,8 @@ bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
     if (digit == 0)
     {
         setOverlayMode(mviewer::OverlayMode::None);
-        showCompareStatus(QCoreApplication::translate("CompareWorkspace", "Reset to %1").arg(compareShortcutName("Shift+0")));
+        showCompareStatus(QCoreApplication::translate("CompareWorkspace", "Reset to %1")
+                              .arg(compareShortcutName("Shift+0")));
         event->accept();
         return true;
     }
@@ -318,16 +319,18 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_Z && m_syncZoomChk)
     {
         m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
-        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(), QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
-                                QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
+        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_D && m_syncDragChk)
     {
         m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
-        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(), QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
-                                QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
+        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
@@ -335,24 +338,27 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_R && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
-        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(), QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
-                                QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
+        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_L && m_pixelLinkChk)
     {
         m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
-        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(), QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
-                                QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
+        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_I && m_sideChk)
     {
         m_sideChk->setChecked(!m_sideChk->isChecked());
-        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(), QT_TRANSLATE_NOOP("CompareWorkspace", "Shown"),
-                                QT_TRANSLATE_NOOP("CompareWorkspace", "Hidden")));
+        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "Shown"),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "Hidden")));
         event->accept();
         return true;
     }
@@ -707,8 +713,9 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
     if (alt && key == Qt::Key_R)
     {
         setSyncRotate(!m_syncRotate);
-        showCompareStatus(compareToggleStatus("Alt+R", m_syncRotate, QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
-                                QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
+        showCompareStatus(compareToggleStatus("Alt+R", m_syncRotate,
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "On"),
+                                              QT_TRANSLATE_NOOP("CompareWorkspace", "Off")));
         event->accept();
         return true;
     }

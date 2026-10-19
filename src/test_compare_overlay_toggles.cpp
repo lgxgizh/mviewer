@@ -1,7 +1,7 @@
 // Compare overlay toggles must erase their drawing from every pane the moment
 // they are switched off (shortcut, checkbox or mirrored menu action alike):
-//  - 同步准星 (R): the synced crosshair used to stay on screen after R off.
-//  - 显示差异: switching it off during a zoom/pan (deferred heavy work) used to
+//  - Sync crosshair (R): the synced crosshair used to stay on screen after R off.
+//  - Show Diff: switching it off during a zoom/pan (deferred heavy work) used to
 //    keep the heatmap until the interaction settled.
 
 #include "compareworkspace.h"
@@ -152,7 +152,7 @@ void diffOverlayCases(CompareWorkspace *ws, RawImageView *v0)
 }
 void highlightCases(CompareWorkspace *ws)
 {
-    // User report: 高亮差异 on, then off -> the right pane kept the diff view.
+    // User report: Highlight Diff on, then off -> the right pane kept the diff view.
     auto *hl = ws->findChild<QCheckBox *>(QStringLiteral("diffHighlightToggle"));
     auto *ov = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
     RawImageView *right = paneView(ws, 1);
@@ -180,7 +180,7 @@ void highlightCases(CompareWorkspace *ws)
     check(qAbs(qRed(body) - 40) < 12 && qAbs(qBlue(body) - 160) < 12,
           "right pane renders the original blue body pixels");
 
-    // Manual 显示差异 stays on when highlight is switched off.
+    // Manual Show Diff stays on when highlight is switched off.
     ov->setChecked(true);
     hl->setChecked(true);
     hl->setChecked(false);
@@ -205,7 +205,7 @@ void crosshairAcrossSetsCase(CompareWorkspace *ws, RawImageView *v0, const QStri
     chk->setChecked(false);
 }
 
-// Manual "显示差异" (no highlight) must survive choosing a new pair.
+// Manual "Show Diff" (no highlight) must survive choosing a new pair.
 void diffOverlayAcrossPairsCase(CompareWorkspace *ws, const QStringList &pool)
 {
     auto *ov = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
@@ -223,7 +223,7 @@ void diffOverlayAcrossPairsCase(CompareWorkspace *ws, const QStringList &pool)
     ws->setImages(pool.mid(2, 2));
     check(waitTrue([ws] { return ws->comparedImageCount() == 2; }, 20000),
           "diff overlay P/N: second pair loaded");
-    check(ov->isChecked(), "diff overlay P/N: 显示差异 survives a new pair");
+    check(ov->isChecked(), "diff overlay P/N: Show Diff survives a new pair");
     check(waitTrue([ws] { return anyOverlay(ws); }, 20000),
           "diff overlay P/N: heatmap redraws on the new pair");
     ov->setChecked(false);

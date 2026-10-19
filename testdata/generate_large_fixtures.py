@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """MViewer M47 deterministic LARGE-image fixture generator.
 
-Phase 0 / baseline requirement: "建立 deterministic large-image
+Phase 0 / baseline requirement: "establish deterministic large-image
 fixtures/generator". Generated products live under testdata/large/ which is
 git-ignored (see .gitignore: testdata/* is ignored, ONLY the tracked generator
 scripts are whitelisted), so a clean checkout / CI runner rebuilds the exact

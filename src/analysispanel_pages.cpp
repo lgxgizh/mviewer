@@ -124,8 +124,7 @@ void AnalysisPanel::updateInspectorPage()
             const mviewer::core::NeighborhoodStats s =
                 mviewer::core::neighborhoodStats(data, stride, w, h, m_px, m_py, m_kernel, 4);
             txt += tr("<br><b>%1×%1 neighborhood statistics</b> (luminance)<br>").arg(m_kernel);
-            txt +=
-                tr("Mean: %1  Std dev: %2<br>").arg(s.mean, 0, 'f', 1).arg(s.stdDev, 0, 'f', 1);
+            txt += tr("Mean: %1  Std dev: %2<br>").arg(s.mean, 0, 'f', 1).arg(s.stdDev, 0, 'f', 1);
             txt += tr("Min: %1  Max: %2  Variance: %3  Samples: %4")
                        .arg(s.min, 0, 'f', 0)
                        .arg(s.max, 0, 'f', 0)

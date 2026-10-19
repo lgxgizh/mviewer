@@ -3,7 +3,7 @@
 // real Decoder and asserts: no crash, and each file is either decoded
 // (non-null ImageData) or gracefully rejected (null) — never an exception or
 // hard assert. This is the review's Phase-4 acceptance:
-//   "全部 Open OK / Compare OK / Export OK / No Crash"
+//   "All Open OK / Compare OK / Export OK / No Crash"
 // Decode/Compare/Export are exercised through the actual engine path.
 //
 // Scope: dataset coverage only. No new core code — pure acceptance gate.

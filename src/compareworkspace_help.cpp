@@ -45,7 +45,8 @@ QDialog *createCompareShortcutHelp(QWidget *parent)
 {
     auto *dialog = new QDialog(parent);
     dialog->setObjectName(QStringLiteral("compareShortcutHelpDialog"));
-    dialog->setWindowTitle(QCoreApplication::translate("CompareWorkspace", "Compare Mode Shortcuts"));
+    dialog->setWindowTitle(
+        QCoreApplication::translate("CompareWorkspace", "Compare Mode Shortcuts"));
     dialog->setModal(false);
     auto *layout = new QVBoxLayout(dialog);
     auto *table = new QTableWidget(dialog);

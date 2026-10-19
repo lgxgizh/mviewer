@@ -7,7 +7,7 @@
 //   E1 Pixel Inspector with a mixed feasible+infeasible set: the feasible
 //      pane's row reports the EXACT full-resolution source pixel (proven
 //      different from the display LOD sample), and the infeasible pane's row
-//      reports 无效 — the Inspector does not fall back to sampling the LOD
+//      reports Invalid — the Inspector does not fall back to sampling the LOD
 //      raster, even though that pane's engine frame holds only metadata.
 //   E2 Diff/PSNR/SSIM on an all-infeasible pair: the batch completes without
 //      any decode (zero NativeLod/FullDecode* activity), metrics stay "—", the
@@ -241,7 +241,7 @@ int main(int argc, char **argv)
         // not fall back to sampling its LOD raster.
         CHECK(table->rowCount() >= 2 && table->item(1, 2) &&
                   table->item(1, 2)->text() == QStringLiteral("Invalid"),
-              "E1: the infeasible pane's inspector row is 无效 (never the LOD)");
+              "E1: the infeasible pane's inspector row is Invalid (never the LOD)");
         const auto &c = SourceDecodeStats::instance().counters();
         CHECK(c.fullDecodeScaled.load() == 0 && c.fullDecodeCrop.load() == 0 &&
                   c.fullDecode.load() == 0,

@@ -21,10 +21,14 @@ struct CompareShortcut
 // W is Swipe. The same action name is reused when several chords share an action.
 inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"Space", QT_TRANSLATE_NOOP("CompareShortcuts", "Peek"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "With two images, hold to temporarily show the other side under the cursor; release to "
-     "restore")},
+     QT_TRANSLATE_NOOP(
+         "CompareShortcuts",
+         "With two images, hold to temporarily show the other side under the cursor; release to "
+         "restore")},
     {"Esc", QT_TRANSLATE_NOOP("CompareShortcuts", "Exit"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Clears the selection first if one exists; restores images while Peek is active")},
+     QT_TRANSLATE_NOOP(
+         "CompareShortcuts",
+         "Clears the selection first if one exists; restores images while Peek is active")},
     {"Alt+Arrow", QT_TRANSLATE_NOOP("CompareShortcuts", "Nudge ROI"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Move the current selection by 1 pixel")},
     {"Shift+Arrow", QT_TRANSLATE_NOOP("CompareShortcuts", "Nudge ROI"),
@@ -44,7 +48,8 @@ inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"K", QT_TRANSLATE_NOOP("CompareShortcuts", "Checkerboard"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Checkerboard alternation between two images")},
     {"H", QT_TRANSLATE_NOOP("CompareShortcuts", "Highlight Diff"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Highlight differing regions in red; similar regions in grayscale")},
+     QT_TRANSLATE_NOOP("CompareShortcuts",
+                       "Highlight differing regions in red; similar regions in grayscale")},
     {"Shift+0", QT_TRANSLATE_NOOP("CompareShortcuts", "All Color Channels"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Restore full RGB")},
     {"Shift+1", QT_TRANSLATE_NOOP("CompareShortcuts", "All Color Channels"),
@@ -64,13 +69,16 @@ inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"D", QT_TRANSLATE_NOOP("CompareShortcuts", "Synchronized drag"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Synchronize panning across all panes")},
     {"R", QT_TRANSLATE_NOOP("CompareShortcuts", "Sync Crosshair"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Show a crosshair at the same image coordinates in every pane")},
+     QT_TRANSLATE_NOOP("CompareShortcuts",
+                       "Show a crosshair at the same image coordinates in every pane")},
     {"L", QT_TRANSLATE_NOOP("CompareShortcuts", "Pixel Link"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Click to add marker points and compare RGB")},
     {"I", QT_TRANSLATE_NOOP("CompareShortcuts", "Inspector"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Show or hide the analysis side panel")},
     {"F", QT_TRANSLATE_NOOP("CompareShortcuts", "Fit window"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Fit to the window; whether scale is shared is controlled by Uniform Pixel Scale")},
+     QT_TRANSLATE_NOOP(
+         "CompareShortcuts",
+         "Fit to the window; whether scale is shared is controlled by Uniform Pixel Scale")},
     {"0", QT_TRANSLATE_NOOP("CompareShortcuts", "Fit window"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Same as F")},
     {"Ctrl+0", QT_TRANSLATE_NOOP("CompareShortcuts", "Fit window"),
@@ -80,9 +88,11 @@ inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"Alt+R", QT_TRANSLATE_NOOP("CompareShortcuts", "Sync Rotate"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Whether rotate/flip applies to all compared images")},
     {"Ctrl+R", QT_TRANSLATE_NOOP("CompareShortcuts", "Rotate Clockwise"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Preview 90° clockwise rotation without writing the file")},
+     QT_TRANSLATE_NOOP("CompareShortcuts",
+                       "Preview 90° clockwise rotation without writing the file")},
     {"Ctrl+Shift+R", QT_TRANSLATE_NOOP("CompareShortcuts", "Rotate Counterclockwise"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Preview 90° counterclockwise rotation without writing the file")},
+     QT_TRANSLATE_NOOP("CompareShortcuts",
+                       "Preview 90° counterclockwise rotation without writing the file")},
     {"Ctrl+Shift+H", QT_TRANSLATE_NOOP("CompareShortcuts", "Flip Horizontal"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Preview horizontal flip without writing the file")},
     {"Ctrl+Shift+V", QT_TRANSLATE_NOOP("CompareShortcuts", "Flip Vertical"),
@@ -110,8 +120,10 @@ inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"Ctrl+2 / Ctrl+4 / Ctrl+8", QT_TRANSLATE_NOOP("CompareShortcuts", "Layout Presets"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Load 2/4/8-pane layout presets")},
     {"1 / 2 / 3 / 4 / 5 / 6 / 7 / 8", QT_TRANSLATE_NOOP("CompareShortcuts", "Temporary Image Swap"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Hold a digit to temporarily show image N in the pane under the cursor; if not over a pane, "
-     "uses the current pane. Out-of-range only shows a hint")},
+     QT_TRANSLATE_NOOP("CompareShortcuts",
+                       "Hold a digit to temporarily show image N in the pane under the cursor; if "
+                       "not over a pane, "
+                       "uses the current pane. Out-of-range only shows a hint")},
     {"?", QT_TRANSLATE_NOOP("CompareShortcuts", "Shortcut Help"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Open or close this table")},
     {"/", QT_TRANSLATE_NOOP("CompareShortcuts", "Shortcut Help"),

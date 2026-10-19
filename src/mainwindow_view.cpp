@@ -556,7 +556,8 @@ void MainWindow::toggleSlideshow()
                         if (idx >= 0 && idx + 1 >= m_imageList->count())
                         {
                             stopSlideshow();
-                            statusBar()->showMessage(tr("Slideshow finished (reached the end)"), 3000);
+                            statusBar()->showMessage(tr("Slideshow finished (reached the end)"),
+                                                     3000);
                             return;
                         }
                     }

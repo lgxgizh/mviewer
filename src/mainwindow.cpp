@@ -372,8 +372,7 @@ void MainWindow::rateCurrentImage(int stars)
     m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
     writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(
-        tr("Rated %1: %2 stars").arg(QFileInfo(currentImagePath()).fileName()).arg(stars),
-        3000);
+        tr("Rated %1: %2 stars").arg(QFileInfo(currentImagePath()).fileName()).arg(stars), 3000);
 }
 
 void MainWindow::onFlagFilterChanged(int)
@@ -450,10 +449,9 @@ void MainWindow::toggleCurrentPick()
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
-    statusBar()->showMessage(
-        v ? tr("Picked %1").arg(QFileInfo(currentImagePath()).fileName())
-          : tr("Unpicked %1").arg(QFileInfo(currentImagePath()).fileName()),
-        3000);
+    statusBar()->showMessage(v ? tr("Picked %1").arg(QFileInfo(currentImagePath()).fileName())
+                               : tr("Unpicked %1").arg(QFileInfo(currentImagePath()).fileName()),
+                             3000);
 }
 
 void MainWindow::toggleCurrentReject()
@@ -466,10 +464,9 @@ void MainWindow::toggleCurrentReject()
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
-    statusBar()->showMessage(
-        v ? tr("Rejected %1").arg(QFileInfo(currentImagePath()).fileName())
-          : tr("Unrejected %1").arg(QFileInfo(currentImagePath()).fileName()),
-        3000);
+    statusBar()->showMessage(v ? tr("Rejected %1").arg(QFileInfo(currentImagePath()).fileName())
+                               : tr("Unrejected %1").arg(QFileInfo(currentImagePath()).fileName()),
+                             3000);
 }
 
 void MainWindow::setOpenOnLaunch(const QString &path)
@@ -619,9 +616,8 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (m_lblCount && m_imageList && m_imageList->count() > 0)
     {
         const int idx = m_imageList->indexOf(path);
-        m_lblCount->setText(idx >= 0
-                                ? tr("Image %1 / %2").arg(idx + 1).arg(m_imageList->count())
-                                : tr("%1 images").arg(m_imageList->count()));
+        m_lblCount->setText(idx >= 0 ? tr("Image %1 / %2").arg(idx + 1).arg(m_imageList->count())
+                                     : tr("%1 images").arg(m_imageList->count()));
     }
 
     ++m_statusMetadataGeneration;
@@ -701,7 +697,7 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     }
     QStringList imgs = images;
     // A-3: prefer the shared SelectionModel multi-selection when the caller
-    // didn't pass an explicit list (e.g. menu "比较模式").
+    // didn't pass an explicit list (e.g. the "Compare Mode" menu).
     if (imgs.isEmpty())
         imgs = resolveSelectedPaths(true);
     // Compare is a 2-8 image selection. Do not substitute the first 8 files

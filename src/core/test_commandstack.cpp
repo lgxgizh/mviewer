@@ -563,11 +563,13 @@ static void testFileOperationSafety()
     CHECK(stuck.lastError().empty() && fs::exists(stuckA) && fs::exists(stuckB),
           "retained partial state can be recovered by undo");
 
+    // i18n-allow-begin: non-ASCII path fixtures (exercise Unicode file and folder names)
     const std::string unicodeDirUtf8 = mviewer::core::pathToUtf8(dir) + "/中文目录-😀";
     const fs::path unicodeDir = mviewer::core::pathFromUtf8(unicodeDirUtf8);
     fs::create_directories(unicodeDir);
     const fs::path unicodeSource = unicodeDir / mviewer::core::pathFromUtf8("文件-😀.txt");
     const fs::path unicodeRenamed = unicodeDir / mviewer::core::pathFromUtf8("重命名-😀.txt");
+    // i18n-allow-end
     writeFile(unicodeSource, "unicode");
     FileRenameCommand unicode(mviewer::core::pathToUtf8(unicodeSource),
                               mviewer::core::pathToUtf8(unicodeRenamed));

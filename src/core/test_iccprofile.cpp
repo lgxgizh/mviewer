@@ -159,10 +159,10 @@ int main()
         const IccProfile info = parseIccProfile(p.data(), p.size());
         CHECK(info.valid, "valid profile reports valid=true");
         CHECK(info.version == "2.1.0", "version decodes as 2.1.0 (BCD high nibble)");
-        CHECK(info.deviceClass == "显示器", "device class 'mntr' -> 显示器");
+        CHECK(info.deviceClass == "Display", "device class 'mntr' -> Display");
         CHECK(info.colorSpace == "RGB", "color space 'RGB ' -> RGB");
         CHECK(info.pcs == "XYZ", "PCS 'XYZ ' -> XYZ");
-        CHECK(info.renderingIntent == "感知 (Perceptual)", "rendering intent 0 -> Perceptual");
+        CHECK(info.renderingIntent == "Perceptual", "rendering intent 0 -> Perceptual");
         CHECK(info.description == "sRGB IEC61966-2.1", "desc tag extracted");
         CHECK(info.copyright == "Copyright ACME", "cprt tag extracted");
     }

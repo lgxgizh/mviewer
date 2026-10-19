@@ -188,8 +188,7 @@ void MetadataModel::buildImageSection()
     if (m_meta.width > 0 && m_meta.height > 0)
     {
         const double mp = m_meta.width * m_meta.height / 1000000.0;
-        addLeaf(img, tr("Dimensions"),
-                tr("%1 × %2 pixels").arg(m_meta.width).arg(m_meta.height));
+        addLeaf(img, tr("Dimensions"), tr("%1 × %2 pixels").arg(m_meta.width).arg(m_meta.height));
         addLeaf(img, tr("Aspect Ratio"), ratioText(m_meta.width, m_meta.height));
         addLeaf(img, tr("Megapixels"), QString("%1 MP").arg(mp, 0, 'f', 2));
     }
