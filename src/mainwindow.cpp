@@ -158,9 +158,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                        });
     // M17: quiet background update check shortly after launch (only notifies on a new version).
     // Acceptance harnesses can disable this unrelated network activity so
-    // teardown remains deterministic; production keeps the normal check.
-    if (!qEnvironmentVariableIsSet("MVIEWER_DISABLE_UPDATE_CHECK"))
-        QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
+    // teardown remains deterministic; Preferences → autoCheckUpdates (default true)
+    // lets users turn off the startup nag without blocking Help → Check for Updates.
+    {
+        QSettings settings;
+        const bool autoCheck = settings.value(QStringLiteral("autoCheckUpdates"), true).toBool();
+        if (autoCheck && !qEnvironmentVariableIsSet("MVIEWER_DISABLE_UPDATE_CHECK"))
+            QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
+    }
     cleanupClipboardPasteTemps();
 }
 

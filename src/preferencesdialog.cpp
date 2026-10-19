@@ -18,11 +18,8 @@
 #include <QVBoxLayout>
 #include <algorithm>
 
-QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
+void PreferencesDialog::addUiAppearanceRows(QFormLayout *gl)
 {
-    auto *general = new QWidget;
-    auto *gl = new QFormLayout(general);
-
     m_uiTheme = new QComboBox;
     m_uiTheme->setObjectName(QStringLiteral("preferencesUiTheme"));
     m_uiTheme->addItem(tr("Follow system (default)"),
@@ -57,6 +54,14 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     auto *languageHint = new QLabel(tr("Restart MViewer to apply a language change everywhere."));
     languageHint->setObjectName(QStringLiteral("preferencesUiLanguageHint"));
     gl->addRow(QString(), languageHint);
+}
+
+QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
+{
+    auto *general = new QWidget;
+    auto *gl = new QFormLayout(general);
+
+    addUiAppearanceRows(gl);
 
     m_viewMode = new QComboBox;
     struct VM
@@ -132,6 +137,13 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
                                      "when disabled, use native RGB/sRGB"));
     m_colorManagement->setChecked(s.value("display/colorManagement", true).toBool());
     gl->addRow(m_colorManagement);
+
+    m_autoCheckUpdates = new QCheckBox(tr("Automatically check for updates on startup"));
+    m_autoCheckUpdates->setObjectName(QStringLiteral("preferencesAutoCheckUpdates"));
+    m_autoCheckUpdates->setToolTip(
+        tr("Only notifies when a newer release exists; Help → Check for Updates still works."));
+    m_autoCheckUpdates->setChecked(s.value(QStringLiteral("autoCheckUpdates"), true).toBool());
+    gl->addRow(m_autoCheckUpdates);
 
     return general;
 }
@@ -232,6 +244,7 @@ void PreferencesDialog::accept()
     s.setValue("zebraThreshold", m_zebraThreshold->value());
     const bool colorManagement = m_colorManagement->isChecked();
     s.setValue("display/colorManagement", colorManagement);
+    s.setValue(QStringLiteral("autoCheckUpdates"), m_autoCheckUpdates->isChecked());
     s.sync();
     GpuTileUploader::resetEnabledCache();
     DisplayColorContextProvider::setColorManagementEnabled(colorManagement);

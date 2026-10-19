@@ -4041,6 +4041,11 @@ or double-click a thumbnail to view</source>
         <translation>建议更新以获得最新功能与缺陷修复。</translation>
     </message>
     <message>
+        <location filename="../src/mainwindow_session_notifications.cpp" line="72"/>
+        <source>Don't check for updates automatically</source>
+        <translation>不再自动检查更新</translation>
+    </message>
+    <message>
         <location filename="../src/mainwindow_session_notifications.cpp" line="68"/>
         <source>Go to Download Page</source>
         <translation>前往下载页</translation>
@@ -5723,6 +5728,16 @@ Build: %2</source>
         <location filename="../src/preferencesdialog.cpp" line="131"/>
         <source>When enabled, convert colors using the display ICC profile; when disabled, use native RGB/sRGB</source>
         <translation>启用时根据显示器 ICC 转换颜色；禁用时使用原生 RGB/sRGB</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="136"/>
+        <source>Automatically check for updates on startup</source>
+        <translation>启动时自动检查更新</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="139"/>
+        <source>Only notifies when a newer release exists; Help → Check for Updates still works.</source>
+        <translation>仅在有新版本时提示；帮助菜单中的「检查更新」仍可手动使用。</translation>
     </message>
     <message>
         <location filename="../src/preferencesdialog.cpp" line="143"/>

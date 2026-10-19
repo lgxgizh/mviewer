@@ -825,6 +825,25 @@ target_include_directories(language_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME language_tests COMMAND language_tests)
 set_tests_properties(language_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
+# Preferences autoCheckUpdates default and round-trip (startup silent update gate).
+add_executable(auto_check_updates_pref_tests
+    test_auto_check_updates_pref.cpp
+)
+
+target_link_libraries(auto_check_updates_pref_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(auto_check_updates_pref_tests PRIVATE cxx_std_20)
+target_include_directories(auto_check_updates_pref_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME auto_check_updates_pref_tests COMMAND auto_check_updates_pref_tests)
+set_tests_properties(auto_check_updates_pref_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
     test_rotate_selection.cpp
