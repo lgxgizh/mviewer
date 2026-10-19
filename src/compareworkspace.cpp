@@ -688,61 +688,6 @@ void CompareWorkspace::onSideToggled(bool on)
     update();
 }
 
-void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)
-{
-    if (!view)
-        return;
-    // Track the hovered cell so the focus-lock button knows which cell to pin.
-    m_hoverIdx = view->cellIndex();
-
-    if (!m_crosshairChk || !m_crosshairChk->isChecked())
-        return;
-
-    const bool valid = pos.x() >= 0.0 && pos.y() >= 0.0;
-    const int n = m_engine.imageCount();
-    bool asymmetricLocal = false;
-    for (int i = 0; i < n; ++i)
-    {
-        if (std::abs(localZoomMultiplier(i) - 1.0) > 1e-9)
-        {
-            asymmetricLocal = true;
-            break;
-        }
-    }
-    for (int i = 0; i < n; ++i)
-    {
-        if (i >= m_cellViews.size() || !m_cellViews[i])
-            continue;
-        if (!valid)
-        {
-            m_cellViews[i]->clearCrosshair();
-            continue;
-        }
-        if (asymmetricLocal)
-        {
-            // L11: map by viewport-normalized position so a Ctrl+wheel
-            // asymmetric zoom keeps crosshairs on the visually aligned point.
-            const QPointF widgetPt = view->sourcePointToWidget(pos);
-            const double u =
-                view->width() > 0 ? widgetPt.x() / static_cast<double>(view->width()) : 0.5;
-            const double v =
-                view->height() > 0 ? widgetPt.y() / static_cast<double>(view->height()) : 0.5;
-            const QPoint mapped(static_cast<int>(std::lround(u * m_cellViews[i]->width())),
-                                static_cast<int>(std::lround(v * m_cellViews[i]->height())));
-            m_cellViews[i]->setCrosshair(m_cellViews[i]->widgetToImage(mapped));
-        }
-        else
-        {
-            m_cellViews[i]->setCrosshair(pos);
-        }
-    }
-    // Sample every cell at the synced image-space point. M30: route through the
-    // coalescer so this crosshair path cannot double-render the inspector that
-    // the same hover's pixelInfo signal already requested.
-    if (valid && m_sidePanel && m_sidePanel->isVisible())
-        requestInspectorUpdate(qRound(pos.x()), qRound(pos.y()));
-}
-
 void CompareWorkspace::onFocusRequested(int cellIndex)
 {
     // Toggle the locked reference: re-clicking the focused cell clears it.

@@ -1323,9 +1323,20 @@ void testSyncRotate(const QString &img0, const QString &img1)
     CHECK(tbChk && !tbChk->isChecked(), "Toolbar checkbox synchronizes to unchecked");
 
     ws->setEditCellIndex(1);
+    // resolveEditCell prefers the pane under the cursor; pin it to pane 1 so
+    // headless CI (where QCursor may still sit on pane 0) matches the API intent.
+    {
+        const auto views = ws->findChildren<RawImageView *>();
+        if (views.size() > 1 && views.at(1) && views.at(1)->isVisible())
+            QCursor::setPos(views.at(1)->mapToGlobal(views.at(1)->rect().center()));
+    }
+    pump(50);
+    const int rot0Before = ws->cellRotation(0);
+    const int rot1Before = ws->cellRotation(1);
     ws->rotateCurrentCell(90);
-    pump(30);
-    CHECK(ws->cellRotation(0) == 90 && ws->cellRotation(1) == 90,
+    pump(80);
+    CHECK(ws->cellRotation(0) == rot0Before &&
+              ws->cellRotation(1) == ((rot1Before + 90) % 360),
           "Rotating pane 1 only modifies pane 1 when syncRotate is off");
 }
 

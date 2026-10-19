@@ -98,6 +98,23 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     return handleCellEvent(view, idx, event);
 }
 
+bool CompareWorkspace::handleCellWheel(RawImageView *view, int idx, QEvent *event)
+{
+    auto *we = static_cast<QWheelEvent *>(event);
+    const int wheelDelta = verticalWheelDelta(we);
+    if (wheelDelta == 0)
+        return true; // horizontal-only wheel: consume without zooming
+    noteCompareInteraction();
+    const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
+    // Transform anchors are center-relative (RawImageView pan delta).
+    const QPoint pos = we->position().toPoint();
+    const bool localOnly = (we->modifiers() & Qt::ControlModifier) != 0;
+    applyAnchorZoom(idx, pos.x() - view->width() / 2.0, pos.y() - view->height() / 2.0, factor,
+                    localOnly);
+    update();
+    return true;
+}
+
 bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *event)
 {
     trackCellPointerForExportMenu(idx, event);
@@ -114,23 +131,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
     }
 
     if (event->type() == QEvent::Wheel)
-    {
-        auto *we = static_cast<QWheelEvent *>(event);
-        const int wheelDelta = verticalWheelDelta(we);
-        if (wheelDelta == 0)
-            return true; // horizontal-only wheel: consume without zooming
-        noteCompareInteraction();
-        const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
-        // The transform anchors in CENTER-RELATIVE coordinates (RawImageView
-        // stores offset as a pan delta from the pane center), so convert the
-        // widget-local cursor position before applying the zoom.
-        const QPoint pos = we->position().toPoint();
-        const bool localOnly = (we->modifiers() & Qt::ControlModifier) != 0;
-        applyAnchorZoom(idx, pos.x() - view->width() / 2.0, pos.y() - view->height() / 2.0, factor,
-                        localOnly);
-        update();
-        return true;
-    }
+        return handleCellWheel(view, idx, event);
 
     if (event->type() == QEvent::MouseButtonPress)
     {
