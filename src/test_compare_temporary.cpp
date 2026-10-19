@@ -22,6 +22,8 @@ void expect(bool cond, const char *message)
 
 int main()
 {
+    // UsmCompareDialog::beginTemporaryHold reuses these pair-hold decisions
+    // (left=Before/original, right=After/USM).
     const auto left = decidePairHold(2, 0);
     expect(left.action == TemporaryAction::ShowPair && left.targetPane == 0 && left.sourcePane == 1,
            "hover left shows the right image on the left");

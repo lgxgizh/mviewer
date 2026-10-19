@@ -6342,8 +6342,23 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/usmcomparedialog.cpp" line="161"/>
-        <source>Hold to View Original (Space)</source>
-        <translation>按住看原图 (Space)</translation>
+        <source>Hold to compare other side (Space)</source>
+        <translation>按住对比另一侧 (Space)</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog.cpp" line="163"/>
+        <source>While holding Space, the side under the mouse temporarily shows the other side&apos;s image; release to restore.</source>
+        <translation>按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog.cpp"/>
+        <source>No image to switch to on this side yet</source>
+        <translation>这一侧还没有可切换的图像</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog.cpp"/>
+        <source>Move the mouse to one side, then hold Space</source>
+        <translation>将鼠标移到某一侧再按住 Space</translation>
     </message>
     <message>
         <location filename="../src/usmcomparedialog.cpp" line="162"/>
