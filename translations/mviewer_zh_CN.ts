@@ -685,22 +685,22 @@
 <context>
     <name>CompareRoi</name>
     <message>
-        <location filename="../src/compare_roi_controller.cpp" line="96"/>
+        <location filename="../src/compare_roi_controller.cpp" line="97"/>
         <source>The ROI does not intersect the source pixels</source>
         <translation>ROI 与源图像素没有交集</translation>
     </message>
     <message>
-        <location filename="../src/compare_roi_controller.cpp" line="101"/>
+        <location filename="../src/compare_roi_controller.cpp" line="102"/>
         <source>Source pixels are unavailable</source>
         <translation>源图像素不可用</translation>
     </message>
     <message>
-        <location filename="../src/compare_roi_controller.cpp" line="115"/>
+        <location filename="../src/compare_roi_controller.cpp" line="116"/>
         <source>Unable to open the source image</source>
         <translation>无法打开源图</translation>
     </message>
     <message>
-        <location filename="../src/compare_roi_controller.cpp" line="124"/>
+        <location filename="../src/compare_roi_controller.cpp" line="125"/>
         <source>The ROI is outside the source image</source>
         <translation>ROI 超出源图范围</translation>
     </message>
@@ -710,17 +710,17 @@
         <translation>无法从源图精确解码此区域</translation>
     </message>
     <message>
-        <location filename="../src/compare_roi_controller.cpp" line="148"/>
+        <location filename="../src/compare_roi_controller.cpp" line="149"/>
         <source>Failed to decode the source region</source>
         <translation>源图区域解码失败</translation>
     </message>
     <message>
-        <location filename="../src/compare_roi_controller.cpp" line="162"/>
+        <location filename="../src/compare_roi_controller.cpp" line="164"/>
         <source>The decoded region has no source pixels</source>
         <translation>解码区域没有源图像素</translation>
     </message>
     <message>
-        <location filename="../src/compare_roi_controller.cpp" line="170"/>
+        <location filename="../src/compare_roi_controller.cpp" line="172"/>
         <source>Unknown source measurement failure</source>
         <translation>未知的源图测量失败</translation>
     </message>
@@ -3551,88 +3551,88 @@ or double-click a thumbnail to view</source>
 <context>
     <name>MainWindow</name>
     <message>
-        <location filename="../src/mainwindow.cpp" line="41"/>
+        <location filename="../src/mainwindow.cpp" line="42"/>
         <source>Cannot write the sidecar file for %1</source>
         <translation>无法写入 %1 的附属文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="375"/>
+        <location filename="../src/mainwindow.cpp" line="376"/>
         <source>Rated %1: %2 stars</source>
         <translation>已为 %1 评分: %2 星</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="437"/>
+        <location filename="../src/mainwindow.cpp" line="438"/>
         <source>Cleared the color label of %1</source>
         <translation>已清除 %1 的色标</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="438"/>
+        <location filename="../src/mainwindow.cpp" line="439"/>
         <source>Set color label %2 on %1</source>
         <translation>已为 %1 设置色标 %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="452"/>
+        <location filename="../src/mainwindow.cpp" line="453"/>
         <source>Picked %1</source>
         <translation>已收藏 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="453"/>
+        <location filename="../src/mainwindow.cpp" line="454"/>
         <source>Unpicked %1</source>
         <translation>已取消收藏 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="467"/>
+        <location filename="../src/mainwindow.cpp" line="468"/>
         <source>Rejected %1</source>
         <translation>已拒绝 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="468"/>
+        <location filename="../src/mainwindow.cpp" line="469"/>
         <source>Unrejected %1</source>
         <translation>已取消拒绝 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="615"/>
-        <location filename="../src/mainwindow.cpp" line="758"/>
+        <location filename="../src/mainwindow.cpp" line="616"/>
+        <location filename="../src/mainwindow.cpp" line="765"/>
         <location filename="../src/mainwindow_navigation.cpp" line="236"/>
         <source>Current: %1</source>
         <translation>当前: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="619"/>
+        <location filename="../src/mainwindow.cpp" line="620"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="684"/>
         <source>Image %1 / %2</source>
         <translation>图片 %1 / %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="620"/>
+        <location filename="../src/mainwindow.cpp" line="621"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="686"/>
         <source>%1 images</source>
         <translation>图片 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="708"/>
+        <location filename="../src/mainwindow.cpp" line="715"/>
         <source>At most 8 images can be compared; the first 8 were used</source>
         <translation>最多支持 8 张图片对比，已使用前 8 张</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="713"/>
+        <location filename="../src/mainwindow.cpp" line="720"/>
         <location filename="../src/mainwindow_commands.cpp" line="509"/>
         <source>Select 2-8 images to compare</source>
         <translation>需要选择 2-8 张图片才能比较</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="764"/>
+        <location filename="../src/mainwindow.cpp" line="771"/>
         <location filename="../src/mainwindow_session_recovery.cpp" line="413"/>
         <source>Ready</source>
         <translation>就绪</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="870"/>
+        <location filename="../src/mainwindow.cpp" line="877"/>
         <source>Compare</source>
         <translation>比较</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="870"/>
+        <location filename="../src/mainwindow.cpp" line="877"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="134"/>
         <source>Select 2–8 images to compare</source>
         <translation>选择 2–8 张图片进行比较</translation>
