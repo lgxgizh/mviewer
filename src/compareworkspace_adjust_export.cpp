@@ -238,8 +238,8 @@ void CompareWorkspace::addAdjustedExportButton(QVBoxLayout *editLay)
     m_exportAdjustedBtn->setObjectName(QStringLiteral("exportAdjustedButton"));
     m_exportAdjustedBtn->setToolTip(
         tr("Export current pane at full resolution with brightness/contrast/gamma, white balance, "
-           "USM, rotate/flip, and crop applied "
-           "PNG 或 TIFF，不覆盖原文件"));
+           "USM, rotate/flip, and crop applied, "
+           "as PNG or TIFF without overwriting the original"));
     connect(m_exportAdjustedBtn, &QPushButton::clicked, this,
             &CompareWorkspace::exportCurrentCellAdjusted);
     editLay->addWidget(m_exportAdjustedBtn);

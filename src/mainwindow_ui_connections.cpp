@@ -787,9 +787,9 @@ void MainWindow::connectSettingsSignals()
             [this]()
             {
                 QMessageBox::about(
-                    this, "关于 MViewer",
+                    this, tr("About MViewer"),
                     tr("MViewer "
-                       "%1\n\n图像算法工程师的可视化分析平台：浏览、对比、分析、导出。\n\n构建: %2")
+                       "%1\n\nVisual analysis platform for imaging algorithm engineers: browse, compare, analyze, export.\n\nBuild: %2")
                         .arg(QStringLiteral(MVIEWER_VERSION_STRING),
                              QStringLiteral(MVIEWER_VERSION_FULL)));
             });

@@ -203,7 +203,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
 void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
 {
     // M15: threshold slider for difference heatmap (0-255).
-    auto *thresholdLabel = new QLabel("阈值:", this);
+    auto *thresholdLabel = new QLabel(tr("Threshold:"), this);
     thresholdLabel->setObjectName("diffThresholdCaption");
     toolLayout->addWidget(thresholdLabel);
     m_thresholdSlider = new QSlider(Qt::Horizontal, this);

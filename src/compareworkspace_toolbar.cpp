@@ -261,7 +261,7 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
 {
     auto *sync = makePopup(viewBar, "compareSyncButton", tr("Sync"),
                            tr("Sync zoom (Z), sync drag (D), sync rotate (Alt+R), sync crosshair"
-                              "(R)、像素连线 (L)、统一像素倍率"));
+                              " (R), pixel link (L), Uniform Pixel Scale"));
     bindMirror(sync->menu(), m_syncZoomChk, "syncZoomAction");
     bindMirror(sync->menu(), m_syncDragChk, "syncDragAction");
     bindMirror(sync->menu(), m_syncRotateChk, "syncRotateAction");
@@ -273,7 +273,7 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     auto *adjust = makePopup(viewBar, "compareAdjustButton", tr("Adjust"),
                              tr("Brightness, contrast, gamma, gain, USM sharpening, rotation and "
                                 "flip (preview only, does not overwrite the original file);"
-                                "可导出此图调优结果"));
+                                " adjusted result can be exported"));
     if (m_editPanel && adjust->menu())
     {
         lift(m_editPanel);

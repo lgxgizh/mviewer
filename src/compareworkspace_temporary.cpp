@@ -254,8 +254,8 @@ QString CompareWorkspace::temporaryCompareTooltip() const
     {
         return tr(
             "With more than 2 images, this button and Space are unavailable. Hold number keys 1–N "
-            "在鼠标所在窗格临时显示第 N 张（不在窗格上则用当前窗格）；松开恢复。"
-            "布局预设用 Ctrl+2 / Ctrl+4 / Ctrl+8。");
+            "to temporarily show image N in the pane under the cursor (or the current pane); release to restore. "
+            "Layout presets use Ctrl+2 / Ctrl+4 / Ctrl+8.");
     }
     if (!imagesReady)
         return tr("Exactly 2 displayed images are required to hold and switch temporarily");
