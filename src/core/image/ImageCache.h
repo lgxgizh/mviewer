@@ -9,14 +9,16 @@
 #include <string>
 #include <unordered_map>
 
-// Multi-level memory cache (the memory part of the tiered cache). Split into four tiers by purpose (all are
-// LRU, each with its own independent capacity/eviction/lifecycle):
+// Multi-level memory cache (the memory part of the tiered cache). Split into four tiers by purpose
+// (all are LRU, each with its own independent capacity/eviction/lifecycle):
 //  - Metadata: tiny images/file-level derived data (numerous, minimal footprint, byte-limited)
 //  - Thumbnail: small images (list/gallery), many in count, small footprint
 //  - Preview  : medium images (left-column preview), moderate quantity
-//  - Viewer   : full-resolution decode results (double-click large image/compare), few in count, large footprint
+//  - Viewer   : full-resolution decode results (double-click large image/compare), few in count,
+//  large footprint
 // Each tier has its own mutex (not a global lock), scheduled and tracked centrally by CacheManager.
-// Note: the interface exposes only std::string keys and ImageData values and does not depend on Qt types.
+// Note: the interface exposes only std::string keys and ImageData values and does not depend on Qt
+// types.
 class ImageCache
 {
   public:
@@ -42,7 +44,8 @@ class ImageCache
 
     void clear();
 
-    // Set the capacity limit for a given level (bytes). CacheManager applies its CacheConfig after construction is complete.
+    // Set the capacity limit for a given level (bytes). CacheManager applies its CacheConfig after
+    // construction is complete.
     void setCapacity(Level level, size_t maxBytes);
 
     // Used bytes / entry count per tier (for CacheManager tiered statistics).

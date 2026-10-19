@@ -15,14 +15,15 @@
 #include <vector>
 
 // Unified hub of the hierarchical cache (CacheManager is the "owner").
-// Memory tiers (Metadata / Thumbnail / Preview / FullImage) are delegated to the existing ImageCache
-// (Independent capacity/eviction/lifetime/mutex per level); the disk level is delegated to the existing DiskCache (SQLite).
-// CacheManager does not hold storage itself, but is responsible for: routing, cross-tier fallback, eviction budget, prefetch coordination,
-// and per-level statistics. All public interfaces expose only std types.
+// Memory tiers (Metadata / Thumbnail / Preview / FullImage) are delegated to the existing
+// ImageCache (Independent capacity/eviction/lifetime/mutex per level); the disk level is delegated
+// to the existing DiskCache (SQLite). CacheManager does not hold storage itself, but is responsible
+// for: routing, cross-tier fallback, eviction budget, prefetch coordination, and per-level
+// statistics. All public interfaces expose only std types.
 //
-// True mipmap (in-memory): after a FullImage put, a power-of-two chain can be generated or lazily filled.
-// Key scheme: baseKey + "#mip:" + lod (lod≥1); lod 0 is the FullImage itself.
-// lod convention matches TileCache: 0 = finest, larger is coarser. mip pixels live in the Preview pool,
+// True mipmap (in-memory): after a FullImage put, a power-of-two chain can be generated or lazily
+// filled. Key scheme: baseKey + "#mip:" + lod (lod≥1); lod 0 is the FullImage itself. lod
+// convention matches TileCache: 0 = finest, larger is coarser. mip pixels live in the Preview pool,
 // Bounded by the Preview byte budget (shares eviction with other Preview entries).
 enum class CacheLevel : uint8_t
 {
@@ -59,7 +60,8 @@ class CacheManager
   public:
     static CacheManager &instance();
 
-    // Apply capacity configuration (call once after construction; see CacheConfig for the default configuration).
+    // Apply capacity configuration (call once after construction; see CacheConfig for the default
+    // configuration).
     void configure(const CacheConfig &cfg);
     const CacheConfig &config() const
     {
@@ -87,13 +89,15 @@ class CacheManager
     // Per-level statistics
     CacheLevelStats levelStats(CacheLevel level) const;
 
-    // Metadata object cache layer (RFC-003 Metadata level; stores ImageMetadata rather than pixels).
+    // Metadata object cache layer (RFC-003 Metadata level; stores ImageMetadata rather than
+    // pixels).
     void putMetadata(const std::string &key, const mviewer::domain::ImageMetadata &meta);
     bool getMetadata(const std::string &key, mviewer::domain::ImageMetadata &out) const;
     bool hasMetadata(const std::string &key) const;
 
-    // Raw 16-bit sample-buffer cache (Pixel Inspector high-bit-depth reads). Only when source bit depth > 8
-    // Present, independent of the pixel pool; a separate cap on the vector's allocated capacity protects memory.
+    // Raw 16-bit sample-buffer cache (Pixel Inspector high-bit-depth reads). Only when source bit
+    // depth > 8 Present, independent of the pixel pool; a separate cap on the vector's allocated
+    // capacity protects memory.
     void putRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> buf, int channels,
                   uint16_t maxSample);
     bool getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,

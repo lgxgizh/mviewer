@@ -29,13 +29,15 @@ struct UsmDiffSummary
     double changedPercent = 0.0;
 };
 
-// Apply USM (Unsharp Mask) sharpening to the input image and return a newly allocated ImageData (preserving the original format and dimensions).
-// Supports RGB24, BGR24, RGBA32, BGRA32, Grayscale8.
-// If the cancelled callback returns true, abort immediately and return an empty ImageData{}.
+// Apply USM (Unsharp Mask) sharpening to the input image and return a newly allocated ImageData
+// (preserving the original format and dimensions). Supports RGB24, BGR24, RGBA32, BGRA32,
+// Grayscale8. If the cancelled callback returns true, abort immediately and return an empty
+// ImageData{}.
 ImageData applyUsmSharpen(const ImageData &src, const UsmParams &params,
                           const std::function<bool()> &cancelled = {});
 
-// Compute the quantitative difference between the original image and the sharpened image (PSNR, SSIM, Δmean, Δmax, pixel-change percentage)
+// Compute the quantitative difference between the original image and the sharpened image (PSNR,
+// SSIM, Δmean, Δmax, pixel-change percentage)
 UsmDiffSummary computeUsmDiffSummary(const ImageData &orig, const ImageData &sharpened);
 
 } // namespace mviewer::core

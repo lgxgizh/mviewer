@@ -12,8 +12,9 @@
 #include <cstring>
 #include <sstream>
 
-// Internal implementation: convert ImageData to QImage for pixel-level statistics; the algorithm logic stays the same.
-// The header does not expose Qt; Qt is used inside the .cpp as an implementation detail.
+// Internal implementation: convert ImageData to QImage for pixel-level statistics; the algorithm
+// logic stays the same. The header does not expose Qt; Qt is used inside the .cpp as an
+// implementation detail.
 
 ImageStats AnalysisEngine::computeStats(const ImageData &imgData)
 {

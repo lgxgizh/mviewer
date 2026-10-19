@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-// Image statistics algorithms (independent of QWidget; the interface exposes only ImageData/std types).
-// Internal implementation may use Qt or SIMD; this interface is not bound to Qt.
+// Image statistics algorithms (independent of QWidget; the interface exposes only ImageData/std
+// types). Internal implementation may use Qt or SIMD; this interface is not bound to Qt.
 struct ImageStats
 {
     double lumMean = 0;                                             // 亮度均值
@@ -34,21 +34,25 @@ class AnalysisEngine
     // Compute statistics for a single image
     static ImageStats computeStats(const ImageData &img);
 
-    // Compute ROI region statistics (region is in image coordinates; out-of-bounds areas are cropped automatically)
+    // Compute ROI region statistics (region is in image coordinates; out-of-bounds areas are
+    // cropped automatically)
     static ImageStats computeStatsROI(const ImageData &img,
                                       const mviewer::domain::Selection &region);
 
-    // Compute the difference between two images (same size required; returns grayscale difference image Grayscale8)
+    // Compute the difference between two images (same size required; returns grayscale difference
+    // image Grayscale8)
     static ImageData differenceMap(const ImageData &a, const ImageData &b);
 
     // PSNR (peak signal-to-noise ratio, in dB; same dimensions; a perfect match returns 100)
     static double psnr(const ImageData &a, const ImageData &b);
 
-    // SSIM (structural similarity; same dimensions; returns [-1,1], 1 means identical; simplified grayscale)
+    // SSIM (structural similarity; same dimensions; returns [-1,1], 1 means identical; simplified
+    // grayscale)
     static double ssim(const ImageData &a, const ImageData &b);
 
-    // Noise estimation: Laplacian variance method (a larger return value means stronger noise; typical range 0..500+)
-    // Variance of the Laplacian operator on the grayscale image; estimates Gaussian white noise well
+    // Noise estimation: Laplacian variance method (a larger return value means stronger noise;
+    // typical range 0..500+) Variance of the Laplacian operator on the grayscale image; estimates
+    // Gaussian white noise well
     static double noiseEstimate(const ImageData &img);
 
     // False-color heatmap: map the grayscale difference to blue-green-red (returns RGB24)

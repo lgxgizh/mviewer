@@ -1,9 +1,9 @@
 #pragma once
 // Internal core helper: ImageData <-> QImage conversion.
-// This header is one of the adapter headers in core **explicitly allowed to include Qt** (the other is
-// QtMetadataSemantics.h, see docs/adr/011 and R5 of architecture_gate.ps1).
-// It may be included by core .cpp files and UI private headers (*_p.h); other than that, core/domain
-// Header files must remain free of Qt includes.
+// This header is one of the adapter headers in core **explicitly allowed to include Qt** (the other
+// is QtMetadataSemantics.h, see docs/adr/011 and R5 of architecture_gate.ps1). It may be included
+// by core .cpp files and UI private headers (*_p.h); other than that, core/domain Header files must
+// remain free of Qt includes.
 #include "core/image/DisplayColorContext.h"
 #include "core/image/ImageBuffer.h"
 #include "domain/Image.h"
@@ -49,10 +49,12 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
                              const mviewer::core::DisplayColorContext &target);
 
-// QImage -> ImageData (format-aware: Grayscale8 is kept as grayscale, the rest are converted to RGB24)
+// QImage -> ImageData (format-aware: Grayscale8 is kept as grayscale, the rest are converted to
+// RGB24)
 ImageData fromQImage(const QImage &src);
 
-// QImage -> ImageData (preserve the Alpha channel: convert to RGBA32 / BGRA32 when Alpha is present, equivalent to fromQImage when there is no Alpha)
+// QImage -> ImageData (preserve the Alpha channel: convert to RGBA32 / BGRA32 when Alpha is
+// present, equivalent to fromQImage when there is no Alpha)
 ImageData fromQImagePreservingAlpha(const QImage &src);
 
 } // namespace mvcore

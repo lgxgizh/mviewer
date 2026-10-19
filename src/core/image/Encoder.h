@@ -32,7 +32,8 @@ class Encoder
         }
     };
 
-    // Default encoding parameters (clang-cl requires named default arguments; inline definitions avoid cross-DLL export issues)
+    // Default encoding parameters (clang-cl requires named default arguments; inline definitions
+    // avoid cross-DLL export issues)
     static inline const Params kDefaultParams{90, 6};
 
     // Encode to file

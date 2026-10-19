@@ -3,7 +3,8 @@
 #include <string>
 #include <vector>
 
-// Filesystem layer: scan directories and enumerate image files. Change watching (QFileSystemWatcher) can be added later.
+// Filesystem layer: scan directories and enumerate image files. Change watching
+// (QFileSystemWatcher) can be added later.
 class FileSystem
 {
   public:

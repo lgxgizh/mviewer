@@ -70,8 +70,9 @@ struct CompareSession
     uint8_t threshold = 0;         // HeatMap / Diff threshold (0-255)
     int blinkIntervalMs = 500;     // Blink interval (was hardcoded 500; now persistable)
     bool sidePanelVisible = false; // Inspector panel visibility
-    int layoutIndex = 0;           // Layout combo selection (0=auto,1=1-col,2=2-col,3=3-col,4=4-col,5=single-row,6=custom)
-    int customColumns = 2;         // Custom layout column count (rows derived from image count)
+    int layoutIndex =
+        0; // Layout combo selection (0=auto,1=1-col,2=2-col,3=3-col,4=4-col,5=single-row,6=custom)
+    int customColumns = 2; // Custom layout column count (rows derived from image count)
 
     // H5: "uniform pixel scale" — force every pane to the same zoom so images of
     // different resolutions line up 1:1 in pixel scale (not fitted independently).
