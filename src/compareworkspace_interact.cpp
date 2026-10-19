@@ -574,9 +574,9 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
     const int count = m_engine.imageCount();
     ensureLocalZoomMultipliers(count);
 
-    if (localOnly || !m_syncZoom)
+    if (localOnly)
     {
-        // Ctrl+wheel (or sync-zoom off): only the hovered pane moves.
+        // Ctrl+wheel: only the hovered pane's M_i / scale / offset move.
         m_localZoomMultipliers[refIdx] *= effectiveFactor;
         if (!(m_localZoomMultipliers[refIdx] > 0.0) ||
             !std::isfinite(m_localZoomMultipliers[refIdx]))
@@ -584,11 +584,28 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
         m_engine.setCellScale(refIdx, targetScale);
         const Vec2 o = m_engine.cellTransform(refIdx).offset;
         m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
-        if (localOnly)
+        const int pct = static_cast<int>(std::round(targetScale * 100.0));
+        const QChar tag = QChar('A' + (refIdx % 26));
+        showCompareStatus(tr("Pane %1 local zoom: %2% (Ctrl+wheel)").arg(tag).arg(pct));
+    }
+    else if (!m_syncZoom)
+    {
+        // Independent zoom: only the hovered pane's scale changes.
+        m_engine.setCellScale(refIdx, targetScale);
+        if (m_syncDrag)
         {
-            const int pct = static_cast<int>(std::round(targetScale * 100.0));
-            const QChar tag = QChar('A' + (refIdx % 26));
-            showCompareStatus(tr("Pane %1 local zoom: %2% (Ctrl+wheel)").arg(tag).arg(pct));
+            // Drag sync on: keep a single shared offset across panes (mixed-B).
+            const Vec2 o = m_engine.syncTransform().offset;
+            const double ox = zoomedOffset(anchorX, o.x);
+            const double oy = zoomedOffset(anchorY, o.y);
+            m_engine.setOffset(ox, oy);
+            for (int i = 0; i < count; ++i)
+                m_engine.setCellOffset(i, ox, oy);
+        }
+        else
+        {
+            const Vec2 o = m_engine.cellTransform(refIdx).offset;
+            m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
         }
     }
     else
@@ -603,7 +620,7 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
         for (int i = 0; i < count; ++i)
             m_engine.setCellScale(i, oldScales[i] * effectiveFactor);
         // L2: zoom each pane's own offset around the anchor. Never force every
-        // pane onto syncTransform().offset (that wipes local anchor deltas).
+        // pane onto syncTransform().offset (that wipes local Ctrl+wheel anchors).
         for (int i = 0; i < count; ++i)
         {
             const Vec2 o = m_engine.cellTransform(i).offset;
