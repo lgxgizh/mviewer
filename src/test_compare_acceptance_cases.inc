@@ -186,7 +186,13 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
           "M49: releasing momentary Compare restores A");
 
     ws->setFocus();
-    pointAtComparePane(view0);
+    // Inline cursor aim: pointAtComparePane is defined later in this TU.
+    {
+        const QPoint center = view0->rect().center();
+        QCursor::setPos(view0->mapToGlobal(center));
+        QEvent enter(QEvent::Enter);
+        QApplication::sendEvent(view0, &enter);
+    }
     QKeyEvent spacePress(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
     QApplication::sendEvent(ws, &spacePress);
     pump(20);
