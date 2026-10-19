@@ -1,6 +1,6 @@
-> **Note (historical):** This review document retains Chinese prose from the original milestone write-up. Treat it as a historical record; current product status is in `STATUS.md` (English).
-
 # A-1 ~ A-10 完成度对账 — 2026-07-24
+
+**Note (historical):** This review document retains Chinese prose from the original milestone write-up. Treat it as a historical record; current product status is in `STATUS.md` (English).
 
 > 对照 `REVIEW_ACTION_ITEMS_2026-07-24.md` 与当前 `master` 源码。  
 > 状态：`DONE` 已实现 · `PARTIAL` 有实现但缺验收点 · `VERIFY` 仅需产品/性能验收 · `NOT_DONE` 未见实现
