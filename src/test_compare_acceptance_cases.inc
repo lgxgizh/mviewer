@@ -1676,7 +1676,6 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
     CHECK(combo && combo->currentIndex() == 2, "Ctrl+2 selects the 2-column layout");
 }
 
-
 // ─── Local zoom (Ctrl+wheel) acceptance — TC-01..05, TC-07, TC-08 (no TC-06) ─
 void sendPaneWheel(RawImageView *view, const QPoint &localPos, int angleDeltaY, bool ctrl)
 {
@@ -1747,8 +1746,9 @@ void testLocalZoomAcceptance(const QString &a, const QString &b)
     const auto o0Pre = ws->engine().cellTransform(0).offset;
     const auto o1Pre = ws->engine().cellTransform(1).offset;
     {
-        QMouseEvent press(QEvent::MouseButtonPress, QPointF(80, 80), v0->mapToGlobal(QPoint(80, 80)),
-                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(80, 80),
+                          v0->mapToGlobal(QPoint(80, 80)), Qt::LeftButton, Qt::LeftButton,
+                          Qt::NoModifier);
         QApplication::sendEvent(v0, &press);
         QMouseEvent move(QEvent::MouseMove, QPointF(140, 40), v0->mapToGlobal(QPoint(140, 40)),
                          Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
@@ -1782,8 +1782,7 @@ void testLocalZoomAcceptance(const QString &a, const QString &b)
         QApplication::sendEvent(ws, &press);
         pump(40);
         CHECK(v0->hasTransientDisplay(), "TC-04: Space installs transient on pane 0");
-        CHECK(std::abs(v0->presentedScale() - srcScale) < 1e-6 ||
-                  v0->presentedScale() > 0.0,
+        CHECK(std::abs(v0->presentedScale() - srcScale) < 1e-6 || v0->presentedScale() > 0.0,
               "TC-04: transient uses source scale");
         QKeyEvent release(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier);
         QApplication::sendEvent(ws, &release);
@@ -1848,6 +1847,5 @@ void testLocalZoomAcceptance(const QString &a, const QString &b)
               "TC-08: session captures localZoomMultiplier > 1");
     }
 }
-
 
 } // namespace
