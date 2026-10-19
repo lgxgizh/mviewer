@@ -17,9 +17,9 @@ void testMultiImageEntry(const QStringList &paths8)
     waitForCompareCount(ws, 4);
     CHECK(ws->comparedImageCount() == 4, "B#1: 4-image compare entry loads 4 images");
 
-    QCheckBox *split = findChk(ws, QStringLiteral("左右分割"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
-    QCheckBox *swipe = findChk(ws, QStringLiteral("滑动"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Split"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe"));
     CHECK(split && overlay, "B#8: split/overlay controls exist");
     if (split && overlay)
     {
@@ -73,9 +73,9 @@ void testModePreservesState(const QString &a, const QString &b)
     ws->applyROI({40, 30, 200, 120});
     pump(30);
 
-    QCheckBox *blink = findChk(ws, QStringLiteral("闪烁对比"));
-    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
-    QCheckBox *split = findChk(ws, QStringLiteral("左右分割"));
+    QCheckBox *blink = findChk(ws, QStringLiteral("Flicker"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("Overlay"));
+    QCheckBox *split = findChk(ws, QStringLiteral("Split"));
     CHECK(blink && overlay && split, "B#4: blink/overlay/split controls present");
     if (!blink || !overlay || !split)
         return;
@@ -100,7 +100,7 @@ void testModePreservesState(const QString &a, const QString &b)
           "B#4: no exclusive mode left stuck on after the cycle");
 
     // Diff-highlight toggling also preserves state.
-    QCheckBox *diffHl = findChk(ws, QStringLiteral("差异高亮"));
+    QCheckBox *diffHl = findChk(ws, QStringLiteral("Difference highlight"));
     if (diffHl)
     {
         diffHl->setChecked(true);
@@ -118,9 +118,9 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
 {
     std::cout << "── M49: exact grid + momentary Compare ──\n";
     const QString longA = writePng(
-        dir, QStringLiteral("a very long 中文 filename for caption elision 0123456789.png"), 80, 60,
-        QColor(240, 40, 40));
-    const QString b = writePng(dir, QStringLiteral("B 蓝色.png"), 80, 60, QColor(40, 80, 240));
+        dir, QStringLiteral("a very long Chinese filename for caption elision 0123456789.png"), 80,
+        60, QColor(240, 40, 40));
+    const QString b = writePng(dir, QStringLiteral("B blue.png"), 80, 60, QColor(40, 80, 240));
 
     SelectionModel sel;
     QDialog dlg;
@@ -273,7 +273,7 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     auto *perPane = ws->findChild<QCheckBox *>("perPaneHistogramToggle");
     auto *overlay = ws->findChild<QCheckBox *>("paneHistogramOverlayToggle");
     auto *roi = ws->findChild<QCheckBox *>("roiHistogramToggle");
-    auto *blink = findChk(ws, QStringLiteral("闪烁对比"));
+    auto *blink = findChk(ws, QStringLiteral("Flicker"));
     CHECK(perPane && overlay && roi && blink, "P1: histogram and blink controls are discoverable");
     if (!perPane || !overlay || !roi || !blink)
         return;
@@ -474,7 +474,7 @@ void testDegradedImages(const QDir &dir)
 
     CHECK(ws->comparedImageCount() == 3,
           "B#7: corrupt image is excluded from compare without crashing");
-    CHECK(warning.contains("无法加载") || warning.contains("无法加载"),
+    CHECK(warning.contains("could not be loaded"),
           "B#7: the load failure is surfaced to the user (loadWarning)");
     ws->engine().setScale(2.0);
     pump(30);
@@ -712,7 +712,7 @@ void testLargeCompareDisplayBounded(const QDir &dir)
     if (!panes.isEmpty() && panes.first())
         panes.first()->zoom(2.0,
                             QPointF(panes.first()->width() / 2.0, panes.first()->height() / 2.0));
-    if (QCheckBox *diff = findChk(ws, QStringLiteral("显示差异")))
+    if (QCheckBox *diff = findChk(ws, QStringLiteral("Show Difference")))
         diff->setChecked(true);
     pump(100);
     dlg.close();
@@ -1032,7 +1032,7 @@ void testInspectorCoalescing(const QString &a, const QString &b)
 
     // (b) One physical hover with the synced crosshair ON emits both pixelInfo
     // and crosshairMoved; the pair must render the inspector exactly once.
-    QCheckBox *crosshair = findChk(ws, QStringLiteral("同步准星"));
+    QCheckBox *crosshair = findChk(ws, QStringLiteral("Sync Crosshair"));
     CHECK(crosshair != nullptr, "M30: synced crosshair toggle is discoverable");
     if (crosshair)
     {
@@ -1113,7 +1113,7 @@ void testInspectorCoalescing(const QString &a, const QString &b)
         pump(60);
         QPushButton *lockReference = nullptr;
         for (QPushButton *b : ws->findChildren<QPushButton *>())
-            if (b->isCheckable() && b->text().startsWith(QStringLiteral("锁定基准")))
+            if (b->isCheckable() && b->text().startsWith(QStringLiteral("Lock Reference")))
                 lockReference = b;
         CHECK(lockReference != nullptr, "M30: lock-reference button is discoverable");
         if (!lockReference)
@@ -1208,7 +1208,7 @@ void testCanvasDoubleClickGestures(const QString &a, const QString &b)
     waitForCompareCount(ws, 2);
     pump(100);
 
-    auto *swipe = findChk(ws, QStringLiteral("滑动对比"));
+    auto *swipe = findChk(ws, QStringLiteral("Swipe"));
     CHECK(swipe && swipe->isEnabled(), "Canvas double-click: swipe mode is available");
     if (!swipe)
         return;
@@ -1353,7 +1353,7 @@ void testCompareShortcutHelpSnapshot(const QDir &dir, const QString &img0, const
     dlg.show();
     pump(30);
 
-    QCheckBox *swipe = findChk(ws, QStringLiteral("滑动对比"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe"));
     const mviewer::cw::CompareShortcut *swipeKeys = mviewer::cw::findCompareShortcut("W");
     QString swipeName;
     if (swipe)
@@ -1459,7 +1459,7 @@ QComboBox *compareLayoutCombo(QWidget *root)
     const auto boxes = root->findChildren<QComboBox *>();
     for (QComboBox *box : boxes)
     {
-        if (box && box->count() > 0 && box->itemText(0) == QStringLiteral("自动"))
+        if (box && box->count() > 0 && box->itemText(0) == QStringLiteral("Auto"))
             return box;
     }
     return nullptr;
@@ -1557,14 +1557,15 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
         const QString keys = QString::fromUtf8(entry.keys ? entry.keys : "");
         const QString text = QString::fromUtf8(entry.name ? entry.name : "") +
                              QString::fromUtf8(entry.description ? entry.description : "");
-        if (keys == QLatin1String("1") && text.contains(QStringLiteral("实际大小")))
+        if (keys == QLatin1String("1") && text.contains(QStringLiteral("Actual Size")))
             plainOneIsZoom = true;
-        if (text.contains(QStringLiteral("套用宫格")) || text.contains(QStringLiteral("改布局")))
+        if (text.contains(QStringLiteral("Apply grid")) ||
+            text.contains(QStringLiteral("Change layout")))
             digitsChangeLayout = true;
         if (keys == QLatin1String("Ctrl+1") && text.contains(QStringLiteral("100%")))
             ctrl1IsActual = true;
         if (keys.contains(QLatin1Char('1')) && keys.contains(QLatin1Char('8')) &&
-            text.contains(QStringLiteral("临时")))
+            text.contains(QStringLiteral("Temporary")))
             digitsPreview = true;
     }
     CHECK(!plainOneIsZoom && ctrl1IsActual && digitsPreview && !digitsChangeLayout,
@@ -1620,7 +1621,7 @@ void testPlainDigitsReservedForPreview(const QDir &dir)
     CHECK(std::abs(ws->engine().cellTransform(0).scale - threeScale) < 1e-6,
           "plain 2/3/4 with three images do not change zoom");
     auto *status = ws->findChild<QLabel *>(QStringLiteral("compareStatusLabel"));
-    CHECK(status && status->text().contains(QStringLiteral("当前共 3 张")),
+    CHECK(status && status->text().contains(QStringLiteral("Currently 3 images in total")),
           "a digit past the image count shows a status hint");
 
     RawImageView *pane0 = comparePaneView(ws, 0);

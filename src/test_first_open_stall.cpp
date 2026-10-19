@@ -153,8 +153,8 @@ void testMissingDirectory(Results &results)
                             QString::number(QCoreApplication::applicationPid());
     QDir(missing).removeRecursively();
     panel.setDirectory(missing);
-    const bool failed =
-        waitTrue([&] { return statuses.contains(QStringLiteral("目录加载失败")); }, 5000);
+    const bool failed = waitTrue(
+        [&] { return statuses.contains(QStringLiteral("Failed to load directory")); }, 5000);
     check(results, failed, "missing directory emits 目录加载失败");
     check(results, panel.entries().isEmpty(), "missing directory leaves the gallery empty");
     check(results, QApplication::overrideCursor() == nullptr,
@@ -213,7 +213,7 @@ void testNavigateEmitsBeforeStat(Results &results)
     check(results, tmp.isValid(), "tree temp dir created");
     if (!tmp.isValid())
         return;
-    const QString dir = QDir(tmp.path()).filePath(QStringLiteral("相册"));
+    const QString dir = QDir(tmp.path()).filePath(QStringLiteral("Album"));
     QDir().mkpath(dir);
 
     DirectoryTree tree;
@@ -244,7 +244,7 @@ void testNavigationIndexDoesNotBlockGallery(Results &results)
     check(results, tmp.isValid(), "gallery/tree temp dir created");
     if (!tmp.isValid())
         return;
-    const QString dir = QDir(tmp.path()).filePath(QStringLiteral("相册"));
+    const QString dir = QDir(tmp.path()).filePath(QStringLiteral("Album"));
     QDir().mkpath(dir);
     const QString image = writePng(dir);
 

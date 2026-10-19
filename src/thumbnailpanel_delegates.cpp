@@ -153,7 +153,7 @@ void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &pa
         QFont f = painter->font();
         f.setPointSize(qMax(7, f.pointSize() - 1));
         painter->setFont(f);
-        painter->drawText(thumbRect, Qt::AlignCenter, QStringLiteral("无法加载"));
+        painter->drawText(thumbRect, Qt::AlignCenter, QStringLiteral("Unable to Load"));
     }
     else
     {
@@ -386,7 +386,7 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QMod
     {
         const double mp = (entry->width * static_cast<double>(entry->height)) / 1000000.0;
         const QString fmt = fileSuffixFromPath(path).toUpper();
-        lines << QObject::tr("分辨率: %1 × %2 (%3 MP) · %4")
+        lines << QObject::tr("Resolution: %1 × %2 (%3 MP) · %4")
                      .arg(entry->width)
                      .arg(entry->height)
                      .arg(QString::number(mp, 'f', 1))
@@ -396,14 +396,14 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QMod
     {
         const QString fmt = fileSuffixFromPath(path).toUpper();
         if (!fmt.isEmpty())
-            lines << QObject::tr("格式: %1").arg(fmt);
+            lines << QObject::tr("Format: %1").arg(fmt);
     }
 
     if (entry && entry->size > 0)
-        lines << QObject::tr("大小: %1").arg(formatFileSize(entry->size));
+        lines << QObject::tr("Size: %1").arg(formatFileSize(entry->size));
 
     if (entry && entry->date.isValid())
-        lines << QObject::tr("修改时间: %1")
+        lines << QObject::tr("Modified: %1")
                      .arg(entry->date.toString(QStringLiteral("yyyy-MM-dd hh:mm:ss")));
 
     const auto &rs = mviewer::core::RatingStore::instance();
@@ -423,10 +423,10 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QMod
     if (label > 0)
     {
         static const char *kLabelNames[7] = {"", "红色", "橙色", "黄色", "绿色", "蓝色", "紫色"};
-        metaTags << QString::fromUtf8(kLabelNames[label]) + QObject::tr("标签");
+        metaTags << QString::fromUtf8(kLabelNames[label]) + QObject::tr("Label");
     }
     if (rejected)
-        metaTags << QObject::tr("已排除 (Rejected)");
+        metaTags << QObject::tr("Excluded (Rejected)");
 
     if (!metaTags.isEmpty())
         lines << metaTags.join(QStringLiteral(" · "));

@@ -259,9 +259,9 @@ void CompareWorkspace::presentDiffMetrics(const QString &text)
 void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, QWidget *&syncButton,
                                            QWidget *&adjustButton, QWidget *&moreButton)
 {
-    auto *sync = makePopup(viewBar, "compareSyncButton", tr("同步"),
-                           tr("同步缩放 (Z)、同步拖动 (D)、同步旋转 (Alt+R)、同步准星 "
-                              "(R)、像素连线 (L)、统一像素倍率"));
+    auto *sync = makePopup(viewBar, "compareSyncButton", tr("Sync"),
+                           tr("Sync zoom (Z), sync drag (D), sync rotate (Alt+R), sync crosshair"
+                              " (R), pixel link (L), Uniform Pixel Scale"));
     bindMirror(sync->menu(), m_syncZoomChk, "syncZoomAction");
     bindMirror(sync->menu(), m_syncDragChk, "syncDragAction");
     bindMirror(sync->menu(), m_syncRotateChk, "syncRotateAction");
@@ -270,10 +270,10 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     bindMirror(sync->menu(), m_uniformScaleChk, "uniformScaleAction");
     syncButton = sync;
 
-    auto *adjust =
-        makePopup(viewBar, "compareAdjustButton", tr("调整"),
-                  tr("亮度、对比度、伽马、增益、USM 锐化、旋转与翻转（仅预览，不覆盖原文件）；"
-                     "可导出此图调优结果"));
+    auto *adjust = makePopup(viewBar, "compareAdjustButton", tr("Adjust"),
+                             tr("Brightness, contrast, gamma, gain, USM sharpening, rotation and "
+                                "flip (preview only, does not overwrite the original file);"
+                                " adjusted result can be exported"));
     if (m_editPanel && adjust->menu())
     {
         lift(m_editPanel);
@@ -287,8 +287,9 @@ void CompareWorkspace::installCompareMenus(QWidget *viewBar, QWidget *toolBar, Q
     }
     adjustButton = adjust;
 
-    auto *more = makePopup(toolBar, "compareMoreButton", tr("⋯ 更多"),
-                           tr("存储布局、读取布局、对齐、锁定基准、标记和其他比较选项"));
+    auto *more = makePopup(toolBar, "compareMoreButton", tr("⋯ More"),
+                           tr("Save layout, load layout, align, lock reference, markers, and other "
+                              "comparison options"));
     auto *morePanel = new QWidget(more);
     auto *moreLay = new QVBoxLayout(morePanel);
     moreLay->setContentsMargins(8, 8, 8, 8);
@@ -337,7 +338,7 @@ void CompareWorkspace::regroupCompareChrome()
     const auto labels = viewBar->findChildren<QLabel *>(QString(), Qt::FindDirectChildrenOnly);
     for (QLabel *label : labels)
     {
-        if (label && label->text().startsWith(tr("布局")))
+        if (label && label->text().startsWith(tr("Layout")))
             layoutLabel = label;
     }
 
@@ -366,7 +367,7 @@ void CompareWorkspace::regroupCompareChrome()
 
     if (m_layoutCombo)
     {
-        m_layoutCombo->setToolTip(tr("布局：自动 / 1×N / 2×2 …（Ctrl+2 / Ctrl+4 / Ctrl+8）"));
+        m_layoutCombo->setToolTip(tr("Layout: Auto / 1×N / 2×2 … (Ctrl+2 / Ctrl+4 / Ctrl+8)"));
         m_layoutCombo->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     }
     place(viewLay, syncButton, true);

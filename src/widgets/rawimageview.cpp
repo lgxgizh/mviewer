@@ -450,7 +450,7 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
     if (m_sizeMismatch)
     {
         p.save();
-        drawCornerBadge(p, tr("尺寸不匹配"), QColor(200, 40, 40, 235), false);
+        drawCornerBadge(p, tr("Size mismatch"), QColor(200, 40, 40, 235), false);
         p.restore();
     }
 
@@ -460,7 +460,7 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
         p.setPen(Qt::NoPen);
         p.setBrush(QColor(0, 0, 0, 28));
         p.drawRect(rect());
-        drawCornerBadge(p, tr("加载中"), QColor(30, 90, 180, 210), true);
+        drawCornerBadge(p, tr("Loading"), QColor(30, 90, 180, 210), true);
         p.restore();
     }
     else if (!m_metricBadge.isEmpty())

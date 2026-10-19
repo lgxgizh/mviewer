@@ -141,14 +141,14 @@ const char *deviceClassText(const std::string &s)
     if (s == "abst")
         return "抽象";
     if (s == "spac")
-        return "色彩空间";
+        return "Color Space";
     if (s == "nmcl")
         return "命名色";
     if (s == "camb")
-        return "相机";
+        return "Camera";
     if (s == "vidm")
         return "视频";
-    return "未知";
+    return "Unknown";
 }
 
 const char *colorSpaceText(const std::string &s)
@@ -175,7 +175,7 @@ const char *colorSpaceText(const std::string &s)
         return "HLS";
     if (s == "YCbr")
         return "YCbCr";
-    return "未知";
+    return "Unknown";
 }
 
 const char *renderingIntentText(uint32_t v)
@@ -191,7 +191,7 @@ const char *renderingIntentText(uint32_t v)
     case 3:
         return "绝对色度 (ICC-Absolute Colorimetric)";
     default:
-        return "未知";
+        return "Unknown";
     }
 }
 

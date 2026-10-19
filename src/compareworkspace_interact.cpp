@@ -418,7 +418,7 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
             m_diffRenderer->setSplitRatio(0.5);
         if (m_compareCanvas)
             m_compareCanvas->update();
-        showCompareStatus(tr("滑动卷帘已重置居中 (50%)"));
+        showCompareStatus(tr("Swipe divider reset to center (50%)"));
         return true;
     }
 
@@ -445,13 +445,13 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
     {
         const double factor = std::abs(fitScale - 1.0) < 0.005 ? 2.0 : (1.0 / currentScale);
         applyAnchorZoom(refCell, anchorX, anchorY, factor);
-        showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("视图缩放: 200%")
-                                                         : tr("视图缩放: 100%"));
+        showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("View zoom: 200%")
+                                                         : tr("View zoom: 100%"));
     }
     else
     {
         fitAll();
-        showCompareStatus(tr("视图自适应窗口 (Fit)"));
+        showCompareStatus(tr("View Fitted to Window (Fit)"));
     }
 
     m_dragging = false;
@@ -666,7 +666,7 @@ void CompareWorkspace::updateLinkInfo()
         return;
     if (m_linkPoints.isEmpty())
     {
-        m_linkInfoLabel->setText(tr("标记: 0"));
+        m_linkInfoLabel->setText(tr("Markers: 0"));
         m_linkInfoLabel->setToolTip(QString());
         return;
     }
@@ -681,7 +681,7 @@ void CompareWorkspace::updateLinkInfo()
     const int n = m_engine.imageCount();
     const int baseIdx = n > 0 ? qBound(0, diffBaseIndex(), n - 1) : -1;
     QStringList lines;
-    lines << tr("共 %1 个标记点").arg(m_linkPoints.size());
+    lines << tr("%1 markers").arg(m_linkPoints.size());
     for (int i = 0; i < m_linkPoints.size(); ++i)
     {
         const int x = qRound(m_linkPoints[i].x());
@@ -714,7 +714,7 @@ void CompareWorkspace::updateLinkInfo()
             const LinkSample &sample = samples[static_cast<size_t>(c)];
             if (!sample.valid)
             {
-                line += QString("  [%1] 无效").arg(c);
+                line += tr("  [%1] invalid").arg(c);
             }
             else if (c == baseIdx)
             {
@@ -737,7 +737,7 @@ void CompareWorkspace::updateLinkInfo()
             }
             else
             {
-                line += QString("  [%1] RGB(%2,%3,%4) Δ无效")
+                line += tr("  [%1] RGB(%2,%3,%4) Δinvalid")
                             .arg(c)
                             .arg(sample.r)
                             .arg(sample.g)
@@ -746,10 +746,10 @@ void CompareWorkspace::updateLinkInfo()
         }
         lines << line;
     }
-    m_linkInfoLabel->setText(tr("标记: %1").arg(m_linkPoints.size()));
+    m_linkInfoLabel->setText(tr("Markers: %1").arg(m_linkPoints.size()));
     m_linkInfoLabel->setToolTip(lines.join('\n'));
     const auto &last = m_linkPoints.last();
-    emit pixelInfo(tr("像素连线 #%1 @ (%2,%3) — 悬停“标记”查看全部 RGB/Δ")
+    emit pixelInfo(tr("Pixel Link #%1 @ (%2,%3) — hover \"Markers\" to view all RGB/Δ")
                        .arg(m_linkPoints.size())
                        .arg(qRound(last.x()))
                        .arg(qRound(last.y())));

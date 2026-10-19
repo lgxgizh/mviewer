@@ -76,7 +76,7 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
             if (item && !item->text().isEmpty())
             {
                 const QString cellText = item->text();
-                menu.addAction(QObject::tr("复制单元格内容 (%1)").arg(cellText),
+                menu.addAction(QObject::tr("Copy cell contents (%1)").arg(cellText),
                                [cellText]() { QApplication::clipboard()->setText(cellText); });
             }
             auto rowCells = [inspector](int r) -> QStringList
@@ -93,7 +93,7 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
             if (row >= 0 && row < inspector->rowCount())
             {
                 const QString rowText = rowCells(row).join('\t');
-                menu.addAction(QObject::tr("复制该行数据"),
+                menu.addAction(QObject::tr("Copy this row's data"),
                                [rowText]() { QApplication::clipboard()->setText(rowText); });
                 auto *item0 = inspector->item(row, 0);
                 const QVariant varRgb = item0 ? item0->data(Qt::UserRole) : QVariant();
@@ -107,9 +107,9 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                                             .arg(b, 2, 16, QLatin1Char('0'))
                                             .toUpper();
                     const QString rgb = QString("rgb(%1, %2, %3)").arg(r).arg(g).arg(b);
-                    menu.addAction(QObject::tr("复制 HEX 颜色 (%1)").arg(hex),
+                    menu.addAction(QObject::tr("Copy HEX color (%1)").arg(hex),
                                    [hex]() { QApplication::clipboard()->setText(hex); });
-                    menu.addAction(QObject::tr("复制 RGB 颜色 (%1)").arg(rgb),
+                    menu.addAction(QObject::tr("Copy RGB color (%1)").arg(rgb),
                                    [rgb]() { QApplication::clipboard()->setText(rgb); });
                 }
             }
@@ -135,8 +135,9 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                     }
                     QApplication::clipboard()->setText(lines.join('\n'));
                 };
-                menu.addAction(QObject::tr("复制全部表格数据"), [=]() { copyFormatted(false); });
-                menu.addAction(QObject::tr("复制为 Markdown 表格"), [=]() { copyFormatted(true); });
+                menu.addAction(QObject::tr("Copy all table data"), [=]() { copyFormatted(false); });
+                menu.addAction(QObject::tr("Copy as Markdown table"),
+                               [=]() { copyFormatted(true); });
             }
             if (!menu.isEmpty())
                 menu.exec(inspector->viewport()->mapToGlobal(pos));
@@ -155,7 +156,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
 {
     // ── Pixel Inspector Pro ──────────────────────────────────────────────
     auto *inspHeader = new QHBoxLayout();
-    inspHeader->addWidget(new QLabel(tr("像素检视"), this));
+    inspHeader->addWidget(new QLabel(tr("Pixel Inspector"), this));
     m_coordLabel = new QLabel(QStringLiteral("(—, —)"), this);
     m_coordLabel->setObjectName("pixelInspectorCoordLabel");
     m_coordLabel->setStyleSheet(
@@ -169,7 +170,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_csCombo->addItems({QStringLiteral("RGB"), QStringLiteral("HEX"), QStringLiteral("HSV"),
                          QStringLiteral("Lab"), QStringLiteral("YUV"), QStringLiteral("YCbCr"),
                          QStringLiteral("XYZ")});
-    m_csCombo->setToolTip(tr("像素值显示的色彩空间"));
+    m_csCombo->setToolTip(tr("Color space for pixel value display"));
     connect(m_csCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int idx)
             {
@@ -184,7 +185,8 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_kernelCombo->addItems({QStringLiteral("1×1"), QStringLiteral("3×3"), QStringLiteral("5×5"),
                              QStringLiteral("7×7")});
     m_kernelCombo->setCurrentIndex(1); // 3×3 by default
-    m_kernelCombo->setToolTip(tr("邻域统计核大小（基准格亮度均值/方差）"));
+    m_kernelCombo->setToolTip(
+        tr("Neighborhood stats kernel size (base cell luminance mean/variance)"));
     connect(m_kernelCombo, &QComboBox::currentIndexChanged, this,
             [this](int)
             {
@@ -197,7 +199,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_inspector = new QTableWidget(this);
     m_inspector->setObjectName("pixelInspectorTable");
     m_inspector->setColumnCount(7);
-    m_inspector->setHorizontalHeaderLabels({tr("#"), tr("名称"), QStringLiteral("R"),
+    m_inspector->setHorizontalHeaderLabels({tr("#"), tr("Name"), QStringLiteral("R"),
                                             QStringLiteral("G"), QStringLiteral("B"),
                                             QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
     m_inspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -208,7 +210,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     setupInspectorContextMenu(m_inspector, this);
     sideLay->addWidget(m_inspector);
 
-    m_statsLabel = new QLabel(tr("邻域统计: —"), this);
+    m_statsLabel = new QLabel(tr("Neighborhood statistics: —"), this);
     m_statsLabel->setObjectName("pixelInspectorStatsLabel");
     m_statsLabel->setWordWrap(true);
     m_statsLabel->setStyleSheet(
@@ -223,7 +225,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
 void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
 {
     // ── Histogram (channels / log / ROI) ─────────────────────────────────
-    m_histTitle = new QLabel(tr("直方图（全图）"), this);
+    m_histTitle = new QLabel(tr("Histogram (full image)"), this);
     sideLay->addWidget(m_histTitle);
 
     auto *histOpts = new QHBoxLayout();
@@ -243,12 +245,12 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     m_histRChk = makeChanChk(QStringLiteral("R"), true, 0);
     m_histGChk = makeChanChk(QStringLiteral("G"), true, 1);
     m_histBChk = makeChanChk(QStringLiteral("B"), true, 2);
-    m_histLumaChk = makeChanChk(tr("亮度"), false, 3);
-    m_histVChk = makeChanChk(tr("V(明度)"), false, 4);
-    m_histVChk->setToolTip(tr("HSV 空间的 V 分量（最大通道明度 max(R,G,B)）"));
+    m_histLumaChk = makeChanChk(tr("Brightness"), false, 3);
+    m_histVChk = makeChanChk(tr("V (Value)"), false, 4);
+    m_histVChk->setToolTip(tr("V component in HSV space (maximum channel value max(R,G,B))"));
 
     m_histLogChk = new QCheckBox(QStringLiteral("Log"), this);
-    m_histLogChk->setToolTip(tr("对数纵轴：低计数区间不再被峰值淹没"));
+    m_histLogChk->setToolTip(tr("Log Y-axis: low-count bins are no longer drowned out by peaks"));
     connect(m_histLogChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -259,7 +261,8 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
 
     m_roiHistChk = new QCheckBox(QStringLiteral("ROI"), this);
     m_roiHistChk->setObjectName("roiHistogramToggle");
-    m_roiHistChk->setToolTip(tr("仅统计当前 ROI 选区内的像素（先在图像上框选 ROI）"));
+    m_roiHistChk->setToolTip(
+        tr("Count only pixels inside the current ROI (box-select an ROI on the image first)"));
     connect(m_roiHistChk, &QCheckBox::toggled, this, [this](bool) { refreshHistograms(); });
     histOpts->addWidget(m_roiHistChk);
     histOpts->addStretch(1);
@@ -271,7 +274,7 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     sideLay->addWidget(m_hist, 1);
 
     // M16.5: per-pane histogram toggle
-    m_perPaneHistChk = new QCheckBox(tr("每窗格独立直方图"), this);
+    m_perPaneHistChk = new QCheckBox(tr("Independent histogram per pane"), this);
     m_perPaneHistChk->setObjectName("perPaneHistogramToggle");
     m_perPaneHistChk->setChecked(false);
     connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
@@ -310,7 +313,7 @@ void CompareWorkspace::updateInspectorHeader(int spaceIdx)
     if (idx == m_inspectorSpaceIdx)
         return;
     m_inspector->setHorizontalHeaderLabels(
-        {tr("#"), tr("名称"), QString::fromLatin1(kHeaders[idx][0]),
+        {tr("#"), tr("Name"), QString::fromLatin1(kHeaders[idx][0]),
          QString::fromLatin1(kHeaders[idx][1]), QString::fromLatin1(kHeaders[idx][2]),
          QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
     m_inspectorSpaceIdx = idx;
@@ -376,20 +379,20 @@ void CompareWorkspace::updateInspector(int x, int y)
                       : mviewer::core::NeighborhoodStats{};
         if (stats.count > 0)
         {
-            m_statsLabel->setText(
-                tr("邻域 %1×%1: 亮度 μ=%2 σ=%3 [%4, %5] · RGB均值(%6, %7, %8) · V均值 %9")
-                    .arg(kernel)
-                    .arg(stats.mean, 0, 'f', 1)
-                    .arg(stats.stdDev, 0, 'f', 1)
-                    .arg(static_cast<int>(stats.min))
-                    .arg(static_cast<int>(stats.max))
-                    .arg(stats.rMean, 0, 'f', 1)
-                    .arg(stats.gMean, 0, 'f', 1)
-                    .arg(stats.bMean, 0, 'f', 1)
-                    .arg(stats.vMean, 0, 'f', 1));
+            m_statsLabel->setText(tr("Neighborhood %1×%1: luminance μ=%2 σ=%3 [%4, %5] · RGB mean "
+                                     "(%6, %7, %8) · V mean %9")
+                                      .arg(kernel)
+                                      .arg(stats.mean, 0, 'f', 1)
+                                      .arg(stats.stdDev, 0, 'f', 1)
+                                      .arg(static_cast<int>(stats.min))
+                                      .arg(static_cast<int>(stats.max))
+                                      .arg(stats.rMean, 0, 'f', 1)
+                                      .arg(stats.gMean, 0, 'f', 1)
+                                      .arg(stats.bMean, 0, 'f', 1)
+                                      .arg(stats.vMean, 0, 'f', 1));
         }
         else
-            m_statsLabel->setText(tr("邻域统计: —"));
+            m_statsLabel->setText(tr("Neighborhood statistics: —"));
     }
 }
 
@@ -414,7 +417,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
 
         if (!sample.valid)
         {
-            const QString invalid = QStringLiteral("无效");
+            const QString invalid = QStringLiteral("Invalid");
             setCellText(m_inspector, i, 2, invalid);
             setCellText(m_inspector, i, 3,
                         space == ColorSpace::HEX ? QStringLiteral("—") : invalid);
@@ -440,7 +443,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             setCellText(m_inspector, i, 4, formatChannel(space, color.c3));
         }
 
-        QString delta = QStringLiteral("无效");
+        QString delta = QStringLiteral("Invalid");
         QString deltaTip;
         if (sample.valid && baseIdx >= 0 && baseIdx < n &&
             samples[static_cast<size_t>(baseIdx)].valid)
@@ -459,13 +462,14 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             if (i == baseIdx)
             {
                 delta = QStringLiteral("0");
-                deltaTip = tr("基准图像（差值为0）");
+                deltaTip = tr("Reference image (difference is 0)");
             }
             else
             {
                 delta = (space == ColorSpace::Lab) ? QString::number(dE76, 'f', 1)
                                                    : QString::number(dist, 'f', 0);
-                deltaTip = tr("与基准对比：ΔR=%1, ΔG=%2, ΔB=%3 (欧氏距离: %4, ΔE76: %5)")
+                deltaTip = tr("Compared to baseline: ΔR=%1, ΔG=%2, ΔB=%3 (Euclidean distance: %4, "
+                              "ΔE76: %5)")
                                .arg(dr >= 0 ? QString("+%1").arg(dr) : QString::number(dr))
                                .arg(dg >= 0 ? QString("+%1").arg(dg) : QString::number(dg))
                                .arg(db >= 0 ? QString("+%1").arg(db) : QString::number(db))
@@ -475,7 +479,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
         }
         setCellText(m_inspector, i, 5, delta, deltaTip);
 
-        QString raw16 = QStringLiteral("无效");
+        QString raw16 = QStringLiteral("Invalid");
         if (sample.valid)
         {
             const bool identity = i >= static_cast<int>(m_cellAdjusts.size()) ||
@@ -492,7 +496,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
                                 .arg(sample.r)
                                 .arg(sample.g)
                                 .arg(sample.b)
-                                .arg(QStringLiteral("预览"));
+                                .arg(QStringLiteral("Preview"));
             }
             else
             {
@@ -500,7 +504,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
                             .arg(sample.r)
                             .arg(sample.g)
                             .arg(sample.b)
-                            .arg(QStringLiteral("已调整预览"));
+                            .arg(QStringLiteral("Adjusted preview"));
             }
         }
         setCellText(m_inspector, i, 6, raw16);
@@ -510,8 +514,12 @@ QString CompareWorkspace::histogramTitleText(bool roiEnabled,
                                              const mviewer::domain::Selection &roi) const
 {
     if (roiEnabled && !roi.isEmpty())
-        return tr("直方图（ROI %1,%2 %3×%4）").arg(roi.x).arg(roi.y).arg(roi.width).arg(roi.height);
-    return tr("直方图（全图）");
+        return tr("Histogram (ROI %1,%2 %3×%4)")
+            .arg(roi.x)
+            .arg(roi.y)
+            .arg(roi.width)
+            .arg(roi.height);
+    return tr("Histogram (full image)");
 }
 
 void CompareWorkspace::refreshHistograms()
@@ -755,7 +763,7 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
         if (m_histTitle)
         {
             QString title = histogramTitleText(r.roiEnabled, r.roi);
-            QString tip = tr("直方图与动态范围截断分析");
+            QString tip = tr("Histogram and dynamic range clipping analysis");
             if (!r.main.empty() && r.main[0].total > 0 && r.main[0].bins == 256)
             {
                 const auto &h0 = r.main[0];
@@ -763,7 +771,7 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
                     (100.0 * static_cast<double>(h0.luma[0])) / static_cast<double>(h0.total);
                 const double over =
                     (100.0 * static_cast<double>(h0.luma[255])) / static_cast<double>(h0.total);
-                title += tr(" · 截断: 暗 %1% / 亮 %2%")
+                title += tr(" · Clipping: dark %1% / bright %2%")
                              .arg(QString::number(under, 'f', under >= 0.1 ? 1 : 2),
                                   QString::number(over, 'f', over >= 0.1 ? 1 : 2));
                 QStringList tipLines;
@@ -778,7 +786,8 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
                         (100.0 * static_cast<double>(h.luma[0])) / static_cast<double>(h.total);
                     const double o =
                         (100.0 * static_cast<double>(h.luma[255])) / static_cast<double>(h.total);
-                    tipLines << tr("[%1] 像素 %2 · 暗部(Y=0): %3 (%4%) · 高光(Y=255): %5 (%6%)")
+                    tipLines << tr("[%1] pixels %2 · shadows (Y=0): %3 (%4%) · highlights (Y=255): "
+                                   "%5 (%6%)")
                                     .arg(QChar('A' + slot))
                                     .arg(static_cast<qlonglong>(h.total))
                                     .arg(static_cast<qlonglong>(h.luma[0]))

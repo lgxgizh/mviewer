@@ -19,7 +19,7 @@ RatingWidget::RatingWidget(QWidget *parent) : QWidget(parent)
         btn->setAutoRaise(true);
         btn->setCheckable(false);
         btn->setText(QString("☆"));
-        btn->setToolTip(tr("设为 %1 星").arg(i + 1));
+        btn->setToolTip(tr("Set %1 stars").arg(i + 1));
         const int stars = i + 1;
         connect(btn, &QToolButton::clicked, this,
                 [this, stars]()

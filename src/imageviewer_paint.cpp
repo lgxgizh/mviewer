@@ -587,7 +587,7 @@ void ImageViewer::drawEmptyState(QPainter &painter)
     if (!m_currentPath.isEmpty())
     {
         painter.setPen(Qt::white);
-        painter.drawText(rect(), Qt::AlignCenter, "无法加载图片");
+        painter.drawText(rect(), Qt::AlignCenter, "Unable to load image");
         return;
     }
     painter.setPen(QColor(180, 180, 180));

@@ -354,12 +354,12 @@ QString Theme::themeModeName(ThemeMode mode)
     switch (mode)
     {
     case ThemeMode::System:
-        return QStringLiteral("跟随系统");
+        return QStringLiteral("Follow system");
     case ThemeMode::Light:
-        return QStringLiteral("浅色模式");
+        return QStringLiteral("Light mode");
     case ThemeMode::Dark:
     default:
-        return QStringLiteral("深色模式");
+        return QStringLiteral("Dark mode");
     }
 }
 

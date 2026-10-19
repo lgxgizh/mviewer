@@ -100,7 +100,8 @@ void MainWindow::openExternalTargets(const QStringList &paths)
     const auto plan = mviewer::application::planExternalOpen(paths);
     if (!plan.isValid())
     {
-        const QString message = plan.error.isEmpty() ? QStringLiteral("无法打开目标") : plan.error;
+        const QString message =
+            plan.error.isEmpty() ? QStringLiteral("Unable to open target") : plan.error;
         statusBar()->showMessage(message, 5000);
         qWarning().noquote() << message;
         return;
@@ -247,16 +248,16 @@ void MainWindow::updateUndoRedoActions()
         m_actUndo->setEnabled(m_cmdStack.canUndo());
         const std::string label = m_cmdStack.undoLabel();
         m_actUndo->setText(label.empty()
-                               ? QStringLiteral("撤销(&U)")
-                               : QStringLiteral("撤销(&U) %1").arg(QString::fromStdString(label)));
+                               ? QStringLiteral("Undo(&U)")
+                               : QStringLiteral("Undo(&U) %1").arg(QString::fromStdString(label)));
     }
     if (m_actRedo)
     {
         m_actRedo->setEnabled(m_cmdStack.canRedo());
         const std::string label = m_cmdStack.redoLabel();
         m_actRedo->setText(label.empty()
-                               ? QStringLiteral("重做(&R)")
-                               : QStringLiteral("重做(&R) %1").arg(QString::fromStdString(label)));
+                               ? QStringLiteral("Redo(&R)")
+                               : QStringLiteral("Redo(&R) %1").arg(QString::fromStdString(label)));
     }
 }
 
@@ -340,13 +341,13 @@ void MainWindow::toggleFullscreen()
     {
         showNormal();
         if (m_actFullscreen)
-            m_actFullscreen->setText(tr("全屏(&U)"));
+            m_actFullscreen->setText(tr("Full Screen(&U)"));
     }
     else
     {
         showFullScreen();
         if (m_actFullscreen)
-            m_actFullscreen->setText(tr("退出全屏(&U)"));
+            m_actFullscreen->setText(tr("Exit Full Screen(&U)"));
     }
 }
 
@@ -499,7 +500,9 @@ void MainWindow::openAnalysisOverlay()
     }
     if (img.isNull())
     {
-        QMessageBox::information(this, tr("分析叠加层"), tr("当前图像尚未解码完成，请稍后再试。"));
+        QMessageBox::information(
+            this, tr("Analysis Overlay"),
+            tr("The current image has not finished decoding. Please try again later."));
         return;
     }
     AnalysisOverlayDialog dlg(img, this);
@@ -646,19 +649,22 @@ void MainWindow::updateCacheStat()
     }
     if (hits + misses == 0)
     {
-        m_lblCache->setText("命中率 —");
-        m_lblCache->setToolTip(tr("缓存命中率: 尚无请求记录"));
+        m_lblCache->setText("Hit rate —");
+        m_lblCache->setToolTip(tr("Cache hit rate: No request records yet"));
     }
     else
     {
         const int pct = static_cast<int>(100.0 * hits / (hits + misses));
         m_lblCache->setText(QString("命中率 %1%").arg(pct));
-        m_lblCache->setToolTip(
-            tr("缓存命中率: %1% (命中 %2 / 请求 %3)").arg(pct).arg(hits).arg(hits + misses));
+        m_lblCache->setToolTip(tr("Cache hit rate: %1% (hits %2 / requests %3)")
+                                   .arg(pct)
+                                   .arg(hits)
+                                   .arg(hits + misses));
     }
     if (!m_lblImage)
         return;
-    QString tip = tr("点击在资源管理器中定位当前文件，右键复制完整路径");
+    QString tip =
+        tr("Click to locate the current file in File Explorer; right-click to copy the full path");
     if (!m_lblCache->toolTip().isEmpty())
         tip += QLatin1Char('\n') + m_lblCache->toolTip();
     if (m_lblSize && !m_lblSize->text().isEmpty())
@@ -735,7 +741,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             if (!p.isEmpty())
             {
                 QApplication::clipboard()->setText(QDir::toNativeSeparators(p));
-                statusBar()->showMessage(tr("已复制文件路径到剪贴板"), 3000);
+                statusBar()->showMessage(tr("File path copied to clipboard"), 3000);
             }
             return true;
         }

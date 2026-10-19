@@ -42,7 +42,7 @@ ImageViewer::ImageViewer(QWidget *parent)
     : QOpenGLWidget(parent), m_tileRequests(m_tileCache), m_overlayRequests(m_overlayCache)
 {
     m_lifetime = mviewer::core::AsyncLifetimeToken::create();
-    setWindowTitle("图片查看");
+    setWindowTitle("Image Viewer");
     setMouseTracking(true);
     setCursor(Qt::OpenHandCursor);
     // The viewer is a standalone top-level window. Explicitly opt into
@@ -395,8 +395,9 @@ void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool c
                     {
                         emit viewer->statusMessageRequested(
                             clipboardOk
-                                ? viewer->tr("已复制图片到剪贴板")
-                                : (detail.isEmpty() ? viewer->tr("复制到剪贴板失败") : detail),
+                                ? viewer->tr("Copied image to clipboard")
+                                : (detail.isEmpty() ? viewer->tr("Failed to copy to clipboard")
+                                                    : detail),
                             clipboardOk ? 2000 : 4000);
                     }
                     Q_UNUSED(destination);
@@ -521,8 +522,10 @@ void ImageViewer::zoomActual()
 void ImageViewer::setLockZoom(bool lock)
 {
     m_lockZoom = lock;
-    emit statusMessageRequested(lock ? tr("已开启缩放锁定 (切图保持缩放比)") : tr("已关闭缩放锁定"),
-                                2000);
+    emit statusMessageRequested(
+        lock ? tr("Zoom lock enabled (keep zoom ratio when switching images)")
+             : tr("Zoom lock disabled"),
+        2000);
 }
 
 void ImageViewer::computeHistogram()

@@ -55,20 +55,21 @@ QLabel *makeHintLabel(QWidget *parent, const QString &objectName, const QString 
 void MainWindow::buildEmptyStateUi()
 {
     // Guide page: shown until the first directory is opened.
-    const QString guideBody = tr("%1 打开目录 &nbsp;·&nbsp; 也可将图片或文件夹拖入窗口")
-                                  .arg(keyCap(QStringLiteral("Ctrl+O")));
+    const QString guideBody =
+        tr("%1 Open folder &nbsp;·&nbsp; You can also drag images or folders into the window")
+            .arg(keyCap(QStringLiteral("Ctrl+O")));
     m_emptyState = makeHintLabel(m_thumbnailPanel, QStringLiteral("emptyStateLabel"),
-                                 hintCardHtml(tr("打开一个文件夹以开始浏览"), guideBody));
+                                 hintCardHtml(tr("Open a folder to start browsing"), guideBody));
     m_emptyState->show();
 
     // Clickable entry point under the guide text; it is a sibling, not a child,
     // because the label ignores the mouse so the gallery keeps drag and drop.
-    m_emptyStateOpen = new QPushButton(tr("打开文件夹…"), m_thumbnailPanel);
+    m_emptyStateOpen = new QPushButton(tr("Open Folder…"), m_thumbnailPanel);
     m_emptyStateOpen->setObjectName(QStringLiteral("emptyStateOpenButton"));
     m_emptyStateOpen->setProperty("primary", true);
     m_emptyStateOpen->setCursor(Qt::PointingHandCursor);
     m_emptyStateOpen->setFixedHeight(metrics::kControlHeight + metrics::kSpace4);
-    m_emptyStateOpen->setToolTip(tr("打开文件夹 (Ctrl+O)"));
+    m_emptyStateOpen->setToolTip(tr("Open folder (Ctrl+O)"));
     connect(m_emptyStateOpen, &QPushButton::clicked, this,
             [this]
             {
@@ -80,9 +81,10 @@ void MainWindow::buildEmptyStateUi()
     // Empty-folder hint: a directory is open but nothing is displayable
     // (no image files, or every entry is hidden by filters). Deferred via
     // a short timer so the transient pre-scan zero cannot flash it.
-    m_emptyFolderLabel = makeHintLabel(
-        m_thumbnailPanel, QStringLiteral("emptyFolderLabel"),
-        hintCardHtml(tr("此文件夹中没有可显示的图片"), tr("尝试清除筛选或换一个文件夹")));
+    m_emptyFolderLabel =
+        makeHintLabel(m_thumbnailPanel, QStringLiteral("emptyFolderLabel"),
+                      hintCardHtml(tr("No images to display in this folder"),
+                                   tr("Try clearing the filter or choosing another folder")));
     m_emptyFolderLabel->hide();
 }
 

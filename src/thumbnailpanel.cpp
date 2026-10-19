@@ -12,7 +12,7 @@
 
 ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 {
-    setAccessibleName(tr("图片画廊"));
+    setAccessibleName(tr("Image Gallery"));
     m_liveDirectoryMonitoring = false;
     m_scanGenToken = std::make_shared<std::atomic<uint64_t>>(0);
     m_busyCursorRefs = std::make_shared<std::atomic<int>>(0);
@@ -57,7 +57,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     setItemDelegate(m_delegate);
     new mviewer::ui::HoverFade(this); // owned by the view; delegates look it up
 
-    m_compareBtn = new QPushButton(QStringLiteral("比较 (P)"), this);
+    m_compareBtn = new QPushButton(QStringLiteral("Compare (P)"), this);
     m_compareBtn->setObjectName(QStringLiteral("compareSelectionButton"));
     m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     m_compareBtn->setVisible(false);

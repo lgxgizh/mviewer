@@ -61,13 +61,13 @@ bool CompareWorkspace::handleBasicCompareEscape(QKeyEvent *event)
     if (m_temporaryCompareActive)
     {
         endTemporaryCompare();
-        showCompareStatus(tr("已恢复临时切换前的图像"));
+        showCompareStatus(tr("Restored the image from before the temporary switch"));
         return true;
     }
     if (!m_lastSelection.isEmpty())
     {
         clearROI();
-        showCompareStatus(tr("选区已清除，再按 Esc 退出"));
+        showCompareStatus(tr("Selection cleared, press Esc again to exit"));
         return true;
     }
     closeCompareHost();
@@ -86,7 +86,7 @@ QString compareShortcutName(const char *keys)
 
 QString compareModeStatus(const char *keys)
 {
-    return QString::fromUtf8("模式: ") + mviewer::cw::compareShortcutText(keys);
+    return QString::fromUtf8("Mode: ") + mviewer::cw::compareShortcutText(keys);
 }
 
 QString compareToggleStatus(const char *keys, bool on, const char *whenOn, const char *whenOff)
@@ -226,8 +226,8 @@ bool CompareWorkspace::handleROIKeyboardNudge(QKeyEvent *event)
     else
         applySelectionToAll(sel);
 
-    const QString paneInfo = m_roiLinked ? QString() : tr(" (窗格 %1)").arg(paneIndex + 1);
-    showCompareStatus(tr("微调 ROI%1: X=%2 Y=%3 W=%4 H=%5")
+    const QString paneInfo = m_roiLinked ? QString() : tr(" (Pane %1)").arg(paneIndex + 1);
+    showCompareStatus(tr("Nudge ROI%1: X=%2 Y=%3 W=%4 H=%5")
                           .arg(paneInfo)
                           .arg(m_lastSelection.x)
                           .arg(m_lastSelection.y)
@@ -278,7 +278,7 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
         return false;
     const bool newState = !target->isChecked();
     target->setChecked(newState);
-    showCompareStatus(newState ? modeName : tr("模式已关闭"));
+    showCompareStatus(newState ? modeName : tr("Mode turned off"));
     event->accept();
     return true;
 }
@@ -291,7 +291,7 @@ bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
     if (digit == 0)
     {
         setOverlayMode(mviewer::OverlayMode::None);
-        showCompareStatus(QString::fromUtf8("已重置为") + compareShortcutName("Shift+0"));
+        showCompareStatus(QString::fromUtf8("Reset to ") + compareShortcutName("Shift+0"));
         event->accept();
         return true;
     }
@@ -313,14 +313,14 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_Z && m_syncZoomChk)
     {
         m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
-        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("Z", m_syncZoomChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_D && m_syncDragChk)
     {
         m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
-        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("D", m_syncDragChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
@@ -328,21 +328,21 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_R && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
-        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("R", m_crosshairChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_L && m_pixelLinkChk)
     {
         m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
-        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(), "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("L", m_pixelLinkChk->isChecked(), "On", "Off"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_I && m_sideChk)
     {
         m_sideChk->setChecked(!m_sideChk->isChecked());
-        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(), "展开", "收起"));
+        showCompareStatus(compareToggleStatus("I", m_sideChk->isChecked(), "Shown", "Hidden"));
         event->accept();
         return true;
     }
@@ -350,14 +350,14 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_F)
     {
         fitAll();
-        showCompareStatus(tr("视图自适应窗口 (Fit)"));
+        showCompareStatus(tr("View Fitted to Window (Fit)"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_X)
     {
         onSwapPanes();
-        showCompareStatus(tr("已对调 A/B 窗格"));
+        showCompareStatus(tr("A/B panes swapped"));
         event->accept();
         return true;
     }
@@ -375,7 +375,7 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
     if ((ctrl || plain) && key == Qt::Key_0)
     {
         fitAll();
-        showCompareStatus(tr("视图自适应窗口 (Fit)"));
+        showCompareStatus(tr("View Fitted to Window (Fit)"));
         if (m_compareCanvas)
             m_compareCanvas->update();
         update();
@@ -397,7 +397,8 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
         applyAnchorZoom(0, 0.0, 0.0, factor);
         const double currentScale = m_engine.cellTransform(0).scale;
         const int pct = static_cast<int>(std::round(currentScale * 100.0));
-        showCompareStatus(isZoomIn ? tr("视图放大 (%1%)").arg(pct) : tr("视图缩小 (%1%)").arg(pct));
+        showCompareStatus(isZoomIn ? tr("View zoomed in (%1%)").arg(pct)
+                                   : tr("View zoomed out (%1%)").arg(pct));
         if (m_compareCanvas)
             m_compareCanvas->update();
         update();
@@ -582,14 +583,15 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
         scheduleDisplayMaterialization(dirty);
         onAdjEditFinished();
         update();
-        showCompareStatus(tr("已同步旋转所有比较图（未写入文件）"));
+        showCompareStatus(tr("Rotated all comparison images in sync (not written to file)"));
         return;
     }
 
     const int idx = resolveEditCell();
     if (idx < 0)
     {
-        showCompareStatus(tr("请先点击要旋转的窗格（仅预览，不修改原文件）"));
+        showCompareStatus(
+            tr("Click a pane to rotate first (preview only, does not modify the original file)"));
         return;
     }
     const int needed = idx + 1;
@@ -609,8 +611,8 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
     update();
     const ImageFrame *img = m_engine.imageAt(idx);
     const QString name =
-        img ? QString::fromStdString(img->metadata().fileName) : tr("窗格 %1").arg(idx + 1);
-    showCompareStatus(tr("已预览旋转 %1（未写入文件）").arg(name));
+        img ? QString::fromStdString(img->metadata().fileName) : tr("Pane %1").arg(idx + 1);
+    showCompareStatus(tr("Previewed rotation of %1 (not written to file)").arg(name));
 }
 
 void CompareWorkspace::flipCurrentCell(bool horizontal)
@@ -648,15 +650,18 @@ void CompareWorkspace::flipCurrentCell(bool horizontal)
         scheduleDisplayMaterialization(dirty);
         onAdjEditFinished();
         update();
-        showCompareStatus(horizontal ? tr("已同步水平翻转所有比较图（未写入文件）")
-                                     : tr("已同步垂直翻转所有比较图（未写入文件）"));
+        showCompareStatus(
+            horizontal
+                ? tr("Flipped all comparison images horizontally in sync (not written to file)")
+                : tr("Flipped all comparison images vertically in sync (not written to file)"));
         return;
     }
 
     const int idx = resolveEditCell();
     if (idx < 0)
     {
-        showCompareStatus(tr("请先点击要翻转的窗格（仅预览，不修改原文件）"));
+        showCompareStatus(
+            tr("Click a pane to flip first (preview only, does not modify the original file)"));
         return;
     }
     const int needed = idx + 1;
@@ -676,9 +681,10 @@ void CompareWorkspace::flipCurrentCell(bool horizontal)
     update();
     const ImageFrame *img = m_engine.imageAt(idx);
     const QString name =
-        img ? QString::fromStdString(img->metadata().fileName) : tr("窗格 %1").arg(idx + 1);
-    showCompareStatus(horizontal ? tr("已预览水平翻转 %1（未写入文件）").arg(name)
-                                 : tr("已预览垂直翻转 %1（未写入文件）").arg(name));
+        img ? QString::fromStdString(img->metadata().fileName) : tr("Pane %1").arg(idx + 1);
+    showCompareStatus(horizontal
+                          ? tr("Previewed horizontal flip of %1 (not written to file)").arg(name)
+                          : tr("Previewed vertical flip of %1 (not written to file)").arg(name));
 }
 
 bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
@@ -691,7 +697,7 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
     if (alt && key == Qt::Key_R)
     {
         setSyncRotate(!m_syncRotate);
-        showCompareStatus(compareToggleStatus("Alt+R", m_syncRotate, "开启", "关闭"));
+        showCompareStatus(compareToggleStatus("Alt+R", m_syncRotate, "On", "Off"));
         event->accept();
         return true;
     }

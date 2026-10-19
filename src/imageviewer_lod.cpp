@@ -86,7 +86,8 @@ void ImageViewer::presentLoadFailure()
     m_loading = false;
     // Keep m_fitMode. Zoom lock treats a cleared fit flag as an explicit zoom
     // and would pin this scale onto the next image.
-    setWindowTitle(QString("无法加载 - %1 - MViewer").arg(QFileInfo(m_currentPath).fileName()));
+    setWindowTitle(
+        QString("Unable to Load - %1 - MViewer").arg(QFileInfo(m_currentPath).fileName()));
     emit zoomChanged(-1); // status bar treats a negative percent as "no image"
     update();
     emit loadFailed(m_currentPath);

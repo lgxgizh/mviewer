@@ -540,8 +540,7 @@ void testManualRejectedReplacement()
     CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
           "accepted gated manual job started and is blocked");
     CHECK(panel.hasLoadedImage(), "image stays loaded while the gated job runs");
-    CHECK(panel.analysisText().contains("分析中"),
-          "accepted manual job shows a pending state");
+    CHECK(panel.analysisText().contains("Analyzing"), "accepted manual job shows a pending state");
     QPushButton *exportButton = reportButton(panel);
     CHECK(exportButton && !exportButton->isEnabled(),
           "report export is disabled for the accepted pending request");
@@ -554,9 +553,9 @@ void testManualRejectedReplacement()
         panel.runAnalyzer("brightness");
         CHECK(panel.hasLoadedImage(),
               "image stays loaded after the rejected replacement");
-        CHECK(!panel.analysisText().contains("分析中"),
+        CHECK(!panel.analysisText().contains("Analyzing"),
               "rejected replacement clears the pending state");
-        CHECK(panel.analysisText().contains("请稍后重试"),
+        CHECK(panel.analysisText().contains("Please try again later"),
               "rejected replacement shows an explicit retryable unavailable message");
         CHECK(exportButton && exportButton->isEnabled() &&
                   panel.reportAnalysisState() == AnalysisPanel::ReportAnalysisState::Unavailable,
@@ -577,7 +576,7 @@ void testManualRejectedReplacement()
                                                          std::chrono::milliseconds(5000));
     CHECK(drained, "Analysis pool drains after the rejected replacement");
     pump(300); // let any stale queued delivery attempt and be discarded
-    CHECK(panel.analysisText().contains("请稍后重试"),
+    CHECK(panel.analysisText().contains("Please try again later"),
           "stale accepted job never overwrites the rejected unavailable state");
     CHECK(!model.resultText(path).contains("m28 gated result"),
           "stale accepted job never publishes its gated result");
@@ -617,16 +616,16 @@ void testManualNoResultTerminal()
     panel.reanalyze();
     CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
           "no-result analyzer run submitted to the Analysis pool");
-    CHECK(panel.analysisText().contains("分析中"),
+    CHECK(panel.analysisText().contains("Analyzing"),
           "pending state shown while the no-result analyzer is blocked");
     QPushButton *exportButton = reportButton(panel);
     CHECK(exportButton && !exportButton->isEnabled(),
           "report export is disabled while the no-result request is pending");
 
     opener.open();
-    CHECK(waitFor([&panel]() { return !panel.analysisText().contains("分析中"); }, 5000),
+    CHECK(waitFor([&panel]() { return !panel.analysisText().contains("Analyzing"); }, 5000),
           "pending state is replaced by an explicit terminal");
-    CHECK(panel.analysisText().contains("未产生结果"),
+    CHECK(panel.analysisText().contains("no results"),
           "analysis surface shows the explicit no-result message");
     CHECK(exportButton && exportButton->isEnabled() &&
               panel.reportAnalysisState() == AnalysisPanel::ReportAnalysisState::NoResult &&

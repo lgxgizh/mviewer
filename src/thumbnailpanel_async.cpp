@@ -502,9 +502,9 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     // sequenceChanged (inside the filter rebuild) publishes "Browse: N images".
     // A failure or empty result must win over that line.
     if (!directoryReadable)
-        emit browseStatusChanged(QStringLiteral("目录加载失败"));
+        emit browseStatusChanged(QStringLiteral("Failed to load directory"));
     else if (entries.isEmpty() && !m_currentDir.isEmpty())
-        emit browseStatusChanged(QStringLiteral("暂无图片"));
+        emit browseStatusChanged(QStringLiteral("No images yet"));
     // Details (resolution column) and SortResolution need header probes.
     // Thumbnail/LargeIcon intentionally skip the full-directory probe so the
     // first viewport decode owns the link on high-latency folders.

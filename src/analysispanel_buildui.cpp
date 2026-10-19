@@ -51,23 +51,23 @@ void AnalysisPanel::buildUi()
 void AnalysisPanel::buildAnalyzerSection(QVBoxLayout &layout)
 {
     auto *bar = new QHBoxLayout;
-    bar->addWidget(new QLabel(tr("分析器:")));
+    bar->addWidget(new QLabel(tr("Analyzer:")));
     m_analyzerCombo = new QComboBox;
     fillAnalyzerCombo(QString());
     bar->addWidget(m_analyzerCombo, 1);
 
-    auto *runButton = new QPushButton(tr("运行"));
-    runButton->setToolTip(tr("对当前图片运行所选分析器"));
+    auto *runButton = new QPushButton(tr("Run"));
+    runButton->setToolTip(tr("Run the selected analyzer on the current image"));
     connect(runButton, &QPushButton::clicked, this, &AnalysisPanel::reanalyze);
     bar->addWidget(runButton);
 
-    m_exportButton = new QPushButton(tr("导出报告"));
+    m_exportButton = new QPushButton(tr("Export Report"));
     m_exportButton->setObjectName(QStringLiteral("analysisExportReportButton"));
     connect(m_exportButton, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
     bar->addWidget(m_exportButton);
-    m_pinBtn = new QPushButton(tr("钉住"));
+    m_pinBtn = new QPushButton(tr("Pin"));
     m_pinBtn->setCheckable(true);
-    m_pinBtn->setToolTip(tr("钉住当前分析结果（History 中保留，不被淘汰）"));
+    m_pinBtn->setToolTip(tr("Pin the current analysis result (kept in History, not discarded)"));
     connect(m_pinBtn, &QPushButton::clicked, this, &AnalysisPanel::onPinToggled);
     bar->addWidget(m_pinBtn);
     layout.addLayout(bar);
@@ -78,23 +78,24 @@ void AnalysisPanel::buildHistorySection(QVBoxLayout &layout)
     auto *history = new QListWidget;
     m_historyList = history;
     history->setMaximumHeight(72);
-    history->setToolTip(tr("分析历史（最近 50 条）— 双击打开图片并恢复结果"));
+    history->setToolTip(
+        tr("Analysis history (last 50) — double-click to open the image and restore the result"));
     connect(history, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem *) { onHistoryActivated(); });
 
     auto *pinned = new QListWidget;
     m_pinnedList = pinned;
     pinned->setMaximumHeight(72);
-    pinned->setToolTip(tr("钉住的分析结果 — 双击打开"));
+    pinned->setToolTip(tr("Pinned analysis results — double-click to open"));
     connect(pinned, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem *) { onPinnedActivated(); });
 
     auto *row = new QHBoxLayout;
     auto *historyColumn = new QVBoxLayout;
-    historyColumn->addWidget(new QLabel(tr("历史")));
+    historyColumn->addWidget(new QLabel(tr("History")));
     historyColumn->addWidget(history);
     auto *pinnedColumn = new QVBoxLayout;
-    pinnedColumn->addWidget(new QLabel(tr("钉住")));
+    pinnedColumn->addWidget(new QLabel(tr("Pin")));
     pinnedColumn->addWidget(pinned);
     row->addLayout(historyColumn, 1);
     row->addLayout(pinnedColumn, 1);
@@ -124,7 +125,7 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     histogramLayout->setSpacing(4);
     histogramLayout->addWidget(m_histogramLabel, 1);
     histogramLayout->addWidget(m_statsLabel);
-    m_tabs->addTab(histogramPage, tr("直方图"));
+    m_tabs->addTab(histogramPage, tr("Histogram"));
 
     m_rgbLabel = new QLabel;
     m_rgbLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -139,28 +140,28 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     rgbLayout->setSpacing(4);
     rgbLayout->addWidget(m_rgbLabel, 1);
     rgbLayout->addWidget(m_rgbStatsLabel);
-    m_tabs->addTab(rgbPage, tr("RGB 通道"));
+    m_tabs->addTab(rgbPage, tr("RGB channels"));
 
     m_exposureLabel = new QLabel;
     m_exposureLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_exposureLabel->setWordWrap(true);
     m_exposureLabel->setStyleSheet(analysisReadoutStyle(false));
-    m_tabs->addTab(m_exposureLabel, tr("曝光"));
+    m_tabs->addTab(m_exposureLabel, tr("Exposure"));
     m_focusLabel = new QLabel;
     m_focusLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_focusLabel->setWordWrap(true);
     m_focusLabel->setStyleSheet(analysisReadoutStyle(false));
-    m_tabs->addTab(m_focusLabel, tr("对焦"));
+    m_tabs->addTab(m_focusLabel, tr("Focus"));
     m_metaLabel = new QLabel;
     m_metaLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_metaLabel->setWordWrap(true);
     m_metaLabel->setStyleSheet(analysisReadoutStyle(false));
-    m_tabs->addTab(m_metaLabel, tr("元数据"));
+    m_tabs->addTab(m_metaLabel, tr("Metadata"));
     m_pluginResult = new QLabel;
     m_pluginResult->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_pluginResult->setWordWrap(true);
     m_pluginResult->setStyleSheet(analysisReadoutStyle(false));
-    m_tabs->addTab(m_pluginResult, tr("插件"));
+    m_tabs->addTab(m_pluginResult, tr("Plugin"));
 }
 
 void AnalysisPanel::buildInspectorTab()
@@ -171,7 +172,7 @@ void AnalysisPanel::buildInspectorTab()
     layout->setSpacing(4);
 
     auto *bar = new QHBoxLayout;
-    bar->addWidget(new QLabel(tr("色空间:")));
+    bar->addWidget(new QLabel(tr("Color space:")));
     auto *colorSpace = new QComboBox;
     colorSpace->addItem(tr("RGB"), static_cast<int>(mviewer::core::ColorSpace::RGB));
     colorSpace->addItem(tr("HSV"), static_cast<int>(mviewer::core::ColorSpace::HSV));
@@ -182,11 +183,11 @@ void AnalysisPanel::buildInspectorTab()
     colorSpace->addItem(tr("HEX"), static_cast<int>(mviewer::core::ColorSpace::HEX));
     bar->addWidget(colorSpace, 1);
 
-    auto *freeze = new QPushButton(tr("冻结"));
+    auto *freeze = new QPushButton(tr("Freeze"));
     freeze->setCheckable(true);
-    freeze->setToolTip(tr("冻结当前检视像素，移动鼠标时保持显示"));
+    freeze->setToolTip(tr("Freeze the inspected pixel so it stays visible while the mouse moves"));
     bar->addWidget(freeze);
-    bar->addWidget(new QLabel(tr("邻域:")));
+    bar->addWidget(new QLabel(tr("Neighborhood:")));
     auto *kernel = new QComboBox;
     kernel->addItem(tr("1×1"), 1);
     kernel->addItem(tr("3×3"), 3);
@@ -200,10 +201,10 @@ void AnalysisPanel::buildInspectorTab()
     m_inspectorLabel->setWordWrap(true);
     m_inspectorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_inspectorLabel->setStyleSheet(analysisReadoutStyle(true));
-    m_inspectorLabel->setText(tr("将鼠标移到图像上检视像素。"));
+    m_inspectorLabel->setText(tr("Move the mouse over the image to inspect pixels."));
     layout->addWidget(m_inspectorLabel, 1);
     buildInspectorActions(*layout);
-    m_tabs->insertTab(1, page, tr("像素检视"));
+    m_tabs->insertTab(1, page, tr("Pixel Inspector"));
 
     connect(colorSpace, QOverload<int>::of(&QComboBox::activated), this,
             [this, colorSpace](int)
@@ -216,7 +217,7 @@ void AnalysisPanel::buildInspectorTab()
             [this, freeze](bool on)
             {
                 m_frozen = on;
-                freeze->setText(on ? tr("已冻结") : tr("冻结"));
+                freeze->setText(on ? tr("Frozen") : tr("Freeze"));
                 updateInspectorPage();
             });
     connect(kernel, QOverload<int>::of(&QComboBox::activated), this,
@@ -229,12 +230,12 @@ void AnalysisPanel::buildInspectorTab()
 void AnalysisPanel::buildInspectorActions(QVBoxLayout &layout)
 {
     auto *bar = new QHBoxLayout;
-    auto *copyRgb = new QPushButton(tr("复制 RGB"));
-    auto *copyHex = new QPushButton(tr("复制 HEX"));
-    auto *copyXyz = new QPushButton(tr("复制 XYZ"));
-    copyRgb->setToolTip(tr("复制当前像素 RGB 到剪贴板"));
-    copyHex->setToolTip(tr("复制当前像素 HEX 颜色到剪贴板"));
-    copyXyz->setToolTip(tr("复制当前像素 XYZ 到剪贴板"));
+    auto *copyRgb = new QPushButton(tr("Copy RGB"));
+    auto *copyHex = new QPushButton(tr("Copy HEX"));
+    auto *copyXyz = new QPushButton(tr("Copy XYZ"));
+    copyRgb->setToolTip(tr("Copy current pixel RGB to clipboard"));
+    copyHex->setToolTip(tr("Copy current pixel HEX color to clipboard"));
+    copyXyz->setToolTip(tr("Copy current pixel XYZ to clipboard"));
     bar->addWidget(copyRgb);
     bar->addWidget(copyHex);
     bar->addWidget(copyXyz);

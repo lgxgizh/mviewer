@@ -141,7 +141,7 @@ std::string ensureOutputDir(const domain::BatchJobConfig &config)
     std::filesystem::create_directories(pathFromUtf8(dir), dirEc);
     if (!dirEc)
         return {};
-    std::string message = "无法创建输出目录：";
+    std::string message = "Cannot create output directory: ";
     message += dirEc.message();
     return message;
 }
@@ -151,13 +151,13 @@ std::string checkDestination(const domain::BatchJobConfig &config,
                              const std::filesystem::path &destination)
 {
     if (sameAsSource(input, destination))
-        return "目标与源文件相同，已跳过";
+        return "Destination is the same as the source; skipped";
 
     std::error_code existsError;
     const bool exists = std::filesystem::exists(destination, existsError);
     if (existsError || !exists || config.overwriteExisting)
         return {};
-    std::string message = "目标文件已存在：";
+    std::string message = "Destination file already exists: ";
     message += pathToUtf8(destination.filename());
     return message;
 }
@@ -170,7 +170,7 @@ void removeQuietly(const std::filesystem::path &path)
 
 std::string exportFailed(const std::filesystem::path &destination)
 {
-    std::string message = "导出失败：";
+    std::string message = "Export failed: ";
     message += pathToUtf8(destination);
     return message;
 }
@@ -337,11 +337,11 @@ bool applyExportOp(const domain::BatchJobConfig &config, const std::string &inpu
 
 std::string tooLargeMessage(int width, int height)
 {
-    std::string message = "图片过大（";
+    std::string message = "Image too large (";
     message += std::to_string(width);
     message += "x";
     message += std::to_string(height);
-    message += "），批处理暂不支持";
+    message += "); batch processing is not supported";
     return message;
 }
 
@@ -414,11 +414,11 @@ std::string decodeFailureMessage(const std::string &inputPath)
     const QImageReader reader(path);
     const QSize size = reader.size();
     if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
-        return "无法解码图片";
+        return "Unable to decode image";
     std::string tooBig = oversizedMessage(size.width(), size.height());
     if (!tooBig.empty())
         return tooBig;
-    return "无法解码图片";
+    return "Unable to decode image";
 }
 
 bool isImageFile(const std::filesystem::path &path)
@@ -482,7 +482,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
 
     if (m_cancelled.load())
     {
-        result.errorMessage = "已取消";
+        result.errorMessage = "Cancelled";
         return result;
     }
 
@@ -499,7 +499,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     auto decodeRes = Decoder::decodeFullResult(inputPath);
     if (m_cancelled.load())
     {
-        result.errorMessage = "已取消";
+        result.errorMessage = "Cancelled";
         return result;
     }
     if (!decodeRes.isOk() || decodeRes.value().isNull())
@@ -519,7 +519,7 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     {
         if (m_cancelled.load())
         {
-            result.errorMessage = "已取消";
+            result.errorMessage = "Cancelled";
             return result;
         }
 
@@ -562,7 +562,7 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
     domain::BatchJobResult aggregate;
 
     // Expand directory inputs. recursiveScan walks subfolders; otherwise only
-    // the directory's own image files are collected so "添加目录" still works.
+    // the directory's own image files are collected so "Add Directory" still works.
     const std::vector<std::string> expandedPaths = expandInputPaths(config);
     const int total = static_cast<int>(expandedPaths.size());
 

@@ -20,7 +20,8 @@ void fillCompareShortcutTable(QTableWidget *table)
     const int rows = static_cast<int>(std::size(mviewer::cw::kCompareShortcuts));
     table->setColumnCount(2);
     table->setRowCount(rows);
-    table->setHorizontalHeaderLabels({QString::fromUtf8("快捷键"), QString::fromUtf8("说明")});
+    table->setHorizontalHeaderLabels(
+        {QString::fromUtf8("快捷键"), QString::fromUtf8("Description")});
     table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     table->setSelectionMode(QAbstractItemView::NoSelection);
     table->verticalHeader()->setVisible(false);
@@ -64,6 +65,6 @@ void CompareWorkspace::showShortcutHelp()
         m_shortcutHelpDialog->raise();
     // Selection guidance stays on the status label; the dialog is the full table.
     // Compare pairs are chosen in Browse, so there is no in-Compare pair stepping.
-    const QString tip = tr("Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。");
+    const QString tip = tr("Ctrl+Shift+A deselects. Ctrl+Alt+A exports batch analysis.");
     showCompareStatus(tip, 8000);
 }

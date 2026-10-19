@@ -10,8 +10,8 @@ static void testBatchGuardsAndDialog(const QString &p1)
         const QString input = writePngIn(srcDir, "photo.png", qRgb(7, 8, 9));
         QDir().mkpath(dstDir + QStringLiteral("/photo.png"));
         const auto failed = exportFile(input, dstDir, "", true);
-        CHECK(!failed.success && failed.errorMessage.find("导出失败：") == 0,
-              "commit onto a directory reports 导出失败");
+        CHECK(!failed.success && failed.errorMessage.find("Export failed: ") == 0,
+              "commit onto a directory reports Export failed");
         CHECK(!hasMviewerTemp(dstDir), "failed commit leaves no .mviewer-tmp file");
         QDir(srcDir).removeRecursively();
         QDir(dstDir).removeRecursively();
@@ -26,17 +26,20 @@ static void testBatchGuardsAndDialog(const QString &p1)
         const auto tooWide =
             exportFile(writeBytes(dir + QStringLiteral("/huge.png"), pngClaim(wide)), hugeOut,
                        "x_{name}", false);
-        CHECK(tooWide.errorMessage == "图片过大（20000x8），批处理暂不支持",
-              "an image wider than 16384 reports 图片过大");
+        CHECK(tooWide.errorMessage ==
+                  "Image too large (20000x8); batch processing is not supported",
+              "an image wider than 16384 reports Image too large");
         const auto tooHeavy =
             exportFile(writeBytes(dir + QStringLiteral("/heavy.png"), pngClaim(heavy)), hugeOut,
                        "y_{name}", false);
-        CHECK(tooHeavy.errorMessage == "图片过大（9000x9000），批处理暂不支持",
-              "an image over 256MB reports 图片过大");
+        CHECK(tooHeavy.errorMessage ==
+                  "Image too large (9000x9000); batch processing is not supported",
+              "an image over 256MB reports Image too large");
         const auto undecoded =
             exportFile(writeBytes(dir + QStringLiteral("/junk.png"), QByteArray("not a png")),
                        hugeOut, "z_{name}", false);
-        CHECK(undecoded.errorMessage == "无法解码图片", "undecodable image reports 无法解码图片");
+        CHECK(undecoded.errorMessage == "Unable to decode image",
+              "undecodable image reports Unable to decode image");
         QDir(dir).removeRecursively();
     }
 
@@ -75,7 +78,7 @@ static void testBatchGuardsAndDialog(const QString &p1)
         analyzed.success = true;
         analyzed.inputPath = "C:/in.png";
         CHECK(BatchDialog::formatResultLine(analyzed) ==
-                  QStringLiteral("[OK] C:/in.png（仅分析，未写出文件）"),
+                  QStringLiteral("[OK] C:/in.png (analysis only, file not written)"),
               "analysis-only success does not show an empty arrow");
         mviewer::domain::BatchFileResult exported;
         exported.success = true;
@@ -125,11 +128,11 @@ static void testBatchGuardsAndDialog(const QString &p1)
                                    message->reject();
                                });
             start->click();
-            CHECK(start->isEnabled(), "resize without 导出 does not start the batch");
-            CHECK(seen.contains(QStringLiteral("请勾选「导出」")),
-                  "resize without 导出 warns to check 导出");
+            CHECK(start->isEnabled(), "resize without Export does not start the batch");
+            CHECK(seen.contains(QStringLiteral("Please check Export")),
+                  "resize without Export warns to check Export");
             CHECK(log && !log->toPlainText().contains(QStringLiteral("[OK]")),
-                  "resize without 导出 writes no result line");
+                  "resize without Export writes no result line");
         }
         settings.remove(QStringLiteral("batch/overwriteExisting"));
     }

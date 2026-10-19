@@ -165,7 +165,7 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     // gallery address bar (pathEdit).
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setObjectName(QStringLiteral("directoryFilterEdit"));
-    m_filterEdit->setPlaceholderText("搜索目录...");
+    m_filterEdit->setPlaceholderText("Search directories...");
     m_filterEdit->setClearButtonEnabled(true);
     m_filterEdit->setTextMargins(6, 4, 6, 4);
     m_filterEdit->hide();
@@ -240,7 +240,7 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     QAction *aOpen = menu.addAction("打开");
     QAction *aReveal = menu.addAction("在资源管理器中显示");
-    QAction *aCopyPath = menu.addAction("复制路径");
+    QAction *aCopyPath = menu.addAction("Copy path");
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;

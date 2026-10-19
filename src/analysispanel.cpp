@@ -82,11 +82,11 @@ void AnalysisPanel::updateHistogramPage()
 {
     if (!m_hasA)
     {
-        m_statsLabel->setText(tr("未选择图片"));
+        m_statsLabel->setText(tr("No Image Selected"));
         m_histogramLabel->clear();
         return;
     }
-    QString title = m_hasROI ? tr("选区统计") : tr("全图统计");
+    QString title = m_hasROI ? tr("Selection statistics") : tr("Full-image statistics");
     QString txt = QString("<h3>%1</h3>").arg(title);
     txt += QString("<table>"
                    "<tr><td>%2</td><td>%3</td></tr>"
@@ -95,15 +95,15 @@ void AnalysisPanel::updateHistogramPage()
                    "<tr><td>%8</td><td>%9</td></tr>"
                    "<tr><td>%10</td><td>%11</td></tr>"
                    "</table>")
-               .arg(tr("亮度均值"))
+               .arg(tr("Mean Luminance"))
                .arg(m_statsA.lumMean, 0, 'f', 2)
-               .arg(tr("R 均值"))
+               .arg(tr("R Mean"))
                .arg(m_statsA.rMean, 0, 'f', 2)
-               .arg(tr("G 均值"))
+               .arg(tr("G Mean"))
                .arg(m_statsA.gMean, 0, 'f', 2)
-               .arg(tr("B 均值"))
+               .arg(tr("B Mean"))
                .arg(m_statsA.bMean, 0, 'f', 2)
-               .arg(tr("像素数"))
+               .arg(tr("Pixel Count"))
                .arg(m_statsA.pixelCount);
     m_statsLabel->setText(txt);
     renderHistogramPixmap();
@@ -172,24 +172,24 @@ void AnalysisPanel::updateRgbPage()
 {
     if (!m_hasA)
     {
-        m_rgbLabel->setText(tr("未选择图片"));
+        m_rgbLabel->setText(tr("No Image Selected"));
         m_rgbStatsLabel->setText(QString());
         return;
     }
-    QString txt = QString("<h3>%1</h3>").arg(tr("RGB 通道"));
+    QString txt = QString("<h3>%1</h3>").arg(tr("RGB channels"));
     txt += QString("<table>"
                    "<tr><td>%1</td><td>%2</td></tr>"
                    "<tr><td>%3</td><td>%4</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
                    "<tr><td>%7</td><td>%8</td></tr>"
                    "</table>")
-               .arg(tr("R 均值"))
+               .arg(tr("R Mean"))
                .arg(m_statsA.rMean, 0, 'f', 2)
-               .arg(tr("G 均值"))
+               .arg(tr("G Mean"))
                .arg(m_statsA.gMean, 0, 'f', 2)
-               .arg(tr("B 均值"))
+               .arg(tr("B Mean"))
                .arg(m_statsA.bMean, 0, 'f', 2)
-               .arg(tr("HSV-V 均值"))
+               .arg(tr("HSV-V mean"))
                .arg(m_statsA.vMean, 0, 'f', 2);
     m_rgbStatsLabel->setText(txt);
 
@@ -248,7 +248,7 @@ void AnalysisPanel::updateExposurePage()
 {
     if (!m_hasA)
     {
-        m_exposureLabel->setText(tr("未选择图片"));
+        m_exposureLabel->setText(tr("No Image Selected"));
         return;
     }
     long long highlights = 0, shadows = 0, total = 0;
@@ -264,20 +264,20 @@ void AnalysisPanel::updateExposurePage()
     const double highlightPct = total ? 100.0 * highlights / total : 0.0;
     const double shadowPct = total ? 100.0 * shadows / total : 0.0;
 
-    QString txt = QString("<h3>%1</h3>").arg(tr("曝光"));
+    QString txt = QString("<h3>%1</h3>").arg(tr("Exposure"));
     txt += QString("<table>"
                    "<tr><td>%1</td><td>%2%</td></tr>"
                    "<tr><td>%3</td><td>%4%</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
                    "<tr><td>%7</td><td>%8</td></tr>"
                    "</table>")
-               .arg(tr("高光 (>=240)"))
+               .arg(tr("Highlights (>=240)"))
                .arg(highlightPct, 0, 'f', 2)
-               .arg(tr("阴影 (<=15)"))
+               .arg(tr("Shadows (<=15)"))
                .arg(shadowPct, 0, 'f', 2)
-               .arg(tr("亮度均值"))
+               .arg(tr("Mean Luminance"))
                .arg(m_statsA.lumMean, 0, 'f', 2)
-               .arg(tr("HSV-V 明度均值"))
+               .arg(tr("HSV-V brightness mean"))
                .arg(m_statsA.vMean, 0, 'f', 2);
     m_exposureLabel->setText(txt);
 }
@@ -286,7 +286,7 @@ void AnalysisPanel::updateFocusPage()
 {
     if (!m_hasA)
     {
-        m_focusLabel->setText(tr("未选择图片"));
+        m_focusLabel->setText(tr("No Image Selected"));
         return;
     }
     // M28 P1-04: noise is precomputed (async worker or legacy applyFrameImage)
@@ -295,17 +295,17 @@ void AnalysisPanel::updateFocusPage()
     const double noise =
         m_noiseValid ? m_noiseA : AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageA));
 
-    QString txt = QString("<h3>%1</h3>").arg(tr("清晰度 / 噪声"));
+    QString txt = QString("<h3>%1</h3>").arg(tr("Sharpness / Noise"));
     txt += QString("<table>"
                    "<tr><td>%1</td><td>%2</td></tr>"
                    "<tr><td>%3</td><td>%4</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
                    "</table>")
-               .arg(tr("亮度均值"))
+               .arg(tr("Mean Luminance"))
                .arg(m_statsA.lumMean, 0, 'f', 2)
-               .arg(tr("噪声估计"))
+               .arg(tr("Noise estimate"))
                .arg(noiseLevelText(noise))
-               .arg(tr("像素数"))
+               .arg(tr("Pixel Count"))
                .arg(m_statsA.pixelCount);
     m_focusLabel->setText(txt);
 }
@@ -314,20 +314,20 @@ void AnalysisPanel::updatePluginPage()
 {
     if (m_pluginIds.empty())
     {
-        m_pluginResult->setText(tr("没有可用的分析器插件"));
+        m_pluginResult->setText(tr("No analyzer plugins available"));
         return;
     }
     int pluginIdx = m_currentPluginIdx - 2;
     if (pluginIdx < 0 || pluginIdx >= static_cast<int>(m_pluginIds.size()))
     {
-        m_pluginResult->setText(tr("请选择插件"));
+        m_pluginResult->setText(tr("Please select a plugin"));
         return;
     }
     const std::string &id = m_pluginIds[pluginIdx];
     auto analyzer = (m_pipeline ? m_pipeline->create(id) : AnalyzerRegistry::instance().create(id));
     if (!analyzer)
     {
-        m_pluginResult->setText(tr("无法创建：%1").arg(QString::fromStdString(id)));
+        m_pluginResult->setText(tr("Cannot create: %1").arg(QString::fromStdString(id)));
         return;
     }
     QString txt = QString("<h3>%1</h3><p>%2</p>")
@@ -339,14 +339,14 @@ void AnalysisPanel::updatePluginPage()
 QString AnalysisPanel::noiseLevelText(double variance)
 {
     if (variance < 50)
-        return tr("极低 (%1)").arg(variance, 0, 'f', 1);
+        return tr("Very low (%1)").arg(variance, 0, 'f', 1);
     if (variance < 150)
-        return tr("低 (%1)").arg(variance, 0, 'f', 1);
+        return tr("Low (%1)").arg(variance, 0, 'f', 1);
     if (variance < 300)
-        return tr("中 (%1)").arg(variance, 0, 'f', 1);
+        return tr("Medium (%1)").arg(variance, 0, 'f', 1);
     if (variance < 500)
-        return tr("高 (%1)").arg(variance, 0, 'f', 1);
-    return tr("极高 (%1)").arg(variance, 0, 'f', 1);
+        return tr("High (%1)").arg(variance, 0, 'f', 1);
+    return tr("Extremely high (%1)").arg(variance, 0, 'f', 1);
 }
 
 void AnalysisPanel::paintEvent(QPaintEvent *event)
@@ -378,18 +378,18 @@ void AnalysisPanel::updateHistogram(const mviewer::domain::Histogram &hist)
                                   "<tr><td>%10</td><td>%11</td></tr>"
                                   "<tr><td>%12</td><td>%13</td></tr>"
                                   "</table>")
-                              .arg(tr("全图统计"))
-                              .arg(tr("亮度均值"))
+                              .arg(tr("Full-image statistics"))
+                              .arg(tr("Mean Luminance"))
                               .arg(hist.lumMean, 0, 'f', 2)
-                              .arg(tr("HSV-V 均值"))
+                              .arg(tr("HSV-V mean"))
                               .arg(hist.vMean, 0, 'f', 2)
-                              .arg(tr("R 均值"))
+                              .arg(tr("R Mean"))
                               .arg(hist.rMean, 0, 'f', 2)
-                              .arg(tr("G 均值"))
+                              .arg(tr("G Mean"))
                               .arg(hist.gMean, 0, 'f', 2)
-                              .arg(tr("B 均值"))
+                              .arg(tr("B Mean"))
                               .arg(hist.bMean, 0, 'f', 2)
-                              .arg(tr("像素数"))
+                              .arg(tr("Pixel Count"))
                               .arg(hist.totalPixels()));
 }
 
