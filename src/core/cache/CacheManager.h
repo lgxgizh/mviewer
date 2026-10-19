@@ -42,7 +42,7 @@ struct CacheConfig
     size_t previewCacheSize = 256 * 1024 * 1024;  // 256MB
     size_t viewerCacheSize = 512 * 1024 * 1024;   // 512MB
     size_t raw16CacheSize = 256 * 1024 * 1024;    // 256MB (16-bit inspector samples)
-    size_t diskCacheSize = size_t{1024} * 1024 * 1024;    // 1GB exact byte cap
+    size_t diskCacheSize = size_t{1024} * 1024 * 1024; // 1GB exact byte cap
     int maxDiskCacheEntries = 100000;
 };
 
