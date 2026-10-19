@@ -106,6 +106,7 @@ int main(int argc, char **argv)
 
     testLayoutForCount(2, 2, 1);
     testLayoutForCount(4, 2, 2);
+    testLayoutForCount(6, 3, 2);
     testLayoutForCount(8, 4, 2);
 
     printf("\n=== M9-2 Compare acceptance: %d passed, %d failed ===\n", g_pass, g_fail);

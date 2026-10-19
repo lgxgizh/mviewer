@@ -6,6 +6,7 @@
 #include "directorymodel.h"
 #include "hoverfade.h"
 #include "imagelistmodel.h"
+#include "naturalnameorder.h"
 #include "selectionmodel.h"
 #include "workspacemodel.h"
 
@@ -85,6 +86,24 @@ int main(int argc, char **argv)
         sel.clear();
         CHECK(sel.compared().isEmpty(), "SelectionModel compared cleared on clear");
         CHECK(sel.focused().isEmpty(), "SelectionModel focused cleared on clear");
+    }
+
+    // ---- Compare default order: natural, case-insensitive file-name sort ----
+    {
+        CHECK(compareNaturalName(u"img2.jpg", u"img10.jpg") < 0, "natural: img2 before img10");
+        CHECK(compareNaturalName(u"IMG_3.jpg", u"img_20.jpg") < 0,
+              "natural: case-insensitive text chunks");
+        CHECK(compareNaturalName(u"a.jpg", u"A.jpg") == 0,
+              "natural: case-only names compare equal");
+        const QStringList picked = {"/d/img10.jpg", "/d/IMG2.jpg", "/d/img1.jpg", "/e/b.jpg",
+                                    "/d/a.jpg"};
+        const QStringList sorted = sortPathsByNaturalFileName(picked);
+        const QStringList expected = {"/d/a.jpg", "/e/b.jpg", "/d/img1.jpg", "/d/IMG2.jpg",
+                                      "/d/img10.jpg"};
+        CHECK(sorted == expected, "compare order: selection sorted by natural file name");
+        const QStringList dupes = sortPathsByNaturalFileName({"/z/x.jpg", "/a/x.jpg"});
+        CHECK(dupes == QStringList({"/a/x.jpg", "/z/x.jpg"}),
+              "compare order: same file name tie-breaks on full path");
     }
 
     // ---- DirectoryModel ----

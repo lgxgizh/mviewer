@@ -22,6 +22,10 @@ struct CompareLayout
     CellSize cellSize(const CellSize &viewport) const;
 };
 
+// Auto grid: rows = floor(sqrt(n)), cols = ceil(n / rows). This keeps the
+// grid landscape-biased (cols >= rows, matching wide viewports and landscape
+// photos) while leaving at most a few empty cells:
+//   2 -> 1x2, 3 -> 1x3, 4 -> 2x2, 5/6 -> 2x3, 7/8 -> 2x4, 9 -> 3x3.
 inline CompareLayout CompareLayout::forCount(int n)
 {
     CompareLayout l;
@@ -31,25 +35,11 @@ inline CompareLayout CompareLayout::forCount(int n)
         l.cols = l.rows = 1;
         return l;
     }
-    switch (n)
-    {
-    case 2:
-        l.cols = 2;
-        l.rows = 1;
-        break;
-    case 3:
-        l.cols = 3;
-        l.rows = 1;
-        break;
-    case 4:
-        l.cols = 2;
-        l.rows = 2;
-        break;
-    default:
-        l.cols = 4;
-        l.rows = 2;
-        break;
-    }
+    int rows = 1;
+    while ((rows + 1) * (rows + 1) <= n)
+        ++rows;
+    l.rows = rows;
+    l.cols = (n + rows - 1) / rows;
     return l;
 }
 

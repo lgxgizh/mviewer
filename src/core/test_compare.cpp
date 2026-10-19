@@ -55,11 +55,16 @@ int main(int argc, char **argv)
             printf("LAYOUT4_FAIL %dx%d\n", l4.cols, l4.rows);
             fails++;
         }
-        auto l7 = CompareLayout::forCount(7);
-        if (!(l7.cols == 4 && l7.rows == 2))
+        // Auto grid minimises empty cells, landscape-biased (cols >= rows).
+        const int expect[][3] = {{5, 3, 2}, {6, 3, 2}, {7, 4, 2}, {8, 4, 2}, {9, 3, 3}};
+        for (const auto &e : expect)
         {
-            printf("LAYOUT7_FAIL %dx%d\n", l7.cols, l7.rows);
-            fails++;
+            const auto l = CompareLayout::forCount(e[0]);
+            if (!(l.cols == e[1] && l.rows == e[2]))
+            {
+                printf("LAYOUT%d_FAIL %dx%d\n", e[0], l.cols, l.rows);
+                fails++;
+            }
         }
         printf("LAYOUT_OK\n");
     }
