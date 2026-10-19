@@ -2,13 +2,19 @@
 
 ## [Unreleased]
 
+## [1.0.140] - 2026-10-20
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.140** (compare mosaic fix: #198; auto-check-updates preference: #199; USM maximize + Space pair-hold: #200).
+
 ### Added
 
-- **Preferences: automatic update check** — General tab checkbox **Automatically check for updates on startup** (`autoCheckUpdates`, default **true**). When off, the silent post-launch update check is skipped; **Help → Check for Updates** still works. The "New version available" dialog includes **Don't check for updates automatically**, which persists the same setting when checked (including with **Later**).
+- **Preferences: automatic update check** (#199) — General tab checkbox **Automatically check for updates on startup** (`autoCheckUpdates`, default **true**). When off, the silent post-launch update check is skipped; **Help → Check for Updates** still works. The "New version available" dialog includes **Don't check for updates automatically**, which persists the same setting when checked (including with **Later**).
 
 ### Fixed
 
-- **Compare sticky low-res mosaic**: soft/warm first paint no longer claims full
+- **Compare sticky low-res mosaic** (#198): soft/warm first paint no longer claims full
   source geometry for a Browse/Preview thumbnail (nearest-neighbour blit was
   stretching ~640px thumbs into a pixel mosaic). `softLoading` stays set until
   `applyDisplayBatchResult` lands a real display raster, so the cheap→upgrade
@@ -18,7 +24,7 @@
 
 ### Changed
 
-- **USM sharpen compare dialog**: opens maximized by default (not exclusive fullscreen, so the parameter strip and status bar stay usable). Space and the hold button now use the same mouse-aware pair-hold as normal Compare Mode: the pane under the cursor temporarily shows the other side (with matching presented scale/offset); off-pane Space keeps classic A←B via `decidePairHold`. Button label/tooltip updated accordingly.
+- **USM sharpen compare dialog** (#200): opens maximized by default (not exclusive fullscreen, so the parameter strip and status bar stay usable). Space and the hold button now use the same mouse-aware pair-hold as normal Compare Mode: the pane under the cursor temporarily shows the other side (with matching presented scale/offset); off-pane Space keeps classic A←B via `decidePairHold`. Button label/tooltip updated accordingly.
 
 ## [1.0.139] - 2026-10-19
 
