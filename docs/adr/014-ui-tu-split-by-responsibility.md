@@ -100,7 +100,7 @@ would churn signals/ownership for no product gain.
   The core `thumbnailpanel.cpp` returned below the 800 guard by keeping
   `setViewMode` in `thumbnailpanel_viewmode.cpp` and selection/navigation in
   `thumbnailpanel_selection.cpp`.
-- Phase 2 has begun incrementally (per the reviewer's "abc 都需要" directive):
+- Phase 2 has begun incrementally (per the reviewer's "need a, b, and c" directive):
   `ThumbnailProvider` is the first real class extracted from a god object, not
   just a TU split. It removes the thumbnail-production knowledge (decode,
   square-fit, on-disk cache) from `ThumbnailPanel`, leaving the panel to own only

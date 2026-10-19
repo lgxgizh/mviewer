@@ -1,4 +1,6 @@
-﻿# MViewer 全量 Codebase Review Report
+# MViewer 全量 Codebase Review Report
+
+**Note (historical):** This review document retains Chinese prose from the original milestone write-up. Treat it as a historical record; current product status is in `STATUS.md` (English).
 
 - 日期: 2026-08-10
 - 范围: `src/`(core / domain / application / ui / gpu)、CMake、build.ps1、CI/CD(ci / nightly / release)、静态分析配置、benchmark、测试体系、文档 / ADR / README / 打包脚本

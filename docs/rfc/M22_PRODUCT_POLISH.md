@@ -22,11 +22,11 @@ one place to tune the app. A tabbed Preferences dialog also becomes the natural
 home for the new toggles introduced by F2/F3/F4.
 
 **What:**
-- New `PreferencesDialog` (Qt Widgets) with tabs: 常规 / 视图 / 对比 / 分析 / 导出 / 插件 / 高级.
+- New `PreferencesDialog` (Qt Widgets) with tabs: General / View / Compare / Analysis / Export / Plugins / Advanced.
 - Backed entirely by existing `QSettings` keys where they exist; a small set of
   new keys for genuinely new options (e.g. `autoAlignBeforeDiff`,
   `defaultAnalysisOverlay`, `confirmDelete`).
-- Exposes at minimum: 默认排序/视图模式、缩略图默认尺寸、幻灯片间隔、确认删除开关、GPU 开关（`MVIEWER_GPU` 仅作提示，不改启动语义）、F3 对齐开关、F4 默认叠加层。
+- Exposes at minimum: default sort/view mode, default thumbnail size, slideshow interval, confirm-delete toggle, GPU toggle (`MVIEWER_GPU` hint only — does not change startup semantics), F3 alignment toggle, F4 default overlays.
 
 **Acceptance:** open Preferences, change a value, close, reopen → value
 persists across sessions; applied live where feasible (view/compare/analysis).

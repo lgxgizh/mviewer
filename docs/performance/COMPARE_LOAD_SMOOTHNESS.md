@@ -6,7 +6,7 @@
    (ImageRepository cache shared with Browse). Neighbor `preloadAsync` handles may be
    **promoted** into the batch via `promotePreloadAsync` when the user steps next/prev.
 2. Soft keep-grid + progressive placeholders (caption + optional PreviewPanel cache)
-   while the batch is in flight; per-pane 「加载中」 badge — never whole-page white when
+   while the batch is in flight; per-pane "Loading" badge — never whole-page white when
    content already exists.
 3. `finishLoad` → **in-place** pane update when kept frame count matches existing panes;
    otherwise `rebuildCells` → async display materialization + diff overlays.
@@ -31,7 +31,7 @@
 | Hist during zoom/pan | Deferred until interaction settle |
 | Diff during zoom/pan | Live low-precision overlay; full on settle |
 
-## 极致快速 (beyond #47)
+## Extreme speed (beyond #47)
 
 | Issue | Change |
 | --- | --- |
@@ -41,7 +41,7 @@
 | Browse→Compare blank first frames | `seedWarmDisplay` + `m_pendingWarmSeeds` reuse Viewer displayRaster |
 | Canvas filter during gesture | SmoothPixmapTransform off while dragging / interactionBusy |
 
-## 极致快速 Tier-1+2 (beyond #49)
+## Extreme speed Tier-1+2 (beyond #49)
 
 | Issue | Change |
 | --- | --- |

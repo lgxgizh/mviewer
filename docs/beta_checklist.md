@@ -1,8 +1,6 @@
 # MViewer v0.9 Beta Checklist
 
-> **用途**：v0.9 Beta 回归门禁。每一个 PR / 每一次功能落地后，由 **UX Review Agent**
-> （见下方角色定义）完整跑一遍，全部打勾方可合入。目标是把产品从"开发中的 Demo"
-> 推向"可长期使用的产品"。
+> **Purpose**: v0.9 Beta regression gate. After every PR and every feature landing, the **UX Review Agent** (see the role definition below) runs this checklist in full. Merge is allowed only when every item is checked. The goal is to move the product from a demo under development to a product that can be used long-term.
 >
 > **M53 release-quality review snapshot (2026-08-29)**
 > - M53 focused qualification covers 100MP TIFF Viewer/Compare bounded display,
@@ -39,19 +37,19 @@
 >   zoom continuity, target-machine packaging, hostile disposal fixtures, and
 >   long-session/100MP multi-page RSS qualification.
 >
-> **通过判据（任一不满足即不通过）**：
-> - 无等待（no waiting）：每一步操作在预算延迟内完成，不出现可感知的卡顿/转圈。
-> - 无闪烁（no flicker）：布局切换、缩放、模式切换时画面不闪、不白屏、不跳动。
-> - 无缩放错误（no zoom error）：Fit/100%/200%/自由缩放在任意比例下画面几何正确、未被拉伸或错位。
-> - 无状态不同步（no state desync）：目录树、缩略图、主视图、状态栏、工具栏对"当前图片/当前目录"的认知始终一致。
+> **Pass criteria** (fail if any one is not met):
+> - No waiting: every step completes within its latency budget, with no perceptible stall or spinner.
+> - No flicker: layout changes, zoom, and mode switches do not flash, show a white frame, or jump.
+> - No zoom error: Fit, 100%, 200%, and free zoom keep correct geometry at every scale, with no stretch or misalignment.
+> - No state desync: the directory tree, thumbnails, main view, status bar, and toolbar always agree on the current image and the current directory.
 
 ## M44 release-candidate review snapshot (2026-08-15)
 
-- Automated workflow and release gates: **通过** — final Release build and
+- Automated workflow and release gates: **Pass** — final Release build and
   full `.\build.ps1 Test` passed **88/88**, including `workflow_ux_tests`,
   Browse/Compare/export acceptance, `golden_image`, `bench_smoke`,
   `bench_enforce`, and async lifetime gates.
-- Data-safety and persistence contracts: **通过** — command/file-operation
+- Data-safety and persistence contracts: **Pass** — command/file-operation
   regressions cover collision, partial batch, rollback failure, Unicode paths,
   cross-volume fallback, and atomic export/persistence paths.
 - Native UX review: **MANUAL PENDING / NOT AVAILABLE** — this run did not have
@@ -65,7 +63,7 @@
 
 ## M43 fidelity review snapshot (2026-08-15)
 
-- Automated source/display fidelity: **通过** — `pixelinspector_tests` and
+- Automated source/display fidelity: **Pass** — `pixelinspector_tests` and
   `compare_acceptance_tests` pass; canonical `build.ps1 Test` is 88/88 in
   three consecutive runs. Coverage includes high-frequency source-vs-LOD
   Inspector RGB, exact 1×1/3×3/5×5/7×7 neighborhoods, LOD replacement
@@ -78,134 +76,131 @@
 
 ---
 
-## 角色：UX Review Agent
+## Role: UX Review Agent
 
-- **只评审，不写代码**。职责是检查每一个操作流程是否符合用户直觉。
-- 每次 PR 必跑本 Checklist，输出：通过 / 阻塞（附具体步骤与现象）。
-- 关注点：
-  - 每一个按钮是否必要；每一个操作是否符合用户直觉。
-  - 有没有多余点击；有没有状态不同步；有没有默认值不合理。
-  - 有没有动画、布局、缩放异常。
-
----
-
-## Workflow 1 — 浏览主流程
-
-打开目录 → 浏览图片 → 滚轮切换 → 双击放大 → 恢复 → 关闭
-
-| 步骤 | 检查点 | 通过标准 |
-|---|---|---|
-| 打开目录 | 首屏速度、目录树同步 | 目录树高亮并展开当前目录；首张图在预算内显示 |
-| 浏览图片 | 缩略图、主视图 | 缩略图按需解码，无整屏阻塞；主视图即时刷新 |
-| 滚轮切换 | 前后切换延迟、状态同步 | 切换无等待、无闪烁；目录树/缩略图焦点跟随；状态栏更新路径与分辨率 |
-| 双击放大 | 100% 居中、缩放几何 | 双击在鼠标点处放大到 100%，几何正确、无错位 |
-| 恢复 | 回到 Fit | 再次双击/复位回到 Fit，与双击前视图一致 |
-| 关闭 | 资源释放 | 关闭后无 GPU/内存泄漏；再次打开无残留状态 |
-
-## Workflow 2 — 比较主流程
-
-选择两张图片 → Compare → 切换（左右 / 覆盖 / 闪烁 / Diff）→ 退出 Compare → 继续浏览
-
-| 步骤 | 检查点 | 通过标准 |
-|---|---|---|
-| 选择两张 | Ctrl/Shift 多选、框选 | 多选用 `blockSignals` 守卫，无回环；选择序正确 |
-| Compare | 全屏、默认布局、自动适配窗口 | 首帧直接全屏；每图按自身窗格 Fit，铺满视口且无空白；窗口缩放时自适应 |
-| 切换：左右 | 并排几何 | 左右布局对称，缩放同步 |
-| 切换：覆盖 | 叠加对齐 | 两图按相同锚点对齐，无偏移 |
-| 切换：闪烁 | 闪烁节奏、无撕裂 | 固定节奏交替，无撕裂/卡顿 |
-| 切换：Diff | 差值/热力图 | 默认无染色；显式开启“显示差异”后差值正确、热力图配色可读 |
-| 退出 Compare | 回到浏览、状态一致 | 退出后主视图与缩略图选择保持同步，无空白 cell |
-| 继续浏览 | 无残留 | 后续切换流畅，比较期间的状态不污染浏览模式 |
+- **Review only; do not write code.** The job is to check whether every workflow matches user intuition.
+- Run this checklist on every PR and report: Pass / Blocked (with the concrete steps and the observed behavior).
+- Focus:
+  - Whether every button is necessary, and whether every action matches user intuition.
+  - Extra clicks, state desync, and unreasonable defaults.
+  - Animation, layout, and zoom anomalies.
 
 ---
 
-## 自动化映射（每次 `.\build.ps1 Test` 自动执行）
+## Workflow 1 — Browse main flow
 
-Checklist 条目凡能自动化的，已固化为回归测试，随门禁自动运行；
-其余条目由 UX Review Agent 人工执行。
+Open a directory → browse images → wheel to switch → double-click to zoom → restore → close
 
-| Checklist 范围 | 自动化测试（ctest） | 覆盖内容 |
+| Step | Check | Pass criteria |
 |---|---|---|
-| Workflow 1 全流程 | `workflow_ux_tests` | 真实 MainWindow：专业浏览工具栏、Folder/Preview 侧栏比例迁移、Browse 与 Tab 独立恢复、Analysis/Search 跨窗口恢复、路径 Enter 不误开旧图、跨盘精确导航并自动清除冲突目录过滤、目录切换清理旧状态并选中新目录首图、视图模式/固定尺寸/可调滑块状态同步；打开目录 → onImageOpen → ←/→/Home/End/PageUp/PageDown → 首屏解码 ≤ 5 s → Fit/100%/放大/恢复 → 关闭 |
-| Workflow 2 全流程 | `workflow_ux_tests` | 真实 MainWindow 全屏 Compare + 真实键鼠事件：默认无 Diff 染色、按窗格 Fit + 相对同步缩放、B/S/O/K/H 模式互斥、Space 临时闪烁、锁定基准、阈值/调整/重置后的指标与 Inspector 同步、拖动期间重计算合并、Esc 退出后继续浏览 |
-| Compare linked ROI | `m61_roi_workflow_tests` + `workflow_ux_tests` | Grid/Split/Overlay/Swipe/Checkerboard 真实右键创建，移动与八向缩放，实时镜像，隐藏面板 HUD，TSV 复制，取消/背压/过期结果，以及 decoder bounded-region 真值 |
-| Compare 会话恢复 | `compare_session_tests` | 布局/参考图/闪烁间隔/差异阈值 round-trip |
-| Compare 引擎语义 | `compare_workflow_tests` | 选择→比较→引擎状态机 |
-| 浏览模型 | `product_browse_tests` | 目录列表 / 导航模型 |
-| 画质回归 | `golden_image` | PSNR / SSIM / pixel-diff vs `golden/` |
-| 性能预算 | `bench_smoke` + `bench_enforce` | Decode / Thumbnail / 预算 ±10% 硬门禁 |
-| 人工专项 | —（UX Review Agent） | 闪烁观感、动画流畅度、缩放中心手感、1000 图长时间浏览、内存趋势 |
+| Open directory | First-screen speed, directory-tree sync | The directory tree highlights and expands the current directory; the first image appears within budget |
+| Browse images | Thumbnails, main view | Thumbnails decode on demand with no full-screen block; the main view refreshes immediately |
+| Wheel switch | Previous/next latency, state sync | Switching has no wait and no flicker; directory-tree and thumbnail focus follow; the status bar updates path and resolution |
+| Double-click zoom | 100% centering, zoom geometry | Double-click zooms to 100% at the mouse point, with correct geometry and no misalignment |
+| Restore | Return to Fit | A second double-click or reset returns to Fit, matching the view from before the double-click |
+| Close | Resource release | After close there is no GPU or memory leak; opening again leaves no residual state |
 
-**规则**：新功能落地时，若触及上述任一 Workflow，必须先扩展
-`src/test_workflow_ux.cpp` 的对应断言，再实现功能（先测后写）。
-自动化测试通过 ≠ Checklist 通过；人工专项仍需 UX Review Agent 签名。
+## Workflow 2 — Compare main flow
+
+Select two images → Compare → switch (side-by-side / overlay / flicker / Diff) → exit Compare → continue browsing
+
+| Step | Check | Pass criteria |
+|---|---|---|
+| Select two | Ctrl/Shift multi-select, marquee select | Multi-select is guarded by `blockSignals`, with no re-entrancy loop; selection order is correct |
+| Compare | Full screen, default layout, auto-fit window | The first frame is full screen immediately; each image Fits its own pane, fills the viewport with no empty space, and adapts when the window is resized |
+| Switch: side-by-side | Side-by-side geometry | Left and right layouts are symmetric; zoom stays in sync |
+| Switch: overlay | Overlay alignment | Both images align to the same anchor, with no offset |
+| Switch: flicker | Flicker cadence, no tearing | Alternation uses a fixed cadence, with no tearing or stutter |
+| Switch: Diff | Difference / heatmap | No tint by default; after “Show difference” is turned on explicitly, the difference is correct and the heatmap colors are readable |
+| Exit Compare | Return to browse, consistent state | After exit, the main view and thumbnail selection stay in sync, with no empty cell |
+| Continue browsing | No residue | Later switches stay smooth; state from the compare session does not leak into browse mode |
 
 ---
 
-## 分类检查清单
+## Automation mapping (runs automatically on every `.\build.ps1 Test`)
 
-### 浏览体验
-- [ ] 打开目录：首屏速度达标（1000 图目录首缩略图 < 2 s）
-- [ ] 滚轮浏览：前后切换无等待
-- [ ] PageUp / PageDown：翻页正确
-- [ ] Home / End：跳到首/末图正确
+Checklist items that can be automated are fixed as regression tests and run with the gate. The remaining items are executed manually by the UX Review Agent.
+
+| Checklist scope | Automated test (ctest) | Coverage |
+|---|---|---|
+| Workflow 1, full flow | `workflow_ux_tests` | Real MainWindow: professional browse toolbar; Folder/Preview sidebar ratio migration; independent Browse and Tab restore; Analysis/Search restore across windows; Enter on a path does not reopen a stale image; cross-volume exact navigation that automatically clears a conflicting directory filter; directory switch clears old state and selects the first image of the new directory once; view mode, fixed size, and adjustable slider state stay in sync. Open directory → onImageOpen → ←/→/Home/End/PageUp/PageDown → first-screen decode ≤ 5 s → Fit/100%/zoom/restore → close |
+| Workflow 2, full flow | `workflow_ux_tests` | Real MainWindow full-screen Compare plus real keyboard and mouse events: no Diff tint by default; per-pane Fit plus relative synchronized zoom; B/S/O/K/H modes are mutually exclusive; Space toggles temporary flicker; lock reference; metrics and Inspector stay in sync after threshold, adjustment, and reset; recomputation is coalesced while dragging; Esc exits and browsing continues |
+| Compare linked ROI | `m61_roi_workflow_tests` + `workflow_ux_tests` | Real right-click creation for Grid/Split/Overlay/Swipe/Checkerboard; move and eight-direction resize; live mirroring; hidden-panel HUD; TSV copy; cancel / backpressure / stale results; and decoder bounded-region ground truth |
+| Compare session restore | `compare_session_tests` | Round-trip of layout, reference image, flicker interval, and difference threshold |
+| Compare engine semantics | `compare_workflow_tests` | Select → compare → engine state machine |
+| Browse model | `product_browse_tests` | Directory listing / navigation model |
+| Image-quality regression | `golden_image` | PSNR / SSIM / pixel-diff against `golden/` |
+| Performance budget | `bench_smoke` + `bench_enforce` | Decode / thumbnail / budget ±10% hard gate |
+| Manual specials | — (UX Review Agent) | Flicker feel, animation smoothness, zoom-center feel, long browse of 1000 images, memory trend |
+
+**Rule**: When a new feature lands and touches any workflow above, extend the matching assertions in `src/test_workflow_ux.cpp` before implementing the feature (test first). An automated test pass is not a checklist pass; the manual specials still require the UX Review Agent’s sign-off.
+
+---
+
+## Categorized checklist
+
+### Browse experience
+- [ ] Open directory: first-screen speed meets budget (first thumbnail of a 1000-image directory < 2 s)
+- [ ] Wheel browse: previous/next switch with no wait
+- [ ] PageUp / PageDown: page turns are correct
+- [ ] Home / End: jump to the first and last image is correct
 
 ### Compare
-- [ ] Ctrl 多选
-- [ ] Shift 多选
-- [ ] 框选
-- [ ] Compare 默认布局铺满、自动适配窗口
-- [ ] 同步缩放
-- [ ] 模式切换（左右 / 覆盖 / 闪烁 / Diff）流畅无闪烁
-- [ ] 退出 Compare 回到浏览、状态一致
+- [ ] Ctrl multi-select
+- [ ] Shift multi-select
+- [ ] Marquee select
+- [ ] Compare default layout fills the view and auto-fits the window
+- [ ] Synchronized zoom
+- [ ] Mode switch (side-by-side / overlay / flicker / Diff) is smooth with no flicker
+- [ ] Exit Compare returns to browse with consistent state
 
 ### View
 - [ ] Fit
 - [ ] 100%
 - [ ] 200%
-- [ ] 缩放中心（以鼠标点为中心）
-- [ ] 平移
-- [ ] GIF/WebP：播放、暂停、重启、前后帧、Frame 状态正确
-- [ ] 多页 TIFF：前后页导航、Page 状态正确且不改变 Browse 文件索引
-- [ ] 帧切换保持缩放/平移，不重新 Fit
+- [ ] Zoom center (centered on the mouse point)
+- [ ] Pan
+- [ ] GIF/WebP: play, pause, restart, previous/next frame, and Frame status are correct
+- [ ] Multi-page TIFF: previous/next page navigation and Page status are correct and do not change the Browse file index
+- [ ] Frame changes keep zoom and pan and do not re-Fit
 
 ### UI
-- [ ] 当前目录同步（目录树 ↔ 主视图 ↔ 状态栏）
-- [ ] Browse 布局：保留目录/预览，隐藏 Analysis/Search 后画廊无空白或跳动
-- [ ] 目录切换：旧缩略图/预览/状态立即清理，新目录首图仅自动选择一次
-- [ ] 最近文件
-- [ ] 工具栏
-- [ ] 状态栏（路径 / 分辨率 / 缩放比 / 帧率）
+- [ ] Current directory stays in sync (directory tree ↔ main view ↔ status bar)
+- [ ] Browse layout: directory and preview stay; after Analysis/Search are hidden, the gallery has no empty gap or jump
+- [ ] Directory switch: old thumbnails, preview, and state clear immediately; the first image of the new directory is auto-selected only once
+- [ ] Recent files
+- [ ] Toolbar
+- [ ] Status bar (path / resolution / zoom ratio / frame rate)
 
-### 性能
+### Performance
 - [ ] GPU Upload
 - [ ] Decode
 - [ ] Thumbnail
-- [ ] Memory（长时间浏览不增长）
+- [ ] Memory (does not grow during a long browse)
 
-### 稳定性
-- [ ] 连续打开 1000 张图片
-- [ ] 快速切图（无崩溃、无不同步）
-- [ ] 快速缩放（无撕裂、无缩放错误）
-- [ ] 长时间浏览（内存稳定、无泄漏）
-- [ ] 动画快速切换文件后无 stale frame、无残留 timer、无后台无限解码
+### Stability
+- [ ] Open 1000 images in a row
+- [ ] Rapid image switching (no crash, no desync)
+- [ ] Rapid zoom (no tearing, no zoom error)
+- [ ] Long browse (stable memory, no leak)
+- [ ] After rapid file switches during animation: no stale frame, no leftover timer, no unbounded background decode
 
 ---
 
-## 签名
+## Sign-off
 
-| 项 | 值 |
+| Item | Value |
 |---|---|
-| 评审版本（commit） | |
+| Review revision (commit) | |
 | UX Review Agent | |
-| 结果 | □ 通过 □ 阻塞 |
-| 阻塞项 | |
+| Result | □ Pass □ Blocked |
+| Blocking items | |
 ## M45 qualification notes (2026-08-16)
 
 - Automated coverage includes CommandStack callback re-entry, unresolved and
   ordinary command failures, transfer cancellation safety, and clipboard PNG
   generation/lifecycle. The full local Release gate passed **90/90**.
-- Delete is currently labeled **MViewer 回收站** and stages files under the
+- Delete is currently labeled **MViewer Recycle Bin** and stages files under the
   per-user application data directory. It is not Windows Explorer's native
   Recycle Bin.
 - Native Release GUI evidence for ICC, 100/125/150/200 DPI and mixed-DPI

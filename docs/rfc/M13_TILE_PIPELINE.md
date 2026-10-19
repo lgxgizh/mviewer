@@ -2,10 +2,10 @@
 
 **Status:** DRAFT for review (RFC-first). No core code change proposed beyond a
 minor extraction; this documents what already exists and closes the review's
-"先完成 Tile Pipeline RFC" requirement.
+"Finish the Tile Pipeline RFC first" requirement.
 **Author:** Hermes (commander), verified against `src/core/render/` at `f3f8d1c`.
 **Date:** 2026-07-19
-**Supersedes:** review P2 ("Render Pipeline 收敛")
+**Supersedes:** review P2 ("Render Pipeline convergence")
 
 ---
 
@@ -13,8 +13,8 @@ minor extraction; this documents what already exists and closes the review's
 
 The engineering review (P2) required, *before* any GPU work:
 
-> 先完成 Tile Pipeline RFC … 新增 core/render/ Tile TileCache Viewport
-> RenderCommand … 验收：打开 12000x8000 JPEG，zoom 不阻塞 UI，只加载可见区域。
+> Finish the Tile Pipeline RFC first … add core/render/ Tile TileCache Viewport
+> RenderCommand … acceptance: open a 12000x8000 JPEG, zoom without blocking the UI, load only the visible region.
 
 This RFC documents the **already-built** CPU tile pipeline (M7 foundation +
 wired into `ImageViewer::paintEvent`) and formally records the acceptance

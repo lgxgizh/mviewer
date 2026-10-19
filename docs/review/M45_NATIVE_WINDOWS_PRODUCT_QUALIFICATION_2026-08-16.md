@@ -30,7 +30,7 @@ proves ICC, mixed-DPI, multi-volume, native-dialog, or long-session behavior.
   PNG on the I/O scheduler, then re-enters `onImageOpen()` only for the current
   generation. Stale files are cleaned on startup/teardown and old paste files
   are aged out.
-- Delete is explicitly labeled **MViewer 回收站**. It is a per-user reversible
+- Delete is explicitly labeled **MViewer Trash**. It is a per-user reversible
   staging directory, not the native Windows Shell Recycle Bin.
 
 ## Evidence and limitations

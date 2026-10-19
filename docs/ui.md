@@ -154,7 +154,7 @@ above is the main window only.
 | Action | Shortcut | Description |
 |--------|----------|-------------|
 | Keyboard Shortcuts | `F1` | Show shortcut reference |
-| 使用说明 (User guide) | | Open `docs/USER_GUIDE.md` in the browser |
+| User guide | | Open `docs/USER_GUIDE.md` in the browser |
 | About | | Show version and credits |
 
 ---
@@ -490,6 +490,5 @@ CompareWorkspace (separate window, QDialog)
 
 Long-running file operations show cancellable progress and complete through a
 generation-guarded UI handoff. Ctrl+V accepts an image immediately while PNG
-encoding runs in the I/O scheduler. Delete actions are labeled **移到 MViewer
-回收站** to distinguish the current per-user staging semantics from Windows'
+encoding runs in the I/O scheduler. Delete actions are labeled **Move to MViewer Trash** to distinguish the current per-user staging semantics from Windows'
 native Recycle Bin.

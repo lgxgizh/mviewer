@@ -1,5 +1,7 @@
 # 评审行动项 — 2026-07-24
 
+**Note (historical):** This review document retains Chinese prose from the original milestone write-up. Treat it as a historical record; current product status is in `STATUS.md` (English).
+
 > 来源：产品评审（Directory Tree / Thumbnail View / Selection / Compare / Analyzer / Workspace）
 > 当前项目阶段：**Product Beta → RC**（M16 进行中，M17-M18 已规划）
 > 核心理念：**每新增 1000 行代码，都应该能让用户明显感觉到价值。不要再为了架构增加架构。**
