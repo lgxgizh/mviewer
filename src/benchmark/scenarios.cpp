@@ -36,34 +36,6 @@
 namespace mviewer::bench
 {
 
-namespace
-{
-double pct(const std::vector<double> &sorted, double p)
-{
-    if (sorted.empty())
-        return 0;
-    const size_t idx = static_cast<size_t>(std::clamp(p, 0.0, 1.0) * (sorted.size() - 1));
-    return sorted[idx];
-}
-
-Timing summarize(std::vector<double> vals)
-{
-    std::sort(vals.begin(), vals.end());
-    Timing t;
-    t.samples = vals.size();
-    t.p50Ms = pct(vals, 0.50);
-    t.p95Ms = pct(vals, 0.95);
-    t.p99Ms = pct(vals, 0.99);
-    return t;
-}
-
-// Block until a std::atomic<bool> flips or timeout (used to latch async callbacks).
-template <typename Clock = std::chrono::steady_clock> double nowMs()
-{
-    return std::chrono::duration<double, std::milli>(Clock::now().time_since_epoch()).count();
-}
-} // namespace
-
 // ─── B1: startup to first paint ──────────────────────────────────────────────
 ScenarioResult scenarioStartup()
 {
@@ -564,7 +536,9 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus)
     return r;
 }
 
-// ─── B7: image-switch latency, preloaded vs cold ────────────────────────────
+// ─── B7: image-switch latency, preloaded vs cold (repository-level) ─────────
+// Times ImageRepository::load() only. End-to-end UI next/previous (ImageViewer
+// present + paint, overlay/preview/metadata) is B18/B19 in scenarios_e2e.cpp.
 ScenarioResult scenarioImageSwitch(const Corpus &corpus)
 {
     auto &repo = ImageRepository::instance();
@@ -598,10 +572,10 @@ ScenarioResult scenarioImageSwitch(const Corpus &corpus)
 }
 
 // ─── B8: first-interaction latency for a PRELOADED switch (< 16 ms) ──────────
-// docs/performance.md: "Perceived latency < 16 ms (one frame at 60fps)" and
-// "Decode + display (preloaded) < 16 ms". We fully warm the cache, then navigate
-// back-and-forth (i -> i+1 -> i) so every switch hits the in-memory FullImage
-// LRU — measuring the user-perceived single-frame latency, NOT decode cost.
+// Repository-level: warms the in-memory FullImage LRU and times
+// ImageRepository::load() cache hits (not ImageViewer paint / MainWindow
+// navigation). The end-to-end UI measurement is B18/B19 in scenarios_e2e.cpp.
+// docs/performance.md: "Perceived latency < 16 ms (one frame at 60fps)".
 ScenarioResult scenarioSwitchLatency(const Corpus &corpus)
 {
     auto &repo = ImageRepository::instance();

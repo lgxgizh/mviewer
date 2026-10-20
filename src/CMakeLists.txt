@@ -2639,6 +2639,7 @@ add_executable(mviewer_bench
     benchmark/main.cpp
     benchmark/corpus.cpp
     benchmark/scenarios.cpp
+    benchmark/scenarios_e2e.cpp
     core/perf/GpuTracker.cpp
 )
 
@@ -2647,6 +2648,7 @@ target_link_libraries(mviewer_bench
         Qt6::Core
         Qt6::Widgets
         mviewer_core
+        mviewer_ui
         $<$<PLATFORM_ID:Windows>:dxgi;ole32>
 )
 
@@ -2671,7 +2673,7 @@ add_test(NAME bench_enforce
 # profile adapts the budget for small local machines; RUN_SERIAL keeps the
 # enforced measurement itself free from test-suite contention. The smoke test
 # remains parallelizable because it only proves the harness can execute.
-set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE)
+set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
 add_executable(audit_misc_tests
     core/test_audit_misc.cpp

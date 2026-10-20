@@ -148,6 +148,9 @@ links and runs; the full suite is for local/perf runs).
 | B6 | Memory budget | `loadDirectory` of 1000 24 MP, sample `MemoryTracker` | base <50 MB; per-image ~96 MB; returns to baseline after eviction |
 | B7 | Image-switch latency | navigate fwd 100× preloaded vs cold | preloaded <16 ms; cold <100 ms (24 MP) |
 
+B7 (and later B8) time `ImageRepository::load()` only. End-to-end UI next/previous
+(ImageViewer present + paint) is B18/B19 in `src/benchmark/scenarios_e2e.cpp`.
+
 Each scenario prints a one-line verdict `[PASS]/[FAIL] Bn <metric> <value> budget=<x>`
 and the binary exits non-zero **only in `--enforce` mode** (local perf gate, opt-in).
 Default mode (CI `--smoke`) prints numbers and always exits 0 — CI does not enforce
