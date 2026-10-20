@@ -3,6 +3,7 @@
 // Viewer closed → gallery selects B → rotate/flip QAction must rewrite B, not A.
 // Compare rotate with no panes must not invent cell 0.
 
+#include "application/Shutdown.h"
 #include "compareworkspace.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
@@ -29,13 +30,8 @@
 #include <QTimer>
 #include <QWidget>
 
-#include <cstdlib>
 #include <functional>
 #include <iostream>
-
-#ifdef Q_OS_WIN
-#include <windows.h>
-#endif
 
 namespace
 {
@@ -60,16 +56,6 @@ void pump(int ms = 30)
     do
         QApplication::processEvents(QEventLoop::AllEvents, 10);
     while (timer.elapsed() < ms);
-}
-
-[[noreturn]] void terminateTestProcess(int exitCode)
-{
-#ifdef Q_OS_WIN
-    ::TerminateProcess(::GetCurrentProcess(), static_cast<UINT>(exitCode));
-    std::abort();
-#else
-    std::_Exit(exitCode);
-#endif
 }
 
 bool waitFor(const std::function<bool()> &predicate, int timeoutMs = 4000)
@@ -225,6 +211,7 @@ int main(int argc, char **argv)
     const QString pathA = writeSizedPng(directory, "a_stale.png", 8, 4, QColor(200, 0, 0));
     const QString pathB = writeSizedPng(directory, "b_current.png", 6, 10, QColor(0, 0, 200));
 
+    mviewer::application::ScopedProcessShutdown shutdown;
     MainWindow window;
     window.resize(1100, 750);
     window.show();
@@ -235,7 +222,7 @@ int main(int argc, char **argv)
     auto *rotateCw = window.findChild<QAction *>(QStringLiteral("rotateCWAction"));
     CHECK(panel && selection && rotateCw, "MainWindow owns gallery, SSOT, rotate action");
     if (!panel || !selection || !rotateCw)
-        terminateTestProcess(1);
+        return 1;
 
     panel->setDirectory(directory.absolutePath());
     CHECK(waitFor(
@@ -485,29 +472,32 @@ int main(int argc, char **argv)
 
             // 1st rotation: 90° -> 12x6
             compare.rotateCurrentCell(90);
-            CHECK(waitFor([&]
-                          {
-                              return v0->sourceSize() == QSize(12, 6) &&
-                                     v0->sourceRect() == QRect(0, 0, 12, 6);
-                          }),
+            CHECK(waitFor(
+                      [&]
+                      {
+                          return v0->sourceSize() == QSize(12, 6) &&
+                                 v0->sourceRect() == QRect(0, 0, 12, 6);
+                      }),
                   "1x rotate: 12x6 full rect");
 
             // 2nd rotation: 180° -> 6x12
             compare.rotateCurrentCell(90);
-            CHECK(waitFor([&]
-                          {
-                              return v0->sourceSize() == QSize(6, 12) &&
-                                     v0->sourceRect() == QRect(0, 0, 6, 12);
-                          }),
+            CHECK(waitFor(
+                      [&]
+                      {
+                          return v0->sourceSize() == QSize(6, 12) &&
+                                 v0->sourceRect() == QRect(0, 0, 6, 12);
+                      }),
                   "2x rotate: 6x12 full rect");
 
             // 3rd rotation: 270° -> 12x6
             compare.rotateCurrentCell(90);
-            CHECK(waitFor([&]
-                          {
-                              return v0->sourceSize() == QSize(12, 6) &&
-                                     v0->sourceRect() == QRect(0, 0, 12, 6);
-                          }),
+            CHECK(waitFor(
+                      [&]
+                      {
+                          return v0->sourceSize() == QSize(12, 6) &&
+                                 v0->sourceRect() == QRect(0, 0, 12, 6);
+                      }),
                   "3x rotate: 12x6 full rect");
 
             // 4th rotation: 360°/0° -> 6x12 (must not be clipped to 12x6 / partial height)
@@ -529,8 +519,8 @@ int main(int argc, char **argv)
     if (g_failures)
     {
         std::cerr << g_failures << " failure(s)\n";
-        terminateTestProcess(1);
+        return 1;
     }
     std::cout << "All rotate-selection tests passed.\n";
-    terminateTestProcess(0);
+    return 0;
 }

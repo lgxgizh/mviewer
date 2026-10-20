@@ -3634,10 +3634,10 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
     CHECK(metadataIdle, "report workflow starts with an idle Background pool");
 
     {
-        // The real save dialog is nested and leaves Qt's offscreen modal
-        // internals attached to this parent. Keep this terminal fixture window
-        // alive until process teardown; deleting it here deadlocks Qt 6.10's
-        // offscreen plugin after the dialog returns.
+        // Remaining ADR-017 exception: the real save dialog is nested and
+        // leaves Qt's offscreen modal internals attached to this parent.
+        // Deleting this window here deadlocks Qt 6.10's offscreen plugin after
+        // the dialog returns, so it stays alive until process teardown.
         MainWindow *ownedWindow = new MainWindow;
         MainWindow &w = *ownedWindow;
         w.resize(1200, 800);

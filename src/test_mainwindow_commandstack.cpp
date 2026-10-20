@@ -5,6 +5,7 @@
 // CommandStack used by ThumbnailPanel, without allowing unrelated long-lived
 // acceptance work to trigger the production update-check timer.
 
+#include "application/Shutdown.h"
 #include "directorytree.h"
 #include "mainwindow.h"
 #include "runtime_storage.h"
@@ -27,13 +28,8 @@
 #include <QTemporaryDir>
 #include <QTimer>
 
-#include <cstdlib>
 #include <functional>
 #include <iostream>
-
-#ifdef Q_OS_WIN
-#include <windows.h>
-#endif
 
 namespace
 {
@@ -58,21 +54,6 @@ void pump(int ms = 30)
     do
         QApplication::processEvents(QEventLoop::AllEvents, 10);
     while (timer.elapsed() < ms);
-}
-
-[[noreturn]] void terminateTestProcess(int exitCode)
-{
-#ifdef Q_OS_WIN
-    // MainWindow owns worker-backed Qt resources that are deliberately not
-    // torn down by this acceptance executable.  ExitProcess still runs DLL
-    // detach handlers, which can race those workers on Qt 6.8 and turn a
-    // passed test into an intermittent STATUS_ACCESS_VIOLATION.  Terminate
-    // the isolated test process without invoking that late global teardown.
-    ::TerminateProcess(::GetCurrentProcess(), static_cast<UINT>(exitCode));
-    std::abort();
-#else
-    std::_Exit(exitCode);
-#endif
 }
 
 bool waitFor(const std::function<bool()> &predicate, int timeoutMs = 4000)
@@ -123,6 +104,7 @@ int main(int argc, char **argv)
     const QString original = writePng(directory, "m45_uiop.png");
     const QString renamed = directory.filePath("m45_uiop_renamed.png");
 
+    mviewer::application::ScopedProcessShutdown shutdown;
     MainWindow window;
     window.resize(1100, 750);
     window.show();
@@ -262,15 +244,8 @@ int main(int argc, char **argv)
     if (g_failures > 0)
     {
         std::cout << "mainwindow_commandstack_acceptance: FAIL (" << g_failures << " failures)\n";
-        std::fflush(stdout);
-        terminateTestProcess(1);
+        return 1;
     }
     std::cout << "mainwindow_commandstack_acceptance: PASS\n";
-    std::fflush(stdout);
-    // MainWindow owns long-lived Qt/worker resources whose process-level
-    // shutdown is covered by the dedicated lifecycle suites. This acceptance
-    // executable is intentionally isolated; exit after flushing its verdict
-    // so a late global Qt teardown cannot turn a passed UI assertion into a
-    // watchdog timeout.
-    terminateTestProcess(0);
+    return 0;
 }

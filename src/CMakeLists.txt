@@ -299,6 +299,7 @@ target_include_directories(mviewer_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(mviewer_application STATIC
     application/ExternalOpen.cpp
     application/OpenDirectoryUseCase.cpp
+    application/Shutdown.cpp
     application/Startup.cpp
 )
 
@@ -2551,6 +2552,7 @@ target_link_libraries(m57_multiframe_decoder_tests
         Qt6::Gui
         Qt6::Core
         mviewer_core
+        mviewer_application
 )
 target_compile_features(m57_multiframe_decoder_tests PRIVATE cxx_std_20)
 target_include_directories(m57_multiframe_decoder_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
