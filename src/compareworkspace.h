@@ -621,7 +621,8 @@ class CompareWorkspace : public QWidget
     void scheduleDisplayLodRefresh(int idx = -1);
     void queueDisplayLod(int requestedPane);
     void queueFastPreview(int requestedPane);
-    void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes, bool preview = false);
+    void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes, bool preview = false,
+                                        bool sharpUpgrade = false);
     // Drops the in-flight display batch from the scheduler graph immediately.
     void releaseDisplayTask();
     void reapplyPinnedCellTransforms(bool clearPins = false);
@@ -635,6 +636,7 @@ class CompareWorkspace : public QWidget
         const std::vector<std::string> &paths, const mviewer::core::DisplayColorContext &target,
         const QPointer<CompareWorkspace> &guard);
     void applyDisplayBatchResult(const DisplayBatchResult &result);
+    void requeueStalledSoftPanes(); // watchdog: re-request panes still softLoading
 
     uint64_t m_displayGen = 0;
     mviewer::core::DisplayColorContext m_displayColorTarget =

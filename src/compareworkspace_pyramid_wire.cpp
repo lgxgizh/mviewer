@@ -1,4 +1,5 @@
 #include "compareworkspace_caption.h"
+#include "compareworkspace_display_pending.h"
 #include "compareworkspace_p.h"
 
 #include "core/render/DisplayResample.h"
@@ -199,32 +200,40 @@ void CompareWorkspace::releaseDisplayTask()
 }
 
 void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes,
-                                                      bool preview)
+                                                      bool preview, bool sharpUpgrade)
 {
+    const int paneCount = static_cast<int>(m_cellViews.size());
+    // Every pane still waiting on a real raster (blank, or softLoading over a
+    // warm thumb / previous raster) and every pane the in-flight batch has not
+    // delivered yet rides along. Otherwise a single-pane request (fast
+    // preview, per-pane scaleChanged LOD refresh) cancels the only pending
+    // request for the other pane and strands it on "Loading" + low-res raster.
+    std::vector<bool> waiting(static_cast<size_t>(std::max(0, paneCount)), false);
+    for (int i = 0; i < paneCount; ++i)
+    {
+        const RawImageView *view = m_cellViews[i];
+        // While a soft pair reload is in flight the engine still holds the
+        // previous frames; repainting them would replace the new pair's warm
+        // stand-in. finishLoad schedules every pane once the frames land.
+        const bool soft = view && view->softLoading() && !m_loadInFlight;
+        waiting[static_cast<size_t>(i)] = view && (view->image().isNull() || soft);
+    }
+    const std::vector<int> undelivered =
+        (m_displayTask && m_session) ? m_session->displayPendingPanes : std::vector<int>{};
+    std::vector<int> panes =
+        mviewer::ui::collectDisplayBatchPanes(paneCount, waiting, undelivered, dirtyPanes);
+    // Nothing to request: keep the in-flight batch instead of cancelling it
+    // (an empty call used to bump the generation and drop every delivery).
+    if (panes.empty())
+        return;
+
     // Latest-wins: drop any in-flight batch from the scheduler graph and start
     // a fresh generation. Cooperative cancel would keep the handle until the
     // sharp resample returned.
     releaseDisplayTask();
     ++m_displayGen;
-
-    const int paneCount = static_cast<int>(m_cellViews.size());
-    std::vector<int> panes;
-    panes.reserve(static_cast<size_t>(paneCount));
-    auto add = [&panes, paneCount](int idx)
-    {
-        if (idx < 0 || idx >= paneCount)
-            return;
-        if (std::find(panes.cbegin(), panes.cend(), idx) != panes.cend())
-            return;
-        panes.push_back(idx);
-    };
-    for (int i = 0; i < paneCount; ++i)
-        if (m_cellViews[i] && m_cellViews[i]->image().isNull())
-            add(i);
-    for (int idx : dirtyPanes)
-        add(idx);
-    if (panes.empty())
-        return;
+    if (m_session)
+        m_session->displayPendingPanes.clear();
 
     // Stagger priority: focus/edit pane first so first paint is stable.
     int focusPane = m_editIdx;
@@ -267,7 +276,11 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
         pixels.push_back(img ? img->pixels() : ImageData());
         metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
         RawImageView *view = (i < m_cellViews.size()) ? m_cellViews[i] : nullptr;
-        const bool blankPane = !view || view->image().isNull() || view->softLoading();
+        const bool upgradePane = sharpUpgrade && std::find(dirtyPanes.cbegin(), dirtyPanes.cend(),
+                                                           i) != dirtyPanes.cend();
+        const bool blankPane =
+            !view || mviewer::ui::displayRequestWantsCheap(view->image().isNull(),
+                                                           view->softLoading(), upgradePane);
         if (img && !img->pixels().isNull())
             displayRequests.push_back(memoryDisplayRequest(i, blankPane));
         else if (i < static_cast<int>(m_comparePaths.size()) &&
@@ -301,6 +314,8 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
     if (!handle)
         return;
     m_displayTask = handle;
+    if (m_session)
+        m_session->displayPendingPanes = panes;
     if (preview && m_session)
         m_session->previewGeneration = gen;
 }
@@ -317,6 +332,8 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         return;
 
     m_displayTask.reset();
+    if (m_session)
+        m_session->displayPendingPanes.clear();
     if (!r.provisional && m_session)
         m_session->forceDecodePriority = false;
 
@@ -333,6 +350,9 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         if (!cell.errorText.isEmpty())
         {
             const QString message = tr("Cannot display this source: %1").arg(cell.errorText);
+            // A failed pane will not get a raster from this request; the
+            // caption carries the error, so the Loading badge must not stick.
+            view->setSoftLoading(false);
             view->setToolTip(message);
             if (view->image().isNull() && cell.index < m_cellLabels.size())
                 setComparePaneCaptionStatus(m_cellLabels[cell.index], message);
@@ -403,10 +423,55 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
                                    CompareWorkspace *ws = guard.data();
                                    if (!ws || ws->m_displayGen != gen)
                                        return;
-                                   ws->scheduleDisplayMaterialization(upgrade);
+                                   ws->scheduleDisplayMaterialization(upgrade, false, true);
                                });
         }
+        if (m_session)
+            m_session->displayStallRetries = 0;
+        return;
     }
+    requeueStalledSoftPanes();
+}
+
+void CompareWorkspace::requeueStalledSoftPanes()
+{
+    // Watchdog: a pane still flagged softLoading after the latest batch landed
+    // was never part of it (or was skipped). Re-request it so every pane
+    // eventually leaves the Loading state; bounded so a pane that keeps
+    // failing silently cannot spin. A soft pair reload in flight owns the
+    // badge until finishLoad schedules the new frames.
+    if (m_loadInFlight || !m_session)
+        return;
+    int &retries = m_session->displayStallRetries;
+    std::vector<int> stalled;
+    for (int i = 0; i < m_cellViews.size(); ++i)
+    {
+        if (m_cellViews[i] && m_cellViews[i]->softLoading())
+            stalled.push_back(i);
+    }
+    if (stalled.empty())
+    {
+        retries = 0;
+        return;
+    }
+    constexpr int kMaxDisplayStallRetries = 3;
+    if (retries >= kMaxDisplayStallRetries)
+    {
+        clearSoftLoadingIndicators();
+        retries = 0;
+        return;
+    }
+    ++retries;
+    const uint64_t gen = m_displayGen;
+    QPointer<CompareWorkspace> guard(this);
+    QTimer::singleShot(0, this,
+                       [guard, stalled, gen]()
+                       {
+                           CompareWorkspace *ws = guard.data();
+                           if (!ws || ws->m_displayGen != gen || ws->m_displayTask)
+                               return;
+                           ws->scheduleDisplayMaterialization(stalled, false, true);
+                       });
 }
 
 void CompareWorkspace::queueDisplayLod(int requestedPane)
@@ -416,6 +481,13 @@ void CompareWorkspace::queueDisplayLod(int requestedPane)
     {
         if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
             return;
+        // A pane still on its soft stand-in always needs a real raster, even
+        // when the stand-in (previous pair, same dimensions) "covers" the view.
+        if (m_cellViews[pane]->softLoading() && !m_loadInFlight)
+        {
+            dirty.push_back(pane);
+            return;
+        }
         const ImageFrame *frame = m_engine.imageAt(pane);
         if (!frame || frame->pixels().isNull())
         {

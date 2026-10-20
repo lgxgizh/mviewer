@@ -1,4 +1,5 @@
 // CompareWorkspace rendering: paint modes, diff overlay, blink, histograms (M20 P0#2).
+#include "compareworkspace_display_pending.h"
 #include "compareworkspace_p.h"
 
 #include "core/image/SourceImage.h"
@@ -674,7 +675,10 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
     // only the last one submits the sharp resample. Do NOT mark
     // interaction-busy here: setImage/resetFit emits scaleChanged during
     // materialization and would defer hist/diff after rebuildCells.
-    m_displayLodRefreshPane = idx;
+    // Merge pane targets inside one debounce window: with sync zoom every view
+    // emits scaleChanged(own index), and last-writer-wins dropped the others.
+    m_displayLodRefreshPane =
+        mviewer::ui::mergeLodRefreshPane(m_displayLodRefreshPending, m_displayLodRefreshPane, idx);
     if (m_session)
         ++m_session->lodDebounceEpoch;
     const uint64_t epoch = m_session ? m_session->lodDebounceEpoch : 0;

@@ -362,7 +362,12 @@ void RawImageView::paintEvent(QPaintEvent *)
 void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, int dh,
                                     const QSize &sourceSize, double presented)
 {
-    if (mviewer::pixelGridVisible(presented) && sourceSize.width() > 0 && sourceSize.height() > 0)
+    const QRect gridRect = renderSourceRect();
+    const bool gridMatches = mviewer::pixelGridMatchesRaster(
+        displayImage().width(), displayImage().height(), gridRect.width(), gridRect.height(),
+        m_softLoading && m_transientImage.isNull());
+    if (gridMatches && mviewer::pixelGridVisible(presented) && sourceSize.width() > 0 &&
+        sourceSize.height() > 0)
     {
         mviewer::ui::drawPixelGrid(
             p,
