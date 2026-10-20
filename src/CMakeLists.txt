@@ -2120,6 +2120,39 @@ target_compile_features(compare_warm_soft_geometry_tests PRIVATE cxx_std_20)
 target_include_directories(compare_warm_soft_geometry_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_warm_soft_geometry_tests COMMAND compare_warm_soft_geometry_tests)
 
+# Compare display batch carry-over + pixel-grid raster gate (stuck Loading race).
+add_executable(compare_display_pending_tests
+    test_compare_display_pending.cpp
+)
+target_link_libraries(compare_display_pending_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_display_pending_tests PRIVATE cxx_std_20)
+target_include_directories(compare_display_pending_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_display_pending_tests COMMAND compare_display_pending_tests)
+
+# Compare soft reload at high zoom with two 4096x3072 JPEGs: no stuck Loading.
+add_executable(compare_stuck_loading_stress_tests
+    test_compare_stuck_loading_stress.cpp
+)
+target_link_libraries(compare_stuck_loading_stress_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_stuck_loading_stress_tests PRIVATE cxx_std_20)
+target_include_directories(compare_stuck_loading_stress_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_stuck_loading_stress_tests COMMAND compare_stuck_loading_stress_tests)
+set_tests_properties(compare_stuck_loading_stress_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
 # Compare in-session decoded frame LRU pool (path+frameIndex).
 add_executable(compare_session_frame_pool_tests
     test_compare_session_frame_pool.cpp

@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Compare stuck "Loading" + low-res mosaic after a pair switch** (follow-up to #198):
+  - **Livelock**: a cheap provisional raster was skipped as "blurrier" than the
+    warm Browse/viewer stand-in (whose soft geometry reads as 1:1 density), so
+    `softLoading` stayed set and the 0 ms "upgrade" asked for the cheap LOD
+    again — forever. The upgrade (and the new stall watchdog) now always
+    requests the sharp plan (`displayRequestWantsCheap`). Reproduced 6/6 with
+    two 4096x3072 JPEGs at ~880% before the fix, 0/12 after.
+  - **Lost requests**: `scheduleDisplayMaterialization` carries every pane
+    that is still blank/`softLoading` and every pane the cancelled in-flight
+    batch had not delivered into the replacement batch, and no longer cancels
+    the in-flight batch when it has nothing to request. Previously a
+    single-pane fast preview or per-pane `scaleChanged` LOD refresh could
+    cancel the all-pane batch and strand the other pane (often B).
+  - The debounced LOD refresh merges different pane targets into "all panes"
+    instead of last-writer-wins; `queueDisplayLod` always treats a
+    `softLoading` pane as stale; failed panes clear the Loading badge; a
+    bounded watchdog re-requests panes still `softLoading` after a batch lands.
+  - Pixel grid (>= 800%) is no longer drawn over a soft or lower-density
+    stand-in raster (`pixelGridMatchesRaster`), which looked like grid seams
+    on top of the mosaic.
+
 ## [1.0.140] - 2026-10-20
 
 ### Release

@@ -16,6 +16,21 @@ inline bool pixelGridVisible(double scale)
     return std::isfinite(scale) && scale >= kPixelGridMinScale;
 }
 
+// Grid lines only describe real source pixels when the raster on screen has
+// at least one raster pixel per covered source pixel. Over a soft/cheap
+// stand-in (Browse thumb, 640px provisional) the lattice would sit on top of
+// upscaled blocks and read as a mosaic with grid seams, so callers skip it.
+inline bool pixelGridMatchesRaster(int rasterWidth, int rasterHeight, int sourceRectWidth,
+                                   int sourceRectHeight, bool softLoading)
+{
+    if (softLoading)
+        return false;
+    if (rasterWidth <= 0 || rasterHeight <= 0 || sourceRectWidth <= 0 || sourceRectHeight <= 0)
+        return false;
+    // One pixel of rounding slack on either axis.
+    return rasterWidth + 1 >= sourceRectWidth && rasterHeight + 1 >= sourceRectHeight;
+}
+
 struct PixelGridLine
 {
     double x1 = 0;

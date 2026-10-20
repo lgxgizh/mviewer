@@ -296,8 +296,14 @@ void CompareWorkspace::drawCanvasPixelGrid(QPainter &p)
     {
         if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
             return;
-        const QSize sourceSize = m_cellViews[pane]->sourceSize();
+        const RawImageView *view = m_cellViews[pane];
+        const QSize sourceSize = view->sourceSize();
         if (!sourceSize.isValid() || sourceSize.width() <= 0 || sourceSize.height() <= 0)
+            return;
+        // Same gate as RawImageView: no lattice over a soft / lower-density raster.
+        if (!mviewer::pixelGridMatchesRaster(view->image().width(), view->image().height(),
+                                             view->sourceRect().width(),
+                                             view->sourceRect().height(), view->softLoading()))
             return;
         const QRectF geom = canvasPaneGeometry(pane);
         const QRectF dest = cellFullDestRect(pane, geom);

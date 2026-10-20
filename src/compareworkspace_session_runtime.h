@@ -32,6 +32,11 @@ struct CompareSessionRuntime
     uint64_t lodDebounceEpoch = 0;
     // m_displayGen of the in-flight fast preview, or 0 when none is queued.
     uint64_t previewGeneration = 0;
+    // Panes requested by the in-flight display batch; carried into the
+    // replacement batch when latest-wins cancels it undelivered.
+    std::vector<int> displayPendingPanes;
+    // Bounded re-requests for panes still softLoading after a batch landed.
+    int displayStallRetries = 0;
     // True while queueFastPreview is inside scheduleDisplayMaterialization,
     // so setImage's scaleChanged cannot start another preview recursively.
     bool fastPreviewBusy = false;
