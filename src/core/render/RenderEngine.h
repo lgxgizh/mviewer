@@ -2,15 +2,10 @@
 
 #include "core/image/ImageBuffer.h"
 
-// This header deliberately does NOT include <QPainter>/<QRect>, but it is not
-// "Qt-free": executeCommand(QPainter &, ...) is part of the public API, so a
-// caller must already have Qt to use it, and the forward declarations below
-// only keep the include out. The declared rule (see docs/adr/011) is therefore:
-// core headers keep Qt INCLUDES out, with two named Qt adapter headers
-// (core/image/QtConvert.h, core/image/QtMetadataSemantics.h) as the only
-// exceptions, and the R5 architecture gate checks exactly that.
-class QPainter;
-class QRect;
+// Qt-free: this header neither includes nor names Qt types. Compositing a
+// RenderCommand onto a QPainter is a UI concern and lives in the UI render
+// adapter (src/rendercommandpainter.h, ADR-016). The types live in
+// mviewer::core; global aliases at the end keep existing callers compiling.
 
 #include <array>
 #include <cstdint>
@@ -18,6 +13,9 @@ class QRect;
 #include <span>
 #include <string>
 #include <vector>
+
+namespace mviewer::core
+{
 
 // ─── Foundation types ───────────────────────────────────────────────────────
 
@@ -207,20 +205,20 @@ class RenderEngine
                                        const RenderSize &target,
                                        RenderInterp mode = RenderInterp::Bilinear);
 
-    // RenderCommand pipeline: execute a single command onto a QPainter.
-    // `viewport` is the cell's local rectangle the painter draws into.
-    // SmoothPixmapTransform is enabled while drawing when cmd.interp != 0.
-    void executeCommand(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
-
   private:
     RenderEngine();
     std::unique_ptr<Renderer> m_backend;
-
-    // Command dispatch targets.
-    void executeDrawImage(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
-    void executeDrawOverlay(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
-    void executeDrawSelection(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
-    void executeDrawHistogram(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
-    void executeDrawHeatmap(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
-    void executeDrawPixelMarker(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
 };
+
+} // namespace mviewer::core
+
+// Compatibility aliases: the render types were global before they moved into
+// mviewer::core. New code should spell the namespace.
+using RenderCommandType = mviewer::core::RenderCommandType;
+using RenderInterp = mviewer::core::RenderInterp;
+using RenderSize = mviewer::core::RenderSize;
+using RenderRect = mviewer::core::RenderRect;
+using Renderer = mviewer::core::Renderer;
+using SoftwareRenderer = mviewer::core::SoftwareRenderer;
+using RenderCommand = mviewer::core::RenderCommand;
+using RenderEngine = mviewer::core::RenderEngine;
