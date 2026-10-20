@@ -102,6 +102,14 @@ The MSVC environment is imported programmatically by `Import-MSVCEnvironment`
 (`vswhere` → `vcvars64.bat` → parse `set` output). You do **not** need to open
 a "Developer Command Prompt" yourself.
 
+### Optional configure knobs
+
+| Knob | Default | Effect |
+|------|---------|--------|
+| `MVIEWER_LIBRAW_ARCHIVE` (cache or env var) | empty | Path to a pre-downloaded LibRaw `0.21.4` tag archive. Used only if its SHA256 matches the pinned hash; otherwise `third_party/LibRaw-0.21.4.tar.gz` (if present and matching), then the GitHub download. Lets offline / flaky-network configures succeed. |
+| `MVIEWER_MSVC_W4` | `OFF` | Compiles the product targets at MSVC `/W4` (`cmake/MViewerWarnings.cmake`). Off by default because the CI zero-warnings gate is calibrated at the default level. GCC/Clang always get `-Wall -Wextra` (no `-Werror`). |
+| `cmake/toolchain-msvc.cmake` | unused | Manual toolchain for configuring outside a vcvars shell. Reads `VCToolsInstallDir` / `WindowsSdkDir` / `WindowsSDKVersion` (or `MVIEWER_MSVC_TOOLS_DIR` / `MVIEWER_WINDOWS_SDK_DIR` / `MVIEWER_WINDOWS_SDK_VERSION`); the old `D:/msvc` + SDK `10.0.26100.0` paths are only a last-resort fallback. `build.ps1` and CI never use it. |
+
 ---
 
 ## 4. `build.ps1` internals (quick reference)

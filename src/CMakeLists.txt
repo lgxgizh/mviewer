@@ -160,7 +160,8 @@ target_compile_features(mviewer_core PUBLIC cxx_std_20)
 # so consumers link without per-symbol declspec markup.
 set_target_properties(mviewer_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
-target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
+    ${MVIEWER_GENERATED_INCLUDE_DIR})
 
 add_library(mviewer_ui STATIC
     mainwindow.cpp
@@ -326,6 +327,10 @@ target_include_directories(MViewer
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+# Product targets only (cmake/MViewerWarnings.cmake): -Wall -Wextra on GCC/Clang,
+# /W4 on MSVC when MVIEWER_MSVC_W4=ON.
+mviewer_target_warnings(mviewer_core mviewer_ui mviewer_application MViewer)
 
 # ── Auto-deploy Qt runtime next to the executable (windeployqt) ───────────────
 # Fixes the recurring "missing DLL" (0xc0000135) errors when launching
