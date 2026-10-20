@@ -73,11 +73,11 @@ class ScopedCancelProbe
         }
     }
 
-    static const ScopedCancelProbe *&current()
-    {
-        static thread_local const ScopedCancelProbe *top = nullptr;
-        return top;
-    }
+    // Out of line (CooperativeCancel.cpp): mviewer_core is a DLL on Windows,
+    // and an inline function-local thread_local would give every module its
+    // own chain, so a probe installed by the app/test would be invisible to
+    // the decoder inside mviewer_core.
+    static const ScopedCancelProbe *&current();
 
     std::function<bool()> m_probe;
     const ScopedCancelProbe *m_previous;
