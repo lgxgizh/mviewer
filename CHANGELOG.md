@@ -34,6 +34,22 @@
     `mviewer_application` / `MViewer`: `-Wall -Wextra` on GCC/Clang (no
     `-Werror`); MSVC `/W4` behind `MVIEWER_MSVC_W4` (default `OFF`, because
     the CI zero-warnings gate is calibrated at the default level).
+### Documentation
+
+- **Public roadmap synced to v1.0.141**: `docs/ROADMAP_PUBLIC.md` no longer
+  says "Beta / 1.0.30" or lists LibRaw as deferred. It states the current
+  `v1.0.141` Beta line, LibRaw 0.21.4 RAW demosaic (shipped in 1.0.77),
+  Compare local zoom / per-pane USM, English + Simplified Chinese UI and the
+  update-check preference, with a condensed release track sourced from
+  `CHANGELOG.md`. The remaining RAW gap (no external libjpeg/zlib/lcms in the
+  bundled LibRaw) is listed as deferred instead.
+
+### Quality
+
+- **Version gate covers the public roadmap**: `scripts/version_gate.ps1`
+  (CTest `version_consistency`) now also fails when `docs/ROADMAP_PUBLIC.md`
+  does not mention the current `project(VERSION)`, so a version bump must
+  update the public roadmap in the same PR.
 - **Complexity hotspots (behavior-preserving refactor)**: retired the last CC > 25
   tracked debt and gave near-cap files line headroom (complexity gate: 0 hard
   fails, `$knownFunctionDebt` no longer lists `decodeTiffWic`).
