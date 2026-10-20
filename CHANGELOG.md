@@ -2,9 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.141] - 2026-10-20
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.141** (compare stuck Loading / mosaic fix: #202).
+
 ### Fixed
 
-- **Compare stuck "Loading" + low-res mosaic after a pair switch** (follow-up to #198):
+- **Compare stuck "Loading" + low-res mosaic after a pair switch** (#202, follow-up to #198):
   - **Livelock**: a cheap provisional raster was skipped as "blurrier" than the
     warm Browse/viewer stand-in (whose soft geometry reads as 1:1 density), so
     `softLoading` stayed set and the 0 ms "upgrade" asked for the cheap LOD
