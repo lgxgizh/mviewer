@@ -131,7 +131,7 @@ Checklist items that can be automated are fixed as regression tests and run with
 | Browse model | `product_browse_tests` | Directory listing / navigation model |
 | Image-quality regression | `golden_image` | PSNR / SSIM / pixel-diff against `golden/` |
 | Performance budget | `bench_smoke` + `bench_enforce` | Decode / thumbnail / budget ±10% hard gate |
-| Manual specials | — (UX Review Agent) | Flicker feel, animation smoothness, zoom-center feel, long browse of 1000 images, memory trend |
+| Manual specials | — (UX Review Agent) | Flicker feel, animation smoothness, zoom-center feel, long browse of 1000 images, memory trend. Native Windows hardware rows are driven by `scripts/manual_acceptance.ps1` (see `docs/acceptance/MANUAL_ACCEPTANCE.md`). |
 
 **Rule**: When a new feature lands and touches any workflow above, extend the matching assertions in `src/test_workflow_ux.cpp` before implementing the feature (test first). An automated test pass is not a checklist pass; the manual specials still require the UX Review Agent’s sign-off.
 
@@ -195,6 +195,12 @@ Checklist items that can be automated are fixed as regression tests and run with
 | UX Review Agent | |
 | Result | □ Pass □ Blocked |
 | Blocking items | |
+
+Native Windows MANUAL/BLOCKED hardware rows (DPI, mixed-DPI, ICC, two-volume
+FileOps, native dialogs, long paths, long-session RSS, clean-machine install,
+UNC, HDR, ROI pointer feel) are recorded with
+`scripts/manual_acceptance.ps1`. See `docs/acceptance/MANUAL_ACCEPTANCE.md`.
+
 ## M45 qualification notes (2026-08-16)
 
 - Automated coverage includes CommandStack callback re-entry, unresolved and

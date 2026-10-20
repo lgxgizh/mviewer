@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Manual acceptance wizard**: `scripts/manual_acceptance.ps1` walks a tester
+  through native Windows MANUAL/BLOCKED qualification rows (real-desktop
+  workflow, DPI/mixed-DPI, ICC, two-volume FileOps, native dialogs, long
+  paths, long-session RSS, clean-machine install, UNC, HDR, ROI pointer
+  feel). Checklist: `docs/acceptance/manual_acceptance_checklist.json`.
+  Guide: `docs/acceptance/MANUAL_ACCEPTANCE.md`. Self-test:
+  `scripts/manual_acceptance_test.ps1`.
+
 ### Tests
 
 - **UI tests exit normally**: `mainwindow_commandstack_acceptance`,
