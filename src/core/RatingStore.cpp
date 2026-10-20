@@ -44,10 +44,12 @@ RatingStore::RatingStore()
     m_flagsWorker = std::thread([this]() { flagsWorkerLoop(); });
 }
 
-RatingStore::~RatingStore()
+void RatingStore::stopWorker()
 {
     {
         std::lock_guard<std::mutex> lk(m_flagsWorkerMutex);
+        if (m_flagsWorkerStop)
+            return;
         m_flagsWorkerStop = true;
     }
     m_flagsWorkerCv.notify_one();
@@ -55,10 +57,29 @@ RatingStore::~RatingStore()
         m_flagsWorker.join();
 }
 
+RatingStore::~RatingStore()
+{
+    stopWorker();
+}
+
+namespace
+{
+RatingStore *g_ratingStore = nullptr;
+}
+
 RatingStore &RatingStore::instance()
 {
+    // Function-local static: destroyed at process exit after workers have been
+    // joined by joinBackgroundWorker() / ~RatingStore. Policy: ADR 017.
     static RatingStore s;
+    g_ratingStore = &s;
     return s;
+}
+
+void RatingStore::joinBackgroundWorker()
+{
+    if (g_ratingStore)
+        g_ratingStore->stopWorker();
 }
 
 namespace

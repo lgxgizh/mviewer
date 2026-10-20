@@ -189,8 +189,20 @@ struct AnimationSession
     std::unique_ptr<QImageReader> reader;
 };
 
-std::mutex g_animationMutex;
-std::shared_ptr<AnimationSession> g_animationSession;
+std::mutex &animationMutex()
+{
+    // Process-lifetime: AnimationSession holds QImageReader, which must not be
+    // destroyed after QCoreApplication (ADR 017). releaseFile() drops the
+    // reader while the event loop is alive; the pointer storage is leaked.
+    static auto *mutex = new std::mutex();
+    return *mutex;
+}
+
+std::shared_ptr<AnimationSession> &animationSession()
+{
+    static auto *session = new std::shared_ptr<AnimationSession>();
+    return *session;
+}
 
 bool animationPathMatches(const AnimationSession &session, const std::string &path)
 {
@@ -230,17 +242,18 @@ bool animationNeedsRewind(const AnimationSession &session, int frameIndex)
 std::shared_ptr<AnimationSession> prepareAnimationSession(const std::string &path, int frameIndex)
 {
     const QFileInfo info(qpath(path));
-    std::lock_guard<std::mutex> lock(g_animationMutex);
-    const bool keep = g_animationSession && !g_animationSession->abandon.load() &&
-                      animationFileMatches(*g_animationSession, path, info) &&
-                      !animationNeedsRewind(*g_animationSession, frameIndex);
+    std::lock_guard<std::mutex> lock(animationMutex());
+    auto &session = animationSession();
+    const bool keep = session && !session->abandon.load() &&
+                      animationFileMatches(*session, path, info) &&
+                      !animationNeedsRewind(*session, frameIndex);
     if (!keep)
     {
-        if (g_animationSession)
-            g_animationSession->abandon.store(true);
-        g_animationSession = openAnimationSession(path, info);
+        if (session)
+            session->abandon.store(true);
+        session = openAnimationSession(path, info);
     }
-    return g_animationSession;
+    return session;
 }
 
 bool copyCachedAnimationFrame(const AnimationSession &session, int frameIndex, int maxEdge,
@@ -617,12 +630,13 @@ void FrameSequenceReader::releaseFile(const std::string &path)
 {
     std::shared_ptr<AnimationSession> current;
     {
-        std::lock_guard<std::mutex> lock(g_animationMutex);
-        if (!g_animationSession)
+        std::lock_guard<std::mutex> lock(animationMutex());
+        auto &session = animationSession();
+        if (!session)
             return;
-        if (!path.empty() && !animationPathMatches(*g_animationSession, path))
+        if (!path.empty() && !animationPathMatches(*session, path))
             return;
-        current = std::move(g_animationSession);
+        current = std::move(session);
     }
     if (current)
         current->abandon.store(true);

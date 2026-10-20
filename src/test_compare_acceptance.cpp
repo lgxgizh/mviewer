@@ -15,6 +15,7 @@
 #include "compareworkspace_preset_sanitize.h"
 #include "compareworkspace_shortcuts.h"
 #include "core/compare/CompareEngine.h"
+#include "core/image/ImageBuffer.h"
 #include "core/perf/MemoryTracker.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "selectionmodel.h"
@@ -199,8 +200,8 @@ double highFrequencyNeighborhoodMean(int cx, int cy, int kernel)
         for (int dx = -half; dx <= half; ++dx)
         {
             const QColor pixel = highFrequencyPixel(cx + dx, cy + dy);
-            sum += static_cast<int>(0.2126 * pixel.red() + 0.7152 * pixel.green() +
-                                    0.0722 * pixel.blue() + 0.5);
+            // Canonical Rec.601 8-bit luma (ADR 027), as the Inspector uses.
+            sum += lumaRec601_8(pixel.red(), pixel.green(), pixel.blue());
             ++count;
         }
     }

@@ -301,6 +301,7 @@ target_include_directories(mviewer_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(mviewer_application STATIC
     application/ExternalOpen.cpp
     application/OpenDirectoryUseCase.cpp
+    application/Shutdown.cpp
     application/Startup.cpp
 )
 
@@ -2570,6 +2571,7 @@ target_link_libraries(m57_multiframe_decoder_tests
         Qt6::Gui
         Qt6::Core
         mviewer_core
+        mviewer_application
 )
 target_compile_features(m57_multiframe_decoder_tests PRIVATE cxx_std_20)
 target_include_directories(m57_multiframe_decoder_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -2610,6 +2612,13 @@ add_test(NAME release_contract_tests
         ${CMAKE_SOURCE_DIR}/scripts/release_contract_test.ps1
         ${CMAKE_SOURCE_DIR})
 set_tests_properties(release_contract_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+
+# Manual-acceptance wizard: checklist schema + DryRun/NonInteractive (no GUI).
+add_test(NAME manual_acceptance_tests
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/manual_acceptance_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(manual_acceptance_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
 # ─── M47 Phase 0: large-image data-path BASELINE recorder ───────────────────
 # Records the pre-Phase-1 behavior of the current data path (decode entry

@@ -1,5 +1,6 @@
 #include "thumbnailcache.h"
 
+#include "application/Shutdown.h"
 #include "core/FileIdentity.h"
 #include "runtime_storage.h"
 
@@ -42,11 +43,21 @@ bool hasTransparentPixel(const QImage &img)
 
 ThumbnailCache &ThumbnailCache::instance()
 {
+    // Function-local static: workers are joined at process shutdown while
+    // QCoreApplication is alive (ADR 017). The object itself is destroyed at
+    // exit after those threads have stopped.
     static ThumbnailCache inst;
+    static const bool hooked = []
+    {
+        mviewer::application::registerProcessShutdownHook(
+            [] { ThumbnailCache::instance().shutdown(); });
+        return true;
+    }();
+    (void)hooked;
     return inst;
 }
 
-ThumbnailCache::~ThumbnailCache()
+void ThumbnailCache::shutdown()
 {
     {
         std::lock_guard<std::mutex> lock(m_invalidationMutex);
@@ -59,6 +70,11 @@ ThumbnailCache::~ThumbnailCache()
     // bootstrap before its mutex/index storage disappears.
     if (m_bootstrapThread.joinable())
         m_bootstrapThread.join();
+}
+
+ThumbnailCache::~ThumbnailCache()
+{
+    shutdown();
 }
 
 QString ThumbnailCache::cacheDir() const

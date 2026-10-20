@@ -14,6 +14,11 @@
 #include <mutex>
 #include <utility>
 
+namespace
+{
+QThreadPool *g_resamplePool = nullptr;
+}
+
 namespace mviewer::core::resample_detail
 {
 namespace
@@ -102,6 +107,7 @@ QThreadPool *resamplePool()
         threads = std::max(2, threads / 2);
         created->setMaxThreadCount(threads);
         created->setExpiryTimeout(-1);
+        g_resamplePool = created;
         return created;
     }();
     return pool;
@@ -163,3 +169,14 @@ void parallelForRows(int rowCount, int minRows, const std::atomic<bool> *cancel,
 }
 
 } // namespace mviewer::core::resample_detail
+
+namespace mviewer::core
+{
+
+void waitForDisplayResampleIdle()
+{
+    if (g_resamplePool)
+        g_resamplePool->waitForDone();
+}
+
+} // namespace mviewer::core

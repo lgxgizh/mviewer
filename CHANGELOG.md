@@ -4,26 +4,6 @@
 
 ### Changed
 
-- **RenderEngine namespace + Qt-free core header** (ADR-016 addendum): the
-  render types (`RenderCommandType`, `RenderInterp`, `RenderSize`,
-  `RenderRect`, `Renderer`, `SoftwareRenderer`, `RenderCommand`,
-  `RenderEngine`) now live in `mviewer::core`, with global `using` aliases so
-  existing callers compile unchanged. The QPainter compositing overload
-  `RenderEngine::executeCommand(QPainter &, …)` and its `executeDrawXxx`
-  dispatchers moved to the UI render adapter `mviewer::ui::paintRenderCommand`
-  (`src/rendercommandpainter.{h,cpp}`); `core/render/RenderEngine.h` no longer
-  names `QPainter`/`QRect`. Drawing output is unchanged (scaling still uses the
-  active backend). `docs/api/RenderEngine.md` updated.
-- **DiskCache owns the large-frame policy** (`DiskCache::maxEntryBytes()`, default
-  `kDefaultMaxEntryBytes` = 16 MiB, configurable, 0 = off). Rows are uncompressed
-  pixel BLOBs; a frame above the threshold (e.g. a 4096x3072 RGB24 JPEG, 36 MiB)
-  stays in the memory tiers only. Previously only `ImageRepository::loadPixels`
-  had a hard-coded 16 MB guard, while `CacheManager::putDisk` and
-  `ImageRepository::cacheToDisk` still wrote full-res BLOBs of any size. A legacy
-  row above the threshold is purged on read without materializing its payload.
-  `CacheManager` API unchanged. Tests: `cache_tests` (threshold, configurable,
-  legacy purge, 4096x3072 / 2048x2048 fixtures), `repository_tests` (4096x3072
-  JPEG load is not persisted, 1024x768 still hits the disk tier).
 - **Compare display materialization is an explicit per-pane state machine**
   (`compareworkspace_display_state.{h,cpp}`, pure value, no Qt). Each pane moves
   `Empty | WarmStandIn → CheapPending → SharpPending → Ready | Failed`, re-entered
@@ -50,6 +30,68 @@
     livelock and lost-request scenarios with two 4096x3072 panes, pair-switch
     re-entry, idle backstop, seeded 500-round interleaving soak);
     `compare_display_pending_tests` keeps the debounce merge and pixel-grid math.
+
+## [1.0.142] - 2026-10-20
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.142** (review hardening: #204, #205, #207, #208, #209, #210, #211, #212, #214).
+
+### Added
+
+- **Manual acceptance wizard**: `scripts/manual_acceptance.ps1` walks a tester
+  through native Windows MANUAL/BLOCKED qualification rows (real-desktop
+  workflow, DPI/mixed-DPI, ICC, two-volume FileOps, native dialogs, long
+  paths, long-session RSS, clean-machine install, UNC, HDR, ROI pointer
+  feel). Checklist: `docs/acceptance/manual_acceptance_checklist.json`.
+  Guide: `docs/acceptance/MANUAL_ACCEPTANCE.md`. Self-test:
+  `scripts/manual_acceptance_test.ps1`.
+
+### Tests
+
+- **UI tests exit normally**: `mainwindow_commandstack_acceptance`,
+  `rotate_selection_tests`, `fullscreen_analysis_tests`, and
+  `m57_multiframe_decoder_tests` return from `main()` after
+  `ScopedProcessShutdown` instead of `TerminateProcess` / `std::_Exit`. The
+  workflow suite's offscreen `QFileDialog` heap window remains the single
+  ADR-017 exception.
+
+### Changed
+
+- **RenderEngine namespace + Qt-free core header** (ADR-016 addendum): the
+  render types (`RenderCommandType`, `RenderInterp`, `RenderSize`,
+  `RenderRect`, `Renderer`, `SoftwareRenderer`, `RenderCommand`,
+  `RenderEngine`) now live in `mviewer::core`, with global `using` aliases so
+  existing callers compile unchanged. The QPainter compositing overload
+  `RenderEngine::executeCommand(QPainter &, …)` and its `executeDrawXxx`
+  dispatchers moved to the UI render adapter `mviewer::ui::paintRenderCommand`
+  (`src/rendercommandpainter.{h,cpp}`); `core/render/RenderEngine.h` no longer
+  names `QPainter`/`QRect`. Drawing output is unchanged (scaling still uses the
+  active backend). `docs/api/RenderEngine.md` updated.
+- **DiskCache owns the large-frame policy** (`DiskCache::maxEntryBytes()`, default
+  `kDefaultMaxEntryBytes` = 16 MiB, configurable, 0 = off). Rows are uncompressed
+  pixel BLOBs; a frame above the threshold (e.g. a 4096x3072 RGB24 JPEG, 36 MiB)
+  stays in the memory tiers only. Previously only `ImageRepository::loadPixels`
+  had a hard-coded 16 MB guard, while `CacheManager::putDisk` and
+  `ImageRepository::cacheToDisk` still wrote full-res BLOBs of any size. A legacy
+  row above the threshold is purged on read without materializing its payload.
+  `CacheManager` API unchanged. Tests: `cache_tests` (threshold, configurable,
+  legacy purge, 4096x3072 / 2048x2048 fixtures), `repository_tests` (4096x3072
+  JPEG load is not persisted, 1024x768 still hits the disk tier).
+- **One canonical 8-bit luma** (ADR 027): `lumaRec601_8()` in `ImageBuffer.h`,
+  `(19595 R + 38470 G + 7471 B + 32768) >> 16` — rounded Rec.601, gray levels
+  map to themselves. It replaces the float-truncating `luminance()` (histogram,
+  image stats, alignment, overlays: 65 of 256 gray levels read one LSB low), the
+  truncating analyzer `lumaRec601()` (ROI stats, brightness / contrast /
+  exposure / blur), the USM luma-only extraction, the Grayscale8 crosshair
+  marker's `(77, 150, 29) >> 8`, and the Pixel Inspector's
+  Rec.709-weighted neighborhood luma (now agrees with ROI stats). Values that
+  used to truncate move by at most **+1 LSB**; gray pixels do not change. The
+  channel-mean helpers used on purpose by noise / sharpness / entropy /
+  dead-pixel / MTF are renamed `rgbMean` / `rgbMeanF`. Linear CIE Y (inspector
+  colour readouts, ColorChecker) is unchanged. No Rec.601/709 preference was
+  added. Tests: `histogram_tests` pins the luma contract; `compare_acceptance_tests`
+  M43 expects the Rec.601 7x7 neighborhood mean.
 
 ### Build
 
@@ -110,6 +152,13 @@
     `renameBrowsePaths`) moved to `imageviewer_browse.cpp`.
 
 ### Fixed
+
+- **Orderly process shutdown**: `mviewer::application::shutdownProcessServices()`
+  is the shared production/test exit path. It joins scheduler, resample, and
+  store workers, releases the animation `QImageReader`, and flushes the file
+  logger while `QApplication` is still alive. `ThumbnailPanel` and
+  `DirectoryMonitor` now wait for their `QThreadPool`s in the destructor body
+  so queued `invokeMethod(this, …)` cannot land on a destroyed `QObject`.
 
 - **LibRaw demosaic is cooperatively cancellable**: a stale RAW decode (request
   cancelled via `cancelAsync`, or its consumer `AsyncLifetimeToken` gone) no
