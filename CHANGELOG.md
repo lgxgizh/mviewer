@@ -14,6 +14,17 @@
   (`src/rendercommandpainter.{h,cpp}`); `core/render/RenderEngine.h` no longer
   names `QPainter`/`QRect`. Drawing output is unchanged (scaling still uses the
   active backend). `docs/api/RenderEngine.md` updated.
+- **DiskCache owns the large-frame policy** (`DiskCache::maxEntryBytes()`, default
+  `kDefaultMaxEntryBytes` = 16 MiB, configurable, 0 = off). Rows are uncompressed
+  pixel BLOBs; a frame above the threshold (e.g. a 4096x3072 RGB24 JPEG, 36 MiB)
+  stays in the memory tiers only. Previously only `ImageRepository::loadPixels`
+  had a hard-coded 16 MB guard, while `CacheManager::putDisk` and
+  `ImageRepository::cacheToDisk` still wrote full-res BLOBs of any size. A legacy
+  row above the threshold is purged on read without materializing its payload.
+  `CacheManager` API unchanged. Tests: `cache_tests` (threshold, configurable,
+  legacy purge, 4096x3072 / 2048x2048 fixtures), `repository_tests` (4096x3072
+  JPEG load is not persisted, 1024x768 still hits the disk tier).
+
 ### Build
 
 - **Portability / Modern CMake** (no change to `build.ps1`, presets or CI):

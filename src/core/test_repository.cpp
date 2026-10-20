@@ -365,6 +365,49 @@ static void testRaw16SingleDecode()
     DiskCache::instance().clear();
 }
 
+// The user's compare fixture: a 4096x3072 JPEG decodes to a 36 MiB RGB24
+// frame, above DiskCache::maxEntryBytes(). It must stay out of the SQLite
+// tier (memory tiers only) while a small JPEG is still persisted.
+static void testLargeFrameNotPersisted()
+{
+    printf("\n[Large full-res frame skips DiskCache]\n");
+    CacheManager &mgr = CacheManager::instance();
+    DiskCache &disk = DiskCache::instance();
+    mgr.clear();
+    disk.clear();
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "large-frame temp dir");
+    if (!dir.isValid())
+        return;
+    QImage big(4096, 3072, QImage::Format_RGB888);
+    big.fill(QColor(90, 120, 150));
+    const QString bigPath = dir.filePath("compare_4096x3072.jpg");
+    CHECK(big.save(bigPath, "JPEG", 90), "4096x3072 JPEG fixture saved");
+    QImage small(1024, 768, QImage::Format_RGB888);
+    small.fill(QColor(30, 60, 90));
+    const QString smallPath = dir.filePath("small_1024x768.jpg");
+    CHECK(small.save(smallPath, "JPEG", 90), "1024x768 JPEG fixture saved");
+
+    ImageRepository &repo = ImageRepository::instance();
+    const auto first = repo.load(bigPath.toStdString());
+    CHECK(first.success() && first.frame && first.frame->pixels().width == 4096,
+          "4096x3072 JPEG loads");
+    CHECK(disk.entryCount() == 0, "4096x3072 frame is not written to the disk tier");
+    mgr.clearMemory();
+    const auto again = repo.load(bigPath.toStdString());
+    CHECK(again.success() && !again.fromCache, "reload re-decodes instead of reading a BLOB");
+
+    const auto smallFirst = repo.load(smallPath.toStdString());
+    CHECK(smallFirst.success() && disk.entryCount() == 1, "1024x768 frame is persisted");
+    mgr.clearMemory();
+    const auto smallAgain = repo.load(smallPath.toStdString());
+    CHECK(smallAgain.success() && smallAgain.fromCache, "1024x768 reload hits the disk tier");
+
+    mgr.clear();
+    disk.clear();
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -377,6 +420,7 @@ int main(int argc, char **argv)
     testImageFrameExtras();
     testRaw16ImageSoak();
     testRaw16SingleDecode();
+    testLargeFrameNotPersisted();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
