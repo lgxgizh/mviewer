@@ -9,6 +9,8 @@
 #   4. Any new "1.0.x" style literal appears in src/ (diagnostic list included).
 #   5. Packaging scripts no longer read version_info.txt.
 #   6. STATUS.md does not state the current version.
+#   7. docs/ROADMAP_PUBLIC.md (the user-facing roadmap) does not state the
+#      current version, so the public page cannot silently lag the release.
 #
 # Usage:
 #   powershell -NoProfile -ExecutionPolicy Bypass -File scripts/version_gate.ps1 `
@@ -72,6 +74,17 @@ foreach ($ps in @('package_release.ps1', 'package_portable.ps1')) {
 $status = Get-Content (Join-Path $SourceDir 'STATUS.md') -Raw
 if ($status -match [regex]::Escape($Version)) { Ok "STATUS.md mentions $Version" }
 else { Fail "STATUS.md does not mention current version $Version" }
+
+# 6) The public roadmap must state the current version too (it once lagged
+#    100+ patches behind STATUS.md). Bump it in the same version-bump PR.
+$roadmapPath = Join-Path $SourceDir (Join-Path 'docs' 'ROADMAP_PUBLIC.md')
+if (-not (Test-Path $roadmapPath)) { Fail "missing docs/ROADMAP_PUBLIC.md" }
+else {
+    $roadmap = Get-Content $roadmapPath -Raw
+    $versionRe = "(?<![0-9.])" + [regex]::Escape($Version) + "(?![0-9])"
+    if ($roadmap -match $versionRe) { Ok "ROADMAP_PUBLIC.md mentions $Version" }
+    else { Fail "docs/ROADMAP_PUBLIC.md does not mention current version $Version" }
+}
 
 if ($failed) {
     Write-Host "version_consistency: FAIL"
