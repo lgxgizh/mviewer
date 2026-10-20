@@ -221,6 +221,7 @@ add_library(mviewer_ui STATIC
     compare_session_state.cpp
     compare_roi_controller.cpp
     compare_diff_renderer.cpp
+    rendercommandpainter.cpp
     compare_display_manager.cpp
     compareworkspace_controls.cpp
     compareworkspace_toolbar.cpp
@@ -505,6 +506,9 @@ foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_p
     target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endforeach()
+# The QPainter compositing half of the RenderCommand pipeline is a UI adapter
+# (ADR-016); the core render test exercises it without linking all of mviewer_ui.
+target_sources(test_render_pipeline PRIVATE rendercommandpainter.cpp)
 
 # M41 cache thread-affinity regression inspects the process-wide Qt SQL
 # connection registry directly.
