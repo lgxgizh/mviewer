@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **RenderEngine namespace + Qt-free core header** (ADR-016 addendum): the
+  render types (`RenderCommandType`, `RenderInterp`, `RenderSize`,
+  `RenderRect`, `Renderer`, `SoftwareRenderer`, `RenderCommand`,
+  `RenderEngine`) now live in `mviewer::core`, with global `using` aliases so
+  existing callers compile unchanged. The QPainter compositing overload
+  `RenderEngine::executeCommand(QPainter &, …)` and its `executeDrawXxx`
+  dispatchers moved to the UI render adapter `mviewer::ui::paintRenderCommand`
+  (`src/rendercommandpainter.{h,cpp}`); `core/render/RenderEngine.h` no longer
+  names `QPainter`/`QRect`. Drawing output is unchanged (scaling still uses the
+  active backend). `docs/api/RenderEngine.md` updated.
 ### Build
 
 - **Portability / Modern CMake** (no change to `build.ps1`, presets or CI):

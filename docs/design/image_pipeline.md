@@ -80,8 +80,8 @@ all feature implementation and bug identification.
 | `ImageFrame`, viewport, transform | `QPixmap` ready for UI | `RenderEngine` | UI thread | <16ms |
 
 **Bug Symptoms:** Laggy zoom/pan, flicker on image switch.
-**Check:** `RenderEngine::executeCommand(QPainter&, const RenderCommand&, const QRect&)`
-and its `executeDrawXxx` dispatchers, the `ImageData` overloads
+**Check:** the UI render adapter `mviewer::ui::paintRenderCommand(QPainter&, const RenderCommand&, const QRect&)`
+(`src/rendercommandpainter.cpp`) and its `paintDrawXxx` dispatchers, the core `ImageData` overloads
 (`executeCommand(cmd, buffer)` / `executeCommands(cmds)`), QPainter state, widget
 update rect.
 

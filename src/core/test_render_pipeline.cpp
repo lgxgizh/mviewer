@@ -7,6 +7,7 @@
 #include "core/render/TileSeam.h"
 #include "core/render/Viewport.h"
 #include "core/render/ZoomPercent.h"
+#include "rendercommandpainter.h"
 
 #include <QImage>
 #include <QPainter>
@@ -378,8 +379,8 @@ static void testPixelMarker()
     canvas.fill(Qt::black);
     {
         QPainter painter(&canvas);
-        engine.executeCommand(painter, RenderCommand::drawPixelMarker(10, 12, 0x00FF00),
-                              QRect(0, 0, 32, 32));
+        mviewer::ui::paintRenderCommand(painter, RenderCommand::drawPixelMarker(10, 12, 0x00FF00),
+                                        QRect(0, 0, 32, 32));
     }
     const QRgb painted = canvas.pixel(10, 12);
     const QRgb paintedArm = canvas.pixel(10, 4);
