@@ -78,6 +78,7 @@ class LibrawCancelWatch
         catch (...)
         {
             // No watcher thread: stage-boundary cancel still applies.
+            m_done = true;
         }
     }
     ~LibrawCancelWatch()

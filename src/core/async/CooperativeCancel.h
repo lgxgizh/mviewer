@@ -53,20 +53,26 @@ class ScopedCancelProbe
     {
         for (const ScopedCancelProbe *p = chain; p; p = p->m_previous)
         {
-            try
-            {
-                if (p->m_probe && p->m_probe())
-                    return true;
-            }
-            catch (...)
-            {
-                // A throwing probe cannot decide; treat it as "keep going".
-            }
+            if (p->reportsStale())
+                return true;
         }
         return false;
     }
 
   private:
+    bool reportsStale() const
+    {
+        try
+        {
+            return m_probe && m_probe();
+        }
+        catch (...)
+        {
+            // A throwing probe cannot decide; treat it as "keep going".
+            return false;
+        }
+    }
+
     static const ScopedCancelProbe *&current()
     {
         static thread_local const ScopedCancelProbe *top = nullptr;
