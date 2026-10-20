@@ -2592,6 +2592,13 @@ add_test(NAME release_contract_tests
         ${CMAKE_SOURCE_DIR})
 set_tests_properties(release_contract_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
+# Manual-acceptance wizard: checklist schema + DryRun/NonInteractive (no GUI).
+add_test(NAME manual_acceptance_tests
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/manual_acceptance_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(manual_acceptance_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+
 # ─── M47 Phase 0: large-image data-path BASELINE recorder ───────────────────
 # Records the pre-Phase-1 behavior of the current data path (decode entry
 # points, latency, materialized bytes, RSS) for the large fixture corpus.

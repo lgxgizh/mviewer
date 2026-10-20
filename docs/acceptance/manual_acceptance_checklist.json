@@ -1,0 +1,680 @@
+{
+  "schema": "manual-acceptance/v1",
+  "description": "Native Windows MANUAL/BLOCKED qualification items derived from the cited review reports. Automated CTest PASS is not a substitute.",
+  "items": [
+    {
+      "id": "M46-10",
+      "group": "workflow",
+      "title": "Interactive full workflow on a real desktop with a real mouse/keyboard",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 10
+      },
+      "also": [
+        {
+          "report": "docs/review/M46_RELIABILITY_SOAK_2026-08-17.md",
+          "row": "E. Remaining risks"
+        },
+        {
+          "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+          "row": "Native Windows qualification boundary"
+        },
+        {
+          "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+          "row": 16
+        }
+      ],
+      "prerequisites": [
+        "interactive Windows target desktop",
+        "real mouse and keyboard"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Launch MViewer on a real Windows desktop (not an offscreen or headless session).",
+        "Exercise the product loop with the mouse and keyboard: Browse a folder, open Viewer, next/previous, zoom/pan, Compare a pair, Analyze, Export, FileOps.",
+        "M51 target-machine pass also repeats Browse -> Select -> Compare -> Zoom/ROI -> Export on this desktop."
+      ],
+      "expected": "The interactive full workflow completes with real input. Green CTest runs (m46_browse_tests, m46_repository_tests, workflow_ux_tests) are not a substitute for this row.",
+      "automationHints": [
+        "m46_browse_tests and m46_repository_tests cover race safety of viewer/compare destroy and A->B->A",
+        "workflow_ux_tests covers the offscreen Browse/Compare loop"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-11",
+      "group": "workflow",
+      "title": "Perceived smoothness / flicker / zoom feel during the loop",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 11
+      },
+      "also": [
+        {
+          "report": "docs/review/M46_RELIABILITY_SOAK_2026-08-17.md",
+          "row": "E. Remaining risks"
+        },
+        {
+          "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+          "row": "extended human GUI soak"
+        },
+        {
+          "report": "docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md",
+          "row": 18
+        }
+      ],
+      "prerequisites": [
+        "interactive Windows target desktop",
+        "UX Review Agent observing the live GUI"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Repeat the Browse -> Viewer -> Compare -> Analyze -> Export loop on the target desktop.",
+        "Watch layout changes, zoom, and mode switches for flicker, a white frame, or a jump.",
+        "Judge zoom feel (Fit / 100% / 200% / free zoom) and focus continuity / stale-state perception (M51 soak list)."
+      ],
+      "expected": "No flicker, white frame, or jump. Zoom geometry feels correct. UX Review Agent on the target desktop; offscreen tests do not cover perceived smoothness.",
+      "automationHints": [
+        "docs/beta_checklist.md pass criteria: no waiting, no flicker, no zoom error, no state desync"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-12",
+      "group": "display",
+      "title": "100% DPI run",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 12
+      },
+      "prerequisites": [
+        "interactive display session at 100% scaling"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Set the primary display scaling to 100% and sign in so the session uses that DPI.",
+        "Launch MViewer and run Browse, Viewer zoom/pan, and Compare on this display."
+      ],
+      "expected": "Layout, hit-testing, and zoom geometry stay correct at 100% DPI. Requires an interactive display session.",
+      "automationHints": [
+        "Wizard records the detected session scaling when obtainable"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-13",
+      "group": "display",
+      "title": "125% DPI run",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 13
+      },
+      "also": [
+        {
+          "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+          "row": "fractional scaling"
+        }
+      ],
+      "prerequisites": [
+        "interactive display session at 125% scaling"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Set the primary display scaling to 125% (fractional scaling) and sign in so the session uses that DPI.",
+        "Launch MViewer and run Browse, Viewer zoom/pan, and Compare on this display."
+      ],
+      "expected": "Layout, hit-testing, and zoom geometry stay correct at 125% DPI. Requires an interactive display session.",
+      "automationHints": [
+        "Wizard records the detected session scaling when obtainable"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-14",
+      "group": "display",
+      "title": "150% DPI run",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 14
+      },
+      "prerequisites": [
+        "interactive display session at 150% scaling"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Set the primary display scaling to 150% and sign in so the session uses that DPI.",
+        "Launch MViewer and run Browse, Viewer zoom/pan, and Compare on this display."
+      ],
+      "expected": "Layout, hit-testing, and zoom geometry stay correct at 150% DPI. Requires an interactive display session.",
+      "automationHints": [
+        "Wizard records the detected session scaling when obtainable"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-15",
+      "group": "display",
+      "title": "200% DPI run",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 15
+      },
+      "prerequisites": [
+        "interactive display session at 200% scaling"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Set the primary display scaling to 200% and sign in so the session uses that DPI.",
+        "Launch MViewer and run Browse, Viewer zoom/pan, and Compare on this display."
+      ],
+      "expected": "Layout, hit-testing, and zoom geometry stay correct at 200% DPI. Requires an interactive display session.",
+      "automationHints": [
+        "Wizard records the detected session scaling when obtainable"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-16",
+      "group": "display",
+      "title": "Mixed-DPI dual monitor (per-monitor DPI)",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 16
+      },
+      "also": [
+        {
+          "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+          "row": "real multi-monitor DPI changes"
+        },
+        {
+          "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+          "row": 16
+        },
+        {
+          "report": "docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md",
+          "row": 18
+        },
+        {
+          "report": "docs/review/M59_PHASE0_COLOR_METADATA_BASELINE_2026-09-01.md",
+          "row": "Existing boundaries carried forward"
+        }
+      ],
+      "prerequisites": [
+        "two physical displays with different DPI"
+      ],
+      "probes": ["windows", "interactiveSession", "twoMonitors"],
+      "steps": [
+        "Attach two physical monitors configured with different scaling (per-monitor DPI).",
+        "Launch MViewer, move the window between the two displays, and resize it on each.",
+        "Repeat Browse / Viewer zoom / Compare after the move. M59 also asks for mixed-DPI monitor moves."
+      ],
+      "expected": "Per-monitor DPI is honored. The offscreen platform cannot create mixed-DPI monitors; this row stays BLOCKED without two physical displays at different DPI.",
+      "automationHints": [
+        "Wizard auto-blocks when fewer than two monitors are detected"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-17",
+      "group": "display",
+      "title": "Physical ICC profile changes while running (profile switch / unplug)",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 17
+      },
+      "also": [
+        {
+          "report": "docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md",
+          "row": "9. How are profile changes made safe?"
+        },
+        {
+          "report": "docs/review/M46_RELIABILITY_SOAK_2026-08-17.md",
+          "row": "E. Remaining risks"
+        }
+      ],
+      "prerequisites": [
+        "a real monitor",
+        "installed physical ICC profiles"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Launch MViewer displaying a color-critical image on a real monitor with an installed ICC profile.",
+        "While it is running, switch the monitor ICC profile and/or unplug and replug the display.",
+        "Confirm Viewer/Compare cancel in-flight display work and refresh against the new target (M59 DisplayColorContext generation)."
+      ],
+      "expected": "Profile switch or unplug does not crash, black-frame, or mutate source bytes. Malformed/missing target falls back to sRGB. ICC parsing itself is covered by iccprofile_tests / m36_display_tests.",
+      "automationHints": [
+        "iccprofile_tests and m36_display_tests cover embedded-profile display copies",
+        "m59_color_managed_tests cover generation invalidation in automation"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-19",
+      "group": "fileops",
+      "title": "FileOps across two real physical volumes (copy/move with cross-volume fallback)",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 19
+      },
+      "also": [
+        {
+          "report": "docs/review/M46_RELIABILITY_SOAK_2026-08-17.md",
+          "row": "E. Remaining risks"
+        }
+      ],
+      "prerequisites": [
+        "two writable physical volumes"
+      ],
+      "probes": ["windows", "twoWritableVolumes"],
+      "steps": [
+        "Open a folder on volume A that contains images MViewer can browse.",
+        "Copy and move files to a folder on volume B (a second writable physical volume).",
+        "Confirm the cross-volume fallback path is used and the operation completes or is cancelled cleanly."
+      ],
+      "expected": "Copy/move across two real physical volumes succeeds via the cross-volume fallback. A single-volume host is BLOCKED. The code path itself is covered by test_commandstack 'cross-volume rename fallback' (fault-injected adapter).",
+      "automationHints": [
+        "test_commandstack covers the fault-injected cross-volume rename fallback"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-20",
+      "group": "fileops",
+      "title": "Native Windows open/save dialogs (file dialogs with shell UI)",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 20
+      },
+      "also": [
+        {
+          "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+          "row": "native dialog behavior"
+        }
+      ],
+      "prerequisites": [
+        "interactive Windows desktop with shell UI"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "From MViewer, invoke the native Open and Save dialogs (open folder / open files / export save).",
+        "Navigate the shell UI, including a path with spaces, and confirm/cancel each dialog."
+      ],
+      "expected": "Native Windows file dialogs appear and work. Interactive native dialogs cannot be driven offscreen; dialog-less paths are covered by mainwindow_commandstack_acceptance.",
+      "automationHints": [
+        "mainwindow_commandstack_acceptance covers non-interactive dialog-less paths"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-22",
+      "group": "fileops",
+      "title": "Long paths (> 260 chars, extended-length)",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 22
+      },
+      "also": [
+        {
+          "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+          "row": "long-path policy"
+        }
+      ],
+      "prerequisites": [
+        "a real volume with long-path support enabled"
+      ],
+      "probes": ["windows", "longPathsEnabled"],
+      "steps": [
+        "Confirm the OS long-path policy is enabled on this volume (LongPathsEnabled).",
+        "Create or copy an image under a path whose full length exceeds 260 characters.",
+        "Open that folder in MViewer and browse / open / export using the long path."
+      ],
+      "expected": "Paths longer than 260 characters work when the OS long-path policy is enabled. test_commandstack covers cross-volume/Unicode but not the OS long-path policy.",
+      "automationHints": [
+        "Wizard reports HKLM FileSystem LongPathsEnabled",
+        "test_commandstack covers Unicode paths, not OS long-path policy"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-23",
+      "group": "fileops",
+      "title": "Special filenames (leading dots, trailing spaces, reserved names)",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 23
+      },
+      "prerequisites": [
+        "a volume whose policy allows the special names under test"
+      ],
+      "probes": ["windows"],
+      "steps": [
+        "On a real volume, create test images whose names have a leading dot and, where the volume allows it, a trailing space.",
+        "Where the volume policy allows reserved names (CON, NUL, ...), create or attempt those names too.",
+        "Browse, open, rename, and undo in MViewer."
+      ],
+      "expected": "Leading-dot names work. Trailing spaces and reserved names (CON/NUL) are volume-policy dependent; record what the volume accepted and how MViewer behaved. Unicode/Chinese/emoji rename round-trip is already automated (test_commandstack).",
+      "automationHints": [
+        "test_commandstack covers Unicode dir + Chinese/emoji rename round-trip"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M46-26",
+      "group": "soak",
+      "title": "Long session RSS/handles on the target desktop",
+      "source": {
+        "report": "docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md",
+        "row": 26
+      },
+      "also": [
+        {
+          "report": "docs/review/M46_RELIABILITY_SOAK_2026-08-17.md",
+          "row": "E. Remaining risks"
+        },
+        {
+          "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+          "row": "extended human GUI soak"
+        },
+        {
+          "report": "docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md",
+          "row": 15
+        }
+      ],
+      "prerequisites": [
+        "interactive target desktop available for a multi-hour session"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Launch MViewer on the target desktop and use Browse / Viewer / Compare / Analyze / Export over a multi-hour interactive session.",
+        "Record RSS and handle counts at start, during use, and after returning to idle.",
+        "Watch for leaks, a stranded busy cursor, and stale UI state (M51: focus continuity, stale-state perception, resource behavior)."
+      ],
+      "expected": "The multi-hour interactive session remains usable; RSS/handles are observed on target hardware. The automated short soak (m46_workflow_soak) proves convergence mechanics only; m46_workflow_soak --extended is the longer automated form, not this human observation.",
+      "automationHints": [
+        "m46_workflow_soak CTest short form: pools -> 0, RSS <= max(128 MiB, 15%), handles <= +64",
+        "extended automated form: m46_workflow_soak --extended"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M51-install",
+      "group": "release",
+      "title": "Clean-machine install, upgrade, Explorer Open With, association launch, and uninstall",
+      "source": {
+        "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+        "row": "Native Windows qualification boundary"
+      },
+      "also": [
+        {
+          "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+          "row": 16
+        },
+        {
+          "report": "docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md",
+          "row": 18
+        },
+        {
+          "report": "docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md",
+          "row": 15
+        }
+      ],
+      "prerequisites": [
+        "a physical clean Windows machine",
+        "shipping portable ZIP and NSIS installer artifacts"
+      ],
+      "probes": ["windows", "interactiveSession", "releaseArtifacts"],
+      "steps": [
+        "Install both shipping artifacts (portable ZIP launch and NSIS installer) on a clean Windows machine.",
+        "Exercise each native association (.mvws, .mvproj, Explorer Open With / file launch) with paths containing spaces and Unicode.",
+        "Repeat Browse -> Select -> Compare -> Zoom/ROI -> Export from those launches.",
+        "Upgrade over the installed copy, then uninstall and confirm current associations are removed and the obsolete .mviewer registration is not left behind.",
+        "Record OS build, display scaling, GPU, driver, ICC profile, storage type, and exact artifact hashes."
+      ],
+      "expected": "Install, upgrade, association launch, and clean uninstall work on a physical clean Windows machine. Uninstall removes current associations without leaving the obsolete .mviewer registration. The package gate does not replace this row.",
+      "automationHints": [
+        "release_contract_tests and package_release.ps1 cover the unpacked payload, PE version, and SHA256SUMS",
+        "NSIS does not register the obsolete .mviewer extension"
+      ],
+      "launchViewer": false
+    },
+    {
+      "id": "M51-unc",
+      "group": "fileops",
+      "title": "UNC/network shares, removable volumes, and interruption during Sidecar/import/export",
+      "source": {
+        "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+        "row": "Unicode, long-path, and UNC evidence"
+      },
+      "also": [
+        {
+          "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+          "row": 16
+        }
+      ],
+      "prerequisites": [
+        "a UNC or network share, and/or a removable volume",
+        "ability to interrupt or reconnect the share during Sidecar/import/export"
+      ],
+      "probes": ["windows"],
+      "steps": [
+        "Open a folder on a UNC/network share and on a removable volume and browse images.",
+        "Run Sidecar / import / export against those paths.",
+        "Interrupt or reconnect the share or volume during those operations and record the outcome."
+      ],
+      "expected": "UNC, removable volumes, and interruption/reconnection during Sidecar/import/export are qualified on the target machine. No automated green result is claimed for these target-dependent rows.",
+      "automationHints": [
+        "Automated fixtures cover ASCII, spaces, Chinese, emoji, quoted paths, and Unicode workspace/project names"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M51-gpu",
+      "group": "display",
+      "title": "GPU/driver combination native display",
+      "source": {
+        "report": "docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md",
+        "row": "Native Windows qualification boundary"
+      },
+      "prerequisites": [
+        "the target machine GPU and driver under test"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Record the GPU name and driver version (the wizard captures these when CIM is available).",
+        "Launch MViewer on this GPU/driver combination and run Browse, Viewer, and Compare.",
+        "Note any driver-specific display or compositor defects."
+      ],
+      "expected": "Native display works on the recorded GPU/driver combination. The target-machine pass records GPU and driver alongside OS build and display scaling.",
+      "automationHints": [
+        "Wizard records Win32_VideoController Name and DriverVersion when available"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M57-playback",
+      "group": "multiframe",
+      "title": "Long-session GIF/WebP playback feel on a native GUI",
+      "source": {
+        "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+        "row": 16
+      },
+      "prerequisites": [
+        "interactive native GUI",
+        "GIF and/or WebP animation samples"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Open an animated GIF and an animated WebP in the Viewer on a real desktop.",
+        "Play, pause, restart, and step frames (, / .) over a long interactive session.",
+        "Watch playback feel, zoom/pan preservation across frames, and whether a corrupt frame pauses without a busy retry loop."
+      ],
+      "expected": "Physical native GUI playback feel is qualified. A slow decode is caught up/skipped; a corrupt requested frame pauses and reports failure without crossing the Viewer boundary. Deterministic plugin decode is covered by m57_multiframe_decoder_tests.",
+      "automationHints": [
+        "m57_multiframe_decoder_tests covers real qgif/qwebp/qtiff fixtures and bounded-stall catch-up"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M57-disposal",
+      "group": "multiframe",
+      "title": "Hostile GIF disposal / dirty-rectangle corpus",
+      "source": {
+        "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+        "row": "8. GIF disposal/transparency"
+      },
+      "prerequisites": [
+        "a hostile disposal/dirty-rectangle GIF corpus"
+      ],
+      "probes": ["windows"],
+      "steps": [
+        "Open GIF samples that use hostile disposal methods and dirty rectangles.",
+        "Play and step frames, including cases with transparency."
+      ],
+      "expected": "Composed frames remain usable (qgif's composed QImage is the display source). The deterministic real-plugin fixture verifies distinct composed colors; a hostile disposal/dirty-rectangle corpus remains manual follow-up.",
+      "automationHints": [
+        "m57_multiframe_decoder_tests verifies distinct composed colors on the real qgif plugin"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M57-tiff100mp",
+      "group": "multiframe",
+      "title": "100MP multi-page TIFF RSS / soak",
+      "source": {
+        "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+        "row": "9. 100MP multi-page TIFF"
+      },
+      "also": [
+        {
+          "report": "docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md",
+          "row": 16
+        }
+      ],
+      "prerequisites": [
+        "a 100MP-class multi-page TIFF on the target machine"
+      ],
+      "probes": ["windows"],
+      "steps": [
+        "Open a 100MP multi-page TIFF in the Viewer.",
+        "Navigate pages without requesting every page up front.",
+        "Record RSS while stepping pages and after returning to idle."
+      ],
+      "expected": "Page selection is on-demand and does not enumerate or decode all pages. Physical 100MP multi-page RSS was not available in the M57 automated run; the M53 source-backed large-image contract remains the governing path.",
+      "automationHints": [
+        "M53 source-backed large-image contract governs 100MP-class TIFF display"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M59-lut",
+      "group": "color",
+      "title": "Physical monitor-profile / LUT verification",
+      "source": {
+        "report": "docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md",
+        "row": 18
+      },
+      "also": [
+        {
+          "report": "docs/review/M59_PHASE0_COLOR_METADATA_BASELINE_2026-09-01.md",
+          "row": "Existing boundaries carried forward"
+        },
+        {
+          "report": "docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md",
+          "row": "8. How is the monitor profile obtained?"
+        }
+      ],
+      "prerequisites": [
+        "a representative physical monitor with a known ICC/LUT"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "On a real Windows host, display an embedded-profile image (for example AdobeRGB) and an untagged sRGB image.",
+        "Confirm the UI asks Windows GetICMProfileW for the current window device context and uses that monitor profile as the presentation target.",
+        "Capture compositor screenshots as evidence (M59 remaining manual list).",
+        "Confirm Pixel Inspector still samples source pixels, not the monitor-converted display raster."
+      ],
+      "expected": "Presentation targets the currently attached physical monitor profile. Errors, unavailable profiles, and non-Windows builds fall back to sRGB. No automated claim is made for a particular panel LUT. Source bytes are not mutated; Inspector samples the source ImageFrame.",
+      "automationHints": [
+        "m59_color_managed_tests cover CPU/GPU parity, malformed ICC fallback, and source-buffer snapshots",
+        "M48 already proves embedded ICC is applied on display copies only"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M59-hdr",
+      "group": "color",
+      "title": "HDR policy and tone mapping on a physical HDR monitor",
+      "source": {
+        "report": "docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md",
+        "row": 18
+      },
+      "also": [
+        {
+          "report": "docs/review/M59_PHASE0_COLOR_METADATA_BASELINE_2026-09-01.md",
+          "row": "Existing boundaries carried forward"
+        }
+      ],
+      "prerequisites": [
+        "a physical HDR-capable monitor"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Attach an HDR-capable monitor and enable HDR in Windows.",
+        "Launch MViewer and display ordinary SDR sources (untagged and ICC-tagged).",
+        "Record whether presentation stays an 8-bit SDR buffer and whether the HDR policy is explicit (no silent HDR tone-mapping claim)."
+      ],
+      "expected": "HDR policy and tone mapping remain a manual qualification. The display ImageData remains an explicit 8-bit SDR presentation buffer; analysis/source data is not down-converted in place. No automated HDR claim is made.",
+      "automationHints": [
+        "M59 Q14: display ImageData remains an explicit 8-bit SDR presentation buffer"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M61-pointer",
+      "group": "roi",
+      "title": "Linked ROI pointer feel on a physical desktop",
+      "source": {
+        "report": "docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md",
+        "row": 15
+      },
+      "prerequisites": [
+        "interactive native GUI with a real pointing device"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Open Compare on a real desktop and create a linked ROI with a right-button drag in Grid, Split, Overlay, Swipe, and Checkerboard.",
+        "Move the ROI by dragging inside it and resize from edges and corners.",
+        "Judge pointer feel: overlay tracking, handle hitting, and whether statistics wait until release."
+      ],
+      "expected": "Pointer feel is qualified on a native GUI. Automated tests send real right-button events but do not judge perceived tracking. Programmatic applyROI() is not the sole evidence (M61 Q14).",
+      "automationHints": [
+        "m61_roi_workflow_tests and workflow_ux_tests send real right-button events to production widgets"
+      ],
+      "launchViewer": true
+    },
+    {
+      "id": "M61-contrast",
+      "group": "roi",
+      "title": "ROI overlay contrast on a physical calibrated or HDR monitor",
+      "source": {
+        "report": "docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md",
+        "row": 15
+      },
+      "prerequisites": [
+        "a physical calibrated and/or HDR monitor"
+      ],
+      "probes": ["windows", "interactiveSession"],
+      "steps": [
+        "Display Compare with a linked ROI on a calibrated and/or HDR monitor.",
+        "Confirm the high-contrast overlay, label, and handles remain readable against the image.",
+        "When Analysis is hidden, confirm the compact HUD stays readable and does not cover the ROI center."
+      ],
+      "expected": "ROI overlay contrast is readable on a physical calibrated/HDR monitor. This is a manual boundary; automated widget tests do not judge physical contrast.",
+      "automationHints": [
+        "m61_roi_workflow_tests covers hidden-panel HUD geometry in automation"
+      ],
+      "launchViewer": true
+    }
+  ]
+}

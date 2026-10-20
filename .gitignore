@@ -57,3 +57,6 @@ __pycache__/
 
 # Optional pre-downloaded LibRaw tag archive (cmake/LibRaw.cmake); never committed.
 third_party/*.tar.gz
+
+# Local manual-acceptance wizard output
+artifacts/
