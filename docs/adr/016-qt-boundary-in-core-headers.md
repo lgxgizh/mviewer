@@ -56,3 +56,22 @@ State the boundary in the form that is both true and mechanically enforced:
 - `RenderEngine`'s public Qt signature stays as it is: removing it would change
   the rendering API for every caller, which is a larger, separate refactor than
   the honesty fix this ADR is about.
+
+## Addendum (2026-10): RenderEngine.h is now Qt-free
+
+The separate refactor deferred above has landed. The QPainter compositing
+overload `RenderEngine::executeCommand(QPainter &, const RenderCommand &,
+const QRect &)` and its private `executeDrawXxx` dispatchers moved out of core
+into the UI render adapter `mviewer::ui::paintRenderCommand`
+(`src/rendercommandpainter.{h,cpp}`, linked into `mviewer_ui`). Its only caller
+was `core/test_render_pipeline.cpp`, which now calls the adapter. Scaling in
+the adapter still goes through `RenderEngine::instance().scale`, i.e. the
+active backend, so output is unchanged.
+
+`core/render/RenderEngine.h` therefore no longer names `QPainter`/`QRect` at
+all. Its types (`RenderCommandType`, `RenderInterp`, `RenderSize`,
+`RenderRect`, `Renderer`, `SoftwareRenderer`, `RenderCommand`,
+`RenderEngine`) live in `mviewer::core`; global `using` aliases keep existing
+callers compiling unchanged. The `ImageData` API (`scale`, `scaleRegion`,
+`overlayDifference`, `heatMap`, `executeCommand(cmd[, buffer])`,
+`executeCommands`, the `*Static` helpers) is unchanged.
