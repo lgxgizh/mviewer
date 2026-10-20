@@ -21,14 +21,25 @@
     cheap one is no longer dropped by the provisional-over-full guard, and panes
     outside the batch no longer mark it provisional;
   - a delivery for a pane re-entered after submit (pair switch) is ignored;
+  - only a sharp, non-preview raster settles a pane: a cheap LOD or a wheel
+    preview (accepted or skipped) leaves it `SharpPending` under its Loading
+    badge, previews never count against the idle budget, the follow-up after a
+    preview also asks once the wheel debounce has fired, and a debounced
+    single-pane refresh carries every pane still owed a request. A wheel during
+    a soft pair reload no longer repaints a badged stand-in from the previous
+    pair's frames. This fixes an intermittent stuck pane found by
+    `compare_stuck_loading_stress_tests` (pane 0 left on the cheap 2048x1536
+    full frame at ~5x zoom with no badge and no sharp crop requested);
   - the watchdog is gone; the only backstop is a per-pane idle-landing budget
     (`kMaxIdleLandings` = 3) that fails the pane, clears its badge and logs a
     warning — it should never fire.
-  - User-visible behaviour is unchanged: progressive soft→sharp, no stuck
-    Loading, no mosaic, pixel grid only over a matching raster.
+  - User-visible behaviour: progressive soft→sharp, no stuck Loading, no
+    mosaic, pixel grid only over a matching raster; the Loading badge now stays
+    on over the cheap first paint until the sharp raster lands.
   - Tests: `compare_display_state_tests` (table-driven transitions, #202
     livelock and lost-request scenarios with two 4096x3072 panes, pair-switch
-    re-entry, idle backstop, seeded 500-round interleaving soak);
+    re-entry, idle backstop, wheel previews during a soft reload, seeded
+    500-round interleaving soak);
     `compare_display_pending_tests` keeps the debounce merge and pixel-grid math.
 
 ## [1.0.142] - 2026-10-20

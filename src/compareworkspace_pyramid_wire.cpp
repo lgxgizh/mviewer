@@ -364,7 +364,8 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
             const QString message = tr("Cannot display this source: %1").arg(cell.errorText);
             // A failed pane will not get a raster from this request; the
             // caption carries the error, so the Loading badge must not stick.
-            state.deliver(cell.index, r.generation, mviewer::ui::ComparePaneDelivery::Failed);
+            state.deliver(cell.index, r.generation, mviewer::ui::ComparePaneDelivery::Failed,
+                          r.preview);
             view->setToolTip(message);
             if (view->image().isNull() && cell.index < m_cellLabels.size())
                 setComparePaneCaptionStatus(m_cellLabels[cell.index], message);
@@ -380,10 +381,12 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         if (skipLateProvisional(cheapCell || r.preview, r.preview, cell.index, view->image(),
                                 view->sourceRect(), cell.image, cell.sourceRect, m_session.get()))
         {
-            state.deliver(cell.index, r.generation, mviewer::ui::ComparePaneDelivery::Skipped);
+            state.deliver(cell.index, r.generation, mviewer::ui::ComparePaneDelivery::Skipped,
+                          r.preview);
             continue;
         }
-        state.deliver(cell.index, r.generation, mviewer::ui::ComparePaneDelivery::Accepted);
+        state.deliver(cell.index, r.generation, mviewer::ui::ComparePaneDelivery::Accepted,
+                      r.preview);
         tagPaneContent(cell.index);
         view->setImage(cell.image, cell.sourceSize, cell.sourceRect);
         if (!swapPreviewState(m_session.get(), cell.index, r.preview))
@@ -424,10 +427,11 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
 void CompareWorkspace::followUpDisplayBatch(const DisplayBatchResult &r)
 {
     auto &state = m_session->displayState;
-    // Requested panes without a delivered cell count an idle landing. The
-    // state machine fails a pane after kMaxIdleLandings landings without
-    // progress; that backstop should never fire, so it is logged.
-    for (const int pane : state.land(r.generation))
+    // Requested panes without a delivered cell count an idle landing (not
+    // for a preview). The state machine fails a pane after kMaxIdleLandings
+    // landings without progress; that backstop should never fire, so it is
+    // logged.
+    for (const int pane : state.land(r.generation, r.preview))
     {
         qWarning("CompareWorkspace: pane %d made no display progress in %d batches; "
                  "clearing its Loading badge",
@@ -437,9 +441,9 @@ void CompareWorkspace::followUpDisplayBatch(const DisplayBatchResult &r)
 
     // Progressive pyramid: after a cheap first paint (or a cheap pass skipped
     // as blurrier than the stand-in) the sharp viewport LOD follows at once.
-    // After a wheel preview only badged panes follow; the sharp pass for the
-    // rest waits for the trailing debounce.
-    if (state.awaitingRequest(r.preview).empty())
+    // After a wheel preview only badged panes follow while the trailing
+    // debounce is still armed; once it has fired, nothing else would ask.
+    if (state.awaitingRequest(r.preview && m_displayLodRefreshPending).empty())
         return;
     const uint64_t gen = m_displayGen;
     QPointer<CompareWorkspace> guard(this);
@@ -517,7 +521,10 @@ void CompareWorkspace::queueDisplayLod(int requestedPane)
         for (int i = 0; i < m_cellViews.size(); ++i)
             addIfNeeded(i);
     }
-    if (!dirty.empty())
+    // A pending pane outside `requestedPane` (owed its sharp pass after a
+    // preview) rides along: the plan carries every pending pane.
+    if (!dirty.empty() ||
+        (m_session && !m_loadInFlight && !m_session->displayState.awaitingRequest().empty()))
         scheduleDisplayMaterialization(dirty);
 }
 

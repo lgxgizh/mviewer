@@ -15,13 +15,17 @@ namespace mviewer::ui
 // (beginPane / noteStandIn) or a view change (dirty pane in plan()):
 //
 //   Empty | WarmStandIn  -> CheapPending -(accepted | skipped)-> SharpPending
-//   SharpPending         -> Ready | Failed
+//   SharpPending         -(sharp, non-preview accepted)-> Ready | Failed
+//   SharpPending         -(preview accepted | skipped)-> SharpPending
 //   Ready | Failed       -(dirty: zoom, pan, adjust, swap)-> SharpPending
 //   any                  -(pair switch)-> Empty | WarmStandIn
 //
 // Invariants (each covered by test_compare_display_state.cpp):
 // - A pane that is not Ready / Failed rides along in every new batch, so
 //   latest-wins cancellation can never strand it (the #202 lost request).
+// - The Loading badge set by a pair switch / warm seed stays until a sharp,
+//   non-preview raster lands (or the pane fails): a cheap or preview raster
+//   is never mistaken for the target LOD.
 // - Cheap is requested at most once per pane epoch. After the cheap pass was
 //   delivered *or* skipped as blurrier than the stand-in, the next request is
 //   sharp (the #202 cheap -> skip -> cheap livelock cannot be expressed).
@@ -113,7 +117,7 @@ class CompareDisplayStateMachine
 
     // Batch for `dirty` plus every pending pane. While a soft pair reload is
     // in flight (`loadInFlight`) a badged pane with a stand-in raster is left
-    // alone: the engine still holds the previous frames.
+    // alone, even when dirty: the engine still holds the previous frames.
     CompareDisplayBatchPlan plan(const std::vector<int> &dirty,
                                  const std::vector<uint8_t> &hasRaster, bool loadInFlight) const;
     // The plan was submitted as generation `gen` (latest-wins replaces any
@@ -129,14 +133,18 @@ class CompareDisplayStateMachine
     // it is the cheap one (per cell, not per batch).
     bool expects(int index, uint64_t gen) const;
     bool requestedCheap(int index, uint64_t gen) const;
-    // One delivered cell of batch `gen`. Ignored when stale.
-    void deliver(int index, uint64_t gen, ComparePaneDelivery delivery);
+    // One delivered cell of batch `gen`. Ignored when stale. Only a sharp,
+    // non-preview raster settles a pane (Ready, badge off); a cheap LOD or a
+    // wheel `preview` leaves it SharpPending under its badge.
+    void deliver(int index, uint64_t gen, ComparePaneDelivery delivery, bool preview = false);
     // Batch `gen` finished applying. Requested panes without a delivered cell
-    // count an idle landing. Returns the panes failed by the idle backstop.
-    std::vector<int> land(uint64_t gen);
+    // count an idle landing (not for a `preview` batch: a preview is never an
+    // obligation). Returns the panes failed by the idle backstop.
+    std::vector<int> land(uint64_t gen, bool preview = false);
     // Pending panes without a live request: the follow-up batch. With
     // `badgeOnly` only panes still under the Loading badge (after a preview
-    // batch the sharp pass waits for the wheel debounce instead).
+    // batch, while the wheel debounce is still armed, the sharp pass for the
+    // other panes waits for it).
     std::vector<int> awaitingRequest(bool badgeOnly = false) const;
 
   private:

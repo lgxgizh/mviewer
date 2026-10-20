@@ -110,13 +110,19 @@ CompareDisplayBatchPlan CompareDisplayStateMachine::plan(const std::vector<int> 
         return i >= 0 && i < static_cast<int>(hasRaster.size()) &&
                hasRaster[static_cast<size_t>(i)] != 0;
     };
-    const auto add = [this, &out, &raster, count](int i)
+    const auto add = [this, &out, &raster, count, loadInFlight](int i)
     {
         if (i < 0 || i >= count)
             return;
         if (std::find(out.panes.cbegin(), out.panes.cend(), i) != out.panes.cend())
             return;
         const ComparePaneDisplayState &state = m_panes[static_cast<size_t>(i)];
+        // A soft pair reload in flight still has the previous frames in the
+        // engine; repainting them would replace the new pair's stand-in, and
+        // a wheel during the reload (dirty) must not either. finishLoad
+        // schedules every pane once the frames land.
+        if (loadInFlight && state.badge && raster(i))
+            return;
         const bool cheapPhase = state.phase == ComparePanePhase::Empty ||
                                 state.phase == ComparePanePhase::WarmStandIn ||
                                 state.phase == ComparePanePhase::CheapPending;
@@ -128,14 +134,8 @@ CompareDisplayBatchPlan CompareDisplayStateMachine::plan(const std::vector<int> 
         const ComparePaneDisplayState &state = m_panes[static_cast<size_t>(i)];
         const bool pending = isComparePanePending(state.phase);
         const bool blank = !raster(i) && state.phase != ComparePanePhase::Failed;
-        if (!pending && !blank)
-            continue;
-        // A soft pair reload in flight still has the previous frames in the
-        // engine; repainting them would replace the new pair's stand-in.
-        // finishLoad schedules every pane once the frames land.
-        if (loadInFlight && state.badge && raster(i))
-            continue;
-        add(i);
+        if (pending || blank)
+            add(i);
     }
     for (int i : dirty)
         add(i);
@@ -169,7 +169,8 @@ bool CompareDisplayStateMachine::requestedCheap(int index, uint64_t gen) const
     return expects(index, gen) && m_panes[static_cast<size_t>(index)].requestedCheap;
 }
 
-void CompareDisplayStateMachine::deliver(int index, uint64_t gen, ComparePaneDelivery delivery)
+void CompareDisplayStateMachine::deliver(int index, uint64_t gen, ComparePaneDelivery delivery,
+                                         bool preview)
 {
     if (!expects(index, gen))
         return;
@@ -185,13 +186,30 @@ void CompareDisplayStateMachine::deliver(int index, uint64_t gen, ComparePaneDel
         state.idleLandings = 0;
         return;
     case ComparePaneDelivery::Accepted:
-        state.badge = false;
         state.idleLandings = 0;
         if (wasCheap)
             state.cheapTried = true;
-        state.phase = wasCheap ? ComparePanePhase::SharpPending : ComparePanePhase::Ready;
+        if (wasCheap || preview)
+        {
+            // A cheap LOD or a wheel preview is not the target raster: the
+            // pane keeps its Loading badge and stays owed the sharp pass, so
+            // the next batch carries it whatever the debounce timing.
+            state.phase = ComparePanePhase::SharpPending;
+            return;
+        }
+        state.badge = false;
+        state.phase = ComparePanePhase::Ready;
         return;
     case ComparePaneDelivery::Skipped:
+        if (preview)
+        {
+            // A preview discarded as blurrier changed nothing on screen. It
+            // is not an obligation, so it neither settles the pane nor counts
+            // against the idle backstop; a pending pane stays pending.
+            state.cheapTried = state.cheapTried || wasCheap;
+            state.phase = ComparePanePhase::SharpPending;
+            return;
+        }
         if (wasCheap || state.badge)
         {
             // The cheap raster lost to the stand-in: ask for sharp next. This
@@ -202,7 +220,7 @@ void CompareDisplayStateMachine::deliver(int index, uint64_t gen, ComparePaneDel
         }
         else
         {
-            // A late preview lost to a sharper raster already on screen.
+            // A late sharp raster lost to a sharper one already on screen.
             state.phase = ComparePanePhase::Ready;
         }
         return;
@@ -220,7 +238,7 @@ void CompareDisplayStateMachine::countIdle(ComparePaneDisplayState &state, int i
     exhausted.push_back(index);
 }
 
-std::vector<int> CompareDisplayStateMachine::land(uint64_t gen)
+std::vector<int> CompareDisplayStateMachine::land(uint64_t gen, bool preview)
 {
     std::vector<int> exhausted;
     if (gen == 0 || gen != m_liveGen)
@@ -233,9 +251,11 @@ std::vector<int> CompareDisplayStateMachine::land(uint64_t gen)
         {
             state.requestGen = 0;
             state.requestedCheap = false;
-            ++state.idleLandings;
+            if (!preview)
+                ++state.idleLandings;
         }
-        countIdle(state, i, exhausted);
+        if (!preview)
+            countIdle(state, i, exhausted);
     }
     return exhausted;
 }

@@ -127,10 +127,10 @@ void runTable()
     const Row rows[] = {
         {"fresh blank pane -> cheap -> sharp owed", Start::FreshEmpty, false, false, true, true,
          D::Accepted, P::SharpPending, false, true},
-        {"pair switch, no thumb -> cheap", Start::PairEmpty, false, false, true, true, D::Accepted,
-         P::SharpPending, false, true},
-        {"warm stand-in -> cheap accepted clears badge", Start::WarmStandIn, true, false, true,
-         true, D::Accepted, P::SharpPending, false, true},
+        {"pair switch, no thumb -> cheap keeps badge", Start::PairEmpty, false, false, true, true,
+         D::Accepted, P::SharpPending, true, true},
+        {"warm stand-in -> cheap accepted keeps badge", Start::WarmStandIn, true, false, true, true,
+         D::Accepted, P::SharpPending, true, true},
         {"warm stand-in -> cheap skipped keeps badge, owes sharp", Start::WarmStandIn, true, false,
          true, true, D::Skipped, P::SharpPending, true, true},
         {"warm stand-in -> cheap failed is terminal", Start::WarmStandIn, true, false, true, true,
@@ -141,7 +141,7 @@ void runTable()
          P::Failed, false, false},
         {"ready -> zoom (dirty) -> sharp accepted", Start::Ready, true, true, true, false,
          D::Accepted, P::Ready, false, false},
-        {"ready -> late preview skipped stays Ready", Start::Ready, true, true, true, false,
+        {"ready -> late sharp skipped stays Ready", Start::Ready, true, true, true, false,
          D::Skipped, P::Ready, false, false},
         {"failed -> zoom (dirty) retries sharp", Start::Failed, true, true, true, false,
          D::Accepted, P::Ready, false, false},
@@ -247,15 +247,18 @@ void lostRequest()
 void loadInFlight()
 {
     CompareDisplayStateMachine m;
-    m.reset(3);
+    m.reset(4);
     m.beginPane(0, true);  // warm thumb of the new pair
     m.beginPane(1, false); // blank
     m.beginPane(2, true);
-    const auto plan = m.plan({2}, {1, 0, 1}, true);
+    m.adopt({1, 0, 1, 1}, {1, 1, 1, 0}); // pane 3: settled, not part of the reload
+    const auto plan = m.plan({2, 3}, {1, 0, 1, 1}, true);
     expect("load in flight: badged stand-in left alone", !contains(plan.panes, 0));
     expect("load in flight: blank pane still requested", contains(plan.panes, 1));
-    expect("load in flight: explicit dirty pane still requested", contains(plan.panes, 2));
-    const auto after = m.plan({}, {1, 0, 1}, false);
+    expect("load in flight: dirty badged stand-in is not repainted from the previous frames",
+           !contains(plan.panes, 2));
+    expect("load in flight: dirty settled pane still requested", contains(plan.panes, 3));
+    const auto after = m.plan({}, {1, 0, 1, 1}, false);
     expect("load landed: every pending pane requested", after.panes.size() == 3);
 }
 
@@ -329,11 +332,15 @@ void previewAndSwap()
     m.beginPane(0, true);
     m.beginPane(1, true);
     m.commit(m.plan({}, {1, 1}, false), 60);
-    m.deliver(0, 60, ComparePaneDelivery::Accepted); // cheap shown, badge off
-    m.deliver(1, 60, ComparePaneDelivery::Skipped);  // badge stays
+    m.deliver(0, 60, ComparePaneDelivery::Accepted); // cheap shown, still badged
+    m.deliver(1, 60, ComparePaneDelivery::Accepted);
     m.land(60);
-    const auto badged = m.awaitingRequest(true);
-    expect("preview follow-up: only badged panes", badged.size() == 1 && badged[0] == 1);
+    m.commit(m.plan({}, {1, 1}, false), 61);
+    m.deliver(0, 61, ComparePaneDelivery::Accepted); // sharp: Ready, badge off
+    m.land(61);                                      // pane 1 got no cell
+    expect("preview follow-up: badgeOnly keeps only badged panes",
+           m.awaitingRequest(true).size() == 1 && m.awaitingRequest(true)[0] == 1 &&
+               m.awaitingRequest(false).size() == 1);
     m.swapPanes(0, 1);
     expect("swap: state follows the raster", m.badge(0) && !m.badge(1));
     CompareDisplayStateMachine a;
@@ -343,6 +350,77 @@ void previewAndSwap()
                a.pane(1).phase == ComparePanePhase::WarmStandIn &&
                a.pane(2).phase == ComparePanePhase::Empty);
     expect("out of range pane reads as settled", !a.isPending(7) && !a.badge(-1));
+}
+
+// The intermittent compare_stuck_loading_stress_tests failure (iteration 6,
+// variant 2): two 4096x3072 panes at ~5.4x zoom, a soft pair reload with a
+// warm thumb on pane 0 only, wheel events on both panes while the reload is
+// in flight. Pane 0 was left on the cheap 2048x1536 full frame with no
+// Loading badge: the cheap delivery cleared the badge, a wheel preview batch
+// carrying pane 0 then settled it Ready (skipped as blurrier, no badge), and
+// the pane-1 debounce never asked for pane 0 again.
+void previewDuringReload()
+{
+    CompareDisplayStateMachine m;
+    m.reset(2);
+    m.beginPane(0, true);  // warm 512x384 thumb
+    m.beginPane(1, false); // cold
+    // Wheel on pane 0 while the reload is in flight (fast preview, dirty).
+    auto plan = m.plan({0}, {1, 0}, true);
+    expect("reload: wheel preview does not repaint pane 0 from the previous pair",
+           !contains(plan.panes, 0) && contains(plan.panes, 1));
+    m.commit(plan, 70);
+    m.deliver(1, 70, ComparePaneDelivery::Accepted, true);
+    expect("reload: preview landing never fails or settles a pane",
+           m.land(70, true).empty() && m.pane(1).phase == ComparePanePhase::SharpPending);
+    // finishLoad: every pane. Pane 0 cheap (2048x1536 full frame).
+    plan = m.plan({0, 1}, {1, 1}, false);
+    expect("reload landed: pane 0 cheap, pane 1 sharp", plan.wantsCheap(0) && !plan.wantsCheap(1));
+    m.commit(plan, 71);
+    m.deliver(0, 71, ComparePaneDelivery::Accepted);
+    m.deliver(1, 71, ComparePaneDelivery::Accepted);
+    m.land(71);
+    expect("cheap 2048x1536 frame keeps Loading and owes the sharp crop",
+           m.badge(0) && m.pane(0).phase == ComparePanePhase::SharpPending &&
+               contains(m.awaitingRequest(true), 0));
+    // Before the follow-up runs, a wheel on pane 1 submits a preview batch
+    // (latest-wins); pending pane 0 rides along as a preview cell.
+    plan = m.plan({1}, {1, 1}, false);
+    expect("wheel preview on pane 1 carries pane 0 sharp",
+           contains(plan.panes, 0) && !plan.wantsCheap(0));
+    m.commit(plan, 72);
+    m.deliver(0, 72, ComparePaneDelivery::Skipped, true);
+    m.deliver(1, 72, ComparePaneDelivery::Accepted, true);
+    m.land(72, true);
+    expect("preview skipped on pane 0: still SharpPending under Loading",
+           m.badge(0) && m.pane(0).phase == ComparePanePhase::SharpPending);
+    expect("preview accepted on pane 1: not Ready, sharp still owed",
+           m.pane(1).phase == ComparePanePhase::SharpPending && !m.badge(1));
+    expect("preview follow-up asks for pane 0 even while the debounce is armed",
+           contains(m.awaitingRequest(true), 0));
+    // A wheel burst: many preview batches, each skipped for pane 0.
+    for (uint64_t g = 73; g < 73 + 2 * CompareDisplayStateMachine::kMaxIdleLandings; ++g)
+    {
+        m.commit(m.plan({1}, {1, 1}, false), g);
+        m.deliver(0, g, ComparePaneDelivery::Skipped, true);
+        m.deliver(1, g, ComparePaneDelivery::Accepted, true);
+        expect("wheel burst: previews never trip the idle backstop", m.land(g, true).empty());
+    }
+    expect("wheel burst: pane 0 still owed with its badge",
+           m.badge(0) && m.pane(0).phase == ComparePanePhase::SharpPending &&
+               m.awaitingRequest().size() == 2);
+    // Debounce / follow-up: a sharp, non-preview batch settles both.
+    plan = m.plan({}, {1, 1}, false);
+    expect("follow-up carries both panes sharp",
+           plan.panes.size() == 2 && !plan.wantsCheap(0) && !plan.wantsCheap(1));
+    m.commit(plan, 90);
+    m.deliver(0, 90, ComparePaneDelivery::Accepted);
+    m.deliver(1, 90, ComparePaneDelivery::Accepted);
+    m.land(90);
+    expect("sharp crop lands: both Ready, no Loading badge",
+           m.pane(0).phase == ComparePanePhase::Ready &&
+               m.pane(1).phase == ComparePanePhase::Ready && !m.badge(0) && !m.badge(1) &&
+               m.awaitingRequest().empty());
 }
 
 // Seeded interleaving soak: pair switches, per-pane zoom refreshes and
@@ -440,6 +518,7 @@ int main()
     reentry();
     idleBackstop();
     previewAndSwap();
+    previewDuringReload();
     soak();
     expect("debounce merges two panes into all panes",
            mviewer::ui::mergeLodRefreshPane(true, 0, 1) == -1);
