@@ -26,7 +26,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MViewerVersion.h.in
                ${CMAKE_BINARY_DIR}/generated/MViewerVersion.h @ONLY)
 file(WRITE ${CMAKE_BINARY_DIR}/version_info.txt
      "MVIEWER_VERSION=${PROJECT_VERSION}\nMVIEWER_GIT_DESCRIBE=${MVIEWER_GIT_DESCRIBE}\n")
-include_directories(${CMAKE_BINARY_DIR}/generated)
+# The generated header dir is a usage requirement of mviewer_core (PUBLIC in
+# src/CMakeLists.txt), not a directory-wide include path.
+set(MVIEWER_GENERATED_INCLUDE_DIR ${CMAKE_BINARY_DIR}/generated)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -40,6 +42,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
     add_compile_options(/wd4869 /wd4228)
 endif()
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MViewerWarnings.cmake)
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
