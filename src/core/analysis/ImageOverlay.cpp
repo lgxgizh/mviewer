@@ -138,6 +138,8 @@ void applyFalseColor(ImageData &img)
     if (img.isNull() || img.width <= 0 || img.height <= 0)
         return;
     const ImageBuffer v = img.view();
+    if (v.isNull())
+        return;
     switch (v.format)
     {
     case PixelFormat::RGB24:
@@ -601,6 +603,8 @@ void applyChannelOverlay(ImageData &img, OverlayMode mode)
     if (img.isNull() || img.width <= 0 || img.height <= 0 || img.format == PixelFormat::Grayscale8)
         return;
     const ImageBuffer v = img.view();
+    if (v.isNull())
+        return;
     switch (v.format)
     {
     case PixelFormat::RGB24:
@@ -684,6 +688,8 @@ void applyZebraOverlay(ImageData &img, int zebraThresholdPct)
     const int lo = (thr * 255) / 100;
     const int hi = 255 - lo;
     const ImageBuffer v = img.view();
+    if (v.isNull())
+        return;
     switch (v.format)
     {
     case PixelFormat::RGB24:

@@ -264,18 +264,18 @@ static bool parseIdentityTag(FILE *f, uint64_t fileSize, const IfdEntry &e, RawM
 // ShutterSpeedValue additionally ignores non-positive readings.
 struct ExposureRationalField
 {
-    uint16_t tag;
     double RawMetadata::*field;
+    uint16_t tag;
     bool positiveOnly;
 };
 
 static constexpr ExposureRationalField kExposureRationalFields[] = {
-    {0x829A, &RawMetadata::exposureSec, false},
-    {0x829D, &RawMetadata::fNumber, false},
-    {0x9201, &RawMetadata::shutterSpeedValue, true},
-    {0x9202, &RawMetadata::apertureValue, false},
-    {0x9203, &RawMetadata::brightnessValue, false},
-    {0x9204, &RawMetadata::exposureCompensation, false},
+    {&RawMetadata::exposureSec, 0x829A, false},
+    {&RawMetadata::fNumber, 0x829D, false},
+    {&RawMetadata::shutterSpeedValue, 0x9201, true},
+    {&RawMetadata::apertureValue, 0x9202, false},
+    {&RawMetadata::brightnessValue, 0x9203, false},
+    {&RawMetadata::exposureCompensation, 0x9204, false},
 };
 
 static bool parseExposureRationalTag(FILE *f, bool le, uint64_t fileSize, const IfdEntry &e,
