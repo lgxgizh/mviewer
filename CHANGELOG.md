@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.142] - 2026-10-20
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.142** (review hardening: #204, #205, #207, #208, #209, #210, #211, #212, #214).
+
 ### Added
 
 - **Manual acceptance wizard**: `scripts/manual_acceptance.ps1` walks a tester
