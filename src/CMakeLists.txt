@@ -222,6 +222,7 @@ add_library(mviewer_ui STATIC
     thumbnailcache.cpp
     compareworkspace.cpp
     compareworkspace_display_planner.cpp
+    compareworkspace_display_state.cpp
     compareworkspace_display_pyramid.cpp
     compare_session_frame_pool.cpp
     compare_session_state.cpp
@@ -2149,6 +2150,23 @@ target_link_libraries(compare_display_pending_tests
 target_compile_features(compare_display_pending_tests PRIVATE cxx_std_20)
 target_include_directories(compare_display_pending_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_display_pending_tests COMMAND compare_display_pending_tests)
+
+# Compare display state machine: table-driven transitions, #202 livelock and
+# lost-request regressions, seeded interleaving soak (no pane stays Loading).
+add_executable(compare_display_state_tests
+    test_compare_display_state.cpp
+)
+target_link_libraries(compare_display_state_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_display_state_tests PRIVATE cxx_std_20)
+target_include_directories(compare_display_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_display_state_tests COMMAND compare_display_state_tests)
 
 # Compare soft reload at high zoom with two 4096x3072 JPEGs: no stuck Loading.
 add_executable(compare_stuck_loading_stress_tests

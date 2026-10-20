@@ -425,7 +425,10 @@ void CompareWorkspace::rebuildCells()
         applyBlink(m_blinkState);
     }
 
-    // Browse→Compare handoff may already have seeded pane bitmaps.
+    // Fresh panes start Empty; Browse→Compare handoff may already have seeded
+    // pane bitmaps (warm stand-ins).
+    if (m_session)
+        m_session->displayState.reset(static_cast<int>(m_cellViews.size()));
     applyPendingWarmSeeds();
 
     // M28 P1-01: every pane was recreated, so materialize all pane images in ONE

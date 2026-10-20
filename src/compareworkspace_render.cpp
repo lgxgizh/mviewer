@@ -1,5 +1,5 @@
 // CompareWorkspace rendering: paint modes, diff overlay, blink, histograms (M20 P0#2).
-#include "compareworkspace_display_pending.h"
+#include "compareworkspace_display_state.h"
 #include "compareworkspace_p.h"
 
 #include "core/image/SourceImage.h"

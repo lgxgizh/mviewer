@@ -24,6 +24,32 @@
   `CacheManager` API unchanged. Tests: `cache_tests` (threshold, configurable,
   legacy purge, 4096x3072 / 2048x2048 fixtures), `repository_tests` (4096x3072
   JPEG load is not persisted, 1024x768 still hits the disk tier).
+- **Compare display materialization is an explicit per-pane state machine**
+  (`compareworkspace_display_state.{h,cpp}`, pure value, no Qt). Each pane moves
+  `Empty | WarmStandIn → CheapPending → SharpPending → Ready | Failed`, re-entered
+  by a pair switch / warm seed or a dirty view (zoom, pan, adjust, swap). It
+  replaces the implicit coupling of `RawImageView::softLoading`, the
+  `displayPendingPanes` carry-over list, the 0 ms cheap→sharp upgrade kick and the
+  #202 stall watchdog:
+  - every pane that is not `Ready`/`Failed` rides in every new latest-wins batch
+    (the #202 lost request cannot happen by construction, including a cheap-shown
+    pane whose sharp follow-up was cancelled before it was submitted);
+  - the cheap LOD is requested at most once per pane epoch — after it is
+    delivered *or* skipped as blurrier than the stand-in the next request is
+    sharp (the #202 livelock is unrepresentable);
+  - cheap vs sharp is decided **per cell**, so a sharp cell in a batch with a
+    cheap one is no longer dropped by the provisional-over-full guard, and panes
+    outside the batch no longer mark it provisional;
+  - a delivery for a pane re-entered after submit (pair switch) is ignored;
+  - the watchdog is gone; the only backstop is a per-pane idle-landing budget
+    (`kMaxIdleLandings` = 3) that fails the pane, clears its badge and logs a
+    warning — it should never fire.
+  - User-visible behaviour is unchanged: progressive soft→sharp, no stuck
+    Loading, no mosaic, pixel grid only over a matching raster.
+  - Tests: `compare_display_state_tests` (table-driven transitions, #202
+    livelock and lost-request scenarios with two 4096x3072 panes, pair-switch
+    re-entry, idle backstop, seeded 500-round interleaving soak);
+    `compare_display_pending_tests` keeps the debounce merge and pixel-grid math.
 
 ### Build
 

@@ -112,7 +112,11 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
         }
         view->setFilenameOverlay(name, m_filenameOverlay);
 
+        // Pair switch: the pane re-enters its display state machine (stand-in
+        // under the badge, cheap first, then sharp).
         view->setSoftLoading(true);
+        if (m_session)
+            m_session->displayState.beginPane(i, !view->image().isNull());
         if (samePath)
             continue;
 
@@ -140,6 +144,8 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
 
 void CompareWorkspace::clearSoftLoadingIndicators()
 {
+    if (m_session)
+        m_session->displayState.clearBadges();
     for (RawImageView *view : m_cellViews)
     {
         if (view)
@@ -248,6 +254,8 @@ void CompareWorkspace::applyPendingWarmSeeds()
             // The bitmap is about to change; the previous pair's badge is not
             // this image's PSNR/SSIM.
             view->setSoftLoading(true);
+            if (m_session)
+                m_session->displayState.noteStandIn(i);
             view->setMetricBadge(QString());
             tagPaneContent(i);
             const auto paint =

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "compare_session_frame_pool.h"
+#include "compareworkspace_display_state.h"
 #include "compareworkspace_display_types.h"
 
 #include <cstdint>
@@ -32,11 +33,10 @@ struct CompareSessionRuntime
     uint64_t lodDebounceEpoch = 0;
     // m_displayGen of the in-flight fast preview, or 0 when none is queued.
     uint64_t previewGeneration = 0;
-    // Panes requested by the in-flight display batch; carried into the
-    // replacement batch when latest-wins cancels it undelivered.
-    std::vector<int> displayPendingPanes;
-    // Bounded re-requests for panes still softLoading after a batch landed.
-    int displayStallRetries = 0;
+    // Per-pane display materialization state machine (Empty -> stand-in ->
+    // cheap -> sharp -> Ready / Failed). Owns which panes ride in the next
+    // latest-wins batch and the Loading badge of every pane.
+    CompareDisplayStateMachine displayState;
     // True while queueFastPreview is inside scheduleDisplayMaterialization,
     // so setImage's scaleChanged cannot start another preview recursively.
     bool fastPreviewBusy = false;
