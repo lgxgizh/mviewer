@@ -707,9 +707,9 @@ int main(int argc, char **argv)
     workflow9_pixel_inspector_lifecycle(workDir.absolutePath());
     workflow16_multiframe_view_continuity(workDir.absolutePath());
     workflow14_compare_loading_feedback(workDir.absolutePath());
-    // Keep the report workflow terminal: Qt's offscreen QFileDialog leaves
-    // internal modal widgets that deadlock MainWindow destruction. The test
-    // closes its window and lets process teardown reclaim it after assertions.
+    // Remaining ADR-017 process-exit exception: Qt's offscreen QFileDialog
+    // leaves internal modal widgets that deadlock MainWindow destruction. The
+    // report workflow keeps that window on the heap until process teardown.
     workflow13_compare_report_export_nonblocking(workDir.absolutePath());
 
     for (const QString &p : paths)

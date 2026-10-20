@@ -12,6 +12,15 @@
   Guide: `docs/acceptance/MANUAL_ACCEPTANCE.md`. Self-test:
   `scripts/manual_acceptance_test.ps1`.
 
+### Tests
+
+- **UI tests exit normally**: `mainwindow_commandstack_acceptance`,
+  `rotate_selection_tests`, `fullscreen_analysis_tests`, and
+  `m57_multiframe_decoder_tests` return from `main()` after
+  `ScopedProcessShutdown` instead of `TerminateProcess` / `std::_Exit`. The
+  workflow suite's offscreen `QFileDialog` heap window remains the single
+  ADR-017 exception.
+
 ### Changed
 
 - **RenderEngine namespace + Qt-free core header** (ADR-016 addendum): the
@@ -108,6 +117,13 @@
     `renameBrowsePaths`) moved to `imageviewer_browse.cpp`.
 
 ### Fixed
+
+- **Orderly process shutdown**: `mviewer::application::shutdownProcessServices()`
+  is the shared production/test exit path. It joins scheduler, resample, and
+  store workers, releases the animation `QImageReader`, and flushes the file
+  logger while `QApplication` is still alive. `ThumbnailPanel` and
+  `DirectoryMonitor` now wait for their `QThreadPool`s in the destructor body
+  so queued `invokeMethod(this, …)` cannot land on a destroyed `QObject`.
 
 - **LibRaw demosaic is cooperatively cancellable**: a stale RAW decode (request
   cancelled via `cancelAsync`, or its consumer `AsyncLifetimeToken` gone) no

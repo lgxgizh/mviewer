@@ -4,13 +4,13 @@
 #include "MViewerVersion.h"
 #include "Theme.h"
 #include "application/CommandLine.h"
+#include "application/Shutdown.h"
 #include "application/Startup.h"
 #include "core/CrashHandler.h"
 #include "core/Logger.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
 #include "core/SettingsIO.h"
-#include "core/scheduler/TaskScheduler.h"
 #include "runtime_storage.h"
 
 #include <QApplication>
@@ -127,11 +127,8 @@ int main(int argc, char *argv[])
         exitCode = app.exec();
     }
 
-    // Shut down background task pools after MainWindow and all child widgets
-    // have completed their teardown.
-    TaskScheduler::instance().shutdown();
-
-    // Flush and release the log file after all teardown messages reach disk.
-    mviewer::core::shutdownFileLogger();
+    // Join workers and release Qt-plugin-backed readers while QApplication is
+    // still alive. Same sequence as UI/core tests (ADR 017).
+    mviewer::application::shutdownProcessServices();
     return exitCode;
 }
