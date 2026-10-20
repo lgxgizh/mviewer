@@ -55,6 +55,10 @@ class ThumbnailCache
 
     static ThumbnailCache &instance();
 
+    // Join bootstrap/invalidation workers. Call while QCoreApplication is
+    // still alive (ADR 017). Idempotent.
+    void shutdown();
+
     // Returns true and fills `out` when a cache entry exists for `path` at
     // `size` (and the source file identity still matches). A hit refreshes
     // recency and counts the file if it appeared after indexing; a corrupt

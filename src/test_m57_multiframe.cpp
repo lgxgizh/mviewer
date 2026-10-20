@@ -1,7 +1,8 @@
-#include "core/image/FramePlaybackController.h"
-#include "core/image/ImageRepository.h"
-#include "core/image/FrameSequence.h"
+#include "application/Shutdown.h"
 #include "core/compare/CompareEngine.h"
+#include "core/image/FramePlaybackController.h"
+#include "core/image/FrameSequence.h"
+#include "core/image/ImageRepository.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include <QCoreApplication>
@@ -13,7 +14,6 @@
 #include <QTemporaryFile>
 
 #include <algorithm>
-#include <cstdlib>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -68,8 +68,7 @@ QByteArray makeAnimatedGifDelays(const std::vector<int> &centiseconds)
     gif.append(globalPalette, sizeof(globalPalette));
     gif.append("\x21\xff\x0bNETSCAPE2.0\x03\x01\x00\x00\x00", 19);
 
-    const char colors[][3] = {{char(0xff), 0, 0}, {0, char(0xff), 0},
-                              {0, 0, char(0xff)}};
+    const char colors[][3] = {{char(0xff), 0, 0}, {0, char(0xff), 0}, {0, 0, char(0xff)}};
     for (int frame = 0; frame < static_cast<int>(centiseconds.size()); ++frame)
     {
         const int cs = centiseconds[static_cast<size_t>(frame)];
@@ -195,8 +194,8 @@ bool check(bool condition, const std::string &message)
 void printBaseline(const QString &label, const QString &path)
 {
     QImageReader reader(path);
-    std::cout << "baseline " << label.toStdString() << " format="
-              << reader.format().toStdString() << " imageCount=" << reader.imageCount()
+    std::cout << "baseline " << label.toStdString() << " format=" << reader.format().toStdString()
+              << " imageCount=" << reader.imageCount()
               << " supportsAnimation=" << (reader.supportsAnimation() ? 1 : 0)
               << " loopCount=" << reader.loopCount() << '\n';
     for (int i = 0; i < std::max(1, reader.imageCount()); ++i)
@@ -366,6 +365,7 @@ bool checkPlaybackLoopEdges()
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    mviewer::application::ScopedProcessShutdown shutdown;
     const QString root = QDir::tempPath() + "/mviewer_m57_multiframe_" +
                          QString::number(QCoreApplication::applicationPid());
     QDir(root).removeRecursively();
@@ -406,16 +406,15 @@ int main(int argc, char **argv)
          ok;
 
     const std::vector<std::tuple<QString, int, int, int, int>> expected{
-        {gif, 0, 255, 0, 0}, {gif, 1, 0, 255, 0}, {gif, 2, 0, 0, 255},
+        {gif, 0, 255, 0, 0},  {gif, 1, 0, 255, 0},  {gif, 2, 0, 0, 255},
         {webp, 0, 255, 0, 0}, {webp, 1, 0, 255, 0}, {webp, 2, 0, 0, 255},
         {tiff, 0, 255, 0, 0}, {tiff, 1, 0, 255, 0}, {tiff, 2, 0, 0, 255}};
     for (const auto &[path, index, r, g, b] : expected)
     {
-        const auto decoded = mviewer::core::FrameSequenceReader::decodeFull(
-            path.toUtf8().toStdString(), index);
+        const auto decoded =
+            mviewer::core::FrameSequenceReader::decodeFull(path.toUtf8().toStdString(), index);
         ok = check(decoded.ok && checkColor(decoded.pixels, r, g, b,
-                                             path.toStdString() + " frame " +
-                                                 std::to_string(index)),
+                                            path.toStdString() + " frame " + std::to_string(index)),
                    "explicit frame/page decode succeeds") &&
              ok;
     }
@@ -426,9 +425,8 @@ int main(int argc, char **argv)
     const auto frame1Again = repo.loadFrame(gif.toUtf8().toStdString(), 1);
     ok = check(frame0.success() && frame1.success() && frame1Again.success() &&
                    frame0.frame->frameIdentity() != frame1.frame->frameIdentity() &&
-                   frame0.frame->id() != frame1.frame->id() &&
-                   frame0.frame->frameIndex() == 0 && frame1.frame->frameIndex() == 1 &&
-                   frame1Again.fromCache,
+                   frame0.frame->id() != frame1.frame->id() && frame0.frame->frameIndex() == 0 &&
+                   frame1.frame->frameIndex() == 1 && frame1Again.fromCache,
                "repository and render-cache identity include frame index and revision") &&
          ok;
 
@@ -483,8 +481,8 @@ int main(int argc, char **argv)
     workspace.currentImagePath = gif.toUtf8().toStdString();
     workspace.currentFrameIndex = 2;
     workspace.currentPlaying = true;
-    const auto restored = mviewer::core::deserializeWorkspace(
-        mviewer::core::serializeWorkspace(workspace));
+    const auto restored =
+        mviewer::core::deserializeWorkspace(mviewer::core::serializeWorkspace(workspace));
     ok = check(restored && restored->currentImagePath == workspace.currentImagePath &&
                    restored->currentFrameIndex == 2 && restored->currentPlaying,
                "workspace persists current frame and playing state") &&
@@ -501,5 +499,5 @@ int main(int argc, char **argv)
     QDir(root).removeRecursively();
     std::cout.flush();
     std::cerr.flush();
-    std::_Exit(ok ? 0 : 1);
+    return ok ? 0 : 1;
 }

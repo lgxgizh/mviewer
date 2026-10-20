@@ -8,14 +8,15 @@ review flagged them as a HIGH-severity risk ("MainWindow teardown is not proven"
 because a reader cannot tell an intentional platform workaround from forgotten
 debt:
 
-- `src/test_mainwindow_commandstack.cpp` ends both verdicts with
-  `terminateTestProcess()` (`TerminateProcess` + `std::abort`) so the stack
-  `MainWindow` and `QApplication` are never destroyed.
-- `src/test_workflow_ux.cpp` leaves its last window to process teardown: an
-  offscreen `QFileDialog` leaves internal modal widgets that deadlock
-  `MainWindow` destruction.
-- `src/test_workflow_ux_cases.inc` keeps one `MainWindow` on the heap for the
-  same reason; `src/test_m57_multiframe.cpp` exits with `std::_Exit`.
+- `src/test_mainwindow_commandstack.cpp`, `src/test_rotate_selection.cpp` and
+  `src/test_fullscreen_analysis.cpp` used to end with `terminateTestProcess()`
+  (`TerminateProcess` / `std::_Exit`) so the stack `MainWindow` and
+  `QApplication` were never destroyed. `src/test_m57_multiframe.cpp` used
+  `std::_Exit`. The 2026-10-20 addendum retires those process-kill exits.
+- `src/test_workflow_ux.cpp` / `src/test_workflow_ux_cases.inc` leave one
+  window to process teardown: an offscreen `QFileDialog` leaves internal modal
+  widgets that deadlock `MainWindow` destruction. That remains the single
+  named exception.
 - `src/core/plugin/PluginManager.cpp` unregisters a plugin but never
   `FreeLibrary`/`dlclose`s it: unloading a Qt-linking DLL at runtime (or during
   teardown) crashes the process through DLL-detach / CRT static ordering.
@@ -47,29 +48,71 @@ destroyed repeatedly, including destruction while work is in flight.
 3. **Process-exit workarounds stay, but only for process-exit reasons.** A test
    may skip a destructor or terminate its own process when the failure mode is
    Qt's *global* teardown (static destruction ordering, DLL detach, offscreen
-   dialog internals) — and only with a comment naming that reason, as the
-   existing sites now do. Teardown of *objects* is never skipped: that is what
-   the stress test covers.
+   dialog internals) — and only with a comment naming that reason. Teardown of
+   *objects* is never skipped: that is what the stress test covers. The
+   2026-10-20 addendum below tightens this for test process exit.
 4. **Plugin libraries are process-lifetime.** Registration is dropped on
    unload; the module stays mapped. Loading the same path again reuses the
    already-mapped handle.
 5. **New singletons state which policy they follow** in a comment at their
    `instance()` definition.
 
+### Addendum (2026-10-20)
+
+Decision 3 is tightened. Test executables must exit through a normal `return`
+from `main()` after orderly shutdown. `TerminateProcess`, `std::_Exit`,
+`std::quick_exit`, and deliberately leaking a heap `MainWindow` so its
+destructor never runs are not permitted.
+
+Production `main.cpp` and the tests share one entry point:
+`mviewer::application::shutdownProcessServices()` (tests typically hold
+`mviewer::application::ScopedProcessShutdown` so early `return` still runs it).
+Widgets the test owns must already have been destroyed (stack/`unique_ptr`
+scope, or `deleteLater` plus draining `DeferredDelete`). The shared sequence,
+while `QCoreApplication` is still alive, is:
+
+1. Drain posted events, including `DeferredDelete`.
+2. Run registered UI shutdown hooks (`ThumbnailCache` joins its bootstrap and
+   invalidation threads).
+3. Cancel `MetadataIndexer` requests and `ThumbnailPipeline` work.
+4. `FrameSequenceReader::releaseFile({})` so the process-lifetime
+   `QImageReader` is destroyed before Qt plugin teardown.
+5. Join `TagStore` / `RatingStore` background workers.
+6. `TaskScheduler::instance().shutdown()`, then wait for the display-resample
+   pool and `QThreadPool::globalInstance()`.
+7. Clear the main-thread dispatcher and `shutdownFileLogger()`.
+8. Drain posted events again, then return so `QApplication` can be destroyed.
+
+Object-level teardown bugs found while removing the process-kill workarounds
+were fixed in production: `ThumbnailPanel` and `DirectoryMonitor` join their
+`QThreadPool`s in the destructor body (while `this` is still a valid
+`QObject`), and the animation-session `QImageReader` is a leaked
+process-lifetime pointer released explicitly at shutdown.
+
+**Remaining exception:** `src/test_workflow_ux.cpp` /
+`src/test_workflow_ux_cases.inc` keep one heap `MainWindow` alive after an
+offscreen `QFileDialog::getSaveFileName`. That workflow asserts nested-loop
+heartbeats of the real dialog; Qt 6.10's offscreen plugin then deadlocks if
+the parent `MainWindow` is destroyed. There is no save-dialog injection seam
+to avoid opening a real `QFileDialog` here. If upstream Qt fixes the
+deadlock, drop this exception.
+
 ## Consequences
 
 - No shutdown hook can rely on destructors running for the leaked services:
   anything that must be flushed at exit needs an explicit call (see
-  `mviewer::core::shutdownFileLogger()` called from `main.cpp`).
-- Tests that destroy windows remain safe; tests that merely *end* still pass,
-  but a new test must not copy the terminate-the-process pattern for a
-  first-chance object-teardown failure — that is a real bug the stress test
-  would catch.
+  `mviewer::application::shutdownProcessServices()` from `main.cpp` and tests).
+- Tests that destroy windows remain safe and must return from `main()` after
+  that shared shutdown. A new test must not copy a process-kill or leak-the-
+  window pattern for a first-chance object-teardown failure — that is a real
+  bug the stress test would catch.
 - The offscreen `QFileDialog` → `MainWindow` destruction deadlock is an
-  environment property (Qt 6.10 offscreen platform), not a product defect. If
-  it is fixed upstream, the workflow-suite comment and this ADR should be
-  revisited rather than silently dropped.
+  environment property (Qt 6.10 offscreen platform), not a product defect. It
+  is the single remaining process-exit exception, named above. If it is fixed
+  upstream, the workflow-suite comment and this ADR should be revisited rather
+  than silently dropped.
 
 ## Status
 
-Accepted (2026-09). Verified by `teardown_stress_tests` in `.\build.ps1 Test`.
+Accepted (2026-09). Addendum 2026-10-20. Verified by `teardown_stress_tests`
+in `.\build.ps1 Test`.

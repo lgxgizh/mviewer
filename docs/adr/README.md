@@ -22,7 +22,7 @@
 | [011](011-viewer-core-boundary.md) | Viewer/Core boundary is frozen | Prevent UI logic from leaking into the core layer |
 | [014](014-ui-tu-split-by-responsibility.md) | Large UI files are split into TUs by responsibility | Hard constraints such as `mainwindow.cpp` < 1000 lines |
 | [016](016-qt-boundary-in-core-headers.md) | core/domain headers must not include Qt (two named adapter headers excepted) | The rule must match the R5 gate and be auditable |
-| [017](017-process-lifetime-services.md) | Process-lifetime services are intentionally not destroyed; object-lifetime destruction must hold | Distinguish "platform exit limits" from "forgot to destroy", and let stress tests guard the latter |
+| [017](017-process-lifetime-services.md) | Process-lifetime services are intentionally not destroyed; object-lifetime destruction must hold; tests return from `main()` after shared shutdown | Distinguish "platform exit limits" from "forgot to destroy", and let stress tests guard the latter |
 | [018](018-thumbnail-cpu-budget.md) | Thumbnail thread cap is half the core count, at low priority, and yields briefly during foreground decode/resample | Keep thumbnails from contending for CPU with current-image decode and compare hi-res resample |
 
 ### Cache and scheduling

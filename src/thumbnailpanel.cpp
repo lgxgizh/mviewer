@@ -224,8 +224,10 @@ ThumbnailPanel::~ThumbnailPanel()
         m_filterDebounceTimer->stop();
     // M24: drop queued scan/dimension tasks; in-flight ones abort at their next
     // m_alive check, so destruction waits only a bounded time for the current
-    // QDir sort (typically < 100 ms even for 10k-image folders).
+    // QDir sort (typically < 100 ms even for 10k-image folders). Join here,
+    // while members are still alive; ~QThreadPool would wait too late.
     m_scanPool.clear();
+    m_scanPool.waitForDone();
     // M46: queued scans dropped by clear() never run their completion, so
     // their busy-cursor refs would leak. Drain them here; a scan that was
     // still RUNNING marshals its own restore later, which becomes a no-op

@@ -3,6 +3,7 @@
 // fullscreen viewer would otherwise cover it.
 
 #include "analysispanel.h"
+#include "application/Shutdown.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
 #include "runtime_storage.h"
@@ -16,10 +17,6 @@
 #include <QStandardPaths>
 
 #include <iostream>
-
-#ifdef Q_OS_WIN
-#include <windows.h>
-#endif
 
 namespace
 {
@@ -44,16 +41,6 @@ void pump(int ms = 30)
     do
         QApplication::processEvents(QEventLoop::AllEvents, 10);
     while (timer.elapsed() < ms);
-}
-
-[[noreturn]] void terminateTestProcess(int exitCode)
-{
-#ifdef Q_OS_WIN
-    ::TerminateProcess(::GetCurrentProcess(), static_cast<UINT>(exitCode));
-    std::abort();
-#else
-    std::_Exit(exitCode);
-#endif
 }
 
 bool viewerIsFullscreen(const ImageViewer *viewer)
@@ -90,6 +77,7 @@ int main(int argc, char **argv)
         mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
     QFile::remove(QDir(appConfig).filePath(QStringLiteral("recovery.json")));
 
+    mviewer::application::ScopedProcessShutdown shutdown;
     MainWindow window;
     window.resize(1100, 750);
     window.show();
@@ -102,8 +90,7 @@ int main(int argc, char **argv)
     if (!viewer || !panel)
     {
         std::cout << "fullscreen_analysis_tests: FAIL (" << g_failures << " failures)\n";
-        std::fflush(stdout);
-        terminateTestProcess(1);
+        return 1;
     }
 
     CHECK(!panel->isVisible(), "analysis panel starts hidden");
@@ -123,10 +110,8 @@ int main(int argc, char **argv)
     if (g_failures > 0)
     {
         std::cout << "fullscreen_analysis_tests: FAIL (" << g_failures << " failures)\n";
-        std::fflush(stdout);
-        terminateTestProcess(1);
+        return 1;
     }
     std::cout << "fullscreen_analysis_tests: PASS\n";
-    std::fflush(stdout);
-    terminateTestProcess(0);
+    return 0;
 }

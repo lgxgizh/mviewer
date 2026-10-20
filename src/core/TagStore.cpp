@@ -49,10 +49,12 @@ TagStore::TagStore()
     m_worker = std::thread([this]() { workerLoop(); });
 }
 
-TagStore::~TagStore()
+void TagStore::stopWorker()
 {
     {
         std::lock_guard<std::mutex> lock(m_workerMutex);
+        if (m_workerStop)
+            return;
         m_workerStop = true;
     }
     m_workerCv.notify_one();
@@ -60,10 +62,29 @@ TagStore::~TagStore()
         m_worker.join();
 }
 
+TagStore::~TagStore()
+{
+    stopWorker();
+}
+
+namespace
+{
+TagStore *g_tagStore = nullptr;
+}
+
 TagStore &TagStore::instance()
 {
+    // Function-local static: destroyed at process exit after workers have been
+    // joined by joinBackgroundWorker() / ~TagStore. Policy: ADR 017.
     static TagStore s;
+    g_tagStore = &s;
     return s;
+}
+
+void TagStore::joinBackgroundWorker()
+{
+    if (g_tagStore)
+        g_tagStore->stopWorker();
 }
 
 std::string TagStore::legacyPath() const

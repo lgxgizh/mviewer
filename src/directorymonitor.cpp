@@ -66,8 +66,10 @@ DirectoryMonitor::~DirectoryMonitor()
     if (m_stabilityTimer)
         m_stabilityTimer->stop();
     m_pool.clear();
-    // Do not block the GUI thread waiting for a possibly slow directory
-    // snapshot. Running tasks check m_alive and self-cancel safely.
+    // Join while `this` is still a valid QObject: the snapshot worker posts
+    // via QMetaObject::invokeMethod(this, ...). ~QThreadPool would wait after
+    // later members (and the QObject) are already gone.
+    m_pool.waitForDone();
 }
 
 void DirectoryMonitor::setActiveDirectory(const QString &path)
@@ -188,11 +190,11 @@ void DirectoryMonitor::startReconcile()
             if (!alive->load(std::memory_order_acquire) ||
                 generationToken->load(std::memory_order_acquire) != generation)
                 return;
-            auto snapshot = mviewer::core::snapshotDirectory(path.toUtf8().toStdString(), generation);
+            auto snapshot =
+                mviewer::core::snapshotDirectory(path.toUtf8().toStdString(), generation);
             QMetaObject::invokeMethod(
                 this,
-                [this, alive, generation, generationToken,
-                 snapshot = std::move(snapshot)]() mutable
+                [this, alive, generation, generationToken, snapshot = std::move(snapshot)]() mutable
                 {
                     if (!alive->load(std::memory_order_acquire) ||
                         generation != generationToken->load(std::memory_order_acquire))

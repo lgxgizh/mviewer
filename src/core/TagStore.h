@@ -66,6 +66,9 @@ class TagStore
     void flushSave();
     bool load();
     void setFilePath(const std::string &path);
+    // Join the persistence worker. No-op if instance() was never called.
+    // Call while QCoreApplication is still alive (ADR 017).
+    static void joinBackgroundWorker();
     ~TagStore();
 
   private:
@@ -79,6 +82,7 @@ class TagStore
     void loadLocked() const;
     void scheduleSave();
     void workerLoop();
+    void stopWorker();
     bool saveSnapshot() const;
 
     mutable std::mutex m_mutex;
