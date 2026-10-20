@@ -18,15 +18,12 @@ inline double clamp01(double x)
     return x < 0.0 ? 0.0 : (x > 1.0 ? 1.0 : x);
 }
 
-// Rec. 709 luma — the luminance used for neighborhood stats.
-inline double luma(double r, double g, double b)
-{
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b; // r,g,b in 0..1
-}
-
+// Neighborhood luminance is the canonical lumaRec601_8() (ImageBuffer.h), so
+// the inspector's mean/variance agree with the ROI stats, histogram and
+// analyzers for the same pixels (it used Rec.709 weights before).
 inline int lumaFast(int r, int g, int b)
 {
-    return (13933 * r + 46871 * g + 4732 * b + 32768) >> 16;
+    return lumaRec601_8(r, g, b);
 }
 
 inline int clampToInt(long long value)

@@ -52,7 +52,7 @@ double NoiseAnalyzer::estimateLaplacian(const ConstImageView &v, int x0, int y0,
         int64_t iSum = 0;
         int64_t iSum2 = 0;
         const PixelFormat format = v.format;
-        auto lumOf = [format](const uint8_t *p) { return lumaAverage(unpackRgb8(p, format)); };
+        auto lumOf = [format](const uint8_t *p) { return rgbMean(unpackRgb8(p, format)); };
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
