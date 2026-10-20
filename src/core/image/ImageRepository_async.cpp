@@ -2,6 +2,7 @@
 // ImageRepository.cpp so the delivery-gate machinery — opaque request state,
 // consumer lifetime tokens, the terminal delivery gate and cancelAsync's
 // wait-for-in-flight-delivery semantics — stays a bounded, testable unit).
+#include "core/async/CooperativeCancel.h"
 #include "core/image/ImageRepository.h"
 
 #include "core/image/FrameSequence.h"
@@ -103,6 +104,22 @@ static bool lifetimeTokenAllows(const std::weak_ptr<mviewer::core::AsyncLifetime
         return true;
     const auto token = lifetime.lock();
     return token && token->isAlive();
+}
+
+// Cooperative cancel for the running decode: a cancelled request or a dead
+// consumer token is stale, so a long LibRaw demosaic can stop early instead of
+// holding a DecodePool worker. Thread-safe (state mutex), as the probe may be
+// polled from a decoder's watcher thread.
+static std::function<bool()>
+staleRequestProbe(const std::shared_ptr<ImageRepository::AsyncRequestState> &state)
+{
+    return [state]()
+    {
+        if (state->cancelled.load(std::memory_order_acquire))
+            return true;
+        std::lock_guard<std::mutex> lk(state->mtx);
+        return !lifetimeTokenAllows(state->lifetime);
+    };
 }
 
 // M46: terminal-delivery helper shared by every async request kind. Runs on
@@ -259,6 +276,7 @@ ImageRepository::loadAsyncCancellable(const std::string &filePath,
             Result res;
             try
             {
+                const mviewer::core::ScopedCancelProbe probe(staleRequestProbe(state));
                 res = state->operation();
             }
             catch (...)
@@ -384,6 +402,7 @@ ImageRepository::AsyncRequestHandle ImageRepository::loadFrameAsync(
             Result result;
             try
             {
+                const mviewer::core::ScopedCancelProbe probe(staleRequestProbe(state));
                 result = state->operation();
             }
             catch (...)
@@ -484,6 +503,7 @@ ImageRepository::AsyncRequestHandle ImageRepository::preloadAsync(
             // concurrent promotion can deliver it; a pure preload releases it
             // at completion (the FullImage memory cache populated by load() is
             // the only observable effect).
+            const mviewer::core::ScopedCancelProbe probe(staleRequestProbe(state));
             Result res = loadFrame(filePath, 0, opts);
             {
                 std::lock_guard<std::mutex> lk(state->mtx);
