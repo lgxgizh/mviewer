@@ -310,9 +310,23 @@ inline PixelRGBA samplePixel(const ImageData &img, int x, int y) noexcept
     return out;
 }
 
+// Canonical 8-bit luma: Rec.601 weights on gamma-encoded R'G'B',
+// round(0.299 R + 0.587 G + 0.114 B) in 16.16 fixed point. The weights sum to
+// 65536, so a gray pixel maps to itself exactly; the previous float truncation
+// mapped 65 of the 256 gray levels one LSB low, and the analyzers' >>16 form
+// truncated as well. Every "luma" / "luminance" / "brightness" of an 8-bit
+// display-referred pixel uses this (histogram, stats, alignment, overlays,
+// analyzers, USM luma-only). A channel mean is a different quantity: see
+// rgbMean() in core/analyzer/PixelAccess.h. Linear-light CIE Y (Rec.709 /
+// sRGB primaries) in the Pixel Inspector and ColorChecker is also separate.
+constexpr int lumaRec601_8(int r, int g, int b) noexcept
+{
+    return (19595 * r + 38470 * g + 7471 * b + 32768) >> 16;
+}
+
 inline int luminance(uint8_t r, uint8_t g, uint8_t b)
 {
-    return (int)(0.299 * r + 0.587 * g + 0.114 * b);
+    return lumaRec601_8(r, g, b);
 }
 
 inline void getPixelRGB(const uint8_t *p, PixelFormat fmt, uint8_t &r, uint8_t &g,
@@ -345,16 +359,17 @@ inline double pixelLuminance(const uint8_t *p, PixelFormat fmt) noexcept
     {
     case PixelFormat::BGR24:
     case PixelFormat::BGRA32:
-        return 0.299 * p[2] + 0.587 * p[1] + 0.114 * p[0];
+        return static_cast<double>(lumaRec601_8(p[2], p[1], p[0]));
     case PixelFormat::Grayscale8:
         return static_cast<double>(p[0]);
     case PixelFormat::RGB24:
     case PixelFormat::RGBA32:
     default:
-        return 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];
+        return static_cast<double>(lumaRec601_8(p[0], p[1], p[2]));
     }
 }
 
+// Channel mean (R+G+B)/3, not luma: kept for plugins that ask for it by name.
 inline double pixelLuminanceAvg(const uint8_t *p, PixelFormat fmt) noexcept
 {
     switch (fmt)

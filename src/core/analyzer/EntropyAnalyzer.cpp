@@ -34,7 +34,7 @@ double EntropyAnalyzer::computeEntropy(const ConstImageView &v, int x0, int y0, 
             const uint8_t *p = line + static_cast<size_t>(x0) * cpp;
             for (int x = x0; x < x1; ++x, p += cpp)
             {
-                const int lum = lumaAverage(unpackRgb8(p, v.format));
+                const int lum = rgbMean(unpackRgb8(p, v.format));
                 ++hist[lum];
             }
         }

@@ -148,9 +148,9 @@ bool ImageRepository::loadPixels(const std::string &filePath, const std::string 
         return false;
     }
     pixels = std::move(decodeRes).value();
-    // Avoid synchronous writes of giant uncompressed BLOBs (>16MB) to SQLite,
-    // which cause I/O stalls and lock contention on large full-res frames.
-    if (opts.useDiskCache && pixels.byteSize() <= 16 * 1024 * 1024)
+    // DiskCache::put() owns the large-frame policy (maxEntryBytes(), default
+    // 16 MiB): giant uncompressed BLOBs are not written synchronously here.
+    if (opts.useDiskCache && DiskCache::instance().persistsBytes(pixels.byteSize()))
         DiskCache::instance().put(key, pixels);
     return true;
 }

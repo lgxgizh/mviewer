@@ -86,7 +86,7 @@ bool DeadPixelAnalyzer::compute(const ConstImageView &v, int x0, int y0, int x1,
     else
     {
         const PixelFormat format = v.format;
-        auto lumOf = [format](const uint8_t *p) { return lumaAverage(unpackRgb8(p, format)); };
+        auto lumOf = [format](const uint8_t *p) { return rgbMean(unpackRgb8(p, format)); };
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();

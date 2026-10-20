@@ -18,7 +18,7 @@ namespace mviewer::core
 {
 
 // Per-channel luminance/colour histogram of a decoded image.
-// Luma is Rec.601 (0.299 R + 0.587 G + 0.114 B), truncated to int.
+// Luma is the canonical rounded Rec.601 lumaRec601_8() (ImageBuffer.h).
 // V is max(R, G, B). On grayscale, V equals the gray sample.
 // The alpha byte of RGBA32 / BGRA32 is never a colour sample. A fully
 // transparent pixel (alpha == 0) is omitted, matching AnalysisEngine and
@@ -26,7 +26,7 @@ namespace mviewer::core
 struct Histogram
 {
     std::vector<int64_t> r, g, b;
-    std::vector<int64_t> luma; // Rec.601: 0.299 R + 0.587 G + 0.114 B
+    std::vector<int64_t> luma; // lumaRec601_8: round(0.299 R + 0.587 G + 0.114 B)
     std::vector<int64_t> v;    // HSV-V: max(R, G, B)
     int bins = 256;
     int64_t total = 0; // samples that contributed; transparent pixels are not included
