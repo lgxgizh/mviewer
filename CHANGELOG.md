@@ -56,7 +56,7 @@
 - **LibRaw demosaic is cooperatively cancellable**: a stale RAW decode (request
   cancelled via `cancelAsync`, or its consumer `AsyncLifetimeToken` gone) no
   longer holds a DecodePool worker until `dcraw_process()` finishes. New
-  Qt-free `core/async/CooperativeCancel.h` (`ScopedCancelProbe`, thread-local,
+  Qt-free `core/async/CooperativeCancel.{h,cpp}` (`ScopedCancelProbe`, thread-local,
   nestable) is installed by `ImageRepository`'s async load / frame / preload
   workers; `RawDecoder` registers a LibRaw progress handler that aborts at stage
   boundaries, and a full (AHD) demosaic also gets a 20 ms watcher that raises
