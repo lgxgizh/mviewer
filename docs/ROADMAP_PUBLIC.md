@@ -4,11 +4,12 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.30 Review hardening**
+## Where we are now — **Beta / 1.0.141**
 
-MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now verified as
-the `1.0.30` patch line. The product
-loop below is built and verified; packaging and final human review remain:
+MViewer remains in **Beta**; the current release is **`v1.0.141`**
+(2026-10-20, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+The product loop below is built and verified; the non-prerelease 1.0 work
+(signed installer, docs site, frozen plugin ABI) and final human review remain:
 
 - **Browse** — open a 1000-image directory without UI freeze; thumbnails stream
   in; first thumbnail < ~35 ms (cold).
@@ -30,6 +31,18 @@ loop below is built and verified; packaging and final human review remain:
 - **Large sources** — 100MP JPEG and 100MP-class TIFF now use bounded
   source-backed display on Windows; exact-source analysis remains separate.
 - **Installer** — NSIS `.exe` + portable zip; real UI screenshot in the release.
+- **Camera RAW** — CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF/… display through the
+  embedded JPEG preview; **LibRaw 0.21.4** (LGPL-2.1 / CDDL-1.0, integrated in
+  1.0.77) supplies half-size demosaic when the preview is too short and full
+  demosaic only when no preview exists.
+- **Compare tools** — per-pane local zoom (`Ctrl`+wheel, 1.0.139), per-pane USM
+  sharpening and the USM before/after dialog (1.0.133–1.0.136, 1.0.140),
+  cursor-aware `Space` pair-hold.
+- **Languages** — English source text with a Simplified Chinese translation;
+  **Tools → Preferences → UI language** (Follow system / English / Simplified
+  Chinese, 1.0.138).
+- **Updates** — Help → Check for Updates plus an optional silent startup check
+  (**Automatically check for updates on startup**, 1.0.140).
 
 Supported formats today: **JPEG / PNG / BMP / TIFF** (8/16-bit), plus
 **GIF animation** and **animated WebP when the deployed Qt qwebp plugin is
@@ -46,33 +59,21 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.30** (current line) | Review hardening: bounded file/settings input, deterministic delivery, teardown evidence | 🔵 Beta hardening |
-| **1.0.29** | Larger Compare filenames | ✅ Previous patch |
-| **1.0.28** | User guide and P to open Compare | ✅ Previous patch |
-| **1.0.27** | Contextual Compare sliders, inspector Analyze, status help | ✅ Previous patch |
-| **1.0.26** | Compare safe insets, ROI A/B tags, readable PSNR | ✅ Previous patch |
-| **1.0.25** | Restore console subsystem to reduce AV false positives | ✅ Previous patch |
-| **1.0.24** | Larger histograms and true Compare fullscreen | ✅ Previous patch |
-| **1.0.23** | Compare PSNR HUD, exit, auto-align, toolbar icons, silent GUI launch | ✅ Previous patch |
-| **1.0.22** | Faster Compare overlay histograms via 256-edge subsample | ✅ Previous patch |
-| **1.0.21** | Compare transparent histogram overlay and wrapping filename overlay | ✅ Previous patch |
-| **1.0.20** | Channel isolation, 800% pixel grid, and Compare visual auto-align for algorithm-engineer inspection | ✅ Previous patch |
-| **1.0.19** | Viewer overlay/pan, Compare entry, and linked ROI source-mapping correctness | ✅ Previous patch |
-| **1.0.18** | Editable linked ROI in every Compare mode, cancellable source measurement, honest decoder support states, and compact HUD/TSV results | ✅ Previous patch |
-| **1.0.17** | Linked source-coordinate ROI measurement, asynchronous source RGB statistics, unequal-dimension guardrails, and M59 color-managed presentation | ✅ Previous patch |
-| **1.0.16** | Color-managed presentation, canonical ICC/EXIF metadata, monitor-target invalidation, and Browse regression closure | ✅ Previous patch |
-| **1.0.15** | Large-directory query responsiveness, latest-wins filtering, bounded metadata/search updates, and Windows build reproducibility | ✅ Previous patch |
-| **1.0.14** | Release quality truthfulness, large-source format parity, workflow boundaries, and Windows qualification closure | ✅ Previous patch |
-| **1.0.13** | Release quality truthfulness, large-source format parity, workflow boundaries, and Windows qualification closure | ✅ Previous patch |
-| **1.0.12** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
-| **1.0.11** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
-| **1.0.10** | Windows UX / Unicode / Compare reliability closure | ✅ Previous patch |
-| **1.0.9** | Product loop closed + perf proven + SDK + installer | ✅ Previous patch |
+| **1.0.141** (current) | Compare stuck "Loading" / low-res mosaic after a pair switch fixed | 🔵 Beta |
+| **1.0.140** | Compare mosaic fix, automatic-update-check preference, USM dialog maximize + `Space` pair-hold | ✅ Previous patch |
+| **1.0.139** | Compare local zoom (`Ctrl`+wheel), paste images into the browsed folder, Open Folder | ✅ Previous patch |
+| **1.0.138** | English source language + Simplified Chinese localization, UI language setting | ✅ Previous patch |
+| **1.0.137** | 60 static-audit fixes | ✅ Previous patch |
+| **1.0.133–1.0.136** | USM sharpen before/after compare and export, per-pane USM in Compare | ✅ Previous patches |
+| **1.0.77** | Viewport region tiles, GPU Stage A tile residency, LibRaw half/full demosaic | ✅ Previous patch |
+| **1.0.31–1.0.132** | Performance, UX and reliability patch line (per-version detail in `CHANGELOG.md`) | ✅ Previous patches |
+| **1.0.30** | Review hardening: bounded file/settings input, deterministic delivery, teardown evidence | ✅ Previous patch |
+| **1.0.9–1.0.29** | Product loop, Windows qualification, color management, linked ROI, Compare inspection chrome | ✅ Previous patches |
 | **1.0** | First non-prerelease: signed installer, docs site, stable plugin ABI | ⬜ Release work |
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.30` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.141` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
@@ -96,10 +97,10 @@ feel still require a physical Windows review.
 
 ## Explicitly deferred (not in the current track)
 
-- **Camera RAW — full processing** (NEF/CR2/ARW demosaic) — needs a libraw
-  integration (decoder-scope). **Basic opening already shipped (P6):** `RawDecoder`
-  extracts the embedded JPEG preview so RAW files display without libraw; full
-  demosaic remains a post-1.0 enhancement.
+- **Camera RAW — beyond LibRaw's internal decoders** — LibRaw 0.21.4 ships
+  without external libjpeg/zlib/lcms, so some DNG deflate/lossy files still fail
+  to open, and a build with `MVIEWER_WITH_LIBRAW=OFF` falls back to the embedded
+  preview only (see "Known gaps" in [`STATUS.md`](../STATUS.md)).
 - **GPU Stage C/D** (Direct2D/D3D11 direct compositing, Vulkan) — deferred per
   the frozen `UI = Qt Widgets` boundary and the "CPU tile is enough for v1"
   guidance.
