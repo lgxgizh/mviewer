@@ -110,7 +110,6 @@ $responsibilityCaps = @(
 # commit that splits the function; never add one without an ADR-014 note.
 $knownFunctionDebt = @{
     'src/core/metadata/MetadataIndexer.cpp::index'                  = 'span 136'
-    'src/core/image/decoder/QtDecoder.cpp::decodeTiffWic'           = 'span 133 / cc 32'
     'src/core/image/ImageRepository_async.cpp::loadAsyncCancellable' = 'span 127'
     'src/core/metadata/MetadataIndexer.cpp::indexBatched'           = 'span 122'
     'src/core/filesystem/AtomicFile.cpp::atomicWriteFile'           = 'span 152'

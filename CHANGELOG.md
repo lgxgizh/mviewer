@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Complexity hotspots (behavior-preserving refactor)**: retired the last CC > 25
+  tracked debt and gave near-cap files line headroom (complexity gate: 0 hard
+  fails, `$knownFunctionDebt` no longer lists `decodeTiffWic`).
+  - `QtDecoder.cpp::decodeTiffWic` (span 133 / CC 32): the Windows WIC TIFF
+    pipeline moved to `core/image/decoder/QtDecoder_wic.cpp` as small steps
+    (`openWicTiffFrame` → `clampWicClip` → `buildWicDisplaySource` →
+    `copyWicBgrToRgb`, every helper CC ≤ 8); metadata recovery is
+    `populateWicTiffMetadata`. COM objects are still released in reverse
+    pipeline order before `CoUninitialize`.
+  - `RawMetadata.cpp::parseExposureRationalTag` (CC 25): EXIF exposure
+    rationals are a tag → field table (ShutterSpeedValue keeps its
+    positive-only rule).
+  - `mainwindow.cpp` (982 → 845 / 1000 lines): selection resolution, gallery
+    sync and selection-driven action enablement moved to
+    `mainwindow_selection.cpp`; `updateSelectionActions` CC 24 → 15 (action-list loops).
+  - `core/analysis/ImageOverlay.h` (784 → 88 lines): overlay kernels (false
+    color, channel/AVX2/SSSE3, zebra) moved to `ImageOverlay.cpp`; the header
+    keeps `OverlayMode` and the public `apply*Overlay` API.
+  - `imageviewer_loading.cpp` (791 → 701 / 800 lines): browse-sequence
+    bookkeeping (`setBrowseSequence`, `showBrowseFullscreen`,
+    `renameBrowsePaths`) moved to `imageviewer_browse.cpp`.
+
 ## [1.0.141] - 2026-10-20
 
 ### Release

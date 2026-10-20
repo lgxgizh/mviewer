@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -259,42 +260,39 @@ static bool parseIdentityTag(FILE *f, uint64_t fileSize, const IfdEntry &e, RawM
            parseDescriptionDateTag(f, fileSize, e, rm) || parseLensIdentityTag(f, fileSize, e, rm);
 }
 
+// EXIF exposure rationals (type 5, count 1). Each field keeps its first value;
+// ShutterSpeedValue additionally ignores non-positive readings.
+struct ExposureRationalField
+{
+    uint16_t tag;
+    double RawMetadata::*field;
+    bool positiveOnly;
+};
+
+static constexpr ExposureRationalField kExposureRationalFields[] = {
+    {0x829A, &RawMetadata::exposureSec, false},
+    {0x829D, &RawMetadata::fNumber, false},
+    {0x9201, &RawMetadata::shutterSpeedValue, true},
+    {0x9202, &RawMetadata::apertureValue, false},
+    {0x9203, &RawMetadata::brightnessValue, false},
+    {0x9204, &RawMetadata::exposureCompensation, false},
+};
+
 static bool parseExposureRationalTag(FILE *f, bool le, uint64_t fileSize, const IfdEntry &e,
                                      RawMetadata &rm)
 {
-    switch (e.tag)
-    {
-    case 0x829A:
-        if (e.type == 5 && e.count == 1 && rm.exposureSec == 0.0)
-            rm.exposureSec = readRational(f, le, fileSize, e.value);
-        return true;
-    case 0x829D:
-        if (e.type == 5 && e.count == 1 && rm.fNumber == 0.0)
-            rm.fNumber = readRational(f, le, fileSize, e.value);
-        return true;
-    case 0x9201:
-        if (e.type == 5 && e.count == 1 && rm.shutterSpeedValue == 0.0)
-        {
-            const double sv = readRational(f, le, fileSize, e.value);
-            if (sv > 0.0)
-                rm.shutterSpeedValue = sv;
-        }
-        return true;
-    case 0x9202:
-        if (e.type == 5 && e.count == 1 && rm.apertureValue == 0.0)
-            rm.apertureValue = readRational(f, le, fileSize, e.value);
-        return true;
-    case 0x9203:
-        if (e.type == 5 && e.count == 1 && rm.brightnessValue == 0.0)
-            rm.brightnessValue = readRational(f, le, fileSize, e.value);
-        return true;
-    case 0x9204:
-        if (e.type == 5 && e.count == 1 && rm.exposureCompensation == 0.0)
-            rm.exposureCompensation = readRational(f, le, fileSize, e.value);
-        return true;
-    default:
+    const auto *spec =
+        std::find_if(std::begin(kExposureRationalFields), std::end(kExposureRationalFields),
+                     [&e](const ExposureRationalField &r) { return r.tag == e.tag; });
+    if (spec == std::end(kExposureRationalFields))
         return false;
-    }
+    double &field = rm.*(spec->field);
+    if (e.type != 5 || e.count != 1 || field != 0.0)
+        return true;
+    const double value = readRational(f, le, fileSize, e.value);
+    if (!spec->positiveOnly || value > 0.0)
+        field = value;
+    return true;
 }
 
 static bool parseExposureAuxTag(FILE *f, bool le, uint64_t fileSize, const IfdEntry &e,

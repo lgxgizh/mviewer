@@ -17,6 +17,7 @@ add_library(mviewer_core SHARED
     core/MainThreadDispatcher.cpp
     core/image/Decoder.cpp
     core/image/decoder/QtDecoder.cpp
+    core/image/decoder/QtDecoder_wic.cpp
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
@@ -68,6 +69,7 @@ add_library(mviewer_core SHARED
     core/MemoryTrim.cpp
     core/SelfTest.cpp
     core/SettingsIO.cpp
+    core/analysis/ImageOverlay.cpp
     core/analysis/AnalysisEngine.cpp
     core/analysis/AnalysisEngine_metrics.cpp
     core/analysis/PixelInspector.cpp
@@ -177,6 +179,7 @@ add_library(mviewer_ui STATIC
     mainwindow_export.cpp
     mainwindow_view.cpp
     mainwindow_keys.cpp
+    mainwindow_selection.cpp
     selectionmodel.cpp
     directorymodel.cpp
     imagelistmodel.cpp
@@ -185,6 +188,7 @@ add_library(mviewer_ui STATIC
     appstate.cpp
     imageviewer.cpp
     imageviewer_loading.cpp
+    imageviewer_browse.cpp
     imageviewer_multiframe.cpp
     imageviewer_lod.cpp
     imageviewer_paint.cpp
