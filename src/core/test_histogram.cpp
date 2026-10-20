@@ -4,11 +4,13 @@
 //
 // P0 #③: unit tests for the domain-free RGB histogram computation.
 //
+#include "core/analyzer/PixelAccess.h"
 #include "core/compare/Histogram.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 #include "domain/Histogram.h"
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -293,6 +295,42 @@ int main()
         mviewer::domain::Histogram dh;
         dh.luminance[0] = huge;
         CHECK(dh.totalPixels() == huge, "domain histogram totalPixels is 64-bit");
+    }
+
+    // Canonical luma contract (one Rec.601 form everywhere).
+    {
+        bool grayExact = true;
+        for (int v = 0; v < 256; ++v)
+            grayExact = grayExact && lumaRec601_8(v, v, v) == v &&
+                        luminance(static_cast<uint8_t>(v), static_cast<uint8_t>(v),
+                                  static_cast<uint8_t>(v)) == v;
+        CHECK(grayExact, "every gray level maps to itself (float truncation lost 65 levels)");
+        CHECK(lumaRec601_8(255, 0, 0) == 76 && lumaRec601_8(0, 255, 0) == 150 &&
+                  lumaRec601_8(0, 0, 255) == 29,
+              "primaries: R 76, G 150, B 29");
+        bool withinHalf = true;
+        bool sameEverywhere = true;
+        for (int r = 0; r < 256; r += 5)
+            for (int g = 0; g < 256; g += 7)
+                for (int b = 0; b < 256; b += 11)
+                {
+                    const int y = lumaRec601_8(r, g, b);
+                    // Rounding is exact against the 16-bit weights (<= 0.5);
+                    // those weights differ from 0.299 / 0.587 / 0.114 by
+                    // < 1e-5 each, adding at most ~0.002 LSB at 8 bits.
+                    const double fixedExact = (19595.0 * r + 38470.0 * g + 7471.0 * b) / 65536.0;
+                    const double exact = 0.299 * r + 0.587 * g + 0.114 * b;
+                    withinHalf = withinHalf && std::fabs(y - fixedExact) <= 0.5 &&
+                                 std::fabs(y - exact) <= 0.5 + 2e-3;
+                    sameEverywhere =
+                        sameEverywhere &&
+                        y == luminance(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
+                                       static_cast<uint8_t>(b)) &&
+                        y == lumaRec601(Rgb8{r, g, b});
+                }
+        CHECK(withinHalf, "fixed point rounds to nearest (|error| <= 0.5 LSB)");
+        CHECK(sameEverywhere, "histogram luminance() and analyzer lumaRec601() agree");
+        CHECK(rgbMean(Rgb8{10, 20, 31}) == 20, "channel mean stays a separate, named quantity");
     }
 
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);

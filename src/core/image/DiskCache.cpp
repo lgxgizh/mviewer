@@ -359,7 +359,14 @@ bool DiskCache::get(const std::string &key, ImageData &out)
         return false;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
-    q.prepare("SELECT w, h, fmt, data FROM blobs WHERE key = ?");
+    // One statement: the payload is only materialized when it is within the
+    // entry-size threshold. A larger row predates the threshold (or was written
+    // under a larger one); it is dropped instead of read.
+    const qint64 maxEntry = static_cast<qint64>(m_maxEntryBytes.load());
+    q.prepare("SELECT w, h, fmt, length(data), CASE WHEN ? = 0 OR length(data) <= ? THEN data "
+              "END FROM blobs WHERE key = ?");
+    q.addBindValue(QVariant::fromValue<qint64>(maxEntry));
+    q.addBindValue(QVariant::fromValue<qint64>(maxEntry));
     q.addBindValue(QVariant(QString::fromStdString(key)));
     if (!q.exec() || !q.next())
         return false;
@@ -367,7 +374,14 @@ bool DiskCache::get(const std::string &key, ImageData &out)
     const int w = q.value(0).toInt();
     const int h = q.value(1).toInt();
     const int fmt = q.value(2).toInt();
-    const QByteArray blob = q.value(3).toByteArray();
+    const qint64 storedBytes = q.value(3).toLongLong();
+    if (maxEntry > 0 && storedBytes > maxEntry)
+    {
+        q.finish();
+        remove(key);
+        return false;
+    }
+    const QByteArray blob = q.value(4).toByteArray();
     if (w <= 0 || h <= 0 || blob.isEmpty())
         return false;
     // Reject implausible dimensions before allocating: a corrupt row must not be
@@ -417,6 +431,14 @@ void DiskCache::put(const std::string &key, const ImageData &img)
     // truncating them into an unreadable row.
     if (img.byteSize() > static_cast<size_t>((std::numeric_limits<int>::max)()))
         return;
+    // Large full-resolution frames are not persisted (see maxEntryBytes()):
+    // writing and re-reading an uncompressed BLOB of that size stalls the
+    // SQLite lock longer than a re-decode costs.
+    if (!persistsBytes(img.byteSize()))
+    {
+        m_skippedLarge.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     q.prepare("INSERT OR REPLACE INTO blobs(key, w, h, fmt, ts, data) VALUES(?, "

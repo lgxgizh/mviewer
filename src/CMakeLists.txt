@@ -12,6 +12,7 @@ endif()
 
 add_library(mviewer_core SHARED
     runtime_storage.cpp
+    core/async/CooperativeCancel.cpp
     core/EventBus.cpp
     core/FileIdentity.cpp
     core/MainThreadDispatcher.cpp

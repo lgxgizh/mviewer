@@ -1,4 +1,5 @@
 #include "core/image/decoder/QtFallbackDecoder.h"
+#include "core/async/CooperativeCancel.h"
 #include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
@@ -89,6 +90,13 @@ mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>
 QtFallbackDecoder::decodeFullResult(const std::string &path,
                                     mviewer::domain::ImageMetadata &outMeta) const
 {
+    // The registry falls through to this decoder when a specific one failed.
+    // A cancelled RAW demosaic must not be retried here as a generic image.
+    if (mviewer::core::cooperativeCancelRequested())
+    {
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {mviewer::domain::DecodeErrorCode::Cancelled, "decode cancelled: " + path, path});
+    }
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImageReader reader(qPath);
     reader.setAutoTransform(true);

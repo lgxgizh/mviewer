@@ -561,13 +561,8 @@ void writeMarkerPixel(ImageBuffer &img, int x, int y, MarkerColor color)
         pixel[2] = color.r;
         break;
     case PixelFormat::Grayscale8:
-    {
-        const int lum = (static_cast<int>(color.r) * 77 + static_cast<int>(color.g) * 150 +
-                         static_cast<int>(color.b) * 29) >>
-                        8;
-        pixel[0] = static_cast<uint8_t>(lum);
+        pixel[0] = static_cast<uint8_t>(lumaRec601_8(color.r, color.g, color.b));
         break;
-    }
     }
 }
 

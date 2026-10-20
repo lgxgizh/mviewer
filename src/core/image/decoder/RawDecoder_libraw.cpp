@@ -1,5 +1,6 @@
 #include "core/image/decoder/RawDecoder.h"
 
+#include "core/async/CooperativeCancel.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/decoder/RawDecodePlan.h"
@@ -8,9 +9,14 @@
 #include <QFileInfo>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <condition_variable>
 #include <cstring>
 #include <exception>
+#include <memory>
+#include <mutex>
+#include <thread>
 
 #if defined(MVIEWER_HAS_LIBRAW)
 #include "libraw/libraw.h"
@@ -30,6 +36,72 @@ ImageData scaleToEdge(ImageData image, int maxEdge)
     const int th = (std::max)(1, static_cast<int>(std::lround(image.height * ratio)));
     return RenderEngine::scaleBoundedStatic(image, RenderSize{tw, th});
 }
+
+#if defined(MVIEWER_HAS_LIBRAW)
+// LibRaw progress callback: a non-zero return aborts the current stage
+// (open / unpack / dcraw_process) with LIBRAW_CANCELLED_BY_CALLBACK.
+int librawCancelProgress(void *, enum LibRaw_progress, int, int)
+{
+    return mviewer::core::cooperativeCancelRequested() ? 1 : 0;
+}
+
+// The progress callback only runs at stage boundaries; a full AHD demosaic
+// spends most of its time inside one stage, polling LibRaw::checkCancel().
+// This watcher evaluates the decoding thread's probe chain every 20 ms and
+// raises LibRaw's cancel flag, so a stale full decode stops mid-stage.
+class LibrawCancelWatch
+{
+  public:
+    explicit LibrawCancelWatch(LibRaw &raw)
+    {
+        const mviewer::core::ScopedCancelProbe *chain =
+            mviewer::core::ScopedCancelProbe::installed();
+        if (!chain)
+            return;
+        try
+        {
+            m_thread = std::thread(
+                [this, &raw, chain]()
+                {
+                    std::unique_lock<std::mutex> lock(m_mutex);
+                    while (!m_cv.wait_for(lock, std::chrono::milliseconds(20),
+                                          [this]() { return m_done; }))
+                    {
+                        if (mviewer::core::ScopedCancelProbe::cancelRequested(chain))
+                        {
+                            raw.setCancelFlag();
+                            return;
+                        }
+                    }
+                });
+        }
+        catch (...)
+        {
+            // No watcher thread: stage-boundary cancel still applies.
+            m_done = true;
+        }
+    }
+    ~LibrawCancelWatch()
+    {
+        if (!m_thread.joinable())
+            return;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_done = true;
+        }
+        m_cv.notify_all();
+        m_thread.join();
+    }
+    LibrawCancelWatch(const LibrawCancelWatch &) = delete;
+    LibrawCancelWatch &operator=(const LibrawCancelWatch &) = delete;
+
+  private:
+    std::mutex m_mutex;
+    std::condition_variable m_cv;
+    bool m_done = false;
+    std::thread m_thread;
+};
+#endif
 } // namespace
 
 bool RawDecoder::librawAvailable()
@@ -49,9 +121,14 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
     (void)maxEdge;
     return {};
 #else
+    if (mviewer::core::cooperativeCancelRequested())
+        return {};
     try
     {
+        // Every early return below leaves through ~LibRaw (recycle + free) and
+        // the processed image's unique_ptr, including a cancelled stage.
         LibRaw raw;
+        raw.set_progress_handler(&librawCancelProgress, nullptr);
         const auto native = mviewer::core::pathFromUtf8(path);
 #if defined(_WIN32)
         const int opened = raw.open_file(native.wstring().c_str());
@@ -81,7 +158,16 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
             raw.recycle();
             return {};
         }
-        if (raw.dcraw_process() != LIBRAW_SUCCESS)
+        // A stale request aborts the demosaic from the progress callback (or
+        // the watcher, mid-stage); decodeRawPixels() then reports it as
+        // cancelled, not as a broken file.
+        int processed = LIBRAW_UNSPECIFIED_ERROR;
+        {
+            const std::unique_ptr<LibrawCancelWatch> watch =
+                halfSize ? nullptr : std::make_unique<LibrawCancelWatch>(raw);
+            processed = raw.dcraw_process();
+        }
+        if (processed != LIBRAW_SUCCESS || mviewer::core::cooperativeCancelRequested())
         {
             raw.recycle();
             return {};
@@ -145,6 +231,11 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
 
 ImageData RawDecoder::decodeRawPixels(const std::string &path, int maxEdge, bool allowFull) const
 {
+    // A stale request does no work and never falls back to the preview: the
+    // caller is gone, and an empty result plus cooperativeCancelRequested()
+    // is reported as DecodeErrorCode::Cancelled.
+    if (mviewer::core::cooperativeCancelRequested())
+        return {};
     // One preview decode. When it already covers the request (or LibRaw is not
     // linked) this is the whole path — the historical embedded-JPEG fast path.
     const int previewEdgeRequest = maxEdge > 0 ? maxEdge : 0;
@@ -161,6 +252,8 @@ ImageData RawDecoder::decodeRawPixels(const std::string &path, int maxEdge, bool
         ImageData half = demosaicWithLibraw(path, true, maxEdge);
         if (!half.isNull())
             return half;
+        if (mviewer::core::cooperativeCancelRequested())
+            return {};
         return preview;
     }
 
@@ -171,6 +264,8 @@ ImageData RawDecoder::decodeRawPixels(const std::string &path, int maxEdge, bool
         ImageData demosaic = demosaicWithLibraw(path, false, 0);
         if (!demosaic.isNull())
             return demosaic;
+        if (mviewer::core::cooperativeCancelRequested())
+            return {};
     }
     return preview;
 }

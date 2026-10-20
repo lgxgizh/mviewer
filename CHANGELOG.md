@@ -24,6 +24,31 @@
   (`src/rendercommandpainter.{h,cpp}`); `core/render/RenderEngine.h` no longer
   names `QPainter`/`QRect`. Drawing output is unchanged (scaling still uses the
   active backend). `docs/api/RenderEngine.md` updated.
+- **DiskCache owns the large-frame policy** (`DiskCache::maxEntryBytes()`, default
+  `kDefaultMaxEntryBytes` = 16 MiB, configurable, 0 = off). Rows are uncompressed
+  pixel BLOBs; a frame above the threshold (e.g. a 4096x3072 RGB24 JPEG, 36 MiB)
+  stays in the memory tiers only. Previously only `ImageRepository::loadPixels`
+  had a hard-coded 16 MB guard, while `CacheManager::putDisk` and
+  `ImageRepository::cacheToDisk` still wrote full-res BLOBs of any size. A legacy
+  row above the threshold is purged on read without materializing its payload.
+  `CacheManager` API unchanged. Tests: `cache_tests` (threshold, configurable,
+  legacy purge, 4096x3072 / 2048x2048 fixtures), `repository_tests` (4096x3072
+  JPEG load is not persisted, 1024x768 still hits the disk tier).
+- **One canonical 8-bit luma** (ADR 027): `lumaRec601_8()` in `ImageBuffer.h`,
+  `(19595 R + 38470 G + 7471 B + 32768) >> 16` — rounded Rec.601, gray levels
+  map to themselves. It replaces the float-truncating `luminance()` (histogram,
+  image stats, alignment, overlays: 65 of 256 gray levels read one LSB low), the
+  truncating analyzer `lumaRec601()` (ROI stats, brightness / contrast /
+  exposure / blur), the USM luma-only extraction, the Grayscale8 crosshair
+  marker's `(77, 150, 29) >> 8`, and the Pixel Inspector's
+  Rec.709-weighted neighborhood luma (now agrees with ROI stats). Values that
+  used to truncate move by at most **+1 LSB**; gray pixels do not change. The
+  channel-mean helpers used on purpose by noise / sharpness / entropy /
+  dead-pixel / MTF are renamed `rgbMean` / `rgbMeanF`. Linear CIE Y (inspector
+  colour readouts, ColorChecker) is unchanged. No Rec.601/709 preference was
+  added. Tests: `histogram_tests` pins the luma contract; `compare_acceptance_tests`
+  M43 expects the Rec.601 7x7 neighborhood mean.
+
 ### Build
 
 - **Portability / Modern CMake** (no change to `build.ps1`, presets or CI):
@@ -81,6 +106,27 @@
   - `imageviewer_loading.cpp` (791 → 701 / 800 lines): browse-sequence
     bookkeeping (`setBrowseSequence`, `showBrowseFullscreen`,
     `renameBrowsePaths`) moved to `imageviewer_browse.cpp`.
+
+### Fixed
+
+- **LibRaw demosaic is cooperatively cancellable**: a stale RAW decode (request
+  cancelled via `cancelAsync`, or its consumer `AsyncLifetimeToken` gone) no
+  longer holds a DecodePool worker until `dcraw_process()` finishes. New
+  Qt-free `core/async/CooperativeCancel.{h,cpp}` (`ScopedCancelProbe`, thread-local,
+  nestable) is installed by `ImageRepository`'s async load / frame / preload
+  workers; `RawDecoder` registers a LibRaw progress handler that aborts at stage
+  boundaries, and a full (AHD) demosaic also gets a 20 ms watcher that raises
+  `LibRaw::setCancelFlag()` mid-stage. No `IDecoder` / `DecoderRegistry`
+  signature changed.
+  - A cancelled decode is reported as the new `DecodeErrorCode::Cancelled`
+    (not `CorruptData`), skips the embedded-preview fallback, and the Qt
+    fallback decoder does not retry it; nothing is cached. LibRaw buffers are
+    released by the existing RAII paths (`~LibRaw`, processed-image
+    `unique_ptr`).
+  - Tests: `rawdecode_tests` covers probe nesting / thread isolation / watcher
+    evaluation and Cancelled reporting through `RawDecoder` and the registry
+    without RAW data; a real LibRaw mid-demosaic abort runs when
+    `MVIEWER_TEST_RAW_FILE` names a RAW file (skipped otherwise).
 
 ## [1.0.141] - 2026-10-20
 
