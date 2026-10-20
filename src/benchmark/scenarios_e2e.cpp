@@ -8,6 +8,7 @@
 #include "imageviewer.h"
 #include "mainwindow.h"
 #include "metadatapanel.h"
+#include "selectionmodel.h"
 
 #include <QApplication>
 #include <QEventLoop>
@@ -131,8 +132,9 @@ struct E2eHost
     std::unique_ptr<MainWindow> window;
     ImageViewer *viewer = nullptr;
     ImageListModel *list = nullptr;
+    SelectionModel *selection = nullptr;
     QString readyPath;
-    QString error;
+    std::string error;
 
     bool prepareSubset(const Corpus &corpus)
     {
@@ -161,6 +163,11 @@ struct E2eHost
         return true;
     }
 
+    QString currentImage() const
+    {
+        return selection ? selection->currentImage() : QString();
+    }
+
     bool openGallery()
     {
         window = std::make_unique<MainWindow>();
@@ -171,9 +178,10 @@ struct E2eHost
             meta->show();
         window->openExternalTargets({subset.path()});
         list = window->findChild<ImageListModel *>();
-        const bool listed = waitUntil(
-            [this] { return list && list->count() >= 2 && !window->currentImagePath().isEmpty(); },
-            kSetupTimeoutMs);
+        selection = window->findChild<SelectionModel *>();
+        const bool listed =
+            waitUntil([this] { return list && list->count() >= 2 && !currentImage().isEmpty(); },
+                      kSetupTimeoutMs);
         if (!listed)
         {
             error = "gallery did not list >=2 images";
@@ -184,7 +192,7 @@ struct E2eHost
 
     bool openViewer()
     {
-        const QString first = window->currentImagePath();
+        const QString first = currentImage();
         window->onImageOpen(first);
         viewer = findViewer();
         const bool shown = waitUntil(

@@ -1,6 +1,8 @@
 #include "benchmark/corpus.h"
 #include "benchmark/scenarios.h"
 
+#include "application/Shutdown.h"
+
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDateTime>
@@ -21,6 +23,7 @@
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <thread>
@@ -519,6 +522,11 @@ int main(int argc, char **argv)
         app = std::make_unique<QApplication>(argc, argv);
     else
         app = std::make_unique<QCoreApplication>(argc, argv);
+    // B18/B19 start UI workers: join them before the app object goes away
+    // (ADR 017 shared shutdown path; declared after `app` so it runs first).
+    std::optional<mviewer::application::ScopedProcessShutdown> processShutdown;
+    if (needGui)
+        processShutdown.emplace();
 
     std::cout << "=== MViewer benchmark (M10) ===" << '\n';
     if (smoke)

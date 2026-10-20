@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **End-to-end view-switch benchmarks**: B18 (`e2e_switch_warm_p50_ms`) and
+  B19 (`e2e_switch_cold_p50_ms`) time the real UI next/previous path
+  (`CommandRegistry` `navigate_next` → `MainWindow::navigate` → `ImageViewer`
+  present + paint, including preview/metadata/overlay updates) offscreen.
+  B7/B8 remain repository-level `ImageRepository::load()` measurements. The
+  new scenarios are report-only (not in `scenario_map`) until CI calibrates
+  budgets; `--smoke` skips them.
+
 ## [1.0.142] - 2026-10-20
 
 ### Release
@@ -26,15 +36,6 @@
   `ScopedProcessShutdown` instead of `TerminateProcess` / `std::_Exit`. The
   workflow suite's offscreen `QFileDialog` heap window remains the single
   ADR-017 exception.
-### Added
-
-- **End-to-end view-switch benchmarks**: B18 (`e2e_switch_warm_p50_ms`) and
-  B19 (`e2e_switch_cold_p50_ms`) time the real UI next/previous path
-  (`CommandRegistry` `navigate_next` → `MainWindow::navigate` → `ImageViewer`
-  present + paint, including preview/metadata/overlay updates) offscreen.
-  B7/B8 remain repository-level `ImageRepository::load()` measurements. The
-  new scenarios are report-only (not in `scenario_map`) until CI calibrates
-  budgets; `--smoke` skips them.
 
 ### Changed
 
