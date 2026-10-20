@@ -1,6 +1,7 @@
 # Isolated LibRaw (LGPL-2.1 / CDDL-1.0) for half-size and full demosaic.
 # Fetched at configure time so Windows CI (build.ps1 + MSVC + Qt) picks it up
-# without a vcpkg toolchain or workflow edit. Optional codecs that need
+# without a vcpkg toolchain or workflow edit; a verified local archive is
+# preferred when available (see MVIEWER_LIBRAW_ARCHIVE below). Optional codecs that need
 # libjpeg/lcms/jasper stay off; LibRaw's internal decoders cover CR2/NEF/ARW
 # half-size. Sources compile at /W0 (-w) so their warnings cannot trip the
 # CI "warning Cxxxx" gate.
@@ -27,8 +28,36 @@ set(MVIEWER_LIBRAW_URL
 set(MVIEWER_LIBRAW_SHA256
     "8baeb5253c746441fadad62e9c5c43ff4e414e41b0c45d6dcabccb542b2dff4b")
 
+# Offline / flaky-network fallback: a pre-downloaded copy of the SAME tag archive
+# is used when present and its SHA256 matches. Lookup order:
+#   1. MVIEWER_LIBRAW_ARCHIVE (cache var, or environment variable of that name)
+#   2. third_party/LibRaw-<version>.tar.gz in the source tree
+#   3. the GitHub tag URL above
+# A local file with the wrong hash is ignored with a warning (never used).
+set(MVIEWER_LIBRAW_ARCHIVE "$ENV{MVIEWER_LIBRAW_ARCHIVE}" CACHE FILEPATH
+    "Local LibRaw ${MVIEWER_LIBRAW_VERSION} tag archive (.tar.gz); empty = third_party/ or download")
+set(_libraw_fetch_url "${MVIEWER_LIBRAW_URL}")
+foreach(_libraw_candidate IN ITEMS
+        "${MVIEWER_LIBRAW_ARCHIVE}"
+        "${CMAKE_SOURCE_DIR}/third_party/LibRaw-${MVIEWER_LIBRAW_VERSION}.tar.gz")
+    if(_libraw_candidate STREQUAL "" OR NOT EXISTS "${_libraw_candidate}")
+        continue()
+    endif()
+    file(SHA256 "${_libraw_candidate}" _libraw_candidate_sha256)
+    if(_libraw_candidate_sha256 STREQUAL MVIEWER_LIBRAW_SHA256)
+        file(TO_CMAKE_PATH "${_libraw_candidate}" _libraw_fetch_url)
+        message(STATUS "LibRaw: using local archive ${_libraw_fetch_url}")
+        break()
+    endif()
+    message(WARNING "LibRaw: ignoring ${_libraw_candidate} (SHA256 ${_libraw_candidate_sha256} "
+                    "does not match the ${MVIEWER_LIBRAW_VERSION} tag archive)")
+endforeach()
+if(MVIEWER_LIBRAW_ARCHIVE AND NOT EXISTS "${MVIEWER_LIBRAW_ARCHIVE}")
+    message(WARNING "LibRaw: MVIEWER_LIBRAW_ARCHIVE='${MVIEWER_LIBRAW_ARCHIVE}' does not exist")
+endif()
+
 FetchContent_Declare(mviewer_libraw_src
-    URL ${MVIEWER_LIBRAW_URL}
+    URL ${_libraw_fetch_url}
     URL_HASH SHA256=${MVIEWER_LIBRAW_SHA256}
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )

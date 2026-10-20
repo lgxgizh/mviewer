@@ -54,3 +54,6 @@ release_checklist_report.md
 # Python bytecode from CI helper scripts (local debug runs)
 __pycache__/
 *.pyc
+
+# Optional pre-downloaded LibRaw tag archive (cmake/LibRaw.cmake); never committed.
+third_party/*.tar.gz

@@ -14,6 +14,26 @@
   (`src/rendercommandpainter.{h,cpp}`); `core/render/RenderEngine.h` no longer
   names `QPainter`/`QRect`. Drawing output is unchanged (scaling still uses the
   active backend). `docs/api/RenderEngine.md` updated.
+### Build
+
+- **Portability / Modern CMake** (no change to `build.ps1`, presets or CI):
+  - `cmake/toolchain-msvc.cmake` (manual toolchain; not used by `build.ps1`/CI)
+    now takes MSVC / Windows SDK paths from `VCToolsInstallDir`,
+    `WindowsSdkDir`, `WindowsSDKVersion` (or `MVIEWER_MSVC_TOOLS_DIR` /
+    `MVIEWER_WINDOWS_SDK_DIR` / `MVIEWER_WINDOWS_SDK_VERSION`); the hard-coded
+    `D:/msvc` + SDK `10.0.26100.0` paths are only the last-resort fallback.
+  - `cmake/LibRaw.cmake`: a local LibRaw `0.21.4` archive
+    (`MVIEWER_LIBRAW_ARCHIVE` cache/env var, else
+    `third_party/LibRaw-0.21.4.tar.gz`) is used when its SHA256 matches the
+    pinned hash, before falling back to the GitHub download. Mismatching files
+    are ignored with a warning.
+  - The generated-header directory (`MViewerVersion.h`) is a `PUBLIC` include
+    of `mviewer_core` instead of a global `include_directories`.
+  - Per-target warnings via `mviewer_target_warnings()`
+    (`cmake/MViewerWarnings.cmake`) on `mviewer_core` / `mviewer_ui` /
+    `mviewer_application` / `MViewer`: `-Wall -Wextra` on GCC/Clang (no
+    `-Werror`); MSVC `/W4` behind `MVIEWER_MSVC_W4` (default `OFF`, because
+    the CI zero-warnings gate is calibrated at the default level).
 ### Documentation
 
 - **Public roadmap synced to v1.0.141**: `docs/ROADMAP_PUBLIC.md` no longer
