@@ -24,6 +24,20 @@
   `CacheManager` API unchanged. Tests: `cache_tests` (threshold, configurable,
   legacy purge, 4096x3072 / 2048x2048 fixtures), `repository_tests` (4096x3072
   JPEG load is not persisted, 1024x768 still hits the disk tier).
+- **One canonical 8-bit luma** (ADR 027): `lumaRec601_8()` in `ImageBuffer.h`,
+  `(19595 R + 38470 G + 7471 B + 32768) >> 16` — rounded Rec.601, gray levels
+  map to themselves. It replaces the float-truncating `luminance()` (histogram,
+  image stats, alignment, overlays: 65 of 256 gray levels read one LSB low), the
+  truncating analyzer `lumaRec601()` (ROI stats, brightness / contrast /
+  exposure / blur), the USM luma-only extraction, the Grayscale8 crosshair
+  marker's `(77, 150, 29) >> 8`, and the Pixel Inspector's
+  Rec.709-weighted neighborhood luma (now agrees with ROI stats). Values that
+  used to truncate move by at most **+1 LSB**; gray pixels do not change. The
+  channel-mean helpers used on purpose by noise / sharpness / entropy /
+  dead-pixel / MTF are renamed `rgbMean` / `rgbMeanF`. Linear CIE Y (inspector
+  colour readouts, ColorChecker) is unchanged. No Rec.601/709 preference was
+  added. Tests: `histogram_tests` pins the luma contract; `compare_acceptance_tests`
+  M43 expects the Rec.601 7x7 neighborhood mean.
 
 ### Build
 
