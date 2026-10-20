@@ -15,7 +15,10 @@ enum class DecodeErrorCode
     CorruptData,
     UnsupportedFormat,
     OutOfMemory,
-    Unknown
+    Unknown,
+    // The request that owned the decode went stale (cooperative cancel). Not
+    // a property of the file: never report it as corrupt or cache it.
+    Cancelled
 };
 
 struct DecodeError

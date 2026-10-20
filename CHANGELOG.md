@@ -51,6 +51,27 @@
   does not mention the current `project(VERSION)`, so a version bump must
   update the public roadmap in the same PR.
 
+### Fixed
+
+- **LibRaw demosaic is cooperatively cancellable**: a stale RAW decode (request
+  cancelled via `cancelAsync`, or its consumer `AsyncLifetimeToken` gone) no
+  longer holds a DecodePool worker until `dcraw_process()` finishes. New
+  Qt-free `core/async/CooperativeCancel.h` (`ScopedCancelProbe`, thread-local,
+  nestable) is installed by `ImageRepository`'s async load / frame / preload
+  workers; `RawDecoder` registers a LibRaw progress handler that aborts at stage
+  boundaries, and a full (AHD) demosaic also gets a 20 ms watcher that raises
+  `LibRaw::setCancelFlag()` mid-stage. No `IDecoder` / `DecoderRegistry`
+  signature changed.
+  - A cancelled decode is reported as the new `DecodeErrorCode::Cancelled`
+    (not `CorruptData`), skips the embedded-preview fallback, and the Qt
+    fallback decoder does not retry it; nothing is cached. LibRaw buffers are
+    released by the existing RAII paths (`~LibRaw`, processed-image
+    `unique_ptr`).
+  - Tests: `rawdecode_tests` covers probe nesting / thread isolation / watcher
+    evaluation and Cancelled reporting through `RawDecoder` and the registry
+    without RAW data; a real LibRaw mid-demosaic abort runs when
+    `MVIEWER_TEST_RAW_FILE` names a RAW file (skipped otherwise).
+
 ## [1.0.141] - 2026-10-20
 
 ### Release
