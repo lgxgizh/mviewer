@@ -651,6 +651,56 @@ static void testDiskCacheBoundsHardening()
     disk.clear();
 }
 
+// Large full-resolution frames are not persisted: rows are uncompressed BLOBs.
+// Fixture sizes follow the user's compare report (4096x3072 JPEGs).
+static void testDiskCacheLargeEntryThreshold()
+{
+    printf("\n[DiskCache large-entry threshold]\n");
+    DiskCache &disk = DiskCache::instance();
+    disk.clear();
+    CHECK(disk.maxEntryBytes() == DiskCache::kDefaultMaxEntryBytes &&
+              DiskCache::kDefaultMaxEntryBytes == size_t{16} * 1024 * 1024,
+          "default entry threshold is 16 MiB");
+
+    const ImageData large = makeImageData(4096, 3072, PixelFormat::RGB24);  // 36 MiB
+    const ImageData medium = makeImageData(2048, 2048, PixelFormat::RGB24); // 12 MiB
+    CHECK(!large.isNull() && !medium.isNull(), "4096x3072 and 2048x2048 fixtures allocate");
+    CHECK(!disk.persistsBytes(large.byteSize()) && disk.persistsBytes(medium.byteSize()),
+          "persistsBytes: 4096x3072 RGB24 no, 2048x2048 RGB24 yes");
+
+    const size_t skippedBefore = disk.skippedLargeEntries();
+    disk.put("large_4096x3072", large);
+    CacheManager::instance().putDisk("large_via_manager", large);
+    ImageData out;
+    CHECK(!disk.get("large_4096x3072", out) && !disk.get("large_via_manager", out),
+          "4096x3072 full-res frame is not persisted (direct and via CacheManager)");
+    CHECK(disk.skippedLargeEntries() == skippedBefore + 2, "both skips are counted");
+    CHECK(disk.entryCount() == 0 && disk.totalBytes() == 0, "no BLOB written for large frames");
+
+    disk.put("medium_2048x2048", medium);
+    CHECK(disk.get("medium_2048x2048", out) && out.width == 2048 && out.height == 2048,
+          "2048x2048 frame under the threshold is persisted and read back");
+
+    // Configurable: a lower threshold drops the medium frame, 0 disables it.
+    disk.setMaxEntryBytes(size_t{4} * 1024 * 1024);
+    disk.put("medium_low_cap", medium);
+    CHECK(!disk.get("medium_low_cap", out), "lowered threshold drops a 12 MiB frame");
+    disk.setMaxEntryBytes(0);
+    disk.put("large_unlimited", large);
+    CHECK(disk.get("large_unlimited", out) && out.width == 4096,
+          "threshold 0 persists the 4096x3072 frame (legacy row)");
+
+    // A row above the current threshold (written before it existed) is dropped
+    // on read instead of materializing a 36 MiB BLOB.
+    disk.setMaxEntryBytes(DiskCache::kDefaultMaxEntryBytes);
+    const size_t entriesBefore = disk.entryCount();
+    CHECK(!disk.get("large_unlimited", out), "legacy oversized row is a miss");
+    CHECK(disk.entryCount() == entriesBefore - 1, "legacy oversized row is purged on read");
+    CHECK(disk.get("medium_2048x2048", out), "rows under the threshold still hit");
+
+    disk.clear();
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -668,6 +718,7 @@ int main(int argc, char **argv)
     testMetadataLruAndHardening();
     testDiskCacheLruLowWater();
     testDiskCacheBoundsHardening();
+    testDiskCacheLargeEntryThreshold();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
