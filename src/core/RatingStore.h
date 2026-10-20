@@ -111,6 +111,9 @@ class RatingStore
     void flushSave();
     bool load();
     void setFilePath(const std::string &path);
+    // Join the flags persistence worker. No-op if instance() was never called.
+    // Call while QCoreApplication is still alive (ADR 017).
+    static void joinBackgroundWorker();
 
   private:
     RatingStore();
@@ -120,6 +123,7 @@ class RatingStore
 
     void scheduleSave();
     void flagsWorkerLoop();
+    void stopWorker();
     bool saveSnapshot() const;
     void loadFlags();
 

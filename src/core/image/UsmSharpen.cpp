@@ -166,7 +166,7 @@ void extractLuma(const uint8_t *src, int w, int h, int cpp, PixelFormat format, 
         const int r = isBgr ? p[2] : p[0];
         const int g = p[1];
         const int b = isBgr ? p[0] : p[2];
-        luma[i] = static_cast<uint8_t>((19595 * r + 38470 * g + 7471 * b) >> 16);
+        luma[i] = static_cast<uint8_t>(lumaRec601_8(r, g, b));
     }
 }
 

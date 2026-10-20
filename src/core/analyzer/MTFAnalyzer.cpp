@@ -75,13 +75,13 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            leftSum += lumaAverageF(unpackRgb8(p, v.format));
+            leftSum += rgbMeanF(unpackRgb8(p, v.format));
         }
         for (int x = x1 - qW; x < x1; ++x)
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            rightSum += lumaAverageF(unpackRgb8(p, v.format));
+            rightSum += rgbMeanF(unpackRgb8(p, v.format));
         }
     }
     const double diffX = std::abs((rightSum - leftSum) / (static_cast<double>(qW * h)));
@@ -92,13 +92,13 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            topSum += lumaAverageF(unpackRgb8(p, v.format));
+            topSum += rgbMeanF(unpackRgb8(p, v.format));
         }
         for (int y = y1 - qH; y < y1; ++y)
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            bottomSum += lumaAverageF(unpackRgb8(p, v.format));
+            bottomSum += rgbMeanF(unpackRgb8(p, v.format));
         }
     }
     const double diffY = std::abs((bottomSum - topSum) / (static_cast<double>(w * qH)));
@@ -118,7 +118,7 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
             {
                 const uint8_t *p =
                     v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-                col += lumaAverageF(unpackRgb8(p, v.format));
+                col += rgbMeanF(unpackRgb8(p, v.format));
             }
             profile[static_cast<size_t>(x - x0)] = col / h;
         }
@@ -132,7 +132,7 @@ std::vector<double> extractEdgeProfile(const ConstImageView &v, int x0, int y0, 
             {
                 const uint8_t *p =
                     v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-                row += lumaAverageF(unpackRgb8(p, v.format));
+                row += rgbMeanF(unpackRgb8(p, v.format));
             }
             profile[static_cast<size_t>(y - y0)] = row / w;
         }

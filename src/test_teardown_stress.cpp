@@ -1,12 +1,10 @@
 // H23: object-level teardown stress (see docs/adr/017-process-lifetime-services.md).
 //
-// The suite contains several deliberate Qt-teardown workarounds: acceptance
-// tests terminate the process instead of destroying their MainWindow, the
-// workflow suite leaves its last window to process teardown after an offscreen
-// QFileDialog, and process-wide services are intentionally leaked. Those exist
-// for Qt's *global* teardown (static destruction after QCoreApplication is
-// gone, DLL detach ordering) — which no test can fix and which is not a product
-// defect.
+// Process-wide services that own threads or Qt plugin objects are intentionally
+// leaked (ADR 017). Test executables still destroy the widgets they own and
+// return from main() after mviewer::application::shutdownProcessServices().
+// The remaining process-exit exception is the workflow suite's offscreen
+// QFileDialog (documented in test_workflow_ux.cpp).
 //
 // What a test CAN control is object-level teardown: create a real MainWindow,
 // let it start the browse/thumbnail/metadata pipelines and a CompareWorkspace
@@ -23,6 +21,7 @@
 // destruction (documented in test_workflow_ux.cpp), which is an environment
 // property, not something this test should mask.
 
+#include "application/Shutdown.h"
 #include "compareworkspace.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "directorytree.h"
@@ -189,6 +188,8 @@ int main(int argc, char **argv)
     for (int i = 0; i < names.size(); ++i)
         paths << writePng(dir, names[i], colors[i], 48);
     const std::vector<std::string> comparePaths = {paths[0].toStdString(), paths[1].toStdString()};
+
+    mviewer::application::ScopedProcessShutdown shutdown;
 
     // Baseline: the widgets the application itself owns (none, besides any the
     // platform creates lazily). Rounds are compared against the post-first-round

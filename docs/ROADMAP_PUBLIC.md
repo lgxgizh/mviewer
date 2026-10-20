@@ -4,9 +4,9 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.141**
+## Where we are now — **Beta / 1.0.142**
 
-MViewer remains in **Beta**; the current release is **`v1.0.141`**
+MViewer remains in **Beta**; the current release is **`v1.0.142`**
 (2026-10-20, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.141** (current) | Compare stuck "Loading" / low-res mosaic after a pair switch fixed | 🔵 Beta |
+| **1.0.142** (current) | Review hardening: complexity splits, RenderEngine namespace, build portability, LibRaw cancel, DiskCache threshold, unified luma, acceptance wizard, orderly test exit | 🔵 Beta |
+| **1.0.141** | Compare stuck "Loading" / low-res mosaic after a pair switch fixed | ✅ Previous patch |
 | **1.0.140** | Compare mosaic fix, automatic-update-check preference, USM dialog maximize + `Space` pair-hold | ✅ Previous patch |
 | **1.0.139** | Compare local zoom (`Ctrl`+wheel), paste images into the browsed folder, Open Folder | ✅ Previous patch |
 | **1.0.138** | English source language + Simplified Chinese localization, UI language setting | ✅ Previous patch |
@@ -73,7 +74,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.141` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.142` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate

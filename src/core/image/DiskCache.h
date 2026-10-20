@@ -3,6 +3,7 @@
 #include "core/image/ImageBuffer.h"
 
 #include <atomic>
+#include <cstddef>
 #include <mutex>
 #include <set>
 #include <string>
@@ -44,6 +45,32 @@ class DiskCache
     // least recently used rows are dropped down to 90% of the cap.
     void setMaxBytes(size_t n);
     size_t maxBytes() const;
+
+    // Largest decoded payload (bytes) put() persists. Rows are uncompressed
+    // pixel BLOBs, so a full-resolution frame above this costs more SQLite
+    // write/read I/O (and lock hold time) than re-decoding it; such frames
+    // stay in the memory tiers only. Default kDefaultMaxEntryBytes (16 MiB:
+    // e.g. a 4096x3072 RGB24 JPEG, 36 MiB, is not persisted; a 2048x2048
+    // RGB24 frame, 12 MiB, is). 0 disables the threshold (hard caps remain).
+    static constexpr size_t kDefaultMaxEntryBytes = size_t{16} * 1024 * 1024;
+    void setMaxEntryBytes(size_t n)
+    {
+        m_maxEntryBytes = n;
+    }
+    size_t maxEntryBytes() const
+    {
+        return m_maxEntryBytes;
+    }
+    // Whether put() would persist an image of this payload size.
+    bool persistsBytes(size_t bytes) const
+    {
+        return m_maxEntryBytes == 0 || bytes <= m_maxEntryBytes;
+    }
+    // put() calls dropped by the entry-size threshold (diagnostics/tests).
+    size_t skippedLargeEntries() const
+    {
+        return m_skippedLarge.load(std::memory_order_relaxed);
+    }
 
     // Clear all cached entries.
     void clear();
@@ -98,6 +125,8 @@ class DiskCache
     std::string m_dbPath;
     int m_maxEntries = 100000;
     size_t m_maxBytes = 2147483648ULL; // 2 GB default cap
+    std::atomic<size_t> m_maxEntryBytes{kDefaultMaxEntryBytes};
+    std::atomic<size_t> m_skippedLarge{0};
     // Inserts since the last limit enforcement (see put()/enforceLimits()).
     int m_writesSinceEnforce = 0;
 };

@@ -1,3 +1,4 @@
+#include "core/async/CooperativeCancel.h"
 #include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/RawDecoder.h"
@@ -8,11 +9,15 @@
 #include <QImageWriter>
 #include <QTemporaryDir>
 
+#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <initializer_list>
 #include <string>
+#include <thread>
 #include <vector>
 
 static int g_pass = 0;
@@ -78,6 +83,89 @@ static void writeFile(const std::string &path, const std::vector<uint8_t> &data)
 {
     std::ofstream f(path, std::ios::binary);
     f.write(reinterpret_cast<const char *>(data.data()), static_cast<std::streamsize>(data.size()));
+}
+
+// Cooperative cancel: probe semantics plus RawDecoder / registry reporting a
+// stale request as Cancelled (never as a corrupt file, never via the
+// preview / Qt fallback). Runs without real RAW data; a real LibRaw demosaic
+// abort runs only when MVIEWER_TEST_RAW_FILE names a RAW file.
+static void testCooperativeCancel(const std::string &rawPath)
+{
+    using mviewer::core::cooperativeCancelRequested;
+    using mviewer::core::ScopedCancelProbe;
+    using mviewer::domain::DecodeErrorCode;
+
+    CHECK(!cooperativeCancelRequested(), "no probe installed: never cancelled");
+    {
+        std::atomic<bool> stale{false};
+        const ScopedCancelProbe outer([&stale]() { return stale.load(); });
+        CHECK(!cooperativeCancelRequested(), "live probe: not cancelled");
+        {
+            const ScopedCancelProbe inner([]() { return false; });
+            stale.store(true);
+            CHECK(cooperativeCancelRequested(), "stale enclosing probe cancels nested work");
+        }
+        bool otherThread = true;
+        std::thread([&otherThread]() { otherThread = cooperativeCancelRequested(); }).join();
+        CHECK(!otherThread, "probe is thread-local to the decoding thread");
+        const ScopedCancelProbe *chain = ScopedCancelProbe::installed();
+        bool watched = false;
+        std::thread([&watched, chain]() { watched = ScopedCancelProbe::cancelRequested(chain); })
+            .join();
+        CHECK(watched, "watcher thread can evaluate the decoding thread's chain");
+    }
+    CHECK(!cooperativeCancelRequested(), "probe scope restores the previous chain");
+    {
+        const ScopedCancelProbe throwing([]() -> bool { throw 1; });
+        CHECK(!cooperativeCancelRequested(), "throwing probe does not cancel");
+    }
+
+    RawDecoder dec;
+    {
+        const ScopedCancelProbe stale([]() { return true; });
+        mviewer::domain::ImageMetadata meta;
+        auto res = dec.decodeFullResult(rawPath, meta);
+        CHECK(!res.has_value() && res.error().code == DecodeErrorCode::Cancelled,
+              "stale RAW decode reports Cancelled, not CorruptData");
+        auto viaRegistry = DecoderRegistry::instance().decodeFullResult(rawPath, meta);
+        CHECK(!viaRegistry.has_value() && viaRegistry.error().code == DecodeErrorCode::Cancelled,
+              "registry fall-through keeps Cancelled (Qt fallback does not retry)");
+        CHECK(dec.decodeScaled(rawPath, 16).isNull(), "stale scaled decode skips the preview");
+    }
+    {
+        const ScopedCancelProbe live([]() { return false; });
+        mviewer::domain::ImageMetadata meta;
+        auto res = dec.decodeFullResult(rawPath, meta);
+        CHECK(res.has_value() && !res.value().isNull(), "live probe: RAW decodes as before");
+    }
+
+    const char *realRaw = std::getenv("MVIEWER_TEST_RAW_FILE");
+    if (!realRaw || !*realRaw || !RawDecoder::librawAvailable())
+    {
+        printf("  SKIP: real LibRaw demosaic abort (set MVIEWER_TEST_RAW_FILE)\n");
+        return;
+    }
+    std::atomic<bool> stale{false};
+    std::thread flip(
+        [&stale]()
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            stale.store(true);
+        });
+    const auto t0 = std::chrono::steady_clock::now();
+    mviewer::domain::ImageMetadata meta;
+    auto res = [&]()
+    {
+        const ScopedCancelProbe probe([&stale]() { return stale.load(); });
+        return dec.decodeFullResult(realRaw, meta);
+    }();
+    const auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
+    flip.join();
+    printf("  INFO: real RAW decode returned after %lld ms\n", static_cast<long long>(ms));
+    CHECK(!res.has_value() && res.error().code == DecodeErrorCode::Cancelled,
+          "real LibRaw demosaic aborts as Cancelled once the request goes stale");
 }
 
 int main(int argc, char **argv)
@@ -231,6 +319,8 @@ int main(int argc, char **argv)
         CHECK(!paddedScaled.isNull() && paddedScaled.width <= 16 && paddedScaled.height <= 16,
               "padded embedded JPEG honors setScaledSize maxEdge");
     }
+
+    testCooperativeCancel(rawPath);
 
     printf("\n==== RAW decode test: %d passed, %d failed ====\n", g_pass, g_fail);
     fflush(stdout);

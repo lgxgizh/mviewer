@@ -80,6 +80,10 @@ int selectDisplayStandIn(const DisplayRasterLevel *levels, int count,
 // already took. Compare session teardown calls this with the pane caches.
 void releaseDisplayResampleCache() noexcept;
 
+// Join the process-lifetime display-resample pool. No-op if it was never
+// created. Call while QCoreApplication is still alive (ADR 017).
+void waitForDisplayResampleIdle();
+
 // 0 auto, 1 scalar, 2 SSE4.1, 3 AVX2. Test hook; production leaves this at 0.
 void setDisplayResampleIsaForTest(int isa) noexcept;
 

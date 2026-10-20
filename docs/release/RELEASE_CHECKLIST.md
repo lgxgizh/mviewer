@@ -105,6 +105,19 @@ artifacts, installer/version mismatches, checksum errors, dependency gaps,
 crash smoke failures, and packaged selftest failures into hard FAIL results.
 It also disallows `-SkipBench`; no WARN or SKIP can produce a passing RC report.
 
+## 9. Native Windows manual acceptance
+
+Asset- and real-display UX sign-off still run on a physical Windows desktop.
+Drive those MANUAL/BLOCKED rows with the wizard:
+
+```powershell
+pwsh -File scripts/manual_acceptance.ps1
+```
+
+See `docs/acceptance/MANUAL_ACCEPTANCE.md`. Attach `report.md` plus
+`results.json` (and screenshots) to the matching review document before
+claiming native hardware sign-off. Green CTest is not a substitute.
+
 ## Notes
 
 - P6 (GPU / RAW) is delivered as fallback-safe capability: RAW opens via an

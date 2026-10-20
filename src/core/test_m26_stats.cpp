@@ -68,7 +68,7 @@ void testSolidColor()
     CHECK(s.valid, "stats valid");
     CHECK(s.rMean == 10 && s.gMean == 20 && s.bMean == 30, "RGB means exact for solid color");
     CHECK(s.lumMean >= 17.99 && s.lumMean <= 18.01,
-          "luminance mean = (int)(0.299*10 + 0.587*20 + 0.114*30) = 18.0");
+          "luminance mean = round(0.299*10 + 0.587*20 + 0.114*30) = 18.0");
 }
 
 void testFormatsAgree()

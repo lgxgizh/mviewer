@@ -1,4 +1,5 @@
 #include "core/image/decoder/RawDecoder.h"
+#include "core/async/CooperativeCancel.h"
 #include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
@@ -544,6 +545,12 @@ RawDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMeta
     }
 
     ImageData d = decodeRawPixels(path, 0, true);
+    if (d.isNull() && mviewer::core::cooperativeCancelRequested())
+    {
+        return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+            {mviewer::domain::DecodeErrorCode::Cancelled, "RawDecoder: decode cancelled: " + path,
+             path});
+    }
     if (d.isNull())
     {
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
