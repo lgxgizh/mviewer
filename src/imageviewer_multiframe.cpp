@@ -534,6 +534,20 @@ void ImageViewer::persistWindowGeometry()
         emit statusMessageRequested(QStringLiteral("Failed to save viewer window position"), 5000);
 }
 
+void ImageViewer::exitFullscreenForClose()
+{
+    hide();
+    if (property("mviewerFullscreenRequested").toBool() || fullscreenBit(this))
+    {
+        setProperty("mviewerFullscreenRequested", false);
+        setWindowState(windowState() & ~Qt::WindowFullScreen);
+        if (!m_windowedGeometry.isEmpty())
+            restoreGeometry(m_windowedGeometry);
+        dropUnrequestedFullscreen(this);
+        clampWidgetToAvailableScreens(this);
+    }
+}
+
 void ImageViewer::setFullscreenRequested(bool requested)
 {
     // The property is authoritative when offscreen Qt cannot report fullscreen.
@@ -546,6 +560,22 @@ void ImageViewer::setFullscreenRequested(bool requested)
     {
         setWindowState(windowState() | Qt::WindowFullScreen);
         showFullScreen();
+        if (m_fitMode && width() > 0 && height() > 0)
+        {
+            if (m_frame && m_frame->isValid())
+                fitToWidget();
+            else if (!m_provisionalImage.isNull())
+            {
+                m_view.screenW = width();
+                m_view.screenH = height();
+                const QSize source = m_provisionalSourceSize.isValid()
+                                         ? m_provisionalSourceSize
+                                         : m_provisionalImage.size();
+                m_view.fit(source.width(), source.height(), FitPolicy::MaximizeClient);
+                advanceViewportRevision();
+                emitZoom();
+            }
+        }
     }
     else
     {

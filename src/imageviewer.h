@@ -86,7 +86,9 @@ class ImageViewer : public QOpenGLWidget
     static bool browsePathEquals(const QString &left, const QString &right);
     int indexInBrowseSequence(const QString &path) const;
     // Open from Browse with the first native presentation already fullscreen.
+    void prepareBrowseFullscreen(QScreen *targetScreen);
     void showBrowseFullscreen();
+    void exitFullscreenForClose();
     // Display-only warm thumbnail used while the full frame and first visible
     // tiles arrive. It is never used as an analysis/ROI source.
     void setProvisionalImage(const QString &path, const QImage &image,

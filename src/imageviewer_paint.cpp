@@ -566,8 +566,26 @@ void ImageViewer::drawEmptyState(QPainter &painter)
 {
     if (!m_provisionalImage.isNull())
     {
-        m_view.screenW = width();
-        m_view.screenH = height();
+        if (m_fitMode &&
+            (m_view.screenW != width() || m_view.screenH != height() || m_view.scale <= 0.0))
+        {
+            m_view.screenW = width();
+            m_view.screenH = height();
+            const QSize source = m_provisionalSourceSize.isValid()
+                                     ? m_provisionalSourceSize
+                                     : m_provisionalImage.size();
+            const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
+                                            ? FitPolicy::MaximizeClient
+                                            : FitPolicy::Comfortable;
+            m_view.fit(source.width(), source.height(), fitPolicy);
+            advanceViewportRevision();
+            emitZoom();
+        }
+        else
+        {
+            m_view.screenW = width();
+            m_view.screenH = height();
+        }
         drawProvisional(painter);
         return;
     }

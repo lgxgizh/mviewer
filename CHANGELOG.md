@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.0.143] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.143** (fullscreen transition smoothness, 16-bit analysis, dynamic language retranslate, USM Space hold).
+
+### Fixed
+
+- **Double-click open black flash eliminated**: Target screen geometry and fullscreen fit policy are now pre-configured on `ImageViewer` before setting provisional image and loading raster; unified slash handling in `ThumbnailPanel::thumbCacheKey` so warm thumbnails reliably hit cache; ensured provisional images immediately scale to client area without waiting for singleShot timer.
+- **ESC exit transition smoothed**: Replaced synchronous `showNormal()` window transition before `close()` with clean off-screen geometry restoration in `exitFullscreenForClose()`, eliminating the black flash and momentary top-left small window artifact when returning to browse mode.
+- **USM comparison Space hold**: Fixed default button focus in `UsmCompareDialog` so pressing Space triggers temporary hold compare instead of clicking `Fit window`.
+
+### Added
+
+- **16-bit native analysis pathway**: Added `Rgb16` / `computeROIChannelStats16` in `ImageStats` and `PixelAccess.h`, allowing high-precision channel sums and ratios without 8-bit quantization loss.
+- **Dynamic language switching**: Added `MainWindow::retranslateUi()` and `changeEvent(LanguageChange)` support so UI strings update immediately upon selecting a language in Preferences without requiring application restart.
+
 ## [1.0.142] - 2026-10-20
 
 ### Release

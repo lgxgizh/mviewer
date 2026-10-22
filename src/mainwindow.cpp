@@ -526,15 +526,29 @@ void MainWindow::onImageOpen(const QString &path)
         if (!m_imageList || m_imageList->indexOf(path) < 0)
             sequence = {path};
         m_imageViewer->setBrowseSequence(sequence);
+        QScreen *targetScreen = screen();
+        if (!targetScreen)
+            targetScreen = QGuiApplication::primaryScreen();
+        m_imageViewer->prepareBrowseFullscreen(targetScreen);
+
+        QPixmap warm;
+        if (m_thumbnailPanel)
+            warm = m_thumbnailPanel->thumbReady(path);
+        if (warm.isNull() && m_previewPanel && m_previewPanel->presentedPath() == path)
+            warm = m_previewPanel->currentPixmap();
+
+        QSize knownSize;
         if (m_thumbnailPanel)
         {
-            const QPixmap warm = m_thumbnailPanel->thumbReady(path);
-            QSize knownSize;
             if (const auto *entry = m_thumbnailPanel->entryForPath(path))
                 knownSize = QSize(entry->width, entry->height);
-            if (!warm.isNull())
-                m_imageViewer->setProvisionalImage(path, warm.toImage(), knownSize);
         }
+        if (!knownSize.isValid() && m_previewPanel && m_previewPanel->presentedPath() == path)
+            knownSize = m_previewPanel->sourceImageSize();
+
+        if (!warm.isNull())
+            m_imageViewer->setProvisionalImage(path, warm.toImage(), knownSize);
+
         m_imageViewer->setImage(path); // async; imageReady() feeds AnalysisPanel
     }
 

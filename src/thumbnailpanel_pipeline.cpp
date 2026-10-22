@@ -16,7 +16,7 @@ void ThumbnailPanel::pruneThumbnailState()
 
 QString ThumbnailPanel::thumbCacheKey(const QString &path, int size) const
 {
-    return path + QChar(0x1f) + QString::number(size);
+    return galleryPathKey(path) + QChar(0x1f) + QString::number(size);
 }
 
 void ThumbnailPanel::invalidateThumbnailCacheFor(const QString &path)
@@ -244,7 +244,7 @@ QPixmap ThumbnailPanel::thumbReady(const QString &path) const
     // Fallback: if this path was decoded at any other size in memory, reuse it
     // instead of showing a blank placeholder (particularly in Details mode where
     // any thumbnail can be scaled to 48x48).
-    const QString prefix = path + QChar(0x1f);
+    const QString prefix = galleryPathKey(path) + QChar(0x1f);
     for (auto alt = m_thumbReady.begin(); alt != m_thumbReady.end(); ++alt)
     {
         if (alt.key().startsWith(prefix) && !alt.value().pixmap.isNull())

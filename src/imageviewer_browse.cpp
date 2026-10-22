@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QFileInfo>
+#include <QScreen>
 #include <QTimer>
 
 void ImageViewer::setBrowseSequence(const QStringList &paths)
@@ -46,6 +47,23 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
     setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                        .arg(info.fileName(), QString::number(size.width()),
                             QString::number(size.height()), position));
+}
+
+void ImageViewer::prepareBrowseFullscreen(QScreen *targetScreen)
+{
+    if (!property("mviewerFullscreenRequested").toBool() && !isFullScreen() &&
+        !windowState().testFlag(Qt::WindowFullScreen))
+        m_windowedGeometry = saveGeometry();
+    setProperty("mviewerFullscreenRequested", true);
+    if (targetScreen)
+    {
+        if (screen() != targetScreen)
+            setScreen(targetScreen);
+        const QRect geom = targetScreen->geometry();
+        setGeometry(geom);
+        m_view.screenW = geom.width();
+        m_view.screenH = geom.height();
+    }
 }
 
 void ImageViewer::showBrowseFullscreen()
