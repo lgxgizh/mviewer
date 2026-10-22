@@ -22,7 +22,8 @@ void MainWindow::buildMenus()
 void MainWindow::buildFileMenu(QMenuBar *menuBar)
 {
     // ----- File -----
-    auto *fileMenu = menuBar->addMenu(tr("&File"));
+    m_fileMenu = menuBar->addMenu(tr("&File"));
+    auto *fileMenu = m_fileMenu;
     m_actOpenDir = new QAction(tr("&Open Folder..."), this);
     m_actOpenDir->setShortcut(QKeySequence::Open); // Ctrl+O
     m_actOpenFile = new QAction(tr("Open &File..."), this);
@@ -65,7 +66,8 @@ void MainWindow::buildFileMenu(QMenuBar *menuBar)
 void MainWindow::buildEditMenu(QMenuBar *menuBar)
 {
     // ----- Edit — A-10: Undo/Redo -----
-    auto *editMenu = menuBar->addMenu(tr("&Edit"));
+    m_editMenu = menuBar->addMenu(tr("&Edit"));
+    auto *editMenu = m_editMenu;
     m_actUndo = new QAction("Undo(&U)", this);
     m_actUndo->setShortcut(QKeySequence::Undo); // Ctrl+Z
     m_actUndo->setEnabled(false);
@@ -204,7 +206,8 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
 void MainWindow::buildViewMenu(QMenuBar *menuBar)
 {
     // ----- View -----
-    auto *viewMenu = menuBar->addMenu(tr("&View"));
+    m_viewMenu = menuBar->addMenu(tr("&View"));
+    auto *viewMenu = m_viewMenu;
     m_actCompare = new QAction(tr("Compare Mode (&C)"), this);
     m_actCompare->setObjectName("compareAction");
     m_actCompare->setShortcut(QKeySequence("P"));
@@ -321,7 +324,8 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
 void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
 {
     // ----- Tools -----
-    auto *toolsMenu = menuBar->addMenu(tr("&Tools"));
+    m_toolsMenu = menuBar->addMenu(tr("&Tools"));
+    auto *toolsMenu = m_toolsMenu;
     m_actBatch = new QAction(tr("&Batch Processing"), this);
     m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
     toolsMenu->addAction(m_actBatch);
@@ -401,7 +405,8 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     toolsMenu->addAction(actMemTimeline);
 
     // ----- Help -----
-    auto *helpMenu = menuBar->addMenu(tr("&Help"));
+    m_helpMenu = menuBar->addMenu(tr("&Help"));
+    auto *helpMenu = m_helpMenu;
     auto *actCheckUpdate = new QAction(tr("Check for &Updates..."), this);
     connect(actCheckUpdate, &QAction::triggered, this, [this]() { checkForUpdates(false); });
     helpMenu->addAction(actCheckUpdate);
@@ -415,4 +420,90 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     helpMenu->addAction(actShortcuts);
     m_actAbout = new QAction(tr("&About"), this);
     helpMenu->addAction(m_actAbout);
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::retranslateUi()
+{
+    struct ActionEntry
+    {
+        QAction *act;
+        const char *text;
+    };
+    const ActionEntry actions[] = {
+        {m_actOpenDir, QT_TR_NOOP("&Open Folder...")},
+        {m_actOpenFile, QT_TR_NOOP("Open &File...")},
+        {m_actSaveWorkspace, QT_TR_NOOP("&Save Workspace")},
+        {m_actOpenWorkspace, QT_TR_NOOP("Open &Workspace")},
+        {m_actSaveProject, QT_TR_NOOP("Save &Project")},
+        {m_actOpenProject, QT_TR_NOOP("Open Pro&ject")},
+        {m_actExportReport, QT_TR_NOOP("Export &Report...")},
+        {m_actExportImages, QT_TR_NOOP("&Export Images...")},
+        {m_actExit, QT_TR_NOOP("E&xit")},
+        {m_actAddFavorite, QT_TR_NOOP("Add Current Folder to Favorites(&D)")},
+        {m_actRemoveFavorite, QT_TR_NOOP("Remove Current Folder from Favorites")},
+        {m_actUndo, QT_TR_NOOP("Undo(&U)")},
+        {m_actRedo, QT_TR_NOOP("Redo(&R)")},
+        {m_actRotateCW, QT_TR_NOOP("Rotate 90° Clockwise (&R)")},
+        {m_actRotateCCW, QT_TR_NOOP("Rotate 90° Counterclockwise(&L)")},
+        {m_actFlipH, QT_TR_NOOP("Flip Horizontal(&H)")},
+        {m_actFlipV, QT_TR_NOOP("Flip Vertical(&V)")},
+        {m_actSelectAll, QT_TR_NOOP("Select All(&A)")},
+        {m_actDeselectAll, QT_TR_NOOP("Deselect (&D)")},
+        {m_actInvertSelection, QT_TR_NOOP("Invert Selection(&I)")},
+        {m_actCompare, QT_TR_NOOP("Compare Mode (&C)")},
+        {m_actToggleAnalysis, QT_TR_NOOP("Analysis Panel(&H)")},
+        {m_actHistoryBack, QT_TR_NOOP("&Back")},
+        {m_actHistoryForward, QT_TR_NOOP("Forward(&N)")},
+        {m_actDirBack, QT_TR_NOOP("Previous directory")},
+        {m_actDirForward, QT_TR_NOOP("Next directory")},
+        {m_actToggleSearch, QT_TR_NOOP("Global &Search")},
+        {m_actFocusBrowse, QT_TR_NOOP("Focus Browse Mode (Tab)")},
+        {m_actBrowseWorkspace, QT_TR_NOOP("Browse Workspace")},
+        {m_actDirUp, QT_TR_NOOP("Parent Directory(&U)")},
+        {m_actRefresh, QT_TR_NOOP("Refresh(&R)")},
+        {m_actOpenCurrentFolder, QT_TR_NOOP("Open Current Folder In File Manager")},
+        {m_actBatch, QT_TR_NOOP("&Batch Processing...")},
+        {m_actUsmCompare, QT_TR_NOOP("USM Sharpen Compare (&U)...")},
+        {m_actPluginSettings, QT_TR_NOOP("&Plugin Settings...")},
+        {m_actAbout, QT_TR_NOOP("&About")},
+        {m_actZoomIn, QT_TR_NOOP("Zoom &In")},
+        {m_actZoomOut, QT_TR_NOOP("Zoom &Out")},
+        {m_actZoomFit, QT_TR_NOOP("&Fit to Window")},
+        {m_actZoomActual, QT_TR_NOOP("&Actual Size")},
+        {m_actFullscreen, QT_TR_NOOP("&Fullscreen")},
+        {m_actSlideshow, QT_TR_NOOP("&Slideshow")},
+    };
+    for (const auto &entry : actions)
+    {
+        if (entry.act)
+            entry.act->setText(tr(entry.text));
+    }
+
+    struct MenuEntry
+    {
+        QMenu *menu;
+        const char *text;
+    };
+    const MenuEntry menus[] = {
+        {m_fileMenu, QT_TR_NOOP("&File")},
+        {m_editMenu, QT_TR_NOOP("&Edit")},
+        {m_viewMenu, QT_TR_NOOP("&View")},
+        {m_toolsMenu, QT_TR_NOOP("&Tools")},
+        {m_helpMenu, QT_TR_NOOP("&Help")},
+        {m_recentMenu, QT_TR_NOOP("&Recent Folders")},
+        {m_recentFileMenu, QT_TR_NOOP("Recent &Files")},
+        {m_favMenu, QT_TR_NOOP("Fa&vorite Folders")},
+    };
+    for (const auto &entry : menus)
+    {
+        if (entry.menu)
+            entry.menu->setTitle(tr(entry.text));
+    }
 }

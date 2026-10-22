@@ -96,6 +96,8 @@ class MainWindow : public QMainWindow
     static QString userGuideHtml();
 
   protected:
+    void changeEvent(QEvent *event) override;
+    void retranslateUi();
     void closeEvent(QCloseEvent *event) override;
     // M15: drag & drop support
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -333,6 +335,11 @@ class MainWindow : public QMainWindow
     QAction *m_actZoomActual = nullptr;
     QAction *m_actFullscreen = nullptr;
     QMenu *m_zoomPresetsMenu = nullptr;
+    QMenu *m_fileMenu = nullptr;
+    QMenu *m_editMenu = nullptr;
+    QMenu *m_viewMenu = nullptr;
+    QMenu *m_toolsMenu = nullptr;
+    QMenu *m_helpMenu = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr; // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;

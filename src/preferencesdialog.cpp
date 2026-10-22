@@ -42,7 +42,7 @@ void PreferencesDialog::addUiAppearanceRows(QFormLayout *gl)
     m_uiLanguage->addItem(QStringLiteral("简体中文"),
                           static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
     m_uiLanguage->setToolTip(
-        tr("UI language. Restart MViewer to apply the change to every window."));
+        tr("UI language. Takes effect immediately without restarting."));
     {
         QSettings langSettings;
         const auto lang = mviewer::ui::Language::languageModeFromKey(
@@ -51,7 +51,7 @@ void PreferencesDialog::addUiAppearanceRows(QFormLayout *gl)
         m_uiLanguage->setCurrentIndex(langIdx >= 0 ? langIdx : 0);
     }
     gl->addRow(tr("UI language"), m_uiLanguage);
-    auto *languageHint = new QLabel(tr("Restart MViewer to apply a language change everywhere."));
+    auto *languageHint = new QLabel(tr("UI language switches immediately for open windows."));
     languageHint->setObjectName(QStringLiteral("preferencesUiLanguageHint"));
     gl->addRow(QString(), languageHint);
 }

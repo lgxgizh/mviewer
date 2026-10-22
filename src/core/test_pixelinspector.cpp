@@ -577,6 +577,33 @@ static void test_display_orientation_and_alpha()
     CHECK(!huge.contains(INT_MAX - 3, 0));
 }
 
+static void test_computeROIChannelStats16()
+{
+    const int w = 4;
+    const int h = 4;
+    std::vector<uint16_t> rgb16(w * h * 3, 0);
+    rgb16[(1 * w + 1) * 3 + 0] = 1000;
+    rgb16[(1 * w + 1) * 3 + 1] = 2000;
+    rgb16[(1 * w + 1) * 3 + 2] = 3000;
+    rgb16[(1 * w + 2) * 3 + 0] = 3000;
+    rgb16[(1 * w + 2) * 3 + 1] = 2000;
+    rgb16[(1 * w + 2) * 3 + 2] = 1000;
+
+    mviewer::domain::Selection roi{1, 1, 2, 1};
+    const auto stats = mviewer::core::computeROIChannelStats16(
+        rgb16.data(), w, h, 3, 65535, roi);
+
+    CHECK(stats.valid);
+    CHECK(stats.pixelCount == 2);
+    CHECK(std::abs(stats.rMean - 2000.0) < 1e-6);
+    CHECK(std::abs(stats.gMean - 2000.0) < 1e-6);
+    CHECK(std::abs(stats.bMean - 2000.0) < 1e-6);
+    CHECK(std::abs(stats.vMean - 3000.0) < 1e-6);
+    CHECK(stats.ratiosValid);
+    CHECK(std::abs(stats.rOverG - 1.0) < 1e-6);
+    CHECK(std::abs(stats.bOverG - 1.0) < 1e-6);
+}
+
 int main()
 {
     test_color_spaces();
@@ -586,6 +613,7 @@ int main()
     test_color_spaces_16bit();
     test_image_adjustments();
     test_display_orientation_and_alpha();
+    test_computeROIChannelStats16();
     if (g_failures == 0)
     {
         std::printf("PASS: pixelinspector_tests (%d checks)\n", 0);

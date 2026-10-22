@@ -1875,4 +1875,43 @@ void testLocalZoomAcceptance(const QString &a, const QString &b)
     }
 }
 
+void testUsmCompareDialogSpaceHold(const QDir &dir)
+{
+    std::cout << "── USM Compare Dialog focus & Space key behavior ──\n";
+    const QString imgPath = writePng(dir, QStringLiteral("usm_test.png"), 64, 64, QColor(100, 150, 200));
+    UsmCompareDialog dlg(imgPath);
+    dlg.show();
+    QCoreApplication::processEvents();
+
+    const auto buttons = dlg.findChildren<QPushButton *>();
+    CHECK(!buttons.isEmpty(), "USM dialog has buttons");
+    bool anyButtonHasFocus = false;
+    bool anyButtonAutoDefault = false;
+    for (QPushButton *btn : buttons)
+    {
+        if (btn->focusPolicy() != Qt::NoFocus)
+            anyButtonHasFocus = true;
+        if (btn->autoDefault() || btn->isDefault())
+            anyButtonAutoDefault = true;
+    }
+    CHECK(!anyButtonHasFocus, "All USM dialog buttons have Qt::NoFocus");
+    CHECK(!anyButtonAutoDefault, "No USM dialog button is autoDefault or default");
+
+    bool buttonTriggered = false;
+    if (!buttons.isEmpty())
+    {
+        QObject::connect(buttons.first(), &QPushButton::clicked, [&buttonTriggered]() {
+            buttonTriggered = true;
+        });
+    }
+
+    QKeyEvent spacePress(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+    QApplication::sendEvent(&dlg, &spacePress);
+    QKeyEvent spaceRelease(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier);
+    QApplication::sendEvent(&dlg, &spaceRelease);
+
+    CHECK(!buttonTriggered, "Space key does not trigger the first button");
+    dlg.close();
+}
+
 } // namespace
