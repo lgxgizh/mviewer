@@ -1,9 +1,9 @@
 #pragma once
 
-#include <QLabel>
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
+#include <QLabel>
 #include <QString>
 #include <QStringList>
 
@@ -154,7 +154,8 @@ inline QStringList disambiguateCaptions(const QStringList &paths)
                     QStringList otherParts = otherNorm.split(QLatin1Char('/'), Qt::SkipEmptyParts);
                     if (levels <= otherParts.size())
                     {
-                        QString otherCand = otherParts.mid(otherParts.size() - levels).join(QLatin1Char('/'));
+                        QString otherCand =
+                            otherParts.mid(otherParts.size() - levels).join(QLatin1Char('/'));
                         if (otherCand == candidate)
                         {
                             unique = false;

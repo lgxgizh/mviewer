@@ -145,10 +145,10 @@ class ThumbnailPanel : public QListView
                      bool publishToModel = true);
     // P0-2: inject the app-wide SelectionModel so hover events publish `hovered`.
     void setSelectionModel(SelectionModel *sel);
-    SelectionModel::PaneSlot paneSlot() const { return m_paneSlot; }
-    void setPaneSlot(SelectionModel::PaneSlot slot) { m_paneSlot = slot; }
-    int consumerId() const { return m_consumerId; }
-    void setConsumerId(int id) { m_consumerId = id; }
+    SelectionModel::PaneSlot paneSlot() const;
+    void setPaneSlot(SelectionModel::PaneSlot slot);
+    int consumerId() const;
+    void setConsumerId(int id);
     void setSortMode(SortMode mode);
     SortMode sortMode() const
     {

@@ -159,8 +159,7 @@ void ThumbnailPanel::updateVisibleRange()
     ThumbnailPipeline::instance().setPredictiveCount(predictive);
 
     ThumbnailPipeline::instance().setVisibleRangeForConsumer(
-        m_consumerId, static_cast<size_t>(first),
-        last >= 0 ? static_cast<size_t>(last) + 1 : 0);
+        m_consumerId, static_cast<size_t>(first), last >= 0 ? static_cast<size_t>(last) + 1 : 0);
 }
 
 void ThumbnailPanel::onThumbReady(const QString &path)

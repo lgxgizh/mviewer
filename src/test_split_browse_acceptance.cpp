@@ -30,18 +30,18 @@ namespace
 
 int g_failures = 0;
 
-#define EXPECT(cond, msg)                                                                     \
-    do                                                                                        \
-    {                                                                                         \
-        if (!(cond))                                                                          \
-        {                                                                                     \
-            std::cerr << "[FAIL] Line " << __LINE__ << ": " << (msg) << std::endl;           \
-            ++g_failures;                                                                     \
-        }                                                                                     \
-        else                                                                                  \
-        {                                                                                     \
-            std::cout << "[PASS] " << (msg) << std::endl;                                     \
-        }                                                                                     \
+#define EXPECT(cond, msg)                                                                          \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "[FAIL] Line " << __LINE__ << ": " << (msg) << std::endl;                 \
+            ++g_failures;                                                                          \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "[PASS] " << (msg) << std::endl;                                          \
+        }                                                                                          \
     } while (0)
 
 void createDummyImage(const QString &filePath)
@@ -57,7 +57,8 @@ void testDefaultAndToggle(MainWindow &mw)
 {
     std::cout << "--- TC-SB-01: Default state & toggle ---" << std::endl;
     EXPECT(!mw.isSplitBrowseEnabled(), "Split browse is disabled by default");
-    EXPECT(mw.secondaryBrowsePaneWidget() != nullptr, "Secondary browse pane widget is constructed");
+    EXPECT(mw.secondaryBrowsePaneWidget() != nullptr,
+           "Secondary browse pane widget is constructed");
     EXPECT(mw.secondaryBrowsePaneWidget()->isHidden(), "Secondary browse pane is initially hidden");
 
     mw.toggleSplitBrowse(true);
@@ -158,10 +159,14 @@ void testPairingSortAndCaptionDisambiguation(MainWindow &mw)
 
     QStringList captions = disambiguateCaptions(sorted);
     EXPECT(captions.size() == 4, "Disambiguated caption count matches");
-    EXPECT(captions.at(0) == QStringLiteral("baseline/0001.png"), "Caption disambiguates baseline/0001");
-    EXPECT(captions.at(1) == QStringLiteral("candidate/0001.png"), "Caption disambiguates candidate/0001");
-    EXPECT(captions.at(2) == QStringLiteral("baseline/0002.png"), "Caption disambiguates baseline/0002");
-    EXPECT(captions.at(3) == QStringLiteral("candidate/0002.png"), "Caption disambiguates candidate/0002");
+    EXPECT(captions.at(0) == QStringLiteral("baseline/0001.png"),
+           "Caption disambiguates baseline/0001");
+    EXPECT(captions.at(1) == QStringLiteral("candidate/0001.png"),
+           "Caption disambiguates candidate/0001");
+    EXPECT(captions.at(2) == QStringLiteral("baseline/0002.png"),
+           "Caption disambiguates baseline/0002");
+    EXPECT(captions.at(3) == QStringLiteral("candidate/0002.png"),
+           "Caption disambiguates candidate/0002");
 }
 
 void testDeduplication()

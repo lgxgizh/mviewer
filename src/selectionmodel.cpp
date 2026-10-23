@@ -187,9 +187,11 @@ void SelectionModel::rebuildMergedSelection(bool emitSignals)
         }
         const int activeIdx = static_cast<int>(m_activePane);
         const int otherIdx = 1 - activeIdx;
-        if (!m_paneCurrentImage[activeIdx].isEmpty() && merged.contains(m_paneCurrentImage[activeIdx]))
+        if (!m_paneCurrentImage[activeIdx].isEmpty() &&
+            merged.contains(m_paneCurrentImage[activeIdx]))
             cur = m_paneCurrentImage[activeIdx];
-        else if (!m_paneCurrentImage[otherIdx].isEmpty() && merged.contains(m_paneCurrentImage[otherIdx]))
+        else if (!m_paneCurrentImage[otherIdx].isEmpty() &&
+                 merged.contains(m_paneCurrentImage[otherIdx]))
             cur = m_paneCurrentImage[otherIdx];
         else if (!merged.isEmpty())
             cur = merged.first();

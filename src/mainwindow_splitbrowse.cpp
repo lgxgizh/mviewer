@@ -1,9 +1,9 @@
 #include "mainwindow.h"
 #include "mainwindow_p.h"
 
+#include "ThemeMetrics.h"
 #include "directorymonitor.h"
 #include "naturalnameorder.h"
-#include "ThemeMetrics.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 
@@ -51,8 +51,8 @@ QWidget *MainWindow::buildSecondaryBrowsePane()
             {
                 const QString current =
                     m_secondaryThumbnailPanel ? m_secondaryThumbnailPanel->currentDir() : QString();
-                const QString dir =
-                    QFileDialog::getExistingDirectory(this, tr("Open Secondary Directory"), current);
+                const QString dir = QFileDialog::getExistingDirectory(
+                    this, tr("Open Secondary Directory"), current);
                 if (!dir.isEmpty())
                     openRightDirectory(dir);
             });
@@ -188,8 +188,7 @@ void MainWindow::swapBrowsePanes()
     const QString leftDir = m_thumbnailPanel->currentDir();
     const QString rightDir = m_secondaryThumbnailPanel->currentDir();
     const QStringList leftSel =
-        m_selection ? m_selection->paneSelection(SelectionModel::PaneSlot::Primary)
-                    : QStringList();
+        m_selection ? m_selection->paneSelection(SelectionModel::PaneSlot::Primary) : QStringList();
     const QStringList rightSel =
         m_selection ? m_selection->paneSelection(SelectionModel::PaneSlot::Secondary)
                     : QStringList();
@@ -241,9 +240,9 @@ void MainWindow::updateSplitBrowseCompareButton()
         m_actCompare->setEnabled(canCompare);
         if (count > 8)
         {
-            m_actCompare->setToolTip(
-                tr("Select 2 to 8 images across left and right panes to compare (currently %1 selected)")
-                    .arg(count));
+            m_actCompare->setToolTip(tr("Select 2 to 8 images across left and right panes to "
+                                        "compare (currently %1 selected)")
+                                         .arg(count));
         }
         else if (count < 2)
         {
@@ -264,8 +263,7 @@ QStringList MainWindow::sortPathsForCompare(const QStringList &paths) const
     if (!m_splitBrowseEnabled || !m_selection)
         return sortPathsByNaturalFileName(paths);
 
-    const QStringList &primarySel =
-        m_selection->paneSelection(SelectionModel::PaneSlot::Primary);
+    const QStringList &primarySel = m_selection->paneSelection(SelectionModel::PaneSlot::Primary);
     const QStringList &secondarySel =
         m_selection->paneSelection(SelectionModel::PaneSlot::Secondary);
 

@@ -8,11 +8,11 @@
 #include "core/update/UpdateChecker.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
+#include "selectionmodel.h"
 #include <QKeyEvent>
 #include <QListWidget>
 #include <QMainWindow>
 #include <QMap>
-#include "selectionmodel.h"
 #include <QPointer>
 #include <QStringList>
 #include <QVariantMap>
@@ -91,18 +91,33 @@ class MainWindow : public QMainWindow
     void openProjectFile(const QString &filePath);
 
     // Split Browse View (RFC ADR-001/005/014/018)
-    bool isSplitBrowseEnabled() const { return m_splitBrowseEnabled; }
+    bool isSplitBrowseEnabled() const
+    {
+        return m_splitBrowseEnabled;
+    }
     void toggleSplitBrowse(bool enabled);
     void openRightDirectory(const QString &dir);
     void swapBrowsePanes();
     void cloneLeftToRightPane();
     void setActiveBrowsePane(SelectionModel::PaneSlot pane);
-    SelectionModel::PaneSlot activeBrowsePane() const { return m_activeBrowsePane; }
+    SelectionModel::PaneSlot activeBrowsePane() const
+    {
+        return m_activeBrowsePane;
+    }
     void updateSplitBrowseCompareButton();
     QStringList sortPathsForCompare(const QStringList &paths) const;
-    QWidget *secondaryBrowsePaneWidget() const { return m_secondaryBrowsePane; }
-    SelectionModel *selectionModel() const { return m_selection; }
-    QAction *compareAction() const { return m_actCompare; }
+    QWidget *secondaryBrowsePaneWidget() const
+    {
+        return m_secondaryBrowsePane;
+    }
+    SelectionModel *selectionModel() const
+    {
+        return m_selection;
+    }
+    QAction *compareAction() const
+    {
+        return m_actCompare;
+    }
 
     // The shortcut cheat-sheet HTML (single source of truth for the F1 help;
     // public so tests can verify it stays in sync with registered commands).

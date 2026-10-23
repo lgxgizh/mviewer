@@ -104,7 +104,8 @@ void MainWindow::buildBrowserShell()
     {
         m_actSplitBrowse->setIcon(mviewer::ui::toolbarIcon("split_browse"));
         m_actSplitBrowse->setObjectName("splitBrowseAction");
-        m_actSplitBrowse->setToolTip(actTip(tr("Split Browse View (Ctrl+Shift+S)"), m_actSplitBrowse));
+        m_actSplitBrowse->setToolTip(
+            actTip(tr("Split Browse View (Ctrl+Shift+S)"), m_actSplitBrowse));
         browserToolBar->addAction(m_actSplitBrowse);
     }
     if (m_actCompare)
