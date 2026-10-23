@@ -5,6 +5,8 @@
 #include "compareworkspace_display_pending.h"
 #include "compareworkspace_display_planner.h"
 #include "core/analysis/PixelGrid.h"
+#include "widgets/rawimageview.h"
+#include <QApplication>
 
 #include <algorithm>
 #include <cstdio>
@@ -138,6 +140,15 @@ int main()
         ++fails;
     if (!expect("rounding slack keeps the grid on a 1:1 raster",
                 mviewer::pixelGridMatchesRaster(139, 146, 139, 147, false)))
+        ++fails;
+
+    int argc = 0;
+    QApplication app(argc, nullptr);
+    RawImageView view;
+    if (!expect("raw image view pixel grid is disabled by default", !view.isPixelGridEnabled()))
+        ++fails;
+    view.setPixelGridEnabled(true);
+    if (!expect("raw image view pixel grid can be enabled", view.isPixelGridEnabled()))
         ++fails;
 
     std::printf("%d failure(s)\n", fails);

@@ -290,7 +290,7 @@ void CompareWorkspace::drawCanvasROI(QPainter &p)
 
 void CompareWorkspace::drawCanvasPixelGrid(QPainter &p)
 {
-    if (!m_compareCanvas || m_cellViews.size() < 2)
+    if (!m_pixelGridEnabled || !m_compareCanvas || m_cellViews.size() < 2)
         return;
     const auto drawPane = [this, &p](int pane)
     {
@@ -489,6 +489,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         view->setCellIndex(i);
         view->setPaneTag(QString(QChar('A' + i)));
         view->setDisplayOverlay(m_displayOverlay);
+        view->setPixelGridEnabled(m_pixelGridEnabled);
         cellLay->addWidget(view, 1);
         m_cellViews.push_back(view);
         connect(view, &RawImageView::scaleChanged, this,

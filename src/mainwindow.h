@@ -378,6 +378,7 @@ class MainWindow : public QMainWindow
     QAction *m_actZoomOut = nullptr;
     QAction *m_actZoomFit = nullptr;
     QAction *m_actZoomActual = nullptr;
+    QAction *m_actPixelGrid = nullptr;
     QAction *m_actFullscreen = nullptr;
     QMenu *m_zoomPresetsMenu = nullptr;
     QMenu *m_fileMenu = nullptr;

@@ -83,10 +83,9 @@ class CompareWorkspace : public QWidget
     // Preferences / toolbar: integer-shift auto-align before diff. Syncs the
     // toolbar checkbox and recomputes the diff when the value changes.
     void setAutoAlignBeforeDiff(bool on);
-    bool autoAlignBeforeDiff() const
-    {
-        return m_autoAlignBeforeDiff;
-    }
+    bool autoAlignBeforeDiff() const;
+    void setPixelGridEnabled(bool on);
+    bool isPixelGridEnabled() const;
     // The default frame/page is zero. A caller restoring a persisted compare
     // session may provide one explicit frame index per pane.
     void setImages(const QStringList &paths);
@@ -758,6 +757,8 @@ class CompareWorkspace : public QWidget
     TaskScheduler::TaskHandle m_histTask;
     QCheckBox *m_paneHistOverlayChk = nullptr;
     QCheckBox *m_filenameOverlayChk = nullptr;
+    QCheckBox *m_pixelGridChk = nullptr;
+    bool m_pixelGridEnabled = false;
     bool m_filenameOverlay = true; // checkbox shows or hides the top name; default visible
     void applyFilenameOverlays();
     std::vector<HistogramWidget *> m_cellHists;

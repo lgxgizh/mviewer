@@ -4,9 +4,9 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.144**
+## Where we are now — **Beta / 1.0.145**
 
-MViewer remains in **Beta**; the current release is **`v1.0.144`**
+MViewer remains in **Beta**; the current release is **`v1.0.145`**
 (2026-10-20, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:

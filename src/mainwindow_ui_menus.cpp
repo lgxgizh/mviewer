@@ -456,6 +456,7 @@ void MainWindow::retranslateUi()
         {m_actZoomOut, QT_TR_NOOP("Zoom &Out")},
         {m_actZoomFit, QT_TR_NOOP("&Fit to Window")},
         {m_actZoomActual, QT_TR_NOOP("&Actual Size")},
+        {m_actPixelGrid, QT_TR_NOOP("Pixel &Grid")},
         {m_actFullscreen, QT_TR_NOOP("&Fullscreen")},
         {m_actSlideshow, QT_TR_NOOP("&Slideshow")},
     };
@@ -506,6 +507,20 @@ void MainWindow::buildViewZoomActions(QMenu *viewMenu)
     viewMenu->addAction(m_actZoomOut);
     viewMenu->addAction(m_actZoomFit);
     viewMenu->addAction(m_actZoomActual);
+    m_actPixelGrid = new QAction(tr("Pixel &Grid"), this);
+    m_actPixelGrid->setObjectName("pixelGridAction");
+    m_actPixelGrid->setCheckable(true);
+    m_actPixelGrid->setChecked(false);
+    m_actPixelGrid->setToolTip(tr("Show pixel inspection grid when zoomed to 800% or above"));
+    connect(m_actPixelGrid, &QAction::toggled, this,
+            [this](bool on)
+            {
+                if (m_imageViewer)
+                    m_imageViewer->setPixelGridEnabled(on);
+                if (m_compareView)
+                    m_compareView->setPixelGridEnabled(on);
+            });
+    viewMenu->addAction(m_actPixelGrid);
     m_zoomPresetsMenu = viewMenu->addMenu(tr("Zoom Presets"));
     m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
     m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });

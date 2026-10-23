@@ -2226,6 +2226,9 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(histOverlayChk && !histOverlayChk->isChecked(), "histogram overlay is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->isChecked(),
           "filename overlay is on by default");
+    auto *pixelGridChk = ws->findChild<QCheckBox *>(QStringLiteral("comparePixelGridToggle"));
+    CHECK(pixelGridChk, "compare exposes pixel grid toggle");
+    CHECK(pixelGridChk && !pixelGridChk->isChecked(), "pixel grid toggle is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("hide")) &&
               filenameOverlayChk->toolTip().contains(QStringLiteral("wrapping")),
           "filename checkbox tooltip describes show/hide and wrapping");
@@ -5554,6 +5557,7 @@ void assertCompareControlsReachable(const QString &pathA, const QString &pathB)
         "compareFrameSpin",
         "paneHistogramOverlayToggle",
         "compareFilenameOverlayToggle",
+        "comparePixelGridToggle",
         "compareChannelCombo",
         "compareSwapPanesButton",
         "temporaryCompareButton",

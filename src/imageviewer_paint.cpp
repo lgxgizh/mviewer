@@ -144,8 +144,18 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     noteDisplayedFrameForPixelReadout();
 }
 
+void ImageViewer::setPixelGridEnabled(bool on)
+{
+    if (m_pixelGridEnabled == on)
+        return;
+    m_pixelGridEnabled = on;
+    update();
+}
+
 void ImageViewer::drawPixelGridOverlay(QPainter &painter)
 {
+    if (!m_pixelGridEnabled)
+        return;
     int imageW = 0;
     int imageH = 0;
     if (m_lodMode && m_raster.sourceSize.isValid())

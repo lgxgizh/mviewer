@@ -239,6 +239,11 @@ class ImageViewer : public QOpenGLWidget
     void zoomFit();
     void zoomActual();
     void zoomTo(double targetScale);
+    void setPixelGridEnabled(bool on);
+    bool isPixelGridEnabled() const
+    {
+        return m_pixelGridEnabled;
+    }
     bool isFitMode() const
     {
         return m_fitMode;
@@ -621,6 +626,7 @@ class ImageViewer : public QOpenGLWidget
     QImage m_provisionalImage;
     QSize m_provisionalSourceSize;
     bool m_lockZoom = false;
+    bool m_pixelGridEnabled = false;
     QImage m_transitionImage;
     QSize m_transitionSourceSize;
     bool m_tileRepaintQueued = false;

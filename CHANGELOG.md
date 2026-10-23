@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [1.0.145] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.145** (Opt-in Pixel Grid, Compare high-zoom mesh elimination, and dedicated UI toggle).
+
+### Fixed
+
+- **Pixel Grid high-zoom lattice made opt-in**:
+  - Eliminated automatic source-pixel lattice overlay at >= 800% zoom in both CompareWorkspace (`RawImageView`) and single image view (`ImageViewer`).
+  - Fixed issue where opening low-resolution images (such as 720x540) alongside high-resolution images (such as 4096x3072) caused an unexpected dense grid mesh to appear on the lower-resolution image past 800% zoom (e.g. 839%).
+  - Added dedicated **Pixel Grid** checkbox to CompareWorkspace tool controls and `View -> Pixel Grid` action to MainWindow, defaulting to off so zoom operations display clean interpolated/nearest pixels unless inspection lattice is intentionally enabled.
+
 ## [1.0.144] - 2026-10-23
 
 ### Release
