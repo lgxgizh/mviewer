@@ -683,6 +683,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true;
     }
 
+    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)
+    {
+        if (m_secondaryThumbnailPanel &&
+            (watched == m_secondaryThumbnailPanel || watched == m_secondaryThumbnailPanel->viewport()))
+            setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+        else if (m_thumbnailPanel &&
+                 (watched == m_thumbnailPanel || watched == m_thumbnailPanel->viewport()))
+            setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+    }
+
     if (event->type() == QEvent::MouseButtonPress)
     {
         auto *me = static_cast<QMouseEvent *>(event);

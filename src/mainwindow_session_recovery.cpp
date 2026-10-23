@@ -98,6 +98,14 @@ void MainWindow::restoreLastSession()
             // Do not QDir::exists() here. A disconnected lastDir blocks the
             // GUI thread before changeDirectory can start the async scan.
             changeDirectory(dir);
+            if (m_appState.splitBrowseEnabled)
+            {
+                toggleSplitBrowse(true);
+                if (!m_appState.secondaryLastDir.isEmpty())
+                    openRightDirectory(m_appState.secondaryLastDir);
+                if (!m_appState.gallerySplitterSizes.isEmpty() && m_gallerySplitter)
+                    m_gallerySplitter->setSizes(m_appState.gallerySplitterSizes);
+            }
 
             const QString img = m_appState.lastImage;
             if (!img.isEmpty())
@@ -130,48 +138,48 @@ void MainWindow::restoreLastSession()
                 m_appState.history = m_history;
                 updateSelectionActions();
             }
-            // Restore the thumbnail-grid scroll position after items exist.
+            // Restore the thumbnail-grid scroll position and session after items exist.
             QMetaObject::invokeMethod(
-                this,
-                [this]()
-                {
-                    if (m_appState.lastThumbScroll > 0)
-                        m_thumbnailPanel->verticalScrollBar()->setValue(m_appState.lastThumbScroll);
-                    if (!m_appState.lastImage.isEmpty())
-                        m_thumbnailPanel->scrollToPath(m_appState.lastImage);
-
-                    // A-6.3: restore viewer zoom/pan from QSettings (same logic as
-                    // crash-recovery path, but for normal session restore).
-                    QSettings vs;
-                    if (m_imageViewer && !currentImagePath().isEmpty() &&
-                        vs.value("viewerPath").toString() == currentImagePath())
-                    {
-                        Viewport v;
-                        v.screenW = m_imageViewer->width();
-                        v.screenH = m_imageViewer->height();
-                        v.scale = vs.value("viewerScale", 1.0).toReal();
-                        v.offsetX = vs.value("viewerOffX", 0.0).toReal();
-                        v.offsetY = vs.value("viewerOffY", 0.0).toReal();
-                        m_imageViewer->setViewTransform(v);
-                    }
-
-                    // A-6.1: restore Compare session on normal startup (not just
-                    // crash recovery). If QSettings has a compareSession, reopen it.
-                    const QJsonArray cmpImgs = vs.value("compareImages").toJsonArray();
-                    const QString cmpSession = vs.value("compareSession").toString();
-                    QStringList cmpPaths;
-                    for (const auto &v2 : cmpImgs)
-                    {
-                        const QString p = v2.toString();
-                        if (!p.isEmpty())
-                            cmpPaths.append(p);
-                    }
-                    if (cmpPaths.size() >= 2 && !cmpSession.isEmpty())
-                        openCompare(cmpPaths, cmpSession);
-                },
-                Qt::QueuedConnection);
+                this, [this]() { restoreSessionPostScroll(); }, Qt::QueuedConnection);
         },
         Qt::QueuedConnection);
+}
+
+void MainWindow::restoreSessionPostScroll()
+{
+    if (m_appState.lastThumbScroll > 0 && m_thumbnailPanel)
+        m_thumbnailPanel->verticalScrollBar()->setValue(m_appState.lastThumbScroll);
+    if (!m_appState.lastImage.isEmpty() && m_thumbnailPanel)
+        m_thumbnailPanel->scrollToPath(m_appState.lastImage);
+
+    // A-6.3: restore viewer zoom/pan from QSettings (same logic as
+    // crash-recovery path, but for normal session restore).
+    QSettings vs;
+    if (m_imageViewer && !currentImagePath().isEmpty() &&
+        vs.value("viewerPath").toString() == currentImagePath())
+    {
+        Viewport v;
+        v.screenW = m_imageViewer->width();
+        v.screenH = m_imageViewer->height();
+        v.scale = vs.value("viewerScale", 1.0).toReal();
+        v.offsetX = vs.value("viewerOffX", 0.0).toReal();
+        v.offsetY = vs.value("viewerOffY", 0.0).toReal();
+        m_imageViewer->setViewTransform(v);
+    }
+
+    // A-6.1: restore Compare session on normal startup (not just
+    // crash recovery). If QSettings has a compareSession, reopen it.
+    const QJsonArray cmpImgs = vs.value("compareImages").toJsonArray();
+    const QString cmpSession = vs.value("compareSession").toString();
+    QStringList cmpPaths;
+    for (const auto &v2 : cmpImgs)
+    {
+        const QString p = v2.toString();
+        if (!p.isEmpty())
+            cmpPaths.append(p);
+    }
+    if (cmpPaths.size() >= 2 && !cmpSession.isEmpty())
+        openCompare(cmpPaths, cmpSession);
 }
 
 void MainWindow::stopCloseTimers()
@@ -270,6 +278,14 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.lastDir = currentDir();
     m_appState.lastImage = currentImagePath();
     m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
+    m_appState.splitBrowseEnabled = m_splitBrowseEnabled;
+    if (m_secondaryThumbnailPanel)
+    {
+        m_appState.secondaryLastDir = m_secondaryThumbnailPanel->currentDir();
+        m_appState.secondaryThumbScroll = m_secondaryThumbnailPanel->scrollOffset();
+    }
+    if (m_gallerySplitter)
+        m_appState.gallerySplitterSizes = m_gallerySplitter->sizes();
 
     // P1-3: persist the Analysis workspace so reopening restores UI state.
     // Focus Browse temporarily hides panels; persist the state from before that

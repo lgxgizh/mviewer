@@ -134,8 +134,10 @@ void ThumbnailPanel::wireThumbnailPipeline()
                                               { return ThumbnailProvider::produce(p, size); });
     auto alive = m_alive;
     const QPointer<ThumbnailPanel> self(this);
-    ThumbnailPipeline::instance().setResultFn(
-        [alive, self](const std::string &p, int size, const ImageData &img)
+    if (m_pipelineListenerToken == 0)
+    {
+        m_pipelineListenerToken = ThumbnailPipeline::instance().addResultFn(
+            [alive, self](const std::string &p, int size, const ImageData &img)
         {
             if (!alive->load() || !self)
                 return;
@@ -200,7 +202,8 @@ void ThumbnailPanel::wireThumbnailPipeline()
                     }
                     panel->onThumbReady(qp);
                 });
-        });
+            });
+    }
 }
 
 ThumbnailPanel::~ThumbnailPanel()
@@ -235,11 +238,12 @@ ThumbnailPanel::~ThumbnailPanel()
     // every interleaving.
     while (m_busyCursorRefs && m_busyCursorRefs->load(std::memory_order_acquire) > 0)
         restoreBusyCursorOnce(m_busyCursorRefs);
-    // Detach from the shared pipeline so its worker thread can't call back into
-    // a destroyed panel (and restore the default decode for the next panel).
-    ThumbnailPipeline::instance().setResultFn([](const std::string &, int, const ImageData &) {});
-    ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
-                                              { return Decoder::decodeScaled(p, size); });
+    // Detach listener token from pipeline
+    if (m_pipelineListenerToken != 0)
+    {
+        ThumbnailPipeline::instance().removeResultFn(m_pipelineListenerToken);
+        m_pipelineListenerToken = 0;
+    }
 }
 
 void ThumbnailPanel::resetDirectoryState()
@@ -483,11 +487,11 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     // After scanComplete: updateSources preserves ready thumbs across filter
     // rebuilds (setSources would bump gen and force avoidable re-decodes).
     if (m_scanProgressive)
-        ThumbnailPipeline::instance().replaceSources(toStdPaths(m_paths));
+        ThumbnailPipeline::instance().replaceSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     else if (m_scanComplete)
-        ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
+        ThumbnailPipeline::instance().updateSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     else
-        ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
+        ThumbnailPipeline::instance().setSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     // M37: publish the exact order displayed by the gallery. Sort/filter
     // rebuilds also pass through here, keeping navigation and preload aligned.
     emit sequenceChanged(m_currentDir, m_paths);

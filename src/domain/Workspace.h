@@ -59,6 +59,7 @@ struct Folder
 struct Workspace
 {
     std::string rootPath;
+    std::string secondaryRootPath;
     std::vector<Folder> folders;
 
     // M12.2 (review fix): explicit list of image paths that were open in the

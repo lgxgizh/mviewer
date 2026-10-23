@@ -236,6 +236,13 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     viewMenu->addSeparator();
     viewMenu->addAction(m_actDirBack);
     viewMenu->addAction(m_actDirForward);
+    m_actSplitBrowse = new QAction(tr("Split Browse View"), this);
+    m_actSplitBrowse->setObjectName("splitBrowseAction");
+    m_actSplitBrowse->setCheckable(true);
+    m_actSplitBrowse->setChecked(false);
+    m_actSplitBrowse->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S));
+    connect(m_actSplitBrowse, &QAction::toggled, this, &MainWindow::toggleSplitBrowse);
+    viewMenu->addAction(m_actSplitBrowse);
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
     m_actToggleSearch = new QAction(tr("Global &Search"), this);
@@ -265,36 +272,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actToggleMetadata->setShortcut(QKeySequence("Ctrl+I"));
     viewMenu->addAction(m_actToggleMetadata);
     viewMenu->addSeparator();
-    // Zoom commands act on the image viewer. Plain +/-/0/1 keys are handled
-    // in keyPressEvent; the Ctrl variants live on the actions so they show
-    // in the menu. Fit/Actual use plain 0/1 (a QAction plain-key shortcut
-    // would shadow text entry in the search box).
-    m_actZoomIn = new QAction(tr("&Zoom In"), this);
-    m_actZoomIn->setObjectName("zoomInAction");
-    m_actZoomIn->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")});
-    m_actZoomOut = new QAction(tr("Zoom &Out"), this);
-    m_actZoomOut->setObjectName("zoomOutAction");
-    m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
-    m_actZoomFit = new QAction(tr("&Fit to Window"), this);
-    m_actZoomFit->setObjectName("zoomFitAction");
-    m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
-    m_actZoomActual = new QAction(tr("&Actual Size"), this);
-    m_actZoomActual->setObjectName("zoomActualAction");
-    m_actFullscreen = new QAction("Full Screen(&U)", this);
-    m_actFullscreen->setShortcut(QKeySequence("F11"));
-    viewMenu->addAction(m_actZoomIn);
-    viewMenu->addAction(m_actZoomOut);
-    viewMenu->addAction(m_actZoomFit);
-    viewMenu->addAction(m_actZoomActual);
-    m_zoomPresetsMenu = viewMenu->addMenu(tr("Zoom Presets"));
-    m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
-    m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });
-    m_zoomPresetsMenu->addAction(tr("100% (Actual Size)"), this, [this]() { zoomViewer(3); });
-    m_zoomPresetsMenu->addAction("200%", this, [this]() { zoomViewer(5); });
-    m_zoomPresetsMenu->addAction("400%", this, [this]() { zoomViewer(6); });
-    m_zoomPresetsMenu->addAction(tr("800% (Pixel Grid)"), this, [this]() { zoomViewer(7); });
-    viewMenu->addSeparator();
-    viewMenu->addAction(m_actFullscreen);
+    buildViewZoomActions(viewMenu);
     m_actSlideshow = new QAction(tr("&Slideshow (S)"), this);
     m_actSlideshow->setObjectName("slideshowAction");
     m_actSlideshow->setCheckable(true);
@@ -457,6 +435,7 @@ void MainWindow::retranslateUi()
         {m_actSelectAll, QT_TR_NOOP("Select All(&A)")},
         {m_actDeselectAll, QT_TR_NOOP("Deselect (&D)")},
         {m_actInvertSelection, QT_TR_NOOP("Invert Selection(&I)")},
+        {m_actSplitBrowse, QT_TR_NOOP("Split Browse View")},
         {m_actCompare, QT_TR_NOOP("Compare Mode (&C)")},
         {m_actToggleAnalysis, QT_TR_NOOP("Analysis Panel(&H)")},
         {m_actHistoryBack, QT_TR_NOOP("&Back")},
@@ -506,4 +485,34 @@ void MainWindow::retranslateUi()
         if (entry.menu)
             entry.menu->setTitle(tr(entry.text));
     }
+}
+
+void MainWindow::buildViewZoomActions(QMenu *viewMenu)
+{
+    m_actZoomIn = new QAction(tr("&Zoom In"), this);
+    m_actZoomIn->setObjectName("zoomInAction");
+    m_actZoomIn->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")});
+    m_actZoomOut = new QAction(tr("Zoom &Out"), this);
+    m_actZoomOut->setObjectName("zoomOutAction");
+    m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
+    m_actZoomFit = new QAction(tr("&Fit to Window"), this);
+    m_actZoomFit->setObjectName("zoomFitAction");
+    m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
+    m_actZoomActual = new QAction(tr("&Actual Size"), this);
+    m_actZoomActual->setObjectName("zoomActualAction");
+    m_actFullscreen = new QAction("Full Screen(&U)", this);
+    m_actFullscreen->setShortcut(QKeySequence("F11"));
+    viewMenu->addAction(m_actZoomIn);
+    viewMenu->addAction(m_actZoomOut);
+    viewMenu->addAction(m_actZoomFit);
+    viewMenu->addAction(m_actZoomActual);
+    m_zoomPresetsMenu = viewMenu->addMenu(tr("Zoom Presets"));
+    m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
+    m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });
+    m_zoomPresetsMenu->addAction(tr("100% (Actual Size)"), this, [this]() { zoomViewer(3); });
+    m_zoomPresetsMenu->addAction("200%", this, [this]() { zoomViewer(5); });
+    m_zoomPresetsMenu->addAction("400%", this, [this]() { zoomViewer(6); });
+    m_zoomPresetsMenu->addAction(tr("800% (Pixel Grid)"), this, [this]() { zoomViewer(7); });
+    viewMenu->addSeparator();
+    viewMenu->addAction(m_actFullscreen);
 }

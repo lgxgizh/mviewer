@@ -16,37 +16,18 @@
 // Independent thumbnail subsystem (Architect P1-③): background decode ->
 // in-memory LRU -> visible queue (priority) -> predictive loading.
 //
-// Owned by core/ (Qt-permitted). It does NOT know about QPixmap/QWidget; it
-// produces ImageData thumbnails and delivers them via an injected callback.
-// The UI adapts ImageData -> QPixmap and forwards via signal. Decode is
-// injected so the pipeline is unit-testable without files or a display.
-//
-// Work is submitted to the shared TaskScheduler (ThumbnailPool), reusing the
-// priority/cancel machinery instead of spinning up a private worker thread.
-//
-// M25 identity & lifecycle contract:
-//   * the in-memory cache is keyed by (path, requested size) — a 64px result
-//     can never satisfy a 240px request;
-//   * every scheduled task carries the generation it was born in; setSources()
-//     and clear() bump the generation, and any result from a superseded
-//     generation is dropped (never cached, never delivered) — so rapid
-//     directory switches cannot pollute the current folder;
-//   * cancelled tasks check the scheduler's cancel flag BEFORE decoding, so
-//     stale queued work stops instead of merely being discarded afterwards.
-
+// Owned by core/ (Qt-free headers). It produces ImageData thumbnails and delivers
+// them via callbacks. Supports multiple isolated consumers (e.g. primary pane
+// cid=0, secondary pane cid=1 for Split Browse View).
 struct ThumbnailPipeline
 {
     using DecodeFn = std::function<ImageData(const std::string &path, int size)>;
     using ResultFn = std::function<void(const std::string &path, int size, const ImageData &thumb)>;
     using ResultToken = uint64_t;
 
-    size_t memCacheMax = 512;                           // hot thumbnails retained in memory (LRU)
+    size_t memCacheMax = 512;
     size_t memCacheMaxBytes = size_t{96} * 1024 * 1024; // 96 MiB budget (M55)
 
-    // Current thumbnail size. Read under m_mtx by the workers and written only
-    // through setThumbSize(), which also performs the size-change invalidation
-    // (generation bump + dropping old-size cache entries). It used to be a public
-    // field, so the UI could write it without the lock and skip that work.
     int currentThumbSize() const
     {
         std::lock_guard<std::mutex> lk(m_mtx);
@@ -57,37 +38,21 @@ struct ThumbnailPipeline
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         memCacheMaxBytes = bytes;
-        while (!m_lru.empty() && (m_memCache.size() > memCacheMax ||
-                                  (memCacheMaxBytes > 0 && m_memCacheBytes > memCacheMaxBytes)))
-        {
-            const std::string &back = m_lru.back();
-            auto it = m_memCache.find(back);
-            if (it != m_memCache.end())
-            {
-                m_memCacheBytes -= it->second.data.byteSize();
-                m_memCache.erase(it);
-            }
-            m_lru.pop_back();
-        }
+        pruneCacheLocked();
     }
 
-    // Inject the decode step (default: Decoder::decodeScaled). Tests inject a fake.
     void setDecodeFn(DecodeFn fn)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         m_decode = std::move(fn);
     }
-    // Deliver decoded thumbnails here (called on the scheduler worker thread).
-    // Replaces only the primary callback. Subscribers from addResultFn stay.
+
     void setResultFn(ResultFn fn)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         m_result = std::move(fn);
     }
 
-    // Extra completion subscriber. Returns 0 when fn is empty. A subscriber
-    // registered before a decode finishes receives that result. setResultFn
-    // does not remove these.
     ResultToken addResultFn(ResultFn fn)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
@@ -115,59 +80,122 @@ struct ThumbnailPipeline
         }
     }
 
-    // Full directory listing (image paths, in display order). Starts a new
-    // generation: in-flight work from the previous listing is CANCELLED (queued
-    // tasks stop before decoding) and the pending bookkeeping is reset so no
-    // stale key can block the new listing. The consumer re-schedules via
-    // setVisibleRange() once the model is built.
+    // Default consumer (cid = 0) source setters
     void setSources(const std::vector<std::string> &paths)
     {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        ++m_gen;
-        cancelHandlesLocked();
-        m_sources = paths;
-        m_pending.clear();
-        m_failed.clear();
-        m_attemptedKeys.clear();
-        m_pathRevisions.clear();
-        m_visibleBegin = 0;
-        m_visibleEnd = 0;
+        setSourcesForConsumer(0, paths);
     }
 
-    // M54: publish discovered batches without superseding already decoded
-    // thumbnails. The scanner may therefore feed the first screen while the
-    // rest of a large directory is still being enumerated.
     void appendSources(const std::vector<std::string> &paths)
     {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        m_sources.insert(m_sources.end(), paths.begin(), paths.end());
+        appendSourcesForConsumer(0, paths);
     }
 
-    // M54: one controlled convergence update after a progressive scan. Keep
-    // the generation stable so path-keyed results remain reusable, while
-    // dropping work whose old row demand is no longer current.
     void replaceSources(const std::vector<std::string> &paths)
     {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        m_sources = paths;
-        cancelObsoleteHandlesLocked();
-        scheduleLocked(false);
+        replaceSourcesForConsumer(0, paths);
     }
 
-    // M56: update the live source order without bumping generation or
-    // cancelling thumbnails for paths that remain in the working set.
     void updateSources(const std::vector<std::string> &paths)
     {
+        updateSourcesForConsumer(0, paths);
+    }
+
+    void setVisibleRange(size_t begin, size_t end)
+    {
+        setVisibleRangeForConsumer(0, begin, end);
+    }
+
+    // Consumer-isolated methods (cid = 0 for primary, cid = 1 for secondary)
+    void setSourcesForConsumer(int cid, const std::vector<std::string> &paths)
+    {
         std::lock_guard<std::mutex> lk(m_mtx);
-        m_sources = paths;
+        ConsumerSlot &slot = m_consumers[cid];
+        ++slot.gen;
+        if (cid == 0)
+            ++m_gen;
+        cancelHandlesForConsumerLocked(cid);
+        slot.sources = paths;
+        if (cid == 0)
+            m_sources = paths;
+        slot.visibleBegin = 0;
+        slot.visibleEnd = 0;
+        if (m_consumers.size() <= 1)
+        {
+            m_pending.clear();
+            m_failed.clear();
+            m_attemptedKeys.clear();
+        }
+        else
+        {
+            for (const auto &p : paths)
+            {
+                const std::string prefix = p + "\x1f";
+                for (auto it = m_failed.begin(); it != m_failed.end();)
+                {
+                    if (it->rfind(prefix, 0) == 0)
+                        it = m_failed.erase(it);
+                    else
+                        ++it;
+                }
+                for (auto it = m_attemptedKeys.begin(); it != m_attemptedKeys.end();)
+                {
+                    if (it->rfind(prefix, 0) == 0)
+                        it = m_attemptedKeys.erase(it);
+                    else
+                        ++it;
+                }
+            }
+        }
+        cancelObsoleteHandlesLocked();
+    }
+
+    void appendSourcesForConsumer(int cid, const std::vector<std::string> &paths)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        ConsumerSlot &slot = m_consumers[cid];
+        slot.sources.insert(slot.sources.end(), paths.begin(), paths.end());
+        if (cid == 0)
+            m_sources = slot.sources;
+    }
+
+    void replaceSourcesForConsumer(int cid, const std::vector<std::string> &paths)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        ConsumerSlot &slot = m_consumers[cid];
+        slot.sources = paths;
+        if (cid == 0)
+            m_sources = paths;
         cancelObsoleteHandlesLocked();
         scheduleLocked(false);
     }
 
-    // M56: invalidate one source without resetting the directory generation or
-    // the other visible thumbnails. In-flight work for this path is cancelled
-    // and carries a per-path revision guard so a running decoder cannot publish
-    // pixels from before an overwrite.
+    void updateSourcesForConsumer(int cid, const std::vector<std::string> &paths)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        ConsumerSlot &slot = m_consumers[cid];
+        slot.sources = paths;
+        if (cid == 0)
+            m_sources = paths;
+        cancelObsoleteHandlesLocked();
+        scheduleLocked(false);
+    }
+
+    void setVisibleRangeForConsumer(int cid, size_t begin, size_t end)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        ConsumerSlot &slot = m_consumers[cid];
+        slot.visibleBegin = begin;
+        slot.visibleEnd = end;
+        if (cid == 0)
+        {
+            m_visibleBegin = begin;
+            m_visibleEnd = end;
+        }
+        cancelObsoleteHandlesLocked();
+        scheduleLocked(false);
+    }
+
     void invalidatePath(const std::string &path)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
@@ -219,35 +247,12 @@ struct ThumbnailPipeline
         }
     }
 
-    // The currently visible item range [begin, end). Visible items are decoded
-    // at Thumbnail priority (ahead of predictive neighbors). Must be called
-    // whenever the viewport scrolls/resizes. Re-submits only missing items.
-    void setVisibleRange(size_t begin, size_t end)
-    {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        m_visibleBegin = begin;
-        m_visibleEnd = end;
-        // M55 demand ownership: retain requests that are still inside the new
-        // visible+predictive window. Only obsolete demand is cancelled. This
-        // avoids cancel/re-submit churn during small scrolls and, together
-        // with the per-enqueue owner token below, closes the same-generation
-        // ABA window when a running decoder outlives cancellation.
-        cancelObsoleteHandlesLocked();
-        scheduleLocked(false);
-    }
-
-    // Number of neighbors beyond the visible range to pre-decode at Background
-    // priority (predictive loading for fast scroll). Default 16.
     void setPredictiveCount(size_t n)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         m_predictive = n;
     }
 
-    // Recommended predictive window. High-latency (UNC/SMB/mapped) paths keep
-    // a tight forward window so off-screen decode does not saturate the link
-    // ahead of the viewport; local SSD keeps the established large-directory
-    // snappy-scroll window from M54/M55.
     static size_t recommendedPredictiveCount(size_t directorySize, bool highLatencyIo)
     {
         if (highLatencyIo)
@@ -259,14 +264,6 @@ struct ThumbnailPipeline
         return 48;
     }
 
-    // M46: thumbnail-size change is a REAL supersession boundary. In-flight
-    // decodes at the old size are cancelled (their handles are dropped and the
-    // generation is bumped, so a late old-size result is neither cached nor
-    // delivered), the old-size memory cache and pending keys are dropped, and
-    // the caller re-schedules the visible window at the new size. Previously a
-    // size change only re-queued the new size while old-size decodes kept
-    // running and repopulated the cache — stale workload stayed unbounded
-    // during a drag of the size slider.
     void setThumbSize(int size)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
@@ -274,6 +271,8 @@ struct ThumbnailPipeline
             return;
         thumbSize = size;
         ++m_gen;
+        for (auto &kv : m_consumers)
+            ++kv.second.gen;
         cancelHandlesLocked();
         m_memCache.clear();
         m_lru.clear();
@@ -283,8 +282,6 @@ struct ThumbnailPipeline
         m_memCacheBytes = 0;
     }
 
-    // Non-submitting cache probe: returns the cached thumbnail if present in
-    // memory at `size`, else null without mutating demand or triggering scheduler work.
     ImageData findCached(const std::string &path, int size)
     {
         if (path.empty() || size <= 0)
@@ -300,9 +297,6 @@ struct ThumbnailPipeline
         return ImageData{};
     }
 
-    // Synchronous cache probe: returns the cached thumbnail at `size` if
-    // present, else null and kicks an async decode (respecting
-    // visible/predictive ordering). Single-lock path tracks hits/misses.
     ImageData request(const std::string &path, int size)
     {
         if (path.empty() || size <= 0)
@@ -316,21 +310,21 @@ struct ThumbnailPipeline
             return it->second.data;
         }
         ++m_misses;
-        // Kick scheduling in case this path is newly visible.
         scheduleLocked(false);
         return ImageData{};
     }
 
-    // Cancel all outstanding thumbnail tasks (e.g. on directory switch) and
-    // start a new generation so late results are dropped.
     void clear()
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         ++m_gen;
+        for (auto &kv : m_consumers)
+            ++kv.second.gen;
         cancelHandlesLocked();
         m_memCache.clear();
         m_lru.clear();
         m_sources.clear();
+        m_consumers.clear();
         m_pending.clear();
         m_failed.clear();
         m_attemptedKeys.clear();
@@ -369,26 +363,29 @@ struct ThumbnailPipeline
         return total == 0 ? 0.0 : static_cast<double>(m_hits) / static_cast<double>(total);
     }
 
-    // M26: test observability — number of keys with an outstanding scheduler
-    // handle (must return to ~0 after completion) and keys awaiting/decoding
-    // (must return to 0 when the pipeline is idle).
     size_t handlesCount() const
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         return m_handles.size();
     }
+
     size_t pendingCount() const
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         return m_pending.size();
     }
 
-    // The generation counter — bumped by setSources()/clear(). Consumers may
-    // observe it to validate their own deferred work.
     uint64_t generation() const
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         return m_gen;
+    }
+
+    uint64_t consumerGeneration(int cid) const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        auto it = m_consumers.find(cid);
+        return it != m_consumers.end() ? it->second.gen : m_gen;
     }
 
     static ThumbnailPipeline &instance()
@@ -398,9 +395,15 @@ struct ThumbnailPipeline
     }
 
   private:
-    // Only setThumbSize() writes this: it also bumps the generation and drops
-    // cache entries decoded at the previous size.
     int thumbSize = 256;
+
+    struct ConsumerSlot
+    {
+        std::vector<std::string> sources;
+        size_t visibleBegin = 0;
+        size_t visibleEnd = 0;
+        uint64_t gen = 0;
+    };
 
     struct MemEntry
     {
@@ -418,78 +421,120 @@ struct ThumbnailPipeline
     {
         return path + "\x1f" + std::to_string(size);
     }
-    // Handle-map key includes a unique per-enqueue owner. Generation alone is
-    // insufficient because a same-generation viewport update may cancel a
-    // running request and immediately submit the same key again.
-    static std::string handleKey(const std::string &k, uint64_t gen, uint64_t owner)
+
+    static std::string handleKey(int cid, const std::string &k, uint64_t gen, uint64_t owner)
     {
-        return k + "\x1e" + std::to_string(gen) + "\x1f" + std::to_string(owner);
+        return std::to_string(cid) + "\x1e" + k + "\x1e" + std::to_string(gen) + "\x1f" +
+               std::to_string(owner);
     }
 
-    // Must hold m_mtx. Until every visible key is cached or has failed, keep
-    // only a few decodes in flight and do not start the predictive window.
-    // The thumbnail pool has one thread per core, so queueing the whole
-    // folder at once lets off-screen work run beside the first cells.
-    //
-    // refillOnly is the completion path. It must not submit a key again:
-    // a thumbnail that was just evicted to stay inside the byte budget would
-    // otherwise be decoded forever, and the pipeline would still be running
-    // after its owner was destroyed. A viewport or cache-miss schedule passes
-    // false and may retry those keys.
-    //
-    // Both tiers still use the Thumbnail pool (M10): a separate Background
-    // pool finished neighbors before visible cells. Predictive work starts
-    // only after the visible set is settled, still behind that set.
-    void scheduleLocked(bool refillOnly)
+    void pruneCacheLocked()
     {
-        if (!m_decode)
-            return;
-        const size_t n = m_sources.size();
-        const size_t vb = std::min(m_visibleBegin, n);
-        const size_t ve = std::min(m_visibleEnd, n);
-        if (!visibleDemandSatisfiedLocked(vb, ve))
+        while (!m_lru.empty() && (m_memCache.size() > memCacheMax ||
+                                  (memCacheMaxBytes > 0 && m_memCacheBytes > memCacheMaxBytes)))
         {
-            size_t inFlight = 0;
-            for (size_t i = vb; i < ve; ++i)
+            const std::string &back = m_lru.back();
+            auto it = m_memCache.find(back);
+            if (it != m_memCache.end())
             {
-                if (m_pending.count(key(m_sources[i], thumbSize)) != 0)
-                    ++inFlight;
+                m_memCacheBytes -= it->second.data.byteSize();
+                m_memCache.erase(it);
             }
-            for (size_t i = vb; i < ve && inFlight < kVisibleFirstWave; ++i)
-            {
-                const std::string k = key(m_sources[i], thumbSize);
-                if (m_memCache.count(k) != 0 || m_failed.count(k) != 0 || m_pending.count(k) != 0)
-                    continue;
-                enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail, refillOnly);
-                if (m_pending.count(k) != 0)
-                    ++inFlight;
-            }
-            return;
+            m_lru.pop_back();
         }
-        for (size_t i = vb; i < ve; ++i)
-            enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail, refillOnly);
-        // Predictive neighbors after the visible range. Reverse prefetch is
-        // omitted: the user scrolls forward.
-        const size_t pe = std::min(ve + m_predictive, n);
-        for (size_t i = ve; i < pe; ++i)
-            enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail, refillOnly);
     }
 
-    // Must hold m_mtx. A visible key is settled when its thumbnail is cached
-    // or that decode already failed. Failures are not retried from completion,
-    // or a null thumb would reschedule itself forever.
-    bool visibleDemandSatisfiedLocked(size_t vb, size_t ve) const
+    void cacheLocked(const std::string &k, const std::string &path, const ImageData &data)
+    {
+        (void)path;
+        if (k.empty() || data.isNull())
+            return;
+        const size_t bytes = data.byteSize();
+        if (memCacheMaxBytes > 0 && bytes > memCacheMaxBytes)
+            return;
+
+        auto existing = m_memCache.find(k);
+        if (existing != m_memCache.end())
+        {
+            m_memCacheBytes -= existing->second.data.byteSize();
+            m_lru.erase(existing->second.lruIt);
+            m_memCache.erase(existing);
+        }
+        MemEntry e;
+        e.data = data;
+        m_lru.push_front(k);
+        e.lruIt = m_lru.begin();
+        m_memCacheBytes += bytes;
+        m_memCache[k] = e;
+        pruneCacheLocked();
+    }
+
+    bool visibleDemandSatisfiedLocked(const std::vector<std::string> &sources, size_t vb,
+                                      size_t ve) const
     {
         for (size_t i = vb; i < ve; ++i)
         {
-            const std::string k = key(m_sources[i], thumbSize);
+            const std::string k = key(sources[i], thumbSize);
             if (m_memCache.count(k) == 0 && m_failed.count(k) == 0)
                 return false;
         }
         return true;
     }
 
-    void enqueueLocked(const std::string &path, TaskScheduler::Priority prio, bool refillOnly)
+    void scheduleLocked(bool refillOnly)
+    {
+        if (!m_decode)
+            return;
+
+        auto scheduleForConsumer = [this, refillOnly](int cid, const ConsumerSlot &slot)
+        {
+            const size_t n = slot.sources.size();
+            const size_t vb = std::min(slot.visibleBegin, n);
+            const size_t ve = std::min(slot.visibleEnd, n);
+            if (!visibleDemandSatisfiedLocked(slot.sources, vb, ve))
+            {
+                size_t inFlight = 0;
+                for (size_t i = vb; i < ve; ++i)
+                {
+                    if (m_pending.count(key(slot.sources[i], thumbSize)) != 0)
+                        ++inFlight;
+                }
+                for (size_t i = vb; i < ve && inFlight < kVisibleFirstWave; ++i)
+                {
+                    const std::string k = key(slot.sources[i], thumbSize);
+                    if (m_memCache.count(k) != 0 || m_failed.count(k) != 0 ||
+                        m_pending.count(k) != 0)
+                        continue;
+                    enqueueLocked(slot.sources[i], cid, slot.gen,
+                                  TaskScheduler::Priority::Thumbnail, refillOnly);
+                    if (m_pending.count(k) != 0)
+                        ++inFlight;
+                }
+                return;
+            }
+            for (size_t i = vb; i < ve; ++i)
+                enqueueLocked(slot.sources[i], cid, slot.gen, TaskScheduler::Priority::Thumbnail,
+                              refillOnly);
+            const size_t pe = std::min(ve + m_predictive, n);
+            for (size_t i = ve; i < pe; ++i)
+                enqueueLocked(slot.sources[i], cid, slot.gen, TaskScheduler::Priority::Thumbnail,
+                              refillOnly);
+        };
+
+        if (m_consumers.empty())
+        {
+            ConsumerSlot defSlot{m_sources, m_visibleBegin, m_visibleEnd, m_gen};
+            scheduleForConsumer(0, defSlot);
+        }
+        else
+        {
+            for (const auto &kv : m_consumers)
+                scheduleForConsumer(kv.first, kv.second);
+        }
+    }
+
+    void enqueueLocked(const std::string &path, int cid, uint64_t slotGen,
+                       TaskScheduler::Priority prio, bool refillOnly)
     {
         const int size = thumbSize;
         const std::string k = key(path, size);
@@ -497,81 +542,70 @@ struct ThumbnailPipeline
             return;
         auto pit = m_pending.find(k);
         if (pit != m_pending.end())
-            return; // already owned by the current demand window
-        // Completion refill must not re-decode a key that already ran. Eviction
-        // and an oversized reject both leave the key uncached; retrying here
-        // never settles. Viewport scheduling passes refillOnly == false.
+            return;
         if (refillOnly && m_attemptedKeys.count(k) != 0)
             return;
         const uint64_t owner = ++m_nextOwner;
-        const std::string ownerKey = handleKey(k, m_gen, owner);
+        const std::string ownerKey = handleKey(cid, k, slotGen, owner);
         m_pending[k] = PendingEntry{owner, ownerKey};
         DecodeFn decode = m_decode;
         ResultFn result = m_result;
-        const uint64_t gen = m_gen;
         const uint64_t pathRevision = m_pathRevisions[path];
         m_attemptedKeys.insert(k);
+
         auto handle = TaskScheduler::instance().submit(
             prio,
-            [this, path, size, k, gen, owner, ownerKey, decode, result,
+            [this, path, size, k, cid, slotGen, owner, ownerKey, decode, result,
              pathRevision](const TaskScheduler::TaskContext &ctx)
             {
-                // Stop stale queued work BEFORE decoding. The generation that
-                // owned this key already cleared/repurposed the bookkeeping in
-                // setSources()/clear(); touching m_pending here could erase the
-                // NEW generation's ownership of the same key.
                 if (ctx.isCancelled())
                     return;
-                // M27: a throwing decoder must not leak the pipeline
-                // bookkeeping (m_pending / m_handles). It is treated as a
-                // decode failure — the null-thumb branch below cleans up under
-                // the lock and surfaces the failure to the consumer.
-                ImageData thumb;
-                try
-                {
-                    thumb = decode(path, size);
-                }
-                catch (...)
-                {
-                    thumb = ImageData{};
-                }
-                ImageData deliver;
-                ResultFn cb;
-                std::vector<ResultFn> subscribers;
                 {
                     std::lock_guard<std::mutex> lk(m_mtx);
-                    // Remove this task's own bookkeeping only — the key may
-                    // belong to a newer generation by now.
-                    auto pendIt = m_pending.find(k);
-                    if (pendIt != m_pending.end() && pendIt->second.owner == owner)
-                        m_pending.erase(pendIt);
-                    m_handles.erase(ownerKey);
-                    // Superseded generation: drop everything (no cache, no
-                    // delivery) so old directories can never pollute the
-                    // current one.
-                    if (ctx.isCancelled())
-                    {
-                        m_attemptedKeys.erase(k);
+                    auto it = m_consumers.find(cid);
+                    if (it != m_consumers.end() && it->second.gen != slotGen)
                         return;
+                    if (it == m_consumers.end() && cid == 0 && m_gen != slotGen)
+                        return;
+                    if (m_pathRevisions[path] != pathRevision)
+                        return;
+                }
+                ImageData thumb;
+                if (decode)
+                {
+                    try
+                    {
+                        thumb = decode(path, size);
                     }
-                    if (gen != m_gen || m_pathRevisions[path] != pathRevision)
+                    catch (...)
+                    {
+                        thumb = ImageData{};
+                    }
+                }
+                ResultFn cb;
+                std::vector<ResultFn> subscribers;
+                ImageData deliver;
+                {
+                    std::lock_guard<std::mutex> lk(m_mtx);
+                    m_handles.erase(ownerKey);
+                    auto pit = m_pending.find(k);
+                    if (pit == m_pending.end() || pit->second.owner != owner)
+                        return;
+                    m_pending.erase(pit);
+                    auto it = m_consumers.find(cid);
+                    if (it != m_consumers.end() && it->second.gen != slotGen)
+                        return;
+                    if (it == m_consumers.end() && cid == 0 && m_gen != slotGen)
+                        return;
+                    if (m_pathRevisions[path] != pathRevision)
                         return;
                     if (!thumb.isNull())
                     {
                         cacheLocked(k, path, thumb);
-                        // Result callback is delivered OUTSIDE the lock (M27):
-                        // a callback that re-enters request()/setSources()/
-                        // clear() must never deadlock against the pipeline
-                        // mutex. The state mutations above are done; only the
-                        // user-visible delivery remains.
                         deliver = thumb;
                     }
                     else
                     {
-                        // Remember the failure for this generation so a later
-                        // setVisibleRange does not re-decode a thumb that
-                        // already failed. setSources()/clear()/setThumbSize()
-                        // drop the set; replaceSources() keeps it.
                         m_failed.insert(k);
                         deliver = ImageData{};
                     }
@@ -588,11 +622,6 @@ struct ThumbnailPipeline
                 {
                     if (!fn)
                         return;
-                    // M27: the result callback is user code running on the
-                    // worker — a throw must never escape the pool (an uncaught
-                    // exception in a worker thread terminates the process).
-                    // Bookkeeping was already cleaned under the lock before
-                    // delivery, so a throw here leaves zero residue.
                     try
                     {
                         fn(path, size, deliver);
@@ -605,15 +634,13 @@ struct ThumbnailPipeline
                 for (const ResultFn &sub : subscribers)
                     deliverOne(sub);
             });
+
         if (handle)
         {
             m_handles[ownerKey] = handle;
         }
         else
         {
-            // Scheduler rejected the submission (paused / saturated): the key
-            // must remain schedulable — a later setVisibleRange/request will
-            // retry it.
             auto pendIt = m_pending.find(k);
             if (pendIt != m_pending.end() && pendIt->second.owner == owner)
                 m_pending.erase(pendIt);
@@ -621,24 +648,32 @@ struct ThumbnailPipeline
         }
     }
 
-    // Must hold m_mtx. A same-generation viewport update retains the exact
-    // intersection of old and new demand. Each obsolete request is removed
-    // by its own owner key; a later same-key request therefore cannot be
-    // erased by the old task's completion.
     void cancelObsoleteHandlesLocked()
     {
         if (m_pending.empty())
             return;
         std::unordered_set<std::string> keep;
-        const size_t n = m_sources.size();
-        const size_t vb = std::min(m_visibleBegin, n);
-        const size_t ve = std::min(m_visibleEnd, n);
-        keep.reserve((ve - vb) + m_predictive);
-        for (size_t i = vb; i < ve; ++i)
-            keep.insert(key(m_sources[i], thumbSize));
-        const size_t pe = std::min(ve + m_predictive, n);
-        for (size_t i = ve; i < pe; ++i)
-            keep.insert(key(m_sources[i], thumbSize));
+        auto addKeepFor = [this, &keep](const ConsumerSlot &slot)
+        {
+            const size_t n = slot.sources.size();
+            const size_t vb = std::min(slot.visibleBegin, n);
+            const size_t ve = std::min(slot.visibleEnd, n);
+            for (size_t i = vb; i < ve; ++i)
+                keep.insert(key(slot.sources[i], thumbSize));
+            const size_t pe = std::min(ve + m_predictive, n);
+            for (size_t i = ve; i < pe; ++i)
+                keep.insert(key(slot.sources[i], thumbSize));
+        };
+        if (m_consumers.empty())
+        {
+            ConsumerSlot defSlot{m_sources, m_visibleBegin, m_visibleEnd, m_gen};
+            addKeepFor(defSlot);
+        }
+        else
+        {
+            for (const auto &kv : m_consumers)
+                addKeepFor(kv.second);
+        }
 
         for (auto it = m_pending.begin(); it != m_pending.end();)
         {
@@ -657,10 +692,23 @@ struct ThumbnailPipeline
         }
     }
 
-    // Must hold m_mtx. Cancels every outstanding pipeline task (sets its
-    // scheduler cancel token) and drops the pipeline bookkeeping for them.
-    // Queued tasks still run on the pool but exit before decoding; in-flight
-    // decodes finish and are dropped by the generation guard.
+    void cancelHandlesForConsumerLocked(int cid)
+    {
+        const std::string prefix = std::to_string(cid) + "\x1e";
+        for (auto it = m_handles.begin(); it != m_handles.end();)
+        {
+            if (it->first.rfind(prefix, 0) == 0)
+            {
+                TaskScheduler::cancel(it->second);
+                it = m_handles.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
     void cancelHandlesLocked()
     {
         for (auto &kv : m_handles)
@@ -668,59 +716,18 @@ struct ThumbnailPipeline
         m_handles.clear();
     }
 
-    void cacheLocked(const std::string &k, const std::string &path, const ImageData &data)
-    {
-        (void)path;
-        if (k.empty() || data.isNull())
-            return;
-        const size_t bytes = data.byteSize();
-        // Prevent oversized decode candidate from wiping out the entire memory cache.
-        if (memCacheMaxBytes > 0 && bytes > memCacheMaxBytes)
-            return;
-
-        // A cancelled same-generation decode may still finish after a newer
-        // request for the same key has been queued. Replace the existing
-        // entry instead of adding a second LRU node for the same key; otherwise
-        // a later path invalidation would erase a stale iterator and corrupt
-        // the cache.
-        auto existing = m_memCache.find(k);
-        if (existing != m_memCache.end())
-        {
-            m_memCacheBytes -= existing->second.data.byteSize();
-            m_lru.erase(existing->second.lruIt);
-            m_memCache.erase(existing);
-        }
-        MemEntry e;
-        e.data = data;
-        m_lru.push_front(k);
-        e.lruIt = m_lru.begin();
-        m_memCacheBytes += bytes;
-        m_memCache[k] = e;
-        while (!m_lru.empty() && (m_memCache.size() > memCacheMax ||
-                                  (memCacheMaxBytes > 0 && m_memCacheBytes > memCacheMaxBytes)))
-        {
-            const std::string &back = m_lru.back();
-            auto it = m_memCache.find(back);
-            if (it != m_memCache.end())
-            {
-                m_memCacheBytes -= it->second.data.byteSize();
-                m_memCache.erase(it);
-            }
-            m_lru.pop_back();
-        }
-    }
-
     mutable std::mutex m_mtx;
     std::vector<std::string> m_sources;
     size_t m_visibleBegin = 0;
     size_t m_visibleEnd = 0;
     size_t m_predictive = 16;
-    // In-flight cap until the visible window is cached or failed. The pool
-    // would otherwise run the whole folder beside the first cells.
     static constexpr size_t kVisibleFirstWave = 16;
     uint64_t m_gen = 0;
+    std::unordered_map<int, ConsumerSlot> m_consumers;
+
     DecodeFn m_decode = [](const std::string &path, int size)
     { return Decoder::decodeScaled(path, size); };
+
     struct ResultSubscriber
     {
         ResultToken token = 0;
@@ -734,19 +741,9 @@ struct ThumbnailPipeline
     size_t m_memCacheBytes = 0;
     uint64_t m_hits = 0;
     uint64_t m_misses = 0;
-    // Outstanding scheduler handles, keyed by (path, size, generation, owner). Tasks
-    // remove their own entry on completion; setSources()/clear() cancel + drop
-    // them wholesale — the map never accumulates the browse history.
     std::unordered_map<std::string, TaskScheduler::TaskHandle> m_handles;
-    // Pending keys: (path, size) -> unique request owner. An obsolete request
-    // can never block or erase a later same-key request in the same generation.
     std::unordered_map<std::string, PendingEntry> m_pending;
-    // Keys whose decode returned null in the current generation. Not consulted
-    // by replaceSources()/updateSources(), so a same-generation retry after
-    // setSources() (which clears this set) still works.
     std::unordered_set<std::string> m_failed;
-    // Keys submitted for this generation. Completion refill will not submit
-    // them again; setVisibleRange() and request() may.
     std::unordered_set<std::string> m_attemptedKeys;
     std::unordered_map<std::string, uint64_t> m_pathRevisions;
     uint64_t m_nextOwner = 0;

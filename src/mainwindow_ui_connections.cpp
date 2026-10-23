@@ -25,6 +25,8 @@ void MainWindow::connectNavigationSignals()
             &DirectoryMonitor::setActiveDirectory);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
             &ThumbnailPanel::setDirectory);
+    connect(m_directoryTree, &DirectoryTree::openInSecondaryPaneRequested, this,
+            &MainWindow::openRightDirectory);
     connect(m_directoryTree, &DirectoryTree::directoryContentsChanged, m_directoryMonitor,
             &DirectoryMonitor::notifyDirectoryChanged);
     connect(m_thumbnailPanel, &ThumbnailPanel::directoryContentsChanged, m_directoryMonitor,
@@ -235,7 +237,17 @@ void MainWindow::connectSelectionSignals()
             {
                 syncGalleryFromSelection();
                 updateSelectionActions();
+                updateSplitBrowseCompareButton();
             });
+    if (m_secondaryThumbnailPanel)
+    {
+        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
+                [this](const QString &path) { onImageOpen(path); });
+        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::compareRequested, this,
+                [this](const QStringList &images) { openCompare(images); });
+        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
+                [this](const QString &path) { openUsmCompare(path); });
+    }
     // Dropping files directly onto the gallery behaves the same as dropping
     // them anywhere else on the window.
     connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this, &MainWindow::handleDroppedPaths);

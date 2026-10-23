@@ -16,41 +16,7 @@
 namespace
 {
 
-// Address bar: first click / focus selects all (Ctrl+A look) so the user can
-// immediately type a new path or copy. Later clicks while focused keep the
-// caret so partial edits still work.
-class SelectAllOnActivateLineEdit : public QLineEdit
-{
-  public:
-    using QLineEdit::QLineEdit;
-
-  protected:
-    void focusInEvent(QFocusEvent *event) override
-    {
-        QLineEdit::focusInEvent(event);
-        if (event->reason() == Qt::MouseFocusReason || event->reason() == Qt::TabFocusReason ||
-            event->reason() == Qt::BacktabFocusReason ||
-            event->reason() == Qt::ShortcutFocusReason || event->reason() == Qt::OtherFocusReason)
-        {
-            // Defer past the activating mouse press, which would otherwise place
-            // a caret and clear the selection we want.
-            QTimer::singleShot(0, this,
-                               [this]()
-                               {
-                                   if (hasFocus())
-                                       selectAll();
-                               });
-        }
-    }
-
-    void mousePressEvent(QMouseEvent *event) override
-    {
-        const bool gainingFocus = !hasFocus();
-        QLineEdit::mousePressEvent(event);
-        if (gainingFocus)
-            selectAll();
-    }
-};
+// SelectAllOnActivateLineEdit is defined in mainwindow_p.h
 
 QString actTip(const QString &label, const QAction *action)
 {
@@ -133,6 +99,13 @@ void MainWindow::buildBrowserShell()
         m_actRotateCW->setToolTip(
             actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
         browserToolBar->addAction(m_actRotateCW);
+    }
+    if (m_actSplitBrowse)
+    {
+        m_actSplitBrowse->setIcon(mviewer::ui::toolbarIcon("split_browse"));
+        m_actSplitBrowse->setObjectName("splitBrowseAction");
+        m_actSplitBrowse->setToolTip(actTip(tr("Split Browse View (Ctrl+Shift+S)"), m_actSplitBrowse));
+        browserToolBar->addAction(m_actSplitBrowse);
     }
     if (m_actCompare)
     {
@@ -519,16 +492,29 @@ QWidget *MainWindow::buildGalleryPanel()
     auto *sortBar = buildSortBar(rightWidget);
     rightLayout->addWidget(sortBar);
 
-    m_thumbnailPanel = new ThumbnailPanel(rightWidget);
+    m_gallerySplitter = new QSplitter(Qt::Horizontal, rightWidget);
+    m_gallerySplitter->setObjectName(QStringLiteral("gallerySplitter"));
+
+    m_thumbnailPanel = new ThumbnailPanel(m_gallerySplitter);
+    m_thumbnailPanel->setObjectName(QStringLiteral("thumbnailPanel"));
+    m_thumbnailPanel->setConsumerId(0);
+    m_thumbnailPanel->setPaneSlot(SelectionModel::PaneSlot::Primary);
     connect(m_thumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
     placeGalleryCompareButton(sortBar);
-    m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
-    m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
+    m_thumbnailPanel->setCommandStack(&m_cmdStack);
+    m_thumbnailPanel->setSelectionModel(m_selection);
     m_thumbnailPanel->installEventFilter(this);
     if (m_thumbnailPanel->viewport())
         m_thumbnailPanel->viewport()->installEventFilter(this);
-    rightLayout->addWidget(m_thumbnailPanel, 1);
+    m_primaryBrowsePane = m_thumbnailPanel;
+    m_gallerySplitter->addWidget(m_thumbnailPanel);
+
+    m_secondaryBrowsePane = buildSecondaryBrowsePane();
+    m_gallerySplitter->addWidget(m_secondaryBrowsePane);
+    m_secondaryBrowsePane->hide();
+
+    rightLayout->addWidget(m_gallerySplitter, 1);
 
     buildEmptyStateUi();
     m_emptyFolderTimer = new QTimer(this);

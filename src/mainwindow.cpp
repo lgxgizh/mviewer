@@ -725,7 +725,7 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     // whatever order Ctrl/Shift/rubber-band picks produced. A restored session
     // keeps its saved order because per-pane state is stored by index.
     if (sessionJson.isEmpty())
-        imgs = sortPathsByNaturalFileName(imgs);
+        imgs = sortPathsForCompare(imgs);
     // Compare is a 2-8 image selection. Do not substitute the first 8 files
     // of the folder when the user has 0-1 images selected.
     if (imgs.size() > 8)

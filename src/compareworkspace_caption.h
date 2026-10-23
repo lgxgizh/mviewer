@@ -1,7 +1,11 @@
 #pragma once
 
 #include <QLabel>
+#include <QDir>
+#include <QFileInfo>
+#include <QHash>
 #include <QString>
+#include <QStringList>
 
 // Hidden filename store under each compare pane. The visible name is the top
 // overlay (wrap, no elision). This label stays hidden unless a display error
@@ -102,4 +106,71 @@ inline bool comparePaneCaptionHasStatus(const QLabel *caption)
 {
     const auto *stored = dynamic_cast<const ComparePaneCaption *>(caption);
     return stored && stored->hasStatus();
+}
+
+inline QStringList disambiguateCaptions(const QStringList &paths)
+{
+    QStringList result;
+    result.reserve(paths.size());
+    if (paths.isEmpty())
+        return result;
+
+    QHash<QString, int> nameCounts;
+    for (const QString &p : paths)
+    {
+        const QString name = QFileInfo(p).fileName();
+        nameCounts[name]++;
+    }
+
+    for (const QString &p : paths)
+    {
+        const QString fileName = QFileInfo(p).fileName();
+        if (nameCounts.value(fileName, 0) <= 1)
+        {
+            result.append(fileName);
+            continue;
+        }
+
+        QString normalized = QDir::fromNativeSeparators(p);
+        QStringList parts = normalized.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        if (parts.size() <= 1)
+        {
+            result.append(fileName);
+            continue;
+        }
+
+        QString best = fileName;
+        for (int levels = 2; levels <= parts.size(); ++levels)
+        {
+            QString candidate = parts.mid(parts.size() - levels).join(QLatin1Char('/'));
+            bool unique = true;
+            for (const QString &other : paths)
+            {
+                if (other == p)
+                    continue;
+                if (QFileInfo(other).fileName() == fileName)
+                {
+                    QString otherNorm = QDir::fromNativeSeparators(other);
+                    QStringList otherParts = otherNorm.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+                    if (levels <= otherParts.size())
+                    {
+                        QString otherCand = otherParts.mid(otherParts.size() - levels).join(QLatin1Char('/'));
+                        if (otherCand == candidate)
+                        {
+                            unique = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (unique)
+            {
+                best = candidate;
+                break;
+            }
+            best = candidate;
+        }
+        result.append(best);
+    }
+    return result;
 }

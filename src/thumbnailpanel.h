@@ -41,7 +41,7 @@ class QResizeEvent;
 class QStringListModel;
 class CommandStack;
 class ICommand;
-class SelectionModel;
+#include "selectionmodel.h"
 class QProgressDialog;
 class QRegularExpression;
 
@@ -141,9 +141,14 @@ class ThumbnailPanel : public QListView
     void selectPath(const QString &path);
     // M19: apply a multi-selection from SelectionModel onto the gallery.
     // `current` becomes the focused item; empty current falls back to paths[0].
-    void selectPaths(const QStringList &paths, const QString &current = {});
+    void selectPaths(const QStringList &paths, const QString &current = {},
+                     bool publishToModel = true);
     // P0-2: inject the app-wide SelectionModel so hover events publish `hovered`.
     void setSelectionModel(SelectionModel *sel);
+    SelectionModel::PaneSlot paneSlot() const { return m_paneSlot; }
+    void setPaneSlot(SelectionModel::PaneSlot slot) { m_paneSlot = slot; }
+    int consumerId() const { return m_consumerId; }
+    void setConsumerId(int id) { m_consumerId = id; }
     void setSortMode(SortMode mode);
     SortMode sortMode() const
     {
@@ -745,18 +750,9 @@ class ThumbnailPanel : public QListView
     QString m_incrementalAnchorPath;
     int m_incrementalAnchorOffset = 0;
     int m_incrementalPreviousCurrentRow = -1;
-    // M46: directory-generation token shared with the scan/dimension/recursive
-    // workers. setDirectory() stores the new generation here; every worker
-    // loop re-checks it (alongside m_alive) so superseded walking, sorting and
-    // dimension probing stop cooperatively instead of running to completion
-    // only to be discarded on the UI thread.
+    // M46: directory-generation token shared with workers.
     std::shared_ptr<std::atomic<uint64_t>> m_scanGenToken;
-    // M46: app-global busy-cursor refcount, owned UI-side. setDirectory()
-    // increments it before launching the scan; every scan completion or abort
-    // decrements it (marshaled to the UI thread), and the destructor drains
-    // any refs whose worker was dropped by m_scanPool.clear(). This makes
-    // setOverrideCursor()/restoreOverrideCursor() provably balanced: no queued
-    // job being cleared/cancelled can strand the whole app with a busy cursor.
+    // M46: app-global busy-cursor refcount, owned UI-side.
     std::shared_ptr<std::atomic<int>> m_busyCursorRefs;
     // Per-scan once-flag. A superseded scan must not pop the newer scan's cursor.
     std::shared_ptr<std::atomic<bool>> m_scanCursorReleased;
@@ -785,6 +781,10 @@ class ThumbnailPanel : public QListView
     QProgressDialog *m_fileProgress = nullptr;
     uint64_t m_fileOperationGeneration = 0;
     bool m_fileOperationBusy = false;
+    SelectionModel::PaneSlot m_paneSlot = SelectionModel::PaneSlot::Primary;
+    int m_consumerId = 0;
+    uint64_t m_pipelineListenerToken = 0;
+    bool m_updatingFromModel = false;
 };
 
 // Nested delegates are defined after ThumbnailPanel itself is complete.

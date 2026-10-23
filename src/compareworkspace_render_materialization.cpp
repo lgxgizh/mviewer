@@ -454,6 +454,20 @@ void CompareWorkspace::rebuildCells()
 // panes). One Analysis-priority task per call; never a synchronous fallback.
 void CompareWorkspace::buildCompareCells(int n, int columns)
 {
+    QStringList allPaths;
+    allPaths.reserve(n);
+    for (int idx = 0; idx < n; ++idx)
+    {
+        const ImageFrame *f = m_engine.imageAt(idx);
+        if (f && !f->metadata().filePath.empty())
+            allPaths.append(QString::fromStdString(f->metadata().filePath));
+        else if (f && !f->metadata().fileName.empty())
+            allPaths.append(QString::fromStdString(f->metadata().fileName));
+        else
+            allPaths.append(QString());
+    }
+    const QStringList disambiguated = disambiguateCaptions(allPaths);
+
     for (int i = 0; i < n; ++i)
     {
         // Image view plus a hidden filename store; visible names use the top overlay.
@@ -532,6 +546,8 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
             view->setLinkMarkers(m_linkPoints);
 
         auto *caption = createPaneCaption(cellWidget, i, img);
+        if (i < disambiguated.size() && !disambiguated[i].isEmpty())
+            caption->setFullText(disambiguated[i]);
         cellLay->addWidget(caption);
         m_cellLabels.push_back(caption);
         view->setFilenameOverlay(caption->fullText(), m_filenameOverlay);

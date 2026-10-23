@@ -1464,7 +1464,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 subQDir.mkdir("sub_ux_test");
                 const QString subDirPath = QDir::cleanPath(subQDir.filePath("sub_ux_test"));
                 directoryTree->navigateTo(subDirPath, true);
-                pump(100);
+                for (int i = 0; i < 10 && directoryTree->currentPath() != subDirPath; ++i)
+                    pump(50);
                 CHECK(directoryTree->currentPath() == subDirPath, "navigated to subfolder in test");
 
                 // Mouse back button navigates back to original directory.
@@ -1472,7 +1473,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                                  viewer->mapToGlobal(QPoint(10, 10)), Qt::BackButton,
                                  Qt::BackButton, Qt::NoModifier);
                 QApplication::sendEvent(viewer, &back);
-                pump(100);
+                for (int i = 0; i < 10 && directoryTree->currentPath() != origDir; ++i)
+                    pump(50);
                 CHECK(directoryTree->currentPath() == origDir,
                       "mouse back button navigates to the previous directory");
 
@@ -1481,7 +1483,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                                 viewer->mapToGlobal(QPoint(10, 10)), Qt::ForwardButton,
                                 Qt::ForwardButton, Qt::NoModifier);
                 QApplication::sendEvent(viewer, &fwd);
-                pump(100);
+                for (int i = 0; i < 10 && directoryTree->currentPath() != subDirPath; ++i)
+                    pump(50);
                 CHECK(directoryTree->currentPath() == subDirPath,
                       "mouse forward button navigates back to the forward directory");
 

@@ -4,9 +4,9 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.143**
+## Where we are now — **Beta / 1.0.144**
 
-MViewer remains in **Beta**; the current release is **`v1.0.143`**
+MViewer remains in **Beta**; the current release is **`v1.0.144`**
 (2026-10-20, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.143** (current) | Smooth fullscreen transitions: eliminate black flash on double-click open and small-image artifact on ESC exit; 16-bit analysis pathway; hot-switch language without restart; USM Space hold | 🔵 Beta |
+| **1.0.144** (current) | Split Browse View: independent dual-pane gallery (Primary / Secondary) with isolated directory monitoring & thumbnail pipelines, cross-pane 2–8 natural image selection, 3-tier deterministic pairing sort, and caption disambiguation | 🔵 Beta |
+| **1.0.143** | Smooth fullscreen transitions: eliminate black flash on double-click open and small-image artifact on ESC exit; 16-bit analysis pathway; hot-switch language without restart; USM Space hold | ✅ Previous patch |
 | **1.0.142** | Review hardening: complexity splits, RenderEngine namespace, build portability, LibRaw cancel, DiskCache threshold, unified luma, acceptance wizard, orderly test exit | ✅ Previous patch |
 | **1.0.141** | Compare stuck "Loading" / low-res mosaic after a pair switch fixed | ✅ Previous patch |
 | **1.0.140** | Compare mosaic fix, automatic-update-check preference, USM dialog maximize + `Space` pair-hold | ✅ Previous patch |

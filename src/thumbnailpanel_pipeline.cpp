@@ -158,8 +158,9 @@ void ThumbnailPanel::updateVisibleRange()
         ThumbnailPipeline::recommendedPredictiveCount(static_cast<size_t>(n), m_highLatencyDir);
     ThumbnailPipeline::instance().setPredictiveCount(predictive);
 
-    ThumbnailPipeline::instance().setVisibleRange(static_cast<size_t>(first),
-                                                  last >= 0 ? static_cast<size_t>(last) + 1 : 0);
+    ThumbnailPipeline::instance().setVisibleRangeForConsumer(
+        m_consumerId, static_cast<size_t>(first),
+        last >= 0 ? static_cast<size_t>(last) + 1 : 0);
 }
 
 void ThumbnailPanel::onThumbReady(const QString &path)

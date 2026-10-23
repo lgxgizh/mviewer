@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.0.144] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.144** (Split Browse View, cross-directory natural image comparison, deterministic pairing sort, caption disambiguation, and session persistence).
+
+### Added
+
+- **Split Browse View**:
+  - **Dual-Pane Gallery**: Added optional secondary browse pane (`Ctrl+Shift+S`, View menu, and toolbar) splitting the gallery horizontally, with independent address bar, directory navigation & monitor (`DirectoryMonitor`), thumbnail pipeline consumer slot (`ThumbnailPipeline`), sorting, and filtering.
+  - **Cross-Pane Natural Selection (ADR-001)**: Extended `SelectionModel` with `PaneSlot::Primary` and `PaneSlot::Secondary` so clicking in the right pane preserves left pane selections without complex modifier keys; merged selection cleanly supports 2–8 images for instant comparison via `P` / `C` / toolbar button.
+  - **3-Tier Deterministic Pairing Sort**: When comparing across directories, pairs matching filenames together (`filename` natural order -> `paneRank` primary/secondary -> `fullPath`), ensuring baseline images appear first and corresponding candidates immediately follow.
+  - **Caption Disambiguation**: Implemented `disambiguateCaptions()` in compare workspace headers to automatically prepend parent directory names (e.g. `exp_v1/0001.png` vs `exp_v2/0001.png`) when filenames are identical.
+  - **Persistence & Workspace**: Persisted split browse state, secondary directory, scroll position, and splitter sizes across sessions in `AppState` and `.mvws` workspace files.
+  - **Acceptance Test Suite**: Added `test_split_browse_acceptance` verifying TC-SB-01 through TC-SB-08 under `ADR-001/005/014/018`.
+
 ## [1.0.143] - 2026-10-23
 
 ### Release
