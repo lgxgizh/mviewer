@@ -54,7 +54,7 @@ void dropUnrequestedFullscreen(QWidget *widget)
 QString sequenceLabel(const mviewer::core::FrameSequenceInfo &sequence)
 {
     return sequence.kind == mviewer::core::FrameSequenceKind::Pages ? QStringLiteral("Page")
-                                                                      : QStringLiteral("Frame");
+                                                                    : QStringLiteral("Frame");
 }
 
 } // namespace
@@ -121,9 +121,8 @@ void ImageViewer::previousFrame()
 {
     if (frameCount() <= 1)
         return;
-    const int next = m_sequence.animated
-                         ? (m_frameIndex + frameCount() - 1) % frameCount()
-                         : std::max(0, m_frameIndex - 1);
+    const int next = m_sequence.animated ? (m_frameIndex + frameCount() - 1) % frameCount()
+                                         : std::max(0, m_frameIndex - 1);
     setFrameIndex(next);
 }
 
@@ -216,10 +215,10 @@ void ImageViewer::applyLoadedFrame(const ImageLoadResult &result, int requestedF
     m_frame = result.frame;
     m_sequence = m_frame->sequenceInfo();
     m_frameIndex = m_frame->frameIndex();
-    m_playback.setFrameInfo({m_frameIndex, m_frame->metadata().frameDurationMs > 0
-                                                  ? m_frame->metadata().frameDurationMs
-                                                  : 100,
-                             m_frame->width(), m_frame->height()});
+    m_playback.setFrameInfo(
+        {m_frameIndex,
+         m_frame->metadata().frameDurationMs > 0 ? m_frame->metadata().frameDurationMs : 100,
+         m_frame->width(), m_frame->height()});
     computeHistogram();
     m_tiles = TileGrid(m_frame->width(), m_frame->height(), 256);
     m_overlayCache.clear();
@@ -299,9 +298,10 @@ void ImageViewer::updateFramePresentationStatus()
     }
     const QFileInfo info(m_currentPath);
     const QSize size = displaySize();
-    const QString position = m_currentIndex >= 0
-                                 ? QStringLiteral(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
-                                 : QString();
+    const QString position =
+        m_currentIndex >= 0
+            ? QStringLiteral(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+            : QString();
     const QString state = isPlaying() ? QStringLiteral("Playing") : QStringLiteral("Paused");
     m_frameStatusText = QStringLiteral("%1 %2/%3")
                             .arg(sequenceLabel(m_sequence))
@@ -310,9 +310,8 @@ void ImageViewer::updateFramePresentationStatus()
     if (m_sequence.animated)
         m_frameStatusText += QStringLiteral(" · %1").arg(state);
     const QString shortcuts =
-        m_sequence.animated
-            ? QStringLiteral("Space: Play/Pause; comma/period: Previous/Next frame")
-            : QStringLiteral("Comma/period: Previous/Next page");
+        m_sequence.animated ? QStringLiteral("Space: Play/Pause; comma/period: Previous/Next frame")
+                            : QStringLiteral("Comma/period: Previous/Next page");
     setAccessibleDescription(QStringLiteral("%1. %2").arg(m_frameStatusText, shortcuts));
     setWindowTitle(QStringLiteral("%1 (%2x%3)%4 · %5 - MViewer")
                        .arg(info.fileName())
@@ -568,9 +567,8 @@ void ImageViewer::setFullscreenRequested(bool requested)
             {
                 m_view.screenW = width();
                 m_view.screenH = height();
-                const QSize source = m_provisionalSourceSize.isValid()
-                                         ? m_provisionalSourceSize
-                                         : m_provisionalImage.size();
+                const QSize source = m_provisionalSourceSize.isValid() ? m_provisionalSourceSize
+                                                                       : m_provisionalImage.size();
                 m_view.fit(source.width(), source.height(), FitPolicy::MaximizeClient);
                 advanceViewportRevision();
                 emitZoom();

@@ -571,9 +571,8 @@ void ImageViewer::drawEmptyState(QPainter &painter)
         {
             m_view.screenW = width();
             m_view.screenH = height();
-            const QSize source = m_provisionalSourceSize.isValid()
-                                     ? m_provisionalSourceSize
-                                     : m_provisionalImage.size();
+            const QSize source = m_provisionalSourceSize.isValid() ? m_provisionalSourceSize
+                                                                   : m_provisionalImage.size();
             const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
                                             ? FitPolicy::MaximizeClient
                                             : FitPolicy::Comfortable;
