@@ -16,8 +16,13 @@
 #include "mainwindow.h"
 #include "naturalnameorder.h"
 #include "selectionmodel.h"
+#include "thumbnailpanel.h"
 
 #include <QApplication>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QSplitter>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -243,6 +248,53 @@ void testAppStatePersistence()
     EXPECT(loaded.gallerySplitterSizes.size() >= 2, "gallerySplitterSizes restored");
 }
 
+void testParallelColumnLayoutAndSync(MainWindow &mw)
+{
+    std::cout << "--- TC-SB-09: Parallel column layout, sort independence & mode sync ---"
+              << std::endl;
+    mw.toggleSplitBrowse(true);
+
+    EXPECT(mw.primaryBrowsePaneWidget() != nullptr, "Primary browse pane exists");
+    EXPECT(mw.secondaryBrowsePaneWidget() != nullptr, "Secondary browse pane exists");
+    EXPECT(!mw.primaryBrowsePaneWidget()->isHidden(), "Primary browse pane is visible");
+    EXPECT(!mw.secondaryBrowsePaneWidget()->isHidden(), "Secondary browse pane is visible");
+
+    auto *priPath =
+        mw.primaryBrowsePaneWidget()->findChild<QLineEdit *>(QStringLiteral("pathEdit"));
+    auto *secPath = mw.secondaryBrowsePaneWidget()->findChild<QLineEdit *>(
+        QStringLiteral("secondaryPathEdit"));
+    EXPECT(priPath != nullptr, "Primary address bar is inside primary pane");
+    EXPECT(secPath != nullptr, "Secondary address bar is inside secondary pane");
+
+    auto *priSort = mw.primaryBrowsePaneWidget()->findChild<QComboBox *>();
+    auto *secSort = mw.secondaryBrowsePaneWidget()->findChild<QComboBox *>(
+        QStringLiteral("secondarySortCombo"));
+    EXPECT(priSort != nullptr, "Primary sort combo exists");
+    EXPECT(secSort != nullptr, "Secondary sort combo exists");
+
+    auto *priSortDir =
+        mw.primaryBrowsePaneWidget()->findChild<QPushButton *>(QStringLiteral("sortDirBtn"));
+    auto *secSortDir = mw.secondaryBrowsePaneWidget()->findChild<QPushButton *>(
+        QStringLiteral("secondarySortDirBtn"));
+    EXPECT(priSortDir != nullptr, "Primary sort dir button exists");
+    EXPECT(secSortDir != nullptr, "Secondary sort dir button exists");
+
+    auto *secThumb = mw.secondaryBrowsePaneWidget()->findChild<ThumbnailPanel *>(
+        QStringLiteral("secondaryThumbnailPanel"));
+    EXPECT(secThumb != nullptr, "Secondary thumbnail panel exists");
+
+    secSort->setCurrentIndex(secSort->findData(ThumbnailPanel::SortSize));
+    EXPECT(secThumb->sortMode() == ThumbnailPanel::SortSize,
+           "Secondary sort changed to SortSize");
+
+    secSortDir->setChecked(true);
+    EXPECT(!secThumb->sortAscending(), "Secondary sort order toggled to descending");
+
+    mw.toggleSplitBrowse(false);
+    EXPECT(mw.secondaryBrowsePaneWidget()->isHidden(),
+           "Secondary pane hidden after toggleSplitBrowse(false)");
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -261,6 +313,7 @@ int main(int argc, char *argv[])
     testSelectionConvergenceOnClose();
     testThumbnailPipelineIsolation();
     testAppStatePersistence();
+    testParallelColumnLayoutAndSync(mw);
 
     std::cout << "\nResults: " << (g_failures == 0 ? "ALL PASS" : "FAILURES DETECTED") << " ("
               << g_failures << " failures)" << std::endl;

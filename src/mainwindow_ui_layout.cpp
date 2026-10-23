@@ -490,13 +490,19 @@ QWidget *MainWindow::buildGalleryPanel()
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(4);
 
-    auto *sortBar = buildSortBar(rightWidget);
-    rightLayout->addWidget(sortBar);
-
     m_gallerySplitter = new QSplitter(Qt::Horizontal, rightWidget);
     m_gallerySplitter->setObjectName(QStringLiteral("gallerySplitter"));
 
-    m_thumbnailPanel = new ThumbnailPanel(m_gallerySplitter);
+    m_primaryBrowsePane = new QWidget();
+    m_primaryBrowsePane->setObjectName(QStringLiteral("primaryBrowsePane"));
+    auto *primaryLayout = new QVBoxLayout(m_primaryBrowsePane);
+    primaryLayout->setContentsMargins(0, 0, 0, 0);
+    primaryLayout->setSpacing(4);
+
+    auto *sortBar = buildSortBar(m_primaryBrowsePane);
+    primaryLayout->addWidget(sortBar);
+
+    m_thumbnailPanel = new ThumbnailPanel(m_primaryBrowsePane);
     m_thumbnailPanel->setObjectName(QStringLiteral("thumbnailPanel"));
     m_thumbnailPanel->setConsumerId(0);
     m_thumbnailPanel->setPaneSlot(SelectionModel::PaneSlot::Primary);
@@ -508,12 +514,12 @@ QWidget *MainWindow::buildGalleryPanel()
     m_thumbnailPanel->installEventFilter(this);
     if (m_thumbnailPanel->viewport())
         m_thumbnailPanel->viewport()->installEventFilter(this);
-    m_primaryBrowsePane = m_thumbnailPanel;
-    m_gallerySplitter->addWidget(m_thumbnailPanel);
-
+    primaryLayout->addWidget(m_thumbnailPanel, 1);
+    m_gallerySplitter->addWidget(m_primaryBrowsePane);
     m_secondaryBrowsePane = buildSecondaryBrowsePane();
     m_gallerySplitter->addWidget(m_secondaryBrowsePane);
     m_secondaryBrowsePane->hide();
+    m_primaryBrowsePane->lower();
 
     rightLayout->addWidget(m_gallerySplitter, 1);
 

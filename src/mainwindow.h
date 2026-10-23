@@ -48,6 +48,7 @@ class QLineEdit;
 class QCheckBox;
 class QLabel;
 class QHBoxLayout;
+class QVBoxLayout;
 class QTimer;
 class QComboBox;
 class QPushButton;
@@ -106,6 +107,7 @@ class MainWindow : public QMainWindow
     }
     void updateSplitBrowseCompareButton();
     QStringList sortPathsForCompare(const QStringList &paths) const;
+    QWidget *primaryBrowsePaneWidget() const { return m_primaryBrowsePane; }
     QWidget *secondaryBrowsePaneWidget() const
     {
         return m_secondaryBrowsePane;
@@ -157,6 +159,9 @@ class MainWindow : public QMainWindow
     QWidget *buildNavigationPanel();
     QWidget *buildGalleryPanel();
     QWidget *buildSecondaryBrowsePane();
+    QWidget *buildSecondaryHeaderBar(QWidget *pane);
+    void wireSecondaryPanelSignals();
+    void buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout);
     QWidget *buildSortBar(QWidget *parent);
     void buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLayout);
     void buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sortLayout,
@@ -302,6 +307,8 @@ class MainWindow : public QMainWindow
     QPushButton *m_secondaryCloneBtn = nullptr;
     QPushButton *m_secondarySwapBtn = nullptr;
     QPushButton *m_secondaryCloseBtn = nullptr;
+    QComboBox *m_secondarySortCombo = nullptr;
+    QPushButton *m_secondarySortDirBtn = nullptr;
     ThumbnailPanel *m_secondaryThumbnailPanel = nullptr;
     DirectoryMonitor *m_secondaryDirectoryMonitor = nullptr;
     QAction *m_actSplitBrowse = nullptr;

@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [1.0.146] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.146** (Split Browse View parallel layout, independent column sort controls, view mode sync, and secondary thumbnail pipeline consumer routing).
+
+### Added
+
+- **Split Browse View Parallel Column UI & Independent Controls**:
+  - Arranged primary and secondary address bars and headers side-by-side above their respective thumbnail columns rather than spanning across columns.
+  - Added independent sort selector (`QComboBox`) and sort direction toggle button (`QPushButton`) for the secondary browse column, allowing each column to have its own sorting criteria (Name, Date, Size, Resolution, Type, Rating, Camera, Lens, Ascending/Descending).
+  - Mode & size sync on split: entering Split Browse Mode automatically inherits the primary column's view mode and thumbnail size instead of defaulting to large icon view.
+
+### Fixed
+
+- **Secondary Browse Pane Thumbnail Pipeline Consumer Routing**:
+  - Routed directory source updates in `ThumbnailPanel::setDirectory`, `applyScanBatch`, and `applyScanResult` to `ThumbnailPipeline` methods with `m_consumerId` (`setSourcesForConsumer`, `replaceSourcesForConsumer`, and `updateSourcesForConsumer`).
+  - Fixed issue where the secondary pane was displaying empty/white placeholder boxes without decoding thumbnails.
+- **Complexity Gate Adherence**:
+  - Extracted helper routines in `src/mainwindow_splitbrowse.cpp` (`buildSecondaryHeaderBar`, `wireSecondaryPanelSignals`) and `src/core/filesystem/AtomicFile.cpp` (`sweepStaleTemps`, `commitAtomicReplace`) to keep all functions strictly under the 120-line hard cap (0 hard fails).
+
 ## [1.0.145] - 2026-10-23
 
 ### Release
