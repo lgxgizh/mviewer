@@ -8,16 +8,22 @@
 //
 // Before this class the current image was tracked independently by MainWindow
 // (m_currentImagePath), the thumbnail grid (its own QItemSelectionModel) and the
-// keyboard-navigation path — so the views could drift out of sync (e.g. pressing
-// the arrow keys advanced the viewer but left the thumbnail highlight behind).
+// keyboard-navigation path — so the views could drift out of sync.
 //
-// Every panel now reacts to this model instead of maintaining its own notion of
-// the current item. It is intentionally tiny: it holds state and emits change
-// signals, nothing more (no new "manager" infrastructure).
+// Extended for Split Browse View: tracks primary and secondary pane selection
+// slots independently while presenting a transparent merged selection to the
+// rest of the application.
 class SelectionModel : public QObject
 {
     Q_OBJECT
   public:
+    enum class PaneSlot : int
+    {
+        Primary = 0,
+        Secondary = 1
+    };
+    Q_ENUM(PaneSlot)
+
     explicit SelectionModel(QObject *parent = nullptr);
 
     QString currentImage() const
@@ -49,16 +55,35 @@ class SelectionModel : public QObject
         return m_compared;
     }
 
+    // Split Browse View extensions
+    bool isSplitModeEnabled() const
+    {
+        return m_splitModeEnabled;
+    }
+    PaneSlot activePane() const
+    {
+        return m_activePane;
+    }
+    const QStringList &paneSelection(PaneSlot pane) const;
+    QString paneCurrentImage(PaneSlot pane) const;
+
   public slots:
     // Make `path` the current image and the sole selection.
     void setCurrentImage(const QString &path);
     // Replace the multi-selection; `current` becomes the focused item.
-    void setSelection(const QStringList &paths, const QString &current);
+    void setSelection(const QStringList &paths, const QString &current = QString());
     void clear();
     // P0-2: focus / hover / compared-set — see getters above for meaning.
     void setFocused(const QString &path);
     void setHovered(const QString &path);
     void setCompared(const QStringList &paths);
+
+    // Split browse slots
+    void setSplitModeEnabled(bool enabled);
+    void setActivePane(PaneSlot pane);
+    void setPaneSelection(PaneSlot pane, const QStringList &paths,
+                          const QString &current = QString());
+    void clearPane(PaneSlot pane);
 
   signals:
     void currentImageChanged(const QString &path);
@@ -67,7 +92,18 @@ class SelectionModel : public QObject
     void hoveredChanged(const QString &path);
     void comparedChanged(const QStringList &paths);
 
+    void paneSelectionChanged(SelectionModel::PaneSlot pane, const QStringList &panePaths);
+    void activePaneChanged(SelectionModel::PaneSlot pane);
+    void splitModeChanged(bool enabled);
+
   private:
+    void rebuildMergedSelection(bool emitSignals = true);
+
+    bool m_splitModeEnabled = false;
+    PaneSlot m_activePane = PaneSlot::Primary;
+    QStringList m_paneSelections[2];
+    QString m_paneCurrentImage[2];
+
     QString m_current;
     QStringList m_selection;
     QString m_focused;

@@ -508,52 +508,7 @@ void MainWindow::setOpenOnLaunch(const QStringList &paths)
 
 void MainWindow::onImageOpen(const QString &path)
 {
-    const bool wasHidden = m_imageViewer->isHidden();
-    // P0-2: route the "current image" change through the shared model so every
-    // panel (preview, metadata, status bar, thumbnail highlight) syncs centrally
-    // in onCurrentImageChanged(). The central handler only decodes into the
-    // viewer when it is already visible, so when opening it fresh we set the
-    // image explicitly below.
-    m_selection->setCurrentImage(path);
-    if (wasHidden)
-    {
-        // Gallery double-clicks already belong to the published sequence. A
-        // direct recent-file open may not, so keep that standalone viewer
-        // request navigable without touching the Browse SSOT or scanning disk.
-        QStringList sequence = m_imageList ? m_imageList->paths() : QStringList();
-        // indexOf matches '/' and '\\'. QStringList::contains does not, and a
-        // miss used to replace the folder sequence with a one-image list.
-        if (!m_imageList || m_imageList->indexOf(path) < 0)
-            sequence = {path};
-        m_imageViewer->setBrowseSequence(sequence);
-        if (m_thumbnailPanel)
-        {
-            const QPixmap warm = m_thumbnailPanel->thumbReady(path);
-            QSize knownSize;
-            if (const auto *entry = m_thumbnailPanel->entryForPath(path))
-                knownSize = QSize(entry->width, entry->height);
-            if (!warm.isNull())
-                m_imageViewer->setProvisionalImage(path, warm.toImage(), knownSize);
-        }
-        m_imageViewer->setImage(path); // async; imageReady() feeds AnalysisPanel
-    }
-
-    // --- "open" extras (only meaningful for an explicit open, not selection) ---
-    pushHistory(path); // P0: in-session browse history
-    // P0-1: cross-session image history.
-    m_appState.addHistory(path);
-    // M14-1: track in recent-files LRU + refresh menu.
-    m_recentFiles.add(path.toUtf8().toStdString());
-    rebuildRecentFilesMenu();
-    // M12.2 / M19: restore saved analysis from AnalyzerModel if present.
-    const QString savedAnalysis = m_analyzer->resultText(path);
-    if (!savedAnalysis.isEmpty())
-        m_analysisPanel->setRegionStats(savedAnalysis);
-    if (wasHidden)
-        m_imageViewer->showBrowseFullscreen();
-    m_imageViewer->raise();
-    m_imageViewer->activateWindow();
-    updateSelectionActions();
+    onImageOpenFromPanel(path, qobject_cast<ThumbnailPanel *>(sender()));
 }
 
 void MainWindow::onCurrentImageChanged(const QString &path)
@@ -563,12 +518,13 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (path.isEmpty())
         return;
 
-    const QPixmap warmThumbnail = m_thumbnailPanel ? m_thumbnailPanel->thumbReady(path) : QPixmap();
+    ThumbnailPanel *sourcePanel = thumbnailPanelForPath(path, activeThumbnailPanel());
+    const QPixmap warmThumbnail = sourcePanel ? sourcePanel->thumbReady(path) : QPixmap();
     QSize knownSourceSize;
     qint64 knownFileSize = -1;
-    if (m_thumbnailPanel)
+    if (sourcePanel)
     {
-        if (const auto *entry = m_thumbnailPanel->entryForPath(path))
+        if (const auto *entry = sourcePanel->entryForPath(path))
         {
             knownSourceSize = QSize(entry->width, entry->height);
             knownFileSize = entry->size;
@@ -711,7 +667,7 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     // whatever order Ctrl/Shift/rubber-band picks produced. A restored session
     // keeps its saved order because per-pane state is stored by index.
     if (sessionJson.isEmpty())
-        imgs = sortPathsByNaturalFileName(imgs);
+        imgs = sortPathsForCompare(imgs);
     // Compare is a 2-8 image selection. Do not substitute the first 8 files
     // of the folder when the user has 0-1 images selected.
     if (imgs.size() > 8)

@@ -8,6 +8,7 @@
 #include "core/update/UpdateChecker.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
+#include "selectionmodel.h"
 #include <QKeyEvent>
 #include <QListWidget>
 #include <QMainWindow>
@@ -32,7 +33,6 @@ class AnalysisPanel;
 class MetadataPanel;
 class CompareWorkspace;
 class SearchPanel;
-class SelectionModel;
 class DirectoryModel;
 class ImageListModel;
 class WorkspaceModel;
@@ -48,6 +48,7 @@ class QLineEdit;
 class QCheckBox;
 class QLabel;
 class QHBoxLayout;
+class QVBoxLayout;
 class QTimer;
 class QComboBox;
 class QPushButton;
@@ -90,12 +91,52 @@ class MainWindow : public QMainWindow
     void openWorkspaceFile(const QString &filePath);
     void openProjectFile(const QString &filePath);
 
+    // Split Browse View (RFC ADR-001/005/014/018)
+    bool isSplitBrowseEnabled() const
+    {
+        return m_splitBrowseEnabled;
+    }
+    void toggleSplitBrowse(bool enabled);
+    void openRightDirectory(const QString &dir);
+    void swapBrowsePanes();
+    void cloneLeftToRightPane();
+    void setActiveBrowsePane(SelectionModel::PaneSlot pane);
+    SelectionModel::PaneSlot activeBrowsePane() const
+    {
+        return m_activeBrowsePane;
+    }
+    ThumbnailPanel *activeThumbnailPanel() const;
+    ThumbnailPanel *secondaryThumbnailPanel() const
+    {
+        return m_secondaryThumbnailPanel;
+    }
+    void updateSplitBrowseCompareButton();
+    QStringList sortPathsForCompare(const QStringList &paths) const;
+    QWidget *primaryBrowsePaneWidget() const
+    {
+        return m_primaryBrowsePane;
+    }
+    QWidget *secondaryBrowsePaneWidget() const
+    {
+        return m_secondaryBrowsePane;
+    }
+    SelectionModel *selectionModel() const
+    {
+        return m_selection;
+    }
+    QAction *compareAction() const
+    {
+        return m_actCompare;
+    }
+
     // The shortcut cheat-sheet HTML (single source of truth for the F1 help;
     // public so tests can verify it stays in sync with registered commands).
     static QString shortcutsHelpHtml();
     static QString userGuideHtml();
 
   protected:
+    void changeEvent(QEvent *event) override;
+    void retranslateUi();
     void closeEvent(QCloseEvent *event) override;
     // M15: drag & drop support
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -117,6 +158,7 @@ class MainWindow : public QMainWindow
     void addOpenTrashEditAction(QMenu *editMenu);
     void buildEditTransformActions(QMenu *editMenu);
     void buildViewMenu(QMenuBar *menuBar);
+    void buildViewZoomActions(QMenu *viewMenu);
     void buildToolsHelpMenus(QMenuBar *menuBar);
     void buildBrowserShell();
     void installNavigationCollapse();
@@ -124,6 +166,33 @@ class MainWindow : public QMainWindow
     void placeGalleryCompareButton(QWidget *sortBar);
     QWidget *buildNavigationPanel();
     QWidget *buildGalleryPanel();
+    QWidget *buildSecondaryBrowsePane();
+    QWidget *buildSecondaryHeaderBar(QWidget *pane);
+    void wireSecondaryPanelSignals();
+    void wireSecondaryBrowseHostSignals();
+    void buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout);
+    void applyGallerySplitterSizes();
+    void updateActivePaneIndicator();
+    void updateSwapButtonEnabled();
+    void enableSplitBrowseUi();
+    void disableSplitBrowseUi();
+    void applySecondarySortFromState();
+    void persistSecondaryBrowseState();
+    void restoreSecondaryBrowsePosition();
+    void applyPendingSecondaryBrowseRestore(const QString &directory, const QStringList &paths);
+    void handleSecondaryDroppedPaths(const QStringList &paths);
+    void onGalleryPathsRemoved(ThumbnailPanel *source, const QStringList &deleted);
+    void onGalleryPathsRenamed(const QStringList &oldPaths, const QStringList &newPaths);
+    void onGalleryPathsModified(const QStringList &paths);
+    void dropRemovedPathsFromPanel(ThumbnailPanel *panel, const QStringList &deleted);
+    void refreshVisibleBrowsePanes();
+    void applyActivePaneStatusBar();
+    void onSecondaryStatsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
+    void onSecondarySequenceChanged(const QString &directory, const QStringList &paths);
+    void onBrowseFocusChanged(QWidget *old, QWidget *now);
+    ThumbnailPanel *thumbnailPanelForPath(const QString &path,
+                                          ThumbnailPanel *prefer = nullptr) const;
+    void onImageOpenFromPanel(const QString &path, ThumbnailPanel *source);
     QWidget *buildSortBar(QWidget *parent);
     void buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLayout);
     void buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sortLayout,
@@ -205,6 +274,7 @@ class MainWindow : public QMainWindow
     void restoreWindowSettings();
     void restoreNavigationSettings(const QSettings &settings);
     void restoreLastSession();
+    void restoreSessionPostScroll();
     // P0: Directory-level back/forward history (independent of image history).
     void pushDirHistory(const QString &dir);
     void goDirBack();
@@ -258,6 +328,22 @@ class MainWindow : public QMainWindow
     QWidget *m_navigationWidget = nullptr;        // whole browse navigation column
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
+    bool m_splitBrowseEnabled = false;
+    SelectionModel::PaneSlot m_activeBrowsePane = SelectionModel::PaneSlot::Primary;
+    QSplitter *m_gallerySplitter = nullptr;
+    QWidget *m_primaryBrowsePane = nullptr;
+    QWidget *m_secondaryBrowsePane = nullptr;
+    QLineEdit *m_secondaryPathEdit = nullptr;
+    QPushButton *m_secondaryBrowseBtn = nullptr;
+    QPushButton *m_secondaryCloneBtn = nullptr;
+    QPushButton *m_secondarySwapBtn = nullptr;
+    QPushButton *m_secondaryCloseBtn = nullptr;
+    QComboBox *m_secondarySortCombo = nullptr;
+    QPushButton *m_secondarySortDirBtn = nullptr;
+    ThumbnailPanel *m_secondaryThumbnailPanel = nullptr;
+    DirectoryMonitor *m_secondaryDirectoryMonitor = nullptr;
+    bool m_pendingSecondaryScrollRestore = false;
+    QAction *m_actSplitBrowse = nullptr;
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
     QLabel *m_emptyFolderLabel =
         nullptr; // gallery empty-folder hint (objectName: emptyFolderLabel)
@@ -331,8 +417,14 @@ class MainWindow : public QMainWindow
     QAction *m_actZoomOut = nullptr;
     QAction *m_actZoomFit = nullptr;
     QAction *m_actZoomActual = nullptr;
+    QAction *m_actPixelGrid = nullptr;
     QAction *m_actFullscreen = nullptr;
     QMenu *m_zoomPresetsMenu = nullptr;
+    QMenu *m_fileMenu = nullptr;
+    QMenu *m_editMenu = nullptr;
+    QMenu *m_viewMenu = nullptr;
+    QMenu *m_toolsMenu = nullptr;
+    QMenu *m_helpMenu = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr; // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;

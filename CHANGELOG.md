@@ -42,6 +42,89 @@
     500-round interleaving soak);
     `compare_display_pending_tests` keeps the debounce merge and pixel-grid math.
 
+### Fixed
+
+- **Split Browse active pane routing**: rename, copy/move, paste, select-all/deselect/invert, reveal, and batch analysis now target the focused pane instead of always the left gallery.
+- **Split Browse Delete**: Delete (keyboard, menu, command) moves the union of both panes' selections to the Recycle Bin, with a confirm dialog that states the total and per-pane counts; both panes drop the removed paths.
+- **Split Browse restore**: right-pane scroll position, last image, independent sort, and splitter sizes restore from the previous session; avoid a second directory scan on restore.
+- **Split Browse thumbnails**: cancelled / generation-mismatched pipeline jobs release their pending key so a re-request is not swallowed; each pane ignores results that do not belong to it; the right pane no longer overwrites the left pane's predictive window.
+- **Focus Browse**: shortcut is F6 so Tab / Shift+Tab perform normal focus traversal.
+- **Toolbar**: Split Browse action now has a `split_browse` icon.
+
+### Changed
+
+- Right-pane sort is independent of the left pane and persisted; enabling split no longer copies left sort onto the right.
+- Swap is disabled when either pane has no directory.
+- Retranslate uses the same action texts as construction, and fullscreen keeps the Exit Full Screen label when already full screen.
+- Clone Left Chinese translation is now “右栏跟随左栏”.
+
+## [1.0.146] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.146** (Split Browse View parallel layout, independent column sort controls, view mode sync, and secondary thumbnail pipeline consumer routing).
+
+### Added
+
+- **Split Browse View Parallel Column UI & Independent Controls**:
+  - Arranged primary and secondary address bars and headers side-by-side above their respective thumbnail columns rather than spanning across columns.
+  - Added independent sort selector (`QComboBox`) and sort direction toggle button (`QPushButton`) for the secondary browse column, allowing each column to have its own sorting criteria (Name, Date, Size, Resolution, Type, Rating, Camera, Lens, Ascending/Descending).
+  - Mode & size sync on split: entering Split Browse Mode automatically inherits the primary column's view mode and thumbnail size instead of defaulting to large icon view.
+
+### Fixed
+
+- **Secondary Browse Pane Thumbnail Pipeline Consumer Routing**:
+  - Routed directory source updates in `ThumbnailPanel::setDirectory`, `applyScanBatch`, and `applyScanResult` to `ThumbnailPipeline` methods with `m_consumerId` (`setSourcesForConsumer`, `replaceSourcesForConsumer`, and `updateSourcesForConsumer`).
+  - Fixed issue where the secondary pane was displaying empty/white placeholder boxes without decoding thumbnails.
+- **Complexity Gate Adherence**:
+  - Extracted helper routines in `src/mainwindow_splitbrowse.cpp` (`buildSecondaryHeaderBar`, `wireSecondaryPanelSignals`) and `src/core/filesystem/AtomicFile.cpp` (`sweepStaleTemps`, `commitAtomicReplace`) to keep all functions strictly under the 120-line hard cap (0 hard fails).
+
+## [1.0.145] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.145** (Opt-in Pixel Grid, Compare high-zoom mesh elimination, and dedicated UI toggle).
+
+### Fixed
+
+- **Pixel Grid high-zoom lattice made opt-in**:
+  - Eliminated automatic source-pixel lattice overlay at >= 800% zoom in both CompareWorkspace (`RawImageView`) and single image view (`ImageViewer`).
+  - Fixed issue where opening low-resolution images (such as 720x540) alongside high-resolution images (such as 4096x3072) caused an unexpected dense grid mesh to appear on the lower-resolution image past 800% zoom (e.g. 839%).
+  - Added dedicated **Pixel Grid** checkbox to CompareWorkspace tool controls and `View -> Pixel Grid` action to MainWindow, defaulting to off so zoom operations display clean interpolated/nearest pixels unless inspection lattice is intentionally enabled.
+
+## [1.0.144] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.144** (Split Browse View, cross-directory natural image comparison, deterministic pairing sort, caption disambiguation, and session persistence).
+
+### Added
+
+- **Split Browse View**:
+  - **Dual-Pane Gallery**: Added optional secondary browse pane (`Ctrl+Shift+S`, View menu, and toolbar) splitting the gallery horizontally, with independent address bar, directory navigation & monitor (`DirectoryMonitor`), thumbnail pipeline consumer slot (`ThumbnailPipeline`), sorting, and filtering.
+  - **Cross-Pane Natural Selection (ADR-001)**: Extended `SelectionModel` with `PaneSlot::Primary` and `PaneSlot::Secondary` so clicking in the right pane preserves left pane selections without complex modifier keys; merged selection cleanly supports 2–8 images for instant comparison via `P` / `C` / toolbar button.
+  - **3-Tier Deterministic Pairing Sort**: When comparing across directories, pairs matching filenames together (`filename` natural order -> `paneRank` primary/secondary -> `fullPath`), ensuring baseline images appear first and corresponding candidates immediately follow.
+  - **Caption Disambiguation**: Implemented `disambiguateCaptions()` in compare workspace headers to automatically prepend parent directory names (e.g. `exp_v1/0001.png` vs `exp_v2/0001.png`) when filenames are identical.
+  - **Persistence & Workspace**: Persisted split browse state, secondary directory, scroll position, and splitter sizes across sessions in `AppState` and `.mvws` workspace files.
+  - **Acceptance Test Suite**: Added `test_split_browse_acceptance` verifying TC-SB-01 through TC-SB-08 under `ADR-001/005/014/018`.
+
+## [1.0.143] - 2026-10-23
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.143** (fullscreen transition smoothness, 16-bit analysis, dynamic language retranslate, USM Space hold).
+
+### Fixed
+
+- **Double-click open black flash eliminated**: Target screen geometry and fullscreen fit policy are now pre-configured on `ImageViewer` before setting provisional image and loading raster; unified slash handling in `ThumbnailPanel::thumbCacheKey` so warm thumbnails reliably hit cache; ensured provisional images immediately scale to client area without waiting for singleShot timer.
+- **ESC exit transition smoothed**: Replaced synchronous `showNormal()` window transition before `close()` with clean off-screen geometry restoration in `exitFullscreenForClose()`, eliminating the black flash and momentary top-left small window artifact when returning to browse mode.
+- **USM comparison Space hold**: Fixed default button focus in `UsmCompareDialog` so pressing Space triggers temporary hold compare instead of clicking `Fit window`.
+
+### Added
+
+- **16-bit native analysis pathway**: Added `Rgb16` / `computeROIChannelStats16` in `ImageStats` and `PixelAccess.h`, allowing high-precision channel sums and ratios without 8-bit quantization loss.
+- **Dynamic language switching**: Added `MainWindow::retranslateUi()` and `changeEvent(LanguageChange)` support so UI strings update immediately upon selecting a language in Preferences without requiring application restart.
+
 ## [1.0.142] - 2026-10-20
 
 ### Release

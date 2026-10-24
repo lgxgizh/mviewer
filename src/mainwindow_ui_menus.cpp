@@ -22,7 +22,8 @@ void MainWindow::buildMenus()
 void MainWindow::buildFileMenu(QMenuBar *menuBar)
 {
     // ----- File -----
-    auto *fileMenu = menuBar->addMenu(tr("&File"));
+    m_fileMenu = menuBar->addMenu(tr("&File"));
+    auto *fileMenu = m_fileMenu;
     m_actOpenDir = new QAction(tr("&Open Folder..."), this);
     m_actOpenDir->setShortcut(QKeySequence::Open); // Ctrl+O
     m_actOpenFile = new QAction(tr("Open &File..."), this);
@@ -65,11 +66,12 @@ void MainWindow::buildFileMenu(QMenuBar *menuBar)
 void MainWindow::buildEditMenu(QMenuBar *menuBar)
 {
     // ----- Edit — A-10: Undo/Redo -----
-    auto *editMenu = menuBar->addMenu(tr("&Edit"));
-    m_actUndo = new QAction("Undo(&U)", this);
+    m_editMenu = menuBar->addMenu(tr("&Edit"));
+    auto *editMenu = m_editMenu;
+    m_actUndo = new QAction(tr("Undo(&U)"), this);
     m_actUndo->setShortcut(QKeySequence::Undo); // Ctrl+Z
     m_actUndo->setEnabled(false);
-    m_actRedo = new QAction("Redo(&R)", this);
+    m_actRedo = new QAction(tr("Redo(&R)"), this);
     m_actRedo->setShortcut(QKeySequence::Redo); // Ctrl+Y / Ctrl+Shift+Z
     m_actRedo->setEnabled(false);
     editMenu->addAction(m_actUndo);
@@ -86,8 +88,7 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                     updateUndoRedoActions();
                     return;
                 }
-                if (m_thumbnailPanel && !currentDir().isEmpty())
-                    m_thumbnailPanel->setDirectory(currentDir());
+                refreshVisibleBrowsePanes();
                 updateUndoRedoActions();
             });
     connect(m_actRedo, &QAction::triggered, this,
@@ -102,8 +103,7 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                     updateUndoRedoActions();
                     return;
                 }
-                if (m_thumbnailPanel && !currentDir().isEmpty())
-                    m_thumbnailPanel->setDirectory(currentDir());
+                refreshVisibleBrowsePanes();
                 updateUndoRedoActions();
             });
     m_cmdStack.setChangeCallback([this]() { updateUndoRedoActions(); });
@@ -126,20 +126,20 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
     connect(m_actSelectAll, &QAction::triggered, this,
             [this]()
             {
-                if (m_thumbnailPanel)
-                    m_thumbnailPanel->selectAll();
+                if (ThumbnailPanel *panel = activeThumbnailPanel())
+                    panel->selectAll();
             });
     connect(m_actDeselectAll, &QAction::triggered, this,
             [this]()
             {
-                if (m_thumbnailPanel)
-                    m_thumbnailPanel->clearSelection();
+                if (ThumbnailPanel *panel = activeThumbnailPanel())
+                    panel->clearSelection();
             });
     connect(m_actInvertSelection, &QAction::triggered, this,
             [this]()
             {
-                if (m_thumbnailPanel)
-                    m_thumbnailPanel->invertSelection();
+                if (ThumbnailPanel *panel = activeThumbnailPanel())
+                    panel->invertSelection();
             });
     addOpenTrashEditAction(editMenu);
 }
@@ -204,7 +204,8 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
 void MainWindow::buildViewMenu(QMenuBar *menuBar)
 {
     // ----- View -----
-    auto *viewMenu = menuBar->addMenu(tr("&View"));
+    m_viewMenu = menuBar->addMenu(tr("&View"));
+    auto *viewMenu = m_viewMenu;
     m_actCompare = new QAction(tr("Compare Mode (&C)"), this);
     m_actCompare->setObjectName("compareAction");
     m_actCompare->setShortcut(QKeySequence("P"));
@@ -222,10 +223,10 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actHistoryForward->setObjectName("historyForwardAction");
     m_actHistoryForward->setShortcut(QKeySequence::Forward); // Alt+Right
     // P0: Directory-level back/forward (independent of image history).
-    m_actDirBack = new QAction("Previous directory", this);
+    m_actDirBack = new QAction(tr("Previous directory"), this);
     m_actDirBack->setObjectName("directoryBackAction");
     m_actDirBack->setShortcut(QKeySequence("Ctrl+Alt+Left"));
-    m_actDirForward = new QAction("Next directory", this);
+    m_actDirForward = new QAction(tr("Next directory"), this);
     m_actDirForward->setObjectName("directoryForwardAction");
     m_actDirForward->setShortcut(QKeySequence("Ctrl+Alt+Right"));
     viewMenu->addAction(m_actHistoryBack);
@@ -233,6 +234,13 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     viewMenu->addSeparator();
     viewMenu->addAction(m_actDirBack);
     viewMenu->addAction(m_actDirForward);
+    m_actSplitBrowse = new QAction(tr("Split Browse View"), this);
+    m_actSplitBrowse->setObjectName("splitBrowseAction");
+    m_actSplitBrowse->setCheckable(true);
+    m_actSplitBrowse->setChecked(false);
+    m_actSplitBrowse->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S));
+    connect(m_actSplitBrowse, &QAction::toggled, this, &MainWindow::toggleSplitBrowse);
+    viewMenu->addAction(m_actSplitBrowse);
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
     m_actToggleSearch = new QAction(tr("Global &Search"), this);
@@ -241,10 +249,10 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actToggleSearch->setChecked(false);
     m_actToggleSearch->setShortcut(QKeySequence("Ctrl+Shift+F"));
     viewMenu->addAction(m_actToggleSearch);
-    m_actFocusBrowse = new QAction(tr("Focus Browse Mode (Tab)"), this);
+    m_actFocusBrowse = new QAction(tr("Focus Browse Mode (F6)"), this);
     m_actFocusBrowse->setObjectName("focusBrowseAction");
     m_actFocusBrowse->setCheckable(true);
-    m_actFocusBrowse->setShortcut(QKeySequence(Qt::Key_Tab));
+    m_actFocusBrowse->setShortcut(QKeySequence(Qt::Key_F6));
     m_actFocusBrowse->setShortcutContext(Qt::WindowShortcut);
     viewMenu->addAction(m_actFocusBrowse);
     addAction(m_actFocusBrowse);
@@ -262,36 +270,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actToggleMetadata->setShortcut(QKeySequence("Ctrl+I"));
     viewMenu->addAction(m_actToggleMetadata);
     viewMenu->addSeparator();
-    // Zoom commands act on the image viewer. Plain +/-/0/1 keys are handled
-    // in keyPressEvent; the Ctrl variants live on the actions so they show
-    // in the menu. Fit/Actual use plain 0/1 (a QAction plain-key shortcut
-    // would shadow text entry in the search box).
-    m_actZoomIn = new QAction(tr("&Zoom In"), this);
-    m_actZoomIn->setObjectName("zoomInAction");
-    m_actZoomIn->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")});
-    m_actZoomOut = new QAction(tr("Zoom &Out"), this);
-    m_actZoomOut->setObjectName("zoomOutAction");
-    m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
-    m_actZoomFit = new QAction(tr("&Fit to Window"), this);
-    m_actZoomFit->setObjectName("zoomFitAction");
-    m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
-    m_actZoomActual = new QAction(tr("&Actual Size"), this);
-    m_actZoomActual->setObjectName("zoomActualAction");
-    m_actFullscreen = new QAction("Full Screen(&U)", this);
-    m_actFullscreen->setShortcut(QKeySequence("F11"));
-    viewMenu->addAction(m_actZoomIn);
-    viewMenu->addAction(m_actZoomOut);
-    viewMenu->addAction(m_actZoomFit);
-    viewMenu->addAction(m_actZoomActual);
-    m_zoomPresetsMenu = viewMenu->addMenu(tr("Zoom Presets"));
-    m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
-    m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });
-    m_zoomPresetsMenu->addAction(tr("100% (Actual Size)"), this, [this]() { zoomViewer(3); });
-    m_zoomPresetsMenu->addAction("200%", this, [this]() { zoomViewer(5); });
-    m_zoomPresetsMenu->addAction("400%", this, [this]() { zoomViewer(6); });
-    m_zoomPresetsMenu->addAction(tr("800% (Pixel Grid)"), this, [this]() { zoomViewer(7); });
-    viewMenu->addSeparator();
-    viewMenu->addAction(m_actFullscreen);
+    buildViewZoomActions(viewMenu);
     m_actSlideshow = new QAction(tr("&Slideshow (S)"), this);
     m_actSlideshow->setObjectName("slideshowAction");
     m_actSlideshow->setCheckable(true);
@@ -321,7 +300,8 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
 void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
 {
     // ----- Tools -----
-    auto *toolsMenu = menuBar->addMenu(tr("&Tools"));
+    m_toolsMenu = menuBar->addMenu(tr("&Tools"));
+    auto *toolsMenu = m_toolsMenu;
     m_actBatch = new QAction(tr("&Batch Processing"), this);
     m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
     toolsMenu->addAction(m_actBatch);
@@ -332,8 +312,8 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     connect(actBatchAnalyze, &QAction::triggered, this,
             [this]()
             {
-                if (m_thumbnailPanel)
-                    m_thumbnailPanel->batchAnalyzeExport();
+                if (ThumbnailPanel *panel = activeThumbnailPanel())
+                    panel->batchAnalyzeExport();
             });
     m_actPluginSettings = new QAction(tr("&Plugin Manager..."), this);
     toolsMenu->addAction(m_actPluginSettings);
@@ -401,7 +381,8 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     toolsMenu->addAction(actMemTimeline);
 
     // ----- Help -----
-    auto *helpMenu = menuBar->addMenu(tr("&Help"));
+    m_helpMenu = menuBar->addMenu(tr("&Help"));
+    auto *helpMenu = m_helpMenu;
     auto *actCheckUpdate = new QAction(tr("Check for &Updates..."), this);
     connect(actCheckUpdate, &QAction::triggered, this, [this]() { checkForUpdates(false); });
     helpMenu->addAction(actCheckUpdate);
@@ -415,4 +396,138 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     helpMenu->addAction(actShortcuts);
     m_actAbout = new QAction(tr("&About"), this);
     helpMenu->addAction(m_actAbout);
+}
+
+void MainWindow::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::LanguageChange)
+        retranslateUi();
+    QMainWindow::changeEvent(event);
+}
+
+void MainWindow::retranslateUi()
+{
+    struct ActionEntry
+    {
+        QAction *act;
+        const char *text;
+    };
+    const ActionEntry actions[] = {
+        {m_actOpenDir, QT_TR_NOOP("&Open Folder...")},
+        {m_actOpenFile, QT_TR_NOOP("Open &File...")},
+        {m_actSaveWorkspace, QT_TR_NOOP("&Save Workspace")},
+        {m_actOpenWorkspace, QT_TR_NOOP("Open &Workspace")},
+        {m_actSaveProject, QT_TR_NOOP("Save &Project")},
+        {m_actOpenProject, QT_TR_NOOP("Open Pro&ject")},
+        {m_actExportReport, QT_TR_NOOP("Export &Report...")},
+        {m_actExportImages, QT_TR_NOOP("&Export Images...")},
+        {m_actExit, QT_TR_NOOP("E&xit")},
+        {m_actAddFavorite, QT_TR_NOOP("Add Current Folder to Favorites(&D)")},
+        {m_actRemoveFavorite, QT_TR_NOOP("Remove Current Folder from Favorites")},
+        {m_actUndo, QT_TR_NOOP("Undo(&U)")},
+        {m_actRedo, QT_TR_NOOP("Redo(&R)")},
+        {m_actRotateCW, QT_TR_NOOP("Rotate 90° Clockwise (&R)")},
+        {m_actRotateCCW, QT_TR_NOOP("Rotate 90° Counterclockwise(&L)")},
+        {m_actFlipH, QT_TR_NOOP("Flip Horizontal(&H)")},
+        {m_actFlipV, QT_TR_NOOP("Flip Vertical(&V)")},
+        {m_actSelectAll, QT_TR_NOOP("Select All(&A)")},
+        {m_actDeselectAll, QT_TR_NOOP("Deselect (&D)")},
+        {m_actInvertSelection, QT_TR_NOOP("Invert Selection(&I)")},
+        {m_actSplitBrowse, QT_TR_NOOP("Split Browse View")},
+        {m_actCompare, QT_TR_NOOP("Compare Mode (&C)")},
+        {m_actToggleAnalysis, QT_TR_NOOP("Analysis Panel(&H)")},
+        {m_actHistoryBack, QT_TR_NOOP("&Back")},
+        {m_actHistoryForward, QT_TR_NOOP("Forward(&N)")},
+        {m_actDirBack, QT_TR_NOOP("Previous directory")},
+        {m_actDirForward, QT_TR_NOOP("Next directory")},
+        {m_actToggleSearch, QT_TR_NOOP("Global &Search")},
+        {m_actFocusBrowse, QT_TR_NOOP("Focus Browse Mode (F6)")},
+        {m_actBrowseWorkspace, QT_TR_NOOP("Browse Layout")},
+        {m_actDirUp, QT_TR_NOOP("Up one level")},
+        {m_actRefresh, QT_TR_NOOP("Refresh")},
+        {m_actOpenCurrentFolder, QT_TR_NOOP("Open Folder")},
+        {m_actBatch, QT_TR_NOOP("&Batch Processing")},
+        {m_actUsmCompare, QT_TR_NOOP("USM Sharpen Compare (&U)...")},
+        {m_actPluginSettings, QT_TR_NOOP("&Plugin Manager...")},
+        {m_actAbout, QT_TR_NOOP("&About")},
+        {m_actZoomIn, QT_TR_NOOP("&Zoom In")},
+        {m_actZoomOut, QT_TR_NOOP("Zoom &Out")},
+        {m_actZoomFit, QT_TR_NOOP("&Fit to Window")},
+        {m_actZoomActual, QT_TR_NOOP("&Actual Size")},
+        {m_actPixelGrid, QT_TR_NOOP("Pixel &Grid")},
+        {m_actFullscreen, QT_TR_NOOP("Full Screen(&U)")},
+        {m_actSlideshow, QT_TR_NOOP("&Slideshow (S)")},
+    };
+    for (const auto &entry : actions)
+    {
+        if (entry.act)
+            entry.act->setText(tr(entry.text));
+    }
+    if (m_actFullscreen && isFullScreen())
+        m_actFullscreen->setText(tr("Exit Full Screen(&U)"));
+
+    struct MenuEntry
+    {
+        QMenu *menu;
+        const char *text;
+    };
+    const MenuEntry menus[] = {
+        {m_fileMenu, QT_TR_NOOP("&File")},
+        {m_editMenu, QT_TR_NOOP("&Edit")},
+        {m_viewMenu, QT_TR_NOOP("&View")},
+        {m_toolsMenu, QT_TR_NOOP("&Tools")},
+        {m_helpMenu, QT_TR_NOOP("&Help")},
+        {m_recentMenu, QT_TR_NOOP("&Recent Folders")},
+        {m_recentFileMenu, QT_TR_NOOP("Recent &Files")},
+        {m_favMenu, QT_TR_NOOP("Fa&vorite Folders")},
+    };
+    for (const auto &entry : menus)
+    {
+        if (entry.menu)
+            entry.menu->setTitle(tr(entry.text));
+    }
+}
+
+void MainWindow::buildViewZoomActions(QMenu *viewMenu)
+{
+    m_actZoomIn = new QAction(tr("&Zoom In"), this);
+    m_actZoomIn->setObjectName("zoomInAction");
+    m_actZoomIn->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")});
+    m_actZoomOut = new QAction(tr("Zoom &Out"), this);
+    m_actZoomOut->setObjectName("zoomOutAction");
+    m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
+    m_actZoomFit = new QAction(tr("&Fit to Window"), this);
+    m_actZoomFit->setObjectName("zoomFitAction");
+    m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
+    m_actZoomActual = new QAction(tr("&Actual Size"), this);
+    m_actZoomActual->setObjectName("zoomActualAction");
+    m_actFullscreen = new QAction(tr("Full Screen(&U)"), this);
+    m_actFullscreen->setShortcut(QKeySequence("F11"));
+    viewMenu->addAction(m_actZoomIn);
+    viewMenu->addAction(m_actZoomOut);
+    viewMenu->addAction(m_actZoomFit);
+    viewMenu->addAction(m_actZoomActual);
+    m_actPixelGrid = new QAction(tr("Pixel &Grid"), this);
+    m_actPixelGrid->setObjectName("pixelGridAction");
+    m_actPixelGrid->setCheckable(true);
+    m_actPixelGrid->setChecked(false);
+    m_actPixelGrid->setToolTip(tr("Show pixel inspection grid when zoomed to 800% or above"));
+    connect(m_actPixelGrid, &QAction::toggled, this,
+            [this](bool on)
+            {
+                if (m_imageViewer)
+                    m_imageViewer->setPixelGridEnabled(on);
+                if (m_compareView)
+                    m_compareView->setPixelGridEnabled(on);
+            });
+    viewMenu->addAction(m_actPixelGrid);
+    m_zoomPresetsMenu = viewMenu->addMenu(tr("Zoom Presets"));
+    m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
+    m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });
+    m_zoomPresetsMenu->addAction(tr("100% (Actual Size)"), this, [this]() { zoomViewer(3); });
+    m_zoomPresetsMenu->addAction("200%", this, [this]() { zoomViewer(5); });
+    m_zoomPresetsMenu->addAction("400%", this, [this]() { zoomViewer(6); });
+    m_zoomPresetsMenu->addAction(tr("800% (Pixel Grid)"), this, [this]() { zoomViewer(7); });
+    viewMenu->addSeparator();
+    viewMenu->addAction(m_actFullscreen);
 }

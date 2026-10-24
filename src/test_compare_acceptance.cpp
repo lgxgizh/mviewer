@@ -12,6 +12,7 @@
 // bundles are already covered by workflow_ux_tests / compare_session_tests.)
 
 #include "compareworkspace.h"
+#include "usmcomparedialog.h"
 #include "compareworkspace_preset_sanitize.h"
 #include "compareworkspace_shortcuts.h"
 #include "core/compare/CompareEngine.h"
@@ -253,6 +254,7 @@ int main(int argc, char **argv)
     testComparePresetSanitize();
     testPlainDigitsReservedForPreview(dir);
     testLocalZoomAcceptance(paths8[0], paths8[1]);
+    testUsmCompareDialogSpaceHold(dir);
 
     if (g_failures > 0)
     {

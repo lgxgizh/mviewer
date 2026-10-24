@@ -16,41 +16,7 @@
 namespace
 {
 
-// Address bar: first click / focus selects all (Ctrl+A look) so the user can
-// immediately type a new path or copy. Later clicks while focused keep the
-// caret so partial edits still work.
-class SelectAllOnActivateLineEdit : public QLineEdit
-{
-  public:
-    using QLineEdit::QLineEdit;
-
-  protected:
-    void focusInEvent(QFocusEvent *event) override
-    {
-        QLineEdit::focusInEvent(event);
-        if (event->reason() == Qt::MouseFocusReason || event->reason() == Qt::TabFocusReason ||
-            event->reason() == Qt::BacktabFocusReason ||
-            event->reason() == Qt::ShortcutFocusReason || event->reason() == Qt::OtherFocusReason)
-        {
-            // Defer past the activating mouse press, which would otherwise place
-            // a caret and clear the selection we want.
-            QTimer::singleShot(0, this,
-                               [this]()
-                               {
-                                   if (hasFocus())
-                                       selectAll();
-                               });
-        }
-    }
-
-    void mousePressEvent(QMouseEvent *event) override
-    {
-        const bool gainingFocus = !hasFocus();
-        QLineEdit::mousePressEvent(event);
-        if (gainingFocus)
-            selectAll();
-    }
-};
+// SelectAllOnActivateLineEdit is defined in mainwindow_p.h
 
 QString actTip(const QString &label, const QAction *action)
 {
@@ -134,6 +100,14 @@ void MainWindow::buildBrowserShell()
             actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
         browserToolBar->addAction(m_actRotateCW);
     }
+    if (m_actSplitBrowse)
+    {
+        m_actSplitBrowse->setIcon(mviewer::ui::toolbarIcon("split_browse"));
+        m_actSplitBrowse->setObjectName("splitBrowseAction");
+        m_actSplitBrowse->setToolTip(
+            actTip(tr("Split Browse View (Ctrl+Shift+S)"), m_actSplitBrowse));
+        browserToolBar->addAction(m_actSplitBrowse);
+    }
     if (m_actCompare)
     {
         m_actCompare->setIcon(mviewer::ui::toolbarIcon("compare"));
@@ -143,7 +117,7 @@ void MainWindow::buildBrowserShell()
     }
     if (m_actUsmCompare)
     {
-        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analyze"));
+        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analysis"));
         m_actUsmCompare->setObjectName("usmCompareAction");
         m_actUsmCompare->setToolTip(
             actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));
@@ -516,19 +490,41 @@ QWidget *MainWindow::buildGalleryPanel()
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(4);
 
-    auto *sortBar = buildSortBar(rightWidget);
-    rightLayout->addWidget(sortBar);
+    m_gallerySplitter = new QSplitter(Qt::Horizontal, rightWidget);
+    m_gallerySplitter->setObjectName(QStringLiteral("gallerySplitter"));
+    m_gallerySplitter->setChildrenCollapsible(false);
 
-    m_thumbnailPanel = new ThumbnailPanel(rightWidget);
+    m_primaryBrowsePane = new QWidget();
+    m_primaryBrowsePane->setObjectName(QStringLiteral("primaryBrowsePane"));
+    auto *primaryLayout = new QVBoxLayout(m_primaryBrowsePane);
+    primaryLayout->setContentsMargins(0, 0, 0, 0);
+    primaryLayout->setSpacing(4);
+
+    auto *sortBar = buildSortBar(m_primaryBrowsePane);
+    primaryLayout->addWidget(sortBar);
+
+    m_thumbnailPanel = new ThumbnailPanel(m_primaryBrowsePane);
+    m_thumbnailPanel->setObjectName(QStringLiteral("thumbnailPanel"));
+    m_thumbnailPanel->setConsumerId(0);
+    m_thumbnailPanel->setPaneSlot(SelectionModel::PaneSlot::Primary);
     connect(m_thumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
     placeGalleryCompareButton(sortBar);
-    m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
-    m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
+    m_thumbnailPanel->setCommandStack(&m_cmdStack);
+    m_thumbnailPanel->setSelectionModel(m_selection);
     m_thumbnailPanel->installEventFilter(this);
     if (m_thumbnailPanel->viewport())
         m_thumbnailPanel->viewport()->installEventFilter(this);
-    rightLayout->addWidget(m_thumbnailPanel, 1);
+    m_primaryBrowsePane->installEventFilter(this);
+    m_thumbnailPanel->setMinimumWidth(220);
+    primaryLayout->addWidget(m_thumbnailPanel, 1);
+    m_gallerySplitter->addWidget(m_primaryBrowsePane);
+    m_secondaryBrowsePane = buildSecondaryBrowsePane();
+    m_gallerySplitter->addWidget(m_secondaryBrowsePane);
+    m_secondaryBrowsePane->hide();
+    m_primaryBrowsePane->lower();
+
+    rightLayout->addWidget(m_gallerySplitter, 1);
 
     buildEmptyStateUi();
     m_emptyFolderTimer = new QTimer(this);
@@ -686,6 +682,8 @@ void MainWindow::buildStatusBarUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
             {
+                if (activeThumbnailPanel() != m_thumbnailPanel)
+                    return;
                 const int idx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
                 if (total > 0 && idx >= 0)
                     m_lblCount->setText(tr("Image %1 / %2").arg(idx + 1).arg(total));

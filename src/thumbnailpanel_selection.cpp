@@ -39,7 +39,7 @@ void ThumbnailPanel::onSelectionChanged()
     // into SelectionModel before — so Compare used to receive a single (stale)
     // image instead of the whole selection. Updating here makes the shared model
     // reflect Ctrl/Shift/box selections uniformly.
-    if (m_selection)
+    if (m_selection && !m_updatingFromModel)
     {
         QStringList paths;
         paths.reserve(n);
@@ -50,7 +50,7 @@ void ThumbnailPanel::onSelectionChanged()
         const QModelIndex focused =
             current.isValid() && selectionModel()->isSelected(current) ? current : fallback;
         const QString cur = focused.isValid() ? m_paths.value(focused.row()) : QString();
-        m_selection->setSelection(paths, cur);
+        m_selection->setPaneSelection(m_paneSlot, paths, cur);
     }
 
     // M23 P2 (selection UX): keep the compare affordance always discoverable.
@@ -66,11 +66,25 @@ void ThumbnailPanel::onSelectionChanged()
         m_compareBtn->setText(QStringLiteral("Compare (P)"));
         m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
         m_compareBtn->adjustSize();
-        const bool canCompare = n >= 2 && n <= 8;
+        const bool inSplit = (m_selection && m_selection->isSplitModeEnabled());
+        const int totalCount = inSplit ? m_selection->selection().size() : n;
+        const bool canCompare = totalCount >= 2 && totalCount <= 8;
         m_compareBtn->setEnabled(canCompare);
-        m_compareBtn->setToolTip(
-            canCompare ? QStringLiteral("Send the %1 selected images to compare").arg(n)
-                       : QStringLiteral("Select 2-8 images to compare (currently %1)").arg(n));
+        if (canCompare)
+        {
+            m_compareBtn->setToolTip(
+                QStringLiteral("Send the %1 selected images to compare").arg(totalCount));
+        }
+        else if (inSplit)
+        {
+            m_compareBtn->setToolTip(
+                tr("Select 2-8 images across panes to compare (currently %1)").arg(totalCount));
+        }
+        else
+        {
+            m_compareBtn->setToolTip(
+                QStringLiteral("Select 2-8 images to compare (currently %1)").arg(totalCount));
+        }
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }
@@ -148,10 +162,12 @@ void ThumbnailPanel::selectPath(const QString &path)
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
-void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &current)
+void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &current,
+                                 bool publishToModel)
 {
     if (!selectionModel() || !m_model)
         return;
+    m_updatingFromModel = !publishToModel;
     QItemSelection sel;
     for (const QString &p : paths)
     {
@@ -183,6 +199,7 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
     // Signals were blocked while the full native selection was reconstructed;
     // publish once through this panel's single selection owner.
     onSelectionChanged();
+    m_updatingFromModel = false;
 }
 
 int ThumbnailPanel::scrollOffset() const

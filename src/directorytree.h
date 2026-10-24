@@ -92,6 +92,7 @@ class DirectoryTree : public QTreeView
     // A watcher/F5 hint that the current directory's contents may have changed.
     // Consumers reconcile a snapshot; no navigation lifecycle is allowed.
     void directoryContentsChanged(const QString &path);
+    void openInSecondaryPaneRequested(const QString &path);
 
   protected:
     // Enter/Return opens the selected directory (same as double-click) so the

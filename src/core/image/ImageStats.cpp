@@ -376,4 +376,100 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
     return out;
 }
 
+
+ROIChannelStats computeROIChannelStats16(const uint16_t *buf, int width, int height,
+                                         int channels, uint16_t maxVal,
+                                         const mviewer::domain::Selection &region,
+                                         const std::function<bool()> &cancelled)
+{
+    ROIChannelStats out;
+    if (!buf || width <= 0 || height <= 0 || channels <= 0)
+        return out;
+
+    if (region.isEmpty())
+        return out;
+
+    const long long x0ll = std::clamp<long long>(region.x, 0, width);
+    const long long y0ll = std::clamp<long long>(region.y, 0, height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, height);
+    const int x0 = static_cast<int>(std::min(x0ll, x1ll));
+    const int y0 = static_cast<int>(std::min(y0ll, y1ll));
+    const int x1 = static_cast<int>(std::max(x0ll, x1ll));
+    const int y1 = static_cast<int>(std::max(y0ll, y1ll));
+    if (x1 <= x0 || y1 <= y0)
+        return out;
+
+    if (maxVal == 0)
+        maxVal = 65535;
+
+    RoiAccum accum;
+    const double invMax = 255.0 / static_cast<double>(maxVal);
+
+    for (int y = y0; y < y1; ++y)
+    {
+        if (cancelled && cancelled())
+        {
+            out.cancelled = true;
+            return out;
+        }
+        const uint16_t *row = buf + (static_cast<size_t>(y) * width + x0) * channels;
+        for (int x = x0; x < x1; ++x, row += channels)
+        {
+            uint16_t r = 0, g = 0, b = 0;
+            if (channels == 1)
+            {
+                r = g = b = row[0];
+            }
+            else
+            {
+                r = row[0];
+                g = row[1];
+                b = row[2];
+            }
+            accum.sumR += r;
+            accum.sumG += g;
+            accum.sumB += b;
+            accum.sumV += std::max({r, g, b});
+
+            const uint8_t r8 = static_cast<uint8_t>(std::min(255.0, std::round(r * invMax)));
+            const uint8_t g8 = static_cast<uint8_t>(std::min(255.0, std::round(g * invMax)));
+            const uint8_t b8 = static_cast<uint8_t>(std::min(255.0, std::round(b * invMax)));
+            double hue = 0.0, sat = 0.0;
+            pixelHueSat(r8, g8, b8, hue, sat);
+            accum.sumS += sat;
+            if (sat > 0.0)
+            {
+                const double rad = hue * kDegToRad;
+                accum.sumSin += std::sin(rad);
+                accum.sumCos += std::cos(rad);
+                ++accum.hueCount;
+            }
+            ++accum.pixelCount;
+        }
+    }
+
+    if (accum.pixelCount <= 0)
+        return out;
+
+    out.pixelCount = accum.pixelCount;
+    out.valid = true;
+    const double denom = static_cast<double>(accum.pixelCount);
+    out.rMean = static_cast<double>(accum.sumR) / denom;
+    out.gMean = static_cast<double>(accum.sumG) / denom;
+    out.bMean = static_cast<double>(accum.sumB) / denom;
+    out.vMean = static_cast<double>(accum.sumV) / denom;
+    out.sMean = accum.sumS / denom;
+    out.hMean = circularHueMean(accum.sumSin, accum.sumCos, accum.hueCount);
+    if (accum.sumG > 0)
+    {
+        out.ratiosValid = true;
+        out.rOverG = static_cast<double>(accum.sumR) / static_cast<double>(accum.sumG);
+        out.bOverG = static_cast<double>(accum.sumB) / static_cast<double>(accum.sumG);
+    }
+    return out;
+}
+
 } // namespace mviewer::core

@@ -22,8 +22,8 @@ namespace
 {
 
 const char *const kToolbarIconIds[] = {
-    "open",    "back",     "forward", "up",     "refresh",    "favorite",
-    "compare", "analysis", "search",  "browse", "rotate_ccw", "rotate_cw",
+    "open",     "back",   "forward", "up",         "refresh",   "favorite",     "compare",
+    "analysis", "search", "browse",  "rotate_ccw", "rotate_cw", "split_browse",
 };
 
 QPixmap tintMask(const QPixmap &mask, const QColor &color)

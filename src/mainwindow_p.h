@@ -165,3 +165,39 @@ inline bool readBoundedStateFile(QFile &file, const QString &path, qint64 maxByt
     out = file.read(std::min<qint64>(file.size(), maxBytes));
     return true;
 }
+
+#include <QFocusEvent>
+#include <QLineEdit>
+#include <QMouseEvent>
+#include <QTimer>
+
+class SelectAllOnActivateLineEdit : public QLineEdit
+{
+  public:
+    using QLineEdit::QLineEdit;
+
+  protected:
+    void focusInEvent(QFocusEvent *event) override
+    {
+        QLineEdit::focusInEvent(event);
+        if (event->reason() == Qt::MouseFocusReason || event->reason() == Qt::TabFocusReason ||
+            event->reason() == Qt::BacktabFocusReason ||
+            event->reason() == Qt::ShortcutFocusReason || event->reason() == Qt::OtherFocusReason)
+        {
+            QTimer::singleShot(0, this,
+                               [this]()
+                               {
+                                   if (hasFocus())
+                                       selectAll();
+                               });
+        }
+    }
+
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        const bool gainingFocus = !hasFocus();
+        QLineEdit::mousePressEvent(event);
+        if (gainingFocus)
+            selectAll();
+    }
+};

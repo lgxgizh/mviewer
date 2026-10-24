@@ -683,6 +683,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             return true;
     }
 
+    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)
+    {
+        auto *widget = qobject_cast<QWidget *>(watched);
+        if (widget && m_splitBrowseEnabled)
+        {
+            if (m_secondaryBrowsePane &&
+                (widget == m_secondaryBrowsePane || m_secondaryBrowsePane->isAncestorOf(widget)))
+                setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+            else if (m_primaryBrowsePane &&
+                     (widget == m_primaryBrowsePane || m_primaryBrowsePane->isAncestorOf(widget)))
+                setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+        }
+    }
+
     if (event->type() == QEvent::MouseButtonPress)
     {
         auto *me = static_cast<QMouseEvent *>(event);

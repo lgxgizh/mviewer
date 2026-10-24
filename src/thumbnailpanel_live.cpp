@@ -551,7 +551,7 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
     }
 
     pruneThumbnailState();
-    ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
+    ThumbnailPipeline::instance().updateSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     emit sequenceChanged(m_currentDir, m_paths);
     emit statsChanged(m_paths.size(), m_totalBytes, restored.indexes().size(), 0);
     preserveScrollAnchor(anchorPath, anchorOffset);
