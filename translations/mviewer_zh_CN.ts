@@ -3577,7 +3577,7 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <source>Clone Left</source>
-        <translation>同步左栏</translation>
+        <translation>右栏跟随左栏</translation>
     </message>
     <message>
         <source>Sync right pane to the left pane directory</source>
@@ -3593,6 +3593,10 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <source>Close split browse view</source>
+        <translation>关闭双栏浏览</translation>
+    </message>
+    <message>
+        <source>Close Split Browse View</source>
         <translation>关闭双栏浏览</translation>
     </message>
     <message>
@@ -4469,6 +4473,14 @@ or double-click a thumbnail to view</source>
         <translation>编辑(&amp;E)</translation>
     </message>
     <message>
+        <source>Undo(&amp;U)</source>
+        <translation>撤销(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Redo(&amp;R)</source>
+        <translation>重做(&amp;R)</translation>
+    </message>
+    <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="84"/>
         <source>Undo Failed</source>
         <translation>撤销失败</translation>
@@ -4560,8 +4572,8 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="244"/>
-        <source>Focus Browse Mode (Tab)</source>
-        <translation>专注浏览模式 (Tab)</translation>
+        <source>Focus Browse Mode (F6)</source>
+        <translation>专注浏览模式 (F6)</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="251"/>
@@ -6262,6 +6274,12 @@ Continue?</source>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="515"/>
         <source>Are you sure you want to move %1 files to the Recycle Bin?</source>
         <translation>确定将 %1 个文件移到回收站？</translation>
+    </message>
+    <message numerus="yes">
+        <source>Move %n file(s) to the Recycle Bin? (left: %1, right: %2)</source>
+        <translation>
+            <numerusform>将 %n 个文件移到回收站？（左栏: %1，右栏: %2）</numerusform>
+        </translation>
     </message>
     <message>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="518"/>

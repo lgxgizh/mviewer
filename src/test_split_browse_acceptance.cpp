@@ -8,7 +8,8 @@
 //   TC-SB-05: Deduplication when both panes select identical file paths
 //   TC-SB-06: Selection convergence to primary on closing secondary pane
 //   TC-SB-07: Dual-pane thumbnail pipeline consumer isolation
-//   TC-SB-08: AppState session persistence round-trip
+//   TC-SB-08: AppState session persistence round-trip (scroll, last image, sort)
+//   TC-SB-09: Parallel column layout, sort independence and mode sync
 
 #include "appstate.h"
 #include "compareworkspace_caption.h"
@@ -16,18 +17,25 @@
 #include "mainwindow.h"
 #include "naturalnameorder.h"
 #include "selectionmodel.h"
+#include "splitbrowse_delete.h"
 #include "thumbnailpanel.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QComboBox>
-#include <QLineEdit>
-#include <QPushButton>
-#include <QSplitter>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QLineEdit>
+#include <QPushButton>
+#include <QScrollBar>
+#include <QSplitter>
+#include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QThread>
+#include <QToolBar>
+#include <functional>
 #include <iostream>
 
 namespace
@@ -238,14 +246,177 @@ void testAppStatePersistence()
     s.secondaryLastImage = QStringLiteral("D:/experiments/candidate_v2/0001.png");
     s.secondaryThumbScroll = 180;
     s.gallerySplitterSizes = {480, 520};
+    s.hasSecondarySort = true;
+    s.secondarySortField = static_cast<int>(ThumbnailPanel::SortSize);
+    s.secondarySortAscending = false;
 
     EXPECT(s.save(), "AppState saves successfully");
 
     AppState loaded = AppState::load();
     EXPECT(loaded.splitBrowseEnabled == true, "splitBrowseEnabled restored");
     EXPECT(loaded.secondaryLastDir == s.secondaryLastDir, "secondaryLastDir restored");
+    EXPECT(loaded.secondaryLastImage == s.secondaryLastImage, "secondaryLastImage restored");
     EXPECT(loaded.secondaryThumbScroll == 180, "secondaryThumbScroll restored");
     EXPECT(loaded.gallerySplitterSizes.size() >= 2, "gallerySplitterSizes restored");
+    EXPECT(loaded.hasSecondarySort, "hasSecondarySort restored");
+    EXPECT(loaded.secondarySortField == static_cast<int>(ThumbnailPanel::SortSize),
+           "secondarySortField restored");
+    EXPECT(loaded.secondarySortAscending == false, "secondarySortAscending restored");
+    AppState().save();
+}
+
+bool waitUntil(const std::function<bool()> &pred, int tries = 80)
+{
+    for (int i = 0; i < tries; ++i)
+    {
+        if (pred())
+            return true;
+        QApplication::processEvents();
+        QThread::msleep(25);
+    }
+    return pred();
+}
+
+void testSessionRestoreMainWindow()
+{
+    std::cout << "--- TC-SB-08b: MainWindow restores right pane scroll, image, sort ---"
+              << std::endl;
+    QTemporaryDir tmp;
+    EXPECT(tmp.isValid(), "temp dir for restore test");
+    if (!tmp.isValid())
+        return;
+    const QString leftDir = tmp.filePath(QStringLiteral("left"));
+    const QString rightDir = tmp.filePath(QStringLiteral("right"));
+    QDir().mkpath(leftDir);
+    QDir().mkpath(rightDir);
+    createDummyImage(QDir(leftDir).filePath(QStringLiteral("l1.png")));
+    createDummyImage(QDir(leftDir).filePath(QStringLiteral("l2.png")));
+    const QString r1 = QDir(rightDir).filePath(QStringLiteral("r1.png"));
+    const QString r2 = QDir(rightDir).filePath(QStringLiteral("r2.png"));
+    createDummyImage(r1);
+    createDummyImage(r2);
+
+    int savedScroll = 0;
+    {
+        MainWindow mw;
+        mw.resize(1024, 768);
+        mw.show();
+        QApplication::processEvents();
+        mw.openExternalTargets({leftDir});
+        mw.toggleSplitBrowse(true);
+        mw.openRightDirectory(rightDir);
+        EXPECT(waitUntil(
+                   [&]()
+                   {
+                       auto *sec = mw.secondaryThumbnailPanel();
+                       return sec && sec->pathList().size() >= 2;
+                   }),
+               "right pane scan populated");
+        ThumbnailPanel *sec = mw.secondaryThumbnailPanel();
+        if (!sec)
+            return;
+        sec->setSort(ThumbnailPanel::SortSize, false);
+        sec->selectPath(r2);
+        if (sec->verticalScrollBar())
+        {
+            sec->verticalScrollBar()->setMaximum(400);
+            sec->verticalScrollBar()->setValue(48);
+            savedScroll = sec->scrollOffset();
+        }
+        AppState persist;
+        persist.splitBrowseEnabled = true;
+        persist.lastDir = leftDir;
+        persist.secondaryLastDir = rightDir;
+        persist.secondaryLastImage = r2;
+        persist.secondaryThumbScroll = savedScroll;
+        persist.hasSecondarySort = true;
+        persist.secondarySortField = static_cast<int>(ThumbnailPanel::SortSize);
+        persist.secondarySortAscending = false;
+        persist.gallerySplitterSizes = {400, 400};
+        EXPECT(persist.save(), "restore fixture AppState saved");
+    }
+
+    MainWindow restored;
+    restored.resize(1024, 768);
+    restored.show();
+    for (int i = 0; i < 40; ++i)
+        QApplication::processEvents();
+    EXPECT(restored.isSplitBrowseEnabled(), "restored window enables split browse");
+    EXPECT(waitUntil(
+               [&]()
+               {
+                   auto *sec = restored.secondaryThumbnailPanel();
+                   return sec && sec->isVisible() && sec->pathList().size() >= 2;
+               }),
+           "restored right pane populated");
+    ThumbnailPanel *sec = restored.secondaryThumbnailPanel();
+    if (!sec)
+        return;
+    EXPECT(sec->sortMode() == ThumbnailPanel::SortSize, "right pane sort field restored");
+    EXPECT(!sec->sortAscending(), "right pane sort order restored independently");
+    EXPECT(sec->currentDir() == QDir::cleanPath(rightDir) ||
+               QDir(sec->currentDir()) == QDir(rightDir),
+           "right pane directory restored");
+    if (savedScroll > 0)
+        EXPECT(sec->scrollOffset() == savedScroll, "right pane scroll restored");
+    const QString current = sec->pathList().value(sec->currentIndex().row());
+    EXPECT(QFileInfo(current).fileName() == QStringLiteral("r2.png") ||
+               sec->rowForPath(r2) == sec->currentIndex().row(),
+           "right pane last image restored");
+}
+
+void testActivePaneRouting(MainWindow &mw)
+{
+    std::cout << "--- TC-SB-10: Active pane routing ---" << std::endl;
+    mw.toggleSplitBrowse(true);
+    EXPECT(mw.activeThumbnailPanel() ==
+               mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel")),
+           "active panel is primary by default");
+    mw.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+    EXPECT(mw.activeThumbnailPanel() == mw.secondaryThumbnailPanel(),
+           "active pane routing picks the secondary panel");
+    mw.setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+    EXPECT(mw.activeThumbnailPanel() != mw.secondaryThumbnailPanel(),
+           "active pane routing returns to primary");
+}
+
+void testDeleteUnionPrompt()
+{
+    std::cout << "--- TC-SB-11: Delete-union confirm counts ---" << std::endl;
+    const QStringList left{QStringLiteral("L1"), QStringLiteral("L2")};
+    const QStringList right{QStringLiteral("R1"), QStringLiteral("L2")};
+    const SplitDeletePrompt prompt = splitDeletePrompt(left, right);
+    EXPECT(prompt.leftCount == 2, "left pane contributes 2");
+    EXPECT(prompt.rightCount == 2, "right pane contributes 2");
+    EXPECT(prompt.totalCount == 3, "union total is 3 unique paths");
+    const QStringList uni = splitDeleteUnion(left, right);
+    EXPECT(uni.size() == 3, "union list has 3 paths");
+    const QString msg = splitDeleteConfirmMessage(prompt, true);
+    EXPECT(msg.contains(QStringLiteral("left: 2")), "confirm mentions left count");
+    EXPECT(msg.contains(QStringLiteral("right: 2")), "confirm mentions right count");
+}
+
+void testToolbarActionIcons(MainWindow &mw)
+{
+    std::cout << "--- TC-SB-12: Toolbar actions have icons ---" << std::endl;
+    auto *bar = mw.findChild<QToolBar *>(QStringLiteral("browserToolBar"));
+    EXPECT(bar != nullptr, "main browse toolbar exists");
+    if (!bar)
+        return;
+    int actions = 0;
+    int withIcon = 0;
+    for (QAction *act : bar->actions())
+    {
+        if (!act || act->isSeparator())
+            continue;
+        ++actions;
+        if (!act->icon().isNull())
+            ++withIcon;
+        else
+            std::cerr << "missing toolbar icon: " << act->text().toStdString() << std::endl;
+    }
+    EXPECT(actions > 0, "toolbar has actions");
+    EXPECT(actions == withIcon, "every QAction on the main toolbar has a non-null icon");
 }
 
 void testParallelColumnLayoutAndSync(MainWindow &mw)
@@ -261,8 +432,8 @@ void testParallelColumnLayoutAndSync(MainWindow &mw)
 
     auto *priPath =
         mw.primaryBrowsePaneWidget()->findChild<QLineEdit *>(QStringLiteral("pathEdit"));
-    auto *secPath = mw.secondaryBrowsePaneWidget()->findChild<QLineEdit *>(
-        QStringLiteral("secondaryPathEdit"));
+    auto *secPath =
+        mw.secondaryBrowsePaneWidget()->findChild<QLineEdit *>(QStringLiteral("secondaryPathEdit"));
     EXPECT(priPath != nullptr, "Primary address bar is inside primary pane");
     EXPECT(secPath != nullptr, "Secondary address bar is inside secondary pane");
 
@@ -284,8 +455,7 @@ void testParallelColumnLayoutAndSync(MainWindow &mw)
     EXPECT(secThumb != nullptr, "Secondary thumbnail panel exists");
 
     secSort->setCurrentIndex(secSort->findData(ThumbnailPanel::SortSize));
-    EXPECT(secThumb->sortMode() == ThumbnailPanel::SortSize,
-           "Secondary sort changed to SortSize");
+    EXPECT(secThumb->sortMode() == ThumbnailPanel::SortSize, "Secondary sort changed to SortSize");
 
     secSortDir->setChecked(true);
     EXPECT(!secThumb->sortAscending(), "Secondary sort order toggled to descending");
@@ -299,7 +469,12 @@ void testParallelColumnLayoutAndSync(MainWindow &mw)
 
 int main(int argc, char *argv[])
 {
+    QStandardPaths::setTestModeEnabled(true);
+    qputenv("MVIEWER_DISABLE_UPDATE_CHECK", "1");
+    qputenv("MVIEWER_DISABLE_RECOVERY_PROMPTS", "1");
     QApplication app(argc, argv);
+    QCoreApplication::setOrganizationName(QStringLiteral("mviewer-split-browse-test"));
+    QCoreApplication::setApplicationName(QStringLiteral("mviewer-split-browse-test"));
     std::cout << "=== Running Split Browse Acceptance Tests ===" << std::endl;
 
     MainWindow mw;
@@ -314,6 +489,10 @@ int main(int argc, char *argv[])
     testThumbnailPipelineIsolation();
     testAppStatePersistence();
     testParallelColumnLayoutAndSync(mw);
+    testActivePaneRouting(mw);
+    testDeleteUnionPrompt();
+    testToolbarActionIcons(mw);
+    testSessionRestoreMainWindow();
 
     std::cout << "\nResults: " << (g_failures == 0 ? "ALL PASS" : "FAILURES DETECTED") << " ("
               << g_failures << " failures)" << std::endl;

@@ -588,6 +588,16 @@ QStatusBar QLabel {
     padding: 0 {{space8}}px;
 }
 
+QWidget#primaryBrowsePane[activePane="true"],
+QWidget#secondaryBrowsePane[activePane="true"] {
+    border: 2px solid {{accent}};
+}
+
+QWidget#primaryBrowsePane[activePane="false"],
+QWidget#secondaryBrowsePane[activePane="false"] {
+    border: 2px solid transparent;
+}
+
 QSplitter::handle {
     background: {{border}};
 }

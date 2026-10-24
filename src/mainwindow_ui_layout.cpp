@@ -492,6 +492,7 @@ QWidget *MainWindow::buildGalleryPanel()
 
     m_gallerySplitter = new QSplitter(Qt::Horizontal, rightWidget);
     m_gallerySplitter->setObjectName(QStringLiteral("gallerySplitter"));
+    m_gallerySplitter->setChildrenCollapsible(false);
 
     m_primaryBrowsePane = new QWidget();
     m_primaryBrowsePane->setObjectName(QStringLiteral("primaryBrowsePane"));
@@ -514,6 +515,8 @@ QWidget *MainWindow::buildGalleryPanel()
     m_thumbnailPanel->installEventFilter(this);
     if (m_thumbnailPanel->viewport())
         m_thumbnailPanel->viewport()->installEventFilter(this);
+    m_primaryBrowsePane->installEventFilter(this);
+    m_thumbnailPanel->setMinimumWidth(220);
     primaryLayout->addWidget(m_thumbnailPanel, 1);
     m_gallerySplitter->addWidget(m_primaryBrowsePane);
     m_secondaryBrowsePane = buildSecondaryBrowsePane();
@@ -679,6 +682,8 @@ void MainWindow::buildStatusBarUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
             {
+                if (activeThumbnailPanel() != m_thumbnailPanel)
+                    return;
                 const int idx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
                 if (total > 0 && idx >= 0)
                     m_lblCount->setText(tr("Image %1 / %2").arg(idx + 1).arg(total));

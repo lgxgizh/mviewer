@@ -75,8 +75,16 @@ void MainWindow::connectNavigationSignals()
             {
                 if (!m_imageList)
                     return;
-                m_imageList->setPaths(paths, directory);
-                if (!paths.isEmpty() && m_directory &&
+                const QString current = currentImagePath();
+                // In split mode keep the viewer sequence on the right pane only
+                // while the current image actually comes from that pane.
+                const bool currentFromSecondary =
+                    m_splitBrowseEnabled && m_secondaryThumbnailPanel && !paths.contains(current) &&
+                    m_secondaryThumbnailPanel->rowForPath(current) >= 0;
+                const bool viewingThis = current.isEmpty() || !currentFromSecondary;
+                if (viewingThis)
+                    m_imageList->setPaths(paths, directory);
+                if (activeThumbnailPanel() == m_thumbnailPanel && !paths.isEmpty() && m_directory &&
                     DirectoryTree::equivalentPath(m_directory->currentDirectory(), directory))
                     statusBar()->showMessage(QStringLiteral("Loaded %1 images").arg(paths.size()),
                                              2500);
@@ -140,6 +148,8 @@ void MainWindow::connectGallerySignals()
             [this](const QString &message)
             {
                 if (message.isEmpty() || !statusBar())
+                    return;
+                if (activeThumbnailPanel() != m_thumbnailPanel)
                     return;
                 statusBar()->showMessage(message, 4000);
             });
@@ -225,7 +235,7 @@ void MainWindow::connectSelectionSignals()
                 updateSelectionActions();
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
-            [this](const QString &path) { onImageOpen(path); });
+            [this](const QString &path) { onImageOpenFromPanel(path, m_thumbnailPanel); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
             [this](const QStringList &images) { openCompare(images); });
     // A-3 / M19: ThumbnailPanel is the sole gallery selection publisher. Its
@@ -239,62 +249,20 @@ void MainWindow::connectSelectionSignals()
                 updateSelectionActions();
                 updateSplitBrowseCompareButton();
             });
-    if (m_secondaryThumbnailPanel)
-    {
-        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
-                [this](const QString &path) { onImageOpen(path); });
-        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::compareRequested, this,
-                [this](const QStringList &images) { openCompare(images); });
-        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
-                [this](const QString &path) { openUsmCompare(path); });
-    }
     // Dropping files directly onto the gallery behaves the same as dropping
-    // them anywhere else on the window.
+    // them anywhere else on the window. Secondary pane wiring lives in
+    // wireSecondaryBrowseHostSignals().
     connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this, &MainWindow::handleDroppedPaths);
     // When the user deletes images from the gallery, advance the viewer off the
-    // deleted image if it was the one being viewed.
+    // deleted image if it was the one being viewed, and drop the paths from
+    // both panes.
     connect(m_thumbnailPanel, &ThumbnailPanel::pathsRemoved, this,
             [this](const QStringList &deleted)
-            {
-                m_imageList->removePaths(deleted);
-                if (currentImagePath().isEmpty() || m_imageViewer->isHidden())
-                    return;
-                if (!deleted.contains(currentImagePath()))
-                    return;
-                // Advance to the next available image in the (refreshed) folder.
-                navigate(1);
-            });
+            { onGalleryPathsRemoved(m_thumbnailPanel, deleted); });
     connect(m_thumbnailPanel, &ThumbnailPanel::pathsRenamed, this,
-            [this](const QStringList &oldPaths, const QStringList &newPaths)
-            {
-                const QString before = currentImagePath();
-                if (m_imageViewer)
-                    m_imageViewer->renameBrowsePaths(oldPaths, newPaths);
-                const int index = oldPaths.indexOf(before);
-                if (index < 0 || index >= newPaths.size())
-                    return;
-                const QString after = newPaths.at(index);
-                if (m_previewPanel)
-                    m_previewPanel->setImage(after);
-                if (m_metadataPanel)
-                    m_metadataPanel->setImage(after);
-            });
+            &MainWindow::onGalleryPathsRenamed);
     connect(m_thumbnailPanel, &ThumbnailPanel::pathsModified, this,
-            [this](const QStringList &paths)
-            {
-                for (const QString &path : paths)
-                {
-                    if (m_imageViewer)
-                        m_imageViewer->refreshSource(path);
-                    if (path == currentImagePath())
-                    {
-                        if (m_previewPanel)
-                            m_previewPanel->setImage(path);
-                        if (m_metadataPanel)
-                            m_metadataPanel->setImage(path);
-                    }
-                }
-            });
+            &MainWindow::onGalleryPathsModified);
 }
 
 static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, int b, int a,

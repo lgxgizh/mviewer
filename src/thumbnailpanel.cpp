@@ -151,6 +151,10 @@ void ThumbnailPanel::wireThumbnailPipeline()
                         const QString qp = QString::fromStdString(p);
                         if (size != panel->m_thumbSize)
                             return;
+                        // Two panes can share the pipeline (including the same
+                        // directory). Ignore results that are not in this panel.
+                        if (panel->rowForPath(qp) < 0)
+                            return;
                         const QString cacheKey = panel->thumbCacheKey(qp, size);
                         if (img.isNull())
                         {
@@ -238,12 +242,16 @@ ThumbnailPanel::~ThumbnailPanel()
     // every interleaving.
     while (m_busyCursorRefs && m_busyCursorRefs->load(std::memory_order_acquire) > 0)
         restoreBusyCursorOnce(m_busyCursorRefs);
-    // Detach listener token from pipeline
+    // Detach listener token from pipeline and drop this panel's consumer so a
+    // leftover visible-range cannot keep scheduling work after destruction.
     if (m_pipelineListenerToken != 0)
     {
         ThumbnailPipeline::instance().removeResultFn(m_pipelineListenerToken);
         m_pipelineListenerToken = 0;
     }
+    ThumbnailPipeline::instance().removeConsumer(m_consumerId);
+    if (!ThumbnailPipeline::instance().hasResultListeners())
+        ThumbnailPipeline::instance().restoreDefaultDecodeFn();
 }
 
 void ThumbnailPanel::resetDirectoryState()

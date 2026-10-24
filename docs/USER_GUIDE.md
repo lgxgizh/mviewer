@@ -27,7 +27,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
    - GIF, animated WebP and multi-page TIFF are supported.
    - **Space** plays/pauses, **←** / **→** step one frame.
 8. **Workspace and search**:
-   - **Tab**: focus browse mode (hide the side panels and view full window).
+   - **F6**: focus browse mode (hide the side panels and view full window).
    - **Ctrl+Shift+F**: global search panel.
    - **Alt+H**: analysis panel (histogram, statistics and quality metrics computed instantly). The panel analyzes the current image only; two-image comparison lives in Compare.
    - When the viewer is full screen, the context-menu "Analyze" leaves full screen first and then opens the panel in the main window.
@@ -148,7 +148,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **Ctrl+R** / **Ctrl+Shift+R** | Rotate 90° clockwise / counterclockwise (overwrites the original; preview only in Compare) |
 | **Ctrl+Shift+H** / **Ctrl+Shift+V** | Flip horizontally / vertically (overwrites the original; preview only in Compare) |
 | **Shift+C** | Copy the pixel color at the cursor |
-| **Tab** | Toggle focus browse mode |
+| **F6** | Toggle focus browse mode |
 | **S** | Start the slideshow |
 | **Ctrl+Shift+B** | Open the batch processing dialog |
 | **Ctrl+Shift+A** | Cancel selection (deselect) |

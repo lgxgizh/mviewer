@@ -102,6 +102,12 @@ AppState AppState::load()
     const QJsonArray splitSizes = o.value("gallerySplitterSizes").toArray();
     for (const auto &v : splitSizes)
         s.gallerySplitterSizes.append(v.toInt());
+    if (o.contains(QStringLiteral("secondarySortField")))
+    {
+        s.hasSecondarySort = true;
+        s.secondarySortField = o.value(QStringLiteral("secondarySortField")).toInt(0);
+        s.secondarySortAscending = o.value(QStringLiteral("secondarySortAscending")).toBool(true);
+    }
     return s;
 }
 
@@ -149,6 +155,11 @@ bool AppState::save() const
     for (int sz : gallerySplitterSizes)
         splitSizesArr.append(sz);
     o["gallerySplitterSizes"] = splitSizesArr;
+    if (hasSecondarySort)
+    {
+        o["secondarySortField"] = secondarySortField;
+        o["secondarySortAscending"] = secondarySortAscending;
+    }
 
     QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))

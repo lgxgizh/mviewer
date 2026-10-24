@@ -71,9 +71,10 @@ QWidget *MainWindow::buildSecondaryHeaderBar(QWidget *pane)
     connect(m_secondarySwapBtn, &QPushButton::clicked, this, &MainWindow::swapBrowsePanes);
     hLayout->addWidget(m_secondarySwapBtn);
 
-    m_secondaryCloseBtn = new QPushButton(QStringLiteral("X"), row1Widget);
+    m_secondaryCloseBtn = new QPushButton(QStringLiteral("×"), row1Widget);
     m_secondaryCloseBtn->setObjectName(QStringLiteral("secondaryCloseButton"));
-    m_secondaryCloseBtn->setToolTip(tr("Close split browse view"));
+    m_secondaryCloseBtn->setToolTip(tr("Close Split Browse View"));
+    m_secondaryCloseBtn->setAccessibleName(tr("Close Split Browse View"));
     m_secondaryCloseBtn->setFixedWidth(28);
     connect(m_secondaryCloseBtn, &QPushButton::clicked, this,
             [this]() { toggleSplitBrowse(false); });
@@ -134,7 +135,8 @@ void MainWindow::wireSecondaryPanelSignals()
                     {
                         const QSignalBlocker b(m_secondarySortDirBtn);
                         m_secondarySortDirBtn->setChecked(descending);
-                        m_secondarySortDirBtn->setText(descending ? QStringLiteral("↓") : QStringLiteral("↑"));
+                        m_secondarySortDirBtn->setText(descending ? QStringLiteral("↓")
+                                                                  : QStringLiteral("↑"));
                     }
                 }
             });
@@ -146,6 +148,7 @@ void MainWindow::wireSecondaryPanelSignals()
             m_secondaryDirectoryMonitor, &DirectoryMonitor::notifyDirectoryChanged);
     connect(m_secondaryDirectoryMonitor, &DirectoryMonitor::directoryDeltaReady,
             m_secondaryThumbnailPanel, &ThumbnailPanel::applyDirectoryDelta);
+    wireSecondaryBrowseHostSignals();
 }
 
 QWidget *MainWindow::buildSecondaryBrowsePane()
@@ -168,6 +171,10 @@ QWidget *MainWindow::buildSecondaryBrowsePane()
     m_secondaryThumbnailPanel->installEventFilter(this);
     if (m_secondaryThumbnailPanel->viewport())
         m_secondaryThumbnailPanel->viewport()->installEventFilter(this);
+    pane->installEventFilter(this);
+    if (m_secondaryPathEdit)
+        m_secondaryPathEdit->installEventFilter(this);
+    m_secondaryThumbnailPanel->setMinimumWidth(220);
     layout->addWidget(m_secondaryThumbnailPanel, 1);
 
     if (m_thumbnailPanel)
@@ -220,9 +227,8 @@ void MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *hea
             {
                 if (m_secondaryThumbnailPanel && m_secondarySortCombo)
                 {
-                    m_secondaryThumbnailPanel->setSortMode(
-                        static_cast<ThumbnailPanel::SortMode>(
-                            m_secondarySortCombo->currentData().toInt()));
+                    m_secondaryThumbnailPanel->setSortMode(static_cast<ThumbnailPanel::SortMode>(
+                        m_secondarySortCombo->currentData().toInt()));
                 }
             });
 
@@ -230,7 +236,8 @@ void MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *hea
             [this](bool descending)
             {
                 if (m_secondarySortDirBtn)
-                    m_secondarySortDirBtn->setText(descending ? QStringLiteral("↓") : QStringLiteral("↑"));
+                    m_secondarySortDirBtn->setText(descending ? QStringLiteral("↓")
+                                                              : QStringLiteral("↑"));
                 if (m_secondaryThumbnailPanel)
                     m_secondaryThumbnailPanel->setSortAscending(!descending);
             });
@@ -253,68 +260,9 @@ void MainWindow::toggleSplitBrowse(bool enabled)
         m_selection->setSplitModeEnabled(enabled);
 
     if (enabled)
-    {
-        if (m_thumbnailPanel && m_secondaryThumbnailPanel)
-        {
-            m_secondaryThumbnailPanel->setThumbSize(m_thumbnailPanel->thumbSize());
-            m_secondaryThumbnailPanel->setViewMode(m_thumbnailPanel->viewMode());
-            m_secondaryThumbnailPanel->setSort(m_thumbnailPanel->sortMode(),
-                                               m_thumbnailPanel->sortAscending());
-            if (m_secondarySortCombo)
-            {
-                const int idx = m_secondarySortCombo->findData(m_thumbnailPanel->sortMode());
-                if (idx >= 0)
-                {
-                    const QSignalBlocker b(m_secondarySortCombo);
-                    m_secondarySortCombo->setCurrentIndex(idx);
-                }
-            }
-            if (m_secondarySortDirBtn)
-            {
-                const bool desc = !m_thumbnailPanel->sortAscending();
-                const QSignalBlocker b(m_secondarySortDirBtn);
-                m_secondarySortDirBtn->setChecked(desc);
-                m_secondarySortDirBtn->setText(desc ? QStringLiteral("↓") : QStringLiteral("↑"));
-            }
-        }
-        if (m_secondaryBrowsePane)
-        {
-            m_secondaryBrowsePane->show();
-            if (m_gallerySplitter)
-            {
-                if (!m_appState.gallerySplitterSizes.isEmpty() &&
-                    m_appState.gallerySplitterSizes.size() >= 2 &&
-                    m_appState.gallerySplitterSizes[0] > 0 &&
-                    m_appState.gallerySplitterSizes[1] > 0)
-                {
-                    m_gallerySplitter->setSizes(m_appState.gallerySplitterSizes);
-                }
-                else
-                {
-                    const int w = m_gallerySplitter->width();
-                    const int half = w > 0 ? w / 2 : 400;
-                    m_gallerySplitter->setSizes({half, half});
-                }
-            }
-        }
-        if (m_secondaryThumbnailPanel && m_secondaryThumbnailPanel->currentDir().isEmpty())
-        {
-            QString targetDir = m_appState.secondaryLastDir;
-            if (targetDir.isEmpty() || !QDir(targetDir).exists())
-            {
-                if (m_thumbnailPanel && !m_thumbnailPanel->currentDir().isEmpty())
-                    targetDir = m_thumbnailPanel->currentDir();
-            }
-            if (!targetDir.isEmpty() && QDir(targetDir).exists())
-                openRightDirectory(targetDir);
-        }
-    }
+        enableSplitBrowseUi();
     else
-    {
-        if (m_secondaryBrowsePane)
-            m_secondaryBrowsePane->hide();
-        setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
-    }
+        disableSplitBrowseUi();
     updateSplitBrowseCompareButton();
 }
 
@@ -330,16 +278,18 @@ void MainWindow::openRightDirectory(const QString &dir)
         m_secondaryThumbnailPanel->setDirectory(cleaned);
     if (m_secondaryPathEdit)
         m_secondaryPathEdit->setText(cleaned);
-    if (m_secondaryDirectoryMonitor)
-        m_secondaryDirectoryMonitor->setActiveDirectory(cleaned);
 
     m_appState.secondaryLastDir = cleaned;
     setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+    updateSwapButtonEnabled();
 }
 
 void MainWindow::swapBrowsePanes()
 {
     if (!m_thumbnailPanel || !m_secondaryThumbnailPanel)
+        return;
+    if (m_thumbnailPanel->currentDir().isEmpty() ||
+        m_secondaryThumbnailPanel->currentDir().isEmpty())
         return;
 
     const QString leftDir = m_thumbnailPanel->currentDir();
@@ -367,8 +317,6 @@ void MainWindow::swapBrowsePanes()
         m_secondaryThumbnailPanel->setSort(leftSort, leftAsc);
         if (m_secondaryPathEdit)
             m_secondaryPathEdit->setText(leftDir);
-        if (m_secondaryDirectoryMonitor)
-            m_secondaryDirectoryMonitor->setActiveDirectory(leftDir);
         m_appState.secondaryLastDir = leftDir;
         if (m_selection)
             m_selection->setPaneSelection(SelectionModel::PaneSlot::Secondary, leftSel);
@@ -392,6 +340,7 @@ void MainWindow::setActiveBrowsePane(SelectionModel::PaneSlot pane)
     m_activeBrowsePane = pane;
     if (m_selection)
         m_selection->setActivePane(pane);
+    updateActivePaneIndicator();
 }
 
 void MainWindow::updateSplitBrowseCompareButton()

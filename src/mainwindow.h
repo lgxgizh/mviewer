@@ -105,9 +105,17 @@ class MainWindow : public QMainWindow
     {
         return m_activeBrowsePane;
     }
+    ThumbnailPanel *activeThumbnailPanel() const;
+    ThumbnailPanel *secondaryThumbnailPanel() const
+    {
+        return m_secondaryThumbnailPanel;
+    }
     void updateSplitBrowseCompareButton();
     QStringList sortPathsForCompare(const QStringList &paths) const;
-    QWidget *primaryBrowsePaneWidget() const { return m_primaryBrowsePane; }
+    QWidget *primaryBrowsePaneWidget() const
+    {
+        return m_primaryBrowsePane;
+    }
     QWidget *secondaryBrowsePaneWidget() const
     {
         return m_secondaryBrowsePane;
@@ -161,7 +169,29 @@ class MainWindow : public QMainWindow
     QWidget *buildSecondaryBrowsePane();
     QWidget *buildSecondaryHeaderBar(QWidget *pane);
     void wireSecondaryPanelSignals();
+    void wireSecondaryBrowseHostSignals();
     void buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout);
+    void applyGallerySplitterSizes();
+    void updateActivePaneIndicator();
+    void updateSwapButtonEnabled();
+    void enableSplitBrowseUi();
+    void disableSplitBrowseUi();
+    void applySecondarySortFromState();
+    void persistSecondaryBrowseState();
+    void restoreSecondaryBrowsePosition();
+    void handleSecondaryDroppedPaths(const QStringList &paths);
+    void onGalleryPathsRemoved(ThumbnailPanel *source, const QStringList &deleted);
+    void onGalleryPathsRenamed(const QStringList &oldPaths, const QStringList &newPaths);
+    void onGalleryPathsModified(const QStringList &paths);
+    void dropRemovedPathsFromPanel(ThumbnailPanel *panel, const QStringList &deleted);
+    void refreshVisibleBrowsePanes();
+    void applyActivePaneStatusBar();
+    void onSecondaryStatsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
+    void onSecondarySequenceChanged(const QString &directory, const QStringList &paths);
+    void onBrowseFocusChanged(QWidget *old, QWidget *now);
+    ThumbnailPanel *thumbnailPanelForPath(const QString &path,
+                                          ThumbnailPanel *prefer = nullptr) const;
+    void onImageOpenFromPanel(const QString &path, ThumbnailPanel *source);
     QWidget *buildSortBar(QWidget *parent);
     void buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLayout);
     void buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sortLayout,

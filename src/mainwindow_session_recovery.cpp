@@ -101,10 +101,7 @@ void MainWindow::restoreLastSession()
             if (m_appState.splitBrowseEnabled)
             {
                 toggleSplitBrowse(true);
-                if (!m_appState.secondaryLastDir.isEmpty())
-                    openRightDirectory(m_appState.secondaryLastDir);
-                if (!m_appState.gallerySplitterSizes.isEmpty() && m_gallerySplitter)
-                    m_gallerySplitter->setSizes(m_appState.gallerySplitterSizes);
+                applyGallerySplitterSizes();
             }
 
             const QString img = m_appState.lastImage;
@@ -151,6 +148,7 @@ void MainWindow::restoreSessionPostScroll()
         m_thumbnailPanel->verticalScrollBar()->setValue(m_appState.lastThumbScroll);
     if (!m_appState.lastImage.isEmpty() && m_thumbnailPanel)
         m_thumbnailPanel->scrollToPath(m_appState.lastImage);
+    restoreSecondaryBrowsePosition();
 
     // A-6.3: restore viewer zoom/pan from QSettings (same logic as
     // crash-recovery path, but for normal session restore).
@@ -279,11 +277,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.lastImage = currentImagePath();
     m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
     m_appState.splitBrowseEnabled = m_splitBrowseEnabled;
-    if (m_secondaryThumbnailPanel)
-    {
-        m_appState.secondaryLastDir = m_secondaryThumbnailPanel->currentDir();
-        m_appState.secondaryThumbScroll = m_secondaryThumbnailPanel->scrollOffset();
-    }
+    persistSecondaryBrowseState();
     if (m_gallerySplitter)
         m_appState.gallerySplitterSizes = m_gallerySplitter->sizes();
 
