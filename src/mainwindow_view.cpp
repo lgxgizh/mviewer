@@ -685,12 +685,16 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
     if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)
     {
-        if (m_secondaryThumbnailPanel && (watched == m_secondaryThumbnailPanel ||
-                                          watched == m_secondaryThumbnailPanel->viewport()))
-            setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
-        else if (m_thumbnailPanel &&
-                 (watched == m_thumbnailPanel || watched == m_thumbnailPanel->viewport()))
-            setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+        auto *widget = qobject_cast<QWidget *>(watched);
+        if (widget && m_splitBrowseEnabled)
+        {
+            if (m_secondaryBrowsePane &&
+                (widget == m_secondaryBrowsePane || m_secondaryBrowsePane->isAncestorOf(widget)))
+                setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+            else if (m_primaryBrowsePane &&
+                     (widget == m_primaryBrowsePane || m_primaryBrowsePane->isAncestorOf(widget)))
+                setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+        }
     }
 
     if (event->type() == QEvent::MouseButtonPress)

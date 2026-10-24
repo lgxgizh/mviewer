@@ -526,11 +526,6 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
     esc(os, ws.currentImagePath);
     os << ",\"currentFrameIndex\":" << std::max(0, ws.currentFrameIndex);
     os << ",\"currentPlaying\":" << (ws.currentPlaying ? 1 : 0);
-    if (!ws.secondaryRootPath.empty())
-    {
-        os << ",\"secondaryRoot\":";
-        esc(os, ws.secondaryRootPath);
-    }
     os << "}";
     return os.str();
 }
@@ -652,7 +647,7 @@ static bool parseWorkspaceOptionalFields(Parser &p, mviewer::domain::Workspace &
         }
         else if (key == "secondaryRoot")
         {
-            out.secondaryRootPath = p.parseString();
+            p.parseString(); // legacy field, ignored
         }
         else
         {

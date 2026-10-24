@@ -577,11 +577,11 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         pathEdit->setFocus(Qt::OtherFocusReason);
     pump(10);
     CHECK(QApplication::focusWidget() == pathEdit, "focus can be placed on the real path edit");
-    sendFocusedKey(Qt::Key_Tab);
+    sendFocusedKey(Qt::Key_F6);
     CHECK(navigationPanel && !navigationPanel->isVisible() && analysisPanel &&
               !analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
               focusAction && focusAction->isChecked(),
-          "plain Tab from a focused child enters focus browse");
+          "F6 from a focused child enters focus browse");
     CHECK(analysisAction && !analysisAction->isEnabled() && searchAction &&
               !searchAction->isEnabled(),
           "focus browse disables panel toggles while their state is suspended");
@@ -591,11 +591,11 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     pump(10);
     CHECK(QApplication::focusWidget() == pathEdit,
           "focus can be placed on the real directory path input");
-    sendFocusedKey(Qt::Key_Tab);
+    sendFocusedKey(Qt::Key_F6);
     CHECK(navigationPanel && navigationPanel->isVisible() && analysisPanel &&
               analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
               focusAction && !focusAction->isChecked(),
-          "plain Tab from a focused path input exits focus browse");
+          "F6 from a focused path input exits focus browse");
     CHECK(analysisAction && analysisAction->isEnabled() && analysisAction->isChecked() &&
               searchAction && searchAction->isEnabled() && !searchAction->isChecked(),
           "leaving focus browse restores action state as well as panels");
@@ -603,6 +603,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     if (pathEdit)
         pathEdit->setFocus(Qt::OtherFocusReason);
     pump(10);
+    sendFocusedKey(Qt::Key_Tab);
+    CHECK(focusAction && !focusAction->isChecked(),
+          "plain Tab keeps normal focus traversal and does not enter focus browse");
     sendFocusedKey(Qt::Key_Tab, Qt::ShiftModifier);
     CHECK(focusAction && !focusAction->isChecked(),
           "Shift+Tab keeps normal focus traversal and does not enter focus browse");

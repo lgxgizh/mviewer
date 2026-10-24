@@ -156,7 +156,7 @@ void ThumbnailPanel::updateVisibleRange()
     // cannot starve first paint of the viewport.
     const size_t predictive =
         ThumbnailPipeline::recommendedPredictiveCount(static_cast<size_t>(n), m_highLatencyDir);
-    ThumbnailPipeline::instance().setPredictiveCount(predictive);
+    ThumbnailPipeline::instance().setPredictiveCountForConsumer(m_consumerId, predictive);
 
     ThumbnailPipeline::instance().setVisibleRangeForConsumer(
         m_consumerId, static_cast<size_t>(first), last >= 0 ? static_cast<size_t>(last) + 1 : 0);

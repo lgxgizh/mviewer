@@ -80,6 +80,24 @@ struct ThumbnailPipeline
         }
     }
 
+    bool hasResultListeners() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return static_cast<bool>(m_result) || !m_subscribers.empty();
+    }
+    void restoreDefaultDecodeFn()
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        m_decode = [](const std::string &path, int size)
+        { return Decoder::decodeScaled(path, size); };
+    }
+    void removeConsumer(int cid)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        cancelHandlesForConsumerLocked(cid);
+        m_consumers.erase(cid);
+    }
+
     // Default consumer (cid = 0) source setters
     void setSources(const std::vector<std::string> &paths)
     {
@@ -253,6 +271,16 @@ struct ThumbnailPipeline
         m_predictive = n;
     }
 
+    void setPredictiveCountForConsumer(int cid, size_t n)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        auto it = m_consumers.find(cid);
+        if (it != m_consumers.end())
+            it->second.predictive = n;
+        else
+            m_predictive = n;
+    }
+
     static size_t recommendedPredictiveCount(size_t directorySize, bool highLatencyIo)
     {
         if (highLatencyIo)
@@ -403,6 +431,7 @@ struct ThumbnailPipeline
         size_t visibleBegin = 0;
         size_t visibleEnd = 0;
         uint64_t gen = 0;
+        size_t predictive = 0;
     };
 
     struct MemEntry
@@ -515,7 +544,8 @@ struct ThumbnailPipeline
             for (size_t i = vb; i < ve; ++i)
                 enqueueLocked(slot.sources[i], cid, slot.gen, TaskScheduler::Priority::Thumbnail,
                               refillOnly);
-            const size_t pe = std::min(ve + m_predictive, n);
+            const size_t pred = slot.predictive > 0 ? slot.predictive : m_predictive;
+            const size_t pe = std::min(ve + pred, n);
             for (size_t i = ve; i < pe; ++i)
                 enqueueLocked(slot.sources[i], cid, slot.gen, TaskScheduler::Priority::Thumbnail,
                               refillOnly);
@@ -558,17 +588,24 @@ struct ThumbnailPipeline
             [this, path, size, k, cid, slotGen, owner, ownerKey, decode, result,
              pathRevision](const TaskScheduler::TaskContext &ctx)
             {
-                if (ctx.isCancelled())
-                    return;
+                auto abandonPending = [this, k, owner, ownerKey]()
+                {
+                    m_handles.erase(ownerKey);
+                    auto pit = m_pending.find(k);
+                    if (pit != m_pending.end() && pit->second.owner == owner)
+                        m_pending.erase(pit);
+                };
                 {
                     std::lock_guard<std::mutex> lk(m_mtx);
                     auto it = m_consumers.find(cid);
-                    if (it != m_consumers.end() && it->second.gen != slotGen)
+                    const bool stale = ctx.isCancelled() || m_pathRevisions[path] != pathRevision ||
+                                       (it != m_consumers.end() && it->second.gen != slotGen) ||
+                                       (it == m_consumers.end() && cid == 0 && m_gen != slotGen);
+                    if (stale)
+                    {
+                        abandonPending();
                         return;
-                    if (it == m_consumers.end() && cid == 0 && m_gen != slotGen)
-                        return;
-                    if (m_pathRevisions[path] != pathRevision)
-                        return;
+                    }
                 }
                 ImageData thumb;
                 if (decode)
@@ -660,7 +697,8 @@ struct ThumbnailPipeline
             const size_t ve = std::min(slot.visibleEnd, n);
             for (size_t i = vb; i < ve; ++i)
                 keep.insert(key(slot.sources[i], thumbSize));
-            const size_t pe = std::min(ve + m_predictive, n);
+            const size_t pred = slot.predictive > 0 ? slot.predictive : m_predictive;
+            const size_t pe = std::min(ve + pred, n);
             for (size_t i = ve; i < pe; ++i)
                 keep.insert(key(slot.sources[i], thumbSize));
         };

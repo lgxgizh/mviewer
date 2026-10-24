@@ -516,6 +516,11 @@ void MainWindow::rotateCurrentImage(int degrees)
     if (!cur.isEmpty() && paths.contains(cur))
         refreshOpenImage(m_imageViewer, m_previewPanel, m_metadataPanel, cur);
     reportRotateBatch(this, statusBar(), paths, batch, degrees);
+    if (m_secondaryThumbnailPanel)
+    {
+        for (const QString &path : paths)
+            m_secondaryThumbnailPanel->invalidateSourceImage(path);
+    }
     // Keep the pre-rotate multi-selection after thumbnail invalidate / rebuild.
     restoreMultiSelection(m_thumbnailPanel, m_selection, paths, cur);
 }
@@ -548,5 +553,10 @@ void MainWindow::flipCurrentImage(bool horizontal)
     if (!cur.isEmpty() && paths.contains(cur))
         refreshOpenImage(m_imageViewer, m_previewPanel, m_metadataPanel, cur);
     reportFlipBatch(this, statusBar(), paths, batch, horizontal);
+    if (m_secondaryThumbnailPanel)
+    {
+        for (const QString &path : paths)
+            m_secondaryThumbnailPanel->invalidateSourceImage(path);
+    }
     restoreMultiSelection(m_thumbnailPanel, m_selection, paths, cur);
 }

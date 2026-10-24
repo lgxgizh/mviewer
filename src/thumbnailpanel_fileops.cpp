@@ -3,6 +3,7 @@
 
 #include "fileopmessages.h"
 #include "runtime_storage.h"
+#include "splitbrowse_delete.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -504,15 +505,22 @@ void ThumbnailPanel::renameSelected()
 
 void ThumbnailPanel::moveToTrashSelected()
 {
-    const QStringList paths = selectedPaths();
+    const bool splitActive = m_selection && m_selection->isSplitModeEnabled();
+    const QStringList paths =
+        splitActive
+            ? splitDeleteUnion(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
+                               m_selection->paneSelection(SelectionModel::PaneSlot::Secondary))
+            : selectedPaths();
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
     if (QSettings().value(QStringLiteral("confirmDelete"), true).toBool())
     {
-        const QString prompt =
-            paths.size() == 1 ? tr("Are you sure you want to move this file to the Recycle Bin?")
-                              : tr("Are you sure you want to move %1 files to the Recycle Bin?")
-                                    .arg(paths.size());
+        const SplitDeletePrompt counts =
+            splitActive
+                ? splitDeletePrompt(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
+                                    m_selection->paneSelection(SelectionModel::PaneSlot::Secondary))
+                : SplitDeletePrompt{0, 0, static_cast<int>(paths.size())};
+        const QString prompt = splitDeleteConfirmMessage(counts, splitActive);
         const auto answer =
             QMessageBox::question(this, tr("Delete confirmation"), prompt,
                                   QMessageBox::Yes | QMessageBox::No, QMessageBox::No);

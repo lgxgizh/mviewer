@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Split Browse active pane routing**: rename, copy/move, paste, select-all/deselect/invert, reveal, and batch analysis now target the focused pane instead of always the left gallery.
+- **Split Browse Delete**: Delete (keyboard, menu, command) moves the union of both panes' selections to the Recycle Bin, with a confirm dialog that states the total and per-pane counts; both panes drop the removed paths.
+- **Split Browse restore**: right-pane scroll position, last image, independent sort, and splitter sizes restore from the previous session; avoid a second directory scan on restore.
+- **Split Browse thumbnails**: cancelled / generation-mismatched pipeline jobs release their pending key so a re-request is not swallowed; each pane ignores results that do not belong to it; the right pane no longer overwrites the left pane's predictive window.
+- **Focus Browse**: shortcut is F6 so Tab / Shift+Tab perform normal focus traversal.
+- **Toolbar**: Split Browse action now has a `split_browse` icon.
+
+### Changed
+
+- Right-pane sort is independent of the left pane and persisted; enabling split no longer copies left sort onto the right.
+- Swap is disabled when either pane has no directory.
+- Retranslate uses the same action texts as construction, and fullscreen keeps the Exit Full Screen label when already full screen.
+- Clone Left Chinese translation is now “右栏跟随左栏”.
+
 ## [1.0.146] - 2026-10-23
 
 ### Release
