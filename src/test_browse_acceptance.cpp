@@ -487,7 +487,8 @@ void testDegradedInputs(QTemporaryDir &tmp)
         const QString bad = dir.filePath("bad.png");
         QFile f(bad);
         f.open(QIODevice::WriteOnly);
-        f.write("\x89PNG\r\n\x1a\n this is not a png payload", 40);
+        const char payload[] = "\x89PNG\r\n\x1a\n this is not a png payload";
+        f.write(payload, static_cast<qint64>(sizeof(payload) - 1));
         f.close();
 
         SelectionModel sel;

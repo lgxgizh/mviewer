@@ -139,9 +139,11 @@ void CompareWorkspace::applyBlink(bool state)
         }
         if (needsLayoutSetup)
         {
-            while (m_layout->takeAt(0))
-            {
-            }
+            // takeAt releases ownership. Delete the item only; the pane widgets
+            // stay parented to the grid and are re-added below. Dropping the
+            // pointer leaks the QWidgetItem allocated by relayoutGridKeepingPanes.
+            while (QLayoutItem *item = m_layout->takeAt(0))
+                delete item;
             QWidget *pane0 = m_cellViews[0] ? m_cellViews[0]->parentWidget() : nullptr;
             QWidget *pane1 = m_cellViews[1] ? m_cellViews[1]->parentWidget() : nullptr;
             if (pane0)
