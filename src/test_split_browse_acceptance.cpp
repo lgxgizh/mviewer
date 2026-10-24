@@ -35,6 +35,8 @@
 #include <QTemporaryDir>
 #include <QThread>
 #include <QToolBar>
+#include <QToolButton>
+#include <QWidgetAction>
 #include <functional>
 #include <iostream>
 
@@ -63,7 +65,17 @@ void createDummyImage(const QString &filePath)
     QDir().mkpath(info.absolutePath());
     QImage img(64, 64, QImage::Format_RGB32);
     img.fill(Qt::blue);
-    img.save(filePath);
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return;
+    if (!img.save(&file, "PNG"))
+    {
+        file.close();
+        QFile::remove(filePath);
+        return;
+    }
+    file.flush();
+    file.close();
 }
 
 void testDefaultAndToggle(MainWindow &mw)
@@ -289,12 +301,20 @@ void testSessionRestoreMainWindow()
     const QString rightDir = tmp.filePath(QStringLiteral("right"));
     QDir().mkpath(leftDir);
     QDir().mkpath(rightDir);
-    createDummyImage(QDir(leftDir).filePath(QStringLiteral("l1.png")));
-    createDummyImage(QDir(leftDir).filePath(QStringLiteral("l2.png")));
-    const QString r1 = QDir(rightDir).filePath(QStringLiteral("r1.png"));
-    const QString r2 = QDir(rightDir).filePath(QStringLiteral("r2.png"));
-    createDummyImage(r1);
-    createDummyImage(r2);
+    constexpr int kRightImages = 24;
+    for (int i = 0; i < 4; ++i)
+        createDummyImage(
+            QDir(leftDir).filePath(QStringLiteral("l%1.png").arg(i, 2, 10, QChar('0'))));
+    QStringList rightPaths;
+    rightPaths.reserve(kRightImages);
+    for (int i = 0; i < kRightImages; ++i)
+    {
+        const QString path =
+            QDir(rightDir).filePath(QStringLiteral("r%1.png").arg(i, 2, 10, QChar('0')));
+        createDummyImage(path);
+        rightPaths.append(path);
+    }
+    const QString lastImage = rightPaths.last();
 
     int savedScroll = 0;
     {
@@ -305,29 +325,42 @@ void testSessionRestoreMainWindow()
         mw.openExternalTargets({leftDir});
         mw.toggleSplitBrowse(true);
         mw.openRightDirectory(rightDir);
+        if (auto *sp = mw.findChild<QSplitter *>(QStringLiteral("gallerySplitter")))
+            sp->setSizes({400, 400});
         EXPECT(waitUntil(
                    [&]()
                    {
                        auto *sec = mw.secondaryThumbnailPanel();
-                       return sec && sec->pathList().size() >= 2;
-                   }),
+                       return sec && sec->pathList().size() >= kRightImages;
+                   },
+                   160),
                "right pane scan populated");
         ThumbnailPanel *sec = mw.secondaryThumbnailPanel();
         if (!sec)
             return;
         sec->setSort(ThumbnailPanel::SortSize, false);
-        sec->selectPath(r2);
-        if (sec->verticalScrollBar())
+        sec->selectPath(lastImage);
+        EXPECT(waitUntil(
+                   [&]()
+                   {
+                       auto *bar = sec->verticalScrollBar();
+                       return bar && bar->maximum() > 0;
+                   },
+                   160),
+               "right pane has a scroll range");
+        if (auto *bar = sec->verticalScrollBar(); bar && bar->maximum() > 0)
         {
-            sec->verticalScrollBar()->setMaximum(400);
-            sec->verticalScrollBar()->setValue(48);
+            const int target = qMax(1, bar->maximum() / 2);
+            bar->setValue(target);
+            QApplication::processEvents();
             savedScroll = sec->scrollOffset();
         }
+        EXPECT(savedScroll > 0, "saved a non-zero right pane scroll");
         AppState persist;
         persist.splitBrowseEnabled = true;
         persist.lastDir = leftDir;
         persist.secondaryLastDir = rightDir;
-        persist.secondaryLastImage = r2;
+        persist.secondaryLastImage = lastImage;
         persist.secondaryThumbScroll = savedScroll;
         persist.hasSecondarySort = true;
         persist.secondarySortField = static_cast<int>(ThumbnailPanel::SortSize);
@@ -346,8 +379,9 @@ void testSessionRestoreMainWindow()
                [&]()
                {
                    auto *sec = restored.secondaryThumbnailPanel();
-                   return sec && sec->isVisible() && sec->pathList().size() >= 2;
-               }),
+                   return sec && !sec->isHidden() && sec->pathList().size() >= kRightImages;
+               },
+               160),
            "restored right pane populated");
     ThumbnailPanel *sec = restored.secondaryThumbnailPanel();
     if (!sec)
@@ -357,11 +391,11 @@ void testSessionRestoreMainWindow()
     EXPECT(sec->currentDir() == QDir::cleanPath(rightDir) ||
                QDir(sec->currentDir()) == QDir(rightDir),
            "right pane directory restored");
-    if (savedScroll > 0)
-        EXPECT(sec->scrollOffset() == savedScroll, "right pane scroll restored");
+    EXPECT(waitUntil([&]() { return savedScroll > 0 && sec->scrollOffset() == savedScroll; }, 160),
+           "right pane scroll restored");
     const QString current = sec->pathList().value(sec->currentIndex().row());
-    EXPECT(QFileInfo(current).fileName() == QStringLiteral("r2.png") ||
-               sec->rowForPath(r2) == sec->currentIndex().row(),
+    EXPECT(QFileInfo(current).fileName() == QFileInfo(lastImage).fileName() ||
+               sec->rowForPath(lastImage) == sec->currentIndex().row(),
            "right pane last image restored");
 }
 
@@ -408,6 +442,13 @@ void testToolbarActionIcons(MainWindow &mw)
     for (QAction *act : bar->actions())
     {
         if (!act || act->isSeparator())
+            continue;
+        // Widget-backed items (spacers, insertWidget hosts, QWidgetAction) are
+        // not icon tool buttons; the Sidebar collapse control is one of these.
+        if (qobject_cast<QWidgetAction *>(act))
+            continue;
+        if (QWidget *hosted = bar->widgetForAction(act);
+            hosted && !qobject_cast<QToolButton *>(hosted))
             continue;
         ++actions;
         if (!act->icon().isNull())

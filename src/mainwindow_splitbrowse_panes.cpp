@@ -25,6 +25,7 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTimer>
 #include <QWidget>
 #include <utility>
 
@@ -57,12 +58,51 @@ void applyPaneActiveStyle(QWidget *pane, bool active)
     }
     pane->update();
 }
+
+// isVisible() is false when any ancestor (including an unshown top-level) is
+// hidden. isVisibleTo(host) only requires this widget's own hide()/show() chain
+// up to host, so pane routing works in headless tests that never show().
+bool browsePaneExposed(const QWidget *pane, const QWidget *host)
+{
+    return pane && host && pane->isVisibleTo(host);
+}
+
+void restorePanelScroll(ThumbnailPanel *panel, int scroll)
+{
+    if (!panel || scroll <= 0)
+        return;
+    QScrollBar *bar = panel->verticalScrollBar();
+    if (!bar)
+        return;
+    bar->setValue(scroll);
+    if (bar->maximum() >= scroll && bar->value() == scroll)
+        return;
+    auto *timer = new QTimer(panel);
+    timer->setInterval(0);
+    QObject::connect(timer, &QTimer::timeout, panel,
+                     [bar, scroll, timer, hops = 0]() mutable
+                     {
+                         if (bar->maximum() > 0)
+                         {
+                             bar->setValue(qMin(scroll, bar->maximum()));
+                             timer->stop();
+                             timer->deleteLater();
+                             return;
+                         }
+                         if (++hops >= 40)
+                         {
+                             timer->stop();
+                             timer->deleteLater();
+                         }
+                     });
+    timer->start();
+}
 } // namespace
 
 ThumbnailPanel *MainWindow::activeThumbnailPanel() const
 {
     if (m_splitBrowseEnabled && m_secondaryThumbnailPanel &&
-        m_secondaryThumbnailPanel->isVisible() &&
+        browsePaneExposed(m_secondaryBrowsePane, this) &&
         m_activeBrowsePane == SelectionModel::PaneSlot::Secondary)
         return m_secondaryThumbnailPanel;
     return m_thumbnailPanel;
@@ -98,8 +138,7 @@ void MainWindow::applyGallerySplitterSizes()
 
 void MainWindow::updateActivePaneIndicator()
 {
-    const bool split =
-        m_splitBrowseEnabled && m_secondaryBrowsePane && m_secondaryBrowsePane->isVisible();
+    const bool split = m_splitBrowseEnabled && browsePaneExposed(m_secondaryBrowsePane, this);
     const bool secondaryActive = split && m_activeBrowsePane == SelectionModel::PaneSlot::Secondary;
     applyPaneActiveStyle(m_primaryBrowsePane, split && !secondaryActive);
     applyPaneActiveStyle(m_secondaryBrowsePane, secondaryActive);
@@ -145,6 +184,7 @@ void MainWindow::enableSplitBrowseUi()
 
 void MainWindow::disableSplitBrowseUi()
 {
+    m_pendingSecondaryScrollRestore = false;
     if (m_secondaryBrowsePane)
         m_secondaryBrowsePane->hide();
     setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
@@ -206,21 +246,44 @@ void MainWindow::restoreSecondaryBrowsePosition()
 {
     if (!m_splitBrowseEnabled || !m_secondaryThumbnailPanel)
         return;
-    if (m_appState.secondaryThumbScroll > 0)
-        m_secondaryThumbnailPanel->verticalScrollBar()->setValue(m_appState.secondaryThumbScroll);
-    if (m_appState.secondaryLastImage.isEmpty())
+    if (m_appState.secondaryThumbScroll <= 0 && m_appState.secondaryLastImage.isEmpty())
         return;
-    m_secondaryThumbnailPanel->scrollToPath(m_appState.secondaryLastImage);
-    m_secondaryThumbnailPanel->selectPath(m_appState.secondaryLastImage);
+    m_pendingSecondaryScrollRestore = true;
+    if (!m_secondaryThumbnailPanel->pathList().isEmpty())
+        applyPendingSecondaryBrowseRestore(m_secondaryThumbnailPanel->currentDir(),
+                                           m_secondaryThumbnailPanel->pathList());
+}
+
+void MainWindow::applyPendingSecondaryBrowseRestore(const QString &directory,
+                                                    const QStringList &paths)
+{
+    if (!m_pendingSecondaryScrollRestore || paths.isEmpty() || !m_secondaryThumbnailPanel)
+        return;
+    const QString want = QDir::cleanPath(m_appState.secondaryLastDir);
+    if (!want.isEmpty())
+    {
+        const QString have = QDir::cleanPath(directory);
+        if (have != want && QDir(directory) != QDir(m_appState.secondaryLastDir))
+            return;
+    }
+    m_pendingSecondaryScrollRestore = false;
+    ThumbnailPanel *panel = m_secondaryThumbnailPanel;
+    const QString lastImage = m_appState.secondaryLastImage;
+    if (!lastImage.isEmpty())
+    {
+        panel->scrollToPath(lastImage);
+        panel->selectPath(lastImage);
+    }
+    restorePanelScroll(panel, m_appState.secondaryThumbScroll);
 }
 
 void MainWindow::refreshVisibleBrowsePanes()
 {
-    if (m_thumbnailPanel && m_thumbnailPanel->isVisible() &&
+    if (m_thumbnailPanel && browsePaneExposed(m_thumbnailPanel, this) &&
         !m_thumbnailPanel->currentDir().isEmpty())
         m_thumbnailPanel->refresh();
     if (m_splitBrowseEnabled && m_secondaryThumbnailPanel &&
-        m_secondaryThumbnailPanel->isVisible() &&
+        browsePaneExposed(m_secondaryBrowsePane, this) &&
         !m_secondaryThumbnailPanel->currentDir().isEmpty())
         m_secondaryThumbnailPanel->refresh();
 }
@@ -478,6 +541,7 @@ void MainWindow::onSecondarySequenceChanged(const QString &directory, const QStr
         m_imageList->setPaths(paths, directory);
     if (activeThumbnailPanel() == m_secondaryThumbnailPanel && statusBar() && !paths.isEmpty())
         statusBar()->showMessage(tr("Loaded %1 images").arg(paths.size()), 2500);
+    applyPendingSecondaryBrowseRestore(directory, paths);
 }
 
 void MainWindow::onBrowseFocusChanged(QWidget *, QWidget *now)

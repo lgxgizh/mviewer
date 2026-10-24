@@ -117,7 +117,7 @@ void MainWindow::buildBrowserShell()
     }
     if (m_actUsmCompare)
     {
-        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analyze"));
+        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analysis"));
         m_actUsmCompare->setObjectName("usmCompareAction");
         m_actUsmCompare->setToolTip(
             actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));

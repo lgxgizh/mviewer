@@ -246,7 +246,7 @@ void MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *hea
 void MainWindow::toggleSplitBrowse(bool enabled)
 {
     if (m_splitBrowseEnabled == enabled && m_secondaryBrowsePane &&
-        m_secondaryBrowsePane->isVisible() == enabled)
+        m_secondaryBrowsePane->isVisibleTo(this) == enabled)
         return;
 
     m_splitBrowseEnabled = enabled;

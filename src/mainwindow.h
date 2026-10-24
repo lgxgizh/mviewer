@@ -179,6 +179,7 @@ class MainWindow : public QMainWindow
     void applySecondarySortFromState();
     void persistSecondaryBrowseState();
     void restoreSecondaryBrowsePosition();
+    void applyPendingSecondaryBrowseRestore(const QString &directory, const QStringList &paths);
     void handleSecondaryDroppedPaths(const QStringList &paths);
     void onGalleryPathsRemoved(ThumbnailPanel *source, const QStringList &deleted);
     void onGalleryPathsRenamed(const QStringList &oldPaths, const QStringList &newPaths);
@@ -341,6 +342,7 @@ class MainWindow : public QMainWindow
     QPushButton *m_secondarySortDirBtn = nullptr;
     ThumbnailPanel *m_secondaryThumbnailPanel = nullptr;
     DirectoryMonitor *m_secondaryDirectoryMonitor = nullptr;
+    bool m_pendingSecondaryScrollRestore = false;
     QAction *m_actSplitBrowse = nullptr;
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
     QLabel *m_emptyFolderLabel =
