@@ -305,7 +305,7 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
                   << " p99=" << r.timing.p99Ms << ")";
     if (!r.detail.empty())
         std::cout << "  # " << r.detail;
-    std::cout << std::endl;
+    std::cout << '\n' << std::flush;
 }
 
 // Build the scenario list, apply --enforce budgets, print verdicts, and return
@@ -583,7 +583,7 @@ Prepared prepareRun(BenchOptions &opt, int &exitCode)
     if (!opt.budget.configureProfile(opt.profileArg))
     {
         std::cerr << "Unknown hardware profile: " << opt.profileArg
-                  << " (expected auto, base, low-core, or ci)" << std::endl;
+                  << " (expected auto, base, low-core, or ci)" << '\n' << std::flush;
         exitCode = 2;
         return prep;
     }
