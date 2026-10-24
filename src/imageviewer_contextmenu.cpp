@@ -633,9 +633,7 @@ bool ImageViewer::handleViewerEscape()
         return true;
     if (dismissOpenMetadata())
         return true;
-    if (property("mviewerFullscreenRequested").toBool() || isFullScreen() ||
-        windowState().testFlag(Qt::WindowFullScreen))
-        setFullscreenRequested(false);
+    exitFullscreenForClose();
     close();
     return true;
 }

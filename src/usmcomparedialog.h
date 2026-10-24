@@ -37,6 +37,10 @@ class UsmCompareDialog : public QDialog
   protected:
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
+    void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
+    void changeEvent(QEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
   private slots:
     void onParametersChanged();

@@ -95,6 +95,19 @@ AppState AppState::load()
         if (v.isString())
             s.navHistory.append(v.toString());
     s.navHistoryIndex = o.value("navHistoryIndex").toInt(-1);
+    s.splitBrowseEnabled = o.value("splitBrowseEnabled").toBool(false);
+    s.secondaryLastDir = o.value("secondaryLastDir").toString();
+    s.secondaryLastImage = o.value("secondaryLastImage").toString();
+    s.secondaryThumbScroll = o.value("secondaryThumbScroll").toInt(0);
+    const QJsonArray splitSizes = o.value("gallerySplitterSizes").toArray();
+    for (const auto &v : splitSizes)
+        s.gallerySplitterSizes.append(v.toInt());
+    if (o.contains(QStringLiteral("secondarySortField")))
+    {
+        s.hasSecondarySort = true;
+        s.secondarySortField = o.value(QStringLiteral("secondarySortField")).toInt(0);
+        s.secondarySortAscending = o.value(QStringLiteral("secondarySortAscending")).toBool(true);
+    }
     return s;
 }
 
@@ -134,6 +147,19 @@ bool AppState::save() const
         nav.append(h);
     o["navHistory"] = nav;
     o["navHistoryIndex"] = navHistoryIndex;
+    o["splitBrowseEnabled"] = splitBrowseEnabled;
+    o["secondaryLastDir"] = secondaryLastDir;
+    o["secondaryLastImage"] = secondaryLastImage;
+    o["secondaryThumbScroll"] = secondaryThumbScroll;
+    QJsonArray splitSizesArr;
+    for (int sz : gallerySplitterSizes)
+        splitSizesArr.append(sz);
+    o["gallerySplitterSizes"] = splitSizesArr;
+    if (hasSecondarySort)
+    {
+        o["secondarySortField"] = secondarySortField;
+        o["secondarySortAscending"] = secondarySortAscending;
+    }
 
     QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))

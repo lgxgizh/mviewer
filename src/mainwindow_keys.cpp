@@ -49,7 +49,7 @@ bool MainWindow::forwardGlobalShortcut(QObject *watched, QKeyEvent *ke, Qt::Keyb
                                          Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
     static const QList<int> globalKeys = {
         Qt::Key_Space, Qt::Key_M,      Qt::Key_I,       Qt::Key_G, Qt::Key_D,    Qt::Key_F,
-        Qt::Key_Tab,   Qt::Key_C,      Qt::Key_P,       Qt::Key_S, Qt::Key_Plus, Qt::Key_Equal,
+        Qt::Key_F6,    Qt::Key_C,      Qt::Key_P,       Qt::Key_S, Qt::Key_Plus, Qt::Key_Equal,
         Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,       Qt::Key_2, Qt::Key_F11,  Qt::Key_Home,
         Qt::Key_End,   Qt::Key_PageUp, Qt::Key_PageDown};
     // Shift+digit is reported as a symbol on Windows; route by the digit.

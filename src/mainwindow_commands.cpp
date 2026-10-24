@@ -61,10 +61,18 @@ void MainWindow::setupCommands()
     reg.registerCommand(
         std::make_unique<OpenDirectoryCommand>([this]() { m_actOpenDir->trigger(); }));
     reg.registerCommand(std::make_unique<CompareCommand>([this]() { openCompare(); }));
-    reg.registerCommand(
-        std::make_unique<RenameCommand>([this]() { m_thumbnailPanel->renameSelected(); }));
-    reg.registerCommand(
-        std::make_unique<DeleteCommand>([this]() { m_thumbnailPanel->moveToTrashSelected(); }));
+    reg.registerCommand(std::make_unique<RenameCommand>(
+        [this]()
+        {
+            if (ThumbnailPanel *panel = activeThumbnailPanel())
+                panel->renameSelected();
+        }));
+    reg.registerCommand(std::make_unique<DeleteCommand>(
+        [this]()
+        {
+            if (ThumbnailPanel *panel = activeThumbnailPanel())
+                panel->moveToTrashSelected();
+        }));
     reg.registerCommand(
         std::make_unique<ToggleHistogramCommand>([this]() { m_actToggleAnalysis->trigger(); }));
     reg.registerCommand(std::make_unique<ExportCommand>(this));
@@ -90,23 +98,46 @@ void MainWindow::setupCommands()
 
     // M18: file-management shortcuts for the selected gallery items.
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_rename", "Rename (F2)", [this]() { m_thumbnailPanel->renameSelected(); },
+        "file_rename", "Rename (F2)",
+        [this]()
+        {
+            if (ThumbnailPanel *panel = activeThumbnailPanel())
+                panel->renameSelected();
+        },
         std::vector<CommandShortcut>{{Qt::Key_F2, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "file_delete", "Move to Recycle Bin (Delete)",
-        [this]() { m_thumbnailPanel->moveToTrashSelected(); },
+        [this]()
+        {
+            if (ThumbnailPanel *panel = activeThumbnailPanel())
+                panel->moveToTrashSelected();
+        },
         std::vector<CommandShortcut>{{Qt::Key_Delete, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_copy", "Copy To...", [this]() { m_thumbnailPanel->copySelectedTo(); },
+        "file_copy", "Copy To...",
+        [this]()
+        {
+            if (ThumbnailPanel *panel = activeThumbnailPanel())
+                panel->copySelectedTo();
+        },
         // No shortcut: global Ctrl+C copies the image to the clipboard
         // (handled before registry dispatch); binding it here too would be dead.
         std::vector<CommandShortcut>{}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_move", "Move To... (Ctrl+M)", [this]() { m_thumbnailPanel->moveSelectedTo(); },
+        "file_move", "Move To... (Ctrl+M)",
+        [this]()
+        {
+            if (ThumbnailPanel *panel = activeThumbnailPanel())
+                panel->moveSelectedTo();
+        },
         std::vector<CommandShortcut>{{Qt::Key_M, Qt::ControlModifier}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "file_reveal", "Show in File Manager (Ctrl+E)",
-        [this]() { m_thumbnailPanel->revealSelected(); },
+        [this]()
+        {
+            if (ThumbnailPanel *panel = activeThumbnailPanel())
+                panel->revealSelected();
+        },
         std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
     // Ctrl+F focuses the gallery address bar (pathEdit).
     reg.registerCommand(std::make_unique<CallbackCommand>(
@@ -310,17 +341,18 @@ bool MainWindow::handleViewModeKey(QKeyEvent *event)
 
 bool MainWindow::isThumbnailPanelPasteTarget() const
 {
-    if (!m_thumbnailPanel || m_thumbnailPanel->currentDir().isEmpty())
+    ThumbnailPanel *panel = activeThumbnailPanel();
+    if (!panel || panel->currentDir().isEmpty())
         return false;
     // Compare mode owns the canvas; keep the legacy temp-file paste there.
     if (m_compareView && !m_compareView->isHidden())
         return false;
     QWidget *focus = QApplication::focusWidget();
-    if (focus && (focus == m_thumbnailPanel || m_thumbnailPanel->isAncestorOf(focus)))
+    if (focus && (focus == panel || panel->isAncestorOf(focus)))
         return true;
-    if (m_thumbnailPanel->underMouse())
+    if (panel->underMouse())
         return true;
-    if (QWidget *viewport = m_thumbnailPanel->viewport())
+    if (QWidget *viewport = panel->viewport())
     {
         if (viewport->underMouse())
             return true;
@@ -368,7 +400,9 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
             return false;
         if (isThumbnailPanelPasteTarget())
         {
-            const QStringList written = m_thumbnailPanel->pasteClipboardIntoCurrentDirectory();
+            ThumbnailPanel *panel = activeThumbnailPanel();
+            const QStringList written =
+                panel ? panel->pasteClipboardIntoCurrentDirectory() : QStringList();
             if (written.isEmpty())
             {
                 if (statusBar())

@@ -46,5 +46,7 @@
         <file alias="rotate_ccw@2x.png">icons/rotate_ccw@2x.png</file>
         <file alias="rotate_cw.png">icons/rotate_cw.png</file>
         <file alias="rotate_cw@2x.png">icons/rotate_cw@2x.png</file>
+        <file alias="split_browse.png">icons/split_browse.png</file>
+        <file alias="split_browse@2x.png">icons/split_browse@2x.png</file>
     </qresource>
 </RCC>

@@ -33,6 +33,15 @@
 
 namespace
 {
+void stripButtonFocus(QPushButton *btn)
+{
+    if (!btn)
+        return;
+    btn->setFocusPolicy(Qt::NoFocus);
+    btn->setAutoDefault(false);
+    btn->setDefault(false);
+}
+
 QString formatName(PixelFormat fmt)
 {
     switch (fmt)
@@ -73,6 +82,9 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
     setupConnections();
     loadImageSource(filePath, initialData);
 
+    setFocusPolicy(Qt::StrongFocus);
+    qApp->installEventFilter(this);
+
     // Prefer maximized over exclusive fullscreen: USM keeps the parameter strip
     // and status bar usable. Compare Mode uses a dedicated fullscreen host without
     // those controls.
@@ -84,6 +96,9 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
 
 UsmCompareDialog::~UsmCompareDialog()
 {
+    if (qApp)
+        qApp->removeEventFilter(this);
+    endTemporaryHold();
     if (m_currentCancel)
         *m_currentCancel = true;
     if (m_activeTask)
@@ -171,6 +186,14 @@ QWidget *UsmCompareDialog::createTopToolBar()
            "image; release to restore."));
     m_btnCopy = new QPushButton(tr("Copy result (Ctrl+C)"), bar);
     m_btnSave = new QPushButton(tr("Save As... (Ctrl+S)"), bar);
+
+    stripButtonFocus(m_btnFit);
+    stripButtonFocus(m_btn100);
+    stripButtonFocus(m_btn200);
+    m_syncCheck->setFocusPolicy(Qt::NoFocus);
+    stripButtonFocus(m_btnHoldCompare);
+    stripButtonFocus(m_btnCopy);
+    stripButtonFocus(m_btnSave);
 
     layout->addWidget(m_btnFit);
     layout->addWidget(m_btn100);
@@ -262,8 +285,11 @@ QWidget *UsmCompareDialog::createBottomControls()
 
     m_checkLumaOnly = new QCheckBox(tr("Sharpen Luma Channel Only (Luma Only)"), controls);
     m_checkLumaOnly->setChecked(true);
+    m_checkLumaOnly->setFocusPolicy(Qt::NoFocus);
     m_btnReset = new QPushButton(tr("Reset"), controls);
     m_btnApply = new QPushButton(tr("Apply sharpen"), controls);
+    stripButtonFocus(m_btnReset);
+    stripButtonFocus(m_btnApply);
 
     grid->addWidget(lblPreset, 0, 0);
     grid->addWidget(m_comboPreset, 0, 1);
@@ -614,6 +640,46 @@ void UsmCompareDialog::endTemporaryHold()
     m_temporaryTarget = nullptr;
     if (m_btnHoldCompare)
         m_btnHoldCompare->setDown(false);
+}
+
+void UsmCompareDialog::showEvent(QShowEvent *event)
+{
+    QDialog::showEvent(event);
+    setFocus(Qt::OtherFocusReason);
+}
+
+void UsmCompareDialog::hideEvent(QHideEvent *event)
+{
+    endTemporaryHold();
+    QDialog::hideEvent(event);
+}
+
+void UsmCompareDialog::changeEvent(QEvent *event)
+{
+    if (event->type() == QEvent::ActivationChange && !isActiveWindow())
+        endTemporaryHold();
+    QDialog::changeEvent(event);
+}
+
+bool UsmCompareDialog::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease)
+    {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        if (ke->key() == Qt::Key_Space && !ke->isAutoRepeat())
+        {
+            auto *w = qobject_cast<QWidget *>(watched);
+            if (w == this || (w && isAncestorOf(w)))
+            {
+                if (event->type() == QEvent::KeyPress)
+                    beginTemporaryHold();
+                else
+                    endTemporaryHold();
+                return true;
+            }
+        }
+    }
+    return QDialog::eventFilter(watched, event);
 }
 
 void UsmCompareDialog::keyPressEvent(QKeyEvent *event)

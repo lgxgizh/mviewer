@@ -88,6 +88,12 @@ class PreviewPanel : public QWidget
         return QSize(m_previewW, m_previewH);
     }
 
+    // Currently held visual pixmap (sharp preview or fitted warm thumbnail).
+    QPixmap currentPixmap() const
+    {
+        return m_preview.isNull() ? m_scaled : m_preview;
+    }
+
     // On-screen size after fitting the current pixmap into the panel. Stage-1
     // gallery thumbs and the later scaled preview must agree, or the photo jumps.
     QSize fittedPreviewSize() const

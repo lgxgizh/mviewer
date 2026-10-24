@@ -70,4 +70,11 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
                                        const mviewer::domain::Selection &region,
                                        const std::function<bool()> &isCancelled);
 
+
+// Authoritative 16-bit format-aware source/analysis RGB measurement without 8-bit quantization.
+ROIChannelStats computeROIChannelStats16(const uint16_t *buf, int width, int height,
+                                         int channels, uint16_t maxVal,
+                                         const mviewer::domain::Selection &region,
+                                         const std::function<bool()> &cancelled = {});
+
 } // namespace mviewer::core

@@ -99,43 +99,58 @@ void MainWindow::ensureImageList()
         m_imageList->setPaths({}, dir);
 }
 
-void MainWindow::syncGalleryFromSelection()
+static void syncPanelSlot(ThumbnailPanel *panel, const QStringList &sel, const QString &cur)
 {
-    if (!m_selection || !m_thumbnailPanel || m_syncingSelection)
+    if (!panel)
         return;
-    const QStringList sel = m_selection->selection();
-    const QString cur = m_selection->currentImage();
-    // Avoid feedback when the gallery already matches (common path: user clicked
-    // a thumbnail → gallery selectionChanged → setSelection → here).
-    const QStringList gallery = m_thumbnailPanel->selectedPaths();
+    const QStringList gallery = panel->selectedPaths();
     if (gallery == sel)
     {
-        // Selection set matches — only move focus if needed (preserve multi).
         if (!cur.isEmpty())
         {
-            const QModelIndex curIdx = m_thumbnailPanel->currentIndex();
+            const QModelIndex curIdx = panel->currentIndex();
             const QString curPath =
-                curIdx.isValid() ? m_thumbnailPanel->pathList().value(curIdx.row()) : QString();
+                curIdx.isValid() ? panel->pathList().value(curIdx.row()) : QString();
             if (curPath != cur)
-            {
-                m_syncingSelection = true;
-                m_thumbnailPanel->selectPath(cur);
-                m_syncingSelection = false;
-            }
+                panel->selectPath(cur);
         }
         return;
     }
-    m_syncingSelection = true;
     if (sel.size() <= 1)
     {
         if (!cur.isEmpty())
-            m_thumbnailPanel->selectPath(cur);
+            panel->selectPath(cur);
         else if (!sel.isEmpty())
-            m_thumbnailPanel->selectPath(sel.first());
+            panel->selectPath(sel.first());
+        else
+            panel->selectPaths({}, {}, false);
     }
     else
     {
-        m_thumbnailPanel->selectPaths(sel, cur);
+        panel->selectPaths(sel, cur, false);
+    }
+}
+
+void MainWindow::syncGalleryFromSelection()
+{
+    if (!m_selection || m_syncingSelection)
+        return;
+    m_syncingSelection = true;
+    if (!m_splitBrowseEnabled)
+    {
+        syncPanelSlot(m_thumbnailPanel, m_selection->selection(), m_selection->currentImage());
+    }
+    else
+    {
+        syncPanelSlot(m_thumbnailPanel,
+                      m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
+                      m_selection->paneCurrentImage(SelectionModel::PaneSlot::Primary));
+        if (m_secondaryThumbnailPanel && m_secondaryThumbnailPanel->isVisible())
+        {
+            syncPanelSlot(m_secondaryThumbnailPanel,
+                          m_selection->paneSelection(SelectionModel::PaneSlot::Secondary),
+                          m_selection->paneCurrentImage(SelectionModel::PaneSlot::Secondary));
+        }
     }
     m_syncingSelection = false;
 }

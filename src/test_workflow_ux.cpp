@@ -20,6 +20,7 @@
 //
 // Maps one-to-one to the "Browsing / Compare / View" items of docs/beta_checklist.md.
 
+#include "Language.h"
 #include "analysispanel.h"
 #include "appstate.h"
 #include "batchdialog.h"
@@ -653,6 +654,7 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName("mviewer-workflow-ux-test");
     mviewer::runtime::configureSettings();
     QSettings().clear();
+    mviewer::ui::Language::apply(mviewer::ui::LanguageMode::English);
     {
         const QString cfg = mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
         if (!cfg.isEmpty())

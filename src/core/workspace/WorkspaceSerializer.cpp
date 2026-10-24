@@ -645,6 +645,10 @@ static bool parseWorkspaceOptionalFields(Parser &p, mviewer::domain::Workspace &
         {
             out.currentPlaying = p.parseNumber() != 0;
         }
+        else if (key == "secondaryRoot")
+        {
+            p.parseString(); // legacy field, ignored
+        }
         else
         {
             p.parseString();

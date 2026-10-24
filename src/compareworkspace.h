@@ -83,10 +83,9 @@ class CompareWorkspace : public QWidget
     // Preferences / toolbar: integer-shift auto-align before diff. Syncs the
     // toolbar checkbox and recomputes the diff when the value changes.
     void setAutoAlignBeforeDiff(bool on);
-    bool autoAlignBeforeDiff() const
-    {
-        return m_autoAlignBeforeDiff;
-    }
+    bool autoAlignBeforeDiff() const;
+    void setPixelGridEnabled(bool on);
+    bool isPixelGridEnabled() const;
     // The default frame/page is zero. A caller restoring a persisted compare
     // session may provide one explicit frame index per pane.
     void setImages(const QStringList &paths);
@@ -728,12 +727,11 @@ class CompareWorkspace : public QWidget
     void exportCurrentCellAdjusted();
     void exportCellAdjusted(int idx);
     void cancelAdjustedExport();
-    void launchAdjustedExport(const std::string &sourcePath, int frameIndex, const QString &outPath,
-                              const mviewer::core::CellImageAdjust &adjust);
+    void launchAdjustedExport(const std::string &sourcePath, int frameIndex,
+                              const QString &outPath, const mviewer::core::CellImageAdjust &adjust);
 
     // ── M16.4: quick PSNR/SSIM metrics ──
     QLabel *m_metricLabel = nullptr;
-
     // ── M16.7: adjusted-aware diff/metrics + per-pane histogram overlay ──
     ImageData adjustedPixels(int cellIdx) const;
     void onAdjEditFinished();
@@ -741,19 +739,16 @@ class CompareWorkspace : public QWidget
     void positionCellHists();
     void onPaneHistOverlayToggled(bool on);
     bool m_paneHistOverlay = false;
-
     // Async batch histogram refresh: one cancellable latest-wins task per refresh.
     void scheduleHistogramRefresh(bool includeMain, const std::vector<int> &paneIndices);
     HistIndexPlan collectHistogramIndices(bool includeMain, const std::vector<int> &paneIndices);
     void clearMainHistogramForEmptyPlan(bool updateMain);
-    static void computeHistogramBatch(const std::vector<ImageData> &pixels,
-                                      const std::vector<CellAdjust> &adjusts, bool roiEnabled,
-                                      const mviewer::domain::Selection &roi,
-                                      const std::vector<int> &unionIdx,
-                                      const std::vector<int> &mainIndices,
-                                      const std::vector<int> &panes, int paneCount, bool updateMain,
-                                      uint64_t gen, const QPointer<CompareWorkspace> &guard,
-                                      const TaskScheduler::TaskContext &ctx);
+    static void computeHistogramBatch(
+        const std::vector<ImageData> &pixels, const std::vector<CellAdjust> &adjusts,
+        bool roiEnabled, const mviewer::domain::Selection &roi, const std::vector<int> &unionIdx,
+        const std::vector<int> &mainIndices, const std::vector<int> &panes, int paneCount,
+        bool updateMain, uint64_t gen, const QPointer<CompareWorkspace> &guard,
+        const TaskScheduler::TaskContext &ctx);
     void applyHistogramBatchResult(const HistogramBatchResult &result);
     // M23: the histogram section title text for the given ROI/full state.
     QString histogramTitleText(bool roiEnabled, const mviewer::domain::Selection &roi) const;
@@ -762,10 +757,11 @@ class CompareWorkspace : public QWidget
     TaskScheduler::TaskHandle m_histTask;
     QCheckBox *m_paneHistOverlayChk = nullptr;
     QCheckBox *m_filenameOverlayChk = nullptr;
+    QCheckBox *m_pixelGridChk = nullptr;
+    bool m_pixelGridEnabled = false;
     bool m_filenameOverlay = true; // checkbox shows or hides the top name; default visible
     void applyFilenameOverlays();
     std::vector<HistogramWidget *> m_cellHists;
-
     bool m_perPaneHist = false;
     QCheckBox *m_perPaneHistChk = nullptr;
     void onPerPaneHistToggled(bool on);
@@ -778,7 +774,6 @@ class CompareWorkspace : public QWidget
     void restorePresetAdjustments(const QJsonObject &root);
     void restorePresetSession(const QJsonObject &root);
     void ensurePresetDir();
-
     QPushButton *m_swapBtn = nullptr;
     void onSwapPanes();
     SelectionModel *m_selection = nullptr;
@@ -792,7 +787,6 @@ class CompareWorkspace : public QWidget
     void applyCompareSafeInsets();
     void syncContextualCompareControls();
     QDialog *m_shortcutHelpDialog = nullptr;
-
     std::unique_ptr<mviewer::ui::CompareSessionState> m_sessionState;
     std::unique_ptr<mviewer::ui::CompareRoiController> m_roiController;
     std::unique_ptr<mviewer::ui::CompareDiffRenderer> m_diffRenderer;

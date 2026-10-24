@@ -507,6 +507,13 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
             });
     toolLayout->addWidget(m_filenameOverlayChk);
 
+    m_pixelGridChk = new QCheckBox(tr("Pixel Grid"), this);
+    m_pixelGridChk->setObjectName("comparePixelGridToggle");
+    m_pixelGridChk->setChecked(m_pixelGridEnabled);
+    m_pixelGridChk->setToolTip(tr("Show pixel inspection grid when zoomed to 800% or above"));
+    connect(m_pixelGridChk, &QCheckBox::toggled, this, &CompareWorkspace::setPixelGridEnabled);
+    toolLayout->addWidget(m_pixelGridChk);
+
     m_channelCombo = new QComboBox(this);
     m_channelCombo->setObjectName("compareChannelCombo");
     m_channelCombo->setMaximumWidth(125);
@@ -763,4 +770,34 @@ void CompareWorkspace::addSnapshotButton(QHBoxLayout *toolLayout)
     connect(saveAction, &QAction::triggered, this, &CompareWorkspace::saveComparisonViewToFile);
     button->setMenu(menu);
     toolLayout->addWidget(button);
+}
+
+bool CompareWorkspace::autoAlignBeforeDiff() const
+{
+    return m_autoAlignBeforeDiff;
+}
+
+bool CompareWorkspace::isPixelGridEnabled() const
+{
+    return m_pixelGridEnabled;
+}
+
+void CompareWorkspace::setPixelGridEnabled(bool on)
+{
+    if (m_pixelGridEnabled == on)
+        return;
+    m_pixelGridEnabled = on;
+    if (m_pixelGridChk && m_pixelGridChk->isChecked() != on)
+    {
+        const QSignalBlocker b(m_pixelGridChk);
+        m_pixelGridChk->setChecked(on);
+    }
+    for (RawImageView *view : m_cellViews)
+    {
+        if (view)
+            view->setPixelGridEnabled(on);
+    }
+    if (m_compareCanvas)
+        m_compareCanvas->update();
+    update();
 }

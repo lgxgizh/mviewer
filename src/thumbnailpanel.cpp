@@ -134,73 +134,80 @@ void ThumbnailPanel::wireThumbnailPipeline()
                                               { return ThumbnailProvider::produce(p, size); });
     auto alive = m_alive;
     const QPointer<ThumbnailPanel> self(this);
-    ThumbnailPipeline::instance().setResultFn(
-        [alive, self](const std::string &p, int size, const ImageData &img)
-        {
-            if (!alive->load() || !self)
-                return;
-            QMetaObject::invokeMethod(
-                qApp,
-                [alive, self, p, size, img]()
-                {
-                    if (!alive->load() || !self)
-                        return;
-                    ThumbnailPanel *panel = self.data();
-                    const QString qp = QString::fromStdString(p);
-                    if (size != panel->m_thumbSize)
-                        return;
-                    const QString cacheKey = panel->thumbCacheKey(qp, size);
-                    if (img.isNull())
+    if (m_pipelineListenerToken == 0)
+    {
+        m_pipelineListenerToken = ThumbnailPipeline::instance().addResultFn(
+            [alive, self](const std::string &p, int size, const ImageData &img)
+            {
+                if (!alive->load() || !self)
+                    return;
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [alive, self, p, size, img]()
                     {
+                        if (!alive->load() || !self)
+                            return;
+                        ThumbnailPanel *panel = self.data();
+                        const QString qp = QString::fromStdString(p);
+                        if (size != panel->m_thumbSize)
+                            return;
+                        // Two panes can share the pipeline (including the same
+                        // directory). Ignore results that are not in this panel.
+                        if (panel->rowForPath(qp) < 0)
+                            return;
+                        const QString cacheKey = panel->thumbCacheKey(qp, size);
+                        if (img.isNull())
                         {
-                            QMutexLocker l(&panel->m_thumbMtx);
-                            panel->m_thumbFailed.insert(cacheKey);
+                            {
+                                QMutexLocker l(&panel->m_thumbMtx);
+                                panel->m_thumbFailed.insert(cacheKey);
+                                panel->m_thumbPending.remove(cacheKey);
+                            }
+                            // onThumbReady reads the ready map under the same mutex.
+                            panel->onThumbReady(qp);
+                            return;
+                        }
+                        const QImage q = mvcore::toQImageFast(img);
+                        if (q.isNull())
+                        {
+                            {
+                                QMutexLocker l(&panel->m_thumbMtx);
+                                panel->m_thumbFailed.insert(cacheKey);
+                                panel->m_thumbPending.remove(cacheKey);
+                            }
+                            panel->onThumbReady(qp);
+                            return;
+                        }
+                        {
+                            QMutexLocker lk(&panel->m_thumbMtx);
+                            auto old = panel->m_thumbReady.find(cacheKey);
+                            if (old != panel->m_thumbReady.end())
+                            {
+                                panel->m_thumbReadyBytes =
+                                    qMax<qint64>(0, panel->m_thumbReadyBytes - old->bytes);
+                                panel->m_thumbReadyLru.erase(old->lruIt);
+                                panel->m_thumbReady.erase(old);
+                            }
+                            const qint64 pixmapBytes = static_cast<qint64>(q.sizeInBytes());
+                            if (pixmapBytes <= kThumbPixmapCacheMaxBytes)
+                            {
+                                panel->m_thumbReadyLru.push_front(cacheKey);
+                                ThumbnailPanel::ReadyPixmap ready;
+                                ready.pixmap = QPixmap::fromImage(q);
+                                ready.bytes = pixmapBytes;
+                                ready.lastUse = ++panel->m_thumbReadyClock;
+                                ready.lruIt = panel->m_thumbReadyLru.begin();
+                                panel->m_thumbReadyBytes += ready.bytes;
+                                panel->m_thumbReady.insert(cacheKey, std::move(ready));
+                                panel->enforceThumbPixmapBudgetLocked();
+                            }
+                            panel->m_thumbFailed.remove(cacheKey);
                             panel->m_thumbPending.remove(cacheKey);
                         }
-                        // onThumbReady reads the ready map under the same mutex.
                         panel->onThumbReady(qp);
-                        return;
-                    }
-                    const QImage q = mvcore::toQImageFast(img);
-                    if (q.isNull())
-                    {
-                        {
-                            QMutexLocker l(&panel->m_thumbMtx);
-                            panel->m_thumbFailed.insert(cacheKey);
-                            panel->m_thumbPending.remove(cacheKey);
-                        }
-                        panel->onThumbReady(qp);
-                        return;
-                    }
-                    {
-                        QMutexLocker lk(&panel->m_thumbMtx);
-                        auto old = panel->m_thumbReady.find(cacheKey);
-                        if (old != panel->m_thumbReady.end())
-                        {
-                            panel->m_thumbReadyBytes =
-                                qMax<qint64>(0, panel->m_thumbReadyBytes - old->bytes);
-                            panel->m_thumbReadyLru.erase(old->lruIt);
-                            panel->m_thumbReady.erase(old);
-                        }
-                        const qint64 pixmapBytes = static_cast<qint64>(q.sizeInBytes());
-                        if (pixmapBytes <= kThumbPixmapCacheMaxBytes)
-                        {
-                            panel->m_thumbReadyLru.push_front(cacheKey);
-                            ThumbnailPanel::ReadyPixmap ready;
-                            ready.pixmap = QPixmap::fromImage(q);
-                            ready.bytes = pixmapBytes;
-                            ready.lastUse = ++panel->m_thumbReadyClock;
-                            ready.lruIt = panel->m_thumbReadyLru.begin();
-                            panel->m_thumbReadyBytes += ready.bytes;
-                            panel->m_thumbReady.insert(cacheKey, std::move(ready));
-                            panel->enforceThumbPixmapBudgetLocked();
-                        }
-                        panel->m_thumbFailed.remove(cacheKey);
-                        panel->m_thumbPending.remove(cacheKey);
-                    }
-                    panel->onThumbReady(qp);
-                });
-        });
+                    });
+            });
+    }
 }
 
 ThumbnailPanel::~ThumbnailPanel()
@@ -235,11 +242,16 @@ ThumbnailPanel::~ThumbnailPanel()
     // every interleaving.
     while (m_busyCursorRefs && m_busyCursorRefs->load(std::memory_order_acquire) > 0)
         restoreBusyCursorOnce(m_busyCursorRefs);
-    // Detach from the shared pipeline so its worker thread can't call back into
-    // a destroyed panel (and restore the default decode for the next panel).
-    ThumbnailPipeline::instance().setResultFn([](const std::string &, int, const ImageData &) {});
-    ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
-                                              { return Decoder::decodeScaled(p, size); });
+    // Detach listener token from pipeline and drop this panel's consumer so a
+    // leftover visible-range cannot keep scheduling work after destruction.
+    if (m_pipelineListenerToken != 0)
+    {
+        ThumbnailPipeline::instance().removeResultFn(m_pipelineListenerToken);
+        m_pipelineListenerToken = 0;
+    }
+    ThumbnailPipeline::instance().removeConsumer(m_consumerId);
+    if (!ThumbnailPipeline::instance().hasResultListeners())
+        ThumbnailPipeline::instance().restoreDefaultDecodeFn();
 }
 
 void ThumbnailPanel::resetDirectoryState()
@@ -483,11 +495,11 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     // After scanComplete: updateSources preserves ready thumbs across filter
     // rebuilds (setSources would bump gen and force avoidable re-decodes).
     if (m_scanProgressive)
-        ThumbnailPipeline::instance().replaceSources(toStdPaths(m_paths));
+        ThumbnailPipeline::instance().replaceSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     else if (m_scanComplete)
-        ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
+        ThumbnailPipeline::instance().updateSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     else
-        ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
+        ThumbnailPipeline::instance().setSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     // M37: publish the exact order displayed by the gallery. Sort/filter
     // rebuilds also pass through here, keeping navigation and preload aligned.
     emit sequenceChanged(m_currentDir, m_paths);
@@ -521,6 +533,26 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
 void ThumbnailPanel::setSelectionModel(SelectionModel *sel)
 {
     m_selection = sel;
+}
+
+SelectionModel::PaneSlot ThumbnailPanel::paneSlot() const
+{
+    return m_paneSlot;
+}
+
+void ThumbnailPanel::setPaneSlot(SelectionModel::PaneSlot slot)
+{
+    m_paneSlot = slot;
+}
+
+int ThumbnailPanel::consumerId() const
+{
+    return m_consumerId;
+}
+
+void ThumbnailPanel::setConsumerId(int id)
+{
+    m_consumerId = id;
 }
 
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)

@@ -42,6 +42,16 @@ struct AppState
     QStringList navHistory;   // ordered visited-image paths
     int navHistoryIndex = -1; // index of the current image within navHistory
 
+    // Split Browse View session state
+    bool splitBrowseEnabled = false;
+    QString secondaryLastDir;
+    QString secondaryLastImage;
+    int secondaryThumbScroll = 0;
+    QList<int> gallerySplitterSizes;
+    bool hasSecondarySort = false;
+    int secondarySortField = 0;
+    bool secondarySortAscending = true;
+
     // Load from the per-user config path. Missing/corrupt file => defaults
     // (empty favorites, empty lastDir). Never throws.
     static AppState load();

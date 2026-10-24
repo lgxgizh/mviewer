@@ -248,7 +248,7 @@ int main(int argc, char **argv)
         CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::System).isEmpty(),
               "ThemeModeName not empty for System");
 
-        CHECK(mviewer::ui::toolbarIconIds().size() == 12, "toolbar icon catalog has 12 ids");
+        CHECK(mviewer::ui::toolbarIconIds().size() == 13, "toolbar icon catalog has 13 ids");
         for (const QString &id : mviewer::ui::toolbarIconIds())
         {
             QByteArray bytes = id.toUtf8();

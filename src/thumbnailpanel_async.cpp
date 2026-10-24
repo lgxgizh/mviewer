@@ -284,7 +284,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_model->setStringList({});
     // Supersede thumbnail demand at the same T0 as the directory transition;
     // discovered batches below then append into an empty, current source set.
-    ThumbnailPipeline::instance().setSources({});
+    ThumbnailPipeline::instance().setSourcesForConsumer(m_consumerId, {});
     viewport()->update();
     // Publish the empty shell immediately so consumers drop the previous
     // directory sequence before this directory's worker result arrives.
@@ -428,7 +428,7 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
         return;
 
     insertProgressiveRows(batch);
-    ThumbnailPipeline::instance().replaceSources(toStdPaths(m_paths));
+    ThumbnailPipeline::instance().replaceSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
     // Navigation reads this list. Publish it with the rows, not only when the
     // sorted rebuild lands at the end of the scan.
     emit sequenceChanged(m_currentDir, m_paths);
@@ -486,7 +486,7 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     if (wasProgressive)
     {
         pruneThumbnailState();
-        ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
+        ThumbnailPipeline::instance().updateSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
         emit sequenceChanged(m_currentDir, m_paths);
         emit statsChanged(m_paths.size(), m_totalBytes, selectedPaths().size(), 0);
         if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(galleryPathKey(m_pendingSelect)))

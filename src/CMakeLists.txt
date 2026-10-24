@@ -168,6 +168,8 @@ add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
+    mainwindow_splitbrowse.cpp
+    mainwindow_splitbrowse_panes.cpp
     mainwindow_emptystate.cpp
     mainwindow_ui_chrome.cpp
     mainwindow_ui_menus.cpp
@@ -782,6 +784,23 @@ target_compile_features(browse_paste_acceptance PRIVATE cxx_std_20)
 target_include_directories(browse_paste_acceptance PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME browse_paste_acceptance COMMAND browse_paste_acceptance)
 set_tests_properties(browse_paste_acceptance PROPERTIES RUN_SERIAL TRUE)
+
+# Split Browse View (RFC ADR-001/005/014/018)
+add_executable(split_browse_acceptance
+    test_split_browse_acceptance.cpp
+)
+target_link_libraries(split_browse_acceptance
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(split_browse_acceptance PRIVATE cxx_std_20)
+target_include_directories(split_browse_acceptance PRIVATE )
+add_test(NAME split_browse_acceptance COMMAND split_browse_acceptance)
+set_tests_properties(split_browse_acceptance PROPERTIES RUN_SERIAL TRUE)
 
 # ─── M45: real MainWindow CommandStack callback + async file-op surface ─────
 add_executable(mainwindow_commandstack_acceptance

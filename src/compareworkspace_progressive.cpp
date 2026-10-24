@@ -150,11 +150,27 @@ void CompareWorkspace::clearSoftLoadingIndicators()
 void CompareWorkspace::applyFramesToExistingPanes()
 {
     const int n = m_engine.imageCount();
+    QStringList allPaths;
+    allPaths.reserve(n);
+    for (int idx = 0; idx < n; ++idx)
+    {
+        const ImageFrame *f = m_engine.imageAt(idx);
+        if (f && !f->metadata().filePath.empty())
+            allPaths.append(QString::fromStdString(f->metadata().filePath));
+        else if (f && !f->metadata().fileName.empty())
+            allPaths.append(QString::fromStdString(f->metadata().fileName));
+        else
+            allPaths.append(QString());
+    }
+    const QStringList disambiguated = disambiguateCaptions(allPaths);
+
     for (int i = 0; i < n && i < m_cellViews.size(); ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
         QString name;
-        if (img)
+        if (i < disambiguated.size() && !disambiguated[i].isEmpty())
+            name = disambiguated[i];
+        else if (img)
             name = QString::fromUtf8(img->metadata().fileName.data(),
                                      static_cast<int>(img->metadata().fileName.size()));
         if (i < m_cellLabels.size() && img)

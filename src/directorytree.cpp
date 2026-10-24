@@ -239,11 +239,17 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
 
     QMenu menu(this);
     QAction *aOpen = menu.addAction(tr("Open"));
+    QAction *aOpenRight = menu.addAction(tr("Open in Right Browse Pane"));
     QAction *aReveal = menu.addAction(tr("Show in File Manager"));
     QAction *aCopyPath = menu.addAction("Copy path");
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
+    if (chosen == aOpenRight)
+    {
+        emit openInSecondaryPaneRequested(path);
+        return;
+    }
     if (chosen == aOpen)
     {
         cancelPendingNavigation();

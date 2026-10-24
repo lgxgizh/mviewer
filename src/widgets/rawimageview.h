@@ -149,6 +149,12 @@ class RawImageView : public QWidget
     }
 
     // 0-based grid index (set by CompareWorkspace so the inspector can label the cell).
+    void setPixelGridEnabled(bool on);
+    bool isPixelGridEnabled() const
+    {
+        return m_pixelGridEnabled;
+    }
+
     void setCellIndex(int idx)
     {
         m_cellIndex = idx;
@@ -354,6 +360,7 @@ class RawImageView : public QWidget
     mviewer::OverlayMode m_displayOverlay = mviewer::OverlayMode::None;
     QString m_filenameOverlayText;
     bool m_filenameOverlayVisible = false;
+    bool m_pixelGridEnabled = false;
     QSize m_sourceSize;
     QRect m_sourceRect;
     QImage m_transientImage;

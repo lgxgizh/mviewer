@@ -577,11 +577,11 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         pathEdit->setFocus(Qt::OtherFocusReason);
     pump(10);
     CHECK(QApplication::focusWidget() == pathEdit, "focus can be placed on the real path edit");
-    sendFocusedKey(Qt::Key_Tab);
+    sendFocusedKey(Qt::Key_F6);
     CHECK(navigationPanel && !navigationPanel->isVisible() && analysisPanel &&
               !analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
               focusAction && focusAction->isChecked(),
-          "plain Tab from a focused child enters focus browse");
+          "F6 from a focused child enters focus browse");
     CHECK(analysisAction && !analysisAction->isEnabled() && searchAction &&
               !searchAction->isEnabled(),
           "focus browse disables panel toggles while their state is suspended");
@@ -591,11 +591,11 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     pump(10);
     CHECK(QApplication::focusWidget() == pathEdit,
           "focus can be placed on the real directory path input");
-    sendFocusedKey(Qt::Key_Tab);
+    sendFocusedKey(Qt::Key_F6);
     CHECK(navigationPanel && navigationPanel->isVisible() && analysisPanel &&
               analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
               focusAction && !focusAction->isChecked(),
-          "plain Tab from a focused path input exits focus browse");
+          "F6 from a focused path input exits focus browse");
     CHECK(analysisAction && analysisAction->isEnabled() && analysisAction->isChecked() &&
               searchAction && searchAction->isEnabled() && !searchAction->isChecked(),
           "leaving focus browse restores action state as well as panels");
@@ -603,6 +603,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     if (pathEdit)
         pathEdit->setFocus(Qt::OtherFocusReason);
     pump(10);
+    sendFocusedKey(Qt::Key_Tab);
+    CHECK(focusAction && !focusAction->isChecked(),
+          "plain Tab keeps normal focus traversal and does not enter focus browse");
     sendFocusedKey(Qt::Key_Tab, Qt::ShiftModifier);
     CHECK(focusAction && !focusAction->isChecked(),
           "Shift+Tab keeps normal focus traversal and does not enter focus browse");
@@ -1464,7 +1467,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 subQDir.mkdir("sub_ux_test");
                 const QString subDirPath = QDir::cleanPath(subQDir.filePath("sub_ux_test"));
                 directoryTree->navigateTo(subDirPath, true);
-                pump(100);
+                for (int i = 0; i < 10 && directoryTree->currentPath() != subDirPath; ++i)
+                    pump(50);
                 CHECK(directoryTree->currentPath() == subDirPath, "navigated to subfolder in test");
 
                 // Mouse back button navigates back to original directory.
@@ -1472,7 +1476,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                                  viewer->mapToGlobal(QPoint(10, 10)), Qt::BackButton,
                                  Qt::BackButton, Qt::NoModifier);
                 QApplication::sendEvent(viewer, &back);
-                pump(100);
+                for (int i = 0; i < 10 && directoryTree->currentPath() != origDir; ++i)
+                    pump(50);
                 CHECK(directoryTree->currentPath() == origDir,
                       "mouse back button navigates to the previous directory");
 
@@ -1481,7 +1486,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                                 viewer->mapToGlobal(QPoint(10, 10)), Qt::ForwardButton,
                                 Qt::ForwardButton, Qt::NoModifier);
                 QApplication::sendEvent(viewer, &fwd);
-                pump(100);
+                for (int i = 0; i < 10 && directoryTree->currentPath() != subDirPath; ++i)
+                    pump(50);
                 CHECK(directoryTree->currentPath() == subDirPath,
                       "mouse forward button navigates back to the forward directory");
 
@@ -2223,6 +2229,9 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(histOverlayChk && !histOverlayChk->isChecked(), "histogram overlay is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->isChecked(),
           "filename overlay is on by default");
+    auto *pixelGridChk = ws->findChild<QCheckBox *>(QStringLiteral("comparePixelGridToggle"));
+    CHECK(pixelGridChk, "compare exposes pixel grid toggle");
+    CHECK(pixelGridChk && !pixelGridChk->isChecked(), "pixel grid toggle is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("hide")) &&
               filenameOverlayChk->toolTip().contains(QStringLiteral("wrapping")),
           "filename checkbox tooltip describes show/hide and wrapping");
@@ -5551,6 +5560,7 @@ void assertCompareControlsReachable(const QString &pathA, const QString &pathB)
         "compareFrameSpin",
         "paneHistogramOverlayToggle",
         "compareFilenameOverlayToggle",
+        "comparePixelGridToggle",
         "compareChannelCombo",
         "compareSwapPanesButton",
         "temporaryCompareButton",

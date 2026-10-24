@@ -2540,6 +2540,11 @@ ROI diff: %1%  Mean %2  Peak %3</source>
 <context>
     <name>DirectoryTree</name>
     <message>
+        <source>Open in Right Browse Pane</source>
+        <translation>在右侧浏览栏中打开</translation>
+    </message>
+
+    <message>
         <location filename="../src/directorytree.cpp" line="157"/>
         <source>  Loading...</source>
         <translation>  加载中...</translation>
@@ -3555,6 +3560,59 @@ or double-click a thumbnail to view</source>
 <context>
     <name>MainWindow</name>
     <message>
+        <source>Split Browse View</source>
+        <translation>双栏浏览视图</translation>
+    </message>
+    <message>
+        <source>Split Browse</source>
+        <translation>双栏浏览</translation>
+    </message>
+    <message>
+        <source>Enter secondary directory path...</source>
+        <translation>输入右栏目录路径...</translation>
+    </message>
+    <message>
+        <source>Open Secondary Directory</source>
+        <translation>打开右栏目录</translation>
+    </message>
+    <message>
+        <source>Clone Left</source>
+        <translation>右栏跟随左栏</translation>
+    </message>
+    <message>
+        <source>Sync right pane to the left pane directory</source>
+        <translation>同步右栏路径为左栏当前目录</translation>
+    </message>
+    <message>
+        <source>Swap</source>
+        <translation>左右互换</translation>
+    </message>
+    <message>
+        <source>Swap left and right pane directories and selections</source>
+        <translation>交换左右栏目录与选中项</translation>
+    </message>
+    <message>
+        <source>Close split browse view</source>
+        <translation>关闭双栏浏览</translation>
+    </message>
+    <message>
+        <source>Close Split Browse View</source>
+        <translation>关闭双栏浏览</translation>
+    </message>
+    <message>
+        <source>Select 2 to 8 images across left and right panes to compare (currently %1 selected)</source>
+        <translation>在左右栏中选择 2 到 8 张图片进行对比（当前已选 %1 张）</translation>
+    </message>
+    <message>
+        <source>Select 2 to 8 images across left and right panes to compare</source>
+        <translation>在左右栏中选择 2 到 8 张图片进行对比</translation>
+    </message>
+    <message>
+        <source>Compare %1 selected images (P)</source>
+        <translation>对比选中的 %1 张图片 (P)</translation>
+    </message>
+
+    <message>
         <location filename="../src/mainwindow.cpp" line="42"/>
         <source>Cannot write the sidecar file for %1</source>
         <translation>无法写入 %1 的附属文件</translation>
@@ -4415,6 +4473,14 @@ or double-click a thumbnail to view</source>
         <translation>编辑(&amp;E)</translation>
     </message>
     <message>
+        <source>Undo(&amp;U)</source>
+        <translation>撤销(&amp;U)</translation>
+    </message>
+    <message>
+        <source>Redo(&amp;R)</source>
+        <translation>重做(&amp;R)</translation>
+    </message>
+    <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="84"/>
         <source>Undo Failed</source>
         <translation>撤销失败</translation>
@@ -4506,8 +4572,8 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="244"/>
-        <source>Focus Browse Mode (Tab)</source>
-        <translation>专注浏览模式 (Tab)</translation>
+        <source>Focus Browse Mode (F6)</source>
+        <translation>专注浏览模式 (F6)</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="251"/>
@@ -6051,6 +6117,15 @@ Continue?</source>
 <context>
     <name>ThumbnailPanel</name>
     <message>
+        <source>Send the %1 selected images to compare</source>
+        <translation>发送选中的 %1 张图片进行对比</translation>
+    </message>
+    <message>
+        <source>Select 2-8 images across panes to compare (currently %1)</source>
+        <translation>在分栏中选择 2-8 张图片进行对比（当前已选 %1）</translation>
+    </message>
+
+    <message>
         <location filename="../src/thumbnailpanel.cpp" line="15"/>
         <source>Image Gallery</source>
         <translation>图片画廊</translation>
@@ -6199,6 +6274,12 @@ Continue?</source>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="515"/>
         <source>Are you sure you want to move %1 files to the Recycle Bin?</source>
         <translation>确定将 %1 个文件移到回收站？</translation>
+    </message>
+    <message numerus="yes">
+        <source>Move %n file(s) to the Recycle Bin? (left: %1, right: %2)</source>
+        <translation>
+            <numerusform>将 %n 个文件移到回收站？（左栏: %1，右栏: %2）</numerusform>
+        </translation>
     </message>
     <message>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="518"/>

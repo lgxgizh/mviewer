@@ -192,6 +192,7 @@ void ImageViewer::initializeGL()
 
 void ImageViewer::closeEvent(QCloseEvent *event)
 {
+    exitFullscreenForClose();
     markClosing();
     // Drop the hover sample and any sticky select mode before decode teardown.
     clearPixelInfo();

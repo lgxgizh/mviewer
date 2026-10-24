@@ -226,6 +226,14 @@ void RawImageView::setOverlay(const QImage &overlay, double alpha)
     update();
 }
 
+void RawImageView::setPixelGridEnabled(bool on)
+{
+    if (m_pixelGridEnabled == on)
+        return;
+    m_pixelGridEnabled = on;
+    update();
+}
+
 void RawImageView::setTransform(double scale, const QPointF &offset)
 {
     // CompareWorkspace pushes the same transform to every pane on each of its
@@ -366,8 +374,8 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
     const bool gridMatches = mviewer::pixelGridMatchesRaster(
         displayImage().width(), displayImage().height(), gridRect.width(), gridRect.height(),
         m_softLoading && m_transientImage.isNull());
-    if (gridMatches && mviewer::pixelGridVisible(presented) && sourceSize.width() > 0 &&
-        sourceSize.height() > 0)
+    if (m_pixelGridEnabled && gridMatches && mviewer::pixelGridVisible(presented) &&
+        sourceSize.width() > 0 && sourceSize.height() > 0)
     {
         mviewer::ui::drawPixelGrid(
             p,
