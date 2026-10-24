@@ -38,21 +38,27 @@ static int g_fail = 0;
 namespace
 {
 
-// Fill a w x h image with a single RGB color.
+// Fill a w x h image with a single color in memory order. Only `cpp` bytes are
+// written: Grayscale8 is one sample (the first argument), so an 8x8 buffer is
+// 64 bytes and a forced RGB triple overruns it by one byte.
 void fill(ImageData &d, uint8_t r, uint8_t g, uint8_t b)
 {
     const auto v = d.view();
     const int cpp = d.channelsPerPixel();
+    const size_t stride = static_cast<size_t>(v.stride());
     for (int y = 0; y < d.height; ++y)
     {
-        uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+        uint8_t *row = v.data + static_cast<size_t>(y) * stride;
         for (int x = 0; x < d.width; ++x)
         {
-            uint8_t *p = row + static_cast<size_t>(x) * cpp;
-            p[0] = r;
-            p[1] = g;
-            p[2] = b;
-            if (cpp == 4)
+            uint8_t *p = row + static_cast<size_t>(x) * static_cast<size_t>(cpp);
+            if (cpp > 0)
+                p[0] = r;
+            if (cpp > 1)
+                p[1] = g;
+            if (cpp > 2)
+                p[2] = b;
+            if (cpp > 3)
                 p[3] = 255;
         }
     }

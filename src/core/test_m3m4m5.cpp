@@ -395,17 +395,24 @@ static ImageData makePattern(int w, int h, PixelFormat fmt)
     ImageData d = makeImageData(w, h, fmt);
     if (d.isNull())
         return d;
+    // Honor stride and channels. Grayscale8 is 1 byte/pixel (512x512 = 262144);
+    // writing a fixed RGB triple walks one byte past that buffer.
     const int cpp = d.channelsPerPixel();
-    uint8_t *p = d.buffer->data();
+    const auto view = d.view();
+    const size_t stride = static_cast<size_t>(view.stride());
+    uint8_t *base = view.data;
     for (int y = 0; y < h; ++y)
     {
+        uint8_t *row = base + static_cast<size_t>(y) * stride;
         for (int x = 0; x < w; ++x)
         {
-            uint8_t *px = p + (static_cast<size_t>(y) * w + x) * cpp;
+            uint8_t *px = row + static_cast<size_t>(x) * static_cast<size_t>(cpp);
             px[0] = static_cast<uint8_t>(x & 0xFF);
-            px[1] = static_cast<uint8_t>(y & 0xFF);
-            px[2] = static_cast<uint8_t>((x ^ y) & 0xFF);
-            if (cpp == 4)
+            if (cpp > 1)
+                px[1] = static_cast<uint8_t>(y & 0xFF);
+            if (cpp > 2)
+                px[2] = static_cast<uint8_t>((x ^ y) & 0xFF);
+            if (cpp > 3)
                 px[3] = 255;
         }
     }
