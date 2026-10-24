@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- **Nightly sanitizer hygiene**: grayscale test fills stay inside the buffer; corrupt-file fixtures write only the literal's bytes; two-image blink deletes detached grid layout items (LSan leak).
 - **Split Browse active pane routing**: rename, copy/move, paste, select-all/deselect/invert, reveal, and batch analysis now target the focused pane instead of always the left gallery.
 - **Split Browse Delete**: Delete (keyboard, menu, command) moves the union of both panes' selections to the Recycle Bin, with a confirm dialog that states the total and per-pane counts; both panes drop the removed paths.
 - **Split Browse restore**: right-pane scroll position, last image, independent sort, and splitter sizes restore from the previous session; avoid a second directory scan on restore.

@@ -461,7 +461,8 @@ void testDegradedImages(const QDir &dir)
     QFile f(corrupt);
     const bool opened = f.open(QIODevice::WriteOnly);
     Q_UNUSED(opened); // C4834: QIODevice::open is [[nodiscard]] on Qt 6.10 headers
-    const qint64 written = f.write("\x89PNG\r\n\x1a\n definitely not a png", 32);
+    const char payload[] = "\x89PNG\r\n\x1a\n definitely not a png";
+    const qint64 written = f.write(payload, static_cast<qint64>(sizeof(payload) - 1));
     Q_UNUSED(written); // C4834: QIODevice::write is [[nodiscard]] on Qt 6.10 headers
     f.close();
 
