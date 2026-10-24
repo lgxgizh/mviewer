@@ -45,9 +45,17 @@ void paint(QImage &img, uint32_t seed)
 
 bool write(const QString &path, const QImage &img, const char *fmt)
 {
-    QImageWriter w(path, fmt);
-    w.setQuality(90);
-    return w.write(img);
+    bool wrote = false;
+    {
+        QImageWriter w(path, fmt);
+        w.setQuality(90);
+        wrote = w.write(img);
+    }
+    if (!wrote)
+        return false;
+    // An empty or IHDR-only PNG makes libpng print "Read Error" on every later
+    // decode. Reject it here so the corpus does not replay that line.
+    return QFileInfo(path).size() >= 64;
 }
 } // namespace
 
@@ -107,8 +115,8 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
 #endif
         if (!envTmp.isEmpty())
         {
-            const QString uniqueName = QStringLiteral("mviewer_bench-%1").arg(
-                QUuid::createUuid().toString(QUuid::WithoutBraces));
+            const QString uniqueName = QStringLiteral("mviewer_bench-%1")
+                                           .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
             const QString uniqueDir = QDir(envTmp).filePath(uniqueName);
             if (QDir().mkpath(uniqueDir))
                 c.dir = QFileInfo(uniqueDir).absoluteFilePath().toStdString();

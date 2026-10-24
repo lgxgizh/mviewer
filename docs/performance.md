@@ -182,6 +182,16 @@ source and `repaint()` / `QWidget::render` has completed. That full sample is
 the default `mviewer_bench` run and `--e2e` / `--scenarios e2e`. `--enforce`
 omits it unless the metric is budgeted, in which case it records 12 samples.
 
+`bench_enforce` (CTest, `RUN_SERIAL`) runs
+`mviewer_bench --enforce --profile auto --budget benchmark/performance_budget.json`.
+Its 900 s `TIMEOUT` is headroom only. The harness flushes a `[bench] start` /
+`[bench] done` line with wall-clock milliseconds around every scenario and
+prints the total elapsed at the end. Under `--enforce`, a scenario that exceeds
+`--scenario-timeout-ms` (default 120000) prints
+`[bench] WATCHDOG <name> exceeded N ms` and exits 2. Numeric budgets in
+`benchmark/performance_budget.json` are unchanged. B18/B19 stay omitted unless
+`scenario_map` gives them a numeric budget.
+
 ---
 
 ## Optimization Hierarchy

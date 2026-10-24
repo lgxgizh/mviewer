@@ -1,18 +1,16 @@
+#include "benchmark/bench_progress.h"
 #include "benchmark/corpus.h"
 #include "benchmark/scenarios.h"
 
 #include "application/Shutdown.h"
 
 #include <QApplication>
+#include <QByteArray>
 #include <QCoreApplication>
-#include <QDateTime>
-#include <QFile>
-#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QTextStream>
 
 #include "core/trace/TraceSink.h"
 
@@ -25,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -40,6 +39,10 @@
 //   mviewer_bench --budget <f>     --profile <auto|base|low-core|ci>  --baseline <f>
 //   mviewer_bench --corpus-size N  --corpus-dir <d>  --scale  --scenarios B1,B8
 //   mviewer_bench --results <f>    --history <f>  --report <f>  --trace <f>
+//   mviewer_bench --scenario-timeout-ms N
+//                                  --enforce watchdog per scenario (default 120000;
+//                                  <=0 disables). A blocked scenario prints
+//                                  `[bench] WATCHDOG <name> exceeded N ms` and exits 2.
 //
 // --enforce hard-gates scenario_map (B1-B9 + B11-B15). B18/B19 need QApplication
 // (offscreen when QT_QPA_PLATFORM is unset). They run for --e2e / --scenarios,
@@ -249,79 +252,52 @@ bool loadBudgetJson(const std::string &path, Budget &b)
     return true;
 }
 
-// Load baseline metrics from a JSON file using QJson.
-// Returns a map of metric name -> baseline value.
-std::unordered_map<std::string, double> loadBaselineJson(const std::string &path)
+struct BenchOptions
 {
-    std::unordered_map<std::string, double> m;
-    QFile f(QString::fromStdString(path));
-    if (!f.open(QIODevice::ReadOnly))
-        return m;
-    const QByteArray data = f.readAll();
-    f.close();
+    Budget budget;
+    size_t corpusSize = 1000;
+    bool smoke = false;
+    bool regression = false;
+    bool scaleMode = false;
+    bool e2eFlag = false;
+    int scenarioTimeoutMs = mviewer::bench::kDefaultScenarioTimeoutMs;
+    std::string emitData;
+    std::string emitFormat = "all";
+    std::string traceFile;
+    std::string budgetFile;
+    std::string profileArg = "auto";
+    std::string corpusDir;
+    std::string scenariosArg;
+    std::string resultsFile;
+    std::string baselineFile;
+    std::string historyFile;
+    std::string reportFile;
+};
 
-    QJsonParseError err;
-    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
-    if (doc.isNull() || !doc.isObject())
-        return m;
-
-    const QJsonObject root = doc.object();
-    const QJsonObject metrics = root.value("metrics").toObject();
-    for (auto it = metrics.begin(); it != metrics.end(); ++it)
-    {
-        if (it.value().isDouble())
-            m[it.key().toStdString()] = it.value().toDouble();
-        else if (it.value().isString())
-            m[it.key().toStdString()] =
-                std::strtod(it.value().toString().toStdString().c_str(), nullptr);
-    }
-    return m;
-}
-
-std::string loadBaselineProfile(const std::string &path)
+struct Prepared
 {
-    QFile f(QString::fromStdString(path));
-    if (!f.open(QIODevice::ReadOnly))
-        return {};
-    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-    f.close();
-    if (!doc.isObject())
-        return {};
-    return doc.object().value("hardware_profile").toString().toStdString();
-}
+    bool budgetLoaded = false;
+    bool needGui = false;
+    mviewer::bench::E2eSchedule e2e;
+    std::set<std::string> runOnly;
+};
 
-// Write results to a JSON file.
-void writeResultsJson(const std::string &path,
-                      const std::vector<mviewer::bench::ScenarioResult> &results,
-                      const Budget &budget)
+struct BenchSession
 {
-    QJsonArray arr;
-    for (const auto &r : results)
+    double t0 = mviewer::bench::nowMs();
+    ~BenchSession()
     {
-        QJsonObject o;
-        o.insert("name", QString::fromStdString(r.name));
-        o.insert("metric", QString::fromStdString(r.metric));
-        o.insert("value", r.value);
-        o.insert("passed", r.passed);
-        arr.append(o);
+        const long long ms = static_cast<long long>(mviewer::bench::nowMs() - t0);
+        mviewer::bench::writeLine("[bench] total " + std::to_string(ms) + " ms");
+        const int errors = mviewer::bench::libpngReadErrorCount();
+        if (errors > 0)
+            mviewer::bench::writeLine("[bench] libpng Read Error count=" + std::to_string(errors));
     }
-    QJsonObject root;
-    root.insert("results", arr);
-    root.insert("hardware_profile", QString::fromStdString(budget.profileName));
-    root.insert("logical_cores", static_cast<int>(budget.logicalCores));
-    root.insert("timestamp", QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
-
-    QJsonDocument doc(root);
-    QFile f(QString::fromStdString(path));
-    if (f.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        f.write(doc.toJson(QJsonDocument::Indented));
-        f.close();
-    }
-}
+};
 
 void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
 {
+    (void)b;
     const char *ok = r.passed ? "[PASS]" : "[FAIL]";
     std::cout << ok << " " << r.name << " " << r.metric << "=" << r.value;
     if (r.timing.samples > 0)
@@ -329,16 +305,16 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
                   << " p99=" << r.timing.p99Ms << ")";
     if (!r.detail.empty())
         std::cout << "  # " << r.detail;
-    std::cout << '\n';
+    std::cout << std::endl;
 }
 
 // Build the scenario list, apply --enforce budgets, print verdicts, and return
 // whether every scenario passed. Shared by the regen path and the --corpus-dir
 // path so both exercise identical scenarios/printing.
 bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
-                  const std::set<std::string> &runOnly = {},
-                  std::vector<mviewer::bench::ScenarioResult> *outResults = nullptr,
-                  bool scaleMode = false, const mviewer::bench::E2eSchedule &e2e = {})
+                  const std::set<std::string> &runOnly,
+                  std::vector<mviewer::bench::ScenarioResult> *outResults, bool scaleMode,
+                  const mviewer::bench::E2eSchedule &e2e, int scenarioWatchdogMs)
 {
     const bool filter = !runOnly.empty();
     // Lazy scenario registry, filtered on the AUTHORITATIVE name BEFORE
@@ -392,407 +368,425 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     }
 
     std::vector<mviewer::bench::ScenarioResult> results;
+    bool allPass = true;
     for (const auto &it : items)
     {
-        if (filter && !runOnly.count(it.name))
+        if (filter && runOnly.count(it.name) == 0)
             continue;
-        results.push_back(it.fn());
-    }
-
-    bool allPass = true;
-    for (auto &r : results)
-    {
+        mviewer::bench::ScenarioSpan span(it.name, scenarioWatchdogMs);
+        auto result = it.fn();
+        span.finish();
         // scenario_map entries are hard-gated. Anything else keeps its own verdict.
-        if (b.enforce && b.appliesTo(r.name))
-            r.passed = b.checkScenario(r.name, r.value);
-        printVerdict(r, b);
-        if (!r.passed)
+        if (b.enforce && b.appliesTo(result.name))
+            result.passed = b.checkScenario(result.name, result.value);
+        printVerdict(result, b);
+        if (!result.passed)
             allPass = false;
+        results.push_back(std::move(result));
     }
     if (outResults)
         *outResults = std::move(results);
     return allPass;
 }
 
-} // namespace
-
-int main(int argc, char **argv)
+bool takeFlag(BenchOptions &opt, const std::string &arg)
 {
-    Budget b;
-    size_t corpusSize = 1000;
-    bool smoke = false;
-    std::string emitData;            // P3: if set, emit corpus to this dir and exit.
-    std::string emitFormat = "all";  // P3: "all" or "jpeg" (10000-jpeg large tier)
-    std::string traceFile;           // M13.5: if set, flush a Chrome trace JSON at exit
-    std::string budgetFile;          // M13.3: performance_budget.json (data-driven gates)
-    std::string profileArg = "auto"; // CPU-aware budget profile; CI may pin this to `ci`
-    std::string corpusDir;           // P3: if set, reuse an existing on-disk corpus dir
-    std::string scenariosArg;        // P3: comma-separated scenario ids to run (e.g. "B1,B2,B8")
-    std::string resultsFile;         // M14: if set, write JSON results (for regression tracking)
-    std::string baselineFile;        // M14: if set, compare against baseline for regression
-    bool regression = false; // M15: enable baseline diff (separate from --enforce hard budget)
-    bool scaleMode = false;  // M-XX: run the 100/1000/5000 scaling tiers
-    bool e2eFlag = false;    // full B18/B19 even under --enforce
-    std::string historyFile; // M15: if set, append results row to history CSV
-    std::string reportFile;  // M15: if set, write markdown regression report
+    if (arg == "--enforce")
+    {
+        opt.budget.enforce = true;
+        return true;
+    }
+    if (arg == "--regression")
+    {
+        opt.regression = true;
+        return true;
+    }
+    if (arg == "--smoke")
+    {
+        opt.smoke = true;
+        opt.corpusSize = 20;
+        return true;
+    }
+    if (arg == "--e2e")
+    {
+        opt.e2eFlag = true;
+        return true;
+    }
+    if (arg == "--scale")
+    {
+        // Tiers are capped by the corpus. Pass --corpus-size 5000 for the full sweep.
+        opt.scaleMode = true;
+        return true;
+    }
+    return false;
+}
 
+void setScenarioTimeout(BenchOptions &opt, const char *text)
+{
+    char *end = nullptr;
+    const long parsed = std::strtol(text, &end, 10);
+    if (end == text || (end != nullptr && *end != '\0'))
+        return;
+    if (parsed <= 0)
+    {
+        opt.scenarioTimeoutMs = 0;
+        return;
+    }
+    if (parsed > 1800000L)
+    {
+        opt.scenarioTimeoutMs = 1800000;
+        return;
+    }
+    opt.scenarioTimeoutMs = static_cast<int>(parsed);
+}
+
+bool takeCorpusArgs(BenchOptions &opt, const std::string &arg, int &i, int argc, char **argv)
+{
+    if (i + 1 >= argc)
+        return false;
+    if (arg == "--corpus-size")
+    {
+        opt.corpusSize = static_cast<size_t>(std::strtoul(argv[++i], nullptr, 10));
+        return true;
+    }
+    if (arg == "--corpus-dir")
+    {
+        opt.corpusDir = argv[++i];
+        return true;
+    }
+    if (arg == "--scenarios")
+    {
+        opt.scenariosArg = argv[++i];
+        return true;
+    }
+    if (arg == "--scenario-timeout-ms")
+    {
+        setScenarioTimeout(opt, argv[++i]);
+        return true;
+    }
+    return false;
+}
+
+bool takeOutputArgs(BenchOptions &opt, const std::string &arg, int &i, int argc, char **argv)
+{
+    if (i + 1 >= argc)
+        return false;
+    if (arg == "--budget")
+    {
+        opt.budgetFile = argv[++i];
+        return true;
+    }
+    if (arg == "--profile")
+    {
+        opt.profileArg = argv[++i];
+        return true;
+    }
+    if (arg == "--emit-data")
+    {
+        opt.emitData = argv[++i];
+        return true;
+    }
+    if (arg == "--emit-format")
+    {
+        opt.emitFormat = argv[++i];
+        return true;
+    }
+    if (arg == "--trace")
+    {
+        opt.traceFile = argv[++i];
+        return true;
+    }
+    if (arg == "--results")
+    {
+        opt.resultsFile = argv[++i];
+        return true;
+    }
+    if (arg == "--baseline")
+    {
+        opt.baselineFile = argv[++i];
+        return true;
+    }
+    if (arg == "--history")
+    {
+        opt.historyFile = argv[++i];
+        return true;
+    }
+    if (arg == "--report")
+    {
+        opt.reportFile = argv[++i];
+        return true;
+    }
+    return false;
+}
+
+void parseArgs(int argc, char **argv, BenchOptions &opt)
+{
     for (int i = 1; i < argc; ++i)
     {
-        std::string a = argv[i];
-        if (a == "--enforce")
-            b.enforce = true;
-        else if (a == "--regression")
-            regression = true;
-        else if (a == "--budget" && i + 1 < argc)
-            budgetFile = argv[++i];
-        else if (a == "--profile" && i + 1 < argc)
-            profileArg = argv[++i];
-        else if (a == "--smoke")
-        {
-            smoke = true;
-            corpusSize = 20;
-        }
-        else if (a == "--e2e")
-            e2eFlag = true;
-        else if (a == "--emit-data" && i + 1 < argc)
-            emitData = argv[++i];
-        else if (a == "--emit-format" && i + 1 < argc)
-            emitFormat = argv[++i];
-        else if (a == "--corpus-size" && i + 1 < argc)
-            corpusSize = static_cast<size_t>(std::strtoul(argv[++i], nullptr, 10));
-        else if (a == "--trace" && i + 1 < argc)
-            traceFile = argv[++i];
-        else if (a == "--corpus-dir" && i + 1 < argc)
-            corpusDir = argv[++i];
-        else if (a == "--scenarios" && i + 1 < argc)
-            scenariosArg = argv[++i];
-        else if (a == "--results" && i + 1 < argc)
-            resultsFile = argv[++i];
-        else if (a == "--baseline" && i + 1 < argc)
-            baselineFile = argv[++i];
-        else if (a == "--history" && i + 1 < argc)
-            historyFile = argv[++i];
-        else if (a == "--report" && i + 1 < argc)
-            reportFile = argv[++i];
-        else if (a == "--scale")
-        {
-            scaleMode = true;
-            // Scale tiers (100/1000/5000) are capped by the available corpus.
-            // Pass --corpus-size 5000 for the full sweep; smaller sizes run the
-            // same tiers capped to the generated image count.
-        }
+        const std::string arg = argv[i];
+        if (takeFlag(opt, arg))
+            continue;
+        if (takeCorpusArgs(opt, arg, i, argc, argv))
+            continue;
+        (void)takeOutputArgs(opt, arg, i, argc, argv);
     }
+}
 
-    // Build the restricted scenario set (empty = run all). Normalize tokens to the
-    // exact scenario names (B1..B9, TRACE) so "--scenarios B1,B2,B8" works.
-    std::set<std::string> runOnly;
-    if (!scenariosArg.empty())
-    {
-        size_t pos = 0;
-        while (pos < scenariosArg.size())
-        {
-            size_t comma = scenariosArg.find(',', pos);
-            std::string tok = (comma == std::string::npos) ? scenariosArg.substr(pos)
-                                                           : scenariosArg.substr(pos, comma - pos);
-            // trim + uppercase
-            auto start = tok.find_first_not_of(" \t");
-            if (start != std::string::npos)
-            {
-                auto end = tok.find_last_not_of(" \t");
-                tok = tok.substr(start, end - start + 1);
-            }
-            for (auto &c : tok)
-                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-            if (!tok.empty())
-            {
-                if (tok == "E2E")
-                {
-                    runOnly.insert("B18");
-                    runOnly.insert("B19");
-                }
-                else
-                    runOnly.insert(tok);
-            }
-            if (comma == std::string::npos)
-                break;
-            pos = comma + 1;
-        }
-    }
-    // `--e2e` alongside a scenario filter still runs the full UI sample.
-    if (e2eFlag && !runOnly.empty())
+void insertScenarioToken(std::set<std::string> &runOnly, const std::string &tok)
+{
+    if (tok.empty())
+        return;
+    if (tok == "E2E")
     {
         runOnly.insert("B18");
         runOnly.insert("B19");
+        return;
     }
+    runOnly.insert(tok);
+}
 
-    // Load the budget first so unbudgeted --enforce can stay on QCoreApplication.
-    bool budgetLoaded = false;
-    if (!budgetFile.empty())
-        budgetLoaded = loadBudgetJson(budgetFile, b);
-    if (!b.configureProfile(profileArg))
+std::string normalizeScenarioToken(const std::string &raw)
+{
+    const auto start = raw.find_first_not_of(" \t");
+    if (start == std::string::npos)
+        return {};
+    const auto end = raw.find_last_not_of(" \t");
+    std::string tok = raw.substr(start, end - start + 1);
+    for (char &c : tok)
+        c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+    return tok;
+}
+
+std::set<std::string> parseScenarioList(const std::string &scenariosArg)
+{
+    std::set<std::string> runOnly;
+    size_t pos = 0;
+    while (pos < scenariosArg.size())
     {
-        std::cerr << "Unknown hardware profile: " << profileArg
-                  << " (expected auto, base, low-core, or ci)\n";
-        return 2;
+        const size_t comma = scenariosArg.find(',', pos);
+        const std::string raw = (comma == std::string::npos)
+                                    ? scenariosArg.substr(pos)
+                                    : scenariosArg.substr(pos, comma - pos);
+        insertScenarioToken(runOnly, normalizeScenarioToken(raw));
+        if (comma == std::string::npos)
+            break;
+        pos = comma + 1;
     }
-    const mviewer::bench::E2eSchedule e2e = mviewer::bench::scheduleE2eSwitch(
-        {smoke, b.enforce, e2eFlag, !runOnly.empty(), runOnly.count("B18") > 0,
-         runOnly.count("B19") > 0, b.gated("B18"), b.gated("B19")});
-    const bool needGui = emitData.empty() && (e2e.warm || e2e.cold);
-    if (needGui && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+    return runOnly;
+}
+
+Prepared prepareRun(BenchOptions &opt, int &exitCode)
+{
+    Prepared prep;
+    if (!opt.budgetFile.empty())
+        prep.budgetLoaded = loadBudgetJson(opt.budgetFile, opt.budget);
+    if (!opt.budget.configureProfile(opt.profileArg))
+    {
+        std::cerr << "Unknown hardware profile: " << opt.profileArg
+                  << " (expected auto, base, low-core, or ci)" << std::endl;
+        exitCode = 2;
+        return prep;
+    }
+    prep.runOnly = parseScenarioList(opt.scenariosArg);
+    // `--e2e` alongside a scenario filter still runs the full UI sample.
+    if (opt.e2eFlag && !prep.runOnly.empty())
+    {
+        prep.runOnly.insert("B18");
+        prep.runOnly.insert("B19");
+    }
+    prep.e2e = mviewer::bench::scheduleE2eSwitch(
+        {opt.smoke, opt.budget.enforce, opt.e2eFlag, !prep.runOnly.empty(),
+         prep.runOnly.count("B18") > 0, prep.runOnly.count("B19") > 0, opt.budget.gated("B18"),
+         opt.budget.gated("B19")});
+    prep.needGui = opt.emitData.empty() && (prep.e2e.warm || prep.e2e.cold);
+    if (prep.needGui && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "offscreen");
+    return prep;
+}
+
+void printBanner(const BenchOptions &opt, const Prepared &prep)
+{
+    std::ostringstream oss;
+    oss << "=== MViewer benchmark (M10) ===\n";
+    if (opt.smoke)
+        oss << "[smoke] ";
+    if (!opt.budgetFile.empty() && !prep.budgetLoaded)
+        oss << "budget=LOAD-FAILED(" << opt.budgetFile << ")\n";
+    oss << "corpus-size=" << opt.corpusSize << " enforce=" << (opt.budget.enforce ? "yes" : "no")
+        << " e2e=" << prep.e2e.label << " logical-cores=" << opt.budget.logicalCores
+        << " profile=" << opt.budget.profileName;
+    if (prep.budgetLoaded)
+        oss << " budget=" << opt.budgetFile;
+    oss << '\n';
+    if (opt.budget.enforce)
+        oss << "scenario-timeout-ms=" << opt.scenarioTimeoutMs << '\n';
+    std::cout << oss.str();
+    std::cout.flush();
+    std::fflush(stdout);
+    const char *qt = prep.needGui ? "QApplication" : "QCoreApplication";
+    mviewer::bench::writeLine(std::string("[bench] qt=") + qt);
+}
+
+void warnIfCorpusIncomplete(const mviewer::bench::Corpus &corpus, bool expectPng)
+{
+    const bool missing = corpus.jpegPaths.empty() || (expectPng && corpus.pngPaths.empty());
+    if (missing)
+        mviewer::bench::writeLine("[bench] corpus is missing jpeg or png files");
+}
+
+void printCorpusLine(const mviewer::bench::Corpus &corpus)
+{
+    std::ostringstream oss;
+    oss << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
+        << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir;
+    mviewer::bench::writeLine(oss.str());
+}
+
+int runEmit(const BenchOptions &opt)
+{
+    mviewer::bench::writeLine("[bench] start corpus");
+    const double t0 = mviewer::bench::nowMs();
+    const mviewer::bench::Corpus corpus =
+        mviewer::bench::makeCorpus(opt.corpusSize, 512, 512, opt.emitData, opt.emitFormat);
+    const long long ms = static_cast<long long>(mviewer::bench::nowMs() - t0);
+    mviewer::bench::writeLine("[bench] done corpus in " + std::to_string(ms) + " ms");
+    std::ostringstream oss;
+    oss << "emitted: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
+        << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir;
+    mviewer::bench::writeLine(oss.str());
+    warnIfCorpusIncomplete(corpus, opt.emitFormat != "jpeg");
+    mviewer::bench::writeLine("=== EMIT DONE ===");
+    return 0;
+}
+
+bool runCollected(const BenchOptions &opt, const Prepared &prep,
+                  const mviewer::bench::Corpus &corpus,
+                  std::vector<mviewer::bench::ScenarioResult> &results)
+{
+    printCorpusLine(corpus);
+    const int watchdogMs = opt.budget.enforce ? opt.scenarioTimeoutMs : 0;
+    return runScenarios(corpus, opt.budget, prep.runOnly, &results, opt.scaleMode, prep.e2e,
+                        watchdogMs);
+}
+
+void flushTrace(const std::string &traceFile)
+{
+#if defined(MVIEWER_ENABLE_PERFETTO)
+    if (traceFile.empty())
+        return;
+    const bool ok = mviewer::trace::flush(traceFile);
+    std::ostringstream oss;
+    oss << "trace: " << (ok ? "wrote " : "FAILED to write ") << traceFile << " ("
+        << mviewer::trace::count() << " spans)";
+    mviewer::bench::writeLine(oss.str());
+#else
+    if (!traceFile.empty())
+        mviewer::bench::writeLine("trace: --trace needs a build with MVIEWER_ENABLE_PERFETTO=ON");
+#endif
+}
+
+int finishBenchRun(BenchOptions &opt, bool allPass,
+                   const std::vector<mviewer::bench::ScenarioResult> &results)
+{
+    if (!opt.resultsFile.empty())
+    {
+        const mviewer::bench::BenchResultMeta meta{opt.budget.profileName, opt.budget.logicalCores};
+        mviewer::bench::writeResultsJson(opt.resultsFile, results, meta);
+    }
+    // Regression is a separate axis from the hard budget. Nightly passes
+    // --regression; the PR bench_enforce gate does not.
+    if (opt.budget.enforce && opt.regression && opt.baselineFile.empty())
+    {
+        const std::string found = mviewer::bench::findDefaultBaselineFile();
+        if (!found.empty())
+        {
+            opt.baselineFile = found;
+            mviewer::bench::writeLine("auto-baseline: " + opt.baselineFile);
+        }
+    }
+    std::vector<std::string> issues;
+    if (!opt.baselineFile.empty())
+    {
+        const bool ok = mviewer::bench::baselineComparisonPassed(
+            opt.baselineFile, opt.budget.profileName, results, Budget::higherIsBetter(), &issues);
+        if (!ok)
+            allPass = false;
+    }
+    if (!opt.historyFile.empty())
+    {
+        const auto baseline = opt.baselineFile.empty()
+                                  ? std::unordered_map<std::string, double>{}
+                                  : mviewer::bench::loadBaselineMetrics(opt.baselineFile);
+        mviewer::bench::appendHistory(opt.historyFile, results, baseline);
+    }
+    if (!opt.reportFile.empty())
+    {
+        const auto baseline = opt.baselineFile.empty()
+                                  ? std::unordered_map<std::string, double>{}
+                                  : mviewer::bench::loadBaselineMetrics(opt.baselineFile);
+        mviewer::bench::writeMarkdownReport(opt.reportFile, opt.baselineFile, results, baseline,
+                                            issues);
+    }
+    flushTrace(opt.traceFile);
+    if (opt.budget.enforce && !allPass)
+        return 1;
+    return 0;
+}
+
+int runBench(int argc, char **argv, BenchOptions opt)
+{
+    int exitCode = 0;
+    const Prepared prep = prepareRun(opt, exitCode);
+    if (exitCode != 0)
+        return exitCode;
+
     std::unique_ptr<QCoreApplication> app;
-    if (needGui)
+    if (prep.needGui)
         app = std::make_unique<QApplication>(argc, argv);
     else
         app = std::make_unique<QCoreApplication>(argc, argv);
     // B18/B19 start UI workers: join them before the app object goes away
     // (ADR 017 shared shutdown path; declared after `app` so it runs first).
     std::optional<mviewer::application::ScopedProcessShutdown> processShutdown;
-    if (needGui)
+    if (prep.needGui)
         processShutdown.emplace();
 
-    std::cout << "=== MViewer benchmark (M10) ===" << '\n';
-    if (smoke)
-        std::cout << "[smoke] ";
-    if (!budgetFile.empty() && !budgetLoaded)
-        std::cout << "budget=LOAD-FAILED(" << budgetFile << ")" << '\n';
-    std::cout << "corpus-size=" << corpusSize << " enforce=" << (b.enforce ? "yes" : "no")
-              << " e2e=" << e2e.label << " logical-cores=" << b.logicalCores
-              << " profile=" << b.profileName;
-    if (budgetLoaded)
-        std::cout << " budget=" << budgetFile;
-    std::cout << '\n';
-
-    // P3 dataset emission mode: generate the corpus into emitData and stop
-    // (no scenarios, no cleanup) so benchmark/data/{small,medium,large} can be
-    // materialized as reproducible, reusable image sets.
-    if (!emitData.empty())
-    {
-        mviewer::bench::Corpus corpus =
-            mviewer::bench::makeCorpus(corpusSize, 512, 512, emitData, emitFormat);
-        std::cout << "emitted: jpeg=" << corpus.jpegPaths.size()
-                  << " png=" << corpus.pngPaths.size() << " tiff=" << corpus.tiffPaths.size()
-                  << " dir=" << corpus.dir << '\n';
-        std::cout << "=== EMIT DONE ===" << '\n';
-        return 0;
-    }
+    printBanner(opt, prep);
+    if (!opt.emitData.empty())
+        return runEmit(opt);
 
     std::vector<mviewer::bench::ScenarioResult> results;
     bool allPass = true;
-
-    // P3 reusable-corpus mode: consume an existing on-disk dataset instead of
-    // regenerating one. Behavior is otherwise identical to the regen path below.
-    if (!corpusDir.empty())
+    if (!opt.corpusDir.empty())
     {
-        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpusFromDir(corpusDir);
-        std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
-                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << '\n';
-        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode, e2e);
-        std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << '\n';
+        const mviewer::bench::Corpus corpus = mviewer::bench::makeCorpusFromDir(opt.corpusDir);
+        allPass = runCollected(opt, prep, corpus, results);
     }
     else
     {
-        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize);
-        std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
-                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << '\n';
-
-        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode, e2e);
+        // Corpus generation is outside the per-scenario watchdog: 3000 images
+        // can legitimately take a large slice of a passing run. The start line
+        // is flushed so a hang here is visible before ctest's own kill.
+        mviewer::bench::writeLine("[bench] start corpus");
+        const double t0 = mviewer::bench::nowMs();
+        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(opt.corpusSize);
+        const long long ms = static_cast<long long>(mviewer::bench::nowMs() - t0);
+        mviewer::bench::writeLine("[bench] done corpus in " + std::to_string(ms) + " ms");
+        warnIfCorpusIncomplete(corpus, true);
+        allPass = runCollected(opt, prep, corpus, results);
         corpus.clear();
     }
+    mviewer::bench::writeLine(std::string("=== ") + (allPass ? "ALL PASS" : "SOME FAIL") + " ===");
+    return finishBenchRun(opt, allPass, results);
+}
 
-    std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << '\n';
+} // namespace
 
-    // M14: write JSON results if --results given.
-    if (!resultsFile.empty())
-        writeResultsJson(resultsFile, results, b);
-
-    // M15: auto-baseline — when --enforce + --regression are on but no --baseline
-    // is specified, attempt to load benchmark/perf_baseline.json from cwd. This
-    // closes the M15 gap: "CI does not yet diff against baseline or fail on
-    // regression." Regression is a SEPARATE, noisier axis (it compares against a
-    // machine-specific baseline); the mandatory CI hard gate (ci.yml `test` job, via the
-    // `bench_enforce` ctest) runs
-    // `--enforce --budget` WITHOUT --regression so it never fails on hardware
-    // jitter. Nightly runs `--enforce --budget --regression` for trend tracking.
-    if (b.enforce && regression && baselineFile.empty())
-    {
-        static const char *const kCandidates[] = {"benchmark/perf_baseline.json",
-                                                  "../benchmark/perf_baseline.json", nullptr};
-        for (int ci = 0; kCandidates[ci]; ++ci)
-        {
-            if (QFile::exists(QString::fromLatin1(kCandidates[ci])))
-            {
-                baselineFile = kCandidates[ci];
-                std::cout << "auto-baseline: " << baselineFile << '\n';
-                break;
-            }
-        }
-    }
-
-    // M15: regression vs baseline.
-    std::vector<std::string> regressionIssues; // { "B2: +12.3%", ... }
-    if (!baselineFile.empty())
-    {
-        const std::string baselineProfile = loadBaselineProfile(baselineFile);
-        if (baselineProfile.empty())
-        {
-            std::cout << "Warning: baseline has no hardware_profile; skipping regression "
-                         "comparison.\n";
-        }
-        else if (baselineProfile != b.profileName)
-        {
-            std::cout << "Warning: baseline profile '" << baselineProfile
-                      << "' differs from active profile '" << b.profileName
-                      << "'; skipping regression comparison.\n";
-        }
-        else if (auto baseline = loadBaselineJson(baselineFile); !baseline.empty())
-        {
-            std::cout << "=== REGRESSION CHECK ===" << '\n';
-            for (const auto &r : results)
-            {
-                std::string key = r.name + "_" + r.metric;
-                auto it = baseline.find(key);
-                if (it != baseline.end() && it->second > 0.0)
-                {
-                    double delta = ((r.value - it->second) / it->second) * 100.0;
-                    const bool higherIsBetter = Budget::higherIsBetter().count(r.metric) > 0;
-                    const bool regression = higherIsBetter ? delta < -10.0 : delta > 10.0;
-                    const bool warning = higherIsBetter ? delta < -5.0 : delta > 5.0;
-                    const char *flag = "";
-                    if (regression)
-                    {
-                        flag = " *** REGRESSION >10% ***";
-                        allPass = false;
-                    }
-                    else if (warning)
-                    {
-                        flag = " * WARN >5%";
-                    }
-                    std::cout << "  " << r.name << ": current=" << r.value
-                              << " baseline=" << it->second << " delta=" << delta << "%" << flag
-                              << '\n';
-                    if (regression)
-                    {
-                        char buf[128];
-                        std::snprintf(buf, sizeof(buf), "%s: %+.1f%% (%.3f -> %.3f)",
-                                      r.name.c_str(), delta, it->second,
-                                      r.value); // NOLINT(cppcoreguidelines-pro-type-vararg)
-                        regressionIssues.push_back(buf);
-                    }
-                }
-            }
-        }
-        else
-        {
-            std::cout << "Warning: could not load baseline from " << baselineFile << '\n';
-        }
-    }
-
-    // M15: append results row to history CSV.
-    if (!historyFile.empty())
-    {
-        // Determine if the file exists (needs header on first write).
-        bool hasHeader = QFile::exists(QString::fromStdString(historyFile));
-        std::ofstream csv(historyFile, std::ios::app);
-        if (csv.is_open())
-        {
-            if (!hasHeader)
-            {
-                csv << "date,scenario,metric,value,p50,p95,p99,passed,regression_pct\n";
-            }
-            const std::string today =
-                QDateTime::currentDateTime().toString("yyyy-MM-dd").toStdString();
-            // Load baseline once (avoid re-parsing per row).
-            auto bl = baselineFile.empty() ? std::unordered_map<std::string, double>{}
-                                           : loadBaselineJson(baselineFile);
-            for (const auto &r : results)
-            {
-                csv << today << ',' << r.name << ',' << r.metric << ',' << r.value << ','
-                    << r.timing.p50Ms << ',' << r.timing.p95Ms << ',' << r.timing.p99Ms << ','
-                    << (r.passed ? "1" : "0") << ',';
-                // Include regression delta for baseline-matched metrics.
-                if (!bl.empty())
-                {
-                    std::string key = r.name + "_" + r.metric;
-                    auto it = bl.find(key);
-                    if (it != bl.end() && it->second > 0.0)
-                        csv << ((r.value - it->second) / it->second) * 100.0;
-                }
-                csv << '\n';
-            }
-            csv.close();
-            std::cout << "history: appended " << results.size() << " rows to " << historyFile
-                      << '\n';
-        }
-    }
-
-    // M15: write markdown regression report.
-    if (!reportFile.empty())
-    {
-        std::ofstream rpt(reportFile);
-        if (rpt.is_open())
-        {
-            rpt << "# MViewer Benchmark Regression Report\n\n";
-            rpt << "**Date:** "
-                << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss").toStdString()
-                << "\n\n";
-            rpt << "**Baseline:** " << (baselineFile.empty() ? "(none)" : baselineFile) << "\n\n";
-            rpt << "| Scenario | Metric | Value | Passed | Regression |\n";
-            rpt << "|----------|--------|-------|--------|------------|\n";
-            auto baseline = baselineFile.empty() ? std::unordered_map<std::string, double>{}
-                                                 : loadBaselineJson(baselineFile);
-            for (const auto &r : results)
-            {
-                std::string regr = "—";
-                if (!baseline.empty())
-                {
-                    std::string key = r.name + "_" + r.metric;
-                    auto it = baseline.find(key);
-                    if (it != baseline.end() && it->second > 0.0)
-                    {
-                        double delta = ((r.value - it->second) / it->second) * 100.0;
-                        char buf[64];
-                        std::snprintf(buf, sizeof(buf), "%+.1f%%",
-                                      delta); // NOLINT(cppcoreguidelines-pro-type-vararg)
-                        regr = buf;
-                    }
-                }
-                rpt << "| " << r.name << " | " << r.metric << " | " << r.value << " | "
-                    << (r.passed ? "PASS" : "FAIL") << " | " << regr << " |\n";
-            }
-            if (!regressionIssues.empty())
-            {
-                rpt << "\n### Regressions (>10%)\n\n";
-                for (const auto &issue : regressionIssues)
-                    rpt << "- " << issue << "\n";
-            }
-            else
-            {
-                rpt << "\n### No regressions detected\n";
-            }
-            rpt.close();
-            std::cout << "report: wrote " << reportFile << '\n';
-        }
-    }
-
-    // M13.5: flush a Chrome trace JSON if --trace was given (only meaningful
-    // when built with MVIEWER_ENABLE_PERFETTO; otherwise the macros are no-ops
-    // and the buffer is empty, so we report and skip).
-#if defined(MVIEWER_ENABLE_PERFETTO)
-    if (!traceFile.empty())
-    {
-        const bool ok = mviewer::trace::flush(traceFile);
-        std::cout << "trace: " << (ok ? "wrote " : "FAILED to write ") << traceFile << " ("
-                  << mviewer::trace::count() << " spans)" << '\n';
-    }
-#else
-    if (!traceFile.empty())
-        std::cout << "trace: --trace needs a build with MVIEWER_ENABLE_PERFETTO=ON" << '\n';
-#endif
-
-    // CI (--smoke) always exits 0 (proves links + runs). Local --enforce may exit 1.
-    if (b.enforce && !allPass)
-        return 1;
-    return 0;
+int main(int argc, char **argv)
+{
+    mviewer::bench::installBenchIo();
+    const BenchSession session;
+    BenchOptions opt;
+    parseArgs(argc, argv, opt);
+    return runBench(argc, argv, std::move(opt));
 }

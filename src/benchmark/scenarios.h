@@ -65,7 +65,10 @@ inline Timing summarize(std::vector<double> vals)
 //   scan       - directory enumeration (FileSystem::listImages)
 //   queue_wait - anchor (visible-range kick) -> first worker begins decode
 //   decode     - decodeScaled (includes scaled-resize for the Qt codec path)
-//   resize     - standalone resize cost (separate from decode; ~0 when folded)
+//   resize     - standalone QImage::scaled on the calling thread, and only when
+//                the thumbnail and decode pools are idle. A full-resolution
+//                QImageReader::read() on a pool thread beside other decodes can
+//                deadlock Qt image IO.
 //   cache      - worker-side mem-cache insert before result callback fires
 //   ui_notify  - anchor -> first thumbnail handed to the UI adapter (resultFn)
 //   total      - scan + ui_notify (end-to-end, user-perceived)
@@ -78,6 +81,13 @@ struct ThumbnailBreakdown
     double cache_ms = 0;
     double ui_notify_ms = 0;
     double total_ms = 0;
+    // First-thumbnail wait hit its deadline. The scenario reports a failing
+    // sentinel so --enforce cannot score a hang as 0 ms.
+    bool timedOut = false;
+    int timeoutMs = 0;
+    // Thumbnail pool drain hit its own deadline. The measured latency stays;
+    // the scenario only appends a note.
+    bool drainTimedOut = false;
 
     std::string toString() const;
 };

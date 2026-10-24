@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **bench_enforce hang diagnostics**: `mviewer_bench` flushes `[bench] start` /
+  `[bench] done` lines (with wall-clock milliseconds) around every scenario and
+  prints the total elapsed at the end. Stdout and stderr stay unbuffered when
+  ctest pipes the process. `--enforce` arms a per-scenario watchdog (default
+  120 s, `--scenario-timeout-ms`) that prints
+  `[bench] WATCHDOG <name> exceeded N ms` and exits 2, so the ctest log names
+  the scenario that hung. Waits on that path (first-thumbnail poll,
+  pipeline-priority trace, startup `processEvents`, end-to-end polls) fail
+  closed with `timed out after N ms`. The first-thumbnail breakdown measures
+  resize on the calling thread only while the thumbnail and decode pools are
+  idle. A full-resolution `QImageReader::read()` on a pool thread beside other
+  decodes can deadlock Qt image IO and block the next scenario. Repeated
+  `libpng error: Read Error`
+  lines are rate-limited inside the harness. `bench_enforce` ctest `TIMEOUT`
+  is 900 s of headroom; budgets and `scenario_map` are unchanged.
+
 ## [1.0.147] - 2026-10-24
 
 ### Release
