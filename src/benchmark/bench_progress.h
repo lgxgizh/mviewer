@@ -18,9 +18,12 @@ namespace mviewer::bench
 inline constexpr double kTimeoutSentinel = 1.0e18;
 inline constexpr int kDefaultScenarioTimeoutMs = 120000;
 
-// Unbuffered stdout/stderr (MSVC treats _IOLBF as fully buffered) plus a
-// bench-only Qt message filter for repeated libpng "Read Error" lines.
+// Unbuffered stdout (MSVC treats _IOLBF as fully buffered). stderr is tapped
+// so libpng's own fprintf("libpng error: Read Error") — Qt's PNG handler
+// installs a null libpng error callback, so the Qt message handler never sees
+// it — is rate-limited before it reaches ctest's pipe.
 void installBenchIo();
+void shutdownBenchIo();
 int libpngReadErrorCount();
 
 void writeLine(const std::string &line);

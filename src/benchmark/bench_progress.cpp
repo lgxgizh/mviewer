@@ -19,6 +19,14 @@
 #include <sstream>
 #include <thread>
 
+#if defined(_WIN32)
+#include <fcntl.h>
+#include <io.h>
+#else
+#include <cerrno>
+#include <unistd.h>
+#endif
+
 namespace mviewer::bench
 {
 namespace
@@ -27,18 +35,188 @@ namespace
 QtMessageHandler g_prevHandler = nullptr;
 std::atomic<int> g_libpngReadErrors{0};
 
-bool isLibpngReadError(const QString &msg)
+struct StderrTap
 {
-    return msg.contains(QLatin1String("libpng")) && msg.contains(QLatin1String("Read Error"));
+    int saved = -1;
+    int readFd = -1;
+    std::thread reader;
+};
+
+StderrTap g_stderrTap;
+
+int fdRead(int fd, char *buf, int n)
+{
+#if defined(_WIN32)
+    return _read(fd, buf, n);
+#else
+    return static_cast<int>(::read(fd, buf, static_cast<size_t>(n)));
+#endif
 }
 
-void writeStderrBytes(const char *data, size_t n)
+int fdWrite(int fd, const char *buf, int n)
 {
-    if (data == nullptr || n == 0)
+#if defined(_WIN32)
+    return _write(fd, buf, n);
+#else
+    return static_cast<int>(::write(fd, buf, static_cast<size_t>(n)));
+#endif
+}
+
+int fdDup(int fd)
+{
+#if defined(_WIN32)
+    return _dup(fd);
+#else
+    return ::dup(fd);
+#endif
+}
+
+int fdDup2(int from, int to)
+{
+#if defined(_WIN32)
+    return _dup2(from, to);
+#else
+    return ::dup2(from, to);
+#endif
+}
+
+int fdClose(int fd)
+{
+#if defined(_WIN32)
+    return _close(fd);
+#else
+    return ::close(fd);
+#endif
+}
+
+bool fdPipe(int fds[2])
+{
+#if defined(_WIN32)
+    return _pipe(fds, 65536, _O_BINARY) == 0;
+#else
+    return ::pipe(fds) == 0;
+#endif
+}
+
+bool interruptedRead(int n)
+{
+#if defined(_WIN32)
+    (void)n;
+    return false;
+#else
+    return n < 0 && errno == EINTR;
+#endif
+}
+
+void writeFdBytes(int fd, const char *data, size_t n)
+{
+    size_t off = 0;
+    while (off < n)
+    {
+        const size_t left = n - off;
+        const int chunk = left > 1 << 20 ? 1 << 20 : static_cast<int>(left);
+        const int wrote = fdWrite(fd, data + off, chunk);
+        if (wrote <= 0)
+            return;
+        off += static_cast<size_t>(wrote);
+    }
+}
+
+void writeFdLine(int fd, const std::string &line)
+{
+    writeFdBytes(fd, line.data(), line.size());
+    writeFdBytes(fd, "\n", 1);
+}
+
+bool isLibpngReadErrorLine(const std::string &line)
+{
+    return line.find("libpng") != std::string::npos && line.find("Read Error") != std::string::npos;
+}
+
+// Qt's qpnghandler passes a null libpng error function, so png_default_error
+// fprintf's this line. Counting it here is the only path that sees it.
+void emitTapLine(const std::string &line, int savedFd)
+{
+    if (!isLibpngReadErrorLine(line))
+    {
+        writeFdLine(savedFd, line);
         return;
-    std::fwrite(data, 1, n, stderr);
-    std::fputc('\n', stderr);
-    std::fflush(stderr);
+    }
+    const int seen = g_libpngReadErrors.fetch_add(1, std::memory_order_relaxed);
+    if (seen < 3)
+        writeFdLine(savedFd, line);
+    else if (seen == 3)
+        writeFdLine(savedFd, "[bench] further libpng Read Error lines suppressed");
+}
+
+void appendTapByte(std::string &line, char c, int savedFd)
+{
+    if (c == '\r')
+        return;
+    if (c != '\n')
+    {
+        if (line.size() < 1024)
+            line.push_back(c);
+        return;
+    }
+    emitTapLine(line, savedFd);
+    line.clear();
+}
+
+void consumeTapBytes(std::string &line, const char *data, int n, int savedFd)
+{
+    for (int i = 0; i < n; ++i)
+        appendTapByte(line, data[i], savedFd);
+}
+
+void readStderrTap(int readFd, int savedFd)
+{
+    std::string line;
+    char buf[512];
+    for (;;)
+    {
+        const int n = fdRead(readFd, buf, static_cast<int>(sizeof buf));
+        if (n > 0)
+        {
+            consumeTapBytes(line, buf, n, savedFd);
+            continue;
+        }
+        if (n == 0 || !interruptedRead(n))
+            break;
+    }
+    if (!line.empty())
+        emitTapLine(line, savedFd);
+}
+
+void startStderrTap()
+{
+    int fds[2] = {-1, -1};
+    if (!fdPipe(fds))
+        return;
+    const int saved = fdDup(2);
+    if (saved < 0)
+    {
+        fdClose(fds[0]);
+        fdClose(fds[1]);
+        return;
+    }
+    g_stderrTap.readFd = fds[0];
+    g_stderrTap.saved = saved;
+    g_stderrTap.reader = std::thread(readStderrTap, fds[0], saved);
+    // POSIX dup2 returns the new descriptor; MSVC _dup2 returns 0. Both use -1
+    // on failure. A `!= 0` test disables the tap on every non-Windows host.
+    if (fdDup2(fds[1], 2) < 0)
+    {
+        fdClose(fds[1]);
+        if (g_stderrTap.reader.joinable())
+            g_stderrTap.reader.join();
+        fdClose(saved);
+        fdClose(fds[0]);
+        g_stderrTap.saved = -1;
+        g_stderrTap.readFd = -1;
+        return;
+    }
+    fdClose(fds[1]);
 }
 
 void forwardQtMessage(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
@@ -49,28 +227,16 @@ void forwardQtMessage(QtMsgType type, const QMessageLogContext &ctx, const QStri
         return;
     }
     const QByteArray bytes = msg.toLocal8Bit();
-    writeStderrBytes(bytes.constData(), static_cast<size_t>(bytes.size()));
+    if (bytes.isEmpty())
+        return;
+    std::fwrite(bytes.constData(), 1, static_cast<size_t>(bytes.size()), stderr);
+    std::fputc('\n', stderr);
+    std::fflush(stderr);
 }
 
-// Bench-only filter. Decoder behaviour is unchanged; this only stops a corrupt
-// or truncated PNG from flooding the ctest log with the same libpng line.
 void benchQtMessage(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
 {
-    if (!isLibpngReadError(msg))
-    {
-        forwardQtMessage(type, ctx, msg);
-        return;
-    }
-    const int seen = g_libpngReadErrors.fetch_add(1, std::memory_order_relaxed);
-    if (seen < 3)
-    {
-        const QByteArray bytes = msg.toLocal8Bit();
-        writeStderrBytes(bytes.constData(), static_cast<size_t>(bytes.size()));
-        return;
-    }
-    if (seen == 3)
-        writeStderrBytes("[bench] further libpng Read Error lines suppressed",
-                         sizeof("[bench] further libpng Read Error lines suppressed") - 1);
+    forwardQtMessage(type, ctx, msg);
 }
 
 void pushRegressionIssue(std::vector<std::string> *issues, const ScenarioResult &result,
@@ -184,12 +350,38 @@ void installBenchIo()
     if (!installed.compare_exchange_strong(expected, true))
         return;
     // MSVC treats _IOLBF as fully buffered. _IONBF keeps ctest's pipe from
-    // swallowing the banner when the process is killed.
+    // swallowing the banner when the process is killed. libpng fprintf lines
+    // are dropped by the stderr tap before they reach that pipe.
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
     std::cout << std::unitbuf;
     std::cerr << std::unitbuf;
     g_prevHandler = qInstallMessageHandler(benchQtMessage);
+    startStderrTap();
+}
+
+void shutdownBenchIo()
+{
+    if (g_stderrTap.saved < 0)
+        return;
+    std::fflush(stderr);
+    const int saved = g_stderrTap.saved;
+    g_stderrTap.saved = -1;
+    // Restoring fd 2 closes the pipe's write end so the reader sees EOF.
+    // On failure, close fd 2 first so the reader still observes EOF, then retry.
+    if (fdDup2(saved, 2) < 0)
+    {
+        fdClose(2);
+        fdDup2(saved, 2);
+    }
+    if (g_stderrTap.reader.joinable())
+        g_stderrTap.reader.join();
+    fdClose(saved);
+    if (g_stderrTap.readFd >= 0)
+    {
+        fdClose(g_stderrTap.readFd);
+        g_stderrTap.readFd = -1;
+    }
 }
 
 int libpngReadErrorCount()

@@ -289,6 +289,9 @@ struct BenchSession
     {
         const long long ms = static_cast<long long>(mviewer::bench::nowMs() - t0);
         mviewer::bench::writeLine("[bench] total " + std::to_string(ms) + " ms");
+        // Drain the stderr tap before reading the count so a libpng line still
+        // in the pipe is included, then print on the restored stderr/stdout.
+        mviewer::bench::shutdownBenchIo();
         const int errors = mviewer::bench::libpngReadErrorCount();
         if (errors > 0)
             mviewer::bench::writeLine("[bench] libpng Read Error count=" + std::to_string(errors));

@@ -406,6 +406,34 @@ int main()
                                         std::chrono::milliseconds(2000));
     }
 
+    {
+        // TRACE used to wait for 60 arrivals. The pipeline never submits past
+        // the visible window + the default predictive count (16).
+        printf("\n[default predictive window]\n");
+        fflush(stdout);
+        ThumbnailPipeline bounded;
+        bounded.setDecodeFn([](const std::string &, int size) { return fakeThumb(size); });
+        std::atomic<int> delivered{0};
+        bounded.setResultFn([&](const std::string &, int, const ImageData &)
+                            { delivered.fetch_add(1, std::memory_order_relaxed); });
+        std::vector<std::string> many;
+        many.reserve(100);
+        for (int i = 0; i < 100; ++i)
+            many.push_back("bounded/" + std::to_string(i) + ".jpg");
+        bounded.setSources(many);
+        bounded.setVisibleRange(0, 20);
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(5000));
+        CHECK(delivered.load() == 36,
+              "visible 20 + default predictive 16, not the whole directory");
+        CHECK(bounded.memCacheSize() == 36, "cache holds only the scheduled window");
+        CHECK(bounded.findCached(many[36], bounded.currentThumbSize()).isNull(),
+              "index 36 is outside the default predictive window");
+        bounded.clear();
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(2000));
+    }
+
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

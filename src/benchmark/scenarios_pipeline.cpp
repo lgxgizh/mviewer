@@ -141,6 +141,18 @@ bool drainThumbnailPool()
                                            std::chrono::milliseconds(kPoolDrainMs));
 }
 
+// clear() drops queued work but keeps injected callbacks and does not join
+// in-flight decodes. Restore the defaults, then drain, so a TRACE or B2
+// lambda cannot keep running into the next scenario.
+bool resetThumbnailPipeline()
+{
+    auto &pipe = ThumbnailPipeline::instance();
+    pipe.clear();
+    pipe.restoreDefaultDecodeFn();
+    pipe.setResultFn({});
+    return drainThumbnailPool();
+}
+
 } // namespace
 
 ThumbnailBreakdown measureFirstThumbnail(const Corpus &corpus)
@@ -174,8 +186,7 @@ ThumbnailBreakdown measureFirstThumbnail(const Corpus &corpus)
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
 
     fillThumbBreakdown(bd, st, tScan0, tAnchor);
-    pipe.clear();
-    bd.drainTimedOut = !drainThumbnailPool();
+    bd.drainTimedOut = !resetThumbnailPipeline();
     // `st` (heap) outlives this function; late worker tasks write only to its
     // atomics, which remain valid. No stack capture -> no use-after-free.
     return bd;
@@ -221,11 +232,12 @@ ScenarioResult scenarioFirstThumbnail(const Corpus &corpus)
 // ─── Pipeline priority trace (M10 P1 verification) ───────────────────────────
 //
 // The user's review asked to PROVE ThumbnailPipeline priority scheduling
-// actually works: visible images (P0) must arrive before predictive neighbors
-// (Background), and background work must not block visible work. We trace the
-// completion order + latency of the first N thumbnails and classify each by
-// its scheduling tier (visible range [0,vis), neighbors [vis,vis+pred),
-// background beyond). No architecture change — pure observation.
+// actually works: visible images must start before predictive neighbors.
+// The pipeline enqueues ONLY the visible window plus m_predictive neighbors
+// (default 16). It does not walk the rest of the directory, so waiting for
+// 60 arrivals on a 20-wide window can never complete — the pool goes idle
+// after 36 deliveries and the wait just burns its deadline. Trace that
+// scheduled set. Tiers: visible [0,vis), neighbors [vis, vis+predictive).
 namespace
 {
 
@@ -292,6 +304,9 @@ struct PriorityStarts
     double minNeighbor = 1e9;
     double maxNeighbor = -1;
     double minBackground = 1e9;
+    bool sawVisible = false;
+    bool sawNeighbor = false;
+    bool sawBackground = false;
     bool orderingOk = false;
 };
 
@@ -299,15 +314,18 @@ void considerStart(PriorityStarts &starts, const TraceState &st, size_t idx, dou
 {
     if (idx < st.visEnd)
     {
+        starts.sawVisible = true;
         starts.maxVisible = std::max(starts.maxVisible, sample);
         return;
     }
     if (idx < st.neighborEnd)
     {
+        starts.sawNeighbor = true;
         starts.minNeighbor = std::min(starts.minNeighbor, sample);
         starts.maxNeighbor = std::max(starts.maxNeighbor, sample);
         return;
     }
+    starts.sawBackground = true;
     starts.minBackground = std::min(starts.minBackground, sample);
 }
 
@@ -324,18 +342,35 @@ PriorityStarts priorityStarts(TraceState &st)
             continue;
         considerStart(starts, st, it->second, kv.second);
     }
-    starts.orderingOk = (starts.maxVisible <= starts.minNeighbor + 1e-6) &&
-                        (starts.maxNeighbor <= starts.minBackground + 1e-6);
+    const bool visibleBeforeNeighbor =
+        starts.sawVisible && starts.sawNeighbor && starts.maxVisible <= starts.minNeighbor + 1e-6;
+    const bool neighborBeforeBackground =
+        !starts.sawBackground ||
+        (starts.sawNeighbor && starts.maxNeighbor <= starts.minBackground + 1e-6);
+    starts.orderingOk = visibleBeforeNeighbor && neighborBeforeBackground;
     return starts;
+}
+
+void appendStart(std::ostringstream &oss, const char *label, bool saw, double value)
+{
+    oss << label << '=';
+    if (saw)
+        oss << value;
+    else
+        oss << "n/a";
 }
 
 std::string formatPriority(const PriorityStarts &starts, bool drained)
 {
     std::ostringstream oss;
-    oss << "visible_start_max=" << starts.maxVisible << " neighbor_start_min=" << starts.minNeighbor
-        << " neighbor_start_max=" << starts.maxNeighbor
-        << " background_start_min=" << starts.minBackground
-        << " priority_by_start=" << (starts.orderingOk ? "OK" : "VIOLATED");
+    appendStart(oss, "visible_start_max", starts.sawVisible, starts.maxVisible);
+    oss << ' ';
+    appendStart(oss, "neighbor_start_min", starts.sawNeighbor, starts.minNeighbor);
+    oss << ' ';
+    appendStart(oss, "neighbor_start_max", starts.sawNeighbor, starts.maxNeighbor);
+    oss << ' ';
+    appendStart(oss, "background_start_min", starts.sawBackground, starts.minBackground);
+    oss << " priority_by_start=" << (starts.orderingOk ? "OK" : "VIOLATED");
     if (!drained)
         oss << " pool drain timed out after " << kPoolDrainMs << " ms";
     return oss.str();
@@ -352,11 +387,17 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
     if (paths.empty())
         return ScenarioResult{"TRACE", "pipeline_priority", 0, {}, "empty corpus", false};
 
+    // Match ThumbnailPipeline's real schedule: visible window, then the
+    // default predictive count. Paths past that are never submitted.
+    constexpr size_t kVisible = 20;
+    constexpr size_t kPredictive = 16;
+    pipe.setPredictiveCount(kPredictive);
+
     auto st = std::make_shared<TraceState>();
-    st->visEnd = 20;
-    st->neighborEnd = st->visEnd + 16;
+    st->visEnd = kVisible;
+    st->neighborEnd = kVisible + kPredictive;
     st->pathCount = paths.size();
-    st->want = static_cast<int>(std::min<size_t>(60, paths.size()));
+    st->want = static_cast<int>(std::min(st->neighborEnd, paths.size()));
     for (size_t i = 0; i < paths.size(); ++i)
         st->pathToIndex[paths[i]] = i;
 
@@ -380,8 +421,7 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
         std::unique_lock<std::mutex> lk(st->trMtx);
         finished = st->cv.wait_for(lk, std::chrono::seconds(30), [&] { return st->done.load(); });
     }
-    pipe.clear();
-    const bool drained = drainThumbnailPool();
+    const bool drained = resetThumbnailPipeline();
     if (!finished)
         return timeoutResult("TRACE", "pipeline_priority", 30000, false);
 

@@ -4,21 +4,28 @@
 
 ### Fixed
 
-- **bench_enforce hang diagnostics**: `mviewer_bench` flushes `[bench] start` /
-  `[bench] done` lines (with wall-clock milliseconds) around every scenario and
-  prints the total elapsed at the end. Stdout and stderr stay unbuffered when
-  ctest pipes the process. `--enforce` arms a per-scenario watchdog (default
-  120 s, `--scenario-timeout-ms`) that prints
-  `[bench] WATCHDOG <name> exceeded N ms` and exits 2, so the ctest log names
-  the scenario that hung. Waits on that path (first-thumbnail poll,
-  pipeline-priority trace, startup `processEvents`, end-to-end polls) fail
-  closed with `timed out after N ms`. The first-thumbnail breakdown measures
-  resize on the calling thread only while the thumbnail and decode pools are
-  idle. A full-resolution `QImageReader::read()` on a pool thread beside other
-  decodes can deadlock Qt image IO and block the next scenario. Repeated
-  `libpng error: Read Error`
-  lines are rate-limited inside the harness. `bench_enforce` ctest `TIMEOUT`
-  is 900 s of headroom; budgets and `scenario_map` are unchanged.
+- **bench_enforce TRACE stall and B6 timeout**: TRACE waited 30 s for 60
+  thumbnail arrivals. `ThumbnailPipeline` only enqueues the visible window plus
+  its predictive neighbors (here 20 + the default 16). The Windows log showed
+  exactly 12 `libpng` lines in that window — one per PNG in those 36 files —
+  and the scenario returned in 30060 ms, so the 5 s pool drain did not wait:
+  workers were idle, not stuck, and paths past the window are never submitted.
+  The trace now waits for that scheduled set. After TRACE and the first-thumbnail
+  scenario the pipeline restores the default decode callback, clears the result
+  callback, drops the queue, and drains in-flight work so a late lambda cannot
+  run into B3–B6. Corpus writes applied JPEG `setQuality(90)` to PNG as well.
+  `QImageWriter` passes compression -1, and Qt then maps quality 90 to zlib
+  level 0 (`(100-90)*9/91 == 0`), so each of the 1000 corpus PNGs was an
+  uncompressed full raster. Every `QImageReader::read` of those files printed
+  one `libpng error: Read Error` (TRACE 12, B3 100, B6 994). Qt's qpnghandler
+  passes a null libpng error callback, so the line is libpng's own
+  `fprintf(stderr, ...)`, which a Qt message handler never sees. With stderr
+  forced unbuffered, those writes hit ctest's pipe on the decode thread. B4
+  already spends ~38 s on 1000 JPEGs; the PNG stretch then misses the 120 s
+  scenario cap. PNG/TIFF now keep the codec default compression, and a bench
+  stderr tap drops that fprintf line before it reaches the pipe. Flushed
+  `[bench] start` / `[bench] done` lines, the per-scenario watchdog, and the
+  900 s ctest `TIMEOUT` stay. Budgets and `scenario_map` are unchanged.
 
 ## [1.0.147] - 2026-10-24
 
