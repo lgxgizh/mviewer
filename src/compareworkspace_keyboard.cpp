@@ -709,6 +709,7 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
     const auto mods = event->modifiers();
     const bool ctrl = (mods == Qt::ControlModifier);
     const bool shiftCtrl = (mods == (Qt::ControlModifier | Qt::ShiftModifier));
+    const bool ctrlAlt = (mods == (Qt::ControlModifier | Qt::AltModifier));
     const bool alt = (mods == Qt::AltModifier);
     if (alt && key == Qt::Key_R)
     {
@@ -737,7 +738,7 @@ bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    if (shiftCtrl && key == Qt::Key_V)
+    if (ctrlAlt && key == Qt::Key_V)
     {
         flipCurrentCell(false);
         event->accept();

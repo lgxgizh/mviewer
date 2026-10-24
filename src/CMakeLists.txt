@@ -144,6 +144,20 @@ add_library(mviewer_core SHARED
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql OpenGL OpenGLWidgets)
+# Optional. The normal build does not run lrelease; the committed .qm files are
+# the source of truth. Invoke this target only when LinguistTools is installed.
+find_package(Qt6 QUIET COMPONENTS LinguistTools)
+if(TARGET Qt6::lrelease)
+    add_custom_target(update_translations_qm
+        COMMAND Qt6::lrelease
+                ${CMAKE_SOURCE_DIR}/translations/mviewer_zh_CN.ts
+                -qm ${CMAKE_SOURCE_DIR}/resources/i18n/mviewer_zh_CN.qm
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${CMAKE_SOURCE_DIR}/resources/i18n/mviewer_zh_CN.qm
+                ${CMAKE_SOURCE_DIR}/translations/mviewer_zh_CN.qm
+        COMMENT "Regenerate resources/i18n/mviewer_zh_CN.qm from translations/mviewer_zh_CN.ts"
+        VERBATIM)
+endif()
 # psapi: provides GetProcessMemoryInfo used by core/perf/MemoryTracker for the
 # OS working-set (RSS) sample. Windows-only; harmless on other platforms.
 target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
@@ -175,6 +189,7 @@ add_library(mviewer_ui STATIC
     mainwindow_ui_menus.cpp
     mainwindow_filetransform.cpp
     mainwindow_ui_connections.cpp
+    mainwindow_ui_connections_browse.cpp
     mainwindow_commands.cpp
     mainwindow_navigation.cpp
     mainwindow_session.cpp
@@ -233,10 +248,12 @@ add_library(mviewer_ui STATIC
     rendercommandpainter.cpp
     compare_display_manager.cpp
     compareworkspace_controls.cpp
+    compareworkspace_controls_overlay.cpp
     compareworkspace_toolbar.cpp
     compareworkspace_pane_header.cpp
     compareworkspace_render.cpp
     compareworkspace_render_materialization.cpp
+    compareworkspace_render_canvas_paint.cpp
     compareworkspace_pyramid_wire.cpp
     compareworkspace_render_diff.cpp
     compareworkspace_live_diff.cpp

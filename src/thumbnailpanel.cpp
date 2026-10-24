@@ -568,6 +568,16 @@ void ThumbnailPanel::keyPressEvent(QKeyEvent *event)
 {
     const auto mods = event->modifiers();
     const int key = event->key();
+    // Plain Ctrl+0 stays Fit. Ctrl+Alt+9 resets size: Ctrl+Shift+digits rate,
+    // Alt+digits label, and Key_0 is forwarded as a global key.
+    const auto chord = mods & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
+    if (chord == (Qt::ControlModifier | Qt::AltModifier) && key == Qt::Key_9)
+    {
+        setThumbSize(kDefaultThumbSize);
+        emit browseStatusChanged(tr("Thumbnail size reset (Ctrl+Alt+9)"));
+        event->accept();
+        return;
+    }
     if (mods & Qt::ControlModifier)
     {
         if (key == Qt::Key_Plus || key == Qt::Key_Equal)
@@ -579,12 +589,6 @@ void ThumbnailPanel::keyPressEvent(QKeyEvent *event)
         if (key == Qt::Key_Minus || key == Qt::Key_Underscore)
         {
             setThumbSize(qBound(kMinThumbSize, m_thumbSize - 16, kMaxThumbSize));
-            event->accept();
-            return;
-        }
-        if (key == Qt::Key_0)
-        {
-            setThumbSize(kDefaultThumbSize);
             event->accept();
             return;
         }

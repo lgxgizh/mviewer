@@ -13,10 +13,11 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 2. **Click** to view large; **Ctrl+click** / **Shift+click** to multi-select. **Ctrl+Shift+A** Cancel selection (deselect).
 3. **View zoom**:
    - Scroll to zoom freely; double-click toggles between "Fit to Window" and 100% actual size.
+   - With focus in the gallery, **Ctrl++** / **Ctrl+-** change thumbnail size and **Ctrl+Alt+9** resets it. **Ctrl+0** always fits the window.
    - Quick presets (View menu): **50%**, **100%**, **200%**, **400%**, **800%** (pixel-grid level).
 4. **Geometric transforms** (overwrite the original file; JPEG is re-encoded at quality 95):
    - **Ctrl+R** / **Ctrl+Shift+R**: rotate 90° clockwise / counterclockwise and overwrite the original.
-   - **Ctrl+Shift+H** / **Ctrl+Shift+V**: flip horizontally / vertically and overwrite the original.
+   - **Ctrl+Shift+H** / **Ctrl+Alt+V**: flip horizontally / vertically and overwrite the original.
    - With no image selected the menu items are disabled and the status bar explains why (never a silent no-op).
 5. **Channel isolation and analysis**:
    - **Shift+1…6**: original RGB / red (R) / green (G) / blue (B) / luminance (Y) / value (HSV-V).
@@ -66,7 +67,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
    - The images to compare are chosen in Browse; Compare no longer steps to a previous / next group.
    - **Esc**: clears the ROI selection first; press Esc again to exit Compare.
 7. **Rotate / flip in Compare is a preview**:
-   - Side-panel buttons or **Ctrl+R** / **Ctrl+Shift+R** / **Ctrl+Shift+H** / **Ctrl+Shift+V** change only the current pane's display and **do not overwrite the original file**.
+   - Side-panel buttons or **Ctrl+R** / **Ctrl+Shift+R** / **Ctrl+Shift+H** / **Ctrl+Alt+V** change only the current pane's display and **do not overwrite the original file**.
    - The target is the pane picked for editing, otherwise the pane under the cursor / the locked reference; without a target the status bar says so instead of silently changing pane 1.
 8. **Per-pane adjustments and export**:
    - The Adjust panel sets brightness, contrast, gamma, white balance and USM sharpening (amount 0%–500%, radius 0.1–20 px, threshold 0–255, optional luminance only) for the current pane. Off by default. Preview, difference and histogram use the same adjustments and **do not overwrite the original file**. "Reset Adjustments" also turns USM off.
@@ -130,7 +131,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **.** / **,** | Overlay opacity +5% / -5% |
 | **Shift+1…6** | Single channel: RGB / R / G / B / Y / HSV-V |
 | **Ctrl+R** / **Ctrl+Shift+R** | Preview-rotate the current pane (file not written) |
-| **Ctrl+Shift+H** / **Ctrl+Shift+V** | Preview-flip the current pane (file not written) |
+| **Ctrl+Shift+H** / **Ctrl+Alt+V** | Preview-flip the current pane (file not written) |
 | **Esc** | Clear the ROI selection or exit Compare |
 | **?** | Bottom hint strip |
 
@@ -146,7 +147,8 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **Ctrl+Shift+F** | Toggle the global search panel |
 | **Ctrl+I** / **I** | Toggle the EXIF metadata overlay |
 | **Ctrl+R** / **Ctrl+Shift+R** | Rotate 90° clockwise / counterclockwise (overwrites the original; preview only in Compare) |
-| **Ctrl+Shift+H** / **Ctrl+Shift+V** | Flip horizontally / vertically (overwrites the original; preview only in Compare) |
+| **Ctrl+Shift+H** / **Ctrl+Alt+V** | Flip horizontally / vertically (overwrites the original; preview only in Compare) |
+| **Ctrl++** / **Ctrl+-** / **Ctrl+Alt+9** | Gallery focus: enlarge, shrink, or reset thumbnail size. **Ctrl+0** always fits the window |
 | **Shift+C** | Copy the pixel color at the cursor |
 | **F6** | Toggle focus browse mode |
 | **S** | Start the slideshow |

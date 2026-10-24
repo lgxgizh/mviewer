@@ -264,7 +264,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aRotateCCW =
         menu.addAction(tr("Rotate 90° Counterclockwise and Overwrite Original (Ctrl+Shift+R)"));
     QAction *aFlipH = menu.addAction(tr("Flip Horizontal and Overwrite Original (Ctrl+Shift+H)"));
-    QAction *aFlipV = menu.addAction(tr("Flip Vertical and Overwrite Original (Ctrl+Shift+V)"));
+    QAction *aFlipV = menu.addAction(tr("Flip Vertical and Overwrite Original (Ctrl+Alt+V)"));
     const bool hasPath = !m_currentPath.isEmpty();
     for (QAction *a : {aRotateCW, aRotateCCW, aFlipH, aFlipV, aCopy, aCopyPath, aCopyName, aReveal})
         a->setEnabled(hasPath);
@@ -434,13 +434,14 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
     const bool ctrl = (modifiers == Qt::ControlModifier);
     const bool shift = (modifiers == Qt::ShiftModifier);
     const bool shiftCtrl = (modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
+    const bool ctrlAlt = (modifiers == (Qt::ControlModifier | Qt::AltModifier));
     if (ctrl && key == Qt::Key_R)
         return rotateCW();
     if (shiftCtrl && key == Qt::Key_R)
         return rotateCCW();
     if (shiftCtrl && key == Qt::Key_H)
         return flipHorizontal();
-    if (shiftCtrl && key == Qt::Key_V)
+    if (ctrlAlt && key == Qt::Key_V)
         return flipVertical();
     if (shift && (key == Qt::Key_C || key == Qt::Key_B))
     {

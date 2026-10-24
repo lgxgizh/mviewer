@@ -10,6 +10,7 @@
 #include <QCoreApplication>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTranslator>
 
 #include <iostream>
 
@@ -69,6 +70,26 @@ int main(int argc, char **argv)
           "Chinese shortcut page is loaded");
     check(Language::localizedHelpHtml(QStringLiteral("no-such-page")).isEmpty(),
           "missing help page returns empty");
+
+    // The shipped catalog is committed (the build does not run lrelease). These
+    // strings are recent or added here, so a stale .qm fails this gate.
+    QTranslator embedded;
+    check(embedded.load(QStringLiteral(":/i18n/mviewer_zh_CN.qm")),
+          "embedded :/i18n/mviewer_zh_CN.qm loads");
+    check(embedded.translate("MainWindow", "Close Split Browse View") ==
+              QStringLiteral("关闭双栏浏览"),
+          "qm translates Close Split Browse View");
+    check(embedded.translate("MainWindow", "Focus Browse Mode (F6)") ==
+              QStringLiteral("专注浏览模式 (F6)"),
+          "qm translates Focus Browse Mode");
+    check(embedded.translate("ThumbnailPanel", "Thumbnail size reset (Ctrl+Alt+9)") ==
+              QStringLiteral("已重置缩略图大小 (Ctrl+Alt+9)"),
+          "qm translates thumbnail size reset");
+    check(embedded.translate(
+              "CompareShortcuts",
+              "Same as O when the compare canvas has focus; otherwise Tab moves focus") ==
+              QStringLiteral("比较画布拥有焦点时与 O 相同；否则 Tab 移动焦点"),
+          "qm translates compare canvas Tab note");
 
     Language::apply(LanguageMode::English);
     check(tr("MainWindow", "&File") == QStringLiteral("&File"),

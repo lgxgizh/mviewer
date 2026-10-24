@@ -75,9 +75,13 @@ bool ThumbnailPanel::event(QEvent *event)
     {
         const auto *keyEvent = static_cast<const QKeyEvent *>(event);
         const int key = keyEvent->key();
-        const bool thumbKey = key == Qt::Key_Plus || key == Qt::Key_Equal || key == Qt::Key_Minus ||
-                              key == Qt::Key_Underscore || key == Qt::Key_0;
-        if (keyEvent->modifiers() == Qt::ControlModifier && thumbKey)
+        const bool thumbZoom = key == Qt::Key_Plus || key == Qt::Key_Equal ||
+                               key == Qt::Key_Minus || key == Qt::Key_Underscore;
+        const auto chord = keyEvent->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
+        // Ctrl+0 is Fit everywhere. Ctrl+Alt+9 resets thumbnail size.
+        const bool thumbReset =
+            chord == (Qt::ControlModifier | Qt::AltModifier) && key == Qt::Key_9;
+        if ((keyEvent->modifiers() == Qt::ControlModifier && thumbZoom) || thumbReset)
         {
             event->accept();
             return true;

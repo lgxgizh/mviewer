@@ -135,7 +135,7 @@ above is the main window only.
 | Colour label | `0`–`6` | Assign a colour label to the selection |
 
 > Browse/Viewer persist geometry with **overwrite**: `Ctrl+R` / `Ctrl+Shift+R`
-> rotate 90°, `Ctrl+Shift+H` / `Ctrl+Shift+V` flip. Compare uses the same keys as
+> rotate 90°, `Ctrl+Shift+H` / `Ctrl+Alt+V` flip. Compare uses the same keys as
 > **preview-only** cell adjustments (side-panel hint + status). Plain `H` / `V` do
 > **not** flip — in Compare, `H` is difference highlight. The viewer's `R` still
 > toggles ROI selection mode (`src/imageviewer.cpp`).
@@ -187,7 +187,8 @@ above is the main window only.
 | `F5` | Refresh the directory |
 | `Delete` | Move to MViewer staging |
 | `Ctrl+R` / `Ctrl+Shift+R` | Rotate 90° CW / CCW (overwrites the file) |
-| `Ctrl+Shift+H` / `Ctrl+Shift+V` | Flip horizontal / vertical (overwrites the file) |
+| `Ctrl+Shift+H` / `Ctrl+Alt+V` | Flip horizontal / vertical (overwrites the file) |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+Alt+9` | Gallery focus: thumbnail size (reset is Ctrl+Alt+9). `Ctrl+0` always fits the window |
 | `Ctrl+Shift+B` | Batch processing |
 | `Ctrl+Shift+A` | Deselect all |
 | `Ctrl+Alt+A` | Batch analysis export |
@@ -205,7 +206,7 @@ above is the main window only.
 | `F` or `F11` | Fullscreen |
 | `R` | Toggle ROI selection mode |
 | `Ctrl+R` / `Ctrl+Shift+R` | Rotate 90° CW / CCW (overwrites the open file) |
-| `Ctrl+Shift+H` / `Ctrl+Shift+V` | Flip horizontal / vertical (overwrites the open file) |
+| `Ctrl+Shift+H` / `Ctrl+Alt+V` | Flip horizontal / vertical (overwrites the open file) |
 | `Esc` | Close the viewer |
 | `,` / `.` | Previous / next frame (animated / multi-page sources) |
 | `Space` | Play / pause animation (animated sources only) |
@@ -226,7 +227,7 @@ above is the main window only.
 | `1`–`8` | Hold to preview image N on the pane under the pointer. Off a pane, the focused pane is used, otherwise the first pane. Digits past the image count show a status hint only |
 | `Ctrl+2` / `Ctrl+4` / `Ctrl+8` | 2-up / 4-up / 8-up layout presets |
 | `Ctrl+R` / `Ctrl+Shift+R` | Preview-rotate the edit/hover/focus pane (does not write files) |
-| `Ctrl+Shift+H` / `Ctrl+Shift+V` | Preview-flip the edit/hover/focus pane (does not write files) |
+| `Ctrl+Shift+H` / `Ctrl+Alt+V` | Preview-flip the edit/hover/focus pane (does not write files) |
 | `Shift+1`…`Shift+6` | Channel: none / R / G / B / Y / V |
 | `?` | Shortcut hints |
 | `Esc` | Clear the ROI, then exit Compare |
