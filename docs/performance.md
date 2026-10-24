@@ -40,6 +40,18 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 
 **Requirement:** Neighboring images should be preloaded. Switching to a preloaded image must feel instantaneous.
 
+**How it is measured:** B7 (`switch_warm_p50_ms`) and B8 (`switch_p50_ms`) are
+repository-level: they time `ImageRepository::load()` cache hits/misses only
+(~0.2 ms on the committed baseline) and never set an `ImageViewer` image, paint,
+or run MainWindow next/previous. The end-to-end UI path — `navigate_next` →
+viewer displays the new source → a paint completes, including preview / metadata
+/ overlay updates — is B18 (`e2e_switch_warm_p50_ms`) and B19
+(`e2e_switch_cold_p50_ms`). Those scenarios are report-only until a Windows CI
+run supplies real numbers for the budget. `mviewer_bench --enforce` skips them
+until `scenario_map` has a numeric budget (then 12 samples on a 4-image
+fixture). Full runs are the default outside `--enforce` / `--smoke`, or
+`--e2e` / `--scenarios e2e`.
+
 ### Zoom & Pan
 
 | Metric | Target |
@@ -161,6 +173,14 @@ Measure: Time from navigation request to new image displayed
 Method: Navigate forward 100 times, measure frame-to-frame time
 Target: < 16ms for preloaded images
 ```
+
+B7/B8 implement that method at the repository (`ImageRepository::load()`) layer.
+B18 (warm, 100 iterations) and B19 (cold, 30 iterations) implement it on the
+real UI path offscreen: `CommandRegistry` `navigate_next` (the same entry
+`MainWindow::navigate` / viewer Left/Right uses) until `ImageViewer` has the new
+source and `repaint()` / `QWidget::render` has completed. That full sample is
+the default `mviewer_bench` run and `--e2e` / `--scenarios e2e`. `--enforce`
+omits it unless the metric is budgeted, in which case it records 12 samples.
 
 ---
 

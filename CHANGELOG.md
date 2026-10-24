@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- **End-to-end view-switch benchmarks**: B18 (`e2e_switch_warm_p50_ms`) and
+  B19 (`e2e_switch_cold_p50_ms`) time the real UI next/previous path
+  (`CommandRegistry` `navigate_next` → `MainWindow::navigate` → `ImageViewer`
+  present + paint, including preview/metadata/overlay updates) offscreen.
+  B7/B8 remain repository-level `ImageRepository::load()` measurements. The
+  new scenarios are report-only (not in `scenario_map`) until CI calibrates
+  budgets. `--smoke` skips them. `--enforce` skips them too, so `bench_enforce`
+  does not pay for the UI loop; once a scenario has a numeric budget it runs
+  there as a 12-sample / 4-image fixture and is hard-gated. Full 100/30-iteration
+  runs stay the default outside `--enforce` / `--smoke`, and on demand via
+  `--e2e` or `--scenarios e2e` (or `B18` / `B19`).
+
 ### Changed
 
 - **Compare display materialization is an explicit per-pane state machine**

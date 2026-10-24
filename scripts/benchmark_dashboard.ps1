@@ -24,6 +24,8 @@ foreach ($f in (Get-ChildItem $ResultDir -Filter 'result_*.txt' | Sort-Object Na
     if ($text -match 'B4 thumbnails_per_sec=([\d.]+)') { $row['thumbs_per_sec'] = $Matches[1] }
     if ($text -match 'B7 switch_warm_p50_ms=([\d.]+)') { $row['switch_warm_p50_ms'] = $Matches[1] }
     if ($text -match 'B8 switch_p50_ms=([\d.]+)') { $row['switch_p50_ms'] = $Matches[1] }
+    if ($text -match 'B18 e2e_switch_warm_p50_ms=([\d.]+)') { $row['e2e_switch_warm_p50_ms'] = $Matches[1] }
+    if ($text -match 'B19 e2e_switch_cold_p50_ms=([\d.]+)') { $row['e2e_switch_cold_p50_ms'] = $Matches[1] }
     if ($text -match 'B6 peak_cache_bytes=([\d.eE+]+)') { $row['peak_cache_bytes'] = $Matches[1] }
     if ($text -match 'finalRssMB=(\d+)') { $row['rss_mb'] = $Matches[1] }
     $rows += ,$row
@@ -31,7 +33,7 @@ foreach ($f in (Get-ChildItem $ResultDir -Filter 'result_*.txt' | Sort-Object Na
 
 if ($rows.Count -eq 0) { Write-Host "no benchmark result files found"; exit 1 }
 
-$cols = @('date','file','corpus','first_thumb_ms','decode_jpeg_p50_ms','thumbs_per_sec','switch_warm_p50_ms','switch_p50_ms','peak_cache_bytes','rss_mb')
+$cols = @('date','file','corpus','first_thumb_ms','decode_jpeg_p50_ms','thumbs_per_sec','switch_warm_p50_ms','switch_p50_ms','e2e_switch_warm_p50_ms','e2e_switch_cold_p50_ms','peak_cache_bytes','rss_mb')
 $csv = Join-Path $OutDir 'history.csv'
 $lines = @(($cols -join ','))
 foreach ($r in $rows) {
@@ -72,6 +74,8 @@ $seriesJson = @{
     decode_jpeg_p50_ms = (Get-Series 'decode_jpeg_p50_ms')
     thumbs_per_sec     = (Get-Series 'thumbs_per_sec')
     switch_p50_ms      = (Get-Series 'switch_p50_ms')
+    e2e_switch_warm_p50_ms = (Get-Series 'e2e_switch_warm_p50_ms')
+    e2e_switch_cold_p50_ms = (Get-Series 'e2e_switch_cold_p50_ms')
     peak_cache_bytes   = (Get-Series 'peak_cache_bytes')
 } | ConvertTo-Json -Compress
 
@@ -111,7 +115,8 @@ $table
 <li><b>first_thumb_ms</b> - review budget &lt;300ms cold. Lower is better.</li>
 <li><b>decode_jpeg_p50_ms</b> - JPEG decode median. Lower is better.</li>
 <li><b>thumbs_per_sec</b> - thumbnail throughput. Higher is better.</li>
-<li><b>switch_*_p50_ms</b> - image-switch latency. Lower is better.</li>
+<li><b>switch_*_p50_ms</b> - repository-level image-switch (B7/B8, ImageRepository::load). Lower is better.</li>
+<li><b>e2e_switch_*_p50_ms</b> - end-to-end UI view-switch (B18/B19, navigate → present+paint). Lower is better. Report-only until calibrated. Omitted from <code>--enforce</code> unless budgeted; record the full sample with <code>--e2e</code>.</li>
 <li><b>peak_cache_bytes</b> / <b>rss_mb</b> - memory.</li>
 </ul>
 
