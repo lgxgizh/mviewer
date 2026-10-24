@@ -66,3 +66,10 @@ B18 (`e2e_switch_warm_p50_ms`) and B19 (`e2e_switch_cold_p50_ms`) are listed
 under `provisional` in `benchmark/performance_budget.json` and are **not** in
 `scenario_map`. They print p50/p95/p99 like B7/B8 but do not fail `--enforce`
 until a Windows CI run supplies real numbers. `--smoke` skips them.
+`--enforce` skips them as well, so the `bench_enforce` ctest does not run the
+UI loop. After a metric is added to `scenario_map` and `budgets`, `--enforce`
+runs a 12-sample / 4-image fixture and hard-gates that limit. The full
+100-iteration warm / 30-iteration cold sample is the default non-enforce run,
+or `--e2e` / `--scenarios e2e` (also `B18` or `B19` alone). Nightly
+`--enforce --regression` follows the same rule; pass `--e2e` there to record
+the long sample.

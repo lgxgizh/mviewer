@@ -116,7 +116,7 @@ $table
 <li><b>decode_jpeg_p50_ms</b> - JPEG decode median. Lower is better.</li>
 <li><b>thumbs_per_sec</b> - thumbnail throughput. Higher is better.</li>
 <li><b>switch_*_p50_ms</b> - repository-level image-switch (B7/B8, ImageRepository::load). Lower is better.</li>
-<li><b>e2e_switch_*_p50_ms</b> - end-to-end UI view-switch (B18/B19, navigate → present+paint). Lower is better. Report-only until calibrated.</li>
+<li><b>e2e_switch_*_p50_ms</b> - end-to-end UI view-switch (B18/B19, navigate → present+paint). Lower is better. Report-only until calibrated. Omitted from <code>--enforce</code> unless budgeted; record the full sample with <code>--e2e</code>.</li>
 <li><b>peak_cache_bytes</b> / <b>rss_mb</b> - memory.</li>
 </ul>
 

@@ -180,16 +180,60 @@ ScenarioResult scenarioWorkflowSoak(const Corpus &corpus);
 // `tierLabel` is the human-readable tier name ("100"/"1000"/"5000").
 ScenarioResult scenarioScaleTier(const Corpus &corpus, size_t tierN, const std::string &tierLabel);
 
+// How long B18/B19 run. `scheduleE2eSwitch` fills this. A default-constructed
+// schedule runs nothing (`warm`/`cold` false) so the enforce gate cannot pick
+// up the full UI loop by accident. `full()` is the explicit / non-enforce sample.
+struct E2eSchedule
+{
+    bool warm = false;
+    bool cold = false;
+    const char *label = "skip"; // skip | smoke | short | full
+    int warmIterations = 0;
+    int coldIterations = 0;
+    int subsetMax = 4;
+    // <0 warms every image in the subset (repository load + one UI step each).
+    int warmupPasses = -1;
+    int warmTimeoutMs = 800;
+    int coldTimeoutMs = 1200;
+
+    static E2eSchedule full();
+};
+
+// Inputs for `scheduleE2eSwitch`. `tokenWarm` / `tokenCold` are true when
+// `--scenarios` names B18 / B19 (the `e2e` token expands to both). `budgetWarm`
+// / `budgetCold` are true only when performance_budget.json maps that scenario
+// onto a numeric limit.
+struct E2eRequest
+{
+    bool smoke = false;
+    bool enforce = false;
+    bool e2eFlag = false;
+    bool filterActive = false;
+    bool tokenWarm = false;
+    bool tokenCold = false;
+    bool budgetWarm = false;
+    bool budgetCold = false;
+};
+
+// --smoke skips B18/B19 unless `--e2e` or `--scenarios` names them (then 2
+// samples). --enforce skips them unless the budget gates the metric, in which
+// case it keeps a >=10 sample on a 4-image fixture. `--e2e` / `--scenarios e2e`
+// (and a named B18/B19) keep the full 100/30 sample. Other non-enforce runs
+// are full too.
+E2eSchedule scheduleE2eSwitch(const E2eRequest &req);
+
 // B18: end-to-end WARM view-switch (preloaded/cached). Issues the same next-image
 // command the UI uses (CommandRegistry "navigate_next" → MainWindow::navigate →
 // ImageViewer::setImage + preview/metadata/overlay) and waits until the viewer
-// displays the new source and a paint has completed. Report-only; not in
-// scenario_map. Default 100 iterations; --smoke skips unless explicitly selected.
-ScenarioResult scenarioE2eSwitchWarm(const Corpus &corpus, int iterations = 100);
+// displays the new source and a paint has completed. Not a hard gate unless
+// scenario_map budgets the metric.
+ScenarioResult scenarioE2eSwitchWarm(const Corpus &corpus,
+                                     const E2eSchedule &run = E2eSchedule::full());
 
 // B19: end-to-end COLD view-switch (first visit). Same UI path as B18, but the
-// in-memory/disk caches are flushed before each navigation so the sample includes
-// decode + first present + paint. Report-only. Default 30 iterations.
-ScenarioResult scenarioE2eSwitchCold(const Corpus &corpus, int iterations = 30);
+// in-memory caches are flushed before each navigation so the sample includes
+// decode + first present + paint.
+ScenarioResult scenarioE2eSwitchCold(const Corpus &corpus,
+                                     const E2eSchedule &run = E2eSchedule::full());
 
 } // namespace mviewer::bench

@@ -36,6 +36,12 @@ $env:MVIEWER_BENCH_TMP = "D:/mviewer_bench_data/medium"
 ./build_msvc/bin/mviewer_bench.exe --corpus-size 1000 --enforce
 ```
 
+`--enforce` skips the B18/B19 UI view-switch scenarios unless
+`performance_budget.json` gives that scenario a numeric budget (then a
+12-sample / 4-image run). Add `--e2e`, or `--scenarios e2e`, for the full
+100-iteration warm / 30-iteration cold sample. `--smoke` skips them unless
+they are named.
+
 ## Note
 
 The images are **not committed to git** (binary bloat). They are regenerated on

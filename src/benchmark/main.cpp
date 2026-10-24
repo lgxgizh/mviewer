@@ -32,17 +32,18 @@
 
 // mviewer_bench — M10 performance harness (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
 //
-//   mviewer_bench                  full corpus, print verdicts, exit 0
-//   mviewer_bench --smoke         20/img corpus, skip B18/B19, exit 0 (link+run)
-//   mviewer_bench --enforce       hard-gate scenario_map vs performance_budget.json
-//   mviewer_bench --regression    also diff perf_baseline.json; >10% -> fail
-//   mviewer_bench --budget <f>    --profile <auto|base|low-core|ci>  --baseline <f>
-//   mviewer_bench --corpus-size N  --corpus-dir <d>  --scale  --scenarios B1,B8,B18
+//   mviewer_bench                  full corpus, including full B18/B19, exit 0
+//   mviewer_bench --smoke          20/img corpus, skip B18/B19, exit 0 (link+run)
+//   mviewer_bench --enforce        hard-gate scenario_map; skip unbudgeted B18/B19
+//   mviewer_bench --e2e            full B18/B19 (100/30). Same as --scenarios e2e
+//   mviewer_bench --regression     also diff perf_baseline.json; >10% -> fail
+//   mviewer_bench --budget <f>     --profile <auto|base|low-core|ci>  --baseline <f>
+//   mviewer_bench --corpus-size N  --corpus-dir <d>  --scale  --scenarios B1,B8
 //   mviewer_bench --results <f>    --history <f>  --report <f>  --trace <f>
 //
-// --enforce hard-gates scenario_map (B1-B9 + B11-B15). B0/B10/TRACE/B16/B17/B18/B19
-// are report-only. --regression is a separate nightly axis. B18/B19 need QApplication
-// (offscreen when QT_QPA_PLATFORM is unset); --smoke keeps QCoreApplication.
+// --enforce hard-gates scenario_map (B1-B9 + B11-B15). B18/B19 need QApplication
+// (offscreen when QT_QPA_PLATFORM is unset). They run for --e2e / --scenarios,
+// for a non-enforce run, or when the budget file actually gates them (12 samples).
 
 namespace
 {
@@ -145,6 +146,15 @@ struct Budget
         return scenarioMap.find(scenario) != scenarioMap.end();
     }
 
+    // True when scenario_map binds `scenario` to a metric that has a numeric limit.
+    bool gated(const std::string &scenario) const
+    {
+        const auto it = scenarioMap.find(scenario);
+        if (it == scenarioMap.end())
+            return false;
+        return limits.find(it->second) != limits.end();
+    }
+
     // Enforce `measured` for `scenario` against its budget limit. Returns true
     // (pass) when the scenario is not in the gated set, so unspecified scenarios
     // keep their own structural verdict.
@@ -170,14 +180,19 @@ struct Budget
 // source of truth for limits in CI.
 bool loadBudgetJson(const std::string &path, Budget &b)
 {
-    QFile f(QString::fromStdString(path));
-    if (!f.open(QIODevice::ReadOnly))
+    // ifstream, not QFile: this runs before QCoreApplication exists so the
+    // harness can choose QApplication only when B18/B19 are actually scheduled.
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
         return false;
-    const QByteArray data = f.readAll();
-    f.close();
-
+    std::string text;
+    char buf[4096]{};
+    while (in.read(buf, sizeof(buf)))
+        text.append(buf, sizeof(buf));
+    text.append(buf, static_cast<size_t>(in.gcount()));
     QJsonParseError err;
-    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(QByteArray(text.data(), static_cast<int>(text.size())), &err);
     if (doc.isNull() || !doc.isObject())
         return false;
 
@@ -323,7 +338,7 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
 bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
                   const std::set<std::string> &runOnly = {},
                   std::vector<mviewer::bench::ScenarioResult> *outResults = nullptr,
-                  bool scaleMode = false, bool smoke = false)
+                  bool scaleMode = false, const mviewer::bench::E2eSchedule &e2e = {})
 {
     const bool filter = !runOnly.empty();
     // Lazy scenario registry, filtered on the AUTHORITATIVE name BEFORE
@@ -349,10 +364,6 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     items.push_back({"B9", [&]() { return mviewer::bench::scenarioSoakStability(corpus); }});
     // B10 does not need the corpus; it synthesizes a 100MP buffer in-process.
     items.push_back({"B10", [&]() { return mviewer::bench::scenarioHundredMpTiles(); }});
-    // Post-M22 named scenarios (review "performance regression" asks). All synthesized
-    // in-process, so they run headless and never OOM on a missing RAW sample.
-    // They are report + baseline-regression (±10%) gated, not hard exit-fails,
-    // to avoid CI flakiness on uncalibrated hardware.
     items.push_back({"B11", [&]() { return mviewer::bench::scenarioDecode4kJpeg(); }});
     items.push_back({"B12", [&]() { return mviewer::bench::scenarioDecode8k(); }});
     items.push_back({"B13", [&]() { return mviewer::bench::scenarioCacheHitRate(corpus); }});
@@ -360,21 +371,14 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     items.push_back({"B15", [&]() { return mviewer::bench::scenarioZoomLatency(); }});
     // B16: render throughput (fps), report-only (machine dependent).
     items.push_back({"B16", [&]() { return mviewer::bench::scenarioRenderFps(); }});
-    // B17: workflow soak — RSS / handle growth across repeated browse->compare->
-    // exit cycles. Report-only; feeds the nightly Build-Health dashboard.
     items.push_back({"B17", [&]() { return mviewer::bench::scenarioWorkflowSoak(corpus); }});
-    // B18/B19: end-to-end UI view-switch (MainWindow navigate_next → present+paint).
-    // Report-only. --smoke skips them unless they are in --scenarios (tiny N).
-    const bool includeE2e = !smoke || runOnly.count("B18") || runOnly.count("B19");
-    if (includeE2e)
-    {
-        const int warmN = smoke ? 2 : 100;
-        const int coldN = smoke ? 2 : 30;
-        items.push_back({"B18", [&corpus, warmN]()
-                         { return mviewer::bench::scenarioE2eSwitchWarm(corpus, warmN); }});
-        items.push_back({"B19", [&corpus, coldN]()
-                         { return mviewer::bench::scenarioE2eSwitchCold(corpus, coldN); }});
-    }
+    // B18/B19 length comes from scheduleE2eSwitch (skip / smoke / short / full).
+    if (e2e.warm)
+        items.push_back(
+            {"B18", [&]() { return mviewer::bench::scenarioE2eSwitchWarm(corpus, e2e); }});
+    if (e2e.cold)
+        items.push_back(
+            {"B19", [&]() { return mviewer::bench::scenarioE2eSwitchCold(corpus, e2e); }});
     // SCALE tiers (opt-in via --scale): decode throughput (fps) plus peak cache
     // memory and GPU dedicated memory at 100 / 1000 / 5000 images. Report-only.
     if (scaleMode)
@@ -398,13 +402,7 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     bool allPass = true;
     for (auto &r : results)
     {
-        // Data-driven hard gate (product pillar #2 "stays stable"). Each scenario listed in
-        // Budget::scenarioMap (B1-B9 + B11-B15, sourced from performance_budget.json)
-        // is enforced against its budget limit. Scenarios NOT in the map
-        // (B0/B10/TRACE/B16-B19) keep their structural verdict and are only
-        // regression-checked (when --regression is given). This is the canonical CI
-        // hard gate: generous, cross-machine-stable absolute caps, so it never fails
-        // on CI hardware jitter.
+        // scenario_map entries are hard-gated. Anything else keeps its own verdict.
         if (b.enforce && b.appliesTo(r.name))
             r.passed = b.checkScenario(r.name, r.value);
         printVerdict(r, b);
@@ -434,6 +432,7 @@ int main(int argc, char **argv)
     std::string baselineFile;        // M14: if set, compare against baseline for regression
     bool regression = false; // M15: enable baseline diff (separate from --enforce hard budget)
     bool scaleMode = false;  // M-XX: run the 100/1000/5000 scaling tiers
+    bool e2eFlag = false;    // full B18/B19 even under --enforce
     std::string historyFile; // M15: if set, append results row to history CSV
     std::string reportFile;  // M15: if set, write markdown regression report
 
@@ -453,6 +452,8 @@ int main(int argc, char **argv)
             smoke = true;
             corpusSize = 20;
         }
+        else if (a == "--e2e")
+            e2eFlag = true;
         else if (a == "--emit-data" && i + 1 < argc)
             emitData = argv[++i];
         else if (a == "--emit-format" && i + 1 < argc)
@@ -503,18 +504,41 @@ int main(int argc, char **argv)
             for (auto &c : tok)
                 c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
             if (!tok.empty())
-                runOnly.insert(tok);
+            {
+                if (tok == "E2E")
+                {
+                    runOnly.insert("B18");
+                    runOnly.insert("B19");
+                }
+                else
+                    runOnly.insert(tok);
+            }
             if (comma == std::string::npos)
                 break;
             pos = comma + 1;
         }
     }
+    // `--e2e` alongside a scenario filter still runs the full UI sample.
+    if (e2eFlag && !runOnly.empty())
+    {
+        runOnly.insert("B18");
+        runOnly.insert("B19");
+    }
 
-    // B18/B19 construct real widgets, so they need QApplication + a platform.
-    // Other scenarios only need QImage (QCoreApplication). Default to offscreen
-    // when unset so headless CI can run the e2e path.
-    const bool needGui = emitData.empty() && (runOnly.count("B18") || runOnly.count("B19") ||
-                                              (!smoke && runOnly.empty()));
+    // Load the budget first so unbudgeted --enforce can stay on QCoreApplication.
+    bool budgetLoaded = false;
+    if (!budgetFile.empty())
+        budgetLoaded = loadBudgetJson(budgetFile, b);
+    if (!b.configureProfile(profileArg))
+    {
+        std::cerr << "Unknown hardware profile: " << profileArg
+                  << " (expected auto, base, low-core, or ci)\n";
+        return 2;
+    }
+    const mviewer::bench::E2eSchedule e2e = mviewer::bench::scheduleE2eSwitch(
+        {smoke, b.enforce, e2eFlag, !runOnly.empty(), runOnly.count("B18") > 0,
+         runOnly.count("B19") > 0, b.gated("B18"), b.gated("B19")});
+    const bool needGui = emitData.empty() && (e2e.warm || e2e.cold);
     if (needGui && qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "offscreen");
     std::unique_ptr<QCoreApplication> app;
@@ -531,21 +555,11 @@ int main(int argc, char **argv)
     std::cout << "=== MViewer benchmark (M10) ===" << '\n';
     if (smoke)
         std::cout << "[smoke] ";
-    bool budgetLoaded = false;
-    if (!budgetFile.empty())
-    {
-        budgetLoaded = loadBudgetJson(budgetFile, b);
-        if (!budgetLoaded)
-            std::cout << "budget=LOAD-FAILED(" << budgetFile << ")" << '\n';
-    }
-    if (!b.configureProfile(profileArg))
-    {
-        std::cerr << "Unknown hardware profile: " << profileArg
-                  << " (expected auto, base, low-core, or ci)\n";
-        return 2;
-    }
+    if (!budgetFile.empty() && !budgetLoaded)
+        std::cout << "budget=LOAD-FAILED(" << budgetFile << ")" << '\n';
     std::cout << "corpus-size=" << corpusSize << " enforce=" << (b.enforce ? "yes" : "no")
-              << " logical-cores=" << b.logicalCores << " profile=" << b.profileName;
+              << " e2e=" << e2e.label << " logical-cores=" << b.logicalCores
+              << " profile=" << b.profileName;
     if (budgetLoaded)
         std::cout << " budget=" << budgetFile;
     std::cout << '\n';
@@ -574,7 +588,7 @@ int main(int argc, char **argv)
         mviewer::bench::Corpus corpus = mviewer::bench::makeCorpusFromDir(corpusDir);
         std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
                   << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << '\n';
-        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode, smoke);
+        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode, e2e);
         std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << '\n';
     }
     else
@@ -583,7 +597,7 @@ int main(int argc, char **argv)
         std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
                   << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << '\n';
 
-        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode, smoke);
+        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode, e2e);
         corpus.clear();
     }
 
