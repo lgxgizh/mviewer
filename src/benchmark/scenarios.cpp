@@ -1,16 +1,11 @@
 #include "benchmark/scenarios.h"
+#include "benchmark/bench_progress.h"
 
 #include "core/cache/CacheManager.h"
-#include "core/filesystem/FileSystem.h"
-#include "core/image/Decoder.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
 #include "core/perf/GpuTracker.h"
 #include "core/perf/MemoryTracker.h"
-#include "core/render/TileCache.h"
-#include "core/render/TileGrid.h"
-#include "core/render/Viewport.h"
-#include "core/thumbnail/ThumbnailPipeline.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -19,23 +14,17 @@
 
 #include <QApplication>
 #include <QCoreApplication>
-#include <QImage>
-#include <QImageReader>
-#include <QTemporaryDir>
+#include <QEventLoop>
+
 #include <algorithm>
-#include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <numeric>
 #include <random>
 #include <sstream>
-#include <thread>
-#include <unordered_map>
 #include <vector>
 
 namespace mviewer::bench
 {
-
 // ─── B1: startup to first paint ──────────────────────────────────────────────
 ScenarioResult scenarioStartup()
 {
@@ -48,11 +37,17 @@ ScenarioResult scenarioStartup()
 
     if (QCoreApplication::instance())
     {
+        // Above the 50 ms budget, so a queue that never goes idle still fails
+        // the gate. An idle queue returns immediately. Far below the scenario
+        // watchdog, so this probe cannot burn the ctest job.
+        constexpr int kEventProbeCapMs = 2000;
         const double t0 = nowMs();
-        QCoreApplication::processEvents();
-        const double t1 = nowMs();
+        QCoreApplication::processEvents(QEventLoop::AllEvents, kEventProbeCapMs);
+        const double elapsed = nowMs() - t0;
+        if (elapsed >= static_cast<double>(kEventProbeCapMs))
+            return timeoutResult("B1", "qt_event_loop_probe_ms", kEventProbeCapMs, false);
         r.metric = "qt_event_loop_probe_ms";
-        r.value = t1 - t0;
+        r.value = elapsed;
         r.detail = "Qt already initialized (QApplication owned by harness)";
         return r;
     }
@@ -65,7 +60,7 @@ ScenarioResult scenarioStartup()
     char arg0[] = "mviewer_bench";
     char *argv[] = {arg0, nullptr};
     QApplication app(argc, argv); // forces Qt + platform plugin load
-    QApplication::processEvents();
+    QApplication::processEvents(QEventLoop::AllEvents, 2000);
     const double t1 = nowMs();
 
     r.metric = "startup_to_qtcore_ready_ms";
@@ -89,308 +84,19 @@ ScenarioResult scenarioColdStart(const Corpus &corpus)
 
     // Phase 2: first thumbnail (reuse B2).
     auto thumb = scenarioFirstThumbnail(corpus);
+    if (thumb.detail.rfind("timed out after ", 0) == 0)
+    {
+        r.value = thumb.value;
+        r.passed = false;
+        r.timing = thumb.timing;
+        r.detail = thumb.detail;
+        return r;
+    }
 
     r.value = startup.value + thumb.value;
     r.timing = thumb.timing;
     r.detail = "startup=" + std::to_string(startup.value) +
                "ms + thumbnail=" + std::to_string(thumb.value) + "ms (cold start to first image)";
-    return r;
-}
-
-// ─── B2: first thumbnail latency (REAL ThumbnailPipeline path) ───────────────
-//
-// NOTE: previously this scenario drove ImageRepository::loadDirectoryAsync,
-// which submits a FULL-SIZE decode for EVERY image and waits for ALL of them.
-// That measured directory-wide decode time, NOT the user-perceived first
-// thumbnail. The product's actual first-thumbnail path is ThumbnailPipeline
-// (visible range -> Thumbnail priority, neighbors -> Background), which the
-// M3 acceptance test already exercises. This scenario now measures THAT path,
-// with a stage breakdown (M10 performance gate: profile before optimize).
-//
-// Measure one cold+warm first-thumbnail cycle through the real pipeline and
-// return the stage split. `warm` reuses an already-warm corpus directory so
-// filesystem/codec caches are hot.
-ThumbnailBreakdown measureFirstThumbnail(const Corpus &corpus)
-{
-    ThumbnailBreakdown bd;
-
-    // 1) scan: directory enumeration (what setSources consumes).
-    const double tScan0 = nowMs();
-    const auto paths = FileSystem::listImages(corpus.dir);
-    const double tScan1 = nowMs();
-    bd.scan_ms = tScan1 - tScan0;
-    if (paths.empty())
-        return bd;
-
-    auto &pipe = ThumbnailPipeline::instance();
-    pipe.clear();
-
-    // All mutable timing state lives on the HEAP via shared_ptr and is captured
-    // BY VALUE by the worker lambdas. The ThumbnailPipeline does NOT join
-    // in-flight decode tasks on clear(); they run to completion on scheduler
-    // worker threads. If we captured stack locals by reference, a late task
-    // would write into freed stack -> use-after-free (flaky SEGFAULT under
-    // parallel ctest). Heap-backed state survives the function scope safely.
-    struct State
-    {
-        std::atomic<double> firstDecodeStart{-1.0};
-        std::atomic<double> firstDecodeEnd{-1.0};
-        std::atomic<double> firstResultAt{-1.0};
-        std::atomic<bool> firstCaptured{false};
-        std::atomic<double> anchor{-1.0};
-        std::atomic<bool> firstSeen{false};
-        std::atomic<double> resizeMs{0.0};
-        std::atomic<double> cacheMs{0.0};
-    };
-    auto st = std::make_shared<State>();
-
-    // Injected decode: measure decode (incl. scaled-resize via Qt codec) and a
-    // separate standalone resize pass so the breakdown shows resize distinctly.
-    pipe.setDecodeFn(
-        [st](const std::string &p, int size) -> ImageData
-        {
-            // Latch the very first decode-start (queue_wait end) exactly once.
-            if (st->anchor.load() >= 0.0 && st->firstDecodeStart.load() < 0.0)
-            {
-                double expect = -1.0;
-                st->firstDecodeStart.compare_exchange_strong(expect, nowMs());
-            }
-            const double ds = nowMs();
-            ImageData thumb = Decoder::decodeScaled(p, size);
-            const double de = nowMs();
-            // Record the first decode's end + standalone resize, once.
-            bool expected = false;
-            if (st->firstCaptured.compare_exchange_strong(expected, true))
-            {
-                st->firstDecodeEnd.store(de);
-                st->firstDecodeStart.store(ds);
-                // Standalone resize cost: the Qt codec path folds scaling into the
-                // decode (setScaledSize), so decode_ms already includes it. Measure
-                // an explicit QImage::scaled on a fresh full read to surface the
-                // independent resize cost for the breakdown (first thumbnail only).
-                QImageReader rr(QString::fromStdString(p));
-                QImage full = rr.read();
-                if (!full.isNull())
-                {
-                    const double rs = nowMs();
-                    (void)full.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                    const double re = nowMs();
-                    st->resizeMs.fetch_add(re - rs, std::memory_order_relaxed);
-                }
-            }
-            return thumb;
-        });
-
-    pipe.setResultFn(
-        [st](const std::string &, int, const ImageData &)
-        {
-            const double now = nowMs();
-            double expect = -1.0;
-            if (st->firstResultAt.compare_exchange_strong(expect, now))
-            {
-                // cache = decode-end -> result-callback (worker mem-cache insert).
-                const double de = st->firstDecodeEnd.load();
-                if (de >= 0.0)
-                    st->cacheMs.store(now - de, std::memory_order_relaxed);
-                st->firstSeen.store(true, std::memory_order_relaxed);
-            }
-        });
-
-    pipe.setSources(paths);
-
-    // Anchor right before the visible-range kick (the user-visible trigger).
-    st->anchor.store(nowMs());
-    const double tAnchor = st->anchor.load();
-    pipe.setVisibleRange(0, 20); // first screenful
-
-    // Latch on the first thumbnail reaching the UI adapter.
-    const double tDeadline = tAnchor + 10000.0;
-    while (!st->firstSeen.load(std::memory_order_relaxed) && nowMs() < tDeadline)
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-
-    const double tFirst = nowMs();
-    bd.cache_ms = st->cacheMs.load();
-    bd.ui_notify_ms = tFirst - tAnchor;
-    bd.queue_wait_ms = (st->firstDecodeStart.load() >= 0.0)
-                           ? (st->firstDecodeStart.load() - tAnchor)
-                           : bd.ui_notify_ms;
-    bd.decode_ms = (st->firstDecodeEnd.load() >= 0.0 && st->firstDecodeStart.load() >= 0.0)
-                       ? (st->firstDecodeEnd.load() - st->firstDecodeStart.load())
-                       : 0.0;
-    bd.resize_ms = st->resizeMs.load();
-    bd.total_ms = tFirst - tScan0;
-
-    pipe.clear();
-    // `st` (heap) outlives this function; late worker tasks write only to its
-    // atomics, which remain valid. No stack capture -> no use-after-free.
-    return bd;
-}
-
-std::string ThumbnailBreakdown::toString() const
-{
-    std::ostringstream oss;
-    oss << "scan=" << scan_ms << "ms"
-        << " queue_wait=" << queue_wait_ms << "ms"
-        << " decode=" << decode_ms << "ms"
-        << " resize=" << resize_ms << "ms"
-        << " cache=" << cache_ms << "ms"
-        << " ui_notify=" << ui_notify_ms << "ms"
-        << " total=" << total_ms << "ms";
-    return oss.str();
-}
-
-ScenarioResult scenarioFirstThumbnail(const Corpus &corpus)
-{
-    // Cold: fresh process, empty scheduler pools (corpus dir exists on disk;
-    // filesystem/codec caches are cold on first open of the run).
-    ThumbnailBreakdown cold = measureFirstThumbnail(corpus);
-    // Warm: repeat the same open in-process; caches hot.
-    ThumbnailBreakdown warm = measureFirstThumbnail(corpus);
-
-    ScenarioResult r;
-    r.name = "B2";
-    r.metric = "first_thumbnail_ms";
-    r.value = cold.ui_notify_ms;
-    r.passed = true; // smoke reports; --enforce applies the <100ms budget
-    r.detail = "COLD {" + cold.toString() +
-               "}"
-               " WARM {" +
-               warm.toString() +
-               "}"
-               " (real ThumbnailPipeline path; budget <100ms)";
-    return r;
-}
-
-// ─── Pipeline priority trace (M10 P1 verification) ───────────────────────────
-//
-// The user's review asked to PROVE ThumbnailPipeline priority scheduling
-// actually works: visible images (P0) must arrive before predictive neighbors
-// (Background), and background work must not block visible work. We trace the
-// completion order + latency of the first N thumbnails and classify each by
-// its scheduling tier (visible range [0,vis), neighbors [vis,vis+pred),
-// background beyond). No architecture change — pure observation.
-struct PipelineTraceEntry
-{
-    size_t index;
-    double arrivalMs;
-    std::string tier;
-};
-
-ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
-{
-    auto &pipe = ThumbnailPipeline::instance();
-    pipe.clear();
-
-    const auto paths = FileSystem::listImages(corpus.dir);
-    if (paths.empty())
-        return ScenarioResult{"TRACE", "pipeline_priority", 0, {}, "empty corpus", false};
-
-    const size_t visBegin = 0, visEnd = 20; // visible screenful
-    const size_t predCount = 16;            // predictive neighbors
-    const size_t neighborEnd = visEnd + predCount;
-
-    // Authoritative index = position in the display-order path list the
-    // pipeline consumes. Filename parsing is fragile (mixed formats collide
-    // on img_NNNNN across .jpg/.png/.tif). Map path -> position instead.
-    std::unordered_map<std::string, size_t> pathToIndex;
-    for (size_t i = 0; i < paths.size(); ++i)
-        pathToIndex[paths[i]] = i;
-
-    std::mutex trMtx;
-    std::vector<PipelineTraceEntry> trace;
-    std::condition_variable cv;
-    std::atomic<int> arrived{0};
-    const int want = static_cast<int>(std::min<size_t>(60, paths.size()));
-    std::atomic<bool> done{false};
-    double tAnchorTrace = 0.0;
-
-    // Decode START times, keyed by path. Captured inside a wrapping decode
-    // fn so we can prove priority by DISPATCH/START order (decode-cost
-    // independent), not by completion order (which TIFF-vs-JPEG cost dominates
-    // and would falsely flag a slow visible TIFF as "behind" a fast neighbor).
-    std::unordered_map<std::string, double> startMs;
-    std::mutex startMtx;
-
-    pipe.setDecodeFn(
-        [&](const std::string &p, int size) -> ImageData
-        {
-            {
-                std::lock_guard<std::mutex> lk(startMtx);
-                startMs[p] = nowMs() - tAnchorTrace;
-            }
-            return Decoder::decodeScaled(p, size);
-        });
-    pipe.setResultFn(
-        [&](const std::string &p, int, const ImageData &)
-        {
-            const double ms = nowMs() - tAnchorTrace;
-            std::lock_guard<std::mutex> lk(trMtx);
-            size_t idx = paths.size();
-            auto it = pathToIndex.find(p);
-            if (it != pathToIndex.end())
-                idx = it->second;
-            std::string tier = (idx >= visBegin && idx < visEnd)      ? "visible"
-                               : (idx >= visEnd && idx < neighborEnd) ? "neighbor"
-                                                                      : "background";
-            trace.push_back({idx, ms, tier});
-            if (++arrived >= want)
-            {
-                done.store(true);
-                cv.notify_all();
-            }
-        });
-
-    pipe.setSources(paths);
-    tAnchorTrace = nowMs();
-    pipe.setVisibleRange(visBegin, visEnd);
-
-    {
-        std::unique_lock<std::mutex> lk(trMtx);
-        cv.wait_for(lk, std::chrono::seconds(30), [&] { return done.load(); });
-    }
-
-    // Priority proof (decode-cost independent): every visible decode must START
-    // no later than any neighbor starts, and every neighbor no later than any
-    // background starts. This is what "visible gets highest priority" means.
-    double maxVisibleStart = -1, minNeighborStart = 1e9;
-    double maxNeighborStart = -1, minBackgroundStart = 1e9;
-    for (const auto &kv : startMs)
-    {
-        auto it = pathToIndex.find(kv.first);
-        if (it == pathToIndex.end())
-            continue;
-        const size_t idx = it->second;
-        const double s = kv.second;
-        if (idx >= visBegin && idx < visEnd)
-        {
-            maxVisibleStart = std::max(maxVisibleStart, s);
-        }
-        else if (idx >= visEnd && idx < neighborEnd)
-        {
-            minNeighborStart = std::min(minNeighborStart, s);
-            maxNeighborStart = std::max(maxNeighborStart, s);
-        }
-        else
-        {
-            minBackgroundStart = std::min(minBackgroundStart, s);
-        }
-    }
-    const bool orderingOk = (maxVisibleStart <= minNeighborStart + 1e-6) &&
-                            (maxNeighborStart <= minBackgroundStart + 1e-6);
-
-    ScenarioResult r;
-    r.name = "TRACE";
-    r.metric = "pipeline_priority";
-    // Report-only: priority-by-start-order proof. Not a hard --enforce gate
-    // (user said do not redesign Scheduler). detail carries the verdict.
-    r.passed = true;
-    std::ostringstream oss;
-    oss << "visible_start_max=" << maxVisibleStart << " neighbor_start_min=" << minNeighborStart
-        << " neighbor_start_max=" << maxNeighborStart
-        << " background_start_min=" << minBackgroundStart
-        << " priority_by_start=" << (orderingOk ? "OK" : "VIOLATED");
-    r.detail = oss.str();
-    pipe.clear();
     return r;
 }
 
@@ -408,18 +114,21 @@ ScenarioResult scenarioDecodeLatency(const Corpus &corpus)
     };
 
     std::vector<double> j, png, tif;
+    ScenarioResult r;
+    r.name = "B3";
+    r.metric = "decode_p50_ms_jpeg";
     const size_t n = std::min<size_t>(100, corpus.jpegPaths.size());
     for (size_t i = 0; i < n; ++i)
     {
+        if (failIfScenarioTimedOut(r, false))
+            return r;
         j.push_back(timeOne(corpus.jpegPaths[i]));
-        png.push_back(timeOne(corpus.pngPaths[i]));
+        if (i < corpus.pngPaths.size())
+            png.push_back(timeOne(corpus.pngPaths[i]));
         if (i < corpus.tiffPaths.size())
             tif.push_back(timeOne(corpus.tiffPaths[i]));
     }
 
-    ScenarioResult r;
-    r.name = "B3";
-    r.metric = "decode_p50_ms_jpeg";
     r.value = summarize(j).p50Ms;
     r.timing = summarize(j);
     r.detail = "jpeg p50=" + std::to_string(r.timing.p50Ms) +
@@ -435,9 +144,14 @@ ScenarioResult scenarioThumbThroughput(const Corpus &corpus)
     auto &cm = CacheManager::instance();
     const auto all = corpus.allPaths();
     const size_t n = std::min<size_t>(1000, all.size());
+    ScenarioResult early;
+    early.name = "B4";
+    early.metric = "thumbnails_per_sec";
     const double t0 = nowMs();
     for (size_t i = 0; i < n; ++i)
     {
+        if (failIfScenarioTimedOut(early, true))
+            return early;
         // Force a thumbnail-level entry via the cache (simulates ThumbnailPipeline
         // decode+resize; we use the real decode path through ImageRepository).
         auto res = ImageRepository::instance().load(all[i]);
@@ -477,17 +191,25 @@ ScenarioResult scenarioCacheHitRatio(const Corpus &corpus)
     std::iota(ranks.begin(), ranks.end(), 0);
     double hits = 0, total = 0;
     const int navs = 1000;
+    ScenarioResult early;
+    early.name = "B5";
+    early.metric = "cache_hit_ratio";
     for (int k = 0; k < navs; ++k)
     {
+        if (failIfScenarioTimedOut(early, true))
+            return early;
         std::discrete_distribution<size_t> zipf(ranks.begin(), ranks.end());
         const size_t idx = zipf(rng) % n;
         ImageData out;
         ++total;
         if (cm.getMemory(CacheLevel::FullImage, all[idx], out))
+        {
             ++hits;
-        else
-            cm.putMemory(CacheLevel::FullImage, all[idx],
-                         ImageRepository::instance().load(all[idx]).frame->pixels());
+            continue;
+        }
+        const auto loaded = ImageRepository::instance().load(all[idx]);
+        if (loaded.frame)
+            cm.putMemory(CacheLevel::FullImage, all[idx], loaded.frame->pixels());
     }
     const double ratio = hits / total;
 
@@ -510,9 +232,16 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus)
     mt.reset();
 
     const auto all = corpus.allPaths();
+    ScenarioResult early;
+    early.name = "B6";
+    early.metric = "peak_cache_bytes";
     // Warm: load all (Viewer 512MB + Preview mip 256MB; B6 budget ≥ sum).
     for (const auto &p : all)
+    {
+        if (failIfScenarioTimedOut(early, false))
+            return early;
         ImageRepository::instance().load(p);
+    }
 
     const auto peak = mt.sample();
     const size_t liveFrames = peak.liveImageFrames;
@@ -549,8 +278,13 @@ ScenarioResult scenarioImageSwitch(const Corpus &corpus)
 
     // Cold: first access (decode+display path).
     std::vector<double> cold, warm;
+    ScenarioResult early;
+    early.name = "B7";
+    early.metric = "switch_warm_p50_ms";
     for (size_t i = 0; i < std::min<size_t>(100, all.size()); ++i)
     {
+        if (failIfScenarioTimedOut(early, false))
+            return early;
         const double a = nowMs();
         repo.load(all[i]);
         cold.push_back(nowMs() - a);
@@ -596,13 +330,22 @@ ScenarioResult scenarioSwitchLatency(const Corpus &corpus)
     // work M36 removes from the browse hot path.
     ImageRepository::LoadOptions displayOpts;
     displayOpts.generateHistogram = false;
+    ScenarioResult early;
+    early.name = "B8";
+    early.metric = "switch_p50_ms";
     for (size_t i = 0; i < m; ++i)
+    {
+        if (failIfScenarioTimedOut(early, false))
+            return early;
         repo.load(all[i], displayOpts);
+    }
     // Timed pass: 200 forward/back switches (all cache hits). Measure the
     // frame-to-frame navigation time the UI would incur (repo.load path).
     std::vector<double> sw;
     for (size_t k = 0; k < 200; ++k)
     {
+        if (failIfScenarioTimedOut(early, false))
+            return early;
         const size_t i = k % (m - 1);
         const double a = nowMs();
         repo.load(all[i], displayOpts);     // hit
@@ -650,8 +393,13 @@ ScenarioResult scenarioSoakStability(const Corpus &corpus)
     double globalPeak = initBase;
     std::ostringstream perCycle;
 
+    ScenarioResult early;
+    early.name = "B9";
+    early.metric = "baseline_return_ok";
     for (int c = 0; c < cycles; ++c)
     {
+        if (failIfScenarioTimedOut(early, true))
+            return early;
         // Offset the window each cycle so different images churn through.
         const size_t off = static_cast<size_t>(c) * (window / 2) % all.size();
         for (size_t i = 0; i < window; ++i)
@@ -685,220 +433,15 @@ ScenarioResult scenarioSoakStability(const Corpus &corpus)
     return r;
 }
 
-// ─── B10 / A-8.4: 100MP tile-cache viewport request ──────────────────────────
-// Treat the source as a 10000×10000 (100 MP) image and measure how long
-// TileCache::request() takes to fill a 1920×1080 viewport at fit scale.
-// Tiles are synthesized on demand (no full 400 MB buffer) so the metric
-// isolates tile enumeration + cache put/get + region fill cost without
-// stressing CI hosts.
-ScenarioResult scenarioHundredMpTiles()
-{
-    constexpr int kW = 10000;
-    constexpr int kH = 10000;
-    constexpr int kTile = 256;
-    constexpr int kScreenW = 1920;
-    constexpr int kScreenH = 1080;
-
-    Viewport vp;
-    vp.screenW = kScreenW;
-    vp.screenH = kScreenH;
-    vp.fit(kW, kH);
-
-    TileGrid grid(kW, kH, kTile);
-    TileCache cache;
-    cache.maxTiles = 512;
-
-    auto decode = [&](const std::string & /*id*/, int sx, int sy, int sw, int sh, int dw,
-                      int dh) -> ImageData
-    {
-        if (sx < 0)
-            sx = 0;
-        if (sy < 0)
-            sy = 0;
-        if (sx + sw > kW)
-            sw = kW - sx;
-        if (sy + sh > kH)
-            sh = kH - sy;
-        if (sw <= 0 || sh <= 0)
-            return ImageData{};
-        // Materialize the canonical output resolution requested by TileCache.
-        // This keeps the synthetic benchmark aligned with the byte-budgeted
-        // render path instead of returning the full source region.
-        if (dw <= 0 || dh <= 0)
-            return ImageData{};
-        ImageData tile = makeImageData(dw, dh, PixelFormat::RGBA32);
-        if (tile.isNull() || !tile.buffer)
-            return ImageData{};
-        // Deterministic procedural fill — cheap stand-in for a region decode.
-        auto &buf = *tile.buffer;
-        for (int y = 0; y < dh; ++y)
-        {
-            for (int x = 0; x < dw; ++x)
-            {
-                const int sourceX = sx + (x * sw) / dw;
-                const int sourceY = sy + (y * sh) / dh;
-                const size_t i = (static_cast<size_t>(y) * dw + x) * 4;
-                buf[i + 0] = static_cast<uint8_t>(sourceX & 0xFF);
-                buf[i + 1] = static_cast<uint8_t>(sourceY & 0xFF);
-                buf[i + 2] = static_cast<uint8_t>((sourceX ^ sourceY) & 0xFF);
-                buf[i + 3] = 255;
-            }
-        }
-        return tile;
-    };
-
-    // Warm-up (not timed): exercise the path once so first-call allocator noise
-    // does not dominate the measured sample.
-    {
-        int warmCalls = 0;
-        (void)cache.request("100mp", vp, grid, decode, &warmCalls);
-        cache.clear();
-    }
-
-    // Timed cold request (empty cache).
-    int decodeCalls = 0;
-    const double t0 = nowMs();
-    auto ready = cache.request("100mp", vp, grid, decode, &decodeCalls);
-    const double coldMs = nowMs() - t0;
-
-    // Timed warm request (all tiles cached) — should be near-instant.
-    int warmCalls = 0;
-    const double t1 = nowMs();
-    auto readyWarm = cache.request("100mp", vp, grid, decode, &warmCalls);
-    const double warmMs = nowMs() - t1;
-
-    ScenarioResult r;
-    r.name = "B10";
-    r.metric = "hundred_mp_viewport_ms";
-    r.value = coldMs;
-    r.timing.samples = 1;
-    r.timing.p50Ms = coldMs;
-    r.timing.p95Ms = coldMs;
-    r.timing.p99Ms = coldMs;
-    // B10 is REPORT-ONLY by design (performance_budget.json excludes it from the
-    // scenario_map hard gate; it is only +/-10% regression-checked under
-    // --regression). The verdict below is therefore STRUCTURAL: the request must
-    // fill the viewport and the warm request must hit the cache (zero decodes).
-    // No absolute cold-latency cap lives here: an absolute cap that fits the
-    // fastest dev box fails on legitimately slower CI/VM hosts (measured
-    // 392.8 ms on the 2026-07-24 baseline box vs 1480 ms on a 2-core Xeon VM),
-    // so absolute gating would need a data-driven entry in
-    // performance_budget.json with documented hardware provenance.
-    r.passed = !ready.empty() && (warmCalls == 0);
-    r.detail = "image=10000x10000 tiles_ready=" + std::to_string(ready.size()) +
-               " decode_calls=" + std::to_string(decodeCalls) +
-               " cold_ms=" + std::to_string(coldMs) + " warm_ms=" + std::to_string(warmMs) +
-               " warm_decode_calls=" + std::to_string(warmCalls) +
-               " cache_size=" + std::to_string(cache.size()) +
-               " warm_ready=" + std::to_string(readyWarm.size());
-    return r;
-}
-
-// ─── Post-M22 named scenarios (review "performance regression" asks) ───────────────────
 namespace
 {
-// Render a deterministic gradient + noise frame (stand-in for a real photo/RAW).
-QImage makeSyntheticFrame(int w, int h, uint32_t seed)
+
+bool isTimeoutDetail(const std::string &detail)
 {
-    QImage img(w, h, QImage::Format_RGB888);
-    std::mt19937 rng(seed ? seed : 0x9e3779b9u);
-    std::uniform_int_distribution<int> noise(0, 40);
-    for (int y = 0; y < h; ++y)
-    {
-        uchar *row = img.scanLine(y);
-        const int gy = static_cast<int>(static_cast<double>(y) / h * 255);
-        for (int x = 0; x < w; ++x)
-        {
-            const int gx = static_cast<int>(static_cast<double>(x) / w * 255);
-            const int n = noise(rng);
-            const int r = std::clamp(gx + n, 0, 255);
-            const int g = std::clamp(gy + n, 0, 255);
-            const int b = std::clamp((gx + gy) / 2 + n, 0, 255);
-            const int o = x * 3;
-            row[o] = static_cast<uchar>(r);
-            row[o + 1] = static_cast<uchar>(g);
-            row[o + 2] = static_cast<uchar>(b);
-        }
-    }
-    return img;
+    return detail.rfind("timed out after ", 0) == 0;
 }
 
-// Persist a synthesized frame to a temp file that outlives the call (QTemporaryDir
-// is held by the struct, so the file survives until the caller's scope ends).
-struct TmpAsset
-{
-    QTemporaryDir dir;
-    std::string path;
-    bool ok = false;
-};
-TmpAsset saveSynthetic(const QImage &img, const char *ext)
-{
-    TmpAsset t;
-    if (!t.dir.isValid())
-        return t;
-    t.path = std::string(t.dir.path().toUtf8()) + "/s." + ext;
-    t.ok = img.save(QString::fromStdString(t.path), ext);
-    return t;
-}
 } // namespace
-
-// B11: 4K JPEG full-res decode latency.
-ScenarioResult scenarioDecode4kJpeg()
-{
-    ScenarioResult r;
-    r.name = "B11";
-    r.metric = "decode_4k_jpeg_ms";
-    TmpAsset a = saveSynthetic(makeSyntheticFrame(3840, 2160, 1), "jpg");
-    if (!a.ok)
-    {
-        r.detail = "synthetic 4K image save failed";
-        return r;
-    }
-    std::vector<double> s;
-    s.reserve(12);
-    for (int i = 0; i < 12; ++i)
-    {
-        const double t0 = nowMs();
-        const ImageData d = Decoder::decodeScaled(a.path, 3840);
-        const double t1 = nowMs();
-        (void)d;
-        s.push_back(t1 - t0);
-    }
-    r.timing = summarize(s);
-    r.value = r.timing.p50Ms;
-    r.detail = "4K JPEG full-res decode via Decoder::decodeScaled (edge=3840)";
-    return r;
-}
-
-// B12: 8K frame decode latency. CI ships no RAW sample, so this decodes a
-// synthesized 8K RGB frame through the same ImageData pipeline a real RAW would
-// feed; point it at a .raw/.dng asset to measure the true RAW decode path.
-ScenarioResult scenarioDecode8k()
-{
-    ScenarioResult r;
-    r.name = "B12";
-    r.metric = "decode_8k_ms";
-    TmpAsset a = saveSynthetic(makeSyntheticFrame(8192, 4320, 2), "png");
-    if (!a.ok)
-    {
-        r.detail = "synthetic 8K image save failed";
-        return r;
-    }
-    std::vector<double> s;
-    s.reserve(8);
-    for (int i = 0; i < 8; ++i)
-    {
-        const double t0 = nowMs();
-        const ImageData d = Decoder::decodeScaled(a.path, 8192);
-        const double t1 = nowMs();
-        (void)d;
-        s.push_back(t1 - t0);
-    }
-    r.timing = summarize(s);
-    r.value = r.timing.p50Ms;
-    r.detail = "8K frame full-res decode (edge=8192); CI stand-in for 8K RAW";
-    return r;
-}
 
 // B13: cache hit rate (0..1). Wraps the existing B5 Zipf navigation pattern.
 ScenarioResult scenarioCacheHitRate(const Corpus &corpus)
@@ -910,7 +453,8 @@ ScenarioResult scenarioCacheHitRate(const Corpus &corpus)
     r.value = b5.value;
     r.timing = b5.timing;
     r.passed = b5.passed;
-    r.detail = "wraps B5 cache_hit_ratio under Zipf navigation";
+    r.detail =
+        isTimeoutDetail(b5.detail) ? b5.detail : "wraps B5 cache_hit_ratio under Zipf navigation";
     return r;
 }
 
@@ -924,61 +468,9 @@ ScenarioResult scenarioFirstFrameLatency(const Corpus &corpus)
     r.metric = "first_frame_latency_ms";
     r.value = b2.value;
     r.timing = b2.timing;
-    r.detail = "wraps B2 real ThumbnailPipeline first-thumbnail path";
-    return r;
-}
-
-// B15: per-frame zoom render cost. Proxies the hot path behind wheel/gesture
-// zoom: rescale an 8K frame down to a 1080p viewport.
-ScenarioResult scenarioZoomLatency()
-{
-    ScenarioResult r;
-    r.name = "B15";
-    r.metric = "zoom_frame_ms";
-    QImage big = makeSyntheticFrame(8192, 4320, 3);
-    QImage view(1920, 1080, QImage::Format_RGB888);
-    std::vector<double> s;
-    s.reserve(30);
-    for (int i = 0; i < 30; ++i)
-    {
-        const double t0 = nowMs();
-        QImage z = big.scaled(1920, 1080, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        view = z.copy();
-        const double t1 = nowMs();
-        s.push_back(t1 - t0);
-    }
-    r.timing = summarize(s);
-    r.value = r.timing.p50Ms;
-    r.detail = "8K->1080p SmoothTransformation rescale per frame (zoom hot-path proxy)";
-    return r;
-}
-
-// B16: render throughput (fps). Synthesizes a viewport rescale loop (the hot
-// path behind continuous wheel/gesture zoom) and reports achieved FPS.
-// Report-only (machine dependent) — never blocks CI under --enforce.
-ScenarioResult scenarioRenderFps()
-{
-    ScenarioResult r;
-    r.name = "B16";
-    r.metric = "render_fps";
-    QImage big = makeSyntheticFrame(8000, 6000, 4);
-    QImage view(1920, 1080, QImage::Format_RGB888);
-    const int frames = 120;
-    const double t0 = nowMs();
-    for (int i = 0; i < frames; ++i)
-    {
-        // Vary the target size slightly to emulate continuous zoom; copy so the
-        // resize does real work every frame (worst-case continuous-zoom path).
-        const int w = 1280 + (i % 5) * 160;
-        QImage z = big.scaled(w, 720, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        view = z.copy();
-    }
-    const double t1 = nowMs();
-    const double elapsed = std::max(t1 - t0, 1e-6);
-    const double fps = frames / (elapsed / 1000.0);
-    r.value = fps;
-    r.passed = true;
-    r.detail = "frames=" + std::to_string(frames) + " elapsed_ms=" + std::to_string(elapsed);
+    r.passed = b2.passed;
+    r.detail = isTimeoutDetail(b2.detail) ? b2.detail
+                                          : "wraps B2 real ThumbnailPipeline first-thumbnail path";
     return r;
 }
 
@@ -1003,9 +495,14 @@ ScenarioResult scenarioScaleTier(const Corpus &corpus, size_t tierN, const std::
     constexpr size_t kWindow = 64; // evict after each window to bound peak memory
     double peakCacheBytes = 0;
 
+    ScenarioResult early;
+    early.name = "S" + tierLabel;
+    early.metric = "scale_decode_fps";
     const double t0 = nowMs();
     for (size_t i = 0; i < n; ++i)
     {
+        if (failIfScenarioTimedOut(early, true))
+            return early;
         repo.load(all[i]);
         peakCacheBytes = std::max(peakCacheBytes, static_cast<double>(mt.sample().cacheTotalBytes));
         if ((i + 1) % kWindow == 0)
@@ -1076,8 +573,13 @@ ScenarioResult scenarioWorkflowSoak(const Corpus &corpus)
     size_t handlesFirst = 0, handlesLast = 0;
     std::ostringstream perCycle;
 
+    ScenarioResult early;
+    early.name = "B17";
+    early.metric = "workflow_soak_rss_growth_mb";
     for (int c = 0; c < cycles; ++c)
     {
+        if (failIfScenarioTimedOut(early, false))
+            return early;
         // 1) Browse: load a sliding window of images.
         const size_t off = static_cast<size_t>(c) * (window / 2) % all.size();
         for (size_t i = 0; i < window; ++i)

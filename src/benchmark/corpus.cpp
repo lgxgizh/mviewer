@@ -45,9 +45,25 @@ void paint(QImage &img, uint32_t seed)
 
 bool write(const QString &path, const QImage &img, const char *fmt)
 {
-    QImageWriter w(path, fmt);
-    w.setQuality(90);
-    return w.write(img);
+    bool wrote = false;
+    {
+        QImageWriter w(path, fmt);
+        // Quality is a JPEG scale. Qt maps PNG quality 90 to zlib level 0
+        // ((100-90)*9/91 == 0), so every corpus PNG was an uncompressed
+        // width*height*3 raster. Those files made each later QImageReader::read
+        // pay a full IDAT and then libpng's png_read_end fprintf
+        // "libpng error: Read Error" (Qt installs a null libpng error callback).
+        // Leave PNG/TIFF on the codec default.
+        const bool jpeg = fmt != nullptr && fmt[0] == 'j' && fmt[1] == 'p';
+        if (jpeg)
+            w.setQuality(90);
+        wrote = w.write(img);
+    }
+    if (!wrote)
+        return false;
+    // An empty or IHDR-only PNG makes libpng print "Read Error" on every later
+    // decode. Reject it here so the corpus does not replay that line.
+    return QFileInfo(path).size() >= 64;
 }
 } // namespace
 
@@ -107,8 +123,8 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
 #endif
         if (!envTmp.isEmpty())
         {
-            const QString uniqueName = QStringLiteral("mviewer_bench-%1").arg(
-                QUuid::createUuid().toString(QUuid::WithoutBraces));
+            const QString uniqueName = QStringLiteral("mviewer_bench-%1")
+                                           .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
             const QString uniqueDir = QDir(envTmp).filePath(uniqueName);
             if (QDir().mkpath(uniqueDir))
                 c.dir = QFileInfo(uniqueDir).absoluteFilePath().toStdString();

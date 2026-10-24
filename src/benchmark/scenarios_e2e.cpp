@@ -20,6 +20,7 @@
 #include <QWidget>
 
 #include <algorithm>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <sstream>
@@ -64,6 +65,9 @@ bool waitUntil(const std::function<bool()> &ready, int timeoutMs)
         timeoutMs = 1;
     if (ready())
         return true;
+    // Wall clock, checked before ready(). If ready() blocks on this thread the
+    // QTimer cannot fire, so the next poll still quits once the deadline passed.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
     QEventLoop loop;
     QTimer timeout;
     timeout.setSingleShot(true);
@@ -75,6 +79,11 @@ bool waitUntil(const std::function<bool()> &ready, int timeoutMs)
     QObject::connect(&poll, &QTimer::timeout, &loop,
                      [&]
                      {
+                         if (std::chrono::steady_clock::now() >= deadline)
+                         {
+                             loop.quit();
+                             return;
+                         }
                          if (ready())
                              loop.quit();
                      });
