@@ -111,6 +111,7 @@ void swapSessionPaneSlots(mviewer::ui::CompareSessionRuntime &session, int a, in
     if (pyramids.size() <= static_cast<size_t>(b))
         pyramids.resize(static_cast<size_t>(b) + 1);
     std::swap(pyramids[static_cast<size_t>(a)], pyramids[static_cast<size_t>(b)]);
+    session.displayState.swapPanes(a, b);
 
     auto &frames = session.frameIndices;
     if (static_cast<size_t>(b) < frames.size())
@@ -189,6 +190,12 @@ void CompareWorkspace::onSwapPanes()
         // async delivery does the same when its raster lands.
         swapPaneViewsAndCaptions(va, vb, ca, cb, m_engine.imageAt(a), m_engine.imageAt(b),
                                  m_filenameOverlay);
+        // The display state (and its Loading badge) follows the raster.
+        if (m_session && va && vb && m_session->displayState.paneCount() == n)
+        {
+            va->setSoftLoading(m_session->displayState.badge(a));
+            vb->setSoftLoading(m_session->displayState.badge(b));
+        }
         swapIndexIfMatch(m_focusIndex, a, b);
         swapIndexIfMatch(m_editIdx, a, b);
 

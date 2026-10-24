@@ -1,9 +1,8 @@
-// Compare display batch bookkeeping: every pane waiting on a raster must be
-// carried into the next latest-wins batch, and the pixel grid must not be drawn
-// over a soft / lower-density stand-in. Fixture size matches the user report:
+// Compare display debounce merge and pixel-grid gating: the pixel grid must not
+// be drawn over a soft / lower-density stand-in. Fixture size matches the user report:
 // two 4096x3072 JPEGs at 744% / 855% zoom.
-#include "compareworkspace_display_pending.h"
 #include "compareworkspace_display_planner.h"
+#include "compareworkspace_display_state.h"
 #include "core/analysis/PixelGrid.h"
 #include "widgets/rawimageview.h"
 #include <QApplication>
@@ -15,18 +14,12 @@
 namespace
 {
 
-using mviewer::ui::collectDisplayBatchPanes;
 using mviewer::ui::mergeLodRefreshPane;
 
 bool expect(const char *name, bool ok)
 {
     std::printf("%s: %s\n", ok ? "PASS" : "FAIL", name);
     return ok;
-}
-
-bool contains(const std::vector<int> &v, int x)
-{
-    return std::find(v.begin(), v.end(), x) != v.end();
 }
 
 mviewer::ui::CompareDisplayPlanningInput highZoomInput(double scale)
@@ -64,50 +57,8 @@ int main()
     if (!expect("an all-pane request is never narrowed", mergeLodRefreshPane(true, -1, 0) == -1))
         ++fails;
 
-    // Race: all-pane batch {0,1} in flight, then a fast preview for pane 0
-    // only. Pane 1 shows a warm thumb (non-null) with softLoading=true.
-    {
-        const std::vector<bool> waiting{false, true};
-        const auto panes = collectDisplayBatchPanes(2, waiting, {0, 1}, {0});
-        if (!expect("soft pane 1 rides along with pane-0 request",
-                    panes.size() == 2 && contains(panes, 0) && contains(panes, 1)))
-            ++fails;
-    }
-    // Same race with the soft flag already cleared by a cheap provisional:
-    // the undelivered upgrade for pane 1 is carried over.
-    {
-        const std::vector<bool> waiting{false, false};
-        const auto panes = collectDisplayBatchPanes(2, waiting, {1}, {0});
-        if (!expect("undelivered pane 1 upgrade is carried over",
-                    panes.size() == 2 && contains(panes, 1)))
-            ++fails;
-    }
-    {
-        const auto panes = collectDisplayBatchPanes(2, {false, false}, {}, {});
-        if (!expect("nothing waiting and nothing dirty requests nothing", panes.empty()))
-            ++fails;
-    }
-    {
-        const auto panes = collectDisplayBatchPanes(2, {true, false}, {5, -1}, {0, 0});
-        if (!expect("out-of-range and duplicate panes are dropped",
-                    panes.size() == 1 && panes[0] == 0))
-            ++fails;
-    }
-
-    // Livelock contract: after the cheap pass the upgrade asks for sharp
-    // even if softLoading is still set (cheap skipped as blurrier than thumb).
-    if (!expect("blank pane takes the cheap LOD",
-                mviewer::ui::displayRequestWantsCheap(true, false, true)))
-        ++fails;
-    if (!expect("soft pane without an upgrade takes the cheap LOD",
-                mviewer::ui::displayRequestWantsCheap(false, true, false)))
-        ++fails;
-    if (!expect("soft pane on its sharp upgrade asks for the sharp plan",
-                !mviewer::ui::displayRequestWantsCheap(false, true, true)))
-        ++fails;
-    if (!expect("settled pane asks for the sharp plan",
-                !mviewer::ui::displayRequestWantsCheap(false, false, false)))
-        ++fails;
+    // Batch pane carry-over and the cheap/sharp choice moved into the display
+    // state machine: see test_compare_display_state.cpp.
 
     // 4096x3072 threshold math. Both 744% and 855% plan a density-1 region
     // raster (no cache mip / 640 cheap LOD is involved for the sharp plan).
