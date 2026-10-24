@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.147] - 2026-10-24
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.147** (split-browse routing fixes #216, compare per-pane display state machine #206, end-to-end view-switch benchmarks #213, sanitizer test hygiene #217, UX/robustness pass #218).
+
 ### Added
 
 - **End-to-end view-switch benchmarks**: B18 (`e2e_switch_warm_p50_ms`) and
