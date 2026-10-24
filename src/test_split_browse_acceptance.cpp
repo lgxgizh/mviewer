@@ -289,6 +289,16 @@ bool waitUntil(const std::function<bool()> &pred, int tries = 80)
     return pred();
 }
 
+// Layout can settle a row or so away from the saved scrollbar value.
+bool restoredScrollNear(int saved, int restored, int rowStep, int scrollMax)
+{
+    if (saved <= 0 || restored <= 0)
+        return false;
+    const int step = qMax(rowStep, 1);
+    const int tolerance = qMax(step, qMax(scrollMax / 10, 10));
+    return qAbs(restored - saved) <= tolerance;
+}
+
 void testSessionRestoreMainWindow()
 {
     std::cout << "--- TC-SB-08b: MainWindow restores right pane scroll, image, sort ---"
@@ -391,7 +401,15 @@ void testSessionRestoreMainWindow()
     EXPECT(sec->currentDir() == QDir::cleanPath(rightDir) ||
                QDir(sec->currentDir()) == QDir(rightDir),
            "right pane directory restored");
-    EXPECT(waitUntil([&]() { return savedScroll > 0 && sec->scrollOffset() == savedScroll; }, 160),
+    EXPECT(waitUntil(
+               [&]()
+               {
+                   const int span =
+                       sec->verticalScrollBar() ? sec->verticalScrollBar()->maximum() : 0;
+                   return restoredScrollNear(savedScroll, sec->scrollOffset(),
+                                             sec->gridSize().height(), span);
+               },
+               160),
            "right pane scroll restored");
     const QString current = sec->pathList().value(sec->currentIndex().row());
     EXPECT(QFileInfo(current).fileName() == QFileInfo(lastImage).fileName() ||

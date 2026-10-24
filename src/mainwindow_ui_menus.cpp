@@ -192,7 +192,7 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
     m_actFlipH->setEnabled(false);
     m_actFlipV = new QAction(tr("Flip Vertical(&V)"), this);
     m_actFlipV->setObjectName("flipVAction");
-    m_actFlipV->setShortcut(QKeySequence("Ctrl+Shift+V"));
+    m_actFlipV->setShortcut(QKeySequence("Ctrl+Alt+V"));
     m_actFlipV->setToolTip(actTip(tr("Flip Vertically and Overwrite Original File"), m_actFlipV));
     m_actFlipV->setEnabled(false);
     editMenu->addAction(m_actFlipH);

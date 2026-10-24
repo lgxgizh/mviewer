@@ -394,7 +394,9 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
     }
     // Ctrl+V: when the gallery has focus or the pointer is over it, paste into
     // the browsed folder. Otherwise keep the legacy temp-file → viewer path.
-    if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_V && !(mod & Qt::ShiftModifier))
+    // Ctrl+Alt+V is Flip Vertical, so Alt must not paste.
+    if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_V && !(mod & Qt::ShiftModifier) &&
+        !(mod & Qt::AltModifier))
     {
         if (mviewer_keys::textEntryWidget(QApplication::focusWidget()))
             return false;

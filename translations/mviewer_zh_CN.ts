@@ -816,13 +816,13 @@
     </message>
     <message>
         <location filename="../src/compareworkspace_shortcuts.h" line="45"/>
-        <source>Semi-transparent overlay; Tab toggles the same mode</source>
-        <translation>半透明叠加；Tab 切换同一模式</translation>
+        <source>Semi-transparent overlay. Tab toggles it only when the compare canvas has focus</source>
+        <translation>半透明叠加。仅当比较画布拥有焦点时，Tab 才切换此模式</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_shortcuts.h" line="47"/>
-        <source>Same as O</source>
-        <translation>同 O</translation>
+        <source>Same as O when the compare canvas has focus; otherwise Tab moves focus</source>
+        <translation>比较画布拥有焦点时与 O 相同；否则 Tab 移动焦点</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_shortcuts.h" line="48"/>
@@ -1752,13 +1752,13 @@
     </message>
     <message>
         <location filename="../src/compareworkspace_editpanel.cpp" line="232"/>
-        <source>⇅ Vertical (Ctrl+Shift+V)</source>
-        <translation>⇅ 垂直 (Ctrl+Shift+V)</translation>
+        <source>⇅ Vertical (Ctrl+Alt+V)</source>
+        <translation>⇅ 垂直 (Ctrl+Alt+V)</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_editpanel.cpp" line="234"/>
-        <source>Flip current pane vertically (Ctrl+Shift+V, preview only, does not modify the original file)</source>
-        <translation>垂直翻转当前窗格 (Ctrl+Shift+V，仅预览，不修改原文件)</translation>
+        <source>Flip current pane vertically (Ctrl+Alt+V, preview only, does not modify the original file)</source>
+        <translation>垂直翻转当前窗格 (Ctrl+Alt+V，仅预览，不修改原文件)</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_editpanel.cpp" line="243"/>
@@ -3403,8 +3403,8 @@ ROI diff: %1%  Mean %2  Peak %3</source>
     </message>
     <message>
         <location filename="../src/imageviewer_contextmenu.cpp" line="267"/>
-        <source>Flip Vertical and Overwrite Original (Ctrl+Shift+V)</source>
-        <translation>垂直翻转并覆盖原文件 (Ctrl+Shift+V)</translation>
+        <source>Flip Vertical and Overwrite Original (Ctrl+Alt+V)</source>
+        <translation>垂直翻转并覆盖原文件 (Ctrl+Alt+V)</translation>
     </message>
     <message>
         <location filename="../src/imageviewer_contextmenu.cpp" line="305"/>
@@ -6387,6 +6387,10 @@ Continue?</source>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="895"/>
         <source>Background task was rejected by the scheduler.</source>
         <translation>后台任务被调度器拒绝。</translation>
+    </message>
+    <message>
+        <source>Thumbnail size reset (Ctrl+Alt+9)</source>
+        <translation>已重置缩略图大小 (Ctrl+Alt+9)</translation>
     </message>
 </context>
 <context>

@@ -229,9 +229,9 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         btnFlipH->setObjectName("flipHButton");
         btnFlipH->setToolTip(tr("Flip current pane horizontally (Ctrl+Shift+H, preview only, does "
                                 "not modify the original file)"));
-        auto *btnFlipV = new QPushButton(tr("⇅ Vertical (Ctrl+Shift+V)"), m_editPanel);
+        auto *btnFlipV = new QPushButton(tr("⇅ Vertical (Ctrl+Alt+V)"), m_editPanel);
         btnFlipV->setObjectName("flipVButton");
-        btnFlipV->setToolTip(tr("Flip current pane vertically (Ctrl+Shift+V, preview only, does "
+        btnFlipV->setToolTip(tr("Flip current pane vertically (Ctrl+Alt+V, preview only, does "
                                 "not modify the original file)"));
         row->addWidget(btnFlipH);
         row->addWidget(btnFlipV);

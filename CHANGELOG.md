@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Split Browse scroll restore**: the right-pane scroll check accepts a restored offset near the saved one (within a thumbnail row, or 10% of the scrollbar range) instead of requiring an exact pixel match.
+- **Chinese catalog**: regenerated `resources/i18n/mviewer_zh_CN.qm` and `translations/mviewer_zh_CN.qm` from `translations/mviewer_zh_CN.ts`. `language_tests` now fails if the embedded catalog is missing recent strings. Optional CMake target `update_translations_qm` runs lrelease when LinguistTools is present and is not part of the normal build.
+- **Flip Vertical shortcut**: moved from Ctrl+Shift+V (the usual paste-plain chord) to Ctrl+Alt+V. Ctrl+Shift+H stays horizontal flip. Ctrl+V still pastes.
+- **Ctrl+0**: always fits the window. Thumbnail-size reset is Ctrl+Alt+9 while the gallery has focus (Ctrl+Shift+digits rate, Alt+digits set color labels, and plain Ctrl+0 is no longer stolen by the thumbnail panel). Ctrl++ / Ctrl+- still resize thumbnails.
 - **Split Browse active pane routing**: rename, copy/move, paste, select-all/deselect/invert, reveal, and batch analysis now target the focused pane instead of always the left gallery.
 - **Split Browse Delete**: Delete (keyboard, menu, command) moves the union of both panes' selections to the Recycle Bin, with a confirm dialog that states the total and per-pane counts; both panes drop the removed paths.
 - **Split Browse restore**: right-pane scroll position, last image, independent sort, and splitter sizes restore from the previous session; avoid a second directory scan on restore.
@@ -13,6 +17,7 @@
 
 ### Changed
 
+- Split `compareworkspace_controls.cpp` overlay state into `compareworkspace_controls_overlay.cpp`, and browse signal wiring into `mainwindow_ui_connections_browse.cpp`, with no behavior change.
 - Right-pane sort is independent of the left pane and persisted; enabling split no longer copies left sort onto the right.
 - Swap is disabled when either pane has no directory.
 - Retranslate uses the same action texts as construction, and fullscreen keeps the Exit Full Screen label when already full screen.
