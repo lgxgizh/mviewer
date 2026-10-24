@@ -253,6 +253,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_pane_header.cpp
     compareworkspace_render.cpp
     compareworkspace_render_materialization.cpp
+    compareworkspace_render_canvas_paint.cpp
     compareworkspace_pyramid_wire.cpp
     compareworkspace_render_diff.cpp
     compareworkspace_live_diff.cpp

@@ -14,8 +14,9 @@
 //   compareworkspace_nav.cpp                 pair navigation, layout presets  757
 //   compareworkspace_render.cpp              paint modes, canvas host         484
 //   compareworkspace_render_canvas.cpp       blink controller, canvas paint   449
+//   compareworkspace_render_canvas_paint.cpp canvas paint, pixel grid, overlays 168
 //   compareworkspace_render_diff.cpp         diff overlay batch + metrics     353
-//   compareworkspace_render_materialization.cpp cell raster materialization   805
+//   compareworkspace_render_materialization.cpp cell raster materialization   647
 //   compareworkspace_roi.cpp                 ROI box, HUD, measurement export 589
 // Only CompareWorkspace TUs may include this header.
 #pragma once

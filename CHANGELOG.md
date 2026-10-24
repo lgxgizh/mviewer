@@ -59,6 +59,7 @@
 ### Changed
 
 - Split `compareworkspace_controls.cpp` overlay state into `compareworkspace_controls_overlay.cpp`, and browse signal wiring into `mainwindow_ui_connections_browse.cpp`, with no behavior change.
+- Split canvas paint (pixel grid, ROI, and info overlays) out of `compareworkspace_render_materialization.cpp` into `compareworkspace_render_canvas_paint.cpp`, with no behavior change.
 - Right-pane sort is independent of the left pane and persisted; enabling split no longer copies left sort onto the right.
 - Swap is disabled when either pane has no directory.
 - Retranslate uses the same action texts as construction, and fullscreen keeps the Exit Full Screen label when already full screen.
