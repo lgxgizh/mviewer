@@ -67,9 +67,9 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
             -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
-            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
-            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
-            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" `
+            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" `
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address -g"
 
       - name: Build (ASan)
         run: cmake --build build_asan -j 4
@@ -86,7 +86,9 @@ jobs:
           $env:QT_QPA_PLATFORM = "offscreen"
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
           $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
-          $env:ASAN_OPTIONS = "detect_leaks=1:detect_odr_violation=0"
+          # detect_leaks is unsupported on Windows and aborts every test at
+          # startup. The Linux GCC job below keeps detect_leaks=1.
+          $env:ASAN_OPTIONS = "detect_odr_violation=0"
           cd build_asan
           $excludeRegex = "core_tests|m3m4m5_tests|m3pipeline_tests|decoder_tests|repository_tests|metadata_tests|m3acceptance_tests|product_browse_tests|product_workflow_gate"
           ctest --output-on-failure -j4 -E $excludeRegex
@@ -159,16 +161,15 @@ jobs:
 
       - name: Configure (clang-cl + UBSan)
         run: |
-          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $ubsanLib = "$llvmShort/lib/clang/21/lib/windows"
+          # Trap mode needs no ubsan runtime. The static standalone lib is
+          # MT_StaticRelease and mismatches /MD, and lld-link rejects
+          # -fsanitize=undefined. vptr/function cannot trap, so they are off.
           cmake -S . -B build_ubsan -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
             -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
-            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=undefined /libpath:$ubsanLib clang_rt.ubsan_standalone-x86_64.lib" `
-            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=undefined /libpath:$ubsanLib clang_rt.ubsan_standalone-x86_64.lib" `
-            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -g"
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -fsanitize-trap=all -fno-sanitize=vptr,function -g"
 
       - name: Build (UBSan)
         run: cmake --build build_ubsan -j 4
@@ -374,13 +375,16 @@ jobs:
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:PATH = "$env:QT_ROOT_DIR\bin;C:\Program Files\OpenCppCoverage;" + $env:PATH
           cd build_msvc
+          # crashhandler_tests launches a child that deliberately crashes.
+          # Under OpenCppCoverage --cover_children that child cannot run, so
+          # the test fails in ~30s. It stays in the normal (non-coverage) suite.
           OpenCppCoverage.exe `
             --export_type cobertura:coverage.xml `
             --export_type html:coverage_html `
             --sources "$env:GITHUB_WORKSPACE\src" `
             --excluded_sources "$env:GITHUB_WORKSPACE\src\benchmark" `
             --cover_children `
-            -- ctest --output-on-failure -j2
+            -- ctest --output-on-failure -j2 -E crashhandler_tests
           if (-not (Test-Path coverage.xml)) { Write-Host "::warning:: coverage.xml not produced"; exit 1 }
 
       - name: Per-module coverage summary + dashboard
@@ -475,7 +479,11 @@ jobs:
           git config user.name "mviewer-bot"
           git config user.email "bot@mviewer.local"
           git add docs/quality/ docs/test_matrix.md docs/known_issues/
-          git add -f benchmark/report/trend.json benchmark/report/index.html
+          # trend.json / index.html are produced only when a benchmark report
+          # exists. git add -f of a missing pathspec fails the publish step.
+          for f in benchmark/report/trend.json benchmark/report/index.html; do
+            [ -f "$f" ] && git add -f "$f"
+          done
           if git diff --cached --quiet; then
             echo "health: nothing to commit"
           else
