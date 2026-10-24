@@ -583,7 +583,8 @@ Prepared prepareRun(BenchOptions &opt, int &exitCode)
     if (!opt.budget.configureProfile(opt.profileArg))
     {
         std::cerr << "Unknown hardware profile: " << opt.profileArg
-                  << " (expected auto, base, low-core, or ci)" << '\n' << std::flush;
+                  << " (expected auto, base, low-core, or ci)" << '\n'
+                  << std::flush;
         exitCode = 2;
         return prep;
     }
