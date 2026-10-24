@@ -408,6 +408,7 @@ add_executable(core_tests
     core/perf/GpuTracker.cpp
     benchmark/corpus.cpp
     benchmark/scenarios.cpp
+    benchmark/scenarios_pipeline.cpp
 )
 
 target_link_libraries(core_tests
@@ -2701,9 +2702,12 @@ add_test(NAME product_workflow_gate
 # is roadmap Phase-4 and is NOT wired into ci.yml here.
 add_executable(mviewer_bench
     benchmark/main.cpp
+    benchmark/bench_progress.cpp
     benchmark/corpus.cpp
     benchmark/scenarios.cpp
     benchmark/scenarios_e2e.cpp
+    benchmark/scenarios_pipeline.cpp
+    benchmark/scenarios_render.cpp
     core/perf/GpuTracker.cpp
 )
 
@@ -2737,7 +2741,12 @@ add_test(NAME bench_enforce
 # profile adapts the budget for small local machines; RUN_SERIAL keeps the
 # enforced measurement itself free from test-suite contention. The smoke test
 # remains parallelizable because it only proves the harness can execute.
-set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+# TIMEOUT is headroom above the in-process per-scenario watchdog (default
+# 120s, mviewer_bench --scenario-timeout-ms). The watchdog prints a flushed
+# `[bench] WATCHDOG <name> exceeded N ms` line and exits non-zero; that is
+# the hang guard. 900s lets ctest capture that line. It is not a looser
+# performance budget.
+set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
 add_executable(audit_misc_tests
     core/test_audit_misc.cpp
