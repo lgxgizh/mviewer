@@ -33,7 +33,7 @@
 <table border='1' cellpadding='4' cellspacing='0'>
 <tr><td><kbd>P</kbd> / <kbd>C</kbd></td><td>Open Compare (needs 2–8 images)</td></tr>
 <tr><td><kbd>Space</kbd></td><td>Quick-compare the current image with the next one</td></tr>
-<tr><td><kbd>Alt+H</kbd></td><td>Analysis panel (Browse window, single image; the histogram appears on open. Use Compare for two images)</td></tr>
+<tr><td><kbd>F7</kbd></td><td>Analysis panel (Browse window, single image; the histogram appears on open. Use Compare for two images)</td></tr>
 <tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>Image info overlay</td></tr>
 <tr><td><kbd>S</kbd></td><td>Slideshow</td></tr>
 <tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+H</kbd></td><td>Rotate / flip and overwrite the original</td></tr>
@@ -42,4 +42,31 @@
 <tr><td><kbd>Ctrl+Alt+A</kbd></td><td>Batch Analysis Export</td></tr>
 </table>
 <p>When the viewer is full screen, the context-menu "Analyze" leaves full screen first and then opens the analysis panel in the main window. The analysis panel works on the current image only; two-image PSNR / SSIM lives in Compare.</p>
+<h3>5. Split browse</h3>
+<ul>
+<li><kbd>Ctrl+Shift+S</kbd> opens a second gallery on the right; its header has back / forward / up, <b>Browse...</b>, <b>Clone Left</b>, <b>Swap</b> and close.</li>
+<li>Click a pane to make it active. Delete / rotate / flip act on the selections of both panes.</li>
+<li><kbd>Ctrl+Alt+C</kbd> copies and <kbd>Ctrl+Shift+M</kbd> moves the active pane's selection to the other pane's directory (undo with <kbd>Ctrl+Z</kbd>; same-name files become <code>name_1</code>).</li>
+</ul>
+<h3>6. USM sharpen compare</h3>
+<ul>
+<li><kbd>Ctrl+U</kbd> opens maximized: original on the left, result on the right. Pick a preset or adjust Amount / Radius / Threshold.</li>
+<li>Hold <kbd>Space</kbd> to see the other side under the mouse; <kbd>0</kbd> fit, <kbd>1</kbd> 100%, <kbd>2</kbd> 200%; <kbd>Ctrl+C</kbd> copy, <kbd>Ctrl+S</kbd> save as. The original is never overwritten.</li>
+</ul>
+<h3>7. RAW, files and preferences</h3>
+<ul>
+<li>RAW files show the embedded preview by default; <kbd>Ctrl+Shift+D</kbd> decodes the full RAW. Preferences → RAW display sets the default.</li>
+<li>Delete goes to the recycle bin; <kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> undo and redo delete, rename, copy, move, rotate and flip. JPEG rotation changes only the EXIF orientation tag.</li>
+<li>In the full viewer, Delete and <kbd>F2</kbd> act on the displayed image only.</li>
+<li>Tools → Preferences: theme, language (switches immediately), defaults, confirmations, RAW display, automatic update check. Help → Check for Updates works at any time.</li>
+</ul>
+<h3>8. Same key, different window</h3>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>Key</th><th>Browse</th><th>Viewer</th><th>Compare</th><th>USM</th></tr>
+<tr><td><kbd>1</kbd></td><td>100% preview</td><td>100%</td><td>Hold: preview image 1</td><td>100%</td></tr>
+<tr><td><kbd>Ctrl+1</kbd></td><td>Grid view</td><td>Grid view</td><td>100% actual size</td><td>—</td></tr>
+<tr><td><kbd>R</kbd></td><td>—</td><td>ROI select mode</td><td>Sync crosshair</td><td>—</td></tr>
+<tr><td><kbd>Ctrl+R</kbd></td><td>Rotate (writes file)</td><td>Rotate (writes file)</td><td>Preview rotate (no write)</td><td>—</td></tr>
+<tr><td><kbd>Space</kbd></td><td>Quick compare</td><td>Quick compare / play animation</td><td>Hold: other side</td><td>Hold: other side</td></tr>
+</table>
 <p>Full shortcut table: menu "Help → Keyboard Shortcuts" or <kbd>F1</kbd>.</p>

@@ -221,6 +221,8 @@ class MainWindow : public QMainWindow
     void applyRatingFilterItems(QComboBox *combo);
     void applyFlagFilterItems(QComboBox *combo);
     QString sortDirectionToolTip(bool detailed) const;
+    void retranslateBrowseBar();
+    void retranslateSplitHeader();
     void buildAnalysisAndSearchPanels();
     void buildCentralContainer(QWidget *leftWidget, QWidget *rightWidget);
     void buildMetadataPanelUi();

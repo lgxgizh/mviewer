@@ -242,22 +242,45 @@ void MainWindow::applyMetadataHistogram(uint64_t gen, const QString &path,
 
 static QString localizedFileCommand(const QString &label)
 {
-    if (label == QLatin1String("Rotate 1 file"))
-        return MainWindow::tr("Rotate 1 file");
-    if (label == QLatin1String("Flip 1 file"))
-        return MainWindow::tr("Flip 1 file");
-    bool ok = false;
-    if (label.startsWith(QLatin1String("Rotate ")) && label.endsWith(QLatin1String(" files")))
+    // Core commands describe themselves in English ("<Verb> N files",
+    // "<Verb> 1 file" or "<Verb> <name>"); map those onto translatable forms.
+    struct VerbForms
     {
-        const int count = label.mid(7, label.size() - 13).toInt(&ok);
-        if (ok)
-            return MainWindow::tr("Rotate %1 files").arg(count);
-    }
-    if (label.startsWith(QLatin1String("Flip ")) && label.endsWith(QLatin1String(" files")))
+        const char *verb;
+        const char *many;  // "%1" = file count
+        const char *one;   // exactly one file, no name
+        const char *named; // "%1" = file name, nullptr when unused
+    };
+    static const VerbForms kForms[] = {
+        {"Rotate", QT_TRANSLATE_NOOP("MainWindow", "Rotate %1 files"),
+         QT_TRANSLATE_NOOP("MainWindow", "Rotate 1 file"), nullptr},
+        {"Flip", QT_TRANSLATE_NOOP("MainWindow", "Flip %1 files"),
+         QT_TRANSLATE_NOOP("MainWindow", "Flip 1 file"), nullptr},
+        {"Copy", QT_TRANSLATE_NOOP("MainWindow", "Copy %1 files"), nullptr,
+         QT_TRANSLATE_NOOP("MainWindow", "Copy %1")},
+        {"Move", QT_TRANSLATE_NOOP("MainWindow", "Move %1 files"), nullptr,
+         QT_TRANSLATE_NOOP("MainWindow", "Move %1")},
+        {"Delete", QT_TRANSLATE_NOOP("MainWindow", "Delete %1 files"), nullptr,
+         QT_TRANSLATE_NOOP("MainWindow", "Delete %1")},
+    };
+    for (const VerbForms &forms : kForms)
     {
-        const int count = label.mid(5, label.size() - 11).toInt(&ok);
-        if (ok)
-            return MainWindow::tr("Flip %1 files").arg(count);
+        const QString prefix = QLatin1String(forms.verb) + QLatin1Char(' ');
+        if (!label.startsWith(prefix))
+            continue;
+        const QString rest = label.mid(prefix.size());
+        if (forms.one && rest == QLatin1String("1 file"))
+            return MainWindow::tr(forms.one);
+        if (rest.endsWith(QLatin1String(" files")))
+        {
+            bool ok = false;
+            const int count = rest.left(rest.size() - 6).toInt(&ok);
+            if (ok)
+                return MainWindow::tr(forms.many).arg(count);
+        }
+        if (forms.named && !rest.isEmpty())
+            return MainWindow::tr(forms.named).arg(rest);
+        return label;
     }
     return label;
 }

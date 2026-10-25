@@ -236,7 +236,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
     m_actToggleAnalysis->setCheckable(true);
     m_actToggleAnalysis->setChecked(false);
-    m_actToggleAnalysis->setShortcut(QKeySequence(QStringLiteral("Alt+H")));
+    m_actToggleAnalysis->setShortcut(QKeySequence(Qt::Key_F7));
     // P0: in-session browse history (browser-style back/forward).
     m_actHistoryBack = new QAction(tr("&Back"), this);
     m_actHistoryBack->setObjectName("historyBackAction");
@@ -271,7 +271,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actToggleSearch->setChecked(false);
     m_actToggleSearch->setShortcut(QKeySequence("Ctrl+Shift+F"));
     viewMenu->addAction(m_actToggleSearch);
-    m_actFocusBrowse = new QAction(tr("Focus Browse Mode (F6)"), this);
+    m_actFocusBrowse = new QAction(tr("Focus Browse Mode"), this);
     m_actFocusBrowse->setObjectName("focusBrowseAction");
     m_actFocusBrowse->setCheckable(true);
     m_actFocusBrowse->setShortcut(QKeySequence(Qt::Key_F6));
@@ -293,9 +293,13 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     viewMenu->addAction(m_actToggleMetadata);
     viewMenu->addSeparator();
     buildViewZoomActions(viewMenu);
-    m_actSlideshow = new QAction(tr("&Slideshow (S)"), this);
+    m_actSlideshow = new QAction(tr("&Slideshow"), this);
     m_actSlideshow->setObjectName("slideshowAction");
     m_actSlideshow->setCheckable(true);
+    // S stays handled by keyPressEvent / the viewer filter. The shortcut here
+    // only shows in the menu; the widget context keeps it from firing twice.
+    m_actSlideshow->setShortcut(QKeySequence(Qt::Key_S));
+    m_actSlideshow->setShortcutContext(Qt::WidgetShortcut);
     viewMenu->addAction(m_actSlideshow);
     viewMenu->addSeparator();
     m_actColorManagement = new QAction(tr("Color Management (CMS)"), this);
@@ -374,7 +378,6 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     m_actImportSettings = new QAction(tr("&Import Settings..."), this);
     toolsMenu->addAction(m_actExportSettings);
     toolsMenu->addAction(m_actImportSettings);
-    toolsMenu->addSeparator();
     // M21: Memory Timeline snapshot (status bar + optional CSV dump).
     auto *actMemTimeline = new QAction(tr("&Memory Timeline..."), this);
     actMemTimeline->setToolTip(
@@ -416,7 +419,6 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
                 statusBar()->showMessage(msg, 8000);
                 QMessageBox::information(this, tr("Memory Timeline"), msg);
             });
-    toolsMenu->addAction(actMemTimeline);
 
     // ----- Help -----
     m_helpMenu = menuBar->addMenu(tr("&Help"));
@@ -432,6 +434,9 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     actShortcuts->setShortcut(QKeySequence(Qt::Key_F1));
     connect(actShortcuts, &QAction::triggered, this, &MainWindow::showShortcutsHelp);
     helpMenu->addAction(actShortcuts);
+    // Developer diagnostics live under Help so Tools stays user-facing.
+    auto *diagnosticsMenu = helpMenu->addMenu(tr("&Diagnostics"));
+    diagnosticsMenu->addAction(actMemTimeline);
     m_actAbout = new QAction(tr("&About"), this);
     helpMenu->addAction(m_actAbout);
 }
@@ -481,7 +486,7 @@ void MainWindow::retranslateUi()
         {m_actDirBack, QT_TR_NOOP("Previous directory")},
         {m_actDirForward, QT_TR_NOOP("Next directory")},
         {m_actToggleSearch, QT_TR_NOOP("Global &Search")},
-        {m_actFocusBrowse, QT_TR_NOOP("Focus Browse Mode (F6)")},
+        {m_actFocusBrowse, QT_TR_NOOP("Focus Browse Mode")},
         {m_actBrowseWorkspace, QT_TR_NOOP("Browse Layout")},
         {m_actDirUp, QT_TR_NOOP("Up one level")},
         {m_actRefresh, QT_TR_NOOP("Refresh")},
@@ -497,7 +502,7 @@ void MainWindow::retranslateUi()
         {m_actZoomActual, QT_TR_NOOP("&Actual Size")},
         {m_actPixelGrid, QT_TR_NOOP("Pixel &Grid")},
         {m_actFullscreen, QT_TR_NOOP("Full Screen(&U)")},
-        {m_actSlideshow, QT_TR_NOOP("&Slideshow (S)")},
+        {m_actSlideshow, QT_TR_NOOP("&Slideshow")},
     };
     for (const auto &entry : actions)
     {
@@ -529,6 +534,7 @@ void MainWindow::retranslateUi()
         if (entry.menu)
             entry.menu->setTitle(tr(entry.text));
     }
+    retranslateBrowseBar();
 }
 
 void MainWindow::buildViewZoomActions(QMenu *viewMenu)

@@ -31,7 +31,7 @@
 <h3>4. 浏览窗口常用键</h3>
 <table border='1' cellpadding='4' cellspacing='0'><tr><td><kbd>P</kbd> / <kbd>C</kbd></td><td>打开比较（需 2–8 张）</td></tr>
 <tr><td><kbd>Space</kbd></td><td>当前图与下一张快速比较</td></tr>
-<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口，单图；打开即出直方图。双图比较用比较模式）</td></tr>
+<tr><td><kbd>F7</kbd></td><td>分析面板（浏览窗口，单图；打开即出直方图。双图比较用比较模式）</td></tr>
 <tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层</td></tr>
 <tr><td><kbd>S</kbd></td><td>幻灯片</td></tr>
 <tr><td><kbd>Ctrl+R</kbd> / <kbd>Ctrl+Shift+H</kbd></td><td>旋转 / 翻转并覆盖原文件</td></tr>
@@ -40,4 +40,31 @@
 <tr><td><kbd>Ctrl+Alt+A</kbd></td><td>批量分析导出</td></tr>
 </table>
 <p>查看器全屏时，右键「分析」会先退出全屏，再在主窗口打开分析面板。分析面板只处理当前这一张图；两张图的 PSNR / SSIM 在比较模式里。</p>
+<h3>5. 双栏浏览</h3>
+<ul>
+<li><kbd>Ctrl+Shift+S</kbd> 在右侧打开第二个图库；表头有后退 / 前进 / 上一级、<b>浏览...</b>、<b>克隆左栏</b>、<b>交换</b>和关闭。</li>
+<li>点击某一栏使其成为活动栏。删除 / 旋转 / 翻转作用于两栏的选择。</li>
+<li><kbd>Ctrl+Alt+C</kbd> 复制、<kbd>Ctrl+Shift+M</kbd> 移动活动栏的选择到另一栏的目录（<kbd>Ctrl+Z</kbd> 撤销；同名文件变为 <code>name_1</code>）。</li>
+</ul>
+<h3>6. USM 锐化对比</h3>
+<ul>
+<li><kbd>Ctrl+U</kbd> 以最大化打开：左侧原图，右侧结果。选择预设或调整数量 / 半径 / 阈值。</li>
+<li>按住 <kbd>Space</kbd> 在鼠标所在侧查看另一侧；<kbd>0</kbd> 适应，<kbd>1</kbd> 100%，<kbd>2</kbd> 200%；<kbd>Ctrl+C</kbd> 复制，<kbd>Ctrl+S</kbd> 另存为。原图不会被覆盖。</li>
+</ul>
+<h3>7. RAW、文件与首选项</h3>
+<ul>
+<li>RAW 默认显示内嵌预览；<kbd>Ctrl+Shift+D</kbd> 解码完整 RAW。首选项 → RAW 显示可设置默认行为。</li>
+<li>删除进入回收站；<kbd>Ctrl+Z</kbd> / <kbd>Ctrl+Y</kbd> 撤销和重做删除、重命名、复制、移动、旋转和翻转。JPEG 旋转只修改 EXIF 方向标记。</li>
+<li>在全图查看器中，删除和 <kbd>F2</kbd> 只作用于当前显示的图像。</li>
+<li>工具 → 首选项：主题、语言（立即生效）、默认设置、确认、RAW 显示、自动检查更新。帮助 → 检查更新随时可用。</li>
+</ul>
+<h3>8. 同一按键在不同窗口中的含义</h3>
+<table border="1" cellspacing="0" cellpadding="3">
+<tr><th>按键</th><th>浏览</th><th>查看器</th><th>比较</th><th>USM</th></tr>
+<tr><td><kbd>1</kbd></td><td>预览 100%</td><td>100%</td><td>按住预览第 1 张</td><td>100%</td></tr>
+<tr><td><kbd>Ctrl+1</kbd></td><td>网格视图</td><td>网格视图</td><td>100% 实际大小</td><td>—</td></tr>
+<tr><td><kbd>R</kbd></td><td>—</td><td>ROI 框选模式</td><td>同步十字线</td><td>—</td></tr>
+<tr><td><kbd>Ctrl+R</kbd></td><td>旋转（写入文件）</td><td>旋转（写入文件）</td><td>预览旋转（不写文件）</td><td>—</td></tr>
+<tr><td><kbd>Space</kbd></td><td>快速比较</td><td>快速比较 / 播放动图</td><td>按住显示另一侧</td><td>按住显示另一侧</td></tr>
+</table>
 <p>完整快捷键表：菜单「帮助 → 键盘快捷键」或 <kbd>F1</kbd>。</p>

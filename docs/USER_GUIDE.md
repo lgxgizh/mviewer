@@ -30,7 +30,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 8. **Workspace and search**:
    - **F6**: focus browse mode (hide the side panels and view full window).
    - **Ctrl+Shift+F**: global search panel.
-   - **Alt+H**: analysis panel (histogram, statistics and quality metrics computed instantly). The panel analyzes the current image only; two-image comparison lives in Compare.
+   - **F7**: analysis panel (histogram, statistics and quality metrics computed instantly). The panel analyzes the current image only; two-image comparison lives in Compare.
    - When the viewer is full screen, the context-menu "Analyze" leaves full screen first and then opens the panel in the main window.
 
 ---
@@ -106,11 +106,85 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 ## 5. Language
 
 - **Tools → Preferences... → UI language**: Follow system (default), English or 简体中文.
-- Restart MViewer after changing the language so every window uses it.
+- The language switches immediately for open windows; a few dialogs pick it up the next time they open.
 
 ---
 
-## 6. Shortcut reference
+## 6. Split browse
+
+- **View → Split Browse View** or **Ctrl+Shift+S** opens a second gallery on the right. The right pane header has back / forward / up buttons, a path box, **Browse...**, **Clone Left** (show the left directory on the right), **Swap** (exchange directories and selections) and a close button.
+- Click a pane to make it active; the active pane has the highlighted frame and drives the status bar.
+- **Delete**, rotate and flip act on the union of the selections in both panes.
+- **Edit → Copy to Other Pane** (**Ctrl+Alt+C**) and **Move to Other Pane** (**Ctrl+Shift+M**) send the active pane's selection to the directory shown in the other pane. They are disabled when both panes show the same directory. A confirmation names the source pane and the target directory (it can be turned off in Preferences). Files with the same name are saved as `name_1.ext`. Copy and move from the menu can be undone with **Ctrl+Z**.
+- **F6** toggles focus browse mode (hides the side panels so the gallery fills the window).
+
+---
+
+## 7. USM sharpen compare
+
+- Select an image and press **Ctrl+U** (or **Tools → USM Sharpen Compare...**). The dialog opens maximized with the original on the left and the sharpened result on the right.
+- **Preset template** offers several starting points (standard, light detail boost, portrait skin protection, landscape and architecture, strong edges); changing Amount, Radius or Threshold switches to **Custom**. **Sharpen Luma Channel Only** avoids color fringes.
+- Hold **Space** to show the other side in the pane under the mouse; release to restore.
+- **0** fits the window, **1** is 100%, **2** is 200%. Zoom and pan stay synchronized when **Synchronize zoom/pan** is checked.
+- **Ctrl+C** copies the sharpened result; **Ctrl+S** saves it as a new file. The original is never overwritten.
+
+---
+
+## 8. RAW files
+
+- By default MViewer shows the preview JPEG embedded in the RAW file, which is fast. The status bar marks whether you see the embedded preview or a full decode.
+- **View → Decode Full RAW** (**Ctrl+Shift+D**, also in the viewer context menu) decodes the sensor data for the current image; run it again to cancel a decode in progress.
+- **Preferences → RAW display** chooses: prefer embedded preview, full decode when the preview is smaller than 90% of the sensor, or always decode full RAW.
+
+---
+
+## 9. File operations
+
+- **Delete** moves files to the system recycle bin. **Ctrl+Z** / **Ctrl+Y** undo and redo deletes, renames, copies, moves, rotations and flips; the Edit menu shows what will be undone.
+- Rotate and flip **overwrite the original file**. For JPEG, MViewer first tries to change only the EXIF orientation tag, which keeps the pixels and all other EXIF data intact; other formats are re-encoded. A confirmation can be enabled in Preferences, and the change can be undone.
+- In the full image viewer, **Delete** and **F2** (rename) act only on the image being shown, not on the gallery selection.
+
+---
+
+## 10. Sort and filter
+
+- The sort bar sorts by file name, date, size, resolution, type, rating, camera or lens; the arrow button switches ascending / descending. Equal items keep file-name order.
+- **Search** filters by file name; **Include Subfolders** and **Metadata** widen the search.
+- **Advanced Filter** shows camera, lens, ISO, tag, rating and flag/color-label filters plus a file-type filter. **Clear Filters** / **Reset Filters** remove every condition.
+
+---
+
+## 11. Preferences
+
+**Tools → Preferences...**
+
+- **General**: interface theme, UI language (switches immediately), default view mode, default sort, thumbnail size, slideshow interval and loop, confirmations before delete / copy or move / modifying the original, GPU rendering, color management, automatic update check, RAW display.
+- **Compare**: compare window defaults.
+- **Analyze**: default analysis overlay (zebra, false color, single channels) and the zebra threshold.
+
+---
+
+## 12. Update check
+
+- With **Automatically check for updates on startup** enabled, MViewer looks for a newer release a few seconds after start and shows a non-blocking notice only when one exists.
+- **Help → Check for Updates...** always checks on demand, even when the automatic check is off.
+- **Skip this version** in the notice hides that release until a newer one appears.
+
+---
+
+## 13. Same key, different window
+
+| Key | Browse | Viewer | Compare | USM |
+|---|---|---|---|---|
+| **1** | 100% zoom of the preview | 100% (actual pixels) | Hold to preview image 1 | 100% |
+| **Ctrl+1** | Grid view mode | Grid view mode (gallery) | 100% actual size | — |
+| **R** | — | Toggle ROI select mode | Sync crosshair | — |
+| **Ctrl+R** | Rotate 90° clockwise (writes the file) | Rotate 90° clockwise (writes the file) | Preview-rotate the current pane (file not written) | — |
+| **Space** | Quick-compare with the next image | Quick compare (animations: play/pause) | Hold to show the other side | Hold to show the other side |
+
+---
+
+## 14. Shortcut reference
 
 ### Compare window
 
@@ -143,7 +217,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **Ctrl+Shift+O** | Open a single file |
 | **P** / **C** | Compare the 2–8 selected images |
 | **Space** | Quick-compare the current image with the next (or play/pause an animation) |
-| **Alt+H** | Toggle the analysis panel (single image; in full-screen viewer, "Analyze" leaves full screen first) |
+| **F7** | Toggle the analysis panel (single image; in full-screen viewer, "Analyze" leaves full screen first) |
 | **Ctrl+Shift+F** | Toggle the global search panel |
 | **Ctrl+I** / **I** | Toggle the EXIF metadata overlay |
 | **Ctrl+R** / **Ctrl+Shift+R** | Rotate 90° clockwise / counterclockwise (overwrites the original; preview only in Compare) |

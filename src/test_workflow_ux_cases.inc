@@ -6319,4 +6319,73 @@ void workflow20_raw_display_chrome()
     dismissVisibleMessageBoxes();
 }
 
+void workflow23_language_switch_browse_bar()
+{
+    std::cout << "── Workflow 23: language switch refreshes the browse bar ──\n";
+    using mviewer::ui::Language;
+    using mviewer::ui::LanguageMode;
+    MainWindow window;
+    pump(40);
+    auto *flag = window.findChild<QComboBox *>(QStringLiteral("flagFilterCombo"));
+    auto *rating = window.findChild<QComboBox *>(QStringLiteral("ratingFilterCombo"));
+    auto *sortLabel = window.findChild<QLabel *>(QStringLiteral("sortFieldLabel"));
+    auto *advanced = window.findChild<QPushButton *>(QStringLiteral("advancedFilterToggle"));
+    auto *viewMode = window.findChild<QComboBox *>(QStringLiteral("thumbnailViewModeCombo"));
+    CHECK(flag && rating && sortLabel && advanced && viewMode, "browse bar widgets exist");
+    if (!flag || !rating || !sortLabel || !advanced || !viewMode)
+        return;
+    flag->setCurrentIndex(flag->findData(12));
+    rating->setCurrentIndex(rating->findData(3));
+    const int viewIndex = viewMode->currentIndex();
+    const QString flagEn = flag->currentText();
+    const QString viewEn = viewMode->currentText();
+
+    Language::apply(LanguageMode::ChineseSimplified);
+    pump(40);
+    CHECK(sortLabel->text() != QStringLiteral("Sort:"), "sort label switches to Chinese");
+    CHECK(advanced->text() != QStringLiteral("Advanced Filter"),
+          "advanced filter toggle switches to Chinese");
+    CHECK(flag->currentText() != flagEn, "flag filter items switch to Chinese");
+    CHECK(viewMode->currentText() != viewEn, "view mode items switch to Chinese");
+    CHECK(flag->currentData().toInt() == 12, "flag filter keeps its selection");
+    CHECK(rating->currentData().toInt() == 3, "rating filter keeps its selection");
+    CHECK(viewMode->currentIndex() == viewIndex, "view mode keeps its selection");
+
+    Language::apply(LanguageMode::English);
+    pump(40);
+    CHECK(sortLabel->text() == QStringLiteral("Sort:"), "sort label switches back to English");
+    CHECK(flag->currentText() == flagEn, "flag filter switches back to English");
+
+    // P1-12: no QAction may claim Alt+<letter> used by a top-level menu mnemonic.
+    QStringList conflicts;
+    const auto menuActions = window.menuBar()->actions();
+    const auto allActions = window.findChildren<QAction *>();
+    for (QAction *menuAction : menuActions)
+    {
+        const QString title = menuAction->text();
+        const qsizetype amp = title.indexOf(QLatin1Char('&'));
+        if (amp < 0 || amp + 1 >= title.size())
+            continue;
+        const QKeySequence altKey(QStringLiteral("Alt+") + title.at(amp + 1).toUpper());
+        for (QAction *action : allActions)
+        {
+            if (action->menu() || action == menuAction)
+                continue;
+            const auto shortcuts = action->shortcuts();
+            for (const QKeySequence &shortcut : shortcuts)
+            {
+                if (shortcut == altKey)
+                    conflicts << action->text();
+            }
+        }
+    }
+    CHECK(conflicts.isEmpty(), "no action shortcut collides with a menu mnemonic");
+    auto *analysis = window.findChild<QAction *>(QStringLiteral("toggleAnalysisPanelAction"));
+    CHECK(analysis && analysis->shortcut() == QKeySequence(Qt::Key_F7),
+          "analysis panel shortcut is F7");
+    window.close();
+    pump(40);
+    dismissVisibleMessageBoxes();
+}
+
 } // namespace

@@ -71,13 +71,14 @@ enum class PaneTransferKind : std::uint8_t
 inline QString otherPaneTransferConfirmText(PaneTransferKind kind, bool fromLeft, int count,
                                             const QString &destinationDir)
 {
-    const char *source = "Copy %1 file(s) from the left pane to %2";
+    const char *source =
+        QT_TRANSLATE_NOOP("MainWindow", "Copy %1 file(s) from the left pane to %2");
     if (kind == PaneTransferKind::Copy && !fromLeft)
-        source = "Copy %1 file(s) from the right pane to %2";
+        source = QT_TRANSLATE_NOOP("MainWindow", "Copy %1 file(s) from the right pane to %2");
     else if (kind == PaneTransferKind::Move && fromLeft)
-        source = "Move %1 file(s) from the left pane to %2";
+        source = QT_TRANSLATE_NOOP("MainWindow", "Move %1 file(s) from the left pane to %2");
     else if (kind == PaneTransferKind::Move)
-        source = "Move %1 file(s) from the right pane to %2";
+        source = QT_TRANSLATE_NOOP("MainWindow", "Move %1 file(s) from the right pane to %2");
     return QCoreApplication::translate("MainWindow", source).arg(count).arg(destinationDir);
 }
 
@@ -117,6 +118,7 @@ inline bool transferShortcutConflicts(int key, int mods)
     const Chord occupied[] = {
         {static_cast<int>(Qt::Key_F5), 0},
         {static_cast<int>(Qt::Key_F6), 0},
+        {static_cast<int>(Qt::Key_F7), 0},
         {static_cast<int>(Qt::Key_C), static_cast<int>(Qt::ControlModifier)},
         {static_cast<int>(Qt::Key_C), static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)},
         {static_cast<int>(Qt::Key_M), static_cast<int>(Qt::ControlModifier)},

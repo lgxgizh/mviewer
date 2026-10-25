@@ -79,8 +79,7 @@ int main(int argc, char **argv)
     check(embedded.translate("MainWindow", "Close Split Browse View") ==
               QStringLiteral("关闭双栏浏览"),
           "qm translates Close Split Browse View");
-    check(embedded.translate("MainWindow", "Focus Browse Mode (F6)") ==
-              QStringLiteral("专注浏览模式 (F6)"),
+    check(embedded.translate("MainWindow", "Focus Browse Mode") == QStringLiteral("专注浏览模式"),
           "qm translates Focus Browse Mode");
     check(embedded.translate("ThumbnailPanel", "Thumbnail size reset (Ctrl+Alt+9)") ==
               QStringLiteral("已重置缩略图大小 (Ctrl+Alt+9)"),
