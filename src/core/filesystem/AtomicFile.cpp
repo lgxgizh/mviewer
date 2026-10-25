@@ -89,13 +89,17 @@ namespace
 void sweepStaleTemps(const std::filesystem::path &dir, const std::string &base)
 {
     namespace fs = std::filesystem;
-    static std::mutex sweptMutex;
-    static std::set<std::string> sweptDirs;
+    // Intentionally leaked for process lifetime (ADR 017). RatingStore /
+    // HistoryStore workers may still call atomicWriteFile during static
+    // destruction; a normal function-local static would already be gone and
+    // trigger heap-use-after-free under ASan (audit_misc_tests on Linux).
+    static auto *sweptMutex = new std::mutex();
+    static auto *sweptDirs = new std::set<std::string>();
     const std::string dirKey = pathToUtf8(dir);
     bool sweep = false;
     {
-        std::lock_guard<std::mutex> lk(sweptMutex);
-        sweep = sweptDirs.insert(dirKey).second;
+        std::lock_guard<std::mutex> lk(*sweptMutex);
+        sweep = sweptDirs->insert(dirKey).second;
     }
     if (!sweep)
         return;

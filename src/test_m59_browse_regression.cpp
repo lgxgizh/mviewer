@@ -6,6 +6,7 @@
 
 #include <QApplication>
 #include <QColor>
+#include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -304,12 +305,30 @@ int main(int argc, char **argv)
         ThumbnailPanel panel;
         panel.resize(600, 400);
         panel.show();
+        // Offscreen Linux ASan often leaves maximum()==0 until a layout pass
+        // runs; pump until the viewport has a real size.
+        CHECK(waitFor(
+                  [&]
+                  {
+                      QCoreApplication::processEvents();
+                      return panel.viewport() && panel.viewport()->height() > 0;
+                  },
+                  5000),
+              "Progressive scroll test: viewport laid out");
         panel.setDirectory(testDir.path());
         CHECK(waitFor([&]() { return panel.entries().size() == 40; }, 10000),
               "Progressive scroll test: directory scan finishes");
 
         QScrollBar *bar = panel.verticalScrollBar();
-        CHECK(bar && bar->maximum() > 0, "Progressive scroll test: vertical scrollbar available");
+        CHECK(waitFor(
+                  [&]
+                  {
+                      QCoreApplication::processEvents();
+                      return bar && bar->maximum() > 0;
+                  },
+                  5000),
+              "Progressive scroll test: vertical scrollbar available");
+        bar = panel.verticalScrollBar();
         if (bar && bar->maximum() > 0)
         {
             bar->setValue(bar->maximum() / 2);

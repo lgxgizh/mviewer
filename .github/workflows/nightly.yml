@@ -474,13 +474,16 @@ jobs:
           # Under OpenCppCoverage --cover_children that child cannot run, so
           # the test fails in ~30s. It stays in the normal (non-coverage) suite.
           # bench_* perf budgets are meaningless under coverage instrumentation.
+          # product_browse_tests / product_workflow_gate assert wall-clock UI
+          # budgets that OpenCppCoverage --cover_children blows past
+          # (advisory Coverage). Same exclusion as ASan/UBSan.
           OpenCppCoverage.exe `
             --export_type cobertura:coverage.xml `
             --export_type html:coverage_html `
             --sources "$env:GITHUB_WORKSPACE\src" `
             --excluded_sources "$env:GITHUB_WORKSPACE\src\benchmark" `
             --cover_children `
-            -- ctest --output-on-failure -j2 -E "crashhandler_tests|bench_"
+            -- ctest --output-on-failure -j2 -E "crashhandler_tests|bench_|product_workflow_gate|product_browse_tests"
           if (-not (Test-Path coverage.xml)) { Write-Host "::warning:: coverage.xml not produced"; exit 1 }
 
       - name: Per-module coverage summary + dashboard

@@ -148,17 +148,21 @@ bool graphConverged()
 // Returns the observed display raster dims at readiness.
 QSize viewerOpenReady(ImageViewer &viewer, const QString &path, int timeoutMs = 60000)
 {
-    QSize readySize;
-    bool ready = false;
-    QObject::connect(&viewer, &ImageViewer::displayReady, &viewer,
-                     [&](const QSize &s)
-                     {
-                         readySize = s;
-                         ready = true;
-                     });
+    // Heap state: displayReady can fire after waitTrue returns (or on a late
+    // superseded decode). Capturing stack locals made Linux GCC ASan report
+    // stack-use-after-return at the lambda body.
+    const auto state = std::make_shared<std::pair<QSize, bool>>(QSize{}, false);
+    QObject::connect(
+        &viewer, &ImageViewer::displayReady, &viewer,
+        [state](const QSize &s)
+        {
+            state->first = s;
+            state->second = true;
+        },
+        Qt::SingleShotConnection);
     viewer.setImage(path);
-    waitTrue([&] { return ready; }, timeoutMs);
-    return readySize;
+    waitTrue([&] { return state->second; }, timeoutMs);
+    return state->first;
 }
 
 // ── Compare slice: set -> both panes materialized ───────────────────────────

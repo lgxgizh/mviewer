@@ -263,6 +263,14 @@ void retintLiveWidgets(const ThemeTokens &from, const ThemeTokens &to)
 }
 
 // In System mode, re-apply when Windows switches between light and dark apps.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+void onSystemColorSchemeChanged(Qt::ColorScheme)
+{
+    if (g_mode == ThemeMode::System)
+        Theme::applyTheme(ThemeMode::System);
+}
+#endif
+
 void installSystemSchemeFollower()
 {
     static bool installed = false;
@@ -270,12 +278,13 @@ void installSystemSchemeFollower()
         return;
     installed = true;
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, qApp,
-                     [](Qt::ColorScheme)
-                     {
-                         if (g_mode == ThemeMode::System)
-                             Theme::applyTheme(ThemeMode::System);
-                     });
+    // Use a plain function (not a lambda) for the slot. clang-cl +
+    // -fsanitize-trap=undefined traps inside Qt's QCallableObject path when
+    // connecting a lambda here (Nightly UBSan selftest Illegal at Theme.cpp).
+    QStyleHints *hints = QGuiApplication::styleHints();
+    if (hints == nullptr)
+        return;
+    QObject::connect(hints, &QStyleHints::colorSchemeChanged, qApp, onSystemColorSchemeChanged);
 #endif
 }
 

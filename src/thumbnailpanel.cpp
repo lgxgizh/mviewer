@@ -449,6 +449,11 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
                    : (currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString()));
     const bool hadGallerySelection = !prevSelected.isEmpty();
     const bool pendingSelectionBeforeRebuild = !m_pendingSelect.isEmpty();
+    // Capture before m_paths.clear(): distinguishes "filter just hid the last
+    // visible row" (must clear currentImage — workflow_ux no-match) from a
+    // second empty rebuild while the gallery was already empty (must keep a
+    // currentImage set for rate-into-filter — p0_rating_roi under ASan).
+    const bool hadVisibleRows = !m_paths.isEmpty();
 
     m_paths.clear();
     m_rowByPath.clear();
@@ -483,12 +488,18 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     restoreSelectionAndCurrent(prevSelected, prevCurrent, selToRestore);
     restoreScrollState(anchorPath, anchorOffset, savedScroll.v, savedScroll.h);
 
-    // A completed filter rebuild with no visible rows must clear the shared
-    // selection as well as the gallery. This drives the existing preview and
-    // status-bar empty state through SelectionModel; recursive/meta searches
-    // that are still pending never reach buildModel().
+    // Empty filter rebuild: clear currentImage only when this pass hid the
+    // last visible rows (no-match filter / first rating-filter apply). A late
+    // empty rebuild on an already-empty gallery must not wipe a currentImage
+    // the caller just set for "rate into filter" (p0_rating_roi under ASan).
     if (entries.isEmpty() && m_selection)
-        m_selection->setSelection({}, {});
+    {
+        const QString existing = m_selection->paneCurrentImage(m_paneSlot);
+        if (hadVisibleRows)
+            m_selection->setSelection({}, {});
+        else
+            m_selection->setSelection({}, existing);
+    }
 
     pruneThumbnailState();
     // Progressive mid-scan: replaceSources keeps generation stable.

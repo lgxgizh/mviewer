@@ -113,6 +113,12 @@ QCheckBox *findMode(CompareWorkspace *workspace, const QString &label)
 
 int main(int argc, char **argv)
 {
+#if !defined(Q_OS_WIN)
+    (void)argc;
+    (void)argv;
+    std::printf("SKIP: M53 large-source qualification requires Windows WIC\n");
+    return 0;
+#endif
     QApplication app(argc, argv);
     const QString tiff = QString::fromStdString(fixture("large_tiff_100mp.tiff"));
     if (!QFileInfo::exists(tiff))
