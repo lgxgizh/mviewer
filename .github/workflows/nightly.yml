@@ -276,9 +276,9 @@ jobs:
             if (-not $wd) { $wd = Split-Path $exe }
             Write-Host "::group::$n"
             Push-Location $wd
-            & $cdb -g -G -y (Split-Path $exe) -c ".lines -e; kn 30; q" $exe @testArgs 2>&1 |
-              Select-String -Pattern "Illegal instruction|Access violation|^[0-9a-f]{2} " |
-              Select-Object -First 40 | ForEach-Object { Write-Host $_.Line }
+            & $cdb -g -G -y (Split-Path $exe) -c ".lines -e; kn 30; ub @rip L20; u @rip L2; r; q" $exe @testArgs 2>&1 |
+              Select-String -Pattern 'Illegal instruction|Access violation|^[0-9a-f]{2} |^[0-9a-f]{8}`[0-9a-f]{8} |^r[a-z0-9]+=|^[A-Za-z_!:<>+0-9 ]+:$' |
+              Select-Object -First 70 | ForEach-Object { Write-Host $_.Line }
             Pop-Location
             Write-Host "::endgroup::"
           }

@@ -3527,8 +3527,8 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     compareAction->trigger();
     pump(300);
 
-    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
-    CompareWorkspace *compare =
+    QPointer<QDialog> compareDialog = w.findChild<QDialog *>("compareDialog");
+    QPointer<CompareWorkspace> compare =
         compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
     CHECK(compareDialog && compareDialog->isVisible() && compare,
           "non-first navigation opens the real Compare workspace");
@@ -3579,7 +3579,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     {
         QElapsedTimer closeTimer;
         closeTimer.start();
-        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        while (compareDialog && compareDialog->isVisible() && closeTimer.elapsed() < 3000)
         {
             sendKey(compareDialog, Qt::Key_Escape);
             pump(50);
@@ -3602,7 +3602,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     {
         QElapsedTimer closeTimer;
         closeTimer.start();
-        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        while (compareDialog && compareDialog->isVisible() && closeTimer.elapsed() < 3000)
         {
             sendKey(compareDialog, Qt::Key_Escape);
             pump(50);
