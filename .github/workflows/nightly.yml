@@ -164,6 +164,9 @@ jobs:
           python3 testdata/generate_large_fixtures.py --ensure
 
       - name: Test (ASan + LeakSanitizer)
+        # Bound a hung test so the job reports instead of holding the nightly
+        # concurrency group for the 6 h default.
+        timeout-minutes: 90
         run: |
           export QT_QPA_PLATFORM=offscreen
           export ASAN_OPTIONS="detect_leaks=1:detect_odr_violation=0"
@@ -175,7 +178,7 @@ jobs:
           # deliberate crash is Windows SEH / minidump (and ASan intercepts it).
           # The rest are PowerShell script gates (COMMAND powershell in
           # src/CMakeLists.txt); Linux runners have no powershell.
-          ctest --output-on-failure -j 4 -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
+          ctest --output-on-failure -j 4 --timeout 600 -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
   # ---------------------------------------------------------------------------
   # ubsan — UndefinedBehaviorSanitizer via clang-cl
