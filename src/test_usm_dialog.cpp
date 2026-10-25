@@ -118,9 +118,8 @@ void testRejectedSubmit()
                              return UsmLoadedSource{};
                          });
     check(!loaderCalled, "rejected USM submit does not run the loader");
-    const QString expect =
-        QStringLiteral("Cannot open blocked.nef for USM sharpen comparison: ") +
-        QStringLiteral("scheduler rejected submission");
+    const QString expect = QStringLiteral("Cannot open blocked.nef for USM sharpen comparison: ") +
+                           QStringLiteral("scheduler rejected submission");
     check(body == expect, "rejected USM submit surfaces a failure");
     hold.store(false);
     TaskScheduler::cancel(blocker);
