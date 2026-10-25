@@ -48,7 +48,7 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     ContextMenuActions acts;
     acts.aOpen = menu.addAction(tr("Open"));
     acts.aOpen->setShortcut(QKeySequence(Qt::Key_Return));
-    acts.aRename = menu.addAction("Rename");
+    acts.aRename = menu.addAction(tr("Rename"));
     acts.aRename->setShortcut(QKeySequence(Qt::Key_F2));
     // NOTE: no Ctrl+C here — the global binding copies the current image to
     // the clipboard; advertising the file-copy dialog on the same key would
@@ -76,18 +76,18 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     }
     acts.aTrash = menu.addAction(tr("Move to Recycle Bin"));
     acts.aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
-    acts.aOpenTrash = menu.addAction("Open Recycle Bin");
+    acts.aOpenTrash = menu.addAction(tr("Open Recycle Bin"));
     acts.aReveal = menu.addAction(tr("Show in File Manager"));
     acts.aReveal->setShortcut(QKeySequence("Ctrl+E"));
-    acts.aCopyPath = menu.addAction("Copy path");
+    acts.aCopyPath = menu.addAction(tr("Copy path"));
     acts.aCopyPath->setShortcut(QKeySequence("Ctrl+Shift+C"));
-    acts.aCopyName = menu.addAction("Copy filename");
-    acts.aCompare = menu.addAction("Compare");
+    acts.aCopyName = menu.addAction(tr("Copy filename"));
+    acts.aCompare = menu.addAction(tr("Compare"));
     acts.aCompare->setShortcut(QKeySequence("P"));
     acts.aCompare->setEnabled(selPaths.size() >= 2 && selPaths.size() <= 8);
     acts.aUsmCompare = menu.addAction(tr("USM Sharpen Compare..."));
     acts.aUsmCompare->setEnabled(selPaths.size() == 1);
-    acts.aAnalyze = menu.addAction("Batch Analysis Export");
+    acts.aAnalyze = menu.addAction(tr("Batch Analysis Export"));
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     acts.aAnalyze->setEnabled(!selPaths.isEmpty());
     menu.addSeparator();

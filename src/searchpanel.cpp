@@ -31,25 +31,25 @@ SearchPanel::SearchPanel(QWidget *parent)
     // ── top bar: search input + reindex button ──────────────────────
     auto *topBar = new QHBoxLayout;
     m_searchEdit = new QLineEdit;
-    m_searchEdit->setPlaceholderText("Search filename, metadata, analysis…");
+    m_searchEdit->setPlaceholderText(tr("Search filename, metadata, analysis…"));
     m_searchEdit->setClearButtonEnabled(true);
     topBar->addWidget(m_searchEdit);
 
     m_reindexBtn = new QPushButton(tr("Rebuild Index"));
-    m_reindexBtn->setToolTip("Rescan all images to build the search index");
+    m_reindexBtn->setToolTip(tr("Rescan all images to build the search index"));
     m_reindexBtn->setFixedWidth(72);
     topBar->addWidget(m_reindexBtn);
     mainLayout->addLayout(topBar);
 
     // ── scope checkboxes ────────────────────────────────────────────
     auto *scopeBar = new QHBoxLayout;
-    m_chkFilename = new QCheckBox("File Name");
+    m_chkFilename = new QCheckBox(tr("File Name"));
     m_chkFilename->setChecked(true);
-    m_chkMetadata = new QCheckBox("Metadata");
+    m_chkMetadata = new QCheckBox(tr("Metadata"));
     m_chkMetadata->setChecked(true);
     m_chkAnalysis = new QCheckBox(tr("Analysis Results"));
     m_chkAnalysis->setChecked(true);
-    m_chkPaths = new QCheckBox("Path");
+    m_chkPaths = new QCheckBox(tr("Path"));
     m_chkPaths->setChecked(false);
     scopeBar->addWidget(m_chkFilename);
     scopeBar->addWidget(m_chkMetadata);
@@ -231,7 +231,8 @@ void SearchPanel::performSearch()
                     self->m_table->setRowCount(n);
                     if (n == 0)
                         self->m_countLabel->setText(
-                            "No matching results — try other keywords or check more search scopes");
+                            SearchPanel::tr("No matching results — try other keywords or "
+                                            "check more search scopes"));
                     else
                         self->m_countLabel->setText(
                             tr("Found %1 results (click a column header to sort)").arg(n));
@@ -242,7 +243,7 @@ void SearchPanel::performSearch()
         });
     if (!m_searchTask)
     {
-        m_countLabel->setText("Search queue busy, try again later");
+        m_countLabel->setText(tr("Search queue busy, try again later"));
     }
 }
 
@@ -308,13 +309,13 @@ QString SearchPanel::matchTypeLabel(mviewer::domain::SearchMatch::Type type) con
     switch (type)
     {
     case mviewer::domain::SearchMatch::Type::Filename:
-        return "File Name";
+        return tr("File Name");
     case mviewer::domain::SearchMatch::Type::Metadata:
-        return "Metadata";
+        return tr("Metadata");
     case mviewer::domain::SearchMatch::Type::Analysis:
         return tr("Analysis Results");
     case mviewer::domain::SearchMatch::Type::Path:
-        return "Path";
+        return tr("Path");
     }
     return {};
 }

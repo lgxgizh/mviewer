@@ -748,12 +748,12 @@ void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
     if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
         return;
     QMenu menu(this);
-    menu.addAction("Fit to window (0 / F)", this, [this]() { m_imageViewer->zoomFit(); });
-    menu.addAction("Actual Size 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
+    menu.addAction(tr("Fit to window (0 / F)"), this, [this]() { m_imageViewer->zoomFit(); });
+    menu.addAction(tr("Actual Size 100% (1)"), this, [this]() { m_imageViewer->zoomActual(); });
     menu.addSeparator();
-    menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
-    menu.addAction("200% (2)", this, [this]() { m_imageViewer->zoomTo(2.0); });
-    menu.addAction("400%", this, [this]() { m_imageViewer->zoomTo(4.0); });
+    menu.addAction(tr("50%"), this, [this]() { m_imageViewer->zoomTo(0.5); });
+    menu.addAction(tr("200% (2)"), this, [this]() { m_imageViewer->zoomTo(2.0); });
+    menu.addAction(tr("400%"), this, [this]() { m_imageViewer->zoomTo(4.0); });
     menu.addAction(tr("800% (Pixel Grid)"), this, [this]() { m_imageViewer->zoomTo(8.0); });
     menu.exec(globalPos);
 }

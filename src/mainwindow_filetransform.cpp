@@ -70,7 +70,7 @@ class BatchFileProgress
             return;
         const QString label = kind == FileTransformKind::Rotate ? MainWindow::tr("Rotating…")
                                                                 : MainWindow::tr("Flipping…");
-        m_dialog = std::make_unique<ShownProgressDialog>(label, QStringLiteral("Cancel"), 0, total,
+        m_dialog = std::make_unique<ShownProgressDialog>(label, MainWindow::tr("Cancel"), 0, total,
                                                          parent);
         m_dialog->setObjectName(QStringLiteral("batchRotateFlipProgress"));
         m_dialog->setWindowModality(Qt::WindowModal);

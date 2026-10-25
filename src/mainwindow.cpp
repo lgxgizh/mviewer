@@ -1,9 +1,11 @@
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
+
 #include "core/image/decoder/RawDecodePlan.h"
 #include "naturalnameorder.h"
 #include "runtime_storage.h"
+#include <QCoreApplication>
 
 namespace
 {
@@ -14,7 +16,7 @@ QDialog *createFullscreenCompareHost(QWidget *parent, CompareWorkspace **viewOut
     // visible on one edge.
     auto *dlg = new QDialog(parent, Qt::Window);
     dlg->setObjectName("compareDialog");
-    dlg->setWindowTitle("Compare Mode - MViewer");
+    dlg->setWindowTitle(QCoreApplication::translate("MainWindow", "Compare Mode - MViewer"));
     auto *layout = new QVBoxLayout(dlg);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
@@ -124,7 +126,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     setupUi();
     setupCommands();
-    setWindowTitle("MViewer");
+    setWindowTitle(tr("MViewer"));
     resize(1280, 800);
     setMinimumSize(800, 500); // prevent layout collapse at tiny sizes
 

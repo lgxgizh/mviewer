@@ -3,6 +3,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -23,7 +24,7 @@ QWidget *makeResizePanel(QSpinBox *&maxEdge)
     panel->setObjectName(QStringLiteral("batchResizePanel"));
     auto *row = new QHBoxLayout(panel);
     row->setContentsMargins(0, 0, 0, 0);
-    row->addWidget(new QLabel("Max edge:"));
+    row->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Max edge:")));
     maxEdge = new QSpinBox;
     maxEdge->setRange(64, 32768);
     maxEdge->setValue(1920);
@@ -37,7 +38,9 @@ QWidget *makeCropPanel(QSpinBox *&x, QSpinBox *&y, QSpinBox *&w, QSpinBox *&h)
 {
     auto *panel = new QWidget;
     panel->setObjectName(QStringLiteral("batchCropPanel"));
-    panel->setToolTip("Crop by pixel rectangle; clamp to the valid region when outside the image");
+    panel->setToolTip(QCoreApplication::translate(
+        "BatchDialog",
+        "Crop by pixel rectangle; clamp to the valid region when outside the image"));
     auto *grid = new QGridLayout(panel);
     grid->setContentsMargins(0, 0, 0, 0);
     x = new QSpinBox;
@@ -54,13 +57,13 @@ QWidget *makeCropPanel(QSpinBox *&x, QSpinBox *&y, QSpinBox *&w, QSpinBox *&h)
     h->setRange(1, 100000);
     w->setValue(256);
     h->setValue(256);
-    grid->addWidget(new QLabel("X:"), 0, 0);
+    grid->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "X:")), 0, 0);
     grid->addWidget(x, 0, 1);
-    grid->addWidget(new QLabel("Y:"), 0, 2);
+    grid->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Y:")), 0, 2);
     grid->addWidget(y, 0, 3);
-    grid->addWidget(new QLabel("W:"), 1, 0);
+    grid->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "W:")), 1, 0);
     grid->addWidget(w, 1, 1);
-    grid->addWidget(new QLabel("H:"), 1, 2);
+    grid->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "H:")), 1, 2);
     grid->addWidget(h, 1, 3);
     grid->setColumnStretch(4, 1);
     return panel;
@@ -75,24 +78,29 @@ QWidget *makeWatermarkPanel(QLineEdit *&text, QComboBox *&pos, QDoubleSpinBox *&
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(mviewer::ui::metrics::kSpace8);
     auto *row1 = new QHBoxLayout;
-    row1->addWidget(new QLabel("Watermark text:"));
+    row1->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Watermark text:")));
     text = new QLineEdit;
-    text->setPlaceholderText("© 2025");
+    text->setPlaceholderText(QCoreApplication::translate("BatchDialog", "© 2025"));
     row1->addWidget(text, 1);
-    row1->addWidget(new QLabel("Position:"));
+    row1->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Position:")));
     pos = new QComboBox;
-    pos->addItems({"Top Left", "Top right", "Bottom Left", "Bottom Right", "Center", "Tile"});
+    pos->addItem(QCoreApplication::translate("BatchDialog", "Top Left"));
+    pos->addItem(QCoreApplication::translate("BatchDialog", "Top right"));
+    pos->addItem(QCoreApplication::translate("BatchDialog", "Bottom Left"));
+    pos->addItem(QCoreApplication::translate("BatchDialog", "Bottom Right"));
+    pos->addItem(QCoreApplication::translate("BatchDialog", "Center"));
+    pos->addItem(QCoreApplication::translate("BatchDialog", "Tile"));
     pos->setCurrentIndex(4);
     row1->addWidget(pos);
     lay->addLayout(row1);
     auto *row2 = new QHBoxLayout;
-    row2->addWidget(new QLabel("Opacity:"));
+    row2->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Opacity:")));
     opacity = new QDoubleSpinBox;
     opacity->setRange(0.0, 1.0);
     opacity->setSingleStep(0.05);
     opacity->setValue(0.3);
     row2->addWidget(opacity);
-    row2->addWidget(new QLabel("Font size:"));
+    row2->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Font size:")));
     fontSize = new QSpinBox;
     fontSize->setRange(8, 200);
     fontSize->setValue(24);
@@ -111,11 +119,15 @@ QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&out
     lay->setContentsMargins(0, 0, 0, 0);
     lay->setSpacing(mviewer::ui::metrics::kSpace8);
     auto *fmtRow = new QHBoxLayout;
-    fmtRow->addWidget(new QLabel("Export format:"));
+    fmtRow->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Export format:")));
     format = new QComboBox;
-    format->addItems({"png", "jpg", "bmp", "webp"});
+    // currentText() is the format id written into the batch config.
+    format->addItem(QStringLiteral("png"));
+    format->addItem(QStringLiteral("jpg"));
+    format->addItem(QStringLiteral("bmp"));
+    format->addItem(QStringLiteral("webp"));
     fmtRow->addWidget(format);
-    fmtRow->addWidget(new QLabel("Quality:"));
+    fmtRow->addWidget(new QLabel(QCoreApplication::translate("BatchDialog", "Quality:")));
     quality = new QSpinBox;
     quality->setRange(1, 100);
     quality->setValue(90);
@@ -123,15 +135,18 @@ QWidget *makeExportPanel(QComboBox *&format, QSpinBox *&quality, QLineEdit *&out
     fmtRow->addStretch();
     lay->addLayout(fmtRow);
     auto *outputRow = new QHBoxLayout;
-    outputRow->addWidget(new QLabel("Output directory:"));
+    outputRow->addWidget(
+        new QLabel(QCoreApplication::translate("BatchDialog", "Output directory:")));
     outputDir = new QLineEdit;
     outputDir->setObjectName(QStringLiteral("batchOutputDir"));
-    outputDir->setPlaceholderText("(Leave empty = original directory)");
+    outputDir->setPlaceholderText(
+        QCoreApplication::translate("BatchDialog", "(Leave empty = original directory)"));
     outputRow->addWidget(outputDir, 1);
-    browseBtn = new QPushButton("Browse...");
+    browseBtn = new QPushButton(QCoreApplication::translate("BatchDialog", "Browse..."));
     outputRow->addWidget(browseBtn);
     lay->addLayout(outputRow);
-    overwriteExisting = new QCheckBox("Overwrite existing files");
+    overwriteExisting =
+        new QCheckBox(QCoreApplication::translate("BatchDialog", "Overwrite existing files"));
     overwriteExisting->setObjectName(QStringLiteral("batchOverwriteExisting"));
     lay->addWidget(overwriteExisting);
     return panel;

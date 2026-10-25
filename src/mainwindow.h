@@ -215,6 +215,12 @@ class MainWindow : public QMainWindow
                                      QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout);
     void buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
                              QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout);
+    void applySortComboItems(QComboBox *combo);
+    void applyViewModeComboItems(QComboBox *combo);
+    void applyTypeFilterItems(QComboBox *combo);
+    void applyRatingFilterItems(QComboBox *combo);
+    void applyFlagFilterItems(QComboBox *combo);
+    QString sortDirectionToolTip(bool detailed) const;
     void buildAnalysisAndSearchPanels();
     void buildCentralContainer(QWidget *leftWidget, QWidget *rightWidget);
     void buildMetadataPanelUi();

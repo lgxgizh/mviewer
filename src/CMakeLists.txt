@@ -187,6 +187,7 @@ add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
+    mainwindow_ui_retranslate.cpp
     mainwindow_splitbrowse.cpp
     mainwindow_splitbrowse_panes.cpp
     mainwindow_split_transfer.cpp

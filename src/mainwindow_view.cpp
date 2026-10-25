@@ -667,7 +667,7 @@ void MainWindow::updateCacheStat()
     }
     if (hits + misses == 0)
     {
-        m_lblCache->setText("Hit rate —");
+        m_lblCache->setText(tr("Hit rate —"));
         m_lblCache->setToolTip(tr("Cache hit rate: No request records yet"));
     }
     else

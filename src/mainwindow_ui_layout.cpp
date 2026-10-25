@@ -136,9 +136,10 @@ void MainWindow::buildBrowserShell()
     // ----- Path input bar (UX: type a path to jump to a directory) -----
     m_pathEdit = new SelectAllOnActivateLineEdit(this);
     m_pathEdit->setObjectName("pathEdit");
-    m_pathEdit->setPlaceholderText("Enter a directory path and press Enter to switch...");
-    m_pathEdit->setToolTip("Type or paste a directory path and press Enter to open it (shortcut: "
-                           "Ctrl+F / Alt+D to focus).");
+    m_pathEdit->setPlaceholderText(tr("Enter a directory path and press Enter to switch..."));
+    m_pathEdit->setToolTip(
+        tr("Type or paste a directory path and press Enter to open it (shortcut: "
+           "Ctrl+F / Alt+D to focus)."));
     m_pathEdit->setClearButtonEnabled(true);
     auto *actFocusPath = new QAction(this);
     actFocusPath->setObjectName("focusPathAction");
@@ -295,25 +296,19 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
 
 void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLayout)
 {
-    sortLayout->addWidget(new QLabel(tr("Sort:"), sortBar));
+    auto *sortLabel = new QLabel(tr("Sort:"), sortBar);
+    sortLabel->setObjectName(QStringLiteral("sortFieldLabel"));
+    sortLayout->addWidget(sortLabel);
     m_sortCombo = new QComboBox(sortBar);
-    m_sortCombo->addItem("File Name", ThumbnailPanel::SortName);
-    m_sortCombo->addItem("Date", ThumbnailPanel::SortDate);
-    m_sortCombo->addItem("Size", ThumbnailPanel::SortSize);
-    m_sortCombo->addItem("Resolution", ThumbnailPanel::SortResolution);
-    m_sortCombo->addItem("Type", ThumbnailPanel::SortType);
-    m_sortCombo->addItem("Rating", ThumbnailPanel::SortRating);
-    m_sortCombo->addItem("Camera", ThumbnailPanel::SortCamera);
-    m_sortCombo->addItem("Lens", ThumbnailPanel::SortLens);
+    applySortComboItems(m_sortCombo);
     sortLayout->addWidget(m_sortCombo);
 
     // A-2.2: sort direction toggle (ascending / descending).
-    m_sortDirBtn = new QPushButton("↑", sortBar);
+    m_sortDirBtn = new QPushButton(QStringLiteral("↑"), sortBar);
     m_sortDirBtn->setObjectName("sortDirBtn");
     m_sortDirBtn->setFixedWidth(28);
     m_sortDirBtn->setCheckable(true);
-    m_sortDirBtn->setToolTip("↑ Ascending: A→Z (numbers by value), earliest to latest, smallest to "
-                             "largest; ↓ the opposite. Identical items still sort by filename");
+    m_sortDirBtn->setToolTip(sortDirectionToolTip(true));
     sortLayout->addWidget(m_sortDirBtn);
     connect(m_sortDirBtn, &QPushButton::toggled, this,
             [this](bool descending)
@@ -332,19 +327,14 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     // A-2.3: file-type quick filter buttons.
     auto *typeFilterCombo = new QComboBox(sortBar);
     typeFilterCombo->setObjectName("typeFilterCombo");
-    typeFilterCombo->addItem("All types", "");
-    typeFilterCombo->addItem("JPG", "jpg,jpeg");
-    typeFilterCombo->addItem("PNG", "png");
-    typeFilterCombo->addItem("TIFF", "tif,tiff");
-    typeFilterCombo->addItem("WebP", "webp");
-    typeFilterCombo->addItem("RAW", QString::fromStdString(mviewer::core::rawTypeFilterData()));
-    typeFilterCombo->setToolTip("Filter by file type");
+    applyTypeFilterItems(typeFilterCombo);
+    typeFilterCombo->setToolTip(tr("Filter by file type"));
 
     advancedLayout->addWidget(typeFilterCombo);
     auto *advancedFilterToggle = new QPushButton(tr("Advanced Filter"), sortBar);
     advancedFilterToggle->setObjectName("advancedFilterToggle");
     advancedFilterToggle->setCheckable(true);
-    advancedFilterToggle->setToolTip("Show camera, lens, rating, and metadata filters");
+    advancedFilterToggle->setToolTip(tr("Show camera, lens, rating, and metadata filters"));
     sortLayout->addWidget(advancedFilterToggle);
     connect(advancedFilterToggle, &QPushButton::toggled, advancedFilterPanel, &QWidget::setVisible);
     auto *clearFilters = new QPushButton(tr("Clear Filters"), sortBar);
@@ -353,20 +343,23 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
 
     // P0 #①: metadata filters — camera / lens (substring) and ISO (exact).
     auto *camEdit = new QLineEdit(sortBar);
-    camEdit->setPlaceholderText("Camera");
+    camEdit->setObjectName(QStringLiteral("cameraFilterEdit"));
+    camEdit->setPlaceholderText(tr("Camera"));
     camEdit->setFixedWidth(80);
     camEdit->setClearButtonEnabled(true);
     camEdit->setToolTip(tr("Filter by camera (brand/model), substring match"));
     advancedLayout->addWidget(camEdit);
     auto *lensEdit = new QLineEdit(sortBar);
-    lensEdit->setPlaceholderText("Lens");
+    lensEdit->setObjectName(QStringLiteral("lensFilterEdit"));
+    lensEdit->setPlaceholderText(tr("Lens"));
     lensEdit->setFixedWidth(95);
     lensEdit->setClearButtonEnabled(true);
     lensEdit->setToolTip(tr("Filter by lens model, substring match"));
     advancedLayout->addWidget(lensEdit);
     auto *isoSpin = new QSpinBox(sortBar);
     isoSpin->setRange(0, 65535);
-    isoSpin->setSpecialValueText("ISO");
+    isoSpin->setObjectName(QStringLiteral("isoFilterSpin"));
+    isoSpin->setSpecialValueText(tr("ISO"));
     isoSpin->setToolTip(tr("Filter by exact ISO (0 = all)"));
     isoSpin->setFixedWidth(72);
     advancedLayout->addWidget(isoSpin);
@@ -379,7 +372,8 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
 
     // P0 #①: free-form tag filter.
     auto *tagEdit = new QLineEdit(sortBar);
-    tagEdit->setPlaceholderText("Label");
+    tagEdit->setObjectName(QStringLiteral("tagFilterEdit"));
+    tagEdit->setPlaceholderText(tr("Label"));
     tagEdit->setFixedWidth(90);
     tagEdit->setClearButtonEnabled(true);
     tagEdit->setToolTip(tr("Filter by tag exactly (empty = all)"));
@@ -415,14 +409,8 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     // P0-2: View mode switcher (Grid / Large / Small / Detail / Filmstrip / Compact)
     m_viewModeCombo = new QComboBox(sortBar);
     m_viewModeCombo->setObjectName("thumbnailViewModeCombo");
-    m_viewModeCombo->addItem("Grid (Ctrl+1)", ThumbnailPanel::Thumbnail);
-    m_viewModeCombo->addItem("Large icons", ThumbnailPanel::LargeIcon);
-    m_viewModeCombo->addItem("Small icons (Ctrl+5)", ThumbnailPanel::SmallIcon);
-    m_viewModeCombo->addItem("List (Ctrl+2)", ThumbnailPanel::List);
-    m_viewModeCombo->addItem("Details (Ctrl+3)", ThumbnailPanel::Details);
-    m_viewModeCombo->addItem("Filmstrip (Ctrl+4)", ThumbnailPanel::Filmstrip);
-    m_viewModeCombo->addItem("Compact (Ctrl+6)", ThumbnailPanel::Compact);
-    m_viewModeCombo->setToolTip("Switch thumbnail view mode (common modes Ctrl+1..6)");
+    applyViewModeComboItems(m_viewModeCombo);
+    m_viewModeCombo->setToolTip(tr("Switch thumbnail view mode (common modes Ctrl+1..6)"));
     sortLayout->addWidget(m_viewModeCombo);
     connect(m_viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this]()
@@ -432,10 +420,12 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
             });
 
     // M18: live search bar.
-    sortLayout->addWidget(new QLabel(tr("Search:"), sortBar));
+    auto *searchLabel = new QLabel(tr("Search:"), sortBar);
+    searchLabel->setObjectName(QStringLiteral("searchFieldLabel"));
+    sortLayout->addWidget(searchLabel);
     m_searchEdit = new QLineEdit(sortBar);
     m_searchEdit->setObjectName("searchEdit");
-    m_searchEdit->setPlaceholderText("Filter by filename...");
+    m_searchEdit->setPlaceholderText(tr("Filter by filename..."));
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->installEventFilter(this);
     sortLayout->addWidget(m_searchEdit, 1);
@@ -443,33 +433,25 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     advancedLayout->addWidget(m_searchRecursive);
 
     // P1: metadata-aware search (camera / lens / ISO / date / …).
-    m_searchMeta = new QCheckBox("Metadata", sortBar);
+    m_searchMeta = new QCheckBox(tr("Metadata"), sortBar);
     advancedLayout->addWidget(m_searchMeta);
 
     // P1: star-rating filter.
-    advancedLayout->addWidget(new QLabel("Rating:", advancedFilterPanel));
+    auto *ratingLabel = new QLabel(tr("Rating:"), advancedFilterPanel);
+    ratingLabel->setObjectName(QStringLiteral("ratingFilterLabel"));
+    advancedLayout->addWidget(ratingLabel);
     m_ratingFilter = new QComboBox(sortBar);
-    m_ratingFilter->addItem("All", 0);
-    m_ratingFilter->addItem("★ and above", 1);
-    m_ratingFilter->addItem("★★ and above", 2);
-    m_ratingFilter->addItem("★★★ and above", 3);
-    m_ratingFilter->addItem("★★★★ and above", 4);
-    m_ratingFilter->addItem("★★★★★", 5);
+    m_ratingFilter->setObjectName(QStringLiteral("ratingFilterCombo"));
+    applyRatingFilterItems(m_ratingFilter);
     advancedLayout->addWidget(m_ratingFilter);
 
     // P3 tail: color label / reject / pick / recents filter.
-    advancedLayout->addWidget(new QLabel("Flag:", advancedFilterPanel));
+    auto *flagLabel = new QLabel(tr("Flag:"), advancedFilterPanel);
+    flagLabel->setObjectName(QStringLiteral("flagFilterLabel"));
+    advancedLayout->addWidget(flagLabel);
     m_flagFilter = new QComboBox(sortBar);
-    m_flagFilter->addItem("All", 0);
-    m_flagFilter->addItem("Favorited", 1);
-    m_flagFilter->addItem("Rejected", 2);
-    m_flagFilter->addItem("Recently viewed", 3);
-    m_flagFilter->addItem("Red Label", 11);
-    m_flagFilter->addItem("Orange label", 12);
-    m_flagFilter->addItem("Yellow mark", 13);
-    m_flagFilter->addItem("Green Label", 14);
-    m_flagFilter->addItem("Blue label", 15);
-    m_flagFilter->addItem("Purple mark", 16);
+    m_flagFilter->setObjectName(QStringLiteral("flagFilterCombo"));
+    applyFlagFilterItems(m_flagFilter);
     advancedLayout->addWidget(m_flagFilter);
 
     auto *resetFilterBtn = new QPushButton(tr("Reset Filters"), advancedFilterPanel);
@@ -635,7 +617,7 @@ void MainWindow::buildImageViewerUi()
 {
     // ----- Full image viewer window -----
     m_imageViewer = new ImageViewer(nullptr);
-    m_imageViewer->setWindowTitle("Image Viewer - MViewer");
+    m_imageViewer->setWindowTitle(tr("Image Viewer - MViewer"));
     connect(m_imageViewer, &ImageViewer::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
 
@@ -668,8 +650,8 @@ void MainWindow::buildStatusBarUi()
     m_lblCount->setObjectName(QStringLiteral("statusImageCount"));
     m_lblSize = new QLabel(tr("Size 0 B"), this);
     m_lblSize->setObjectName(QStringLiteral("statusSelectionSize"));
-    m_lblZoom = new QLabel("Zoom", this);
-    m_lblCache = new QLabel("Hit rate —", this);
+    m_lblZoom = new QLabel(tr("Zoom"), this);
+    m_lblCache = new QLabel(tr("Hit rate —"), this);
     m_lblRawSource = new QLabel(this);
     m_lblRawSource->setObjectName(QStringLiteral("rawSourceStatus"));
     m_lblCache->setToolTip(

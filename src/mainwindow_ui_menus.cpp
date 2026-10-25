@@ -386,7 +386,7 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
                 auto &mt = MemoryTracker::instance();
                 const auto snap = mt.sample();
                 const auto hist = mt.timeline();
-                QString msg = QString("Cache: %1 MB · Peak: %2 MB · Frames: %3 · Samples: %4")
+                QString msg = tr("Cache: %1 MB · Peak: %2 MB · Frames: %3 · Samples: %4")
                                   .arg(snap.cacheTotalBytes / (1024.0 * 1024.0), 0, 'f', 1)
                                   .arg(snap.peakBytes / (1024.0 * 1024.0), 0, 'f', 1)
                                   .arg(snap.liveImageFrames)
@@ -566,10 +566,10 @@ void MainWindow::buildViewZoomActions(QMenu *viewMenu)
     viewMenu->addAction(m_actPixelGrid);
     m_zoomPresetsMenu = viewMenu->addMenu(tr("Zoom Presets"));
     m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
-    m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });
+    m_zoomPresetsMenu->addAction(tr("50%"), this, [this]() { zoomViewer(4); });
     m_zoomPresetsMenu->addAction(tr("100% (Actual Size)"), this, [this]() { zoomViewer(3); });
-    m_zoomPresetsMenu->addAction("200%", this, [this]() { zoomViewer(5); });
-    m_zoomPresetsMenu->addAction("400%", this, [this]() { zoomViewer(6); });
+    m_zoomPresetsMenu->addAction(tr("200%"), this, [this]() { zoomViewer(5); });
+    m_zoomPresetsMenu->addAction(tr("400%"), this, [this]() { zoomViewer(6); });
     m_zoomPresetsMenu->addAction(tr("800% (Pixel Grid)"), this, [this]() { zoomViewer(7); });
     viewMenu->addSeparator();
     viewMenu->addAction(m_actFullscreen);

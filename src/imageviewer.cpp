@@ -42,7 +42,7 @@ ImageViewer::ImageViewer(QWidget *parent)
     : QOpenGLWidget(parent), m_tileRequests(m_tileCache), m_overlayRequests(m_overlayCache)
 {
     m_lifetime = mviewer::core::AsyncLifetimeToken::create();
-    setWindowTitle("Image Viewer");
+    setWindowTitle(tr("Image Viewer"));
     setMouseTracking(true);
     setCursor(Qt::OpenHandCursor);
     // The viewer is a standalone top-level window. Explicitly opt into
