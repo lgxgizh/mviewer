@@ -31,12 +31,20 @@ inline QString defaultTransferDir(bool splitActive, const QString &otherPaneDir,
     return currentDir;
 }
 
+inline QString normalizeTransferDir(const QString &dir)
+{
+    // Treat \ and / as the same browse separator on every platform so a path
+    // pasted from Windows into a Linux build (or mixed QDir separators) still
+    // compares as one directory for SameDirectory transfer decisions.
+    return QDir::cleanPath(QString(dir).replace(QLatin1Char('\\'), QLatin1Char('/')));
+}
+
 inline bool transferDirectoriesMatch(const QString &left, const QString &right)
 {
     if (left.isEmpty() || right.isEmpty())
         return false;
-    const QString a = QDir::cleanPath(QDir::fromNativeSeparators(left));
-    const QString b = QDir::cleanPath(QDir::fromNativeSeparators(right));
+    const QString a = normalizeTransferDir(left);
+    const QString b = normalizeTransferDir(right);
 #ifdef Q_OS_WIN
     return a.compare(b, Qt::CaseInsensitive) == 0;
 #else
