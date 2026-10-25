@@ -9,6 +9,7 @@
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include "selectionmodel.h"
+#include "splitbrowse_selection.h"
 #include <QKeyEvent>
 #include <QListWidget>
 #include <QMainWindow>
@@ -557,6 +558,8 @@ class MainWindow : public QMainWindow
     // target (ADR-012). Compare still uses in-memory cell preview when up.
     void rotateCurrentImage(int degrees);
     void flipCurrentImage(bool horizontal);
+    SplitSelectionRestorePlan captureTransformSelection() const;
+    void applyTransformSelection(const SplitSelectionRestorePlan &plan);
     void deleteViewerImage();
     void renameViewerImage();
     void moveViewerImage();

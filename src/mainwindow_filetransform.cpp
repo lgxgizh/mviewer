@@ -507,6 +507,7 @@ void MainWindow::rotateCurrentImage(int degrees)
     if (!confirmTransform(this, paths, FileTransformKind::Rotate))
         return;
 
+    const SplitSelectionRestorePlan selectionPlan = captureTransformSelection();
     const FileTransformBatch batch =
         runTransformBatch(this, m_imageViewer, m_previewPanel, m_thumbnailPanel, paths,
                           FileTransformKind::Rotate, [degrees](const std::string &utf8)
@@ -521,8 +522,9 @@ void MainWindow::rotateCurrentImage(int degrees)
         for (const QString &path : paths)
             m_secondaryThumbnailPanel->invalidateSourceImage(path);
     }
-    // Keep the pre-rotate multi-selection after thumbnail invalidate / rebuild.
-    restoreMultiSelection(m_thumbnailPanel, m_selection, paths, cur);
+    // Keep each pane's selection. setSelection() would pour the union into the
+    // active pane only.
+    applyTransformSelection(selectionPlan);
 }
 
 void MainWindow::flipCurrentImage(bool horizontal)
@@ -544,6 +546,7 @@ void MainWindow::flipCurrentImage(bool horizontal)
     if (!confirmTransform(this, paths, FileTransformKind::Flip))
         return;
 
+    const SplitSelectionRestorePlan selectionPlan = captureTransformSelection();
     const FileTransformBatch batch =
         runTransformBatch(this, m_imageViewer, m_previewPanel, m_thumbnailPanel, paths,
                           FileTransformKind::Flip, [horizontal](const std::string &utf8)
@@ -558,5 +561,55 @@ void MainWindow::flipCurrentImage(bool horizontal)
         for (const QString &path : paths)
             m_secondaryThumbnailPanel->invalidateSourceImage(path);
     }
-    restoreMultiSelection(m_thumbnailPanel, m_selection, paths, cur);
+    applyTransformSelection(selectionPlan);
+}
+
+SplitSelectionRestorePlan MainWindow::captureTransformSelection() const
+{
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    using Pane = SelectionModel::PaneSlot;
+    const QStringList primary =
+        m_selection ? m_selection->paneSelection(Pane::Primary) : QStringList();
+    const QStringList secondary =
+        m_selection ? m_selection->paneSelection(Pane::Secondary) : QStringList();
+    const QString primaryCurrent =
+        m_selection ? m_selection->paneCurrentImage(Pane::Primary) : QString();
+    const QString secondaryCurrent =
+        m_selection ? m_selection->paneCurrentImage(Pane::Secondary) : QString();
+    const QStringList single = m_selection ? m_selection->selection() : QStringList();
+    const QString singleCurrent = m_selection ? m_selection->currentImage() : QString();
+    const QStringList primaryList = m_thumbnailPanel ? m_thumbnailPanel->pathList() : QStringList();
+    const QStringList secondaryList =
+        m_secondaryThumbnailPanel ? m_secondaryThumbnailPanel->pathList() : QStringList();
+    return splitSelectionRestorePlan(split, primary, primaryCurrent, secondary, secondaryCurrent,
+                                     primaryList, secondaryList, single, singleCurrent,
+                                     currentImagePath());
+}
+
+void MainWindow::applyTransformSelection(const SplitSelectionRestorePlan &plan)
+{
+    if (!plan.split)
+    {
+        restoreMultiSelection(m_thumbnailPanel, m_selection, plan.singleSelection,
+                              plan.singleCurrent);
+        return;
+    }
+    using Pane = SelectionModel::PaneSlot;
+    if (m_selection)
+    {
+        m_selection->setPaneSelection(Pane::Primary, plan.primaryModel, plan.primaryCurrent);
+        m_selection->setPaneSelection(Pane::Secondary, plan.secondaryModel, plan.secondaryCurrent);
+    }
+    const auto focusOf = [](const QStringList &view, const QString &current)
+    { return view.contains(current) ? current : QString(); };
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->selectPaths(plan.primaryView,
+                                      focusOf(plan.primaryView, plan.primaryCurrent), false);
+    if (m_secondaryThumbnailPanel)
+    {
+        m_secondaryThumbnailPanel->selectPaths(
+            plan.secondaryView, focusOf(plan.secondaryView, plan.secondaryCurrent), false);
+    }
+    if (m_selection && !plan.globalCurrent.isEmpty())
+        m_selection->setCurrentImage(plan.globalCurrent);
 }
