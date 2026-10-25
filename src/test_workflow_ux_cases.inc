@@ -5821,10 +5821,14 @@ void workflow20_viewer_fileop_targets(const QString &dirPath, const QStringList 
     window.show();
     pump(40);
     dismissVisibleMessageBoxes();
-    window.openDirectory(dirPath);
+    // Same folder open as the other MainWindow workflows: DirectoryTree::navigateTo
+    // is the public path MainWindow::openDirectory uses (that method is private).
+    auto *directoryTree = window.findChild<DirectoryTree *>();
     auto *panel = window.findChild<ThumbnailPanel *>();
     auto *selection = window.findChild<SelectionModel *>();
-    CHECK(panel && selection, "workflow 20 gallery and selection exist");
+    CHECK(directoryTree && panel && selection, "workflow 20 gallery and selection exist");
+    if (directoryTree)
+        directoryTree->navigateTo(dirPath, true);
     QElapsedTimer timer;
     timer.start();
     while (panel && panel->pathList().size() < 4 && timer.elapsed() < 8000)
