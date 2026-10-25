@@ -2,8 +2,10 @@
 
 ImageCache &ImageCache::instance()
 {
-    static ImageCache inst;
-    return inst;
+    // Intentionally leaked: see CacheManager::instance(). Tile workers can
+    // still ImageCache::put after main() returns.
+    static ImageCache *inst = new ImageCache();
+    return *inst;
 }
 
 ImageCache::ImageCache()

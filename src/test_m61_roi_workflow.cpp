@@ -515,7 +515,9 @@ int main(int argc, char **argv)
                       afterNudge.height == beforeNudge.height && unequalB->selection().isEmpty(),
                   "Alt+Right nudges only the unlinked pane by +1 x");
         }
+        phase("unequal pair teardown");
     }
+    phase("after unequal pair");
 
     {
         phase("rotated mismatched pair");
