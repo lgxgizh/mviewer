@@ -24,6 +24,7 @@
 #include <QVBoxLayout>
 
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 
@@ -145,22 +146,51 @@ RawImageView *pane(CompareWorkspace *workspace, int index)
     return nullptr;
 }
 
-void sendRightDrag(QWidget *target, const QPoint &from, const QPoint &to, bool release = true)
+// Optional breadcrumb prefix (e.g. "unequal") so a hang inside press/move/pump
+// shows up in Nightly logs. Empty prefix keeps the quiet path used elsewhere.
+void sendRightDrag(QWidget *target, const QPoint &from, const QPoint &to, bool release = true,
+                   const char *breadcrumb = nullptr)
 {
+    auto step = [&](const char *suffix)
+    {
+        if (!breadcrumb)
+            return;
+        char buf[96];
+        std::snprintf(buf, sizeof(buf), "%s drag %s", breadcrumb, suffix);
+        phase(buf);
+    };
+    // Non-finite widget points (unmaterialized pane → NaN from sourcePointToWidget)
+    // used to reach sendEvent and hang the clang-cl ASan event loop for the full
+    // ctest TIMEOUT. Refuse the drag so the CHECK below fails loudly instead.
+    if (!target || !std::isfinite(static_cast<double>(from.x())) ||
+        !std::isfinite(static_cast<double>(from.y())) ||
+        !std::isfinite(static_cast<double>(to.x())) || !std::isfinite(static_cast<double>(to.y())))
+    {
+        std::printf("[m61] sendRightDrag skipped: null target or non-finite widget point "
+                    "(%d,%d)->(%d,%d)\n",
+                    from.x(), from.y(), to.x(), to.y());
+        return;
+    }
+    step("press");
     QMouseEvent press(QEvent::MouseButtonPress, QPointF(from), target->mapToGlobal(from),
                       Qt::RightButton, Qt::RightButton, Qt::NoModifier);
     QApplication::sendEvent(target, &press);
+    step("move");
     QMouseEvent move(QEvent::MouseMove, QPointF(to), target->mapToGlobal(to), Qt::NoButton,
                      Qt::RightButton, Qt::NoModifier);
     QApplication::sendEvent(target, &move);
+    step("pump1");
     pump(10);
     if (release)
     {
+        step("release");
         QMouseEvent up(QEvent::MouseButtonRelease, QPointF(to), target->mapToGlobal(to),
                        Qt::RightButton, Qt::NoButton, Qt::NoModifier);
         QApplication::sendEvent(target, &up);
+        step("pump2");
         pump(10);
     }
+    step("done");
 }
 
 void clearROI(CompareWorkspace *workspace)
@@ -493,13 +523,19 @@ int main(int argc, char **argv)
           "a new release retries successfully after backpressure clears");
 
     // Nested CompareWorkspace dialogs under clang-cl ASan previously hung inside
-    // processEvents while the outer dialog still painted a live compare set +
-    // pending ROI/display work (Nightly Timeout at "unequal pair", never reaching
-    // teardown). Hide the outer dialog and drain AnalysisPool first so the nested
-    // pair is the only active consumer; re-show before keyboard-nudge below.
-    phase("hide outer before nested");
+    // processEvents while the outer dialog still owned a live compare set +
+    // pending Decode/Analysis work (Nightly Timeout at "unequal pair" / later
+    // "unequal drag"). Unload the outer pair (not just hide), drain both pools,
+    // and wait for nested pane display materialization before any right-drag —
+    // sourcePointToWidget on a blank pane yields non-finite points that hang the
+    // clang-cl ASan event loop for the full ctest TIMEOUT.
+    phase("unload outer before nested");
     clearROI(workspace);
+    workspace->setImages({});
+    CHECK(waitFor([&]() { return workspace->comparedImageCount() == 0; }, 10000),
+          "outer compare set unloads before nested dialogs");
     TaskScheduler::instance().drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5));
+    TaskScheduler::instance().drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
     dialog.hide();
     pump(50);
 
@@ -521,14 +557,33 @@ int main(int argc, char **argv)
         phase("unequal wait load");
         CHECK(waitFor([&]() { return unequal->comparedImageCount() == 2; }),
               "unequal-dimension pair loads");
-        phase("unequal panes ready");
+        // Mirror the grid/rotated waits: finishLoad reports count==2 before the
+        // async display batch paints panes, and only then is source geometry +
+        // scale valid for sourcePointToWidget.
+        phase("unequal wait materialize");
+        const bool unequalReady = waitFor(
+            [&]()
+            {
+                RawImageView *p0 = pane(unequal, 0);
+                RawImageView *p1 = pane(unequal, 1);
+                return p0 && p1 && p0->sourceSize() == QSize(96, 72) &&
+                       p1->sourceSize() == QSize(80, 60) && !p0->image().isNull() &&
+                       !p1->image().isNull();
+            },
+            15000);
         RawImageView *unequalA = pane(unequal, 0);
         RawImageView *unequalB = pane(unequal, 1);
-        if (unequalA && unequalB)
+        CHECK(unequalReady && unequalA && unequalB, "unequal panes expose materialized geometry");
+        phase("unequal panes ready");
+        if (unequalReady && unequalA && unequalB)
         {
+            const QPointF fromF = unequalA->sourcePointToWidget(QPointF(5, 5));
+            const QPointF toF = unequalA->sourcePointToWidget(QPointF(30, 25));
+            CHECK(std::isfinite(fromF.x()) && std::isfinite(fromF.y()) && std::isfinite(toF.x()) &&
+                      std::isfinite(toF.y()),
+                  "unequal drag widget points are finite");
             phase("unequal drag");
-            sendRightDrag(unequalA, unequalA->sourcePointToWidget(QPointF(5, 5)).toPoint(),
-                          unequalA->sourcePointToWidget(QPointF(30, 25)).toPoint());
+            sendRightDrag(unequalA, fromF.toPoint(), toF.toPoint(), true, "unequal");
             QLabel *unequalStatus = unequal->findChild<QLabel *>("roiStatusLabel");
             CHECK(
                 unequalB->selection().isEmpty() && unequalStatus &&
@@ -568,8 +623,10 @@ int main(int argc, char **argv)
                       RawImageView *p1 = pane(mismatch, 1);
                       return mismatch->comparedImageCount() == 2 && p0 &&
                              p0->sourceSize() == QSize(96, 72) && p1 &&
-                             p1->sourceSize() == QSize(72, 96);
-                  }),
+                             p1->sourceSize() == QSize(72, 96) && !p0->image().isNull() &&
+                             !p1->image().isNull();
+                  },
+                  15000),
               "mismatched horizontal/vertical pair loads");
         RawImageView *pane0 = pane(mismatch, 0);
         RawImageView *pane1 = pane(mismatch, 1);
@@ -624,14 +681,24 @@ int main(int argc, char **argv)
         }
     }
 
-    phase("reshow outer after nested");
+    phase("reload outer after nested");
     dialog.show();
-    pump(50);
-    // Cells may have been rebuilt while hidden; re-resolve pane pointers.
+    workspace->setImages({a, b});
+    CHECK(waitFor([&]() { return workspace->comparedImageCount() == 2; }),
+          "outer pair reloads after nested dialogs");
+    const bool outerReady = waitFor(
+        [&]()
+        {
+            RawImageView *p0 = pane(workspace, 0);
+            RawImageView *p1 = pane(workspace, 1);
+            return p0 && p1 && p0->sourceSize() == QSize(96, 72) &&
+                   p1->sourceSize() == QSize(96, 72) && !p0->image().isNull();
+        },
+        15000);
     first = pane(workspace, 0);
     second = pane(workspace, 1);
-    CHECK(first && second, "outer panes still resolvable after nested dialogs");
-    if (!first || !second)
+    CHECK(outerReady && first && second, "outer panes rematerialize after nested dialogs");
+    if (!outerReady || !first || !second)
         return 1;
 
     // ROI keyboard micro-stepping (nudging & resizing)
