@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.147**
+## Where we are now — **Beta / 1.0.148**
 
-MViewer remains in **Beta**; the current release is **`v1.0.147`**
-(2026-10-24, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+MViewer remains in **Beta**; the current release is **`v1.0.148`**
+(2026-10-25, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
 
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.147** (current) | Split-browse routing fixes, Compare per-pane display state machine (no stuck Loading), end-to-end view-switch benchmarks, Flip V → `Ctrl`+`Alt`+`V`, thumbnail reset → `Ctrl`+`Alt`+`9` (`Ctrl`+`0` always fits), refreshed translations | 🔵 Beta |
+| **1.0.148** (current) | Design review batches: split-browse copy/move to the other pane, RAW source badge + full decode, viewer-scoped Delete/F2 and lossless JPEG rotate, analysis panel → `F7`, immediate language switch, new user guide chapters | 🔵 Beta |
+| **1.0.147** | Split-browse routing fixes, Compare per-pane display state machine (no stuck Loading), end-to-end view-switch benchmarks, Flip V → `Ctrl`+`Alt`+`V`, thumbnail reset → `Ctrl`+`Alt`+`9` (`Ctrl`+`0` always fits), refreshed translations | ✅ Previous patch |
 | **1.0.146** | Split Browse View parallel layout: independent column sort, view-mode sync, and secondary thumbnail pipeline consumer routing | ✅ Previous patch |
 | **1.0.145** | Opt-in Pixel Grid; Compare high-zoom mesh eliminated unless inspection lattice is enabled | ✅ Previous patch |
 | **1.0.144** | Split Browse View: independent dual-pane gallery (Primary / Secondary) with isolated directory monitoring & thumbnail pipelines, cross-pane 2–8 natural image selection, 3-tier deterministic pairing sort, and caption disambiguation | ✅ Previous patch |
@@ -79,7 +80,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.147` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.148` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate

@@ -2,9 +2,29 @@
 
 ## [Unreleased]
 
+## [1.0.148] - 2026-10-25
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.148** (design review batches 1–4: file-op safety #223, RAW/USM/update #224, split-browse transfer #225, i18n/menus/docs #226; bench bounds #222; nightly sanitizer env #221).
+
+### Added
+
+- **Split browse transfer** (#225): Edit → Copy to Other Pane (`Ctrl`+`Alt`+`C`) and Move to Other Pane (`Ctrl`+`Shift`+`M`) send the active pane's selection to the other pane's directory, with a confirmation naming source pane and target, undo support, and disabled state when both panes show the same directory. The right pane gets back / forward / up history.
+- **RAW source badge and full decode** (#224): the status bar shows whether the embedded preview or a full decode is displayed; View → Decode Full RAW (`Ctrl`+`Shift`+`D`); Preferences → RAW display policy. A single RAW extension list is shared by browse, viewer and decode.
+- **User guide chapters** (#226): split browse, USM, RAW, file operations, sort/filter, preferences, update check, and a per-window key table, in English and Simplified Chinese (docs and in-app guide).
+
+### Changed
+
+- **Analysis panel shortcut → `F7`** (#226): `Alt`+`H` clashed with the &Help menu mnemonic.
+- **Language switch is immediate for the browse bar and split header** (#226); combo choices are preserved. Memory Timeline moved to Help → Diagnostics; undo/redo menu text is translated; zh_CN catalog fully refreshed (1527 entries, none unfinished).
+- **USM** (#224): ICC-aware display and asynchronous processing; the update notice is non-modal with "Skip this version".
+
 ### Fixed
 
-- **bench_enforce TRACE stall and B6 timeout**: TRACE waited 30 s for 60
+- **File-operation safety** (#223): Delete / `F2` in the full viewer act only on the displayed image; JPEG rotate rewrites only the EXIF orientation tag; per-pane selection is restored after operations; rotate/flip are undoable.
+- **Nightly sanitizer** (#221): Windows ASan/UBSan environment, coverage crash-handler exclusion, health publish.
+- **bench_enforce TRACE stall and B6 timeout** (#222): TRACE waited 30 s for 60
   thumbnail arrivals. `ThumbnailPipeline` only enqueues the visible window plus
   its predictive neighbors (here 20 + the default 16). The Windows log showed
   exactly 12 `libpng` lines in that window — one per PNG in those 36 files —
