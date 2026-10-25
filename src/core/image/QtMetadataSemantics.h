@@ -9,7 +9,6 @@
 #include <QColorSpace>
 #include <QImage>
 #include <QImageIOHandler>
-#include <QImageReader>
 
 #include <algorithm>
 
@@ -179,13 +178,15 @@ inline void applyRasterMetadata(const QImage &image, mviewer::domain::ImageMetad
     applyColorMetadata(image, meta);
 }
 
-inline void applyReaderRasterMetadata(const QImageReader &reader, const QImage &image,
+inline void applyReaderRasterMetadata(QImage::Format sourceFormat, const QImage &image,
                                       mviewer::domain::ImageMetadata &meta)
 {
-    // imageFormat() describes the source format even when read() materializes
-    // a normalized 32-bit QImage.  Prefer it so 16-bit TIFF/PNG sources do not
-    // get reported as 8-bit merely because the display raster is normalized.
-    const QImage::Format sourceFormat = reader.imageFormat();
+    // sourceFormat is QImageReader::imageFormat() captured BEFORE read().
+    // Querying imageFormat()/size()/textKeys()/text() after read() makes Qt's
+    // PNG handler re-parse the consumed device (libpng "Read Error").
+    // The captured value describes the source even when read() materializes a
+    // normalized 32-bit QImage, so 16-bit TIFF/PNG sources are not reported
+    // as 8-bit merely because the display raster is normalized.
     if (sourceFormat != QImage::Format_Invalid)
     {
         const QImage probe(1, 1, sourceFormat);

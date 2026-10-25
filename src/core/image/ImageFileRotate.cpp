@@ -187,6 +187,15 @@ bool loadOrientedImage(const QString &path, QImage *outImage, std::string *forma
 {
     QImageReader reader(path);
     reader.setAutoTransform(true);
+    // textKeys()/text() must be queried before read(): after read() Qt's PNG
+    // handler re-parses the consumed device and libpng prints "Read Error".
+    std::vector<std::pair<std::string, std::string>> capturedText;
+    if (textOut)
+    {
+        const QStringList keys = reader.textKeys();
+        for (const QString &k : keys)
+            capturedText.emplace_back(k.toStdString(), reader.text(k).toStdString());
+    }
     QImage image = reader.read();
     if (image.isNull())
     {
@@ -210,13 +219,7 @@ bool loadOrientedImage(const QString &path, QImage *outImage, std::string *forma
         }
     }
     if (textOut)
-    {
-        const QStringList keys = reader.textKeys();
-        for (const QString &k : keys)
-        {
-            textOut->emplace_back(k.toStdString(), reader.text(k).toStdString());
-        }
-    }
+        *textOut = std::move(capturedText);
     *outImage = std::move(image);
     return true;
 }

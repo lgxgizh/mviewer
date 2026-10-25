@@ -48,15 +48,19 @@ bool write(const QString &path, const QImage &img, const char *fmt)
     bool wrote = false;
     {
         QImageWriter w(path, fmt);
-        // Quality is a JPEG scale. Qt maps PNG quality 90 to zlib level 0
-        // ((100-90)*9/91 == 0), so every corpus PNG was an uncompressed
-        // width*height*3 raster. Those files made each later QImageReader::read
-        // pay a full IDAT and then libpng's png_read_end fprintf
-        // "libpng error: Read Error" (Qt installs a null libpng error callback).
-        // Leave PNG/TIFF on the codec default.
+        // JPEG quality 90 is the historical corpus setting. PNG quality 80 maps
+        // to zlib level 1 ((100-80)*9/91 == 1): fast compression (~14 ms vs
+        // ~104 ms at Qt's default zlib 6) and a smaller file (~360 KB vs ~788 KB
+        // for 512x512 RGB). TIFF/BMP stay on the codec default. The libpng
+        // "Read Error" on later QImageReader::read came from post-read
+        // imageFormat()/size()/textKeys()/text() queries; that is fixed in
+        // applyReaderRasterMetadata.
         const bool jpeg = fmt != nullptr && fmt[0] == 'j' && fmt[1] == 'p';
+        const bool png = fmt != nullptr && fmt[0] == 'p' && fmt[1] == 'n';
         if (jpeg)
             w.setQuality(90);
+        else if (png)
+            w.setQuality(80);
         wrote = w.write(img);
     }
     if (!wrote)

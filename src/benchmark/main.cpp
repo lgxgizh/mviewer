@@ -3,6 +3,7 @@
 #include "benchmark/scenarios.h"
 
 #include "application/Shutdown.h"
+#include "core/image/DiskCache.h"
 
 #include <QApplication>
 #include <QByteArray>
@@ -11,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QStandardPaths>
 
 #include "core/trace/TraceSink.h"
 
@@ -749,6 +751,14 @@ int runBench(int argc, char **argv, BenchOptions opt)
         app = std::make_unique<QApplication>(argc, argv);
     else
         app = std::make_unique<QCoreApplication>(argc, argv);
+    // Isolate DiskCache from the user's real CacheLocation. DiskCache opens
+    // mviewer_disk.db in its constructor (first instance() call); this must
+    // run before any ImageRepository / CacheManager use. Test-mode only in
+    // mviewer_bench — core_tests compile scenarios.cpp without this path.
+    // Budget/corpus/baseline files are explicit CLI paths, not standard
+    // locations, so setTestModeEnabled does not change what the harness reads.
+    QStandardPaths::setTestModeEnabled(true);
+    DiskCache::instance().clear();
     // B18/B19 start UI workers: join them before the app object goes away
     // (ADR 017 shared shutdown path; declared after `app` so it runs first).
     std::optional<mviewer::application::ScopedProcessShutdown> processShutdown;
