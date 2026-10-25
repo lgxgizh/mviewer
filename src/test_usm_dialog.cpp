@@ -12,6 +12,7 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -99,13 +100,20 @@ void testRejectedSubmit()
     auto &sched = TaskScheduler::instance();
     const size_t previous = sched.maxQueueDepth(TaskScheduler::DecodePool);
     sched.setMaxQueueDepth(TaskScheduler::DecodePool, 1);
-    std::atomic<bool> hold{true};
+    // The blocker owns its flags through shared_ptrs and the test waits for it
+    // to exit: TaskScheduler::cancel() does not join a running task, so a
+    // stack-captured flag was read after this function returned (Linux ASan
+    // stack-use-after-return on a pooled thread, then a 20 s ctest timeout).
+    auto hold = std::make_shared<std::atomic<bool>>(true);
+    auto blockerDone = std::make_shared<std::atomic<bool>>(false);
     auto blocker = sched.submit(TaskScheduler::Priority::Decode,
-                                [&](const TaskScheduler::TaskContext &)
+                                [hold, blockerDone](const TaskScheduler::TaskContext &)
                                 {
-                                    while (hold.load())
+                                    while (hold->load())
                                         std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                                    blockerDone->store(true);
                                 });
+    check(blocker != nullptr, "blocker task accepted");
     QString body;
     bool loaderCalled = false;
     UsmCompareDialog::setFailurePresenter([&](const QString &, const QString &gotBody)
@@ -121,8 +129,13 @@ void testRejectedSubmit()
     const QString expect = QStringLiteral("Cannot open blocked.nef for USM sharpen comparison: ") +
                            QStringLiteral("scheduler rejected submission");
     check(body == expect, "rejected USM submit surfaces a failure");
-    hold.store(false);
-    TaskScheduler::cancel(blocker);
+    // Release rather than cancel: a cancel could drop a still-queued blocker,
+    // and then nothing would ever signal blockerDone.
+    hold->store(false);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!blockerDone->load() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    check(blockerDone->load(), "blocker task exits before the test returns");
     sched.setMaxQueueDepth(TaskScheduler::DecodePool, previous);
     UsmCompareDialog::setFailurePresenter({});
 }
