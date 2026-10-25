@@ -5742,6 +5742,10 @@ Build: %2</source>
         <source>Both panes show the same directory</source>
         <translation>两栏是同一目录</translation>
     </message>
+    <message>
+        <source>Left %1 + Right %2 selected</source>
+        <translation>左栏 %1 + 右栏 %2 个已选</translation>
+    </message>
 </context>
 <context>
     <name>PreferencesDialog</name>
