@@ -37,6 +37,7 @@ class QHideEvent;
 class QShowEvent;
 class QAction;
 class QContextMenuEvent;
+class QMenu;
 class QDragEnterEvent;
 class QDragMoveEvent;
 class QDropEvent;
@@ -404,6 +405,11 @@ class ImageViewer : public QOpenGLWidget
     void applyFullRawResult(const QString &path, uint64_t generation,
                             const ImageLoadResult &result);
     void stopFullRawDecode(bool notify);
+    // Context-menu entry for the explicit full-RAW decode. The label and the
+    // chosen-action dispatch live with the decode helpers so the menu builder
+    // stays under the cyclomatic cap.
+    QAction *addRawDecodeAction(QMenu &menu);
+    bool handleRawDecodeAction(QAction *chosen, QAction *fullRaw);
     void applyPendingView();
     void clearLoadedGpu();
     // Drop lod≥1 mips for an image that is no longer the open viewer file.
@@ -543,6 +549,7 @@ class ImageViewer : public QOpenGLWidget
     bool clearRealSelectionForEscape();
     bool dismissOpenMetadata();
     void commitSelectionDrag();
+    QAction *addBrowseContextActions(QMenu &menu, QAction *&next, QAction *&previous);
     bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath, QAction *reveal,
                                  QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
                                  QAction *copyHsv, QContextMenuEvent *event,

@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QFont>
 #include <QFontMetrics>
+#include <QMenu>
 #include <QMetaObject>
 #include <QPainter>
 #include <QPointer>
@@ -74,6 +75,22 @@ void ImageViewer::stopFullRawDecode(bool notify)
 void ImageViewer::cancelFullRawDecode()
 {
     stopFullRawDecode(true);
+}
+
+QAction *ImageViewer::addRawDecodeAction(QMenu &menu)
+{
+    return menu.addAction(m_fullRawLoading ? tr("Cancel Full RAW Decode") : tr("Decode Full RAW"));
+}
+
+bool ImageViewer::handleRawDecodeAction(QAction *chosen, QAction *fullRaw)
+{
+    if (chosen != fullRaw)
+        return false;
+    if (m_fullRawLoading)
+        cancelFullRawDecode();
+    else
+        requestFullRawDecode();
+    return true;
 }
 
 void ImageViewer::requestFullRawDecode()
