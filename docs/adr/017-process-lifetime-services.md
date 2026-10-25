@@ -112,7 +112,20 @@ deadlock, drop this exception.
   upstream, the workflow-suite comment and this ADR should be revisited rather
   than silently dropped.
 
+### Addendum (2026-10-25)
+
+`CacheManager`, `ImageCache`, and `DiskCache` join the process-lifetime leak
+set alongside `TaskScheduler`. `AsyncTileRequestManager::shutdown` cancels
+in-flight tile work but does not join the pooled workers; those workers still
+call `CacheManager::storeMipChain` / `getBestMip` (and therefore
+`ImageCache` / `DiskCache`) after `main()` returns. Destroying the Meyers
+singletons at exit raced a worker and tripped Linux GCC ASan
+heap-use-after-free in `m48_phase0_failure_regressions`. Each `instance()` now
+allocates with `new` and never destroys; the OS reclaims at process exit.
+Object-owned teardown (ImageViewer / CompareWorkspace cancel + generation
+guards) is unchanged.
+
 ## Status
 
-Accepted (2026-09). Addendum 2026-10-20. Verified by `teardown_stress_tests`
-in `.\build.ps1 Test`.
+Accepted (2026-09). Addenda 2026-10-20 and 2026-10-25. Verified by
+`teardown_stress_tests` in `.\build.ps1 Test`.
