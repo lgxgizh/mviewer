@@ -5823,7 +5823,7 @@ void workflow20_raw_display_chrome()
 {
     std::cout << "── Workflow 20: RAW display chrome ──\n";
     MainWindow window;
-    pumpWindow(window);
+    pump(40);
     auto *combo = window.findChild<QComboBox *>(QStringLiteral("typeFilterCombo"));
     CHECK(combo, "type filter combo exists");
     QString rawData;
