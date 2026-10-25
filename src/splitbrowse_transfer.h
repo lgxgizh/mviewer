@@ -4,6 +4,8 @@
 #include <QDir>
 #include <QString>
 
+#include <cstdint>
+
 // Pure decisions for dual-pane copy/move. Kept out of thumbnailpanel.h so
 // tests can call them without a gallery widget.
 
@@ -42,7 +44,7 @@ inline bool transferDirectoriesMatch(const QString &left, const QString &right)
 #endif
 }
 
-enum class OtherPaneTransferDecision
+enum class OtherPaneTransferDecision : std::uint8_t
 {
     Available,
     Disabled,
@@ -60,7 +62,7 @@ inline OtherPaneTransferDecision decideOtherPaneTransfer(bool splitActive, int s
     return OtherPaneTransferDecision::Available;
 }
 
-enum class PaneTransferKind
+enum class PaneTransferKind : std::uint8_t
 {
     Copy,
     Move
@@ -94,14 +96,12 @@ struct TransferShortcut
 // F5 is refresh and F6 is focus browse. These two chords are outside that set.
 inline TransferShortcut copyToOtherPaneShortcut()
 {
-    return {static_cast<int>(Qt::Key_C),
-            static_cast<int>(Qt::ControlModifier | Qt::AltModifier)};
+    return {static_cast<int>(Qt::Key_C), static_cast<int>(Qt::ControlModifier | Qt::AltModifier)};
 }
 
 inline TransferShortcut moveToOtherPaneShortcut()
 {
-    return {static_cast<int>(Qt::Key_M),
-            static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)};
+    return {static_cast<int>(Qt::Key_M), static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)};
 }
 
 // True when `key`+`mods` is already owned by a browse command. Used by the

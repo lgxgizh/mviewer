@@ -3,6 +3,7 @@
 #include "FileSystemAdapter.h"
 #include "ICommand.h"
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <utility>
@@ -53,7 +54,7 @@ class FileCopyCommand : public ICommand
         return m_unresolved;
     }
 
-    enum class State
+    enum class State : std::uint8_t
     {
         Idle,
         Succeeded,

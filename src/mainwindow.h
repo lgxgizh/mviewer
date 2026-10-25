@@ -187,6 +187,7 @@ class MainWindow : public QMainWindow
     void navigateSecondaryUp();
     void updateSecondaryNavButtons();
     bool routeSecondaryBrowseKey(QObject *watched, QEvent *event);
+    bool routeDirectoryHistoryMouse(QObject *watched, QEvent *event);
     bool secondaryBrowseOwns(QObject *watched) const;
     void enableSplitBrowseUi();
     void disableSplitBrowseUi();

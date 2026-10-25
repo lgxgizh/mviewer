@@ -716,26 +716,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
-    if (event->type() == QEvent::MouseButtonPress)
-    {
-        auto *me = static_cast<QMouseEvent *>(event);
-        if (me->button() == Qt::BackButton || me->button() == Qt::ForwardButton)
-        {
-            const bool back = me->button() == Qt::BackButton;
-            if (secondaryBrowseOwns(watched))
-            {
-                if (back)
-                    navigateSecondaryBack();
-                else
-                    navigateSecondaryForward();
-            }
-            else if (back)
-                goDirBack();
-            else
-                goDirForward();
-            return true;
-        }
-    }
+    if (routeDirectoryHistoryMouse(watched, event))
+        return true;
 
     if (watched == m_lblZoom)
     {

@@ -4,6 +4,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <cstdint>
+
 // Status-bar decisions for the active browse pane. The image index comes from
 // that pane's own path list, and split mode keeps both selection counts visible.
 
@@ -14,7 +16,7 @@ inline int activePaneImageIndex(const QStringList &panePaths, const QString &cur
     return panePaths.indexOf(current);
 }
 
-enum class PaneSelectionStatusKind
+enum class PaneSelectionStatusKind : std::uint8_t
 {
     Images,
     Selected,

@@ -2,6 +2,7 @@
 #include "splitbrowse_transfer.h"
 #include "thumbnailpanel_p.h"
 
+#include <QDateTime>
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QSettings>
@@ -74,6 +75,7 @@ void ThumbnailPanel::publishTransferIfAny(const ICommand *command)
         take(copy->copied());
     else if (const auto *move = dynamic_cast<const FileMoveCommand *>(command))
         take(move->moved());
+    // The host refreshes whichever pane shows destinationDir and selects created.
     if (!created.isEmpty())
         emit filesTransferred(destinationDir, created);
 }

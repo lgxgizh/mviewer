@@ -1,7 +1,9 @@
 // Right-pane directory history: header buttons, keyboard, and mouse back/forward.
 #include "mainwindow_p.h"
 
+#include <QDir>
 #include <QKeyEvent>
+#include <QMouseEvent>
 
 bool MainWindow::secondaryBrowseOwns(QObject *watched) const
 {
@@ -52,6 +54,28 @@ void MainWindow::navigateSecondaryUp()
     QDir parent(m_secondaryThumbnailPanel->currentDir());
     if (!m_secondaryThumbnailPanel->currentDir().isEmpty() && parent.cdUp())
         openRightDirectory(parent.absolutePath());
+}
+
+bool MainWindow::routeDirectoryHistoryMouse(QObject *watched, QEvent *event)
+{
+    if (event->type() != QEvent::MouseButtonPress)
+        return false;
+    auto *me = static_cast<QMouseEvent *>(event);
+    if (me->button() != Qt::BackButton && me->button() != Qt::ForwardButton)
+        return false;
+    const bool back = me->button() == Qt::BackButton;
+    if (secondaryBrowseOwns(watched))
+    {
+        if (back)
+            navigateSecondaryBack();
+        else
+            navigateSecondaryForward();
+    }
+    else if (back)
+        goDirBack();
+    else
+        goDirForward();
+    return true;
 }
 
 bool MainWindow::routeSecondaryBrowseKey(QObject *watched, QEvent *event)
