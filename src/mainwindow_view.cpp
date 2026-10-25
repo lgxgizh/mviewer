@@ -240,24 +240,42 @@ void MainWindow::applyMetadataHistogram(uint64_t gen, const QString &path,
     m_metadataHistDelivered = true;
 }
 
+static QString localizedFileCommand(const QString &label)
+{
+    if (label == QLatin1String("Rotate 1 file"))
+        return MainWindow::tr("Rotate 1 file");
+    if (label == QLatin1String("Flip 1 file"))
+        return MainWindow::tr("Flip 1 file");
+    bool ok = false;
+    if (label.startsWith(QLatin1String("Rotate ")) && label.endsWith(QLatin1String(" files")))
+    {
+        const int count = label.mid(7, label.size() - 13).toInt(&ok);
+        if (ok)
+            return MainWindow::tr("Rotate %1 files").arg(count);
+    }
+    if (label.startsWith(QLatin1String("Flip ")) && label.endsWith(QLatin1String(" files")))
+    {
+        const int count = label.mid(5, label.size() - 11).toInt(&ok);
+        if (ok)
+            return MainWindow::tr("Flip %1 files").arg(count);
+    }
+    return label;
+}
+
 // A-10: refresh Undo/Redo menu labels and enabled state from CommandStack.
 void MainWindow::updateUndoRedoActions()
 {
     if (m_actUndo)
     {
         m_actUndo->setEnabled(m_cmdStack.canUndo());
-        const std::string label = m_cmdStack.undoLabel();
-        m_actUndo->setText(label.empty()
-                               ? QStringLiteral("Undo(&U)")
-                               : QStringLiteral("Undo(&U) %1").arg(QString::fromStdString(label)));
+        const QString label = localizedFileCommand(QString::fromStdString(m_cmdStack.undoLabel()));
+        m_actUndo->setText(label.isEmpty() ? tr("Undo(&U)") : tr("Undo(&U) %1").arg(label));
     }
     if (m_actRedo)
     {
         m_actRedo->setEnabled(m_cmdStack.canRedo());
-        const std::string label = m_cmdStack.redoLabel();
-        m_actRedo->setText(label.empty()
-                               ? QStringLiteral("Redo(&R)")
-                               : QStringLiteral("Redo(&R) %1").arg(QString::fromStdString(label)));
+        const QString label = localizedFileCommand(QString::fromStdString(m_cmdStack.redoLabel()));
+        m_actRedo->setText(label.isEmpty() ? tr("Redo(&R)") : tr("Redo(&R) %1").arg(label));
     }
 }
 
@@ -535,44 +553,43 @@ void MainWindow::toggleSlideshow()
     if (!m_slideshowTimer)
     {
         m_slideshowTimer = new QTimer(this);
-        connect(m_slideshowTimer, &QTimer::timeout, this,
-                [this, interval]()
+        connect(
+            m_slideshowTimer, &QTimer::timeout, this,
+            [this, interval]()
+            {
+                // Closing the viewer (ESC) ends the show.
+                if (m_imageViewer->isHidden())
                 {
-                    // Closing the viewer (ESC) ends the show.
-                    if (m_imageViewer->isHidden())
+                    stopSlideshow();
+                    return;
+                }
+                // Rotate/flip encode runs off the UI thread. Ignore ticks
+                // until that write finishes so the show cannot skip ahead.
+                if (m_imageViewer->property("mviewerFileTransformBusy").toBool())
+                    return;
+                ensureImageList();
+                const bool wrap = QSettings().value("slideshowWrap", true).toBool();
+                if (!wrap && m_imageList && !m_imageList->isEmpty())
+                {
+                    const int idx = m_imageList->indexOf(currentImagePath());
+                    if (idx >= 0 && idx + 1 >= m_imageList->count())
                     {
                         stopSlideshow();
+                        statusBar()->showMessage(tr("Slideshow finished (reached the end)"), 3000);
                         return;
                     }
-                    // Rotate/flip encode runs off the UI thread. Ignore ticks
-                    // until that write finishes so the show cannot skip ahead.
-                    if (m_imageViewer->property("mviewerFileTransformBusy").toBool())
-                        return;
-                    ensureImageList();
-                    const bool wrap = QSettings().value("slideshowWrap", true).toBool();
-                    if (!wrap && m_imageList && !m_imageList->isEmpty())
-                    {
-                        const int idx = m_imageList->indexOf(currentImagePath());
-                        if (idx >= 0 && idx + 1 >= m_imageList->count())
-                        {
-                            stopSlideshow();
-                            statusBar()->showMessage(tr("Slideshow finished (reached the end)"),
-                                                     3000);
-                            return;
-                        }
-                    }
-                    navigate(1); // wraps at the end of the folder
-                    const int curIdx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
-                    const int total = m_imageList ? m_imageList->count() : 0;
-                    const QString progress = (curIdx >= 0 && total > 0)
-                                                 ? QString(" [%1/%2]").arg(curIdx + 1).arg(total)
-                                                 : QString();
-                    statusBar()->showMessage(
-                        tr("Slideshow%1 — press S or ESC to stop (interval %2 s)")
-                            .arg(progress)
-                            .arg(interval / 1000.0, 0, 'f', 1),
-                        3000);
-                });
+                }
+                navigate(1); // wraps at the end of the folder
+                const int curIdx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
+                const int total = m_imageList ? m_imageList->count() : 0;
+                const QString progress = (curIdx >= 0 && total > 0)
+                                             ? QString(" [%1/%2]").arg(curIdx + 1).arg(total)
+                                             : QString();
+                statusBar()->showMessage(tr("Slideshow%1 — press S or ESC to stop (interval %2 s)")
+                                             .arg(progress)
+                                             .arg(interval / 1000.0, 0, 'f', 1),
+                                         3000);
+            });
     }
     m_slideshowTimer->start(interval);
     if (m_actSlideshow)

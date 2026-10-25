@@ -1,4 +1,5 @@
 // MainWindow keyboard routing while a child or the viewer window has focus.
+#include "fileop_targets.h"
 #include "mainwindow_p.h"
 #include "shortcutdigits.h"
 
@@ -162,19 +163,49 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         const bool ctrlShift = mods == (Qt::ControlModifier | Qt::ShiftModifier);
         const bool altOnly = mods == Qt::AltModifier;
         const bool refresh = mods == Qt::NoModifier && key == Qt::Key_F5;
-        const bool fileOp = mods == Qt::NoModifier && (key == Qt::Key_F2 || key == Qt::Key_Delete);
         const bool rateOrFlag = ctrlShift && ((key >= Qt::Key_0 && key <= Qt::Key_5) ||
                                               key == Qt::Key_P || key == Qt::Key_X);
         const bool colorLabel = altOnly && key >= Qt::Key_0 && key <= Qt::Key_6;
-        if (fileOp || rateOrFlag || colorLabel || refresh)
+        if (rateOrFlag || colorLabel || refresh)
         {
             keyPressEvent(ke);
             return true;
         }
     }
+    // Viewer Delete / F2 / Ctrl+M name the image on screen. A viewer that is
+    // only open behind the browser must not take those keys.
+    if (routeViewerFileOpKeys(watched, ke, mods))
+        return true;
     // Forward navigation / workflow shortcuts from child widgets so they work
     // regardless of which panel has focus.
     if (forwardGlobalShortcut(watched, ke, mods))
         return true;
+    return false;
+}
+
+bool MainWindow::routeViewerFileOpKeys(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods)
+{
+    if (!m_imageViewer)
+        return false;
+    auto *widget = qobject_cast<QWidget *>(watched);
+    const bool eventOnViewer =
+        watched == m_imageViewer || (widget && m_imageViewer->isAncestorOf(widget));
+    if (!viewerOwnsFileOpKeys(eventOnViewer, m_imageViewer->isVisible(),
+                              m_imageViewer->isActiveWindow()))
+        return false;
+    switch (viewerFileOpForKey(mviewer::ui::normalizedShortcutKey(ke), mods))
+    {
+    case ViewerFileOp::Rename:
+        renameViewerImage();
+        return true;
+    case ViewerFileOp::Delete:
+        deleteViewerImage();
+        return true;
+    case ViewerFileOp::Move:
+        moveViewerImage();
+        return true;
+    case ViewerFileOp::None:
+        break;
+    }
     return false;
 }

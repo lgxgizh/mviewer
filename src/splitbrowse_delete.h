@@ -52,7 +52,8 @@ inline QStringList splitDeleteUnion(const QStringList &left, const QStringList &
     return out;
 }
 
-inline QString splitDeleteConfirmMessage(const SplitDeletePrompt &prompt, bool splitActive)
+inline QString splitDeleteConfirmMessage(const SplitDeletePrompt &prompt, bool splitActive,
+                                         const QString &singleFileName = {})
 {
     if (splitActive && prompt.leftCount > 0 && prompt.rightCount > 0)
     {
@@ -64,6 +65,12 @@ inline QString splitDeleteConfirmMessage(const SplitDeletePrompt &prompt, bool s
     }
     if (prompt.totalCount == 1)
     {
+        if (!singleFileName.isEmpty())
+        {
+            return QCoreApplication::translate(
+                       "ThumbnailPanel", "Are you sure you want to move \"%1\" to the Recycle Bin?")
+                .arg(singleFileName);
+        }
         return QCoreApplication::translate(
             "ThumbnailPanel", "Are you sure you want to move this file to the Recycle Bin?");
     }

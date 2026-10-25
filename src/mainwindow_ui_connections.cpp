@@ -218,6 +218,7 @@ void MainWindow::connectViewerSignals()
                 }
                 m_analysisPanel->runAnalyzer(analyzerId);
             });
+    wireHostedFileTransforms();
     connect(m_imageViewer, &ImageViewer::fileRotated, this,
             [this](const QString &path)
             {
@@ -253,6 +254,24 @@ void MainWindow::connectViewerSignals()
                                   "to copy the full path"));
         m_lblImage->installEventFilter(this);
     }
+}
+
+void MainWindow::wireHostedFileTransforms()
+{
+    if (!m_imageViewer)
+        return;
+    connect(m_imageViewer, &ImageViewer::hostRotateRequested, this,
+            [this](const QString &path, int degrees)
+            {
+                if (!path.isEmpty())
+                    runListedTransform({path}, true, degrees, false);
+            });
+    connect(m_imageViewer, &ImageViewer::hostFlipRequested, this,
+            [this](const QString &path, bool horizontal)
+            {
+                if (!path.isEmpty())
+                    runListedTransform({path}, false, 0, horizontal);
+            });
 }
 
 void MainWindow::connectRawSourceUi()

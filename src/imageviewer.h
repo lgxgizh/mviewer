@@ -290,6 +290,10 @@ class ImageViewer : public QOpenGLWidget
 
   signals:
     void fileRotated(const QString &path);
+    // Hosted viewers let MainWindow record one undoable file transform.
+    // A standalone viewer keeps the in-widget encode when nothing is connected.
+    void hostRotateRequested(const QString &path, int degreesCw);
+    void hostFlipRequested(const QString &path, bool horizontal);
     // Emitted when the async decode of a setImage() request fails, so the
     // host can surface the failure (status bar) instead of it being silent.
     void loadFailed(const QString &path);

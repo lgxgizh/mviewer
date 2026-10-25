@@ -2,6 +2,7 @@
 // the UI waits on a local event loop until the in-flight file finishes.
 #include "mainwindow_p.h"
 
+#include "core/command/RotateFilesCommand.h"
 #include "core/image/ImageFileRotate.h"
 #include "core/image/ImageLoadingFacade.h"
 #include "imageviewer.h"
@@ -15,18 +16,14 @@
 #include <QCheckBox>
 #include <QEventLoop>
 #include <QFileInfo>
-#include <QFuture>
-#include <QFutureWatcher>
 #include <QMessageBox>
-#include <QObject>
+#include <QPointer>
 #include <QProgressDialog>
 #include <QSettings>
 #include <QStatusBar>
 #include <QString>
 #include <QStringList>
-#include <QTimer>
 #include <QWidget>
-#include <QtConcurrent/QtConcurrent>
 
 #include <cstdint>
 #include <memory>
@@ -201,76 +198,6 @@ QStringList transformFailureLines(const FileTransformBatch &batch)
                                                   batch.failedErrors.at(i)));
     }
     return lines;
-}
-
-// Connect finished before setFuture. QEventLoop::quit() before exec() does not
-// stick, so a future that is already finished must skip exec().
-template <typename T> T waitFuture(const QFuture<T> &future, const BatchFileProgress &progress)
-{
-    QFutureWatcher<T> watcher;
-    QEventLoop loop;
-    QObject::connect(&watcher, &QFutureWatcher<T>::finished, &loop, &QEventLoop::quit);
-    QTimer cancelTimer;
-    cancelTimer.setInterval(50);
-    QObject::connect(&cancelTimer, &QTimer::timeout, &loop,
-                     [&loop, &progress]()
-                     {
-                         if (progress.wasCanceled())
-                             loop.quit();
-                     });
-    watcher.setFuture(future);
-    if (!future.isFinished())
-    {
-        cancelTimer.start();
-        loop.exec(QEventLoop::ExcludeUserInputEvents);
-        cancelTimer.stop();
-    }
-    QFuture<T> pending = future; // waitForFinished() is non-const
-    if (!pending.isFinished())
-        pending.waitForFinished();
-    return pending.result();
-}
-
-void recordTransformResult(FileTransformBatch &batch, ThumbnailPanel *panel, const QString &path,
-                           const std::string &utf8,
-                           const mviewer::core::ImageFileRotateResult &result)
-{
-    if (!result.ok)
-    {
-        batch.failedPaths.append(path);
-        batch.failedErrors.append(ImageViewer::rotateFailureUserMessage(result));
-        return;
-    }
-    noteTransformSuccess(panel, path, utf8);
-    ++batch.successCount;
-}
-
-template <typename Fn>
-FileTransformBatch runTransformBatch(QWidget *parent, ImageViewer *viewer, PreviewPanel *preview,
-                                     ThumbnailPanel *panel, const QStringList &paths,
-                                     FileTransformKind kind, Fn &&transform)
-{
-    BatchFileProgress progress(parent, static_cast<int>(paths.size()), kind);
-    FileTransformBatch batch;
-    const int total = static_cast<int>(paths.size());
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    for (int i = 0; i < total; ++i)
-    {
-        if (progress.wasCanceled())
-            break;
-        const QString &path = paths.at(i);
-        const std::string utf8 = path.toUtf8().toStdString();
-        releaseSourceForRewrite(viewer, preview, path, utf8);
-        const auto future = QtConcurrent::run([&transform, utf8]() { return transform(utf8); });
-        recordTransformResult(batch, panel, path, utf8, waitFuture(future, progress));
-        progress.advance(i + 1);
-    }
-    QApplication::restoreOverrideCursor();
-    const int attempted = batch.successCount + static_cast<int>(batch.failedPaths.size());
-    // A cancel that arrives while painting the last item has nothing left to skip.
-    batch.canceled = progress.wasCanceled() && attempted < total;
-    progress.dismiss();
-    return batch;
 }
 
 qsizetype skippedCount(const QStringList &paths, const FileTransformBatch &batch)
@@ -486,7 +413,127 @@ bool confirmTransform(QWidget *parent, const QStringList &paths, FileTransformKi
     return true;
 }
 
+FileTransformBatch batchFromRotateCommand(const RotateFilesCommand &command)
+{
+    FileTransformBatch batch;
+    batch.successCount = command.successCount();
+    batch.canceled = command.canceled();
+    const std::vector<std::string> &failed = command.failedPaths();
+    const std::vector<std::string> &errors = command.failedErrors();
+    const std::vector<int> &codes = command.failedErrorCodes();
+    for (size_t i = 0; i < failed.size(); ++i)
+    {
+        mviewer::core::ImageFileRotateResult synthetic;
+        synthetic.error = i < errors.size() ? errors[i] : std::string();
+        const int code = i < codes.size() ? codes[i] : 0;
+        synthetic.errorCode = static_cast<mviewer::core::ImageRotateError>(code);
+        batch.failedPaths.append(QString::fromStdString(failed[i]));
+        batch.failedErrors.append(ImageViewer::rotateFailureUserMessage(synthetic));
+    }
+    return batch;
+}
+
+void showUndoLimitStatus(QStatusBar *bar, const RotateFilesCommand &command)
+{
+    if (command.blockedByPerFileLimit())
+    {
+        showStatus(bar,
+                   MainWindow::tr("Undo is unavailable: a file is larger than the 200 MB undo "
+                                  "backup limit."),
+                   4000);
+    }
+    if (command.droppedOldestBackup())
+    {
+        showStatus(bar,
+                   MainWindow::tr("The oldest undo backup was discarded to stay within the 1 GB "
+                                  "limit."),
+                   4000);
+    }
+}
+
 } // namespace
+
+void MainWindow::refreshTransformedPaths(const QStringList &paths)
+{
+    for (const QString &path : paths)
+    {
+        const std::string utf8 = path.toUtf8().toStdString();
+        noteTransformSuccess(m_thumbnailPanel, path, utf8);
+        if (m_secondaryThumbnailPanel)
+            m_secondaryThumbnailPanel->invalidateSourceImage(path);
+    }
+    const QString current = currentImagePath();
+    if (!current.isEmpty() && paths.contains(current))
+        refreshOpenImage(m_imageViewer, m_previewPanel, m_metadataPanel, current);
+    // Do not refresh() the panes. That calls setDirectory(), which clears the
+    // gallery model and publishes an empty selection. The async rescan then
+    // completes after applyTransformSelection and drops the batch multi-select.
+    // Thumbnails are already invalidated above. A later directory-monitor delta
+    // updates size and mtime while keeping the current selection.
+}
+
+void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int degrees,
+                                    bool horizontal)
+{
+    if (paths.isEmpty())
+        return;
+    const FileTransformKind kind = rotate ? FileTransformKind::Rotate : FileTransformKind::Flip;
+    if (!confirmTransform(this, paths, kind))
+        return;
+
+    const SplitSelectionRestorePlan selectionPlan = captureTransformSelection();
+    std::vector<std::string> utf8Paths;
+    utf8Paths.reserve(static_cast<size_t>(paths.size()));
+    for (const QString &path : paths)
+        utf8Paths.push_back(path.toUtf8().toStdString());
+
+    const RotateFilesCommand::Op op =
+        rotate ? RotateFilesCommand::Op::Rotate
+               : (horizontal ? RotateFilesCommand::Op::FlipH : RotateFilesCommand::Op::FlipV);
+    auto command = std::make_unique<RotateFilesCommand>(std::move(utf8Paths), op, degrees);
+    BatchFileProgress progress(this, static_cast<int>(paths.size()), kind);
+    command->setProgressCallback(
+        [&progress](int finished, int)
+        {
+            if (progress.wasCanceled())
+                return false;
+            progress.advance(finished);
+            return !progress.wasCanceled();
+        });
+    const QPointer<MainWindow> guard(this);
+    command->setPathsChangedCallback(
+        [guard](const std::vector<std::string> &changed)
+        {
+            if (!guard)
+                return;
+            QStringList refreshed;
+            refreshed.reserve(static_cast<int>(changed.size()));
+            for (const std::string &path : changed)
+                refreshed.append(QString::fromStdString(path));
+            guard->refreshTransformedPaths(refreshed);
+        });
+    for (const QString &path : paths)
+    {
+        releaseSourceForRewrite(m_imageViewer, m_previewPanel, path, path.toUtf8().toStdString());
+    }
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    command->execute();
+    QApplication::restoreOverrideCursor();
+    progress.dismiss();
+
+    const FileTransformBatch batch = batchFromRotateCommand(*command);
+    applyTransformSelection(selectionPlan);
+    if (rotate)
+        reportRotateBatch(this, statusBar(), paths, batch, degrees);
+    else
+        reportFlipBatch(this, statusBar(), paths, batch, horizontal);
+    showUndoLimitStatus(statusBar(), *command);
+
+    command->setProgressCallback({});
+    if (command->lastError().empty() && command->canUndo())
+        m_cmdStack.recordExecuted(std::move(command));
+}
 
 void MainWindow::rotateCurrentImage(int degrees)
 {
@@ -503,26 +550,7 @@ void MainWindow::rotateCurrentImage(int degrees)
         showStatus(statusBar(), tr("No images available to rotate"), 2000);
         return;
     }
-
-    if (!confirmTransform(this, paths, FileTransformKind::Rotate))
-        return;
-
-    const FileTransformBatch batch =
-        runTransformBatch(this, m_imageViewer, m_previewPanel, m_thumbnailPanel, paths,
-                          FileTransformKind::Rotate, [degrees](const std::string &utf8)
-                          { return mviewer::core::rotateImageFile(utf8, degrees); });
-
-    const QString cur = currentImagePath();
-    if (!cur.isEmpty() && paths.contains(cur))
-        refreshOpenImage(m_imageViewer, m_previewPanel, m_metadataPanel, cur);
-    reportRotateBatch(this, statusBar(), paths, batch, degrees);
-    if (m_secondaryThumbnailPanel)
-    {
-        for (const QString &path : paths)
-            m_secondaryThumbnailPanel->invalidateSourceImage(path);
-    }
-    // Keep the pre-rotate multi-selection after thumbnail invalidate / rebuild.
-    restoreMultiSelection(m_thumbnailPanel, m_selection, paths, cur);
+    runListedTransform(paths, true, degrees, false);
 }
 
 void MainWindow::flipCurrentImage(bool horizontal)
@@ -540,23 +568,55 @@ void MainWindow::flipCurrentImage(bool horizontal)
         showStatus(statusBar(), tr("No images to flip"), 2000);
         return;
     }
+    runListedTransform(paths, false, 0, horizontal);
+}
 
-    if (!confirmTransform(this, paths, FileTransformKind::Flip))
+SplitSelectionRestorePlan MainWindow::captureTransformSelection() const
+{
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    using Pane = SelectionModel::PaneSlot;
+    const QStringList primary =
+        m_selection ? m_selection->paneSelection(Pane::Primary) : QStringList();
+    const QStringList secondary =
+        m_selection ? m_selection->paneSelection(Pane::Secondary) : QStringList();
+    const QString primaryCurrent =
+        m_selection ? m_selection->paneCurrentImage(Pane::Primary) : QString();
+    const QString secondaryCurrent =
+        m_selection ? m_selection->paneCurrentImage(Pane::Secondary) : QString();
+    const QStringList single = m_selection ? m_selection->selection() : QStringList();
+    const QString singleCurrent = m_selection ? m_selection->currentImage() : QString();
+    const QStringList primaryList = m_thumbnailPanel ? m_thumbnailPanel->pathList() : QStringList();
+    const QStringList secondaryList =
+        m_secondaryThumbnailPanel ? m_secondaryThumbnailPanel->pathList() : QStringList();
+    return splitSelectionRestorePlan(split, primary, primaryCurrent, secondary, secondaryCurrent,
+                                     primaryList, secondaryList, single, singleCurrent,
+                                     currentImagePath());
+}
+
+void MainWindow::applyTransformSelection(const SplitSelectionRestorePlan &plan)
+{
+    if (!plan.split)
+    {
+        restoreMultiSelection(m_thumbnailPanel, m_selection, plan.singleSelection,
+                              plan.singleCurrent);
         return;
-
-    const FileTransformBatch batch =
-        runTransformBatch(this, m_imageViewer, m_previewPanel, m_thumbnailPanel, paths,
-                          FileTransformKind::Flip, [horizontal](const std::string &utf8)
-                          { return mviewer::core::flipImageFile(utf8, horizontal); });
-
-    const QString cur = currentImagePath();
-    if (!cur.isEmpty() && paths.contains(cur))
-        refreshOpenImage(m_imageViewer, m_previewPanel, m_metadataPanel, cur);
-    reportFlipBatch(this, statusBar(), paths, batch, horizontal);
+    }
+    using Pane = SelectionModel::PaneSlot;
+    if (m_selection)
+    {
+        m_selection->setPaneSelection(Pane::Primary, plan.primaryModel, plan.primaryCurrent);
+        m_selection->setPaneSelection(Pane::Secondary, plan.secondaryModel, plan.secondaryCurrent);
+    }
+    const auto focusOf = [](const QStringList &view, const QString &current)
+    { return view.contains(current) ? current : QString(); };
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->selectPaths(plan.primaryView,
+                                      focusOf(plan.primaryView, plan.primaryCurrent), false);
     if (m_secondaryThumbnailPanel)
     {
-        for (const QString &path : paths)
-            m_secondaryThumbnailPanel->invalidateSourceImage(path);
+        m_secondaryThumbnailPanel->selectPaths(
+            plan.secondaryView, focusOf(plan.secondaryView, plan.secondaryCurrent), false);
     }
-    restoreMultiSelection(m_thumbnailPanel, m_selection, paths, cur);
+    if (m_selection && !plan.globalCurrent.isEmpty())
+        m_selection->setCurrentImage(plan.globalCurrent);
 }

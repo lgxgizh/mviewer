@@ -5060,6 +5060,46 @@ Build: %2</source>
         <translation>项目已打开: %1 (%2 张图片, %3 个目录)</translation>
     </message>
     <message>
+        <location filename="../src/mainwindow_view.cpp" line="246"/>
+        <source>Rotate 1 file</source>
+        <translation>旋转 1 个文件</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_view.cpp" line="248"/>
+        <source>Flip 1 file</source>
+        <translation>翻转 1 个文件</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_view.cpp" line="254"/>
+        <source>Rotate %1 files</source>
+        <translation>旋转 %1 个文件</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_view.cpp" line="260"/>
+        <source>Flip %1 files</source>
+        <translation>翻转 %1 个文件</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_view.cpp" line="272"/>
+        <source>Undo(&amp;U) %1</source>
+        <translation>撤销(&amp;U) %1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_view.cpp" line="278"/>
+        <source>Redo(&amp;R) %1</source>
+        <translation>重做(&amp;R) %1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_filetransform.cpp" line="441"/>
+        <source>Undo is unavailable: a file is larger than the 200 MB undo backup limit.</source>
+        <translation>无法撤销：文件超过 200 MB 的撤销备份上限。</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_filetransform.cpp" line="448"/>
+        <source>The oldest undo backup was discarded to stay within the 1 GB limit.</source>
+        <translation>已丢弃最旧的撤销备份以保持在 1 GB 上限内。</translation>
+    </message>
+    <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="298"/>
         <source>Decode Full RAW</source>
         <translation>解码完整 RAW</translation>
@@ -6504,6 +6544,94 @@ Continue?</source>
     <message>
         <source>Thumbnail size reset (Ctrl+Alt+9)</source>
         <translation>已重置缩略图大小 (Ctrl+Alt+9)</translation>
+    </message>
+    <message>
+        <location filename="../src/splitbrowse_delete.h" line="71"/>
+        <source>Are you sure you want to move &quot;%1&quot; to the Recycle Bin?</source>
+        <translation>确定将“%1”移到回收站？</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="271"/>
+        <source>Command was lost.</source>
+        <translation>命令已丢失。</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="281"/>
+        <source>Cancelled.
+</source>
+        <translation>已取消。
+</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="282"/>
+        <source>Failed.
+</source>
+        <translation>失败。
+</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="306"/>
+        <source>Cannot queue %1: background task queue is full.</source>
+        <translation>无法排队%1：后台任务队列已满。</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="319"/>
+        <source>Copying...</source>
+        <translation>正在复制…</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="398"/>
+        <source>Copy complete: %1 succeeded, %2 failed.%3</source>
+        <translation>复制完成：成功 %1 个，失败 %2 个。%3</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="405"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="411"/>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="418"/>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="406"/>
+        <source>Copy cancelled.
+</source>
+        <translation>复制已取消。
+</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="409"/>
+        <source>Successfully copied %1 files</source>
+        <translation>已成功复制 %1 个文件</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="418"/>
+        <source>Cannot queue copy: background task queue is full.</source>
+        <translation>无法排队复制：后台任务队列已满。</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="447"/>
+        <source>Rename %1</source>
+        <translation>重命名 %1</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="470"/>
+        <source>Changing the extension may prevent the file from opening. Continue anyway?</source>
+        <translation>更改扩展名可能导致文件无法打开。仍要继续吗？</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="525"/>
+        <source>Renamed the focused file only; use Tools → Batch Processing to rename multiple files</source>
+        <translation>只重命名了当前焦点文件；要重命名多个文件，请使用 工具 → 批量处理</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="584"/>
+        <source>Delete</source>
+        <translation>删除</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_fileops.cpp" line="637"/>
+        <source>Move</source>
+        <translation>移动</translation>
     </message>
 </context>
 <context>

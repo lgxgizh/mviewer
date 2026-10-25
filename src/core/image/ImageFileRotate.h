@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace mviewer::core
 {
@@ -12,7 +13,7 @@ namespace mviewer::core
 enum class ImageRotateMethod : std::uint8_t
 {
     None = 0,
-    ExifOrientation, // reserved: JPEG orientation-tag rewrite
+    ExifOrientation, // JPEG: rewrite an existing IFD0 Orientation tag
     PixelRewrite     // decode → exact 90°-step rotate → re-encode
 };
 
@@ -56,5 +57,11 @@ ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw
 // Flip the image file in place. Same writable formats, atomic overwrite, and
 // sharing-violation retry as rotateImageFile.
 ImageFileRotateResult flipImageFile(const std::string &utf8Path, bool horizontal);
+
+// Whole-file read / atomic replace used by rotate undo backups. `error` may
+// be null. readFileBytes returns false when the file cannot be opened.
+bool readFileBytes(const std::string &utf8Path, std::vector<uint8_t> &out, std::string *error);
+bool writeFileBytesAtomic(const std::string &utf8Path, const std::vector<uint8_t> &bytes,
+                          std::string *error);
 
 } // namespace mviewer::core

@@ -1,10 +1,13 @@
 #include "core/image/ImageFileRotate.h"
 
 #include "core/image/Encoder.h"
+#include "core/image/ExifOrientation.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/JpegExif.h"
 #include "core/image/QtConvert.h"
 
 #include <QColorSpace>
+#include <QFile>
 #include <QFileDevice>
 #include <QFileInfo>
 #include <QIODevice>
@@ -23,6 +26,7 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <optional>
 #include <thread>
 #include <vector>
 
@@ -73,13 +77,6 @@ ImageData rotatePixelsExact(const ImageData &src, int degreesCw)
         return ImageData{};
     }
 }
-
-enum class FilePixelOp : std::uint8_t
-{
-    Rotate = 0,
-    FlipH,
-    FlipV
-};
 
 ImageData applyFilePixelOp(const ImageData &src, FilePixelOp op, int degreesCw)
 {
@@ -263,6 +260,36 @@ ImageFileRotateResult failResult(std::string error, ImageRotateError code)
     return r;
 }
 
+// JPEG with an IFD0 Orientation tag: rewrite that tag and skip the decoder.
+// nullopt means "no tag, use the pixel path". A hard failure is returned as
+// a result so a broken tag is not silently re-encoded.
+std::optional<ImageFileRotateResult> rewriteTaggedJpegOrientation(const QString &qPath,
+                                                                  std::vector<uint8_t> bytes,
+                                                                  FilePixelOp op, int norm)
+{
+    const auto tag = readJpegOrientation(bytes);
+    if (!tag)
+        return std::nullopt;
+    const int next = composeOrientation(*tag, op, norm);
+    if (!writeJpegOrientationInPlace(bytes, next))
+    {
+        return failResult("jpeg orientation tag rewrite failed", ImageRotateError::WriteFailed);
+    }
+    std::string err;
+    ImageRotateError code = ImageRotateError::WriteFailed;
+    if (!atomicWriteBytes(qPath, bytes, &err, &code))
+        return failResult(err.empty() ? "write failed" : err, code);
+
+    ImageFileRotateResult result;
+    result.ok = true;
+    result.method = ImageRotateMethod::ExifOrientation;
+    int storedWidth = 0;
+    int storedHeight = 0;
+    if (readJpegStoredSize(bytes, storedWidth, storedHeight))
+        orientedSize(storedWidth, storedHeight, next, result.width, result.height);
+    return result;
+}
+
 ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelOp op, int degreesCw)
 {
     if (utf8Path.empty())
@@ -298,11 +325,21 @@ ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelO
                           ImageRotateError::UnsupportedFormat);
     }
 
+    const bool jpeg = suffix == "jpg" || suffix == "jpeg";
+    std::vector<uint8_t> jpegOriginal;
+    std::string err;
+    if (jpeg)
+    {
+        if (!readFileBytes(utf8Path, jpegOriginal, &err))
+            return failResult(err.empty() ? "read failed" : err, ImageRotateError::ReadFailed);
+        if (auto lossless = rewriteTaggedJpegOrientation(qPath, jpegOriginal, op, norm))
+            return *lossless;
+    }
+
     QImage original;
     std::string readerFormat;
     std::vector<uint8_t> icc;
     std::vector<std::pair<std::string, std::string>> text;
-    std::string err;
     if (!loadOrientedImage(qPath, &original, &readerFormat, &icc, &text, &err))
         return failResult(err, ImageRotateError::ReadFailed);
 
@@ -318,6 +355,12 @@ ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelO
     std::vector<uint8_t> encoded;
     if (!encodeRotated(transformed, format, icc, text, &encoded, &err))
         return failResult(err, ImageRotateError::EncodeFailed);
+    if (jpeg)
+    {
+        const std::vector<uint8_t> app1 = extractJpegApp1Exif(jpegOriginal);
+        if (!app1.empty())
+            encoded = spliceJpegApp1Exif(encoded, app1, true);
+    }
 
     ImageRotateError writeCode = ImageRotateError::WriteFailed;
     if (!atomicWriteBytes(qPath, encoded, &err, &writeCode))
@@ -352,6 +395,43 @@ ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw
 ImageFileRotateResult flipImageFile(const std::string &utf8Path, bool horizontal)
 {
     return rewriteImagePixels(utf8Path, horizontal ? FilePixelOp::FlipH : FilePixelOp::FlipV, 0);
+}
+
+bool readFileBytes(const std::string &utf8Path, std::vector<uint8_t> &out, std::string *error)
+{
+    out.clear();
+    const QString path = QString::fromUtf8(utf8Path.data(), static_cast<int>(utf8Path.size()));
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        if (error)
+            *error = file.errorString().toStdString();
+        return false;
+    }
+    const QByteArray data = file.readAll();
+    if (file.error() != QFileDevice::NoError)
+    {
+        if (error)
+            *error = file.errorString().toStdString();
+        return false;
+    }
+    out.assign(data.begin(), data.end());
+    return true;
+}
+
+bool writeFileBytesAtomic(const std::string &utf8Path, const std::vector<uint8_t> &bytes,
+                          std::string *error)
+{
+    const QString path = QString::fromUtf8(utf8Path.data(), static_cast<int>(utf8Path.size()));
+    std::string err;
+    ImageRotateError code = ImageRotateError::WriteFailed;
+    if (!atomicWriteBytes(path, bytes, &err, &code))
+    {
+        if (error)
+            *error = err.empty() ? "write failed" : err;
+        return false;
+    }
+    return true;
 }
 
 } // namespace mviewer::core

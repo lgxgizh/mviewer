@@ -14,6 +14,7 @@
 #include <QCheckBox>
 #include <QDir>
 #include <QMessageBox>
+#include <QMetaMethod>
 #include <QPointer>
 #include <QSettings>
 
@@ -268,6 +269,11 @@ bool ImageViewer::rotateImage(int angle)
         normAngle += 360;
     if (normAngle == 0)
         return true;
+    if (isSignalConnected(QMetaMethod::fromSignal(&ImageViewer::hostRotateRequested)))
+    {
+        emit hostRotateRequested(m_currentPath, normAngle);
+        return true;
+    }
     if (property("mviewerFileTransformBusy").toBool())
         return true;
 
@@ -300,6 +306,11 @@ bool ImageViewer::flipImage(bool horizontal)
 {
     if (m_currentPath.isEmpty())
         return false;
+    if (isSignalConnected(QMetaMethod::fromSignal(&ImageViewer::hostFlipRequested)))
+    {
+        emit hostFlipRequested(m_currentPath, horizontal);
+        return true;
+    }
     if (property("mviewerFileTransformBusy").toBool())
         return true;
 
