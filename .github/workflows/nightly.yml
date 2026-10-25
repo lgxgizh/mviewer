@@ -48,7 +48,12 @@ jobs:
         id: llvm
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "21"
+          # 22.x carries llvm-project#159618: catch-block parameters are no
+          # longer ASan-instrumented on Windows. 21.x reports a bogus
+          # access-violation inside every `catch (const T &e)` that touches e
+          # (google/sanitizers#749). The action's asset table stops at 21.1.8.
+          version: "22.1.8"
+          force-url: https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -61,7 +66,7 @@ jobs:
       - name: Configure (clang-cl + ASan)
         run: |
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $asanLib = "$llvmShort/lib/clang/21/lib/windows"
+          $asanLib = "$llvmShort/lib/clang/22/lib/windows"
           cmake -S . -B build_asan -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
@@ -91,7 +96,7 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
+          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\22\lib\windows;$env:PATH"
           # detect_leaks is unsupported on Windows and aborts every test at
           # startup. The Linux GCC job below keeps detect_leaks=1.
           # symbolize=1 plus llvm-symbolizer: without PDBs (/DEBUG above) and
