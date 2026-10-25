@@ -45,11 +45,12 @@ ImageData toImageData(const QImage &src)
     return out;
 }
 
-void fillMeta(const QImageReader &reader, const QImage &img, mviewer::domain::ImageMetadata &meta)
+void fillMeta(const QImageReader &reader, QImage::Format sourceFormat, const QImage &img,
+              mviewer::domain::ImageMetadata &meta)
 {
     meta.width = img.width();
     meta.height = img.height();
-    mviewer::core::qtmetadata::applyReaderRasterMetadata(reader, img, meta);
+    mviewer::core::qtmetadata::applyReaderRasterMetadata(sourceFormat, img, meta);
     const QByteArray fmt = reader.format();
     if (!fmt.isEmpty())
     {
@@ -100,6 +101,7 @@ QtFallbackDecoder::decodeFullResult(const std::string &path,
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImageReader reader(qPath);
     reader.setAutoTransform(true);
+    const QImage::Format sourceFormat = reader.imageFormat();
     const QImage img = reader.read();
     if (img.isNull())
     {
@@ -121,7 +123,7 @@ QtFallbackDecoder::decodeFullResult(const std::string &path,
 
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
-    fillMeta(reader, img, outMeta);
+    fillMeta(reader, sourceFormat, img, outMeta);
     return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(toImageData(img));
 }
 
@@ -152,6 +154,7 @@ ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge,
         outMeta.filePath = path;
     outMeta.fileSize =
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).size();
+    const QImage::Format sourceFormat = reader.imageFormat();
     QImage img;
     if (full.width() <= maxEdge && full.height() <= maxEdge)
         img = reader.read();
@@ -166,7 +169,7 @@ ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge,
         return ImageData();
     const int sourceWidth = full.width();
     const int sourceHeight = full.height();
-    fillMeta(reader, img, outMeta);
+    fillMeta(reader, sourceFormat, img, outMeta);
     outMeta.width = sourceWidth;
     outMeta.height = sourceHeight;
     const auto transform = reader.transformation();
