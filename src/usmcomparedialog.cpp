@@ -3,11 +3,13 @@
 #include "compareworkspace_temporary.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/Encoder.h"
+#include "core/image/ImageFormats.h"
 #include "core/image/QtConvert.h"
 #include "core/image/UsmSharpen.h"
 #include "display/DisplayColorContextProvider.h"
 
 #include <QApplication>
+#include <QByteArray>
 #include <QCheckBox>
 #include <QClipboard>
 #include <QColorSpace>
@@ -42,6 +44,19 @@ void stripButtonFocus(QPushButton *btn)
     btn->setDefault(false);
 }
 
+std::vector<uint8_t> iccBytesFromMetadata(const mviewer::domain::ImageMetadata &meta)
+{
+    const auto it = meta.textKeys.find("MViewer.DisplayICC.Base64");
+    if (it == meta.textKeys.end() || it->second.empty())
+        return {};
+    const QByteArray encoded(it->second.data(), static_cast<int>(it->second.size()));
+    const QByteArray decoded = QByteArray::fromBase64(encoded);
+    if (decoded.isEmpty())
+        return {};
+    const auto *begin = reinterpret_cast<const uint8_t *>(decoded.constData());
+    return std::vector<uint8_t>(begin, begin + decoded.size());
+}
+
 QString formatName(PixelFormat fmt)
 {
     switch (fmt)
@@ -63,7 +78,7 @@ QString formatName(PixelFormat fmt)
 } // namespace
 
 UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &initialData,
-                                   QWidget *parent)
+                                   QWidget *parent, const mviewer::domain::ImageMetadata &meta)
     : QDialog(parent), m_filePath(filePath), m_debounceTimer(new QTimer(this))
 {
     setWindowTitle(filePath.isEmpty()
@@ -80,7 +95,7 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
 
     setupUi();
     setupConnections();
-    loadImageSource(filePath, initialData);
+    loadImageSource(filePath, initialData, meta);
 
     setFocusPolicy(Qt::StrongFocus);
     qApp->installEventFilter(this);
@@ -105,11 +120,29 @@ UsmCompareDialog::~UsmCompareDialog()
         TaskScheduler::cancel(m_activeTask);
 }
 
-void UsmCompareDialog::loadImageSource(const QString &filePath, const ImageData &initialData)
+QString UsmCompareDialog::defaultSaveExtension(const QString &sourceSuffix)
+{
+    QString ext = sourceSuffix;
+    const int dot = ext.lastIndexOf('.');
+    if (dot >= 0)
+        ext = ext.mid(dot + 1);
+    ext = ext.toLower();
+    if (mviewer::core::isRawExtension(ext.toStdString()))
+        return Encoder::formatForExtension("tif") == "tiff" ? QStringLiteral("tif")
+                                                            : QStringLiteral("png");
+    return ext.isEmpty() ? QStringLiteral("png") : ext;
+}
+
+void UsmCompareDialog::loadImageSource(const QString &filePath, const ImageData &initialData,
+                                       const mviewer::domain::ImageMetadata &meta)
 {
     if (!initialData.isNull())
     {
         m_sourceData = initialData;
+        m_meta = meta;
+        if (m_meta.filePath.empty())
+            m_meta.filePath = filePath.toUtf8().toStdString();
+        m_iccProfile = iccBytesFromMetadata(m_meta);
     }
     else if (!filePath.isEmpty())
     {
@@ -526,25 +559,19 @@ void UsmCompareDialog::saveSharpenedAs()
         return;
 
     const QFileInfo fi(m_filePath);
-    const QString defaultName =
-        fi.dir().filePath(fi.baseName() + "_usm." + (fi.suffix().isEmpty() ? "png" : fi.suffix()));
-    const QString savePath =
-        QFileDialog::getSaveFileName(this, tr("Save As Sharpened Image"), defaultName,
-                                     tr("Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"));
+    const QString saveExt = defaultSaveExtension(fi.suffix());
+    const QString defaultName = fi.dir().filePath(fi.baseName() + "_usm." + saveExt);
+    const QString savePath = QFileDialog::getSaveFileName(
+        this, tr("Save As Sharpened Image"), defaultName,
+        tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;All Files (*)"));
     if (savePath.isEmpty())
         return;
 
     Encoder::Params params;
-    if (!m_iccProfile.empty())
-        params.iccProfile = m_iccProfile;
-    else if (m_origQImage.colorSpace().isValid())
-    {
-        const QByteArray icc = m_origQImage.colorSpace().iccProfile();
-        if (!icc.isEmpty())
-            params.iccProfile.assign(reinterpret_cast<const uint8_t *>(icc.constData()),
-                                     reinterpret_cast<const uint8_t *>(icc.constData()) +
-                                         icc.size());
-    }
+    params.iccProfile = m_iccProfile;
+    const QString chosen = QFileInfo(savePath).suffix().toLower();
+    if (chosen == QLatin1String("jpg") || chosen == QLatin1String("jpeg"))
+        params.quality = 95;
     const bool ok = Encoder::encode(m_sharpenedData, savePath.toStdString(), params);
     if (ok)
         m_lblCalcStatus->setText(tr("Save successful: %1").arg(QFileInfo(savePath).fileName()));

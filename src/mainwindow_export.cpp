@@ -343,22 +343,29 @@ void MainWindow::openUsmCompare(const QString &path)
         return;
 
     ImageData imgData;
+    mviewer::domain::ImageMetadata meta;
     if (m_imageViewer)
     {
         const auto frame = m_imageViewer->frame();
         if (frame && !frame->pixels().isNull() &&
             frame->metadata().filePath == target.toStdString())
+        {
             imgData = frame->pixels();
+            meta = frame->metadata();
+        }
     }
     if (imgData.isNull())
     {
         const auto res = ImageRepository::instance().load(target.toStdString());
         if (res.success() && res.frame)
+        {
             imgData = res.frame->pixels();
+            meta = res.frame->metadata();
+        }
     }
     if (imgData.isNull())
         return;
 
-    UsmCompareDialog dlg(target, imgData, this);
+    UsmCompareDialog dlg(target, imgData, this, meta);
     dlg.exec();
 }

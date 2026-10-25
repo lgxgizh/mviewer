@@ -31,8 +31,17 @@ class UsmCompareDialog : public QDialog
 
   public:
     explicit UsmCompareDialog(const QString &filePath, const ImageData &initialData = {},
-                              QWidget *parent = nullptr);
+                              QWidget *parent = nullptr,
+                              const mviewer::domain::ImageMetadata &meta = {});
     ~UsmCompareDialog() override;
+
+    const std::vector<uint8_t> &embeddedIccProfile() const
+    {
+        return m_iccProfile;
+    }
+    // RAW sources save as tif when the encoder maps it, otherwise png.
+    // Other sources keep their suffix (empty becomes png).
+    static QString defaultSaveExtension(const QString &sourceSuffix);
 
   protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -62,7 +71,8 @@ class UsmCompareDialog : public QDialog
     void setupConnections();
     void syncTransforms(RawImageView *source, RawImageView *target);
     void updateStatusInfo(qint64 elapsedMs, const mviewer::core::UsmDiffSummary &summary);
-    void loadImageSource(const QString &filePath, const ImageData &initialData);
+    void loadImageSource(const QString &filePath, const ImageData &initialData,
+                         const mviewer::domain::ImageMetadata &meta);
 
     // Momentary Space / hold-button compare (aligned with CompareWorkspace pair hold).
     int paneIndexAtGlobalPos(const QPoint &globalPos) const;

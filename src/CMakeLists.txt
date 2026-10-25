@@ -899,6 +899,23 @@ target_include_directories(auto_check_updates_pref_tests PRIVATE ${CMAKE_CURRENT
 add_test(NAME auto_check_updates_pref_tests COMMAND auto_check_updates_pref_tests)
 set_tests_properties(auto_check_updates_pref_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
+# USM source ICC embed and RAW default save suffix.
+add_executable(usm_dialog_tests
+    test_usm_dialog.cpp
+)
+target_link_libraries(usm_dialog_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(usm_dialog_tests PRIVATE cxx_std_20)
+target_include_directories(usm_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME usm_dialog_tests COMMAND usm_dialog_tests)
+set_tests_properties(usm_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
     test_rotate_selection.cpp
