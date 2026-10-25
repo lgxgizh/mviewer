@@ -5,8 +5,8 @@
 #include "thumbnailpanel.h"
 
 #include <QApplication>
-#include <QCoreApplication>
 #include <QColor>
+#include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>

@@ -263,11 +263,13 @@ void retintLiveWidgets(const ThemeTokens &from, const ThemeTokens &to)
 }
 
 // In System mode, re-apply when Windows switches between light and dark apps.
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
 void onSystemColorSchemeChanged(Qt::ColorScheme)
 {
     if (g_mode == ThemeMode::System)
         Theme::applyTheme(ThemeMode::System);
 }
+#endif
 
 void installSystemSchemeFollower()
 {

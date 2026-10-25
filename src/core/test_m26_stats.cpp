@@ -208,11 +208,11 @@ void test24MpBudget()
 #if defined(__SANITIZE_ADDRESS__)
     const double kBudgetMs = 15000.0;
 #elif defined(__has_feature)
-#  if __has_feature(address_sanitizer)
+#if __has_feature(address_sanitizer)
     const double kBudgetMs = 15000.0;
-#  else
+#else
     const double kBudgetMs = 2000.0;
-#  endif
+#endif
 #else
     const double kBudgetMs = 2000.0;
 #endif

@@ -383,8 +383,7 @@ void testD4DegradedDirs(QTemporaryDir &tmp)
     const QString blocker = tmp.filePath(QStringLiteral("not-a-dir"));
     {
         QFile f(blocker);
-        CHECK(f.open(QIODevice::WriteOnly) && f.write("x") > 0,
-              "D#4: blocker file created");
+        CHECK(f.open(QIODevice::WriteOnly) && f.write("x") > 0, "D#4: blocker file created");
     }
     mviewer::exportjob::ExportJobConfig cfg;
     cfg.outDir = QDir(blocker).filePath(QStringLiteral("out")).toStdString();

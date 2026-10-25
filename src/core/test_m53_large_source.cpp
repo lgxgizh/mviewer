@@ -13,10 +13,10 @@
 #include <QImageWriter>
 #include <QTemporaryDir>
 
+#include <QtGlobal>
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
-#include <QtGlobal>
 #include <fstream>
 #include <string>
 #include <vector>

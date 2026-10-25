@@ -152,13 +152,14 @@ QSize viewerOpenReady(ImageViewer &viewer, const QString &path, int timeoutMs = 
     // superseded decode). Capturing stack locals made Linux GCC ASan report
     // stack-use-after-return at the lambda body.
     const auto state = std::make_shared<std::pair<QSize, bool>>(QSize{}, false);
-    QObject::connect(&viewer, &ImageViewer::displayReady, &viewer,
-                     [state](const QSize &s)
-                     {
-                         state->first = s;
-                         state->second = true;
-                     },
-                     Qt::SingleShotConnection);
+    QObject::connect(
+        &viewer, &ImageViewer::displayReady, &viewer,
+        [state](const QSize &s)
+        {
+            state->first = s;
+            state->second = true;
+        },
+        Qt::SingleShotConnection);
     viewer.setImage(path);
     waitTrue([&] { return state->second; }, timeoutMs);
     return state->first;
