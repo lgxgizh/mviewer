@@ -319,7 +319,11 @@ def generate(root: str) -> None:
         print("generated large_tiff_16bit.tiff (16-bit grayscale)")
 
     if want("large_png_16mp.png"):
-        make_pattern(4096, 4096).save(path("large_png_16mp.png"), "PNG", optimize=False)
+        # compress_level=1: zlib-ng (Linux Pillow wheels) packs the pattern
+        # under the 100 KB floor at the default level; pixels are unchanged.
+        make_pattern(4096, 4096).save(
+            path("large_png_16mp.png"), "PNG", optimize=False, compress_level=1
+        )
         print("generated large_png_16mp.png")
 
     if want("large_bmp_16mp.bmp"):

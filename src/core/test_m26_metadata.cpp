@@ -28,6 +28,7 @@
 #include <cstdio>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -235,8 +236,10 @@ void testSameConsumerSupersedeCompletes()
     QTemporaryDir tmp;
     const std::vector<std::string> a = makeDngs(tmp, 800);
 
-    std::atomic<bool> firstDone{false};
-    const uint64_t firstReq = indexer.index(a, {}, [&]() { firstDone = true; });
+    // The superseded first request may still complete after this test returns,
+    // so its completion flag must not live on this stack frame.
+    auto firstDone = std::make_shared<std::atomic<bool>>(false);
+    const uint64_t firstReq = indexer.index(a, {}, [firstDone]() { *firstDone = true; });
     CHECK(firstReq != 0, "first request accepted");
     std::atomic<bool> secondDone{false};
     std::atomic<int> secondEntries{0};

@@ -186,8 +186,12 @@ class PyramidCache
   public:
     static PyramidCache &instance()
     {
-        static PyramidCache cache;
-        return cache;
+        // Leaked on purpose. A function-local static is destroyed from exit()
+        // while a TaskScheduler worker can still be in finish()/abort()
+        // (resampleDisplay -> reduceByBox -> stepDown). Destroying this cache
+        // is the heap-use-after-free in m47_exact_source_tests.
+        static auto *const cache = new PyramidCache();
+        return *cache;
     }
 
     Claim claim(const std::shared_ptr<std::vector<uint8_t>> &buffer, const SourceRect &rect,
