@@ -48,7 +48,12 @@ jobs:
         id: llvm
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "21"
+          # 22.x carries llvm-project#159618: catch-block parameters are no
+          # longer ASan-instrumented on Windows. 21.x reports a bogus
+          # access-violation inside every `catch (const T &e)` that touches e
+          # (google/sanitizers#749). The action's asset table stops at 21.1.8.
+          version: "22.1.8"
+          force-url: https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -61,15 +66,15 @@ jobs:
       - name: Configure (clang-cl + ASan)
         run: |
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $asanLib = "$llvmShort/lib/clang/21/lib/windows"
+          $asanLib = "$llvmShort/lib/clang/22/lib/windows"
           cmake -S . -B build_asan -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
             -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
-            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
-            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
-            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
+            "-DCMAKE_EXE_LINKER_FLAGS=/DEBUG -fsanitize=address /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" `
+            "-DCMAKE_SHARED_LINKER_FLAGS=/DEBUG -fsanitize=address /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" `
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address -g"
 
       - name: Build (ASan)
         run: cmake --build build_asan -j 4
@@ -81,14 +86,31 @@ jobs:
           New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
           Copy-Item "$pluginSrc\*.dll" $pluginDst -Force
 
+      - name: Generate testdata fixtures
+        run: |
+          python -m pip install --quiet --disable-pip-version-check Pillow
+          python testdata/generate_fixtures.py --size 256x256
+          python testdata/generate_large_fixtures.py --ensure
+
       - name: Test (ASan + LeakSanitizer)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
-          $env:ASAN_OPTIONS = "detect_leaks=1:detect_odr_violation=0"
+          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\22\lib\windows;$env:PATH"
+          # detect_leaks is unsupported on Windows and aborts every test at
+          # startup. The Linux GCC job below keeps detect_leaks=1.
+          # symbolize=1 plus llvm-symbolizer: without PDBs (/DEBUG above) and
+          # a symbolizer, frames are exe+offset or the nearest DLL export.
+          $env:ASAN_OPTIONS = "detect_odr_violation=0:symbolize=1"
+          $env:ASAN_SYMBOLIZER_PATH = "$llvmShort\bin\llvm-symbolizer.exe"
           cd build_asan
-          $excludeRegex = "core_tests|m3m4m5_tests|m3pipeline_tests|decoder_tests|repository_tests|metadata_tests|m3acceptance_tests|product_browse_tests|product_workflow_gate"
+          # Decode-suite tests run now that fixtures exist. product_workflow_gate
+          # is a PowerShell orchestration script and product_browse_tests is a
+          # wall-clock UI-responsiveness check. crashhandler_tests raises a
+          # deliberate SEH exception; ASan installs its own unhandled-exception
+          # hook, so the product minidump handler never runs (the test stays in
+          # the PR Gate suite). bench_* budgets are meaningless under ASan.
+          $excludeRegex = "product_workflow_gate|product_browse_tests|crashhandler_tests|bench_"
           ctest --output-on-failure -j4 -E $excludeRegex
 
   # ---------------------------------------------------------------------------
@@ -105,12 +127,29 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev libgl1-mesa-dev cmake ninja-build g++
+          # Qt itself comes from install-qt-action (6.8, with image-format
+          # plugins). These are the system libs the 6.8 gcc_64 build loads for
+          # the offscreen platform. xcb-only packages (libxkbcommon-x11-0,
+          # libxcb-cursor0) are not required: tests set QT_QPA_PLATFORM=offscreen.
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libegl1 \
+            libfontconfig1 libfreetype6 libdbus-1-3 libx11-6 \
+            cmake ninja-build g++
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtimageformats
+          cache: true
 
       - name: Configure (GCC + ASan/UBSan)
         run: |
           cmake -B build_asan_linux -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
@@ -122,13 +161,24 @@ jobs:
         run: |
           python3 -m pip install --quiet --disable-pip-version-check Pillow
           python3 testdata/generate_fixtures.py --size 256x256
+          python3 testdata/generate_large_fixtures.py --ensure
 
       - name: Test (ASan + LeakSanitizer)
+        # Bound a hung test so the job reports instead of holding the nightly
+        # concurrency group for the 6 h default.
+        timeout-minutes: 90
         run: |
           export QT_QPA_PLATFORM=offscreen
           export ASAN_OPTIONS="detect_leaks=1:detect_odr_violation=0"
+          # UBSan otherwise prints "runtime error" with no stack.
+          export UBSAN_OPTIONS="print_stacktrace=1"
           cd build_asan_linux
-          ctest --output-on-failure -j 4 -E "(golden_image|bench_)"
+          # golden_image is a UI pixel diff; bench_* budgets are meaningless
+          # under instrumentation. crashhandler_tests is built on Linux but the
+          # deliberate crash is Windows SEH / minidump (and ASan intercepts it).
+          # The rest are PowerShell script gates (COMMAND powershell in
+          # src/CMakeLists.txt); Linux runners have no powershell.
+          ctest --output-on-failure -j 4 --timeout 600 -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
   # ---------------------------------------------------------------------------
   # ubsan — UndefinedBehaviorSanitizer via clang-cl
@@ -159,6 +209,12 @@ jobs:
 
       - name: Configure (clang-cl + UBSan)
         run: |
+          # Trap mode needs no ubsan runtime. The static standalone lib is
+          # MT_StaticRelease and mismatches /MD, and lld-link rejects
+          # -fsanitize=undefined. vptr/function cannot trap, so they are off.
+          # 128-bit division (test_m3m4m5 makePattern) still calls __udivti3,
+          # which is in clang_rt.builtins, not the ubsan runtime. /DEBUG writes
+          # PDBs so failures are not just exe+offset.
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
           $ubsanLib = "$llvmShort/lib/clang/21/lib/windows"
           cmake -S . -B build_ubsan -G Ninja `
@@ -166,9 +222,9 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
             -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
             -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
-            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=undefined /libpath:$ubsanLib clang_rt.ubsan_standalone-x86_64.lib" `
-            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=undefined /libpath:$ubsanLib clang_rt.ubsan_standalone-x86_64.lib" `
-            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -g"
+            "-DCMAKE_EXE_LINKER_FLAGS=/DEBUG /libpath:$ubsanLib clang_rt.builtins-x86_64.lib" `
+            "-DCMAKE_SHARED_LINKER_FLAGS=/DEBUG /libpath:$ubsanLib clang_rt.builtins-x86_64.lib" `
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -fsanitize-trap=all -fno-sanitize=vptr,function -g"
 
       - name: Build (UBSan)
         run: cmake --build build_ubsan -j 4
@@ -180,6 +236,12 @@ jobs:
           New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
           Copy-Item "$pluginSrc\*.dll" $pluginDst -Force
 
+      - name: Generate testdata fixtures
+        run: |
+          python -m pip install --quiet --disable-pip-version-check Pillow
+          python testdata/generate_fixtures.py --size 256x256
+          python testdata/generate_large_fixtures.py --ensure
+
       - name: Test (UBSan)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
@@ -187,8 +249,42 @@ jobs:
           $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
           $env:UBSAN_OPTIONS = "print_stacktrace=1:halt_on_error=1"
           cd build_ubsan
-          $excludeRegex = "core_tests|m3m4m5_tests|m3pipeline_tests|decoder_tests|repository_tests|metadata_tests|m3acceptance_tests|product_browse_tests|product_workflow_gate"
+          # Decode-suite tests run now that fixtures exist. product_workflow_gate
+          # is a PowerShell script gate; product_browse_tests is a wall-clock
+          # UI-responsiveness check. bench_* budgets are meaningless under
+          # UBSan (bench_smoke alone was about a minute).
+          $excludeRegex = "product_workflow_gate|product_browse_tests|bench_"
           ctest --output-on-failure -j4 -E $excludeRegex
+
+      - name: Locate UBSan traps (diagnostic)
+        # Trap mode prints nothing, so ctest only says "Illegal". Re-run the
+        # first few failing tests under cdb and print the stack at the ud2.
+        if: failure()
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          $cdb = "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe"
+          if (-not (Test-Path $cdb)) { Write-Host "cdb.exe not found"; exit 0 }
+          $failed = "build_ubsan\Testing\Temporary\LastTestsFailed.log"
+          if (-not (Test-Path $failed)) { Write-Host "no failed-test log"; exit 0 }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $tests = (ctest --test-dir build_ubsan --show-only=json-v1 | ConvertFrom-Json).tests
+          $names = Get-Content $failed | ForEach-Object { ($_ -split ':', 2)[1] } | Select-Object -First 8
+          foreach ($n in $names) {
+            $t = $tests | Where-Object { $_.name -eq $n } | Select-Object -First 1
+            if (-not $t -or -not $t.command) { continue }
+            $exe = $t.command[0]
+            $testArgs = @($t.command | Select-Object -Skip 1)
+            $wd = ($t.properties | Where-Object { $_.name -eq "WORKING_DIRECTORY" }).value
+            if (-not $wd) { $wd = Split-Path $exe }
+            Write-Host "::group::$n"
+            Push-Location $wd
+            & $cdb -g -G -y (Split-Path $exe) -c ".lines -e; kn 30; ub @rip L20; u @rip L2; r; q" $exe @testArgs 2>&1 |
+              Select-String -Pattern 'Illegal instruction|Access violation|^[0-9a-f]{2} |^[0-9a-f]{8}`[0-9a-f]{8} |^r[a-z0-9]+=|^[A-Za-z_!:<>+0-9 ]+:$' |
+              Select-Object -First 70 | ForEach-Object { Write-Host $_.Line }
+            Pop-Location
+            Write-Host "::endgroup::"
+          }
 
   # ---------------------------------------------------------------------------
   # clazy — Qt-aware static analysis (ubuntu, ADVISORY signal for nightly)
@@ -361,7 +457,7 @@ jobs:
       - name: Install OpenCppCoverage
         run: choco install opencppcoverage -y --no-progress
 
-      - name: Build (Debug for accurate line mapping)
+      - name: Build (Release)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 
       - name: Generate testdata fixtures
@@ -374,16 +470,23 @@ jobs:
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:PATH = "$env:QT_ROOT_DIR\bin;C:\Program Files\OpenCppCoverage;" + $env:PATH
           cd build_msvc
+          # crashhandler_tests launches a child that deliberately crashes.
+          # Under OpenCppCoverage --cover_children that child cannot run, so
+          # the test fails in ~30s. It stays in the normal (non-coverage) suite.
+          # bench_* perf budgets are meaningless under coverage instrumentation.
           OpenCppCoverage.exe `
             --export_type cobertura:coverage.xml `
             --export_type html:coverage_html `
             --sources "$env:GITHUB_WORKSPACE\src" `
             --excluded_sources "$env:GITHUB_WORKSPACE\src\benchmark" `
             --cover_children `
-            -- ctest --output-on-failure -j2
+            -- ctest --output-on-failure -j2 -E "crashhandler_tests|bench_"
           if (-not (Test-Path coverage.xml)) { Write-Host "::warning:: coverage.xml not produced"; exit 1 }
 
       - name: Per-module coverage summary + dashboard
+        # Test failures must not hide the coverage numbers: summarise whenever
+        # OpenCppCoverage produced a report.
+        if: ${{ !cancelled() && hashFiles('build_msvc/coverage.xml') != '' }}
         shell: pwsh
         run: |
           [xml]$cov = Get-Content build_msvc/coverage.xml -Raw
@@ -475,7 +578,11 @@ jobs:
           git config user.name "mviewer-bot"
           git config user.email "bot@mviewer.local"
           git add docs/quality/ docs/test_matrix.md docs/known_issues/
-          git add -f benchmark/report/trend.json benchmark/report/index.html
+          # trend.json / index.html are produced only when a benchmark report
+          # exists. git add -f of a missing pathspec fails the publish step.
+          for f in benchmark/report/trend.json benchmark/report/index.html; do
+            [ -f "$f" ] && git add -f "$f"
+          done
           if git diff --cached --quiet; then
             echo "health: nothing to commit"
           else

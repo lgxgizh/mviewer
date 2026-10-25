@@ -277,6 +277,22 @@ MainWindow::~MainWindow()
         m_clipboardPastePath.clear();
     }
     cleanupClipboardPasteTemps();
+    // ~QWidget deletes the children only after this body returns, when the
+    // dynamic type is already QWidget. Any signal that then reaches a
+    // MainWindow member-function slot downcasts a non-MainWindow object
+    // (UBSan "object is of type 'QWidget'", Qt assert "class destructor may
+    // have already run" in browse/paste/split acceptance, teardown stress and
+    // m47 restore). The trigger is QApplication::focusChanged ->
+    // onBrowseFocusChanged (qApp outlives the window and focus moves while the
+    // children die); child senders (combo boxes, timers, ThumbnailPanel
+    // selection/model signals) can emit on the way down too. Cut every
+    // connection into this object last, after the teardown above that may
+    // still rely on them.
+    if (QCoreApplication *app = QCoreApplication::instance(); app != nullptr)
+        QObject::disconnect(app, nullptr, this, nullptr);
+    const auto owned = findChildren<QObject *>();
+    for (QObject *child : owned)
+        QObject::disconnect(child, nullptr, this, nullptr);
 }
 
 void MainWindow::onSearchMetaToggled(bool on)

@@ -3367,8 +3367,10 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
         return;
     compareAction->trigger();
     pump(300);
-    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
-    CHECK(compareDialog != nullptr && compareDialog->isVisible(),
+    // QPointer: Escape closes the dialog and it is deleted (deleteLater), so
+    // the final visibility check must not touch a freed QDialog.
+    QPointer<QDialog> compareDialog = w.findChild<QDialog *>("compareDialog");
+    CHECK(!compareDialog.isNull() && compareDialog->isVisible(),
           "fullscreen workflow: visible Compare dialog is discoverable");
     CHECK(compareDialog && compareDialog->property("mviewerFullscreenRequested").toBool(),
           "fullscreen workflow: real Compare requests fullscreen before its first frame");
@@ -3438,7 +3440,8 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
                 pump(50);
             }
         }
-        CHECK(!compareDialog->isVisible(), "fullscreen workflow: Escape closes fullscreen Compare");
+        CHECK(compareDialog.isNull() || !compareDialog->isVisible(),
+              "fullscreen workflow: Escape closes fullscreen Compare");
         CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("Pixel Link")) &&
                   w.statusBar()->currentMessage() == expectedBrowseStatus,
               "fullscreen workflow: leaving Compare restores the current Browse identity");
@@ -3524,8 +3527,8 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     compareAction->trigger();
     pump(300);
 
-    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
-    CompareWorkspace *compare =
+    QPointer<QDialog> compareDialog = w.findChild<QDialog *>("compareDialog");
+    QPointer<CompareWorkspace> compare =
         compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
     CHECK(compareDialog && compareDialog->isVisible() && compare,
           "non-first navigation opens the real Compare workspace");
@@ -3576,7 +3579,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     {
         QElapsedTimer closeTimer;
         closeTimer.start();
-        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        while (compareDialog && compareDialog->isVisible() && closeTimer.elapsed() < 3000)
         {
             sendKey(compareDialog, Qt::Key_Escape);
             pump(50);
@@ -3599,7 +3602,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     {
         QElapsedTimer closeTimer;
         closeTimer.start();
-        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        while (compareDialog && compareDialog->isVisible() && closeTimer.elapsed() < 3000)
         {
             sendKey(compareDialog, Qt::Key_Escape);
             pump(50);
