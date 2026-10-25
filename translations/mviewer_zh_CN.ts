@@ -3548,6 +3548,46 @@ or double-click a thumbnail to view</source>
 或按 Ctrl+O 打开目录
 或双击缩略图查看</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="54"/>
+        <source>Loading</source>
+        <translation>加载中</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="264"/>
+        <source>Decode Full RAW</source>
+        <translation>解码完整 RAW</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="264"/>
+        <source>Cancel Full RAW Decode</source>
+        <translation>取消完整 RAW 解码</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="71"/>
+        <source>Full RAW decode cancelled</source>
+        <translation>已取消完整 RAW 解码</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="88"/>
+        <source>Decode Full RAW applies only to RAW images</source>
+        <translation>解码完整 RAW 仅适用于 RAW 图像</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="93"/>
+        <source>This image is already a full RAW decode</source>
+        <translation>此图像已是完整 RAW 解码</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="133"/>
+        <source>Full RAW decode failed or was cancelled</source>
+        <translation>完整 RAW 解码失败或已取消</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="176"/>
+        <source>Full RAW decode ready</source>
+        <translation>完整 RAW 解码已完成</translation>
+    </message>
 </context>
 <context>
     <name>Language</name>
@@ -5019,6 +5059,31 @@ Build: %2</source>
         <source>Project opened: %1 (%2 images, %3 folders)</source>
         <translation>项目已打开: %1 (%2 张图片, %3 个目录)</translation>
     </message>
+    <message>
+        <location filename="../src/mainwindow_ui_menus.cpp" line="298"/>
+        <source>Decode Full RAW</source>
+        <translation>解码完整 RAW</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_ui_menus.cpp" line="486"/>
+        <source>Cancel Full RAW Decode</source>
+        <translation>取消完整 RAW 解码</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_session_notifications.cpp" line="17"/>
+        <source>Checking for updates…</source>
+        <translation>正在检查更新…</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_session_notifications.cpp" line="96"/>
+        <source>New version %1 available</source>
+        <translation>新版本 %1 可用</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_session_notifications.cpp" line="114"/>
+        <source>Skip this version</source>
+        <translation>跳过此版本</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>
@@ -5364,6 +5429,11 @@ Build: %2</source>
         <location filename="../src/metadatamodel.cpp" line="377"/>
         <source>Value</source>
         <translation>值</translation>
+    </message>
+    <message>
+        <location filename="../src/metadatamodel.cpp" line="208"/>
+        <source>Display source</source>
+        <translation>显示来源</translation>
     </message>
 </context>
 <context>
@@ -5875,6 +5945,31 @@ Build: %2</source>
         <source>Analyze</source>
         <translation>分析</translation>
     </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="150"/>
+        <source>Prefer embedded preview (fast)</source>
+        <translation>优先内嵌预览（快）</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="151"/>
+        <source>Full decode when the preview is under 90% of the sensor</source>
+        <translation>预览小于传感器 90% 时完整解码</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="152"/>
+        <source>Always decode full RAW</source>
+        <translation>总是完整解码 RAW</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="154"/>
+        <source>The camera JPEG preview is fast. A full demosaic uses the sensor. The default stays on the fast preview.</source>
+        <translation>相机 JPEG 预览较快。完整去马赛克使用传感器数据。默认保持快速预览。</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="159"/>
+        <source>RAW display</source>
+        <translation>RAW 显示</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPanel</name>
@@ -6078,6 +6173,24 @@ Continue?</source>
         <location filename="../src/widgets/rawimageview.cpp" line="463"/>
         <source>Loading</source>
         <translation>加载中</translation>
+    </message>
+</context>
+<context>
+    <name>RawSource</name>
+    <message>
+        <location filename="../src/rawsourcebadge.h" line="17"/>
+        <source>RAW · Embedded preview %1×%2</source>
+        <translation>RAW · 内嵌预览 %1×%2</translation>
+    </message>
+    <message>
+        <location filename="../src/rawsourcebadge.h" line="21"/>
+        <source>RAW · Half demosaic %1×%2</source>
+        <translation>RAW · 半尺寸解码 %1×%2</translation>
+    </message>
+    <message>
+        <location filename="../src/rawsourcebadge.h" line="25"/>
+        <source>RAW · Full decode</source>
+        <translation>RAW · 完整解码</translation>
     </message>
 </context>
 <context>
@@ -6579,6 +6692,31 @@ Continue?</source>
         <location filename="../src/usmcomparedialog.cpp" line="524"/>
         <source>Unable to save the image to: %1</source>
         <translation>无法将图像保存至: %1</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog_load.cpp" line="134"/>
+        <source>USM sharpen comparison</source>
+        <translation>USM 锐化对比</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog_load.cpp" line="136"/>
+        <source>Cannot open %1 for USM sharpen comparison: %2</source>
+        <translation>无法打开 %1 进行 USM 锐化对比：%2</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog_load.cpp" line="155"/>
+        <source>decode failed</source>
+        <translation>解码失败</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog_load.cpp" line="194"/>
+        <source>scheduler rejected submission</source>
+        <translation>调度器拒绝了提交</translation>
+    </message>
+    <message>
+        <location filename="../src/usmcomparedialog.cpp" line="504"/>
+        <source>Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;All Files (*)</source>
+        <translation>图片 (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;所有文件 (*)</translation>
     </message>
 </context>
 </TS>
