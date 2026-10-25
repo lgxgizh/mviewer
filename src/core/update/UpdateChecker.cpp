@@ -327,6 +327,11 @@ std::string validatedReleaseUrl(const std::string &candidate)
 
 } // namespace
 
+std::optional<int> compareReleaseVersions(const std::string &lhsTag, const std::string &rhsTag)
+{
+    return compareSemver(lhsTag, rhsTag);
+}
+
 UpdateChecker::UpdateChecker(std::string currentVersion, FetchFn fetchFn)
     : m_currentVersion(std::move(currentVersion)),
       m_fetchFn(fetchFn ? std::move(fetchFn) : FetchFn(httpGet))

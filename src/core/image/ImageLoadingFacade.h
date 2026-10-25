@@ -25,6 +25,11 @@ class ImageLoadingFacade
         return facade;
     }
 
+    static const ImageLoadOptions &defaultLoadOptions()
+    {
+        return ImageRepository::kDefaultLoadOptions;
+    }
+
     // M46: `lifetime` is the consumer's AsyncLifetimeToken. The request layer
     // holds a weak_ptr; once the consumer invalidates/expires the token, any
     // late completion is suppressed BEFORE the client callback starts.

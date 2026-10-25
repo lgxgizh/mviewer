@@ -243,6 +243,15 @@ void ImageViewer::queueLoadedImage(const QString &path, uint64_t generation,
 
 void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &result)
 {
+    const bool fullNow =
+        m_frame && m_frame->metadata().rawSource == mviewer::domain::RawSource::FullDemosaic;
+    const bool fullIn = result.frame && result.frame->metadata().rawSource ==
+                                            mviewer::domain::RawSource::FullDemosaic;
+    if (m_fullRawLoading || (fullNow && !fullIn))
+    {
+        m_foregroundRequest.reset();
+        return;
+    }
     m_foregroundRequest.reset();
     m_loading = false;
     m_transitionImage = QImage();
@@ -477,6 +486,7 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
 
 void ImageViewer::cancelCurrentLoad()
 {
+    stopFullRawDecode(false);
     cancelFrameRequests();
     mviewer::application::ImageLoadingService::instance().cancelAsync(m_foregroundRequest);
 }

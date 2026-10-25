@@ -5,6 +5,8 @@
 #include "core/async/CooperativeCancel.h"
 #include "core/image/ImageRepository.h"
 
+#include "core/image/decoder/RawDecodePlan.h"
+
 #include "core/image/FrameSequence.h"
 
 #include "core/scheduler/TaskScheduler.h"
@@ -163,8 +165,7 @@ static void invokeDeliveryHook(const std::function<void()> &hook)
     }
 }
 
-static void finishClientDelivery(
-    const std::shared_ptr<ImageRepository::AsyncRequestState> &state)
+static void finishClientDelivery(const std::shared_ptr<ImageRepository::AsyncRequestState> &state)
 {
     {
         std::lock_guard<std::mutex> gk(state->deliveryMtx);
@@ -195,7 +196,10 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     }
 
     Result res;
+    const std::string rawSuffix = mviewer::core::rawCacheKeySuffix(filePath);
     std::string key = cachedKeyForPath(filePath);
+    if (!key.empty() && !mviewer::core::rawCacheKeyAgrees(key, rawSuffix))
+        key.clear();
     const bool hadCachedKey = !key.empty();
     if (key.empty())
         key = makeKey(filePath);
@@ -227,11 +231,11 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     frame->setCacheState(fromCache ? CacheState::Disk : CacheState::None);
     CacheManager::instance().putMemory(CacheLevel::FullImage, key, pixels);
     CacheManager::instance().putMetadata(key, frame->metadata());
+    mviewer::core::rememberRawSource(key, frame->metadata().rawSource);
     res.frame = frame;
     res.fromCache = fromCache;
     return res;
 }
-
 
 void ImageRepository::loadAsync(const std::string &filePath,
                                 std::function<void(const Result &)> callback,
@@ -244,11 +248,9 @@ void ImageRepository::loadAsync(const std::string &filePath,
     loadAsyncCancellable(filePath, std::move(callback), opts);
 }
 
-ImageRepository::AsyncRequestHandle
-ImageRepository::loadAsyncCancellable(const std::string &filePath,
-                                      std::function<void(const Result &)> callback,
-                                      const LoadOptions &opts,
-                                      std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
+ImageRepository::AsyncRequestHandle ImageRepository::loadAsyncCancellable(
+    const std::string &filePath, std::function<void(const Result &)> callback,
+    const LoadOptions &opts, std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
 {
     auto state = std::make_shared<AsyncRequestState>();
     {
@@ -474,8 +476,9 @@ ImageRepository::AsyncRequestHandle ImageRepository::loadFrameAsync(
     return state;
 }
 
-ImageRepository::AsyncRequestHandle ImageRepository::preloadAsync(
-    const std::string &filePath, std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
+ImageRepository::AsyncRequestHandle
+ImageRepository::preloadAsync(const std::string &filePath,
+                              std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
 {
     auto state = std::make_shared<AsyncRequestState>();
     {
@@ -583,58 +586,51 @@ ImageRepository::promotePreloadAsync(AsyncRequestHandle &preload,
         return nullptr;
     std::string path;
     TaskScheduler::TaskHandle staleHandle;
-    AsyncRequestHandle promoted;
     {
-        std::lock_guard<std::mutex> lk(preload->mtx);
+        std::unique_lock<std::mutex> lk(preload->mtx);
         if (preload->kind != AsyncRequestState::Kind::Preload)
             return nullptr;
         if (preload->phase == AsyncRequestState::Phase::Running)
         {
             // Reuse the running decode: promote the kind and stash the callback.
             // The preload's terminal done path then delivers to this callback -
-            // a running promotion never submits a second decode. Keep a local
-            // copy of the state so the caller's handle can be consumed (reset)
-            // only after the mutex guard is released.
+            // a running promotion never submits a second decode. Move the
+            // callback only on this returning path, then release the mutex
+            // before consuming the caller's handle.
             preload->kind = AsyncRequestState::Kind::Foreground;
             preload->callback = std::move(callback);
             // Store a destroyed token too. expired() cannot tell that apart
             // from "no token", and dropping it would deliver to a dead consumer.
             if (lifetimeTokenSupplied(lifetime))
                 preload->lifetime = std::move(lifetime);
-            promoted = preload;
+            AsyncRequestHandle promoted = preload;
+            lk.unlock();
+            preload.reset();
+            return promoted;
         }
-        else
+        if (preload->phase == AsyncRequestState::Phase::Queued)
         {
-            if (preload->phase == AsyncRequestState::Phase::Queued)
-            {
-                // Queued: suppress the stale Background preload and resubmit at
-                // Decode priority so the foreground request is not starved
-                // behind other background work.
-                preload->cancelled.store(true, std::memory_order_release);
-                preload->phase = AsyncRequestState::Phase::Cancelled;
-                staleHandle = preload->handle;
-                preload->handle = {};
-                preload->callback = {};
-                preload->result = {};
-            }
-            // The caller's `lifetime` stays with the caller here: the Queued
-            // and Finished/Cancelled branches resubmit via loadAsyncCancellable
-            // below, which receives it by move.
-            path = preload->path;
+            // Queued: suppress the stale Background preload and resubmit at
+            // Decode priority so the foreground request is not starved
+            // behind other background work.
+            preload->cancelled.store(true, std::memory_order_release);
+            preload->phase = AsyncRequestState::Phase::Cancelled;
+            staleHandle = preload->handle;
+            preload->handle = {};
+            preload->callback = {};
+            preload->result = {};
         }
-    }
-    if (promoted)
-    {
-        preload.reset();
-        return promoted;
+        // The caller's `lifetime` stays with the caller here: the Queued
+        // and Finished/Cancelled branches resubmit via loadAsyncCancellable
+        // below, which receives it by move. `callback` is still intact.
+        path = preload->path;
     }
     if (staleHandle)
         TaskScheduler::cancel(staleHandle);
     // Finished/Cancelled: resubmit at Decode priority; a finished preload
     // already warmed the cache, so the foreground load resolves from cache.
     preload.reset();
-    return loadFrameAsync(path, 0, std::move(callback), kDefaultLoadOptions,
-                          std::move(lifetime));
+    return loadFrameAsync(path, 0, std::move(callback), kDefaultLoadOptions, std::move(lifetime));
 }
 
 void ImageRepository::cancelAsync(AsyncRequestHandle &handle)

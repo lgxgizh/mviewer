@@ -73,8 +73,19 @@ class RawDecoder : public IDecoder, public mviewer::core::ISourceImageCapabiliti
     ImageData extractPreview(const std::string &path, int maxEdge) const;
     // Header-only probe of the largest embedded JPEG (no pixel materialization).
     bool probePreviewSize(const std::string &path, int &outW, int &outH) const;
+    struct RawPixelResult
+    {
+        ImageData image;
+        mviewer::domain::RawSource source = mviewer::domain::RawSource::NotRaw;
+    };
     // Preview when adequate; LibRaw half-size when the preview is short of the
-    // request; full demosaic only when `allowFull` and no usable preview.
-    ImageData decodeRawPixels(const std::string &path, int maxEdge, bool allowFull) const;
-    ImageData demosaicWithLibraw(const std::string &path, bool halfSize, int maxEdge) const;
+    // request; full demosaic only when `allowFull` and the display policy (or
+    // an explicit full-decode request) asks for it.
+    RawPixelResult decodeRawPixels(const std::string &path, int maxEdge, bool allowFull) const;
+    RawPixelResult decodeRawLodPixels(const std::string &path, int maxEdge, ImageData preview,
+                                      int previewEdge, bool libraw) const;
+    RawPixelResult decodeRawFullPixels(const std::string &path, ImageData preview, int previewEdge,
+                                       bool libraw) const;
+    ImageData demosaicWithLibraw(const std::string &path, bool halfSize, int maxEdge,
+                                 mviewer::domain::RawSource *sourceOut) const;
 };

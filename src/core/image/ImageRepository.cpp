@@ -6,6 +6,7 @@
 #include "core/image/DiskCache.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/MetadataReader.h"
+#include "core/image/decoder/RawDecodePlan.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/trace/Trace.h"
 
@@ -39,7 +40,10 @@ std::chrono::milliseconds ImageRepository::syncLoadBudget() const
 
 std::string ImageRepository::makeKey(const std::string &filePath) const
 {
-    const std::string key = mviewer::core::MetadataReader::key(filePath);
+    std::string key = mviewer::core::MetadataReader::key(filePath);
+    const std::string suffix = mviewer::core::rawCacheKeySuffix(filePath);
+    if (!suffix.empty())
+        key += suffix;
     rememberKey(filePath, key);
     return key;
 }
@@ -85,4 +89,3 @@ void ImageRepository::putPreviewCache(const std::string &key, const ImageData &i
 {
     CacheManager::instance().putMemory(CacheLevel::Preview, key, image);
 }
-

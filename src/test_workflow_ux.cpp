@@ -80,6 +80,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeyEvent>
+#include <QKeySequence>
 #include <QLabel>
 #include <QLayout>
 #include <QLineEdit>
@@ -699,6 +700,7 @@ int main(int argc, char **argv)
     workflow12_compare_mixed_fit(workDir.absolutePath());
     workflow2_compare(paths[0], paths[2]);
     workflow19_layout_chrome(paths[0], paths[1], paths[2]);
+    workflow20_raw_display_chrome();
     workflow10_compare_canvas(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());
     workflow17_batch_dialog(workDir.absolutePath());

@@ -295,6 +295,22 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
                     m_compareView->setDisplayColorContext(
                         DisplayColorContextProvider::forWindow(m_compareView->windowHandle()));
             });
+    m_actDecodeFullRaw = new QAction(tr("Decode Full RAW"), this);
+    m_actDecodeFullRaw->setObjectName(QStringLiteral("decodeFullRawAction"));
+    m_actDecodeFullRaw->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D));
+    m_actDecodeFullRaw->setShortcutContext(Qt::ApplicationShortcut);
+    connect(m_actDecodeFullRaw, &QAction::triggered, this,
+            [this]()
+            {
+                if (!m_imageViewer)
+                    return;
+                if (m_imageViewer->fullRawDecodeActive())
+                    m_imageViewer->cancelFullRawDecode();
+                else
+                    m_imageViewer->requestFullRawDecode();
+            });
+    viewMenu->addAction(m_actDecodeFullRaw);
+    addAction(m_actDecodeFullRaw);
 }
 
 void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
@@ -448,6 +464,7 @@ void MainWindow::retranslateUi()
         {m_actOpenCurrentFolder, QT_TR_NOOP("Open Folder")},
         {m_actBatch, QT_TR_NOOP("&Batch Processing")},
         {m_actUsmCompare, QT_TR_NOOP("USM Sharpen Compare (&U)...")},
+        {m_actDecodeFullRaw, QT_TR_NOOP("Decode Full RAW")},
         {m_actPluginSettings, QT_TR_NOOP("&Plugin Manager...")},
         {m_actAbout, QT_TR_NOOP("&About")},
         {m_actZoomIn, QT_TR_NOOP("&Zoom In")},
@@ -465,6 +482,8 @@ void MainWindow::retranslateUi()
     }
     if (m_actFullscreen && isFullScreen())
         m_actFullscreen->setText(tr("Exit Full Screen(&U)"));
+    if (m_actDecodeFullRaw && m_imageViewer && m_imageViewer->fullRawDecodeActive())
+        m_actDecodeFullRaw->setText(tr("Cancel Full RAW Decode"));
 
     struct MenuEntry
     {

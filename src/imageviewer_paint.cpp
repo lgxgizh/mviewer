@@ -129,6 +129,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         drawHistogram(painter);
     drawPixelGridOverlay(painter);
     drawOverlayBadge(painter);
+    drawRawSourceBadge(painter);
     drawSelection(painter);
     drawFrameStatus(painter);
     drawLoadingBar(painter);

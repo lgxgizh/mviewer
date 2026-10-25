@@ -23,6 +23,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
     core/image/decoder/RawDecoder_libraw.cpp
+    core/image/decoder/RawDecodePolicy.cpp
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
@@ -123,6 +124,7 @@ add_library(mviewer_core SHARED
     core/batch/BatchProcessor.cpp
     core/batch/BatchRename.cpp
     core/update/UpdateChecker.cpp
+    core/update/UpdatePrompt.cpp
 
     core/command/CommandRegistry.cpp
     core/command/RotateCommand.cpp
@@ -211,6 +213,7 @@ add_library(mviewer_ui STATIC
     imageviewer_multiframe.cpp
     imageviewer_lod.cpp
     imageviewer_paint.cpp
+    imageviewer_rawdecode.cpp
     imageviewer_loadingbar.cpp
     imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp
@@ -296,6 +299,7 @@ add_library(mviewer_ui STATIC
     pluginsettings.cpp
     preferencesdialog.cpp
     usmcomparedialog.cpp
+    usmcomparedialog_load.cpp
     Theme.cpp
     Language.cpp
     ThemeIcons.cpp
@@ -523,7 +527,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode raw_extensions raw_display crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -896,6 +900,23 @@ target_compile_features(auto_check_updates_pref_tests PRIVATE cxx_std_20)
 target_include_directories(auto_check_updates_pref_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME auto_check_updates_pref_tests COMMAND auto_check_updates_pref_tests)
 set_tests_properties(auto_check_updates_pref_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
+# USM source ICC embed and RAW default save suffix.
+add_executable(usm_dialog_tests
+    test_usm_dialog.cpp
+)
+target_link_libraries(usm_dialog_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(usm_dialog_tests PRIVATE cxx_std_20)
+target_include_directories(usm_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME usm_dialog_tests COMMAND usm_dialog_tests)
+set_tests_properties(usm_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
@@ -1587,6 +1608,8 @@ add_test(NAME region_tiles_tests COMMAND test_region_tiles)
 add_test(NAME gputile_tests  COMMAND test_gputile)
 add_test(NAME cpu_features_tests COMMAND test_cpu_features)
 add_test(NAME rawdecode_tests COMMAND test_rawdecode)
+add_test(NAME raw_extensions_tests COMMAND test_raw_extensions)
+add_test(NAME raw_display_tests COMMAND test_raw_display)
 add_test(NAME pixelcontroller_tests COMMAND test_pixelcontroller)
 add_test(NAME thumbnailpipeline_tests COMMAND test_thumbnailpipeline)
 add_test(NAME commandstack_tests COMMAND test_commandstack)

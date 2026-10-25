@@ -1,5 +1,6 @@
 #include "core/image/RawMetadata.h"
 #include "core/filesystem/Utf8Path.h"
+#include "core/image/ImageFormats.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -22,15 +23,6 @@ static std::string toLower(const std::string &s)
     std::transform(r.begin(), r.end(), r.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return r;
-}
-
-static bool isRawExtension(const std::string &path)
-{
-    const std::filesystem::path p = pathFromUtf8(path);
-    std::string ext = toLower(pathToUtf8(p.extension()));
-    return ext == ".dng" || ext == ".arw" || ext == ".nef" || ext == ".orf" || ext == ".rw2" ||
-           ext == ".raf" || ext == ".cr2" || ext == ".cr3" || ext == ".crw" || ext == ".pef" ||
-           ext == ".srw" || ext == ".x3f" || ext == ".erf" || ext == ".mos" || ext == ".raw";
 }
 
 // Subtraction form prevents 32-bit/64-bit integer overflow when checking buffer bounds.
@@ -720,7 +712,7 @@ bool isJpegExtension(const std::string &path)
 RawMetadata parseRawMetadata(const std::string &filePath)
 {
     RawMetadata rm;
-    if (!isRawExtension(filePath))
+    if (!isRawPath(filePath))
         return rm;
     FILE *f = openUtf8(filePath);
     if (!f)
@@ -734,7 +726,7 @@ RawMetadata parseRawMetadata(const std::string &filePath)
 
 RawMetadata parseCaptureMetadata(const std::string &filePath)
 {
-    if (isRawExtension(filePath))
+    if (isRawPath(filePath))
         return parseRawMetadata(filePath);
     RawMetadata rm;
     if (!isJpegExtension(filePath))

@@ -6,6 +6,7 @@
 #include "core/image/ExifOrientation.h"
 #include "core/image/QtMetadataSemantics.h"
 #include "core/image/decoder/QtDecoder.h"
+#include "core/image/decoder/RawDecodePlan.h"
 
 #include <QFileInfo>
 #include <QImageReader>
@@ -136,6 +137,9 @@ bool ImageRepository::loadPixels(const std::string &filePath, const std::string 
     {
         fromCache = true;
         decodeMeta = makeMeta(filePath);
+        const auto remembered = mviewer::core::recalledRawSource(key);
+        if (remembered != mviewer::domain::RawSource::NotRaw)
+            decodeMeta.rawSource = remembered;
         return true;
     }
 
@@ -207,6 +211,8 @@ void ImageRepository::enrichFrame(ImageFrame &frame, const std::string &filePath
         metadata.iccRenderingIntent = decodeMeta.iccRenderingIntent;
     if (!decodeMeta.iccVersion.empty())
         metadata.iccVersion = decodeMeta.iccVersion;
+    if (decodeMeta.rawSource != mviewer::domain::RawSource::NotRaw)
+        metadata.rawSource = decodeMeta.rawSource;
     frame.setMetadata(metadata);
 }
 
