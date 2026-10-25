@@ -136,15 +136,14 @@ bool isCrossVolume(const std::error_code &ec)
 std::string describeError(const std::string &operation, const fs::path &path,
                           const std::error_code &ec)
 {
-    return operation + " '" + pathToUtf8(path) + "': " +
-           (ec ? ec.message() : std::string("unknown error"));
+    return operation + " '" + pathToUtf8(path) +
+           "': " + (ec ? ec.message() : std::string("unknown error"));
 }
 
 } // namespace
 
 bool FileSystemAdapter::copyFileWithProgress(const fs::path &from, const fs::path &to,
-                                              const TransferObserver &observer,
-                                              std::error_code &ec)
+                                             const TransferObserver &observer, std::error_code &ec)
 {
     std::error_code sizeError;
     const uintmax_t total = fileSize(from, sizeError);
@@ -195,8 +194,8 @@ bool samePath(const fs::path &left, const fs::path &right,
 }
 
 fs::path collisionFreeDestination(const fs::path &source, const fs::path &directory,
-                                   const std::shared_ptr<FileSystemAdapter> &adapter,
-                                   std::string &error)
+                                  const std::shared_ptr<FileSystemAdapter> &adapter,
+                                  std::string &error)
 {
     error.clear();
     std::error_code ec;
@@ -287,11 +286,9 @@ FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &de
     {
         std::error_code cleanup;
         adapter->remove(temporary, cleanup);
-        const std::string reason = sourceSizeError
-                                       ? sourceSizeError.message()
-                                       : destinationSizeError
-                                             ? destinationSizeError.message()
-                                             : "byte count differs from source";
+        const std::string reason = sourceSizeError        ? sourceSizeError.message()
+                                   : destinationSizeError ? destinationSizeError.message()
+                                                          : "byte count differs from source";
         if (cleanup)
             return {FileTransferState::Partial,
                     "Copy verification failed (" + reason + ") and temporary cleanup failed."};
@@ -305,7 +302,8 @@ FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &de
         if (cleanup)
             return {FileTransferState::Partial,
                     describeError("Atomic copy commit failed and cleanup failed", destination, ec)};
-        return {FileTransferState::Failed, describeError("Atomic copy commit failed", destination, ec)};
+        return {FileTransferState::Failed,
+                describeError("Atomic copy commit failed", destination, ec)};
     }
     return {FileTransferState::Succeeded, {}};
 }
