@@ -558,6 +558,9 @@ void MainWindow::wireSecondaryBrowseHostSignals()
                 {
                     updateActivePaneIndicator();
                     applyActivePaneStatusBar();
+                    // Copy/move to the other pane depend on the active pane's
+                    // selection and directory, so re-evaluate them here too.
+                    updateOtherPaneTransferActions();
                 });
     }
 

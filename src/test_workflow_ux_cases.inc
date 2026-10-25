@@ -5926,7 +5926,11 @@ void workflow21_split_pane_transfer()
         CHECK(copyAction && !copyAction->isEnabled() && moveAction && !moveAction->isEnabled(),
               "single-pane mode disables copy and move to the other pane");
 
-        window.openDirectory(leftDir.absolutePath());
+        // openDirectory is private. DirectoryTree::navigateTo is the public path.
+        auto *directoryTree = window.findChild<DirectoryTree *>();
+        if (directoryTree)
+            directoryTree->navigateTo(leftDir.absolutePath(), true);
+        pump(40);
         ThumbnailPanel *left = window.activeThumbnailPanel();
         ThumbnailPanel *right = window.secondaryThumbnailPanel();
         CHECK(waitUntil([&]() { return left && left->pathList().size() >= 2; }, 8000),
@@ -6133,7 +6137,11 @@ void workflow22_right_pane_history_status()
         CHECK(backBtn && fwdBtn && upBtn && count && selected,
               "right-pane history buttons and status labels exist");
 
-        window.openDirectory(leftDir.absolutePath());
+        // openDirectory is private. DirectoryTree::navigateTo is the public path.
+        auto *directoryTree = window.findChild<DirectoryTree *>();
+        if (directoryTree)
+            directoryTree->navigateTo(leftDir.absolutePath(), true);
+        pump(40);
         ThumbnailPanel *left = window.activeThumbnailPanel();
         ThumbnailPanel *right = window.secondaryThumbnailPanel();
         CHECK(waitUntil([&]() { return left && left->pathList().size() >= 2; }, 8000),

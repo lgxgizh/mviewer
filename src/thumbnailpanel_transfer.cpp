@@ -105,8 +105,8 @@ void ThumbnailPanelTransfer::movePathsInto(ThumbnailPanel &panel, const QStringL
 void ThumbnailPanelTransfer::copySelectedToOtherPane(ThumbnailPanel &panel)
 {
     const QStringList paths = panel.selectedPaths();
-    const QString other = panel.property(QStringLiteral("otherPaneDirectory")).toString();
-    const bool split = panel.m_selection && panel.m_selection->splitModeEnabled();
+    const QString other = panel.property("otherPaneDirectory").toString();
+    const bool split = panel.m_selection && panel.m_selection->isSplitModeEnabled();
     const auto decision = decideOtherPaneTransfer(split, paths.size(), panel.currentDir(), other);
     if (decision == OtherPaneTransferDecision::SameDirectory)
     {
@@ -124,8 +124,8 @@ void ThumbnailPanelTransfer::copySelectedToOtherPane(ThumbnailPanel &panel)
 void ThumbnailPanelTransfer::moveSelectedToOtherPane(ThumbnailPanel &panel)
 {
     const QStringList paths = panel.selectedPaths();
-    const QString other = panel.property(QStringLiteral("otherPaneDirectory")).toString();
-    const bool split = panel.m_selection && panel.m_selection->splitModeEnabled();
+    const QString other = panel.property("otherPaneDirectory").toString();
+    const bool split = panel.m_selection && panel.m_selection->isSplitModeEnabled();
     const auto decision = decideOtherPaneTransfer(split, paths.size(), panel.currentDir(), other);
     if (decision == OtherPaneTransferDecision::SameDirectory)
     {

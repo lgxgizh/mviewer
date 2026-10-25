@@ -62,8 +62,8 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCopyOther->setShortcut(QKeySequence(copyOther.key | copyOther.mods));
     acts.aMoveOther = menu.addAction(tr("Move to Other Pane"));
     acts.aMoveOther->setShortcut(QKeySequence(moveOther.key | moveOther.mods));
-    const bool split = m_selection && m_selection->splitModeEnabled();
-    const QString otherDir = property(QStringLiteral("otherPaneDirectory")).toString();
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    const QString otherDir = property("otherPaneDirectory").toString();
     const auto decision = decideOtherPaneTransfer(split, selPaths.size(), m_currentDir, otherDir);
     const bool canTransfer = decision == OtherPaneTransferDecision::Available;
     acts.aCopyOther->setEnabled(canTransfer);

@@ -619,8 +619,8 @@ void ThumbnailPanel::copySelectedTo()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const bool split = m_selection && m_selection->splitModeEnabled();
-    const QString other = property(QStringLiteral("otherPaneDirectory")).toString();
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    const QString other = property("otherPaneDirectory").toString();
     const QString dir = askTransferDirectory(this, tr("Copy To..."), split, other, m_currentDir);
     if (dir.isEmpty())
         return;
@@ -636,8 +636,8 @@ void ThumbnailPanel::movePathsTo(const QStringList &paths)
 {
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const bool split = m_selection && m_selection->splitModeEnabled();
-    const QString other = property(QStringLiteral("otherPaneDirectory")).toString();
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    const QString other = property("otherPaneDirectory").toString();
     const QString dir = askTransferDirectory(this, tr("Move To..."), split, other, m_currentDir);
     if (dir.isEmpty())
         return;
