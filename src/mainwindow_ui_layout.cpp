@@ -169,7 +169,7 @@ QWidget *MainWindow::buildNavigationPanel()
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg3)));
     m_favoritesBar->setToolTip(
-        "Favorites — Right-click to remove, Ctrl+D to favorite the current folder");
+        tr("Favorites — Right-click to remove, Ctrl+D to favorite the current folder"));
     connect(m_favoritesBar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item)
             { changeDirectory(item->data(Qt::UserRole).toString()); });
     m_favoritesBar->setContextMenuPolicy(Qt::CustomContextMenu);
