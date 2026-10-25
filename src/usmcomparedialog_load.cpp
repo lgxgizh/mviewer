@@ -7,6 +7,8 @@
 
 #include <QApplication>
 #include <QByteArray>
+#include <QColorSpace>
+#include <QLabel>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QPointer>

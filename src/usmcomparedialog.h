@@ -43,7 +43,7 @@ class UsmCompareDialog : public QDialog
     Q_OBJECT
 
   public:
-    enum class OpenMode
+    enum class OpenMode : std::uint8_t
     {
         Immediate,
         Background

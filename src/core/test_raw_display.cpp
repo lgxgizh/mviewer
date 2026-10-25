@@ -95,6 +95,7 @@ static void testPolicyStoreAndCacheKey()
     using mviewer::core::rawCacheKeyAgrees;
     using mviewer::core::rawCacheKeySuffix;
     using mviewer::core::rawDisplayPolicy;
+    using mviewer::core::rawDisplayPolicyFromInt;
     using mviewer::core::rawFullDecodeRequested;
     using mviewer::core::recalledRawSource;
     using mviewer::core::rememberRawSource;
@@ -137,7 +138,7 @@ static void testPolicyStoreAndCacheKey()
     check(!rawFullDecodeRequested("explicit.nrw"), "clear drops the override");
     check(rawCacheKeySuffix("explicit.nrw") == "|rawpol=2", "policy suffix remains after clear");
 
-    setRawDisplayPolicy(static_cast<RawDisplayPolicy>(9));
+    setRawDisplayPolicy(rawDisplayPolicyFromInt(9));
     check(rawDisplayPolicy() == RawDisplayPolicy::PreferPreview, "unknown policy values reset");
     check(rawCacheKeySuffix("explicit.nrw").empty(), "cleared override leaves the default key");
 

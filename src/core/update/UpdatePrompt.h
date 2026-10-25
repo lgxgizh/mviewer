@@ -2,12 +2,13 @@
 
 // Qt-free update presentation policy. Silent checks never choose a modal.
 
+#include <cstdint>
 #include <string>
 
 namespace mviewer::core
 {
 
-enum class UpdatePromptKind
+enum class UpdatePromptKind : std::uint8_t
 {
     None,
     StatusBarNotice,
@@ -26,7 +27,7 @@ struct UpdatePromptDecision
 UpdatePromptDecision decideUpdatePrompt(bool silent, const std::string &latest,
                                         const std::string &skipped, bool uiBusy);
 
-enum class UpdateCheckStart
+enum class UpdateCheckStart : std::uint8_t
 {
     Started,
     ManualPending,

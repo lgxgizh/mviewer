@@ -1,7 +1,6 @@
 #include "imageviewer.h"
 
 #include "core/image/ImageFormats.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/decoder/RawDecodePlan.h"
 #include "rawsourcebadge.h"
 
@@ -123,7 +122,7 @@ void ImageViewer::requestFullRawDecode()
                 },
                 Qt::QueuedConnection);
         },
-        ImageRepository::kDefaultLoadOptions, m_lifetime);
+        mviewer::application::ImageLoadingService::defaultLoadOptions(), m_lifetime);
     if (!m_fullRawRequest && !delivered->load(std::memory_order_acquire))
     {
         mviewer::core::clearRawFullDecode(utf8);

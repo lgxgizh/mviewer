@@ -244,8 +244,8 @@ int rawSensorLongEdge(const std::string &path)
 {
     const mviewer::core::RawMetadata meta = mviewer::core::parseRawMetadata(path);
     const uint32_t edge = (std::max)(meta.width, meta.height);
-    if (edge > static_cast<uint32_t>(std::numeric_limits<int>::max()))
-        return std::numeric_limits<int>::max();
+    if (edge > static_cast<uint32_t>((std::numeric_limits<int>::max)()))
+        return (std::numeric_limits<int>::max)();
     return static_cast<int>(edge);
 }
 } // namespace
