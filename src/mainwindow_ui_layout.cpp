@@ -337,7 +337,7 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     typeFilterCombo->addItem("PNG", "png");
     typeFilterCombo->addItem("TIFF", "tif,tiff");
     typeFilterCombo->addItem("WebP", "webp");
-    typeFilterCombo->addItem("RAW", "cr2,cr3,nef,nrw,arw,dng,orf,rw2,pef,raf");
+    typeFilterCombo->addItem("RAW", QString::fromStdString(mviewer::core::rawTypeFilterData()));
     typeFilterCombo->setToolTip("Filter by file type");
 
     advancedLayout->addWidget(typeFilterCombo);
@@ -668,16 +668,34 @@ void MainWindow::buildStatusBarUi()
     m_lblSize = new QLabel(tr("Size 0 B"), this);
     m_lblZoom = new QLabel("Zoom", this);
     m_lblCache = new QLabel("Hit rate —", this);
+    m_lblRawSource = new QLabel(this);
+    m_lblRawSource->setObjectName(QStringLiteral("rawSourceStatus"));
     m_lblCache->setToolTip(
         tr("Cache hit rate: improves consecutive large-image switching and thumbnail loading"));
-    for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
+    for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache, m_lblRawSource})
     {
         l->setContentsMargins(mviewer::ui::metrics::kSpace8, 0, mviewer::ui::metrics::kSpace8, 0);
         statusBar()->addPermanentWidget(l);
     }
     m_lblSize->hide();
     m_lblCache->hide();
+    m_lblRawSource->hide();
     m_lblZoom->setMinimumWidth(64);
+
+    m_updateNotice = new QLabel(this);
+    m_updateNotice->setObjectName(QStringLiteral("updateAvailableLink"));
+    m_updateNotice->setTextFormat(Qt::RichText);
+    m_updateNotice->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    m_updateNotice->setContentsMargins(mviewer::ui::metrics::kSpace8, 0,
+                                       mviewer::ui::metrics::kSpace8, 0);
+    m_updateNotice->hide();
+    statusBar()->addPermanentWidget(m_updateNotice);
+    connect(m_updateNotice, &QLabel::linkActivated, this,
+            [this](const QString &)
+            {
+                if (m_hasPendingUpdate)
+                    showUpdateDialog(m_pendingUpdate);
+            });
 
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)

@@ -260,6 +260,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("Save As...");
     QAction *aUsmCompare = menu.addAction(tr("USM Sharpen Compare(&U)... (Ctrl+U)"));
+    QAction *aFullRaw = addRawDecodeAction(menu);
     QAction *aRotateCW = menu.addAction(tr("Rotate 90° Clockwise and Overwrite Original (Ctrl+R)"));
     QAction *aRotateCCW =
         menu.addAction(tr("Rotate 90° Counterclockwise and Overwrite Original (Ctrl+Shift+R)"));
@@ -294,15 +295,9 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QList<QAction *> analyzeActions;
     populateAnalyzeSubmenu(menu, m_frame, analyzeActions);
     menu.addSeparator();
-    QAction *aNext = menu.addAction("Next (→)");
-    QAction *aPrev = menu.addAction("Previous (←)");
-    const bool hasBrowsePosition = m_currentIndex >= 0 && m_currentIndex < m_fileList.size();
-    aNext->setEnabled(hasBrowsePosition && m_currentIndex + 1 < m_fileList.size());
-    aPrev->setEnabled(hasBrowsePosition && m_currentIndex > 0);
-    menu.addSeparator();
-    const bool isFull = property("mviewerFullscreenRequested").toBool() || isFullScreen();
-    QAction *aFullscreen =
-        menu.addAction(isFull ? tr("Exit Fullscreen (F11)") : tr("Fullscreen (F11)"));
+    QAction *aNext = nullptr;
+    QAction *aPrev = nullptr;
+    QAction *aFullscreen = addBrowseContextActions(menu, aNext, aPrev);
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
@@ -319,6 +314,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         emit usmCompareRequested(m_currentPath);
         return;
     }
+    if (handleRawDecodeAction(chosen, aFullRaw))
+        return;
     if (chosen == aPlay)
     {
         if (isPlaying())

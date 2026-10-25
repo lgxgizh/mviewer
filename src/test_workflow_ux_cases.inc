@@ -5876,4 +5876,39 @@ void workflow19_layout_chrome(const QString &pathA, const QString &pathB, const 
     assertNavigationCollapseRoundTrip();
 }
 
+void workflow20_raw_display_chrome()
+{
+    std::cout << "── Workflow 20: RAW display chrome ──\n";
+    MainWindow window;
+    pump(40);
+    auto *combo = window.findChild<QComboBox *>(QStringLiteral("typeFilterCombo"));
+    CHECK(combo, "type filter combo exists");
+    QString rawData;
+    if (combo)
+    {
+        for (int i = 0; i < combo->count(); ++i)
+        {
+            if (combo->itemText(i) == QLatin1String("RAW"))
+                rawData = combo->itemData(i).toString();
+        }
+    }
+    CHECK(rawData.contains(QLatin1String("srw")) && rawData.contains(QLatin1String("nrw")),
+          "RAW type filter lists srw and nrw");
+    auto *act = window.findChild<QAction *>(QStringLiteral("decodeFullRawAction"));
+    CHECK(act, "decode full RAW action exists");
+    if (act)
+    {
+        const QKeySequence expect(Qt::CTRL | Qt::SHIFT | Qt::Key_D);
+        CHECK(act->shortcut() == expect, "decode full RAW shortcut is Ctrl+Shift+D");
+    }
+    PreferencesDialog prefs(&window);
+    auto *policy = prefs.findChild<QComboBox *>(QStringLiteral("preferencesRawDisplayPolicy"));
+    CHECK(policy && policy->count() == 3, "RAW display policy combo has 3 entries");
+    if (policy)
+        CHECK(policy->currentData().toInt() == 0, "RAW display policy defaults to preview");
+    window.close();
+    pump(40);
+    dismissVisibleMessageBoxes();
+}
+
 } // namespace

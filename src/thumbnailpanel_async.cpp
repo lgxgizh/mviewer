@@ -5,6 +5,7 @@
 // supersession/cancellation machinery stays cohesive.
 #include "thumbnailpanel_p.h"
 
+#include "core/image/ImageFormats.h"
 #include "core/metadata/MetadataIndexer.h"
 
 #include <QtConcurrent/QtConcurrent>
@@ -101,25 +102,11 @@ namespace
 // off-thread enumeration share exactly one implementation.
 bool passesTypeFilter(const QString &typeFilter, const QString &suffixRaw)
 {
-    if (typeFilter.isEmpty())
-        return true;
-    const QString suffix = suffixRaw.toLower();
-    static const QStringList rawExts = {"cr2", "cr3", "nef", "arw", "dng", "raf", "rw2",
-                                        "orf", "sr2", "srw", "pef", "3fr", "mef", "erf",
-                                        "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
-    for (const QString &ext : typeFilter.split(','))
-    {
-        const QString lowered = ext.trimmed().toLower();
-        if (lowered == suffix)
-            return true;
-        // P0: Expand "raw" alias to common RAW file extensions.
-        if (lowered == "raw" && rawExts.contains(suffix))
-            return true;
-        // P0: Expand "tiff" alias to "tif" + "tiff".
-        if (lowered == "tiff" && (suffix == "tif" || suffix == "tiff"))
-            return true;
-    }
-    return false;
+    const QByteArray suffix = suffixRaw.toUtf8();
+    const QByteArray filter = typeFilter.toUtf8();
+    return mviewer::core::suffixMatchesTypeFilter(
+        std::string_view(suffix.constData(), static_cast<size_t>(suffix.size())),
+        std::string_view(filter.constData(), static_cast<size_t>(filter.size())));
 }
 
 // The first screen is published one file at a time so a small folder can paint

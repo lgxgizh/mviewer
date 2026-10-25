@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QFileInfo>
+#include <QMenu>
 #include <QScreen>
 #include <QTimer>
 
@@ -47,6 +48,18 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
     setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                        .arg(info.fileName(), QString::number(size.width()),
                             QString::number(size.height()), position));
+}
+
+QAction *ImageViewer::addBrowseContextActions(QMenu &menu, QAction *&next, QAction *&previous)
+{
+    next = menu.addAction("Next (→)");
+    previous = menu.addAction("Previous (←)");
+    const bool hasBrowsePosition = m_currentIndex >= 0 && m_currentIndex < m_fileList.size();
+    next->setEnabled(hasBrowsePosition && m_currentIndex + 1 < m_fileList.size());
+    previous->setEnabled(hasBrowsePosition && m_currentIndex > 0);
+    menu.addSeparator();
+    const bool isFull = property("mviewerFullscreenRequested").toBool() || isFullScreen();
+    return menu.addAction(isFull ? tr("Exit Fullscreen (F11)") : tr("Fullscreen (F11)"));
 }
 
 void ImageViewer::prepareBrowseFullscreen(QScreen *targetScreen)

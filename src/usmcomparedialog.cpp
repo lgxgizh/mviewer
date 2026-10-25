@@ -42,30 +42,14 @@ void stripButtonFocus(QPushButton *btn)
     btn->setDefault(false);
 }
 
-QString formatName(PixelFormat fmt)
-{
-    switch (fmt)
-    {
-    case PixelFormat::RGB24:
-        return QStringLiteral("RGB24");
-    case PixelFormat::BGR24:
-        return QStringLiteral("BGR24");
-    case PixelFormat::RGBA32:
-        return QStringLiteral("RGBA32");
-    case PixelFormat::BGRA32:
-        return QStringLiteral("BGRA32");
-    case PixelFormat::Grayscale8:
-        return QStringLiteral("Grayscale8");
-    default:
-        return QStringLiteral("Unknown");
-    }
-}
 } // namespace
 
 UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &initialData,
-                                   QWidget *parent)
+                                   QWidget *parent, const mviewer::domain::ImageMetadata &meta,
+                                   OpenMode mode, SourceLoader loader)
     : QDialog(parent), m_filePath(filePath), m_debounceTimer(new QTimer(this))
 {
+    m_sourceLoader = std::move(loader);
     setWindowTitle(filePath.isEmpty()
                        ? tr("USM sharpening before/after comparison")
                        : tr("USM Sharpen Before/After - %1").arg(QFileInfo(filePath).fileName()));
@@ -80,7 +64,10 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
 
     setupUi();
     setupConnections();
-    loadImageSource(filePath, initialData);
+    if (mode == OpenMode::Background)
+        beginBackgroundLoad();
+    else
+        loadImageSource(filePath, initialData, meta);
 
     setFocusPolicy(Qt::StrongFocus);
     qApp->installEventFilter(this);
@@ -90,12 +77,13 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
     // those controls.
     setWindowState(windowState() | Qt::WindowMaximized);
 
-    if (!m_sourceData.isNull())
+    if (mode != OpenMode::Background && !m_sourceData.isNull())
         scheduleSharpen();
 }
 
 UsmCompareDialog::~UsmCompareDialog()
 {
+    m_closing = true;
     if (qApp)
         qApp->removeEventFilter(this);
     endTemporaryHold();
@@ -103,57 +91,6 @@ UsmCompareDialog::~UsmCompareDialog()
         *m_currentCancel = true;
     if (m_activeTask)
         TaskScheduler::cancel(m_activeTask);
-}
-
-void UsmCompareDialog::loadImageSource(const QString &filePath, const ImageData &initialData)
-{
-    if (!initialData.isNull())
-    {
-        m_sourceData = initialData;
-    }
-    else if (!filePath.isEmpty())
-    {
-        QImage loaded(filePath);
-        if (!loaded.isNull())
-        {
-            m_sourceData = mvcore::fromQImagePreservingAlpha(loaded);
-            m_meta.filePath = filePath.toStdString();
-            m_meta.width = m_sourceData.width;
-            m_meta.height = m_sourceData.height;
-            if (loaded.colorSpace().isValid())
-            {
-                const QByteArray icc = loaded.colorSpace().iccProfile();
-                if (!icc.isEmpty())
-                {
-                    m_iccProfile.assign(reinterpret_cast<const uint8_t *>(icc.constData()),
-                                        reinterpret_cast<const uint8_t *>(icc.constData()) +
-                                            icc.size());
-                    const QByteArray encoded = icc.toBase64();
-                    m_meta.textKeys["MViewer.DisplayICC.Base64"] =
-                        std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
-                    m_meta.hasIccProfile = true;
-                }
-            }
-        }
-    }
-
-    if (m_sourceData.isNull())
-        return;
-
-    const auto displayCtx = DisplayColorContextProvider::forWindow(windowHandle());
-    m_origQImage = mvcore::toDisplayQImage(m_sourceData, m_meta, displayCtx);
-    m_leftView->setImage(m_origQImage, m_origQImage.size());
-    m_rightView->setImage(m_origQImage, m_origQImage.size());
-
-    QString csDesc = QStringLiteral("sRGB");
-    if (m_origQImage.colorSpace().isValid())
-        csDesc = m_origQImage.colorSpace().description();
-
-    m_lblImageInfo->setText(QString("%1×%2 | %3 | %4")
-                                .arg(m_sourceData.width)
-                                .arg(m_sourceData.height)
-                                .arg(formatName(m_sourceData.format))
-                                .arg(csDesc));
 }
 
 void UsmCompareDialog::setupUi()
@@ -526,25 +463,19 @@ void UsmCompareDialog::saveSharpenedAs()
         return;
 
     const QFileInfo fi(m_filePath);
-    const QString defaultName =
-        fi.dir().filePath(fi.baseName() + "_usm." + (fi.suffix().isEmpty() ? "png" : fi.suffix()));
-    const QString savePath =
-        QFileDialog::getSaveFileName(this, tr("Save As Sharpened Image"), defaultName,
-                                     tr("Images (*.png *.jpg *.jpeg *.webp *.bmp);;All Files (*)"));
+    const QString saveExt = defaultSaveExtension(fi.suffix());
+    const QString defaultName = fi.dir().filePath(fi.baseName() + "_usm." + saveExt);
+    const QString savePath = QFileDialog::getSaveFileName(
+        this, tr("Save As Sharpened Image"), defaultName,
+        tr("Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;All Files (*)"));
     if (savePath.isEmpty())
         return;
 
     Encoder::Params params;
-    if (!m_iccProfile.empty())
-        params.iccProfile = m_iccProfile;
-    else if (m_origQImage.colorSpace().isValid())
-    {
-        const QByteArray icc = m_origQImage.colorSpace().iccProfile();
-        if (!icc.isEmpty())
-            params.iccProfile.assign(reinterpret_cast<const uint8_t *>(icc.constData()),
-                                     reinterpret_cast<const uint8_t *>(icc.constData()) +
-                                         icc.size());
-    }
+    params.iccProfile = m_iccProfile;
+    const QString chosen = QFileInfo(savePath).suffix().toLower();
+    if (chosen == QLatin1String("jpg") || chosen == QLatin1String("jpeg"))
+        params.quality = 95;
     const bool ok = Encoder::encode(m_sharpenedData, savePath.toStdString(), params);
     if (ok)
         m_lblCalcStatus->setText(tr("Save successful: %1").arg(QFileInfo(savePath).fileName()));

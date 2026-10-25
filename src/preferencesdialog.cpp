@@ -1,6 +1,7 @@
 #include "preferencesdialog.h"
 #include "Language.h"
 #include "Theme.h"
+#include "core/image/decoder/RawDecodePlan.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
 #include "thumbnailpanel.h"
@@ -41,8 +42,7 @@ void PreferencesDialog::addUiAppearanceRows(QFormLayout *gl)
     // i18n-allow: language endonym (always shown in its own script)
     m_uiLanguage->addItem(QStringLiteral("简体中文"),
                           static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
-    m_uiLanguage->setToolTip(
-        tr("UI language. Takes effect immediately without restarting."));
+    m_uiLanguage->setToolTip(tr("UI language. Takes effect immediately without restarting."));
     {
         QSettings langSettings;
         const auto lang = mviewer::ui::Language::languageModeFromKey(
@@ -145,6 +145,19 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_autoCheckUpdates->setChecked(s.value(QStringLiteral("autoCheckUpdates"), true).toBool());
     gl->addRow(m_autoCheckUpdates);
 
+    m_rawDisplayPolicy = new QComboBox;
+    m_rawDisplayPolicy->setObjectName(QStringLiteral("preferencesRawDisplayPolicy"));
+    m_rawDisplayPolicy->addItem(tr("Prefer embedded preview (fast)"), 0);
+    m_rawDisplayPolicy->addItem(tr("Full decode when the preview is under 90% of the sensor"), 1);
+    m_rawDisplayPolicy->addItem(tr("Always decode full RAW"), 2);
+    m_rawDisplayPolicy->setToolTip(
+        tr("The camera JPEG preview is fast. A full demosaic uses the sensor. "
+           "The default stays on the fast preview."));
+    const int rawPolicy = s.value(QStringLiteral("raw/displayPolicy"), 0).toInt();
+    const int rawIdx = m_rawDisplayPolicy->findData(rawPolicy);
+    m_rawDisplayPolicy->setCurrentIndex(rawIdx >= 0 ? rawIdx : 0);
+    gl->addRow(tr("RAW display"), m_rawDisplayPolicy);
+
     return general;
 }
 
@@ -245,6 +258,9 @@ void PreferencesDialog::accept()
     const bool colorManagement = m_colorManagement->isChecked();
     s.setValue("display/colorManagement", colorManagement);
     s.setValue(QStringLiteral("autoCheckUpdates"), m_autoCheckUpdates->isChecked());
+    const int rawPolicy = m_rawDisplayPolicy ? m_rawDisplayPolicy->currentData().toInt() : 0;
+    s.setValue(QStringLiteral("raw/displayPolicy"), rawPolicy);
+    mviewer::core::setRawDisplayPolicy(mviewer::core::rawDisplayPolicyFromInt(rawPolicy));
     s.sync();
     GpuTileUploader::resetEnabledCache();
     DisplayColorContextProvider::setColorManagementEnabled(colorManagement);

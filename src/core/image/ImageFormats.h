@@ -11,6 +11,7 @@
 // Qt-free header; the .cpp may use Qt/DecoderRegistry.
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace mviewer::core
@@ -36,5 +37,22 @@ class ImageFormats
     // "*.jpg" wildcard form (Qt QDir / QFileDialog filter convention).
     static std::vector<std::string> wildcardFilters();
 };
+
+// Single RAW-extension catalog. Every RAW gate (decoder, metadata, type
+// filter, UI combo) must use this list. Entries are lowercase, no dot, sorted.
+const std::vector<std::string_view> &rawExtensions();
+
+// Case-insensitive. Accepts "CR2", ".cr2", or "cr2".
+bool isRawExtension(std::string_view extNoDot);
+
+// True when the path's final extension is a RAW extension.
+bool isRawPath(std::string_view path);
+
+// Comma-joined rawExtensions(), used as the type-filter combo payload.
+std::string rawTypeFilterData();
+
+// Empty filter matches every suffix. Token "raw" matches rawExtensions().
+// Token "tiff" matches tif and tiff. Other tokens match exactly.
+bool suffixMatchesTypeFilter(std::string_view suffixNoDot, std::string_view typeFilterCsv);
 
 } // namespace mviewer::core

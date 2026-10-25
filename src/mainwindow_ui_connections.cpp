@@ -1,6 +1,8 @@
 // MainWindow signal wiring split by workflow responsibility.
 #include "mainwindow_p.h"
 
+#include "rawsourcebadge.h"
+
 #include <QDateTime>
 
 void MainWindow::connectUiSignals()
@@ -143,6 +145,7 @@ void MainWindow::connectViewerSignals()
     // synchronous QImage(path) decode that blocked browsing.
     connect(m_imageViewer, &ImageViewer::imageReady, m_analysisPanel, &AnalysisPanel::setFrame);
     connect(m_imageViewer, &ImageViewer::imageReady, m_metadataPanel, &MetadataPanel::setFrame);
+    connectRawSourceUi();
     // P0-3: an active metadata overlay follows the freshly decoded frame — its
     // histogram is computed on the Analysis pool only after the frame is ready
     // (navigating while the overlay is visible must never show the old image's
@@ -268,6 +271,30 @@ void MainWindow::wireHostedFileTransforms()
             {
                 if (!path.isEmpty())
                     runListedTransform({path}, false, 0, horizontal);
+            });
+}
+
+void MainWindow::connectRawSourceUi()
+{
+    connect(m_imageViewer, &ImageViewer::imageReady, this,
+            [this](const std::shared_ptr<ImageFrame> &frame)
+            {
+                if (!m_lblRawSource)
+                    return;
+                QString text;
+                if (frame && frame->metadata().rawSource != mviewer::domain::RawSource::NotRaw)
+                    text = rawSourceBadgeText(frame->metadata().rawSource, frame->width(),
+                                              frame->height());
+                m_lblRawSource->setText(text);
+                m_lblRawSource->setVisible(!text.isEmpty());
+            });
+    connect(m_imageViewer, &ImageViewer::fullRawActivityChanged, this,
+            [this](bool active)
+            {
+                if (!m_actDecodeFullRaw)
+                    return;
+                m_actDecodeFullRaw->setText(active ? tr("Cancel Full RAW Decode")
+                                                   : tr("Decode Full RAW"));
             });
 }
 

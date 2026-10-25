@@ -8,49 +8,56 @@
 
 void MainWindow::checkForUpdates(bool silent)
 {
-    if (m_updateChecking)
+    using mviewer::core::UpdateCheckStart;
+    const auto start = mviewer::core::beginUpdateCheck(m_updateGate, silent);
+    if (start == UpdateCheckStart::Ignored)
         return;
-    m_updateChecking = true;
+    if (start == UpdateCheckStart::ManualPending)
+    {
+        statusBar()->showMessage(tr("Checking for updates…"), 2000);
+        return;
+    }
     if (!silent)
-        statusBar()->showMessage(tr("Checking for updates..."), 2000);
+        statusBar()->showMessage(tr("Checking for updates…"), 2000);
 
     // M24: bounded pool (max 1 thread) instead of a detached std::thread.
     // checkGitHub() performs a synchronous network request (WinHttp timeouts
     // bound it to ~35 s worst case); the result is marshaled back via qApp and
     // guarded with QPointer so a window destroyed mid-request never gets a
     // dangling call. The pool waits at app exit, so no worker survives teardown.
+    // A manual request that arrives while this one runs is recorded on the gate
+    // and does not start a second HTTP request.
     static QThreadPool s_updatePool;
     s_updatePool.setMaxThreadCount(1);
     QPointer<MainWindow> self(this);
     auto updateFuture = QtConcurrent::run(
         &s_updatePool,
-        [self, silent]()
+        [self]()
         {
             mviewer::core::UpdateChecker checker(MVIEWER_VERSION_STRING);
             checker.checkGitHub("lgxgizh/mviewer",
-                                [self, silent](const mviewer::core::UpdateInfo &info)
+                                [self](const mviewer::core::UpdateInfo &info)
                                 {
                                     QMetaObject::invokeMethod(qApp,
-                                                              [self, info, silent]()
+                                                              [self, info]()
                                                               {
                                                                   if (!self)
                                                                       return;
-                                                                  self->m_updateChecking = false;
-                                                                  self->onUpdateChecked(info,
-                                                                                        silent);
+                                                                  self->onUpdateChecked(info);
                                                               });
                                 });
         });
     Q_UNUSED(updateFuture);
 }
 
-void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent)
+void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info)
 {
+    const bool asManual = mviewer::core::finishUpdateCheck(m_updateGate);
     if (!isVisible() || sessionPromptsSuppressed())
         return;
     if (!info.error.empty())
     {
-        if (!silent)
+        if (asManual)
             QMessageBox::warning(this, tr("Update check failed"),
                                  tr("Could not retrieve update information:\n%1")
                                      .arg(QString::fromStdString(info.error)));
@@ -58,34 +65,91 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
     }
     if (info.hasUpdate)
     {
-        QMessageBox box(this);
-        box.setIcon(QMessageBox::Information);
-        box.setWindowTitle(tr("New version available"));
-        box.setText(tr("New version %1 is available (current %2).")
-                        .arg(QString::fromStdString(info.latestVersion),
-                             QString::fromStdString(info.currentVersion)));
-        box.setInformativeText(tr("Update recommended for the latest features and bug fixes."));
-        auto *dontAutoCheck = new QCheckBox(tr("Don't check for updates automatically"), &box);
-        dontAutoCheck->setObjectName(QStringLiteral("updateNagDisableAutoCheck"));
-        box.setCheckBox(dontAutoCheck);
-        QPushButton *openBtn = box.addButton(tr("Go to Download Page"), QMessageBox::AcceptRole);
-        box.addButton(tr("Later"), QMessageBox::RejectRole);
-        box.exec();
-        if (box.checkBox() && box.checkBox()->isChecked())
+        QSettings settings;
+        const std::string skipped =
+            settings.value(QStringLiteral("update/skippedVersion")).toString().toStdString();
+        const auto decision = mviewer::core::decideUpdatePrompt(!asManual, info.latestVersion,
+                                                                skipped, updatePromptUiBusy());
+        if (decision.kind == mviewer::core::UpdatePromptKind::None)
+            return;
+        if (decision.kind == mviewer::core::UpdatePromptKind::StatusBarNotice)
         {
-            QSettings settings;
-            settings.setValue(QStringLiteral("autoCheckUpdates"), false);
-            settings.sync();
+            showUpdateNotice(info);
+            return;
         }
-        if (box.clickedButton() == openBtn)
-            QDesktopServices::openUrl(QUrl(QString::fromStdString(info.releaseUrl)));
+        showUpdateDialog(info);
+        return;
     }
-    else if (!silent)
-    {
+    if (asManual)
         QMessageBox::information(this, tr("Up to Date"),
                                  tr("You are on the latest version (%1).")
                                      .arg(QString::fromStdString(info.currentVersion)));
+}
+
+void MainWindow::showUpdateNotice(const mviewer::core::UpdateInfo &info)
+{
+    m_pendingUpdate = info;
+    m_hasPendingUpdate = true;
+    if (!m_updateNotice)
+        return;
+    const QString label =
+        tr("New version %1 available").arg(QString::fromStdString(info.latestVersion));
+    m_updateNotice->setText(QStringLiteral("<a href=\"update\">%1</a>").arg(label));
+    m_updateNotice->show();
+}
+
+void MainWindow::showUpdateDialog(const mviewer::core::UpdateInfo &info)
+{
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Information);
+    box.setWindowTitle(tr("New version available"));
+    box.setText(tr("New version %1 is available (current %2).")
+                    .arg(QString::fromStdString(info.latestVersion),
+                         QString::fromStdString(info.currentVersion)));
+    box.setInformativeText(tr("Update recommended for the latest features and bug fixes."));
+    auto *dontAutoCheck = new QCheckBox(tr("Don't check for updates automatically"), &box);
+    dontAutoCheck->setObjectName(QStringLiteral("updateNagDisableAutoCheck"));
+    box.setCheckBox(dontAutoCheck);
+    QPushButton *openBtn = box.addButton(tr("Go to Download Page"), QMessageBox::AcceptRole);
+    QPushButton *skipBtn = box.addButton(tr("Skip this version"), QMessageBox::ActionRole);
+    box.addButton(tr("Later"), QMessageBox::RejectRole);
+    box.exec();
+    if (box.checkBox() && box.checkBox()->isChecked())
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("autoCheckUpdates"), false);
+        settings.sync();
     }
+    if (box.clickedButton() == skipBtn)
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("update/skippedVersion"),
+                          QString::fromStdString(info.latestVersion));
+        settings.sync();
+        if (m_updateNotice)
+            m_updateNotice->hide();
+        m_hasPendingUpdate = false;
+        return;
+    }
+    if (box.clickedButton() == openBtn)
+        QDesktopServices::openUrl(QUrl(QString::fromStdString(info.releaseUrl)));
+}
+
+bool MainWindow::updatePromptUiBusy() const
+{
+    if (isFullScreen())
+        return true;
+    if (m_imageViewer && (m_imageViewer->isVisible() || m_imageViewer->isFullScreen()))
+        return true;
+    if (m_compareHost && m_compareHost->isVisible())
+        return true;
+    const auto usmDialogs = findChildren<UsmCompareDialog *>();
+    for (const UsmCompareDialog *dialog : usmDialogs)
+    {
+        if (dialog && dialog->isVisible())
+            return true;
+    }
+    return false;
 }
 
 void MainWindow::maybeShowCrashReport()

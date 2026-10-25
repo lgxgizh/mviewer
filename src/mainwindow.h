@@ -6,6 +6,7 @@
 #include "core/command/CommandStack.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/update/UpdateChecker.h"
+#include "core/update/UpdatePrompt.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include "selectionmodel.h"
@@ -211,6 +212,7 @@ class MainWindow : public QMainWindow
     void connectSelectionSignals();
     void connectViewerSignals();
     void wireHostedFileTransforms();
+    void connectRawSourceUi();
     void connectFilterSignals();
     void connectMenuSignals();
     void connectWorkspaceSignals();
@@ -389,6 +391,7 @@ class MainWindow : public QMainWindow
     QAction *m_actToggleNavigation = nullptr;
     QAction *m_actBatch = nullptr;
     QAction *m_actUsmCompare = nullptr;
+    QAction *m_actDecodeFullRaw = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
     QAction *m_actExportSettings = nullptr;
@@ -490,6 +493,7 @@ class MainWindow : public QMainWindow
     QLabel *m_lblSize = nullptr;
     QLabel *m_lblZoom = nullptr;
     QLabel *m_lblCache = nullptr;
+    QLabel *m_lblRawSource = nullptr;
     QTimer *m_statTimer = nullptr;
     void updateCacheStat();
     static QString formatBytes(qint64 bytes);
@@ -581,9 +585,15 @@ class MainWindow : public QMainWindow
     void stopCloseTimers();
     void persistWindowLayoutOnClose(bool inBrowseWorkspace, QStringList &failures);
     void checkForUpdates(bool silent = false);
-    void onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent);
+    void onUpdateChecked(const mviewer::core::UpdateInfo &info);
+    void showUpdateDialog(const mviewer::core::UpdateInfo &info);
+    void showUpdateNotice(const mviewer::core::UpdateInfo &info);
+    bool updatePromptUiBusy() const;
     void maybeShowCrashReport();
-    bool m_updateChecking = false;
+    mviewer::core::UpdateCheckGate m_updateGate;
+    mviewer::core::UpdateInfo m_pendingUpdate;
+    bool m_hasPendingUpdate = false;
+    QLabel *m_updateNotice = nullptr;
 
     // Shared drop handling for the main window and the thumbnail gallery.
     void handleDroppedPaths(const QStringList &paths);

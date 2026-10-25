@@ -24,6 +24,11 @@ class ImageLoadingService
         return service;
     }
 
+    static const ImageLoadOptions &defaultLoadOptions()
+    {
+        return mviewer::core::ImageLoadingFacade::defaultLoadOptions();
+    }
+
     // M46: `lifetime` is the consumer's AsyncLifetimeToken (see
     // ImageLoadingFacade). Widgets create one token per QObject and invalidate
     // it in the destructor; expired tokens suppress late client deliveries.
