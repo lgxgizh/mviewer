@@ -4,6 +4,7 @@
 #include "analysispanel.h"
 #include "application/ExternalOpen.h"
 #include "core/filesystem/DirectorySnapshot.h"
+#include "fileop_targets.h"
 #include "imagelistmodel.h"
 #include "imageviewer.h"
 #include "metadatapanel.h"
@@ -308,17 +309,39 @@ void MainWindow::dropRemovedPathsFromPanel(ThumbnailPanel *panel, const QStringL
 
 void MainWindow::onGalleryPathsRemoved(ThumbnailPanel *source, const QStringList &deleted)
 {
+    const QString shown = currentImagePath();
+    const bool viewerOpen = m_imageViewer && !m_imageViewer->isHidden();
+    int oldIndex = -1;
+    int oldCount = 0;
+    QList<int> removedIndices;
+    if (viewerOpen && m_imageList && !shown.isEmpty())
+    {
+        const QStringList before = m_imageList->paths();
+        oldCount = static_cast<int>(before.size());
+        oldIndex = static_cast<int>(before.indexOf(shown));
+        for (const QString &path : deleted)
+        {
+            const int index = static_cast<int>(before.indexOf(path));
+            if (index >= 0)
+                removedIndices.append(index);
+        }
+    }
     if (m_imageList)
         m_imageList->removePaths(deleted);
     if (m_thumbnailPanel && m_thumbnailPanel != source)
         dropRemovedPathsFromPanel(m_thumbnailPanel, deleted);
     if (m_secondaryThumbnailPanel && m_secondaryThumbnailPanel != source)
         dropRemovedPathsFromPanel(m_secondaryThumbnailPanel, deleted);
-    if (currentImagePath().isEmpty() || !m_imageViewer || m_imageViewer->isHidden())
+    if (!viewerOpen || shown.isEmpty() || !deleted.contains(shown))
         return;
-    if (!deleted.contains(currentImagePath()))
+    const int next = nextIndexAfterRemoval(oldIndex, oldCount, removedIndices);
+    if (next < 0 || !m_imageList || next >= m_imageList->paths().size())
+    {
+        m_imageViewer->close();
         return;
-    navigate(1);
+    }
+    if (m_selection)
+        m_selection->setCurrentImage(m_imageList->paths().at(next));
 }
 
 void MainWindow::onGalleryPathsRenamed(const QStringList &oldPaths, const QStringList &newPaths)

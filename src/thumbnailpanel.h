@@ -315,7 +315,10 @@ class ThumbnailPanel : public QListView
     int scrollOffset() const;
 
     void renameSelected();
+    void renamePath(const QString &path, bool multiSelectionNotice = false);
     void moveToTrashSelected();
+    void moveToTrashPaths(const QStringList &paths, const QString &confirmMessage = {});
+    void movePathsTo(const QStringList &paths);
     void openTrashFolder();
     void copySelectedTo();
     void moveSelectedTo();

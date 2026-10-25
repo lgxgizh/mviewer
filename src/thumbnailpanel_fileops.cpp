@@ -1,6 +1,7 @@
 // ThumbnailPanel file operations: rename, trash, copy/move, batch export, context menu (M20 P0#3).
 #include "thumbnailpanel_p.h"
 
+#include "fileop_targets.h"
 #include "fileopmessages.h"
 #include "runtime_storage.h"
 #include "splitbrowse_delete.h"
@@ -131,7 +132,7 @@ uint64_t ThumbnailPanel::beginFileOperationProgress(const QString &label)
 {
     m_fileOperationBusy = true;
     const uint64_t generation = ++m_fileOperationGeneration;
-    m_fileProgress = new QProgressDialog(label, QStringLiteral("Cancel"), 0, 100, this);
+    m_fileProgress = new QProgressDialog(label, tr("Cancel"), 0, 100, this);
     m_fileProgress->setWindowModality(Qt::WindowModal);
     m_fileProgress->setAutoClose(false);
     m_fileProgress->setAutoReset(false);
@@ -197,7 +198,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
     const auto alive = m_alive;
     const QPointer<ThumbnailPanel> guard(this);
     auto state = std::make_shared<AsyncCommandState>(std::move(command));
-    const uint64_t generation = beginFileOperationProgress(label + QStringLiteral("…"));
+    const uint64_t generation = beginFileOperationProgress(label + QStringLiteral("..."));
     const auto onProgress = makeFileOperationProgressHandler(generation);
 
     m_fileOperationTask = TaskScheduler::instance().submit(
@@ -266,7 +267,8 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                     }
 
                     const std::string error =
-                        state->command ? state->command->lastError() : "Command was lost.";
+                        state->command ? state->command->lastError()
+                                       : ThumbnailPanel::tr("Command was lost.").toStdString();
                     const bool unresolved = state->command && state->command->hasUnresolvedState();
                     if (panel->m_cmdStack)
                         panel->m_cmdStack->recordExecuted(std::move(state->command));
@@ -274,10 +276,10 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                     if (!state->succeeded)
                     {
                         const QString detail = mviewer::ui::fileOpErrorText(error);
-                        QMessageBox::warning(panel, label,
-                                             state->cancelled
-                                                 ? label + QStringLiteral("Cancelled.\n") + detail
-                                                 : label + QStringLiteral("Failed.\n") + detail);
+                        QMessageBox::warning(
+                            panel, label,
+                            state->cancelled ? label + ThumbnailPanel::tr("Cancelled.\n") + detail
+                                             : label + ThumbnailPanel::tr("Failed.\n") + detail);
                     }
 
                     if (!panel->m_currentDir.isEmpty())
@@ -300,8 +302,8 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
         onProgress);
 
     if (!m_fileOperationTask)
-        failFileOperationQueue(
-            label, label + QStringLiteral("Cannot queue: background task queue is full."));
+        failFileOperationQueue(label,
+                               tr("Cannot queue %1: background task queue is full.").arg(label));
 }
 
 void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
@@ -314,7 +316,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
     const QPointer<ThumbnailPanel> guard(this);
     auto state = std::make_shared<AsyncCopyState>();
     const auto fileSystem = mviewer::core::defaultFileSystemAdapter();
-    const uint64_t generation = beginFileOperationProgress(QStringLiteral("Copying…"));
+    const uint64_t generation = beginFileOperationProgress(tr("Copying..."));
     const auto onProgress = makeFileOperationProgressHandler(generation);
 
     m_fileOperationTask = TaskScheduler::instance().submit(
@@ -393,28 +395,27 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                         panel->m_fileProgress = nullptr;
                     }
                     const QString summary =
-                        QStringLiteral("Copy complete: %1 succeeded, %2 failed.%3")
+                        ThumbnailPanel::tr("Copy complete: %1 succeeded, %2 failed.%3")
                             .arg(state->copied)
                             .arg(state->failures.size())
                             .arg(state->failures.isEmpty()
                                      ? QString()
                                      : QStringLiteral("\n") + state->failures.join("\n"));
                     if (state->cancelled)
-                        QMessageBox::warning(panel, QStringLiteral("Copy"),
-                                             QStringLiteral("Copy cancelled.\n") + summary);
+                        QMessageBox::warning(panel, ThumbnailPanel::tr("Copy"),
+                                             ThumbnailPanel::tr("Copy cancelled.\n") + summary);
                     else if (state->failures.isEmpty())
                         emit panel->browseStatusChanged(
-                            QStringLiteral("Successfully copied %1 files").arg(state->copied));
+                            ThumbnailPanel::tr("Successfully copied %1 files").arg(state->copied));
                     else
-                        QMessageBox::warning(panel, QStringLiteral("Copy"), summary);
+                        QMessageBox::warning(panel, ThumbnailPanel::tr("Copy"), summary);
                 },
                 Qt::QueuedConnection);
         },
         onProgress);
 
     if (!m_fileOperationTask)
-        failFileOperationQueue(QStringLiteral("Copy"),
-                               QStringLiteral("Cannot queue copy: background task queue is full."));
+        failFileOperationQueue(tr("Copy"), tr("Cannot queue copy: background task queue is full."));
 }
 
 void ThumbnailPanel::renameSelected()
@@ -422,10 +423,16 @@ void ThumbnailPanel::renameSelected()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty())
         return;
-    const QString oldPath = paths.first();
+    renamePath(paths.first(), false);
+}
+
+void ThumbnailPanel::renamePath(const QString &oldPath, bool multiSelectionNotice)
+{
+    if (oldPath.isEmpty())
+        return;
     const QFileInfo fi(oldPath);
     QInputDialog dialog(this);
-    dialog.setWindowTitle(tr("Rename"));
+    dialog.setWindowTitle(multiSelectionNotice ? tr("Rename %1").arg(fi.fileName()) : tr("Rename"));
     dialog.setLabelText(tr("New file name:"));
     dialog.setTextValue(fi.fileName());
     if (auto *lineEdit = dialog.findChild<QLineEdit *>())
@@ -441,15 +448,14 @@ void ThumbnailPanel::renameSelected()
     const QString blocked = renameBlockedReason(fi.absolutePath(), fi.fileName(), newName);
     if (!blocked.isEmpty())
     {
-        QMessageBox::warning(this, QStringLiteral("Rename failed"), blocked);
+        QMessageBox::warning(this, tr("Rename failed"), blocked);
         return;
     }
     const QString newSuffix = QFileInfo(newName).suffix();
     if (fi.suffix().compare(newSuffix, Qt::CaseInsensitive) != 0 &&
         QMessageBox::question(
-            this, QStringLiteral("Rename"),
-            QStringLiteral(
-                "Changing the extension may prevent the file from opening. Continue anyway?"),
+            this, tr("Rename"),
+            tr("Changing the extension may prevent the file from opening. Continue anyway?"),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
     const QString newPath = QDir(fi.absolutePath()).filePath(newName);
@@ -461,7 +467,7 @@ void ThumbnailPanel::renameSelected()
                                                        newPath.toUtf8().toStdString());
         if (!m_cmdStack->execute(std::move(cmd)))
         {
-            QMessageBox::warning(this, "Rename failed",
+            QMessageBox::warning(this, tr("Rename failed"),
                                  mviewer::ui::fileOpErrorText(m_cmdStack->lastError()));
             return;
         }
@@ -501,6 +507,12 @@ void ThumbnailPanel::renameSelected()
         // parity. The live delta migrates the identity without a model reset.
         selectPath(newPath);
     }
+    if (multiSelectionNotice)
+    {
+        emit browseStatusChanged(
+            tr("Renamed the focused file only; use Tools → Batch Processing to rename "
+               "multiple files"));
+    }
 }
 
 void ThumbnailPanel::moveToTrashSelected()
@@ -511,16 +523,32 @@ void ThumbnailPanel::moveToTrashSelected()
             ? splitDeleteUnion(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
                                m_selection->paneSelection(SelectionModel::PaneSlot::Secondary))
             : selectedPaths();
+    QString confirm;
+    if (splitActive && !paths.isEmpty())
+    {
+        const QString name = paths.size() == 1 ? QFileInfo(paths.first()).fileName() : QString();
+        confirm = splitDeleteConfirmMessage(
+            splitDeletePrompt(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
+                              m_selection->paneSelection(SelectionModel::PaneSlot::Secondary)),
+            true, name);
+    }
+    moveToTrashPaths(paths, confirm);
+}
+
+void ThumbnailPanel::moveToTrashPaths(const QStringList &paths, const QString &confirmMessage)
+{
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
     if (QSettings().value(QStringLiteral("confirmDelete"), true).toBool())
     {
-        const SplitDeletePrompt counts =
-            splitActive
-                ? splitDeletePrompt(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
-                                    m_selection->paneSelection(SelectionModel::PaneSlot::Secondary))
-                : SplitDeletePrompt{0, 0, static_cast<int>(paths.size())};
-        const QString prompt = splitDeleteConfirmMessage(counts, splitActive);
+        QString prompt = confirmMessage;
+        if (prompt.isEmpty())
+        {
+            const QString name =
+                paths.size() == 1 ? QFileInfo(paths.first()).fileName() : QString();
+            prompt = splitDeleteConfirmMessage(
+                SplitDeletePrompt{0, 0, static_cast<int>(paths.size())}, false, name);
+        }
         const auto answer =
             QMessageBox::question(this, tr("Delete confirmation"), prompt,
                                   QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
@@ -541,7 +569,7 @@ void ThumbnailPanel::moveToTrashSelected()
     auto cmd =
         std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
     cmd->setSystemTrash(&moveToSystemTrash);
-    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("Delete"));
+    startCommandFileOperation(std::move(cmd), paths, tr("Delete"));
 }
 
 void ThumbnailPanel::openTrashFolder()
@@ -582,7 +610,11 @@ void ThumbnailPanel::copySelectedTo()
 
 void ThumbnailPanel::moveSelectedTo()
 {
-    const QStringList paths = selectedPaths();
+    movePathsTo(selectedPaths());
+}
+
+void ThumbnailPanel::movePathsTo(const QStringList &paths)
+{
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
     const QString dir = QFileDialog::getExistingDirectory(this, tr("Move To..."));
@@ -590,7 +622,7 @@ void ThumbnailPanel::moveSelectedTo()
         return;
 
     auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths), dir.toUtf8().toStdString());
-    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("Move"));
+    startCommandFileOperation(std::move(cmd), paths, tr("Move"));
 }
 
 void ThumbnailPanel::revealSelected()

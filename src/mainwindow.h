@@ -150,6 +150,7 @@ class MainWindow : public QMainWindow
     // P0-3: intercept image-viewer mouse events for metadata overlay triggers.
     bool eventFilter(QObject *watched, QEvent *event) override;
     bool filterKeyPress(QObject *watched, QKeyEvent *ke);
+    bool routeViewerFileOpKeys(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods);
 
   private:
     void buildMenus();
@@ -556,6 +557,9 @@ class MainWindow : public QMainWindow
     // target (ADR-012). Compare still uses in-memory cell preview when up.
     void rotateCurrentImage(int degrees);
     void flipCurrentImage(bool horizontal);
+    void deleteViewerImage();
+    void renameViewerImage();
+    void moveViewerImage();
     // Keep directory/image history and folder command boundaries in sync.
     void updateNavigationActions();
     // M19: ensure ImageListModel is populated for the current directory.

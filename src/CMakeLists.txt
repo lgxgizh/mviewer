@@ -198,6 +198,7 @@ add_library(mviewer_ui STATIC
     mainwindow_export.cpp
     mainwindow_view.cpp
     mainwindow_keys.cpp
+    mainwindow_viewer_fileops.cpp
     mainwindow_selection.cpp
     selectionmodel.cpp
     directorymodel.cpp
