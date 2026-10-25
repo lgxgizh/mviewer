@@ -714,6 +714,10 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
     m_compareHost = dlg;
     m_compareView = view;
     QPointer<CompareWorkspace> viewGuard(m_compareView);
+    // QWidget (not QDialog): QPointer<QDialog>::data() does a checked downcast
+    // that fails under GCC ASan while QDialog is mid-destroy. Timer lambda below
+    // still needs a live-guard for the post-show setImages shot.
+    QPointer<QWidget> dialogGuard(dlg);
     // P0: Inject SelectionModel so CompareWorkspace writes focus back to global SSOT.
     // M28 P1-01: setImages() is async and is invoked once below (after the
     // dialog is shown and laid out) — the old pre-show call decoded every
