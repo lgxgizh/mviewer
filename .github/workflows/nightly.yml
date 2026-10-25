@@ -248,6 +248,36 @@ jobs:
           $excludeRegex = "product_workflow_gate|product_browse_tests|bench_"
           ctest --output-on-failure -j4 -E $excludeRegex
 
+      - name: Locate UBSan traps (diagnostic)
+        # Trap mode prints nothing, so ctest only says "Illegal". Re-run the
+        # first few failing tests under cdb and print the stack at the ud2.
+        if: failure()
+        continue-on-error: true
+        timeout-minutes: 15
+        run: |
+          $cdb = "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe"
+          if (-not (Test-Path $cdb)) { Write-Host "cdb.exe not found"; exit 0 }
+          $failed = "build_ubsan\Testing\Temporary\LastTestsFailed.log"
+          if (-not (Test-Path $failed)) { Write-Host "no failed-test log"; exit 0 }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $tests = (ctest --test-dir build_ubsan --show-only=json-v1 | ConvertFrom-Json).tests
+          $names = Get-Content $failed | ForEach-Object { ($_ -split ':', 2)[1] } | Select-Object -First 8
+          foreach ($n in $names) {
+            $t = $tests | Where-Object { $_.name -eq $n } | Select-Object -First 1
+            if (-not $t -or -not $t.command) { continue }
+            $exe = $t.command[0]
+            $testArgs = @($t.command | Select-Object -Skip 1)
+            $wd = ($t.properties | Where-Object { $_.name -eq "WORKING_DIRECTORY" }).value
+            if (-not $wd) { $wd = Split-Path $exe }
+            Write-Host "::group::$n"
+            Push-Location $wd
+            & $cdb -g -G -y (Split-Path $exe) -c ".lines -e; kn 30; q" $exe @testArgs 2>&1 |
+              Select-String -Pattern "Illegal instruction|Access violation|^[0-9a-f]{2} " |
+              Select-Object -First 40 | ForEach-Object { Write-Host $_.Line }
+            Pop-Location
+            Write-Host "::endgroup::"
+          }
+
   # ---------------------------------------------------------------------------
   # clazy — Qt-aware static analysis (ubuntu, ADVISORY signal for nightly)
   # ---------------------------------------------------------------------------
