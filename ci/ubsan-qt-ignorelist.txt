@@ -1,0 +1,17 @@
+# clang-cl UBSan ignorelist for Qt headers (Nightly "clang-cl UBSan" job).
+#
+# Under the MSVC C++ ABI an empty base class that follows a non-empty base is
+# laid out at offset sizeof(object). Qt 6 QtPrivate::QCallableObject stores an
+# empty functor (captureless lambda, empty function object) as such a base via
+# CompactStorage, so constructing the slot object for
+#     connect(sender, &Signal, [] { ... });
+# touches address new(16) + 16. clang's -fsanitize=object-size proves that
+# statically and inlines an unconditional ud1 (handler kind 22, TypeMismatch)
+# at the connect site, so every such connect raised STATUS_ILLEGAL_INSTRUCTION
+# (m47_restore, workflow_ux, ...). This is an ABI layout artefact inside Qt's
+# headers, not an out-of-bounds access in mviewer code.
+#
+# Scope: only object-size, only Qt's slot-object header. Application sources
+# stay fully instrumented.
+[object-size]
+src:*qobjectdefs_impl.h

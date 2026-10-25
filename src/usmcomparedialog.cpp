@@ -276,7 +276,7 @@ void UsmCompareDialog::setupConnections()
     connect(m_btnReset, &QPushButton::clicked, this, &UsmCompareDialog::resetParameters);
     connect(m_btnApply, &QPushButton::clicked, this, &UsmCompareDialog::scheduleSharpen);
 
-    connect(m_comboPreset, qOverload<int>(&QComboBox::currentIndexChanged), this,
+    connect(m_comboPreset, &QComboBox::currentIndexChanged, this,
             &UsmCompareDialog::onPresetSelected);
 
     connect(m_btnHoldCompare, &QPushButton::pressed, this, &UsmCompareDialog::beginTemporaryHold);
@@ -290,21 +290,17 @@ void UsmCompareDialog::setupConnections()
             &UsmCompareDialog::syncRightTransformToLeft);
 
     connect(m_sliderAmount, &QSlider::valueChanged, m_spinAmount, &QSpinBox::setValue);
-    connect(m_spinAmount, qOverload<int>(&QSpinBox::valueChanged), m_sliderAmount,
-            &QSlider::setValue);
+    connect(m_spinAmount, &QSpinBox::valueChanged, m_sliderAmount, &QSlider::setValue);
     connect(m_sliderRadius, &QSlider::valueChanged, this, &UsmCompareDialog::onRadiusSliderChanged);
-    connect(m_spinRadius, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+    connect(m_spinRadius, &QDoubleSpinBox::valueChanged, this,
             &UsmCompareDialog::onRadiusSpinChanged);
     connect(m_sliderThreshold, &QSlider::valueChanged, m_spinThreshold, &QSpinBox::setValue);
-    connect(m_spinThreshold, qOverload<int>(&QSpinBox::valueChanged), m_sliderThreshold,
-            &QSlider::setValue);
+    connect(m_spinThreshold, &QSpinBox::valueChanged, m_sliderThreshold, &QSlider::setValue);
 
-    connect(m_spinAmount, qOverload<int>(&QSpinBox::valueChanged), this,
+    connect(m_spinAmount, &QSpinBox::valueChanged, this, &UsmCompareDialog::onParametersChanged);
+    connect(m_spinRadius, &QDoubleSpinBox::valueChanged, this,
             &UsmCompareDialog::onParametersChanged);
-    connect(m_spinRadius, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
-            &UsmCompareDialog::onParametersChanged);
-    connect(m_spinThreshold, qOverload<int>(&QSpinBox::valueChanged), this,
-            &UsmCompareDialog::onParametersChanged);
+    connect(m_spinThreshold, &QSpinBox::valueChanged, this, &UsmCompareDialog::onParametersChanged);
     connect(m_checkLumaOnly, &QCheckBox::toggled, this, &UsmCompareDialog::onParametersChanged);
     connect(m_debounceTimer, &QTimer::timeout, this, &UsmCompareDialog::scheduleSharpen);
 }
