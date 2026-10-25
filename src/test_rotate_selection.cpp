@@ -257,7 +257,9 @@ int main(int argc, char **argv)
 
     QTimer dismiss;
     dismiss.setInterval(20);
-    QObject::connect(&dismiss, &QTimer::timeout, &app, [] { dismissMessageBoxes(); });
+    // Plain function slot — lambda form traps under clang-cl -fsanitize-trap=all
+    // (Nightly UBSan rotate_selection_tests Illegal at QCallableObject).
+    QObject::connect(&dismiss, &QTimer::timeout, &app, dismissMessageBoxes);
     ProgressDialogSpy progressSpy;
     app.installEventFilter(&progressSpy);
     dismiss.start();

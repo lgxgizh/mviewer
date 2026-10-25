@@ -4,7 +4,7 @@
 # Runs once per day (and on manual dispatch). Covers the slow, environment-
 # sensitive checks that must NOT sit in the PR gate:
 #   * ASan  — out-of-bounds / use-after-free / heap overflow (+ leak detect)
-#   * UBSan — integer overflow / undefined behaviour / alignment
+#   * UBSan — integer overflow / undefined behaviour (alignment off on clang-cl trap)
 #   * clazy — Qt-aware static analysis (advisory signal)
 #   * quality — CTest bench_* perf hard-gate + golden_image UI regression
 #   * perfetto — capture a Chrome-trace JSON under instrumentation (best-effort)
@@ -212,6 +212,10 @@ jobs:
           # Trap mode needs no ubsan runtime. The static standalone lib is
           # MT_StaticRelease and mismatches /MD, and lld-link rejects
           # -fsanitize=undefined. vptr/function cannot trap, so they are off.
+          # alignment is also off: clang-cl + Qt QCallableObject (lambda/PMF
+          # connect and QTimer::singleShot) emits test-al-0Fh / ud2 when the
+          # slot object is constructed under -fsanitize-trap=all, which made
+          # most UI suites Illegal on Nightly (compare_*/usm/rotate/m46/...).
           # 128-bit division (test_m3m4m5 makePattern) still calls __udivti3,
           # which is in clang_rt.builtins, not the ubsan runtime. /DEBUG writes
           # PDBs so failures are not just exe+offset.
@@ -224,7 +228,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
             "-DCMAKE_EXE_LINKER_FLAGS=/DEBUG /libpath:$ubsanLib clang_rt.builtins-x86_64.lib" `
             "-DCMAKE_SHARED_LINKER_FLAGS=/DEBUG /libpath:$ubsanLib clang_rt.builtins-x86_64.lib" `
-            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -fsanitize-trap=all -fno-sanitize=vptr,function -g"
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -fsanitize-trap=all -fno-sanitize=vptr,function,alignment -g"
 
       - name: Build (UBSan)
         run: cmake --build build_ubsan -j 4

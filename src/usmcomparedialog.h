@@ -89,6 +89,10 @@ class UsmCompareDialog : public QDialog
     void zoomFit();
     void zoom100();
     void zoom200();
+    void syncLeftTransformToRight();
+    void syncRightTransformToLeft();
+    void onRadiusSliderChanged(int val);
+    void onRadiusSpinChanged(double val);
 
   private:
     void setupUi();

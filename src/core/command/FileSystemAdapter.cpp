@@ -136,15 +136,14 @@ bool isCrossVolume(const std::error_code &ec)
 std::string describeError(const std::string &operation, const fs::path &path,
                           const std::error_code &ec)
 {
-    return operation + " '" + pathToUtf8(path) + "': " +
-           (ec ? ec.message() : std::string("unknown error"));
+    return operation + " '" + pathToUtf8(path) +
+           "': " + (ec ? ec.message() : std::string("unknown error"));
 }
 
 } // namespace
 
 bool FileSystemAdapter::copyFileWithProgress(const fs::path &from, const fs::path &to,
-                                              const TransferObserver &observer,
-                                              std::error_code &ec)
+                                             const TransferObserver &observer, std::error_code &ec)
 {
     std::error_code sizeError;
     const uintmax_t total = fileSize(from, sizeError);
@@ -177,23 +176,26 @@ std::shared_ptr<FileSystemAdapter> defaultFileSystemAdapter()
 bool samePath(const fs::path &left, const fs::path &right,
               const std::shared_ptr<FileSystemAdapter> &adapter)
 {
+    // Lexical identity covers the common collision-check case without touching
+    // the MSVC STL weakly_canonical path. clang-cl -fsanitize-trap=all aborts
+    // inside wmemcmp while weakly_canonical runs (Nightly commandstack_tests /
+    // filecopycommand_tests Illegal).
+    if (left.lexically_normal() == right.lexically_normal())
+        return true;
+
     std::error_code ec;
-    if (adapter->exists(left, ec) && adapter->exists(right, ec))
-    {
-        const fs::path canonicalLeft = std::filesystem::weakly_canonical(left, ec);
-        if (!ec)
-        {
-            const fs::path canonicalRight = std::filesystem::weakly_canonical(right, ec);
-            if (!ec)
-                return canonicalLeft == canonicalRight;
-        }
-    }
-    return left.lexically_normal() == right.lexically_normal();
+    if (!(adapter->exists(left, ec) && adapter->exists(right, ec)))
+        return false;
+
+    // OS-level identity (inode / Win32 file index) for hard links and
+    // short/long path aliases — avoids weakly_canonical's sanitizer trap.
+    const bool same = fs::equivalent(left, right, ec);
+    return !ec && same;
 }
 
 fs::path collisionFreeDestination(const fs::path &source, const fs::path &directory,
-                                   const std::shared_ptr<FileSystemAdapter> &adapter,
-                                   std::string &error)
+                                  const std::shared_ptr<FileSystemAdapter> &adapter,
+                                  std::string &error)
 {
     error.clear();
     std::error_code ec;
@@ -284,11 +286,9 @@ FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &de
     {
         std::error_code cleanup;
         adapter->remove(temporary, cleanup);
-        const std::string reason = sourceSizeError
-                                       ? sourceSizeError.message()
-                                       : destinationSizeError
-                                             ? destinationSizeError.message()
-                                             : "byte count differs from source";
+        const std::string reason = sourceSizeError        ? sourceSizeError.message()
+                                   : destinationSizeError ? destinationSizeError.message()
+                                                          : "byte count differs from source";
         if (cleanup)
             return {FileTransferState::Partial,
                     "Copy verification failed (" + reason + ") and temporary cleanup failed."};
@@ -302,7 +302,8 @@ FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &de
         if (cleanup)
             return {FileTransferState::Partial,
                     describeError("Atomic copy commit failed and cleanup failed", destination, ec)};
-        return {FileTransferState::Failed, describeError("Atomic copy commit failed", destination, ec)};
+        return {FileTransferState::Failed,
+                describeError("Atomic copy commit failed", destination, ec)};
     }
     return {FileTransferState::Succeeded, {}};
 }
