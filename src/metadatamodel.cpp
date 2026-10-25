@@ -1,5 +1,7 @@
 #include "metadatamodel.h"
 
+#include "rawsourcebadge.h"
+
 #include <QCoreApplication>
 #include <QDateTime>
 
@@ -201,6 +203,11 @@ void MetadataModel::buildImageSection()
         addLeaf(img, tr("Resolution (DPI)"), QString("%1 × %2").arg(m_meta.dpiX).arg(m_meta.dpiY));
     addLeaf(img, tr("Orientation"), orientationText(m_meta.orientation));
     addLeaf(img, tr("ICC Profile"), m_meta.hasIccProfile ? tr("Embedded") : tr("None"));
+    if (m_meta.rawSource != mviewer::domain::RawSource::NotRaw)
+    {
+        addLeaf(img, tr("Display source"),
+                rawSourceBadgeText(m_meta.rawSource, m_meta.width, m_meta.height));
+    }
     if (m_meta.frameCount > 1)
     {
         const bool pages = m_meta.sequenceKind == "pages";
@@ -252,11 +259,10 @@ void MetadataModel::buildTextSection()
 void MetadataModel::buildIccSection()
 {
     const bool hasIccDetails =
-        m_meta.hasIccProfile &&
-        (!m_meta.iccDescription.empty() || !m_meta.iccCopyright.empty() ||
-         !m_meta.iccColorSpace.empty() || !m_meta.iccDeviceClass.empty() ||
-         !m_meta.iccPcs.empty() || !m_meta.iccRenderingIntent.empty() ||
-         !m_meta.iccVersion.empty());
+        m_meta.hasIccProfile && (!m_meta.iccDescription.empty() || !m_meta.iccCopyright.empty() ||
+                                 !m_meta.iccColorSpace.empty() || !m_meta.iccDeviceClass.empty() ||
+                                 !m_meta.iccPcs.empty() || !m_meta.iccRenderingIntent.empty() ||
+                                 !m_meta.iccVersion.empty());
     if (!hasIccDetails)
         return;
     auto *icc = addCategory(tr("ICC Profile Details"));

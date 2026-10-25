@@ -238,6 +238,12 @@ class ImageViewer : public QOpenGLWidget
     void zoomOut();
     void zoomFit();
     void zoomActual();
+    void requestFullRawDecode();
+    void cancelFullRawDecode();
+    bool fullRawDecodeActive() const
+    {
+        return m_fullRawLoading;
+    }
     void zoomTo(double targetScale);
     void setPixelGridEnabled(bool on);
     bool isPixelGridEnabled() const
@@ -290,6 +296,7 @@ class ImageViewer : public QOpenGLWidget
     void statusMessageRequested(const QString &message, int timeoutMs = 2000);
 
     void usmCompareRequested(const QString &path);
+    void fullRawActivityChanged(bool active);
     void regionStats(const QString &text);
     void selectionChanged(const QRect &sel); // image coords (may be null rect)
     void requestPrev();
@@ -394,6 +401,9 @@ class ImageViewer : public QOpenGLWidget
     static void queueLoadedImage(const QString &path, uint64_t generation,
                                  const ImageLoadGuard &guard, const ImageLoadResult &result);
     void applyLoadedImage(const QString &path, const ImageLoadResult &result);
+    void applyFullRawResult(const QString &path, uint64_t generation,
+                            const ImageLoadResult &result);
+    void stopFullRawDecode(bool notify);
     void applyPendingView();
     void clearLoadedGpu();
     // Drop lod≥1 mips for an image that is no longer the open viewer file.
@@ -495,6 +505,7 @@ class ImageViewer : public QOpenGLWidget
     bool acceptDisplayRaster(const QImage &image, const QRect &covered, double density) const;
     void drawPixelGridOverlay(QPainter &painter);
     void drawOverlayBadge(QPainter &painter);
+    void drawRawSourceBadge(QPainter &painter);
     void drawProvisional(QPainter &painter) const;
     void drawTransition(QPainter &painter) const;
     void updatePixelSampleAt(const QPoint &pos);
@@ -631,6 +642,10 @@ class ImageViewer : public QOpenGLWidget
     QSize m_transitionSourceSize;
     bool m_tileRepaintQueued = false;
     bool m_loading = false;
+    bool m_fullRawLoading = false;
+    uint64_t m_fullRawGen = 0;
+    std::string m_fullRawPath;
+    mviewer::application::ImageLoadingService::AsyncRequestHandle m_fullRawRequest;
     QElapsedTimer m_busyClock;      // started when a load becomes visible-busy
     QTimer *m_busyTicker = nullptr; // repaints the loading bar while busy
     bool m_preserveViewOnReload = false;

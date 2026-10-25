@@ -260,6 +260,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("Save As...");
     QAction *aUsmCompare = menu.addAction(tr("USM Sharpen Compare(&U)... (Ctrl+U)"));
+    QAction *aFullRaw =
+        menu.addAction(m_fullRawLoading ? tr("Cancel Full RAW Decode") : tr("Decode Full RAW"));
     QAction *aRotateCW = menu.addAction(tr("Rotate 90° Clockwise and Overwrite Original (Ctrl+R)"));
     QAction *aRotateCCW =
         menu.addAction(tr("Rotate 90° Counterclockwise and Overwrite Original (Ctrl+Shift+R)"));
@@ -319,6 +321,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         emit usmCompareRequested(m_currentPath);
         return;
     }
+    if (chosen == aFullRaw)
+        return (m_fullRawLoading ? cancelFullRawDecode() : requestFullRawDecode()), void();
     if (chosen == aPlay)
     {
         if (isPlaying())

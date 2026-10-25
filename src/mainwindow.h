@@ -208,6 +208,7 @@ class MainWindow : public QMainWindow
     void connectGallerySignals();
     void connectSelectionSignals();
     void connectViewerSignals();
+    void connectRawSourceUi();
     void connectFilterSignals();
     void connectMenuSignals();
     void connectWorkspaceSignals();
@@ -386,6 +387,7 @@ class MainWindow : public QMainWindow
     QAction *m_actToggleNavigation = nullptr;
     QAction *m_actBatch = nullptr;
     QAction *m_actUsmCompare = nullptr;
+    QAction *m_actDecodeFullRaw = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
     QAction *m_actExportSettings = nullptr;
@@ -487,6 +489,7 @@ class MainWindow : public QMainWindow
     QLabel *m_lblSize = nullptr;
     QLabel *m_lblZoom = nullptr;
     QLabel *m_lblCache = nullptr;
+    QLabel *m_lblRawSource = nullptr;
     QTimer *m_statTimer = nullptr;
     void updateCacheStat();
     static QString formatBytes(qint64 bytes);

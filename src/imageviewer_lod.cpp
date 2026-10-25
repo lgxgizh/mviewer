@@ -503,6 +503,14 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
     if (path != m_currentPath || generation != m_requestGen ||
         target.cacheKey() != m_displayColorTarget.cacheKey())
         return; // superseded (A -> B -> A) or stale request
+    if (m_fullRawLoading ||
+        (m_frame && m_frame->metadata().rawSource == mviewer::domain::RawSource::FullDemosaic))
+    {
+        m_displayRequest.reset();
+        m_displayUpgradeScheduled = false;
+        m_largeSourcePending = false;
+        return;
+    }
     m_displayRequest.reset();
     m_displayUpgradeScheduled = false;
     m_largeSourcePending = false; // first raster-path verdict has landed

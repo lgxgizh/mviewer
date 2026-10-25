@@ -212,6 +212,7 @@ add_library(mviewer_ui STATIC
     imageviewer_multiframe.cpp
     imageviewer_lod.cpp
     imageviewer_paint.cpp
+    imageviewer_rawdecode.cpp
     imageviewer_loadingbar.cpp
     imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp

@@ -668,15 +668,18 @@ void MainWindow::buildStatusBarUi()
     m_lblSize = new QLabel(tr("Size 0 B"), this);
     m_lblZoom = new QLabel("Zoom", this);
     m_lblCache = new QLabel("Hit rate —", this);
+    m_lblRawSource = new QLabel(this);
+    m_lblRawSource->setObjectName(QStringLiteral("rawSourceStatus"));
     m_lblCache->setToolTip(
         tr("Cache hit rate: improves consecutive large-image switching and thumbnail loading"));
-    for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
+    for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache, m_lblRawSource})
     {
         l->setContentsMargins(mviewer::ui::metrics::kSpace8, 0, mviewer::ui::metrics::kSpace8, 0);
         statusBar()->addPermanentWidget(l);
     }
     m_lblSize->hide();
     m_lblCache->hide();
+    m_lblRawSource->hide();
     m_lblZoom->setMinimumWidth(64);
 
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,

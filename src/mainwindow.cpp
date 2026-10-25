@@ -1,6 +1,7 @@
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
+#include "core/image/decoder/RawDecodePlan.h"
 #include "naturalnameorder.h"
 #include "runtime_storage.h"
 
@@ -131,6 +132,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     rebuildRecentFilesMenu();
+    {
+        QSettings settings;
+        const int rawPolicy = settings.value(QStringLiteral("raw/displayPolicy"), 0).toInt();
+        mviewer::core::setRawDisplayPolicy(mviewer::core::rawDisplayPolicyFromInt(rawPolicy));
+    }
     restoreLastSession();
 
     // M15: drag & drop — accept files/folders dropped onto the window.
@@ -574,6 +580,8 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     const QString fileName = separator >= 0 ? path.mid(separator + 1) : path;
     setWindowTitle(QString("%1 - MViewer").arg(fileName));
     m_lblImage->setText(fileName);
+    if (m_lblRawSource)
+        m_lblRawSource->clear(), m_lblRawSource->hide();
     statusBar()->showMessage(tr("Current: %1").arg(fileName), 3000);
     if (m_lblCount && m_imageList && m_imageList->count() > 0)
     {
