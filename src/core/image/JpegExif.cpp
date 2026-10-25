@@ -45,8 +45,7 @@ bool readU16(const std::vector<uint8_t> &bytes, size_t index, ByteOrder order, u
         return false;
     if (order == ByteOrder::Little)
     {
-        out = static_cast<uint16_t>(bytes[index] |
-                                    (static_cast<uint16_t>(bytes[index + 1]) << 8));
+        out = static_cast<uint16_t>(bytes[index] | (static_cast<uint16_t>(bytes[index + 1]) << 8));
     }
     else
     {
@@ -61,8 +60,7 @@ bool readU32(const std::vector<uint8_t> &bytes, size_t index, ByteOrder order, u
         return false;
     if (order == ByteOrder::Little)
     {
-        out = static_cast<uint32_t>(bytes[index]) |
-              (static_cast<uint32_t>(bytes[index + 1]) << 8) |
+        out = static_cast<uint32_t>(bytes[index]) | (static_cast<uint32_t>(bytes[index + 1]) << 8) |
               (static_cast<uint32_t>(bytes[index + 2]) << 16) |
               (static_cast<uint32_t>(bytes[index + 3]) << 24);
     }
@@ -115,8 +113,7 @@ bool nextMarker(const std::vector<uint8_t> &jpeg, size_t pos, Marker &marker)
     if (marker.code == 0x00)
         return false;
 
-    const bool standalone =
-        marker.code == 0x01 || (marker.code >= 0xD0 && marker.code <= 0xD9);
+    const bool standalone = marker.code == 0x01 || (marker.code >= 0xD0 && marker.code <= 0xD9);
     if (standalone)
     {
         marker.payload = false;
@@ -355,8 +352,8 @@ std::vector<uint8_t> spliceJpegApp1Exif(const std::vector<uint8_t> &encoded,
             tail = marker.ff;
             break;
         }
-        pieces.push_back(Piece{marker.ff, marker.end, isExifApp1(encoded, marker),
-                               isJfifApp0(encoded, marker)});
+        pieces.push_back(
+            Piece{marker.ff, marker.end, isExifApp1(encoded, marker), isJfifApp0(encoded, marker)});
         pos = marker.end;
     }
 

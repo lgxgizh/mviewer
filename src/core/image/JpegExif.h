@@ -39,8 +39,7 @@ std::vector<uint8_t> extractJpegApp1Exif(const std::vector<uint8_t> &jpeg);
 // IFD0 orientation tag inside `app1` is forced to 1; a missing tag is not
 // created (viewers treat that as orientation 1).
 std::vector<uint8_t> spliceJpegApp1Exif(const std::vector<uint8_t> &encoded,
-                                        const std::vector<uint8_t> &app1,
-                                        bool resetOrientationTo1);
+                                        const std::vector<uint8_t> &app1, bool resetOrientationTo1);
 
 // Compose `op` onto EXIF orientation `current` (1..8). Values outside 1..8
 // are treated as 1. Rotate degrees are normalized modulo 360; a non-multiple
