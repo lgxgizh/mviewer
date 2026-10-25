@@ -59,8 +59,13 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <psapi.h>
+// Order matters and clang-format's include sort does not know that: psapi.h uses
+// the Windows types (HANDLE, DWORD, PROCESS_MEMORY_COUNTERS) that windows.h
+// defines, so sorting this block alphabetically breaks the build.
+// clang-format off
 #include <windows.h>
+#include <psapi.h>
+// clang-format on
 #endif
 
 static int g_failures = 0;
