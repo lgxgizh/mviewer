@@ -142,6 +142,10 @@ int main(int argc, char **argv)
     // The window narrows (e.g. restored from maximized): columns stay equal
     // and every pane re-fits instead of the left one collapsing.
     host.resize(1000, 700);
+    // resizeEvent schedules fit via schedulePostLayoutFit(); pump so the
+    // coalesced refit runs before we assert cell scales (Linux offscreen ASan
+    // otherwise still sees the pre-resize fit values).
+    pump(300);
     checkThreePanes(ws, "after narrowing the window");
 
     // Regression test: snapshot in comparison mode must cover the full canvas area on High-DPI

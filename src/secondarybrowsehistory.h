@@ -102,7 +102,9 @@ class SecondaryBrowseHistory
     {
         if (dir.isEmpty())
             return {};
-        return QDir::cleanPath(QDir::fromNativeSeparators(dir));
+        // Same as transferDirectoriesMatch: collapse both separators so
+        // C:/a and C:\a do not create duplicate history entries on Linux.
+        return QDir::cleanPath(QString(dir).replace(QLatin1Char('\\'), QLatin1Char('/')));
     }
 
     static bool same(const QString &left, const QString &right)

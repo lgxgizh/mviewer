@@ -10,6 +10,10 @@
 #include <QCoreApplication>
 
 #include <cstdlib>
+#include <filesystem>
+#ifdef __linux__
+#include <unistd.h>
+#endif
 #include <iostream>
 #include <memory>
 #include <string>
@@ -51,12 +55,33 @@ int main(int argc, char *argv[])
 
     std::cout << "[Plugin Registry E2E tests]\n";
 
-    // The example plugin is built alongside the test executable (bin/).
-#ifdef _WIN32
-    const char *kPlugin = "example_analyzer";
-#else
-    const char *kPlugin = "example_analyzer";
+    // Resolve the example plugin next to this executable. PREFIX "" yields
+    // example_analyzer.so (not libexample_analyzer.so). Bare "example_analyzer"
+    // works with LoadLibrary on Windows but dlopen needs a real path on Linux.
+    std::filesystem::path pluginFile;
+#ifdef __linux__
+    {
+        char self[4096] = {0};
+        const ssize_t n = ::readlink("/proc/self/exe", self, sizeof(self) - 1);
+        if (n > 0)
+        {
+            self[n] = '\0';
+            pluginFile = std::filesystem::path(self).parent_path();
+        }
+    }
 #endif
+    if (pluginFile.empty() && argc > 0)
+        pluginFile = std::filesystem::path(argv[0]).parent_path();
+    if (pluginFile.empty())
+        pluginFile = std::filesystem::current_path();
+#ifdef _WIN32
+    pluginFile /= "example_analyzer.dll";
+#elif defined(__APPLE__)
+    pluginFile /= "example_analyzer.dylib";
+#else
+    pluginFile /= "example_analyzer.so";
+#endif
+    const std::string kPlugin = pluginFile.string();
     const std::string kAnalyzerId = "example.mean_luminance";
 
     auto &mgr = PluginManager::instance();
