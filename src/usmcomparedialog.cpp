@@ -292,8 +292,7 @@ void UsmCompareDialog::setupConnections()
     connect(m_sliderAmount, &QSlider::valueChanged, m_spinAmount, &QSpinBox::setValue);
     connect(m_spinAmount, qOverload<int>(&QSpinBox::valueChanged), m_sliderAmount,
             &QSlider::setValue);
-    connect(m_sliderRadius, &QSlider::valueChanged, this,
-            &UsmCompareDialog::onRadiusSliderChanged);
+    connect(m_sliderRadius, &QSlider::valueChanged, this, &UsmCompareDialog::onRadiusSliderChanged);
     connect(m_spinRadius, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
             &UsmCompareDialog::onRadiusSpinChanged);
     connect(m_sliderThreshold, &QSlider::valueChanged, m_spinThreshold, &QSpinBox::setValue);
