@@ -197,7 +197,10 @@ jobs:
         id: llvm
         uses: KyleMayes/install-llvm-action@v2
         with:
-          version: "21"
+          # 22.x emits UBSan trap reasons into debug info (an artificial
+          # __clang_trap_msg$... inline frame), so cdb names the failed check.
+          version: "22.1.8"
+          force-url: https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.8/LLVM-22.1.8-win64.exe
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -219,8 +222,11 @@ jobs:
           # 128-bit division (test_m3m4m5 makePattern) still calls __udivti3,
           # which is in clang_rt.builtins, not the ubsan runtime. /DEBUG writes
           # PDBs so failures are not just exe+offset.
+          # -fno-sanitize-merge: Release otherwise folds every check of one kind
+          # into a single ud2 per function, so the cdb stack points at an
+          # unrelated line. Unique traps keep the real source location + reason.
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $ubsanLib = "$llvmShort/lib/clang/21/lib/windows"
+          $ubsanLib = "$llvmShort/lib/clang/22/lib/windows"
           cmake -S . -B build_ubsan -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
@@ -228,7 +234,7 @@ jobs:
             -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
             "-DCMAKE_EXE_LINKER_FLAGS=/DEBUG /libpath:$ubsanLib clang_rt.builtins-x86_64.lib" `
             "-DCMAKE_SHARED_LINKER_FLAGS=/DEBUG /libpath:$ubsanLib clang_rt.builtins-x86_64.lib" `
-            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -fsanitize-trap=all -fno-sanitize=vptr,function,alignment -g"
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -fsanitize-trap=all -fno-sanitize=vptr,function,alignment -fno-sanitize-merge=all -g"
 
       - name: Build (UBSan)
         run: cmake --build build_ubsan -j 4
@@ -250,7 +256,7 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
+          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\22\lib\windows;$env:PATH"
           $env:UBSAN_OPTIONS = "print_stacktrace=1:halt_on_error=1"
           cd build_ubsan
           # Decode-suite tests run now that fixtures exist. product_workflow_gate
