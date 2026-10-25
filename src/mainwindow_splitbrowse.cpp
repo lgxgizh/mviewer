@@ -32,6 +32,27 @@ QWidget *MainWindow::buildSecondaryHeaderBar(QWidget *pane)
     hLayout->setContentsMargins(0, 0, 0, 0);
     hLayout->setSpacing(4);
 
+    auto addNavButton = [this, row1Widget, hLayout](const QString &glyph, const QString &name,
+                                                    const QString &tip, const auto &slot)
+    {
+        auto *button = new QPushButton(glyph, row1Widget);
+        button->setObjectName(name);
+        button->setToolTip(tip);
+        button->setFixedWidth(28);
+        button->setFocusPolicy(Qt::NoFocus);
+        connect(button, &QPushButton::clicked, this, slot);
+        hLayout->addWidget(button);
+        return button;
+    };
+    m_secondaryDirBackBtn =
+        addNavButton(QStringLiteral("←"), QStringLiteral("secondaryDirBackButton"),
+                     tr("Previous directory"), &MainWindow::navigateSecondaryBack);
+    m_secondaryDirForwardBtn =
+        addNavButton(QStringLiteral("→"), QStringLiteral("secondaryDirForwardButton"),
+                     tr("Next directory"), &MainWindow::navigateSecondaryForward);
+    m_secondaryDirUpBtn = addNavButton(QStringLiteral("↑"), QStringLiteral("secondaryDirUpButton"),
+                                       tr("Parent directory"), &MainWindow::navigateSecondaryUp);
+
     m_secondaryPathEdit = new SelectAllOnActivateLineEdit(row1Widget);
     m_secondaryPathEdit->setObjectName(QStringLiteral("secondaryPathEdit"));
     m_secondaryPathEdit->setPlaceholderText(tr("Enter secondary directory path..."));
@@ -83,6 +104,7 @@ QWidget *MainWindow::buildSecondaryHeaderBar(QWidget *pane)
     headerLayout->addWidget(row1Widget);
     buildSecondarySortControls(headerBar, headerLayout);
     polishGalleryToolbar(headerBar);
+    updateSecondaryNavButtons();
     return headerBar;
 }
 
@@ -168,12 +190,6 @@ QWidget *MainWindow::buildSecondaryBrowsePane()
     m_secondaryThumbnailPanel->setPaneSlot(SelectionModel::PaneSlot::Secondary);
     m_secondaryThumbnailPanel->setCommandStack(&m_cmdStack);
     m_secondaryThumbnailPanel->setSelectionModel(m_selection);
-    m_secondaryThumbnailPanel->installEventFilter(this);
-    if (m_secondaryThumbnailPanel->viewport())
-        m_secondaryThumbnailPanel->viewport()->installEventFilter(this);
-    pane->installEventFilter(this);
-    if (m_secondaryPathEdit)
-        m_secondaryPathEdit->installEventFilter(this);
     m_secondaryThumbnailPanel->setMinimumWidth(220);
     layout->addWidget(m_secondaryThumbnailPanel, 1);
 
@@ -186,6 +202,12 @@ QWidget *MainWindow::buildSecondaryBrowsePane()
     }
 
     wireSecondaryPanelSignals();
+    // One filter on every widget in the pane, including ones added above.
+    // A second install would deliver Back/Alt+Left twice.
+    pane->installEventFilter(this);
+    const auto watched = pane->findChildren<QWidget *>();
+    for (QWidget *child : watched)
+        child->installEventFilter(this);
     return pane;
 }
 
@@ -281,8 +303,10 @@ void MainWindow::openRightDirectory(const QString &dir)
         m_secondaryPathEdit->setText(cleaned);
 
     m_appState.secondaryLastDir = cleaned;
+    m_secondaryBrowseHistory.push(cleaned);
     setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
     updateSwapButtonEnabled();
+    updateSecondaryNavButtons();
 }
 
 void MainWindow::swapBrowsePanes()
@@ -319,9 +343,11 @@ void MainWindow::swapBrowsePanes()
         if (m_secondaryPathEdit)
             m_secondaryPathEdit->setText(leftDir);
         m_appState.secondaryLastDir = leftDir;
+        m_secondaryBrowseHistory.push(QDir::cleanPath(leftDir));
         if (m_selection)
             m_selection->setPaneSelection(SelectionModel::PaneSlot::Secondary, leftSel);
     }
+    updateSecondaryNavButtons();
     updateSplitBrowseCompareButton();
 }
 

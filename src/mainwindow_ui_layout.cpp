@@ -665,7 +665,9 @@ void MainWindow::buildStatusBarUi()
     // zoom, and live cache hit-rate. Persistent (not transient showMessage).
     m_lblImage = new QLabel("—", this);
     m_lblCount = new QLabel(tr("0 images"), this);
+    m_lblCount->setObjectName(QStringLiteral("statusImageCount"));
     m_lblSize = new QLabel(tr("Size 0 B"), this);
+    m_lblSize->setObjectName(QStringLiteral("statusSelectionSize"));
     m_lblZoom = new QLabel("Zoom", this);
     m_lblCache = new QLabel("Hit rate —", this);
     m_lblCache->setToolTip(
@@ -682,16 +684,17 @@ void MainWindow::buildStatusBarUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
             {
-                if (activeThumbnailPanel() != m_thumbnailPanel)
+                applyActivePaneStatusBar();
+                if (m_splitBrowseEnabled || !m_lblSize)
+                {
+                    updateCacheStat();
                     return;
-                const int idx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
-                if (total > 0 && idx >= 0)
-                    m_lblCount->setText(tr("Image %1 / %2").arg(idx + 1).arg(total));
-                else
-                    m_lblCount->setText(tr("%1 images").arg(total));
+                }
                 m_lblSize->setText(
                     selected > 0 ? tr("%1 selected · %2").arg(selected).arg(formatBytes(selBytes))
                                  : tr("Size %1").arg(formatBytes(totalBytes)));
+                m_lblSize->hide();
+                Q_UNUSED(total);
                 updateCacheStat();
             });
     connect(m_imageViewer, &ImageViewer::zoomChanged, this,

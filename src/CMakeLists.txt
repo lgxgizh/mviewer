@@ -187,6 +187,7 @@ add_library(mviewer_ui STATIC
     mainwindow_splitbrowse.cpp
     mainwindow_splitbrowse_panes.cpp
     mainwindow_split_transfer.cpp
+    mainwindow_splitbrowse_nav.cpp
     mainwindow_emptystate.cpp
     mainwindow_ui_chrome.cpp
     mainwindow_ui_menus.cpp

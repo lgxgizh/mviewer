@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "mainwindow_p.h"
+#include "splitbrowse_statusbar.h"
 
 #include "analysispanel.h"
 #include "application/ExternalOpen.h"
@@ -181,6 +182,8 @@ void MainWindow::enableSplitBrowseUi()
     }
     updateActivePaneIndicator();
     updateSwapButtonEnabled();
+    updateSecondaryNavButtons();
+    applyActivePaneStatusBar();
 }
 
 void MainWindow::disableSplitBrowseUi()
@@ -191,6 +194,8 @@ void MainWindow::disableSplitBrowseUi()
     setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
     updateActivePaneIndicator();
     updateSwapButtonEnabled();
+    updateSecondaryNavButtons();
+    applyActivePaneStatusBar();
 }
 
 void MainWindow::applySecondarySortFromState()
@@ -241,6 +246,8 @@ void MainWindow::persistSecondaryBrowseState()
     m_appState.hasSecondarySort = true;
     m_appState.secondarySortField = static_cast<int>(m_secondaryThumbnailPanel->sortMode());
     m_appState.secondarySortAscending = m_secondaryThumbnailPanel->sortAscending();
+    m_appState.secondaryDirHistory = m_secondaryBrowseHistory.entries();
+    m_appState.secondaryDirHistoryIndex = m_secondaryBrowseHistory.index();
 }
 
 void MainWindow::restoreSecondaryBrowsePosition()
@@ -414,18 +421,25 @@ void MainWindow::applyActivePaneStatusBar()
     ThumbnailPanel *panel = activeThumbnailPanel();
     if (!panel || !m_lblCount)
         return;
+    const QString current = currentImagePath();
     const int total = panel->pathList().size();
-    const int selected = panel->selectedPaths().size();
-    const int idx = m_imageList ? m_imageList->indexOf(currentImagePath()) : -1;
-    if (total > 0 && idx >= 0 && panelContainsPath(panel, currentImagePath()))
+    const int idx = activePaneImageIndex(panel->pathList(), current);
+    if (total > 0 && idx >= 0)
         m_lblCount->setText(tr("Image %1 / %2").arg(idx + 1).arg(total));
     else
         m_lblCount->setText(tr("%1 images").arg(total));
-    if (m_lblSize)
+    if (!m_lblSize)
+        return;
+    if (m_splitBrowseEnabled)
     {
-        m_lblSize->setText(selected > 0 ? tr("%1 selected").arg(selected)
-                                        : tr("%1 images").arg(total));
+        const int left = m_thumbnailPanel ? m_thumbnailPanel->selectedPaths().size() : 0;
+        const int right =
+            m_secondaryThumbnailPanel ? m_secondaryThumbnailPanel->selectedPaths().size() : 0;
+        m_lblSize->setText(splitSelectionStatusText(left, right));
+        m_lblSize->show();
+        return;
     }
+    m_lblSize->hide();
 }
 
 void MainWindow::onImageOpenFromPanel(const QString &path, ThumbnailPanel *source)
@@ -550,15 +564,11 @@ void MainWindow::wireSecondaryBrowseHostSignals()
     connect(qApp, &QApplication::focusChanged, this, &MainWindow::onBrowseFocusChanged);
 }
 
-void MainWindow::onSecondaryStatsChanged(int total, qint64, int selected, qint64)
+void MainWindow::onSecondaryStatsChanged(int, qint64, int, qint64)
 {
-    if (activeThumbnailPanel() != m_secondaryThumbnailPanel)
+    if (!m_splitBrowseEnabled && activeThumbnailPanel() != m_secondaryThumbnailPanel)
         return;
-    if (m_lblCount)
-        m_lblCount->setText(tr("%1 images").arg(total));
-    if (m_lblSize)
-        m_lblSize->setText(selected > 0 ? tr("%1 selected").arg(selected)
-                                        : tr("%1 images").arg(total));
+    applyActivePaneStatusBar();
 }
 
 void MainWindow::onSecondarySequenceChanged(const QString &directory, const QStringList &paths)

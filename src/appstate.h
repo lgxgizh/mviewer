@@ -45,6 +45,8 @@ struct AppState
     // Split Browse View session state
     bool splitBrowseEnabled = false;
     QString secondaryLastDir;
+    QStringList secondaryDirHistory;
+    int secondaryDirHistoryIndex = -1;
     QString secondaryLastImage;
     int secondaryThumbScroll = 0;
     QList<int> gallerySplitterSizes;
