@@ -85,7 +85,7 @@ bool isTiffPath(const std::string &path)
     return ext == "tif" || ext == "tiff";
 }
 
-void fillMetadata(const QImageReader &reader, const QImage &img,
+void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const QImage &img,
                   mviewer::domain::ImageMetadata &meta);
 
 #if defined(Q_OS_WIN)
@@ -94,7 +94,8 @@ void populateWicTiffMetadata(const QString &filename, const std::string &path, c
 {
     QImageReader metadataReader(filename);
     metadataReader.setAutoTransform(true);
-    fillMetadata(metadataReader, output, meta);
+    const QImage::Format sourceFormat = metadataReader.imageFormat();
+    fillMetadata(metadataReader, sourceFormat, output, meta);
     if (meta.filePath.empty())
         meta.filePath = path;
     meta.fileSize = QFileInfo(filename).size();
@@ -108,9 +109,10 @@ void populateWicTiffMetadata(const QString &filename, const std::string &path, c
     QImageReader profileReader(filename);
     profileReader.setAutoTransform(true);
     profileReader.setScaledSize(QSize(1, 1));
+    const QImage::Format profileFormat = profileReader.imageFormat();
     QImage tiny;
     if (profileReader.read(&tiny))
-        mviewer::core::qtmetadata::applyReaderRasterMetadata(profileReader, tiny, meta);
+        mviewer::core::qtmetadata::applyReaderRasterMetadata(profileFormat, tiny, meta);
 }
 
 // Qt's TIFF plugin reports ClipRect but still attempts to allocate the full
@@ -153,14 +155,14 @@ std::string formatName(const QImageReader &reader)
 
 // Populate the M6 metadata fields from a decoded QImage + its reader. Any
 // field that cannot be determined is left at its default. Never throws.
-void fillMetadata(const QImageReader &reader, const QImage &img,
+void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const QImage &img,
                   mviewer::domain::ImageMetadata &meta)
 {
     meta.width = img.width();
     meta.height = img.height();
 
     meta.orientation = orientationFromTransform(reader.transformation());
-    mviewer::core::qtmetadata::applyReaderRasterMetadata(reader, img, meta);
+    mviewer::core::qtmetadata::applyReaderRasterMetadata(sourceFormat, img, meta);
 
     meta.format = formatName(reader);
 }
@@ -377,7 +379,8 @@ QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetad
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImageReader reader(qPath);
     reader.setAutoTransform(false);
-    const bool sixteen = isSixteenBitFormat(reader.imageFormat());
+    const QImage::Format sourceFormat = reader.imageFormat();
+    const bool sixteen = isSixteenBitFormat(sourceFormat);
     if (!sixteen)
         reader.setAutoTransform(true);
     noteFullImageRead();
@@ -414,7 +417,7 @@ QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetad
         publishRaw16(path, img, orientation);
         qt_imageTransform(img, reader.transformation());
     }
-    fillMetadata(reader, img, outMeta);
+    fillMetadata(reader, sourceFormat, img, outMeta);
     return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(toImageData(img));
 }
 
@@ -595,12 +598,13 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         reader.setScaledSize(
             QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
     }
+    const QImage::Format sourceFormat = reader.imageFormat();
     const QImage img = reader.read();
     if (img.isNull())
         return ImageData();
     const int sourceWidth = full.width();
     const int sourceHeight = full.height();
-    fillMetadata(reader, img, outMeta);
+    fillMetadata(reader, sourceFormat, img, outMeta);
     // QImageReader::read() returns the scaled image, so restore the source
     // dimensions for presentation metadata. EXIF auto-transform rotates the
     // displayed geometry and must be reflected in the reported aspect.
@@ -640,6 +644,7 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
     reader.setClipRect(QRect(x, y, w, h));
     if (targetW > 0 && targetH > 0)
         reader.setScaledSize(QSize(targetW, targetH));
+    const QImage::Format sourceFormat = reader.imageFormat();
     const QImage img = reader.read();
     if (img.isNull())
         return ImageData();
@@ -652,6 +657,6 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
         std::swap(meta.width, meta.height);
     meta.orientation = orientationFromTransform(t);
     meta.format = formatName(reader);
-    mviewer::core::qtmetadata::applyReaderRasterMetadata(reader, img, meta);
+    mviewer::core::qtmetadata::applyReaderRasterMetadata(sourceFormat, img, meta);
     return toImageData(img);
 }

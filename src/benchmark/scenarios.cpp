@@ -235,12 +235,19 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus)
     ScenarioResult early;
     early.name = "B6";
     early.metric = "peak_cache_bytes";
+    // Memory-tier sweep only: B6 reports peak_cache_bytes from CacheManager.
+    // Default load() WAL-persists each decoded frame into DiskCache and that
+    // I/O dominates the 120 s per-scenario watchdog.
+    ImageRepository::LoadOptions memOnly;
+    memOnly.useDiskCache = false;
+    size_t failedLoads = 0;
     // Warm: load all (Viewer 512MB + Preview mip 256MB; B6 budget ≥ sum).
     for (const auto &p : all)
     {
         if (failIfScenarioTimedOut(early, false))
             return early;
-        ImageRepository::instance().load(p);
+        if (!ImageRepository::instance().load(p, memOnly).success())
+            ++failedLoads;
     }
 
     const auto peak = mt.sample();
@@ -256,6 +263,8 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus)
                " peakBytes=" + std::to_string(peak.peakBytes) + " expectedFloor~" +
                std::to_string(expectedFloor) +
                " rssMB=" + std::to_string(peak.processWorkingSetKB / 1024);
+    if (failedLoads > 0)
+        r.detail += " failedLoads=" + std::to_string(failedLoads);
 
     // Now evict and confirm return toward baseline.
     cm.clearMemory();
