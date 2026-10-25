@@ -191,8 +191,10 @@ DiskCache::~DiskCache()
 
 DiskCache &DiskCache::instance()
 {
-    static DiskCache inst;
-    return inst;
+    // Intentionally leaked: see CacheManager::instance(). Decode workers may
+    // still touch the disk tier after main() returns.
+    static DiskCache *inst = new DiskCache();
+    return *inst;
 }
 
 void DiskCache::openDb()

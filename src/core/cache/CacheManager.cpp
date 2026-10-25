@@ -8,8 +8,13 @@
 
 CacheManager &CacheManager::instance()
 {
-    static CacheManager inst;
-    return inst;
+    // Intentionally leaked: tile/decode workers may still touch the mip map
+    // after main() returns (AsyncTileRequestManager::shutdown cancels but does
+    // not join). Destroying the Meyers singleton at exit raced a pooled
+    // storeMipChain/getBestMip and tripped Linux GCC ASan heap-use-after-free
+    // in m48_phase0_failure_regressions. Same pattern as TaskScheduler.
+    static CacheManager *inst = new CacheManager();
+    return *inst;
 }
 
 namespace
