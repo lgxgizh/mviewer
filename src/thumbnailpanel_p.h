@@ -25,6 +25,7 @@
 #include "core/analysis/ExportReport.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/command/CommandStack.h"
+#include "core/command/FileCopyCommand.h"
 #include "core/command/FileDeleteCommand.h"
 #include "core/command/FileMoveCommand.h"
 #include "core/command/FileRenameCommand.h"
@@ -162,6 +163,9 @@ inline std::vector<std::string> toStdPaths(const QStringList &in)
         out.push_back(s.toUtf8().toStdString());
     return out;
 }
+
+void bindFileTransferObserver(ICommand *command,
+                              const mviewer::core::FileSystemAdapter::TransferObserver &observer);
 
 // P0-4: shared column geometry for the Details view so the delegate cells and
 // the header row stay perfectly aligned. Column widths are user-resizable via

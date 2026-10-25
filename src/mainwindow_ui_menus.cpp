@@ -141,6 +141,28 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 if (ThumbnailPanel *panel = activeThumbnailPanel())
                     panel->invertSelection();
             });
+
+    editMenu->addSeparator();
+    m_actCopyOtherPane = new QAction(tr("Copy to Other Pane"), this);
+    m_actCopyOtherPane->setObjectName(QStringLiteral("copyToOtherPaneAction"));
+    m_actCopyOtherPane->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_C));
+    m_actCopyOtherPane->setShortcutContext(Qt::WindowShortcut);
+    m_actCopyOtherPane->setToolTip(tr("Copy the active pane selection to the other pane"));
+    m_actCopyOtherPane->setEnabled(false);
+    m_actMoveOtherPane = new QAction(tr("Move to Other Pane"), this);
+    m_actMoveOtherPane->setObjectName(QStringLiteral("moveToOtherPaneAction"));
+    m_actMoveOtherPane->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+    m_actMoveOtherPane->setShortcutContext(Qt::WindowShortcut);
+    m_actMoveOtherPane->setToolTip(tr("Move the active pane selection to the other pane"));
+    m_actMoveOtherPane->setEnabled(false);
+    editMenu->addAction(m_actCopyOtherPane);
+    editMenu->addAction(m_actMoveOtherPane);
+    addAction(m_actCopyOtherPane);
+    addAction(m_actMoveOtherPane);
+    connect(m_actCopyOtherPane, &QAction::triggered, this,
+            &MainWindow::copyActiveSelectionToOtherPane);
+    connect(m_actMoveOtherPane, &QAction::triggered, this,
+            &MainWindow::moveActiveSelectionToOtherPane);
     addOpenTrashEditAction(editMenu);
 }
 
@@ -449,6 +471,8 @@ void MainWindow::retranslateUi()
         {m_actSelectAll, QT_TR_NOOP("Select All(&A)")},
         {m_actDeselectAll, QT_TR_NOOP("Deselect (&D)")},
         {m_actInvertSelection, QT_TR_NOOP("Invert Selection(&I)")},
+        {m_actCopyOtherPane, QT_TR_NOOP("Copy to Other Pane")},
+        {m_actMoveOtherPane, QT_TR_NOOP("Move to Other Pane")},
         {m_actSplitBrowse, QT_TR_NOOP("Split Browse View")},
         {m_actCompare, QT_TR_NOOP("Compare Mode (&C)")},
         {m_actToggleAnalysis, QT_TR_NOOP("Analysis Panel(&H)")},

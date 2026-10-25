@@ -1,4 +1,6 @@
+#include "splitbrowse_transfer.h"
 #include "thumbnailpanel_p.h"
+#include "thumbnailpanel_transfer.h"
 
 struct ThumbnailPanel::ContextMenuActions
 {
@@ -6,6 +8,8 @@ struct ThumbnailPanel::ContextMenuActions
     QAction *aRename = nullptr;
     QAction *aCopy = nullptr;
     QAction *aMove = nullptr;
+    QAction *aCopyOther = nullptr;
+    QAction *aMoveOther = nullptr;
     QAction *aTrash = nullptr;
     QAction *aOpenTrash = nullptr;
     QAction *aReveal = nullptr;
@@ -52,6 +56,24 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCopy = menu.addAction(tr("Copy..."));
     acts.aMove = menu.addAction(tr("Move..."));
     acts.aMove->setShortcut(QKeySequence("Ctrl+M"));
+    const TransferShortcut copyOther = copyToOtherPaneShortcut();
+    const TransferShortcut moveOther = moveToOtherPaneShortcut();
+    acts.aCopyOther = menu.addAction(tr("Copy to Other Pane"));
+    acts.aCopyOther->setShortcut(QKeySequence(copyOther.key | copyOther.mods));
+    acts.aMoveOther = menu.addAction(tr("Move to Other Pane"));
+    acts.aMoveOther->setShortcut(QKeySequence(moveOther.key | moveOther.mods));
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    const QString otherDir = property("otherPaneDirectory").toString();
+    const auto decision = decideOtherPaneTransfer(split, selPaths.size(), m_currentDir, otherDir);
+    const bool canTransfer = decision == OtherPaneTransferDecision::Available;
+    acts.aCopyOther->setEnabled(canTransfer);
+    acts.aMoveOther->setEnabled(canTransfer);
+    if (decision == OtherPaneTransferDecision::SameDirectory)
+    {
+        const QString sameDir = samePaneDirectoryMessage();
+        acts.aCopyOther->setToolTip(sameDir);
+        acts.aMoveOther->setToolTip(sameDir);
+    }
     acts.aTrash = menu.addAction(tr("Move to Recycle Bin"));
     acts.aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
     acts.aOpenTrash = menu.addAction("Open Recycle Bin");
@@ -122,6 +144,16 @@ bool ThumbnailPanel::handleFileContextMenuAction(const ContextMenuActions &actio
     if (chosen == actions.aMove)
     {
         moveSelectedTo();
+        return true;
+    }
+    if (chosen == actions.aCopyOther)
+    {
+        ThumbnailPanelTransfer::copySelectedToOtherPane(*this);
+        return true;
+    }
+    if (chosen == actions.aMoveOther)
+    {
+        ThumbnailPanelTransfer::moveSelectedToOtherPane(*this);
         return true;
     }
     if (chosen == actions.aTrash)

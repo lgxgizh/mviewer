@@ -694,6 +694,8 @@ void MainWindow::updateCacheStat()
 // P1-4: also forward global workflow shortcuts from child widgets.
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    if (routeSecondaryBrowseKey(watched, event))
+        return true;
     if (event->type() == QEvent::KeyPress)
     {
         if (filterKeyPress(watched, static_cast<QKeyEvent *>(event)))
@@ -714,20 +716,8 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
-    if (event->type() == QEvent::MouseButtonPress)
-    {
-        auto *me = static_cast<QMouseEvent *>(event);
-        if (me->button() == Qt::BackButton)
-        {
-            goDirBack();
-            return true;
-        }
-        if (me->button() == Qt::ForwardButton)
-        {
-            goDirForward();
-            return true;
-        }
-    }
+    if (routeDirectoryHistoryMouse(watched, event))
+        return true;
 
     if (watched == m_lblZoom)
     {

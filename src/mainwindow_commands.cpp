@@ -132,6 +132,16 @@ void MainWindow::setupCommands()
         },
         std::vector<CommandShortcut>{{Qt::Key_M, Qt::ControlModifier}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
+        "file_copy_other_pane", "Copy to Other Pane",
+        [this]() { copyActiveSelectionToOtherPane(); },
+        std::vector<CommandShortcut>{
+            {Qt::Key_C, static_cast<int>(Qt::ControlModifier | Qt::AltModifier)}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "file_move_other_pane", "Move to Other Pane",
+        [this]() { moveActiveSelectionToOtherPane(); },
+        std::vector<CommandShortcut>{
+            {Qt::Key_M, static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
         "file_reveal", "Show in File Manager (Ctrl+E)",
         [this]()
         {

@@ -97,6 +97,11 @@ AppState AppState::load()
     s.navHistoryIndex = o.value("navHistoryIndex").toInt(-1);
     s.splitBrowseEnabled = o.value("splitBrowseEnabled").toBool(false);
     s.secondaryLastDir = o.value("secondaryLastDir").toString();
+    const QJsonArray secondaryHistory = o.value("secondaryDirHistory").toArray();
+    for (const auto &v : secondaryHistory)
+        if (v.isString())
+            s.secondaryDirHistory.append(v.toString());
+    s.secondaryDirHistoryIndex = o.value("secondaryDirHistoryIndex").toInt(-1);
     s.secondaryLastImage = o.value("secondaryLastImage").toString();
     s.secondaryThumbScroll = o.value("secondaryThumbScroll").toInt(0);
     const QJsonArray splitSizes = o.value("gallerySplitterSizes").toArray();
@@ -149,6 +154,11 @@ bool AppState::save() const
     o["navHistoryIndex"] = navHistoryIndex;
     o["splitBrowseEnabled"] = splitBrowseEnabled;
     o["secondaryLastDir"] = secondaryLastDir;
+    QJsonArray secondaryHistory;
+    for (const auto &entry : secondaryDirHistory)
+        secondaryHistory.append(entry);
+    o["secondaryDirHistory"] = secondaryHistory;
+    o["secondaryDirHistoryIndex"] = secondaryDirHistoryIndex;
     o["secondaryLastImage"] = secondaryLastImage;
     o["secondaryThumbScroll"] = secondaryThumbScroll;
     QJsonArray splitSizesArr;

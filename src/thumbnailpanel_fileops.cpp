@@ -5,6 +5,8 @@
 #include "fileopmessages.h"
 #include "runtime_storage.h"
 #include "splitbrowse_delete.h"
+#include "splitbrowse_transfer.h"
+#include "thumbnailpanel_transfer.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -42,6 +44,17 @@ struct AsyncCommandState
     bool succeeded = false;
     bool cancelled = false;
 };
+
+QString askTransferDirectory(QWidget *parent, const QString &title, bool splitActive,
+                             const QString &otherPaneDir, const QString &currentDir)
+{
+    const QString last = QSettings().value(lastTransferDirKey()).toString();
+    const QString dir = QFileDialog::getExistingDirectory(
+        parent, title, defaultTransferDir(splitActive, otherPaneDir, last, currentDir));
+    if (!dir.isEmpty())
+        QSettings().setValue(lastTransferDirKey(), QDir::cleanPath(dir));
+    return dir;
+}
 
 struct AsyncCopyState
 {
@@ -212,10 +225,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                 ctx.reportProgress(transferPercent(copied, total));
                 return !ctx.isCancelled();
             };
-            if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
-                move->setTransferObserver(observer);
-            else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
-                del->setTransferObserver(observer);
+            bindFileTransferObserver(state->command.get(), observer);
 
             try
             {
@@ -223,18 +233,12 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
             }
             catch (...)
             {
-                if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
-                    move->setTransferObserver({});
-                else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
-                    del->setTransferObserver({});
+                bindFileTransferObserver(state->command.get(), {});
                 throw;
             }
             // The command is retained for Undo/Redo. Do not retain the worker
             // callback, whose TaskContext is only valid for this execution.
-            if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
-                move->setTransferObserver({});
-            else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
-                del->setTransferObserver({});
+            bindFileTransferObserver(state->command.get(), {});
             state->succeeded = state->command->lastError().empty();
             state->cancelled = ctx.isCancelled();
         },
@@ -270,6 +274,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                         state->command ? state->command->lastError()
                                        : ThumbnailPanel::tr("Command was lost.").toStdString();
                     const bool unresolved = state->command && state->command->hasUnresolvedState();
+                    ThumbnailPanelTransfer::publishTransferIfAny(*panel, state->command.get());
                     if (panel->m_cmdStack)
                         panel->m_cmdStack->recordExecuted(std::move(state->command));
 
@@ -614,7 +619,9 @@ void ThumbnailPanel::copySelectedTo()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const QString dir = QFileDialog::getExistingDirectory(this, tr("Copy To..."));
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    const QString other = property("otherPaneDirectory").toString();
+    const QString dir = askTransferDirectory(this, tr("Copy To..."), split, other, m_currentDir);
     if (dir.isEmpty())
         return;
     startCopyFileOperation(paths, dir);
@@ -629,12 +636,13 @@ void ThumbnailPanel::movePathsTo(const QStringList &paths)
 {
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const QString dir = QFileDialog::getExistingDirectory(this, tr("Move To..."));
+    const bool split = m_selection && m_selection->isSplitModeEnabled();
+    const QString other = property("otherPaneDirectory").toString();
+    const QString dir = askTransferDirectory(this, tr("Move To..."), split, other, m_currentDir);
     if (dir.isEmpty())
         return;
 
-    auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths), dir.toUtf8().toStdString());
-    startCommandFileOperation(std::move(cmd), paths, tr("Move"));
+    ThumbnailPanelTransfer::movePathsInto(*this, paths, dir);
 }
 
 void ThumbnailPanel::revealSelected()

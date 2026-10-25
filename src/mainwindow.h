@@ -9,6 +9,7 @@
 #include "core/update/UpdatePrompt.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
+#include "secondarybrowsehistory.h"
 #include "selectionmodel.h"
 #include "splitbrowse_selection.h"
 #include <QKeyEvent>
@@ -177,6 +178,18 @@ class MainWindow : public QMainWindow
     void applyGallerySplitterSizes();
     void updateActivePaneIndicator();
     void updateSwapButtonEnabled();
+    void syncOtherPaneDirectories();
+    void updateOtherPaneTransferActions();
+    void copyActiveSelectionToOtherPane();
+    void moveActiveSelectionToOtherPane();
+    void onFilesTransferred(const QString &destinationDirectory, const QStringList &createdPaths);
+    void navigateSecondaryBack();
+    void navigateSecondaryForward();
+    void navigateSecondaryUp();
+    void updateSecondaryNavButtons();
+    bool routeSecondaryBrowseKey(QObject *watched, QEvent *event);
+    bool routeDirectoryHistoryMouse(QObject *watched, QEvent *event);
+    bool secondaryBrowseOwns(QObject *watched) const;
     void enableSplitBrowseUi();
     void disableSplitBrowseUi();
     void applySecondarySortFromState();
@@ -339,6 +352,9 @@ class MainWindow : public QMainWindow
     QWidget *m_primaryBrowsePane = nullptr;
     QWidget *m_secondaryBrowsePane = nullptr;
     QLineEdit *m_secondaryPathEdit = nullptr;
+    QPushButton *m_secondaryDirBackBtn = nullptr;
+    QPushButton *m_secondaryDirForwardBtn = nullptr;
+    QPushButton *m_secondaryDirUpBtn = nullptr;
     QPushButton *m_secondaryBrowseBtn = nullptr;
     QPushButton *m_secondaryCloneBtn = nullptr;
     QPushButton *m_secondarySwapBtn = nullptr;
@@ -406,6 +422,8 @@ class MainWindow : public QMainWindow
     QAction *m_actSelectAll = nullptr;
     QAction *m_actDeselectAll = nullptr;
     QAction *m_actInvertSelection = nullptr;
+    QAction *m_actCopyOtherPane = nullptr;
+    QAction *m_actMoveOtherPane = nullptr;
     QAction *m_actColorManagement = nullptr;
     CommandStack m_cmdStack;
     void updateUndoRedoActions();
@@ -528,6 +546,7 @@ class MainWindow : public QMainWindow
     // P0: Directory-level back/forward history (separate from image history).
     QStringList m_dirHistory;
     int m_dirHistoryIndex = -1;
+    SecondaryBrowseHistory m_secondaryBrowseHistory;
     // P0: Favorites bar widget in the left sidebar.
     QListWidget *m_favoritesBar = nullptr;
     // Persisted, cross-session app state (favorites + restore position).

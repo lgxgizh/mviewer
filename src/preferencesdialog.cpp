@@ -123,6 +123,10 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_confirmDelete->setChecked(s.value("confirmDelete", true).toBool());
     gl->addRow(m_confirmDelete);
 
+    m_confirmFileTransfer = new QCheckBox(tr("Confirm before copying or moving files"));
+    m_confirmFileTransfer->setChecked(s.value("confirmFileTransfer", true).toBool());
+    gl->addRow(m_confirmFileTransfer);
+
     m_confirmModifyFile =
         new QCheckBox(tr("Confirm before modifying the original file (rotate/flip)"));
     m_confirmModifyFile->setChecked(s.value("confirmModifyFile", true).toBool());
@@ -250,6 +254,7 @@ void PreferencesDialog::accept()
     s.setValue("slideshowInterval", m_slideshowInterval->value());
     s.setValue("slideshowWrap", m_slideshowWrap->isChecked());
     s.setValue("confirmDelete", m_confirmDelete->isChecked());
+    s.setValue("confirmFileTransfer", m_confirmFileTransfer->isChecked());
     s.setValue("confirmModifyFile", m_confirmModifyFile->isChecked());
     s.setValue("gpuAcceleration", m_gpuAcceleration->isChecked());
     s.setValue("autoAlignBeforeDiff", m_autoAlign->isChecked());

@@ -5868,6 +5868,414 @@ void workflow20_viewer_fileop_targets(const QString &dirPath, const QStringList 
     dismissVisibleMessageBoxes();
 }
 
+void workflow21_split_pane_transfer()
+{
+    std::cout << "── Workflow 21: copy and move to the other pane ──\n";
+    qputenv("MVIEWER_DISABLE_RECOVERY_PROMPTS", "1");
+    qputenv("MVIEWER_DISABLE_UPDATE_CHECK", "1");
+    QSettings().setValue(QStringLiteral("confirmFileTransfer"), true);
+
+    QHash<QString, QVariant> savedSettings;
+    {
+        QSettings settings;
+        const QStringList keys = settings.allKeys();
+        for (const QString &key : keys)
+            savedSettings.insert(key, settings.value(key));
+    }
+    const SavedFile savedSession = snapshotFile(mviewer::runtime::filePath(
+        QStandardPaths::AppConfigLocation, QStringLiteral("mviewer.json")));
+    const SavedFile savedRecent = snapshotFile(appConfigFile(QStringLiteral("recent.json")));
+    const SavedFile savedRecovery = snapshotFile(appConfigFile(QStringLiteral("recovery.json")));
+
+    QDir tmp(QDir::tempPath());
+    const QString rootName = QStringLiteral("mviewer_wf_pane_transfer");
+    tmp.mkpath(rootName + QStringLiteral("/left"));
+    tmp.mkpath(rootName + QStringLiteral("/right"));
+    const QDir leftDir(tmp.filePath(rootName + QStringLiteral("/left")));
+    const QDir rightDir(tmp.filePath(rootName + QStringLiteral("/right")));
+    const QString leftCopy = writePng(leftDir, QStringLiteral("left_a.png"), QColor(20, 40, 80));
+    const QString leftMove = writePng(leftDir, QStringLiteral("left_b.png"), QColor(80, 40, 20));
+    writePng(rightDir, QStringLiteral("right_keep.png"), QColor(20, 80, 40));
+    const QString copiedDest = rightDir.filePath(QStringLiteral("left_a.png"));
+    const QString movedDest = rightDir.filePath(QStringLiteral("left_b.png"));
+
+    auto waitUntil = [](auto ready, int budgetMs)
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < budgetMs)
+        {
+            if (ready())
+                return true;
+            pump(40);
+        }
+        return static_cast<bool>(ready());
+    };
+
+    {
+        MainWindow window;
+        window.resize(1280, 800);
+        window.show();
+        pump(40);
+        dismissVisibleMessageBoxes();
+        auto *copyAction = window.findChild<QAction *>(QStringLiteral("copyToOtherPaneAction"));
+        auto *moveAction = window.findChild<QAction *>(QStringLiteral("moveToOtherPaneAction"));
+        auto *focus = window.findChild<QAction *>(QStringLiteral("focusBrowseAction"));
+        CHECK(copyAction && moveAction && focus, "other-pane actions and focus browse exist");
+        CHECK(focus && focus->shortcut() == QKeySequence(Qt::Key_F6), "F6 remains focus browse");
+        CHECK(copyAction && !copyAction->isEnabled() && moveAction && !moveAction->isEnabled(),
+              "single-pane mode disables copy and move to the other pane");
+
+        // openDirectory is private. DirectoryTree::navigateTo is the public path.
+        auto *directoryTree = window.findChild<DirectoryTree *>();
+        if (directoryTree)
+            directoryTree->navigateTo(leftDir.absolutePath(), true);
+        pump(40);
+        ThumbnailPanel *left = window.activeThumbnailPanel();
+        ThumbnailPanel *right = window.secondaryThumbnailPanel();
+        CHECK(waitUntil([&]() { return left && left->pathList().size() >= 2; }, 8000),
+              "left pane lists both source images");
+        window.toggleSplitBrowse(true);
+        pump(50);
+        CHECK(copyAction && !copyAction->isEnabled(),
+              "other-pane copy stays disabled while both panes show one directory");
+
+        window.openRightDirectory(rightDir.absolutePath());
+        CHECK(waitUntil(
+                  [&]()
+                  {
+                      return right && right->pathList().size() >= 1 &&
+                             QDir::cleanPath(right->currentDir()) ==
+                                 QDir::cleanPath(rightDir.absolutePath());
+                  },
+                  8000),
+              "right pane finishes its first scan");
+        window.setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+        if (left)
+            left->selectPath(leftCopy);
+        pump(40);
+        window.setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+        CHECK(copyAction && copyAction->isEnabled() && moveAction && moveAction->isEnabled(),
+              "different pane directories enable copy and move to the other pane");
+
+        QString confirmText;
+        QTimer yesPoller;
+        yesPoller.setInterval(15);
+        QObject::connect(&yesPoller, &QTimer::timeout,
+                         [&]()
+                         {
+                             const auto tops = QApplication::topLevelWidgets();
+                             for (QWidget *top : tops)
+                             {
+                                 auto *box = qobject_cast<QMessageBox *>(top);
+                                 if (!box || !box->isVisible())
+                                     continue;
+                                 confirmText = box->text();
+                                 if (QAbstractButton *button = box->button(QMessageBox::Yes))
+                                     button->click();
+                             }
+                         });
+        yesPoller.start();
+        if (copyAction)
+            copyAction->trigger();
+        yesPoller.stop();
+        const QString rightShown = right ? QDir::cleanPath(right->currentDir()) : QString();
+        CHECK(confirmText.contains(QStringLiteral("left pane")) && !rightShown.isEmpty() &&
+                  confirmText.contains(rightShown),
+              "copy confirm names the left pane and the right directory");
+        CHECK(waitUntil(
+                  [&]()
+                  {
+                      if (!QFile::exists(copiedDest) || !right)
+                          return false;
+                      const QStringList selected = right->selectedPaths();
+                      for (const QString &path : selected)
+                      {
+                          if (QFileInfo(path).fileName() == QStringLiteral("left_a.png"))
+                              return true;
+                      }
+                      return false;
+                  },
+                  8000),
+              "the right pane refreshes and selects the copied file");
+        CHECK(QFile::exists(leftCopy), "copy leaves the source file in the left pane");
+
+        QAction *undo = nullptr;
+        const auto actions = window.findChildren<QAction *>();
+        for (QAction *action : actions)
+        {
+            if (action->shortcut() == QKeySequence::Undo)
+                undo = action;
+        }
+        CHECK(waitUntil(
+                  [&]()
+                  {
+                      return undo && undo->isEnabled() &&
+                             undo->text().contains(QStringLiteral("Copy"));
+                  },
+                  8000),
+              "the copy can be undone");
+        if (undo)
+            undo->trigger();
+        pump(50);
+        CHECK(waitUntil([&]() { return !QFile::exists(copiedDest); }, 8000),
+              "undo removes the file copied to the other pane");
+
+        window.setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+        if (left)
+            left->selectPath(leftMove);
+        pump(30);
+        confirmText.clear();
+        yesPoller.start();
+        if (moveAction && moveAction->isEnabled())
+            moveAction->trigger();
+        else if (left)
+            ThumbnailPanelTransfer::moveSelectedToOtherPane(*left);
+        yesPoller.stop();
+        CHECK(confirmText.contains(QStringLiteral("Move")) &&
+                  confirmText.contains(QStringLiteral("left pane")),
+              "move confirm names the left pane");
+        CHECK(
+            waitUntil([&]() { return QFile::exists(movedDest) && !QFile::exists(leftMove); }, 8000),
+            "move puts the file in the right directory and removes the source");
+        CHECK(waitUntil(
+                  [&]()
+                  {
+                      return undo && undo->isEnabled() &&
+                             undo->text().contains(QStringLiteral("Move"));
+                  },
+                  8000),
+              "the move can be undone");
+        if (undo)
+            undo->trigger();
+        CHECK(
+            waitUntil([&]() { return QFile::exists(leftMove) && !QFile::exists(movedDest); }, 8000),
+            "undo moves the file back to the left pane");
+
+        window.close();
+        pump(40);
+        dismissVisibleMessageBoxes();
+    }
+
+    {
+        QSettings settings;
+        settings.clear();
+        for (auto it = savedSettings.cbegin(); it != savedSettings.cend(); ++it)
+            settings.setValue(it.key(), it.value());
+        settings.sync();
+    }
+    restoreFile(savedSession);
+    restoreFile(savedRecent);
+    restoreFile(savedRecovery);
+    QDir(tmp.filePath(rootName)).removeRecursively();
+}
+
+void workflow22_right_pane_history_status()
+{
+    std::cout << "── Workflow 22: right-pane history and status counts ──\n";
+    qputenv("MVIEWER_DISABLE_RECOVERY_PROMPTS", "1");
+    qputenv("MVIEWER_DISABLE_UPDATE_CHECK", "1");
+
+    QHash<QString, QVariant> savedSettings;
+    {
+        QSettings settings;
+        const QStringList keys = settings.allKeys();
+        for (const QString &key : keys)
+            savedSettings.insert(key, settings.value(key));
+    }
+    const SavedFile savedSession = snapshotFile(mviewer::runtime::filePath(
+        QStandardPaths::AppConfigLocation, QStringLiteral("mviewer.json")));
+    const SavedFile savedRecent = snapshotFile(appConfigFile(QStringLiteral("recent.json")));
+    const SavedFile savedRecovery = snapshotFile(appConfigFile(QStringLiteral("recovery.json")));
+
+    QDir tmp(QDir::tempPath());
+    const QString rootName = QStringLiteral("mviewer_wf_right_history");
+    tmp.mkpath(rootName + QStringLiteral("/left"));
+    tmp.mkpath(rootName + QStringLiteral("/right/nested"));
+    const QDir leftDir(tmp.filePath(rootName + QStringLiteral("/left")));
+    const QDir rightDir(tmp.filePath(rootName + QStringLiteral("/right")));
+    const QDir nestedDir(rightDir.filePath(QStringLiteral("nested")));
+    const QString leftA = writePng(leftDir, QStringLiteral("left_a.png"), QColor(20, 40, 80));
+    writePng(leftDir, QStringLiteral("left_b.png"), QColor(80, 40, 20));
+    writePng(rightDir, QStringLiteral("right.png"), QColor(20, 80, 40));
+    const QString nestedImage =
+        writePng(nestedDir, QStringLiteral("nested.png"), QColor(40, 80, 20));
+
+    auto sameDir = [](const QString &a, const QString &b)
+    { return QDir::cleanPath(a) == QDir::cleanPath(b); };
+    auto waitUntil = [](auto ready, int budgetMs)
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < budgetMs)
+        {
+            if (ready())
+                return true;
+            pump(40);
+        }
+        return static_cast<bool>(ready());
+    };
+    auto countMatches = [](const QString &text, int total)
+    {
+        const QString images = QStringLiteral("%1 images").arg(total);
+        const QString indexTail = QStringLiteral(" / %1").arg(total);
+        return text == images || text.endsWith(indexTail);
+    };
+
+    {
+        MainWindow window;
+        window.resize(1280, 800);
+        window.show();
+        pump(40);
+        dismissVisibleMessageBoxes();
+
+        auto *backBtn = window.findChild<QPushButton *>(QStringLiteral("secondaryDirBackButton"));
+        auto *fwdBtn = window.findChild<QPushButton *>(QStringLiteral("secondaryDirForwardButton"));
+        auto *upBtn = window.findChild<QPushButton *>(QStringLiteral("secondaryDirUpButton"));
+        auto *count = window.findChild<QLabel *>(QStringLiteral("statusImageCount"));
+        auto *selected = window.findChild<QLabel *>(QStringLiteral("statusSelectionSize"));
+        CHECK(backBtn && fwdBtn && upBtn && count && selected,
+              "right-pane history buttons and status labels exist");
+
+        // openDirectory is private. DirectoryTree::navigateTo is the public path.
+        auto *directoryTree = window.findChild<DirectoryTree *>();
+        if (directoryTree)
+            directoryTree->navigateTo(leftDir.absolutePath(), true);
+        pump(40);
+        ThumbnailPanel *left = window.activeThumbnailPanel();
+        ThumbnailPanel *right = window.secondaryThumbnailPanel();
+        CHECK(waitUntil([&]() { return left && left->pathList().size() >= 2; }, 8000),
+              "left pane lists both images");
+        window.toggleSplitBrowse(true);
+        pump(40);
+        window.openRightDirectory(nestedDir.absolutePath());
+        CHECK(waitUntil(
+                  [&]()
+                  {
+                      return right && right->pathList().size() >= 1 &&
+                             sameDir(right->currentDir(), nestedDir.absolutePath());
+                  },
+                  8000),
+              "right pane opens the nested directory");
+        CHECK(backBtn && backBtn->isEnabled() && fwdBtn && !fwdBtn->isEnabled() && upBtn &&
+                  upBtn->isEnabled(),
+              "back and parent are enabled and forward is not");
+
+        const QString stayed = right ? right->currentDir() : QString();
+        if (left)
+            sendKey(left, Qt::Key_Left, Qt::AltModifier);
+        CHECK(right && sameDir(right->currentDir(), stayed),
+              "Alt+Left outside the right pane leaves that directory");
+
+        if (upBtn)
+            upBtn->click();
+        pump(30);
+        CHECK(right && sameDir(right->currentDir(), rightDir.absolutePath()),
+              "parent moves the right pane up one directory");
+        if (backBtn)
+            backBtn->click();
+        pump(30);
+        CHECK(right && sameDir(right->currentDir(), nestedDir.absolutePath()) && fwdBtn &&
+                  fwdBtn->isEnabled(),
+              "back returns the right pane to the nested directory");
+        if (fwdBtn)
+            fwdBtn->click();
+        pump(30);
+        CHECK(right && sameDir(right->currentDir(), rightDir.absolutePath()),
+              "forward returns the right pane to the parent directory");
+
+        if (right)
+            sendKey(right, Qt::Key_Left, Qt::AltModifier);
+        CHECK(right && sameDir(right->currentDir(), nestedDir.absolutePath()),
+              "Alt+Left in the right pane goes back");
+        if (right && right->viewport())
+        {
+            auto *view = right->viewport();
+            QMouseEvent mouseForward(QEvent::MouseButtonPress, QPointF(8, 8),
+                                     view->mapToGlobal(QPoint(8, 8)), Qt::ForwardButton,
+                                     Qt::ForwardButton, Qt::NoModifier);
+            QApplication::sendEvent(view, &mouseForward);
+            pump(30);
+        }
+        CHECK(right && sameDir(right->currentDir(), rightDir.absolutePath()),
+              "mouse forward in the right pane goes forward");
+        if (right)
+            sendKey(right, Qt::Key_Backspace);
+        CHECK(right && sameDir(right->currentDir(), nestedDir.absolutePath()),
+              "Backspace in the right pane goes back");
+
+        auto *pathEdit = window.findChild<QLineEdit *>(QStringLiteral("secondaryPathEdit"));
+        const QString beforeEdit = right ? right->currentDir() : QString();
+        if (pathEdit)
+            sendKey(pathEdit, Qt::Key_Backspace);
+        CHECK(right && sameDir(right->currentDir(), beforeEdit),
+              "Backspace in the right path field does not change directory");
+
+        CHECK(waitUntil(
+                  [&]()
+                  {
+                      return left && right && left->pathList().size() >= 2 &&
+                             right->pathList().size() >= 1 &&
+                             sameDir(right->currentDir(), nestedDir.absolutePath());
+                  },
+                  8000),
+              "both panes have finished listing");
+        window.setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
+        pump(30);
+        const int leftTotal = left ? left->pathList().size() : 0;
+        CHECK(count && leftTotal >= 2 && countMatches(count->text(), leftTotal),
+              "the image count follows the left pane");
+        window.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+        pump(30);
+        const int rightTotal = right ? right->pathList().size() : 0;
+        CHECK(count && rightTotal >= 1 && rightTotal != leftTotal &&
+                  countMatches(count->text(), rightTotal),
+              "the image count follows the right pane");
+
+        if (left)
+            left->selectPath(leftA);
+        if (right)
+            right->selectPath(nestedImage);
+        CHECK(waitUntil(
+                  [&]()
+                  {
+                      return selected && selected->isVisible() &&
+                             selected->text() == QStringLiteral("Left 1 + Right 1 selected");
+                  },
+                  4000),
+              "split mode shows one selected file in each pane");
+
+        window.close();
+        pump(40);
+        dismissVisibleMessageBoxes();
+    }
+
+    const AppState restored = AppState::load();
+    bool sawNested = false;
+    for (const QString &entry : restored.secondaryDirHistory)
+    {
+        if (entry.contains(QStringLiteral("nested")))
+            sawNested = true;
+    }
+    CHECK(restored.secondaryDirHistory.size() >= 2 && sawNested,
+          "right-pane directory history is saved");
+    CHECK(restored.secondaryDirHistoryIndex >= 0 &&
+              restored.secondaryDirHistoryIndex < restored.secondaryDirHistory.size(),
+          "saved right-pane history index points at an entry");
+
+    {
+        QSettings settings;
+        settings.clear();
+        for (auto it = savedSettings.cbegin(); it != savedSettings.cend(); ++it)
+            settings.setValue(it.key(), it.value());
+        settings.sync();
+    }
+    restoreFile(savedSession);
+    restoreFile(savedRecent);
+    restoreFile(savedRecovery);
+    QDir(tmp.filePath(rootName)).removeRecursively();
+}
+
 void workflow19_layout_chrome(const QString &pathA, const QString &pathB, const QString &pathC)
 {
     std::cout << "── Workflow 19: layout chrome ──\n";

@@ -100,6 +100,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     // P0: load persisted cross-session state + recent-folders LRU before UI.
     m_appState = AppState::load();
+    m_secondaryBrowseHistory.restore(m_appState.secondaryDirHistory,
+                                     m_appState.secondaryDirHistoryIndex);
     m_directory->setFavorites(m_appState.favorites);
     m_directory->setRecentFolders(m_appState.recentFolders);
     m_workspace->setAnalysisVisible(m_appState.analysisVisible);
@@ -599,12 +601,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (m_lblRawSource)
         m_lblRawSource->clear(), m_lblRawSource->hide();
     statusBar()->showMessage(tr("Current: %1").arg(fileName), 3000);
-    if (m_lblCount && m_imageList && m_imageList->count() > 0)
-    {
-        const int idx = m_imageList->indexOf(path);
-        m_lblCount->setText(idx >= 0 ? tr("Image %1 / %2").arg(idx + 1).arg(m_imageList->count())
-                                     : tr("%1 images").arg(m_imageList->count()));
-    }
+    applyActivePaneStatusBar();
 
     ++m_statusMetadataGeneration;
     const uint64_t generation = m_statusMetadataGeneration;
