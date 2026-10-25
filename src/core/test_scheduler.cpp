@@ -37,16 +37,33 @@ static void testTaskSchedulerDependency()
     CHECK(h1->id != h2->id, "TaskId auto-increments");
     CHECK(h1->id > 0, "TaskId starts from 1");
 
-    TaskScheduler::TaskId depId = 999999;
+    // h3 depends on a gate task that is still running, so it stays deferred
+    // in the registry until the gate is released. Depending on an unknown id
+    // (the old 999999) counts as already satisfied: h3 launched at once and
+    // could finish and leave m_handles before handle() looked it up, which
+    // made this check flaky under the slower ASan build.
+    std::atomic<bool> releaseGate{false};
+    auto gate = sched.submit(TaskScheduler::Priority::Background,
+                             [&releaseGate](const TaskScheduler::TaskContext &)
+                             {
+                                 while (!releaseGate.load(std::memory_order_acquire))
+                                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                             });
+    const TaskScheduler::TaskId depId = gate->id;
+    std::atomic<bool> h3Ran{false};
     auto h3 = sched.submit(TaskScheduler::Priority::Background,
-                           [](const TaskScheduler::TaskContext &) {}, {depId});
+                           [&h3Ran](const TaskScheduler::TaskContext &)
+                           { h3Ran.store(true, std::memory_order_release); }, {depId});
     CHECK(h3->id > 0, "Dep task accepted");
     CHECK(h3->dependencies.size() == 1, "Dep recorded");
 
     auto found = sched.handle(h3->id);
     CHECK(found != nullptr, "handle() finds task");
 
-    TaskScheduler::cancelTree(depId);
+    releaseGate.store(true, std::memory_order_release);
+    CHECK(sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(10)),
+          "dependent drains after gate release");
+    CHECK(h3Ran.load(std::memory_order_acquire), "dependent runs after its dependency");
 
     auto h4 = sched.submit(TaskScheduler::DecodePool, []() {}, []() {});
     CHECK(h4->id > 0, "Compat submit works");

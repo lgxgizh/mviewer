@@ -40,6 +40,13 @@ int g_failures = 0;
         }                                                                                          \
     } while (false)
 
+// Phase breadcrumbs: stdout is unbuffered (see main) so, if ctest kills the
+// process on its timeout, the log still shows the last phase that started.
+void phase(const char *name)
+{
+    std::printf("[m61] phase: %s\n", name);
+}
+
 void pump(int ms = 30)
 {
     QElapsedTimer timer;
@@ -214,17 +221,24 @@ void domainAndCoreTests()
 
 int main(int argc, char **argv)
 {
+    // A pipe-attached stdout is fully buffered on Windows; a ctest timeout kill
+    // then discards every FAIL line and phase marker (the clang-cl ASan Nightly
+    // showed a 300 s timeout with no output at all).
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     QApplication app(argc, argv);
+    phase("domain/core");
     domainAndCoreTests();
     QTemporaryDir temporary;
     CHECK(temporary.isValid(), "temporary directory is available");
     if (!temporary.isValid())
         return 1;
     const QDir dir(temporary.path());
+    phase("source region truth");
     sourceRegionTruthTests(dir);
     const QString a = writePattern(dir, QStringLiteral("A-long-algorithm-image.png"), 96, 72, 10);
     const QString b = writePattern(dir, QStringLiteral("B-long-algorithm-image.png"), 96, 72, 60);
 
+    phase("grid load");
     QDialog dialog;
     auto *layout = new QVBoxLayout(&dialog);
     auto *workspace = new CompareWorkspace(&dialog);
@@ -255,6 +269,7 @@ int main(int argc, char **argv)
     if (!panesReady || !first || !second)
         return 1;
 
+    phase("grid ROI + table + clipboard");
     const QPoint gridFrom = first->sourcePointToWidget(QPointF(12, 10)).toPoint();
     const QPoint gridTo = first->sourcePointToWidget(QPointF(40, 32)).toPoint();
     sendRightDrag(first, gridFrom, gridTo, false);
@@ -325,6 +340,7 @@ int main(int argc, char **argv)
         pump(20);
     }
 
+    phase("rapid preview");
     const auto beforePreview = TaskScheduler::instance().metrics(TaskScheduler::AnalysisPool);
     const QPoint rapidStart = first->sourcePointToWidget(QPointF(2, 2)).toPoint();
     QMouseEvent rapidPress(QEvent::MouseButtonPress, QPointF(rapidStart),
@@ -351,6 +367,7 @@ int main(int argc, char **argv)
     const auto afterRelease = TaskScheduler::instance().metrics(TaskScheduler::AnalysisPool);
     CHECK(afterRelease.pending <= 3, "rapid ROI redraw keeps pending Analysis work bounded");
 
+    phase("move/resize ROI");
     const auto created = workspace->currentROI();
     const QPoint moveFrom = first
                                 ->sourcePointToWidget(QPointF(created.x + created.width / 2.0,
@@ -375,6 +392,7 @@ int main(int argc, char **argv)
               resized.y + resized.height == fixedBottom,
           "corner resize preserves the opposite source-pixel corner");
 
+    phase("canvas modes");
     QCheckBox *split = findCheckBox(workspace, QStringLiteral("Split"));
     QCheckBox *overlay = findCheckBox(workspace, QStringLiteral("Overlay"));
     QCheckBox *swipe = findCheckBox(workspace, QStringLiteral("Swipe"));
@@ -450,6 +468,7 @@ int main(int argc, char **argv)
         pump(20);
     }
 
+    phase("analysis backpressure");
     clearROI(workspace);
     TaskScheduler::instance().pause(TaskScheduler::AnalysisPool);
     sendRightDrag(first, gridFrom, gridTo);
@@ -462,6 +481,7 @@ int main(int argc, char **argv)
           "a new release retries successfully after backpressure clears");
 
     {
+        phase("unequal pair");
         const QString different =
             writePattern(dir, QStringLiteral("different-size.png"), 80, 60, 90);
         QDialog unequalDialog;
@@ -498,6 +518,7 @@ int main(int argc, char **argv)
     }
 
     {
+        phase("rotated mismatched pair");
         const QString vertPath =
             writePattern(dir, QStringLiteral("vert-mismatched.png"), 72, 96, 90);
         QDialog mismatchDialog;
@@ -572,6 +593,7 @@ int main(int argc, char **argv)
 
     // ROI keyboard micro-stepping (nudging & resizing)
     {
+        phase("keyboard nudge");
         const QPoint from = first->sourcePointToWidget(QPointF(20, 20)).toPoint();
         const QPoint to = first->sourcePointToWidget(QPointF(50, 50)).toPoint();
         sendRightDrag(first, from, to);
@@ -606,6 +628,7 @@ int main(int argc, char **argv)
               "Ctrl+Alt+Right expands ROI width by +1 px");
     }
 
+    phase("drain + teardown");
     TaskScheduler::instance().drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5));
 
     std::printf("M61 ROI workflow failures: %d\n", g_failures);
