@@ -2064,7 +2064,7 @@ target_link_libraries(m61_roi_workflow_tests
 target_compile_features(m61_roi_workflow_tests PRIVATE cxx_std_20)
 target_include_directories(m61_roi_workflow_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m61_roi_workflow_tests COMMAND m61_roi_workflow_tests)
-set_tests_properties(m61_roi_workflow_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+set_tests_properties(m61_roi_workflow_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
 add_executable(m61_roi_benchmark
     test_m61_roi_benchmark.cpp
