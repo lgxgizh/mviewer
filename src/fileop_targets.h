@@ -6,19 +6,20 @@
 #include <QStringList>
 
 #include <algorithm>
+#include <cstdint>
 
 // Pure decisions for Delete / F2 / Ctrl+M. UI-layer header (Qt containers are
 // intentional) so tests can lock the target without constructing widgets.
 // Viewer operations always name the image on screen. Browse operations keep
 // the caller's list, including a split-browse union built by the caller.
 
-enum class FileOpContext
+enum class FileOpContext : std::uint8_t
 {
     Browse,
     Viewer
 };
 
-enum class ViewerFileOp
+enum class ViewerFileOp : std::uint8_t
 {
     None,
     Rename,

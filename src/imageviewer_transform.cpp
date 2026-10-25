@@ -14,6 +14,7 @@
 #include <QCheckBox>
 #include <QDir>
 #include <QMessageBox>
+#include <QMetaMethod>
 #include <QPointer>
 #include <QSettings>
 

@@ -46,6 +46,7 @@ add_library(mviewer_core SHARED
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
     core/image/ImageFileRotate.cpp
+    core/image/JpegExif.cpp
     core/image/QtConvert.cpp
     core/image/ImageStats.cpp
     core/image/UsmSharpen.cpp
