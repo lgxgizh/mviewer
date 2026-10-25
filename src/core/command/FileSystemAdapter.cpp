@@ -177,18 +177,21 @@ std::shared_ptr<FileSystemAdapter> defaultFileSystemAdapter()
 bool samePath(const fs::path &left, const fs::path &right,
               const std::shared_ptr<FileSystemAdapter> &adapter)
 {
+    // Lexical identity covers the common collision-check case without touching
+    // the MSVC STL weakly_canonical path. clang-cl -fsanitize-trap=all aborts
+    // inside wmemcmp while weakly_canonical runs (Nightly commandstack_tests /
+    // filecopycommand_tests Illegal).
+    if (left.lexically_normal() == right.lexically_normal())
+        return true;
+
     std::error_code ec;
-    if (adapter->exists(left, ec) && adapter->exists(right, ec))
-    {
-        const fs::path canonicalLeft = std::filesystem::weakly_canonical(left, ec);
-        if (!ec)
-        {
-            const fs::path canonicalRight = std::filesystem::weakly_canonical(right, ec);
-            if (!ec)
-                return canonicalLeft == canonicalRight;
-        }
-    }
-    return left.lexically_normal() == right.lexically_normal();
+    if (!(adapter->exists(left, ec) && adapter->exists(right, ec)))
+        return false;
+
+    // OS-level identity (inode / Win32 file index) for hard links and
+    // short/long path aliases — avoids weakly_canonical's sanitizer trap.
+    const bool same = fs::equivalent(left, right, ec);
+    return !ec && same;
 }
 
 fs::path collisionFreeDestination(const fs::path &source, const fs::path &directory,

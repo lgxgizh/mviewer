@@ -309,9 +309,12 @@ CompareWorkspace::~CompareWorkspace()
     ++m_roiGen;
     // A delivery that landed during the cancel wait must not keep the pool.
     releaseSessionMemory();
-    // Child panes (and their display rasters) are destroyed after this body;
-    // trim once more after the event loop has finished the teardown.
-    QTimer::singleShot(0, qApp, [] { mviewer::core::releaseFreeHeapToOs(); });
+    // Child panes (and their display rasters) are destroyed after this body.
+    // Trim what we can synchronously — a deferred QTimer::singleShot(lambda)
+    // constructs Qt's QCallableObject and traps under clang-cl
+    // -fsanitize-trap=all (Nightly UBSan Illegal across compare_* suites).
+    // Pane rasters still free with the QObject tree either way.
+    mviewer::core::releaseFreeHeapToOs();
 }
 
 void CompareWorkspace::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)

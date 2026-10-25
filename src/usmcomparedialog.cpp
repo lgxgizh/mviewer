@@ -282,18 +282,20 @@ void UsmCompareDialog::setupConnections()
     connect(m_btnHoldCompare, &QPushButton::pressed, this, &UsmCompareDialog::beginTemporaryHold);
     connect(m_btnHoldCompare, &QPushButton::released, this, &UsmCompareDialog::endTemporaryHold);
 
+    // Plain member slots (not lambdas): clang-cl -fsanitize-trap=all traps inside
+    // Qt's QCallableObject path when connecting a lambda (Nightly UBSan).
     connect(m_leftView, &RawImageView::transformChanged, this,
-            [this]() { syncTransforms(m_leftView, m_rightView); });
+            &UsmCompareDialog::syncLeftTransformToRight);
     connect(m_rightView, &RawImageView::transformChanged, this,
-            [this]() { syncTransforms(m_rightView, m_leftView); });
+            &UsmCompareDialog::syncRightTransformToLeft);
 
     connect(m_sliderAmount, &QSlider::valueChanged, m_spinAmount, &QSpinBox::setValue);
     connect(m_spinAmount, qOverload<int>(&QSpinBox::valueChanged), m_sliderAmount,
             &QSlider::setValue);
     connect(m_sliderRadius, &QSlider::valueChanged, this,
-            [this](int val) { m_spinRadius->setValue(val / 10.0); });
-    connect(m_spinRadius, qOverload<double>(&QDoubleSpinBox::valueChanged), this, [this](double val)
-            { m_sliderRadius->setValue(static_cast<int>(std::round(val * 10.0))); });
+            &UsmCompareDialog::onRadiusSliderChanged);
+    connect(m_spinRadius, qOverload<double>(&QDoubleSpinBox::valueChanged), this,
+            &UsmCompareDialog::onRadiusSpinChanged);
     connect(m_sliderThreshold, &QSlider::valueChanged, m_spinThreshold, &QSpinBox::setValue);
     connect(m_spinThreshold, qOverload<int>(&QSpinBox::valueChanged), m_sliderThreshold,
             &QSlider::setValue);
@@ -306,6 +308,26 @@ void UsmCompareDialog::setupConnections()
             &UsmCompareDialog::onParametersChanged);
     connect(m_checkLumaOnly, &QCheckBox::toggled, this, &UsmCompareDialog::onParametersChanged);
     connect(m_debounceTimer, &QTimer::timeout, this, &UsmCompareDialog::scheduleSharpen);
+}
+
+void UsmCompareDialog::syncLeftTransformToRight()
+{
+    syncTransforms(m_leftView, m_rightView);
+}
+
+void UsmCompareDialog::syncRightTransformToLeft()
+{
+    syncTransforms(m_rightView, m_leftView);
+}
+
+void UsmCompareDialog::onRadiusSliderChanged(int val)
+{
+    m_spinRadius->setValue(val / 10.0);
+}
+
+void UsmCompareDialog::onRadiusSpinChanged(double val)
+{
+    m_sliderRadius->setValue(static_cast<int>(std::round(val * 10.0)));
 }
 
 void UsmCompareDialog::onParametersChanged()
