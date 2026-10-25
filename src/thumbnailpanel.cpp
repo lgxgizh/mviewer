@@ -449,6 +449,11 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
                    : (currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString()));
     const bool hadGallerySelection = !prevSelected.isEmpty();
     const bool pendingSelectionBeforeRebuild = !m_pendingSelect.isEmpty();
+    // Capture before m_paths.clear(): distinguishes "filter just hid the last
+    // visible row" (must clear currentImage — workflow_ux no-match) from a
+    // second empty rebuild while the gallery was already empty (must keep a
+    // currentImage set for rate-into-filter — p0_rating_roi under ASan).
+    const bool hadVisibleRows = !m_paths.isEmpty();
 
     m_paths.clear();
     m_rowByPath.clear();
@@ -483,18 +488,17 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     restoreSelectionAndCurrent(prevSelected, prevCurrent, selToRestore);
     restoreScrollState(anchorPath, anchorOffset, savedScroll.v, savedScroll.h);
 
-    // A completed filter rebuild with no visible rows clears the multi-
-    // selection list, but keeps currentImage when that path is still in the
-    // unfiltered directory source. Rating/flag shortcuts (and "rate into a
-    // filter") target currentImage even when the row is hidden; wiping it made
-    // p0_rating_roi_tests flake under ASan/Coverage where a late empty rebuild
-    // raced the test's setCurrentImage.
+    // Empty filter rebuild: clear currentImage only when this pass hid the
+    // last visible rows (no-match filter / first rating-filter apply). A late
+    // empty rebuild on an already-empty gallery must not wipe a currentImage
+    // the caller just set for "rate into filter" (p0_rating_roi under ASan).
     if (entries.isEmpty() && m_selection)
     {
-        const QString keep = m_selection->paneCurrentImage(m_paneSlot);
-        const bool keepInSource =
-            !keep.isEmpty() && m_sourceRowByPath.contains(galleryPathKey(keep));
-        m_selection->setSelection({}, keepInSource ? keep : QString());
+        const QString existing = m_selection->paneCurrentImage(m_paneSlot);
+        if (hadVisibleRows)
+            m_selection->setSelection({}, {});
+        else
+            m_selection->setSelection({}, existing);
     }
 
     pruneThumbnailState();

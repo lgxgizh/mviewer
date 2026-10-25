@@ -50,10 +50,10 @@ void ThumbnailPanel::onSelectionChanged()
         const QModelIndex focused =
             current.isValid() && selectionModel()->isSelected(current) ? current : fallback;
         QString cur = focused.isValid() ? m_paths.value(focused.row()) : QString();
-        // Empty gallery selectionChanged (filter hid every row) must not wipe a
-        // currentImage that is still in the folder source — same contract as
-        // buildModel's empty-filter preserve above.
-        if (paths.isEmpty() && cur.isEmpty() && hasActiveBrowseFilter())
+        // Only when the gallery is already empty: do not let selectionChanged
+        // wipe a currentImage set for rate-into-filter. When a filter just
+        // hid the last visible row, buildModel clears currentImage explicitly.
+        if (paths.isEmpty() && cur.isEmpty() && m_paths.isEmpty() && hasActiveBrowseFilter())
         {
             const QString existing = m_selection->paneCurrentImage(m_paneSlot);
             if (!existing.isEmpty() && m_sourceRowByPath.contains(galleryPathKey(existing)))
