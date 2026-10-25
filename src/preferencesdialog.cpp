@@ -41,8 +41,7 @@ void PreferencesDialog::addUiAppearanceRows(QFormLayout *gl)
     // i18n-allow: language endonym (always shown in its own script)
     m_uiLanguage->addItem(QStringLiteral("简体中文"),
                           static_cast<int>(mviewer::ui::LanguageMode::ChineseSimplified));
-    m_uiLanguage->setToolTip(
-        tr("UI language. Takes effect immediately without restarting."));
+    m_uiLanguage->setToolTip(tr("UI language. Takes effect immediately without restarting."));
     {
         QSettings langSettings;
         const auto lang = mviewer::ui::Language::languageModeFromKey(
@@ -122,6 +121,10 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_confirmDelete = new QCheckBox(tr("Confirm before delete"));
     m_confirmDelete->setChecked(s.value("confirmDelete", true).toBool());
     gl->addRow(m_confirmDelete);
+
+    m_confirmFileTransfer = new QCheckBox(tr("Confirm before copying or moving files"));
+    m_confirmFileTransfer->setChecked(s.value("confirmFileTransfer", true).toBool());
+    gl->addRow(m_confirmFileTransfer);
 
     m_confirmModifyFile =
         new QCheckBox(tr("Confirm before modifying the original file (rotate/flip)"));
@@ -237,6 +240,7 @@ void PreferencesDialog::accept()
     s.setValue("slideshowInterval", m_slideshowInterval->value());
     s.setValue("slideshowWrap", m_slideshowWrap->isChecked());
     s.setValue("confirmDelete", m_confirmDelete->isChecked());
+    s.setValue("confirmFileTransfer", m_confirmFileTransfer->isChecked());
     s.setValue("confirmModifyFile", m_confirmModifyFile->isChecked());
     s.setValue("gpuAcceleration", m_gpuAcceleration->isChecked());
     s.setValue("autoAlignBeforeDiff", m_autoAlign->isChecked());

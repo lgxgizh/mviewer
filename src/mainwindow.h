@@ -176,6 +176,11 @@ class MainWindow : public QMainWindow
     void applyGallerySplitterSizes();
     void updateActivePaneIndicator();
     void updateSwapButtonEnabled();
+    void syncOtherPaneDirectories();
+    void updateOtherPaneTransferActions();
+    void copyActiveSelectionToOtherPane();
+    void moveActiveSelectionToOtherPane();
+    void onFilesTransferred(const QString &destinationDirectory, const QStringList &createdPaths);
     void enableSplitBrowseUi();
     void disableSplitBrowseUi();
     void applySecondarySortFromState();
@@ -403,6 +408,8 @@ class MainWindow : public QMainWindow
     QAction *m_actSelectAll = nullptr;
     QAction *m_actDeselectAll = nullptr;
     QAction *m_actInvertSelection = nullptr;
+    QAction *m_actCopyOtherPane = nullptr;
+    QAction *m_actMoveOtherPane = nullptr;
     QAction *m_actColorManagement = nullptr;
     CommandStack m_cmdStack;
     void updateUndoRedoActions();

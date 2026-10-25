@@ -5706,6 +5706,42 @@ Build: %2</source>
         <source>Add Plugin Search Directory</source>
         <translation>添加插件搜索目录</translation>
     </message>
+    <message>
+        <source>Copy to Other Pane</source>
+        <translation>复制到另一栏</translation>
+    </message>
+    <message>
+        <source>Move to Other Pane</source>
+        <translation>移动到另一栏</translation>
+    </message>
+    <message>
+        <source>Copy the active pane selection to the other pane</source>
+        <translation>将活动栏的选中文件复制到另一栏</translation>
+    </message>
+    <message>
+        <source>Move the active pane selection to the other pane</source>
+        <translation>将活动栏的选中文件移动到另一栏</translation>
+    </message>
+    <message>
+        <source>Copy %1 file(s) from the left pane to %2</source>
+        <translation>从左栏复制 %1 个文件到 %2</translation>
+    </message>
+    <message>
+        <source>Copy %1 file(s) from the right pane to %2</source>
+        <translation>从右栏复制 %1 个文件到 %2</translation>
+    </message>
+    <message>
+        <source>Move %1 file(s) from the left pane to %2</source>
+        <translation>从左栏移动 %1 个文件到 %2</translation>
+    </message>
+    <message>
+        <source>Move %1 file(s) from the right pane to %2</source>
+        <translation>从右栏移动 %1 个文件到 %2</translation>
+    </message>
+    <message>
+        <source>Both panes show the same directory</source>
+        <translation>两栏是同一目录</translation>
+    </message>
 </context>
 <context>
     <name>PreferencesDialog</name>
@@ -5814,6 +5850,10 @@ Build: %2</source>
         <location filename="../src/preferencesdialog.cpp" line="117"/>
         <source>Confirm before delete</source>
         <translation>删除前确认</translation>
+    </message>
+    <message>
+        <source>Confirm before copying or moving files</source>
+        <translation>复制或移动文件前确认</translation>
     </message>
     <message>
         <location filename="../src/preferencesdialog.cpp" line="122"/>
@@ -6519,6 +6559,14 @@ Continue?</source>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="637"/>
         <source>Move</source>
         <translation>移动</translation>
+    </message>
+    <message>
+        <source>Copy to Other Pane</source>
+        <translation>复制到另一栏</translation>
+    </message>
+    <message>
+        <source>Move to Other Pane</source>
+        <translation>移动到另一栏</translation>
     </message>
 </context>
 <context>

@@ -136,6 +136,7 @@ add_library(mviewer_core SHARED
     core/command/RotateFilesCommand.cpp
     core/command/FileRenameCommand.cpp
     core/command/FileMoveCommand.cpp
+    core/command/FileCopyCommand.cpp
     core/command/FileSystemAdapter.cpp
     core/command/ToggleHistogramCommand.cpp
     core/command/CallbackCommand.cpp
@@ -185,6 +186,7 @@ add_library(mviewer_ui STATIC
     mainwindow_ui_layout.cpp
     mainwindow_splitbrowse.cpp
     mainwindow_splitbrowse_panes.cpp
+    mainwindow_split_transfer.cpp
     mainwindow_emptystate.cpp
     mainwindow_ui_chrome.cpp
     mainwindow_ui_menus.cpp
@@ -231,6 +233,7 @@ add_library(mviewer_ui STATIC
     thumbnailpanel_pipeline.cpp
     thumbnailpanel_filters.cpp
     thumbnailpanel_fileops.cpp
+    thumbnailpanel_transfer.cpp
     thumbnailpanel_delegates.cpp
     thumbnailpanel_delegates_details.cpp
     thumbnailpanel_viewmode.cpp
@@ -525,7 +528,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate jpegexif rotatefiles differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate jpegexif rotatefiles filecopycommand differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1679,6 +1682,7 @@ add_test(NAME imagetransform_tests COMMAND test_imagetransform)
 add_test(NAME imagerotate_tests COMMAND test_imagerotate)
 add_test(NAME jpegexif_tests COMMAND test_jpegexif)
 add_test(NAME rotatefiles_tests COMMAND test_rotatefiles)
+add_test(NAME filecopycommand_tests COMMAND test_filecopycommand)
 
 add_executable(test_fileop_targets
     test_fileop_targets.cpp

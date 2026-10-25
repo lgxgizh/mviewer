@@ -83,6 +83,17 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
     int previousCurrentRow = -1;
     captureIncrementalDeltaState(previousSelection, previousCurrent, anchorPath, anchorOffset,
                                  previousCurrentRow);
+    if (!m_transferSelectPending.isEmpty())
+    {
+        for (const QString &path : m_transferSelectPending)
+        {
+            if (!path.isEmpty() && !previousSelection.contains(path))
+                previousSelection.append(path);
+        }
+        if (previousCurrent.isEmpty())
+            previousCurrent = m_transferSelectPending.last();
+        m_transferSelectPending.clear();
+    }
 
     QList<Entry> next = delta.directoryRecovered ? QList<Entry>() : m_allEntries;
     m_directoryUnavailable = false;
@@ -211,7 +222,11 @@ applyDeltaRemovalsAndModifications(const mviewer::core::DirectoryDelta &delta,
     }
     for (const auto &entry : delta.added)
     {
+        const QString key = galleryIndexKey(qpath(entry.path));
+        if (nextIndex.contains(key))
+            continue;
         next.append(toPanelEntry(entry));
+        nextIndex.insert(key, next.size() - 1);
     }
 }
 

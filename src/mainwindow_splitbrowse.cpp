@@ -264,6 +264,7 @@ void MainWindow::toggleSplitBrowse(bool enabled)
     else
         disableSplitBrowseUi();
     updateSplitBrowseCompareButton();
+    syncOtherPaneDirectories();
 }
 
 void MainWindow::openRightDirectory(const QString &dir)

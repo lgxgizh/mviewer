@@ -519,11 +519,15 @@ void MainWindow::wireSecondaryBrowseHostSignals()
                 statusBar()->showMessage(message, 4000);
             });
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::directorySourceChanged, this,
-            [this](const QString &) { updateSwapButtonEnabled(); });
+            [this](const QString &) { syncOtherPaneDirectories(); });
+    connect(m_secondaryThumbnailPanel, &ThumbnailPanel::filesTransferred, this,
+            &MainWindow::onFilesTransferred);
     if (m_thumbnailPanel)
     {
         connect(m_thumbnailPanel, &ThumbnailPanel::directorySourceChanged, this,
-                [this](const QString &) { updateSwapButtonEnabled(); });
+                [this](const QString &) { syncOtherPaneDirectories(); });
+        connect(m_thumbnailPanel, &ThumbnailPanel::filesTransferred, this,
+                &MainWindow::onFilesTransferred);
     }
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::sortChanged, this,
             [this](ThumbnailPanel::SortMode mode, bool ascending)

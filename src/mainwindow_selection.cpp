@@ -74,6 +74,7 @@ void MainWindow::updateSelectionActions()
     const bool canTransform = hasCurrent || (n > 0);
     for (QAction *act : {m_actRotateCW, m_actRotateCCW, m_actFlipH, m_actFlipV})
         enableActionIf(act, canTransform);
+    updateOtherPaneTransferActions();
     updateNavigationActions();
 }
 

@@ -45,7 +45,7 @@ struct AsyncCommandState
 };
 
 QString askTransferDirectory(QWidget *parent, const QString &title, bool splitActive,
-                            const QString &otherPaneDir, const QString &currentDir)
+                             const QString &otherPaneDir, const QString &currentDir)
 {
     const QString last = QSettings().value(lastTransferDirKey()).toString();
     const QString dir = QFileDialog::getExistingDirectory(
@@ -224,10 +224,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                 ctx.reportProgress(transferPercent(copied, total));
                 return !ctx.isCancelled();
             };
-            if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
-                move->setTransferObserver(observer);
-            else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
-                del->setTransferObserver(observer);
+            bindFileTransferObserver(state->command.get(), observer);
 
             try
             {
@@ -235,18 +232,12 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
             }
             catch (...)
             {
-                if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
-                    move->setTransferObserver({});
-                else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
-                    del->setTransferObserver({});
+                bindFileTransferObserver(state->command.get(), {});
                 throw;
             }
             // The command is retained for Undo/Redo. Do not retain the worker
             // callback, whose TaskContext is only valid for this execution.
-            if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
-                move->setTransferObserver({});
-            else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
-                del->setTransferObserver({});
+            bindFileTransferObserver(state->command.get(), {});
             state->succeeded = state->command->lastError().empty();
             state->cancelled = ctx.isCancelled();
         },
@@ -282,6 +273,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                         state->command ? state->command->lastError()
                                        : ThumbnailPanel::tr("Command was lost.").toStdString();
                     const bool unresolved = state->command && state->command->hasUnresolvedState();
+                    panel->publishTransferIfAny(state->command.get());
                     if (panel->m_cmdStack)
                         panel->m_cmdStack->recordExecuted(std::move(state->command));
 
@@ -649,8 +641,7 @@ void ThumbnailPanel::movePathsTo(const QStringList &paths)
     if (dir.isEmpty())
         return;
 
-    auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths), dir.toUtf8().toStdString());
-    startCommandFileOperation(std::move(cmd), paths, tr("Move"));
+    movePathsInto(paths, dir);
 }
 
 void ThumbnailPanel::revealSelected()

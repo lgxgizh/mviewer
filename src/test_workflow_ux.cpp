@@ -702,6 +702,7 @@ int main(int argc, char **argv)
     workflow2_compare(paths[0], paths[2]);
     workflow19_layout_chrome(paths[0], paths[1], paths[2]);
     workflow20_viewer_fileop_targets(workDir.absolutePath(), paths);
+    workflow21_split_pane_transfer();
     workflow10_compare_canvas(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());
     workflow17_batch_dialog(workDir.absolutePath());

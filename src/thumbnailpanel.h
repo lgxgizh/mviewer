@@ -322,6 +322,11 @@ class ThumbnailPanel : public QListView
     void openTrashFolder();
     void copySelectedTo();
     void moveSelectedTo();
+    void copyPathsInto(const QStringList &paths, const QString &destinationDirectory);
+    void movePathsInto(const QStringList &paths, const QString &destinationDirectory);
+    void copySelectedToOtherPane();
+    void moveSelectedToOtherPane();
+    void showTransferredFiles(const QString &destinationDirectory, const QStringList &createdPaths);
     void revealSelected();
     // Open the folder currently shown in the gallery in the OS file manager.
     void openCurrentFolder();
@@ -458,6 +463,9 @@ class ThumbnailPanel : public QListView
     // Emitted after a delete/trash operation so the host can advance the viewer
     // off the deleted image. `deletedPaths` lists the removed files.
     void pathsRemoved(const QStringList &deletedPaths);
+    // Copies or moves finished in `destinationDirectory`. The host refreshes
+    // whichever pane is showing that directory and selects `createdPaths`.
+    void filesTransferred(const QString &destinationDirectory, const QStringList &createdPaths);
     // M56: path identity migration for an inferred rename.
     void pathsRenamed(const QStringList &oldPaths, const QStringList &newPaths);
     // M56: same-path content changes require source/cache refresh, not row
@@ -587,6 +595,9 @@ class ThumbnailPanel : public QListView
     // still being rebuilt asynchronously (e.g. rename→rescan). Applied by
     // buildModel once the path is present; cleared when applied.
     QString m_pendingSelect;
+    // Paths just copied or moved into this directory. Merged into the next
+    // incremental selection so an async filter still selects them.
+    QStringList m_transferSelectPending;
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter
@@ -700,6 +711,7 @@ class ThumbnailPanel : public QListView
                                   const QString &output);
     void startCommandFileOperation(std::unique_ptr<ICommand> command, const QStringList &paths,
                                    const QString &label);
+    void publishTransferIfAny(const ICommand *command);
     void startCopyFileOperation(const QStringList &paths, const QString &destinationDirectory);
     void applyDisplayedEntriesIncremental(const QList<Entry> &entries,
                                           const QStringList &previousSelection,
