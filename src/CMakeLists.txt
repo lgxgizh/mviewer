@@ -133,6 +133,7 @@ add_library(mviewer_core SHARED
     core/command/RenameCommand.cpp
     core/command/DeleteCommand.cpp
     core/command/FileDeleteCommand.cpp
+    core/command/RotateFilesCommand.cpp
     core/command/FileRenameCommand.cpp
     core/command/FileMoveCommand.cpp
     core/command/FileSystemAdapter.cpp

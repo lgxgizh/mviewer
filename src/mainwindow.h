@@ -210,6 +210,7 @@ class MainWindow : public QMainWindow
     void connectGallerySignals();
     void connectSelectionSignals();
     void connectViewerSignals();
+    void wireHostedFileTransforms();
     void connectFilterSignals();
     void connectMenuSignals();
     void connectWorkspaceSignals();
@@ -558,6 +559,8 @@ class MainWindow : public QMainWindow
     // target (ADR-012). Compare still uses in-memory cell preview when up.
     void rotateCurrentImage(int degrees);
     void flipCurrentImage(bool horizontal);
+    void runListedTransform(const QStringList &paths, bool rotate, int degrees, bool horizontal);
+    void refreshTransformedPaths(const QStringList &paths);
     SplitSelectionRestorePlan captureTransformSelection() const;
     void applyTransformSelection(const SplitSelectionRestorePlan &plan);
     void deleteViewerImage();
