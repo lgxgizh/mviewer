@@ -90,12 +90,17 @@ static void testRawPlan()
           "full ask without preview is not an LOD");
     CHECK(rawHalfCoversRequest(6000, 1024), "half-size covers maxEdge << sensor");
     CHECK(!rawHalfCoversRequest(6000, 4000), "half-size does not cover a near-full request");
-    CHECK(chooseRawFull(1200, true, 8'000'000) == RawFullIntent::Preview,
+    using mviewer::core::RawDisplayPolicy;
+    CHECK(chooseRawFull(1200, 0, true, 8'000'000, RawDisplayPolicy::PreferPreview) ==
+              RawFullIntent::Preview,
           "full decode keeps a usable preview");
-    CHECK(chooseRawFull(0, true, 8'000'000) == RawFullIntent::FullDemosaic,
+    CHECK(chooseRawFull(0, 0, true, 8'000'000, RawDisplayPolicy::PreferPreview) ==
+              RawFullIntent::FullDemosaic,
           "no preview: full demosaic");
-    CHECK(chooseRawFull(0, true, 256) == RawFullIntent::Empty, "tiny fixture is not demosaiced");
-    CHECK(chooseRawFull(0, false, 8'000'000) == RawFullIntent::Empty,
+    CHECK(chooseRawFull(0, 0, true, 256, RawDisplayPolicy::PreferPreview) == RawFullIntent::Empty,
+          "tiny fixture is not demosaiced");
+    CHECK(chooseRawFull(0, 0, false, 8'000'000, RawDisplayPolicy::PreferPreview) ==
+              RawFullIntent::Empty,
           "no LibRaw: preview-less stays empty");
 }
 

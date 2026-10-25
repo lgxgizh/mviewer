@@ -16,7 +16,7 @@ constexpr int kSweepMs = 1200;
 
 bool ImageViewer::isLoadingBusy() const
 {
-    return m_loading || m_largeSourcePending || !m_provisionalImage.isNull();
+    return m_loading || m_fullRawLoading || m_largeSourcePending || !m_provisionalImage.isNull();
 }
 
 bool ImageViewer::loadingIndicatorVisible() const

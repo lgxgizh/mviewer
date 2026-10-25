@@ -3367,8 +3367,10 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
         return;
     compareAction->trigger();
     pump(300);
-    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
-    CHECK(compareDialog != nullptr && compareDialog->isVisible(),
+    // QPointer: Escape closes the dialog and it is deleted (deleteLater), so
+    // the final visibility check must not touch a freed QDialog.
+    QPointer<QDialog> compareDialog = w.findChild<QDialog *>("compareDialog");
+    CHECK(!compareDialog.isNull() && compareDialog->isVisible(),
           "fullscreen workflow: visible Compare dialog is discoverable");
     CHECK(compareDialog && compareDialog->property("mviewerFullscreenRequested").toBool(),
           "fullscreen workflow: real Compare requests fullscreen before its first frame");
@@ -3438,7 +3440,8 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
                 pump(50);
             }
         }
-        CHECK(!compareDialog->isVisible(), "fullscreen workflow: Escape closes fullscreen Compare");
+        CHECK(compareDialog.isNull() || !compareDialog->isVisible(),
+              "fullscreen workflow: Escape closes fullscreen Compare");
         CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("Pixel Link")) &&
                   w.statusBar()->currentMessage() == expectedBrowseStatus,
               "fullscreen workflow: leaving Compare restores the current Browse identity");
@@ -3524,8 +3527,8 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     compareAction->trigger();
     pump(300);
 
-    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
-    CompareWorkspace *compare =
+    QPointer<QDialog> compareDialog = w.findChild<QDialog *>("compareDialog");
+    QPointer<CompareWorkspace> compare =
         compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
     CHECK(compareDialog && compareDialog->isVisible() && compare,
           "non-first navigation opens the real Compare workspace");
@@ -3576,7 +3579,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     {
         QElapsedTimer closeTimer;
         closeTimer.start();
-        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        while (compareDialog && compareDialog->isVisible() && closeTimer.elapsed() < 3000)
         {
             sendKey(compareDialog, Qt::Key_Escape);
             pump(50);
@@ -3599,7 +3602,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     {
         QElapsedTimer closeTimer;
         closeTimer.start();
-        while (compareDialog->isVisible() && closeTimer.elapsed() < 3000)
+        while (compareDialog && compareDialog->isVisible() && closeTimer.elapsed() < 3000)
         {
             sendKey(compareDialog, Qt::Key_Escape);
             pump(50);
@@ -5821,10 +5824,14 @@ void workflow20_viewer_fileop_targets(const QString &dirPath, const QStringList 
     window.show();
     pump(40);
     dismissVisibleMessageBoxes();
-    window.openDirectory(dirPath);
+    // Same folder open as the other MainWindow workflows: DirectoryTree::navigateTo
+    // is the public path MainWindow::openDirectory uses (that method is private).
+    auto *directoryTree = window.findChild<DirectoryTree *>();
     auto *panel = window.findChild<ThumbnailPanel *>();
     auto *selection = window.findChild<SelectionModel *>();
-    CHECK(panel && selection, "workflow 20 gallery and selection exist");
+    CHECK(directoryTree && panel && selection, "workflow 20 gallery and selection exist");
+    if (directoryTree)
+        directoryTree->navigateTo(dirPath, true);
     QElapsedTimer timer;
     timer.start();
     while (panel && panel->pathList().size() < 4 && timer.elapsed() < 8000)
@@ -6267,6 +6274,41 @@ void workflow19_layout_chrome(const QString &pathA, const QString &pathB, const 
     assertCompareControlsReachable(pathA, pathB);
     assertPaneHeadersDoNotOverlap(pathA, pathB, pathC);
     assertNavigationCollapseRoundTrip();
+}
+
+void workflow20_raw_display_chrome()
+{
+    std::cout << "── Workflow 20: RAW display chrome ──\n";
+    MainWindow window;
+    pump(40);
+    auto *combo = window.findChild<QComboBox *>(QStringLiteral("typeFilterCombo"));
+    CHECK(combo, "type filter combo exists");
+    QString rawData;
+    if (combo)
+    {
+        for (int i = 0; i < combo->count(); ++i)
+        {
+            if (combo->itemText(i) == QLatin1String("RAW"))
+                rawData = combo->itemData(i).toString();
+        }
+    }
+    CHECK(rawData.contains(QLatin1String("srw")) && rawData.contains(QLatin1String("nrw")),
+          "RAW type filter lists srw and nrw");
+    auto *act = window.findChild<QAction *>(QStringLiteral("decodeFullRawAction"));
+    CHECK(act, "decode full RAW action exists");
+    if (act)
+    {
+        const QKeySequence expect(Qt::CTRL | Qt::SHIFT | Qt::Key_D);
+        CHECK(act->shortcut() == expect, "decode full RAW shortcut is Ctrl+Shift+D");
+    }
+    PreferencesDialog prefs(&window);
+    auto *policy = prefs.findChild<QComboBox *>(QStringLiteral("preferencesRawDisplayPolicy"));
+    CHECK(policy && policy->count() == 3, "RAW display policy combo has 3 entries");
+    if (policy)
+        CHECK(policy->currentData().toInt() == 0, "RAW display policy defaults to preview");
+    window.close();
+    pump(40);
+    dismissVisibleMessageBoxes();
 }
 
 } // namespace

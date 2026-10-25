@@ -101,6 +101,10 @@ static int diffCount(const std::vector<uint8_t> &left, const std::vector<uint8_t
     return diffs;
 }
 
+// IFD0 Orientation is a SHORT. Values 1..8 keep the high byte at 0, so
+// rewriting that 2-byte field changes exactly one byte and nothing else.
+// A rebuilt segment or a re-encode changes far more than one byte.
+
 static bool containsText(const std::vector<uint8_t> &bytes, const char *text)
 {
     const auto *raw = reinterpret_cast<const char *>(bytes.data());
@@ -153,7 +157,7 @@ static void testSegments()
     CHECK(readJpegOrientation(tagged) == 6, "II orientation reads 6");
     auto edited = tagged;
     CHECK(writeJpegOrientationInPlace(edited, 3), "II tag rewrite");
-    CHECK(diffCount(tagged, edited) == 2, "II rewrite changes two bytes");
+    CHECK(diffCount(tagged, edited) == 1, "II rewrite changes only the orientation byte");
     CHECK(readJpegOrientation(edited) == 3, "II orientation reads 3");
     CHECK(containsText(edited, "CanonX 20200101 50mm GPS"), "II metadata bytes stay");
 
@@ -161,7 +165,7 @@ static void testSegments()
     CHECK(readJpegOrientation(motorola) == 6, "MM orientation reads 6");
     auto mmEdit = motorola;
     CHECK(writeJpegOrientationInPlace(mmEdit, 8), "MM tag rewrite");
-    CHECK(diffCount(motorola, mmEdit) == 2, "MM rewrite changes two bytes");
+    CHECK(diffCount(motorola, mmEdit) == 1, "MM rewrite changes only the orientation byte");
     CHECK(readJpegOrientation(mmEdit) == 8, "MM orientation reads 8");
 
     auto missing = wrapSoi({segment(0xE0, {'J', 'F', 'I', 'F', 0, 1, 1})});
@@ -233,7 +237,7 @@ static void testRotateFile()
     CHECK(result.ok && result.method == mviewer::core::ImageRotateMethod::ExifOrientation,
           "tagged JPEG uses the orientation tag");
     const auto rotated = readAll(taggedPath);
-    CHECK(diffCount(tagged, rotated) == 2, "rotate changes only the orientation bytes");
+    CHECK(diffCount(tagged, rotated) == 1, "rotate changes only the orientation byte");
     CHECK(readJpegOrientation(rotated) == 3, "orientation 6 rotated 90 becomes 3");
     CHECK(containsText(rotated, "CanonX"), "camera make survives");
     CHECK(containsText(rotated, "DateTime:2020:01:01 12:00:00"), "capture time survives");

@@ -465,7 +465,11 @@ void MainWindow::refreshTransformedPaths(const QStringList &paths)
     const QString current = currentImagePath();
     if (!current.isEmpty() && paths.contains(current))
         refreshOpenImage(m_imageViewer, m_previewPanel, m_metadataPanel, current);
-    refreshVisibleBrowsePanes();
+    // Do not refresh() the panes. That calls setDirectory(), which clears the
+    // gallery model and publishes an empty selection. The async rescan then
+    // completes after applyTransformSelection and drops the batch multi-select.
+    // Thumbnails are already invalidated above. A later directory-monitor delta
+    // updates size and mtime while keeping the current selection.
 }
 
 void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int degrees,

@@ -115,4 +115,81 @@ std::vector<std::string> ImageFormats::wildcardFilters()
     return out;
 }
 
+const std::vector<std::string_view> &rawExtensions()
+{
+    // Union of the historical decoder, metadata, thumbnail, and combo lists.
+    static const std::vector<std::string_view> kExts = {
+        "3fr", "arw", "cr2", "cr3", "crw", "dcr", "dng", "erf", "fff", "iiq", "kdc", "mef", "mos",
+        "mrw", "nef", "nrw", "orf", "pef", "raf", "raw", "rw2", "rwz", "sr2", "srw", "x3f"};
+    return kExts;
+}
+
+bool isRawExtension(std::string_view extNoDot)
+{
+    const std::string suffix = normalizeSuffix(std::string(extNoDot));
+    if (suffix.empty())
+        return false;
+    for (const std::string_view ext : rawExtensions())
+    {
+        if (suffix == ext)
+            return true;
+    }
+    return false;
+}
+
+bool isRawPath(std::string_view path)
+{
+    const std::filesystem::path file = pathFromUtf8(std::string(path));
+    return isRawExtension(pathToUtf8(file.extension()));
+}
+
+std::string rawTypeFilterData()
+{
+    std::string joined;
+    for (const std::string_view ext : rawExtensions())
+    {
+        if (!joined.empty())
+            joined.push_back(',');
+        joined.append(ext.data(), ext.size());
+    }
+    return joined;
+}
+
+bool suffixMatchesTypeFilter(std::string_view suffixNoDot, std::string_view typeFilterCsv)
+{
+    if (typeFilterCsv.empty())
+        return true;
+    const std::string suffix = normalizeSuffix(std::string(suffixNoDot));
+    if (suffix.empty())
+        return false;
+
+    const std::string filter(typeFilterCsv);
+    std::size_t begin = 0;
+    while (begin < filter.size())
+    {
+        const std::size_t comma = filter.find(',', begin);
+        const std::size_t end = comma == std::string::npos ? filter.size() : comma;
+        std::string token = filter.substr(begin, end - begin);
+        const auto first = token.find_first_not_of(" \t");
+        if (first == std::string::npos)
+            token.clear();
+        else
+        {
+            const auto last = token.find_last_not_of(" \t");
+            token = token.substr(first, last - first + 1);
+        }
+        token = normalizeSuffix(token);
+        if (token == suffix)
+            return true;
+        if (token == "raw" && isRawExtension(suffix))
+            return true;
+        if (token == "tiff" && (suffix == "tif" || suffix == "tiff"))
+            return true;
+        if (comma == std::string::npos)
+            break;
+        begin = comma + 1;
+    }
+    return false;
+}
+
 } // namespace mviewer::core

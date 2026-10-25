@@ -21,7 +21,7 @@
 class RotateFilesCommand : public ICommand
 {
   public:
-    enum class Op
+    enum class Op : std::uint8_t
     {
         Rotate,
         FlipH,
@@ -99,7 +99,7 @@ class RotateFilesCommand : public ICommand
     static void resetBackupBudget();
 
   private:
-    enum class Phase
+    enum class Phase : std::uint8_t
     {
         Fresh,
         Applied,

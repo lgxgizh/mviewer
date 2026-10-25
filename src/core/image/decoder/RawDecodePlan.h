@@ -6,7 +6,10 @@
 // half the sensor edge. Full demosaic is never selected here — decodeLod must
 // not silently materialize the full raster.
 
+#include "domain/Image.h"
+
 #include <cstdint>
+#include <string>
 
 namespace mviewer::core
 {
@@ -50,16 +53,79 @@ enum class RawFullIntent : std::uint8_t
     Empty
 };
 
-// Full decode: keep a usable embedded preview. Demosaic only when that preview
-// is missing and LibRaw is linked. `fileBytes` rejects tiny fixtures that are
-// not real RAW containers.
-inline RawFullIntent chooseRawFull(int previewEdge, bool libraw, long long fileBytes)
+// PreferPreview keeps today's fast path (embedded preview whenever one exists).
+// AutoFullWhenPreviewSmall demosaics when the preview long edge is under 90%
+// of the sensor long edge. AlwaysFull demosaics whenever LibRaw can.
+enum class RawDisplayPolicy : std::uint8_t
 {
-    if (previewEdge > 0)
+    PreferPreview = 0,
+    AutoFullWhenPreviewSmall = 1,
+    AlwaysFull = 2
+};
+
+inline bool rawFullDemosaicPossible(bool libraw, long long fileBytes)
+{
+    return libraw && fileBytes >= 4096;
+}
+
+// `sensorEdge` <= 0 means the sensor size is unknown. Auto then matches
+// PreferPreview so a missing sensor probe cannot force a full demosaic.
+inline RawFullIntent chooseRawFull(int previewEdge, int sensorEdge, bool libraw,
+                                   long long fileBytes, RawDisplayPolicy policy)
+{
+    const bool hasPreview = previewEdge > 0;
+    const bool canFull = rawFullDemosaicPossible(libraw, fileBytes);
+    if (policy == RawDisplayPolicy::AlwaysFull)
+    {
+        if (canFull)
+            return RawFullIntent::FullDemosaic;
+        return hasPreview ? RawFullIntent::Preview : RawFullIntent::Empty;
+    }
+    if (policy == RawDisplayPolicy::AutoFullWhenPreviewSmall && sensorEdge > 0)
+    {
+        const bool previewSmall =
+            static_cast<double>(previewEdge) < 0.9 * static_cast<double>(sensorEdge);
+        if (previewSmall)
+        {
+            if (canFull)
+                return RawFullIntent::FullDemosaic;
+            return hasPreview ? RawFullIntent::Preview : RawFullIntent::Empty;
+        }
+    }
+    if (hasPreview)
         return RawFullIntent::Preview;
-    if (libraw && fileBytes >= 4096)
+    if (canFull)
         return RawFullIntent::FullDemosaic;
     return RawFullIntent::Empty;
 }
+
+inline RawDisplayPolicy rawDisplayPolicyFromInt(int value)
+{
+    if (value == static_cast<int>(RawDisplayPolicy::AutoFullWhenPreviewSmall))
+        return RawDisplayPolicy::AutoFullWhenPreviewSmall;
+    if (value == static_cast<int>(RawDisplayPolicy::AlwaysFull))
+        return RawDisplayPolicy::AlwaysFull;
+    return RawDisplayPolicy::PreferPreview;
+}
+
+// Process-wide preference. Default PreferPreview. Not read from QSettings on
+// the decode path — the UI copies the setting in at startup and on accept.
+void setRawDisplayPolicy(RawDisplayPolicy policy);
+RawDisplayPolicy rawDisplayPolicy();
+
+// Per-path override for an explicit "Decode Full RAW". Survives a successful
+// decode so later loads of the same path reuse the full frame. Cleared on cancel.
+void requestRawFullDecode(const std::string &path);
+void clearRawFullDecode(const std::string &path);
+bool rawFullDecodeRequested(const std::string &path);
+
+// Empty unless the path is RAW and the decision differs from historical
+// PreferPreview. ImageRepository appends it so default cache keys stay identical.
+std::string rawCacheKeySuffix(const std::string &path);
+bool rawCacheKeyAgrees(const std::string &key, const std::string &suffix);
+
+// Remember the source chosen for a cache key so a later disk hit can label it.
+void rememberRawSource(const std::string &cacheKey, mviewer::domain::RawSource source);
+mviewer::domain::RawSource recalledRawSource(const std::string &cacheKey);
 
 } // namespace mviewer::core

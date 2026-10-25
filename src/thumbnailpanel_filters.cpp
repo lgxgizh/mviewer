@@ -4,6 +4,7 @@
 // computed once per file and compared in pure memory.
 #include "thumbnailpanel_p.h"
 
+#include "core/image/ImageFormats.h"
 #include "core/image/ImageSortKeys.h"
 #include "core/metadata/MetadataIndexer.h"
 #include "core/search/MetadataFilter.h"
@@ -449,25 +450,6 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
 {
     QList<Entry> out;
     out.reserve(source.size());
-    QStringList typeCandidates;
-    bool filterRaw = false;
-    bool filterTiff = false;
-    if (!query.type.empty())
-    {
-        for (const QString &c : QString::fromStdString(query.type).split(',', Qt::SkipEmptyParts))
-        {
-            const QString t = c.trimmed().toLower();
-            if (t == QLatin1String("raw"))
-                filterRaw = true;
-            else if (t == QLatin1String("tiff"))
-                filterTiff = true;
-            else
-                typeCandidates.append(t);
-        }
-    }
-    static const QSet<QStringView> rawExts = {
-        u"cr2", u"cr3", u"nef", u"arw", u"dng", u"raf", u"rw2", u"orf", u"sr2", u"srw",
-        u"pef", u"3fr", u"mef", u"erf", u"mrw", u"dcr", u"kdc", u"mos", u"raw", u"iiq"};
     const auto passesType = [&](const QString &path)
     {
         if (query.type.empty())
@@ -475,17 +457,9 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
         const int dot = path.lastIndexOf('.');
         if (dot < 0 || dot + 1 >= path.length())
             return false;
-        const QStringView suffix = QStringView(path).mid(dot + 1);
-        if (filterTiff && (suffix.compare(u"tif", Qt::CaseInsensitive) == 0 ||
-                           suffix.compare(u"tiff", Qt::CaseInsensitive) == 0))
-            return true;
-        const QString lowerSuffix = suffix.toString().toLower();
-        if (filterRaw && rawExts.contains(lowerSuffix))
-            return true;
-        for (const QString &type : typeCandidates)
-            if (lowerSuffix == type)
-                return true;
-        return false;
+        const QByteArray suffix = path.mid(dot + 1).toUtf8();
+        return mviewer::core::suffixMatchesTypeFilter(
+            std::string_view(suffix.constData(), static_cast<size_t>(suffix.size())), query.type);
     };
     for (const Entry &entry : source)
     {

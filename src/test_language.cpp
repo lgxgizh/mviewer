@@ -90,6 +90,20 @@ int main(int argc, char **argv)
               "Same as O when the compare canvas has focus; otherwise Tab moves focus") ==
               QStringLiteral("比较画布拥有焦点时与 O 相同；否则 Tab 移动焦点"),
           "qm translates compare canvas Tab note");
+    check(embedded.translate("MainWindow", "Skip this version") == QStringLiteral("跳过此版本"),
+          "qm translates Skip this version");
+    check(embedded.translate("MainWindow", "Checking for updates…") ==
+              QStringLiteral("正在检查更新…"),
+          "qm translates the ellipsis update status");
+    check(embedded.translate("RawSource", "RAW · Full decode") == QStringLiteral("RAW · 完整解码"),
+          "qm translates the full RAW source badge");
+    check(embedded.translate("UsmCompareDialog", "Cannot open %1 for USM sharpen comparison: %2") ==
+              QStringLiteral("无法打开 %1 进行 USM 锐化对比：%2"),
+          "qm translates the USM open failure");
+    check(embedded.translate("PreferencesDialog", "RAW display") == QStringLiteral("RAW 显示"),
+          "qm translates the RAW display preference");
+    check(embedded.translate("MetadataModel", "Display source") == QStringLiteral("显示来源"),
+          "qm translates Display source");
 
     Language::apply(LanguageMode::English);
     check(tr("MainWindow", "&File") == QStringLiteral("&File"),

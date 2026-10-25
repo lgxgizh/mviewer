@@ -9,7 +9,9 @@
 #include <QImage>
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <string>
 
 class QCheckBox;
 class QComboBox;
@@ -25,14 +27,49 @@ namespace mviewer::core
 struct UsmDiffSummary;
 }
 
+struct UsmLoadedSource
+{
+    ImageData pixels;
+    mviewer::domain::ImageMetadata meta;
+    std::string error;
+    bool ok() const
+    {
+        return error.empty() && !pixels.isNull();
+    }
+};
+
 class UsmCompareDialog : public QDialog
 {
     Q_OBJECT
 
   public:
+    enum class OpenMode : std::uint8_t
+    {
+        Immediate,
+        Background
+    };
+    using SourceLoader = std::function<UsmLoadedSource(const std::string &path)>;
+    using FailurePresenter = std::function<void(const QString &title, const QString &body)>;
+
     explicit UsmCompareDialog(const QString &filePath, const ImageData &initialData = {},
-                              QWidget *parent = nullptr);
+                              QWidget *parent = nullptr,
+                              const mviewer::domain::ImageMetadata &meta = {},
+                              OpenMode mode = OpenMode::Immediate, SourceLoader loader = {});
     ~UsmCompareDialog() override;
+
+    static void setFailurePresenter(FailurePresenter presenter);
+    bool loadedOffUiThread() const
+    {
+        return m_loadedOffUiThread;
+    }
+
+    const std::vector<uint8_t> &embeddedIccProfile() const
+    {
+        return m_iccProfile;
+    }
+    // RAW sources save as tif when the encoder maps it, otherwise png.
+    // Other sources keep their suffix (empty becomes png).
+    static QString defaultSaveExtension(const QString &sourceSuffix);
 
   protected:
     void keyPressEvent(QKeyEvent *event) override;
@@ -62,7 +99,11 @@ class UsmCompareDialog : public QDialog
     void setupConnections();
     void syncTransforms(RawImageView *source, RawImageView *target);
     void updateStatusInfo(qint64 elapsedMs, const mviewer::core::UsmDiffSummary &summary);
-    void loadImageSource(const QString &filePath, const ImageData &initialData);
+    void loadImageSource(const QString &filePath, const ImageData &initialData,
+                         const mviewer::domain::ImageMetadata &meta);
+    void beginBackgroundLoad();
+    void applyBackgroundLoad(const UsmLoadedSource &loaded, bool offUiThread);
+    void presentOpenFailure(const QString &detail);
 
     // Momentary Space / hold-button compare (aligned with CompareWorkspace pair hold).
     int paneIndexAtGlobalPos(const QPoint &globalPos) const;
@@ -112,4 +153,7 @@ class UsmCompareDialog : public QDialog
     uint64_t m_currentGen = 0;
     std::shared_ptr<std::atomic<bool>> m_currentCancel;
     TaskScheduler::TaskHandle m_activeTask;
+    SourceLoader m_sourceLoader;
+    bool m_loadedOffUiThread = false;
+    bool m_closing = false;
 };

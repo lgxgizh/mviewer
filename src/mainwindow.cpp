@@ -1,6 +1,7 @@
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
+#include "core/image/decoder/RawDecodePlan.h"
 #include "naturalnameorder.h"
 #include "runtime_storage.h"
 
@@ -133,6 +134,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     rebuildRecentFilesMenu();
+    {
+        QSettings settings;
+        const int rawPolicy = settings.value(QStringLiteral("raw/displayPolicy"), 0).toInt();
+        mviewer::core::setRawDisplayPolicy(mviewer::core::rawDisplayPolicyFromInt(rawPolicy));
+    }
     restoreLastSession();
 
     // M15: drag & drop — accept files/folders dropped onto the window.
@@ -279,6 +285,22 @@ MainWindow::~MainWindow()
         m_clipboardPastePath.clear();
     }
     cleanupClipboardPasteTemps();
+    // ~QWidget deletes the children only after this body returns, when the
+    // dynamic type is already QWidget. Any signal that then reaches a
+    // MainWindow member-function slot downcasts a non-MainWindow object
+    // (UBSan "object is of type 'QWidget'", Qt assert "class destructor may
+    // have already run" in browse/paste/split acceptance, teardown stress and
+    // m47 restore). The trigger is QApplication::focusChanged ->
+    // onBrowseFocusChanged (qApp outlives the window and focus moves while the
+    // children die); child senders (combo boxes, timers, ThumbnailPanel
+    // selection/model signals) can emit on the way down too. Cut every
+    // connection into this object last, after the teardown above that may
+    // still rely on them.
+    if (QCoreApplication *app = QCoreApplication::instance(); app != nullptr)
+        QObject::disconnect(app, nullptr, this, nullptr);
+    const auto owned = findChildren<QObject *>();
+    for (QObject *child : owned)
+        QObject::disconnect(child, nullptr, this, nullptr);
 }
 
 void MainWindow::onSearchMetaToggled(bool on)
@@ -576,6 +598,8 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     const QString fileName = separator >= 0 ? path.mid(separator + 1) : path;
     setWindowTitle(QString("%1 - MViewer").arg(fileName));
     m_lblImage->setText(fileName);
+    if (m_lblRawSource)
+        m_lblRawSource->clear(), m_lblRawSource->hide();
     statusBar()->showMessage(tr("Current: %1").arg(fileName), 3000);
     applyActivePaneStatusBar();
 

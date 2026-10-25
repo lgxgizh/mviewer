@@ -3,6 +3,7 @@
 #include "core/async/CooperativeCancel.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/RawMetadata.h"
 #include "core/image/decoder/RawDecodePlan.h"
 #include "core/render/RenderEngine.h"
 
@@ -14,6 +15,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -113,12 +115,14 @@ bool RawDecoder::librawAvailable()
 #endif
 }
 
-ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize, int maxEdge) const
+ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize, int maxEdge,
+                                         mviewer::domain::RawSource *sourceOut) const
 {
 #if !defined(MVIEWER_HAS_LIBRAW)
     (void)path;
     (void)halfSize;
     (void)maxEdge;
+    (void)sourceOut;
     return {};
 #else
     if (mviewer::core::cooperativeCancelRequested())
@@ -220,6 +224,11 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
         }
         image.reset();
         raw.recycle();
+        if (sourceOut)
+        {
+            *sourceOut = halfSize ? mviewer::domain::RawSource::HalfDemosaic
+                                  : mviewer::domain::RawSource::FullDemosaic;
+        }
         return scaleToEdge(std::move(out), maxEdge);
     }
     catch (...)
@@ -229,7 +238,108 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
 #endif
 }
 
-ImageData RawDecoder::decodeRawPixels(const std::string &path, int maxEdge, bool allowFull) const
+namespace
+{
+int rawSensorLongEdge(const std::string &path)
+{
+    const mviewer::core::RawMetadata meta = mviewer::core::parseRawMetadata(path);
+    const uint32_t edge = (std::max)(meta.width, meta.height);
+    if (edge > static_cast<uint32_t>((std::numeric_limits<int>::max)()))
+        return (std::numeric_limits<int>::max)();
+    return static_cast<int>(edge);
+}
+} // namespace
+
+RawDecoder::RawPixelResult RawDecoder::decodeRawLodPixels(const std::string &path, int maxEdge,
+                                                          ImageData preview, int previewEdge,
+                                                          bool libraw) const
+{
+    const auto asPreview = [](ImageData image)
+    {
+        RawPixelResult out;
+        if (image.isNull())
+            return out;
+        out.source = mviewer::domain::RawSource::EmbeddedPreview;
+        out.image = std::move(image);
+        return out;
+    };
+    if (!libraw)
+        return asPreview(std::move(preview));
+    const auto intent = mviewer::core::chooseRawLod(previewEdge, maxEdge, true);
+    if (intent != mviewer::core::RawLodIntent::TryHalf)
+        return asPreview(std::move(preview));
+    mviewer::domain::RawSource produced = mviewer::domain::RawSource::NotRaw;
+    ImageData half = demosaicWithLibraw(path, true, maxEdge, &produced);
+    if (!half.isNull())
+    {
+        RawPixelResult out;
+        out.image = std::move(half);
+        out.source = produced;
+        return out;
+    }
+    if (mviewer::core::cooperativeCancelRequested())
+        return {};
+    return asPreview(std::move(preview));
+}
+
+RawDecoder::RawPixelResult RawDecoder::decodeRawFullPixels(const std::string &path,
+                                                           ImageData preview, int previewEdge,
+                                                           bool libraw) const
+{
+    const auto asPreview = [](ImageData image)
+    {
+        RawPixelResult out;
+        if (image.isNull())
+            return out;
+        out.source = mviewer::domain::RawSource::EmbeddedPreview;
+        out.image = std::move(image);
+        return out;
+    };
+    const QFileInfo info(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    const long long fileBytes = info.size();
+    if (libraw && mviewer::core::rawFullDecodeRequested(path) &&
+        mviewer::core::rawFullDemosaicPossible(true, fileBytes))
+    {
+        mviewer::domain::RawSource produced = mviewer::domain::RawSource::NotRaw;
+        ImageData demosaic = demosaicWithLibraw(path, false, 0, &produced);
+        if (!demosaic.isNull())
+        {
+            RawPixelResult out;
+            out.image = std::move(demosaic);
+            out.source = produced;
+            return out;
+        }
+        if (mviewer::core::cooperativeCancelRequested())
+            return {};
+    }
+
+    const mviewer::core::RawDisplayPolicy policy = mviewer::core::rawDisplayPolicy();
+    // Sensor size is only needed for the auto policy. PreferPreview must not
+    // open a second parser when an embedded preview is already in hand.
+    int sensorEdge = 0;
+    if (policy == mviewer::core::RawDisplayPolicy::AutoFullWhenPreviewSmall)
+        sensorEdge = rawSensorLongEdge(path);
+    const auto full =
+        mviewer::core::chooseRawFull(previewEdge, sensorEdge, libraw, fileBytes, policy);
+    if (full == mviewer::core::RawFullIntent::FullDemosaic)
+    {
+        mviewer::domain::RawSource produced = mviewer::domain::RawSource::NotRaw;
+        ImageData demosaic = demosaicWithLibraw(path, false, 0, &produced);
+        if (!demosaic.isNull())
+        {
+            RawPixelResult out;
+            out.image = std::move(demosaic);
+            out.source = produced;
+            return out;
+        }
+        if (mviewer::core::cooperativeCancelRequested())
+            return {};
+    }
+    return asPreview(std::move(preview));
+}
+
+RawDecoder::RawPixelResult RawDecoder::decodeRawPixels(const std::string &path, int maxEdge,
+                                                       bool allowFull) const
 {
     // A stale request does no work and never falls back to the preview: the
     // caller is gone, and an empty result plus cooperativeCancelRequested()
@@ -241,31 +351,8 @@ ImageData RawDecoder::decodeRawPixels(const std::string &path, int maxEdge, bool
     const int previewEdgeRequest = maxEdge > 0 ? maxEdge : 0;
     ImageData preview = extractPreview(path, previewEdgeRequest);
     const int previewEdge = preview.isNull() ? 0 : (std::max)(preview.width, preview.height);
-    if (!librawAvailable())
-        return preview;
-
+    const bool libraw = librawAvailable();
     if (!allowFull)
-    {
-        const auto intent = mviewer::core::chooseRawLod(previewEdge, maxEdge, true);
-        if (intent != mviewer::core::RawLodIntent::TryHalf)
-            return preview;
-        ImageData half = demosaicWithLibraw(path, true, maxEdge);
-        if (!half.isNull())
-            return half;
-        if (mviewer::core::cooperativeCancelRequested())
-            return {};
-        return preview;
-    }
-
-    const QFileInfo info(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-    const auto full = mviewer::core::chooseRawFull(previewEdge, true, info.size());
-    if (full == mviewer::core::RawFullIntent::FullDemosaic)
-    {
-        ImageData demosaic = demosaicWithLibraw(path, false, 0);
-        if (!demosaic.isNull())
-            return demosaic;
-        if (mviewer::core::cooperativeCancelRequested())
-            return {};
-    }
-    return preview;
+        return decodeRawLodPixels(path, maxEdge, std::move(preview), previewEdge, libraw);
+    return decodeRawFullPixels(path, std::move(preview), previewEdge, libraw);
 }

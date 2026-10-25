@@ -3,6 +3,7 @@
 #include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageFormats.h"
 
 #include <QBuffer>
 #include <QByteArray>
@@ -24,17 +25,8 @@ namespace
 std::atomic<size_t> g_lastPreviewFullFileCopyBytes{0};
 std::atomic<size_t> g_lastPreviewPeakBufferedBytes{0};
 
-// RAW container extensions we attempt to preview-decode. This list is
-// intentionally broad: every entry embeds at least a thumbnail/preview JPEG,
-// which is what we extract. Formats without an embedded JPEG simply fall
-
-// RAW container extensions we attempt to preview-decode. This list is
-// intentionally broad: every entry embeds at least a thumbnail/preview JPEG,
-// which is what we extract. Formats without an embedded JPEG simply fall
-// through (empty ImageData).
-const char *kRawExts[] = {"cr2", "cr3", "nef", "nrw", "arw", "dng", "orf",
-                          "rw2", "raf", "pef", "srw", "mrw", "kdc", "dcr",
-                          "sr2", "3fr", "fff", "iiq", "mos", "erf", "rwz"};
+// RAW containers are recognized by rawExtensions(). A file with no embedded
+// JPEG simply falls through (empty ImageData).
 
 constexpr qsizetype kScannerChunkBytes = 64 * 1024;
 constexpr qint64 kMaxPreviewJpegBytes = 64LL * 1024 * 1024;
@@ -453,14 +445,7 @@ ImageData decodeEmbeddedJpeg(QFile &dataFile, const JpegSpan &span, int maxEdge)
 
 bool RawDecoder::canDecode(const std::string &path) const
 {
-    const QString ext =
-        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
-    for (const char *e : kRawExts)
-    {
-        if (ext == QString::fromLatin1(e))
-            return true;
-    }
-    return false;
+    return mviewer::core::isRawPath(path);
 }
 
 size_t RawDecoder::lastPreviewFullFileCopyBytes()
@@ -500,13 +485,14 @@ ImageData RawDecoder::decodeFull(const std::string &path) const
 
 ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge) const
 {
-    return decodeRawPixels(path, maxEdge, false);
+    return decodeRawPixels(path, maxEdge, false).image;
 }
 
 ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
                                    mviewer::domain::ImageMetadata &outMeta) const
 {
-    ImageData d = decodeRawPixels(path, maxEdge, false);
+    RawPixelResult decoded = decodeRawPixels(path, maxEdge, false);
+    ImageData d = std::move(decoded.image);
     if (!d.isNull())
     {
         const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
@@ -517,6 +503,7 @@ ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
         outMeta.height = d.height;
         outMeta.format = "RAW";
         outMeta.channels = 3;
+        outMeta.rawSource = decoded.source;
     }
     return d;
 }
@@ -544,7 +531,8 @@ RawDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMeta
             {mviewer::domain::DecodeErrorCode::FileNotFound, "RAW file not found: " + path, path});
     }
 
-    ImageData d = decodeRawPixels(path, 0, true);
+    RawPixelResult decoded = decodeRawPixels(path, 0, true);
+    ImageData d = std::move(decoded.image);
     if (d.isNull() && mviewer::core::cooperativeCancelRequested())
     {
         return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
@@ -562,6 +550,7 @@ RawDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMeta
     outMeta.height = d.height;
     outMeta.format = "RAW";
     outMeta.channels = 3;
+    outMeta.rawSource = decoded.source;
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
 
@@ -641,7 +630,8 @@ bool RawDecoder::canNativeRegion(const std::string &path) const
 ImageData RawDecoder::decodeLod(const std::string &path, int maxEdge,
                                 mviewer::domain::ImageMetadata &outMeta) const
 {
-    ImageData d = decodeRawPixels(path, maxEdge, false);
+    RawPixelResult decoded = decodeRawPixels(path, maxEdge, false);
+    ImageData d = std::move(decoded.image);
     if (d.isNull())
         return ImageData();
     const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
@@ -659,13 +649,15 @@ ImageData RawDecoder::decodeLod(const std::string &path, int maxEdge,
     }
     outMeta.format = "RAW";
     outMeta.channels = 3;
+    outMeta.rawSource = decoded.source;
     return d;
 }
 
 std::vector<std::string> RawDecoder::extensions() const
 {
-    std::vector<std::string> v;
-    for (const char *e : kRawExts)
-        v.emplace_back(e);
-    return v;
+    std::vector<std::string> extensions;
+    extensions.reserve(mviewer::core::rawExtensions().size());
+    for (const std::string_view ext : mviewer::core::rawExtensions())
+        extensions.emplace_back(ext);
+    return extensions;
 }
