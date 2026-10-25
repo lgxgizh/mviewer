@@ -420,10 +420,22 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
 
 void ThumbnailPanel::renameSelected()
 {
-    const QStringList paths = selectedPaths();
-    if (paths.isEmpty())
+    QList<int> rows;
+    if (selectionModel())
+    {
+        const QModelIndexList selected = selectionModel()->selectedIndexes();
+        for (const QModelIndex &index : selected)
+        {
+            if (index.column() != 0 || rows.contains(index.row()))
+                continue;
+            rows.append(index.row());
+        }
+    }
+    const int current = currentIndex().isValid() ? currentIndex().row() : -1;
+    const int row = renameTargetRow(rows, current);
+    if (row < 0 || row >= m_paths.size())
         return;
-    renamePath(paths.first(), false);
+    renamePath(m_paths.at(row), rows.size() > 1);
 }
 
 void ThumbnailPanel::renamePath(const QString &oldPath, bool multiSelectionNotice)
