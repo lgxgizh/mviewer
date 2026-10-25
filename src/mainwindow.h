@@ -6,6 +6,7 @@
 #include "core/command/CommandStack.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/update/UpdateChecker.h"
+#include "core/update/UpdatePrompt.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include "selectionmodel.h"
@@ -574,9 +575,15 @@ class MainWindow : public QMainWindow
     void stopCloseTimers();
     void persistWindowLayoutOnClose(bool inBrowseWorkspace, QStringList &failures);
     void checkForUpdates(bool silent = false);
-    void onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent);
+    void onUpdateChecked(const mviewer::core::UpdateInfo &info);
+    void showUpdateDialog(const mviewer::core::UpdateInfo &info);
+    void showUpdateNotice(const mviewer::core::UpdateInfo &info);
+    bool updatePromptUiBusy() const;
     void maybeShowCrashReport();
-    bool m_updateChecking = false;
+    mviewer::core::UpdateCheckGate m_updateGate;
+    mviewer::core::UpdateInfo m_pendingUpdate;
+    bool m_hasPendingUpdate = false;
+    QLabel *m_updateNotice = nullptr;
 
     // Shared drop handling for the main window and the thumbnail gallery.
     void handleDroppedPaths(const QStringList &paths);

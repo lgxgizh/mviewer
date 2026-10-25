@@ -124,6 +124,7 @@ add_library(mviewer_core SHARED
     core/batch/BatchProcessor.cpp
     core/batch/BatchRename.cpp
     core/update/UpdateChecker.cpp
+    core/update/UpdatePrompt.cpp
 
     core/command/CommandRegistry.cpp
     core/command/RotateCommand.cpp

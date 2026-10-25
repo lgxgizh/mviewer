@@ -682,6 +682,21 @@ void MainWindow::buildStatusBarUi()
     m_lblRawSource->hide();
     m_lblZoom->setMinimumWidth(64);
 
+    m_updateNotice = new QLabel(this);
+    m_updateNotice->setObjectName(QStringLiteral("updateAvailableLink"));
+    m_updateNotice->setTextFormat(Qt::RichText);
+    m_updateNotice->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    m_updateNotice->setContentsMargins(mviewer::ui::metrics::kSpace8, 0,
+                                       mviewer::ui::metrics::kSpace8, 0);
+    m_updateNotice->hide();
+    statusBar()->addPermanentWidget(m_updateNotice);
+    connect(m_updateNotice, &QLabel::linkActivated, this,
+            [this](const QString &)
+            {
+                if (m_hasPendingUpdate)
+                    showUpdateDialog(m_pendingUpdate);
+            });
+
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
             {

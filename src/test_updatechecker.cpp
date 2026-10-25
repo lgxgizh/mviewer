@@ -1,4 +1,5 @@
 #include "core/update/UpdateChecker.h"
+#include "core/update/UpdatePrompt.h"
 
 #include <cstdio>
 #include <stdexcept>
@@ -254,6 +255,62 @@ void testFetcherExceptions()
               "fetcher exceptions callback exactly once with an error");
     }
 }
+
+void testUpdatePrompt()
+{
+    using mviewer::core::beginUpdateCheck;
+    using mviewer::core::compareReleaseVersions;
+    using mviewer::core::decideUpdatePrompt;
+    using mviewer::core::finishUpdateCheck;
+    using mviewer::core::UpdateCheckGate;
+    using mviewer::core::UpdateCheckStart;
+    using mviewer::core::UpdatePromptKind;
+
+    const std::string v320 = "3." + std::to_string(2) + "." + std::to_string(0);
+    const std::string v390 = "3." + std::to_string(9) + "." + std::to_string(0);
+    const std::string v310 = "3." + std::to_string(1) + "." + std::to_string(0);
+    const std::string v330 = "3." + std::to_string(3) + "." + std::to_string(0);
+    const std::string v3100 = "3." + std::to_string(10) + "." + std::to_string(0);
+    const std::string v300 = "3." + std::to_string(0) + "." + std::to_string(0);
+
+    check(decideUpdatePrompt(false, v320, v390, true).kind == UpdatePromptKind::Dialog,
+          "manual check always uses a dialog even when the version is skipped");
+    check(decideUpdatePrompt(true, v320, v320, false).kind == UpdatePromptKind::None,
+          "silent check skips an equal version");
+    check(decideUpdatePrompt(true, v310, v320, false).kind == UpdatePromptKind::None,
+          "silent check skips a latest version older than the skipped one");
+    check(decideUpdatePrompt(true, v330, v320, true).kind == UpdatePromptKind::StatusBarNotice,
+          "silent check past the skipped version uses the status bar");
+    check(decideUpdatePrompt(true, v330, {}, true).kind == UpdatePromptKind::StatusBarNotice,
+          "silent check with an empty skip and a busy UI uses the status bar");
+    check(decideUpdatePrompt(true, v330, {}, false).kind == UpdatePromptKind::StatusBarNotice,
+          "silent check with an empty skip and an idle UI uses the status bar");
+    check(decideUpdatePrompt(true, "not-a-version", v320, false).kind ==
+              UpdatePromptKind::StatusBarNotice,
+          "an incomparable latest version is not treated as skipped");
+
+    UpdateCheckGate gate;
+    check(beginUpdateCheck(gate, true) == UpdateCheckStart::Started, "first silent check starts");
+    check(gate.checking && !gate.requestWasManual, "a started silent check is marked checking");
+    check(beginUpdateCheck(gate, true) == UpdateCheckStart::Ignored,
+          "a second silent check is ignored");
+    check(beginUpdateCheck(gate, false) == UpdateCheckStart::ManualPending,
+          "a manual check while one is running stays pending");
+    check(gate.manualPending, "pending manual does not start a second request");
+    check(finishUpdateCheck(gate), "a pending manual check presents as manual");
+    check(!gate.checking && !gate.manualPending && !gate.requestWasManual,
+          "finish clears the gate");
+    check(beginUpdateCheck(gate, true) == UpdateCheckStart::Started,
+          "a silent check can start again after finish");
+    check(!finishUpdateCheck(gate), "a silent-only check does not present as manual");
+    check(!gate.checking, "finish clears checking after a silent check");
+
+    const auto same = compareReleaseVersions(v320, v320);
+    const auto newer = compareReleaseVersions(v3100, v320);
+    check(same.has_value() && *same == 0, "equal release tags compare equal");
+    check(newer.has_value() && *newer > 0, "a higher minor component compares greater");
+    check(!compareReleaseVersions("beta", v300).has_value(), "a non-numeric tag does not compare");
+}
 } // namespace
 
 int main()
@@ -265,6 +322,7 @@ int main()
     testReleaseUrlPolicy();
     testEndpointPolicy();
     testFetcherExceptions();
+    testUpdatePrompt();
     std::printf("test_updatechecker: %s (%d failures)\n", g_failures == 0 ? "PASS" : "FAIL",
                 g_failures);
     return g_failures == 0 ? 0 : 1;

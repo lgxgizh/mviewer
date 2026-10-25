@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace mviewer::core
@@ -25,8 +26,11 @@ using UpdateCallback = std::function<void(const UpdateInfo &)>;
 
 /// Synchronous response fetcher used by UpdateChecker. Implementations return
 /// the response body and set error on transport failure.
-using FetchFn =
-    std::function<std::string(const std::string &url, std::string &error)>;
+using FetchFn = std::function<std::string(const std::string &url, std::string &error)>;
+
+// -1, 0, or 1. nullopt when either tag is not a dotted numeric release.
+// Missing trailing components compare as zero. Optional v/V prefix.
+std::optional<int> compareReleaseVersions(const std::string &lhsTag, const std::string &rhsTag);
 
 class UpdateChecker
 {
