@@ -24,6 +24,7 @@
 #include "compareworkspace.h"
 #include "core/EventBus.h"
 #include "core/filesystem/FileSystem.h"
+#include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
 #include "core/metadata/MetadataIndexer.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -779,7 +780,10 @@ int main(int argc, char **argv)
                                  QString::number(QCoreApplication::applicationPid());
         QDir().mkpath(rawDir);
         QDir().mkpath(mixedDir);
-        const QStringList rawExts = {"cr2", "dng", "nef", "arw", "raf", "rw2", "orf"};
+        QStringList rawExts;
+        rawExts.reserve(static_cast<int>(mviewer::core::rawExtensions().size()));
+        for (const std::string_view ext : mviewer::core::rawExtensions())
+            rawExts.push_back(QString::fromLatin1(ext.data(), static_cast<int>(ext.size())));
         for (int i = 0; i < 300; ++i)
         {
             QFile f(rawDir + QString("/r_%1.%2").arg(i).arg(rawExts[i % rawExts.size()]));

@@ -5,6 +5,8 @@
 #include "core/async/CooperativeCancel.h"
 #include "core/image/ImageRepository.h"
 
+#include "core/image/decoder/RawDecodePlan.h"
+
 #include "core/image/FrameSequence.h"
 
 #include "core/scheduler/TaskScheduler.h"
@@ -163,8 +165,7 @@ static void invokeDeliveryHook(const std::function<void()> &hook)
     }
 }
 
-static void finishClientDelivery(
-    const std::shared_ptr<ImageRepository::AsyncRequestState> &state)
+static void finishClientDelivery(const std::shared_ptr<ImageRepository::AsyncRequestState> &state)
 {
     {
         std::lock_guard<std::mutex> gk(state->deliveryMtx);
@@ -195,7 +196,10 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     }
 
     Result res;
+    const std::string rawSuffix = mviewer::core::rawCacheKeySuffix(filePath);
     std::string key = cachedKeyForPath(filePath);
+    if (!key.empty() && !mviewer::core::rawCacheKeyAgrees(key, rawSuffix))
+        key.clear();
     const bool hadCachedKey = !key.empty();
     if (key.empty())
         key = makeKey(filePath);
@@ -227,11 +231,11 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     frame->setCacheState(fromCache ? CacheState::Disk : CacheState::None);
     CacheManager::instance().putMemory(CacheLevel::FullImage, key, pixels);
     CacheManager::instance().putMetadata(key, frame->metadata());
+    mviewer::core::rememberRawSource(key, frame->metadata().rawSource);
     res.frame = frame;
     res.fromCache = fromCache;
     return res;
 }
-
 
 void ImageRepository::loadAsync(const std::string &filePath,
                                 std::function<void(const Result &)> callback,
@@ -244,11 +248,9 @@ void ImageRepository::loadAsync(const std::string &filePath,
     loadAsyncCancellable(filePath, std::move(callback), opts);
 }
 
-ImageRepository::AsyncRequestHandle
-ImageRepository::loadAsyncCancellable(const std::string &filePath,
-                                      std::function<void(const Result &)> callback,
-                                      const LoadOptions &opts,
-                                      std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
+ImageRepository::AsyncRequestHandle ImageRepository::loadAsyncCancellable(
+    const std::string &filePath, std::function<void(const Result &)> callback,
+    const LoadOptions &opts, std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
 {
     auto state = std::make_shared<AsyncRequestState>();
     {
@@ -474,8 +476,9 @@ ImageRepository::AsyncRequestHandle ImageRepository::loadFrameAsync(
     return state;
 }
 
-ImageRepository::AsyncRequestHandle ImageRepository::preloadAsync(
-    const std::string &filePath, std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
+ImageRepository::AsyncRequestHandle
+ImageRepository::preloadAsync(const std::string &filePath,
+                              std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
 {
     auto state = std::make_shared<AsyncRequestState>();
     {
@@ -633,8 +636,7 @@ ImageRepository::promotePreloadAsync(AsyncRequestHandle &preload,
     // Finished/Cancelled: resubmit at Decode priority; a finished preload
     // already warmed the cache, so the foreground load resolves from cache.
     preload.reset();
-    return loadFrameAsync(path, 0, std::move(callback), kDefaultLoadOptions,
-                          std::move(lifetime));
+    return loadFrameAsync(path, 0, std::move(callback), kDefaultLoadOptions, std::move(lifetime));
 }
 
 void ImageRepository::cancelAsync(AsyncRequestHandle &handle)

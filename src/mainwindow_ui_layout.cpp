@@ -337,7 +337,7 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     typeFilterCombo->addItem("PNG", "png");
     typeFilterCombo->addItem("TIFF", "tif,tiff");
     typeFilterCombo->addItem("WebP", "webp");
-    typeFilterCombo->addItem("RAW", "cr2,cr3,nef,nrw,arw,dng,orf,rw2,pef,raf");
+    typeFilterCombo->addItem("RAW", QString::fromStdString(mviewer::core::rawTypeFilterData()));
     typeFilterCombo->setToolTip("Filter by file type");
 
     advancedLayout->addWidget(typeFilterCombo);

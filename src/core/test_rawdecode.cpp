@@ -137,6 +137,8 @@ static void testCooperativeCancel(const std::string &rawPath)
         mviewer::domain::ImageMetadata meta;
         auto res = dec.decodeFullResult(rawPath, meta);
         CHECK(res.has_value() && !res.value().isNull(), "live probe: RAW decodes as before");
+        CHECK(meta.rawSource == mviewer::domain::RawSource::EmbeddedPreview,
+              "embedded preview is labeled EmbeddedPreview");
     }
 
     const char *realRaw = std::getenv("MVIEWER_TEST_RAW_FILE");

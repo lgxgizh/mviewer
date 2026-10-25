@@ -6,6 +6,15 @@
 namespace mviewer::domain
 {
 
+// How the pixels in a RAW frame were produced. NotRaw for every other format.
+enum class RawSource : std::uint8_t
+{
+    NotRaw = 0,
+    EmbeddedPreview,
+    HalfDemosaic,
+    FullDemosaic
+};
+
 // Immutable pixel coordinate
 struct PixelCoord
 {
@@ -80,6 +89,10 @@ struct ImageMetadata
     int roiX = 0, roiY = 0, roiW = 0, roiH = 0;
     std::string analysis;
     std::string analysisAnalyzerId;
+
+    // Filled by RawDecoder when the frame's pixels come from a RAW container.
+    // Kept last so existing aggregate initialization stays valid.
+    RawSource rawSource = RawSource::NotRaw;
 };
 
 // Domain-level image identifier (value type)
