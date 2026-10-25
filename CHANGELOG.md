@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [1.0.149] - 2026-10-25
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.149** (sanitizer and memory-safety fixes #228–#236; Nightly Tier 2 clang-cl ASan, Linux GCC ASan, clang-cl UBSan, Coverage, Bench and QA all green on `0d07247`).
+
+### Fixed
+
+- **CacheManager use-after-free at exit** (#234): `CacheManager` / `ImageCache` / `DiskCache` are now process-lifetime singletons (ADR 017 addendum), like `TaskScheduler`, so a pooled tile worker still in `getBestMip` cannot touch a destroyed cache during static destruction. `AtomicFile`'s stale-temp sweep state is likewise process-lifetime (#228).
+- **Windows working-set trim under ASan** (#234): `releaseFreeHeapToOs()` skips `SetProcessWorkingSetSize` in AddressSanitizer builds, where trimming against ASan's shadow map stalled the UI thread for minutes on Compare teardown.
+- **UBSan `QCallableObject` root** (#230, #233): Theme, `CompareWorkspace` and `UsmCompareDialog` no longer route through lambda slot objects that trapped under clang-cl; `UsmCompareDialog` drops `qOverload` (Qt 6 signals are not overloaded); Qt's `qobjectdefs_impl.h` object-size false positive under the MSVC ABI is ignore-listed only for that header.
+- **`samePath` STL trap** (#230): file copy/move collision checks use lexical identity then `fs::equivalent` instead of `weakly_canonical`, which trapped inside MSVC STL under UBSan.
+- **Compare host destroy handling** (#228): `QPointer` + `QObject*` identity in the destroyed handler instead of a mid-destroy `QDialog` downcast.
+- **Thumbnail filter rebuild** (#228): an empty filter rebuild keeps the current image if it is still in the source.
+- **Linux path equality** (#228, #229): browse path index, split-browse transfer and secondary-pane history normalize both `\` and `/`.
+
+### Tests / CI
+
+- **Scheduler `handle()` race deflaked** (#232): the test no longer depends on an unknown-id dependency that let the task finish before lookup. USM `testRejectedSubmit` stack-use-after-return fixed.
+- **m61 ROI workflow under clang-cl ASan** (#232, #235, #236): unbuffered phase breadcrumbs; nested Compare dialogs are isolated (outer pair unloaded, Decode/Analysis pools drained); the unequal-dimension drag waits for asynchronous pane materialization (source size + non-null image) and rejects non-finite drag points.
+- **m47 ASan RSS waivers** (#235): absolute working-set budgets are waived under ASan (shadow memory, no trim); the other m47 checks still run.
+- **Nightly UBSan on LLVM 22** (#231) with unique traps and trap reasons; plugin registry/example and Linux-only test fixes (#228, #229).
+
 ## [1.0.148] - 2026-10-25
 
 ### Release
