@@ -481,6 +481,9 @@ jobs:
           if (-not (Test-Path coverage.xml)) { Write-Host "::warning:: coverage.xml not produced"; exit 1 }
 
       - name: Per-module coverage summary + dashboard
+        # Test failures must not hide the coverage numbers: summarise whenever
+        # OpenCppCoverage produced a report.
+        if: ${{ !cancelled() && hashFiles('build_msvc/coverage.xml') != '' }}
         shell: pwsh
         run: |
           [xml]$cov = Get-Content build_msvc/coverage.xml -Raw

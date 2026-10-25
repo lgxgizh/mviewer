@@ -3367,8 +3367,10 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
         return;
     compareAction->trigger();
     pump(300);
-    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
-    CHECK(compareDialog != nullptr && compareDialog->isVisible(),
+    // QPointer: Escape closes the dialog and it is deleted (deleteLater), so
+    // the final visibility check must not touch a freed QDialog.
+    QPointer<QDialog> compareDialog = w.findChild<QDialog *>("compareDialog");
+    CHECK(!compareDialog.isNull() && compareDialog->isVisible(),
           "fullscreen workflow: visible Compare dialog is discoverable");
     CHECK(compareDialog && compareDialog->property("mviewerFullscreenRequested").toBool(),
           "fullscreen workflow: real Compare requests fullscreen before its first frame");
@@ -3438,7 +3440,8 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
                 pump(50);
             }
         }
-        CHECK(!compareDialog->isVisible(), "fullscreen workflow: Escape closes fullscreen Compare");
+        CHECK(compareDialog.isNull() || !compareDialog->isVisible(),
+              "fullscreen workflow: Escape closes fullscreen Compare");
         CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("Pixel Link")) &&
                   w.statusBar()->currentMessage() == expectedBrowseStatus,
               "fullscreen workflow: leaving Compare restores the current Browse identity");
