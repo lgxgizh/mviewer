@@ -5811,6 +5811,56 @@ void assertNavigationCollapseRoundTrip()
     restoreFile(savedAnalysis);
 }
 
+void workflow20_viewer_fileop_targets(const QString &dirPath, const QStringList &paths)
+{
+    std::cout << "── Workflow 20: viewer file-op targets ──\n";
+    qputenv("MVIEWER_DISABLE_RECOVERY_PROMPTS", "1");
+    qputenv("MVIEWER_DISABLE_UPDATE_CHECK", "1");
+    MainWindow window;
+    window.resize(1280, 800);
+    window.show();
+    pump(40);
+    dismissVisibleMessageBoxes();
+    window.openDirectory(dirPath);
+    auto *panel = window.findChild<ThumbnailPanel *>();
+    auto *selection = window.findChild<SelectionModel *>();
+    CHECK(panel && selection, "workflow 20 gallery and selection exist");
+    QElapsedTimer timer;
+    timer.start();
+    while (panel && panel->pathList().size() < 4 && timer.elapsed() < 8000)
+        pump(50);
+    CHECK(panel && panel->pathList().size() >= 4, "workflow 20 loaded at least four images");
+    if (!panel || !selection || paths.size() < 4 || panel->pathList().size() < 4)
+    {
+        window.close();
+        pump(40);
+        dismissVisibleMessageBoxes();
+        return;
+    }
+    const QStringList four = paths.mid(0, 4);
+    selection->setSelection(four, four.at(2));
+    pump(30);
+    CHECK(selection->selection().size() == 4, "four images stay selected");
+    CHECK(selection->currentImage() == four.at(2), "current image is the third");
+    const QStringList viewerTargets = resolveFileOpTargets(
+        FileOpContext::Viewer, selection->currentImage(), selection->selection());
+    CHECK(viewerTargets.size() == 1 && viewerTargets.first() == four.at(2),
+          "viewer file ops target only the third image");
+    const QStringList browseTargets = resolveFileOpTargets(
+        FileOpContext::Browse, selection->currentImage(), selection->selection());
+    CHECK(browseTargets == selection->selection(), "browse file ops keep the full selection");
+    CHECK(nextIndexAfterRemoval(3, 4, QList<int>{3}) == 2,
+          "deleting the last of four shows the new last image");
+    const auto plan =
+        splitSelectionRestorePlan(true, four.mid(0, 2), four.at(0), four.mid(2, 1), four.at(2),
+                                  four.mid(0, 2), four.mid(2, 1), {}, {}, four.at(2));
+    CHECK(plan.primaryView.size() == 2 && plan.secondaryView.size() == 1,
+          "split restore keeps two paths on the left and one on the right");
+    window.close();
+    pump(40);
+    dismissVisibleMessageBoxes();
+}
+
 void workflow19_layout_chrome(const QString &pathA, const QString &pathB, const QString &pathC)
 {
     std::cout << "── Workflow 19: layout chrome ──\n";

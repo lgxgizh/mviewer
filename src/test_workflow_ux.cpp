@@ -42,6 +42,7 @@
 #include "directorytree.h"
 #include "exportdialog.h"
 #include "exportmessages.h"
+#include "fileop_targets.h"
 #include "imagelistmodel.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
@@ -53,6 +54,7 @@
 #include "searchpanel.h"
 #include "selectionmodel.h"
 #include "shortcutdigits.h"
+#include "splitbrowse_selection.h"
 #include "thumbnailpanel.h"
 #include "widgets/histogramwidget.h"
 #include "widgets/infooverlay.h"
@@ -699,6 +701,7 @@ int main(int argc, char **argv)
     workflow12_compare_mixed_fit(workDir.absolutePath());
     workflow2_compare(paths[0], paths[2]);
     workflow19_layout_chrome(paths[0], paths[1], paths[2]);
+    workflow20_viewer_fileop_targets(workDir.absolutePath(), paths);
     workflow10_compare_canvas(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());
     workflow17_batch_dialog(workDir.absolutePath());
