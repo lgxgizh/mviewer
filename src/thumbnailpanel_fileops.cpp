@@ -5,6 +5,7 @@
 #include "fileopmessages.h"
 #include "runtime_storage.h"
 #include "splitbrowse_delete.h"
+#include "splitbrowse_transfer.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -42,6 +43,17 @@ struct AsyncCommandState
     bool succeeded = false;
     bool cancelled = false;
 };
+
+QString askTransferDirectory(QWidget *parent, const QString &title, bool splitActive,
+                            const QString &otherPaneDir, const QString &currentDir)
+{
+    const QString last = QSettings().value(lastTransferDirKey()).toString();
+    const QString dir = QFileDialog::getExistingDirectory(
+        parent, title, defaultTransferDir(splitActive, otherPaneDir, last, currentDir));
+    if (!dir.isEmpty())
+        QSettings().setValue(lastTransferDirKey(), QDir::cleanPath(dir));
+    return dir;
+}
 
 struct AsyncCopyState
 {
@@ -614,7 +626,9 @@ void ThumbnailPanel::copySelectedTo()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const QString dir = QFileDialog::getExistingDirectory(this, tr("Copy To..."));
+    const bool split = m_selection && m_selection->splitModeEnabled();
+    const QString other = property(QStringLiteral("otherPaneDirectory")).toString();
+    const QString dir = askTransferDirectory(this, tr("Copy To..."), split, other, m_currentDir);
     if (dir.isEmpty())
         return;
     startCopyFileOperation(paths, dir);
@@ -629,7 +643,9 @@ void ThumbnailPanel::movePathsTo(const QStringList &paths)
 {
     if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    const QString dir = QFileDialog::getExistingDirectory(this, tr("Move To..."));
+    const bool split = m_selection && m_selection->splitModeEnabled();
+    const QString other = property(QStringLiteral("otherPaneDirectory")).toString();
+    const QString dir = askTransferDirectory(this, tr("Move To..."), split, other, m_currentDir);
     if (dir.isEmpty())
         return;
 

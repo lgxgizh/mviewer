@@ -1687,6 +1687,14 @@ target_link_libraries(test_fileop_targets PRIVATE Qt6::Gui Qt6::Core)
 target_compile_features(test_fileop_targets PRIVATE cxx_std_20)
 target_include_directories(test_fileop_targets PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME fileop_targets_tests COMMAND test_fileop_targets)
+
+add_executable(test_split_transfer
+    test_split_transfer.cpp
+)
+target_link_libraries(test_split_transfer PRIVATE Qt6::Core)
+target_compile_features(test_split_transfer PRIVATE cxx_std_20)
+target_include_directories(test_split_transfer PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME split_transfer_tests COMMAND test_split_transfer)
 add_test(NAME differenceengine_tests COMMAND test_differenceengine)
 add_test(NAME blinkcontroller_tests COMMAND test_blinkcontroller)
 add_test(NAME aligner_tests COMMAND test_aligner)
