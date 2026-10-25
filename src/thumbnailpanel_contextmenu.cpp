@@ -1,5 +1,6 @@
 #include "splitbrowse_transfer.h"
 #include "thumbnailpanel_p.h"
+#include "thumbnailpanel_transfer.h"
 
 struct ThumbnailPanel::ContextMenuActions
 {
@@ -147,12 +148,12 @@ bool ThumbnailPanel::handleFileContextMenuAction(const ContextMenuActions &actio
     }
     if (chosen == actions.aCopyOther)
     {
-        copySelectedToOtherPane();
+        ThumbnailPanelTransfer::copySelectedToOtherPane(*this);
         return true;
     }
     if (chosen == actions.aMoveOther)
     {
-        moveSelectedToOtherPane();
+        ThumbnailPanelTransfer::moveSelectedToOtherPane(*this);
         return true;
     }
     if (chosen == actions.aTrash)

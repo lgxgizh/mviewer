@@ -6019,7 +6019,7 @@ void workflow21_split_pane_transfer()
         if (moveAction && moveAction->isEnabled())
             moveAction->trigger();
         else if (left)
-            left->moveSelectedToOtherPane();
+            ThumbnailPanelTransfer::moveSelectedToOtherPane(*left);
         yesPoller.stop();
         CHECK(confirmText.contains(QStringLiteral("Move")) &&
                   confirmText.contains(QStringLiteral("left pane")),

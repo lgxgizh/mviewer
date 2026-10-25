@@ -1,4 +1,6 @@
 // Copy and move into another directory, including the other split-browse pane.
+#include "thumbnailpanel_transfer.h"
+
 #include "splitbrowse_transfer.h"
 #include "thumbnailpanel_p.h"
 
@@ -54,7 +56,7 @@ void bindFileTransferObserver(ICommand *command,
         del->setTransferObserver(observer);
 }
 
-void ThumbnailPanel::publishTransferIfAny(const ICommand *command)
+void ThumbnailPanelTransfer::publishTransferIfAny(ThumbnailPanel &panel, const ICommand *command)
 {
     if (!command)
         return;
@@ -77,76 +79,79 @@ void ThumbnailPanel::publishTransferIfAny(const ICommand *command)
         take(move->moved());
     // The host refreshes whichever pane shows destinationDir and selects created.
     if (!created.isEmpty())
-        emit filesTransferred(destinationDir, created);
+        panel.filesTransferred(destinationDir, created);
 }
 
-void ThumbnailPanel::copyPathsInto(const QStringList &paths, const QString &destinationDirectory)
+void ThumbnailPanelTransfer::copyPathsInto(ThumbnailPanel &panel, const QStringList &paths,
+                                           const QString &destinationDirectory)
 {
-    if (paths.isEmpty() || destinationDirectory.isEmpty() || m_fileOperationBusy)
+    if (paths.isEmpty() || destinationDirectory.isEmpty() || panel.m_fileOperationBusy)
         return;
     auto cmd = std::make_unique<FileCopyCommand>(toStdPaths(paths),
                                                  destinationDirectory.toUtf8().toStdString());
-    startCommandFileOperation(std::move(cmd), paths, tr("Copy"));
+    panel.startCommandFileOperation(std::move(cmd), paths, ThumbnailPanel::tr("Copy"));
 }
 
-void ThumbnailPanel::movePathsInto(const QStringList &paths, const QString &destinationDirectory)
+void ThumbnailPanelTransfer::movePathsInto(ThumbnailPanel &panel, const QStringList &paths,
+                                           const QString &destinationDirectory)
 {
-    if (paths.isEmpty() || destinationDirectory.isEmpty() || m_fileOperationBusy)
+    if (paths.isEmpty() || destinationDirectory.isEmpty() || panel.m_fileOperationBusy)
         return;
     auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths),
                                                  destinationDirectory.toUtf8().toStdString());
-    startCommandFileOperation(std::move(cmd), paths, tr("Move"));
+    panel.startCommandFileOperation(std::move(cmd), paths, ThumbnailPanel::tr("Move"));
 }
 
-void ThumbnailPanel::copySelectedToOtherPane()
+void ThumbnailPanelTransfer::copySelectedToOtherPane(ThumbnailPanel &panel)
 {
-    const QStringList paths = selectedPaths();
-    const QString other = property(QStringLiteral("otherPaneDirectory")).toString();
-    const bool split = m_selection && m_selection->splitModeEnabled();
-    const auto decision = decideOtherPaneTransfer(split, paths.size(), m_currentDir, other);
+    const QStringList paths = panel.selectedPaths();
+    const QString other = panel.property(QStringLiteral("otherPaneDirectory")).toString();
+    const bool split = panel.m_selection && panel.m_selection->splitModeEnabled();
+    const auto decision = decideOtherPaneTransfer(split, paths.size(), panel.currentDir(), other);
     if (decision == OtherPaneTransferDecision::SameDirectory)
     {
-        emit browseStatusChanged(samePaneDirectoryMessage());
+        panel.browseStatusChanged(samePaneDirectoryMessage());
         return;
     }
-    if (decision != OtherPaneTransferDecision::Available || m_fileOperationBusy)
+    if (decision != OtherPaneTransferDecision::Available || panel.m_fileOperationBusy)
         return;
-    const bool fromLeft = paneSlot() != SelectionModel::PaneSlot::Secondary;
-    if (!confirmOtherPaneTransfer(this, PaneTransferKind::Copy, fromLeft, paths.size(), other))
+    const bool fromLeft = panel.paneSlot() != SelectionModel::PaneSlot::Secondary;
+    if (!confirmOtherPaneTransfer(&panel, PaneTransferKind::Copy, fromLeft, paths.size(), other))
         return;
-    copyPathsInto(paths, other);
+    copyPathsInto(panel, paths, other);
 }
 
-void ThumbnailPanel::moveSelectedToOtherPane()
+void ThumbnailPanelTransfer::moveSelectedToOtherPane(ThumbnailPanel &panel)
 {
-    const QStringList paths = selectedPaths();
-    const QString other = property(QStringLiteral("otherPaneDirectory")).toString();
-    const bool split = m_selection && m_selection->splitModeEnabled();
-    const auto decision = decideOtherPaneTransfer(split, paths.size(), m_currentDir, other);
+    const QStringList paths = panel.selectedPaths();
+    const QString other = panel.property(QStringLiteral("otherPaneDirectory")).toString();
+    const bool split = panel.m_selection && panel.m_selection->splitModeEnabled();
+    const auto decision = decideOtherPaneTransfer(split, paths.size(), panel.currentDir(), other);
     if (decision == OtherPaneTransferDecision::SameDirectory)
     {
-        emit browseStatusChanged(samePaneDirectoryMessage());
+        panel.browseStatusChanged(samePaneDirectoryMessage());
         return;
     }
-    if (decision != OtherPaneTransferDecision::Available || m_fileOperationBusy)
+    if (decision != OtherPaneTransferDecision::Available || panel.m_fileOperationBusy)
         return;
-    const bool fromLeft = paneSlot() != SelectionModel::PaneSlot::Secondary;
-    if (!confirmOtherPaneTransfer(this, PaneTransferKind::Move, fromLeft, paths.size(), other))
+    const bool fromLeft = panel.paneSlot() != SelectionModel::PaneSlot::Secondary;
+    if (!confirmOtherPaneTransfer(&panel, PaneTransferKind::Move, fromLeft, paths.size(), other))
         return;
-    movePathsInto(paths, other);
+    movePathsInto(panel, paths, other);
 }
 
-void ThumbnailPanel::showTransferredFiles(const QString &destinationDirectory,
-                                          const QStringList &createdPaths)
+void ThumbnailPanelTransfer::showTransferredFiles(ThumbnailPanel &panel,
+                                                  const QString &destinationDirectory,
+                                                  const QStringList &createdPaths)
 {
-    if (m_currentDir.isEmpty() || createdPaths.isEmpty() ||
-        !transferDirectoriesMatch(m_currentDir, destinationDirectory))
+    if (panel.currentDir().isEmpty() || createdPaths.isEmpty() ||
+        !transferDirectoriesMatch(panel.currentDir(), destinationDirectory))
         return;
 
     bool missing = false;
     for (const QString &path : createdPaths)
     {
-        if (rowForPath(path) < 0)
+        if (panel.rowForPath(path) < 0)
         {
             missing = true;
             break;
@@ -154,20 +159,20 @@ void ThumbnailPanel::showTransferredFiles(const QString &destinationDirectory,
     }
     if (!missing)
     {
-        selectPaths(createdPaths, createdPaths.last());
+        panel.selectPaths(createdPaths, createdPaths.last());
         return;
     }
 
     mviewer::core::DirectoryDelta delta;
-    delta.path = m_currentDir.toUtf8().toStdString();
+    delta.path = panel.currentDir().toUtf8().toStdString();
     for (const QString &path : createdPaths)
     {
-        if (rowForPath(path) < 0)
+        if (panel.rowForPath(path) < 0)
             delta.added.push_back(directoryEntryForTransfer(path));
     }
-    m_transferSelectPending = createdPaths;
+    panel.m_transferState.pendingSelection = createdPaths;
     if (!delta.added.empty())
-        applyDirectoryDelta(delta);
-    if (rowForPath(createdPaths.last()) >= 0)
-        selectPaths(createdPaths, createdPaths.last());
+        panel.applyDirectoryDelta(delta);
+    if (panel.rowForPath(createdPaths.last()) >= 0)
+        panel.selectPaths(createdPaths, createdPaths.last());
 }

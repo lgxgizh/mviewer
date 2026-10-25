@@ -30,6 +30,7 @@
 #include "core/filesystem/DirectorySnapshot.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/search/BrowseQuery.h"
+#include "thumbnailpanel_transfer.h"
 #include "thumbnailpanel_types.h"
 
 class QPushButton;
@@ -111,10 +112,8 @@ class ThumbnailPanel : public QListView
         DetailColIso,
         DetailColCount
     };
-
     explicit ThumbnailPanel(QWidget *parent = nullptr);
     ~ThumbnailPanel() override;
-
     void setDirectory(const QString &path);
     // M56: notify the host that this panel now has a committed source path.
     // This is an observation boundary for the monitor, not a navigation event.
@@ -313,7 +312,6 @@ class ThumbnailPanel : public QListView
     void scrollTo(const QModelIndex &index, ScrollHint hint = EnsureVisible) override;
     // Current vertical scroll offset of the thumbnail grid (for persistence).
     int scrollOffset() const;
-
     void renameSelected();
     void renamePath(const QString &path, bool multiSelectionNotice = false);
     void moveToTrashSelected();
@@ -336,7 +334,9 @@ class ThumbnailPanel : public QListView
     void batchSetFlagSelected(bool reject, bool pick);
     void populateRatingContextMenu(QMenu *menu);
 
-    // A-10: CommandStack reverses rename/delete/move; null falls back (tests / headless).
+    // A-10: reversible file ops via CommandStack. When set, rename/delete/move
+    // go through the stack so Ctrl+Z can reverse them. When null, falls back
+    // to the irreversible direct path (tests / headless).
     void setCommandStack(class CommandStack *stack)
     {
         m_cmdStack = stack;
@@ -456,6 +456,8 @@ class ThumbnailPanel : public QListView
     // Emitted after a delete/trash operation so the host can advance the viewer
     // off the deleted image. `deletedPaths` lists the removed files.
     void pathsRemoved(const QStringList &deletedPaths);
+    // Copies or moves finished in `destinationDirectory`. The host refreshes
+    // whichever pane is showing that directory and selects `createdPaths`.
     void filesTransferred(const QString &destinationDirectory, const QStringList &createdPaths);
     // M56: path identity migration for an inferred rename.
     void pathsRenamed(const QStringList &oldPaths, const QStringList &newPaths);
@@ -542,7 +544,6 @@ class ThumbnailPanel : public QListView
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
-
     class ThumbDelegate;
     class DetailsDelegate;
     class ListDelegate;
@@ -569,7 +570,6 @@ class ThumbnailPanel : public QListView
     // overwrite would otherwise keep serving the stale pixmap and a one-off
     // decode failure would stay negative-cached for the whole directory.
     void invalidateThumbnailCacheFor(const QString &path);
-
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
     CommandStack *m_cmdStack = nullptr;    // A-10: optional reversible file ops
@@ -586,7 +586,8 @@ class ThumbnailPanel : public QListView
     // still being rebuilt asynchronously (e.g. rename→rescan). Applied by
     // buildModel once the path is present; cleared when applied.
     QString m_pendingSelect;
-#include "thumbnailpanel_transfer_decls.h" // copy/move members
+    friend class ThumbnailPanelTransfer;
+    ThumbnailPanelTransferState m_transferState;
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter
@@ -650,7 +651,6 @@ class ThumbnailPanel : public QListView
     QHash<QString, int> m_metaIso;        // path -> ISO (for exact ISO filter)
     QHash<QString, QString> m_metaCamera; // path -> "make model" (Details EXIF column)
     QHash<QString, QString> m_metaLens;   // path -> lens model (Details EXIF column)
-
     QTimer *m_filterDebounceTimer = nullptr;
     std::shared_ptr<std::atomic<bool>> m_filterCancel;
     TaskScheduler::TaskHandle m_filterTask;

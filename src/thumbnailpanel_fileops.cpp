@@ -6,6 +6,7 @@
 #include "runtime_storage.h"
 #include "splitbrowse_delete.h"
 #include "splitbrowse_transfer.h"
+#include "thumbnailpanel_transfer.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -273,7 +274,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                         state->command ? state->command->lastError()
                                        : ThumbnailPanel::tr("Command was lost.").toStdString();
                     const bool unresolved = state->command && state->command->hasUnresolvedState();
-                    panel->publishTransferIfAny(state->command.get());
+                    ThumbnailPanelTransfer::publishTransferIfAny(*panel, state->command.get());
                     if (panel->m_cmdStack)
                         panel->m_cmdStack->recordExecuted(std::move(state->command));
 
@@ -641,7 +642,7 @@ void ThumbnailPanel::movePathsTo(const QStringList &paths)
     if (dir.isEmpty())
         return;
 
-    movePathsInto(paths, dir);
+    ThumbnailPanelTransfer::movePathsInto(*this, paths, dir);
 }
 
 void ThumbnailPanel::revealSelected()

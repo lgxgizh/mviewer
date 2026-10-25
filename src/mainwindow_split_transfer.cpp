@@ -1,6 +1,7 @@
 // Split-browse copy and move of the active pane selection into the other pane.
 #include "mainwindow_p.h"
 #include "splitbrowse_transfer.h"
+#include "thumbnailpanel_transfer.h"
 
 #include <QAction>
 
@@ -49,21 +50,23 @@ void MainWindow::updateOtherPaneTransferActions()
 void MainWindow::copyActiveSelectionToOtherPane()
 {
     if (ThumbnailPanel *panel = activeThumbnailPanel())
-        panel->copySelectedToOtherPane();
+        ThumbnailPanelTransfer::copySelectedToOtherPane(*panel);
 }
 
 void MainWindow::moveActiveSelectionToOtherPane()
 {
     if (ThumbnailPanel *panel = activeThumbnailPanel())
-        panel->moveSelectedToOtherPane();
+        ThumbnailPanelTransfer::moveSelectedToOtherPane(*panel);
 }
 
 void MainWindow::onFilesTransferred(const QString &destinationDirectory,
                                     const QStringList &createdPaths)
 {
     if (m_thumbnailPanel)
-        m_thumbnailPanel->showTransferredFiles(destinationDirectory, createdPaths);
+        ThumbnailPanelTransfer::showTransferredFiles(*m_thumbnailPanel, destinationDirectory,
+                                                     createdPaths);
     if (m_secondaryThumbnailPanel)
-        m_secondaryThumbnailPanel->showTransferredFiles(destinationDirectory, createdPaths);
+        ThumbnailPanelTransfer::showTransferredFiles(*m_secondaryThumbnailPanel,
+                                                     destinationDirectory, createdPaths);
     updateUndoRedoActions();
 }

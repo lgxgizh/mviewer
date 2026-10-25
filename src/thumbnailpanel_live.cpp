@@ -83,17 +83,7 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
     int previousCurrentRow = -1;
     captureIncrementalDeltaState(previousSelection, previousCurrent, anchorPath, anchorOffset,
                                  previousCurrentRow);
-    if (!m_transferSelectPending.isEmpty())
-    {
-        for (const QString &path : m_transferSelectPending)
-        {
-            if (!path.isEmpty() && !previousSelection.contains(path))
-                previousSelection.append(path);
-        }
-        if (previousCurrent.isEmpty())
-            previousCurrent = m_transferSelectPending.last();
-        m_transferSelectPending.clear();
-    }
+    m_transferState.mergeIntoNextSelection(previousSelection, previousCurrent);
 
     QList<Entry> next = delta.directoryRecovered ? QList<Entry>() : m_allEntries;
     m_directoryUnavailable = false;
