@@ -354,18 +354,27 @@ void MainWindow::openUsmCompare(const QString &path)
             meta = frame->metadata();
         }
     }
-    if (imgData.isNull())
+    if (!imgData.isNull())
     {
-        const auto res = ImageRepository::instance().load(target.toStdString());
-        if (res.success() && res.frame)
-        {
-            imgData = res.frame->pixels();
-            meta = res.frame->metadata();
-        }
-    }
-    if (imgData.isNull())
+        UsmCompareDialog dlg(target, imgData, this, meta);
+        dlg.exec();
         return;
+    }
 
-    UsmCompareDialog dlg(target, imgData, this, meta);
+    auto loader = [](const std::string &path)
+    {
+        UsmLoadedSource loaded;
+        const auto res = ImageRepository::instance().load(path);
+        if (!res.success() || !res.frame || res.frame->pixels().isNull())
+        {
+            loaded.error = res.error.empty() ? std::string("decode failed") : res.error;
+            return loaded;
+        }
+        loaded.pixels = res.frame->pixels();
+        loaded.meta = res.frame->metadata();
+        return loaded;
+    };
+    UsmCompareDialog dlg(target, {}, this, {}, UsmCompareDialog::OpenMode::Background,
+                         std::move(loader));
     dlg.exec();
 }

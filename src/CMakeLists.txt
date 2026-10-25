@@ -298,6 +298,7 @@ add_library(mviewer_ui STATIC
     pluginsettings.cpp
     preferencesdialog.cpp
     usmcomparedialog.cpp
+    usmcomparedialog_load.cpp
     Theme.cpp
     Language.cpp
     ThemeIcons.cpp

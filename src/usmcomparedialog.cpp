@@ -3,13 +3,11 @@
 #include "compareworkspace_temporary.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/Encoder.h"
-#include "core/image/ImageFormats.h"
 #include "core/image/QtConvert.h"
 #include "core/image/UsmSharpen.h"
 #include "display/DisplayColorContextProvider.h"
 
 #include <QApplication>
-#include <QByteArray>
 #include <QCheckBox>
 #include <QClipboard>
 #include <QColorSpace>
@@ -44,43 +42,14 @@ void stripButtonFocus(QPushButton *btn)
     btn->setDefault(false);
 }
 
-std::vector<uint8_t> iccBytesFromMetadata(const mviewer::domain::ImageMetadata &meta)
-{
-    const auto it = meta.textKeys.find("MViewer.DisplayICC.Base64");
-    if (it == meta.textKeys.end() || it->second.empty())
-        return {};
-    const QByteArray encoded(it->second.data(), static_cast<int>(it->second.size()));
-    const QByteArray decoded = QByteArray::fromBase64(encoded);
-    if (decoded.isEmpty())
-        return {};
-    const auto *begin = reinterpret_cast<const uint8_t *>(decoded.constData());
-    return std::vector<uint8_t>(begin, begin + decoded.size());
-}
-
-QString formatName(PixelFormat fmt)
-{
-    switch (fmt)
-    {
-    case PixelFormat::RGB24:
-        return QStringLiteral("RGB24");
-    case PixelFormat::BGR24:
-        return QStringLiteral("BGR24");
-    case PixelFormat::RGBA32:
-        return QStringLiteral("RGBA32");
-    case PixelFormat::BGRA32:
-        return QStringLiteral("BGRA32");
-    case PixelFormat::Grayscale8:
-        return QStringLiteral("Grayscale8");
-    default:
-        return QStringLiteral("Unknown");
-    }
-}
 } // namespace
 
 UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &initialData,
-                                   QWidget *parent, const mviewer::domain::ImageMetadata &meta)
+                                   QWidget *parent, const mviewer::domain::ImageMetadata &meta,
+                                   OpenMode mode, SourceLoader loader)
     : QDialog(parent), m_filePath(filePath), m_debounceTimer(new QTimer(this))
 {
+    m_sourceLoader = std::move(loader);
     setWindowTitle(filePath.isEmpty()
                        ? tr("USM sharpening before/after comparison")
                        : tr("USM Sharpen Before/After - %1").arg(QFileInfo(filePath).fileName()));
@@ -95,7 +64,10 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
 
     setupUi();
     setupConnections();
-    loadImageSource(filePath, initialData, meta);
+    if (mode == OpenMode::Background)
+        beginBackgroundLoad();
+    else
+        loadImageSource(filePath, initialData, meta);
 
     setFocusPolicy(Qt::StrongFocus);
     qApp->installEventFilter(this);
@@ -105,12 +77,13 @@ UsmCompareDialog::UsmCompareDialog(const QString &filePath, const ImageData &ini
     // those controls.
     setWindowState(windowState() | Qt::WindowMaximized);
 
-    if (!m_sourceData.isNull())
+    if (mode != OpenMode::Background && !m_sourceData.isNull())
         scheduleSharpen();
 }
 
 UsmCompareDialog::~UsmCompareDialog()
 {
+    m_closing = true;
     if (qApp)
         qApp->removeEventFilter(this);
     endTemporaryHold();
@@ -118,75 +91,6 @@ UsmCompareDialog::~UsmCompareDialog()
         *m_currentCancel = true;
     if (m_activeTask)
         TaskScheduler::cancel(m_activeTask);
-}
-
-QString UsmCompareDialog::defaultSaveExtension(const QString &sourceSuffix)
-{
-    QString ext = sourceSuffix;
-    const int dot = ext.lastIndexOf('.');
-    if (dot >= 0)
-        ext = ext.mid(dot + 1);
-    ext = ext.toLower();
-    if (mviewer::core::isRawExtension(ext.toStdString()))
-        return Encoder::formatForExtension("tif") == "tiff" ? QStringLiteral("tif")
-                                                            : QStringLiteral("png");
-    return ext.isEmpty() ? QStringLiteral("png") : ext;
-}
-
-void UsmCompareDialog::loadImageSource(const QString &filePath, const ImageData &initialData,
-                                       const mviewer::domain::ImageMetadata &meta)
-{
-    if (!initialData.isNull())
-    {
-        m_sourceData = initialData;
-        m_meta = meta;
-        if (m_meta.filePath.empty())
-            m_meta.filePath = filePath.toUtf8().toStdString();
-        m_iccProfile = iccBytesFromMetadata(m_meta);
-    }
-    else if (!filePath.isEmpty())
-    {
-        QImage loaded(filePath);
-        if (!loaded.isNull())
-        {
-            m_sourceData = mvcore::fromQImagePreservingAlpha(loaded);
-            m_meta.filePath = filePath.toStdString();
-            m_meta.width = m_sourceData.width;
-            m_meta.height = m_sourceData.height;
-            if (loaded.colorSpace().isValid())
-            {
-                const QByteArray icc = loaded.colorSpace().iccProfile();
-                if (!icc.isEmpty())
-                {
-                    m_iccProfile.assign(reinterpret_cast<const uint8_t *>(icc.constData()),
-                                        reinterpret_cast<const uint8_t *>(icc.constData()) +
-                                            icc.size());
-                    const QByteArray encoded = icc.toBase64();
-                    m_meta.textKeys["MViewer.DisplayICC.Base64"] =
-                        std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
-                    m_meta.hasIccProfile = true;
-                }
-            }
-        }
-    }
-
-    if (m_sourceData.isNull())
-        return;
-
-    const auto displayCtx = DisplayColorContextProvider::forWindow(windowHandle());
-    m_origQImage = mvcore::toDisplayQImage(m_sourceData, m_meta, displayCtx);
-    m_leftView->setImage(m_origQImage, m_origQImage.size());
-    m_rightView->setImage(m_origQImage, m_origQImage.size());
-
-    QString csDesc = QStringLiteral("sRGB");
-    if (m_origQImage.colorSpace().isValid())
-        csDesc = m_origQImage.colorSpace().description();
-
-    m_lblImageInfo->setText(QString("%1×%2 | %3 | %4")
-                                .arg(m_sourceData.width)
-                                .arg(m_sourceData.height)
-                                .arg(formatName(m_sourceData.format))
-                                .arg(csDesc));
 }
 
 void UsmCompareDialog::setupUi()
