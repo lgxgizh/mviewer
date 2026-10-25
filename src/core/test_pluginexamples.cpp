@@ -56,12 +56,14 @@ static std::filesystem::path binDir(int argc, char **argv)
 
 static std::filesystem::path pluginPath(const std::filesystem::path &dir, const std::string &name)
 {
+    // plugins/example sets PREFIX "" so the file is example_analyzer.so
+    // (not libexample_analyzer.so). Match that layout on every platform.
 #ifdef _WIN32
     return dir / (name + ".dll");
 #elif defined(__APPLE__)
-    return dir / ("lib" + name + ".dylib");
+    return dir / (name + ".dylib");
 #else
-    return dir / ("lib" + name + ".so");
+    return dir / (name + ".so");
 #endif
 }
 

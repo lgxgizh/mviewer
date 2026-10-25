@@ -59,7 +59,7 @@ class ImageListModel : public QObject
 
   private:
     QStringList m_paths;
-    BrowsePathIndex m_index{BrowsePathIndex::Separators::Native};
+    BrowsePathIndex m_index{BrowsePathIndex::Separators::Always};
     QString m_directory;
     bool m_dirty = true;
 };

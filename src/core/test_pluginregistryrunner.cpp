@@ -38,6 +38,19 @@ static std::string childName()
     }
     return "test_pluginregistry.exe";
 #else
+    // Mirror the Windows GetModuleFileName path: ctest's WORKING_DIRECTORY is
+    // not always build/bin, so a bare "./test_pluginregistry" looks in CWD and
+    // fails with "not found" on Linux Nightly ASan.
+    char self[4096] = {0};
+    const ssize_t n = ::readlink("/proc/self/exe", self, sizeof(self) - 1);
+    if (n > 0)
+    {
+        self[n] = '\0';
+        std::string s(self);
+        auto pos = s.find_last_of('/');
+        if (pos != std::string::npos)
+            return s.substr(0, pos + 1) + "test_pluginregistry";
+    }
     return "./test_pluginregistry";
 #endif
 }

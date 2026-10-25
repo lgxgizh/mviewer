@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <QtGlobal>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -90,6 +91,12 @@ void writeBytes(const QString &path, const std::vector<uint8_t> &bytes)
 
 int main(int argc, char **argv)
 {
+#if !defined(Q_OS_WIN)
+    (void)argc;
+    (void)argv;
+    std::printf("SKIP: M53 large-source qualification requires Windows WIC\n");
+    return 0;
+#endif
     QGuiApplication app(argc, argv);
     DecoderRegistry::instance().resetToDefaults();
 

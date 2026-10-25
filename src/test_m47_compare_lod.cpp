@@ -383,6 +383,7 @@ int main(int argc, char **argv)
     }
 
     // ── C5: TIFF native bounded parity ──────────────────────────────────────
+#if defined(Q_OS_WIN)
     {
         MARK("C5 start");
         SourceDecodeStats::instance().counters().reset();
@@ -415,6 +416,9 @@ int main(int argc, char **argv)
                        15000),
               "C5: scheduler drains after the honest fallback");
     }
+#else
+    std::printf("C5: skipped (WIC bounded TIFF LOD is Windows-only)\n");
+#endif
 
     // ── C6: failure vs infeasible accounting ─────────────────────────────────
     {

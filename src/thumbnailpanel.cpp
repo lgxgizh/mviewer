@@ -483,12 +483,19 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     restoreSelectionAndCurrent(prevSelected, prevCurrent, selToRestore);
     restoreScrollState(anchorPath, anchorOffset, savedScroll.v, savedScroll.h);
 
-    // A completed filter rebuild with no visible rows must clear the shared
-    // selection as well as the gallery. This drives the existing preview and
-    // status-bar empty state through SelectionModel; recursive/meta searches
-    // that are still pending never reach buildModel().
+    // A completed filter rebuild with no visible rows clears the multi-
+    // selection list, but keeps currentImage when that path is still in the
+    // unfiltered directory source. Rating/flag shortcuts (and "rate into a
+    // filter") target currentImage even when the row is hidden; wiping it made
+    // p0_rating_roi_tests flake under ASan/Coverage where a late empty rebuild
+    // raced the test's setCurrentImage.
     if (entries.isEmpty() && m_selection)
-        m_selection->setSelection({}, {});
+    {
+        const QString keep = m_selection->paneCurrentImage(m_paneSlot);
+        const bool keepInSource =
+            !keep.isEmpty() && m_sourceRowByPath.contains(galleryPathKey(keep));
+        m_selection->setSelection({}, keepInSource ? keep : QString());
+    }
 
     pruneThumbnailState();
     // Progressive mid-scan: replaceSources keeps generation stable.

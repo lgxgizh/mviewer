@@ -203,7 +203,20 @@ void test24MpBudget()
     fflush(stdout);
     // Generous Release budget (this loop runs on any thread; the point is it
     // is a one-pass pixel loop, not a QPixmap conversion + UI repaint).
-    CHECK(ms < 2000.0, "24 MP stats complete within the worker budget");
+    // ASan instruments every pixel touch in the stats loop; Nightly Linux GCC
+    // ASan needed ~5s on the 24 MP fixture against a 2s Release budget.
+#if defined(__SANITIZE_ADDRESS__)
+    const double kBudgetMs = 15000.0;
+#elif defined(__has_feature)
+#  if __has_feature(address_sanitizer)
+    const double kBudgetMs = 15000.0;
+#  else
+    const double kBudgetMs = 2000.0;
+#  endif
+#else
+    const double kBudgetMs = 2000.0;
+#endif
+    CHECK(ms < kBudgetMs, "24 MP stats complete within the worker budget");
 }
 
 } // namespace

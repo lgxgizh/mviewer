@@ -16,6 +16,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
 
@@ -376,9 +377,17 @@ void testD4DegradedDirs(QTemporaryDir &tmp)
     const QString seed = writeSeedPng(in.absolutePath(), "a.png", 24, 24);
     const QString secondSeed = writeSeedPng(in.absolutePath(), "b.png", 24, 24);
 
-    // Invalid output directory (illegal path chars): every item fails cleanly.
+    // Unwritable output directory: put the path under a regular FILE so
+    // create_directories fails on every platform. (Windows-illegal chars like
+    // <>:" are accepted by Linux and previously made this assertion fail there.)
+    const QString blocker = tmp.filePath(QStringLiteral("not-a-dir"));
+    {
+        QFile f(blocker);
+        CHECK(f.open(QIODevice::WriteOnly) && f.write("x") > 0,
+              "D#4: blocker file created");
+    }
     mviewer::exportjob::ExportJobConfig cfg;
-    cfg.outDir = tmp.filePath("bad dir \u0001<>:\"").toStdString();
+    cfg.outDir = QDir(blocker).filePath(QStringLiteral("out")).toStdString();
     cfg.format = "png";
     cfg.renamePattern = "{name}";
     cfg.sources = {seed.toStdString(), secondSeed.toStdString()};

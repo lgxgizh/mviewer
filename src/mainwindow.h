@@ -386,7 +386,7 @@ class MainWindow : public QMainWindow
     BatchDialog *m_batchDialog = nullptr;
     PluginSettings *m_pluginSettings = nullptr;
     CompareWorkspace *m_compareView = nullptr;
-    QPointer<QDialog> m_compareHost;
+    QPointer<QWidget> m_compareHost; // host is a QDialog; typed as QWidget for safe destroy
 
     QAction *m_actOpenDir = nullptr;
     QAction *m_actOpenFile = nullptr;

@@ -196,6 +196,7 @@ int main(int argc, char **argv)
     }
 
     // ── T3: native bounded LOD on the 100 MP TIFF ───────────────────────────
+#if defined(Q_OS_WIN)
     {
         MARK("T3 start");
         SourceDecodeStats::instance().counters().reset();
@@ -217,6 +218,9 @@ int main(int argc, char **argv)
               "T3: no full-source fallback was attempted");
         CHECK(c.failed.load() == 0, "T3: bounded TIFF decode has no failure");
     }
+#else
+    MARK("T3: skipped (WIC bounded TIFF LOD is Windows-only)");
+#endif
 
     // ── T4: bounded region decode on the 100 MP JPEG ────────────────────────
     {
