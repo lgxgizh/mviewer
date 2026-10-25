@@ -37,11 +37,11 @@ namespace
 
 QString batchFinishText(const mviewer::domain::BatchJobResult &result)
 {
-    const QString counts = QStringLiteral("%1 succeeded, %2 failed")
+    const QString counts = BatchDialog::tr("%1 succeeded, %2 failed")
                                .arg(result.totalSucceeded)
                                .arg(result.totalFailed);
     if (!result.cancelled && result.totalFailed <= 0)
-        return QStringLiteral("Completed: %1").arg(counts);
+        return BatchDialog::tr("Completed: %1").arg(counts);
 
     QString names;
     int shown = 0;
@@ -68,12 +68,12 @@ QString batchFinishText(const mviewer::domain::BatchJobResult &result)
     if (result.cancelled)
     {
         QString text =
-            QStringLiteral("Cancelled: %1, %2 not processed").arg(counts).arg(result.totalSkipped);
+            BatchDialog::tr("Cancelled: %1, %2 not processed").arg(counts).arg(result.totalSkipped);
         if (!names.isEmpty())
-            text += QStringLiteral(" (%1)").arg(names);
+            text += BatchDialog::tr(" (%1)").arg(names);
         return text;
     }
-    return QStringLiteral("Completed: %1 (%2)").arg(counts, names);
+    return BatchDialog::tr("Completed: %1 (%2)").arg(counts, names);
 }
 
 int addSupportedImages(QListWidget *list, const QString &dir, bool recursive)
@@ -120,7 +120,7 @@ BatchDialog::~BatchDialog()
 BatchDialog::BatchDialog(QWidget *parent)
     : QDialog(parent), m_processor(std::make_unique<mviewer::core::BatchProcessor>())
 {
-    setWindowTitle("Batch Processing");
+    setWindowTitle(tr("Batch Processing"));
     setMinimumSize(720, 640);
     resize(760, 700);
     setSizeGripEnabled(true);
@@ -143,7 +143,7 @@ BatchDialog::BatchDialog(QWidget *parent)
 
 void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
 {
-    auto *fileBox = new QGroupBox("File");
+    auto *fileBox = new QGroupBox(tr("File"));
     fileBox->setObjectName(QStringLiteral("batchFileGroup"));
     auto *fileLay = new QVBoxLayout(fileBox);
     fileLay->setSpacing(8);
@@ -155,11 +155,11 @@ void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
     fileLay->addWidget(m_fileList, 1);
 
     auto *fileBtnBar = new QHBoxLayout;
-    m_addBtn = new QPushButton("Add Files...");
-    m_addDirBtn = new QPushButton("Add Directory...");
-    m_removeBtn = new QPushButton("Remove Selected");
-    m_chkRecursive = new QCheckBox("Include subdirectories");
-    m_chkRecursive->setToolTip("Scan subfolders for images when adding a directory");
+    m_addBtn = new QPushButton(tr("Add Files..."));
+    m_addDirBtn = new QPushButton(tr("Add Directory..."));
+    m_removeBtn = new QPushButton(tr("Remove Selected"));
+    m_chkRecursive = new QCheckBox(tr("Include subdirectories"));
+    m_chkRecursive->setToolTip(tr("Scan subfolders for images when adding a directory"));
     fileBtnBar->addWidget(m_addBtn);
     fileBtnBar->addWidget(m_addDirBtn);
     fileBtnBar->addWidget(m_removeBtn);
@@ -171,15 +171,15 @@ void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
 
 void BatchDialog::buildOperationControls(QVBoxLayout *mainLayout)
 {
-    auto *opBox = new QGroupBox("Operations");
+    auto *opBox = new QGroupBox(tr("Operations"));
     opBox->setObjectName(QStringLiteral("batchOpGroup"));
     auto *opRow = new QHBoxLayout(opBox);
-    m_chkAnalyze = new QCheckBox("Analyze");
-    m_chkResize = new QCheckBox("Resize");
-    m_chkCrop = new QCheckBox("Crop");
-    m_chkWatermark = new QCheckBox("Watermark");
-    m_chkRename = new QCheckBox("Rename");
-    m_chkExport = new QCheckBox("Export");
+    m_chkAnalyze = new QCheckBox(tr("Analyze"));
+    m_chkResize = new QCheckBox(tr("Resize"));
+    m_chkCrop = new QCheckBox(tr("Crop"));
+    m_chkWatermark = new QCheckBox(tr("Watermark"));
+    m_chkRename = new QCheckBox(tr("Rename"));
+    m_chkExport = new QCheckBox(tr("Export"));
     m_chkAnalyze->setObjectName(QStringLiteral("batchChkAnalyze"));
     m_chkResize->setObjectName(QStringLiteral("batchChkResize"));
     m_chkCrop->setObjectName(QStringLiteral("batchChkCrop"));
@@ -199,18 +199,18 @@ void BatchDialog::buildOperationControls(QVBoxLayout *mainLayout)
 
 void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
 {
-    auto *paramBox = new QGroupBox("Parameters");
+    auto *paramBox = new QGroupBox(tr("Parameters"));
     paramBox->setObjectName(QStringLiteral("batchParamGroup"));
     auto *paramLay = new QVBoxLayout(paramBox);
     paramLay->setSpacing(8);
 
     auto *retryRow = new QHBoxLayout;
-    retryRow->addWidget(new QLabel("Retry count:"));
+    retryRow->addWidget(new QLabel(tr("Retry count:")));
     m_retryCount = new QSpinBox;
     m_retryCount->setRange(0, 10);
     m_retryCount->setValue(0);
     retryRow->addWidget(m_retryCount);
-    retryRow->addWidget(new QLabel("Retry interval (ms):"));
+    retryRow->addWidget(new QLabel(tr("Retry interval (ms):")));
     m_retryDelay = new QSpinBox;
     m_retryDelay->setRange(0, 30000);
     m_retryDelay->setSingleStep(100);
@@ -236,7 +236,7 @@ void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
 
 void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
 {
-    auto *progressBox = new QGroupBox("Progress");
+    auto *progressBox = new QGroupBox(tr("Progress"));
     progressBox->setObjectName(QStringLiteral("batchProgressGroup"));
     auto *progressLay = new QVBoxLayout(progressBox);
     progressLay->setSpacing(8);
@@ -245,7 +245,7 @@ void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
     m_progress->setObjectName(QStringLiteral("batchProgress"));
     m_progress->setFormat(tr("%p%"));
     progressLay->addWidget(m_progress);
-    m_statusLabel = new QLabel("Ready");
+    m_statusLabel = new QLabel(tr("Ready"));
     m_statusLabel->setObjectName(QStringLiteral("batchStatusLabel"));
     progressLay->addWidget(m_statusLabel);
     m_log = new QTextEdit;
@@ -255,20 +255,20 @@ void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
     progressLay->addWidget(m_log, 1);
 
     auto *btnBar = new QHBoxLayout;
-    m_startBtn = new QPushButton("Start");
+    m_startBtn = new QPushButton(tr("Start"));
     m_startBtn->setObjectName(QStringLiteral("batchStartButton"));
-    m_pauseBtn = new QPushButton("Pause");
+    m_pauseBtn = new QPushButton(tr("Pause"));
     m_pauseBtn->setObjectName(QStringLiteral("batchPauseButton"));
     m_pauseBtn->setEnabled(false);
     m_pauseBtn->setToolTip(
         tr("Pause/resume batch processing (takes effect after the current file finishes)"));
-    m_cancelBtn = new QPushButton("Cancel Processing");
+    m_cancelBtn = new QPushButton(tr("Cancel Processing"));
     m_cancelBtn->setObjectName(QStringLiteral("batchCancelButton"));
     m_cancelBtn->setEnabled(false);
-    m_openOutputBtn = new QPushButton("Open Output Directory");
+    m_openOutputBtn = new QPushButton(tr("Open Output Directory"));
     m_openOutputBtn->setEnabled(false);
     m_openOutputBtn->setToolTip(tr("Open the previous task's output folder in Explorer"));
-    m_closeBtn = new QPushButton("Close");
+    m_closeBtn = new QPushButton(tr("Close"));
     btnBar->addStretch();
     btnBar->addWidget(m_openOutputBtn);
     btnBar->addSpacing(12);
@@ -361,11 +361,11 @@ void BatchDialog::setInputFiles(const QStringList &paths)
 void BatchDialog::onAddFiles()
 {
     // M25: the file-picker filter follows the shipped-format SSOT.
-    QString filter = "Images (";
+    QString filter = tr("Images") + QStringLiteral(" (");
     for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
         filter += QString::fromStdString(w) + " ";
     filter = filter.trimmed() + ")";
-    const auto files = QFileDialog::getOpenFileNames(this, "Select Files", {}, filter);
+    const auto files = QFileDialog::getOpenFileNames(this, tr("Select Files"), {}, filter);
     for (const auto &f : files)
         m_fileList->addItem(f);
     syncFilesToRenamePanel();
@@ -373,14 +373,14 @@ void BatchDialog::onAddFiles()
 
 void BatchDialog::onAddDir() // P2 #⑦
 {
-    const auto dir = QFileDialog::getExistingDirectory(this, "Select Image Directory");
+    const auto dir = QFileDialog::getExistingDirectory(this, tr("Select Image Directory"));
     if (dir.isEmpty())
         return;
     const int added = addSupportedImages(m_fileList, dir, m_chkRecursive->isChecked());
     syncFilesToRenamePanel();
     if (added == 0)
-        QMessageBox::information(this, "Batch Processing",
-                                 "No recognizable image files in this directory.");
+        QMessageBox::information(this, tr("Batch Processing"),
+                                 tr("No recognizable image files in this directory."));
 }
 
 void BatchDialog::onRemoveSelected()
@@ -393,7 +393,7 @@ void BatchDialog::onRemoveSelected()
 
 void BatchDialog::onBrowseOutputDir()
 {
-    const auto dir = QFileDialog::getExistingDirectory(this, "Select output directory");
+    const auto dir = QFileDialog::getExistingDirectory(this, tr("Select output directory"));
     if (!dir.isEmpty())
         m_outputDir->setText(dir);
 }
@@ -449,28 +449,28 @@ bool BatchDialog::validateStart(const mviewer::domain::BatchJobConfig &config)
 {
     if (config.inputPaths.empty())
     {
-        QMessageBox::warning(this, "Batch Processing", "Please add files first.");
+        QMessageBox::warning(this, tr("Batch Processing"), tr("Please add files first."));
         return false;
     }
     if (config.operations.empty())
     {
-        QMessageBox::warning(this, "Batch Processing", "Please select at least one operation.");
+        QMessageBox::warning(this, tr("Batch Processing"),
+                             tr("Please select at least one operation."));
         return false;
     }
     const bool writesNothing = m_chkRename->isChecked() || m_chkResize->isChecked() ||
                                m_chkCrop->isChecked() || m_chkWatermark->isChecked();
     if (!m_chkExport->isChecked() && writesNothing)
     {
-        QMessageBox::warning(this, "Batch Processing",
-                             "With Export unchecked, rename/resize/crop/watermark will not write "
-                             "any files. Please check Export.");
+        QMessageBox::warning(this, tr("Batch Processing"),
+                             tr("With Export unchecked, rename/resize/crop/watermark will not "
+                                "write any files. Please check Export."));
         return false;
     }
     if (m_chkRename->isChecked() && !m_renamePanel->isValid())
     {
-        QMessageBox::warning(
-            this, "Batch Processing",
-            QStringLiteral("Invalid rename settings: %1").arg(m_renamePanel->errorMessage()));
+        QMessageBox::warning(this, tr("Batch Processing"),
+                             tr("Invalid rename settings: %1").arg(m_renamePanel->errorMessage()));
         return false;
     }
     return true;
@@ -513,7 +513,7 @@ void BatchDialog::onStart()
                     if (!path.empty())
                     {
                         self->m_statusLabel->setText(
-                            QString("Processing (%1/%2): %3")
+                            BatchDialog::tr("Processing (%1/%2): %3")
                                 .arg(current + 1)
                                 .arg(total)
                                 .arg(
@@ -562,10 +562,10 @@ QString BatchDialog::formatResultLine(const mviewer::domain::BatchFileResult &re
     const auto errorMessage =
         QString::fromUtf8(result.errorMessage.data(), static_cast<int>(result.errorMessage.size()));
     if (!result.success)
-        return QString("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
+        return tr("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
     if (outputPath.isEmpty())
-        return QString("[OK] %1 (analysis only, file not written)").arg(inputPath);
-    return QString("[OK] %1 → %2").arg(inputPath).arg(outputPath);
+        return tr("[OK] %1 (analysis only, file not written)").arg(inputPath);
+    return tr("[OK] %1 → %2").arg(inputPath).arg(outputPath);
 }
 
 void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher)
@@ -603,9 +603,9 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     m_progress->setValue(m_progress->maximum());
     m_statusLabel->setText(batchFinishText(result));
     if (result.cancelled)
-        m_log->append(QStringLiteral("[CANCEL] %1 files not processed").arg(result.totalSkipped));
+        m_log->append(tr("[CANCEL] %1 files not processed").arg(result.totalSkipped));
     else if (result.totalFailed > 0)
-        m_log->append(QStringLiteral("[SUMMARY] %1 files failed").arg(result.totalFailed));
+        m_log->append(tr("[SUMMARY] %1 files failed").arg(result.totalFailed));
 
     // Enable "open output dir" if any files were produced. An empty field means
     // each file was written beside its source; open the first one that landed.
@@ -634,9 +634,9 @@ void BatchDialog::onCancel()
     {
         m_activeProcessor->resume();
         m_isPaused = false;
-        m_pauseBtn->setText("Pause");
+        m_pauseBtn->setText(tr("Pause"));
     }
-    m_statusLabel->setText("Cancelling...");
+    m_statusLabel->setText(tr("Cancelling..."));
 }
 
 void BatchDialog::onPauseResume()
@@ -647,17 +647,17 @@ void BatchDialog::onPauseResume()
     {
         m_activeProcessor->requestPause();
         m_isPaused = true;
-        m_pauseBtn->setText("Resume");
-        m_statusLabel->setText("Paused (takes effect after the current file finishes)");
-        m_log->append("[PAUSE] Batch paused");
+        m_pauseBtn->setText(tr("Resume"));
+        m_statusLabel->setText(tr("Paused (takes effect after the current file finishes)"));
+        m_log->append(tr("[PAUSE] Batch paused"));
     }
     else
     {
         m_activeProcessor->resume();
         m_isPaused = false;
-        m_pauseBtn->setText("Pause");
-        m_statusLabel->setText("Resumed processing...");
-        m_log->append("[RESUME] Batch resumed");
+        m_pauseBtn->setText(tr("Pause"));
+        m_statusLabel->setText(tr("Resumed processing..."));
+        m_log->append(tr("[RESUME] Batch resumed"));
     }
 }
 
@@ -695,6 +695,6 @@ void BatchDialog::updateUiState(bool running)
     if (!running)
     {
         m_isPaused = false;
-        m_pauseBtn->setText("Pause");
+        m_pauseBtn->setText(tr("Pause"));
     }
 }

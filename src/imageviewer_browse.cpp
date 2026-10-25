@@ -52,8 +52,8 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
 
 QAction *ImageViewer::addBrowseContextActions(QMenu &menu, QAction *&next, QAction *&previous)
 {
-    next = menu.addAction("Next (→)");
-    previous = menu.addAction("Previous (←)");
+    next = menu.addAction(tr("Next (→)"));
+    previous = menu.addAction(tr("Previous (←)"));
     const bool hasBrowsePosition = m_currentIndex >= 0 && m_currentIndex < m_fileList.size();
     next->setEnabled(hasBrowsePosition && m_currentIndex + 1 < m_fileList.size());
     previous->setEnabled(hasBrowsePosition && m_currentIndex > 0);

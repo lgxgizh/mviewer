@@ -112,11 +112,11 @@ void ExportDialog::buildFormatSection(QVBoxLayout *root)
     auto *fmtBox = m_formatGroup;
     auto *fmtLay = new QFormLayout(fmtBox);
     m_formatCombo = new QComboBox(this);
-    m_formatCombo->addItem("PNG", "png");
-    m_formatCombo->addItem("JPEG", "jpeg");
-    m_formatCombo->addItem("BMP", "bmp");
-    m_formatCombo->addItem("WebP", "webp");
-    m_formatCombo->addItem("TIFF", "tiff");
+    m_formatCombo->addItem(tr("PNG"), QStringLiteral("png"));
+    m_formatCombo->addItem(tr("JPEG"), QStringLiteral("jpeg"));
+    m_formatCombo->addItem(tr("BMP"), QStringLiteral("bmp"));
+    m_formatCombo->addItem(tr("WebP"), QStringLiteral("webp"));
+    m_formatCombo->addItem(tr("TIFF"), QStringLiteral("tiff"));
     m_formatCombo->setCurrentIndex(1); // JPEG
     m_qualitySpin = new QSpinBox(this);
     m_qualitySpin->setRange(1, 100);

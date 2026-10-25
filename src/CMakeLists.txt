@@ -187,6 +187,7 @@ add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
+    mainwindow_ui_retranslate.cpp
     mainwindow_splitbrowse.cpp
     mainwindow_splitbrowse_panes.cpp
     mainwindow_split_transfer.cpp
@@ -582,6 +583,11 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME i18n_source_gate
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check_no_chinese.py
                 --root ${CMAKE_SOURCE_DIR})
+    # Bare English literals in widget calls (addAction/addItem/setToolTip/...).
+    # --self-test proves the gate rejects its built-in negative samples.
+    add_test(NAME i18n_tr_literal_gate
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check_tr_literals.py
+                --self-test --root ${CMAKE_SOURCE_DIR})
 endif()
 
 # M35: the canonical local Test entry point must never turn a failing CTest

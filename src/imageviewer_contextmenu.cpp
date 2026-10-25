@@ -46,16 +46,17 @@ void addFrameContextActions(QMenu &menu, bool animated, bool playing, int frameI
 {
     if (animated)
     {
-        play = menu.addAction(playing ? "Pause" : "Play");
-        restart = menu.addAction("Restart");
-        previous = menu.addAction("Previous Frame (,)");
-        next = menu.addAction("Next frame (.)");
+        play = menu.addAction(playing ? QCoreApplication::translate("ImageViewer", "Pause")
+                                      : QCoreApplication::translate("ImageViewer", "Play"));
+        restart = menu.addAction(QCoreApplication::translate("ImageViewer", "Restart"));
+        previous = menu.addAction(QCoreApplication::translate("ImageViewer", "Previous Frame (,)"));
+        next = menu.addAction(QCoreApplication::translate("ImageViewer", "Next frame (.)"));
         return;
     }
 
-    restart = menu.addAction("First Page");
-    previous = menu.addAction("Previous Page (,)");
-    next = menu.addAction("Next Page (.)");
+    restart = menu.addAction(QCoreApplication::translate("ImageViewer", "First Page"));
+    previous = menu.addAction(QCoreApplication::translate("ImageViewer", "Previous Page (,)"));
+    next = menu.addAction(QCoreApplication::translate("ImageViewer", "Next Page (.)"));
     restart->setEnabled(frameIndex > 0);
     previous->setEnabled(frameIndex > 0);
     next->setEnabled(frameIndex + 1 < frameCount);
@@ -107,9 +108,10 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
     QMenu *mZoomPresets = menu.addMenu(QCoreApplication::translate("ImageViewer", "Zoom Presets"));
     mZoomPresets->menuAction()->setEnabled(hasDisplay);
     for (const auto &p :
-         {std::make_pair("50%", 0.5),
+         {std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "50%"), 0.5),
           std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "100% (Actual Size)"), 1.0),
-          std::make_pair("200%", 2.0), std::make_pair("400%", 4.0),
+          std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "200%"), 2.0),
+          std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "400%"), 4.0),
           std::make_pair(QT_TRANSLATE_NOOP("ImageViewer", "800% (Pixel Grid)"), 8.0)})
         mZoomPresets->addAction(QCoreApplication::translate("ImageViewer", p.first))
             ->setData(p.second);
@@ -258,7 +260,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     addCopyContextActions(menu, aCopy, aCopyPath, aCopyName, aReveal, mCopyColor, aCopyHex,
                           aCopyRgb, aCopyFloat, aCopyHsv, aCopyCoord);
     menu.addSeparator();
-    QAction *aSaveAs = menu.addAction("Save As...");
+    QAction *aSaveAs = menu.addAction(tr("Save As..."));
     QAction *aUsmCompare = menu.addAction(tr("USM Sharpen Compare(&U)... (Ctrl+U)"));
     QAction *aFullRaw = addRawDecodeAction(menu);
     QAction *aRotateCW = menu.addAction(tr("Rotate 90° Clockwise and Overwrite Original (Ctrl+R)"));
@@ -696,7 +698,7 @@ bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAc
             const QString defaultName = QFileInfo(m_currentPath).completeBaseName() + "_copy.png";
             const QString path = QFileDialog::getSaveFileName(
                 this, isMultiFrame() ? tr("Save Current Frame/Page As") : tr("Save As"),
-                defaultName, "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");
+                defaultName, tr("PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)"));
             if (!path.isEmpty())
                 saveToPath(path);
         }

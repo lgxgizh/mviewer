@@ -371,7 +371,7 @@ void MainWindow::connectMenuSignals()
     connect(m_actOpenDir, &QAction::triggered, this,
             [this]()
             {
-                const QString dir = QFileDialog::getExistingDirectory(this, "Open Directory");
+                const QString dir = QFileDialog::getExistingDirectory(this, tr("Open Directory"));
                 if (!dir.isEmpty())
                     changeDirectory(dir);
             });

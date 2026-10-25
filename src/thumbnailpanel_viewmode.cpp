@@ -482,16 +482,16 @@ void DetailsHeader::paintEvent(QPaintEvent *)
             p.drawText(rect, flags, text);
     };
 
-    drawCol(L.name, QStringLiteral("Name"), ThumbnailPanel::SortName);
-    drawCol(L.res, QStringLiteral("Resolution"), ThumbnailPanel::SortResolution);
-    drawCol(L.size, QStringLiteral("Size"), ThumbnailPanel::SortSize);
-    drawCol(L.date, QStringLiteral("Date modified"), ThumbnailPanel::SortDate);
-    drawCol(L.fmt, QStringLiteral("Format"), ThumbnailPanel::SortType);
-    drawCol(L.rate, QStringLiteral("Rating"), ThumbnailPanel::SortRating);
-    p.drawText(L.label, flags, QStringLiteral("Label"));
-    drawCol(L.camera, QStringLiteral("Camera"), ThumbnailPanel::SortCamera);
-    drawCol(L.lens, QStringLiteral("Lens"), ThumbnailPanel::SortLens);
-    p.drawText(L.iso, flags, QStringLiteral("ISO"));
+    drawCol(L.name, ThumbnailPanel::tr("Name"), ThumbnailPanel::SortName);
+    drawCol(L.res, ThumbnailPanel::tr("Resolution"), ThumbnailPanel::SortResolution);
+    drawCol(L.size, ThumbnailPanel::tr("Size"), ThumbnailPanel::SortSize);
+    drawCol(L.date, ThumbnailPanel::tr("Date modified"), ThumbnailPanel::SortDate);
+    drawCol(L.fmt, ThumbnailPanel::tr("Format"), ThumbnailPanel::SortType);
+    drawCol(L.rate, ThumbnailPanel::tr("Rating"), ThumbnailPanel::SortRating);
+    p.drawText(L.label, flags, ThumbnailPanel::tr("Label"));
+    drawCol(L.camera, ThumbnailPanel::tr("Camera"), ThumbnailPanel::SortCamera);
+    drawCol(L.lens, ThumbnailPanel::tr("Lens"), ThumbnailPanel::SortLens);
+    p.drawText(L.iso, flags, ThumbnailPanel::tr("ISO"));
 }
 
 void DetailsHeader::mousePressEvent(QMouseEvent *event)

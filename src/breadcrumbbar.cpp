@@ -146,7 +146,7 @@ void BreadcrumbBar::addOverflowButton(int firstVisible)
     auto *button = new QToolButton(this);
     button->setText("...");
     button->setAutoRaise(true);
-    button->setToolTip("Show more path segments");
+    button->setToolTip(tr("Show more path segments"));
     button->setPopupMode(QToolButton::InstantPopup);
     auto *menu = new QMenu(button);
     for (int i = 0; i < firstVisible; ++i)

@@ -212,7 +212,8 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_thresholdSlider->setRange(0, 255);
     m_thresholdSlider->setValue(0);
     m_thresholdSlider->setMaximumWidth(120);
-    m_thresholdSlider->setToolTip("Difference threshold: pixels below this value will be hidden");
+    m_thresholdSlider->setToolTip(
+        tr("Difference threshold: pixels below this value will be hidden"));
     m_thresholdSlider->setEnabled(false);
     auto *sliderTimer = new QTimer(this);
     sliderTimer->setSingleShot(true);

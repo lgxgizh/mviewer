@@ -89,11 +89,14 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
         const char *name;
         ThumbnailPanel::SortMode v;
     };
-    static const SM kSM[] = {
-        {"File Name", ThumbnailPanel::SortName}, {"Date", ThumbnailPanel::SortDate},
-        {"Size", ThumbnailPanel::SortSize},      {"Resolution", ThumbnailPanel::SortResolution},
-        {"Type", ThumbnailPanel::SortType},      {"Rating", ThumbnailPanel::SortRating},
-        {"Camera", ThumbnailPanel::SortCamera},  {"Lens", ThumbnailPanel::SortLens}};
+    static const SM kSM[] = {{QT_TR_NOOP("File Name"), ThumbnailPanel::SortName},
+                             {QT_TR_NOOP("Date"), ThumbnailPanel::SortDate},
+                             {QT_TR_NOOP("Size"), ThumbnailPanel::SortSize},
+                             {QT_TR_NOOP("Resolution"), ThumbnailPanel::SortResolution},
+                             {QT_TR_NOOP("Type"), ThumbnailPanel::SortType},
+                             {QT_TR_NOOP("Rating"), ThumbnailPanel::SortRating},
+                             {QT_TR_NOOP("Camera"), ThumbnailPanel::SortCamera},
+                             {QT_TR_NOOP("Lens"), ThumbnailPanel::SortLens}};
     for (const auto &e : kSM)
         m_sortMode->addItem(tr(e.name), static_cast<int>(e.v));
     const int smIdx =

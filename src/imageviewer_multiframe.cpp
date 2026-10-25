@@ -53,8 +53,8 @@ void dropUnrequestedFullscreen(QWidget *widget)
 
 QString sequenceLabel(const mviewer::core::FrameSequenceInfo &sequence)
 {
-    return sequence.kind == mviewer::core::FrameSequenceKind::Pages ? QStringLiteral("Page")
-                                                                    : QStringLiteral("Frame");
+    return sequence.kind == mviewer::core::FrameSequenceKind::Pages ? ImageViewer::tr("Page")
+                                                                    : ImageViewer::tr("Frame");
 }
 
 } // namespace
@@ -197,12 +197,11 @@ void ImageViewer::applyLoadedFrame(const ImageLoadResult &result, int requestedF
     {
         if (m_playback.playing())
             pause();
-        setWindowTitle(QStringLiteral("%1 %2 %3 failed - %4 - MViewer")
-                           .arg(sequenceLabel(m_sequence))
+        const QString kind = sequenceLabel(m_sequence);
+        setWindowTitle(tr("%1 %2 %3 failed - %4 - MViewer")
+                           .arg(kind)
                            .arg(requestedFrame + 1)
-                           .arg(sequenceLabel(m_sequence) == QStringLiteral("Page")
-                                    ? QStringLiteral("Page")
-                                    : QStringLiteral("Frame"))
+                           .arg(kind)
                            .arg(QFileInfo(m_currentPath).fileName()));
         emit loadFailed(m_currentPath);
         return;
@@ -302,16 +301,14 @@ void ImageViewer::updateFramePresentationStatus()
         m_currentIndex >= 0
             ? QStringLiteral(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
             : QString();
-    const QString state = isPlaying() ? QStringLiteral("Playing") : QStringLiteral("Paused");
-    m_frameStatusText = QStringLiteral("%1 %2/%3")
-                            .arg(sequenceLabel(m_sequence))
-                            .arg(m_frameIndex + 1)
-                            .arg(frameCount());
+    const QString state = isPlaying() ? tr("Playing") : tr("Paused");
+    m_frameStatusText =
+        tr("%1 %2/%3").arg(sequenceLabel(m_sequence)).arg(m_frameIndex + 1).arg(frameCount());
     if (m_sequence.animated)
-        m_frameStatusText += QStringLiteral(" · %1").arg(state);
-    const QString shortcuts =
-        m_sequence.animated ? QStringLiteral("Space: Play/Pause; comma/period: Previous/Next frame")
-                            : QStringLiteral("Comma/period: Previous/Next page");
+        m_frameStatusText += tr(" · %1").arg(state);
+    const QString shortcuts = m_sequence.animated
+                                  ? tr("Space: Play/Pause; comma/period: Previous/Next frame")
+                                  : tr("Comma/period: Previous/Next page");
     setAccessibleDescription(QStringLiteral("%1. %2").arg(m_frameStatusText, shortcuts));
     setWindowTitle(QStringLiteral("%1 (%2x%3)%4 · %5 - MViewer")
                        .arg(info.fileName())

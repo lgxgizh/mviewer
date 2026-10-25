@@ -219,26 +219,19 @@ void MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *hea
     row2Layout->setSpacing(8);
 
     auto *sortLabel = new QLabel(tr("Sort:"), row2Widget);
+    sortLabel->setObjectName(QStringLiteral("secondarySortLabel"));
     row2Layout->addWidget(sortLabel);
 
     m_secondarySortCombo = new QComboBox(row2Widget);
     m_secondarySortCombo->setObjectName(QStringLiteral("secondarySortCombo"));
-    m_secondarySortCombo->addItem(tr("File Name"), ThumbnailPanel::SortName);
-    m_secondarySortCombo->addItem(tr("Date"), ThumbnailPanel::SortDate);
-    m_secondarySortCombo->addItem(tr("Size"), ThumbnailPanel::SortSize);
-    m_secondarySortCombo->addItem(tr("Resolution"), ThumbnailPanel::SortResolution);
-    m_secondarySortCombo->addItem(tr("Type"), ThumbnailPanel::SortType);
-    m_secondarySortCombo->addItem(tr("Rating"), ThumbnailPanel::SortRating);
-    m_secondarySortCombo->addItem(tr("Camera"), ThumbnailPanel::SortCamera);
-    m_secondarySortCombo->addItem(tr("Lens"), ThumbnailPanel::SortLens);
+    applySortComboItems(m_secondarySortCombo);
     row2Layout->addWidget(m_secondarySortCombo);
 
     m_secondarySortDirBtn = new QPushButton(QStringLiteral("↑"), row2Widget);
     m_secondarySortDirBtn->setObjectName(QStringLiteral("secondarySortDirBtn"));
     m_secondarySortDirBtn->setFixedWidth(28);
     m_secondarySortDirBtn->setCheckable(true);
-    m_secondarySortDirBtn->setToolTip(
-        tr("↑ Ascending: A→Z, earliest to latest, smallest to largest; ↓ the opposite"));
+    m_secondarySortDirBtn->setToolTip(sortDirectionToolTip(false));
     row2Layout->addWidget(m_secondarySortDirBtn);
 
     row2Layout->addStretch(1);

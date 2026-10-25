@@ -165,7 +165,7 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     // gallery address bar (pathEdit).
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setObjectName(QStringLiteral("directoryFilterEdit"));
-    m_filterEdit->setPlaceholderText("Search directories...");
+    m_filterEdit->setPlaceholderText(tr("Search directories..."));
     m_filterEdit->setClearButtonEnabled(true);
     m_filterEdit->setTextMargins(6, 4, 6, 4);
     m_filterEdit->hide();
@@ -241,7 +241,7 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
     QAction *aOpen = menu.addAction(tr("Open"));
     QAction *aOpenRight = menu.addAction(tr("Open in Right Browse Pane"));
     QAction *aReveal = menu.addAction(tr("Show in File Manager"));
-    QAction *aCopyPath = menu.addAction("Copy path");
+    QAction *aCopyPath = menu.addAction(tr("Copy path"));
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
