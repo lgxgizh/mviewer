@@ -25,6 +25,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <functional>
 
 namespace
 {
@@ -42,9 +43,20 @@ int g_failures = 0;
 
 // Phase breadcrumbs: stdout is unbuffered (see main) so, if ctest kills the
 // process on its timeout, the log still shows the last phase that started.
+// Elapsed ms (steady clock from first phase) tells Nightly whether we hung
+// inside a phase or simply burned the whole TIMEOUT on earlier ASan work.
+QElapsedTimer g_phaseClock;
+bool g_phaseClockStarted = false;
+
 void phase(const char *name)
 {
-    std::printf("[m61] phase: %s\n", name);
+    if (!g_phaseClockStarted)
+    {
+        g_phaseClock.start();
+        g_phaseClockStarted = true;
+    }
+    std::printf("[m61] phase: %s (+%lld ms)\n", name,
+                static_cast<long long>(g_phaseClock.elapsed()));
 }
 
 void pump(int ms = 30)
@@ -480,23 +492,41 @@ int main(int argc, char **argv)
     CHECK(status && waitFor([&]() { return status->text().contains(QStringLiteral("Ready")); }),
           "a new release retries successfully after backpressure clears");
 
+    // Nested CompareWorkspace dialogs under clang-cl ASan previously hung inside
+    // processEvents while the outer dialog still painted a live compare set +
+    // pending ROI/display work (Nightly Timeout at "unequal pair", never reaching
+    // teardown). Hide the outer dialog and drain AnalysisPool first so the nested
+    // pair is the only active consumer; re-show before keyboard-nudge below.
+    phase("hide outer before nested");
+    clearROI(workspace);
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5));
+    dialog.hide();
+    pump(50);
+
     {
         phase("unequal pair");
+        phase("unequal writePattern");
         const QString different =
             writePattern(dir, QStringLiteral("different-size.png"), 80, 60, 90);
+        phase("unequal ctor");
         QDialog unequalDialog;
         auto *unequalLayout = new QVBoxLayout(&unequalDialog);
         auto *unequal = new CompareWorkspace(&unequalDialog);
         unequalLayout->addWidget(unequal);
+        phase("unequal setImages");
         unequal->setImages({a, different});
         unequalDialog.resize(800, 600);
+        phase("unequal show");
         unequalDialog.show();
+        phase("unequal wait load");
         CHECK(waitFor([&]() { return unequal->comparedImageCount() == 2; }),
               "unequal-dimension pair loads");
+        phase("unequal panes ready");
         RawImageView *unequalA = pane(unequal, 0);
         RawImageView *unequalB = pane(unequal, 1);
         if (unequalA && unequalB)
         {
+            phase("unequal drag");
             sendRightDrag(unequalA, unequalA->sourcePointToWidget(QPointF(5, 5)).toPoint(),
                           unequalA->sourcePointToWidget(QPointF(30, 25)).toPoint());
             QLabel *unequalStatus = unequal->findChild<QLabel *>("roiStatusLabel");
@@ -506,6 +536,7 @@ int main(int argc, char **argv)
                 "unequal dimensions never fabricate linked measurement");
             const auto beforeNudge = unequalA->selection();
             CHECK(!beforeNudge.isEmpty(), "unequal pane 0 keeps its own ROI");
+            phase("unequal nudge");
             QKeyEvent unequalAltRight(QEvent::KeyPress, Qt::Key_Right, Qt::AltModifier);
             QApplication::sendEvent(unequal, &unequalAltRight);
             pump(10);
@@ -592,6 +623,16 @@ int main(int argc, char **argv)
                   "measurement table contains results for both panes including rotated image");
         }
     }
+
+    phase("reshow outer after nested");
+    dialog.show();
+    pump(50);
+    // Cells may have been rebuilt while hidden; re-resolve pane pointers.
+    first = pane(workspace, 0);
+    second = pane(workspace, 1);
+    CHECK(first && second, "outer panes still resolvable after nested dialogs");
+    if (!first || !second)
+        return 1;
 
     // ROI keyboard micro-stepping (nudging & resizing)
     {

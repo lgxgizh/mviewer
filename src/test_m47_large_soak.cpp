@@ -27,6 +27,16 @@
 
 #include <algorithm>
 #include <chrono>
+
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define MVIEWER_ASAN 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+#define MVIEWER_ASAN 1
+#endif
+
 #include <cstdio>
 #include <functional>
 #include <memory>
@@ -292,9 +302,16 @@ int main(int argc, char **argv)
           "soak: scheduler dependency graph converged to zero (no leak)");
     const double rssFinal = rssMB();
     printf("  soak rss: start=%.1f peak=%.1f final=%.1f MB\n", rssStart, rssPeak, rssFinal);
+    // Same ASan WorkingSet caveat as m47_compare_lod C1: shadow memory inflates
+    // peak growth well past the product 350 MB budget (Nightly saw ~422 MB with
+    // plateau drift only 4.2 MB and growing=no). Keep the plateau leak checks.
+#if defined(MVIEWER_ASAN)
+    printf("  soak: absolute peak RSS budget waived under ASan (shadow overhead)\n");
+#else
     CHECK(rssPeak - rssStart < 350.0,
           "soak: peak RSS stays bounded (< 350 MB growth across 6 rounds of "
           "100MP display churn; a single full materialization would be ~286 MB)");
+#endif
     // Windows WorkingSet keeps the heap high-water mark until memory pressure,
     // so absolute convergence is not the right signal. A LEAK grows round over
     // round; a one-time step (a large temporary, or the allocator reacting to
