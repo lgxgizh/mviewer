@@ -1,4 +1,4 @@
-// Right-pane directory history: header buttons, keyboard, and mouse back/forward.
+// Right-pane directory history: toolbar actions, keyboard, and mouse back/forward.
 #include "mainwindow_p.h"
 
 #include <QDir>
@@ -13,20 +13,25 @@ bool MainWindow::secondaryBrowseOwns(QObject *watched) const
     return widget == m_secondaryBrowsePane || m_secondaryBrowsePane->isAncestorOf(widget);
 }
 
+bool MainWindow::secondaryNavActive() const
+{
+    return m_splitBrowseEnabled && m_secondaryThumbnailPanel &&
+           m_activeBrowsePane == SelectionModel::PaneSlot::Secondary;
+}
+
+// The right pane has no nav buttons of its own (its header matches the left
+// address bar); the shared toolbar actions mirror its history while active.
 void MainWindow::updateSecondaryNavButtons()
 {
-    if (m_secondaryDirBackBtn)
-        m_secondaryDirBackBtn->setEnabled(m_secondaryBrowseHistory.canBack());
-    if (m_secondaryDirForwardBtn)
-        m_secondaryDirForwardBtn->setEnabled(m_secondaryBrowseHistory.canForward());
-    bool canUp = false;
-    if (m_secondaryThumbnailPanel && !m_secondaryThumbnailPanel->currentDir().isEmpty())
-    {
-        QDir parent(m_secondaryThumbnailPanel->currentDir());
-        canUp = parent.cdUp();
-    }
-    if (m_secondaryDirUpBtn)
-        m_secondaryDirUpBtn->setEnabled(canUp);
+    if (!secondaryNavActive())
+        return;
+    if (m_actDirBack)
+        m_actDirBack->setEnabled(m_secondaryBrowseHistory.canBack());
+    if (m_actDirForward)
+        m_actDirForward->setEnabled(m_secondaryBrowseHistory.canForward());
+    QDir parent(m_secondaryThumbnailPanel->currentDir());
+    if (m_actDirUp)
+        m_actDirUp->setEnabled(!m_secondaryThumbnailPanel->currentDir().isEmpty() && parent.cdUp());
 }
 
 void MainWindow::navigateSecondaryBack()

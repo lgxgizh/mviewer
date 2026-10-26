@@ -62,40 +62,48 @@ void ThumbnailPanel::onSelectionChanged()
         m_selection->setPaneSelection(m_paneSlot, paths, cur);
     }
 
+    refreshCompareButton();
+    emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
+}
+
+QStringList ThumbnailPanel::compareSelection() const
+{
+    // Split browse: Compare acts on the union of both panes, the same set that
+    // Delete / rotate / flip act on and that enables the button.
+    if (m_selection && m_selection->isSplitModeEnabled())
+        return m_selection->selection();
+    return selectedPaths();
+}
+
+void ThumbnailPanel::refreshCompareButton()
+{
     // M23 P2 (selection UX): keep the compare affordance always discoverable.
     // It shows the live selection count, enables once 2+ images are picked,
-    // and is hidden only when nothing is selected.
-    if (n == 0 || m_currentDir.isEmpty())
+    // and is hidden only when nothing is selected. In split mode both panes'
+    // buttons reflect the cross-pane union, so they are refreshed together.
+    if (!m_compareBtn)
+        return;
+    const bool inSplit = (m_selection && m_selection->isSplitModeEnabled());
+    const int localCount = selectionModel() ? int(selectionModel()->selectedIndexes().size()) : 0;
+    const int totalCount = inSplit ? int(m_selection->selection().size()) : localCount;
+    if (totalCount == 0 || m_currentDir.isEmpty())
     {
         m_compareBtn->setVisible(false);
+        return;
     }
+    m_compareBtn->setVisible(true);
+    m_compareBtn->setText(tr("Compare (P)"));
+    m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
+    m_compareBtn->adjustSize();
+    const bool canCompare = totalCount >= 2 && totalCount <= 8;
+    m_compareBtn->setEnabled(canCompare);
+    if (canCompare)
+        m_compareBtn->setToolTip(tr("Send the %1 selected images to compare").arg(totalCount));
+    else if (inSplit)
+        m_compareBtn->setToolTip(
+            tr("Select 2-8 images across panes to compare (currently %1)").arg(totalCount));
     else
-    {
-        m_compareBtn->setVisible(true);
-        m_compareBtn->setText(QStringLiteral("Compare (P)"));
-        m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
-        m_compareBtn->adjustSize();
-        const bool inSplit = (m_selection && m_selection->isSplitModeEnabled());
-        const int totalCount = inSplit ? m_selection->selection().size() : n;
-        const bool canCompare = totalCount >= 2 && totalCount <= 8;
-        m_compareBtn->setEnabled(canCompare);
-        if (canCompare)
-        {
-            m_compareBtn->setToolTip(
-                QStringLiteral("Send the %1 selected images to compare").arg(totalCount));
-        }
-        else if (inSplit)
-        {
-            m_compareBtn->setToolTip(
-                tr("Select 2-8 images across panes to compare (currently %1)").arg(totalCount));
-        }
-        else
-        {
-            m_compareBtn->setToolTip(
-                QStringLiteral("Select 2-8 images to compare (currently %1)").arg(totalCount));
-        }
-    }
-    emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
+        m_compareBtn->setToolTip(tr("Select 2-8 images to compare (currently %1)").arg(totalCount));
 }
 
 bool ThumbnailPanel::isItemFullyVisible(const QModelIndex &idx) const

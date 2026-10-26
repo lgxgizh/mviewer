@@ -77,27 +77,59 @@ void MainWindow::polishGalleryToolbar(QWidget *sortBar)
 
 void MainWindow::placeGalleryCompareButton(QWidget *sortBar)
 {
-    if (!sortBar || !m_thumbnailPanel)
-        return;
-    auto *button =
-        m_thumbnailPanel->findChild<QPushButton *>(QStringLiteral("compareSelectionButton"));
-    auto *root = qobject_cast<QVBoxLayout *>(sortBar->layout());
-    if (!button || !root)
+    auto *root = sortBar ? qobject_cast<QVBoxLayout *>(sortBar->layout()) : nullptr;
+    if (!root)
         return;
     QHBoxLayout *row = nullptr;
-    for (int i = 0; i < root->count(); ++i)
+    for (int i = 0; i < root->count() && !row; ++i)
     {
         QLayoutItem *item = root->itemAt(i);
         if (item && item->layout())
             row = qobject_cast<QHBoxLayout *>(item->layout());
-        if (row)
-            break;
     }
-    if (!row)
+    dockCompareButton(m_thumbnailPanel, sortBar, row, m_typeFilterCombo);
+}
+
+// Moves a pane's floating Compare button into its toolbar row. Left floating
+// on the list viewport it would sit under the Details header ("Name").
+void MainWindow::dockCompareButton(ThumbnailPanel *panel, QWidget *host, QHBoxLayout *row,
+                                   QWidget *after)
+{
+    if (!panel || !host || !row)
         return;
-    button->setParent(sortBar);
-    button->setText(QStringLiteral("Compare (P)"));
+    auto *button = panel->findChild<QPushButton *>(QStringLiteral("compareSelectionButton"));
+    if (!button)
+        return;
+    button->setParent(host);
     button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
-    button->adjustSize();
-    row->addWidget(button);
+    const int at = after ? row->indexOf(after) : -1;
+    if (at >= 0)
+        row->insertWidget(at + 1, button);
+    else
+        row->addWidget(button);
+    panel->refreshCompareButton();
+}
+
+void MainWindow::setBrowseHiddenFormatGroups(const QStringList &groups)
+{
+    QStringList normalized = groups;
+    normalized.removeDuplicates();
+    normalized.sort();
+    m_hiddenFormatGroups = normalized;
+    mviewer::browseformats::saveHiddenGroups(normalized);
+    for (FormatFilterCombo *combo : {m_typeFilterCombo, m_secondaryTypeFilterCombo})
+    {
+        if (combo)
+            combo->setHiddenGroups(normalized);
+    }
+    for (ThumbnailPanel *panel : {m_thumbnailPanel, m_secondaryThumbnailPanel})
+    {
+        if (panel)
+            panel->setHiddenFormatGroups(normalized);
+    }
+}
+
+QStringList MainWindow::browseHiddenFormatGroups() const
+{
+    return m_hiddenFormatGroups;
 }

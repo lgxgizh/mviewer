@@ -105,6 +105,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_secondaryBrowseHistory.restore(m_appState.secondaryDirHistory,
                                      m_appState.secondaryDirHistoryIndex);
     m_directory->setFavorites(m_appState.favorites);
+    m_hiddenFormatGroups = mviewer::browseformats::loadHiddenGroups();
     m_directory->setRecentFolders(m_appState.recentFolders);
     m_workspace->setAnalysisVisible(m_appState.analysisVisible);
     m_workspace->setAnalysisPage(m_appState.analysisPage);

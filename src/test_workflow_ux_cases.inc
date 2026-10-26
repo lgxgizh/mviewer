@@ -2233,8 +2233,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(pixelGridChk, "compare exposes pixel grid toggle");
     CHECK(pixelGridChk && !pixelGridChk->isChecked(), "pixel grid toggle is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("hide")) &&
-              filenameOverlayChk->toolTip().contains(QStringLiteral("wrapping")),
-          "filename checkbox tooltip describes show/hide and wrapping");
+              filenameOverlayChk->toolTip().contains(QStringLiteral("wrap")),
+          "filename checkbox tooltip describes show/hide and the wrapping overlay");
     CHECK(ws->filenameOverlayVisible(), "filename overlay checkbox enables the overlay");
     auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
     auto *view0 = pane0 ? pane0->findChild<RawImageView *>() : nullptr;
@@ -4563,6 +4563,18 @@ void workflow6_metadata_dual_consumer(const QString &rootDir)
 
     // Clean session: no recovery prompt, no leftover session state.
     QFile::remove(appConfigFile(QStringLiteral("recovery.json")));
+    // This workflow browses a RAW-only folder; RAW is hidden by default in
+    // the Browse type filter, so show every type for its duration.
+    const QStringList savedHiddenTypes = mviewer::browseformats::loadHiddenGroups();
+    mviewer::browseformats::saveHiddenGroups({});
+    struct RestoreHiddenTypes
+    {
+        QStringList groups;
+        ~RestoreHiddenTypes()
+        {
+            mviewer::browseformats::saveHiddenGroups(groups);
+        }
+    } restoreHiddenTypes{savedHiddenTypes};
 
     MainWindow w;
     w.resize(1280, 800);
@@ -5717,7 +5729,7 @@ void assertPaneHeadersDoNotOverlap(const QString &pathA, const QString &pathB, c
         CHECK(badge->text() == QString::number(i + 1), chip.c_str());
         CHECK(!view->filenameOverlayText().isEmpty() &&
                   !view->filenameOverlayText().contains(QChar(0x2026)) &&
-                  name->text() == view->filenameOverlayText() &&
+                  QString(name->text()).remove(QChar(0x200B)) == view->filenameOverlayText() &&
                   name->toolTip().contains(view->filenameOverlayText()),
               chip.c_str());
     }
@@ -6129,13 +6141,19 @@ void workflow22_right_pane_history_status()
         pump(40);
         dismissVisibleMessageBoxes();
 
-        auto *backBtn = window.findChild<QPushButton *>(QStringLiteral("secondaryDirBackButton"));
-        auto *fwdBtn = window.findChild<QPushButton *>(QStringLiteral("secondaryDirForwardButton"));
-        auto *upBtn = window.findChild<QPushButton *>(QStringLiteral("secondaryDirUpButton"));
+        // The right header has no nav buttons of its own; the toolbar's
+        // back / forward / up act on whichever pane is active.
+        auto *backBtn = window.findChild<QAction *>(QStringLiteral("directoryBackAction"));
+        auto *fwdBtn = window.findChild<QAction *>(QStringLiteral("directoryForwardAction"));
+        auto *upBtn = window.findChild<QAction *>(QStringLiteral("directoryUpAction"));
+        CHECK(!window.findChild<QPushButton *>(QStringLiteral("secondaryDirBackButton")) &&
+                  !window.findChild<QPushButton *>(QStringLiteral("secondaryDirForwardButton")) &&
+                  !window.findChild<QPushButton *>(QStringLiteral("secondaryDirUpButton")),
+              "right header carries no back / forward / up buttons");
         auto *count = window.findChild<QLabel *>(QStringLiteral("statusImageCount"));
         auto *selected = window.findChild<QLabel *>(QStringLiteral("statusSelectionSize"));
         CHECK(backBtn && fwdBtn && upBtn && count && selected,
-              "right-pane history buttons and status labels exist");
+              "toolbar history actions and status labels exist");
 
         // openDirectory is private. DirectoryTree::navigateTo is the public path.
         auto *directoryTree = window.findChild<DirectoryTree *>();
@@ -6157,6 +6175,8 @@ void workflow22_right_pane_history_status()
                   },
                   8000),
               "right pane opens the nested directory");
+        window.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+        pump(30);
         CHECK(backBtn && backBtn->isEnabled() && fwdBtn && !fwdBtn->isEnabled() && upBtn &&
                   upBtn->isEnabled(),
               "back and parent are enabled and forward is not");
@@ -6167,22 +6187,26 @@ void workflow22_right_pane_history_status()
         CHECK(right && sameDir(right->currentDir(), stayed),
               "Alt+Left outside the right pane leaves that directory");
 
+        window.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+        pump(30);
         if (upBtn)
-            upBtn->click();
+            upBtn->trigger();
         pump(30);
         CHECK(right && sameDir(right->currentDir(), rightDir.absolutePath()),
               "parent moves the right pane up one directory");
         if (backBtn)
-            backBtn->click();
+            backBtn->trigger();
         pump(30);
         CHECK(right && sameDir(right->currentDir(), nestedDir.absolutePath()) && fwdBtn &&
                   fwdBtn->isEnabled(),
               "back returns the right pane to the nested directory");
         if (fwdBtn)
-            fwdBtn->click();
+            fwdBtn->trigger();
         pump(30);
         CHECK(right && sameDir(right->currentDir(), rightDir.absolutePath()),
               "forward returns the right pane to the parent directory");
+        CHECK(left && sameDir(left->currentDir(), leftDir.absolutePath()),
+              "toolbar navigation with the right pane active leaves the left pane");
 
         if (right)
             sendKey(right, Qt::Key_Left, Qt::AltModifier);
@@ -6291,17 +6315,24 @@ void workflow20_raw_display_chrome()
     pump(40);
     auto *combo = window.findChild<QComboBox *>(QStringLiteral("typeFilterCombo"));
     CHECK(combo, "type filter combo exists");
-    QString rawData;
+    // Multi-select type filter: one checkable row per decodable format group;
+    // each row's tooltip lists the extensions it covers.
+    QString rawExts;
+    bool hasBmp = false;
     if (combo)
     {
         for (int i = 0; i < combo->count(); ++i)
         {
-            if (combo->itemText(i) == QLatin1String("RAW"))
-                rawData = combo->itemData(i).toString();
+            const QString id = combo->itemData(i, Qt::UserRole + 1).toString();
+            if (id == QLatin1String("raw"))
+                rawExts = combo->itemData(i, Qt::ToolTipRole).toString();
+            if (id == QLatin1String("bmp"))
+                hasBmp = true;
         }
     }
-    CHECK(rawData.contains(QLatin1String("srw")) && rawData.contains(QLatin1String("nrw")),
+    CHECK(rawExts.contains(QLatin1String("srw")) && rawExts.contains(QLatin1String("nrw")),
           "RAW type filter lists srw and nrw");
+    CHECK(hasBmp, "type filter lists BMP");
     auto *act = window.findChild<QAction *>(QStringLiteral("decodeFullRawAction"));
     CHECK(act, "decode full RAW action exists");
     if (act)

@@ -84,7 +84,8 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCopyName = menu.addAction(tr("Copy filename"));
     acts.aCompare = menu.addAction(tr("Compare"));
     acts.aCompare->setShortcut(QKeySequence("P"));
-    acts.aCompare->setEnabled(selPaths.size() >= 2 && selPaths.size() <= 8);
+    const auto compareCount = compareSelection().size();
+    acts.aCompare->setEnabled(compareCount >= 2 && compareCount <= 8);
     acts.aUsmCompare = menu.addAction(tr("USM Sharpen Compare..."));
     acts.aUsmCompare->setEnabled(selPaths.size() == 1);
     acts.aAnalyze = menu.addAction(tr("Batch Analysis Export"));

@@ -956,7 +956,8 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
 
 void ThumbnailPanel::requestCompare()
 {
-    const QStringList sel = selectedPaths();
+    // Split browse: the union of both panes, not just this pane's rows.
+    const QStringList sel = compareSelection();
     if (sel.size() >= 2 && sel.size() <= 8)
         emit compareRequested(sel);
 }

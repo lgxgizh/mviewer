@@ -57,7 +57,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     setItemDelegate(m_delegate);
     new mviewer::ui::HoverFade(this); // owned by the view; delegates look it up
 
-    m_compareBtn = new QPushButton(QStringLiteral("Compare (P)"), this);
+    m_compareBtn = new QPushButton(tr("Compare (P)"), this);
     m_compareBtn->setObjectName(QStringLiteral("compareSelectionButton"));
     m_compareBtn->setFixedHeight(mviewer::ui::metrics::kControlHeight);
     m_compareBtn->setVisible(false);
@@ -607,7 +607,7 @@ void ThumbnailPanel::keyPressEvent(QKeyEvent *event)
     if ((key == Qt::Key_Return || key == Qt::Key_Enter) &&
         (mods == Qt::NoModifier || mods == Qt::KeypadModifier))
     {
-        const QStringList sel = selectedPaths();
+        const QStringList sel = compareSelection();
         if (sel.size() >= 2 && sel.size() <= 8)
         {
             emit compareRequested(sel);

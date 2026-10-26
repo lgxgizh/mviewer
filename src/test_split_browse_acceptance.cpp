@@ -10,10 +10,16 @@
 //   TC-SB-07: Dual-pane thumbnail pipeline consumer isolation
 //   TC-SB-08: AppState session persistence round-trip (scroll, last image, sort)
 //   TC-SB-09: Parallel column layout, sort independence and mode sync
+//   TC-SB-13: Compare uses the cross-pane union (1 left + 1 right)
+//   TC-SB-14: Right header matches the left; docked Compare button
+//   TC-SB-15: Multi-select file type filter, RAW hidden by default
 
 #include "appstate.h"
+#include "browseformats.h"
 #include "compareworkspace_caption.h"
+#include "core/image/ImageFormats.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
+#include "formatfiltercombo.h"
 #include "mainwindow.h"
 #include "naturalnameorder.h"
 #include "selectionmodel.h"
@@ -30,6 +36,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -476,6 +483,12 @@ void testToolbarActionIcons(MainWindow &mw)
     }
     EXPECT(actions > 0, "toolbar has actions");
     EXPECT(actions == withIcon, "every QAction on the main toolbar has a non-null icon");
+    auto *splitAct = mw.findChild<QAction *>(QStringLiteral("splitBrowseAction"));
+    QAction *compareAct = mw.compareAction();
+    EXPECT(splitAct && compareAct &&
+               splitAct->icon().pixmap(18, 18).toImage() !=
+                   compareAct->icon().pixmap(18, 18).toImage(),
+           "Split Browse and Compare toolbar icons are distinct");
 }
 
 void testParallelColumnLayoutAndSync(MainWindow &mw)
@@ -524,6 +537,199 @@ void testParallelColumnLayoutAndSync(MainWindow &mw)
            "Secondary pane hidden after toggleSplitBrowse(false)");
 }
 
+bool listsSuffix(const ThumbnailPanel *panel, const QString &suffix)
+{
+    if (!panel)
+        return false;
+    for (const QString &path : panel->pathList())
+        if (QFileInfo(path).suffix().compare(suffix, Qt::CaseInsensitive) == 0)
+            return true;
+    return false;
+}
+
+void writeBrowseFixture(const QString &dir, const QString &tag)
+{
+    createDummyImage(QDir(dir).filePath(tag + QStringLiteral("_a.png")));
+    createDummyImage(QDir(dir).filePath(tag + QStringLiteral("_b.png")));
+    QImage bmp(16, 16, QImage::Format_RGB32);
+    bmp.fill(Qt::red);
+    bmp.save(QDir(dir).filePath(tag + QStringLiteral("_c.bmp")), "BMP");
+    // Not a decodable DNG; it only has to be listed (or hidden) by suffix.
+    QFile raw(QDir(dir).filePath(tag + QStringLiteral("_d.dng")));
+    if (raw.open(QIODevice::WriteOnly))
+        raw.write("II*\0fake");
+}
+
+// Regression: Compare with one image selected in each pane did nothing,
+// because the button / P / Enter / context menu only read their own pane.
+void testUnionCompareAndHeader(const QString &leftDir, const QString &rightDir)
+{
+    std::cout << "--- TC-SB-13/14: union Compare, right header, docked button ---" << std::endl;
+    MainWindow mw;
+    mw.resize(1280, 800);
+    mw.show();
+    QApplication::processEvents();
+    mw.openExternalTargets({leftDir});
+    mw.toggleSplitBrowse(true);
+    mw.openRightDirectory(rightDir);
+    ThumbnailPanel *left = mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
+    ThumbnailPanel *right = mw.secondaryThumbnailPanel();
+    EXPECT(waitUntil(
+               [&]()
+               {
+                   return left && right && left->pathList().size() >= 2 &&
+                          right->pathList().size() >= 2;
+               },
+               160),
+           "both panes listed their fixtures");
+    if (!left || !right || left->pathList().isEmpty() || right->pathList().isEmpty())
+        return;
+    const QString leftPick = left->pathList().constFirst();
+    const QString rightPick = right->pathList().constFirst();
+    left->selectPath(leftPick);
+    right->selectPath(rightPick);
+    QApplication::processEvents();
+    QStringList emitted;
+    int emits = 0;
+    auto record = [&](const QStringList &paths)
+    {
+        emitted = paths;
+        ++emits;
+    };
+    QObject::connect(left, &ThumbnailPanel::compareRequested, &mw, record);
+    QObject::connect(right, &ThumbnailPanel::compareRequested, &mw, record);
+    EXPECT(left->compareSelection().size() == 2 && right->compareSelection().size() == 2,
+           "each pane's compare set is the 1+1 union");
+    right->requestCompare();
+    EXPECT(emits == 1 && emitted.contains(leftPick) && emitted.contains(rightPick),
+           "right pane Compare sends both panes' picks");
+    EXPECT(mw.compareAction()->isEnabled(), "Compare action enabled for 1+1");
+    mw.compareAction()->trigger();
+    EXPECT(emits == 2 && emitted.size() == 2, "Compare action (P) sends the 1+1 union");
+
+    const auto buttons = mw.findChildren<QPushButton *>(QStringLiteral("compareSelectionButton"));
+    EXPECT(buttons.size() == 2, "one Compare button per pane");
+    for (QPushButton *btn : buttons)
+    {
+        EXPECT(btn->isVisible() && btn->isEnabled(), "Compare button live for the 1+1 union");
+        EXPECT(!left->isAncestorOf(btn) && !right->isAncestorOf(btn),
+               "Compare button docked in the toolbar, not over the list header");
+    }
+    QWidget *secPane = mw.secondaryBrowsePaneWidget();
+    EXPECT(secPane &&
+               !secPane->findChild<QPushButton *>(QStringLiteral("secondaryDirBackButton")) &&
+               !secPane->findChild<QPushButton *>(QStringLiteral("secondaryDirForwardButton")) &&
+               !secPane->findChild<QPushButton *>(QStringLiteral("secondaryDirUpButton")),
+           "right header has no back / forward / up buttons");
+    auto *secPath = mw.findChild<QLineEdit *>(QStringLiteral("secondaryPathEdit"));
+    auto *row1 = secPath ? secPath->parentWidget() : nullptr;
+    EXPECT(row1 && row1->findChildren<QWidget *>(Qt::FindDirectChildrenOnly).size() == 1,
+           "right address bar row holds only the path field, like the left");
+}
+
+void testFormatFilter(const QString &leftDir, const QString &rightDir)
+{
+    std::cout << "--- TC-SB-15: multi-select type filter, RAW hidden by default ---" << std::endl;
+    QSettings().remove(QStringLiteral("browse/hiddenFormatGroups"));
+    MainWindow mw;
+    mw.resize(1280, 800);
+    mw.show();
+    QApplication::processEvents();
+    auto *leftCombo = mw.findChild<FormatFilterCombo *>(QStringLiteral("typeFilterCombo"));
+    auto *rightCombo =
+        mw.findChild<FormatFilterCombo *>(QStringLiteral("secondaryTypeFilterCombo"));
+    EXPECT(leftCombo && rightCombo, "both panes have the type filter");
+    if (!leftCombo || !rightCombo)
+        return;
+    EXPECT(leftCombo->isVisibleTo(&mw), "left type filter is on the visible sort row");
+    EXPECT(mw.browseHiddenFormatGroups() == QStringList{QStringLiteral("raw")} &&
+               leftCombo->hiddenGroups() == QStringList{QStringLiteral("raw")},
+           "RAW is unchecked by default");
+    const QStringList ids = mviewer::browseformats::availableGroupIds();
+    EXPECT(ids.contains(QStringLiteral("bmp")), "BMP is a listed, decodable group");
+    EXPECT(leftCombo->count() == ids.size() && rightCombo->count() == ids.size(),
+           "combo rows match the decodable format groups");
+    QStringList decodable;
+    for (const std::string &suffix : mviewer::core::ImageFormats::supportedSuffixes())
+        decodable.append(QString::fromStdString(suffix).toLower());
+    bool extsDecodable = true;
+    for (const QString &id : ids)
+        for (const QString &ext : mviewer::browseformats::groupExtensions(id))
+            extsDecodable = extsDecodable && decodable.contains(ext);
+    EXPECT(extsDecodable, "every listed extension is decodable");
+
+    mw.openExternalTargets({leftDir});
+    mw.toggleSplitBrowse(true);
+    mw.openRightDirectory(rightDir);
+    ThumbnailPanel *left = mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
+    ThumbnailPanel *right = mw.secondaryThumbnailPanel();
+    EXPECT(waitUntil(
+               [&]()
+               {
+                   return listsSuffix(left, QStringLiteral("bmp")) &&
+                          listsSuffix(right, QStringLiteral("bmp"));
+               },
+               160),
+           "BMP files are listed in both panes");
+    EXPECT(!listsSuffix(left, QStringLiteral("dng")) && !listsSuffix(right, QStringLiteral("dng")),
+           "RAW files are hidden in both panes by default");
+    if (ids.contains(QStringLiteral("raw")))
+    {
+        leftCombo->setGroupVisible(QStringLiteral("raw"), true);
+        EXPECT(rightCombo->hiddenGroups().isEmpty(), "right combo follows the left one");
+        EXPECT(waitUntil(
+                   [&]()
+                   {
+                       return listsSuffix(left, QStringLiteral("dng")) &&
+                              listsSuffix(right, QStringLiteral("dng"));
+                   },
+                   160),
+               "checking RAW shows RAW files in both panes");
+        rightCombo->setGroupVisible(QStringLiteral("raw"), false);
+        // Wait for the re-filtered list, not the transient empty one.
+        EXPECT(waitUntil(
+                   [&]()
+                   {
+                       return !listsSuffix(left, QStringLiteral("dng")) &&
+                              listsSuffix(left, QStringLiteral("png"));
+                   },
+                   160),
+               "unchecking RAW in the right combo hides it in the left pane too");
+    }
+    rightCombo->setGroupVisible(QStringLiteral("bmp"), false);
+    EXPECT(waitUntil(
+               [&]()
+               {
+                   // The list is briefly empty while it re-filters; wait
+                   // for the final state (BMP gone, PNG still listed).
+                   return !listsSuffix(left, QStringLiteral("bmp")) &&
+                          !listsSuffix(right, QStringLiteral("bmp")) &&
+                          listsSuffix(left, QStringLiteral("png")) &&
+                          listsSuffix(right, QStringLiteral("png"));
+               },
+               240),
+           "unchecking BMP hides only BMP files");
+    EXPECT(mviewer::browseformats::loadHiddenGroups().contains(QStringLiteral("bmp")),
+           "type filter choice is persisted");
+    mw.setBrowseHiddenFormatGroups(mviewer::browseformats::defaultHiddenGroups());
+}
+
+void testBrowseUx()
+{
+    QTemporaryDir tmp;
+    EXPECT(tmp.isValid(), "temp dir for browse UX tests");
+    if (!tmp.isValid())
+        return;
+    const QString leftDir = tmp.filePath(QStringLiteral("uxleft"));
+    const QString rightDir = tmp.filePath(QStringLiteral("uxright"));
+    QDir().mkpath(leftDir);
+    QDir().mkpath(rightDir);
+    writeBrowseFixture(leftDir, QStringLiteral("l"));
+    writeBrowseFixture(rightDir, QStringLiteral("r"));
+    testUnionCompareAndHeader(leftDir, rightDir);
+    testFormatFilter(leftDir, rightDir);
+}
+
 } // namespace
 
 int main(int argc, char *argv[])
@@ -552,6 +758,7 @@ int main(int argc, char *argv[])
     testDeleteUnionPrompt();
     testToolbarActionIcons(mw);
     testSessionRestoreMainWindow();
+    testBrowseUx();
 
     std::cout << "\nResults: " << (g_failures == 0 ? "ALL PASS" : "FAILURES DETECTED") << " ("
               << g_failures << " failures)" << std::endl;

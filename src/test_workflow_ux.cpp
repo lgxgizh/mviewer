@@ -24,6 +24,7 @@
 #include "analysispanel.h"
 #include "appstate.h"
 #include "batchdialog.h"
+#include "browseformats.h"
 #include "compareworkspace.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/analysis/PixelGrid.h"

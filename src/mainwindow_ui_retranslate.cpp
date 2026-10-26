@@ -79,40 +79,6 @@ void MainWindow::applyViewModeComboItems(QComboBox *combo)
                   [this](const char *text) { return tr(text); });
 }
 
-void MainWindow::applyTypeFilterItems(QComboBox *combo)
-{
-    if (!combo)
-        return;
-    const QString raw = QString::fromStdString(mviewer::core::rawTypeFilterData());
-    struct Item
-    {
-        const char *text;
-        QString data;
-    };
-    const Item items[] = {
-        {QT_TR_NOOP("All types"), QString()},
-        {QT_TR_NOOP("JPG"), QStringLiteral("jpg,jpeg")},
-        {QT_TR_NOOP("PNG"), QStringLiteral("png")},
-        {QT_TR_NOOP("TIFF"), QStringLiteral("tif,tiff")},
-        {QT_TR_NOOP("WebP"), QStringLiteral("webp")},
-        {QT_TR_NOOP("RAW"), raw},
-    };
-    const QVariant current = combo->count() > 0 ? combo->currentData() : QVariant();
-    const bool fill = combo->count() == 0;
-    const QSignalBlocker blocker(combo);
-    if (fill)
-    {
-        for (const Item &item : items)
-            combo->addItem(tr(item.text), item.data);
-        return;
-    }
-    for (int i = 0; i < int(std::size(items)) && i < combo->count(); ++i)
-        combo->setItemText(i, tr(items[i].text));
-    const int idx = combo->findData(current);
-    if (idx >= 0)
-        combo->setCurrentIndex(idx);
-}
-
 void MainWindow::applyRatingFilterItems(QComboBox *combo)
 {
     static const IntItem kItems[] = {
@@ -217,10 +183,10 @@ void MainWindow::retranslateBrowseBar()
     applyViewModeComboItems(m_viewModeCombo);
     applyRatingFilterItems(m_ratingFilter);
     applyFlagFilterItems(m_flagFilter);
-    if (auto *typeCombo = findChild<QComboBox *>(QStringLiteral("typeFilterCombo")))
+    for (FormatFilterCombo *combo : {m_typeFilterCombo, m_secondaryTypeFilterCombo})
     {
-        applyTypeFilterItems(typeCombo);
-        typeCombo->setToolTip(tr("Filter by file type"));
+        if (combo)
+            combo->retranslate();
     }
     if (m_viewModeCombo)
         m_viewModeCombo->setToolTip(tr("Switch thumbnail view mode (common modes Ctrl+1..6)"));
@@ -256,9 +222,6 @@ void MainWindow::retranslateSplitHeader()
         const char *toolTip;
     };
     const ButtonEntry buttons[] = {
-        {m_secondaryDirBackBtn, nullptr, QT_TR_NOOP("Previous directory")},
-        {m_secondaryDirForwardBtn, nullptr, QT_TR_NOOP("Next directory")},
-        {m_secondaryDirUpBtn, nullptr, QT_TR_NOOP("Parent directory")},
         {m_secondaryBrowseBtn, QT_TR_NOOP("Browse..."), nullptr},
         {m_secondaryCloneBtn, QT_TR_NOOP("Clone Left"),
          QT_TR_NOOP("Sync right pane to the left pane directory")},

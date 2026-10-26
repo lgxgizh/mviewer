@@ -462,16 +462,16 @@ void CompareWorkspace::positionCellHists()
         if (!frame || i >= static_cast<size_t>(m_cellViews.size()) || !m_cellViews[i])
             continue;
         const QRect pane = m_cellViews[i]->geometry();
+        // Keep the histogram clear of the floating pane header (index chip +
+        // wrapped file name), which overlays the top-left of the image.
         QRect filenameBox;
-        if (m_filenameOverlay)
-        {
-            QFont overlayFont = this->font();
-            overlayFont.setBold(true);
-            overlayFont.setPointSize(mviewer::ui::kFilenameOverlayPointSize);
-            filenameBox = mviewer::ui::filenameOverlayRect(QFontMetrics(overlayFont),
-                                                           QRect(QPoint(0, 0), pane.size()),
-                                                           m_cellViews[i]->filenameOverlayText());
-        }
+        const QWidget *header =
+            frame->parentWidget()
+                ? frame->parentWidget()->findChild<QWidget *>(QStringLiteral("comparePaneHeader"),
+                                                              Qt::FindDirectChildrenOnly)
+                : nullptr;
+        if (header && !header->isHidden())
+            filenameBox = header->geometry().translated(-pane.topLeft());
         const QRect box =
             mviewer::ui::histogramOverlayRect(QRect(QPoint(0, 0), pane.size()), filenameBox);
         if (box.isEmpty())

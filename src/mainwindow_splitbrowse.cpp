@@ -3,6 +3,7 @@
 
 #include "ThemeMetrics.h"
 #include "directorymonitor.h"
+#include "formatfiltercombo.h"
 #include "naturalnameorder.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
@@ -32,27 +33,9 @@ QWidget *MainWindow::buildSecondaryHeaderBar(QWidget *pane)
     hLayout->setContentsMargins(0, 0, 0, 0);
     hLayout->setSpacing(4);
 
-    auto addNavButton = [this, row1Widget, hLayout](const QString &glyph, const QString &name,
-                                                    const QString &tip, const auto &slot)
-    {
-        auto *button = new QPushButton(glyph, row1Widget);
-        button->setObjectName(name);
-        button->setToolTip(tip);
-        button->setFixedWidth(28);
-        button->setFocusPolicy(Qt::NoFocus);
-        connect(button, &QPushButton::clicked, this, slot);
-        hLayout->addWidget(button);
-        return button;
-    };
-    m_secondaryDirBackBtn =
-        addNavButton(QStringLiteral("←"), QStringLiteral("secondaryDirBackButton"),
-                     tr("Previous directory"), &MainWindow::navigateSecondaryBack);
-    m_secondaryDirForwardBtn =
-        addNavButton(QStringLiteral("→"), QStringLiteral("secondaryDirForwardButton"),
-                     tr("Next directory"), &MainWindow::navigateSecondaryForward);
-    m_secondaryDirUpBtn = addNavButton(QStringLiteral("↑"), QStringLiteral("secondaryDirUpButton"),
-                                       tr("Parent directory"), &MainWindow::navigateSecondaryUp);
-
+    // Row 1 is the address bar only, like the left pane's. Back / forward /
+    // up for the right pane run through the main toolbar (and Alt+Left/Right,
+    // Backspace, mouse back/forward) while the right pane is active.
     m_secondaryPathEdit = new SelectAllOnActivateLineEdit(row1Widget);
     m_secondaryPathEdit->setObjectName(QStringLiteral("secondaryPathEdit"));
     m_secondaryPathEdit->setPlaceholderText(tr("Enter secondary directory path..."));
@@ -66,7 +49,9 @@ QWidget *MainWindow::buildSecondaryHeaderBar(QWidget *pane)
             });
     hLayout->addWidget(m_secondaryPathEdit, 1);
 
-    m_secondaryBrowseBtn = new QPushButton(tr("Browse..."), row1Widget);
+    headerLayout->addWidget(row1Widget);
+    QHBoxLayout *actionsLayout = buildSecondarySortControls(headerBar, headerLayout);
+    m_secondaryBrowseBtn = new QPushButton(tr("Browse..."), headerBar);
     m_secondaryBrowseBtn->setObjectName(QStringLiteral("secondaryBrowseButton"));
     connect(m_secondaryBrowseBtn, &QPushButton::clicked, this,
             [this]()
@@ -78,33 +63,30 @@ QWidget *MainWindow::buildSecondaryHeaderBar(QWidget *pane)
                 if (!dir.isEmpty())
                     openRightDirectory(dir);
             });
-    hLayout->addWidget(m_secondaryBrowseBtn);
+    actionsLayout->addWidget(m_secondaryBrowseBtn);
 
-    m_secondaryCloneBtn = new QPushButton(tr("Clone Left"), row1Widget);
+    m_secondaryCloneBtn = new QPushButton(tr("Clone Left"), headerBar);
     m_secondaryCloneBtn->setObjectName(QStringLiteral("secondaryCloneButton"));
     m_secondaryCloneBtn->setToolTip(tr("Sync right pane to the left pane directory"));
     connect(m_secondaryCloneBtn, &QPushButton::clicked, this, &MainWindow::cloneLeftToRightPane);
-    hLayout->addWidget(m_secondaryCloneBtn);
+    actionsLayout->addWidget(m_secondaryCloneBtn);
 
-    m_secondarySwapBtn = new QPushButton(tr("Swap"), row1Widget);
+    m_secondarySwapBtn = new QPushButton(tr("Swap"), headerBar);
     m_secondarySwapBtn->setObjectName(QStringLiteral("secondarySwapButton"));
     m_secondarySwapBtn->setToolTip(tr("Swap left and right pane directories and selections"));
     connect(m_secondarySwapBtn, &QPushButton::clicked, this, &MainWindow::swapBrowsePanes);
-    hLayout->addWidget(m_secondarySwapBtn);
+    actionsLayout->addWidget(m_secondarySwapBtn);
 
-    m_secondaryCloseBtn = new QPushButton(QStringLiteral("×"), row1Widget);
+    m_secondaryCloseBtn = new QPushButton(QStringLiteral("×"), headerBar);
     m_secondaryCloseBtn->setObjectName(QStringLiteral("secondaryCloseButton"));
     m_secondaryCloseBtn->setToolTip(tr("Close Split Browse View"));
     m_secondaryCloseBtn->setAccessibleName(tr("Close Split Browse View"));
     m_secondaryCloseBtn->setFixedWidth(28);
     connect(m_secondaryCloseBtn, &QPushButton::clicked, this,
             [this]() { toggleSplitBrowse(false); });
-    hLayout->addWidget(m_secondaryCloseBtn);
+    actionsLayout->addWidget(m_secondaryCloseBtn);
 
-    headerLayout->addWidget(row1Widget);
-    buildSecondarySortControls(headerBar, headerLayout);
     polishGalleryToolbar(headerBar);
-    updateSecondaryNavButtons();
     return headerBar;
 }
 
@@ -192,6 +174,14 @@ QWidget *MainWindow::buildSecondaryBrowsePane()
     m_secondaryThumbnailPanel->setSelectionModel(m_selection);
     m_secondaryThumbnailPanel->setMinimumWidth(220);
     layout->addWidget(m_secondaryThumbnailPanel, 1);
+    m_secondaryThumbnailPanel->setHiddenFormatGroups(m_hiddenFormatGroups);
+    if (m_secondaryTypeFilterCombo)
+    {
+        QWidget *row2 = m_secondaryTypeFilterCombo->parentWidget();
+        dockCompareButton(m_secondaryThumbnailPanel, row2,
+                          row2 ? qobject_cast<QHBoxLayout *>(row2->layout()) : nullptr,
+                          m_secondaryTypeFilterCombo);
+    }
 
     if (m_thumbnailPanel)
     {
@@ -211,7 +201,7 @@ QWidget *MainWindow::buildSecondaryBrowsePane()
     return pane;
 }
 
-void MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout)
+QHBoxLayout *MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout)
 {
     auto *row2Widget = new QWidget(headerBar);
     auto *row2Layout = new QHBoxLayout(row2Widget);
@@ -233,6 +223,13 @@ void MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *hea
     m_secondarySortDirBtn->setCheckable(true);
     m_secondarySortDirBtn->setToolTip(sortDirectionToolTip(false));
     row2Layout->addWidget(m_secondarySortDirBtn);
+
+    m_secondaryTypeFilterCombo = new FormatFilterCombo(row2Widget);
+    m_secondaryTypeFilterCombo->setObjectName(QStringLiteral("secondaryTypeFilterCombo"));
+    m_secondaryTypeFilterCombo->setHiddenGroups(m_hiddenFormatGroups);
+    connect(m_secondaryTypeFilterCombo, &FormatFilterCombo::hiddenGroupsChanged, this,
+            &MainWindow::setBrowseHiddenFormatGroups);
+    row2Layout->addWidget(m_secondaryTypeFilterCombo);
 
     row2Layout->addStretch(1);
     headerLayout->addWidget(row2Widget);
@@ -256,6 +253,7 @@ void MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *hea
                 if (m_secondaryThumbnailPanel)
                     m_secondaryThumbnailPanel->setSortAscending(!descending);
             });
+    return row2Layout;
 }
 
 void MainWindow::toggleSplitBrowse(bool enabled)
@@ -361,6 +359,7 @@ void MainWindow::setActiveBrowsePane(SelectionModel::PaneSlot pane)
     if (m_selection)
         m_selection->setActivePane(pane);
     updateActivePaneIndicator();
+    updateNavigationActions();
 }
 
 void MainWindow::updateSplitBrowseCompareButton()
@@ -385,6 +384,13 @@ void MainWindow::updateSplitBrowseCompareButton()
         {
             m_actCompare->setToolTip(tr("Compare %1 selected images (P)").arg(count));
         }
+    }
+    // Each pane's Compare button counts the cross-pane union, so a selection
+    // change in one pane must refresh the other pane's button too.
+    for (ThumbnailPanel *panel : {m_thumbnailPanel, m_secondaryThumbnailPanel})
+    {
+        if (panel)
+            panel->refreshCompareButton();
     }
 }
 

@@ -1064,6 +1064,54 @@
     </message>
 </context>
 <context>
+    <name>BrowseFormats</name>
+    <message>
+        <location filename="../src/browseformats.cpp" line="53"/>
+        <source>JPEG</source>
+        <translation>JPEG</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="54"/>
+        <source>PNG</source>
+        <translation>PNG</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="55"/>
+        <source>WebP</source>
+        <translation>WebP</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="56"/>
+        <source>TIFF</source>
+        <translation>TIFF</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="57"/>
+        <source>HEIC / AVIF</source>
+        <translation>HEIC / AVIF</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="58"/>
+        <source>GIF</source>
+        <translation>GIF</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="59"/>
+        <source>BMP</source>
+        <translation>BMP</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="60"/>
+        <source>RAW</source>
+        <translation>RAW</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="61"/>
+        <source>Other formats</source>
+        <translation>其他格式</translation>
+    </message>
+</context>
+<context>
     <name>CompareRoi</name>
     <message>
         <location filename="../src/compare_roi_controller.cpp" line="97"/>
@@ -1567,12 +1615,12 @@
         <translation>窗格 %1 局部缩放: %2% (Ctrl+滚轮)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="422"/>
+        <location filename="../src/compareworkspace.cpp" line="425"/>
         <source>Loading %1 images…</source>
         <translation>正在加载 %1 张图片…</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="427"/>
+        <location filename="../src/compareworkspace.cpp" line="430"/>
         <source>Loading next set…</source>
         <translation>正在加载下一组…</translation>
     </message>
@@ -1897,7 +1945,7 @@
         <translation>锁定基准</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="707"/>
+        <location filename="../src/compareworkspace.cpp" line="710"/>
         <location filename="../src/compareworkspace_controls.cpp" line="423"/>
         <location filename="../src/compareworkspace_render_materialization.cpp" line="236"/>
         <source>Reference: —</source>
@@ -1925,103 +1973,103 @@
     </message>
     <message>
         <location filename="../src/compareworkspace_controls.cpp" line="460"/>
-        <source>Show or hide the filename above each comparison image, wrapping when too long</source>
-        <translation>显示或隐藏每张比较图上方的文件名，过长时换行</translation>
+        <source>Show or hide the filename overlaid on top of each comparison image (long names wrap onto several lines)</source>
+        <translation>显示或隐藏叠加在每张对比图顶部的文件名（过长时自动换行显示）</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="472"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="473"/>
         <source>Pixel Grid</source>
         <translation>像素网格</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="475"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="476"/>
         <source>Show pixel inspection grid when zoomed to 800% or above</source>
         <translation>缩放到 800% 及以上时显示像素检查网格</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="482"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="483"/>
         <source>RGB (Shift+1)</source>
         <translation>RGB (Shift+1)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="483"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="484"/>
         <source>R (Shift+2)</source>
         <translation>R (Shift+2)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="484"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="485"/>
         <source>G (Shift+3)</source>
         <translation>G (Shift+3)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="485"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="486"/>
         <source>B (Shift+4)</source>
         <translation>B (Shift+4)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="486"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="487"/>
         <source>Y (Shift+5)</source>
         <translation>Y (Shift+5)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="487"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="488"/>
         <source>V (Shift+6)</source>
         <translation>V (Shift+6)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="488"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="489"/>
         <source>Isolate R/G/B/Y/V channels (Shift+1…6)</source>
         <translation>隔离 R/G/B/Y/V 通道（Shift+1…6）</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="501"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="502"/>
         <source>Save Layout</source>
         <translation>存储布局</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="502"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="503"/>
         <source>Save the current layout as a preset</source>
         <translation>将当前布局存储为预设</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="506"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="507"/>
         <source>Load Layout</source>
         <translation>读取布局</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="507"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="508"/>
         <source>Load a layout from a preset file</source>
         <translation>从预设文件中读取布局</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="513"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="514"/>
         <source>Swap A/B panes (Shortcut: X)</source>
         <translation>交换 A/B 窗格 (快捷键: X)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="535"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="536"/>
         <source>Analyze</source>
         <translation>分析</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="538"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="539"/>
         <location filename="../src/compareworkspace_temporary.cpp" line="244"/>
         <source>Open Comparison Inspection Panel</source>
         <translation>打开比较检视面板</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="548"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="549"/>
         <source>Export Report</source>
         <translation>导出报告</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="551"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="552"/>
         <location filename="../src/compareworkspace_temporary.cpp" line="247"/>
         <source>Export comparison results as an HTML/Markdown/JSON report</source>
         <translation>将对比结果导出为 HTML/Markdown/JSON 报告</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="572"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="573"/>
         <location filename="../src/compareworkspace_interact.cpp" line="466"/>
         <location filename="../src/compareworkspace_keyboard.cpp" line="369"/>
         <location filename="../src/compareworkspace_keyboard.cpp" line="394"/>
@@ -2029,47 +2077,47 @@
         <translation>视图自适应窗口 (Fit)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="606"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="607"/>
         <source>PSNR: —    SSIM: —</source>
         <translation>PSNR: —    SSIM: —</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="609"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="610"/>
         <source>Align</source>
         <translation>对齐</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="614"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="615"/>
         <source>Before comparison, auto-align by integer-pixel translation to remove shift error, then compute PSNR/SSIM</source>
         <translation>对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="636"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="637"/>
         <source>Close the comparison window (Esc; with a selection, Esc clears it first)</source>
         <translation>关闭比较窗口（Esc；有选区时 Esc 先清除选区）</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="685"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="686"/>
         <source>Applied auto threshold %1</source>
         <translation>已应用自动阈值 %1</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="695"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="696"/>
         <source>Automatically compute the best separation threshold from the difference distribution (Otsu)</source>
         <translation>基于差异分布自动计算最佳分离阈值 (Otsu)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="711"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="712"/>
         <source>Automatically compute the best separation threshold from the difference distribution (Otsu suggestion: %1)</source>
         <translation>基于差异分布自动计算最佳分离阈值 (Otsu 建议: %1)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="722"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="723"/>
         <source>Screenshot</source>
         <translation>截图</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="724"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="725"/>
         <source>Copy or save the current comparison view</source>
         <translation>复制或保存当前比较视图</translation>
     </message>
@@ -2767,47 +2815,47 @@
         <translation>布局：自动 / 1×N / 2×2 …（Ctrl+2 / Ctrl+4 / Ctrl+8）</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="510"/>
+        <location filename="../src/compareworkspace.cpp" line="513"/>
         <source>No images available.
 Check that the files exist, are complete, and are supported.</source>
         <translation>没有可用的图片。
 请检查文件是否存在、完整且受支持。</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="512"/>
+        <location filename="../src/compareworkspace.cpp" line="515"/>
         <source>No images available.
 Return to Browse and select images.</source>
         <translation>没有可用的图片。
 请返回浏览器选择图片。</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="521"/>
+        <location filename="../src/compareworkspace.cpp" line="524"/>
         <source>%1 %2 could not be loaded (corrupt, missing, or unsupported). %3 usable images were kept for comparison.</source>
         <translation>%1 %2无法加载（损坏、缺失或不支持）。已保留 %3 张可用图片用于比较。</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="524"/>
+        <location filename="../src/compareworkspace.cpp" line="527"/>
         <source>image</source>
         <translation>张图片</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="524"/>
+        <location filename="../src/compareworkspace.cpp" line="527"/>
         <source>images</source>
         <translation>张图片</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="674"/>
+        <location filename="../src/compareworkspace.cpp" line="677"/>
         <source>%1 × %2</source>
         <comment>compare grid rows × columns</comment>
         <translation>%1 行×%2 列</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace.cpp" line="707"/>
+        <location filename="../src/compareworkspace.cpp" line="710"/>
         <source>Reference: %1</source>
         <translation>基准: %1</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="564"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="565"/>
         <source>Fit to window (Shortcut: F): when &quot;Uniform Pixel Scale&quot; is checked, all panes fit at the same scale;when unchecked, each pane fits its own resolution so images with similar FOV/aspect appear similar in size</source>
         <translation>适合窗口（快捷键 F）：勾选「统一像素倍率」时所有窗格按同一倍率适配；不勾选时每个窗格按各自分辨率适配，使视场/比例相近的图片显示大小相近</translation>
     </message>
@@ -3552,6 +3600,24 @@ ROI diff: %1%  Mean %2  Peak %3</source>
     </message>
 </context>
 <context>
+    <name>FormatFilterCombo</name>
+    <message>
+        <location filename="../src/formatfiltercombo.cpp" line="41"/>
+        <source>File types shown in both browse panes (multi-select)</source>
+        <translation>两个浏览窗格中显示的文件类型（可多选）</translation>
+    </message>
+    <message>
+        <location filename="../src/formatfiltercombo.cpp" line="104"/>
+        <source>All types</source>
+        <translation>全部类型</translation>
+    </message>
+    <message>
+        <location filename="../src/formatfiltercombo.cpp" line="105"/>
+        <source>Types: %1/%2</source>
+        <translation>类型：%1/%2</translation>
+    </message>
+</context>
+<context>
     <name>HistogramWidget</name>
     <message>
         <location filename="../src/widgets/histogramwidget.cpp" line="14"/>
@@ -4170,67 +4236,67 @@ or double-click a thumbnail to view</source>
         <translation>双栏浏览视图</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="58"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="281"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="41"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="244"/>
         <source>Enter secondary directory path...</source>
         <translation>输入右栏目录路径...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="69"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="262"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="54"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="225"/>
         <source>Browse...</source>
         <translation>浏览...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="77"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="62"/>
         <source>Open Secondary Directory</source>
         <translation>打开右栏目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="83"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="263"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="68"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="226"/>
         <source>Clone Left</source>
         <translation>右栏跟随左栏</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="85"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="264"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="70"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="227"/>
         <source>Sync right pane to the left pane directory</source>
         <translation>同步右栏路径为左栏当前目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="89"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="265"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="74"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="228"/>
         <source>Swap</source>
         <translation>左右互换</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="91"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="266"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="76"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="229"/>
         <source>Swap left and right pane directories and selections</source>
         <translation>交换左右栏目录与选中项</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="97"/>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="98"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="267"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="279"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="82"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="83"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="230"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="242"/>
         <location filename="../src/test_language.cpp" line="79"/>
         <source>Close Split Browse View</source>
         <translation>关闭双栏浏览</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="375"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="374"/>
         <source>Select 2 to 8 images across left and right panes to compare (currently %1 selected)</source>
         <translation>在左右栏中选择 2 到 8 张图片进行对比（当前已选 %1 张）</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="382"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="381"/>
         <source>Select 2 to 8 images across left and right panes to compare</source>
         <translation>在左右栏中选择 2 到 8 张图片进行对比</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="386"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="385"/>
         <source>Compare %1 selected images (P)</source>
         <translation>对比选中的 %1 张图片 (P)</translation>
     </message>
@@ -4245,49 +4311,49 @@ or double-click a thumbnail to view</source>
         <translation>无法写入 %1 的附属文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="129"/>
+        <location filename="../src/mainwindow.cpp" line="130"/>
         <source>MViewer</source>
         <translation>MViewer</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="407"/>
+        <location filename="../src/mainwindow.cpp" line="408"/>
         <source>Rated %1: %2 stars</source>
         <translation>已为 %1 评分: %2 星</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="469"/>
+        <location filename="../src/mainwindow.cpp" line="470"/>
         <source>Cleared the color label of %1</source>
         <translation>已清除 %1 的色标</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="470"/>
+        <location filename="../src/mainwindow.cpp" line="471"/>
         <source>Set color label %2 on %1</source>
         <translation>已为 %1 设置色标 %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="484"/>
+        <location filename="../src/mainwindow.cpp" line="485"/>
         <source>Picked %1</source>
         <translation>已收藏 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="485"/>
+        <location filename="../src/mainwindow.cpp" line="486"/>
         <source>Unpicked %1</source>
         <translation>已取消收藏 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="499"/>
+        <location filename="../src/mainwindow.cpp" line="500"/>
         <source>Rejected %1</source>
         <translation>已拒绝 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="500"/>
+        <location filename="../src/mainwindow.cpp" line="501"/>
         <source>Unrejected %1</source>
         <translation>已取消拒绝 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="605"/>
-        <location filename="../src/mainwindow.cpp" line="749"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="238"/>
+        <location filename="../src/mainwindow.cpp" line="606"/>
+        <location filename="../src/mainwindow.cpp" line="753"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="239"/>
         <source>Current: %1</source>
         <translation>当前: %1</translation>
     </message>
@@ -4307,18 +4373,18 @@ or double-click a thumbnail to view</source>
         <translation>已加载 %1 张图像</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="699"/>
+        <location filename="../src/mainwindow.cpp" line="700"/>
         <source>At most 8 images can be compared; the first 8 were used</source>
         <translation>最多支持 8 张图片对比，已使用前 8 张</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="704"/>
+        <location filename="../src/mainwindow.cpp" line="705"/>
         <location filename="../src/mainwindow_commands.cpp" line="604"/>
         <source>Select 2-8 images to compare</source>
         <translation>需要选择 2-8 张图片才能比较</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow.cpp" line="755"/>
+        <location filename="../src/mainwindow.cpp" line="759"/>
         <location filename="../src/mainwindow_session_recovery.cpp" line="423"/>
         <source>Ready</source>
         <translation>就绪</translation>
@@ -4659,80 +4725,80 @@ or double-click a thumbnail to view</source>
         <translation>不再提示</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="328"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="339"/>
         <source>Directory does not exist, removed from recent records: %1</source>
         <translation>目录不存在，已从最近记录中移除: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="338"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="349"/>
         <source>Clean Invalid Directories</source>
         <translation>清理失效目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="362"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="373"/>
         <source>Cleared %1 stale directory entries</source>
         <translation>已清理 %1 条失效目录记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="364"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="375"/>
         <source>Clear Recent Directories</source>
         <translation>清空最近目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="374"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="385"/>
         <source>Recent directory history cleared</source>
         <translation>已清空最近目录记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="378"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="390"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="457"/>
-        <location filename="../src/mainwindow_navigation.cpp" line="472"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="389"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="401"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="468"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="483"/>
         <source>(None)</source>
         <translation>(无)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="412"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="423"/>
         <source>File missing; removed from recent list: %1</source>
         <translation>文件不存在，已从最近记录中移除: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="421"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="432"/>
         <source>Clean Invalid Files</source>
         <translation>清理失效文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="442"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="453"/>
         <source>Cleaned %1 invalid file records</source>
         <translation>已清理 %1 条失效文件记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="445"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="456"/>
         <source>Clear recent files</source>
         <translation>清空最近文件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="453"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="464"/>
         <source>Recent file history cleared</source>
         <translation>已清空最近文件记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="479"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="490"/>
         <source>No folder to add to favorites</source>
         <translation>没有可收藏的目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="488"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="499"/>
         <source>Added to favorites: %1</source>
         <translation>已收藏: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="503"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="514"/>
         <source>Removed from favorites: %1</source>
         <translation>已取消收藏: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="535"/>
+        <location filename="../src/mainwindow_navigation.cpp" line="546"/>
         <source>All filters cleared</source>
         <translation>已清除所有筛选条件</translation>
     </message>
@@ -4808,67 +4874,67 @@ or double-click a thumbnail to view</source>
         <translation>点击在资源管理器中定位当前文件，右键复制完整路径</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="414"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="419"/>
         <source>Path does not exist: %1</source>
         <translation>路径不存在: %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="422"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="427"/>
         <source>Image files (</source>
         <translation>图片文件 (</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="425"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="430"/>
         <source>All files (*)</source>
         <translation>所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="427"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="432"/>
         <source>Open Image</source>
         <translation>打开图片</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="585"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="590"/>
         <source>Plugin list updated</source>
         <translation>插件列表已更新</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="600"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="606"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="609"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="605"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="611"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="614"/>
         <source>Export Settings</source>
         <translation>导出设置</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="601"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="617"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="606"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="622"/>
         <source>MViewer Settings File (*.mvs);;All Files (*)</source>
         <translation>MViewer 设置文件 (*.mvs);;所有文件 (*)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="607"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="612"/>
         <source>Settings exported to %1</source>
         <translation>设置已导出至 %1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="610"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="615"/>
         <source>Export failed: %1</source>
         <translation>导出失败：%1</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="616"/>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="623"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="621"/>
         <location filename="../src/mainwindow_ui_connections.cpp" line="628"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="633"/>
         <source>Import Settings</source>
         <translation>导入设置</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="624"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="629"/>
         <source>Settings imported. Some changes require restarting MViewer to take effect.</source>
         <translation>设置已导入。部分更改需要重启 MViewer 才能生效。</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="629"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="634"/>
         <source>Import failed: %1</source>
         <translation>导入失败：%1</translation>
     </message>
@@ -4879,9 +4945,7 @@ or double-click a thumbnail to view</source>
         <translation>上一级</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="54"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="46"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="261"/>
         <source>Parent directory</source>
         <translation>上一级目录</translation>
     </message>
@@ -4920,20 +4984,16 @@ or double-click a thumbnail to view</source>
         <translation>打开目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="49"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="73"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="248"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="486"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="259"/>
         <source>Previous directory</source>
         <translation>上一个目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="52"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="74"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="251"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="487"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="260"/>
         <source>Next directory</source>
         <translation>下一个目录</translation>
     </message>
@@ -4976,19 +5036,19 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_layout.cpp" line="139"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="239"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="205"/>
         <source>Enter a directory path and press Enter to switch...</source>
         <translation>输入目录路径并按回车切换...</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_layout.cpp" line="141"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="241"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="207"/>
         <source>Type or paste a directory path and press Enter to open it (shortcut: Ctrl+F / Alt+D to focus).</source>
         <translation>输入或粘贴目录路径并按回车打开（快捷键：Ctrl+F / Alt+D 聚焦）。</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_layout.cpp" line="172"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="246"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="212"/>
         <source>Favorites — Right-click to remove, Ctrl+D to favorite the current folder</source>
         <translation>收藏夹 — 右键移除，Ctrl+D 收藏当前文件夹</translation>
     </message>
@@ -5008,179 +5068,173 @@ or double-click a thumbnail to view</source>
         <translation>预览</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="221"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="211"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="299"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="165"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="166"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="131"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="132"/>
         <source>Sort:</source>
         <translation>排序：</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="331"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="223"/>
-        <source>Filter by file type</source>
-        <translation>按文件类型筛选</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="334"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="170"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="336"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="136"/>
         <source>Advanced Filter</source>
         <translation>高级筛选</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="337"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="171"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="339"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="137"/>
         <source>Show camera, lens, rating, and metadata filters</source>
         <translation>显示相机、镜头、评分和元数据筛选</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="340"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="172"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="342"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="138"/>
         <source>Clear Filters</source>
         <translation>清除筛选</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="347"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="349"/>
         <location filename="../src/mainwindow_ui_retranslate.cpp" line="60"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="196"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="162"/>
         <source>Camera</source>
         <translation>相机</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="350"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="197"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="352"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="163"/>
         <source>Filter by camera (brand/model), substring match</source>
         <translation>按相机(品牌/型号)过滤，子串匹配</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="354"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="356"/>
         <location filename="../src/mainwindow_ui_retranslate.cpp" line="61"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="198"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="164"/>
         <source>Lens</source>
         <translation>镜头</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="357"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="198"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="359"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="164"/>
         <source>Filter by lens model, substring match</source>
         <translation>按镜头型号过滤，子串匹配</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="362"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="211"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="364"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="177"/>
         <source>ISO</source>
         <translation>ISO</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="363"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="212"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="365"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="178"/>
         <source>Filter by exact ISO (0 = all)</source>
         <translation>按 ISO 精确过滤 (0 = 全部)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="376"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="199"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="378"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="165"/>
         <source>Label</source>
         <translation>标签</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="379"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="199"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="381"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="165"/>
         <source>Filter by tag exactly (empty = all)</source>
         <translation>按标签精确过滤 (空 = 全部)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="413"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="226"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="410"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="192"/>
         <source>Switch thumbnail view mode (common modes Ctrl+1..6)</source>
         <translation>切换缩略图视图模式（常用模式 Ctrl+1..6）</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="423"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="167"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="420"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="133"/>
         <source>Search:</source>
         <translation>搜索：</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="428"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="232"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="425"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="198"/>
         <source>Filter by filename...</source>
         <translation>按文件名筛选...</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="432"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="234"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="429"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="200"/>
         <source>Include Subfolders</source>
         <translation>包含子目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="436"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="236"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="433"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="202"/>
         <source>Metadata</source>
         <translation>元数据</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="440"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="168"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="437"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="134"/>
         <source>Rating:</source>
         <translation>评分:</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="449"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="169"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="446"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="135"/>
         <source>Flag:</source>
         <translation>旗标:</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="457"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="173"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="454"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="139"/>
         <source>Reset Filters</source>
         <translation>重置筛选</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="459"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="174"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="456"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="140"/>
         <source>Clear all search and filter conditions</source>
         <translation>清除所有搜索和过滤条件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="620"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="618"/>
         <source>Image Viewer - MViewer</source>
         <translation>图像查看器 - MViewer</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="649"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="647"/>
         <source>0 images</source>
         <translation>图片 0</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="651"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="649"/>
         <source>Size 0 B</source>
         <translation>大小 0 B</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="653"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="651"/>
         <source>Zoom</source>
         <translation>缩放</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="654"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="652"/>
         <location filename="../src/mainwindow_view.cpp" line="693"/>
         <source>Hit rate —</source>
         <translation>命中率 —</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="658"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="656"/>
         <source>Cache hit rate: improves consecutive large-image switching and thumbnail loading</source>
         <translation>缓存命中率: 提升连续大图切换与缩略图加载性能</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="694"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="692"/>
         <source>%1 selected · %2</source>
         <translation>已选 %1 · %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="695"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="693"/>
         <source>Size %1</source>
         <translation>大小 %1</translation>
     </message>
@@ -5800,12 +5854,12 @@ Restore the last viewed images and directory?</source>
         <translation>比较模式(&amp;C)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="634"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="639"/>
         <source>About MViewer</source>
         <translation>关于 MViewer</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_connections.cpp" line="635"/>
+        <location filename="../src/mainwindow_ui_connections.cpp" line="640"/>
         <source>MViewer %1
 
 Visual analysis platform for imaging algorithm engineers: browse, compare, analyze, export.
@@ -6080,118 +6134,88 @@ Build: %2</source>
         <translation>紧凑 (Ctrl+6)</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="93"/>
-        <source>All types</source>
-        <translation>所有类型</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="94"/>
-        <source>JPG</source>
-        <translation>JPG</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="95"/>
-        <source>PNG</source>
-        <translation>PNG</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="96"/>
-        <source>TIFF</source>
-        <translation>TIFF</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="97"/>
-        <source>WebP</source>
-        <translation>WebP</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="98"/>
-        <source>RAW</source>
-        <translation>RAW</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="119"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="133"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="85"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="99"/>
         <source>All</source>
         <translation>全部</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="120"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="86"/>
         <source>★ and above</source>
         <translation>★ 及以上</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="121"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="87"/>
         <source>★★ and above</source>
         <translation>★★ 及以上</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="122"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="88"/>
         <source>★★★ and above</source>
         <translation>★★★ 及以上</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="123"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="89"/>
         <source>★★★★ and above</source>
         <translation>★★★★ 及以上</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="124"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="90"/>
         <source>★★★★★</source>
         <translation>★★★★★</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="133"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="99"/>
         <source>Favorited</source>
         <translation>已收藏</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="134"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="100"/>
         <source>Rejected</source>
         <translation>已拒绝</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="134"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="100"/>
         <source>Recently viewed</source>
         <translation>最近查看</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="135"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="101"/>
         <source>Red label</source>
         <translation>红色标签</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="135"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="101"/>
         <source>Orange label</source>
         <translation>橙色标签</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="136"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="102"/>
         <source>Yellow label</source>
         <translation>黄色标签</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="136"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="102"/>
         <source>Green label</source>
         <translation>绿色标签</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="137"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="103"/>
         <source>Blue label</source>
         <translation>蓝色标签</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="137"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="103"/>
         <source>Purple label</source>
         <translation>紫色标签</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="147"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="113"/>
         <source>↑ Ascending: A→Z (numbers by value), earliest to latest, smallest to largest; ↓ the opposite. Identical items still sort by filename</source>
         <translation>↑ 升序：A→Z（数字按数值），从早到晚，从小到大；↓ 相反。相同项仍按文件名排序</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="150"/>
+        <location filename="../src/mainwindow_ui_retranslate.cpp" line="116"/>
         <source>↑ Ascending: A→Z, earliest to latest, smallest to largest; ↓ the opposite</source>
         <translation>↑ 升序：A→Z，从早到晚，从小到大；↓ 相反</translation>
     </message>
@@ -6201,27 +6225,27 @@ Build: %2</source>
         <translation>左栏 %1 + 右栏 %2 个已选</translation>
     </message>
     <message>
-        <location filename="../src/splitbrowse_transfer.h" line="75"/>
+        <location filename="../src/splitbrowse_transfer.h" line="83"/>
         <source>Copy %1 file(s) from the left pane to %2</source>
         <translation>从左栏复制 %1 个文件到 %2</translation>
     </message>
     <message>
-        <location filename="../src/splitbrowse_transfer.h" line="77"/>
+        <location filename="../src/splitbrowse_transfer.h" line="85"/>
         <source>Copy %1 file(s) from the right pane to %2</source>
         <translation>从右栏复制 %1 个文件到 %2</translation>
     </message>
     <message>
-        <location filename="../src/splitbrowse_transfer.h" line="79"/>
+        <location filename="../src/splitbrowse_transfer.h" line="87"/>
         <source>Move %1 file(s) from the left pane to %2</source>
         <translation>从左栏移动 %1 个文件到 %2</translation>
     </message>
     <message>
-        <location filename="../src/splitbrowse_transfer.h" line="81"/>
+        <location filename="../src/splitbrowse_transfer.h" line="89"/>
         <source>Move %1 file(s) from the right pane to %2</source>
         <translation>从右栏移动 %1 个文件到 %2</translation>
     </message>
     <message>
-        <location filename="../src/splitbrowse_transfer.h" line="87"/>
+        <location filename="../src/splitbrowse_transfer.h" line="95"/>
         <source>Both panes show the same directory</source>
         <translation>两栏是同一目录</translation>
     </message>
@@ -7453,7 +7477,7 @@ Continue?</source>
 <context>
     <name>ThumbnailPanel</name>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="81"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="104"/>
         <source>Select 2-8 images across panes to compare (currently %1)</source>
         <translation>在分栏中选择 2-8 张图片进行对比（当前已选 %1）</translation>
     </message>
@@ -7461,6 +7485,12 @@ Continue?</source>
         <location filename="../src/thumbnailpanel.cpp" line="15"/>
         <source>Image Gallery</source>
         <translation>图片画廊</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel.cpp" line="60"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="95"/>
+        <source>Compare (P)</source>
+        <translation>对比 (P)</translation>
     </message>
     <message>
         <location filename="../src/thumbnailpanel_contextmenu.cpp" line="49"/>
@@ -7508,97 +7538,107 @@ Continue?</source>
         <translation>比较</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="88"/>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="89"/>
         <source>USM Sharpen Compare...</source>
         <translation>USM 锐化对比...</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="94"/>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="95"/>
         <source>Add Tag…</source>
         <translation>添加标签…</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="96"/>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="97"/>
         <source>Remove Tag from Selection</source>
         <translation>移除所选标签</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="105"/>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="106"/>
         <source>Add tag</source>
         <translation>添加标签</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="105"/>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="106"/>
         <source>Add a tag to the selected images:</source>
         <translation>给所选图片添加标签：</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="333"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="101"/>
+        <source>Send the %1 selected images to compare</source>
+        <translation>将选中的 %1 张图片送去对比</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="106"/>
+        <source>Select 2-8 images to compare (currently %1)</source>
+        <translation>请选择 2-8 张图片进行对比（当前 %1 张）</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="350"/>
         <source>Set rating</source>
         <translation>设置评级</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="342"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="359"/>
         <source>Clear Rating</source>
         <translation>清除评级</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="345"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="362"/>
         <source>Set color label</source>
         <translation>设置颜色标签</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="351"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="368"/>
         <source>Red</source>
         <translation>红色</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="351"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="368"/>
         <source>Orange</source>
         <translation>橙色</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="351"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="368"/>
         <source>Yellow</source>
         <translation>黄色</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="352"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="369"/>
         <source>Green</source>
         <translation>绿色</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="352"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="369"/>
         <source>Blue</source>
         <translation>蓝色</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="352"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="369"/>
         <source>Purple</source>
         <translation>紫色</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="360"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="377"/>
         <source>No label</source>
         <translation>无标签</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="363"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="380"/>
         <source>Set Mark</source>
         <translation>设置标记</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="364"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="381"/>
         <source>Mark as Pick (Pick)</source>
         <translation>标记为精选 (Pick)</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="366"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="383"/>
         <source>Mark as rejected (Reject)</source>
         <translation>标记为排除 (Reject)</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_selection.cpp" line="368"/>
+        <location filename="../src/thumbnailpanel_selection.cpp" line="385"/>
         <source>Clear Markers</source>
         <translation>清除标记</translation>
     </message>
@@ -7674,7 +7714,7 @@ Continue?</source>
         <translation>移动到...</translation>
     </message>
     <message>
-        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="90"/>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="91"/>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="753"/>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="762"/>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="775"/>
@@ -7749,7 +7789,7 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/test_language.cpp" line="84"/>
-        <location filename="../src/thumbnailpanel.cpp" line="577"/>
+        <location filename="../src/thumbnailpanel.cpp" line="588"/>
         <source>Thumbnail size reset (Ctrl+Alt+9)</source>
         <translation>已重置缩略图大小 (Ctrl+Alt+9)</translation>
     </message>
@@ -7948,12 +7988,12 @@ Continue?</source>
         <translation>按住 Space 时，鼠标所在一侧临时显示另一侧的图；松开恢复。</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="530"/>
+        <location filename="../src/usmcomparedialog.cpp" line="547"/>
         <source>No image to switch to on this side yet</source>
         <translation>这一侧还没有可切换的图像</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="553"/>
+        <location filename="../src/usmcomparedialog.cpp" line="570"/>
         <source>Move the mouse to one side, then hold Space</source>
         <translation>将鼠标移到某一侧再按住 Space</translation>
     </message>
@@ -8048,42 +8088,42 @@ Continue?</source>
         <translation>就绪</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="388"/>
+        <location filename="../src/usmcomparedialog.cpp" line="405"/>
         <source>Calculating sharpening...</source>
         <translation>正在计算锐化...</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="435"/>
+        <location filename="../src/usmcomparedialog.cpp" line="452"/>
         <source>Calculation complete (time: %1 ms)</source>
         <translation>计算完成 (耗时: %1 ms)</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="436"/>
+        <location filename="../src/usmcomparedialog.cpp" line="453"/>
         <source>PSNR: %1 dB | SSIM: %2 | ΔMean: %3 | ΔMax: %4 | Changed pixels: %5%</source>
         <translation>PSNR: %1 dB | SSIM: %2 | Δ均值: %3 | Δ最大: %4 | 变化像素: %5%</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="457"/>
+        <location filename="../src/usmcomparedialog.cpp" line="474"/>
         <source>Sharpened result copied to clipboard</source>
         <translation>已复制锐化结果到剪贴板</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="469"/>
+        <location filename="../src/usmcomparedialog.cpp" line="486"/>
         <source>Save As Sharpened Image</source>
         <translation>另存为锐化图像</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="481"/>
+        <location filename="../src/usmcomparedialog.cpp" line="498"/>
         <source>Save successful: %1</source>
         <translation>保存成功: %1</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="483"/>
+        <location filename="../src/usmcomparedialog.cpp" line="500"/>
         <source>Save failed</source>
         <translation>存储失败</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="484"/>
+        <location filename="../src/usmcomparedialog.cpp" line="501"/>
         <source>Unable to save the image to: %1</source>
         <translation>无法将图像保存至: %1</translation>
     </message>
@@ -8109,7 +8149,7 @@ Continue?</source>
         <translation>调度器拒绝了提交</translation>
     </message>
     <message>
-        <location filename="../src/usmcomparedialog.cpp" line="470"/>
+        <location filename="../src/usmcomparedialog.cpp" line="487"/>
         <source>Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;All Files (*)</source>
         <translation>图片 (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;所有文件 (*)</translation>
     </message>

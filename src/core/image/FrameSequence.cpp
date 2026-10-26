@@ -579,7 +579,12 @@ FrameInfo FrameSequenceReader::frameInfo(const std::string &path, int frameIndex
         if (frameIndex == 0 || reader.jumpToImage(frameIndex))
         {
             if (!animation)
+            {
+                // size() is the stored size; report what read() displays.
                 size = reader.size();
+                if (qtmetadata::transformSwapsDimensions(reader.transformation()))
+                    size.transpose();
+            }
             const int before = reader.nextImageDelay();
             const QImage image = reader.read();
             if (image.isNull())
