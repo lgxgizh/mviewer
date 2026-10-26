@@ -686,18 +686,28 @@ void testFormatFilter(const QString &leftDir, const QString &rightDir)
                    160),
                "checking RAW shows RAW files in both panes");
         rightCombo->setGroupVisible(QStringLiteral("raw"), false);
-        EXPECT(waitUntil([&]() { return !listsSuffix(left, QStringLiteral("dng")); }, 160),
+        // Wait for the re-filtered list, not the transient empty one.
+        EXPECT(waitUntil(
+                   [&]()
+                   {
+                       return !listsSuffix(left, QStringLiteral("dng")) &&
+                              listsSuffix(left, QStringLiteral("png"));
+                   },
+                   160),
                "unchecking RAW in the right combo hides it in the left pane too");
     }
     rightCombo->setGroupVisible(QStringLiteral("bmp"), false);
     EXPECT(waitUntil(
                [&]()
                {
+                   // The list is briefly empty while it re-filters; wait
+                   // for the final state (BMP gone, PNG still listed).
                    return !listsSuffix(left, QStringLiteral("bmp")) &&
-                          !listsSuffix(right, QStringLiteral("bmp"));
+                          !listsSuffix(right, QStringLiteral("bmp")) &&
+                          listsSuffix(left, QStringLiteral("png")) &&
+                          listsSuffix(right, QStringLiteral("png"));
                },
-               160) &&
-               listsSuffix(left, QStringLiteral("png")),
+               240),
            "unchecking BMP hides only BMP files");
     EXPECT(mviewer::browseformats::loadHiddenGroups().contains(QStringLiteral("bmp")),
            "type filter choice is persisted");

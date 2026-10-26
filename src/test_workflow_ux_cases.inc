@@ -4563,6 +4563,18 @@ void workflow6_metadata_dual_consumer(const QString &rootDir)
 
     // Clean session: no recovery prompt, no leftover session state.
     QFile::remove(appConfigFile(QStringLiteral("recovery.json")));
+    // This workflow browses a RAW-only folder; RAW is hidden by default in
+    // the Browse type filter, so show every type for its duration.
+    const QStringList savedHiddenTypes = mviewer::browseformats::loadHiddenGroups();
+    mviewer::browseformats::saveHiddenGroups({});
+    struct RestoreHiddenTypes
+    {
+        QStringList groups;
+        ~RestoreHiddenTypes()
+        {
+            mviewer::browseformats::saveHiddenGroups(groups);
+        }
+    } restoreHiddenTypes{savedHiddenTypes};
 
     MainWindow w;
     w.resize(1280, 800);
