@@ -28,6 +28,19 @@ ImageData tryCacheBestMip(const std::string &path, int maxEdge)
     return mviewer::core::tryBestMip(path, maxEdge);
 }
 
+// getBestMip prefers the largest level <= maxEdge, so once lod 0 has left the
+// cache a 4096 request can come back as the 2048 mip. A sharp raster that
+// small at deep zoom is accepted as final and the pane stays soft for good.
+// Dense enough = within 90% of what the request (capped at the source) needs.
+bool mipDenseEnough(const ImageData &mip, int wantEdge, int sourceEdge)
+{
+    if (mip.isNull() || wantEdge <= 0)
+        return false;
+    const int need = sourceEdge > 0 ? std::min(wantEdge, sourceEdge) : wantEdge;
+    return static_cast<long long>(std::max(mip.width, mip.height)) * 10 >=
+           static_cast<long long>(need) * 9;
+}
+
 QRect coveredRectForRequest(const QSize &sourceDims,
                             const mviewer::ui::CompareDisplayRequest &request)
 {
@@ -66,6 +79,12 @@ ImageData resolveLodFromCachedFull(const ImageData &src,
     if (!pathKey.empty())
     {
         ImageData best = mviewer::core::ensureAndBestMip(pathKey, src, wantEdge);
+        // The full frame is in hand: a sharp pass never settles for a coarser
+        // cached mip (cheap and preview passes are followed by a sharp one).
+        const bool needsDense = !request.provisional && !request.preview;
+        if (needsDense && !best.isNull() &&
+            !mipDenseEnough(best, wantEdge, std::max(src.width, src.height)))
+            best = ImageData{};
         if (!best.isNull())
         {
             if (best.width > request.target.width() || best.height > request.target.height())
@@ -461,13 +480,18 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
     result.coveredRect = QRect(QPoint(0, 0), result.sourceSize);
 
     // Prefer in-memory CacheManager mip before SourceImage::decodeLod.
+    const int sourceEdge = std::max(result.sourceSize.width(), result.sourceSize.height());
+    const bool needsDense = !request.provisional && !request.preview;
     ImageData mip = tryCacheBestMip(path, wantEdge);
     if (!mip.isNull())
     {
         const int mipEdge = std::max(mip.width, mip.height);
         // Reject a Browse/Preview-sized cache hit for a much larger viewport
         // request — accepting it paints a sticky nearest-neighbour mosaic.
+        // A sharp request has no follow-up pass, so it needs the full density.
         if (wantEdge > 0 && mipEdge * 2 < wantEdge)
+            mip = ImageData{};
+        else if (needsDense && !mipDenseEnough(mip, wantEdge, sourceEdge))
             mip = ImageData{};
     }
     if (!mip.isNull())
@@ -486,7 +510,23 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
         }
     }
 
-    const auto decoded = source->decodeLod(wantEdge);
+    auto decoded = source->decodeLod(wantEdge);
+    // decodeLod serves the same coarse mip first; decode the full frame as a
+    // region instead (decodeRegion never reads the mip chain).
+    if (needsDense && (!decoded.ok || !mipDenseEnough(decoded.pixels, wantEdge, sourceEdge)))
+    {
+        // Same contract as the region branch above: raw rect in, target in
+        // displayed (oriented) dimensions.
+        const double fit = std::min(1.0, static_cast<double>(wantEdge) / sourceEdge);
+        const int tw = std::max(1, static_cast<int>(std::lround(result.sourceSize.width() * fit)));
+        const int th = std::max(1, static_cast<int>(std::lround(result.sourceSize.height() * fit)));
+        const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
+            {0, 0, result.sourceSize.width(), result.sourceSize.height()}, source->rawWidth(),
+            source->rawHeight(), source->orientation());
+        auto full = source->decodeRegion(raw, tw, th);
+        if (full.ok && !full.pixels.isNull())
+            decoded = std::move(full);
+    }
     if (!decoded.ok)
     {
         result.errorText = QStringLiteral("Bounded display decode unavailable");

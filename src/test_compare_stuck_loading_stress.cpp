@@ -7,6 +7,9 @@
 // display batch and strand the other pane on its soft stand-in.
 
 #include "compareworkspace.h"
+#include "core/cache/CacheManager.h"
+#include "core/image/DisplayMip.h"
+#include "core/image/QtConvert.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "widgets/rawimageview.h"
 
@@ -21,6 +24,19 @@
 #include <cstdio>
 #include <functional>
 #include <thread>
+
+struct CompareSourceDisplayTestAccess
+{
+    static CompareWorkspace::SourceDisplayResult fromFile(const std::string &path,
+                                                          const QSize &target, bool provisional)
+    {
+        CompareWorkspace::DisplayRequest request;
+        request.target = target;
+        request.sourceRect = QRect(0, 0, 4096, 3072);
+        request.provisional = provisional;
+        return CompareWorkspace::materializeSourceDisplay(path, request);
+    }
+};
 
 namespace
 {
@@ -121,6 +137,22 @@ int main(int argc, char **argv)
     const QString b = writeFixture(dir, "b.jpg", 2);
     const QString c = writeFixture(dir, "c.jpg", 3);
     const QString d = writeFixture(dir, "d.jpg", 4);
+
+    // Root cause of the stuck pane: with lod 0 gone from the cache, a sharp
+    // 4096 full-frame request was served the 2048 mip (largest <= 4096) and
+    // accepted as final. The sharp pass must decode at full density instead.
+    {
+        const std::string key = c.toStdString();
+        QImage half(2048, 1536, QImage::Format_RGB888);
+        half.fill(Qt::gray);
+        CacheManager::instance().putMip(key, 1, mvcore::fromQImage(half));
+        const auto sharp = CompareSourceDisplayTestAccess::fromFile(key, QSize(4096, 4096), false);
+        check(sharp.errorText.isEmpty() && sharp.pixels.width >= 3687,
+              "sharp full-frame request is not served a half-size cached mip");
+        const auto cheap = CompareSourceDisplayTestAccess::fromFile(key, QSize(640, 640), true);
+        check(cheap.errorText.isEmpty() && !cheap.pixels.isNull(), "cheap request still paints");
+        mviewer::core::dropMips(key);
+    }
 
     int iterations = 8;
     if (const char *env = std::getenv("MV_STRESS_ITERATIONS"))

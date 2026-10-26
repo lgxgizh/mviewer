@@ -689,6 +689,7 @@ class CompareWorkspace : public QWidget
     static void clearDiffCache();
     friend struct CompareDiffCacheTestAccess;
     friend struct CellImageAdjustTestAccess;
+    friend struct CompareSourceDisplayTestAccess;
 
   private:
     // Analysis samples deliberately bypass RawImageView::image(). That image
