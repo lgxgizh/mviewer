@@ -2,11 +2,14 @@
 // listing when the hidden format groups change, and the empty-folder hint that
 // names files hidden only by the type filter ("3 RAW files hidden ... [Show]").
 #include "browseformats.h"
+#include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 
 #include <QEvent>
 #include <QFrame>
 #include <QLabel>
+#include <QListView>
+#include <QPair>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -74,6 +77,40 @@ class TypeHiddenHint final : public QFrame
     QLabel *m_label = nullptr;
     QPushButton *m_button = nullptr;
 };
+
+// Scroll anchor candidates, best first: the current item when it is on
+// screen, then the visible rows from the top. The first one that survives the
+// type change pins the viewport, so hiding rows above it does not move it.
+QList<QPair<QString, int>> typeFilterAnchors(const QListView *view, const QStringList &paths,
+                                             const QString &firstPath, int firstOffset,
+                                             bool horizontal)
+{
+    QList<QPair<QString, int>> out;
+    const QRect port = view->viewport()->rect();
+    auto offsetOf = [&](const QRect &r)
+    { return horizontal ? r.left() - port.left() : r.top() - port.top(); };
+    const QModelIndex current = view->currentIndex();
+    if (current.isValid() && current.row() < paths.size())
+    {
+        const QRect r = view->visualRect(current);
+        if (r.isValid() && r.intersects(port))
+            out.append(qMakePair(paths.at(current.row()), offsetOf(r)));
+    }
+    if (firstPath.isEmpty())
+        return out;
+    out.append(qMakePair(firstPath, firstOffset));
+    const int first = static_cast<int>(paths.indexOf(firstPath));
+    if (first < 0)
+        return out;
+    for (int row = first + 1; row < paths.size() && row < first + 512; ++row)
+    {
+        const QRect r = view->visualRect(view->model()->index(row, 0));
+        if (!r.isValid() || !r.intersects(port))
+            break;
+        out.append(qMakePair(paths.at(row), offsetOf(r)));
+    }
+    return out;
+}
 } // namespace
 
 void ThumbnailPanel::adoptListing(QList<Entry> all)
@@ -107,6 +144,17 @@ void ThumbnailPanel::setHiddenFormatGroups(const QStringList &groups)
     // The completed listing (shown + type-hidden rows) is re-partitioned in
     // place. No rescan: the filter rebuild below keeps the selection, current
     // item and scroll anchor of every row that is still visible.
+    const QStringList previousSelection = selectedPaths();
+    const QString previousCurrent = currentIndex().isValid()
+                                        ? m_paths.value(currentIndex().row())
+                                        : (m_selection ? m_selection->currentImage() : QString());
+    QString firstPath;
+    int firstOffset = 0;
+    captureScrollAnchor(firstPath, firstOffset);
+    const bool horizontal = (m_viewMode == Filmstrip || m_viewMode == List);
+    const auto anchors = firstPath.isEmpty()
+                             ? QList<QPair<QString, int>>()
+                             : typeFilterAnchors(this, m_paths, firstPath, firstOffset, horizontal);
     const int shownBefore = m_allEntries.size();
     QList<Entry> all = m_allEntries + m_typeHiddenEntries;
     sortDirectoryDeltaEntries(all);
@@ -124,6 +172,21 @@ void ThumbnailPanel::setHiddenFormatGroups(const QStringList &groups)
         if (m_viewMode == Details || m_sortMode == SortResolution)
             ensureDimensions();
     }
+    m_incrementalApply = true;
+    m_incrementalPrevSelection = previousSelection;
+    m_incrementalPrevCurrent = previousCurrent;
+    m_incrementalAnchorPath.clear();
+    m_incrementalAnchorOffset = 0;
+    for (const auto &anchor : anchors)
+    {
+        if (m_sourceRowByPath.contains(galleryPathKey(anchor.first)))
+        {
+            m_incrementalAnchorPath = anchor.first;
+            m_incrementalAnchorOffset = anchor.second;
+            break;
+        }
+    }
+    m_incrementalPreviousCurrentRow = m_paths.indexOf(previousCurrent);
     applyFilter();
     updateTypeHiddenHint();
 }
