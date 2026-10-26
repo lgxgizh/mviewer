@@ -293,3 +293,16 @@ qint64 ThumbnailPanel::thumbReadyBytes() const
     QMutexLocker lk(&m_thumbMtx);
     return m_thumbReadyBytes;
 }
+
+int ThumbnailPanel::thumbReadyCountForSize(int size) const
+{
+    const QString suffix = QChar(0x1f) + QString::number(size);
+    QMutexLocker lk(&m_thumbMtx);
+    int count = 0;
+    for (auto it = m_thumbReady.cbegin(); it != m_thumbReady.cend(); ++it)
+    {
+        if (it.key().endsWith(suffix))
+            ++count;
+    }
+    return count;
+}

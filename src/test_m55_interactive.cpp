@@ -124,10 +124,25 @@ int main(int argc, char **argv)
           "M55 QPixmap cache respects the byte bound");
     check(panel.thumbReadyCount() > 0, "M55 real panel delivered display pixmaps");
 
-    panel.setThumbSize(140);
-    QApplication::processEvents(QEventLoop::AllEvents, 5);
+    // The size switch itself must synchronously drop every old-size pixmap.
+    // Check before pumping events: applyThumbSize() schedules a visible-range
+    // re-request at the new size, and on a fast runner those new-size results
+    // can legitimately land within the next event-loop turn (that race made
+    // the old "count == 0 after processEvents" assertion flaky under GCC ASan).
+    const int oldThumbSize = 512;
+    const int newThumbSize = 140;
+    panel.setThumbSize(newThumbSize);
     check(panel.thumbReadyCount() == 0 && panel.thumbReadyBytes() == 0,
           "thumbnail-size change drops stale QPixmap identity state");
+    // Old-size results still queued or in flight must never re-enter the ready
+    // map after the switch; new-size results may, within the hard bounds.
+    TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(60));
+    waitUntil([] { return false; }, 200);
+    check(panel.thumbReadyCountForSize(oldThumbSize) == 0,
+          "late old-size deliveries stay out of the ready map after a size change");
+    check(panel.thumbReadyCount() <= ThumbnailPanel::kThumbPixmapCacheMaxEntries &&
+              panel.thumbReadyBytes() <= ThumbnailPanel::kThumbPixmapCacheMaxBytes,
+          "new-size deliveries after a size change respect the cache bounds");
     ThumbnailPipeline::instance().clear();
     TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(30));
 
