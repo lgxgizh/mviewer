@@ -1947,7 +1947,7 @@
     <message>
         <location filename="../src/compareworkspace.cpp" line="710"/>
         <location filename="../src/compareworkspace_controls.cpp" line="423"/>
-        <location filename="../src/compareworkspace_render_materialization.cpp" line="236"/>
+        <location filename="../src/compareworkspace_render_materialization.cpp" line="235"/>
         <source>Reference: —</source>
         <translation>基准: —</translation>
     </message>
@@ -4286,17 +4286,17 @@ or double-click a thumbnail to view</source>
         <translation>关闭双栏浏览</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="374"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="375"/>
         <source>Select 2 to 8 images across left and right panes to compare (currently %1 selected)</source>
         <translation>在左右栏中选择 2 到 8 张图片进行对比（当前已选 %1 张）</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="381"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="382"/>
         <source>Select 2 to 8 images across left and right panes to compare</source>
         <translation>在左右栏中选择 2 到 8 张图片进行对比</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="385"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="386"/>
         <source>Compare %1 selected images (P)</source>
         <translation>对比选中的 %1 张图片 (P)</translation>
     </message>
@@ -5068,7 +5068,7 @@ or double-click a thumbnail to view</source>
         <translation>预览</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_splitbrowse.cpp" line="211"/>
+        <location filename="../src/mainwindow_splitbrowse.cpp" line="212"/>
         <location filename="../src/mainwindow_ui_layout.cpp" line="299"/>
         <location filename="../src/mainwindow_ui_retranslate.cpp" line="131"/>
         <location filename="../src/mainwindow_ui_retranslate.cpp" line="132"/>
@@ -5198,43 +5198,43 @@ or double-click a thumbnail to view</source>
         <translation>清除所有搜索和过滤条件</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="618"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="619"/>
         <source>Image Viewer - MViewer</source>
         <translation>图像查看器 - MViewer</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="647"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="648"/>
         <source>0 images</source>
         <translation>图片 0</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="649"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="650"/>
         <source>Size 0 B</source>
         <translation>大小 0 B</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="651"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="652"/>
         <source>Zoom</source>
         <translation>缩放</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="652"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="653"/>
         <location filename="../src/mainwindow_view.cpp" line="693"/>
         <source>Hit rate —</source>
         <translation>命中率 —</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="656"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="657"/>
         <source>Cache hit rate: improves consecutive large-image switching and thumbnail loading</source>
         <translation>缓存命中率: 提升连续大图切换与缩略图加载性能</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="692"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="693"/>
         <source>%1 selected · %2</source>
         <translation>已选 %1 · %2</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="693"/>
+        <location filename="../src/mainwindow_ui_layout.cpp" line="694"/>
         <source>Size %1</source>
         <translation>大小 %1</translation>
     </message>
@@ -7789,7 +7789,7 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/test_language.cpp" line="84"/>
-        <location filename="../src/thumbnailpanel.cpp" line="588"/>
+        <location filename="../src/thumbnailpanel.cpp" line="591"/>
         <source>Thumbnail size reset (Ctrl+Alt+9)</source>
         <translation>已重置缩略图大小 (Ctrl+Alt+9)</translation>
     </message>
@@ -7943,6 +7943,30 @@ Continue?</source>
         <location filename="../src/thumbnailpanel_viewmode.cpp" line="494"/>
         <source>ISO</source>
         <translation>ISO</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/thumbnailpanel_typehint.cpp" line="193"/>
+        <source>%n %1 file(s) hidden by the type filter</source>
+        <translation>
+            <numerusform>类型筛选隐藏了 %n 个 %1 文件</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_typehint.cpp" line="194"/>
+        <source>Show %1 files</source>
+        <translation>显示 %1 文件</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../src/thumbnailpanel_typehint.cpp" line="198"/>
+        <source>%n file(s) hidden by the type filter (%1)</source>
+        <translation>
+            <numerusform>类型筛选隐藏了 %n 个文件（%1）</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_typehint.cpp" line="200"/>
+        <source>Show these types</source>
+        <translation>显示这些类型</translation>
     </message>
 </context>
 <context>

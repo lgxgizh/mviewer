@@ -489,6 +489,7 @@ QWidget *MainWindow::buildGalleryPanel()
     connect(m_thumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
     m_thumbnailPanel->setHiddenFormatGroups(m_hiddenFormatGroups);
+    wireTypeHiddenHint(m_thumbnailPanel);
     m_thumbnailPanel->setCommandStack(&m_cmdStack);
     m_thumbnailPanel->setSelectionModel(m_selection);
     placeGalleryCompareButton(sortBar);

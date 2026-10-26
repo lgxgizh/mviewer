@@ -58,4 +58,24 @@ void eraseHiddenEntries(EntryList &entries, const QStringList &hiddenGroups)
                   entries.end());
 }
 
+// Move entries whose format is hidden from `entries` into `hiddenOut` (replaced),
+// keeping the relative order of both lists.
+template <typename EntryList>
+void partitionHiddenEntries(EntryList &entries, const QStringList &hiddenGroups,
+                            EntryList &hiddenOut)
+{
+    hiddenOut.clear();
+    if (hiddenGroups.isEmpty())
+        return;
+    EntryList shown;
+    for (const auto &e : entries)
+    {
+        if (isPathHidden(e.path, hiddenGroups))
+            hiddenOut.append(e);
+        else
+            shown.append(e);
+    }
+    entries = std::move(shown);
+}
+
 } // namespace mviewer::browseformats

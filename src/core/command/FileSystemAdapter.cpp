@@ -1,8 +1,10 @@
 #include "FileSystemAdapter.h"
 
 #include <atomic>
+#include <chrono>
 #include <fstream>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -11,6 +13,27 @@ namespace mviewer::core
 {
 namespace
 {
+
+// Windows refuses to rename a file another process (antivirus, the search
+// indexer, a thumbnail decoder, Explorer's preview) briefly holds open without
+// FILE_SHARE_DELETE. Those holds last milliseconds, so a short bounded retry
+// turns a spurious "Rename failed" into success; real errors still surface.
+bool isTransientRenameError(const std::error_code &ec)
+{
+#ifdef _WIN32
+    constexpr int kErrorAccessDenied = 5;      // ERROR_ACCESS_DENIED
+    constexpr int kErrorSharingViolation = 32; // ERROR_SHARING_VIOLATION
+    constexpr int kErrorLockViolation = 33;    // ERROR_LOCK_VIOLATION
+    if (ec.category() != std::system_category())
+        return false;
+    const int code = ec.value();
+    return code == kErrorAccessDenied || code == kErrorSharingViolation ||
+           code == kErrorLockViolation;
+#else
+    (void)ec;
+    return false;
+#endif
+}
 
 class StdFileSystemAdapter final : public FileSystemAdapter
 {
@@ -37,8 +60,18 @@ class StdFileSystemAdapter final : public FileSystemAdapter
 
     bool rename(const fs::path &from, const fs::path &to, std::error_code &ec) override
     {
-        fs::rename(from, to, ec);
-        return !ec;
+        // Bounded exponential backoff: 10+20+40+80+160 ms (~0.3 s) worst case.
+        constexpr int kAttempts = 6;
+        std::chrono::milliseconds delay(10);
+        for (int attempt = 1;; ++attempt)
+        {
+            ec.clear();
+            fs::rename(from, to, ec);
+            if (!ec || attempt >= kAttempts || !isTransientRenameError(ec))
+                return !ec;
+            std::this_thread::sleep_for(delay);
+            delay *= 2;
+        }
     }
 
     bool copyFile(const fs::path &from, const fs::path &to, std::error_code &ec) override

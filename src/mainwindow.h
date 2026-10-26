@@ -106,6 +106,8 @@ class MainWindow : public QMainWindow
     // applied to both panes; both type combos stay in sync.
     void setBrowseHiddenFormatGroups(const QStringList &groups);
     QStringList browseHiddenFormatGroups() const;
+    // Route a pane's "Show hidden files" hint click to the shared type filter.
+    void wireTypeHiddenHint(ThumbnailPanel *panel);
     void swapBrowsePanes();
     void cloneLeftToRightPane();
     void setActiveBrowsePane(SelectionModel::PaneSlot pane);

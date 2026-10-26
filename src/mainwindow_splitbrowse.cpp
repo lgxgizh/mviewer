@@ -175,6 +175,7 @@ QWidget *MainWindow::buildSecondaryBrowsePane()
     m_secondaryThumbnailPanel->setMinimumWidth(220);
     layout->addWidget(m_secondaryThumbnailPanel, 1);
     m_secondaryThumbnailPanel->setHiddenFormatGroups(m_hiddenFormatGroups);
+    wireTypeHiddenHint(m_secondaryThumbnailPanel);
     if (m_secondaryTypeFilterCombo)
     {
         QWidget *row2 = m_secondaryTypeFilterCombo->parentWidget();

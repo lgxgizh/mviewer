@@ -460,12 +460,7 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     ++m_scanWatchSerial;
     m_scanComplete = true;
     m_scanStallAnnounced = false;
-    m_allEntries = entries;
-    mviewer::browseformats::eraseHiddenEntries(m_allEntries, m_hiddenFormatGroups);
-    m_sourceRowByPath.clear();
-    m_sourceRowByPath.reserve(m_allEntries.size());
-    for (int i = 0; i < m_allEntries.size(); ++i)
-        m_sourceRowByPath.insert(galleryPathKey(m_allEntries.at(i).path), i);
+    adoptListing(entries);
     m_metaIndex.clear();
     // Seed disk-cache identity from the scan so thumbnail get()/put() reuse
     // listing mtime/size instead of re-statting every source on network paths.
@@ -499,6 +494,7 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
         emit browseStatusChanged(QStringLiteral("Failed to load directory"));
     else if (entries.isEmpty() && !m_currentDir.isEmpty())
         emit browseStatusChanged(QStringLiteral("No images yet"));
+    updateTypeHiddenHint();
     // Details (resolution column) and SortResolution need header probes.
     // Thumbnail/LargeIcon intentionally skip the full-directory probe so the
     // first viewport decode owns the link on high-latency folders.
@@ -660,12 +656,19 @@ QVector<int> ThumbnailPanel::dimensionProbeOrder() const
     return order;
 }
 
-void ThumbnailPanel::applyDimensionBatch(const QVector<int> &idx, const QVector<QSize> &sizes,
-                                         const QVector<int> &frames, const QVector<bool> &animated)
+void ThumbnailPanel::applyDimensionBatch(const QVector<int> &idx, const QStringList &batchPaths,
+                                         const QVector<QSize> &sizes, const QVector<int> &frames,
+                                         const QVector<bool> &animated)
 {
     for (int b = 0; b < idx.size(); ++b)
     {
-        const int i = idx.at(b);
+        // The probe indexes the listing snapshot it started from. A type-filter
+        // change or live delta may since have re-partitioned m_allEntries, so
+        // re-resolve by path whenever the row no longer holds the probed file.
+        int i = idx.at(b);
+        const QString probed = batchPaths.value(b);
+        if (i < 0 || i >= m_allEntries.size() || m_allEntries.at(i).path != probed)
+            i = m_sourceRowByPath.value(galleryPathKey(probed), -1);
         if (i < 0 || i >= m_allEntries.size())
             continue;
         m_allEntries[i].width = sizes.at(b).width();
@@ -686,21 +689,21 @@ void ThumbnailPanel::applyDimensionBatch(const QVector<int> &idx, const QVector<
 
 void ThumbnailPanel::publishDimensionBatch(const QPointer<ThumbnailPanel> &self,
                                            const std::shared_ptr<std::atomic<bool>> &alive, int gen,
-                                           const QVector<int> &idx, const QVector<QSize> &sizes,
-                                           const QVector<int> &frames,
+                                           const QVector<int> &idx, const QStringList &batchPaths,
+                                           const QVector<QSize> &sizes, const QVector<int> &frames,
                                            const QVector<bool> &animated, bool finalBatch,
                                            bool resortWhenDone)
 {
     QMetaObject::invokeMethod(
         qApp,
-        [self, alive, gen, idx, sizes, frames, animated, finalBatch, resortWhenDone]()
+        [self, alive, gen, idx, batchPaths, sizes, frames, animated, finalBatch, resortWhenDone]()
         {
             if (!alive->load() || !self)
                 return;
             ThumbnailPanel *panel = self.data();
             if (gen != panel->m_dirGen)
                 return;
-            panel->applyDimensionBatch(idx, sizes, frames, animated);
+            panel->applyDimensionBatch(idx, batchPaths, sizes, frames, animated);
             if (finalBatch && resortWhenDone)
                 panel->scheduleFilter(false);
             else
@@ -717,12 +720,16 @@ void ThumbnailPanel::dimensionProbeTask(const QPointer<ThumbnailPanel> &self,
     const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
     runDimensionProbeLoop(
         alive, gen, genToken, paths, order, probe,
-        [self, alive, gen, resortWhenDone](const QVector<int> &idx, const QVector<QSize> &sizes,
-                                           const QVector<int> &frames,
-                                           const QVector<bool> &animated, bool finalBatch)
+        [self, alive, gen, resortWhenDone,
+         paths](const QVector<int> &idx, const QVector<QSize> &sizes, const QVector<int> &frames,
+                const QVector<bool> &animated, bool finalBatch)
         {
-            ThumbnailPanel::publishDimensionBatch(self, alive, gen, idx, sizes, frames, animated,
-                                                  finalBatch, resortWhenDone);
+            QStringList batchPaths;
+            batchPaths.reserve(idx.size());
+            for (int i : idx)
+                batchPaths.append(paths.value(i));
+            ThumbnailPanel::publishDimensionBatch(self, alive, gen, idx, batchPaths, sizes, frames,
+                                                  animated, finalBatch, resortWhenDone);
         });
 }
 

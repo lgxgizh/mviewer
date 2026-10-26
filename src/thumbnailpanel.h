@@ -61,9 +61,8 @@ class ThumbnailPanel : public QListView
     static constexpr int kDefaultThumbSize = 140;
     static constexpr int kMinThumbSize = 48;
     static constexpr int kMaxThumbSize = 512;
-    // M55: the UI owns a bounded display cache in addition to the core
-    // ImageData LRU. The count keeps a generous visible+halo working set while
-    // the byte cap protects large thumbnail sizes from driving RSS linearly.
+    // M55: bounded UI display cache on top of the core ImageData LRU; the count keeps
+    // a visible+halo working set, the byte cap bounds RSS at large thumbnail sizes.
     static constexpr int kThumbPixmapCacheMaxEntries = 384;
     static constexpr qint64 kThumbPixmapCacheMaxBytes = 96LL * 1024 * 1024;
 
@@ -133,10 +132,8 @@ class ThumbnailPanel : public QListView
     {
         return m_currentDir;
     }
-    // P0-2: programmatically make `path` the selected/current item so the grid
-    // highlight stays in lock-step with the shared SelectionModel. Unlike
-    // scrollToPath() this only scrolls when the item is off-screen (avoids
-    // recentring jank when the user clicked an already-visible thumbnail).
+    // P0-2: make `path` selected/current in lock-step with the shared SelectionModel;
+    // unlike scrollToPath() this scrolls only when the item is off-screen.
     void selectPath(const QString &path);
     // M19: apply a multi-selection from SelectionModel onto the gallery.
     // `current` becomes the focused item; empty current falls back to paths[0].
@@ -204,10 +201,8 @@ class ThumbnailPanel : public QListView
         bool animated = false;
     };
 
-    // M18: live search. Filters the gallery by filename (case-insensitive
-    // substring). When `recursive` is true, subfolders are enumerated and any
-    // matching image is appended as a temporary item (cleared on next
-    // setDirectory). Empty `text` clears the filter.
+    // M18: live filename search (case-insensitive substring); `recursive` appends
+    // matching subfolder images until the next setDirectory. Empty clears.
     void setFilter(const QString &text, bool recursive = false);
 
     // P1: metadata-aware search (camera / lens / ISO / date / …) and star-rating
@@ -224,9 +219,8 @@ class ThumbnailPanel : public QListView
     void setRecentFilter(bool on);
     void clearFlagFilters();
 
-    // P0 #①: metadata filters. Camera/Lens match as case-insensitive substrings
-    // against the EXIF "make model lens" index; ISO matches the exact numeric
-    // value. These combine with the other filters via AND in applyFilter().
+    // P0 #①: metadata filters (Camera/Lens substrings of the EXIF index, exact ISO),
+    // AND-combined with the other filters in applyFilter().
     void setCameraFilter(const QString &camera);
     void setLensFilter(const QString &lens);
     void setIsoFilter(int iso);
@@ -235,8 +229,7 @@ class ThumbnailPanel : public QListView
     bool hasActiveBrowseFilter() const;
 
     // Quiesce background decode work (e.g. before a headless render where async
-    // QPixmap updates are undesirable). Public so test/demo harnesses can
-    // quiesce the panel.
+    // QPixmap updates are undesirable). Public for test/demo harnesses.
     void stopThumbnailWorker();
 
     // M46 deterministic-test instrumentation: called on the worker at every
@@ -246,9 +239,8 @@ class ThumbnailPanel : public QListView
     // Test seam for the background latency probe. Empty in production. The
     // hook runs on the probe worker, never inside isHighLatencyBrowsePath().
     static void setHighLatencyProbeHook(const std::function<void()> &hook);
-    // M46 test observability: the shared scan-generation token. Tests read it
-    // from the iteration probe to attribute iterations to a directory
-    // generation. Production code never needs it.
+    // M46 test observability: the shared scan-generation token, read from the
+    // iteration probe to attribute iterations to a directory generation.
     std::shared_ptr<std::atomic<uint64_t>> scanGenTokenForTest() const
     {
         return m_scanGenToken;
@@ -272,9 +264,13 @@ class ThumbnailPanel : public QListView
     // Compare set: the cross-pane union in split browse, else selectedPaths().
     QStringList compareSelection() const;
     void refreshCompareButton();
-    // Hidden browse format groups (browseformats.h ids, e.g. "raw"); rescans.
+    // Hidden browse format groups (browseformats.h ids, e.g. "raw"). Re-partitions
+    // the scanned listing in place, keeping selection, current item and scroll.
     void setHiddenFormatGroups(const QStringList &groups);
     QStringList hiddenFormatGroups() const;
+    // Files of this folder hidden only by the type filter, and their groups.
+    int typeHiddenCount() const;
+    QStringList typeHiddenGroups() const;
 
   private:
     // M46 async-scan internals (defined in thumbnailpanel_async.cpp):
@@ -302,8 +298,7 @@ class ThumbnailPanel : public QListView
     void applyScanBatch(int gen, const QList<Entry> &batch);
     void insertProgressiveRows(const QList<Entry> &batch);
     // M46: publish a completed scan's entries on the UI thread (extracted from
-    // setDirectory's completion lambda so the scanning TU stays under the
-    // function-length gate). Runs on the GUI thread; re-checks the generation.
+    // setDirectory's completion lambda); re-checks the generation.
     void applyScanResult(int gen, const QList<Entry> &entries, bool directoryReadable);
     // Keep decoded thumbnail state for the current directory across
     // filter/sort rebuilds; implementation lives with pipeline delivery.
@@ -453,6 +448,8 @@ class ThumbnailPanel : public QListView
     void sortChanged(ThumbnailPanel::SortMode mode, bool ascending);
     void thumbSizeChanged(int size);
     void compareRequested(const QStringList &paths);
+    // The empty-folder hint's "Show" button: the user asked to un-hide `groups`.
+    void showHiddenFormatGroupsRequested(const QStringList &groups);
     void usmCompareRequested(const QString &path);
     // External files/folders dropped onto the gallery (forwarded to MainWindow).
     void filesDropped(const QStringList &paths);
@@ -595,6 +592,10 @@ class ThumbnailPanel : public QListView
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter
     QStringList m_hiddenFormatGroups;
+    QList<Entry> m_typeHiddenEntries; // listing rows hidden only by the type filter
+    QWidget *m_typeHiddenHint = nullptr;
+    void adoptListing(QList<Entry> all); // split by type, rebuild the source index
+    void updateTypeHiddenHint();
     ViewMode m_viewMode = Thumbnail;
     int m_thumbSize = kDefaultThumbSize;     // M15: dynamic thumb size
     int m_gridThumbSize = kDefaultThumbSize; // Last user-selected standard grid size.
@@ -722,15 +723,13 @@ class ThumbnailPanel : public QListView
     void captureIncrementalDeltaState(QStringList &selection, QString &current, QString &anchorPath,
                                       int &anchorOffset, int &currentRow) const;
 
-    // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
-    // longer reads image headers eagerly (that blocked folder switching on large
-    // directories); dimensions are filled in the background only when the
-    // Details view (or SortResolution) needs them. Viewport rows are probed
-    // first; m_dirGen invalidates stale background results.
+    // P0-1 (perf): pixel dimensions resolve off the UI thread, only when Details
+    // or SortResolution needs them; viewport rows first, m_dirGen drops stale work.
     void ensureDimensions();
     QVector<int> dimensionProbeOrder() const;
-    void applyDimensionBatch(const QVector<int> &idx, const QVector<QSize> &sizes,
-                             const QVector<int> &frames, const QVector<bool> &animated);
+    void applyDimensionBatch(const QVector<int> &idx, const QStringList &batchPaths,
+                             const QVector<QSize> &sizes, const QVector<int> &frames,
+                             const QVector<bool> &animated);
     static void dimensionProbeTask(const QPointer<ThumbnailPanel> &self,
                                    const std::shared_ptr<std::atomic<bool>> &alive, int gen,
                                    const std::shared_ptr<std::atomic<uint64_t>> &genToken,
@@ -738,9 +737,10 @@ class ThumbnailPanel : public QListView
                                    bool resortWhenDone);
     static void publishDimensionBatch(const QPointer<ThumbnailPanel> &self,
                                       const std::shared_ptr<std::atomic<bool>> &alive, int gen,
-                                      const QVector<int> &idx, const QVector<QSize> &sizes,
-                                      const QVector<int> &frames, const QVector<bool> &animated,
-                                      bool finalBatch, bool resortWhenDone);
+                                      const QVector<int> &idx, const QStringList &batchPaths,
+                                      const QVector<QSize> &sizes, const QVector<int> &frames,
+                                      const QVector<bool> &animated, bool finalBatch,
+                                      bool resortWhenDone);
     int m_dirGen = 0;
     bool m_dimsResolved = false;
     bool m_highLatencyDir = false;

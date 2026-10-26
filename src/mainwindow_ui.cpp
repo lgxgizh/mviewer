@@ -35,7 +35,8 @@ void MainWindow::updateEmptyFolderState()
 {
     if (!m_emptyFolderLabel || !m_thumbnailPanel)
         return;
-    const bool show = !currentDir().isEmpty() && m_thumbnailPanel->pathList().isEmpty();
+    const bool show = !currentDir().isEmpty() && m_thumbnailPanel->pathList().isEmpty() &&
+                      m_thumbnailPanel->typeHiddenCount() == 0;
     m_emptyFolderLabel->setVisible(show);
     if (show)
         m_emptyFolderLabel->setGeometry(m_thumbnailPanel->rect());

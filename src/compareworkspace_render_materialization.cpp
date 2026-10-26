@@ -110,7 +110,6 @@ ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const Imag
         QStringLiteral("QLabel{background:%1;color:%2;padding:4px 8px;}")
             .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1),
                  mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
-    caption->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     caption->setMinimumWidth(0);
     caption->setMinimumHeight(28);
     caption->setVisible(false);
@@ -390,7 +389,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         auto *caption = createPaneCaption(cellWidget, i, img);
         if (i < disambiguated.size() && !disambiguated[i].isEmpty())
             caption->setFullText(disambiguated[i]);
-        cellLay->addWidget(caption);
+        // Floating overlay (see ComparePaneCaption): deliberately NOT in cellLay.
         m_cellLabels.push_back(caption);
         view->setFilenameOverlay(caption->fullText(), m_filenameOverlay);
         QString headerPath = caption->fullText();

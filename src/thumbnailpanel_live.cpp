@@ -1,5 +1,4 @@
 // M56: incremental live-folder application for the Browse gallery.
-#include "browseformats.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 
@@ -86,20 +85,17 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
                                  previousCurrentRow);
     m_transferState.mergeIntoNextSelection(previousSelection, previousCurrent);
 
-    QList<Entry> next = delta.directoryRecovered ? QList<Entry>() : m_allEntries;
+    // The delta applies to the whole listing, including rows the type filter
+    // hides, so the "N files hidden" hint and a later un-hide stay accurate.
+    QList<Entry> next =
+        delta.directoryRecovered ? QList<Entry>() : m_allEntries + m_typeHiddenEntries;
     m_directoryUnavailable = false;
     QStringList removedPaths;
     QStringList renamedFrom;
     QStringList renamedTo;
     applyDirectoryDeltaEntries(delta, next, removedPaths, renamedFrom, renamedTo);
     sortDirectoryDeltaEntries(next);
-    mviewer::browseformats::eraseHiddenEntries(next, m_hiddenFormatGroups);
-
-    m_allEntries = std::move(next);
-    m_sourceRowByPath.clear();
-    m_sourceRowByPath.reserve(m_allEntries.size());
-    for (int i = 0; i < m_allEntries.size(); ++i)
-        m_sourceRowByPath.insert(galleryPathKey(m_allEntries.at(i).path), i);
+    adoptListing(std::move(next));
 
     // Rename is an identity migration, not a selection loss. Rewrite the
     // saved view selection before the row-local model mutation so both the
@@ -121,6 +117,7 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
     m_incrementalAnchorOffset = anchorOffset;
     m_incrementalPreviousCurrentRow = previousCurrentRow;
     applyFilter();
+    updateTypeHiddenHint();
 
     if (!renamedFrom.isEmpty())
         emit pathsRenamed(renamedFrom, renamedTo);

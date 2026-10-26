@@ -238,6 +238,7 @@ add_library(mviewer_ui STATIC
     thumbnailpanel_selection.cpp
     thumbnailpanel_pipeline.cpp
     thumbnailpanel_filters.cpp
+    thumbnailpanel_typehint.cpp
     browseformats.cpp
     formatfiltercombo.cpp
     thumbnailpanel_fileops.cpp

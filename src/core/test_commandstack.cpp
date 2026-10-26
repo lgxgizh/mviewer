@@ -15,8 +15,10 @@
 #include <fstream>
 
 // NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,bugprone-easily-swappable-parameters,bugprone-implicit-widening-of-multiplication-result)
+#include <chrono>
 #include <memory>
 #include <system_error>
+#include <thread>
 #include <vector>
 
 static int g_pass = 0;
@@ -388,6 +390,28 @@ static void testFileRenameCommand()
     CHECK(!escape.lastError().empty() && fs::exists(a) &&
               !fs::exists(dir.parent_path() / "escaped.txt"),
           "rename refuses a destination outside the source directory");
+
+    // Windows: a file another handle briefly keeps open (no FILE_SHARE_DELETE;
+    // MSVC's fstream opens that way) cannot be renamed. The adapter retries the
+    // transient sharing violation with a bounded backoff, so a hold released
+    // within that window must not surface as "Rename failed". Elsewhere this
+    // just exercises the plain rename.
+    writeFile(dir / "locked.txt", "busy");
+    {
+        auto holder = std::make_unique<std::ofstream>(dir / "locked.txt", std::ios::app);
+        std::thread release(
+            [&holder]
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                holder->close();
+            });
+        FileRenameCommand locked((dir / "locked.txt").string(), (dir / "unlocked.txt").string());
+        locked.execute();
+        release.join();
+        CHECK(locked.lastError().empty() && fs::exists(dir / "unlocked.txt") &&
+                  !fs::exists(dir / "locked.txt"),
+              "rename retries a briefly locked source instead of failing");
+    }
 
     fs::remove_all(dir);
 }

@@ -164,6 +164,26 @@ void testLayoutAndMomentaryCompare(const QDir &dir)
               view0->filenameOverlayText() == caption->toolTip() &&
               view0->filenameOverlayText().contains(fullName),
           "M49: top overlay shows the full filename without elision");
+    if (auto *status = dynamic_cast<ComparePaneCaption *>(caption); status && view0 && view1)
+    {
+        // A loading/error status line floats over the pane bottom; it must not
+        // take layout space, or pane 0's viewport would shrink and its fit
+        // would no longer match pane 1.
+        const QSize view0Before = view0->size();
+        status->setStatusText(QStringLiteral("Loading full resolution... a deliberately long "
+                                             "status line that has to wrap inside the pane"));
+        pump(60);
+        CHECK(status->isVisible() && view0->size() == view0Before && view0->size() == view1->size(),
+              "Compare status caption is an overlay: pane viewports stay equal");
+        const QRect onPane(status->mapTo(pane0, QPoint(0, 0)), status->size());
+        CHECK(pane0->rect().contains(onPane) && onPane.bottom() >= pane0->height() - 40 &&
+                  status->testAttribute(Qt::WA_TransparentForMouseEvents),
+              "Compare status caption sits inside the pane bottom and passes input through");
+        status->clearStatus();
+        pump(30);
+        CHECK(!status->isVisible() && view0->size() == view0Before,
+              "clearing the compare status leaves the viewport unchanged");
+    }
     if (!button || !view0 || !view1 || view0->image().isNull() || view1->image().isNull())
         return;
 
@@ -1879,7 +1899,8 @@ void testLocalZoomAcceptance(const QString &a, const QString &b)
 void testUsmCompareDialogSpaceHold(const QDir &dir)
 {
     std::cout << "── USM Compare Dialog focus & Space key behavior ──\n";
-    const QString imgPath = writePng(dir, QStringLiteral("usm_test.png"), 64, 64, QColor(100, 150, 200));
+    const QString imgPath =
+        writePng(dir, QStringLiteral("usm_test.png"), 64, 64, QColor(100, 150, 200));
     UsmCompareDialog dlg(imgPath);
     dlg.show();
     QCoreApplication::processEvents();
@@ -1901,9 +1922,8 @@ void testUsmCompareDialogSpaceHold(const QDir &dir)
     bool buttonTriggered = false;
     if (!buttons.isEmpty())
     {
-        QObject::connect(buttons.first(), &QPushButton::clicked, [&buttonTriggered]() {
-            buttonTriggered = true;
-        });
+        QObject::connect(buttons.first(), &QPushButton::clicked,
+                         [&buttonTriggered]() { buttonTriggered = true; });
     }
 
     QKeyEvent spacePress(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);

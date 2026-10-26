@@ -133,3 +133,19 @@ QStringList MainWindow::browseHiddenFormatGroups() const
 {
     return m_hiddenFormatGroups;
 }
+
+void MainWindow::wireTypeHiddenHint(ThumbnailPanel *panel)
+{
+    if (!panel)
+        return;
+    // The hint's button is an explicit user choice: un-hide exactly the groups
+    // it names, persisted and mirrored to both panes like a combo toggle.
+    connect(panel, &ThumbnailPanel::showHiddenFormatGroupsRequested, this,
+            [this](const QStringList &groups)
+            {
+                QStringList next = m_hiddenFormatGroups;
+                for (const QString &g : groups)
+                    next.removeAll(g);
+                setBrowseHiddenFormatGroups(next);
+            });
+}

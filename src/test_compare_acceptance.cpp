@@ -12,7 +12,7 @@
 // bundles are already covered by workflow_ux_tests / compare_session_tests.)
 
 #include "compareworkspace.h"
-#include "usmcomparedialog.h"
+#include "compareworkspace_caption.h"
 #include "compareworkspace_preset_sanitize.h"
 #include "compareworkspace_shortcuts.h"
 #include "core/compare/CompareEngine.h"
@@ -20,6 +20,7 @@
 #include "core/perf/MemoryTracker.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "selectionmodel.h"
+#include "usmcomparedialog.h"
 #include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"
 

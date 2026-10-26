@@ -257,6 +257,9 @@ ThumbnailPanel::~ThumbnailPanel()
 void ThumbnailPanel::resetDirectoryState()
 {
     m_allEntries.clear();
+    m_typeHiddenEntries.clear();
+    if (m_typeHiddenHint)
+        m_typeHiddenHint->hide();
     m_paths.clear();
     m_rowByPath.clear();
     m_sourceRowByPath.clear();
