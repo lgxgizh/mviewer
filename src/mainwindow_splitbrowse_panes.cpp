@@ -158,18 +158,33 @@ void MainWindow::updateSwapButtonEnabled()
 
 void MainWindow::enableSplitBrowseUi()
 {
+    // Interactive split: one pane becomes two showing the same contents. The
+    // right pane mirrors the left folder, sort, type filter (shared), view mode
+    // and thumbnail size every time; afterwards both panes navigate on their
+    // own. Session restore instead brings back the saved right pane.
+    const bool mirror =
+        !m_splitRestoringSession && m_thumbnailPanel && !m_thumbnailPanel->currentDir().isEmpty();
     if (m_thumbnailPanel && m_secondaryThumbnailPanel)
     {
         m_secondaryThumbnailPanel->setThumbSize(m_thumbnailPanel->thumbSize());
         m_secondaryThumbnailPanel->setViewMode(m_thumbnailPanel->viewMode());
-        applySecondarySortFromState();
+        if (mirror)
+            m_secondaryThumbnailPanel->setSort(m_thumbnailPanel->sortMode(),
+                                               m_thumbnailPanel->sortAscending());
+        else
+            applySecondarySortFromState();
     }
     if (m_secondaryBrowsePane)
     {
         m_secondaryBrowsePane->show();
         applyGallerySplitterSizes();
     }
-    if (m_secondaryThumbnailPanel && m_secondaryThumbnailPanel->currentDir().isEmpty())
+    if (mirror && !m_splitOpeningTarget)
+    {
+        mirrorPrimaryIntoSecondary();
+    }
+    else if (!mirror && !m_splitOpeningTarget && m_secondaryThumbnailPanel &&
+             m_secondaryThumbnailPanel->currentDir().isEmpty())
     {
         QString targetDir = m_appState.secondaryLastDir;
         if (targetDir.isEmpty() || !QDir(targetDir).exists())
@@ -184,6 +199,27 @@ void MainWindow::enableSplitBrowseUi()
     updateSwapButtonEnabled();
     updateSecondaryNavButtons();
     applyActivePaneStatusBar();
+}
+
+void MainWindow::mirrorPrimaryIntoSecondary()
+{
+    if (!m_thumbnailPanel || !m_secondaryThumbnailPanel)
+        return;
+    const QString leftDir = QDir::cleanPath(m_thumbnailPanel->currentDir());
+    if (leftDir.isEmpty())
+        return;
+    // A stale right folder from an earlier split or session is replaced.
+    if (QDir::cleanPath(m_secondaryThumbnailPanel->currentDir()) != leftDir)
+        m_secondaryThumbnailPanel->setDirectory(leftDir);
+    if (m_secondaryPathEdit)
+        m_secondaryPathEdit->setText(leftDir);
+    m_appState.secondaryLastDir = leftDir;
+    m_secondaryBrowseHistory.push(leftDir);
+    m_pendingSecondaryScrollRestore = false;
+    // The left pane keeps the selection; the new right pane starts clean.
+    m_secondaryThumbnailPanel->clearSelection();
+    if (m_selection)
+        m_selection->setPaneSelection(SelectionModel::PaneSlot::Secondary, QStringList());
 }
 
 void MainWindow::disableSplitBrowseUi()

@@ -202,6 +202,7 @@ class MainWindow : public QMainWindow
     bool routeDirectoryHistoryMouse(QObject *watched, QEvent *event);
     bool secondaryBrowseOwns(QObject *watched) const;
     void enableSplitBrowseUi();
+    void mirrorPrimaryIntoSecondary();
     void disableSplitBrowseUi();
     void applySecondarySortFromState();
     void persistSecondaryBrowseState();
@@ -382,6 +383,10 @@ class MainWindow : public QMainWindow
     ThumbnailPanel *m_secondaryThumbnailPanel = nullptr;
     DirectoryMonitor *m_secondaryDirectoryMonitor = nullptr;
     bool m_pendingSecondaryScrollRestore = false;
+    // Split entry source: session restore keeps the saved right pane; an
+    // explicit right-pane target skips mirroring the left folder.
+    bool m_splitRestoringSession = false;
+    bool m_splitOpeningTarget = false;
     QAction *m_actSplitBrowse = nullptr;
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
     QLabel *m_emptyFolderLabel =

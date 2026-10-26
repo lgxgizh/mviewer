@@ -631,6 +631,7 @@ void testUnionCompareAndHeader(const QString &leftDir, const QString &rightDir)
            "right address bar row holds only the path field, like the left");
 }
 
+#include "test_split_browse_mirror.inc"
 #include "test_split_browse_typefilter.inc"
 
 void testBrowseUx()
@@ -653,6 +654,10 @@ void testBrowseUx()
     QDir().mkpath(rawDir);
     testTypeFilterKeepsState(stateDir);
     testTypeHiddenHint(rawDir);
+    const QString thirdDir = tmp.filePath(QStringLiteral("uxthird"));
+    QDir().mkpath(thirdDir);
+    writeBrowseFixture(thirdDir, QStringLiteral("t"));
+    testSplitMirrorsSinglePane(leftDir, rightDir, thirdDir);
 }
 
 } // namespace

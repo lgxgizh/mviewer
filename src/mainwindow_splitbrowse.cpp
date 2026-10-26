@@ -287,7 +287,12 @@ void MainWindow::openRightDirectory(const QString &dir)
         return;
     const QString cleaned = QDir::cleanPath(dir);
     if (!m_splitBrowseEnabled)
+    {
+        // The right pane opens `dir` below; do not load the left folder first.
+        m_splitOpeningTarget = true;
         toggleSplitBrowse(true);
+        m_splitOpeningTarget = false;
+    }
 
     if (m_secondaryThumbnailPanel)
         m_secondaryThumbnailPanel->setDirectory(cleaned);
