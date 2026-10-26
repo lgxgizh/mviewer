@@ -1790,6 +1790,7 @@ set_tests_properties(teardown_stress_tests PROPERTIES RUN_SERIAL TRUE)
 # UI completion-latency bounds. Heavy but bounded; runs serial.
 add_executable(m27_lifetime_tests
     test_m27_lifetime.cpp
+    test_m27_preview_frame.cpp
 )
 target_link_libraries(m27_lifetime_tests
     PRIVATE
