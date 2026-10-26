@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [1.0.151] - 2026-10-26
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.151** (preview flicker batch #244, Compare overlay follow-up #242, split mirror #241, Nightly fixes #243, #245 and #246).
+
+### Changed
+
+- **Split browse mirrors the single pane** (#241): entering split browse opens the right pane on the same folder as the single pane (never a stale remembered folder) and mirrors sort, view mode and thumbnail size; the type filter is shared. Selection is not copied and the panes navigate independently afterwards. Session restore keeps its explicit targets.
+- **Compare overlays follow the shown image** (#242): Space / 1-8 / hold-button temporary switches and X swap drive the filename overlay, header name and path, index chip, status caption and per-pane histogram from the image the pane actually displays; release restores them. Pane histograms are cached per image, so toggling never recomputes.
+- **Stable preview frame** (#244): the browse preview frame aspect comes from the known source size (or a remembered size) instead of whichever pixmap arrived first, so fast switching no longer shows a smaller image that then grows. Same-path stage changes cross-fade over 110 ms; a memory preview-cache hit is shown sharp immediately; the preview is rasterized at the screen device pixel ratio (sharp on HiDPI).
+
+### Fixed
+
+- **EXIF thumbnail bars** (#244): embedded 4:3 camera thumbnails of 3:2 photos are centre-cropped to the source aspect, removing the baked-in black bars (thumbnail cache schema 5 → 6, old entries regenerate). RAW embedded thumbnails are unchanged.
+- **Viewer provisional image** (#244): the warm thumbnail shown while the centre viewer loads is fitted to the source aspect, so the full image lands in exactly the provisional rectangle; a late thumbnail for an image already shown at full quality is ignored.
+- **Compare deep zoom stays soft** (#245): with the full-size raster evicted from the cache, a sharp Compare pass could be served a half-size cached mip and keep it as final. Sharp passes now always use full density, fitted to the source aspect (#246).
+
+### Tests / CI
+
+- m55 interactive: the thumbnail-size change check is deterministic (no race with the re-request at the new size), fixing the intermittent Linux GCC ASan Nightly failure (#243).
+- Health publish writes `docs/quality/dashboard.md` with a trailing newline (markdownlint MD047) (#243).
+- m27 preview stable frame / rapid switch / wrong-shape placeholder / viewer provisional geometry; embedded thumb aspect crop; TC-SB-18 split mirror; Compare temporary-switch overlay and USM title tests; deterministic coarse-mip check in the Compare stuck-loading stress test (#241, #242, #244, #245).
+
 ## [1.0.150] - 2026-10-26
 
 ### Release
