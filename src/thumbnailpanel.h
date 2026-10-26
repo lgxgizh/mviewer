@@ -361,6 +361,7 @@ class ThumbnailPanel : public QListView
     // M55 observability for the bounded UI-side pixmap cache.
     int thumbReadyCount() const;
     qint64 thumbReadyBytes() const;
+    int thumbReadyCountForSize(int size) const; // ready entries keyed at `size`
     // Public inspection follows the committed gallery result (post-filter),
     // while the private m_allEntries snapshot remains the full directory source
     // used to re-evaluate later query generations without rescanning.
