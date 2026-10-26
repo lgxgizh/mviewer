@@ -109,7 +109,8 @@ void testTemporarySwitchOverlaysFollowImage(const QDir &dir)
               (label + "the other pane keeps its own histogram").toStdString());
 
         sendSpace(ws, QEvent::KeyRelease);
-        CHECK(!target->hasTransientDisplay(), (label + "release restores the raster").toStdString());
+        CHECK(!target->hasTransientDisplay(),
+              (label + "release restores the raster").toStdString());
         CHECK(target->filenameOverlayText() == ownName,
               (label + "release restores the filename overlay").toStdString());
         CHECK(paneHistTotal(ws, side) == ownTotal,
