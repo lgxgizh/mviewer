@@ -4,9 +4,9 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.149**
+## Where we are now — **Beta / 1.0.150**
 
-MViewer remains in **Beta**; the current release is **`v1.0.149`**
+MViewer remains in **Beta**; the current release is **`v1.0.150`**
 (2026-10-25, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.149** (current) | Stability: sanitizer-clean Nightly (ASan/LSan on Windows clang-cl and Linux GCC, UBSan) — fixes a cache use-after-free at exit, a scheduler handle race, and Qt slot/STL undefined-behavior traps | 🔵 Beta |
+| **1.0.150** (current) | Browse UX: multi-select type filter (RAW hidden by default, "N files hidden" hint with one-click Show), union Compare across split panes, Compare pane header and status as overlays so every pane has the same viewport, oriented Resolution, type filter keeps selection and scroll | 🔵 Beta |
+| **1.0.149** | Stability: sanitizer-clean Nightly (ASan/LSan on Windows clang-cl and Linux GCC, UBSan) — fixes a cache use-after-free at exit, a scheduler handle race, and Qt slot/STL undefined-behavior traps | ✅ Previous patch |
 | **1.0.148** | Design review batches: split-browse copy/move to the other pane, RAW source badge + full decode, viewer-scoped Delete/F2 and lossless JPEG rotate, analysis panel → `F7`, immediate language switch, new user guide chapters | ✅ Previous patch |
 | **1.0.147** | Split-browse routing fixes, Compare per-pane display state machine (no stuck Loading), end-to-end view-switch benchmarks, Flip V → `Ctrl`+`Alt`+`V`, thumbnail reset → `Ctrl`+`Alt`+`9` (`Ctrl`+`0` always fits), refreshed translations | ✅ Previous patch |
 | **1.0.146** | Split Browse View parallel layout: independent column sort, view-mode sync, and secondary thumbnail pipeline consumer routing | ✅ Previous patch |
@@ -81,7 +82,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.149` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.150` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
