@@ -219,11 +219,14 @@ void CompareWorkspace::applyFilenameOverlays()
         RawImageView *view = m_cellViews[i];
         if (!view)
             continue;
+        // Name the image this pane presents now; a temporary switch shows the
+        // other pane's image, so its name (and path) come from that pane.
+        const int shown = displayedImageIndex(i);
         QString name;
-        if (i < m_cellLabels.size())
-            name = comparePaneCaptionFullText(m_cellLabels[i]);
+        if (shown >= 0 && shown < m_cellLabels.size())
+            name = comparePaneCaptionFullText(m_cellLabels[shown]);
         QString path = name;
-        if (const ImageFrame *img = m_engine.imageAt(i))
+        if (const ImageFrame *img = m_engine.imageAt(shown))
         {
             if (name.isEmpty() && !img->metadata().fileName.empty())
                 name = QString::fromStdString(img->metadata().fileName);
@@ -235,8 +238,23 @@ void CompareWorkspace::applyFilenameOverlays()
         view->setFilenameOverlay(name, m_filenameOverlay);
         mviewer::ui::updateComparePaneHeaderName(view->parentWidget(), name, path,
                                                  m_filenameOverlay);
-        if (i < m_cellLabels.size() && m_cellLabels[i] &&
-            !comparePaneCaptionHasStatus(m_cellLabels[i]))
-            m_cellLabels[i]->setVisible(false);
+        if (i >= m_cellLabels.size() || !m_cellLabels[i])
+            continue;
+        // A status caption describes this pane's own image: hide it while the
+        // pane shows another image and bring it back on release.
+        QLabel *caption = m_cellLabels[i];
+        const char *hiddenKey = "mvHiddenForSwitch";
+        if (!comparePaneCaptionHasStatus(caption))
+            caption->setVisible(false);
+        else if (shown != i && caption->isVisibleTo(caption->parentWidget()))
+        {
+            caption->setProperty(hiddenKey, true);
+            caption->setVisible(false);
+        }
+        else if (shown == i && caption->property(hiddenKey).toBool())
+        {
+            caption->setProperty(hiddenKey, false);
+            caption->setVisible(true);
+        }
     }
 }

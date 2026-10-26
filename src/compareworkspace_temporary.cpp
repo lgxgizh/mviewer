@@ -87,8 +87,10 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
                                 renderScale, renderOffset, backdrop);
     m_temporaryCompareActive = true;
     m_temporaryTargetPane = targetPane;
+    m_temporarySourcePane = sourcePane;
     if (m_temporaryCompareButton && m_temporaryDigit == 0)
         m_temporaryCompareButton->setDown(true);
+    applyDisplayedPaneOverlays();
     update();
 }
 
@@ -107,8 +109,7 @@ void CompareWorkspace::beginClassicTemporaryCompare()
         m_temporaryCompareActive = true;
         if (m_temporaryCompareButton)
             m_temporaryCompareButton->setDown(true);
-        if (m_compareCanvas)
-            m_compareCanvas->update();
+        applyDisplayedPaneOverlays();
         update();
         return;
     }
@@ -144,8 +145,7 @@ void CompareWorkspace::beginTemporaryCompare()
         m_temporaryCompareActive = true;
         if (m_temporaryCompareButton)
             m_temporaryCompareButton->setDown(true);
-        if (m_compareCanvas)
-            m_compareCanvas->update();
+        applyDisplayedPaneOverlays();
         update();
         return;
     }
@@ -191,10 +191,53 @@ void CompareWorkspace::endTemporaryCompare()
         m_cellViews[m_temporaryTargetPane]->clearTransientDisplay();
     m_temporaryCompareActive = false;
     m_temporaryTargetPane = -1;
+    m_temporarySourcePane = -1;
     m_temporaryDigit = 0;
     if (m_temporaryCompareButton)
         m_temporaryCompareButton->setDown(false);
+    applyDisplayedPaneOverlays();
     update();
+}
+
+int CompareWorkspace::displayedImageIndex(int pane) const
+{
+    if (!m_temporaryCompareActive)
+        return pane;
+    if (m_canvasTemporaryPane >= 0)
+    {
+        // Split keeps the switch in the hovered half; the other canvas modes
+        // draw one full-canvas image, labelled as pane 0.
+        const bool split = m_splitChk && m_splitChk->isChecked();
+        const int shownIn = split ? 1 - m_canvasTemporaryPane : 0;
+        return pane == shownIn ? m_canvasTemporaryPane : pane;
+    }
+    if (pane == m_temporaryTargetPane && m_temporarySourcePane >= 0)
+        return m_temporarySourcePane;
+    return pane;
+}
+
+// Overlays follow the image a pane presents, not the pane slot: a temporary
+// switch (Space / 1-8 / hold button) and its release re-label the pane from
+// cached data. Histograms come from the per-image cache, never a recompute.
+void CompareWorkspace::applyDisplayedPaneOverlays()
+{
+    applyFilenameOverlays();
+    updatePaneIndexBadges();
+    for (size_t i = 0; i < m_cellHists.size(); ++i)
+    {
+        HistogramWidget *hw = m_cellHists[i];
+        const auto shown = static_cast<size_t>(displayedImageIndex(static_cast<int>(i)));
+        if (!hw)
+            continue;
+        if (shown < m_paneHistCache.size() && !m_paneHistCache[shown].r.empty())
+            hw->setHistograms({m_paneHistCache[shown]});
+        else
+            hw->clear();
+    }
+    if (m_paneHistOverlay)
+        positionCellHists();
+    if (m_compareCanvas)
+        m_compareCanvas->update();
 }
 
 void CompareWorkspace::updatePaneIndexBadges()
@@ -207,7 +250,9 @@ void CompareWorkspace::updatePaneIndexBadges()
         QWidget *cell = view ? view->parentWidget() : nullptr;
         if (!cell)
             continue;
-        mviewer::ui::updateComparePaneHeaderBadge(cell, i + 1, show && i < count);
+        // The index chip names the image shown (1-8 hold shows image N here).
+        mviewer::ui::updateComparePaneHeaderBadge(cell, displayedImageIndex(i) + 1,
+                                                  show && i < count);
     }
 }
 

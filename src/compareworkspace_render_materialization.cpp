@@ -214,6 +214,7 @@ void CompareWorkspace::rebuildCells()
     m_cellLabels.clear();
     m_cellViews.clear();
     m_cellHists.clear();
+    m_paneHistCache.clear();
 
     // Reset stale stretch factors from the previous layout. m_layout is reused
     // across rebuilds, and QGridLayout keeps row/column stretch even after the

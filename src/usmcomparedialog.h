@@ -154,6 +154,10 @@ class UsmCompareDialog : public QDialog
     bool m_updatingPreset = false;
     bool m_temporaryHoldActive = false;
     RawImageView *m_temporaryTarget = nullptr;
+    // Pane titles name the image each side shows, so a Space hold relabels them.
+    QLabel *m_lblLeftTitle = nullptr;
+    QLabel *m_lblRightTitle = nullptr;
+    void applyHoldTitles();
     uint64_t m_currentGen = 0;
     std::shared_ptr<std::atomic<bool>> m_currentCancel;
     TaskScheduler::TaskHandle m_activeTask;

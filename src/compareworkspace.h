@@ -365,6 +365,7 @@ class CompareWorkspace : public QWidget
     QPushButton *m_temporaryCompareButton = nullptr;
     bool m_temporaryCompareActive = false;
     int m_temporaryTargetPane = -1;
+    int m_temporarySourcePane = -1; // image shown in the target pane while switched
     int m_temporaryDigit = 0;
     int m_canvasTemporaryPane = -1;
     void toggleBlink();
@@ -761,6 +762,9 @@ class CompareWorkspace : public QWidget
     bool m_pixelGridEnabled = false;
     bool m_filenameOverlay = true; // checkbox shows or hides the top name; default visible
     void applyFilenameOverlays();
+    int displayedImageIndex(int pane) const; // the image a pane shows now (Space / 1-8)
+    void applyDisplayedPaneOverlays();       // name, caption, histogram follow that image
+    std::vector<mviewer::core::Histogram> m_paneHistCache; // per image; empty r = not computed
     std::vector<HistogramWidget *> m_cellHists;
     bool m_perPaneHist = false;
     QCheckBox *m_perPaneHistChk = nullptr;

@@ -804,14 +804,16 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
         m_hist->setHistograms(r.main);
     }
 
-    for (const auto &cell : r.panes)
+    // Pane results are per image; the pane widgets show whichever image their
+    // pane presents right now (a temporary switch shows the other image's).
+    if (!r.panes.empty())
     {
-        if (cell.index < 0 || cell.index >= static_cast<int>(m_cellHists.size()))
-            continue;
-        HistogramWidget *hw = m_cellHists[static_cast<size_t>(cell.index)];
-        if (!hw)
-            continue;
-        hw->setHistograms({cell.hist});
+        if (m_paneHistCache.size() < m_cellHists.size())
+            m_paneHistCache.resize(m_cellHists.size());
+        for (const auto &cell : r.panes)
+            if (cell.index >= 0 && cell.index < static_cast<int>(m_paneHistCache.size()))
+                m_paneHistCache[static_cast<size_t>(cell.index)] = cell.hist;
+        applyDisplayedPaneOverlays();
     }
 
     update();
