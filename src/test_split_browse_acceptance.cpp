@@ -13,6 +13,8 @@
 //   TC-SB-13: Compare uses the cross-pane union (1 left + 1 right)
 //   TC-SB-14: Right header matches the left; docked Compare button
 //   TC-SB-15: Multi-select file type filter, RAW hidden by default
+//   TC-SB-16: Type filter change keeps selection, current item and scroll
+//   TC-SB-17: Type-filtered-only folder shows a "hidden by type" hint + Show
 
 #include "appstate.h"
 #include "browseformats.h"
@@ -33,6 +35,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QScrollBar>
@@ -44,6 +47,7 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QWidgetAction>
+#include <cstdlib>
 #include <functional>
 #include <iostream>
 
@@ -627,92 +631,7 @@ void testUnionCompareAndHeader(const QString &leftDir, const QString &rightDir)
            "right address bar row holds only the path field, like the left");
 }
 
-void testFormatFilter(const QString &leftDir, const QString &rightDir)
-{
-    std::cout << "--- TC-SB-15: multi-select type filter, RAW hidden by default ---" << std::endl;
-    QSettings().remove(QStringLiteral("browse/hiddenFormatGroups"));
-    MainWindow mw;
-    mw.resize(1280, 800);
-    mw.show();
-    QApplication::processEvents();
-    auto *leftCombo = mw.findChild<FormatFilterCombo *>(QStringLiteral("typeFilterCombo"));
-    auto *rightCombo =
-        mw.findChild<FormatFilterCombo *>(QStringLiteral("secondaryTypeFilterCombo"));
-    EXPECT(leftCombo && rightCombo, "both panes have the type filter");
-    if (!leftCombo || !rightCombo)
-        return;
-    EXPECT(leftCombo->isVisibleTo(&mw), "left type filter is on the visible sort row");
-    EXPECT(mw.browseHiddenFormatGroups() == QStringList{QStringLiteral("raw")} &&
-               leftCombo->hiddenGroups() == QStringList{QStringLiteral("raw")},
-           "RAW is unchecked by default");
-    const QStringList ids = mviewer::browseformats::availableGroupIds();
-    EXPECT(ids.contains(QStringLiteral("bmp")), "BMP is a listed, decodable group");
-    EXPECT(leftCombo->count() == ids.size() && rightCombo->count() == ids.size(),
-           "combo rows match the decodable format groups");
-    QStringList decodable;
-    for (const std::string &suffix : mviewer::core::ImageFormats::supportedSuffixes())
-        decodable.append(QString::fromStdString(suffix).toLower());
-    bool extsDecodable = true;
-    for (const QString &id : ids)
-        for (const QString &ext : mviewer::browseformats::groupExtensions(id))
-            extsDecodable = extsDecodable && decodable.contains(ext);
-    EXPECT(extsDecodable, "every listed extension is decodable");
-
-    mw.openExternalTargets({leftDir});
-    mw.toggleSplitBrowse(true);
-    mw.openRightDirectory(rightDir);
-    ThumbnailPanel *left = mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
-    ThumbnailPanel *right = mw.secondaryThumbnailPanel();
-    EXPECT(waitUntil(
-               [&]()
-               {
-                   return listsSuffix(left, QStringLiteral("bmp")) &&
-                          listsSuffix(right, QStringLiteral("bmp"));
-               },
-               160),
-           "BMP files are listed in both panes");
-    EXPECT(!listsSuffix(left, QStringLiteral("dng")) && !listsSuffix(right, QStringLiteral("dng")),
-           "RAW files are hidden in both panes by default");
-    if (ids.contains(QStringLiteral("raw")))
-    {
-        leftCombo->setGroupVisible(QStringLiteral("raw"), true);
-        EXPECT(rightCombo->hiddenGroups().isEmpty(), "right combo follows the left one");
-        EXPECT(waitUntil(
-                   [&]()
-                   {
-                       return listsSuffix(left, QStringLiteral("dng")) &&
-                              listsSuffix(right, QStringLiteral("dng"));
-                   },
-                   160),
-               "checking RAW shows RAW files in both panes");
-        rightCombo->setGroupVisible(QStringLiteral("raw"), false);
-        // Wait for the re-filtered list, not the transient empty one.
-        EXPECT(waitUntil(
-                   [&]()
-                   {
-                       return !listsSuffix(left, QStringLiteral("dng")) &&
-                              listsSuffix(left, QStringLiteral("png"));
-                   },
-                   160),
-               "unchecking RAW in the right combo hides it in the left pane too");
-    }
-    rightCombo->setGroupVisible(QStringLiteral("bmp"), false);
-    EXPECT(waitUntil(
-               [&]()
-               {
-                   // The list is briefly empty while it re-filters; wait
-                   // for the final state (BMP gone, PNG still listed).
-                   return !listsSuffix(left, QStringLiteral("bmp")) &&
-                          !listsSuffix(right, QStringLiteral("bmp")) &&
-                          listsSuffix(left, QStringLiteral("png")) &&
-                          listsSuffix(right, QStringLiteral("png"));
-               },
-               240),
-           "unchecking BMP hides only BMP files");
-    EXPECT(mviewer::browseformats::loadHiddenGroups().contains(QStringLiteral("bmp")),
-           "type filter choice is persisted");
-    mw.setBrowseHiddenFormatGroups(mviewer::browseformats::defaultHiddenGroups());
-}
+#include "test_split_browse_typefilter.inc"
 
 void testBrowseUx()
 {
@@ -728,6 +647,12 @@ void testBrowseUx()
     writeBrowseFixture(rightDir, QStringLiteral("r"));
     testUnionCompareAndHeader(leftDir, rightDir);
     testFormatFilter(leftDir, rightDir);
+    const QString stateDir = tmp.filePath(QStringLiteral("uxstate"));
+    const QString rawDir = tmp.filePath(QStringLiteral("uxrawonly"));
+    QDir().mkpath(stateDir);
+    QDir().mkpath(rawDir);
+    testTypeFilterKeepsState(stateDir);
+    testTypeHiddenHint(rawDir);
 }
 
 } // namespace

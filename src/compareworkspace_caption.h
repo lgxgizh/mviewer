@@ -1,21 +1,41 @@
 #pragma once
 
 #include <QDir>
+#include <QEvent>
 #include <QFileInfo>
 #include <QHash>
 #include <QLabel>
 #include <QString>
 #include <QStringList>
 
-// Hidden filename store under each compare pane. The visible name is the top
-// overlay (wrap, no elision). This label stays hidden unless a display error
-// needs a status line under the image.
+// Hidden filename store for each compare pane. The visible name is the top
+// overlay (wrap, no elision). This label stays hidden unless loading or a
+// display error needs a status line; it then floats over the bottom edge of
+// the pane, outside any layout, so it never shrinks that pane's viewport and
+// every pane keeps the same fit (like the filename overlay at the top).
 class ComparePaneCaption final : public QLabel
 {
   public:
+    static constexpr int kOverlayMargin = 6;
+
     explicit ComparePaneCaption(QWidget *parent) : QLabel(parent)
     {
         setWordWrap(true);
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        if (parent)
+            parent->installEventFilter(this);
+    }
+
+    // Stretch across the pane bottom, height to the wrapped text.
+    void relayout()
+    {
+        QWidget *host = parentWidget();
+        if (!host)
+            return;
+        const int w = qMax(0, host->width() - 2 * kOverlayMargin);
+        const int h = qMin(qMax(minimumHeight(), heightForWidth(w)), host->height());
+        setGeometry(kOverlayMargin, qMax(0, host->height() - h - kOverlayMargin), w, h);
+        raise();
     }
 
     void setFullText(const QString &text)
@@ -39,6 +59,7 @@ class ComparePaneCaption final : public QLabel
         QLabel::setText(text);
         setToolTip(text);
         setVisible(true);
+        relayout();
     }
 
     void clearStatus()
@@ -57,6 +78,16 @@ class ComparePaneCaption final : public QLabel
     bool hasStatus() const
     {
         return !m_statusText.isEmpty();
+    }
+
+  protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        if (watched == parentWidget() &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::LayoutRequest ||
+             event->type() == QEvent::Show))
+            relayout();
+        return QLabel::eventFilter(watched, event);
     }
 
   private:

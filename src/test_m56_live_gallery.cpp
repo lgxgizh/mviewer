@@ -3,8 +3,8 @@
 #include "thumbnailpanel.h"
 
 #include "core/filesystem/DirectorySnapshot.h"
-#include "core/thumbnail/ThumbnailPipeline.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 
 #include <QApplication>
 #include <QDir>
@@ -70,6 +70,23 @@ bool removeEventually(const QString &path)
     return false;
 }
 
+// Windows briefly locks a freshly written/decoded image (the panel's own
+// thumbnail decode, antivirus, the indexer), so a rename right after a scan
+// can hit a sharing violation. Retry with a bounded backoff (~1.5 s total)
+// instead of failing the run on that transient lock.
+bool renameEventually(const QString &from, const QString &to)
+{
+    int delayMs = 5;
+    for (int attempt = 0; attempt < 12; ++attempt)
+    {
+        if (QFile::rename(from, to))
+            return true;
+        pump(delayMs);
+        delayMs = qMin(delayMs * 2, 250);
+    }
+    return false;
+}
+
 std::string pathUtf8(const QString &path)
 {
     return QDir::cleanPath(QDir::fromNativeSeparators(path)).toUtf8().toStdString();
@@ -107,19 +124,18 @@ int main(int argc, char **argv)
           "shared selection follows the focused gallery item");
 
     int modelResets = 0;
-    QObject::connect(panel.model(), &QAbstractItemModel::modelReset,
-                     [&] { ++modelResets; });
+    QObject::connect(panel.model(), &QAbstractItemModel::modelReset, [&] { ++modelResets; });
 
     auto before = mviewer::core::snapshotDirectory(pathUtf8(temporary.path()));
     check(writeImage(folder.filePath("0.png"), 22, 20, qRgb(10, 11, 12)),
           "write a lexically earlier image");
-    auto after = mviewer::core::snapshotDirectory(pathUtf8(temporary.path()), before.generation + 1);
+    auto after =
+        mviewer::core::snapshotDirectory(pathUtf8(temporary.path()), before.generation + 1);
     before.path = pathUtf8(panel.currentDir());
     after.path = before.path;
     auto delta = mviewer::core::diffDirectorySnapshots(before, after);
     panel.applyDirectoryDelta(delta);
-    check(panel.pathList().size() == 4 &&
-              QFileInfo(panel.pathList().front()).fileName() == "0.png",
+    check(panel.pathList().size() == 4 && QFileInfo(panel.pathList().front()).fileName() == "0.png",
           "addition is inserted into the active sort order");
     check(selection.currentImage() == b && panel.pathList().contains(b),
           "inserting before current preserves current identity");
@@ -127,7 +143,7 @@ int main(int argc, char **argv)
 
     const QString renamed = folder.filePath("b-renamed.png");
     auto renameBefore = mviewer::core::snapshotDirectory(pathUtf8(temporary.path()), 2);
-    check(QFile::rename(b, renamed), "rename the selected image");
+    check(renameEventually(b, renamed), "rename the selected image");
     auto renameAfter = mviewer::core::snapshotDirectory(pathUtf8(temporary.path()), 3);
     renameBefore.path = pathUtf8(panel.currentDir());
     renameAfter.path = renameBefore.path;
@@ -162,8 +178,7 @@ int main(int argc, char **argv)
 
     auto unavailable = mviewer::core::DirectorySnapshot{};
     unavailable.path = pathUtf8(panel.currentDir());
-    const auto unavailableDelta =
-        mviewer::core::diffDirectorySnapshots(removeAfter, unavailable);
+    const auto unavailableDelta = mviewer::core::diffDirectorySnapshots(removeAfter, unavailable);
     panel.applyDirectoryDelta(unavailableDelta);
     check(panel.pathList().size() == 3 && panel.pathList().contains(a),
           "temporary directory loss keeps the last coherent gallery visible");

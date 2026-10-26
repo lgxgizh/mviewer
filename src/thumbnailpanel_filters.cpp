@@ -50,27 +50,6 @@ bool ThumbnailPanel::hasActiveBrowseFilter() const
            !m_tagFilter.isEmpty();
 }
 
-void ThumbnailPanel::setHiddenFormatGroups(const QStringList &groups)
-{
-    if (m_hiddenFormatGroups == groups)
-        return;
-    m_hiddenFormatGroups = groups;
-    if (m_currentDir.isEmpty())
-        return;
-    // Hidden formats are dropped where entries enter the source list, so a
-    // change needs a rescan. setDirectory() resets the text search; restore it.
-    const QString text = m_filterText;
-    const bool recursive = m_filterRecursive;
-    refresh();
-    if (!text.trimmed().isEmpty())
-        setFilter(text, recursive);
-}
-
-QStringList ThumbnailPanel::hiddenFormatGroups() const
-{
-    return m_hiddenFormatGroups;
-}
-
 void ThumbnailPanel::setTypeFilter(const QString &types)
 {
     if (m_typeFilter == types)

@@ -145,7 +145,9 @@ void MainWindow::connectGallerySignals()
                 // Empty-folder feedback: once the gallery settles with
                 // zero displayable entries, defer showing the hint past the
                 // transient pre-scan zero; any real content cancels it.
-                if (total > 0)
+                // Files hidden only by the type filter get the panel's own
+                // "N files hidden" hint instead of the generic empty card.
+                if (total > 0 || m_thumbnailPanel->typeHiddenCount() > 0)
                 {
                     if (m_emptyFolderTimer)
                         m_emptyFolderTimer->stop();
