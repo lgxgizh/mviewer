@@ -198,6 +198,10 @@ void CompareWorkspace::onSwapPanes()
         }
         swapIndexIfMatch(m_focusIndex, a, b);
         swapIndexIfMatch(m_editIdx, a, b);
+        if (static_cast<size_t>(b) < m_paneHistCache.size())
+            std::swap(m_paneHistCache[static_cast<size_t>(a)],
+                      m_paneHistCache[static_cast<size_t>(b)]);
+        applyDisplayedPaneOverlays();
 
         scheduleDisplayMaterialization({a, b});
         reapplyPinnedCellTransforms();

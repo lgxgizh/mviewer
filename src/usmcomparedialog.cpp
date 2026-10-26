@@ -151,10 +151,10 @@ QWidget *UsmCompareDialog::createCenterCanvas()
     auto *leftLayout = new QVBoxLayout(leftPane);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(4);
-    auto *lblLeft = new QLabel(tr("Original (Before)"), leftPane);
+    auto *lblLeft = new QLabel(leftPane);
+    lblLeft->setObjectName(QStringLiteral("usmLeftTitle"));
     lblLeft->setAlignment(Qt::AlignCenter);
-    lblLeft->setStyleSheet(QStringLiteral("font-weight: bold; background: #2b2b2b; color: #e0e0e0; "
-                                          "padding: 4px; border-radius: 2px;"));
+    m_lblLeftTitle = lblLeft;
     leftLayout->addWidget(lblLeft);
     leftLayout->addWidget(m_leftView, 1);
 
@@ -162,12 +162,12 @@ QWidget *UsmCompareDialog::createCenterCanvas()
     auto *rightLayout = new QVBoxLayout(rightPane);
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(4);
-    auto *lblRight = new QLabel(tr("USM sharpened (After)"), rightPane);
+    auto *lblRight = new QLabel(rightPane);
+    lblRight->setObjectName(QStringLiteral("usmRightTitle"));
     lblRight->setAlignment(Qt::AlignCenter);
-    lblRight->setStyleSheet(
-        QStringLiteral("font-weight: bold; background: #2b2b2b; color: #4fc3f7; "
-                       "padding: 4px; border-radius: 2px;"));
+    m_lblRightTitle = lblRight;
     rightLayout->addWidget(lblRight);
+    applyHoldTitles();
     rightLayout->addWidget(m_rightView, 1);
 
     splitter->addWidget(leftPane);
@@ -558,6 +558,28 @@ void UsmCompareDialog::applyTemporaryDisplay(RawImageView *target, RawImageView 
     m_temporaryTarget = target;
     if (m_btnHoldCompare)
         m_btnHoldCompare->setDown(true);
+    applyHoldTitles();
+}
+
+void UsmCompareDialog::applyHoldTitles()
+{
+    // Title for side 0 (original) or 1 (sharpened); a held pane names the
+    // image it presents, and release restores its own title.
+    const auto setTitle = [this](QLabel *label, int side)
+    {
+        if (!label)
+            return;
+        label->setText(side == 0 ? tr("Original (Before)") : tr("USM sharpened (After)"));
+        label->setStyleSheet(side == 0 ? QStringLiteral("font-weight: bold; background: #2b2b2b; "
+                                                        "color: #e0e0e0; padding: 4px; "
+                                                        "border-radius: 2px;")
+                                       : QStringLiteral("font-weight: bold; background: #2b2b2b; "
+                                                        "color: #4fc3f7; padding: 4px; "
+                                                        "border-radius: 2px;"));
+    };
+    const bool held = m_temporaryHoldActive && m_temporaryTarget;
+    setTitle(m_lblLeftTitle, held && m_temporaryTarget == m_leftView ? 1 : 0);
+    setTitle(m_lblRightTitle, held && m_temporaryTarget == m_rightView ? 0 : 1);
 }
 
 void UsmCompareDialog::beginTemporaryHold()
@@ -588,6 +610,7 @@ void UsmCompareDialog::endTemporaryHold()
     m_temporaryTarget = nullptr;
     if (m_btnHoldCompare)
         m_btnHoldCompare->setDown(false);
+    applyHoldTitles();
 }
 
 void UsmCompareDialog::showEvent(QShowEvent *event)

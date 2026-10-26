@@ -221,6 +221,7 @@ QCheckBox *findChk(QWidget *root, const QString &textPrefix)
 
 // ─── B#1/B#2/B#8: 4-image and 8-image entry + layout-aware enablement ───────
 #include "test_compare_acceptance_cases.inc"
+#include "test_compare_overlay_follow.inc"
 int main(int argc, char **argv)
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
@@ -256,6 +257,8 @@ int main(int argc, char **argv)
     testPlainDigitsReservedForPreview(dir);
     testLocalZoomAcceptance(paths8[0], paths8[1]);
     testUsmCompareDialogSpaceHold(dir);
+    testTemporarySwitchOverlaysFollowImage(dir);
+    testUsmTitlesFollowHold(dir);
 
     if (g_failures > 0)
     {
