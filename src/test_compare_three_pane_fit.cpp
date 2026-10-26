@@ -6,11 +6,12 @@
 //
 // Two-pane regression (TC-CMP-FIT-ORIENT): a portrait PNG with a short name
 // and a landscape-stored JPEG with EXIF orientation 6 and a long name both
-// DISPLAY as 600x800. The long name used to wrap to a two-line pane header,
-// which shortened that pane's viewport so its image fit visibly smaller.
-// Headers are now one line in every pane; both panes must get the same
-// viewport and the same fit scale, and Browse dimension probes must report
-// the displayed (oriented) size.
+// DISPLAY as 600x800. The long name used to wrap to a two-line pane header
+// that was a layout row, which shortened that pane's viewport so its image fit
+// visibly smaller. The header is now an overlay floating over the image: the
+// long name still wraps (taller overlay, full text, no ellipsis) but both
+// panes must get the same viewport and the same fit scale, and Browse
+// dimension probes must report the displayed (oriented) size.
 
 #include "compareworkspace.h"
 #include "core/image/FrameSequence.h"
@@ -22,6 +23,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
+#include <QLabel>
 #include <QTemporaryDir>
 #include <QVBoxLayout>
 
@@ -185,50 +187,56 @@ QString writePortraitPng(const QDir &dir, const QString &name)
     return path;
 }
 
-int headerHeight(QWidget *root, int pane)
+QWidget *paneHeader(QWidget *root, int pane)
 {
     QWidget *cell = root->findChild<QWidget *>(QStringLiteral("comparePane%1").arg(pane));
     QWidget *header =
         cell ? cell->findChild<QWidget *>(QStringLiteral("comparePaneHeader")) : nullptr;
-    return header && header->isVisible() ? header->height() : -1;
+    return header && header->isVisible() ? header : nullptr;
 }
 
-void checkTwoPanesMatch(CompareWorkspace *ws, int hostWidth)
+// Returns true when the long name's overlay wrapped (taller than the short one).
+bool checkTwoPanesMatch(CompareWorkspace *ws, int hostWidth, const QString &longName)
 {
     RawImageView *a = paneView(ws, 0);
     RawImageView *b = paneView(ws, 1);
-    if (!a || !b)
+    QWidget *ha = paneHeader(ws, 0);
+    QWidget *hb = paneHeader(ws, 1);
+    if (!a || !b || !ha || !hb)
     {
-        check(false, "both pane views exist");
-        return;
+        check(false, "both pane views and filename overlays exist");
+        return false;
     }
     const double sa = ws->engine().cellScale(0);
     const double sb = ws->engine().cellScale(1);
-    std::printf("   width %d: headers %d/%d views %dx%d / %dx%d src %dx%d / %dx%d scales %.4f "
-                "%.4f\n",
-                hostWidth, headerHeight(ws, 0), headerHeight(ws, 1), a->width(), a->height(),
-                b->width(), b->height(), a->sourceSize().width(), a->sourceSize().height(),
+    std::printf("   width %d: overlays %d/%d views %dx%d@%d / %dx%d@%d src %dx%d / %dx%d "
+                "scales %.4f %.4f\n",
+                hostWidth, ha->height(), hb->height(), a->width(), a->height(), a->y(), b->width(),
+                b->height(), b->y(), a->sourceSize().width(), a->sourceSize().height(),
                 b->sourceSize().width(), b->sourceSize().height(), sa, sb);
-    check(headerHeight(ws, 0) > 0 && headerHeight(ws, 0) == headerHeight(ws, 1),
-          "long and short names get the same one-line header height");
-    check(a->height() == b->height() && std::abs(a->width() - b->width()) <= 2,
-          "both panes get the same viewport");
+    check(a->y() == b->y() && a->height() == b->height() && std::abs(a->width() - b->width()) <= 2,
+          "both panes get the same viewport regardless of name length");
+    check(ha->geometry().intersects(a->geometry()) && hb->geometry().intersects(b->geometry()),
+          "filename overlays float on top of the image instead of taking layout space");
+    auto *longLabel = hb->findChild<QLabel *>(QStringLiteral("paneHeaderName"));
+    check(longLabel && QString(longLabel->text()).remove(QChar(0x200B)) == longName,
+          "long filename is shown in full (wrapped, never elided)");
     check(a->sourceSize() == QSize(600, 800) && b->sourceSize() == QSize(600, 800),
           "both panes fit the displayed (EXIF-oriented) 600x800 geometry");
     const double hi = std::max(sa, sb);
     check(hi > 0.0 && std::abs(sa - sb) / hi < 0.01,
           "same displayed size fits at the same scale in both panes");
+    return hb->height() > ha->height();
 }
 
 void runOrientedPairCase(const QDir &dir)
 {
     std::printf("-- two panes: short portrait PNG vs long-named EXIF-6 JPEG\n");
     const QString portrait = writePortraitPng(dir, QStringLiteral("p.png"));
-    const QString rotated = writeExifJpeg(
-        dir,
+    const QString longName =
         QStringLiteral("IMG_20261025_portrait_rotated_right_exif6_long_name_that_used_to_wrap_"
-                       "onto_a_second_header_line_v2.jpg"),
-        800, 600, 6);
+                       "onto_a_second_header_line_v2.jpg");
+    const QString rotated = writeExifJpeg(dir, longName, 800, 600, 6);
     check(!portrait.isEmpty() && !rotated.isEmpty(), "oriented fixtures written");
 
     const auto meta = mviewer::core::MetadataReader::read(rotated.toStdString());
@@ -250,12 +258,14 @@ void runOrientedPairCase(const QDir &dir)
     check(waitForPanes(ws, 2, 20000), "two oriented panes loaded");
     pump(300);
     // Sweep widths so the long name crosses the old 1x..2x wrap window.
+    bool wrapped = false;
     for (const int width : {1400, 1150, 950, 800, 650})
     {
         host.resize(width, 820);
         pump(300);
-        checkTwoPanesMatch(ws, width);
+        wrapped = checkTwoPanesMatch(ws, width, longName) || wrapped;
     }
+    check(wrapped, "the long filename overlay wraps onto extra lines at narrow widths");
 }
 } // namespace
 

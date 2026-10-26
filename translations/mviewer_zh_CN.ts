@@ -1945,11 +1945,6 @@
         <translation>锁定基准</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="460"/>
-        <source>Show or hide the filename above each comparison image (long names are shortened; hover for the full path)</source>
-        <translation>显示或隐藏每张对比图上方的文件名（过长时缩略显示，悬停可查看完整路径）</translation>
-    </message>
-    <message>
         <location filename="../src/compareworkspace.cpp" line="710"/>
         <location filename="../src/compareworkspace_controls.cpp" line="423"/>
         <location filename="../src/compareworkspace_render_materialization.cpp" line="236"/>
@@ -1975,6 +1970,11 @@
         <location filename="../src/compareworkspace_controls.cpp" line="456"/>
         <source>File Name</source>
         <translation>文件名</translation>
+    </message>
+    <message>
+        <location filename="../src/compareworkspace_controls.cpp" line="460"/>
+        <source>Show or hide the filename overlaid on top of each comparison image (long names wrap onto several lines)</source>
+        <translation>显示或隐藏叠加在每张对比图顶部的文件名（过长时自动换行显示）</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_controls.cpp" line="473"/>

@@ -457,8 +457,8 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_filenameOverlayChk->setObjectName("compareFilenameOverlayToggle");
     m_filenameOverlayChk->setChecked(m_filenameOverlay);
     m_filenameOverlayChk->setToolTip(
-        tr("Show or hide the filename above each comparison image (long names are shortened; "
-           "hover for the full path)"));
+        tr("Show or hide the filename overlaid on top of each comparison image (long names "
+           "wrap onto several lines)"));
     connect(m_filenameOverlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {

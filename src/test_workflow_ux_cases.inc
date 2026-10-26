@@ -2233,8 +2233,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(pixelGridChk, "compare exposes pixel grid toggle");
     CHECK(pixelGridChk && !pixelGridChk->isChecked(), "pixel grid toggle is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("hide")) &&
-              filenameOverlayChk->toolTip().contains(QStringLiteral("shortened")),
-          "filename checkbox tooltip describes show/hide and one-line shortening");
+              filenameOverlayChk->toolTip().contains(QStringLiteral("wrap")),
+          "filename checkbox tooltip describes show/hide and the wrapping overlay");
     CHECK(ws->filenameOverlayVisible(), "filename overlay checkbox enables the overlay");
     auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
     auto *view0 = pane0 ? pane0->findChild<RawImageView *>() : nullptr;
@@ -5717,7 +5717,7 @@ void assertPaneHeadersDoNotOverlap(const QString &pathA, const QString &pathB, c
         CHECK(badge->text() == QString::number(i + 1), chip.c_str());
         CHECK(!view->filenameOverlayText().isEmpty() &&
                   !view->filenameOverlayText().contains(QChar(0x2026)) &&
-                  name->text() == view->filenameOverlayText() &&
+                  QString(name->text()).remove(QChar(0x200B)) == view->filenameOverlayText() &&
                   name->toolTip().contains(view->filenameOverlayText()),
               chip.c_str());
     }

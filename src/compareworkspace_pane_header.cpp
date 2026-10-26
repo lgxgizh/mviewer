@@ -6,10 +6,10 @@
 #include "core/image/ImageFrame.h"
 #include "widgets/infooverlay.h"
 
+#include <QEvent>
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QLabel>
-#include <QResizeEvent>
 #include <QVBoxLayout>
 
 namespace
@@ -17,14 +17,40 @@ namespace
 
 constexpr int kPad = 8;
 constexpr int kChip = 24;
+constexpr int kOuter = 6; // gap between the overlay and the pane edge
 
-int oneLineHeight(const QFontMetrics &metrics)
+// Camera-style names ("DSC_2026_10_13_..._v3.jpg") have no spaces, so a
+// word-wrapping QLabel cannot break them. Offer a zero-width break after the
+// usual separators (and inside very long unbroken runs) so long names
+// really wrap instead of being clipped.
+QString wrappableName(const QString &name)
 {
-    const int textHeight = metrics.height() + kPad * 2;
-    const int chipHeight = kChip + kPad * 2;
-    return textHeight > chipHeight ? textHeight : chipHeight;
+    QString out;
+    out.reserve(name.size() + name.size() / 4);
+    int run = 0; // characters since the last break opportunity
+    for (const QChar ch : name)
+    {
+        out.append(ch);
+        ++run;
+        const bool separator =
+            ch == QLatin1Char('_') || ch == QLatin1Char('-') || ch == QLatin1Char('.');
+        if (ch.isSpace())
+            run = 0;
+        else if (separator || run >= 16)
+        {
+            out.append(QChar(0x200B));
+            run = 0;
+        }
+    }
+    return out;
 }
 
+// The pane header (index chip + file name) is an OVERLAY floating over the
+// top-left of the image: it is not in the cell layout, so it takes no space
+// and every pane's image viewport is identical whatever the name length.
+// (It used to be a layout row that grew to two lines for long names, which
+// shortened that pane's viewport and made its image fit visibly smaller.)
+// Long names wrap onto as many lines as needed; nothing is elided.
 class ComparePaneHeader : public QWidget
 {
   public:
@@ -32,7 +58,8 @@ class ComparePaneHeader : public QWidget
     {
         setObjectName(QStringLiteral("comparePaneHeader"));
         setAttribute(Qt::WA_StyledBackground, true);
-        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        // Pan/zoom/hover on the image keep working under the overlay.
+        setAttribute(Qt::WA_TransparentForMouseEvents);
         auto *row = new QHBoxLayout(this);
         row->setContentsMargins(kPad, kPad, kPad, kPad);
         row->setSpacing(kPad);
@@ -41,12 +68,11 @@ class ComparePaneHeader : public QWidget
         m_badge->setObjectName(QStringLiteral("paneIndexBadge"));
         m_badge->setAlignment(Qt::AlignCenter);
         m_badge->setFixedSize(kChip, kChip);
-        m_badge->setAttribute(Qt::WA_TransparentForMouseEvents);
         m_badge->setStyleSheet(
             QStringLiteral("QLabel#paneIndexBadge{background:rgba(255,255,255,45);color:#ffffff;"
                            "border-radius:3px;font-weight:700;font-size:14px;}"));
         m_badge->hide();
-        row->addWidget(m_badge, 0, Qt::AlignVCenter);
+        row->addWidget(m_badge, 0, Qt::AlignTop);
 
         m_name = new QLabel(this);
         m_name->setObjectName(QStringLiteral("paneHeaderName"));
@@ -55,19 +81,16 @@ class ComparePaneHeader : public QWidget
         nameFont.setBold(true);
         nameFont.setPointSize(mviewer::ui::kFilenameOverlayPointSize);
         m_name->setFont(nameFont);
-        // Ignored: the filename must never size the grid column. With
-        // Preferred/Expanding, a long name without break points (e.g.
-        // "DSC_..._v3.jpg") became the column's minimum width and squeezed
-        // the other panes; refreshName() elides/wraps to the width it gets.
-        m_name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Preferred);
+        m_name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
         m_name->setMinimumWidth(0);
         m_name->setStyleSheet(QStringLiteral(
             "QLabel#paneHeaderName{color:#ffffff;font-weight:700;background:transparent;}"));
-        row->addWidget(m_name, 1, Qt::AlignVCenter);
+        row->addWidget(m_name, 1);
 
         setStyleSheet(QStringLiteral(
-            "QWidget#comparePaneHeader{background:rgba(0,0,0,120);border-radius:4px;}"));
-        setFixedHeight(oneLineHeight(QFontMetrics(m_name->font())));
+            "QWidget#comparePaneHeader{background:rgba(0,0,0,140);border-radius:4px;}"));
+        if (parent)
+            parent->installEventFilter(this);
         hide();
     }
 
@@ -90,15 +113,17 @@ class ComparePaneHeader : public QWidget
             m_name->setVisible(m_showName);
             m_name->setToolTip(m_fullPath);
         }
-        refreshName();
         updateChrome();
     }
 
   protected:
-    void resizeEvent(QResizeEvent *event) override
+    bool eventFilter(QObject *watched, QEvent *event) override
     {
-        QWidget::resizeEvent(event);
-        refreshName();
+        if (watched == parentWidget() &&
+            (event->type() == QEvent::Resize || event->type() == QEvent::LayoutRequest ||
+             event->type() == QEvent::Show))
+            relayout();
+        return QWidget::eventFilter(watched, event);
     }
 
   private:
@@ -107,29 +132,40 @@ class ComparePaneHeader : public QWidget
         const bool badgeOn = m_badge && !m_badge->isHidden();
         const bool nameOn = m_showName && !m_fullName.isEmpty();
         setVisible(badgeOn || nameOn);
+        relayout();
     }
 
-    // Always ONE line: the header height is identical in every pane, so all
-    // panes get the same viewport and identical images fit at the same size.
-    // (A long name used to wrap to two lines, which made that pane's header
-    // taller and its viewport shorter, so its portrait image fit smaller.)
-    // Too-long names are elided in the middle; the tooltip has the full path.
-    void refreshName()
+    // Size the overlay to its content, wrapping the name to the pane width,
+    // and float it over the pane's top-left corner above the image view.
+    void relayout()
     {
-        if (!m_name || m_refreshing)
+        QWidget *cell = parentWidget();
+        if (!cell || !m_name || m_refreshing)
             return;
         m_refreshing = true;
+        const bool badgeOn = m_badge && !m_badge->isHidden();
+        const bool nameOn = m_showName && !m_fullName.isEmpty();
         const QFontMetrics metrics(m_name->font());
-        const int line = oneLineHeight(metrics);
-        const int width = m_name->width();
-        m_name->setWordWrap(false);
-        m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-        const bool elide =
-            m_showName && width >= 8 && metrics.horizontalAdvance(m_fullName) > width;
-        m_name->setText(elide ? metrics.elidedText(m_fullName, Qt::ElideMiddle, width)
-                              : m_fullName);
-        if (height() != line)
-            setFixedHeight(line);
+        const int chipW = badgeOn ? kChip : 0;
+        const int gap = badgeOn && nameOn ? kPad : 0;
+        const int avail = qMax(kChip + kPad * 2, cell->width() - kOuter * 2);
+        const int nameMax = qMax(8, avail - kPad * 2 - chipW - gap);
+        int nameW = 0;
+        int nameH = 0;
+        if (nameOn)
+        {
+            const int natural = metrics.horizontalAdvance(m_fullName) + 2;
+            const bool wrap = natural > nameMax;
+            m_name->setWordWrap(wrap);
+            m_name->setText(wrap ? wrappableName(m_fullName) : m_fullName);
+            nameW = wrap ? nameMax : natural;
+            nameH = wrap ? qMax(metrics.height(), m_name->heightForWidth(nameW)) : metrics.height();
+        }
+        const int w = kPad * 2 + chipW + gap + nameW;
+        const int h = kPad * 2 + qMax(badgeOn ? kChip : 0, nameH);
+        setFixedSize(qMin(w, avail), h);
+        move(kOuter, kOuter);
+        raise();
         m_refreshing = false;
     }
 
@@ -157,9 +193,8 @@ QWidget *installComparePaneHeader(QWidget *cell, QVBoxLayout *layout)
 {
     if (!cell || !layout)
         return nullptr;
-    auto *header = new ComparePaneHeader(cell);
-    layout->insertWidget(0, header);
-    return header;
+    // Overlay, not a layout row: the layout is deliberately left untouched.
+    return new ComparePaneHeader(cell);
 }
 
 void updateComparePaneHeaderName(QWidget *cell, const QString &name, const QString &fullPath,
