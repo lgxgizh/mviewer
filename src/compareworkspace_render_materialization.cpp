@@ -41,6 +41,20 @@ bool mipDenseEnough(const ImageData &mip, int wantEdge, int sourceEdge)
            static_cast<long long>(need) * 9;
 }
 
+// Sharp fallback from the resident full frame: fit inside the (often square)
+// target keeping the source aspect and never upscale. scaleBoundedStatic fills
+// the target exactly, so a 4096x4096 box would stretch a 4096x3072 frame.
+ImageData scaleFullToFit(const ImageData &src, const QSize &target)
+{
+    const double fit = std::min({1.0, static_cast<double>(target.width()) / src.width,
+                                 static_cast<double>(target.height()) / src.height});
+    if (fit >= 1.0)
+        return src;
+    const int w = std::max(1, static_cast<int>(std::lround(src.width * fit)));
+    const int h = std::max(1, static_cast<int>(std::lround(src.height * fit)));
+    return RenderEngine::scaleBoundedStatic(src, RenderSize{w, h});
+}
+
 QRect coveredRectForRequest(const QSize &sourceDims,
                             const mviewer::ui::CompareDisplayRequest &request)
 {
@@ -84,7 +98,7 @@ ImageData resolveLodFromCachedFull(const ImageData &src,
         const bool needsDense = !request.provisional && !request.preview;
         if (needsDense && !best.isNull() &&
             !mipDenseEnough(best, wantEdge, std::max(src.width, src.height)))
-            best = ImageData{};
+            return scaleFullToFit(src, request.target);
         if (!best.isNull())
         {
             if (best.width > request.target.width() || best.height > request.target.height())
