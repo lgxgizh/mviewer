@@ -18,22 +18,6 @@ namespace
 constexpr int kPad = 8;
 constexpr int kChip = 24;
 
-// Camera-style names ("DSC_2026_10_13_..._v3.jpg") have no spaces, so a
-// word-wrapping QLabel cannot break them. Offer a zero-width break after the
-// usual separators so the two-line layout really wraps.
-QString wrappableName(const QString &name)
-{
-    QString out;
-    out.reserve(name.size() + name.size() / 4);
-    for (const QChar ch : name)
-    {
-        out.append(ch);
-        if (ch == QLatin1Char('_') || ch == QLatin1Char('-') || ch == QLatin1Char('.'))
-            out.append(QChar(0x200B));
-    }
-    return out;
-}
-
 int oneLineHeight(const QFontMetrics &metrics)
 {
     const int textHeight = metrics.height() + kPad * 2;
@@ -125,6 +109,11 @@ class ComparePaneHeader : public QWidget
         setVisible(badgeOn || nameOn);
     }
 
+    // Always ONE line: the header height is identical in every pane, so all
+    // panes get the same viewport and identical images fit at the same size.
+    // (A long name used to wrap to two lines, which made that pane's header
+    // taller and its viewport shorter, so its portrait image fit smaller.)
+    // Too-long names are elided in the middle; the tooltip has the full path.
     void refreshName()
     {
         if (!m_name || m_refreshing)
@@ -133,41 +122,14 @@ class ComparePaneHeader : public QWidget
         const QFontMetrics metrics(m_name->font());
         const int line = oneLineHeight(metrics);
         const int width = m_name->width();
-        if (!m_showName || m_fullName.isEmpty() || width < 8)
-        {
-            m_name->setWordWrap(false);
-            m_name->setText(m_fullName);
-            if (height() != line)
-                setFixedHeight(line);
-            m_refreshing = false;
-            return;
-        }
-        const int fullWidth = metrics.horizontalAdvance(m_fullName);
-        if (fullWidth <= width)
-        {
-            m_name->setWordWrap(false);
-            m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-            m_name->setText(m_fullName);
-            if (height() != line)
-                setFixedHeight(line);
-        }
-        else if (fullWidth <= width * 2)
-        {
-            const int twoLines = line + metrics.height();
-            m_name->setWordWrap(true);
-            m_name->setAlignment(Qt::AlignLeft | Qt::AlignTop);
-            m_name->setText(wrappableName(m_fullName));
-            if (height() != twoLines)
-                setFixedHeight(twoLines);
-        }
-        else
-        {
-            m_name->setWordWrap(false);
-            m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-            m_name->setText(metrics.elidedText(m_fullName, Qt::ElideMiddle, width));
-            if (height() != line)
-                setFixedHeight(line);
-        }
+        m_name->setWordWrap(false);
+        m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+        const bool elide =
+            m_showName && width >= 8 && metrics.horizontalAdvance(m_fullName) > width;
+        m_name->setText(elide ? metrics.elidedText(m_fullName, Qt::ElideMiddle, width)
+                              : m_fullName);
+        if (height() != line)
+            setFixedHeight(line);
         m_refreshing = false;
     }
 

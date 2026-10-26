@@ -2233,8 +2233,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(pixelGridChk, "compare exposes pixel grid toggle");
     CHECK(pixelGridChk && !pixelGridChk->isChecked(), "pixel grid toggle is off by default");
     CHECK(filenameOverlayChk && filenameOverlayChk->toolTip().contains(QStringLiteral("hide")) &&
-              filenameOverlayChk->toolTip().contains(QStringLiteral("wrapping")),
-          "filename checkbox tooltip describes show/hide and wrapping");
+              filenameOverlayChk->toolTip().contains(QStringLiteral("shortened")),
+          "filename checkbox tooltip describes show/hide and one-line shortening");
     CHECK(ws->filenameOverlayVisible(), "filename overlay checkbox enables the overlay");
     auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
     auto *view0 = pane0 ? pane0->findChild<RawImageView *>() : nullptr;

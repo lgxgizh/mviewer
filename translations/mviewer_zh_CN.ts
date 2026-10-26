@@ -1945,6 +1945,11 @@
         <translation>锁定基准</translation>
     </message>
     <message>
+        <location filename="../src/compareworkspace_controls.cpp" line="460"/>
+        <source>Show or hide the filename above each comparison image (long names are shortened; hover for the full path)</source>
+        <translation>显示或隐藏每张对比图上方的文件名（过长时缩略显示，悬停可查看完整路径）</translation>
+    </message>
+    <message>
         <location filename="../src/compareworkspace.cpp" line="710"/>
         <location filename="../src/compareworkspace_controls.cpp" line="423"/>
         <location filename="../src/compareworkspace_render_materialization.cpp" line="236"/>
@@ -1972,104 +1977,99 @@
         <translation>文件名</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="460"/>
-        <source>Show or hide the filename above each comparison image, wrapping when too long</source>
-        <translation>显示或隐藏每张比较图上方的文件名，过长时换行</translation>
-    </message>
-    <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="472"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="473"/>
         <source>Pixel Grid</source>
         <translation>像素网格</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="475"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="476"/>
         <source>Show pixel inspection grid when zoomed to 800% or above</source>
         <translation>缩放到 800% 及以上时显示像素检查网格</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="482"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="483"/>
         <source>RGB (Shift+1)</source>
         <translation>RGB (Shift+1)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="483"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="484"/>
         <source>R (Shift+2)</source>
         <translation>R (Shift+2)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="484"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="485"/>
         <source>G (Shift+3)</source>
         <translation>G (Shift+3)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="485"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="486"/>
         <source>B (Shift+4)</source>
         <translation>B (Shift+4)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="486"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="487"/>
         <source>Y (Shift+5)</source>
         <translation>Y (Shift+5)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="487"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="488"/>
         <source>V (Shift+6)</source>
         <translation>V (Shift+6)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="488"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="489"/>
         <source>Isolate R/G/B/Y/V channels (Shift+1…6)</source>
         <translation>隔离 R/G/B/Y/V 通道（Shift+1…6）</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="501"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="502"/>
         <source>Save Layout</source>
         <translation>存储布局</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="502"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="503"/>
         <source>Save the current layout as a preset</source>
         <translation>将当前布局存储为预设</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="506"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="507"/>
         <source>Load Layout</source>
         <translation>读取布局</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="507"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="508"/>
         <source>Load a layout from a preset file</source>
         <translation>从预设文件中读取布局</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="513"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="514"/>
         <source>Swap A/B panes (Shortcut: X)</source>
         <translation>交换 A/B 窗格 (快捷键: X)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="535"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="536"/>
         <source>Analyze</source>
         <translation>分析</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="538"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="539"/>
         <location filename="../src/compareworkspace_temporary.cpp" line="244"/>
         <source>Open Comparison Inspection Panel</source>
         <translation>打开比较检视面板</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="548"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="549"/>
         <source>Export Report</source>
         <translation>导出报告</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="551"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="552"/>
         <location filename="../src/compareworkspace_temporary.cpp" line="247"/>
         <source>Export comparison results as an HTML/Markdown/JSON report</source>
         <translation>将对比结果导出为 HTML/Markdown/JSON 报告</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="572"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="573"/>
         <location filename="../src/compareworkspace_interact.cpp" line="466"/>
         <location filename="../src/compareworkspace_keyboard.cpp" line="369"/>
         <location filename="../src/compareworkspace_keyboard.cpp" line="394"/>
@@ -2077,47 +2077,47 @@
         <translation>视图自适应窗口 (Fit)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="606"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="607"/>
         <source>PSNR: —    SSIM: —</source>
         <translation>PSNR: —    SSIM: —</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="609"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="610"/>
         <source>Align</source>
         <translation>对齐</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="614"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="615"/>
         <source>Before comparison, auto-align by integer-pixel translation to remove shift error, then compute PSNR/SSIM</source>
         <translation>对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="636"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="637"/>
         <source>Close the comparison window (Esc; with a selection, Esc clears it first)</source>
         <translation>关闭比较窗口（Esc；有选区时 Esc 先清除选区）</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="685"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="686"/>
         <source>Applied auto threshold %1</source>
         <translation>已应用自动阈值 %1</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="695"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="696"/>
         <source>Automatically compute the best separation threshold from the difference distribution (Otsu)</source>
         <translation>基于差异分布自动计算最佳分离阈值 (Otsu)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="711"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="712"/>
         <source>Automatically compute the best separation threshold from the difference distribution (Otsu suggestion: %1)</source>
         <translation>基于差异分布自动计算最佳分离阈值 (Otsu 建议: %1)</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="722"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="723"/>
         <source>Screenshot</source>
         <translation>截图</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="724"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="725"/>
         <source>Copy or save the current comparison view</source>
         <translation>复制或保存当前比较视图</translation>
     </message>
@@ -2855,7 +2855,7 @@ Return to Browse and select images.</source>
         <translation>基准: %1</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_controls.cpp" line="564"/>
+        <location filename="../src/compareworkspace_controls.cpp" line="565"/>
         <source>Fit to window (Shortcut: F): when &quot;Uniform Pixel Scale&quot; is checked, all panes fit at the same scale;when unchecked, each pane fits its own resolution so images with similar FOV/aspect appear similar in size</source>
         <translation>适合窗口（快捷键 F）：勾选「统一像素倍率」时所有窗格按同一倍率适配；不勾选时每个窗格按各自分辨率适配，使视场/比例相近的图片显示大小相近</translation>
     </message>

@@ -7,6 +7,7 @@
 #include "thumbnailpanel_p.h"
 
 #include "core/image/ImageFormats.h"
+#include "core/image/QtMetadataSemantics.h"
 #include "core/metadata/MetadataIndexer.h"
 
 #include <QtConcurrent/QtConcurrent>
@@ -539,6 +540,8 @@ DimProbeResult probeEntryDimensions(const QString &path)
         QImageReader reader(path);
         reader.setAutoTransform(true);
         out.size = reader.size();
+        if (mviewer::core::qtmetadata::transformSwapsDimensions(reader.transformation()))
+            out.size.transpose();
     }
     return out;
 }

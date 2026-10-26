@@ -3,13 +3,24 @@
 // (camera-style "DSC_..._v3.jpg") made its pane header's minimum width the
 // column's minimum, so the short-named left pane was squeezed and its image
 // rendered much smaller than the other two.
+//
+// Two-pane regression (TC-CMP-FIT-ORIENT): a portrait PNG with a short name
+// and a landscape-stored JPEG with EXIF orientation 6 and a long name both
+// DISPLAY as 600x800. The long name used to wrap to a two-line pane header,
+// which shortened that pane's viewport so its image fit visibly smaller.
+// Headers are now one line in every pane; both panes must get the same
+// viewport and the same fit scale, and Browse dimension probes must report
+// the displayed (oriented) size.
 
 #include "compareworkspace.h"
+#include "core/image/FrameSequence.h"
+#include "core/image/MetadataReader.h"
 #include "widgets/rawimageview.h"
 
 #include <QApplication>
 #include <QDialog>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
 #include <QVBoxLayout>
@@ -54,14 +65,14 @@ RawImageView *paneView(QWidget *root, int pane)
     return cell ? cell->findChild<RawImageView *>() : nullptr;
 }
 
-bool waitForThreePanes(CompareWorkspace *ws, int timeoutMs)
+bool waitForPanes(CompareWorkspace *ws, int count, int timeoutMs)
 {
     QElapsedTimer timer;
     timer.start();
     while (timer.elapsed() < timeoutMs)
     {
-        bool ready = ws->comparedImageCount() == 3;
-        for (int i = 0; ready && i < 3; ++i)
+        bool ready = ws->comparedImageCount() == count;
+        for (int i = 0; ready && i < count; ++i)
         {
             const RawImageView *view = paneView(ws, i);
             ready = view && view->width() > 32 && view->height() > 32 &&
@@ -107,6 +118,145 @@ void checkThreePanes(CompareWorkspace *ws, const char *label)
               "pane scale is fit-to-window for its own view");
     }
 }
+// JPEG stored as rawW x rawH with an EXIF orientation tag inserted after SOI
+// (minimal little-endian TIFF IFD with one 0x0112 SHORT entry).
+QString writeExifJpeg(const QDir &dir, const QString &name, int rawW, int rawH, int orientation)
+{
+    QImage image(rawW, rawH, QImage::Format_RGB32);
+    image.fill(QColor(90, 120, 200));
+    QByteArray jpeg;
+    {
+        QFile sink(dir.filePath(QStringLiteral("tmp_plain.jpg")));
+        image.save(sink.fileName(), "JPEG", 90);
+        if (sink.open(QIODevice::ReadOnly))
+            jpeg = sink.readAll();
+    }
+    if (jpeg.size() < 4)
+        return QString();
+    const char tiff[] = {'I',
+                         'I',
+                         42,
+                         0,
+                         8,
+                         0,
+                         0,
+                         0,
+                         1,
+                         0,
+                         0x12,
+                         0x01,
+                         3,
+                         0,
+                         1,
+                         0,
+                         0,
+                         0,
+                         static_cast<char>(orientation),
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0};
+    QByteArray payload("Exif\0\0", 6);
+    payload.append(tiff, sizeof(tiff));
+    QByteArray app1;
+    app1.append(static_cast<char>(0xFF));
+    app1.append(static_cast<char>(0xE1));
+    const int len = static_cast<int>(payload.size()) + 2;
+    app1.append(static_cast<char>((len >> 8) & 0xFF));
+    app1.append(static_cast<char>(len & 0xFF));
+    app1.append(payload);
+    jpeg.insert(2, app1);
+    const QString path = dir.filePath(name);
+    QFile out(path);
+    if (!out.open(QIODevice::WriteOnly) || out.write(jpeg) != jpeg.size())
+        return QString();
+    return path;
+}
+
+QString writePortraitPng(const QDir &dir, const QString &name)
+{
+    const QString path = dir.filePath(name);
+    QImage image(600, 800, QImage::Format_RGB32);
+    image.fill(QColor(200, 120, 60));
+    image.save(path, "PNG");
+    return path;
+}
+
+int headerHeight(QWidget *root, int pane)
+{
+    QWidget *cell = root->findChild<QWidget *>(QStringLiteral("comparePane%1").arg(pane));
+    QWidget *header =
+        cell ? cell->findChild<QWidget *>(QStringLiteral("comparePaneHeader")) : nullptr;
+    return header && header->isVisible() ? header->height() : -1;
+}
+
+void checkTwoPanesMatch(CompareWorkspace *ws, int hostWidth)
+{
+    RawImageView *a = paneView(ws, 0);
+    RawImageView *b = paneView(ws, 1);
+    if (!a || !b)
+    {
+        check(false, "both pane views exist");
+        return;
+    }
+    const double sa = ws->engine().cellScale(0);
+    const double sb = ws->engine().cellScale(1);
+    std::printf("   width %d: headers %d/%d views %dx%d / %dx%d src %dx%d / %dx%d scales %.4f "
+                "%.4f\n",
+                hostWidth, headerHeight(ws, 0), headerHeight(ws, 1), a->width(), a->height(),
+                b->width(), b->height(), a->sourceSize().width(), a->sourceSize().height(),
+                b->sourceSize().width(), b->sourceSize().height(), sa, sb);
+    check(headerHeight(ws, 0) > 0 && headerHeight(ws, 0) == headerHeight(ws, 1),
+          "long and short names get the same one-line header height");
+    check(a->height() == b->height() && std::abs(a->width() - b->width()) <= 2,
+          "both panes get the same viewport");
+    check(a->sourceSize() == QSize(600, 800) && b->sourceSize() == QSize(600, 800),
+          "both panes fit the displayed (EXIF-oriented) 600x800 geometry");
+    const double hi = std::max(sa, sb);
+    check(hi > 0.0 && std::abs(sa - sb) / hi < 0.01,
+          "same displayed size fits at the same scale in both panes");
+}
+
+void runOrientedPairCase(const QDir &dir)
+{
+    std::printf("-- two panes: short portrait PNG vs long-named EXIF-6 JPEG\n");
+    const QString portrait = writePortraitPng(dir, QStringLiteral("p.png"));
+    const QString rotated = writeExifJpeg(
+        dir,
+        QStringLiteral("IMG_20261025_portrait_rotated_right_exif6_long_name_that_used_to_wrap_"
+                       "onto_a_second_header_line_v2.jpg"),
+        800, 600, 6);
+    check(!portrait.isEmpty() && !rotated.isEmpty(), "oriented fixtures written");
+
+    const auto meta = mviewer::core::MetadataReader::read(rotated.toStdString());
+    check(meta.width == 600 && meta.height == 800 && meta.orientation == 6,
+          "metadata reports displayed 600x800 for the EXIF-6 file");
+    const auto frame = mviewer::core::FrameSequenceReader::frameInfo(rotated.toStdString(), 0);
+    std::printf("   browse probe %dx%d\n", frame.width, frame.height);
+    check(frame.width == 600 && frame.height == 800,
+          "browse Resolution probe reports displayed 600x800, not stored 800x600");
+
+    QDialog host;
+    auto *layout = new QVBoxLayout(&host);
+    auto *ws = new CompareWorkspace(&host);
+    layout->addWidget(ws);
+    host.resize(1400, 820);
+    host.show();
+    pump(50);
+    ws->setImages({portrait, rotated});
+    check(waitForPanes(ws, 2, 20000), "two oriented panes loaded");
+    pump(300);
+    // Sweep widths so the long name crosses the old 1x..2x wrap window.
+    for (const int width : {1400, 1150, 950, 800, 650})
+    {
+        host.resize(width, 820);
+        pump(300);
+        checkTwoPanesMatch(ws, width);
+    }
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -135,7 +285,7 @@ int main(int argc, char **argv)
     host.show();
     pump(50);
     ws->setImages(images);
-    check(waitForThreePanes(ws, 20000), "three panes loaded and laid out");
+    check(waitForPanes(ws, 3, 20000), "three panes loaded and laid out");
     pump(300);
     checkThreePanes(ws, "long names on the right panes");
 
@@ -185,6 +335,8 @@ int main(int argc, char **argv)
     check(ws->saveComparisonViewTo(snapZoomPath), "zoomed snapshot saves successfully");
     const QImage snapZoomImg(snapZoomPath);
     checkCoverage(snapZoomImg, "snapshot covers full canvas width when zoomed in");
+
+    runOrientedPairCase(dir);
 
     if (g_failures > 0)
     {
