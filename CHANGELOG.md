@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+## [1.0.150] - 2026-10-26
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.150** (browse UX batch #238 and its follow-ups #239).
+
+### Added
+
+- **Multi-select type filter** (#238): the browse type filter is a checkable dropdown in both panes (JPEG, PNG, WebP, TIFF, HEIC/AVIF, GIF, BMP, RAW, Other, derived from the runtime decoder registry). RAW is hidden by default; the choice is persisted (`browse/hiddenFormatGroups`) and applies to both panes.
+- **Hidden-by-type hint** (#239): a folder whose files are all hidden by the type filter shows "N RAW files hidden by the type filter" with a one-click Show button in either pane. The saved filter changes only when Show is clicked. Simplified Chinese translations included.
+- **Split browse icon** (#238): redrawn as two panes with thumbnails, distinct from Compare.
+
+### Changed
+
+- **Right pane header** (#238): the address bar stands alone like the left pane; toolbar back / forward / up and their shortcuts act on the active pane. The right Compare button is docked in the sort row instead of floating over the list.
+
+### Fixed
+
+- **Union Compare** (#238): the Compare button, `P`, `Enter` and the context menu use the selection of both panes, so one image per pane can be compared.
+- **Compare viewport sizes** (#238, #239): the pane header (index + file name, wrapping in full) and the status caption are overlays that take no layout space, so every pane has the same viewport and fit scale.
+- **Browse Resolution** (#238): EXIF-rotated images (orientation 5-8) report their displayed size.
+- **Type filter keeps state** (#239): toggling a type re-partitions the scanned listing in place (no rescan), keeping the selection, current item and scroll anchor.
+- **Rename on Windows** (#239): file rename / move retries briefly with backoff on transient sharing or lock errors (for example a reader still holding the file).
+
+### Tests / CI
+
+- TC-SB-13 to TC-SB-17 (union Compare, docked button, type filter, kept state, hidden-by-type hint in both panes); Compare three-pane fit and status-caption viewport regressions; locked-rename command test; m56 live-gallery rename retries with backoff (#238, #239).
+
 ## [1.0.149] - 2026-10-25
 
 ### Release
