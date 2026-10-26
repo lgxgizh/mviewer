@@ -42,6 +42,10 @@
 #include <string>
 #include <thread>
 
+// Selection-preview stable frame + viewer provisional geometry (4c-4f) live
+// in test_m27_preview_frame.cpp to keep this TU under the size cap.
+void runM27PreviewFrameTests(int &pass, int &fail);
+
 static int g_pass = 0;
 static int g_fail = 0;
 
@@ -347,7 +351,8 @@ void testDistantPreviewLetterboxDoesNotJump()
     }
     const QRect photo = redPhotoBounds(cell);
     const int imageSlot = gallery.thumbSize();
-    CHECK(!photo.isNull() && photo.width() + 2 >= imageSlot && photo.width() > photo.height() * 3 / 2,
+    CHECK(!photo.isNull() && photo.width() + 2 >= imageSlot &&
+              photo.width() > photo.height() * 3 / 2,
           "PASS gallery cell paints the wide photo across the slot");
     const QRect slot(photo.center().x() - imageSlot / 2,
                      photo.top() - (imageSlot - photo.height()) / 2, imageSlot, imageSlot);
@@ -611,6 +616,7 @@ int main(int argc, char **argv)
     testViewerABA();
     testDistantPreviewLetterboxDoesNotJump();
     testRejectionReachesTerminalState();
+    runM27PreviewFrameTests(g_pass, g_fail);
     testPreviewUILatency24MP();
     testViewerUILatency24MP();
 

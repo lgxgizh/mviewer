@@ -94,6 +94,12 @@ class ImageViewer : public QOpenGLWidget
     // tiles arrive. It is never used as an analysis/ROI source.
     void setProvisionalImage(const QString &path, const QImage &image,
                              const QSize &sourceSize = QSize());
+    // Pixels drawn for the provisional photo (already fitted to the source
+    // display aspect). Test hook.
+    QImage provisionalImageForTest() const
+    {
+        return m_provisionalImage;
+    }
     // Widget rect of the provisional photo after setProvisionalImage().
     QRect provisionalScreenRect() const
     {

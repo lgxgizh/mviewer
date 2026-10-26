@@ -138,6 +138,10 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
 {
     if (path.isEmpty() || image.isNull())
         return;
+    // A late warm thumbnail for the image already on screen at full quality
+    // is stale: never downgrade (or re-fit) the sharp frame with it.
+    if (browsePathEquals(m_currentPath, path) && hasDisplayImage())
+        return;
     const QString previousPath = m_currentPath;
     if (!browsePathEquals(previousPath, path))
     {
@@ -149,10 +153,16 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
     m_provisionalPath = path;
     m_transitionImage = QImage();
     m_transitionSourceSize = QSize();
-    const QImage shown = mviewer::ui::photoFromSquareThumb(image);
-    m_provisionalImage = shown;
+    // The provisional photo occupies exactly the rect the full image will
+    // (source display aspect): unpad the gallery square, then crop-to-fill
+    // the known aspect, so a 4:3 / barred thumb neither shows black bars nor
+    // stretches, and the full frame lands without a geometry change.
+    const QImage unpadded = mviewer::ui::photoFromSquareThumb(image);
     const bool known = sourceSize.width() > 0 && sourceSize.height() > 0;
-    m_provisionalSourceSize = known ? sourceSize : shown.size();
+    m_provisionalSourceSize = known ? sourceSize : unpadded.size();
+    m_provisionalImage =
+        known ? mviewer::ui::fillPhotoToAspect(unpadded, sourceSize.width(), sourceSize.height())
+              : unpadded;
     m_view.screenW = width();
     m_view.screenH = height();
     // A warm thumbnail must not clear an explicit zoom while zoom lock is on.

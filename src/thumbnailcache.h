@@ -46,8 +46,10 @@ class ThumbnailCache
     // Bump when the payload format or the key semantics change.
     // M36: cached payloads are display-ready (ICC converted), so invalidate
     // the pre-M36 analysis-domain PNGs.
-    static constexpr int kSchemaVersion = 5;
+    static constexpr int kSchemaVersion = 6;
     // v5: payload is JPEG (opaque) or PNG (alpha), detected from content.
+    // v6: embedded EXIF thumbs are center-cropped to the source display
+    // aspect (no baked-in black bars), so v5 payloads are stale.
     static constexpr const char *kFileSuffix = ".thumb";
 
     // Default budget for the on-disk thumbnail folder: 512 MiB.

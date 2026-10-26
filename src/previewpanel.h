@@ -4,6 +4,7 @@
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/scheduler/TaskScheduler.h"
 
+#include <QHash>
 #include <QImage>
 #include <QPixmap>
 #include <QPointer>
@@ -12,8 +13,11 @@
 #include <QWidget>
 
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <string>
+
+class QVariantAnimation;
 
 namespace mviewer::core
 {
@@ -22,6 +26,13 @@ struct PreviewStats;
 
 // Bottom-left panel: shows a single large preview of the currently
 // selected image plus its filename and basic stats.
+//
+// Stable frame: the on-screen frame follows the SOURCE display aspect
+// (known size, then a per-panel memory of sizes seen earlier, then the
+// unpadded warm thumb). Every stage (warm thumb, cached/sharp preview) is
+// center-cropped into that frame, so stage changes for one path never resize
+// the frame unless the placeholder had the wrong shape; that single change,
+// and same-path quality upgrades, cross-fade over ~110 ms.
 //
 // The preview is served by a SINGLE scaled (<= kPreviewMaxEdge) decode on the
 // foreground Decode pool — never a full ImageRepository::loadAsync decode
@@ -94,12 +105,32 @@ class PreviewPanel : public QWidget
         return m_preview.isNull() ? m_scaled : m_preview;
     }
 
-    // On-screen size after fitting the current pixmap into the panel. Stage-1
-    // gallery thumbs and the later scaled preview must agree, or the photo jumps.
+    // On-screen (logical) frame size after fitting the source aspect into the
+    // panel. Stage-1 gallery thumbs and the later scaled preview must agree, or
+    // the photo jumps.
     QSize fittedPreviewSize() const
     {
-        return m_scaled.size();
+        return m_frameSize;
     }
+
+    // Source display size (post-orientation) this panel has learned for
+    // path: the presented image's, else one remembered from an earlier
+    // delivery. Invalid when unknown. No file I/O.
+    QSize rememberedSourceSize(const QString &path) const;
+
+    // Test hooks. Number of frame-aspect changes since construction; a
+    // device-pixel-ratio override (<= 0 uses the widget's own); the fitted
+    // pixmap actually painted; and whether a stage cross-fade is running.
+    int frameChangeCountForTest() const
+    {
+        return m_frameChanges;
+    }
+    void setDevicePixelRatioForTest(qreal dpr);
+    QPixmap scaledPixmapForTest() const
+    {
+        return m_scaled;
+    }
+    bool isTransitioningForTest() const;
 
     // Preview-cache key: ImageRepository::makeKey(path) plus the preview max
     // edge, so a scaled preview is never confused with a FullImage decode.
@@ -119,8 +150,19 @@ class PreviewPanel : public QWidget
     void clearPreview();
     void presentWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
                               const QSize &knownSourceSize, qint64 knownFileSize);
+    bool presentCachedPreview(const QString &path, const QSize &knownSourceSize,
+                              qint64 knownFileSize);
     void deliverVisualPreview(const QImage &qimg, const QString &path, uint64_t gen, int srcW,
-                              int srcH, qint64 fileSize, bool sourceKnown, bool fileSizeKnown);
+                              int srcH, qint64 fileSize, bool sourceKnown, bool fileSizeKnown,
+                              const std::string &previewKey);
+    // Frame / transition helpers.
+    QSize resolveSourceSize(const QString &path, const QSize &knownSourceSize) const;
+    void rememberSource(const QString &path, const QSize &size, const std::string &previewKey);
+    bool applyFrameAspect(double aspect, bool samePath);
+    void beginStageTransition(bool samePath);
+    QSize displayedFrameSize() const;
+    bool transitionRunning() const;
+    qreal effectiveDevicePixelRatio() const;
     void deliverPreviewStats(const mviewer::core::PreviewStats &stats, const QString &path,
                              uint64_t gen);
     static void
@@ -137,9 +179,31 @@ class PreviewPanel : public QWidget
     // worker only observes its TaskContext cancel flag.
     TaskScheduler::TaskHandle m_task;
     QPixmap m_preview; // decoded preview (max edge <= kPreviewMaxEdge)
-    QPixmap m_scaled;  // fitted preview
-    int m_imgW = 0;    // source width (post-orientation)
-    int m_imgH = 0;    // source height (post-orientation)
+    QPixmap m_scaled;  // m_preview center-cropped into the frame (device pixels)
+    // Stable frame: source display aspect (w/h; 0 = none) and its fitted
+    // logical size inside the panel.
+    double m_frameAspect = 0.0;
+    QSize m_frameSize;
+    int m_frameChanges = 0;
+    qreal m_dprOverride = 0.0;
+    // Same-path stage cross-fade: previous painted pixmap and frame.
+    QVariantAnimation *m_transition = nullptr;
+    QPixmap m_fadeFrom;
+    QSize m_fadeFromFrame;
+    double m_transitionT = 1.0;
+    // Per-panel memory of source sizes (post-orientation) and preview cache
+    // keys seen for recent paths, so a re-selected or warm-cached image gets
+    // its true frame and Preview pixels synchronously without file I/O.
+    struct KnownSource
+    {
+        QSize size;
+        std::string previewKey;
+    };
+    static constexpr int kKnownSourceCap = 256;
+    QHash<QString, KnownSource> m_knownSources;
+    std::deque<QString> m_knownSourceOrder;
+    int m_imgW = 0; // source width (post-orientation)
+    int m_imgH = 0; // source height (post-orientation)
     int m_previewW = 0;
     int m_previewH = 0;
     qint64 m_fileSize = 0;

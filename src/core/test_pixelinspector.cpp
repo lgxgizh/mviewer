@@ -590,8 +590,7 @@ static void test_computeROIChannelStats16()
     rgb16[(1 * w + 2) * 3 + 2] = 1000;
 
     mviewer::domain::Selection roi{1, 1, 2, 1};
-    const auto stats = mviewer::core::computeROIChannelStats16(
-        rgb16.data(), w, h, 3, 65535, roi);
+    const auto stats = mviewer::core::computeROIChannelStats16(rgb16.data(), w, h, 3, 65535, roi);
 
     CHECK(stats.valid);
     CHECK(stats.pixelCount == 2);
@@ -604,6 +603,46 @@ static void test_computeROIChannelStats16()
     CHECK(std::abs(stats.bOverG - 1.0) < 1e-6);
 }
 
+// Test 2 (preview flicker): a fixed 4:3 EXIF thumb with baked-in black bars
+// for a 3:2 / 16:9 source is center-cropped to the display aspect; matching,
+// unknown, and sideways (failed orientation) thumbs are left alone.
+static void test_embedded_thumb_aspect_crop()
+{
+    QImage barred(160, 120, QImage::Format_RGB32);
+    barred.fill(Qt::black);
+    for (int y = 7; y < 113; ++y)
+        for (int x = 0; x < 160; ++x)
+            barred.setPixel(x, y, qRgb(200, 30, 30));
+
+    const QImage c32 = cropThumbnailToAspect(barred, 6000, 4000);
+    CHECK(c32.width() == 160 && c32.height() == 107);
+    {
+        // The bars are gone except for at most a sub-pixel rounding row.
+        int blackRows = 0;
+        for (int y = 0; y < c32.height(); ++y)
+            if (qRed(c32.pixel(80, y)) < 50)
+                ++blackRows;
+        CHECK(blackRows <= 1);
+    }
+
+    const QImage c169 = cropThumbnailToAspect(barred, 1920, 1080);
+    CHECK(c169.width() == 160 && c169.height() == 90);
+
+    // Same aspect (within 1%): unchanged.
+    CHECK(cropThumbnailToAspect(barred, 4000, 3000).size() == QSize(160, 120));
+    CHECK(cropThumbnailToAspect(barred, 4032, 3000).size() == QSize(160, 120));
+    // Unknown display size: unchanged.
+    CHECK(cropThumbnailToAspect(barred, 0, 0).size() == QSize(160, 120));
+    // Portrait display vs landscape thumb (orientation not applied): the crop
+    // would remove > 30%, so the thumb is left alone rather than mangled.
+    CHECK(cropThumbnailToAspect(barred, 3000, 4000).size() == QSize(160, 120));
+    // Pillarboxed thumb for a narrower source crops columns.
+    QImage wide(160, 90, QImage::Format_RGB32);
+    wide.fill(Qt::black);
+    CHECK(cropThumbnailToAspect(wide, 4000, 3000).size() == QSize(120, 90));
+    CHECK(cropThumbnailToAspect(QImage(), 4000, 3000).isNull());
+}
+
 int main()
 {
     test_color_spaces();
@@ -613,6 +652,7 @@ int main()
     test_color_spaces_16bit();
     test_image_adjustments();
     test_display_orientation_and_alpha();
+    test_embedded_thumb_aspect_crop();
     test_computeROIChannelStats16();
     if (g_failures == 0)
     {

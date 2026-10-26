@@ -1,8 +1,10 @@
 #pragma once
 
 #include <QImage>
+#include <QPainter>
 
 #include <algorithm>
+#include <cmath>
 
 namespace mviewer::ui
 {
@@ -82,6 +84,49 @@ inline QImage photoFromSquareThumb(const QImage &src)
     if (cropped.isNull() || cropped.size() == src.size())
         return src;
     return cropped;
+}
+
+// Fit a provisional photo to the source display aspect (w:h) so it occupies
+// exactly the rect the full image will: a near-match (<= 1.3x off, e.g. a 4:3
+// EXIF thumb with baked-in bars for a 3:2 photo) is center-cropped to fill;
+// a wilder mismatch is centered on a transparent canvas of that aspect rather
+// than stretched. Unknown size or an aspect within 1% returns src unchanged.
+inline QImage fillPhotoToAspect(const QImage &src, int displayW, int displayH)
+{
+    if (src.isNull() || displayW <= 0 || displayH <= 0 || src.width() <= 0 || src.height() <= 0)
+        return src;
+    const double target = static_cast<double>(displayW) / displayH;
+    const double have = static_cast<double>(src.width()) / src.height();
+    const double ratio = have / target;
+    if (std::abs(ratio - 1.0) <= 0.01)
+        return src;
+    constexpr double kMaxCropRatio = 1.3;
+    if (std::max(ratio, 1.0 / ratio) <= kMaxCropRatio)
+    {
+        if (ratio > 1.0)
+        {
+            const int w =
+                std::clamp(static_cast<int>(std::lround(src.height() * target)), 1, src.width());
+            return src.copy((src.width() - w) / 2, 0, w, src.height());
+        }
+        const int h =
+            std::clamp(static_cast<int>(std::lround(src.width() / target)), 1, src.height());
+        return src.copy(0, (src.height() - h) / 2, src.width(), h);
+    }
+    // Pad: canvas keeps the larger source edge so no detail is lost.
+    int cw = src.width();
+    int ch = src.height();
+    if (ratio > 1.0)
+        ch = std::max(1, static_cast<int>(std::lround(cw / target)));
+    else
+        cw = std::max(1, static_cast<int>(std::lround(ch * target)));
+    QImage canvas(cw, ch, QImage::Format_ARGB32_Premultiplied);
+    canvas.fill(Qt::transparent);
+    {
+        QPainter p(&canvas);
+        p.drawImage((cw - src.width()) / 2, (ch - src.height()) / 2, src);
+    }
+    return canvas;
 }
 
 } // namespace mviewer::ui

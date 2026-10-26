@@ -7,6 +7,7 @@
 #include "thumbnailcache.h"
 
 #include "core/image/ExifOrientation.h"
+#include "core/image/ImageFormats.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtMetadataSemantics.h"
 
@@ -43,21 +44,42 @@ QImage orientThumbnail(const QImage &thumb, int orientation)
     return orientThumbnailImage(thumb, orientation);
 }
 
-QImage maybeOrientEmbedded(const QString &sourcePath, const QImage &thumb, int thumbOwnOrientation)
+// Header-only facts about the source file: raw (stored) size and the main
+// IFD orientation. One QImageReader probe serves both the orientation fix-up
+// and the display-aspect crop.
+struct SourceHeader
+{
+    QSize raw;
+    int orientation = 1;
+    QSize display() const
+    {
+        if (!raw.isValid() || raw.width() <= 0 || raw.height() <= 0)
+            return {};
+        return (orientation >= 5 && orientation <= 8) ? raw.transposed() : raw;
+    }
+};
+
+SourceHeader readSourceHeader(const QString &sourcePath)
+{
+    SourceHeader out;
+    QImageReader reader(sourcePath);
+    reader.setAutoTransform(false);
+    out.raw = reader.size();
+    out.orientation = mviewer::core::qtmetadata::orientationFromTransform(reader.transformation());
+    return out;
+}
+
+QImage maybeOrientEmbedded(const SourceHeader &header, const QImage &thumb, int thumbOwnOrientation)
 {
     if (thumb.isNull() || thumbOwnOrientation != 1)
         return thumb;
-    QImageReader reader(sourcePath);
-    reader.setAutoTransform(false);
-    const QSize raw = reader.size();
+    const QSize raw = header.raw;
     if (!raw.isValid() || raw.width() <= 0 || raw.height() <= 0)
         return thumb;
-    const int orientation =
-        mviewer::core::qtmetadata::orientationFromTransform(reader.transformation());
-    if (!mviewer::core::embeddedThumbFollowsRawAspect(orientation, raw.width(), raw.height(),
+    if (!mviewer::core::embeddedThumbFollowsRawAspect(header.orientation, raw.width(), raw.height(),
                                                       thumb.width(), thumb.height()))
         return thumb;
-    return orientThumbnail(thumb, orientation);
+    return orientThumbnail(thumb, header.orientation);
 }
 
 } // namespace
@@ -112,7 +134,17 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
                 // Header-only size + transformation. Apply the main IFD
                 // orientation only when the thumb itself is unrotated and its
                 // aspect still matches the sensor (orientations 5-8).
-                thumb = maybeOrientEmbedded(qp, thumb, thumbOrientation);
+                const SourceHeader header = readSourceHeader(qp);
+                thumb = maybeOrientEmbedded(header, thumb, thumbOrientation);
+                // Strip black bars baked into a fixed-aspect EXIF thumb so the
+                // gallery thumb carries the photo's true display aspect. RAW
+                // headers are not reliable display sizes here; leave RAW thumbs
+                // to the existing orientation-only handling.
+                if (!mviewer::core::isRawPath(path))
+                {
+                    const QSize display = header.display();
+                    thumb = cropThumbnailToAspect(thumb, display.width(), display.height());
+                }
                 mviewer::domain::ImageMetadata meta;
                 const QImage q = mvcore::toDisplayQImage(mvcore::fromQImage(thumb), meta);
                 const QImage fitted = squareFitImage(q.isNull() ? thumb : q, size);
