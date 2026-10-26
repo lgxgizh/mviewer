@@ -1,4 +1,5 @@
 // M56: incremental live-folder application for the Browse gallery.
+#include "browseformats.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 
@@ -92,6 +93,7 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
     QStringList renamedTo;
     applyDirectoryDeltaEntries(delta, next, removedPaths, renamedFrom, renamedTo);
     sortDirectoryDeltaEntries(next);
+    mviewer::browseformats::eraseHiddenEntries(next, m_hiddenFormatGroups);
 
     m_allEntries = std::move(next);
     m_sourceRowByPath.clear();

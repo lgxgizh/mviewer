@@ -150,6 +150,7 @@ void MainWindow::updateNavigationActions()
         QDir parent(activeDir);
         m_actDirUp->setEnabled(hasDirectory && parent.cdUp());
     }
+    updateSecondaryNavButtons();
     if (m_actRefresh)
         m_actRefresh->setEnabled(hasDirectory);
     if (m_actOpenCurrentFolder)
@@ -272,6 +273,11 @@ void MainWindow::pushDirHistory(const QString &dir)
 
 void MainWindow::goDirBack()
 {
+    if (secondaryNavActive())
+    {
+        navigateSecondaryBack();
+        return;
+    }
     if (m_dirHistoryIndex > 0)
     {
         --m_dirHistoryIndex;
@@ -292,6 +298,11 @@ void MainWindow::goDirBack()
 
 void MainWindow::goDirForward()
 {
+    if (secondaryNavActive())
+    {
+        navigateSecondaryForward();
+        return;
+    }
     if (m_dirHistoryIndex < 0 || m_dirHistoryIndex + 1 >= m_dirHistory.size())
         return;
     ++m_dirHistoryIndex;

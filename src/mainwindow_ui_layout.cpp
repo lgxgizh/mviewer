@@ -324,13 +324,15 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
                                              QWidget *advancedFilterPanel,
                                              QHBoxLayout *advancedLayout)
 {
-    // A-2.3: file-type quick filter buttons.
-    auto *typeFilterCombo = new QComboBox(sortBar);
-    typeFilterCombo->setObjectName("typeFilterCombo");
-    applyTypeFilterItems(typeFilterCombo);
-    typeFilterCombo->setToolTip(tr("Filter by file type"));
-
-    advancedLayout->addWidget(typeFilterCombo);
+    // A-2.3: file type filter. Multi-select format groups (RAW unchecked by
+    // default), persisted and shared by both browse panes; the right pane has
+    // an identical combo in its sort row.
+    m_typeFilterCombo = new FormatFilterCombo(sortBar);
+    m_typeFilterCombo->setObjectName(QStringLiteral("typeFilterCombo"));
+    m_typeFilterCombo->setHiddenGroups(m_hiddenFormatGroups);
+    connect(m_typeFilterCombo, &FormatFilterCombo::hiddenGroupsChanged, this,
+            &MainWindow::setBrowseHiddenFormatGroups);
+    sortLayout->addWidget(m_typeFilterCombo);
     auto *advancedFilterToggle = new QPushButton(tr("Advanced Filter"), sortBar);
     advancedFilterToggle->setObjectName("advancedFilterToggle");
     advancedFilterToggle->setCheckable(true);
@@ -381,16 +383,11 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     connect(tagEdit, &QLineEdit::textChanged, this,
             [this](const QString &t) { m_thumbnailPanel->setTagFilter(t); });
 
-    connect(typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this, typeFilterCombo]()
-            {
-                if (m_thumbnailPanel)
-                    m_thumbnailPanel->setTypeFilter(typeFilterCombo->currentData().toString());
-            });
+    // Clear Filters resets the transient filters only; the file type set is
+    // a persisted browse preference (RAW hidden by default) and stays.
     connect(clearFilters, &QPushButton::clicked, this,
-            [typeFilterCombo, camEdit, lensEdit, isoSpin, tagEdit, this]()
+            [camEdit, lensEdit, isoSpin, tagEdit, this]()
             {
-                typeFilterCombo->setCurrentIndex(0);
                 camEdit->clear();
                 lensEdit->clear();
                 isoSpin->setValue(0);
@@ -491,9 +488,10 @@ QWidget *MainWindow::buildGalleryPanel()
     m_thumbnailPanel->setPaneSlot(SelectionModel::PaneSlot::Primary);
     connect(m_thumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
-    placeGalleryCompareButton(sortBar);
+    m_thumbnailPanel->setHiddenFormatGroups(m_hiddenFormatGroups);
     m_thumbnailPanel->setCommandStack(&m_cmdStack);
     m_thumbnailPanel->setSelectionModel(m_selection);
+    placeGalleryCompareButton(sortBar);
     m_thumbnailPanel->installEventFilter(this);
     if (m_thumbnailPanel->viewport())
         m_thumbnailPanel->viewport()->installEventFilter(this);

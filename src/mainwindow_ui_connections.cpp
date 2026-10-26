@@ -378,6 +378,11 @@ void MainWindow::connectMenuSignals()
     connect(m_actDirUp, &QAction::triggered, this,
             [this]()
             {
+                if (secondaryNavActive())
+                {
+                    navigateSecondaryUp();
+                    return;
+                }
                 QDir parent(currentDir());
                 if (!currentDir().isEmpty() && parent.cdUp())
                     changeDirectory(parent.absolutePath());

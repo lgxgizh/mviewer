@@ -2,6 +2,7 @@
 // (M20 P0#3). M25: metadata indexing moved off the UI thread into the shared
 // MetadataIndexer; Camera/Lens filters are field-scoped; sort keys are
 // computed once per file and compared in pure memory.
+#include "browseformats.h"
 #include "thumbnailpanel_p.h"
 
 #include "core/image/ImageFormats.h"
@@ -47,6 +48,27 @@ bool ThumbnailPanel::hasActiveBrowseFilter() const
            m_labelFilter != 0 || m_rejectFilter || m_pickFilter || m_recentFilter ||
            !m_cameraFilter.isEmpty() || !m_lensFilter.isEmpty() || m_isoFilter > 0 ||
            !m_tagFilter.isEmpty();
+}
+
+void ThumbnailPanel::setHiddenFormatGroups(const QStringList &groups)
+{
+    if (m_hiddenFormatGroups == groups)
+        return;
+    m_hiddenFormatGroups = groups;
+    if (m_currentDir.isEmpty())
+        return;
+    // Hidden formats are dropped where entries enter the source list, so a
+    // change needs a rescan. setDirectory() resets the text search; restore it.
+    const QString text = m_filterText;
+    const bool recursive = m_filterRecursive;
+    refresh();
+    if (!text.trimmed().isEmpty())
+        setFilter(text, recursive);
+}
+
+QStringList ThumbnailPanel::hiddenFormatGroups() const
+{
+    return m_hiddenFormatGroups;
 }
 
 void ThumbnailPanel::setTypeFilter(const QString &types)
@@ -541,6 +563,9 @@ bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
                                                   if (gen != panel->m_dirGen)
                                                       return;
                                                   panel->m_recursiveHits = found;
+                                                  mviewer::browseformats::eraseHiddenEntries(
+                                                      panel->m_recursiveHits,
+                                                      panel->m_hiddenFormatGroups);
                                                   panel->m_recursiveHitsFor = t;
                                                   panel->applyFilter();
                                               });

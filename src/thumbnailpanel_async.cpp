@@ -3,6 +3,7 @@
 // refcount and the deterministic scan-iteration probe live here so the core
 // thumbnailpanel.cpp stays under the 800-line guard while the cooperative
 // supersession/cancellation machinery stays cohesive.
+#include "browseformats.h"
 #include "thumbnailpanel_p.h"
 
 #include "core/image/ImageFormats.h"
@@ -396,11 +397,15 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
         });
 }
 
-void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
+void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &scanned)
 {
-    if (gen != m_dirGen || batch.isEmpty())
+    if (gen != m_dirGen || scanned.isEmpty())
         return;
     noteScanProgress(gen);
+    QList<Entry> batch = scanned;
+    mviewer::browseformats::eraseHiddenEntries(batch, m_hiddenFormatGroups);
+    if (batch.isEmpty())
+        return;
 
     const int sourceRow = m_allEntries.size();
     m_allEntries.append(batch);
@@ -455,6 +460,7 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     m_scanComplete = true;
     m_scanStallAnnounced = false;
     m_allEntries = entries;
+    mviewer::browseformats::eraseHiddenEntries(m_allEntries, m_hiddenFormatGroups);
     m_sourceRowByPath.clear();
     m_sourceRowByPath.reserve(m_allEntries.size());
     for (int i = 0; i < m_allEntries.size(); ++i)

@@ -44,6 +44,7 @@ class BatchDialog;
 class PluginSettings;
 class PreferencesDialog;
 class AnalysisOverlayDialog;
+class FormatFilterCombo;
 class QAction;
 class QMenu;
 class QMenuBar;
@@ -101,6 +102,10 @@ class MainWindow : public QMainWindow
     }
     void toggleSplitBrowse(bool enabled);
     void openRightDirectory(const QString &dir);
+    // Browse file type filter (browseformats.h group ids), persisted and
+    // applied to both panes; both type combos stay in sync.
+    void setBrowseHiddenFormatGroups(const QStringList &groups);
+    QStringList browseHiddenFormatGroups() const;
     void swapBrowsePanes();
     void cloneLeftToRightPane();
     void setActiveBrowsePane(SelectionModel::PaneSlot pane);
@@ -168,13 +173,14 @@ class MainWindow : public QMainWindow
     void installNavigationCollapse();
     void polishGalleryToolbar(QWidget *sortBar);
     void placeGalleryCompareButton(QWidget *sortBar);
+    void dockCompareButton(ThumbnailPanel *panel, QWidget *host, QHBoxLayout *row, QWidget *after);
     QWidget *buildNavigationPanel();
     QWidget *buildGalleryPanel();
     QWidget *buildSecondaryBrowsePane();
     QWidget *buildSecondaryHeaderBar(QWidget *pane);
     void wireSecondaryPanelSignals();
     void wireSecondaryBrowseHostSignals();
-    void buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout);
+    QHBoxLayout *buildSecondarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout);
     void applyGallerySplitterSizes();
     void updateActivePaneIndicator();
     void updateSwapButtonEnabled();
@@ -187,6 +193,9 @@ class MainWindow : public QMainWindow
     void navigateSecondaryForward();
     void navigateSecondaryUp();
     void updateSecondaryNavButtons();
+    // Split browse with the right pane active: the toolbar's back / forward /
+    // up (and their shortcuts) act on the right pane's history.
+    bool secondaryNavActive() const;
     bool routeSecondaryBrowseKey(QObject *watched, QEvent *event);
     bool routeDirectoryHistoryMouse(QObject *watched, QEvent *event);
     bool secondaryBrowseOwns(QObject *watched) const;
@@ -217,7 +226,6 @@ class MainWindow : public QMainWindow
                              QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout);
     void applySortComboItems(QComboBox *combo);
     void applyViewModeComboItems(QComboBox *combo);
-    void applyTypeFilterItems(QComboBox *combo);
     void applyRatingFilterItems(QComboBox *combo);
     void applyFlagFilterItems(QComboBox *combo);
     QString sortDirectionToolTip(bool detailed) const;
@@ -360,9 +368,9 @@ class MainWindow : public QMainWindow
     QWidget *m_primaryBrowsePane = nullptr;
     QWidget *m_secondaryBrowsePane = nullptr;
     QLineEdit *m_secondaryPathEdit = nullptr;
-    QPushButton *m_secondaryDirBackBtn = nullptr;
-    QPushButton *m_secondaryDirForwardBtn = nullptr;
-    QPushButton *m_secondaryDirUpBtn = nullptr;
+    FormatFilterCombo *m_typeFilterCombo = nullptr;
+    FormatFilterCombo *m_secondaryTypeFilterCombo = nullptr;
+    QStringList m_hiddenFormatGroups;
     QPushButton *m_secondaryBrowseBtn = nullptr;
     QPushButton *m_secondaryCloneBtn = nullptr;
     QPushButton *m_secondarySwapBtn = nullptr;

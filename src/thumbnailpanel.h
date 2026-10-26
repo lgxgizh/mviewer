@@ -267,9 +267,14 @@ class ThumbnailPanel : public QListView
         captureScrollAnchor(anchorPath, anchorOffset);
     }
 
-    // Paths of the currently selected gallery rows (in model order). Public:
-    // MainWindow and acceptance tests consume the selection.
+    // Selected rows in model order (MainWindow and acceptance tests read it).
     QStringList selectedPaths() const;
+    // Compare set: the cross-pane union in split browse, else selectedPaths().
+    QStringList compareSelection() const;
+    void refreshCompareButton();
+    // Hidden browse format groups (browseformats.h ids, e.g. "raw"); rescans.
+    void setHiddenFormatGroups(const QStringList &groups);
+    QStringList hiddenFormatGroups() const;
 
   private:
     // M46 async-scan internals (defined in thumbnailpanel_async.cpp):
@@ -334,9 +339,7 @@ class ThumbnailPanel : public QListView
     void batchSetFlagSelected(bool reject, bool pick);
     void populateRatingContextMenu(QMenu *menu);
 
-    // A-10: reversible file ops via CommandStack. When set, rename/delete/move
-    // go through the stack so Ctrl+Z can reverse them. When null, falls back
-    // to the irreversible direct path (tests / headless).
+    // A-10: reversible file ops via CommandStack (null = direct, irreversible).
     void setCommandStack(class CommandStack *stack)
     {
         m_cmdStack = stack;
@@ -591,6 +594,7 @@ class ThumbnailPanel : public QListView
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter
+    QStringList m_hiddenFormatGroups;
     ViewMode m_viewMode = Thumbnail;
     int m_thumbSize = kDefaultThumbSize;     // M15: dynamic thumb size
     int m_gridThumbSize = kDefaultThumbSize; // Last user-selected standard grid size.
