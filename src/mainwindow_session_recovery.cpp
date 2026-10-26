@@ -100,7 +100,11 @@ void MainWindow::restoreLastSession()
             changeDirectory(dir);
             if (m_appState.splitBrowseEnabled)
             {
+                // Restore the saved right pane (folder, sort, scroll) instead
+                // of mirroring the left one like an interactive split does.
+                m_splitRestoringSession = true;
                 toggleSplitBrowse(true);
+                m_splitRestoringSession = false;
                 applyGallerySplitterSizes();
             }
 
