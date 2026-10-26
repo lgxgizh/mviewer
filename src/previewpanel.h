@@ -113,6 +113,11 @@ class PreviewPanel : public QWidget
         return m_frameSize;
     }
 
+    // Source display size (post-orientation) this panel has learned for
+    // path: the presented image's, else one remembered from an earlier
+    // delivery. Invalid when unknown. No file I/O.
+    QSize rememberedSourceSize(const QString &path) const;
+
     // Test hooks. Number of frame-aspect changes since construction; a
     // device-pixel-ratio override (<= 0 uses the widget's own); the fitted
     // pixmap actually painted; and whether a stage cross-fade is running.

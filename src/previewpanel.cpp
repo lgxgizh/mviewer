@@ -117,6 +117,19 @@ QSize PreviewPanel::resolveSourceSize(const QString &path, const QSize &knownSou
     return {};
 }
 
+QSize PreviewPanel::rememberedSourceSize(const QString &path) const
+{
+    if (path.isEmpty())
+        return {};
+    if (path == m_presentedPath)
+    {
+        const QSize presented = sourceImageSize();
+        if (validSize(presented))
+            return presented;
+    }
+    return resolveSourceSize(path, QSize());
+}
+
 void PreviewPanel::rememberSource(const QString &path, const QSize &size,
                                   const std::string &previewKey)
 {

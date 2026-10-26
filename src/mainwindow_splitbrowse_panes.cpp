@@ -513,8 +513,8 @@ void MainWindow::onImageOpenFromPanel(const QString &path, ThumbnailPanel *sourc
             if (const auto *entry = panel->entryForPath(path))
                 knownSize = QSize(entry->width, entry->height);
         }
-        if (!knownSize.isValid() && m_previewPanel && m_previewPanel->presentedPath() == path)
-            knownSize = m_previewPanel->sourceImageSize();
+        if (!knownSize.isValid() && m_previewPanel)
+            knownSize = m_previewPanel->rememberedSourceSize(path);
 
         if (!warm.isNull())
             m_imageViewer->setProvisionalImage(path, warm.toImage(), knownSize);

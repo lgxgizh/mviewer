@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -619,6 +620,97 @@ void testPreviewWrongShapePlaceholder()
     cleanupPreviewFixture(dir);
 }
 
+// ─── 4f. P6: centre viewer provisional keeps the full image's geometry ─────
+QRect fullImageScreenRect(const ImageViewer &viewer, const QSize &source)
+{
+    int sx = 0;
+    int sy = 0;
+    int sw = 0;
+    int sh = 0;
+    viewer.viewTransform().imageRectToScreen(0, 0, source.width(), source.height(), sx, sy, sw, sh);
+    return {sx, sy, sw, sh};
+}
+
+void testViewerProvisionalStableGeometry()
+{
+    printf("\n[4f. viewer provisional: no bars, same rect as the full image]\n");
+    fflush(stdout);
+    const QString dir = previewFixtureDir("viewer_prov");
+    const QString photo = makeSolidImage(dir, "photo_3x2.png", 300, 200, qRgb(200, 30, 30));
+    const QString other = makeSolidImage(dir, "other_2x3.png", 200, 300, qRgb(30, 30, 200));
+
+    // 160x120 EXIF-style thumb of a 3:2 photo: 3:2 content inside black bars.
+    QImage barred(160, 120, QImage::Format_RGB32);
+    barred.fill(Qt::black);
+    for (int y = 6; y < 113; ++y)
+    {
+        QRgb *row = reinterpret_cast<QRgb *>(barred.scanLine(y));
+        for (int x = 0; x < 160; ++x)
+            row[x] = qRgb(200, 30, 30);
+    }
+
+    ImageViewer viewer;
+    viewer.resize(640, 480);
+    viewer.show();
+    pump(30);
+
+    // Rapid A -> B -> A warm thumbs, then the real load of A.
+    viewer.setProvisionalImage(photo, barred, QSize(300, 200));
+    viewer.setProvisionalImage(other, solidPixmap(107, 160, qRgb(30, 30, 200)).toImage(),
+                               QSize(200, 300));
+    viewer.setProvisionalImage(photo, barred, QSize(300, 200));
+
+    const QImage shown = viewer.provisionalImageForTest();
+    CHECK(!shown.isNull() &&
+              std::abs(static_cast<double>(shown.width()) / shown.height() - 1.5) < 0.03,
+          "PASS provisional pixels are cropped to the source 3:2 aspect");
+    CHECK(!shown.isNull() && qRed(shown.pixel(shown.width() / 2, 0)) > 140 &&
+              qRed(shown.pixel(shown.width() / 2, shown.height() - 1)) > 140,
+          "PASS provisional shows no baked-in black bars");
+    const QRect provisionalRect = viewer.provisionalScreenRect();
+    CHECK(provisionalRect.width() > provisionalRect.height() && provisionalRect.width() > 0,
+          "PASS provisional rect follows the known 3:2 source");
+
+    viewer.setImage(photo);
+    const bool loaded = waitFor(
+        [&]
+        {
+            const auto frame = viewer.frame();
+            return frame && frame->isValid() && frame->width() == 300 && frame->height() == 200;
+        },
+        20000);
+    CHECK(loaded, "PASS full image of A arrives (stale B never wins)");
+    pump(50);
+    const QRect fullRect = fullImageScreenRect(viewer, QSize(300, 200));
+    CHECK(qAbs(fullRect.x() - provisionalRect.x()) <= 1 &&
+              qAbs(fullRect.y() - provisionalRect.y()) <= 1 &&
+              qAbs(fullRect.width() - provisionalRect.width()) <= 1 &&
+              qAbs(fullRect.height() - provisionalRect.height()) <= 1,
+          "PASS full image lands in exactly the provisional rect (no small-then-big)");
+
+    // A late warm thumb for the image already shown sharp is stale.
+    const double scale = viewer.viewTransform().scale;
+    const qint64 provisionalBefore = viewer.provisionalImageForTest().cacheKey();
+    viewer.setProvisionalImage(photo, solidPixmap(160, 120, qRgb(200, 30, 30)).toImage(), QSize());
+    CHECK(viewer.provisionalImageForTest().cacheKey() == provisionalBefore,
+          "PASS late same-path warm thumb is ignored once the full image is shown");
+    CHECK(std::abs(viewer.viewTransform().scale - scale) < 1e-9,
+          "PASS late warm thumb does not re-fit the sharp image");
+
+    // A wildly wrong-shaped thumb is centered, never stretched.
+    viewer.setProvisionalImage(other, solidPixmap(160, 40, qRgb(30, 30, 200)).toImage(),
+                               QSize(200, 300));
+    const QImage padded = viewer.provisionalImageForTest();
+    CHECK(!padded.isNull() &&
+              std::abs(static_cast<double>(padded.width()) / padded.height() - 2.0 / 3.0) < 0.03,
+          "PASS wrong-shape thumb is placed on a canvas of the source aspect");
+    CHECK(!padded.isNull() && qAlpha(padded.pixel(0, 0)) == 0,
+          "PASS wrong-shape thumb is padded transparently, not stretched");
+
+    viewer.close();
+    cleanupPreviewFixture(dir);
+}
+
 void testRejectionReachesTerminalState()
 {
     printf("\n[4. rejected requests reach a terminal UI state]\n");
@@ -825,6 +917,7 @@ int main(int argc, char **argv)
     testPreviewStableFrame();
     testPreviewRapidSwitchAndCache();
     testPreviewWrongShapePlaceholder();
+    testViewerProvisionalStableGeometry();
     testPreviewUILatency24MP();
     testViewerUILatency24MP();
 
