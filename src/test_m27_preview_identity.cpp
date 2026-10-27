@@ -16,8 +16,11 @@
 #include <QImage>
 #include <QPixmap>
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <memory>
+#include <thread>
 
 namespace
 {
@@ -155,8 +158,19 @@ void testSmallThumbnailDeferral()
 {
     printf("\n[4h. small thumbnail is deferred while the sharp decode runs]\n");
     fflush(stdout);
+    // A paused pool rejects submits (no decode pending, nothing to wait for),
+    // so hold the single Decode worker with a blocker instead: the panel's
+    // sharp decodes stay queued while the checks run.
     auto &sched = TaskScheduler::instance();
-    sched.pause(PoolType::DecodePool);
+    sched.setQueueMaxThreads(TaskScheduler::Priority::Decode, 1);
+    auto release = std::make_shared<std::atomic<bool>>(false);
+    auto blocker = sched.submit(TaskScheduler::Priority::Decode,
+                                [release](const TaskScheduler::TaskContext &)
+                                {
+                                    for (int i = 0; i < 2000 && !release->load(); ++i)
+                                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                                });
+    pump(20);
     {
         PreviewPanel panel;
         panel.resize(kPanelW, kPanelH);
@@ -192,8 +206,11 @@ void testSmallThumbnailDeferral()
         panel.setImage(a, solidPixmap(240, 160, qRgb(10, 10, 10)), QSize(3000, 2000));
         CHECK(panel.presentedPath() == a && panel.presentationQuality() == Quality::Thumbnail,
               "PASS a sharp-enough thumbnail is shown at once");
+        release->store(true);
+        sched.drain(PoolType::DecodePool, std::chrono::seconds(15));
+        pump(50);
     }
-    sched.resume(PoolType::DecodePool);
+    (void)blocker; // main() restores the pool width at the end of the run
     sched.drain(PoolType::DecodePool, std::chrono::seconds(15));
     pump(50);
 }
