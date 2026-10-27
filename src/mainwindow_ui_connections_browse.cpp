@@ -173,21 +173,22 @@ void MainWindow::connectGallerySignals()
                 m_selection->setCurrentImage(first);
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::currentThumbnailReady, this,
-            [this](const QString &path)
-            {
-                if (!m_previewPanel || !m_thumbnailPanel || !m_selection ||
-                    m_selection->currentImage() != path)
-                    return;
-                const QPixmap warm = m_thumbnailPanel->thumbReady(path);
-                if (warm.isNull())
-                    return;
-                QSize knownSourceSize;
-                qint64 knownFileSize = -1;
-                if (const auto *entry = m_thumbnailPanel->entryForPath(path))
-                {
-                    knownSourceSize = QSize(entry->width, entry->height);
-                    knownFileSize = entry->size;
-                }
-                m_previewPanel->offerWarmThumbnail(path, warm, knownSourceSize, knownFileSize);
-            });
+            [this](const QString &path) { onPanelThumbnailReady(m_thumbnailPanel, path); });
+}
+
+void MainWindow::onPanelThumbnailReady(ThumbnailPanel *panel, const QString &path)
+{
+    if (!panel || !m_previewPanel || !m_selection || m_selection->currentImage() != path)
+        return;
+    const QPixmap warm = panel->thumbReady(path);
+    if (warm.isNull())
+        return;
+    qint64 knownFileSize = -1;
+    const QSize knownSourceSize = knownSourceSizeFor(panel, path, &knownFileSize);
+    m_previewPanel->offerWarmThumbnail(path, warm, knownSourceSize, knownFileSize);
+    // The viewer only takes it for the path it is loading; setProvisionalImage
+    // itself ignores a thumbnail once the sharp image is on screen.
+    if (m_imageViewer && !m_imageViewer->isHidden() &&
+        ImageViewer::browsePathEquals(m_imageViewer->currentPath(), path))
+        m_imageViewer->setProvisionalImage(path, warm.toImage(), knownSourceSize);
 }

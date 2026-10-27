@@ -12,9 +12,14 @@
 #include "core/image/QtMetadataSemantics.h"
 
 #include <QBuffer>
+#include <QHash>
 #include <QImage>
 #include <QImageReader>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QPainter>
+
+#include <deque>
 
 namespace
 {
@@ -82,7 +87,65 @@ QImage maybeOrientEmbedded(const SourceHeader &header, const QImage &thumb, int 
     return orientThumbnail(thumb, header.orientation);
 }
 
+// Bounded path -> display-size memory filled by produce() on the worker.
+struct SourceSizeMemory
+{
+    static constexpr int kCap = 8192;
+    QMutex mutex;
+    QHash<QString, QSize> sizes;
+    std::deque<QString> order;
+};
+
+SourceSizeMemory &sourceSizeMemory()
+{
+    static SourceSizeMemory memory;
+    return memory;
+}
+
+bool usableSize(const QSize &s)
+{
+    return s.isValid() && s.width() > 0 && s.height() > 0;
+}
+
+// A disk-cache hit never decoded the source. Recover its display size with
+// a header-only probe, except on UNC/SMB paths where the extra round trip
+// would compete with first paint.
+bool cheapHeaderProbe(const QString &path)
+{
+    return !path.startsWith(QLatin1String("//")) && !path.startsWith(QLatin1String("\\\\"));
+}
+
 } // namespace
+
+QSize ThumbnailProvider::knownSourceSize(const QString &path)
+{
+    if (path.isEmpty())
+        return {};
+    SourceSizeMemory &memory = sourceSizeMemory();
+    QMutexLocker lock(&memory.mutex);
+    return memory.sizes.value(path);
+}
+
+void ThumbnailProvider::rememberSourceSize(const QString &path, const QSize &displaySize)
+{
+    if (path.isEmpty() || !usableSize(displaySize))
+        return;
+    SourceSizeMemory &memory = sourceSizeMemory();
+    QMutexLocker lock(&memory.mutex);
+    auto it = memory.sizes.find(path);
+    if (it != memory.sizes.end())
+    {
+        *it = displaySize;
+        return;
+    }
+    memory.sizes.insert(path, displaySize);
+    memory.order.push_back(path);
+    while (static_cast<int>(memory.order.size()) > SourceSizeMemory::kCap)
+    {
+        memory.sizes.remove(memory.order.front());
+        memory.order.pop_front();
+    }
+}
 
 QImage ThumbnailProvider::squareFitImage(const QImage &q, int size)
 {
@@ -117,8 +180,13 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
         return {};
     const QString qp = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImage cached;
+    const bool raw = mviewer::core::isRawPath(path);
     if (ThumbnailCache::instance().get(qp, size, cached))
+    {
+        if (!raw && cheapHeaderProbe(qp) && !usableSize(knownSourceSize(qp)))
+            rememberSourceSize(qp, readSourceHeader(qp).display());
         return mvcore::fromQImage(cached);
+    }
 
     // Fast path: attempt embedded EXIF thumbnail extraction for JPEG/TIFF/RAW
     const std::vector<uint8_t> exifThumb =
@@ -140,9 +208,10 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
                 // gallery thumb carries the photo's true display aspect. RAW
                 // headers are not reliable display sizes here; leave RAW thumbs
                 // to the existing orientation-only handling.
-                if (!mviewer::core::isRawPath(path))
+                if (!raw)
                 {
                     const QSize display = header.display();
+                    rememberSourceSize(qp, display);
                     thumb = cropThumbnailToAspect(thumb, display.width(), display.height());
                 }
                 mviewer::domain::ImageMetadata meta;
@@ -161,6 +230,9 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
     const ImageData decoded = Decoder::decodeScaled(path, size, meta);
     if (decoded.isNull())
         return {};
+    // The scaled decode reports the source display size (post-orientation).
+    if (!raw)
+        rememberSourceSize(qp, QSize(meta.width, meta.height));
     const QImage q = mvcore::toDisplayQImage(decoded, meta);
     if (q.isNull())
         return {};
@@ -177,7 +249,12 @@ void ThumbnailProvider::invalidateSource(const std::string &path)
 {
     if (path.empty())
         return;
-    ThumbnailCache::instance().invalidatePath(
-        QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    const QString qp = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
+    {
+        SourceSizeMemory &memory = sourceSizeMemory();
+        QMutexLocker lock(&memory.mutex);
+        memory.sizes.remove(qp);
+    }
+    ThumbnailCache::instance().invalidatePath(qp);
     mviewer::application::ImageLoadingService::instance().invalidateSource(path);
 }

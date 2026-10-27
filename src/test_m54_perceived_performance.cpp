@@ -454,8 +454,11 @@ void testViewportLatestWins()
 
 void testWarmPreviewSurvivesSharpDecode(const QString &seed)
 {
+    // The thumb must be at least half the frame's long edge: a smaller one is
+    // (by design) held back for the identity grace while the sharp decode runs.
     PreviewPanel preview;
-    QImage image(8, 4, QImage::Format_RGB32);
+    preview.resize(320, 260);
+    QImage image(160, 160, QImage::Format_RGB32);
     image.fill(qRgb(20, 40, 60));
     const QPixmap warm = QPixmap::fromImage(image);
     preview.offerWarmThumbnail(seed, warm, QSize(2, 2), 10);

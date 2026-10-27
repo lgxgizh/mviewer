@@ -274,6 +274,13 @@ class MainWindow : public QMainWindow
     void onBreadcrumbPath(const QString &path);
     // P0-2: central handler that keeps every view synced with the current image.
     void onCurrentImageChanged(const QString &path);
+    // A gallery thumbnail landed after the selection moved to `path`: offer it
+    // to the preview panel and (when on screen) the viewer as provisional.
+    void onPanelThumbnailReady(ThumbnailPanel *panel, const QString &path);
+    // Source display size / file size known for `path` without file I/O: the
+    // gallery entry, else the size the thumbnail provider learned.
+    static QSize knownSourceSizeFor(const ThumbnailPanel *panel, const QString &path,
+                                    qint64 *fileSize);
     // P1-8: keyboard-shortcut cheat-sheet dialog (F1 / Help menu).
     void showShortcutsHelp();
     void showUserGuide();

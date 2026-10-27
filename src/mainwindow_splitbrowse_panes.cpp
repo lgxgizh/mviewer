@@ -543,6 +543,9 @@ void MainWindow::wireSecondaryBrowseHostSignals()
 
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
             [this](const QString &path) { onImageOpenFromPanel(path, m_secondaryThumbnailPanel); });
+    connect(m_secondaryThumbnailPanel, &ThumbnailPanel::currentThumbnailReady, this,
+            [this](const QString &path)
+            { onPanelThumbnailReady(m_secondaryThumbnailPanel, path); });
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::compareRequested, this,
             [this](const QStringList &images) { openCompare(images); });
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,

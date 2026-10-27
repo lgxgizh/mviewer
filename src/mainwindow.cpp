@@ -5,6 +5,7 @@
 #include "core/image/decoder/RawDecodePlan.h"
 #include "naturalnameorder.h"
 #include "runtime_storage.h"
+#include "thumbnailprovider.h"
 #include <QCoreApplication>
 
 namespace
@@ -538,6 +539,23 @@ void MainWindow::onImageOpen(const QString &path)
     onImageOpenFromPanel(path, qobject_cast<ThumbnailPanel *>(sender()));
 }
 
+QSize MainWindow::knownSourceSizeFor(const ThumbnailPanel *panel, const QString &path,
+                                     qint64 *fileSize)
+{
+    QSize size;
+    if (fileSize)
+        *fileSize = -1;
+    if (const auto *entry = panel ? panel->entryForPath(path) : nullptr)
+    {
+        size = QSize(entry->width, entry->height);
+        if (fileSize)
+            *fileSize = entry->size;
+    }
+    if (size.width() <= 0 || size.height() <= 0)
+        size = ThumbnailProvider::knownSourceSize(path);
+    return size;
+}
+
 void MainWindow::onCurrentImageChanged(const QString &path)
 {
     // P0-2 / M19: the ONE place that fans the current-image change out to every
@@ -547,19 +565,14 @@ void MainWindow::onCurrentImageChanged(const QString &path)
 
     ThumbnailPanel *sourcePanel = thumbnailPanelForPath(path, activeThumbnailPanel());
     const QPixmap warmThumbnail = sourcePanel ? sourcePanel->thumbReady(path) : QPixmap();
-    QSize knownSourceSize;
     qint64 knownFileSize = -1;
-    if (sourcePanel)
-    {
-        if (const auto *entry = sourcePanel->entryForPath(path))
-        {
-            knownSourceSize = QSize(entry->width, entry->height);
-            knownFileSize = entry->size;
-        }
-    }
+    const QSize knownSourceSize = knownSourceSizeFor(sourcePanel, path, &knownFileSize);
     m_previewPanel->setImage(path, warmThumbnail, knownSourceSize, knownFileSize);
     // Only decode into the viewer when it is actually on screen — avoids a
     // second decode per thumbnail while browsing with the viewer closed.
+    // Without a warm thumbnail the viewer keeps the previous photo for at
+    // most a short grace period, then shows a neutral loading state; a late
+    // gallery thumbnail is routed in by onPanelThumbnailReady().
     if (!m_imageViewer->isHidden())
     {
         if (!warmThumbnail.isNull())

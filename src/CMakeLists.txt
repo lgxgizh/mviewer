@@ -250,6 +250,7 @@ add_library(mviewer_ui STATIC
     thumbnailprovider.cpp
     display/DisplayColorContextProvider.cpp
     previewpanel.cpp
+    previewpanel_paint.cpp
     thumbnailcache.cpp
     compareworkspace.cpp
     compareworkspace_display_planner.cpp
@@ -1791,6 +1792,7 @@ set_tests_properties(teardown_stress_tests PROPERTIES RUN_SERIAL TRUE)
 add_executable(m27_lifetime_tests
     test_m27_lifetime.cpp
     test_m27_preview_frame.cpp
+    test_m27_preview_identity.cpp
 )
 target_link_libraries(m27_lifetime_tests
     PRIVATE

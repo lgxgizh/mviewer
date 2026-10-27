@@ -18,6 +18,7 @@
 #include <QPointer>
 #include <QResizeEvent>
 #include <QSize>
+#include <QTimer>
 #include <QVariantAnimation>
 #include <algorithm>
 #include <cmath>
@@ -31,10 +32,6 @@ constexpr int kStageTransitionMs = 110;
 // A new stage for the same path keeps the current frame unless its source
 // aspect differs by more than this (rounding / crop noise is not a change).
 constexpr double kFrameAspectTolerance = 0.015;
-// Beyond this pixmap-vs-frame aspect mismatch a stage is fitted (letterboxed
-// on the well) instead of center-cropped, so a sideways placeholder is never
-// reduced to a thin slice.
-constexpr double kMaxCropAspectRatio = 1.3;
 
 bool validSize(const QSize &s)
 {
@@ -70,11 +67,17 @@ PreviewPanel::PreviewPanel(QWidget *parent) : QWidget(parent)
                 m_transitionT = 1.0;
                 update();
             });
+    m_graceTimer = new QTimer(this);
+    m_graceTimer->setSingleShot(true);
+    m_graceTimer->setInterval(kIdentityGraceMs);
+    connect(m_graceTimer, &QTimer::timeout, this, &PreviewPanel::onIdentityGraceExpired);
 }
 
 PreviewPanel::~PreviewPanel()
 {
     m_lifetime->invalidate();
+    if (m_graceTimer)
+        m_graceTimer->stop();
     if (m_transition)
     {
         m_transition->disconnect(this);
@@ -86,7 +89,7 @@ PreviewPanel::~PreviewPanel()
 void PreviewPanel::setDevicePixelRatioForTest(qreal dpr)
 {
     m_dprOverride = dpr;
-    if (m_hasImage)
+    if (m_hasImage || m_quality == PresentationQuality::Placeholder)
         rebuild();
     update();
 }
@@ -94,6 +97,11 @@ void PreviewPanel::setDevicePixelRatioForTest(qreal dpr)
 bool PreviewPanel::isTransitioningForTest() const
 {
     return transitionRunning();
+}
+
+bool PreviewPanel::identityGracePendingForTest() const
+{
+    return m_graceTimer && m_graceTimer->isActive();
 }
 
 bool PreviewPanel::transitionRunning() const
@@ -152,7 +160,7 @@ void PreviewPanel::rememberSource(const QString &path, const QSize &size,
     }
 }
 
-bool PreviewPanel::applyFrameAspect(double aspect, bool samePath)
+bool PreviewPanel::applyFrameAspect(double aspect, bool samePath, bool approximate)
 {
     if (!(aspect > 0.0) || !std::isfinite(aspect))
         return false;
@@ -160,7 +168,10 @@ bool PreviewPanel::applyFrameAspect(double aspect, bool samePath)
     {
         if (aspect == m_frameAspect)
             return false;
-        if (samePath && std::abs(aspect / m_frameAspect - 1.0) < kFrameAspectTolerance)
+        // A thumbnail-derived aspect is only an estimate: within tolerance it
+        // keeps the current frame even across a path change.
+        if ((samePath || approximate) &&
+            std::abs(aspect / m_frameAspect - 1.0) < kFrameAspectTolerance)
             return false;
     }
     m_frameAspect = aspect;
@@ -331,8 +342,16 @@ PreviewDecodeResult loadPreviewPixels(const std::string &stdPath, int knownW, in
 
 } // namespace
 
+void PreviewPanel::resetStats()
+{
+    m_statsKnown = false;
+    m_lumMean = 0.0;
+    m_rMean = m_gMean = m_bMean = 0;
+}
+
 void PreviewPanel::clearPreview()
 {
+    stopIdentityGrace();
     m_presentedPath.clear();
     m_quality = PresentationQuality::None;
     m_preview = QPixmap();
@@ -351,9 +370,113 @@ void PreviewPanel::clearPreview()
     m_fileSize = 0;
     m_sourceDimensionsKnown = false;
     m_fileSizeKnown = false;
-    m_lumMean = 0.0;
-    m_rMean = m_gMean = m_bMean = 0;
+    resetStats();
     update();
+}
+
+void PreviewPanel::presentPlaceholder(const QString &path, const QSize &sourceSize,
+                                      qint64 knownFileSize)
+{
+    // Identity first: the new name in an empty well. The frame keeps the
+    // previous shape unless this path's true source aspect is known.
+    beginStageTransition(false);
+    if (m_presentedPath != path)
+        resetStats();
+    m_presentedPath = path;
+    m_quality = PresentationQuality::Placeholder;
+    m_preview = QPixmap();
+    m_scaled = QPixmap();
+    m_hasImage = false;
+    m_previewW = 0;
+    m_previewH = 0;
+    m_sourceDimensionsKnown = validSize(sourceSize);
+    m_imgW = m_sourceDimensionsKnown ? sourceSize.width() : 0;
+    m_imgH = m_sourceDimensionsKnown ? sourceSize.height() : 0;
+    m_fileSizeKnown = knownFileSize >= 0;
+    m_fileSize = m_fileSizeKnown ? knownFileSize : 0;
+    if (m_sourceDimensionsKnown)
+    {
+        rememberSource(path, sourceSize, std::string());
+        applyFrameAspect(aspectOf(sourceSize), false);
+    }
+    rebuild();
+    update();
+}
+
+void PreviewPanel::stopIdentityGrace()
+{
+    if (m_graceTimer)
+        m_graceTimer->stop();
+    m_pendingWarm = QPixmap();
+    m_pendingSize = QSize();
+    m_pendingFileSize = -1;
+}
+
+void PreviewPanel::armIdentityGrace(const QPixmap &deferredThumbnail, const QSize &sourceSize,
+                                    qint64 knownFileSize)
+{
+    if (!deferredThumbnail.isNull())
+        m_pendingWarm = deferredThumbnail;
+    if (validSize(sourceSize))
+        m_pendingSize = sourceSize;
+    if (knownFileSize >= 0)
+        m_pendingFileSize = knownFileSize;
+    if (!m_graceTimer->isActive())
+        m_graceTimer->start();
+}
+
+void PreviewPanel::onIdentityGraceExpired()
+{
+    const QString path = m_requestedPath;
+    const QPixmap warm = m_pendingWarm;
+    const QSize size = resolveSourceSize(path, m_pendingSize);
+    const qint64 fileSize = m_pendingFileSize;
+    stopIdentityGrace();
+    if (path.isEmpty() || (m_presentedPath == path && m_quality == PresentationQuality::Preview))
+        return;
+    if (!warm.isNull())
+        presentWarmThumbnail(path, warm, size, fileSize);
+    else if (m_presentedPath != path || m_quality == PresentationQuality::None)
+        presentPlaceholder(path, size, fileSize);
+}
+
+bool PreviewPanel::shouldDeferThumbnail(const QPixmap &warmThumbnail,
+                                        const QSize &resolvedSource) const
+{
+    if (warmThumbnail.isNull())
+        return false;
+    const double aspect =
+        validSize(resolvedSource) ? aspectOf(resolvedSource) : aspectOf(warmThumbnail.size());
+    const QSize frame = frameForAspect(aspect);
+    if (!validSize(frame))
+        return false;
+    // Long edge under half the frame's device long edge: upscaling it would
+    // read as a visible blur -> sharp step.
+    const double frameLong = std::max(frame.width(), frame.height()) * effectiveDevicePixelRatio();
+    const int thumbLong = std::max(warmThumbnail.width(), warmThumbnail.height());
+    return thumbLong * 2.0 < frameLong;
+}
+
+void PreviewPanel::presentFirstStage(const QString &path, const QPixmap &warmThumbnail,
+                                     const QSize &resolvedSource, qint64 knownFileSize)
+{
+    // This path's identity is already on screen (re-select of a thumbnail or
+    // placeholder stage): any pixels for it are an upgrade.
+    bool identityShown = m_presentedPath == path && m_quality != PresentationQuality::None;
+    if (!warmThumbnail.isNull() &&
+        (identityShown || !shouldDeferThumbnail(warmThumbnail, resolvedSource)))
+    {
+        presentWarmThumbnail(path, warmThumbnail, resolvedSource, knownFileSize);
+        return;
+    }
+    if (m_quality == PresentationQuality::None)
+    {
+        // Nothing on screen to bridge the gap: show the identity at once.
+        presentPlaceholder(path, resolvedSource, knownFileSize);
+        identityShown = true;
+    }
+    if (!identityShown || !warmThumbnail.isNull())
+        armIdentityGrace(warmThumbnail, resolvedSource, knownFileSize);
 }
 
 void PreviewPanel::presentWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
@@ -361,6 +484,8 @@ void PreviewPanel::presentWarmThumbnail(const QString &path, const QPixmap &warm
 {
     const bool samePath = m_hasImage && m_presentedPath == path;
     beginStageTransition(samePath);
+    if (m_presentedPath != path)
+        resetStats();
     m_presentedPath = path;
     m_quality = PresentationQuality::Thumbnail;
     m_preview = unpadSquareThumbnail(warmThumbnail, knownSourceSize);
@@ -371,14 +496,13 @@ void PreviewPanel::presentWarmThumbnail(const QString &path, const QPixmap &warm
     m_fileSize = knownFileSize >= 0 ? knownFileSize : 0;
     m_sourceDimensionsKnown = knownSourceSize.width() > 0 && knownSourceSize.height() > 0;
     m_fileSizeKnown = knownFileSize >= 0;
-    m_lumMean = 0.0;
-    m_rMean = m_gMean = m_bMean = 0;
     m_hasImage = true;
     if (m_sourceDimensionsKnown)
         rememberSource(path, knownSourceSize, std::string());
     // Frame = source display aspect when known; otherwise the unpadded thumb.
-    applyFrameAspect(
-        m_sourceDimensionsKnown ? aspectOf(knownSourceSize) : aspectOf(m_preview.size()), samePath);
+    applyFrameAspect(m_sourceDimensionsKnown ? aspectOf(knownSourceSize)
+                                             : aspectOf(m_preview.size()),
+                     samePath, !m_sourceDimensionsKnown);
     rebuild();
     update();
 }
@@ -403,6 +527,8 @@ bool PreviewPanel::presentCachedPreview(const QString &path, const QSize &knownS
         return false;
     const bool samePath = m_hasImage && m_presentedPath == path;
     beginStageTransition(samePath);
+    if (m_presentedPath != path)
+        resetStats();
     m_presentedPath = path;
     m_quality = PresentationQuality::Preview;
     m_preview = pm;
@@ -413,8 +539,6 @@ bool PreviewPanel::presentCachedPreview(const QString &path, const QSize &knownS
     m_sourceDimensionsKnown = true;
     m_fileSize = knownFileSize >= 0 ? knownFileSize : 0;
     m_fileSizeKnown = knownFileSize >= 0;
-    m_lumMean = 0.0;
-    m_rMean = m_gMean = m_bMean = 0;
     m_hasImage = true;
     applyFrameAspect(aspectOf(knownSourceSize), samePath);
     rebuild();
@@ -431,11 +555,21 @@ void PreviewPanel::deliverVisualPreview(const QImage &qimg, const QString &path,
     if (path != m_requestedPath || gen != m_requestGen)
         return;
     resetMatchingHandle(gen);
-    if (qimg.isNull())
-        return;
-    const QPixmap pm = QPixmap::fromImage(qimg);
+    const QPixmap pm = qimg.isNull() ? QPixmap() : QPixmap::fromImage(qimg);
     if (pm.isNull())
+    {
+        // Undecodable: never leave the previous path posing as this one.
+        // A deferred thumbnail still beats an empty well.
+        const QPixmap deferred = m_pendingWarm;
+        const QSize size = resolveSourceSize(path, sourceKnown ? QSize(srcW, srcH) : m_pendingSize);
+        stopIdentityGrace();
+        if (!deferred.isNull())
+            presentWarmThumbnail(path, deferred, size, fileSizeKnown ? fileSize : -1);
+        else if (m_presentedPath != path || m_quality == PresentationQuality::None)
+            presentPlaceholder(path, size, fileSizeKnown ? fileSize : -1);
         return;
+    }
+    stopIdentityGrace();
     if (sourceKnown)
         rememberSource(path, QSize(srcW, srcH), previewKey);
     const bool samePath = m_hasImage && m_presentedPath == path;
@@ -443,6 +577,8 @@ void PreviewPanel::deliverVisualPreview(const QImage &qimg, const QString &path,
     // re-select): refresh pixels and metadata in place, no cross-fade.
     if (!(samePath && m_quality == PresentationQuality::Preview))
         beginStageTransition(samePath);
+    if (m_presentedPath != path)
+        resetStats();
     m_preview = pm;
     m_presentedPath = path;
     m_quality = PresentationQuality::Preview;
@@ -454,8 +590,9 @@ void PreviewPanel::deliverVisualPreview(const QImage &qimg, const QString &path,
     m_fileSize = fileSize;
     m_sourceDimensionsKnown = sourceKnown;
     m_fileSizeKnown = fileSizeKnown;
-    applyFrameAspect(
-        srcW > 0 && srcH > 0 ? aspectOf(QSize(srcW, srcH)) : aspectOf(m_preview.size()), samePath);
+    const bool exact = sourceKnown && srcW > 0 && srcH > 0;
+    applyFrameAspect(exact ? aspectOf(QSize(srcW, srcH)) : aspectOf(m_preview.size()), samePath,
+                     !exact);
     rebuild();
     update();
 }
@@ -465,18 +602,17 @@ void PreviewPanel::deliverPreviewStats(const mviewer::core::PreviewStats &stats,
 {
     if (!m_lifetime->isAlive() || path != m_requestedPath || gen != m_requestGen)
         return;
-    if (stats.valid)
+    // Stats belong to the presented path; an invalid result keeps "—".
+    if (stats.valid && m_presentedPath == path)
     {
+        m_statsKnown = true;
         m_lumMean = stats.lumMean;
         m_rMean = stats.rMean;
         m_gMean = stats.gMean;
         m_bMean = stats.bMean;
     }
     else
-    {
-        m_lumMean = 0.0;
-        m_rMean = m_gMean = m_bMean = 0;
-    }
+        resetStats();
     // Text-only change: the frame and pixels stay untouched.
     update();
 }
@@ -526,8 +662,17 @@ void PreviewPanel::offerWarmThumbnail(const QString &path, const QPixmap &warmTh
         return;
     if (m_quality == PresentationQuality::Preview && m_presentedPath == path)
         return;
-    presentWarmThumbnail(path, warmThumbnail, resolveSourceSize(path, knownSourceSize),
-                         knownFileSize);
+    const QSize resolved = resolveSourceSize(path, knownSourceSize);
+    const bool pixelsShown = m_hasImage && m_presentedPath == path;
+    if (!pixelsShown && m_task && shouldDeferThumbnail(warmThumbnail, resolved))
+    {
+        // A tiny thumbnail while the sharp decode is in flight: hold it for
+        // the grace period, so a fast decode lands as one step.
+        armIdentityGrace(warmThumbnail, resolved, knownFileSize);
+        return;
+    }
+    stopIdentityGrace();
+    presentWarmThumbnail(path, warmThumbnail, resolved, knownFileSize);
 }
 
 void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
@@ -535,6 +680,7 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
 {
     m_requestedPath = path;
     cancelPending();
+    stopIdentityGrace();
     ++m_requestGen;
     if (path.isEmpty())
     {
@@ -548,13 +694,13 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
     // Stage 1: show the best pixels available without waiting. A same-path
     // re-select that is already sharp is left alone (no downgrade to the thumb);
     // a memory-cached preview with a known source size goes straight to the
-    // Preview stage; otherwise an already-materialized gallery thumbnail.
+    // Preview stage; otherwise an already-materialized gallery thumbnail, or
+    // (after the identity grace) this path's placeholder.
     const QSize resolvedSource = resolveSourceSize(path, knownSourceSize);
     const bool alreadySharp =
         m_hasImage && m_presentedPath == path && m_quality == PresentationQuality::Preview;
-    if (!alreadySharp && !presentCachedPreview(path, resolvedSource, knownFileSize) &&
-        !warmThumbnail.isNull())
-        presentWarmThumbnail(path, warmThumbnail, resolvedSource, knownFileSize);
+    if (!alreadySharp && !presentCachedPreview(path, resolvedSource, knownFileSize))
+        presentFirstStage(path, warmThumbnail, resolvedSource, knownFileSize);
 
     // Single scaled decode on the Decode pool. M27: QPointer + generation guard.
     const uint64_t gen = m_requestGen;
@@ -599,139 +745,4 @@ void PreviewPanel::resetMatchingHandle(uint64_t gen)
     // may already have replaced m_task with its own generation's handle.
     if (gen == m_requestGen)
         m_task.reset();
-}
-
-void PreviewPanel::rebuild()
-{
-    if (m_preview.isNull())
-        return;
-    const int pad = 10;
-    const int txtH = 56;
-    const int availW = width() - pad * 2;
-    const int availH = height() - pad * 2 - txtH;
-    if (availW <= 0 || availH <= 0)
-    {
-        m_scaled = QPixmap();
-        m_frameSize = QSize();
-        return;
-    }
-    const double pixAspect = aspectOf(m_preview.size());
-    const double aspect = m_frameAspect > 0.0 ? m_frameAspect : pixAspect;
-    int w = availW;
-    int h = qRound(static_cast<double>(availW) / aspect);
-    if (h > availH)
-    {
-        h = availH;
-        w = qRound(static_cast<double>(availH) * aspect);
-    }
-    w = std::clamp(w, 1, availW);
-    h = std::clamp(h, 1, availH);
-    m_frameSize = QSize(w, h);
-
-    // P5: rasterize at device resolution so HiDPI panels stay sharp.
-    const qreal dpr = effectiveDevicePixelRatio();
-    const QSize device(std::max(1, qRound(w * dpr)), std::max(1, qRound(h * dpr)));
-    const double mismatch = pixAspect > aspect ? pixAspect / aspect : aspect / pixAspect;
-    QPixmap out;
-    if (mismatch <= kMaxCropAspectRatio)
-    {
-        // Center-crop the stage into the stable frame.
-        out = m_preview.scaled(device, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-        if (out.size() != device)
-            out = out.copy((out.width() - device.width()) / 2, (out.height() - device.height()) / 2,
-                           device.width(), device.height());
-    }
-    else
-    {
-        // Wildly different placeholder: fit it inside the frame instead.
-        const QPixmap fitted =
-            m_preview.scaled(device, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        out = QPixmap(device);
-        out.fill(Qt::transparent);
-        QPainter p(&out);
-        p.drawPixmap((device.width() - fitted.width()) / 2, (device.height() - fitted.height()) / 2,
-                     fitted);
-    }
-    out.setDevicePixelRatio(dpr);
-    m_scaled = out;
-}
-
-void PreviewPanel::resizeEvent(QResizeEvent *event)
-{
-    QWidget::resizeEvent(event);
-    if (m_hasImage)
-        rebuild();
-}
-
-void PreviewPanel::paintEvent(QPaintEvent *event)
-{
-    Q_UNUSED(event);
-    QPainter painter(this);
-    const QPalette pal = palette();
-    const QColor base = pal.color(QPalette::Base);
-    const QColor well = pal.color(QPalette::AlternateBase);
-    const QColor text = pal.color(QPalette::Text);
-    const QColor secondary =
-        QColor(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary));
-    painter.fillRect(rect(), base);
-
-    if (!m_hasImage)
-    {
-        painter.setPen(secondary);
-        QFont f = font();
-        f.setPointSize(9);
-        painter.setFont(f);
-        painter.drawText(rect(), Qt::AlignCenter,
-                         tr("Drop images or folders here\nor press Ctrl+O to open a folder"));
-        return;
-    }
-
-    const int pad = 10;
-    const int txtH = 56;
-    const QRect imgArea(pad, pad, width() - pad * 2, height() - pad * 2 - txtH);
-    const QSize frame = displayedFrameSize();
-    if (!m_scaled.isNull() && validSize(frame))
-    {
-        const int x = imgArea.x() + (imgArea.width() - frame.width()) / 2;
-        const int y = imgArea.y() + (imgArea.height() - frame.height()) / 2;
-        const QRect target(x, y, frame.width(), frame.height());
-        painter.fillRect(target, well);
-        painter.setPen(pal.color(QPalette::Mid));
-        painter.drawRect(x - 1, y - 1, frame.width() + 1, frame.height() + 1);
-        const bool fading = transitionRunning() && !m_fadeFrom.isNull();
-        painter.setRenderHint(QPainter::SmoothPixmapTransform, fading || frame != m_frameSize);
-        if (fading)
-        {
-            painter.drawPixmap(target, m_fadeFrom);
-            painter.setOpacity(std::clamp(m_transitionT, 0.0, 1.0));
-        }
-        painter.drawPixmap(target, m_scaled);
-        painter.setOpacity(1.0);
-    }
-
-    const QRect txtArea(8, height() - txtH - 4, width() - 16, txtH);
-    painter.setPen(text);
-    QFont f = painter.font();
-    f.setPointSize(9);
-    painter.setFont(f);
-    // M46: lexical fileName — paint never constructs QFileInfo.
-    const QString pathStr = m_presentedPath;
-    const int slash = qMax(pathStr.lastIndexOf('/'), pathStr.lastIndexOf('\\'));
-    const QString name = slash >= 0 ? pathStr.mid(slash + 1) : pathStr;
-    QString identity = name;
-    if (m_sourceDimensionsKnown)
-        identity += "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH);
-    if (m_fileSizeKnown)
-        identity +=
-            (m_sourceDimensionsKnown ? "  " : "\n") + QString::number(m_fileSize / 1024) + " KB";
-    painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft, identity);
-    // The brightness/RGB figures are sample means computed over the scaled
-    // preview buffer, not the full image.
-    painter.setPen(secondary);
-    painter.drawText(txtArea.adjusted(0, 36, 0, 0), Qt::AlignTop | Qt::AlignLeft,
-                     tr("Sample luminance %1   RGB(%2,%3,%4)")
-                         .arg(m_lumMean, 0, 'f', 1)
-                         .arg(m_rMean)
-                         .arg(m_gMean)
-                         .arg(m_bMean));
 }

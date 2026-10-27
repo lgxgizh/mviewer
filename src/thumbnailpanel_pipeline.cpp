@@ -175,6 +175,31 @@ void ThumbnailPanel::onThumbReady(const QString &path)
         QTimer::singleShot(0, this, [this]() { flushThumbUpdates(); });
     }
     m_thumbDirtyPaths.insert(path);
+    // The provider read the source header (or decoded it) to make this thumb:
+    // hand its display size to an entry that has none yet, so the selection
+    // preview gets the exact frame on a folder's first visit. Resolution sort
+    // owns its own probe + resort, so partial fills never reorder rows there.
+    if (m_sortMode != SortResolution)
+    {
+        const QSize source = ThumbnailProvider::knownSourceSize(path);
+        const QString key = galleryPathKey(path);
+        const auto fill = [&source](Entry &entry)
+        {
+            if (entry.width > 0 && entry.height > 0)
+                return;
+            entry.width = source.width();
+            entry.height = source.height();
+        };
+        if (source.width() > 0 && source.height() > 0)
+        {
+            const int srcRow = m_sourceRowByPath.value(key, -1);
+            if (srcRow >= 0 && srcRow < m_allEntries.size())
+                fill(m_allEntries[srcRow]);
+            const int drow = m_displayEntryRow.value(key, -1);
+            if (drow >= 0 && drow < m_displayEntries.size())
+                fill(m_displayEntries[drow]);
+        }
+    }
     // The host matches this against the current selection. A null delivery is
     // a failed cell, not a preview frame.
     if (!thumbReady(path).isNull())
