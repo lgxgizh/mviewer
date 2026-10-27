@@ -1,3 +1,4 @@
+#include "browse_file_clipboard.h"
 #include "splitbrowse_transfer.h"
 #include "thumbnailpanel_p.h"
 #include "thumbnailpanel_transfer.h"
@@ -6,6 +7,7 @@ struct ThumbnailPanel::ContextMenuActions
 {
     QAction *aOpen = nullptr;
     QAction *aRename = nullptr;
+    QAction *aCopyFiles = nullptr;
     QAction *aCopy = nullptr;
     QAction *aMove = nullptr;
     QAction *aCopyOther = nullptr;
@@ -50,10 +52,12 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aOpen->setShortcut(QKeySequence(Qt::Key_Return));
     acts.aRename = menu.addAction(tr("Rename"));
     acts.aRename->setShortcut(QKeySequence(Qt::Key_F2));
-    // NOTE: no Ctrl+C here — the global binding copies the current image to
-    // the clipboard; advertising the file-copy dialog on the same key would
-    // be misleading (the dialog stays reachable via the menu item).
-    acts.aCopy = menu.addAction(tr("Copy..."));
+    // Copy = Ctrl+C: the selected files go on the clipboard for Explorer's
+    // Ctrl+V (MainWindow routes the key to the same payload). "Copy To..."
+    // is the folder-picker transfer.
+    acts.aCopyFiles = menu.addAction(tr("Copy"));
+    acts.aCopyFiles->setShortcut(QKeySequence(QKeySequence::Copy));
+    acts.aCopy = menu.addAction(tr("Copy To..."));
     acts.aMove = menu.addAction(tr("Move..."));
     acts.aMove->setShortcut(QKeySequence("Ctrl+M"));
     const TransferShortcut copyOther = copyToOtherPaneShortcut();
@@ -135,6 +139,14 @@ bool ThumbnailPanel::handleFileContextMenuAction(const ContextMenuActions &actio
     if (chosen == actions.aRename)
     {
         renameSelected();
+        return true;
+    }
+    if (chosen == actions.aCopyFiles)
+    {
+        const QStringList files = mviewer::browseclip::copyTargets(compareSelection(), path);
+        if (!files.isEmpty())
+            QApplication::clipboard()->setMimeData(
+                mviewer::browseclip::makeFileCopyMimeData(files));
         return true;
     }
     if (chosen == actions.aCopy)

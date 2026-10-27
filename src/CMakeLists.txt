@@ -825,6 +825,25 @@ target_include_directories(browse_paste_acceptance PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME browse_paste_acceptance COMMAND browse_paste_acceptance)
 set_tests_properties(browse_paste_acceptance PROPERTIES RUN_SERIAL TRUE)
 
+# Browse: Ctrl+C puts the selected files on the clipboard for Explorer paste
+add_executable(browse_copy_files_tests
+    test_browse_copy_files.cpp
+)
+
+target_link_libraries(browse_copy_files_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(browse_copy_files_tests PRIVATE cxx_std_20)
+target_include_directories(browse_copy_files_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME browse_copy_files_tests COMMAND browse_copy_files_tests)
+set_tests_properties(browse_copy_files_tests PROPERTIES RUN_SERIAL TRUE)
+
 # Split Browse View (RFC ADR-001/005/014/018)
 add_executable(split_browse_acceptance
     test_split_browse_acceptance.cpp

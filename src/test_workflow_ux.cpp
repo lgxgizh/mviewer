@@ -92,6 +92,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMetaObject>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPointer>
@@ -114,6 +115,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QVariant>
 #include <QWheelEvent>

@@ -261,6 +261,9 @@ class MainWindow : public QMainWindow
     bool handleMetadataKey(QKeyEvent *event);
     bool handleViewModeKey(QKeyEvent *event);
     bool handleClipboardKey(QKeyEvent *event);
+    void handleCopyKey(bool copyPath);
+    bool browseOwnsCopyKey() const;
+    bool copyBrowseFilesToClipboard();
     bool isThumbnailPanelPasteTarget() const;
     void startClipboardPaste(const QImage &image);
     void cancelClipboardPaste();
