@@ -2072,6 +2072,18 @@ target_include_directories(m61_roi_workflow_tests PRIVATE ${CMAKE_CURRENT_SOURCE
 add_test(NAME m61_roi_workflow_tests COMMAND m61_roi_workflow_tests)
 set_tests_properties(m61_roi_workflow_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
+# M61 follow-up: Compare Ctrl+C copies the ROI statistics chips (WYSIWYG).
+add_executable(m61_roi_copy_tests
+    test_m61_roi_copy.cpp
+)
+target_link_libraries(m61_roi_copy_tests
+    PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui
+)
+target_compile_features(m61_roi_copy_tests PRIVATE cxx_std_20)
+target_include_directories(m61_roi_copy_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m61_roi_copy_tests COMMAND m61_roi_copy_tests)
+set_tests_properties(m61_roi_copy_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
 add_executable(m61_roi_benchmark
     test_m61_roi_benchmark.cpp
 )
