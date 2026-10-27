@@ -17,6 +17,7 @@
 #include <memory>
 #include <string>
 
+class QTimer;
 class QVariantAnimation;
 
 namespace mviewer::core
@@ -34,6 +35,13 @@ struct PreviewStats;
 // the frame unless the placeholder had the wrong shape; that single change,
 // and same-path quality upgrades, cross-fade over ~110 ms.
 //
+// Identity: a path switch never leaves the previous photo posing as the new
+// one. If the new path has no presentable pixels yet, the previous stage may
+// stay for at most kIdentityGraceMs; then the panel shows the new name in an
+// empty well (Placeholder). A gallery thumbnail far smaller than the frame
+// is held back for the same grace while the sharp preview is in flight, so a
+// fast decode lands as a single step instead of blurry -> sharp.
+//
 // The preview is served by a SINGLE scaled (<= kPreviewMaxEdge) decode on the
 // foreground Decode pool — never a full ImageRepository::loadAsync decode
 // (which duplicates ImageViewer work and retains a full QPixmap). The scaled
@@ -48,6 +56,9 @@ class PreviewPanel : public QWidget
     // Longest source edge kept for the preview pixmap. The displayed source
     // dimensions (sourceImageSize()) still reflect the original image.
     static constexpr int kPreviewMaxEdge = 512;
+    // Longest time a previous path's stage (or a tiny deferred thumbnail's
+    // absence) may stand in before the new path's identity is shown.
+    static constexpr int kIdentityGraceMs = 80;
 
     explicit PreviewPanel(QWidget *parent = nullptr);
     ~PreviewPanel() override;
@@ -55,6 +66,7 @@ class PreviewPanel : public QWidget
     enum class PresentationQuality
     {
         None,
+        Placeholder, // new path's name in an empty well: no pixels yet
         Thumbnail,
         Preview
     };
@@ -67,7 +79,8 @@ class PreviewPanel : public QWidget
     void offerWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
                             const QSize &knownSourceSize = QSize(), qint64 knownFileSize = -1);
 
-    // Test/embedding observability: whether a preview is currently shown.
+    // Test/embedding observability: whether preview PIXELS are shown (a
+    // Placeholder shows only the identity, so it reports false).
     bool hasImage() const
     {
         return m_hasImage;
@@ -131,6 +144,13 @@ class PreviewPanel : public QWidget
         return m_scaled;
     }
     bool isTransitioningForTest() const;
+    // Whether the identity grace timer is pending, and whether the sample
+    // statistics line shows real values (false paints "—").
+    bool identityGracePendingForTest() const;
+    bool previewStatsKnownForTest() const
+    {
+        return m_statsKnown;
+    }
 
     // Preview-cache key: ImageRepository::makeKey(path) plus the preview max
     // edge, so a scaled preview is never confused with a FullImage decode.
@@ -152,13 +172,25 @@ class PreviewPanel : public QWidget
                               const QSize &knownSourceSize, qint64 knownFileSize);
     bool presentCachedPreview(const QString &path, const QSize &knownSourceSize,
                               qint64 knownFileSize);
+    void presentFirstStage(const QString &path, const QPixmap &warmThumbnail,
+                           const QSize &resolvedSource, qint64 knownFileSize);
+    void presentPlaceholder(const QString &path, const QSize &sourceSize, qint64 knownFileSize);
+    void armIdentityGrace(const QPixmap &deferredThumbnail, const QSize &sourceSize,
+                          qint64 knownFileSize);
+    void stopIdentityGrace();
+    void onIdentityGraceExpired();
+    bool shouldDeferThumbnail(const QPixmap &warmThumbnail, const QSize &resolvedSource) const;
+    QSize frameForAspect(double aspect) const;
+    void resetStats();
     void deliverVisualPreview(const QImage &qimg, const QString &path, uint64_t gen, int srcW,
                               int srcH, qint64 fileSize, bool sourceKnown, bool fileSizeKnown,
                               const std::string &previewKey);
     // Frame / transition helpers.
     QSize resolveSourceSize(const QString &path, const QSize &knownSourceSize) const;
     void rememberSource(const QString &path, const QSize &size, const std::string &previewKey);
-    bool applyFrameAspect(double aspect, bool samePath);
+    // `approximate`: the aspect comes from a thumbnail, not the source, so
+    // crop/rounding noise within tolerance keeps the current frame.
+    bool applyFrameAspect(double aspect, bool samePath, bool approximate = false);
     void beginStageTransition(bool samePath);
     QSize displayedFrameSize() const;
     bool transitionRunning() const;
@@ -213,7 +245,14 @@ class PreviewPanel : public QWidget
     int m_rMean = 0;
     int m_gMean = 0;
     int m_bMean = 0;
+    bool m_statsKnown = false;
     bool m_hasImage = false;
+    // Identity grace: single-shot timer plus a deferred (small) thumbnail and
+    // the size facts that came with it.
+    QTimer *m_graceTimer = nullptr;
+    QPixmap m_pendingWarm;
+    QSize m_pendingSize;
+    qint64 m_pendingFileSize = -1;
     // M27: request generation — bumped on every setImage() so a late delivery
     // from an older request can never overwrite the current one, even for the
     // same path (e.g. A -> B -> A where the first A completes last).

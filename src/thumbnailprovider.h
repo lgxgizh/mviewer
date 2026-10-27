@@ -12,6 +12,7 @@
 #include "core/image/ImageBuffer.h" // ImageData (complete type: decode() returns by value)
 
 #include <QImage>
+#include <QSize>
 #include <QString>
 
 class ThumbnailProvider
@@ -24,6 +25,14 @@ class ThumbnailProvider
     static ImageData produce(const std::string &path, int size);
 
     static void invalidateSource(const std::string &path);
+
+    // Source display size (post-orientation) that produce() learned for
+    // `path` from the header it already reads (or the scaled decode's
+    // metadata). Invalid when unknown. Thread-safe, memory-only, bounded; the
+    // UI thread reads it when a thumbnail lands so the gallery entry and the
+    // selection preview get the true frame on a folder's first visit.
+    static QSize knownSourceSize(const QString &path);
+    static void rememberSourceSize(const QString &path, const QSize &displaySize);
 
     // Fit `q` into a transparent size×size image, centered with
     // KeepAspectRatio + SmoothTransformation. Null image if `q` is null.

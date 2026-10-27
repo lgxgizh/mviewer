@@ -45,6 +45,8 @@
 // Selection-preview stable frame + viewer provisional geometry (4c-4f) live
 // in test_m27_preview_frame.cpp to keep this TU under the size cap.
 void runM27PreviewFrameTests(int &pass, int &fail);
+// Identity switch / deferral / stats / registry / viewer stand-in (4g-4l).
+void runM27PreviewIdentityTests(int &pass, int &fail);
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -617,6 +619,7 @@ int main(int argc, char **argv)
     testDistantPreviewLetterboxDoesNotJump();
     testRejectionReachesTerminalState();
     runM27PreviewFrameTests(g_pass, g_fail);
+    runM27PreviewIdentityTests(g_pass, g_fail);
     testPreviewUILatency24MP();
     testViewerUILatency24MP();
 

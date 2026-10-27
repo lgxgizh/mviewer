@@ -132,6 +132,8 @@ class ImageViewer : public QOpenGLWidget
     // M47: setImage body with a caller-side exception guard (an unexpected
     // error must never escape into the Qt event loop).
     void setImageImpl(const QString &path);
+    void scheduleStandInExpiry(uint64_t gen); // cross-path stand-in grace
+    static constexpr int kStandInGraceMs = 80;
     void resetSelectionForNewImage(const QString &path);
     void recommitLockedSelection();
 

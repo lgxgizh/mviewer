@@ -45,6 +45,23 @@ void ImageViewer::refreshSource(const QString &path)
     m_preserveViewOnReload = false;
 }
 
+void ImageViewer::scheduleStandInExpiry(uint64_t gen)
+{
+    // The previous image is a different photo: never let it pose as the new
+    // one for longer than kStandInGraceMs. If neither the new image nor its
+    // thumbnail has arrived by then, fall back to the neutral loading state.
+    QTimer::singleShot(kStandInGraceMs, this,
+                       [this, gen]()
+                       {
+                           if (gen != m_requestGen || !m_loading || hasDisplayImage() ||
+                               !m_provisionalImage.isNull() || m_transitionImage.isNull())
+                               return;
+                           m_transitionImage = QImage();
+                           m_transitionSourceSize = QSize();
+                           update();
+                       });
+}
+
 void ImageViewer::setImageImpl(const QString &path)
 {
     // Pixel Inspector lifecycle: invalidate synchronously on every new load so
@@ -86,6 +103,9 @@ void ImageViewer::setImageImpl(const QString &path)
         m_transitionSourceSize = QSize();
     }
 
+    // Cross-path stand-in: the previous photo may bridge only a brief gap.
+    const bool crossPathStandIn =
+        !m_transitionImage.isNull() && !browsePathEquals(path, previousPath);
     m_currentPath = path;
     releaseColdMips(previousPath);
     m_currentIndex = indexInBrowseSequence(path);
@@ -105,6 +125,8 @@ void ImageViewer::setImageImpl(const QString &path)
     m_tiles = TileGrid();
     m_hasHistogram = false;
     m_loading = !path.isEmpty();
+    if (crossPathStandIn)
+        scheduleStandInExpiry(gen);
     m_pendingView.reset();
     if (reloadView)
         m_pendingView = reloadView;
