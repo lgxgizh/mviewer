@@ -38,6 +38,11 @@ int g_failures = 0;
         }                                                                                          \
     } while (false)
 
+void phase(const char *name)
+{
+    std::printf("[m61 copy] phase: %s\n", name);
+}
+
 void pump(int ms = 30)
 {
     QElapsedTimer timer;
@@ -132,6 +137,7 @@ void checkChipsInCopy(CompareWorkspace *workspace, QWidget *page, const char *mo
     if (chips.isEmpty() || !page)
         return;
 
+    phase("copy with chips");
     const QImage withChips = copyView(workspace);
     std::snprintf(message, sizeof(message), "%s: Ctrl+C puts an image on the clipboard", mode);
     CHECK(!withChips.isNull(), message);
@@ -143,6 +149,7 @@ void checkChipsInCopy(CompareWorkspace *workspace, QWidget *page, const char *mo
 
     for (QLabel *chip : chips)
         chip->hide();
+    phase("copy without chips");
     const QImage withoutChips = copyView(workspace);
     for (QLabel *chip : chips)
         chip->show();
@@ -155,7 +162,11 @@ void checkChipsInCopy(CompareWorkspace *workspace, QWidget *page, const char *mo
 
     for (QLabel *chip : chips)
     {
-        const QRect onPage(chip->mapTo(page, QPoint(0, 0)), chip->size());
+        // Chips are workspace children, not page children: map through the
+        // common ancestor (QWidget::mapTo requires an ancestor).
+        const QPoint chipInWs = chip->mapTo(workspace, QPoint(0, 0));
+        const QPoint pageInWs = page->mapTo(workspace, QPoint(0, 0));
+        const QRect onPage(chipInWs - pageInWs, chip->size());
         const QRect inCopy(int(onPage.x() * scale), int(onPage.y() * scale),
                            int(onPage.width() * scale), int(onPage.height() * scale));
         const QRect clipped = inCopy & QRect(0, 0, withChips.width(), int(page->height() * scale));
@@ -197,6 +208,7 @@ int main(int argc, char **argv)
     const QString a = writePattern(dir, QStringLiteral("copy-A.png"), 10);
     const QString b = writePattern(dir, QStringLiteral("copy-B.png"), 60);
 
+    phase("grid load");
     QDialog dialog;
     auto *layout = new QVBoxLayout(&dialog);
     auto *workspace = new CompareWorkspace(&dialog);
@@ -216,6 +228,7 @@ int main(int argc, char **argv)
     if (!panesReady || !first)
         return 1;
 
+    phase("grid ROI");
     // Grid: right-drag an ROI and wait for the real asynchronous stats.
     rightDrag(first, first->sourcePointToWidget(QPointF(12, 10)).toPoint(),
               first->sourcePointToWidget(QPointF(40, 32)).toPoint());
@@ -224,7 +237,9 @@ int main(int argc, char **argv)
     CHECK(waitFor([&]() { return chipReady(workspace->findChild<QLabel *>("roiPaneChip0")); }),
           "Grid ROI chip shows numbers");
     pump(50);
+    phase("grid copy");
     checkChipsInCopy(workspace, workspace->findChild<QWidget *>("compareGridPage"), "Grid");
+    phase("split");
 
     // Split canvas: the chips sit over the canvas page.
     QCheckBox *split = findCheckBox(workspace, QStringLiteral("Split"));
@@ -241,6 +256,7 @@ int main(int argc, char **argv)
         CHECK(waitFor([&]() { return chipReady(workspace->findChild<QLabel *>("roiPaneChip0")); }),
               "Split ROI chip shows numbers");
         pump(50);
+        phase("split copy");
         checkChipsInCopy(workspace, canvas, "Split");
         split->setChecked(false);
         pump(20);
