@@ -4433,6 +4433,16 @@ or double-click a thumbnail to view</source>
         <translation>已将 %1 张图片粘贴到文件夹</translation>
     </message>
     <message>
+        <location filename="../src/mainwindow_commands.cpp" line="470"/>
+        <source>Copied file: %1</source>
+        <translation>已复制文件：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_commands.cpp" line="471"/>
+        <source>Copied %1 files</source>
+        <translation>已复制 %1 个文件</translation>
+    </message>
+    <message>
         <location filename="../src/mainwindow_commands.cpp" line="458"/>
         <source>Unable to create a temporary clipboard file</source>
         <translation>无法创建剪贴板临时文件</translation>

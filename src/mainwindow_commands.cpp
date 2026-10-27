@@ -1,5 +1,6 @@
 // MainWindow command registration and keyboard dispatch (M20 P0#1).
 #include "Language.h"
+#include "browse_file_clipboard.h"
 #include "mainwindow_p.h"
 #include "runtime_storage.h"
 #include "shortcutdigits.h"
@@ -376,29 +377,11 @@ bool MainWindow::isThumbnailPanelPasteTarget() const
 bool MainWindow::handleClipboardKey(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
-    // Ctrl+C copies the current image; Ctrl+Shift+C copies its path.
+    // Ctrl+C copies (browse: the selected files; viewer / compare: the
+    // image); Ctrl+Shift+C copies the current image path.
     if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_C)
     {
-        if ((mod & Qt::ShiftModifier))
-        {
-            if (!currentImagePath().isEmpty())
-            {
-                const QString nativePath = QDir::toNativeSeparators(currentImagePath());
-                QApplication::clipboard()->setText(nativePath);
-                if (statusBar())
-                    statusBar()->showMessage(tr("Path copied: %1").arg(nativePath), 2000);
-            }
-        }
-        else
-        {
-            const bool copying = !currentImagePath().isEmpty() && m_imageViewer;
-            if (copying)
-                copyCurrentImageToClipboard();
-            if (statusBar())
-                statusBar()->showMessage(copying ? tr("Copying image to clipboard...")
-                                                 : tr("No image available to copy"),
-                                         copying ? 0 : 2000);
-        }
+        handleCopyKey((mod & Qt::ShiftModifier) != 0);
         event->accept();
         return true;
     }
@@ -447,6 +430,69 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
         return true;
     }
     return false;
+}
+
+void MainWindow::handleCopyKey(bool copyPath)
+{
+    if (copyPath)
+    {
+        if (!currentImagePath().isEmpty())
+        {
+            const QString nativePath = QDir::toNativeSeparators(currentImagePath());
+            QApplication::clipboard()->setText(nativePath);
+            if (statusBar())
+                statusBar()->showMessage(tr("Path copied: %1").arg(nativePath), 2000);
+        }
+        return;
+    }
+    if (copyBrowseFilesToClipboard())
+        return;
+    const bool copying = !currentImagePath().isEmpty() && m_imageViewer;
+    if (copying)
+        copyCurrentImageToClipboard();
+    if (statusBar())
+        statusBar()->showMessage(copying ? tr("Copying image to clipboard...")
+                                         : tr("No image available to copy"),
+                                 copying ? 0 : 2000);
+}
+
+bool MainWindow::browseOwnsCopyKey() const
+{
+    // Compare keeps its WYSIWYG canvas copy; the viewer window keeps the
+    // decoded image copy. Everything else in this window is browse.
+    if (m_compareView && !m_compareView->isHidden())
+        return false;
+    if (m_imageViewer)
+    {
+        QWidget *focus = QApplication::focusWidget();
+        const bool focusInViewer =
+            focus && (focus == m_imageViewer || m_imageViewer->isAncestorOf(focus));
+        if (focusInViewer || (m_imageViewer->isVisible() && m_imageViewer->isActiveWindow()))
+            return false;
+    }
+    return activeThumbnailPanel() != nullptr;
+}
+
+bool MainWindow::copyBrowseFilesToClipboard()
+{
+    if (!browseOwnsCopyKey())
+        return false;
+    ThumbnailPanel *panel = activeThumbnailPanel();
+    // compareSelection() is the cross-pane union in split browse, the same
+    // set Delete / rotate / Compare act on.
+    const QStringList files =
+        mviewer::browseclip::copyTargets(panel->compareSelection(), currentImagePath());
+    if (files.isEmpty())
+        return false; // e.g. an archive member: fall back to the image copy
+    QApplication::clipboard()->setMimeData(mviewer::browseclip::makeFileCopyMimeData(files));
+    if (statusBar())
+    {
+        statusBar()->showMessage(
+            files.size() == 1 ? tr("Copied file: %1").arg(QFileInfo(files.first()).fileName())
+                              : tr("Copied %1 files").arg(files.size()),
+            2000);
+    }
+    return true;
 }
 
 void MainWindow::startClipboardPaste(const QImage &img)
