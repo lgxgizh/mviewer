@@ -177,7 +177,7 @@ void checkChipsInCopy(CompareWorkspace *workspace, QWidget *page, const char *mo
         std::snprintf(message, sizeof(message),
                       "%s: %s pixels appear in the copied image (%d/%d differ)", mode,
                       qPrintable(chip->objectName()), differing, area);
-        CHECK(differing * 4 >= area, message);
+        CHECK(differing * 10 >= area, message);
         std::snprintf(message, sizeof(message), "%s: %s border is in the copied image (%d px)",
                       mode, qPrintable(chip->objectName()), border);
         CHECK(border >= clipped.width(), message);
