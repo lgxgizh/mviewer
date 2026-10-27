@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.151**
+## Where we are now — **Beta / 1.0.152**
 
-MViewer remains in **Beta**; the current release is **`v1.0.151`**
-(2026-10-26, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+MViewer remains in **Beta**; the current release is **`v1.0.152`**
+(2026-10-27, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
 
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.151** (current) | Smooth previews and Compare polish: the browse preview keeps a stable frame (no "small then grows" flicker, EXIF thumbnail bars cropped, sharp on HiDPI), the viewer's provisional image lands exactly where the full image will, Compare overlays and histograms follow the temporarily shown image, split browse mirrors the current folder, and a deep-zoom Compare pane no longer stays soft | 🔵 Beta |
+| **1.0.152** (current) | Calm previews: switching images in a folder of large photos shows the new image's name at once (never the previous photo standing in), the real source size is known from the thumbnail pass, tiny thumbnails wait briefly for the sharp preview, the stats line no longer jumps, and the centre viewer no longer holds the previous image while the next one loads | 🔵 Beta |
+| **1.0.151** | Smooth previews and Compare polish: the browse preview keeps a stable frame (no "small then grows" flicker, EXIF thumbnail bars cropped, sharp on HiDPI), the viewer's provisional image lands exactly where the full image will, Compare overlays and histograms follow the temporarily shown image, split browse mirrors the current folder, and a deep-zoom Compare pane no longer stays soft | ✅ Previous patch |
 | **1.0.150** | Browse UX: multi-select type filter (RAW hidden by default, "N files hidden" hint with one-click Show), union Compare across split panes, Compare pane header and status as overlays so every pane has the same viewport, oriented Resolution, type filter keeps selection and scroll | ✅ Previous patch |
 | **1.0.149** | Stability: sanitizer-clean Nightly (ASan/LSan on Windows clang-cl and Linux GCC, UBSan) — fixes a cache use-after-free at exit, a scheduler handle race, and Qt slot/STL undefined-behavior traps | ✅ Previous patch |
 | **1.0.148** | Design review batches: split-browse copy/move to the other pane, RAW source badge + full decode, viewer-scoped Delete/F2 and lossless JPEG rotate, analysis panel → `F7`, immediate language switch, new user guide chapters | ✅ Previous patch |
@@ -83,7 +84,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.151` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.152` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate

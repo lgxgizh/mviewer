@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.152] - 2026-10-27
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.152** (preview identity switch #248).
+
+### Fixed
+
+- **Preview no longer flashes the previous image** (#248): when the next image has no pixels yet, the browse preview shows that image's name in an empty frame within 80 ms instead of leaving the previous photo (and its name and statistics) on screen; an empty panel shows it at once.
+- **Real source size from the thumbnail pass** (#248): the thumbnail provider records each photo's display size (EXIF header or scaled-decode metadata, non-RAW), the gallery back-fills unknown entry sizes (not under resolution sort) and the preview frames the photo at its true aspect from the first stage.
+- **Tiny thumbnails wait for the sharp preview** (#248): a thumbnail smaller than half the preview frame is held for up to 80 ms while the sharp decode runs, so a fast decode lands in one step instead of blurry → sharp.
+- **Stable preview text** (#248): the dimensions line is always reserved and statistics show "—" until the new image's own values arrive.
+- **Aspect tolerance across images** (#248): a thumbnail-derived aspect within ~1.5% of the current frame no longer moves it.
+- **Viewer stand-in** (#248): the centre viewer drops the previous image's transition snapshot 80 ms after switching to a different image; late gallery thumbnails become the new image's provisional, in the split-browse secondary pane too.
+
+### Tests / CI
+
+- m27 preview identity tests (placeholder after the grace, small-thumbnail deferral, stats reset, cross-path aspect tolerance, provider source-size registry, viewer stand-in expiry); m54 warm-preview test uses a thumbnail at least half the frame (#248).
+
 ## [1.0.151] - 2026-10-26
 
 ### Release
