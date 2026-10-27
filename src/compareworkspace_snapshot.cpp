@@ -167,7 +167,13 @@ QPixmap CompareWorkspace::grabComparisonView()
         target = m_compareGridPage;
     if (!target)
         target = this;
-    const QPixmap captured = target->grab();
+    // WYSIWYG: grab the workspace over the page's rectangle instead of the page
+    // alone. Per-pane ROI statistics chips (and any other overlay raised above
+    // the page) are children of the workspace, not of the page, so a page-only
+    // grab() silently dropped them from Ctrl+C / Ctrl+S.
+    const QRect targetRect =
+        target == this ? rect() : QRect(target->mapTo(this, QPoint(0, 0)), target->size());
+    const QPixmap captured = grab(targetRect);
     if (captured.isNull())
         return captured;
 
