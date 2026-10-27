@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.0.153] - 2026-10-27
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.153** (Compare WYSIWYG copy #250, browse file copy #251).
+
+### Added
+
+- **Browse Ctrl+C copies selected files** (#251): in browse mode, Ctrl+C puts the selected image files on the clipboard (CF_HDROP + copy drop effect) so Ctrl+V in Windows File Explorer pastes copies into the folder; split browse unions both panes; empty selection copies the current image; archive members fall back to image-pixel copy. Context menu gains **Copy (Ctrl+C)**; the folder-dialog entry is renamed **Copy To...**. Viewer and Compare Ctrl+C are unchanged.
+
+### Fixed
+
+- **Compare Ctrl+C / Ctrl+S is WYSIWYG** (#250): snapshots grab the Compare workspace over the page rectangle so floated ROI statistics chips (R/G, B/G, H/S/V, R/G/B means) appear in the copied/saved image exactly as on screen; ROI rectangles, pane headers, histograms and local zoom were already included.
+
+### Tests / CI
+
+- m61 ROI copy tests (Grid and Split canvas chip pixels on clipboard); browse_copy_files_tests (payload helpers, single/multi/split union, drop effect, address-bar focus) (#250, #251).
+
 ## [1.0.152] - 2026-10-27
 
 ### Release
