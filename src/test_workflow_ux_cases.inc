@@ -1323,20 +1323,22 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 CHECK(drift < 0.5, "wheel zoom keeps the image point under the cursor fixed");
             }
 
-            // Ctrl+C copies the current image to the clipboard. It must NEVER
-            // open the file-copy dialog (the context menu no longer advertises
-            // Ctrl+C for that action — same key, different behavior).
+            // Browse Ctrl+C puts the selected/current image FILE on the
+            // clipboard (Explorer Ctrl+V pastes it). It must NEVER open the
+            // file-copy dialog (that is the context menu's "Copy To...").
             QApplication::clipboard()->clear();
             sendKey(&w, Qt::Key_C, Qt::ControlModifier);
-            // Copy is intentionally an asynchronous worker export. A short
-            // fixed pump passes on a fast desktop but races the worker on CI;
-            // wait for the observable clipboard result instead.
             QElapsedTimer clipboardTimer;
             clipboardTimer.start();
-            while (QApplication::clipboard()->image().isNull() && clipboardTimer.elapsed() < 5000)
+            const auto clipboardHasFile = []()
+            {
+                const QMimeData *md = QApplication::clipboard()->mimeData();
+                return md && md->hasUrls() && !md->urls().isEmpty() &&
+                       md->urls().constFirst().isLocalFile();
+            };
+            while (!clipboardHasFile() && clipboardTimer.elapsed() < 5000)
                 pump(25);
-            CHECK(!QApplication::clipboard()->image().isNull(),
-                  "Ctrl+C copies the current image to the clipboard");
+            CHECK(clipboardHasFile(), "browse Ctrl+C copies the image file to the clipboard");
 
             // Slideshow (S): starts a timer that advances through the folder;
             // S again stops it. Settings drive the interval (min 500 ms).
