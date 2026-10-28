@@ -473,27 +473,6 @@ void CompareWorkspace::zoomActual()
     }
 }
 
-double CompareWorkspace::scaleForPaneSource(int pane, int sourceW, int sourceH) const
-{
-    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
-        return 0.0;
-    if (sourceW <= 0 || sourceH <= 0)
-        return 0.0;
-    const QSize viewSize = m_cellViews[pane]->size();
-    if (viewSize.width() <= 0 || viewSize.height() <= 0)
-        return 0.0;
-    const double fit = std::min(static_cast<double>(viewSize.width()) / sourceW,
-                                static_cast<double>(viewSize.height()) / sourceH);
-    if (!(fit > 0.0) || !std::isfinite(fit))
-        return 0.0;
-    if (m_uniformScale)
-    {
-        const double cell = pane < m_engine.imageCount() ? m_engine.cellTransform(pane).scale : fit;
-        return (cell > 0.0 && std::isfinite(cell)) ? cell : fit;
-    }
-    return fit * sharedZoomRatio(m_sharedZoomRatio) * localZoomMultiplier(pane);
-}
-
 double CompareWorkspace::scaleKeepingFit(int pane, double engineScale)
 {
     if (m_uniformScale || !m_syncZoom)

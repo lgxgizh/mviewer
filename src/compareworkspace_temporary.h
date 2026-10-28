@@ -1,5 +1,8 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+
 namespace mviewer::ui
 {
 
@@ -70,6 +73,44 @@ inline TemporaryKeyDecision decideDigitHold(int imageCount, int hoveredPane, int
     decision.targetPane = target;
     decision.sourcePane = digit - 1;
     return decision;
+}
+
+// Viewport a held pane uses to present another pane's image (Space / 1-8).
+struct TemporaryViewport
+{
+    double scale = 0.0;
+    double offsetX = 0.0;
+    double offsetY = 0.0;
+};
+
+// The held pane shows the source image exactly as the source pane shows it:
+// the source's presented scale (shared ratio x its own Ctrl+wheel multiplier)
+// and its pan. With linked fit (sync zoom, Uniform Pixel Scale off) a target
+// pane of a different size keeps the same zoom relative to its own fit and the
+// same image point at the pane centre (offsets are centre-relative pixels).
+// Uniform Pixel Scale / unlinked zoom keep the source's raw pixel scale.
+inline TemporaryViewport planTemporaryViewport(double sourceScale, double sourceOffsetX,
+                                               double sourceOffsetY, int imageW, int imageH,
+                                               int sourcePaneW, int sourcePaneH, int targetPaneW,
+                                               int targetPaneH, bool fitRelative)
+{
+    TemporaryViewport plan{sourceScale, sourceOffsetX, sourceOffsetY};
+    if (!fitRelative || !(sourceScale > 0.0) || !std::isfinite(sourceScale) || imageW <= 0 ||
+        imageH <= 0 || sourcePaneW <= 0 || sourcePaneH <= 0 || targetPaneW <= 0 || targetPaneH <= 0)
+        return plan;
+    const double sourceFit = std::min(static_cast<double>(sourcePaneW) / imageW,
+                                      static_cast<double>(sourcePaneH) / imageH);
+    const double targetFit = std::min(static_cast<double>(targetPaneW) / imageW,
+                                      static_cast<double>(targetPaneH) / imageH);
+    if (!(sourceFit > 0.0) || !(targetFit > 0.0))
+        return plan;
+    const double ratio = targetFit / sourceFit;
+    if (!std::isfinite(ratio) || !(ratio > 0.0))
+        return plan;
+    plan.scale = sourceScale * ratio;
+    plan.offsetX = sourceOffsetX * ratio;
+    plan.offsetY = sourceOffsetY * ratio;
+    return plan;
 }
 
 } // namespace mviewer::ui

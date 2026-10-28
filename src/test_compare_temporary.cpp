@@ -1,14 +1,21 @@
 #include "compareworkspace_temporary.h"
 
+#include <cmath>
 #include <cstdio>
 
 namespace
 {
 using mviewer::ui::decideDigitHold;
 using mviewer::ui::decidePairHold;
+using mviewer::ui::planTemporaryViewport;
 using mviewer::ui::TemporaryAction;
 
 int g_failed = 0;
+
+bool near(double a, double b)
+{
+    return std::fabs(a - b) <= 1e-9 * (1.0 + std::fabs(b));
+}
 
 void expect(bool cond, const char *message)
 {
@@ -72,6 +79,33 @@ int main()
                badFallback.sourcePane == 2,
            "a hover outside the image range uses the fallback pane");
 
+    // Space keeps the source pane's own view: a Ctrl+wheel zoom on a 3072x4096
+    // pane is replayed 1:1 on an equal-size pane, never reset to plain fit.
+    {
+        const auto same =
+            planTemporaryViewport(0.38, 120.0, -45.0, 3072, 4096, 600, 800, 600, 800, true);
+        expect(near(same.scale, 0.38) && near(same.offsetX, 120.0) && near(same.offsetY, -45.0),
+               "equal panes replay the source scale and pan exactly");
+        // Target pane half as large: zoom relative to fit and the centred image
+        // point are kept, so scale and centre-relative pan halve together.
+        const auto half =
+            planTemporaryViewport(0.38, 120.0, -45.0, 3072, 4096, 600, 800, 300, 400, true);
+        expect(near(half.scale, 0.19) && near(half.offsetX, 60.0) && near(half.offsetY, -22.5),
+               "smaller target keeps zoom-vs-fit and the centred image point");
+        const auto ratio = half.scale / (std::fmin(300.0 / 3072, 400.0 / 4096));
+        const auto srcRatio = 0.38 / (std::fmin(600.0 / 3072, 800.0 / 4096));
+        expect(near(ratio, srcRatio), "zoom relative to fit matches the source pane");
+        // Normalised image point under the pane centre is identical.
+        expect(near(-half.offsetX / (half.scale * 3072), -120.0 / (0.38 * 3072)) &&
+                   near(-half.offsetY / (half.scale * 4096), 45.0 / (0.38 * 4096)),
+               "same image point sits under both pane centres");
+        const auto uniform =
+            planTemporaryViewport(0.38, 120.0, -45.0, 3072, 4096, 600, 800, 300, 400, false);
+        expect(near(uniform.scale, 0.38) && near(uniform.offsetX, 120.0),
+               "uniform / unlinked zoom keeps the raw pixel scale");
+        const auto bad = planTemporaryViewport(0.38, 1.0, 2.0, 0, 0, 600, 800, 300, 400, true);
+        expect(near(bad.scale, 0.38) && near(bad.offsetY, 2.0), "invalid sizes fall back");
+    }
     if (g_failed)
         return 1;
     std::printf("compare temporary decisions ok\n");

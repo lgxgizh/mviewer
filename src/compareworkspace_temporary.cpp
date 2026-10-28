@@ -67,24 +67,19 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
         m_cellViews[m_temporaryTargetPane]->clearTransientDisplay();
     // L4/L5: replay the source pane's exact viewport (scale + offset + backdrop)
     // so Space / 1-8 shows the same local region the user was inspecting.
+    // presentedScale() already carries the shared ratio AND the source pane's
+    // own Ctrl+wheel multiplier, so it is the view the user actually sees.
     const double srcScale = source->presentedScale();
     const QPointF srcOffset = source->offset();
     QImage backdrop;
     if (source->hasBackdrop())
         backdrop = source->backdropImage();
-    double renderScale = srcScale;
-    QPointF renderOffset = srcOffset;
-    if (!m_uniformScale && m_syncZoom && source->sourceSize() != target->sourceSize())
-    {
-        const QSize src = source->sourceSize();
-        const double fitted = scaleForPaneSource(targetPane, src.width(), src.height());
-        if (fitted > 0.0)
-            renderScale = fitted;
-    }
-    // If pane geometries differ, keep the source offset (screen-space) so the
-    // same local feature stays under the same relative viewport center.
+    const QSize image = source->sourceSize();
+    const auto plan = mviewer::ui::planTemporaryViewport(
+        srcScale, srcOffset.x(), srcOffset.y(), image.width(), image.height(), source->width(),
+        source->height(), target->width(), target->height(), !m_uniformScale && m_syncZoom);
     target->setTransientDisplay(source->displayImage(), source->sourceSize(), source->sourceRect(),
-                                renderScale, renderOffset, backdrop);
+                                plan.scale, QPointF(plan.offsetX, plan.offsetY), backdrop);
     m_temporaryCompareActive = true;
     m_temporaryTargetPane = targetPane;
     m_temporarySourcePane = sourcePane;
