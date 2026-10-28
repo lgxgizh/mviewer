@@ -121,8 +121,9 @@ void MainWindow::setupCommands()
             if (ThumbnailPanel *panel = activeThumbnailPanel())
                 panel->copySelectedTo();
         },
-        // No shortcut: global Ctrl+C copies the image to the clipboard
-        // (handled before registry dispatch); binding it here too would be dead.
+        // No shortcut: Ctrl+C is handled before registry dispatch (Browse puts
+        // the selected files on the clipboard; Viewer / Compare copy the image),
+        // so binding it here too would be dead.
         std::vector<CommandShortcut>{}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "file_move", "Move To... (Ctrl+M)",
