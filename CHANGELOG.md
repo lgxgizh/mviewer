@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.154] - 2026-10-28
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.154** (Space follows pane zoom #253, ROI follows the shown image #254, copy docs #255).
+
+### Fixed
+
+- **Compare Space replays the source pane's own view** (#253): holding Space shows the other pane exactly as it is zoomed and panned, including its own Ctrl+wheel local zoom (it used to fall back to plain fit when image sizes differed). The USM compare hold uses the same mapping.
+- **ROI follows the temporarily shown image** (#254): while Space or 1–8 is held, the held pane draws the shown image's ROI box, and its statistics chip shows that image's numbers at the matching place (Grid and canvas modes). Ctrl+C / Ctrl+S during the hold copy what is on screen. In Split, the half that is not held keeps its own image instead of going blank, and each ROI chip stays inside its own half.
+
+### Documentation
+
+- **What Ctrl+C copies** (#255): the F1 cheat sheet and the user guide (en / zh_CN) explain each mode. Browse copies the selected files (paste them in File Explorer), Viewer copies the image pixels, Compare copies or saves the on-screen view including ROI chips, and USM copies the sharpened result. Ctrl+Shift+C copies the path. A stale code comment is also corrected.
+
+### Tests / CI
+
+- compare_space_local_zoom_tests and planner cases in compare_temporary_tests (#253); compare_space_roi_tests (Grid at fit and with local zoom, Split hover hold, Ctrl+C while held, release restores) (#254).
+
 ## [1.0.153] - 2026-10-27
 
 ### Release
