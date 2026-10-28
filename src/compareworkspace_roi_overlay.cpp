@@ -142,7 +142,10 @@ void CompareWorkspace::positionROIHud()
                 mviewer::ui::roiPresentationRect(paneSel, shownView->sourceSize(), destination);
             const QPoint origin = m_compareCanvas->mapTo(this, QPoint(0, 0));
             roi = mapped.translated(origin).toAlignedRect();
-            bounds = QRect(origin, m_compareCanvas->size());
+            // Split keeps each chip inside its own half, so a held half places
+            // its chip exactly where the source half does.
+            bounds = split ? canvasPaneGeometry(geomPane).toAlignedRect().translated(origin)
+                           : QRect(origin, m_compareCanvas->size());
         }
         else if (!gridROIRect(view, paneSel, this, roi, bounds))
         {
