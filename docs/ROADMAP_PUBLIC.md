@@ -4,9 +4,9 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.153**
+## Where we are now — **Beta / 1.0.154**
 
-MViewer remains in **Beta**; the current release is **`v1.0.153`**
+MViewer remains in **Beta**; the current release is **`v1.0.154`**
 (2026-10-27, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.153** (current) | Clipboard polish: Compare Ctrl+C / Ctrl+S captures the on-screen view including ROI statistics chips; browse Ctrl+C puts the selected image files on the clipboard so Explorer Ctrl+V pastes copies | 🔵 Beta |
+| **1.0.154** (current) | Space shows the truth: holding Space (or 1–8) in Compare shows the other pane exactly as it is zoomed and panned, the ROI box and statistics chip follow the shown image, a split hold keeps both halves visible, Ctrl+C while held copies what is on screen, and the help explains what Ctrl+C copies in each mode | 🔵 Beta |
+| **1.0.153** | Clipboard polish: Compare Ctrl+C / Ctrl+S captures the on-screen view including ROI statistics chips; browse Ctrl+C puts the selected image files on the clipboard so Explorer Ctrl+V pastes copies | ✅ Previous patch |
 | **1.0.152** | Calm previews: switching images in a folder of large photos shows the new image's name at once (never the previous photo standing in), the real source size is known from the thumbnail pass, tiny thumbnails wait briefly for the sharp preview, the stats line no longer jumps, and the centre viewer no longer holds the previous image while the next one loads | ✅ Previous patch |
 | **1.0.151** | Smooth previews and Compare polish: the browse preview keeps a stable frame (no "small then grows" flicker, EXIF thumbnail bars cropped, sharp on HiDPI), the viewer's provisional image lands exactly where the full image will, Compare overlays and histograms follow the temporarily shown image, split browse mirrors the current folder, and a deep-zoom Compare pane no longer stays soft | ✅ Previous patch |
 | **1.0.150** | Browse UX: multi-select type filter (RAW hidden by default, "N files hidden" hint with one-click Show), union Compare across split panes, Compare pane header and status as overlays so every pane has the same viewport, oriented Resolution, type filter keeps selection and scroll | ✅ Previous patch |
@@ -85,7 +86,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.153` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.154` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
