@@ -551,9 +551,14 @@ void UsmCompareDialog::applyTemporaryDisplay(RawImageView *target, RawImageView 
         m_temporaryTarget->clearTransientDisplay();
 
     // Match CompareWorkspace::applyTemporaryDisplay: replay the other side's
-    // presented scale + offset so the same local region stays under the viewport.
+    // presented scale + offset (including its own zoom when sync is off) so the
+    // same local region stays under the viewport, mapped onto this pane's size.
+    const QSize image = source->sourceSize();
+    const auto plan = mviewer::ui::planTemporaryViewport(
+        source->presentedScale(), source->offset().x(), source->offset().y(), image.width(),
+        image.height(), source->width(), source->height(), target->width(), target->height(), true);
     target->setTransientDisplay(source->displayImage(), source->sourceSize(), source->sourceRect(),
-                                source->presentedScale(), source->offset());
+                                plan.scale, QPointF(plan.offsetX, plan.offsetY));
     m_temporaryHoldActive = true;
     m_temporaryTarget = target;
     if (m_btnHoldCompare)

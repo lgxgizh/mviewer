@@ -237,9 +237,6 @@ class CompareWorkspace : public QWidget
     bool handleClipboardCompareKey(QKeyEvent *event);
     void rebuildCells();
     void buildCompareCells(int count, int columns);
-    // Fit of `sourceW×sourceH` in this pane, times the shared zoom ratio.
-    // Uniform pixel scale returns that pane's current absolute scale instead.
-    double scaleForPaneSource(int pane, int sourceW, int sourceH) const;
     // When the pane's source or geometry no longer matches m_fitScales, adopt
     // fit × sharedZoomRatio. Uniform / unsynced zoom keep the engine scale.
     double scaleKeepingFit(int pane, double engineScale);
@@ -729,8 +726,8 @@ class CompareWorkspace : public QWidget
     void exportCurrentCellAdjusted();
     void exportCellAdjusted(int idx);
     void cancelAdjustedExport();
-    void launchAdjustedExport(const std::string &sourcePath, int frameIndex,
-                              const QString &outPath, const mviewer::core::CellImageAdjust &adjust);
+    void launchAdjustedExport(const std::string &sourcePath, int frameIndex, const QString &outPath,
+                              const mviewer::core::CellImageAdjust &adjust);
 
     // ── M16.4: quick PSNR/SSIM metrics ──
     QLabel *m_metricLabel = nullptr;
@@ -745,12 +742,14 @@ class CompareWorkspace : public QWidget
     void scheduleHistogramRefresh(bool includeMain, const std::vector<int> &paneIndices);
     HistIndexPlan collectHistogramIndices(bool includeMain, const std::vector<int> &paneIndices);
     void clearMainHistogramForEmptyPlan(bool updateMain);
-    static void computeHistogramBatch(
-        const std::vector<ImageData> &pixels, const std::vector<CellAdjust> &adjusts,
-        bool roiEnabled, const mviewer::domain::Selection &roi, const std::vector<int> &unionIdx,
-        const std::vector<int> &mainIndices, const std::vector<int> &panes, int paneCount,
-        bool updateMain, uint64_t gen, const QPointer<CompareWorkspace> &guard,
-        const TaskScheduler::TaskContext &ctx);
+    static void computeHistogramBatch(const std::vector<ImageData> &pixels,
+                                      const std::vector<CellAdjust> &adjusts, bool roiEnabled,
+                                      const mviewer::domain::Selection &roi,
+                                      const std::vector<int> &unionIdx,
+                                      const std::vector<int> &mainIndices,
+                                      const std::vector<int> &panes, int paneCount, bool updateMain,
+                                      uint64_t gen, const QPointer<CompareWorkspace> &guard,
+                                      const TaskScheduler::TaskContext &ctx);
     void applyHistogramBatchResult(const HistogramBatchResult &result);
     // M23: the histogram section title text for the given ROI/full state.
     QString histogramTitleText(bool roiEnabled, const mviewer::domain::Selection &roi) const;

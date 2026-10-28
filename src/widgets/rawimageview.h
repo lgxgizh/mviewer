@@ -132,6 +132,11 @@ class RawImageView : public QWidget
         return (!m_transientImage.isNull() && m_transientRenderScale > 0.0) ? m_transientRenderScale
                                                                             : m_scale;
     }
+    // Pan used to draw the presented raster (transient offset while held, else offset()).
+    QPointF presentedOffset() const
+    {
+        return (!m_transientImage.isNull() && m_hasTransientOffset) ? m_transientOffset : m_offset;
+    }
 
     // Difference/heatmap overlay (compare mode). The workspace computes the overlay
     // from core-layer data and hands it in as a QImage — RawImageView only renders it,
