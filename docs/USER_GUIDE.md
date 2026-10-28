@@ -56,6 +56,8 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
    - A right-click without dragging opens the pane menu (including "Export Adjusted Image..."); dragging still draws an ROI.
    - The box header shows the reference label (A / B); the HUD shows the region's pixel mean, variance, extremes and histogram live.
    - Multi-level synchronized selection and TSV measurement export are supported.
+   - While **Space** or **1–8** is held, the ROI box and its statistics chip follow the image the pane shows.
+   - **Ctrl+C** / **Ctrl+S** copy / save exactly what is on screen, ROI boxes and statistics chips included.
 5. **Peek and layouts**:
    - Hold **1–8** to temporarily preview image N in the pane under the cursor; release to restore. Without a pane under the cursor the focused pane is used, otherwise the first pane. Out-of-range digits only show a hint. Layout presets are **Ctrl+2 / Ctrl+4 / Ctrl+8**. **Ctrl+1** is 100% actual size, **0 / Ctrl+0** fits the window.
 6. **Synchronization**:
@@ -181,6 +183,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **R** | — | Toggle ROI select mode | Sync crosshair | — |
 | **Ctrl+R** | Rotate 90° clockwise (writes the file) | Rotate 90° clockwise (writes the file) | Preview-rotate the current pane (file not written) | — |
 | **Space** | Quick-compare with the next image | Quick compare (animations: play/pause) | Hold to show the other side | Hold to show the other side |
+| **Ctrl+C** | Copy the selected files (paste in File Explorer) | Copy the image pixels | Copy what is on screen (incl. ROI chips) | Copy the sharpened result |
 
 ---
 
@@ -206,6 +209,8 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **Shift+1…6** | Single channel: RGB / R / G / B / Y / HSV-V |
 | **Ctrl+R** / **Ctrl+Shift+R** | Preview-rotate the current pane (file not written) |
 | **Ctrl+Shift+H** / **Ctrl+Alt+V** | Preview-flip the current pane (file not written) |
+| **Ctrl+C** / **Ctrl+S** | Copy / save what is on screen, including ROI boxes and statistics chips (also while Space is held) |
+| **Ctrl+Shift+C** | Copy the focused image's full path |
 | **Esc** | Clear the ROI selection or exit Compare |
 | **?** | Bottom hint strip |
 
@@ -223,6 +228,8 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **Ctrl+R** / **Ctrl+Shift+R** | Rotate 90° clockwise / counterclockwise (overwrites the original; preview only in Compare) |
 | **Ctrl+Shift+H** / **Ctrl+Alt+V** | Flip horizontally / vertically (overwrites the original; preview only in Compare) |
 | **Ctrl++** / **Ctrl+-** / **Ctrl+Alt+9** | Gallery focus: enlarge, shrink, or reset thumbnail size. **Ctrl+0** always fits the window |
+| **Ctrl+C** | Copy the selected files to the clipboard (paste them in File Explorer) |
+| **Ctrl+Shift+C** | Copy the current image's full path |
 | **Shift+C** | Copy the pixel color at the cursor |
 | **F6** | Toggle focus browse mode |
 | **S** | Start the slideshow |
