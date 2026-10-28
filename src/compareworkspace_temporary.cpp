@@ -80,6 +80,9 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
         source->height(), target->width(), target->height(), !m_uniformScale && m_syncZoom);
     target->setTransientDisplay(source->displayImage(), source->sourceSize(), source->sourceRect(),
                                 plan.scale, QPointF(plan.offsetX, plan.offsetY), backdrop);
+    // The held image brings its ROI along (overlays follow the shown image).
+    target->setTransientSelection(m_roiLinked ? m_lastSelection : source->selection(),
+                                  source->paneTag());
     m_temporaryCompareActive = true;
     m_temporaryTargetPane = targetPane;
     m_temporarySourcePane = sourcePane;
@@ -231,6 +234,7 @@ void CompareWorkspace::applyDisplayedPaneOverlays()
     }
     if (m_paneHistOverlay)
         positionCellHists();
+    positionROIHud();
     if (m_compareCanvas)
         m_compareCanvas->update();
 }

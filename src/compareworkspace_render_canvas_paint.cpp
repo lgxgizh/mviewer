@@ -10,6 +10,18 @@
 #include <QVariant>
 #include <QtMath>
 
+namespace
+{
+// Same dual-tone divider drawSplitCompare paints at the halves' boundary.
+void drawSplitDivider(QPainter &p, const QRect &r, int x)
+{
+    p.setPen(QPen(QColor(0, 0, 0, 110), 3));
+    p.drawLine(QPoint(x, r.top()), QPoint(x, r.bottom()));
+    p.setPen(QPen(QColor(255, 255, 255, 230), 1));
+    p.drawLine(QPoint(x, r.top()), QPoint(x, r.bottom()));
+}
+} // namespace
+
 // Canvas paint entry — invoked from the canvas event path (Paint event via the
 // workspace event filter). Renders with the canvas rect only, never the parent.
 void CompareWorkspace::paintCompareCanvas()
@@ -50,13 +62,17 @@ void CompareWorkspace::paintCompareCanvas()
         if (m_canvasTemporaryPane >= 0)
         {
             // L6: in Split, Space must stay in the hovered half — not full canvas
-            // (full-canvas was a 2x jump of center and scale).
+            // (full-canvas was a 2x jump of center and scale). The other half
+            // keeps showing its own image instead of going blank.
             if (m_splitChk && m_splitChk->isChecked())
             {
-                const int targetPane = 1 - m_canvasTemporaryPane;
-                const QRectF half = canvasPaneGeometry(targetPane >= 0 ? targetPane : 0);
-                const QRect clip = half.toRect().intersected(r);
-                drawCellCompare(base, m_canvasTemporaryPane, clip, half);
+                for (int slot = 0; slot < 2; ++slot)
+                {
+                    const QRectF half = canvasPaneGeometry(slot);
+                    drawCellCompare(base, displayedImageIndex(slot), half.toRect().intersected(r),
+                                    half);
+                }
+                drawSplitDivider(base, r, canvasPaneGeometry(1).toRect().left());
             }
             else
             {
@@ -88,12 +104,15 @@ void CompareWorkspace::drawCanvasROI(QPainter &p)
 {
     if (m_lastSelection.isEmpty() || !m_roiLinked)
         return;
-    const auto drawPane = [this, &p](int pane)
+    // Each slot outlines the ROI on the image it shows (a held Space / 1-8
+    // switch draws the other image there, with that image's geometry and tag).
+    const auto drawPane = [this, &p](int slot)
     {
+        const int pane = displayedImageIndex(slot);
         if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
             return;
         mviewer::ui::drawROIOverlay(p, m_lastSelection, m_cellViews[pane]->sourceSize(),
-                                    cellFullDestRect(pane, canvasPaneGeometry(pane)), true,
+                                    cellFullDestRect(pane, canvasPaneGeometry(slot)), true,
                                     QString(QChar('A' + pane)));
     };
     if (m_splitChk && m_splitChk->isChecked())

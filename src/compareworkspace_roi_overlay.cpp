@@ -40,6 +40,53 @@ QLabel *roiChip(QWidget *owner, int index)
         "border-radius:3px;padding:2px 4px;font-size:11px;font-weight:600;}");
     return chip;
 }
+// Grid: the ROI as the pane presents it now. While a temporary switch is held
+// the pane shows another image with that image's viewport, so the mapping uses
+// the presented transform, not the pane's own.
+bool gridROIRect(const RawImageView *view, const mviewer::domain::Selection &sel, QWidget *owner,
+                 QRect &roi, QRect &bounds)
+{
+    const QPointF a = view->presentedSourcePointToWidget(QPointF(sel.x, sel.y));
+    const QPointF b =
+        view->presentedSourcePointToWidget(QPointF(sel.x + sel.width, sel.y + sel.height));
+    if (!std::isfinite(a.x()) || !std::isfinite(b.x()))
+        return false;
+    const QPoint origin = view->mapTo(owner, QPoint(0, 0));
+    roi = QRectF(a, b).normalized().translated(origin).toAlignedRect();
+    bounds = QRect(origin, view->size());
+    return true;
+}
+
+void placeROIChip(QLabel *chip, const QString &text, const QRect &roi, const QRect &bounds,
+                  int stack)
+{
+    if (chip->text() != text)
+    {
+        chip->setText(text);
+        chip->adjustSize();
+    }
+    QSize size = chip->size();
+    if (size.isEmpty())
+        size = chip->sizeHint();
+    size.setWidth(std::min(size.width(), std::max(40, bounds.width() - 8)));
+    int x = roi.right() + 6;
+    int y = roi.top() + stack * (size.height() + 2);
+    if (x + size.width() > bounds.right())
+    {
+        x = roi.left() + 4;
+        y = roi.top() + 4;
+    }
+    x = std::clamp(x, bounds.left() + 2,
+                   std::max(bounds.left() + 2, bounds.right() - size.width()));
+    y = std::clamp(y, bounds.top() + 2,
+                   std::max(bounds.top() + 2, bounds.bottom() - size.height()));
+    const QRect targetGeom(x, y, size.width(), size.height());
+    if (chip->geometry() != targetGeom)
+        chip->setGeometry(targetGeom);
+    if (!chip->isVisible())
+        chip->show();
+    chip->raise();
+}
 } // namespace
 
 void CompareWorkspace::updateROISurfaces()
@@ -61,22 +108,25 @@ void CompareWorkspace::updateROISurfaces()
 
 void CompareWorkspace::positionROIHud()
 {
-    const int paneCount = m_engine.imageCount();
+    // Chips follow the image each slot shows (Space / 1-8 hold included): the
+    // numbers, the anchor and the visibility all come from displayedImageIndex.
+    const int paneCount = std::min(m_engine.imageCount(), static_cast<int>(m_cellViews.size()));
     const bool canvas = m_compareCanvas && m_compareCanvas->isVisible();
     const bool split = canvas && m_splitChk && m_splitChk->isChecked();
+    const bool canvasHold = canvas && m_canvasTemporaryPane >= 0;
     for (int index = 0; index < 8; ++index)
     {
         QLabel *chip = roiChip(this, index);
-        RawImageView *view = (index < paneCount && index < static_cast<int>(m_cellViews.size()))
-                                 ? m_cellViews[static_cast<size_t>(index)]
-                                 : nullptr;
+        const int shown = index < paneCount ? displayedImageIndex(index) : -1;
+        RawImageView *view = index < paneCount ? m_cellViews[static_cast<size_t>(index)] : nullptr;
+        RawImageView *shownView =
+            shown >= 0 && shown < paneCount ? m_cellViews[static_cast<size_t>(shown)] : nullptr;
         const mviewer::domain::Selection paneSel =
-            view ? (m_roiLinked ? m_lastSelection : view->selection())
-                 : mviewer::domain::Selection{};
-        const bool hasRoi = !paneSel.isEmpty();
-        const bool paneVisible =
-            hasRoi && view && (canvas ? (split ? index < 2 : true) : view->isVisible());
-        if (!paneVisible)
+            shownView ? (m_roiLinked ? m_lastSelection : shownView->selection())
+                      : mviewer::domain::Selection{};
+        // A full-canvas hold draws one image (labelled as slot 0); split shows two.
+        const bool slotShown = canvas ? (split ? index < 2 : (!canvasHold || index == 0)) : true;
+        if (paneSel.isEmpty() || !view || !slotShown || (!canvas && !view->isVisible()))
         {
             chip->hide();
             continue;
@@ -86,53 +136,23 @@ void CompareWorkspace::positionROIHud()
         if (canvas)
         {
             const int geomPane = split ? index : 0;
-            const QRectF destination = cellFullDestRect(geomPane, canvasPaneGeometry(geomPane));
-            QRectF mapped =
-                mviewer::ui::roiPresentationRect(paneSel, view->sourceSize(), destination);
+            const int imagePane = canvasHold ? shown : geomPane;
+            const QRectF destination = cellFullDestRect(imagePane, canvasPaneGeometry(geomPane));
+            const QRectF mapped =
+                mviewer::ui::roiPresentationRect(paneSel, shownView->sourceSize(), destination);
             const QPoint origin = m_compareCanvas->mapTo(this, QPoint(0, 0));
             roi = mapped.translated(origin).toAlignedRect();
-            bounds = QRect(origin, m_compareCanvas->size());
+            // Split keeps each chip inside its own half, so a held half places
+            // its chip exactly where the source half does.
+            bounds = split ? canvasPaneGeometry(geomPane).toAlignedRect().translated(origin)
+                           : QRect(origin, m_compareCanvas->size());
         }
-        else
+        else if (!gridROIRect(view, paneSel, this, roi, bounds))
         {
-            const QPointF a = view->sourcePointToWidget(QPointF(paneSel.x, paneSel.y));
-            const QPointF b = view->sourcePointToWidget(
-                QPointF(paneSel.x + paneSel.width, paneSel.y + paneSel.height));
-            if (!std::isfinite(a.x()) || !std::isfinite(b.x()))
-            {
-                chip->hide();
-                continue;
-            }
-            const QPoint origin = view->mapTo(this, QPoint(0, 0));
-            roi = QRectF(a, b).normalized().translated(origin).toAlignedRect();
-            bounds = QRect(origin, view->size());
+            chip->hide();
+            continue;
         }
-        const QString text = roiChipText(m_roiResult, index);
-        if (chip->text() != text)
-        {
-            chip->setText(text);
-            chip->adjustSize();
-        }
-        QSize size = chip->size();
-        if (size.isEmpty())
-            size = chip->sizeHint();
-        size.setWidth(std::min(size.width(), std::max(40, bounds.width() - 8)));
-        int x = roi.right() + 6;
-        int y = roi.top() + (canvas && !split ? index * (size.height() + 2) : 0);
-        if (x + size.width() > bounds.right())
-        {
-            x = roi.left() + 4;
-            y = roi.top() + 4;
-        }
-        x = std::clamp(x, bounds.left() + 2,
-                       std::max(bounds.left() + 2, bounds.right() - size.width()));
-        y = std::clamp(y, bounds.top() + 2,
-                       std::max(bounds.top() + 2, bounds.bottom() - size.height()));
-        const QRect targetGeom(x, y, size.width(), size.height());
-        if (chip->geometry() != targetGeom)
-            chip->setGeometry(targetGeom);
-        if (!chip->isVisible())
-            chip->show();
-        chip->raise();
+        placeROIChip(chip, roiChipText(m_roiResult, shown), roi, bounds,
+                     canvas && !split ? index : 0);
     }
 }

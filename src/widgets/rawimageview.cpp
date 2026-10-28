@@ -360,8 +360,10 @@ void RawImageView::paintEvent(QPaintEvent *)
     // Geometry for the live annotation layer below (same transform as the image).
     const QSize sourceSize = renderSourceSize();
     const double presented = presentedScale();
-    const double cx = width() / 2.0 + m_offset.x();
-    const double cy = height() / 2.0 + m_offset.y();
+    // presentedOffset(): a held transient viewport carries its own pan.
+    const QPointF presentedPan = presentedOffset();
+    const double cx = width() / 2.0 + presentedPan.x();
+    const double cy = height() / 2.0 + presentedPan.y();
     const int dw = qRound(sourceSize.width() * presented);
     const int dh = qRound(sourceSize.height() * presented);
     drawLiveOverlays(p, cx, cy, dw, dh, sourceSize, presented);
@@ -383,6 +385,11 @@ void RawImageView::drawLiveOverlays(QPainter &p, double cx, double cy, int dw, i
             0, 0, sourceSize.width(), sourceSize.height(), QRectF(rect()));
     }
 
+    if (!m_transientImage.isNull())
+        drawTransientROI(
+            p,
+            QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw), static_cast<double>(dh)),
+            sourceSize);
     if (m_transientImage.isNull())
     {
         mviewer::ui::drawROIOverlay(
