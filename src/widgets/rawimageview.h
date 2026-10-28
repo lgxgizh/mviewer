@@ -122,6 +122,16 @@ class RawImageView : public QWidget
     // Paint-only scale for the transient raster. <= 0 keeps m_scale (pixel align).
     void setTransientRenderScale(double scale);
     void clearTransientDisplay();
+    // ROI carried by the transient image: the source pane's selection and tag,
+    // drawn with the presented transform while held (overlays follow the image).
+    void setTransientSelection(const mviewer::domain::Selection &selection, const QString &tag);
+    mviewer::domain::Selection transientSelection() const
+    {
+        return m_transientSelection;
+    }
+    // sourcePointToWidget() for what is on screen now: the transient viewport
+    // (source size, scale, offset) while held, the pane's own otherwise.
+    QPointF presentedSourcePointToWidget(const QPointF &sourcePoint) const;
     bool hasTransientDisplay() const
     {
         return !m_transientImage.isNull();
@@ -329,6 +339,7 @@ class RawImageView : public QWidget
     void resizeEvent(QResizeEvent *) override;
 
   private:
+    void drawTransientROI(QPainter &p, const QRectF &destination, const QSize &sourceSize);
     void computeFit();
     // NOLINTBEGIN(bugprone-easily-swappable-parameters)
     void drawCrosshair(QPainter &p, double cx, double cy, double dw, double dh) const;
@@ -370,6 +381,8 @@ class RawImageView : public QWidget
     QRect m_sourceRect;
     QImage m_transientImage;
     QSize m_transientSourceSize;
+    mviewer::domain::Selection m_transientSelection;
+    QString m_transientPaneTag;
     QRect m_transientSourceRect;
     double m_transientRenderScale = 0.0;
     QPointF m_transientOffset;

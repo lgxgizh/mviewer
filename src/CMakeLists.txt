@@ -2222,6 +2222,24 @@ target_include_directories(compare_space_local_zoom_tests PRIVATE ${CMAKE_CURREN
 add_test(NAME compare_space_local_zoom_tests COMMAND compare_space_local_zoom_tests)
 set_tests_properties(compare_space_local_zoom_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# Space + ROI: the held pane shows the other image's ROI rectangle and chip at
+# that image's viewport; Ctrl+C while held copies what is on screen.
+add_executable(compare_space_roi_tests
+    test_compare_space_roi.cpp
+)
+target_link_libraries(compare_space_roi_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_space_roi_tests PRIVATE cxx_std_20)
+target_include_directories(compare_space_roi_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_space_roi_tests COMMAND compare_space_roi_tests)
+set_tests_properties(compare_space_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
 # M52: pure source-backed Compare display planning regression matrix. The
 # planner owns no widget or decoder state, so this remains deterministic and
 # proves placeholder/Fit/zoom/pan/DPR/crop/rotation/supersession semantics.

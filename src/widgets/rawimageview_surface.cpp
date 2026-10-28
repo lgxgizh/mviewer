@@ -4,6 +4,7 @@
 // new transform, and rasterizes once after the burst settles.
 
 #include "widgets/rawimageview.h"
+#include "widgets/roioverlay.h"
 
 #include <QPainter>
 #include <QTimer>
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 
 namespace
 {
@@ -230,6 +232,8 @@ void RawImageView::setTransientDisplay(const QImage &img, const QSize &sourceSiz
     m_hasTransientOffset = false;
     m_transientOffset = {};
     m_transientBackdrop = QImage();
+    m_transientSelection = {};
+    m_transientPaneTag.clear();
     rebuildFilteredDisplay();
     releaseBaseSurface();
     update();
@@ -274,7 +278,48 @@ void RawImageView::clearTransientDisplay()
     m_hasTransientOffset = false;
     m_transientOffset = {};
     m_transientBackdrop = QImage();
+    m_transientSelection = {};
+    m_transientPaneTag.clear();
     rebuildFilteredDisplay();
     releaseBaseSurface();
     update();
+}
+
+void RawImageView::setTransientSelection(const mviewer::domain::Selection &selection,
+                                         const QString &tag)
+{
+    if (m_transientImage.isNull())
+        return;
+    m_transientSelection = selection;
+    m_transientPaneTag = tag;
+    update();
+}
+
+void RawImageView::drawTransientROI(QPainter &p, const QRectF &destination, const QSize &sourceSize)
+{
+    // The held image brings its ROI along, mapped like the image itself, so
+    // the rectangle stays on the same content the source pane outlines.
+    if (m_transientSelection.isEmpty())
+        return;
+    mviewer::ui::drawROIOverlay(p, m_transientSelection, sourceSize, destination, true,
+                                m_transientPaneTag);
+}
+
+QPointF RawImageView::presentedSourcePointToWidget(const QPointF &sourcePoint) const
+{
+    if (m_transientImage.isNull())
+        return sourcePointToWidget(sourcePoint);
+    const QSize size = renderSourceSize();
+    const double scale = presentedScale();
+    if (!size.isValid() || !(scale > 0.0) || !std::isfinite(scale) ||
+        !std::isfinite(sourcePoint.x()) || !std::isfinite(sourcePoint.y()))
+    {
+        const double invalid = std::numeric_limits<double>::quiet_NaN();
+        return QPointF(invalid, invalid);
+    }
+    const QPointF pan = presentedOffset();
+    const double cx = width() / 2.0 + pan.x();
+    const double cy = height() / 2.0 + pan.y();
+    return QPointF(cx - size.width() * scale / 2.0 + sourcePoint.x() * scale,
+                   cy - size.height() * scale / 2.0 + sourcePoint.y() * scale);
 }
