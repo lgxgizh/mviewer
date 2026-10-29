@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -15,7 +16,7 @@ struct InPlaceRenameEntry
     std::string targetName; // file name only, including the extension
 };
 
-enum class InPlaceRenameOutcome
+enum class InPlaceRenameOutcome : std::uint8_t
 {
     Renamed,
     Unchanged, // target name equals the current name
