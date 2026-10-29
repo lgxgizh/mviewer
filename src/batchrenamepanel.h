@@ -32,12 +32,16 @@ class BatchRenamePanel : public QWidget
     bool isValid() const;
     QString errorMessage() const;
     QLineEdit *patternEdit() const;
+    // Hosts with their own full preview (BatchDialog) hide the 3-line preview.
+    void setPreviewVisible(bool visible);
 
     void loadSettings();
     void saveSettings() const;
 
   signals:
     void validityChanged(bool isValid);
+    // Any pattern / find / replace / option edit.
+    void optionsChanged();
 
   private:
     void buildFindReplaceRows();

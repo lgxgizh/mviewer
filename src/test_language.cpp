@@ -89,6 +89,8 @@ int main(int argc, char **argv)
               "Same as O when the compare canvas has focus; otherwise Tab moves focus") ==
               QStringLiteral("比较画布拥有焦点时与 O 相同；否则 Tab 移动焦点"),
           "qm translates compare canvas Tab note");
+    check(embedded.translate("BatchDialog", "Batch Rename") == QStringLiteral("批量重命名"),
+          "qm translates the Batch Rename dialog title");
     check(embedded.translate("MainWindow", "Skip this version") == QStringLiteral("跳过此版本"),
           "qm translates Skip this version");
     check(embedded.translate("MainWindow", "Checking for updates…") ==

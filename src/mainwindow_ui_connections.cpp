@@ -566,9 +566,30 @@ void MainWindow::connectPanelSignals()
             [this]()
             {
                 if (!m_batchDialog)
+                {
                     m_batchDialog = new BatchDialog(this);
-                QStringList in = resolveSelectedPaths(true);
-                m_batchDialog->setInputFiles(in.isEmpty() ? m_imageList->paths() : in);
+                    connect(m_batchDialog, &BatchDialog::filesRenamed, this,
+                            [this](const QString &dir, const QString &summary)
+                            {
+                                for (ThumbnailPanel *panel :
+                                     {m_thumbnailPanel, m_secondaryThumbnailPanel})
+                                {
+                                    if (panel && QDir::cleanPath(panel->currentDir()) ==
+                                                     QDir::cleanPath(dir))
+                                        emit panel->directoryContentsChanged(dir);
+                                }
+                                statusBar()->showMessage(summary, 5000);
+                            });
+                }
+                // Every image of the folder being browsed, in gallery order.
+                ThumbnailPanel *panel = activeThumbnailPanel();
+                QStringList paths = panel ? panel->visiblePaths() : QStringList();
+                QString dir = panel ? panel->currentDir() : QString();
+                if (paths.isEmpty())
+                    paths = m_imageList->paths();
+                if (dir.isEmpty() && !paths.isEmpty())
+                    dir = QFileInfo(paths.first()).absolutePath();
+                m_batchDialog->setFolder(dir, paths);
                 m_batchDialog->exec();
             });
     connect(m_actPluginSettings, &QAction::triggered, this,

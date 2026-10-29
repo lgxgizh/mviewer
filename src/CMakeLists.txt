@@ -124,6 +124,7 @@ add_library(mviewer_core SHARED
     core/metadata/MetadataPresentationService.cpp
     core/batch/BatchProcessor.cpp
     core/batch/BatchRename.cpp
+    core/batch/BatchRenameInPlace.cpp
     core/update/UpdateChecker.cpp
     core/update/UpdatePrompt.cpp
 
@@ -302,7 +303,6 @@ add_library(mviewer_ui STATIC
     metadatamodel.cpp
     searchpanel.cpp
     batchdialog.cpp
-    batchdialog_panels.cpp
     batchrenamepanel.cpp
     widgets/rawimageview.cpp
     widgets/rawimageview_surface.cpp

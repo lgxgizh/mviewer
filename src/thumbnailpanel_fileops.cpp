@@ -527,7 +527,7 @@ void ThumbnailPanel::renamePath(const QString &oldPath, bool multiSelectionNotic
     if (multiSelectionNotice)
     {
         emit browseStatusChanged(
-            tr("Renamed the focused file only; use Tools → Batch Processing to rename "
+            tr("Renamed the focused file only; use Tools → Batch Rename to rename "
                "multiple files"));
     }
 }

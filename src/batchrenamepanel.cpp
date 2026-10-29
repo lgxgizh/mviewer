@@ -73,9 +73,15 @@ BatchRenamePanel::BatchRenamePanel(QWidget *parent) : QWidget(parent)
     mainLay->addWidget(m_previewLabel);
 
     for (QLineEdit *edit : {m_patternEdit, m_findEdit, m_replaceEdit})
+    {
         connect(edit, &QLineEdit::textChanged, this, &BatchRenamePanel::updatePreview);
+        connect(edit, &QLineEdit::textChanged, this, &BatchRenamePanel::optionsChanged);
+    }
     for (QCheckBox *check : {m_useRegexCheck, m_caseSensitiveCheck})
+    {
         connect(check, &QCheckBox::toggled, this, &BatchRenamePanel::updatePreview);
+        connect(check, &QCheckBox::toggled, this, &BatchRenamePanel::optionsChanged);
+    }
     updatePreview();
 }
 
@@ -135,6 +141,7 @@ void BatchRenamePanel::setOptions(const mviewer::core::BatchRenameOptions &optio
         m_caseSensitiveCheck->setChecked(options.caseSensitive);
     }
     updatePreview();
+    emit optionsChanged();
 }
 
 void BatchRenamePanel::setSourceFiles(const QStringList &files)
@@ -167,6 +174,11 @@ QString BatchRenamePanel::errorMessage() const
 QLineEdit *BatchRenamePanel::patternEdit() const
 {
     return m_patternEdit;
+}
+
+void BatchRenamePanel::setPreviewVisible(bool visible)
+{
+    m_previewLabel->setVisible(visible);
 }
 
 void BatchRenamePanel::loadSettings()
