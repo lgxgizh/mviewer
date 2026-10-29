@@ -150,9 +150,10 @@ void BatchDialog::setFolder(const QString &directory, const QStringList &imagePa
     }
     m_list->addTopLevelItems(items);
     m_updating = false;
-    m_folderLabel->setText(
-        (imagePaths.size() == 1 ? tr("%1 · 1 image") : tr("%1 · %2 images").arg(imagePaths.size()))
-            .arg(QDir::toNativeSeparators(m_directory)));
+    const QString folder = QDir::toNativeSeparators(m_directory);
+    m_folderLabel->setText(imagePaths.size() == 1
+                               ? tr("%1 · 1 image").arg(folder)
+                               : tr("%1 · %2 images").arg(folder).arg(imagePaths.size()));
     refreshExistingNames();
     refreshPreview();
 }
