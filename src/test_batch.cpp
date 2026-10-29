@@ -3,6 +3,7 @@
 #include "batchdialog.h"
 #include "core/batch/BatchProcessor.h"
 #include "core/batch/BatchRename.h"
+#include "core/batch/BatchRenameInPlace.h"
 #include "domain/BatchJob.h"
 #include <QApplication>
 #include <QByteArray>
@@ -12,6 +13,8 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSettings>
@@ -19,6 +22,7 @@
 #include <QTemporaryDir>
 #include <QTextEdit>
 #include <QTimer>
+#include <QTreeWidget>
 #include <QUuid>
 #include <cstdio>
 #include <string>

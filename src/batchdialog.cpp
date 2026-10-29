@@ -1,700 +1,390 @@
 #include "batchdialog.h"
+#include "Theme.h"
 #include "ThemeMetrics.h"
-#include "batchdialog_panels.h"
 #include "batchrenamepanel.h"
 
-#include "core/image/ImageFormats.h"
+#include "core/batch/BatchRename.h"
 
-#include <QApplication>
-#include <QCheckBox>
-#include <QComboBox>
-#include <QDesktopServices>
+#include <QColor>
 #include <QDir>
-#include <QDirIterator>
-#include <QFileDialog>
 #include <QFileInfo>
-#include <QFutureWatcher>
-#include <QGroupBox>
 #include <QHBoxLayout>
+#include <QHash>
+#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
 #include <QMessageBox>
-#include <QPointer>
-#include <QProgressBar>
 #include <QPushButton>
-#include <QSettings>
 #include <QShowEvent>
-#include <QSpinBox>
-#include <QTextEdit>
-#include <QUrl>
+#include <QTreeWidget>
 #include <QVBoxLayout>
-#include <QWidget>
-#include <QtConcurrent/QtConcurrent>
+
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace
 {
 
-QString batchFinishText(const mviewer::domain::BatchJobResult &result)
+constexpr int kPathRole = Qt::UserRole;
+
+// Same identity rule as the in-place rename: Windows names ignore case.
+QString nameKey(const QString &name)
 {
-    const QString counts = BatchDialog::tr("%1 succeeded, %2 failed")
-                               .arg(result.totalSucceeded)
-                               .arg(result.totalFailed);
-    if (!result.cancelled && result.totalFailed <= 0)
-        return BatchDialog::tr("Completed: %1").arg(counts);
-
-    QString names;
-    int shown = 0;
-    for (const auto &file : result.fileResults)
-    {
-        if (file.success || file.inputPath.empty())
-            continue;
-        if (shown >= 3)
-        {
-            names += QStringLiteral("…");
-            break;
-        }
-        if (!names.isEmpty())
-            names += QStringLiteral(", ");
-        const QString full =
-            QString::fromUtf8(file.inputPath.data(), static_cast<int>(file.inputPath.size()));
-        const int slash = full.lastIndexOf(QLatin1Char('/'));
-        const int back = full.lastIndexOf(QLatin1Char('\\'));
-        const int cut = slash > back ? slash : back;
-        names += cut >= 0 ? full.mid(cut + 1) : full;
-        ++shown;
-    }
-
-    if (result.cancelled)
-    {
-        QString text =
-            BatchDialog::tr("Cancelled: %1, %2 not processed").arg(counts).arg(result.totalSkipped);
-        if (!names.isEmpty())
-            text += BatchDialog::tr(" (%1)").arg(names);
-        return text;
-    }
-    return BatchDialog::tr("Completed: %1 (%2)").arg(counts, names);
+#ifdef Q_OS_WIN
+    return name.toCaseFolded();
+#else
+    return name;
+#endif
 }
 
-int addSupportedImages(QListWidget *list, const QString &dir, bool recursive)
+QColor roleColor(mviewer::ui::ThemeRole role)
 {
-    const auto flags = recursive ? QDirIterator::Subdirectories : QDirIterator::NoIteratorFlags;
-    QDirIterator it(dir, QDir::Files | QDir::Readable, flags);
-    int added = 0;
-    while (it.hasNext())
-    {
-        const QString path = it.next();
-        if (mviewer::core::ImageFormats::isSupportedPath(path.toStdString()))
-        {
-            list->addItem(path);
-            ++added;
-        }
-    }
-    return added;
+    return QColor(mviewer::ui::Theme::themeColor(role));
 }
 
-QString directoryOfFirstOutput(const mviewer::domain::BatchJobResult &result)
+QString fromUtf8(const std::string &text)
 {
-    for (const auto &file : result.fileResults)
-    {
-        if (!file.success || file.outputPath.empty())
-            continue;
-        const QString path =
-            QString::fromUtf8(file.outputPath.data(), static_cast<int>(file.outputPath.size()));
-        return QFileInfo(path).absolutePath();
-    }
-    return {};
+    return QString::fromUtf8(text.data(), static_cast<qsizetype>(text.size()));
 }
 
 } // namespace
 
-BatchDialog::~BatchDialog()
+BatchDialog::BatchDialog(QWidget *parent) : QDialog(parent)
 {
-    // Bound the QtConcurrent worker: cancel flags are atomic in the processor,
-    // so in-flight work stops at its next checkpoint; the stored progress
-    // callback is QPointer-guarded and can no longer touch this dialog.
-    if (m_activeProcessor)
-        m_activeProcessor->requestCancel();
-}
-
-BatchDialog::BatchDialog(QWidget *parent)
-    : QDialog(parent), m_processor(std::make_unique<mviewer::core::BatchProcessor>())
-{
-    setWindowTitle(tr("Batch Processing"));
-    setMinimumSize(720, 640);
-    resize(760, 700);
+    setWindowTitle(tr("Batch Rename"));
+    setMinimumSize(520, 400);
+    resize(640, 520);
     setSizeGripEnabled(true);
 
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(mviewer::ui::metrics::kSpace16, mviewer::ui::metrics::kSpace16,
-                                   mviewer::ui::metrics::kSpace16, mviewer::ui::metrics::kSpace16);
-    mainLayout->setSpacing(mviewer::ui::metrics::kSpace12);
-    buildFileControls(mainLayout);
-    buildOperationControls(mainLayout);
-    buildParameterControls(mainLayout);
-    buildProgressControls(mainLayout);
-    connectControls();
-    const QSettings settings;
-    m_overwriteExisting->setChecked(
-        settings.value(QStringLiteral("batch/overwriteExisting"), false).toBool());
-    m_renamePanel->loadSettings();
-    updateParamVisibility();
-}
+    mainLayout->setContentsMargins(mviewer::ui::metrics::kSpace12, mviewer::ui::metrics::kSpace12,
+                                   mviewer::ui::metrics::kSpace12, mviewer::ui::metrics::kSpace12);
+    mainLayout->setSpacing(mviewer::ui::metrics::kSpace8);
 
-void BatchDialog::buildFileControls(QVBoxLayout *mainLayout)
-{
-    auto *fileBox = new QGroupBox(tr("File"));
-    fileBox->setObjectName(QStringLiteral("batchFileGroup"));
-    auto *fileLay = new QVBoxLayout(fileBox);
-    fileLay->setSpacing(8);
+    m_folderLabel = new QLabel;
+    m_folderLabel->setObjectName(QStringLiteral("batchFolderLabel"));
+    m_folderLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    mainLayout->addWidget(m_folderLabel);
 
-    m_fileList = new QListWidget;
-    m_fileList->setObjectName(QStringLiteral("batchFileList"));
-    m_fileList->setSelectionMode(QAbstractItemView::ExtendedSelection);
-    m_fileList->setMinimumHeight(160);
-    fileLay->addWidget(m_fileList, 1);
-
-    auto *fileBtnBar = new QHBoxLayout;
-    m_addBtn = new QPushButton(tr("Add Files..."));
-    m_addDirBtn = new QPushButton(tr("Add Directory..."));
-    m_removeBtn = new QPushButton(tr("Remove Selected"));
-    m_chkRecursive = new QCheckBox(tr("Include subdirectories"));
-    m_chkRecursive->setToolTip(tr("Scan subfolders for images when adding a directory"));
-    fileBtnBar->addWidget(m_addBtn);
-    fileBtnBar->addWidget(m_addDirBtn);
-    fileBtnBar->addWidget(m_removeBtn);
-    fileBtnBar->addWidget(m_chkRecursive);
-    fileBtnBar->addStretch();
-    fileLay->addLayout(fileBtnBar);
-    mainLayout->addWidget(fileBox, 3);
-}
-
-void BatchDialog::buildOperationControls(QVBoxLayout *mainLayout)
-{
-    auto *opBox = new QGroupBox(tr("Operations"));
-    opBox->setObjectName(QStringLiteral("batchOpGroup"));
-    auto *opRow = new QHBoxLayout(opBox);
-    m_chkAnalyze = new QCheckBox(tr("Analyze"));
-    m_chkResize = new QCheckBox(tr("Resize"));
-    m_chkCrop = new QCheckBox(tr("Crop"));
-    m_chkWatermark = new QCheckBox(tr("Watermark"));
-    m_chkRename = new QCheckBox(tr("Rename"));
-    m_chkExport = new QCheckBox(tr("Export"));
-    m_chkAnalyze->setObjectName(QStringLiteral("batchChkAnalyze"));
-    m_chkResize->setObjectName(QStringLiteral("batchChkResize"));
-    m_chkCrop->setObjectName(QStringLiteral("batchChkCrop"));
-    m_chkWatermark->setObjectName(QStringLiteral("batchChkWatermark"));
-    m_chkRename->setObjectName(QStringLiteral("batchChkRename"));
-    m_chkExport->setObjectName(QStringLiteral("batchChkExport"));
-    m_chkExport->setChecked(true);
-    opRow->addWidget(m_chkAnalyze);
-    opRow->addWidget(m_chkResize);
-    opRow->addWidget(m_chkCrop);
-    opRow->addWidget(m_chkWatermark);
-    opRow->addWidget(m_chkRename);
-    opRow->addWidget(m_chkExport);
-    opRow->addStretch();
-    mainLayout->addWidget(opBox);
-}
-
-void BatchDialog::buildParameterControls(QVBoxLayout *mainLayout)
-{
-    auto *paramBox = new QGroupBox(tr("Parameters"));
-    paramBox->setObjectName(QStringLiteral("batchParamGroup"));
-    auto *paramLay = new QVBoxLayout(paramBox);
-    paramLay->setSpacing(8);
-
-    auto *retryRow = new QHBoxLayout;
-    retryRow->addWidget(new QLabel(tr("Retry count:")));
-    m_retryCount = new QSpinBox;
-    m_retryCount->setRange(0, 10);
-    m_retryCount->setValue(0);
-    retryRow->addWidget(m_retryCount);
-    retryRow->addWidget(new QLabel(tr("Retry interval (ms):")));
-    m_retryDelay = new QSpinBox;
-    m_retryDelay->setRange(0, 30000);
-    m_retryDelay->setSingleStep(100);
-    m_retryDelay->setValue(500);
-    retryRow->addWidget(m_retryDelay);
-    retryRow->addStretch();
-    paramLay->addLayout(retryRow);
-
-    m_resizePanel = batchdialog_detail::makeResizePanel(m_resizeMaxEdge);
-    m_cropPanel = batchdialog_detail::makeCropPanel(m_cropX, m_cropY, m_cropW, m_cropH);
-    m_watermarkPanel = batchdialog_detail::makeWatermarkPanel(
-        m_watermarkText, m_watermarkPos, m_watermarkOpacity, m_watermarkFontSize);
     m_renamePanel = new BatchRenamePanel;
-    m_exportPanel = batchdialog_detail::makeExportPanel(
-        m_exportFormat, m_exportQuality, m_outputDir, m_browseBtn, m_overwriteExisting);
-    paramLay->addWidget(m_resizePanel);
-    paramLay->addWidget(m_cropPanel);
-    paramLay->addWidget(m_watermarkPanel);
-    paramLay->addWidget(m_renamePanel);
-    paramLay->addWidget(m_exportPanel);
-    mainLayout->addWidget(paramBox);
-}
+    m_renamePanel->setPreviewVisible(false);
+    m_renamePanel->patternEdit()->setPlaceholderText(QStringLiteral("{name}_{seq:3}"));
+    mainLayout->addWidget(m_renamePanel);
 
-void BatchDialog::buildProgressControls(QVBoxLayout *mainLayout)
-{
-    auto *progressBox = new QGroupBox(tr("Progress"));
-    progressBox->setObjectName(QStringLiteral("batchProgressGroup"));
-    auto *progressLay = new QVBoxLayout(progressBox);
-    progressLay->setSpacing(8);
+    m_list = new QTreeWidget;
+    m_list->setObjectName(QStringLiteral("batchRenameList"));
+    m_list->setColumnCount(2);
+    m_list->setHeaderLabels({tr("Current name"), tr("New name")});
+    m_list->setRootIsDecorated(false);
+    m_list->setUniformRowHeights(true);
+    m_list->setSelectionMode(QAbstractItemView::ExtendedSelection);
+    m_list->header()->setSectionResizeMode(QHeaderView::Stretch);
+    m_list->setToolTip(tr("Uncheck a file to leave it out of the rename"));
+    mainLayout->addWidget(m_list, 1);
 
-    m_progress = new QProgressBar;
-    m_progress->setObjectName(QStringLiteral("batchProgress"));
-    m_progress->setFormat(tr("%p%"));
-    progressLay->addWidget(m_progress);
-    m_statusLabel = new QLabel(tr("Ready"));
-    m_statusLabel->setObjectName(QStringLiteral("batchStatusLabel"));
-    progressLay->addWidget(m_statusLabel);
-    m_log = new QTextEdit;
-    m_log->setObjectName(QStringLiteral("batchLog"));
-    m_log->setReadOnly(true);
-    m_log->setMinimumHeight(120);
-    progressLay->addWidget(m_log, 1);
+    m_summaryLabel = new QLabel;
+    m_summaryLabel->setObjectName(QStringLiteral("batchSummaryLabel"));
+    m_summaryLabel->setWordWrap(true);
+    mainLayout->addWidget(m_summaryLabel);
 
-    auto *btnBar = new QHBoxLayout;
-    m_startBtn = new QPushButton(tr("Start"));
-    m_startBtn->setObjectName(QStringLiteral("batchStartButton"));
-    m_pauseBtn = new QPushButton(tr("Pause"));
-    m_pauseBtn->setObjectName(QStringLiteral("batchPauseButton"));
-    m_pauseBtn->setEnabled(false);
-    m_pauseBtn->setToolTip(
-        tr("Pause/resume batch processing (takes effect after the current file finishes)"));
-    m_cancelBtn = new QPushButton(tr("Cancel Processing"));
-    m_cancelBtn->setObjectName(QStringLiteral("batchCancelButton"));
-    m_cancelBtn->setEnabled(false);
-    m_openOutputBtn = new QPushButton(tr("Open Output Directory"));
-    m_openOutputBtn->setEnabled(false);
-    m_openOutputBtn->setToolTip(tr("Open the previous task's output folder in Explorer"));
+    auto *buttons = new QHBoxLayout;
+    buttons->addStretch();
+    m_renameBtn = new QPushButton(tr("Rename"));
+    m_renameBtn->setObjectName(QStringLiteral("batchRenameButton"));
+    m_renameBtn->setDefault(true);
     m_closeBtn = new QPushButton(tr("Close"));
-    btnBar->addStretch();
-    btnBar->addWidget(m_openOutputBtn);
-    btnBar->addSpacing(12);
-    btnBar->addWidget(m_startBtn);
-    btnBar->addWidget(m_pauseBtn);
-    btnBar->addWidget(m_cancelBtn);
-    btnBar->addWidget(m_closeBtn);
-    progressLay->addLayout(btnBar);
-    mainLayout->addWidget(progressBox, 2);
-}
+    m_closeBtn->setObjectName(QStringLiteral("batchCloseButton"));
+    buttons->addWidget(m_renameBtn);
+    buttons->addWidget(m_closeBtn);
+    mainLayout->addLayout(buttons);
 
-void BatchDialog::connectControls()
-{
-    connect(m_addBtn, &QPushButton::clicked, this, &BatchDialog::onAddFiles);
-    connect(m_addDirBtn, &QPushButton::clicked, this, &BatchDialog::onAddDir);
-    connect(m_removeBtn, &QPushButton::clicked, this, &BatchDialog::onRemoveSelected);
-    connect(m_startBtn, &QPushButton::clicked, this, &BatchDialog::onStart);
-    connect(m_pauseBtn, &QPushButton::clicked, this, &BatchDialog::onPauseResume);
-    connect(m_cancelBtn, &QPushButton::clicked, this, &BatchDialog::onCancel);
-    connect(m_openOutputBtn, &QPushButton::clicked, this, &BatchDialog::onOpenOutputDir);
+    connect(m_renamePanel, &BatchRenamePanel::optionsChanged, this, &BatchDialog::refreshPreview);
+    connect(m_list, &QTreeWidget::itemChanged, this,
+            [this](QTreeWidgetItem *, int column)
+            {
+                if (column == 0)
+                    refreshPreview();
+            });
+    connect(m_renameBtn, &QPushButton::clicked, this, [this]() { renameNow(); });
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
-    connect(m_browseBtn, &QPushButton::clicked, this, &BatchDialog::onBrowseOutputDir);
 
-    const auto syncParams = [this](bool) { updateParamVisibility(); };
-    connect(m_chkResize, &QCheckBox::toggled, this, syncParams);
-    connect(m_chkCrop, &QCheckBox::toggled, this, syncParams);
-    connect(m_chkWatermark, &QCheckBox::toggled, this, syncParams);
-    connect(m_chkRename, &QCheckBox::toggled, this, syncParams);
-    connect(m_chkExport, &QCheckBox::toggled, this, syncParams);
-
-    // Rename settings: live preview uses the export format; an invalid rename
-    // (bad regex, illegal or duplicate names) disables Start while Rename is on.
-    connect(m_chkRename, &QCheckBox::toggled, this, &BatchDialog::refreshStartButton);
-    connect(m_renamePanel, &BatchRenamePanel::validityChanged, this,
-            &BatchDialog::refreshStartButton);
-    connect(m_exportFormat, &QComboBox::currentTextChanged, m_renamePanel,
-            &BatchRenamePanel::setTargetExtension);
-    m_renamePanel->setTargetExtension(m_exportFormat->currentText());
-}
-
-bool BatchDialog::renameReady() const
-{
-    return !m_chkRename->isChecked() || m_renamePanel->isValid();
-}
-
-void BatchDialog::refreshStartButton()
-{
-    if (!m_activeProcessor)
-        m_startBtn->setEnabled(renameReady());
-}
-
-void BatchDialog::syncFilesToRenamePanel()
-{
-    QStringList files;
-    files.reserve(m_fileList->count());
-    for (int i = 0; i < m_fileList->count(); ++i)
-        files.append(m_fileList->item(i)->text());
-    m_renamePanel->setSourceFiles(files);
+    m_confirmReplace = [this](int count)
+    {
+        return QMessageBox::question(
+                   this, tr("Batch Rename"),
+                   count == 1
+                       ? tr("A file with the new name already exists and is not part of this "
+                            "rename. Move it to the Recycle Bin and replace it?")
+                       : tr("%1 files with the new names already exist and are not part "
+                            "of this rename. Move them to the Recycle Bin and replace them?")
+                             .arg(count),
+                   QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes) == QMessageBox::Yes;
+    };
+    m_renamePanel->loadSettings();
+    refreshPreview();
 }
 
 void BatchDialog::showEvent(QShowEvent *event)
 {
+    m_renamePanel->loadSettings();
     QDialog::showEvent(event);
-    // Each time the dialog opens it restores the last confirmed rename settings.
-    if (!event->spontaneous() && !m_activeProcessor)
-        m_renamePanel->loadSettings();
 }
 
-void BatchDialog::updateParamVisibility()
+void BatchDialog::setFolder(const QString &directory, const QStringList &imagePaths)
 {
-    if (m_resizePanel)
-        m_resizePanel->setVisible(m_chkResize->isChecked());
-    if (m_cropPanel)
-        m_cropPanel->setVisible(m_chkCrop->isChecked());
-    if (m_watermarkPanel)
-        m_watermarkPanel->setVisible(m_chkWatermark->isChecked());
-    if (m_renamePanel)
-        m_renamePanel->setVisible(m_chkRename->isChecked());
-    if (m_exportPanel)
-        m_exportPanel->setVisible(m_chkExport->isChecked());
+    m_directory = directory;
+    if (m_directory.isEmpty() && !imagePaths.isEmpty())
+        m_directory = QFileInfo(imagePaths.first()).absolutePath();
+    m_updating = true;
+    m_list->clear();
+    QList<QTreeWidgetItem *> items;
+    for (const QString &path : imagePaths)
+    {
+        auto *item = new QTreeWidgetItem(QStringList{QFileInfo(path).fileName(), QString()});
+        item->setData(0, kPathRole, path);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        item->setCheckState(0, Qt::Checked);
+        item->setToolTip(0, QDir::toNativeSeparators(path));
+        items.append(item);
+    }
+    m_list->addTopLevelItems(items);
+    m_updating = false;
+    m_folderLabel->setText(
+        (imagePaths.size() == 1 ? tr("%1 · 1 image") : tr("%1 · %2 images").arg(imagePaths.size()))
+            .arg(QDir::toNativeSeparators(m_directory)));
+    refreshExistingNames();
+    refreshPreview();
 }
 
-void BatchDialog::setInputFiles(const QStringList &paths)
+QStringList BatchDialog::filePaths() const
 {
-    m_fileList->clear();
-    m_fileList->addItems(paths);
-    syncFilesToRenamePanel();
+    QStringList paths;
+    for (int i = 0; i < m_list->topLevelItemCount(); ++i)
+        paths << m_list->topLevelItem(i)->data(0, kPathRole).toString();
+    return paths;
 }
 
-void BatchDialog::onAddFiles()
+QStringList BatchDialog::checkedPaths() const
 {
-    // M25: the file-picker filter follows the shipped-format SSOT.
-    QString filter = tr("Images") + QStringLiteral(" (");
-    for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
-        filter += QString::fromStdString(w) + " ";
-    filter = filter.trimmed() + ")";
-    const auto files = QFileDialog::getOpenFileNames(this, tr("Select Files"), {}, filter);
-    for (const auto &f : files)
-        m_fileList->addItem(f);
-    syncFilesToRenamePanel();
+    QStringList paths;
+    for (int i = 0; i < m_list->topLevelItemCount(); ++i)
+    {
+        const QTreeWidgetItem *item = m_list->topLevelItem(i);
+        if (item->checkState(0) == Qt::Checked)
+            paths << item->data(0, kPathRole).toString();
+    }
+    return paths;
 }
 
-void BatchDialog::onAddDir() // P2 #⑦
+void BatchDialog::setTrashFunction(mviewer::core::TrashFunction trash)
 {
-    const auto dir = QFileDialog::getExistingDirectory(this, tr("Select Image Directory"));
-    if (dir.isEmpty())
+    m_trash = std::move(trash);
+}
+
+void BatchDialog::setReplaceConfirmation(std::function<bool(int)> confirm)
+{
+    m_confirmReplace = std::move(confirm);
+}
+
+void BatchDialog::refreshExistingNames()
+{
+    m_existingNames.clear();
+    if (m_directory.isEmpty())
         return;
-    const int added = addSupportedImages(m_fileList, dir, m_chkRecursive->isChecked());
-    syncFilesToRenamePanel();
-    if (added == 0)
-        QMessageBox::information(this, tr("Batch Processing"),
-                                 tr("No recognizable image files in this directory."));
+    const QStringList names =
+        QDir(m_directory).entryList(QDir::Files | QDir::Hidden | QDir::System);
+    for (const QString &name : names)
+        m_existingNames.insert(nameKey(name));
 }
 
-void BatchDialog::onRemoveSelected()
+bool BatchDialog::targetExistsOutsideBatch(const QString &name) const
 {
-    auto items = m_fileList->selectedItems();
-    for (auto *item : items)
-        delete item;
-    syncFilesToRenamePanel();
-}
-
-void BatchDialog::onBrowseOutputDir()
-{
-    const auto dir = QFileDialog::getExistingDirectory(this, tr("Select output directory"));
-    if (!dir.isEmpty())
-        m_outputDir->setText(dir);
-}
-
-void BatchDialog::buildConfig(mviewer::domain::BatchJobConfig &config) const
-{
-    for (int i = 0; i < m_fileList->count(); ++i)
-        config.inputPaths.push_back(m_fileList->item(i)->text().toStdString());
-
-    if (m_chkAnalyze->isChecked())
-        config.operations.push_back(mviewer::domain::BatchOp::Analyze);
-    if (m_chkResize->isChecked())
-        config.operations.push_back(mviewer::domain::BatchOp::Resize);
-    if (m_chkCrop->isChecked()) // P2 #⑦
-        config.operations.push_back(mviewer::domain::BatchOp::Crop);
-    if (m_chkWatermark->isChecked())
-        config.operations.push_back(mviewer::domain::BatchOp::Watermark);
-    if (m_chkRename->isChecked())
-        config.operations.push_back(mviewer::domain::BatchOp::Rename);
-    if (m_chkExport->isChecked())
-        config.operations.push_back(mviewer::domain::BatchOp::Export);
-
-    // P2 #⑦: retry & recursive
-    config.retryCount = m_retryCount->value();
-    config.retryDelayMs = m_retryDelay->value();
-    config.recursiveScan = m_chkRecursive->isChecked();
-
-    config.resizeMaxEdge = m_resizeMaxEdge->value();
-    config.cropX = m_cropX->value();
-    config.cropY = m_cropY->value();
-    config.cropW = m_cropW->value();
-    config.cropH = m_cropH->value();
-    config.watermarkText = m_watermarkText->text().toStdString();
-    config.watermarkPosition = m_watermarkPos->currentIndex();
-    config.watermarkOpacity = m_watermarkOpacity->value();
-    config.watermarkFontSize = m_watermarkFontSize->value();
-    if (m_chkRename->isChecked())
-    {
-        const auto rename = m_renamePanel->options();
-        config.renamePattern = rename.pattern;
-        config.renameFind = rename.find;
-        config.renameReplace = rename.replace;
-        config.renameUseRegex = rename.useRegex;
-        config.renameCaseSensitive = rename.caseSensitive;
-    }
-    config.exportFormat = m_exportFormat->currentText().toStdString();
-    config.exportQuality = m_exportQuality->value();
-    config.outputDir = m_outputDir->text().trimmed().toStdString();
-    config.overwriteExisting = m_overwriteExisting->isChecked();
-}
-
-bool BatchDialog::validateStart(const mviewer::domain::BatchJobConfig &config)
-{
-    if (config.inputPaths.empty())
-    {
-        QMessageBox::warning(this, tr("Batch Processing"), tr("Please add files first."));
+    if (!m_existingNames.contains(nameKey(name)))
         return false;
-    }
-    if (config.operations.empty())
+    for (const QString &path : checkedPaths())
     {
-        QMessageBox::warning(this, tr("Batch Processing"),
-                             tr("Please select at least one operation."));
-        return false;
-    }
-    const bool writesNothing = m_chkRename->isChecked() || m_chkResize->isChecked() ||
-                               m_chkCrop->isChecked() || m_chkWatermark->isChecked();
-    if (!m_chkExport->isChecked() && writesNothing)
-    {
-        QMessageBox::warning(this, tr("Batch Processing"),
-                             tr("With Export unchecked, rename/resize/crop/watermark will not "
-                                "write any files. Please check Export."));
-        return false;
-    }
-    if (m_chkRename->isChecked() && !m_renamePanel->isValid())
-    {
-        QMessageBox::warning(this, tr("Batch Processing"),
-                             tr("Invalid rename settings: %1").arg(m_renamePanel->errorMessage()));
-        return false;
+        if (nameKey(QFileInfo(path).fileName()) == nameKey(name))
+            return false;
     }
     return true;
 }
 
-void BatchDialog::onStart()
+void BatchDialog::refreshPreview()
 {
-    mviewer::domain::BatchJobConfig config;
-    buildConfig(config);
-    if (!validateStart(config))
+    if (m_updating)
         return;
+    const QStringList checked = checkedPaths();
+    m_renamePanel->setSourceFiles(checked);
+    std::vector<std::string> files;
+    files.reserve(static_cast<size_t>(checked.size()));
+    for (const QString &path : checked)
+        files.push_back(path.toUtf8().toStdString());
+    std::string error;
+    const auto results =
+        mviewer::core::validateBatchRename(files, m_renamePanel->options(), &error);
 
-    if (m_chkRename->isChecked())
-        m_renamePanel->saveSettings(); // remembered only when the run is confirmed
-    QSettings settings;
-    settings.setValue(QStringLiteral("batch/overwriteExisting"), m_overwriteExisting->isChecked());
+    QSet<QString> checkedNames;
+    for (const QString &path : checked)
+        checkedNames.insert(nameKey(QFileInfo(path).fileName()));
 
-    updateUiState(true);
-    m_progress->setRange(0, static_cast<int>(config.inputPaths.size()));
-    m_progress->setValue(0);
-    m_log->clear();
-
-    // Progress callback runs on the worker thread → post updates to the UI
-    // thread via invokeMethod so widget access is always safe.
-    m_processor->setProgressCallback(
-        [self = QPointer<BatchDialog>(this)](int current, int total, const std::string &path)
+    m_updating = true;
+    int changes = 0;
+    int replaces = 0;
+    size_t next = 0;
+    const QColor muted = roleColor(mviewer::ui::ThemeRole::TextDisabled);
+    for (int i = 0; i < m_list->topLevelItemCount(); ++i)
+    {
+        QTreeWidgetItem *item = m_list->topLevelItem(i);
+        item->setToolTip(1, QString());
+        if (item->checkState(0) != Qt::Checked || next >= results.size())
         {
-            // M24 lifetime hardening: the processor runs on a QtConcurrent
-            // worker; the stored callback must not capture raw `this` (a dialog
-            // closed mid-batch would leave a dangling pointer). Marshal through
-            // qApp and re-check the dialog is still alive before touching it.
-            QMetaObject::invokeMethod(
-                qApp,
-                [self, current, total, path]()
-                {
-                    if (!self)
-                        return;
-                    self->m_progress->setRange(0, total);
-                    self->m_progress->setValue(current);
-                    if (!path.empty())
-                    {
-                        self->m_statusLabel->setText(
-                            BatchDialog::tr("Processing (%1/%2): %3")
-                                .arg(current + 1)
-                                .arg(total)
-                                .arg(
-                                    QString::fromUtf8(path.data(), static_cast<int>(path.size()))));
-                    }
-                });
-        });
-
-    // Per-file results are streamed as they finish (same marshalling rule as the
-    // progress callback). The final aggregate is still returned, so headless
-    // callers keep the complete list.
-    m_processor->setFileResultCallback(
-        [self = QPointer<BatchDialog>(this)](const mviewer::domain::BatchFileResult &fileResult)
+            item->setText(1, QStringLiteral("—"));
+            item->setForeground(1, muted);
+            continue;
+        }
+        const auto &result = results[next++];
+        const QString newName = fromUtf8(result.newName);
+        item->setText(1, newName);
+        item->setForeground(1, m_list->palette().text());
+        if (!result.valid)
         {
-            QMetaObject::invokeMethod(qApp,
-                                      [self, fileResult]()
-                                      {
-                                          if (!self)
-                                              return;
-                                          self->m_log->append(
-                                              BatchDialog::formatResultLine(fileResult));
-                                      });
-        });
-
-    // Keep a shared_ptr to the processor for cancel control; the background
-    // thread also holds a copy via the lambda capture. A fresh processor is
-    // created when the job finishes so the dialog can be reused.
-    m_activeProcessor = std::shared_ptr<mviewer::core::BatchProcessor>(m_processor.release());
-
-    auto future = QtConcurrent::run([proc = m_activeProcessor, config = std::move(config)]()
-                                    { return proc->execute(config); });
-
-    auto *watcher = new QFutureWatcher<mviewer::domain::BatchJobResult>(this);
-    connect(watcher, &QFutureWatcher<mviewer::domain::BatchJobResult>::finished, this,
-            [this, watcher]() { finishBatch(watcher); });
-
-    watcher->setFuture(future);
-}
-
-QString BatchDialog::formatResultLine(const mviewer::domain::BatchFileResult &result)
-{
-    const auto inputPath =
-        QString::fromUtf8(result.inputPath.data(), static_cast<int>(result.inputPath.size()));
-    const auto outputPath =
-        QString::fromUtf8(result.outputPath.data(), static_cast<int>(result.outputPath.size()));
-    const auto errorMessage =
-        QString::fromUtf8(result.errorMessage.data(), static_cast<int>(result.errorMessage.size()));
-    if (!result.success)
-        return tr("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
-    if (outputPath.isEmpty())
-        return tr("[OK] %1 (analysis only, file not written)").arg(inputPath);
-    return tr("[OK] %1 → %2").arg(inputPath).arg(outputPath);
-}
-
-void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher)
-{
-    // Reading the future rethrows anything the worker threw; without this guard
-    // the exception escapes into the event loop and the dialog is left in its
-    // running state (progress never finishes, the processor is never released).
-    mviewer::domain::BatchJobResult result;
-    try
-    {
-        result = watcher->result();
+            item->setForeground(1, roleColor(mviewer::ui::ThemeRole::Danger));
+            item->setToolTip(1, fromUtf8(result.errorMessage));
+        }
+        else if (newName == item->text(0))
+        {
+            item->setForeground(1, muted);
+        }
+        else
+        {
+            ++changes;
+            if (!checkedNames.contains(nameKey(newName)) &&
+                m_existingNames.contains(nameKey(newName)))
+            {
+                ++replaces;
+                item->setForeground(1, roleColor(mviewer::ui::ThemeRole::Accent));
+                item->setToolTip(1, tr("Replaces an existing file (it goes to the Recycle Bin)"));
+            }
+        }
     }
-    catch (const std::exception &error)
-    {
-        m_progress->setValue(m_progress->maximum());
-        m_statusLabel->setText(
-            tr("Batch processing failed: %1").arg(QString::fromUtf8(error.what())));
-        m_processor = std::make_unique<mviewer::core::BatchProcessor>();
-        m_activeProcessor.reset();
-        updateUiState(false);
-        watcher->deleteLater();
-        return;
-    }
-    catch (...)
-    {
-        m_progress->setValue(m_progress->maximum());
-        m_statusLabel->setText(tr("Batch processing failed: Unknown error"));
-        m_processor = std::make_unique<mviewer::core::BatchProcessor>();
-        m_activeProcessor.reset();
-        updateUiState(false);
-        watcher->deleteLater();
-        return;
-    }
+    m_updating = false;
 
-    m_progress->setValue(m_progress->maximum());
-    m_statusLabel->setText(batchFinishText(result));
-    if (result.cancelled)
-        m_log->append(tr("[CANCEL] %1 files not processed").arg(result.totalSkipped));
-    else if (result.totalFailed > 0)
-        m_log->append(tr("[SUMMARY] %1 files failed").arg(result.totalFailed));
-
-    // Enable "open output dir" if any files were produced. An empty field means
-    // each file was written beside its source; open the first one that landed.
-    m_lastOutputDir = m_outputDir->text().trimmed();
-    if (m_lastOutputDir.isEmpty())
-        m_lastOutputDir = directoryOfFirstOutput(result);
-    m_openOutputBtn->setEnabled(!m_lastOutputDir.isEmpty() && result.totalSucceeded > 0 &&
-                                QDir(m_lastOutputDir).exists());
-
-    // Log lines were already streamed per file by the file-result callback; the
-    // aggregate remains the authoritative count for the status text.
-
-    // Create a fresh processor so the dialog can be reused.
-    m_processor = std::make_unique<mviewer::core::BatchProcessor>();
-    m_activeProcessor.reset();
-    updateUiState(false);
-    watcher->deleteLater();
-}
-
-void BatchDialog::onCancel()
-{
-    if (m_activeProcessor)
-        m_activeProcessor->requestCancel();
-    // If paused, resume so the cancel can take effect.
-    if (m_isPaused && m_activeProcessor)
-    {
-        m_activeProcessor->resume();
-        m_isPaused = false;
-        m_pauseBtn->setText(tr("Pause"));
-    }
-    m_statusLabel->setText(tr("Cancelling..."));
-}
-
-void BatchDialog::onPauseResume()
-{
-    if (!m_activeProcessor)
-        return;
-    if (!m_isPaused)
-    {
-        m_activeProcessor->requestPause();
-        m_isPaused = true;
-        m_pauseBtn->setText(tr("Resume"));
-        m_statusLabel->setText(tr("Paused (takes effect after the current file finishes)"));
-        m_log->append(tr("[PAUSE] Batch paused"));
-    }
+    QString summary;
+    if (!error.empty())
+        summary.clear(); // the rename panel already shows the pattern error
+    else if (checked.isEmpty())
+        summary = tr("No files selected");
     else
-    {
-        m_activeProcessor->resume();
-        m_isPaused = false;
-        m_pauseBtn->setText(tr("Pause"));
-        m_statusLabel->setText(tr("Resumed processing..."));
-        m_log->append(tr("[RESUME] Batch resumed"));
-    }
+        summary = tr("%1 of %2 files will be renamed in place")
+                      .arg(changes)
+                      .arg(m_list->topLevelItemCount());
+    if (error.empty() && replaces > 0)
+        summary +=
+            (replaces == 1 ? tr("; 1 existing file will be replaced (moved to the Recycle Bin)")
+                           : tr("; %1 existing files will be replaced (moved to the Recycle Bin)")
+                                 .arg(replaces));
+    m_summaryLabel->setText(summary);
+    m_renameBtn->setEnabled(error.empty() && changes > 0);
 }
 
-void BatchDialog::onOpenOutputDir()
+std::vector<mviewer::core::InPlaceRenameEntry> BatchDialog::buildPlan(int *replaceCount) const
 {
-    if (m_lastOutputDir.isEmpty() || !QDir(m_lastOutputDir).exists())
-        return;
-    QDesktopServices::openUrl(QUrl::fromLocalFile(m_lastOutputDir));
+    const QStringList checked = checkedPaths();
+    std::vector<std::string> files;
+    for (const QString &path : checked)
+        files.push_back(path.toUtf8().toStdString());
+    const auto results = mviewer::core::validateBatchRename(files, m_renamePanel->options());
+    std::vector<mviewer::core::InPlaceRenameEntry> plan;
+    int replaces = 0;
+    for (const auto &result : results)
+    {
+        if (!result.valid)
+            return {};
+    }
+    for (const auto &result : results)
+    {
+        if (fromUtf8(result.newName) == QFileInfo(fromUtf8(result.originalPath)).fileName())
+            continue;
+        if (targetExistsOutsideBatch(fromUtf8(result.newName)))
+            ++replaces;
+        plan.push_back({result.originalPath, result.newName});
+    }
+    if (replaceCount)
+        *replaceCount = replaces;
+    return plan;
 }
 
-void BatchDialog::updateUiState(bool running)
+bool BatchDialog::renameNow()
 {
-    const bool idle = !running;
-    m_startBtn->setEnabled(idle && renameReady());
-    m_pauseBtn->setEnabled(running);
-    m_cancelBtn->setEnabled(running);
-    m_addBtn->setEnabled(idle);
-    m_addDirBtn->setEnabled(idle);
-    m_removeBtn->setEnabled(idle);
-    m_chkRecursive->setEnabled(idle);
-    m_fileList->setEnabled(idle);
-    m_browseBtn->setEnabled(idle);
-    m_closeBtn->setEnabled(idle);
-    m_retryCount->setEnabled(idle);
-    m_retryDelay->setEnabled(idle);
-    for (QCheckBox *chk :
-         {m_chkAnalyze, m_chkResize, m_chkCrop, m_chkWatermark, m_chkRename, m_chkExport})
-        chk->setEnabled(idle);
-    for (QWidget *panel : {m_resizePanel, m_cropPanel, m_watermarkPanel,
-                           static_cast<QWidget *>(m_renamePanel), m_exportPanel})
+    refreshPreview();
+    if (!m_renamePanel->isValid() || !m_renameBtn->isEnabled())
+        return false;
+    int replaces = 0;
+    const auto plan = buildPlan(&replaces);
+    if (plan.empty())
+        return false;
+    if (replaces > 0 && m_confirmReplace && !m_confirmReplace(replaces))
+        return false;
+
+    m_renamePanel->saveSettings(); // remembered only when the run is confirmed
+    const auto report = mviewer::core::renameInPlace(plan, m_trash);
+    applyReport(plan, report);
+    const QString summary = summaryText(report);
+    if (report.renamed > 0 || report.replaced > 0)
+        emit filesRenamed(m_directory, summary);
+    if (report.failed == 0)
     {
-        if (panel)
-            panel->setEnabled(idle);
+        accept();
+        return true;
     }
-    if (!running)
+    QStringList failures;
+    for (const auto &item : report.items)
     {
-        m_isPaused = false;
-        m_pauseBtn->setText(tr("Pause"));
+        if (item.outcome == mviewer::core::InPlaceRenameOutcome::Failed)
+            failures << fromUtf8(item.errorMessage);
     }
+    m_summaryLabel->setText(summary + QStringLiteral("\n") +
+                            failures.mid(0, 3).join(QStringLiteral("\n")));
+    m_summaryLabel->setToolTip(failures.join(QStringLiteral("\n")));
+    return true;
+}
+
+void BatchDialog::applyReport(const std::vector<mviewer::core::InPlaceRenameEntry> &plan,
+                              const mviewer::core::InPlaceRenameReport &report)
+{
+    QHash<QString, QString> renamed;
+    for (size_t i = 0; i < plan.size() && i < report.items.size(); ++i)
+    {
+        if (report.items[i].outcome == mviewer::core::InPlaceRenameOutcome::Renamed)
+            renamed.insert(fromUtf8(plan[i].sourcePath), fromUtf8(report.items[i].targetPath));
+    }
+    m_updating = true;
+    for (int i = 0; i < m_list->topLevelItemCount(); ++i)
+    {
+        QTreeWidgetItem *item = m_list->topLevelItem(i);
+        const QString path = item->data(0, kPathRole).toString();
+        const auto it = renamed.constFind(path);
+        if (it == renamed.constEnd())
+            continue;
+        item->setData(0, kPathRole, it.value());
+        item->setText(0, QFileInfo(it.value()).fileName());
+        item->setToolTip(0, QDir::toNativeSeparators(it.value()));
+    }
+    m_updating = false;
+    refreshExistingNames();
+    refreshPreview();
+}
+
+QString BatchDialog::summaryText(const mviewer::core::InPlaceRenameReport &report)
+{
+    QString text =
+        report.renamed == 1 ? tr("Renamed 1 file") : tr("Renamed %1 files").arg(report.renamed);
+    if (report.replaced == 1)
+        text += tr(", 1 existing file moved to the Recycle Bin");
+    else if (report.replaced > 1)
+        text += tr(", %1 existing files moved to the Recycle Bin").arg(report.replaced);
+    if (report.failed > 0)
+        text += tr(", %1 failed").arg(report.failed);
+    return text;
 }

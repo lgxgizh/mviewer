@@ -115,6 +115,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
+#include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QVariant>

@@ -344,7 +344,7 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     // ----- Tools -----
     m_toolsMenu = menuBar->addMenu(tr("&Tools"));
     auto *toolsMenu = m_toolsMenu;
-    m_actBatch = new QAction(tr("&Batch Processing"), this);
+    m_actBatch = new QAction(tr("&Batch Rename..."), this);
     m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
     toolsMenu->addAction(m_actBatch);
     // M17: batch analyzer export — same path as gallery context menu.
@@ -491,7 +491,7 @@ void MainWindow::retranslateUi()
         {m_actDirUp, QT_TR_NOOP("Up one level")},
         {m_actRefresh, QT_TR_NOOP("Refresh")},
         {m_actOpenCurrentFolder, QT_TR_NOOP("Open Folder")},
-        {m_actBatch, QT_TR_NOOP("&Batch Processing")},
+        {m_actBatch, QT_TR_NOOP("&Batch Rename...")},
         {m_actUsmCompare, QT_TR_NOOP("USM Sharpen Compare (&U)...")},
         {m_actDecodeFullRaw, QT_TR_NOOP("Decode Full RAW")},
         {m_actPluginSettings, QT_TR_NOOP("&Plugin Manager...")},

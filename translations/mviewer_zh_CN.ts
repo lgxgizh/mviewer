@@ -588,402 +588,105 @@
 <context>
     <name>BatchDialog</name>
     <message>
-        <location filename="../src/batchdialog.cpp" line="40"/>
-        <source>%1 succeeded, %2 failed</source>
-        <translation>%1 成功，%2 失败</translation>
+        <location filename="../src/batchdialog.cpp" line="54"/>
+        <location filename="../src/batchdialog.cpp" line="114"/>
+        <source>Batch Rename</source>
+        <translation>批量重命名</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="44"/>
-        <source>Completed: %1</source>
-        <translation>已完成：%1</translation>
+        <location filename="../src/batchdialog.cpp" line="77"/>
+        <source>Current name</source>
+        <translation>当前名称</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="71"/>
-        <source>Cancelled: %1, %2 not processed</source>
-        <translation>已取消：%1，%2 个未处理</translation>
+        <location filename="../src/batchdialog.cpp" line="77"/>
+        <source>New name</source>
+        <translation>新名称</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="73"/>
-        <source> (%1)</source>
-        <translation> (%1)</translation>
+        <location filename="../src/batchdialog.cpp" line="82"/>
+        <source>Uncheck a file to leave it out of the rename</source>
+        <translation>取消勾选可将文件排除在本次重命名之外</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="76"/>
-        <source>Completed: %1 (%2)</source>
-        <translation>已完成：%1 (%2)</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="123"/>
-        <location filename="../src/batchdialog.cpp" line="382"/>
-        <location filename="../src/batchdialog.cpp" line="452"/>
-        <location filename="../src/batchdialog.cpp" line="457"/>
-        <location filename="../src/batchdialog.cpp" line="465"/>
-        <location filename="../src/batchdialog.cpp" line="472"/>
-        <source>Batch Processing</source>
-        <translation>批量处理</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="146"/>
-        <source>File</source>
-        <translation>文件</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="158"/>
-        <source>Add Files...</source>
-        <translation>添加文件...</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="159"/>
-        <source>Add Directory...</source>
-        <translation>添加目录...</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="160"/>
-        <source>Remove Selected</source>
-        <translation>移除所选</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="161"/>
-        <source>Include subdirectories</source>
-        <translation>包含子目录</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="162"/>
-        <source>Scan subfolders for images when adding a directory</source>
-        <translation>添加目录时扫描子文件夹中的图像</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="174"/>
-        <source>Operations</source>
-        <translation>操作</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="177"/>
-        <source>Analyze</source>
-        <translation>分析</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="178"/>
-        <source>Resize</source>
-        <translation>缩放</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="179"/>
-        <source>Crop</source>
-        <translation>裁剪</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="180"/>
-        <source>Watermark</source>
-        <translation>水印</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="181"/>
+        <location filename="../src/batchdialog.cpp" line="92"/>
         <source>Rename</source>
         <translation>重命名</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="182"/>
-        <source>Export</source>
-        <translation>导出</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="202"/>
-        <source>Parameters</source>
-        <translation>参数</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="208"/>
-        <source>Retry count:</source>
-        <translation>重试次数:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="213"/>
-        <source>Retry interval (ms):</source>
-        <translation>重试间隔 (ms):</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="239"/>
-        <source>Progress</source>
-        <translation>进度</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="246"/>
-        <source>%p%</source>
-        <translation>%p%</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="248"/>
-        <source>Ready</source>
-        <translation>就绪</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="258"/>
-        <source>Start</source>
-        <translation>开始</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="260"/>
-        <location filename="../src/batchdialog.cpp" line="637"/>
-        <location filename="../src/batchdialog.cpp" line="658"/>
-        <location filename="../src/batchdialog.cpp" line="698"/>
-        <source>Pause</source>
-        <translation>暂停</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="264"/>
-        <source>Pause/resume batch processing (takes effect after the current file finishes)</source>
-        <translation>暂停/恢复批处理（当前文件完成后生效）</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="265"/>
-        <source>Cancel Processing</source>
-        <translation>取消处理</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="268"/>
-        <source>Open Output Directory</source>
-        <translation>打开输出目录</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="270"/>
-        <source>Open the previous task&apos;s output folder in Explorer</source>
-        <translation>在资源管理器中打开上一个任务的输出目录</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="271"/>
+        <location filename="../src/batchdialog.cpp" line="95"/>
         <source>Close</source>
         <translation>关闭</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="364"/>
-        <source>Images</source>
-        <translation>图像</translation>
+        <location filename="../src/batchdialog.cpp" line="116"/>
+        <source>A file with the new name already exists and is not part of this rename. Move it to the Recycle Bin and replace it?</source>
+        <translation>已有一个文件使用了新名称，且不在本次重命名范围内。要将其移到回收站并替换吗？</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="368"/>
-        <source>Select Files</source>
-        <translation>选择文件</translation>
+        <location filename="../src/batchdialog.cpp" line="118"/>
+        <source>%1 files with the new names already exist and are not part of this rename. Move them to the Recycle Bin and replace them?</source>
+        <translation>已有 %1 个文件使用了新名称，且不在本次重命名范围内。要将它们移到回收站并替换吗？</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="376"/>
-        <source>Select Image Directory</source>
-        <translation>选择图像目录</translation>
+        <location filename="../src/batchdialog.cpp" line="153"/>
+        <source>%1 · 1 image</source>
+        <translation>%1 · 1 张图片</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="153"/>
+        <source>%1 · %2 images</source>
+        <translation>%1 · %2 张图片</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="266"/>
+        <source>Replaces an existing file (it goes to the Recycle Bin)</source>
+        <translation>将替换已有文件（原文件移到回收站）</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="276"/>
+        <source>No files selected</source>
+        <translation>未选择文件</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="278"/>
+        <source>%1 of %2 files will be renamed in place</source>
+        <translation>共 %2 个文件，将原地重命名 %1 个</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="283"/>
+        <source>; 1 existing file will be replaced (moved to the Recycle Bin)</source>
+        <translation>；将替换 1 个已有文件（移到回收站）</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="284"/>
+        <source>; %1 existing files will be replaced (moved to the Recycle Bin)</source>
+        <translation>；将替换 %1 个已有文件（移到回收站）</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="381"/>
+        <source>Renamed 1 file</source>
+        <translation>已重命名 1 个文件</translation>
+    </message>
+    <message>
+        <location filename="../src/batchdialog.cpp" line="381"/>
+        <source>Renamed %1 files</source>
+        <translation>已重命名 %1 个文件</translation>
     </message>
     <message>
         <location filename="../src/batchdialog.cpp" line="383"/>
-        <source>No recognizable image files in this directory.</source>
-        <translation>此目录中没有可识别的图像文件。</translation>
+        <source>, 1 existing file moved to the Recycle Bin</source>
+        <translation>，1 个已有文件已移到回收站</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="396"/>
-        <source>Select output directory</source>
-        <translation>选择输出目录</translation>
+        <location filename="../src/batchdialog.cpp" line="385"/>
+        <source>, %1 existing files moved to the Recycle Bin</source>
+        <translation>，%1 个已有文件已移到回收站</translation>
     </message>
     <message>
-        <location filename="../src/batchdialog.cpp" line="452"/>
-        <source>Please add files first.</source>
-        <translation>请先添加文件。</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="458"/>
-        <source>Please select at least one operation.</source>
-        <translation>请至少选择一项操作。</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="466"/>
-        <source>With Export unchecked, rename/resize/crop/watermark will not write any files. Please check Export.</source>
-        <translation>未勾选导出时，重命名/缩放/裁剪/水印不会写入任何文件。请勾选导出。</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="473"/>
-        <source>Invalid rename settings: %1</source>
-        <translation>重命名设置无效：%1</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="516"/>
-        <source>Processing (%1/%2): %3</source>
-        <translation>正在处理 (%1/%2)：%3</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="565"/>
-        <source>[FAIL] %1: %2</source>
-        <translation>[失败] %1：%2</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="567"/>
-        <source>[OK] %1 (analysis only, file not written)</source>
-        <translation>[成功] %1（仅分析，未写入文件）</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="568"/>
-        <source>[OK] %1 → %2</source>
-        <translation>[成功] %1 → %2</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="585"/>
-        <source>Batch processing failed: %1</source>
-        <translation>批量处理失败: %1</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="595"/>
-        <source>Batch processing failed: Unknown error</source>
-        <translation>批量处理失败: 未知错误</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="606"/>
-        <source>[CANCEL] %1 files not processed</source>
-        <translation>[取消] %1 个文件未处理</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="608"/>
-        <source>[SUMMARY] %1 files failed</source>
-        <translation>[汇总] %1 个文件失败</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="639"/>
-        <source>Cancelling...</source>
-        <translation>正在取消...</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="650"/>
-        <source>Resume</source>
-        <translation>继续</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="651"/>
-        <source>Paused (takes effect after the current file finishes)</source>
-        <translation>已暂停（当前文件完成后生效）</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="652"/>
-        <source>[PAUSE] Batch paused</source>
-        <translation>[暂停] 批处理已暂停</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="659"/>
-        <source>Resumed processing...</source>
-        <translation>已继续处理...</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog.cpp" line="660"/>
-        <source>[RESUME] Batch resumed</source>
-        <translation>[继续] 批处理已继续</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="27"/>
-        <source>Max edge:</source>
-        <translation>最长边:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="41"/>
-        <source>Crop by pixel rectangle; clamp to the valid region when outside the image</source>
-        <translation>按像素矩形裁剪；超出图像时限制在有效区域内</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="60"/>
-        <source>X:</source>
-        <translation>X:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="62"/>
-        <source>Y:</source>
-        <translation>Y:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="64"/>
-        <source>W:</source>
-        <translation>宽:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="66"/>
-        <source>H:</source>
-        <translation>高:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="81"/>
-        <source>Watermark text:</source>
-        <translation>水印文字:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="83"/>
-        <source>© 2025</source>
-        <translation>© 2025</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="85"/>
-        <source>Position:</source>
-        <translation>位置:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="87"/>
-        <source>Top Left</source>
-        <translation>左上</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="88"/>
-        <source>Top right</source>
-        <translation>右上</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="89"/>
-        <source>Bottom Left</source>
-        <translation>左下</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="90"/>
-        <source>Bottom Right</source>
-        <translation>右下</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="91"/>
-        <source>Center</source>
-        <translation>居中</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="92"/>
-        <source>Tile</source>
-        <translation>平铺</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="97"/>
-        <source>Opacity:</source>
-        <translation>不透明度:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="103"/>
-        <source>Font size:</source>
-        <translation>字号:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="122"/>
-        <source>Export format:</source>
-        <translation>导出格式:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="130"/>
-        <source>Quality:</source>
-        <translation>质量:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="139"/>
-        <source>Output directory:</source>
-        <translation>输出目录:</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="143"/>
-        <source>(Leave empty = original directory)</source>
-        <translation>（留空 = 原目录）</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="145"/>
-        <source>Browse...</source>
-        <translation>浏览...</translation>
-    </message>
-    <message>
-        <location filename="../src/batchdialog_panels.cpp" line="149"/>
-        <source>Overwrite existing files</source>
-        <translation>覆盖已有文件</translation>
+        <location filename="../src/batchdialog.cpp" line="387"/>
+        <source>, %1 failed</source>
+        <translation>，%1 个失败</translation>
     </message>
 </context>
 <context>
@@ -5564,8 +5267,8 @@ or double-click a thumbnail to view</source>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="347"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="494"/>
-        <source>&amp;Batch Processing</source>
-        <translation>批量处理(&amp;B)</translation>
+        <source>&amp;Batch Rename...</source>
+        <translation>批量重命名(&amp;B)...</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="351"/>
@@ -7879,8 +7582,8 @@ Continue?</source>
     </message>
     <message>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="530"/>
-        <source>Renamed the focused file only; use Tools → Batch Processing to rename multiple files</source>
-        <translation>只重命名了当前焦点文件；要重命名多个文件，请使用 工具 → 批量处理</translation>
+        <source>Renamed the focused file only; use Tools → Batch Rename to rename multiple files</source>
+        <translation>只重命名了当前焦点文件；要重命名多个文件，请使用 工具 → 批量重命名</translation>
     </message>
     <message>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="589"/>

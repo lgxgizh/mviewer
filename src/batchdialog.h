@@ -1,139 +1,73 @@
 #pragma once
 
-#include "core/batch/BatchProcessor.h"
-#include "domain/BatchJob.h"
+#include "core/batch/BatchRenameInPlace.h"
 
 #include <QDialog>
-#include <QFutureWatcher>
+#include <QSet>
 #include <QString>
-#include <memory>
+#include <QStringList>
+#include <functional>
 
-class QListWidget;
-class QCheckBox;
-class QSpinBox;
-class QDoubleSpinBox;
-class QLineEdit;
-class QComboBox;
-class QPushButton;
-class QProgressBar;
-class QTextEdit;
 class QLabel;
-class QVBoxLayout;
-class QWidget;
+class QPushButton;
 class QShowEvent;
+class QTreeWidget;
+class QTreeWidgetItem;
 class BatchRenamePanel;
 
-// BatchDialog is a modal dialog for configuring and running batch processing
-// jobs. The user adds files, selects operations (resize, watermark, analyze,
-// export, rename), sets parameters, and clicks "Start" to run the batch.
+// Tools → Batch Rename. Opens on every image of the current browse folder
+// (the gallery's visible, filtered list in its current order), previews
+// old → new names live and renames the original files in place. Rows can be
+// unchecked to leave a file out; {seq} numbering follows the checked rows.
 class BatchDialog : public QDialog
 {
     Q_OBJECT
   public:
     explicit BatchDialog(QWidget *parent = nullptr);
-    // M24: request cancellation of any in-flight batch so a closed dialog
-    // cannot leave a worker writing to a destroyed dialog's callbacks.
-    ~BatchDialog() override;
 
-    // Pre-fill the file list with the given paths.
-    void setInputFiles(const QStringList &paths);
+    // Loads the folder's images; replaces any previous list (all rows checked).
+    void setFolder(const QString &directory, const QStringList &imagePaths);
+    QStringList filePaths() const;
+    QStringList checkedPaths() const;
 
-    // One "[OK] in → out" / "[FAIL] in: error" line for the batch log.
-    static QString formatResultLine(const mviewer::domain::BatchFileResult &result);
+    // Test seams: the recycle-bin mover, and the confirmation shown before
+    // unrelated existing files are replaced (receives how many).
+    void setTrashFunction(mviewer::core::TrashFunction trash);
+    void setReplaceConfirmation(std::function<bool(int replaceCount)> confirm);
+
+    // "Renamed 3 files, 1 existing file moved to the Recycle Bin, 1 failed".
+    static QString summaryText(const mviewer::core::InPlaceRenameReport &report);
+
+    // Runs the rename for the checked rows (the Rename button). Returns false
+    // when nothing ran (invalid pattern, nothing to rename, or declined).
+    bool renameNow();
+
+  signals:
+    // After a run that renamed at least one file, so browse can refresh.
+    void filesRenamed(const QString &directory, const QString &summary);
 
   protected:
     // Restores the last confirmed rename settings each time the dialog opens.
     void showEvent(QShowEvent *event) override;
 
-  private slots:
-    void onAddFiles();
-    void onAddDir(); // P2 #⑦
-    void onRemoveSelected();
-    void onStart();
-    void onCancel();
-    void onPauseResume();
-    void onBrowseOutputDir();
-    void onOpenOutputDir();
-
   private:
-    void buildFileControls(QVBoxLayout *mainLayout);
-    void buildOperationControls(QVBoxLayout *mainLayout);
-    void buildParameterControls(QVBoxLayout *mainLayout);
-    void buildProgressControls(QVBoxLayout *mainLayout);
-    void connectControls();
-    void buildConfig(mviewer::domain::BatchJobConfig &config) const;
-    // False when Start must abort. Shows the reason (missing files, no export, …).
-    bool validateStart(const mviewer::domain::BatchJobConfig &config);
-    void updateUiState(bool running);
-    void updateParamVisibility();
-    bool renameReady() const;
-    void refreshStartButton();
-    void syncFilesToRenamePanel();
-    // Completion path of a batch run: drains the QFutureWatcher (which rethrows a
-    // worker exception), reports the summary and resets the dialog for reuse.
-    void finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher);
+    void refreshPreview();
+    void refreshExistingNames();
+    void applyReport(const std::vector<mviewer::core::InPlaceRenameEntry> &plan,
+                     const mviewer::core::InPlaceRenameReport &report);
+    std::vector<mviewer::core::InPlaceRenameEntry> buildPlan(int *replaceCount) const;
+    bool targetExistsOutsideBatch(const QString &name) const;
 
-    // ── file list ──────────────────────────────────────────────────
-    QListWidget *m_fileList = nullptr;
-    QPushButton *m_addBtn = nullptr;
-    QPushButton *m_addDirBtn = nullptr; // P2 #⑦
-    QPushButton *m_removeBtn = nullptr;
-    QCheckBox *m_chkRecursive = nullptr; // P2 #⑦
-
-    // ── operations ─────────────────────────────────────────────────
-    QCheckBox *m_chkAnalyze = nullptr;
-    QCheckBox *m_chkResize = nullptr;
-    QCheckBox *m_chkCrop = nullptr; // P2 #⑦
-    QCheckBox *m_chkWatermark = nullptr;
-    QCheckBox *m_chkRename = nullptr;
-    QCheckBox *m_chkExport = nullptr;
-
-    // ── retry params ──────────────────────────────────────────────
-    QSpinBox *m_retryCount = nullptr; // P2 #⑦
-    QSpinBox *m_retryDelay = nullptr; // P2 #⑦
-
-    // ── resize params ──────────────────────────────────────────────
-    QSpinBox *m_resizeMaxEdge = nullptr;
-    QWidget *m_resizePanel = nullptr;
-
-    // ── crop params ────────────────────────────────────────────────
-    QSpinBox *m_cropX = nullptr;
-    QSpinBox *m_cropY = nullptr;
-    QSpinBox *m_cropW = nullptr;
-    QSpinBox *m_cropH = nullptr;
-    QWidget *m_cropPanel = nullptr;
-
-    // ── watermark params ───────────────────────────────────────────
-    QLineEdit *m_watermarkText = nullptr;
-    QComboBox *m_watermarkPos = nullptr;
-    QDoubleSpinBox *m_watermarkOpacity = nullptr;
-    QSpinBox *m_watermarkFontSize = nullptr;
-    QWidget *m_watermarkPanel = nullptr;
-
-    // ── rename params ──────────────────────────────────────────────
+    QLabel *m_folderLabel = nullptr;
     BatchRenamePanel *m_renamePanel = nullptr;
-
-    // ── export params ──────────────────────────────────────────────
-    QComboBox *m_exportFormat = nullptr;
-    QSpinBox *m_exportQuality = nullptr;
-    QLineEdit *m_outputDir = nullptr;
-    QCheckBox *m_overwriteExisting = nullptr;
-    QPushButton *m_browseBtn = nullptr;
-    QWidget *m_exportPanel = nullptr;
-
-    // ── progress ──────────────────────────────────────────────────
-    QProgressBar *m_progress = nullptr;
-    QTextEdit *m_log = nullptr;
-    QLabel *m_statusLabel = nullptr;
-    QPushButton *m_startBtn = nullptr;
-    QPushButton *m_pauseBtn = nullptr;
-    QPushButton *m_cancelBtn = nullptr;
+    QTreeWidget *m_list = nullptr;
+    QLabel *m_summaryLabel = nullptr;
+    QPushButton *m_renameBtn = nullptr;
     QPushButton *m_closeBtn = nullptr;
-    QPushButton *m_openOutputBtn = nullptr; // enabled after a job finishes
 
-    std::unique_ptr<mviewer::core::BatchProcessor> m_processor;
-    std::shared_ptr<mviewer::core::BatchProcessor>
-        m_activeProcessor;   // active job handle for cancel
-    QString m_lastOutputDir; // set after a job finishes, drives "open output dir"
-    bool m_isPaused = false;
+    QString m_directory;
+    QSet<QString> m_existingNames; // folded names of every file in the folder
+    bool m_updating = false;
+    mviewer::core::TrashFunction m_trash = mviewer::core::moveFileToSystemTrash;
+    std::function<bool(int)> m_confirmReplace;
 };

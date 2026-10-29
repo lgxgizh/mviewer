@@ -79,9 +79,10 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 
 ## 3. Batch and export
 
-1. **Batch format conversion and rename**:
-   - Press **Ctrl+Shift+B** to open the batch processing dialog.
-   - Supports format conversion (PNG, JPEG, WebP, TIFF and more), batch resize, color space conversion and flexible rename templates.
+1. **Batch rename**:
+   - Press **Ctrl+Shift+B** (Tools → Batch Rename...). Every image of the folder you are browsing loads automatically, in gallery order and with the current filter; there is nothing to add.
+   - Type a pattern (`{name}`, `{ext}`, `{n}`, `{total}`, `{seq:3}`), optionally with find / replace (regex supported). The list shows current → new names live; uncheck a row to leave that file out.
+   - **Rename** renames the original files in place. Swapping names within the batch is safe. When a new name is already used by another file in the folder, that file is moved to the Recycle Bin and replaced, after one confirmation.
 2. **Batch analysis export**:
    - Press **Ctrl+Alt+A** (or gallery context menu Batch Analysis Export).
    - Runs the active Analyzer pipeline over the selected images and writes CSV / TSV in one step.
@@ -233,7 +234,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | **Shift+C** | Copy the pixel color at the cursor |
 | **F6** | Toggle focus browse mode |
 | **S** | Start the slideshow |
-| **Ctrl+Shift+B** | Open the batch processing dialog |
+| **Ctrl+Shift+B** | Batch rename the current folder |
 | **Ctrl+Shift+A** | Cancel selection (deselect) |
 | **Ctrl+Alt+A** | Batch Analysis Export |
 | **←** / **→** | Previous / next image |
