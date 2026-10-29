@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.155] - 2026-10-29
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.155** (Batch Rename #257).
+
+### Changed
+
+- **Batch processing is now Batch Rename** (#257): Tools → Batch Rename... (Ctrl+Shift+B) opens a compact dialog with the rename pattern (`{name}`, `{ext}`, `{n}`, `{total}`, `{seq:3}`, find / replace, regex), a live *Current name → New name* list and one summary line. Every image of the folder being browsed loads automatically (active pane, gallery order and filter); uncheck a row to leave it out. Resize, crop, watermark, analyze, export, output folder, retries and Add Files / Add Folder are removed.
+- **Rename in place**: the original files are renamed. Swaps and case-only renames inside the batch are safe (unique temporary names first). A new name already used by another file in the folder replaces that file after one confirmation; the replaced file goes to the Recycle Bin, and if it cannot be moved there that rename is skipped and reported. Browse refreshes afterwards and the status bar shows the summary.
+
+### Tests / CI
+
+- Engine tests for in-place rename (swap, replace via trash, refused trash, unchanged, invalid, case-only, duplicate, no temp leftovers) and Batch Rename dialog tests (auto-load, preview, renumbering, confirmation, in-place result, settings); workflow 17 rewritten (#257).
+
 ## [1.0.154] - 2026-10-28
 
 ### Release
