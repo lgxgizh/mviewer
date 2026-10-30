@@ -24,9 +24,10 @@
 - **Windows window chrome (C3):** The title bar follows the light/dark theme
   live, and on Windows 11 the window has rounded corners with its caption and
   border matched to the toolbar color. Popup menus use the system's small
-  rounded corners. Preferences adds "Use translucent sidebar (Windows 11)", an
-  opt-in Mica backdrop behind the toolbar and sidebar (22H2+, after restart);
-  image areas stay opaque. Windows 10 keeps solid colors.
+  rounded corners. On Windows 11 22H2+ the toolbar and sidebar show the Mica
+  backdrop; image areas stay opaque. Preferences → "Use translucent sidebar
+  (Windows 11)" (on by default, applies after restart) turns it off. Windows 10
+  keeps solid colors.
 
 ## [1.0.155] - 2026-10-29
 

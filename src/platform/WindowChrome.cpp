@@ -45,9 +45,9 @@ const char *WindowChrome::translucentSidebarSettingsKey()
 
 bool WindowChrome::translucentSidebarEnabled()
 {
-    // Off by default: Mica needs a translucent top-level window, which this
-    // build cannot verify on every GPU/driver; users opt in from Preferences.
-    return QSettings().value(QLatin1String(kTranslucentKey), false).toBool();
+    // On by default; only Windows 11 22H2+ acts on it. Turning it off in
+    // Preferences restores the solid toolbar and sidebar after a restart.
+    return QSettings().value(QLatin1String(kTranslucentKey), true).toBool();
 }
 
 void WindowChrome::setTranslucentSidebarEnabled(bool enabled)

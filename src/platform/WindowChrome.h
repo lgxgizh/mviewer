@@ -26,8 +26,8 @@ class WindowChrome
     // Features for the running OS (all false off Windows).
     static WindowChromeFeatures currentFeatures();
 
-    // Preferences: "Use translucent sidebar (Windows 11)". Persisted in
-    // QSettings; read once when the main window is created.
+    // Preferences: "Use translucent sidebar (Windows 11)", default on.
+    // Persisted in QSettings; read once when the main window is created.
     static bool translucentSidebarEnabled();
     static void setTranslucentSidebarEnabled(bool enabled);
     static const char *translucentSidebarSettingsKey();

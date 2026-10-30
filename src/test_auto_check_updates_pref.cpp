@@ -85,32 +85,38 @@ int main(int argc, char **argv)
     // Windows 11 translucent sidebar (Mica) toggle: opt-in, persisted.
     using mviewer::platform::WindowChrome;
     const QString micaKey = QString::fromLatin1(WindowChrome::translucentSidebarSettingsKey());
-    check(!WindowChrome::translucentSidebarEnabled(), "translucent sidebar defaults off");
+    check(!QSettings().contains(micaKey) && WindowChrome::translucentSidebarEnabled(),
+          "translucent sidebar defaults on");
     {
         PreferencesDialog dlg;
         auto *box = dlg.findChild<QCheckBox *>(QStringLiteral("preferencesTranslucentSidebar"));
         check(box != nullptr, "General tab exposes preferencesTranslucentSidebar");
         if (box)
         {
-            check(!box->isChecked(), "translucent sidebar checkbox starts unchecked");
-            box->setChecked(true);
-            check(clickOk(dlg), "OK applies translucent sidebar");
-        }
-    }
-    check(QSettings().value(micaKey).toBool() && WindowChrome::translucentSidebarEnabled(),
-          "checked translucent sidebar persists true");
-    {
-        PreferencesDialog dlg;
-        auto *box = dlg.findChild<QCheckBox *>(QStringLiteral("preferencesTranslucentSidebar"));
-        check(box != nullptr && box->isChecked() && box->isEnabled(),
-              "reopened Preferences reflects translucent sidebar on and lets it be turned off");
-        if (box)
-        {
+            check(box->isChecked(), "translucent sidebar checkbox starts checked");
             box->setChecked(false);
             check(clickOk(dlg), "OK turns translucent sidebar off");
         }
     }
-    check(!WindowChrome::translucentSidebarEnabled(), "unchecked translucent sidebar persists");
+    check(QSettings().contains(micaKey) && !WindowChrome::translucentSidebarEnabled(),
+          "unchecked translucent sidebar persists false");
+    {
+        QWidget window;
+        WindowChrome::prepareMainWindow(&window);
+        check(!WindowChrome::micaActive(&window), "Mica stays off while the preference is off");
+    }
+    {
+        PreferencesDialog dlg;
+        auto *box = dlg.findChild<QCheckBox *>(QStringLiteral("preferencesTranslucentSidebar"));
+        check(box != nullptr && !box->isChecked(),
+              "reopened Preferences reflects translucent sidebar off");
+        if (box)
+        {
+            box->setChecked(true);
+            check(clickOk(dlg), "OK turns translucent sidebar back on");
+        }
+    }
+    check(WindowChrome::translucentSidebarEnabled(), "checked translucent sidebar persists true");
 
     // Build gates: Win10 gets the dark title bar only; Win11 adds corners and
     // caption color; 22H2 adds Mica.
@@ -126,10 +132,11 @@ int main(int argc, char **argv)
     check(!WindowChrome::currentFeatures().mica && !WindowChrome::currentFeatures().roundedCorners,
           "non-Windows reports no DWM features");
 #endif
+    if (!WindowChrome::currentFeatures().mica)
     {
         QWidget window;
         WindowChrome::prepareMainWindow(&window);
-        check(!WindowChrome::micaActive(&window), "Mica stays off while the preference is off");
+        check(!WindowChrome::micaActive(&window), "no Mica on an OS without DWM backdrops");
     }
 
     QSettings().clear();
