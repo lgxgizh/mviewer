@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.156] - 2026-10-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.156** (macOS-style UI redesign #259–#265).
+
 ### Changed
 
 - **macOS-style theme (A):** Apple system blue (`#0a84ff` dark, `#007aff` light),
