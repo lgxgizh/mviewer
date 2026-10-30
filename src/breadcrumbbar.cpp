@@ -1,8 +1,6 @@
 #include "breadcrumbbar.h"
 #include "ThemeMetrics.h"
 
-#include "Theme.h"
-
 #include <QDir>
 #include <QFont>
 #include <QHBoxLayout>
@@ -162,9 +160,6 @@ void BreadcrumbBar::addOverflowButton(int firstVisible)
     auto *arrow = new QLabel(">", this);
     arrow->setFixedWidth(kArrowSize);
     arrow->setAlignment(Qt::AlignCenter);
-    arrow->setStyleSheet(
-        QStringLiteral("color:%1;")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     m_layout->addWidget(arrow);
 }
 
@@ -181,23 +176,12 @@ void BreadcrumbBar::addVisibleSegments(int firstVisible)
         button->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         button->setProperty("breadcrumbPath", segmentPath);
         connect(button, &QToolButton::clicked, this, &BreadcrumbBar::onSegmentClicked);
-        button->setStyleSheet(
-            QStringLiteral("QToolButton { border: 1px solid transparent; border-radius: 3px;"
-                           " padding: 1px 4px; color: %1; font-size: 11px; }"
-                           "QToolButton:hover { border-color: %2; background: %3; color: %4; }")
-                .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
-                     mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border),
-                     mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg2),
-                     mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Accent)));
         m_layout->addWidget(button);
         if (i < m_segments.size() - 1)
         {
             auto *arrow = new QLabel(">", this);
             arrow->setFixedWidth(kArrowSize);
             arrow->setAlignment(Qt::AlignCenter);
-            arrow->setStyleSheet(
-                QStringLiteral("color:%1;")
-                    .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
             m_layout->addWidget(arrow);
         }
     }

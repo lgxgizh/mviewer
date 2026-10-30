@@ -15,13 +15,15 @@ constexpr int kControlHeight = 28;
 // Toolbar strips that host kControlHeight controls with kSpace4 padding.
 constexpr int kBarHeight = 40;
 
-constexpr int kRadiusControl = 6;
-constexpr int kRadiusPanel = 8;
+constexpr int kRadiusControl = 7;
+constexpr int kRadiusPanel = 10;
+constexpr int kRadiusChip = 5;
 
-// Font sizes (px) for rich-text / inline stylesheet text.
+// Font sizes (px). Body is 13 px (~9.75 pt at 96 DPI).
 constexpr int kFontCaptionPx = 11;
-constexpr int kFontBodyPx = 12;
+constexpr int kFontBodyPx = 13;
 constexpr int kFontTitlePx = 15;
+constexpr int kFontLargeTitlePx = 20;
 
 // Layout defaults handed to Qt through the application style.
 constexpr int kWindowMargin = kSpace12;

@@ -207,28 +207,36 @@ int main(int argc, char **argv)
         mviewer::ui::Theme::initTheme();
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
               "Default theme is Dark");
+        const mviewer::ui::ThemeTokens darkTokens = mviewer::ui::makeThemeTokens(true);
+        const mviewer::ui::ThemeTokens lightTokens = mviewer::ui::makeThemeTokens(false);
         QString darkSheet = qApp->styleSheet();
         CHECK(!darkSheet.isEmpty(), "dark application stylesheet is set");
-        CHECK(darkSheet.contains(QStringLiteral("#4c8dff")), "dark stylesheet contains the accent");
-        CHECK(darkSheet.contains(QStringLiteral("#1e1e1e")),
-              "dark stylesheet uses the dark background");
+        CHECK(darkSheet.contains(darkTokens.accent), "dark stylesheet contains the accent");
+        CHECK(darkSheet.contains(QStringLiteral("#0a84ff")), "dark accent is Apple system blue");
+        CHECK(darkSheet.contains(darkTokens.bg0), "dark stylesheet uses the dark background");
+        CHECK(darkSheet.contains(darkTokens.separator), "dark stylesheet uses the separator");
         CHECK(!darkSheet.contains(QStringLiteral("{{")),
               "dark stylesheet has no unresolved placeholders");
 
-        mviewer::ui::ThemeTokens darkTokens =
-            mviewer::ui::Theme::tokensFor(mviewer::ui::ThemeMode::Dark, false);
         mviewer::ui::ThemeTokens systemDark =
             mviewer::ui::Theme::tokensFor(mviewer::ui::ThemeMode::System, true);
         mviewer::ui::ThemeTokens systemLight =
             mviewer::ui::Theme::tokensFor(mviewer::ui::ThemeMode::System, false);
-        CHECK(darkTokens.bg0 == QStringLiteral("#1e1e1e"), "dark background token");
+        CHECK(mviewer::ui::Theme::tokensFor(mviewer::ui::ThemeMode::Dark, false).bg0 ==
+                  darkTokens.bg0,
+              "dark background token");
         CHECK(systemDark.bg0 == darkTokens.bg0, "System on a dark desktop uses dark tokens");
         CHECK(systemLight.bg0 != darkTokens.bg0, "System on a light desktop swaps tokens");
-        CHECK(systemLight.accent == QStringLiteral("#4c8dff"), "light tokens keep the accent");
+        CHECK(systemLight.accent == lightTokens.accent,
+              "System on a light desktop uses light accent");
+        CHECK(lightTokens.accent == QStringLiteral("#007aff"), "light accent is Apple system blue");
+        CHECK(darkTokens.onAccent == QStringLiteral("#ffffff") &&
+                  lightTokens.onAccent == darkTokens.onAccent,
+              "on-accent stays literal white in both themes");
         QString lightSheet = mviewer::ui::Theme::buildStyleSheet(systemLight);
         CHECK(!lightSheet.isEmpty() && !lightSheet.contains(QStringLiteral("{{")),
               "light stylesheet has no unresolved placeholders");
-        CHECK(lightSheet.contains(QStringLiteral("#4c8dff")),
+        CHECK(lightSheet.contains(QStringLiteral("#007aff")),
               "light stylesheet contains the accent");
 
         mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::System);
@@ -240,8 +248,7 @@ int main(int argc, char **argv)
         CHECK(!systemSheet.isEmpty(), "system application stylesheet is set");
         CHECK(!systemSheet.contains(QStringLiteral("{{")),
               "system stylesheet has no unresolved placeholders");
-        CHECK(systemSheet.contains(QStringLiteral("#4c8dff")),
-              "system stylesheet contains the accent");
+        CHECK(systemSheet.contains(resolved.accent), "system stylesheet contains the accent");
         CHECK(systemSheet.contains(resolved.bg0), "system stylesheet follows the desktop scheme");
         CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::Dark).isEmpty(),
               "ThemeModeName not empty for Dark");

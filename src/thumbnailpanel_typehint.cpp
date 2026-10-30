@@ -23,9 +23,6 @@ class TypeHiddenHint final : public QFrame
     explicit TypeHiddenHint(QWidget *viewport) : QFrame(viewport)
     {
         setObjectName(QStringLiteral("typeHiddenHint"));
-        setStyleSheet(QStringLiteral("#typeHiddenHint { background: rgba(0,0,0,110); "
-                                     "border-radius: 8px; }"
-                                     "#typeHiddenHintLabel { color: #e8e8e8; }"));
         auto *lay = new QVBoxLayout(this);
         lay->setContentsMargins(16, 12, 16, 12);
         lay->setSpacing(8);

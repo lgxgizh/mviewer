@@ -27,7 +27,10 @@ enum class ThemeRole
     Accent,
     AccentHover,
     AccentPressed,
-    Danger
+    Danger,
+    Sidebar,
+    Separator,
+    Hover
 };
 
 class Theme

@@ -3,7 +3,6 @@
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
-#include "Theme.h"
 #include "ThemeIcons.h"
 #include "core/render/ZoomPercent.h"
 
@@ -28,12 +27,8 @@ QLabel *sectionHeaderLabel(QWidget *parent, const char *objectName, const QStrin
     auto *label = new QLabel(text, parent);
     label->setObjectName(QString::fromLatin1(objectName));
     label->setProperty("sectionHeader", true);
+    label->setProperty("role", QStringLiteral("sectionHeader"));
     label->setFixedHeight(mviewer::ui::metrics::kControlHeight);
-    label->setStyleSheet(
-        QStringLiteral("QLabel{color:%1;background:%2;padding-left:%3px;}")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1),
-                 QString::number(mviewer::ui::metrics::kSpace8)));
     return label;
 }
 } // namespace
@@ -161,13 +156,6 @@ QWidget *MainWindow::buildNavigationPanel()
     m_favoritesBar->setMaximumHeight(100);
     m_favoritesBar->hide();
     m_favoritesBar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_favoritesBar->setStyleSheet(
-        QStringLiteral("QListWidget { background: %1; border: none; }"
-                       "QListWidget::item { padding: 3px 8px; color: %2; }"
-                       "QListWidget::item:hover { background: %3; }")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg3)));
     m_favoritesBar->setToolTip(
         tr("Favorites — Right-click to remove, Ctrl+D to favorite the current folder"));
     connect(m_favoritesBar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item)
@@ -422,6 +410,7 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     sortLayout->addWidget(searchLabel);
     m_searchEdit = new QLineEdit(sortBar);
     m_searchEdit->setObjectName("searchEdit");
+    m_searchEdit->setProperty("search", true);
     m_searchEdit->setPlaceholderText(tr("Filter by filename..."));
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->installEventFilter(this);
@@ -603,12 +592,6 @@ void MainWindow::buildMetadataPanelUi()
     m_metadataPanel->setAttribute(Qt::WA_ShowWithoutActivating, false);
     m_metadataPanel->setFixedSize(300, 480);
     m_metadataPanel->setWindowOpacity(0.92); // semi-transparent
-    m_metadataPanel->setStyleSheet(
-        QStringLiteral("MetadataPanel { background: %1; color: %2; "
-                       "border: 1px solid %3; border-radius: 6px; }")
-            .arg(mviewer::ui::Theme::themeRgba(mviewer::ui::ThemeRole::Bg0, 220),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border)));
     m_metadataPanel->hide();
 }
 

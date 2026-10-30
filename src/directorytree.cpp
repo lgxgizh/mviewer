@@ -1,7 +1,5 @@
 #include "directorytree.h"
 
-#include "Theme.h"
-
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
@@ -121,12 +119,6 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     setAnimated(true);
     setIndentation(15);
 
-    // A-1.3: current-directory highlight — use a custom style so the active
-    // node is visually distinct from the regular selection.
-    // Keep selection colors owned by the active Qt palette so light and dark
-    // application themes remain legible.
-    setStyleSheet("DirectoryTree::item { padding: 2px 0; }");
-
     // A-1.4: QFileSystemWatcher for auto-refresh when the file system changes.
     m_watcher = new QFileSystemWatcher(this);
     connect(m_watcher, &QFileSystemWatcher::directoryChanged, this,
@@ -155,9 +147,8 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
 
     // A-1.6: loading indicator label (shown briefly while expanding large dirs).
     m_loadingLabel = new QLabel(tr("  Loading..."), this);
-    m_loadingLabel->setStyleSheet(
-        QStringLiteral("color:%1; font-style: italic; padding: 4px;")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
+    m_loadingLabel->setObjectName(QStringLiteral("directoryLoadingLabel"));
+    m_loadingLabel->setProperty("role", QStringLiteral("caption"));
     m_loadingLabel->hide();
 
     // Directory name filter kept for programmatic clear-on-navigate / tests, but
@@ -165,6 +156,7 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     // gallery address bar (pathEdit).
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setObjectName(QStringLiteral("directoryFilterEdit"));
+    m_filterEdit->setProperty("search", true);
     m_filterEdit->setPlaceholderText(tr("Search directories..."));
     m_filterEdit->setClearButtonEnabled(true);
     m_filterEdit->setTextMargins(6, 4, 6, 4);

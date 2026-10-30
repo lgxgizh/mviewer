@@ -47,8 +47,8 @@ inline QRect drawFilenameOverlay(QPainter &p, const QRect &pane, const QString &
     }
     p.setRenderHint(QPainter::Antialiasing, true);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 120));
-    p.drawRoundedRect(box, 4, 4);
+    p.setBrush(QColor(0, 0, 0, 140));
+    p.drawRoundedRect(box, 6, 6);
     p.setPen(Qt::white);
     p.drawText(box.adjusted(6, 4, -6, -4), Qt::TextWrapAnywhere | Qt::AlignLeft | Qt::AlignTop,
                text);
@@ -74,8 +74,8 @@ inline void drawZoomPercentBadge(QPainter &p, const QRect &pane, const QString &
     const int y = topRight ? pane.top() + 8 : pane.top() + pane.height() - boxH - 8;
     const QRect box(x, y, boxW, boxH);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 170));
-    p.drawRoundedRect(box, 4, 4);
+    p.setBrush(QColor(0, 0, 0, 140));
+    p.drawRoundedRect(box, 6, 6);
     p.setPen(Qt::white);
     p.drawText(box, Qt::AlignCenter, text);
     p.restore();

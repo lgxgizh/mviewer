@@ -1,4 +1,3 @@
-#include "Theme.h"
 #include "ThemeMetrics.h"
 #include "analysispanel.h"
 #include "analyzermodel.h"
@@ -24,12 +23,9 @@
 
 namespace
 {
-QString analysisReadoutStyle(bool monospace)
+void markReadout(QLabel *label, bool monospace)
 {
-    QString extra = monospace ? QStringLiteral("font-family:monospace;") : QString();
-    return QStringLiteral("QLabel{background:%1;color:%2;padding:8px;%3}")
-        .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
-             mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary), extra);
+    label->setProperty("readout", monospace ? QStringLiteral("mono") : QStringLiteral("text"));
 }
 } // namespace
 
@@ -113,12 +109,12 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
 
     m_histogramLabel = new QLabel;
     m_histogramLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    m_histogramLabel->setStyleSheet("QLabel{background:#141414;}");
+    m_histogramLabel->setProperty("plot", true);
     m_statsLabel = new QLabel;
     m_statsLabel->setObjectName(QStringLiteral("analysisStatsLabel"));
     m_statsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_statsLabel->setWordWrap(true);
-    m_statsLabel->setStyleSheet(analysisReadoutStyle(false));
+    markReadout(m_statsLabel, false);
     auto *histogramPage = new QWidget;
     auto *histogramLayout = new QVBoxLayout(histogramPage);
     histogramLayout->setContentsMargins(0, 0, 0, 0);
@@ -129,11 +125,11 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
 
     m_rgbLabel = new QLabel;
     m_rgbLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    m_rgbLabel->setStyleSheet("QLabel{background:#141414;}");
+    m_rgbLabel->setProperty("plot", true);
     m_rgbStatsLabel = new QLabel;
     m_rgbStatsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_rgbStatsLabel->setWordWrap(true);
-    m_rgbStatsLabel->setStyleSheet(analysisReadoutStyle(false));
+    markReadout(m_rgbStatsLabel, false);
     auto *rgbPage = new QWidget;
     auto *rgbLayout = new QVBoxLayout(rgbPage);
     rgbLayout->setContentsMargins(0, 0, 0, 0);
@@ -145,22 +141,22 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     m_exposureLabel = new QLabel;
     m_exposureLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_exposureLabel->setWordWrap(true);
-    m_exposureLabel->setStyleSheet(analysisReadoutStyle(false));
+    markReadout(m_exposureLabel, false);
     m_tabs->addTab(m_exposureLabel, tr("Exposure"));
     m_focusLabel = new QLabel;
     m_focusLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_focusLabel->setWordWrap(true);
-    m_focusLabel->setStyleSheet(analysisReadoutStyle(false));
+    markReadout(m_focusLabel, false);
     m_tabs->addTab(m_focusLabel, tr("Focus"));
     m_metaLabel = new QLabel;
     m_metaLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_metaLabel->setWordWrap(true);
-    m_metaLabel->setStyleSheet(analysisReadoutStyle(false));
+    markReadout(m_metaLabel, false);
     m_tabs->addTab(m_metaLabel, tr("Metadata"));
     m_pluginResult = new QLabel;
     m_pluginResult->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_pluginResult->setWordWrap(true);
-    m_pluginResult->setStyleSheet(analysisReadoutStyle(false));
+    markReadout(m_pluginResult, false);
     m_tabs->addTab(m_pluginResult, tr("Plugin"));
 }
 
@@ -200,7 +196,7 @@ void AnalysisPanel::buildInspectorTab()
     m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_inspectorLabel->setWordWrap(true);
     m_inspectorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_inspectorLabel->setStyleSheet(analysisReadoutStyle(true));
+    markReadout(m_inspectorLabel, true);
     m_inspectorLabel->setText(tr("Move the mouse over the image to inspect pixels."));
     layout->addWidget(m_inspectorLabel, 1);
     buildInspectorActions(*layout);

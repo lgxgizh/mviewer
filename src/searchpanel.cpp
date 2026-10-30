@@ -31,6 +31,7 @@ SearchPanel::SearchPanel(QWidget *parent)
     // ── top bar: search input + reindex button ──────────────────────
     auto *topBar = new QHBoxLayout;
     m_searchEdit = new QLineEdit;
+    m_searchEdit->setProperty("search", true);
     m_searchEdit->setPlaceholderText(tr("Search filename, metadata, analysis…"));
     m_searchEdit->setClearButtonEnabled(true);
     topBar->addWidget(m_searchEdit);

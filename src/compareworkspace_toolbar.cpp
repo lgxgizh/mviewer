@@ -1,9 +1,6 @@
 #include "ThemeMetrics.h"
 #include "compareworkspace_p.h"
 
-#include "Theme.h"
-#include "ThemeTokens.h"
-
 #include <QAbstractButton>
 #include <QAction>
 #include <QCheckBox>
@@ -15,17 +12,13 @@
 #include <QSizePolicy>
 #include <QSlider>
 #include <QSpinBox>
+#include <QStyle>
 #include <QTimer>
 #include <QToolButton>
 #include <QWidgetAction>
 
 namespace
 {
-
-QString themeColor(mviewer::ui::ThemeRole role)
-{
-    return mviewer::ui::Theme::themeColor(role);
-}
 
 void lift(QWidget *widget)
 {
@@ -94,20 +87,14 @@ void styleSegment(QCheckBox *box)
 {
     if (!box)
         return;
-    const int radius = mviewer::ui::makeThemeTokens(true).radiusControl;
     box->setCursor(Qt::PointingHandCursor);
     box->setFixedHeight(mviewer::ui::metrics::kControlHeight);
-    box->setStyleSheet(QStringLiteral("QCheckBox{spacing:0px;padding:2px 6px;border:1px solid %1;"
-                                      "border-radius:%2px;background:%3;}"
-                                      "QCheckBox::indicator{width:0px;height:0px;}"
-                                      "QCheckBox:checked{background:%4;border-color:%5;}"
-                                      "QCheckBox:disabled{color:%6;}")
-                           .arg(themeColor(mviewer::ui::ThemeRole::Border))
-                           .arg(radius)
-                           .arg(themeColor(mviewer::ui::ThemeRole::Bg2))
-                           .arg(mviewer::ui::Theme::themeRgba(mviewer::ui::ThemeRole::Accent, 71))
-                           .arg(themeColor(mviewer::ui::ThemeRole::Accent))
-                           .arg(themeColor(mviewer::ui::ThemeRole::TextDisabled)));
+    box->setProperty("segmented", true);
+    if (QStyle *style = box->style())
+    {
+        style->unpolish(box);
+        style->polish(box);
+    }
 }
 
 void bindMirror(QMenu *menu, QCheckBox *box, const char *name)

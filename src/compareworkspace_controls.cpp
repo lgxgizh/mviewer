@@ -4,7 +4,6 @@
 #include "compareworkspace_p.h"
 
 #include "Theme.h"
-#include "ThemeTokens.h"
 #include "compareworkspace_shortcuts.h"
 
 #include <QAction>
@@ -582,36 +581,22 @@ QWidget *CompareWorkspace::buildStatusStrip()
 {
     auto *strip = new QWidget(this);
     strip->setObjectName("compareStatusStrip");
-    strip->setStyleSheet(
-        QStringLiteral("QWidget#compareStatusStrip{background:%1; border-top:1px solid %2;}")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border)));
     auto *lay = new QHBoxLayout(strip);
     lay->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace4,
                             mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace4);
     lay->setSpacing(8);
 
-    const int chipRadius = mviewer::ui::makeThemeTokens(true).radiusControl;
     m_metricLabel = new QLabel(strip);
     m_metricLabel->setObjectName("diffMetricsLabel");
     m_metricLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_metricLabel->setWordWrap(false);
     m_metricLabel->setFixedHeight(24);
     m_metricLabel->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
-    m_metricLabel->setStyleSheet(
-        QStringLiteral("color:#38bdf8; font-family:monospace; font-weight:700; padding:2px 8px; "
-                       "background:%1; border:1px solid %2; border-radius:%3px;")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg0),
-                 mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border))
-            .arg(chipRadius));
     presentDiffMetrics(tr("PSNR: —    SSIM: —"));
     lay->addWidget(m_metricLabel, 0);
 
     m_autoAlignChk = new QCheckBox(tr("Align"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
-    m_autoAlignChk->setStyleSheet(
-        QStringLiteral("color:%1;")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary)));
     m_autoAlignChk->setToolTip(tr("Before comparison, auto-align by integer-pixel translation to "
                                   "remove shift error, then compute PSNR/SSIM"));
     m_autoAlignBeforeDiff = QSettings().value("autoAlignBeforeDiff", false).toBool();
@@ -626,9 +611,6 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
     m_compareStatusLabel = new QLabel(strip);
     m_compareStatusLabel->setObjectName("compareStatusLabel");
-    m_compareStatusLabel->setStyleSheet(
-        QStringLiteral("color:%1;")
-            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     lay->addWidget(m_compareStatusLabel, 1);
 
     m_exitBtn = new QPushButton(mviewer::cw::compareShortcutText("Esc"), strip);

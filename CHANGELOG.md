@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **macOS-style theme (A):** Apple system blue (`#0a84ff` dark, `#007aff` light),
+  neutral greys, and Segoe UI Variable type in both themes. Chrome drops the
+  boxed borders for hairline separators, rounded selections, and a thin
+  scrollbar. Inline colors follow the same tokens, including a live theme switch.
+
 ## [1.0.155] - 2026-10-29
 
 ### Release

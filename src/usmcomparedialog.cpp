@@ -1,5 +1,7 @@
 #include "usmcomparedialog.h"
 
+#include "Theme.h"
+#include "ThemeMetrics.h"
 #include "compareworkspace_temporary.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/Encoder.h"
@@ -575,12 +577,14 @@ void UsmCompareDialog::applyHoldTitles()
         if (!label)
             return;
         label->setText(side == 0 ? tr("Original (Before)") : tr("USM sharpened (After)"));
-        label->setStyleSheet(side == 0 ? QStringLiteral("font-weight: bold; background: #2b2b2b; "
-                                                        "color: #e0e0e0; padding: 4px; "
-                                                        "border-radius: 2px;")
-                                       : QStringLiteral("font-weight: bold; background: #2b2b2b; "
-                                                        "color: #4fc3f7; padding: 4px; "
-                                                        "border-radius: 2px;"));
+        using mviewer::ui::Theme;
+        using mviewer::ui::ThemeRole;
+        const QString ink = side == 0 ? Theme::themeColor(ThemeRole::TextPrimary)
+                                      : Theme::themeColor(ThemeRole::Accent);
+        label->setStyleSheet(
+            QStringLiteral("font-weight:600;background:%1;color:%2;padding:4px;border-radius:%3px;")
+                .arg(Theme::themeColor(ThemeRole::Bg2), ink,
+                     QString::number(mviewer::ui::metrics::kRadiusChip)));
     };
     const bool held = m_temporaryHoldActive && m_temporaryTarget;
     setTitle(m_lblLeftTitle, held && m_temporaryTarget == m_leftView ? 1 : 0);
