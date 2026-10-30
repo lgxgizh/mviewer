@@ -28,6 +28,12 @@
   backdrop; image areas stay opaque. Preferences → "Use translucent sidebar
   (Windows 11)" (on by default, applies after restart) turns it off. Windows 10
   keeps solid colors.
+- **Finder-style sidebar and thumbnail cards (C2):** The sidebar insets its
+  content under small grey captions, with rounded pill selections and the
+  preview in a rounded info card at the bottom. Thumbnails are 8 px rounded
+  cards with a soft cached shadow; selection is a 3 px accent ring plus an
+  accent filename pill with white text. Rating stars, color labels, the
+  rejected tint and frame badges use theme (Apple system) colors.
 
 ## [1.0.155] - 2026-10-29
 

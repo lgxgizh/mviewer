@@ -878,8 +878,8 @@ QMenu[winRounded="true"] {
     border-radius: 0px;
 }
 
-/* Windows 11 Mica (Preferences, opt-in): the toolbar and sidebar clear their
-   fill so the backdrop shows. Gallery, viewer, preview and compare stay opaque. */
+/* Windows 11 Mica (Preferences, on by default): the toolbar and sidebar clear their
+   fill so the backdrop shows. Gallery, viewer, the preview card and compare stay opaque. */
 QMainWindow[mica="true"] {
     background: transparent;
 }
@@ -888,6 +888,7 @@ QMainWindow[mica="true"] QMenuBar,
 QMainWindow[mica="true"] QToolBar#browserToolBar,
 QMainWindow[mica="true"] QSplitter#navigationPanel,
 QMainWindow[mica="true"] QWidget#foldersSection,
+QMainWindow[mica="true"] QWidget#previewSection,
 QMainWindow[mica="true"] QSplitter#navigationPanel QTreeView,
 QMainWindow[mica="true"] QSplitter#navigationPanel QListWidget {
     background: transparent;
@@ -1013,6 +1014,35 @@ QSplitter#navigationPanel QListWidget {
 
 QSplitter#navigationPanel QTreeView::item {
     padding: 2px 0px;
+    border-radius: 6px;
+}
+
+/* Finder-style sidebar captions: small grey, aligned with the row text. */
+QSplitter#navigationPanel QLabel[sectionHeader="true"] {
+    padding-left: {{space4}}px;
+}
+
+QSplitter#navigationPanel QTreeView::item:selected {
+    background: {{accent}};
+    color: {{onAccent}};
+    border-radius: 6px;
+}
+
+QSplitter#navigationPanel QTreeView:!focus::item:selected,
+QSplitter#navigationPanel QTreeView::item:selected:!active {
+    background: {{bg3}};
+    color: {{textPrimary}};
+}
+
+QSplitter#navigationPanel::handle {
+    background: {{sidebar}};
+}
+
+/* Preview info card at the bottom of the sidebar. */
+QFrame#previewCard {
+    background: {{bg0}};
+    border: 1px solid {{separator}};
+    border-radius: {{radiusPanel}}px;
 }
 
 QSplitter#navigationPanel QListWidget::item {
