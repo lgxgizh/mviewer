@@ -82,11 +82,14 @@ int main(int argc, char **argv)
     check(QSettings().value(QStringLiteral("autoCheckUpdates")).toBool(),
           "re-enabling the checkbox persists true");
 
-    // Windows 11 translucent sidebar (Mica) toggle: opt-in, persisted.
+    // Windows 11 translucent sidebar (Mica) toggle: on by default, persisted.
+    // Earlier PreferencesDialog::accept already wrote the key (checkbox default-
+    // checked), so clear it before asserting the empty-settings default.
     using mviewer::platform::WindowChrome;
     const QString micaKey = QString::fromLatin1(WindowChrome::translucentSidebarSettingsKey());
-    check(!QSettings().contains(micaKey) && WindowChrome::translucentSidebarEnabled(),
-          "translucent sidebar defaults on");
+    QSettings().remove(micaKey);
+    check(!QSettings().contains(micaKey), "translucent sidebar key absent after clear");
+    check(WindowChrome::translucentSidebarEnabled(), "translucent sidebar defaults on");
     {
         PreferencesDialog dlg;
         auto *box = dlg.findChild<QCheckBox *>(QStringLiteral("preferencesTranslucentSidebar"));
