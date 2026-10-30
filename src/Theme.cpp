@@ -1,5 +1,6 @@
 #include "Theme.h"
 #include "ThemeMetrics.h"
+#include "platform/WindowChrome.h"
 
 #include <QAbstractButton>
 #include <QApplication>
@@ -484,6 +485,8 @@ void Theme::applyTheme(ThemeMode mode)
     retintLiveWidgets(previous, g_tokens);
 
     installSystemSchemeFollower();
+    // Native title bars (dark/light, caption color) follow the new tokens.
+    mviewer::platform::WindowChrome::themeChanged();
 
     QSettings settings;
     settings.setValue(QStringLiteral("uiTheme"), themeModeKey(mode));

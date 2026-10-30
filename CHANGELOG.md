@@ -21,6 +21,13 @@
   Split-pane toolbars use the same icon buttons. The status bar is a thin
   caption line.
 
+- **Windows window chrome (C3):** The title bar follows the light/dark theme
+  live, and on Windows 11 the window has rounded corners with its caption and
+  border matched to the toolbar color. Popup menus use the system's small
+  rounded corners. On Windows 11 22H2+ the toolbar and sidebar show the Mica
+  backdrop; image areas stay opaque. Preferences → "Use translucent sidebar
+  (Windows 11)" (on by default, applies after restart) turns it off. Windows 10
+  keeps solid colors.
 - **Finder-style sidebar and thumbnail cards (C2):** The sidebar insets its
   content under small grey captions, with rounded pill selections and the
   preview in a rounded info card at the bottom. Thumbnails are 8 px rounded
