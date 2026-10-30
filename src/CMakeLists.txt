@@ -188,6 +188,7 @@ add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
+    mainwindow_ui_toolbar.cpp
     mainwindow_ui_retranslate.cpp
     mainwindow_splitbrowse.cpp
     mainwindow_splitbrowse_panes.cpp
@@ -305,6 +306,7 @@ add_library(mviewer_ui STATIC
     batchdialog.cpp
     batchrenamepanel.cpp
     widgets/rawimageview.cpp
+    widgets/ViewModeSegment.cpp
     widgets/rawimageview_surface.cpp
     widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
@@ -480,6 +482,7 @@ add_executable(test_ui_models
     ThemeIcons.cpp
     hoverfade.cpp
     breadcrumbbar.cpp
+    widgets/ViewModeSegment.cpp
     ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
 )
 target_link_libraries(test_ui_models

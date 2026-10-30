@@ -4567,8 +4567,13 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_chrome.cpp" line="21"/>
-        <source>Show or hide the folder and preview sidebars</source>
-        <translation>显示或隐藏文件夹与预览侧栏</translation>
+        <source>Toggle sidebar</source>
+        <translation>切换边栏</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_ui_toolbar.cpp" line="114"/>
+        <source>Click to edit the folder path</source>
+        <translation>点击以编辑文件夹路径</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_connections.cpp" line="44"/>

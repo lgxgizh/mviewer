@@ -2,25 +2,14 @@
 #include "ThemeMetrics.h"
 #include "mainwindow_p.h"
 
-#include "ShortcutHelper.h"
-#include "ThemeIcons.h"
 #include "core/render/ZoomPercent.h"
 
-#include <QFocusEvent>
-#include <QMouseEvent>
-#include <QSignalBlocker>
 #include <QTimer>
-#include <QToolBar>
 
 namespace
 {
 
 // SelectAllOnActivateLineEdit is defined in mainwindow_p.h
-
-QString actTip(const QString &label, const QAction *action)
-{
-    return mviewer::ui::appendShortcutHint(label, mviewer::ui::actionShortcutHint(action));
-}
 
 QLabel *sectionHeaderLabel(QWidget *parent, const char *objectName, const QString &text)
 {
@@ -38,87 +27,12 @@ void MainWindow::buildBrowserShell()
     m_actDirUp = new QAction(tr("Up one level"), this);
     m_actDirUp->setObjectName("directoryUpAction");
     m_actDirUp->setShortcut(QKeySequence("Alt+Up"));
-    m_actDirUp->setToolTip(actTip(tr("Parent directory"), m_actDirUp));
     m_actRefresh = new QAction(tr("Refresh"), this);
     m_actRefresh->setObjectName("refreshDirectoryAction");
     m_actRefresh->setShortcut(QKeySequence::Refresh);
-    m_actRefresh->setToolTip(actTip(tr("Refresh directory and thumbnails"), m_actRefresh));
     m_actOpenCurrentFolder = new QAction(tr("Open Folder"), this);
     m_actOpenCurrentFolder->setObjectName("openCurrentFolderAction");
-    m_actOpenCurrentFolder->setToolTip(
-        actTip(tr("Open the current folder in the file manager"), m_actOpenCurrentFolder));
-    auto *browserToolBar = new QToolBar(tr("Browse toolbar"), this);
-    addToolBar(Qt::TopToolBarArea, browserToolBar);
-    browserToolBar->setObjectName("browserToolBar");
-    browserToolBar->setMovable(false);
-    browserToolBar->setFloatable(false);
-    browserToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    browserToolBar->setIconSize(QSize(mviewer::ui::kToolbarIconPx, mviewer::ui::kToolbarIconPx));
-    auto addBrowserAction =
-        [browserToolBar](QAction *action, const char *iconName, const QString &tip = {})
-    {
-        if (!action)
-            return;
-        action->setIcon(mviewer::ui::toolbarIcon(iconName));
-        if (!tip.isEmpty())
-            action->setToolTip(tip);
-        browserToolBar->addAction(action);
-    };
-    addBrowserAction(m_actOpenDir, "open", actTip(tr("Open Directory"), m_actOpenDir));
-    addBrowserAction(m_actDirBack, "back", actTip(tr("Previous directory"), m_actDirBack));
-    addBrowserAction(m_actDirForward, "forward", actTip(tr("Next directory"), m_actDirForward));
-    addBrowserAction(m_actDirUp, "up");
-    addBrowserAction(m_actRefresh, "refresh");
-    addBrowserAction(
-        m_actOpenCurrentFolder, "browse",
-        actTip(tr("Open the current folder in the file manager"), m_actOpenCurrentFolder));
-    browserToolBar->addSeparator();
-    addBrowserAction(m_actAddFavorite, "favorite",
-                     actTip(tr("Favorite Current Directory"), m_actAddFavorite));
-    addBrowserAction(m_actToggleAnalysis, "analysis",
-                     actTip(tr("Analysis panel"), m_actToggleAnalysis));
-    addBrowserAction(m_actToggleSearch, "search", actTip(tr("Global search"), m_actToggleSearch));
-    browserToolBar->addSeparator();
-    addBrowserAction(m_actBrowseWorkspace, "browse_workspace");
-    browserToolBar->addSeparator();
-    if (m_actRotateCCW)
-    {
-        m_actRotateCCW->setIcon(mviewer::ui::toolbarIcon("rotate_ccw"));
-        m_actRotateCCW->setToolTip(
-            actTip(tr("Rotate 90° counterclockwise and overwrite original file"), m_actRotateCCW));
-        browserToolBar->addAction(m_actRotateCCW);
-    }
-    if (m_actRotateCW)
-    {
-        m_actRotateCW->setIcon(mviewer::ui::toolbarIcon("rotate_cw"));
-        m_actRotateCW->setToolTip(
-            actTip(tr("Rotate 90° clockwise and overwrite the original file"), m_actRotateCW));
-        browserToolBar->addAction(m_actRotateCW);
-    }
-    if (m_actSplitBrowse)
-    {
-        m_actSplitBrowse->setIcon(mviewer::ui::toolbarIcon("split_browse"));
-        m_actSplitBrowse->setObjectName("splitBrowseAction");
-        m_actSplitBrowse->setToolTip(
-            actTip(tr("Split Browse View (Ctrl+Shift+S)"), m_actSplitBrowse));
-        browserToolBar->addAction(m_actSplitBrowse);
-    }
-    if (m_actCompare)
-    {
-        m_actCompare->setIcon(mviewer::ui::toolbarIcon("compare"));
-        m_actCompare->setObjectName("compareAction");
-        m_actCompare->setToolTip(actTip(tr("Select 2–8 images to compare"), m_actCompare));
-        browserToolBar->addAction(m_actCompare);
-    }
-    if (m_actUsmCompare)
-    {
-        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("usm"));
-        m_actUsmCompare->setObjectName("usmCompareAction");
-        m_actUsmCompare->setToolTip(
-            actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));
-        browserToolBar->addAction(m_actUsmCompare);
-    }
-    installNavigationCollapse();
+    buildUnifiedToolbar();
 
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
     m_breadcrumb = new BreadcrumbBar(this);
@@ -395,7 +309,9 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     m_viewModeCombo->setObjectName("thumbnailViewModeCombo");
     applyViewModeComboItems(m_viewModeCombo);
     m_viewModeCombo->setToolTip(tr("Switch thumbnail view mode (common modes Ctrl+1..6)"));
-    sortLayout->addWidget(m_viewModeCombo);
+    // The segmented control is the visible switch. The combo stays in the tree
+    // so objectName lookups and currentData remain the source of truth.
+    m_viewModeCombo->hide();
     connect(m_viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this]()
             {
@@ -403,17 +319,15 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
                     static_cast<ThumbnailPanel::ViewMode>(m_viewModeCombo->currentData().toInt()));
             });
 
-    // M18: live search bar.
-    auto *searchLabel = new QLabel(tr("Search:"), sortBar);
-    searchLabel->setObjectName(QStringLiteral("searchFieldLabel"));
-    sortLayout->addWidget(searchLabel);
+    // M18: live search bar. The field is hosted on the unified toolbar
+    // (attachUnifiedToolbarControls); keep the objectName and the event filter.
     m_searchEdit = new QLineEdit(sortBar);
     m_searchEdit->setObjectName("searchEdit");
     m_searchEdit->setProperty("search", true);
     m_searchEdit->setPlaceholderText(tr("Filter by filename..."));
     m_searchEdit->setClearButtonEnabled(true);
     m_searchEdit->installEventFilter(this);
-    sortLayout->addWidget(m_searchEdit, 1);
+    m_searchEdit->hide();
     m_searchRecursive = new QCheckBox(tr("Include Subfolders"), sortBar);
     advancedLayout->addWidget(m_searchRecursive);
 
@@ -507,13 +421,15 @@ QWidget *MainWindow::buildGalleryPanel()
                 {
                     if (m_viewModeCombo->itemData(i).toInt() == static_cast<int>(mode))
                     {
-                        const QSignalBlocker blocker(m_viewModeCombo);
+                        // Do not block: the segmented control listens to the
+                        // combo. Setting the same index does not re-enter.
                         m_viewModeCombo->setCurrentIndex(i);
                         break;
                     }
                 }
             });
     m_thumbnailPanel->setViewMode(m_thumbnailPanel->viewMode());
+    attachUnifiedToolbarControls();
 
     return rightWidget;
 }
@@ -626,6 +542,10 @@ void MainWindow::buildStatusBarUi()
 {
     // P0 #①: real-time status bar — image count, total/selected size, viewer
     // zoom, and live cache hit-rate. Persistent (not transient showMessage).
+    // Thin caption strip; the hairline and type size live in the theme QSS.
+    statusBar()->setObjectName(QStringLiteral("mainStatusBar"));
+    statusBar()->setFixedHeight(mviewer::ui::metrics::kStatusBarHeight);
+    statusBar()->setContentsMargins(0, 0, 0, 0);
     m_lblImage = new QLabel("—", this);
     m_lblCount = new QLabel(tr("0 images"), this);
     m_lblCount->setObjectName(QStringLiteral("statusImageCount"));
@@ -639,6 +559,7 @@ void MainWindow::buildStatusBarUi()
         tr("Cache hit rate: improves consecutive large-image switching and thumbnail loading"));
     for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache, m_lblRawSource})
     {
+        l->setProperty("role", QStringLiteral("caption"));
         l->setContentsMargins(mviewer::ui::metrics::kSpace8, 0, mviewer::ui::metrics::kSpace8, 0);
         statusBar()->addPermanentWidget(l);
     }
@@ -649,6 +570,7 @@ void MainWindow::buildStatusBarUi()
 
     m_updateNotice = new QLabel(this);
     m_updateNotice->setObjectName(QStringLiteral("updateAvailableLink"));
+    m_updateNotice->setProperty("role", QStringLiteral("caption"));
     m_updateNotice->setTextFormat(Qt::RichText);
     m_updateNotice->setTextInteractionFlags(Qt::TextBrowserInteraction);
     m_updateNotice->setContentsMargins(mviewer::ui::metrics::kSpace8, 0,

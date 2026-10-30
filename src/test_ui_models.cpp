@@ -10,7 +10,11 @@
 #include "selectionmodel.h"
 #include "workspacemodel.h"
 
+#include "widgets/ViewModeSegment.h"
+
+#include <QAbstractButton>
 #include <QApplication>
+#include <QComboBox>
 #include <QDebug>
 #include <QDialog>
 #include <QDialogButtonBox>
@@ -489,6 +493,44 @@ int main(int argc, char **argv)
                          [&selectedPath](const QString &p) { selectedPath = p; });
         emit bar.pathSelected(bar.pathForIndex(1));
         CHECK(selectedPath == "/home", "BreadcrumbBar signal emitted with segment path");
+    }
+
+    // ---- View mode segments follow the combo, and drive it ----
+    {
+        QComboBox combo;
+        combo.addItem(QStringLiteral("Grid"), 0);
+        combo.addItem(QStringLiteral("Large"), 1);
+        combo.addItem(QStringLiteral("List"), 6);
+        combo.addItem(QStringLiteral("Details"), 3);
+        combo.addItem(QStringLiteral("Filmstrip"), 4);
+        ViewModeSegment::Mode gridMode;
+        gridMode.data = 0;
+        gridMode.toolTip = QStringLiteral("Grid");
+        gridMode.matches = {1};
+        ViewModeSegment::Mode listMode;
+        listMode.data = 6;
+        listMode.toolTip = QStringLiteral("List");
+        listMode.matches = {3};
+        ViewModeSegment::Mode filmMode;
+        filmMode.data = 4;
+        filmMode.toolTip = QStringLiteral("Filmstrip");
+        ViewModeSegment segment;
+        segment.setModes({gridMode, listMode, filmMode});
+        segment.bind(&combo);
+        combo.setCurrentIndex(combo.findData(4));
+        CHECK(segment.checkedData() == 4, "filmstrip segment follows the combo");
+        QAbstractButton *grid = segment.buttonForData(0);
+        CHECK(grid != nullptr, "grid segment button exists");
+        if (grid)
+            grid->click();
+        CHECK(combo.currentData().toInt() == 0, "grid segment selects the combo grid mode");
+        CHECK(segment.checkedData() == 0, "grid segment stays checked after the click");
+        combo.setCurrentIndex(combo.findData(3));
+        CHECK(segment.checkedData() == 6, "details mode lights the list segment");
+        combo.setCurrentIndex(combo.findData(1));
+        CHECK(segment.checkedData() == 0, "large icons light the grid segment");
+        combo.setCurrentIndex(combo.findData(4));
+        CHECK(segment.checkedData() == 4, "switching the combo again updates the segment");
     }
 
     std::printf("\n%s (%d failures)\n", g_failures == 0 ? "ALL PASS" : "HAS FAILURES", g_failures);

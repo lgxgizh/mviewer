@@ -57,6 +57,46 @@ QToolBar {
     padding: {{space4}}px {{space8}}px;
 }
 
+QToolBar#browserToolBar {
+    background: {{bg1}};
+    border: none;
+    border-bottom: 1px solid {{separator}};
+    spacing: {{space4}}px;
+    padding: 0px {{space8}}px;
+    min-height: 40px;
+    max-height: 44px;
+}
+
+QToolBar#browserToolBar QToolButton {
+    padding: 2px;
+    margin: 0px;
+    border: none;
+}
+
+QToolBar#browserToolBar QToolButton[pill="true"][primary="true"] {
+    border-radius: {{radiusSearch}}px;
+    padding: 2px {{space12}}px;
+    background: {{accent}};
+    color: {{onAccent}};
+    border: 1px solid {{accent}};
+}
+
+QToolBar#browserToolBar QToolButton[pill="true"][primary="true"]:hover {
+    background: {{accentHover}};
+    border-color: {{accentHover}};
+}
+
+QToolBar#browserToolBar QToolButton[pill="true"][primary="true"]:pressed {
+    background: {{accentPressed}};
+    border-color: {{accentPressed}};
+}
+
+QToolBar#browserToolBar QToolButton[pill="true"][primary="true"]:disabled {
+    background: {{bg3}};
+    color: {{textDisabled}};
+    border-color: {{border}};
+}
+
 QToolBar::separator {
     background: {{separator}};
     width: 1px;
@@ -92,6 +132,36 @@ QToolButton:disabled {
 
 QToolButton:checked:hover {
     background: {{selection}};
+}
+
+QToolButton[pill="true"] {
+    border-radius: {{radiusSearch}}px;
+    padding: 2px {{space12}}px;
+    background: {{bg2}};
+    color: {{textPrimary}};
+    border: 1px solid {{border}};
+}
+
+QToolButton[pill="true"][primary="true"] {
+    background: {{accent}};
+    color: {{onAccent}};
+    border: 1px solid {{accent}};
+}
+
+QToolButton[pill="true"][primary="true"]:hover {
+    background: {{accentHover}};
+    border-color: {{accentHover}};
+}
+
+QToolButton[pill="true"][primary="true"]:pressed {
+    background: {{accentPressed}};
+    border-color: {{accentPressed}};
+}
+
+QToolButton[pill="true"][primary="true"]:disabled {
+    background: {{bg3}};
+    color: {{textDisabled}};
+    border-color: {{border}};
 }
 
 QPushButton {
@@ -205,6 +275,25 @@ QWidget[segmented="true"] QPushButton {
 
 QWidget[segmented="true"] QPushButton:checked {
     background: {{bg2}};
+    border-radius: 6px;
+    color: {{textPrimary}};
+}
+
+QWidget#viewModeSegment QPushButton {
+    padding: 1px 4px;
+    min-width: 0px;
+    min-height: 0px;
+    max-height: 24px;
+    border: none;
+    background: transparent;
+}
+
+QWidget#viewModeSegment QPushButton:hover {
+    background: {{hover}};
+}
+
+QWidget#viewModeSegment QPushButton:checked {
+    background: {{bg0}};
     border-radius: 6px;
     color: {{textPrimary}};
 }
@@ -355,6 +444,12 @@ QLineEdit[search="true"] {
     border-radius: {{radiusSearch}}px;
     padding-left: {{space12}}px;
     padding-right: {{space12}}px;
+}
+
+QComboBox[pill="true"] {
+    border-radius: {{radiusSearch}}px;
+    padding-left: {{space12}}px;
+    padding-right: {{space8}}px;
 }
 
 QLineEdit:hover,
@@ -791,6 +886,10 @@ QStatusBar {
     color: {{textSecondary}};
     border: none;
     border-top: 1px solid {{separator}};
+    font-size: {{fontCaptionPx}}px;
+    min-height: 22px;
+    max-height: 24px;
+    padding: 0px;
 }
 
 QStatusBar::item {
@@ -799,7 +898,8 @@ QStatusBar::item {
 
 QStatusBar QLabel {
     color: {{textSecondary}};
-    padding: 0 {{space8}}px;
+    font-size: {{fontCaptionPx}}px;
+    padding: 0px {{space8}}px;
 }
 
 QWidget#primaryBrowsePane,

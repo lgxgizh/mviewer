@@ -15,6 +15,15 @@
   chosen so 125% and 150% scaling stay sharp. Checkbox, radio and chevron
   indicators use the same stroke.
 
+- **macOS-style chrome (C):** The browse toolbar is one strip: sidebar, back,
+  forward and up, the folder title and path, a segmented view switch, the
+  format filter as a pill, a Compare pill and rounded search. The sidebar
+  reads like Finder (section labels, inset selection). Thumbnail cards use a
+  cached shadow, an accent ring and an accent filename pill. The status bar
+  is a thin caption line. On Windows 11 the caption matches the toolbar and
+  Mica sits only behind the sidebar and toolbar; the image stays opaque.
+  Compare's controls share one row, and its overlays stay on the image.
+
 ## [1.0.155] - 2026-10-29
 
 ### Release

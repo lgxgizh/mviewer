@@ -130,7 +130,6 @@ void MainWindow::retranslateBrowseBar()
     static const TextEntry kNamed[] = {
         {"sortFieldLabel", QT_TR_NOOP("Sort:"), nullptr},
         {"secondarySortLabel", QT_TR_NOOP("Sort:"), nullptr},
-        {"searchFieldLabel", QT_TR_NOOP("Search:"), nullptr},
         {"ratingFilterLabel", QT_TR_NOOP("Rating:"), nullptr},
         {"flagFilterLabel", QT_TR_NOOP("Flag:"), nullptr},
         {"advancedFilterToggle", QT_TR_NOOP("Advanced Filter"),
@@ -190,6 +189,7 @@ void MainWindow::retranslateBrowseBar()
     }
     if (m_viewModeCombo)
         m_viewModeCombo->setToolTip(tr("Switch thumbnail view mode (common modes Ctrl+1..6)"));
+    syncViewModeSegmentToolTips();
     if (m_sortDirBtn)
         m_sortDirBtn->setToolTip(sortDirectionToolTip(true));
     if (m_secondarySortDirBtn)

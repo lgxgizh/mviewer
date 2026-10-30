@@ -227,6 +227,7 @@ QHBoxLayout *MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLay
 
     m_secondaryTypeFilterCombo = new FormatFilterCombo(row2Widget);
     m_secondaryTypeFilterCombo->setObjectName(QStringLiteral("secondaryTypeFilterCombo"));
+    m_secondaryTypeFilterCombo->setProperty("pill", true);
     m_secondaryTypeFilterCombo->setHiddenGroups(m_hiddenFormatGroups);
     connect(m_secondaryTypeFilterCombo, &FormatFilterCombo::hiddenGroupsChanged, this,
             &MainWindow::setBrowseHiddenFormatGroups);
