@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.157] - 2026-10-30
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.157** (compare Space hold fix + nightly publish-health retry, #267).
+
 ### Fixed
 
 - **Compare Space / 1-8 hold survives a sharper raster:** holding Space right

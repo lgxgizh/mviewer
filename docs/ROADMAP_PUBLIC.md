@@ -4,9 +4,9 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.156**
+## Where we are now — **Beta / 1.0.157**
 
-MViewer remains in **Beta**; the current release is **`v1.0.156`**
+MViewer remains in **Beta**; the current release is **`v1.0.157`**
 (2026-10-30, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.156** (current) | macOS-style UI redesign: Apple system blue themes, SF Symbols-style icons, unified browse toolbar, Finder-style sidebar and thumbnail cards, Windows 11 chrome with Mica (on by default), compare toolbar segmented modes / capsule menus, and polished dialogs & menus | 🔵 Beta |
+| **1.0.157** (current) | Steady Space hold: holding Space (or 1–8) in Compare right after a zoom or pan keeps showing the other pane even when a sharper preview finishes loading mid-hold; nightly health publishing retries instead of failing when master moves | 🔵 Beta |
+| **1.0.156** | macOS-style UI redesign: Apple system blue themes, SF Symbols-style icons, unified browse toolbar, Finder-style sidebar and thumbnail cards, Windows 11 chrome with Mica (on by default), compare toolbar segmented modes / capsule menus, and polished dialogs & menus | ✅ Previous patch |
 | **1.0.155** | Batch Rename: Ctrl+Shift+B loads every image of the current folder, previews current → new names live and renames the originals in place (swaps safe, a replaced file goes to the Recycle Bin); the crowded batch processing options are gone | ✅ Previous patch |
 | **1.0.154** | Space shows the truth: holding Space (or 1–8) in Compare shows the other pane exactly as it is zoomed and panned, the ROI box and statistics chip follow the shown image, a split hold keeps both halves visible, Ctrl+C while held copies what is on screen, and the help explains what Ctrl+C copies in each mode | ✅ Previous patch |
 | **1.0.153** | Clipboard polish: Compare Ctrl+C / Ctrl+S captures the on-screen view including ROI statistics chips; browse Ctrl+C puts the selected image files on the clipboard so Explorer Ctrl+V pastes copies | ✅ Previous patch |
@@ -88,7 +89,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.156` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.157` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
