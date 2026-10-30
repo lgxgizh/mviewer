@@ -2,6 +2,10 @@
 // for the portable parts and the non-Windows no-op stubs.
 #include "platform/WindowChrome.h"
 
+#include <QtGlobal>
+
+#if defined(Q_OS_WIN)
+
 #include "Theme.h"
 
 #include <QApplication>
@@ -199,3 +203,5 @@ void WindowChrome::themeChanged()
 }
 
 } // namespace mviewer::platform
+
+#endif // Q_OS_WIN
