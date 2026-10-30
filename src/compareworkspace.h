@@ -382,9 +382,7 @@ class CompareWorkspace : public QWidget
     void updatePaneIndexBadges();
     bool temporaryHoldBlocked() const;
     void applyTemporaryDisplay(int targetPane, int sourcePane);
-    // Re-applies a held Space / 1-8 switch after a raster delivery replaced a
-    // pane's image (RawImageView::setImage() drops the transient display).
-    void reassertTemporaryDisplay();
+    void reassertTemporaryDisplay(); // re-hold after setImage() dropped it
     void syncEngineBlink();
     bool isSplitOrSwipe() const;
 
