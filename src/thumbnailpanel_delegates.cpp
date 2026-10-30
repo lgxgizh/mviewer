@@ -151,9 +151,9 @@ void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &pa
             thumb_delegate::cachedScaledPixmap(displayPhoto(pm), thumbRect.size());
         painter->drawPixmap(thumbRect.x() + (thumbRect.width() - scaled.width()) / 2,
                             thumbRect.y() + (thumbRect.height() - scaled.height()) / 2, scaled);
-        QColor hairline = option.palette.color(QPalette::Text);
-        hairline.setAlpha(28);
-        painter->setPen(hairline);
+        // Opaque, quiet hairline: it frames the photo edge the same way in
+        // both themes (a translucent stroke would let the photo bleed past it).
+        painter->setPen(blended(base, option.palette.color(QPalette::Text), 40));
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(thumbRect.adjusted(0, 0, -1, -1));
     }
