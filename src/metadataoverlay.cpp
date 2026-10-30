@@ -2,7 +2,7 @@
 #include "widgets/histogramwidget.h"
 
 #include "Theme.h"
-#include "ThemeTokens.h"
+#include "ThemeMetrics.h"
 
 #include "core/image/MetadataReader.h"
 #include "core/image/RawMetadata.h"
@@ -397,7 +397,7 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
     const int y = 20;
     QRect boxRect(x, y, boxW, boxH);
 
-    const int radius = mviewer::ui::makeThemeTokens(true).radiusPanel;
+    const int radius = mviewer::ui::metrics::kRadiusPanel;
     QColor fill(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1));
     fill.setAlpha(235);
     QColor edge(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border));

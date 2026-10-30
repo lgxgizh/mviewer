@@ -12,6 +12,7 @@
 #include <QGuiApplication>
 #include <QHash>
 #include <QLabel>
+#include <QList>
 #include <QPalette>
 #include <QProxyStyle>
 #include <QRegularExpression>
@@ -44,13 +45,6 @@ struct TokenSlot
     QString value;
 };
 
-QColor mix30(const QColor &accent, const QColor &base)
-{
-    const auto channel = [](int src, int dst) { return (src * 30 + dst * 70) / 100; };
-    return QColor(channel(accent.red(), base.red()), channel(accent.green(), base.green()),
-                  channel(accent.blue(), base.blue()));
-}
-
 void applyGroup(QPalette &palette, QPalette::ColorGroup group, const ThemeTokens &tokens,
                 bool disabled)
 {
@@ -59,8 +53,8 @@ void applyGroup(QPalette &palette, QPalette::ColorGroup group, const ThemeTokens
     palette.setColor(group, QPalette::Window, QColor(tokens.bg1));
     palette.setColor(group, QPalette::WindowText, text);
     palette.setColor(group, QPalette::Base, QColor(tokens.bg0));
-    palette.setColor(group, QPalette::AlternateBase, QColor(tokens.bg1));
-    palette.setColor(group, QPalette::ToolTipBase, QColor(tokens.bg2));
+    palette.setColor(group, QPalette::AlternateBase, QColor(tokens.sidebar));
+    palette.setColor(group, QPalette::ToolTipBase, QColor(tokens.bg1));
     palette.setColor(group, QPalette::ToolTipText, QColor(tokens.textPrimary));
     palette.setColor(group, QPalette::Text, text);
     palette.setColor(group, QPalette::Button, button);
@@ -68,13 +62,14 @@ void applyGroup(QPalette &palette, QPalette::ColorGroup group, const ThemeTokens
     palette.setColor(group, QPalette::BrightText, QColor(tokens.onAccent));
     palette.setColor(group, QPalette::Link, QColor(tokens.accent));
     palette.setColor(group, QPalette::LinkVisited, QColor(tokens.accent));
-    palette.setColor(group, QPalette::Highlight, mix30(QColor(tokens.accent), QColor(tokens.bg0)));
-    palette.setColor(group, QPalette::HighlightedText, QColor(tokens.textPrimary));
+    palette.setColor(group, QPalette::Highlight, QColor(tokens.accent));
+    palette.setColor(group, QPalette::HighlightedText, QColor(tokens.onAccent));
     palette.setColor(group, QPalette::Mid, QColor(tokens.border));
     palette.setColor(group, QPalette::Midlight, QColor(tokens.bg3));
+    palette.setColor(group, QPalette::Light, QColor(tokens.bevel));
     palette.setColor(group, QPalette::Dark, kImageCanvas);
     palette.setColor(group, QPalette::Shadow, QColor(0x10, 0x10, 0x12));
-    palette.setColor(group, QPalette::PlaceholderText, QColor(tokens.textSecondary));
+    palette.setColor(group, QPalette::PlaceholderText, QColor(tokens.textDisabled));
 }
 
 QPalette buildPalette(const ThemeTokens &tokens)
@@ -89,9 +84,10 @@ QPalette buildPalette(const ThemeTokens &tokens)
 void applyThemeFont(const ThemeTokens &tokens)
 {
     QFont font;
-    font.setFamilies({QStringLiteral("Segoe UI Variable"), QStringLiteral("Microsoft YaHei UI"),
-                      QStringLiteral("Segoe UI")});
-    font.setPointSize(tokens.fontPt);
+    font.setFamilies({QStringLiteral("Segoe UI Variable Text"), QStringLiteral("Segoe UI Variable"),
+                      QStringLiteral("Microsoft YaHei UI"), QStringLiteral("Segoe UI")});
+    // 13 px body at the 96 DPI baseline (9.75 pt). Point size tracks DPI.
+    font.setPointSizeF(tokens.fontBodyPx * 72.0 / 96.0);
     font.setStyleHint(QFont::SansSerif, QFont::PreferOutline);
     QApplication::setFont(font);
 }
@@ -176,27 +172,60 @@ void installDialogPolisher()
 // Token colors baked into per-widget stylesheets and rich-text labels at build
 // time are swapped to the new theme in one pass, so a live light/dark switch
 // does not leave dark islands behind. Colors that are not tokens are untouched.
-QHash<QString, QString> tokenColorMap(const ThemeTokens &from, const ThemeTokens &to)
+//
+// Hex tokens remap by #rrggbb. rgba tokens remap by their full string: a second
+// pass on the RGB alone would retint a just-written accent as the other theme's
+// accentHover (those two share a hex across the pair). Literal #ffffff / #000000
+// are never keys, so overlay white and black stay put.
+struct RgbaTokenSwap
 {
-    const QString ThemeTokens::*fields[] = {
-        &ThemeTokens::bg0,           &ThemeTokens::bg1,          &ThemeTokens::bg2,
-        &ThemeTokens::bg3,           &ThemeTokens::border,       &ThemeTokens::textPrimary,
-        &ThemeTokens::textSecondary, &ThemeTokens::textDisabled, &ThemeTokens::accentHover,
-        &ThemeTokens::accentPressed,
-    };
-    QHash<QString, QString> map;
-    for (const auto field : fields)
+    QString from;
+    QString to;
+};
+
+struct RetintPlan
+{
+    QHash<QString, QString> hex;
+    QList<RgbaTokenSwap> rgba;
+};
+
+const QString ThemeTokens::*tokenColorFields[] = {
+    &ThemeTokens::bg0,         &ThemeTokens::bg1,           &ThemeTokens::bg2,
+    &ThemeTokens::bg3,         &ThemeTokens::sidebar,       &ThemeTokens::border,
+    &ThemeTokens::separator,   &ThemeTokens::hover,         &ThemeTokens::bevel,
+    &ThemeTokens::textPrimary, &ThemeTokens::textSecondary, &ThemeTokens::textDisabled,
+    &ThemeTokens::accent,      &ThemeTokens::accentHover,   &ThemeTokens::accentPressed,
+    &ThemeTokens::accentTint,  &ThemeTokens::selection,     &ThemeTokens::danger,
+    &ThemeTokens::onAccent,    &ThemeTokens::scrollHandle,  &ThemeTokens::scrollHandleHover,
+};
+
+RetintPlan retintPlan(const ThemeTokens &from, const ThemeTokens &to)
+{
+    RetintPlan plan;
+    for (const auto field : tokenColorFields)
     {
-        const QColor oldColor(from.*field);
-        const QColor newColor(to.*field);
-        const bool literal = oldColor == QColor(Qt::white) || oldColor == QColor(Qt::black);
-        if (oldColor.isValid() && newColor.isValid() && oldColor != newColor && !literal)
-            map.insert(oldColor.name().toLower(), newColor.name());
+        const QString &oldValue = from.*field;
+        const QString &newValue = to.*field;
+        if (oldValue.isEmpty() || oldValue == newValue)
+            continue;
+        if (oldValue.startsWith(QLatin1String("rgba(")))
+        {
+            plan.rgba.append({oldValue, newValue});
+            continue;
+        }
+        const QColor oldColor(oldValue);
+        const QColor newColor(newValue);
+        if (!oldColor.isValid() || !newColor.isValid())
+            continue;
+        const QString key = oldColor.name().toLower();
+        if (key == QLatin1String("#ffffff") || key == QLatin1String("#000000"))
+            continue;
+        plan.hex.insert(key, newColor.name().toLower());
     }
-    return map;
+    return plan;
 }
 
-QString remapColors(const QString &text, const QHash<QString, QString> &map)
+QString remapLooseColors(const QString &text, const QHash<QString, QString> &map)
 {
     static const QRegularExpression hex(QStringLiteral("#[0-9a-fA-F]{6}\\b"));
     static const QRegularExpression rgba(QStringLiteral("rgba\\((\\d+),\\s*(\\d+),\\s*(\\d+),"));
@@ -234,12 +263,26 @@ QString remapColors(const QString &text, const QHash<QString, QString> &map)
     return result;
 }
 
+QString remapColors(const QString &text, const RetintPlan &plan)
+{
+    QString protectedText = text;
+    for (qsizetype i = 0; i < plan.rgba.size(); ++i)
+    {
+        const QString marker = QStringLiteral("\x01T%1\x01").arg(i);
+        protectedText.replace(plan.rgba.at(i).from, marker);
+    }
+    QString remapped = remapLooseColors(protectedText, plan.hex);
+    for (qsizetype i = 0; i < plan.rgba.size(); ++i)
+        remapped.replace(QStringLiteral("\x01T%1\x01").arg(i), plan.rgba.at(i).to);
+    return remapped;
+}
+
 void retintLiveWidgets(const ThemeTokens &from, const ThemeTokens &to)
 {
     if (qApp == nullptr)
         return;
-    const QHash<QString, QString> map = tokenColorMap(from, to);
-    if (map.isEmpty())
+    const RetintPlan plan = retintPlan(from, to);
+    if (plan.hex.isEmpty() && plan.rgba.isEmpty())
         return;
     const auto widgets = QApplication::allWidgets();
     for (QWidget *widget : widgets)
@@ -247,7 +290,7 @@ void retintLiveWidgets(const ThemeTokens &from, const ThemeTokens &to)
         const QString sheet = widget->styleSheet();
         if (!sheet.isEmpty())
         {
-            const QString mapped = remapColors(sheet, map);
+            const QString mapped = remapColors(sheet, plan);
             if (mapped != sheet)
                 widget->setStyleSheet(mapped);
         }
@@ -255,7 +298,7 @@ void retintLiveWidgets(const ThemeTokens &from, const ThemeTokens &to)
         if (label != nullptr && label->textFormat() == Qt::RichText)
         {
             const QString text = label->text();
-            const QString mapped = remapColors(text, map);
+            const QString mapped = remapColors(text, plan);
             if (mapped != text)
                 label->setText(mapped);
         }
@@ -402,7 +445,10 @@ QString Theme::buildStyleSheet(const ThemeTokens &tokens)
         {"{{bg1}}", tokens.bg1},
         {"{{bg2}}", tokens.bg2},
         {"{{bg3}}", tokens.bg3},
+        {"{{sidebar}}", tokens.sidebar},
         {"{{border}}", tokens.border},
+        {"{{separator}}", tokens.separator},
+        {"{{hover}}", tokens.hover},
         {"{{textPrimary}}", tokens.textPrimary},
         {"{{textSecondary}}", tokens.textSecondary},
         {"{{textDisabled}}", tokens.textDisabled},
@@ -413,6 +459,8 @@ QString Theme::buildStyleSheet(const ThemeTokens &tokens)
         {"{{selection}}", tokens.selection},
         {"{{danger}}", tokens.danger},
         {"{{onAccent}}", tokens.onAccent},
+        {"{{scrollHandleHover}}", tokens.scrollHandleHover},
+        {"{{scrollHandle}}", tokens.scrollHandle},
         {"{{fontFamily}}", tokens.fontFamily},
         {"{{space4}}", QString::number(tokens.space4)},
         {"{{space8}}", QString::number(tokens.space8)},
@@ -420,6 +468,13 @@ QString Theme::buildStyleSheet(const ThemeTokens &tokens)
         {"{{space16}}", QString::number(tokens.space16)},
         {"{{radiusControl}}", QString::number(tokens.radiusControl)},
         {"{{radiusPanel}}", QString::number(tokens.radiusPanel)},
+        {"{{radiusChip}}", QString::number(tokens.radiusChip)},
+        {"{{radiusSearch}}", QString::number(tokens.radiusSearch)},
+        {"{{radiusTooltip}}", QString::number(tokens.radiusTooltip)},
+        {"{{fontBodyPx}}", QString::number(tokens.fontBodyPx)},
+        {"{{fontCaptionPx}}", QString::number(tokens.fontCaptionPx)},
+        {"{{fontTitlePx}}", QString::number(tokens.fontTitlePx)},
+        {"{{fontLargeTitlePx}}", QString::number(tokens.fontLargeTitlePx)},
         {"{{fontPt}}", QString::number(tokens.fontPt)},
     };
     for (const TokenSlot &row : rows)
@@ -456,6 +511,12 @@ QString Theme::themeColor(ThemeRole role)
         return tokens.accentPressed;
     case ThemeRole::Danger:
         return tokens.danger;
+    case ThemeRole::Sidebar:
+        return tokens.sidebar;
+    case ThemeRole::Separator:
+        return tokens.separator;
+    case ThemeRole::Hover:
+        return tokens.hover;
     default:
         return tokens.textPrimary;
     }

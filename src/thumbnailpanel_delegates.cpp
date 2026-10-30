@@ -125,7 +125,7 @@ void drawThumbBackground(QPainter *painter, const QRect &card, const QRect &item
     painter->fillRect(itemRect, base);
     painter->setPen(Qt::NoPen);
     painter->setBrush(cardBg);
-    painter->drawRoundedRect(card, 4, 4);
+    painter->drawRoundedRect(card, 8, 8);
 }
 
 void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &path,
@@ -177,7 +177,7 @@ void drawFrameBadge(QPainter *painter, const QRect &card, const ThumbnailPanel::
                           badgeSize.height());
     painter->setPen(Qt::NoPen);
     painter->setBrush(QColor(25, 25, 25, 190));
-    painter->drawRoundedRect(badgeRect, 4, 4);
+    painter->drawRoundedRect(badgeRect, 5, 5);
     painter->setPen(Qt::white);
     painter->drawText(badgeRect, Qt::AlignCenter | Qt::TextSingleLine, badge);
 }
@@ -282,7 +282,7 @@ void drawThumbCardBorder(QPainter *painter, const QRect &card, bool selected, qr
         border.setWidth(2);
         painter->setPen(border);
         painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 4, 4);
+        painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 8, 8);
     }
     else if (hover > 0.0)
     {
@@ -292,7 +292,7 @@ void drawThumbCardBorder(QPainter *painter, const QRect &card, bool selected, qr
         border.setWidth(1);
         painter->setPen(border);
         painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 4, 4);
+        painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 8, 8);
     }
 }
 

@@ -126,7 +126,7 @@ AnalysisOverlayDialog::AnalysisOverlayDialog(const QImage &image, QWidget *paren
     m_preview = new QLabel;
     m_preview->setAlignment(Qt::AlignCenter);
     m_preview->setMinimumSize(340, 260);
-    m_preview->setStyleSheet("QLabel { background: #111; }");
+    m_preview->setProperty("plot", true);
 
     m_scope = new ScopeWidget;
     m_scope->setMinimumSize(340, 260);

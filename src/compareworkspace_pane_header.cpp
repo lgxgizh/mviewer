@@ -70,7 +70,7 @@ class ComparePaneHeader : public QWidget
         m_badge->setFixedSize(kChip, kChip);
         m_badge->setStyleSheet(
             QStringLiteral("QLabel#paneIndexBadge{background:rgba(255,255,255,45);color:#ffffff;"
-                           "border-radius:3px;font-weight:700;font-size:14px;}"));
+                           "border-radius:6px;font-weight:700;font-size:14px;}"));
         m_badge->hide();
         row->addWidget(m_badge, 0, Qt::AlignTop);
 
@@ -88,7 +88,7 @@ class ComparePaneHeader : public QWidget
         row->addWidget(m_name, 1);
 
         setStyleSheet(QStringLiteral(
-            "QWidget#comparePaneHeader{background:rgba(0,0,0,140);border-radius:4px;}"));
+            "QWidget#comparePaneHeader{background:rgba(0,0,0,140);border-radius:6px;}"));
         if (parent)
             parent->installEventFilter(this);
         hide();

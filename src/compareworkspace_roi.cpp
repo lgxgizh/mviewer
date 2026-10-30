@@ -174,9 +174,9 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiHud->setObjectName("roiMeasurementHud");
     m_roiHud->setCursor(Qt::PointingHandCursor);
     m_roiHud->setStyleSheet(
-        "QPushButton{background:rgba(20,20,20,235);color:#ffffff;border:1px solid #FFD233;"
-        "border-radius:4px;padding:8px;text-align:left;font-size:12px;font-weight:600;}"
-        "QPushButton:hover{background:rgba(35,35,35,245);}");
+        "QPushButton{background:rgba(0,0,0,140);color:#ffffff;border:1px solid #FFD233;"
+        "border-radius:6px;padding:8px;text-align:left;font-size:12px;font-weight:600;}"
+        "QPushButton:hover{background:rgba(0,0,0,170);}");
     m_roiHud->setVisible(false);
     connect(m_roiHud, &QPushButton::clicked, this,
             [this]()

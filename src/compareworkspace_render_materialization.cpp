@@ -118,7 +118,7 @@ HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool
     auto *hframe = new QFrame(cellWidget);
     hframe->setObjectName(QString("paneHistogramFrame%1").arg(index));
     hframe->setAttribute(Qt::WA_TranslucentBackground);
-    hframe->setStyleSheet("background-color: rgba(0,0,0,90); border-radius:4px;");
+    hframe->setStyleSheet("background-color: rgba(0,0,0,140); border-radius:6px;");
     hframe->setVisible(visible);
     auto *layout = new QVBoxLayout(hframe);
     layout->setContentsMargins(4, 4, 4, 4);

@@ -67,8 +67,8 @@ inline void drawROIOverlay(QPainter &p, const mviewer::domain::Selection &select
     const int labelWidth = p.fontMetrics().horizontalAdvance(label) + 10;
     const QRectF labelRect(box.left(), std::max(0.0, box.top() - 20.0), labelWidth, 18.0);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 200));
-    p.drawRoundedRect(labelRect, 2, 2);
+    p.setBrush(QColor(0, 0, 0, 140));
+    p.drawRoundedRect(labelRect, 6, 6);
     p.setPen(Qt::white);
     p.drawText(labelRect, Qt::AlignCenter, label);
     p.restore();
