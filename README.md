@@ -338,7 +338,8 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
 Toolbar outline icons are adapted from [Lucide](https://lucide.dev) (ISC License).
 The license text is in [resources/icons/LICENSE-lucide](resources/icons/LICENSE-lucide).
 SVG files under `resources/icons/` are the source artwork. The application tints
-the matching pre-rendered PNG masks at runtime.
+the matching pre-rendered PNG masks (1x, 1.5x, 2x and 3x) at runtime.
+Regenerate them with `scripts/render_icons.py` (PySide6, offscreen).
 
 ## License
 

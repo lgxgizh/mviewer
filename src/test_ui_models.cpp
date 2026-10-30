@@ -14,6 +14,7 @@
 #include <QDebug>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QIcon>
 #include <QImage>
 #include <QLabel>
 #include <QListView>
@@ -39,6 +40,127 @@ static int g_failures = 0;
             std::printf("PASS: %s\n", msg);                                                        \
         }                                                                                          \
     } while (0)
+
+static int pixmapInk(const QImage &image)
+{
+    int ink = 0;
+    for (int y = 0; y < image.height(); ++y)
+    {
+        for (int x = 0; x < image.width(); ++x)
+        {
+            if (qAlpha(image.pixel(x, y)) > 0)
+                ++ink;
+        }
+    }
+    return ink;
+}
+
+static QRgb firstOpaque(const QImage &image)
+{
+    for (int y = 0; y < image.height(); ++y)
+    {
+        for (int x = 0; x < image.width(); ++x)
+        {
+            const QRgb pixel = image.pixel(x, y);
+            if (qAlpha(pixel) > 200)
+                return pixel;
+        }
+    }
+    return 0;
+}
+
+static void checkToolbarIcons()
+{
+    const char *required[] = {
+        "open",
+        "back",
+        "forward",
+        "up",
+        "refresh",
+        "favorite",
+        "compare",
+        "analysis",
+        "histogram",
+        "usm",
+        "info",
+        "search",
+        "browse",
+        "browse_workspace",
+        "rotate_ccw",
+        "rotate_cw",
+        "split_browse",
+        "sidebar",
+        "view_grid",
+        "view_list",
+        "view_filmstrip",
+        "filter",
+        "sort",
+        "more",
+        "zoom_in",
+        "zoom_out",
+        "fit",
+        "close",
+        "copy",
+        "trash",
+    };
+    const QStringList ids = mviewer::ui::toolbarIconIds();
+    CHECK(ids.size() >= int(sizeof(required) / sizeof(required[0])),
+          "toolbar catalog covers the required ids");
+    for (const char *id : required)
+    {
+        const QString name = QString::fromLatin1(id);
+        if (!ids.contains(name))
+            std::printf("FAIL missing icon id: %s\n", id);
+        CHECK(ids.contains(name), "toolbar catalog includes required id");
+    }
+
+    const int logical = mviewer::ui::kToolbarIconPx;
+    const qreal scales[] = {1.0, 1.25, 1.5, 2.0};
+    for (const QString &id : ids)
+    {
+        const QByteArray bytes = id.toUtf8();
+        const QIcon icon = mviewer::ui::toolbarIcon(bytes.constData());
+        for (qreal dpr : scales)
+        {
+            const QPixmap pixmap = icon.pixmap(QSize(logical, logical), dpr);
+            const int device = qRound(double(logical) * dpr);
+            const int ink = pixmapInk(pixmap.toImage());
+            const bool sharp = !pixmap.isNull() && ink > 0 &&
+                               pixmap.size() == QSize(device, device) &&
+                               qAbs(pixmap.devicePixelRatio() - dpr) < 0.01;
+            if (!sharp)
+            {
+                std::printf("FAIL icon: %s dpr=%.2f size=%dx%d dprGot=%.3f ink=%d\n",
+                            bytes.constData(), dpr, pixmap.width(), pixmap.height(),
+                            pixmap.devicePixelRatio(), ink);
+            }
+            CHECK(sharp, "toolbar icon renders ink at exact device pixels");
+        }
+    }
+
+    const QIcon open = mviewer::ui::toolbarIcon("open");
+    const QPixmap at150 = open.pixmap(QSize(logical, logical), 1.5);
+    const int device150 = qRound(double(logical) * 1.5);
+    CHECK(at150.size() == QSize(device150, device150) &&
+              qAbs(at150.devicePixelRatio() - 1.5) < 0.01,
+          "dpr 1.5 mask is native device pixels, not an upscaled 1x");
+
+    const QSize box(logical, logical);
+    const QRgb normal = firstOpaque(open.pixmap(box, QIcon::Normal, QIcon::Off).toImage());
+    const QRgb disabled = firstOpaque(open.pixmap(box, QIcon::Disabled, QIcon::Off).toImage());
+    const QRgb checked = firstOpaque(open.pixmap(box, QIcon::Normal, QIcon::On).toImage());
+    CHECK(qAlpha(normal) > 0 && qAlpha(disabled) > 0 && qAlpha(checked) > 0,
+          "toolbar icon paints normal, disabled and checked");
+    CHECK(qRed(normal) != qRed(disabled) || qGreen(normal) != qGreen(disabled) ||
+              qBlue(normal) != qBlue(disabled),
+          "disabled toolbar icon uses the disabled tint");
+    CHECK(qRed(normal) != qRed(checked) || qGreen(normal) != qGreen(checked) ||
+              qBlue(normal) != qBlue(checked),
+          "checked toolbar icon uses the accent tint");
+
+    CHECK(mviewer::ui::toolbarIcon("missing-toolbar-icon").isNull(),
+          "unknown toolbar icon id is empty");
+}
 
 int main(int argc, char **argv)
 {
@@ -255,27 +377,7 @@ int main(int argc, char **argv)
         CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::System).isEmpty(),
               "ThemeModeName not empty for System");
 
-        CHECK(mviewer::ui::toolbarIconIds().size() == 13, "toolbar icon catalog has 13 ids");
-        for (const QString &id : mviewer::ui::toolbarIconIds())
-        {
-            QByteArray bytes = id.toUtf8();
-            QPixmap pixmap = mviewer::ui::toolbarIconPixmap(bytes.constData());
-            QImage image = pixmap.toImage();
-            int ink = 0;
-            for (int y = 0; y < image.height(); ++y)
-            {
-                for (int x = 0; x < image.width(); ++x)
-                {
-                    if (qAlpha(image.pixel(x, y)) > 0)
-                        ++ink;
-                }
-            }
-            if (pixmap.isNull() || ink == 0)
-                std::printf("FAIL icon: %s ink=%d\n", bytes.constData(), ink);
-            CHECK(!pixmap.isNull() && ink > 0, "toolbar icon pixmap is visible");
-        }
-        CHECK(mviewer::ui::toolbarIcon("missing-toolbar-icon").isNull(),
-              "unknown toolbar icon id is empty");
+        checkToolbarIcons();
 
         mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::Dark);
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,

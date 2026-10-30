@@ -9,6 +9,12 @@
   boxed borders for hairline separators, rounded selections, and a thin
   scrollbar. Inline colors follow the same tokens, including a live theme switch.
 
+- **macOS-style icons (B):** Toolbar glyphs are one SF Symbols-style outline
+  set, a distinct symbol per action (USM, histogram, browse layout and the
+  view controls batch C will use). Masks ship at 1x, 1.5x, 2x and 3x and are
+  chosen so 125% and 150% scaling stay sharp. Checkbox, radio and chevron
+  indicators use the same stroke.
+
 ## [1.0.155] - 2026-10-29
 
 ### Release
