@@ -4,6 +4,7 @@
 
 #include "core/render/ZoomPercent.h"
 
+#include <QFrame>
 #include <QTimer>
 
 namespace
@@ -102,7 +103,9 @@ QWidget *MainWindow::buildNavigationPanel()
     auto *foldersSection = new QWidget(leftWidget);
     foldersSection->setObjectName("foldersSection");
     auto *foldersLayout = new QVBoxLayout(foldersSection);
-    foldersLayout->setContentsMargins(0, 0, 0, 0);
+    // Finder-style sidebar: content inset from the edges so selection pills float.
+    foldersLayout->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8,
+                                      mviewer::ui::metrics::kSpace8, 0);
     foldersLayout->setSpacing(mviewer::ui::metrics::kSpace4);
     foldersLayout->addWidget(
         sectionHeaderLabel(foldersSection, "foldersSectionLabel", tr("Folders")));
@@ -117,13 +120,24 @@ QWidget *MainWindow::buildNavigationPanel()
     auto *previewSection = new QWidget(leftWidget);
     previewSection->setObjectName("previewSection");
     auto *previewLayout = new QVBoxLayout(previewSection);
-    previewLayout->setContentsMargins(0, 0, 0, 0);
+    previewLayout->setContentsMargins(mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace4,
+                                      mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
     previewLayout->setSpacing(mviewer::ui::metrics::kSpace4);
     previewLayout->addWidget(
         sectionHeaderLabel(previewSection, "previewSectionLabel", tr("Preview")));
-    m_previewPanel = new PreviewPanel(previewSection);
+    // The preview sits in a rounded info card. The card only frames it; the
+    // panel itself (painting, presentation and flicker guards) is unchanged.
+    auto *previewCard = new QFrame(previewSection);
+    previewCard->setObjectName(QStringLiteral("previewCard"));
+    auto *previewCardLayout = new QVBoxLayout(previewCard);
+    previewCardLayout->setContentsMargins(
+        mviewer::ui::metrics::kSpace4, mviewer::ui::metrics::kSpace4, mviewer::ui::metrics::kSpace4,
+        mviewer::ui::metrics::kSpace4);
+    previewCardLayout->setSpacing(0);
+    m_previewPanel = new PreviewPanel(previewCard);
     m_previewPanel->installEventFilter(this);
-    previewLayout->addWidget(m_previewPanel, 1);
+    previewCardLayout->addWidget(m_previewPanel, 1);
+    previewLayout->addWidget(previewCard, 1);
     leftWidget->addWidget(previewSection);
 
     leftWidget->setStretchFactor(0, 0); // optional favorites

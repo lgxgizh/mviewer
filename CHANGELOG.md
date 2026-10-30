@@ -21,6 +21,13 @@
   Split-pane toolbars use the same icon buttons. The status bar is a thin
   caption line.
 
+- **Finder-style sidebar and thumbnail cards (C2):** The sidebar insets its
+  content under small grey captions, with rounded pill selections and the
+  preview in a rounded info card at the bottom. Thumbnails are 8 px rounded
+  cards with a soft cached shadow; selection is a 3 px accent ring plus an
+  accent filename pill with white text. Rating stars, color labels, the
+  rejected tint and frame badges use theme (Apple system) colors.
+
 - **macOS-style compare toolbar (C4):** Compare chrome is one toolbar band.
   The modes (flicker, split, swipe, overlay, checkerboard, diff) form a joined
   segmented track; Sync, Adjust, Screenshot and More are capsule pop-up

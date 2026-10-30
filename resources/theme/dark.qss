@@ -990,6 +990,35 @@ QSplitter#navigationPanel QListWidget {
 
 QSplitter#navigationPanel QTreeView::item {
     padding: 2px 0px;
+    border-radius: 6px;
+}
+
+/* Finder-style sidebar captions: small grey, aligned with the row text. */
+QSplitter#navigationPanel QLabel[sectionHeader="true"] {
+    padding-left: {{space4}}px;
+}
+
+QSplitter#navigationPanel QTreeView::item:selected {
+    background: {{accent}};
+    color: {{onAccent}};
+    border-radius: 6px;
+}
+
+QSplitter#navigationPanel QTreeView:!focus::item:selected,
+QSplitter#navigationPanel QTreeView::item:selected:!active {
+    background: {{bg3}};
+    color: {{textPrimary}};
+}
+
+QSplitter#navigationPanel::handle {
+    background: {{sidebar}};
+}
+
+/* Preview info card at the bottom of the sidebar. */
+QFrame#previewCard {
+    background: {{bg0}};
+    border: 1px solid {{separator}};
+    border-radius: {{radiusPanel}}px;
 }
 
 QSplitter#navigationPanel QListWidget::item {
