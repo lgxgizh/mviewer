@@ -1,5 +1,7 @@
 #pragma once
 
+#include "widgets/overlaychip.h"
+
 #include <QFont>
 #include <QFontMetrics>
 #include <QPainter>
@@ -46,12 +48,10 @@ inline QRect drawFilenameOverlay(QPainter &p, const QRect &pane, const QString &
         return {};
     }
     p.setRenderHint(QPainter::Antialiasing, true);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 140));
-    p.drawRoundedRect(box, 6, 6);
+    paintOverlayChipBackground(p, box);
     p.setPen(Qt::white);
-    p.drawText(box.adjusted(6, 4, -6, -4), Qt::TextWrapAnywhere | Qt::AlignLeft | Qt::AlignTop,
-               text);
+    p.drawText(box.adjusted(kOverlayChipPadX, 4, -kOverlayChipPadX, -4),
+               Qt::TextWrapAnywhere | Qt::AlignLeft | Qt::AlignTop, text);
     p.restore();
     return box;
 }
@@ -63,19 +63,17 @@ inline void drawZoomPercentBadge(QPainter &p, const QRect &pane, const QString &
     if (text.isEmpty() || pane.width() < 48 || pane.height() < 28)
         return;
     p.save();
-    QFont font = p.font();
-    font.setBold(true);
-    font.setPointSize(10);
+    const QFont font = overlayChipFont(p.font());
     p.setFont(font);
     const QFontMetrics metrics(font);
-    const int boxW = metrics.horizontalAdvance(text) + 12;
-    const int boxH = metrics.height() + 6;
+    const QSizeF chip = overlayChipSize(metrics, text);
+    const int boxW = static_cast<int>(chip.width());
+    const int boxH = static_cast<int>(chip.height());
     const int x = topRight ? pane.left() + pane.width() - boxW - 8 : pane.left() + 8;
     const int y = topRight ? pane.top() + 8 : pane.top() + pane.height() - boxH - 8;
     const QRect box(x, y, boxW, boxH);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 140));
-    p.drawRoundedRect(box, 6, 6);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    paintOverlayChipBackground(p, box);
     p.setPen(Qt::white);
     p.drawText(box, Qt::AlignCenter, text);
     p.restore();

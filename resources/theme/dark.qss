@@ -1064,15 +1064,67 @@ QWidget#compareStatusStrip {
     border-top: 1px solid {{separator}};
 }
 
+/* PSNR / SSIM readout: system font (tabular digits set in code), quiet chip. */
 QLabel#diffMetricsLabel {
-    color: {{accent}};
-    font-family: "Cascadia Mono", "Consolas", monospace;
-    font-size: {{fontCaptionPx}}px;
-    font-weight: 600;
+    color: {{textSecondary}};
     padding: 2px {{space8}}px;
-    background: {{bg0}};
-    border: 1px solid {{border}};
+    background: {{hover}};
+    border: none;
     border-radius: {{radiusChip}}px;
+}
+
+/* Compare toolbar band: one chrome strip, modes as a joined segmented track,
+   option groups as capsule popups. */
+QWidget#compareToolbarBand {
+    background: {{bg1}};
+    border: none;
+    border-bottom: 1px solid {{separator}};
+}
+
+QWidget#compareModeSegment {
+    background: {{hover}};
+    border-radius: {{radiusControl}}px;
+}
+
+QWidget#compareModeSegment QCheckBox[segmented="true"] {
+    padding: 0px {{space12}}px;
+    border: none;
+    border-radius: {{radiusChip}}px;
+    background: transparent;
+    color: {{textPrimary}};
+}
+
+QWidget#compareModeSegment QCheckBox[segmented="true"]:hover {
+    background: {{hover}};
+}
+
+QWidget#compareModeSegment QCheckBox[segmented="true"]:checked,
+QWidget#compareModeSegment QCheckBox[segmented="true"]:checked:hover {
+    background: {{bg2}};
+    color: {{accent}};
+    font-weight: 600;
+}
+
+QWidget#compareModeSegment QCheckBox[segmented="true"]:disabled {
+    background: transparent;
+    color: {{textDisabled}};
+}
+
+QToolButton[capsule="true"] {
+    padding-right: 20px;
+}
+
+QToolButton[capsule="true"]::menu-indicator {
+    image: url(:/theme/chevron-down.png);
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    right: {{space8}}px;
+    width: 10px;
+    height: 10px;
+}
+
+QToolButton[capsule="true"]:hover {
+    background: {{bg3}};
 }
 
 QLabel#compareStatusLabel {

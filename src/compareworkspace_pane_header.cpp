@@ -87,8 +87,10 @@ class ComparePaneHeader : public QWidget
             "QLabel#paneHeaderName{color:#ffffff;font-weight:700;background:transparent;}"));
         row->addWidget(m_name, 1);
 
-        setStyleSheet(QStringLiteral(
-            "QWidget#comparePaneHeader{background:rgba(0,0,0,140);border-radius:6px;}"));
+        setStyleSheet(QStringLiteral("QWidget#comparePaneHeader{background:rgba(0,0,0,%1);"
+                                     "border-radius:%2px;}")
+                          .arg(mviewer::ui::kOverlayChipAlpha)
+                          .arg(mviewer::ui::kOverlayChipRadius));
         if (parent)
             parent->installEventFilter(this);
         hide();
