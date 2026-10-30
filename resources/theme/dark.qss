@@ -837,18 +837,22 @@ QMenuBar::item:pressed {
     background: {{bg3}};
 }
 
+/* Menu rows are drawn by Theme's ScaledStyle (26 px rows, rounded accent
+   highlight, grey right-aligned shortcuts). QMenu::item must stay free of
+   padding/border/font so Qt hands the row to the style; the feature flag lets
+   the base style draw on top of these background colors. */
 QMenu {
     background: {{bg1}};
     color: {{textPrimary}};
     border: 1px solid {{separator}};
     border-radius: {{radiusPanel}}px;
     padding: {{space4}}px;
+    -qt-style-features: background-color;
 }
 
 QMenu::item {
-    padding: 6px 12px;
-    border-radius: {{radiusChip}}px;
     background: transparent;
+    -qt-style-features: background-color;
 }
 
 QMenu::item:selected {
@@ -1087,4 +1091,45 @@ QFrame#typeHiddenHint {
 
 QLabel#typeHiddenHintLabel {
     color: {{textPrimary}};
+}
+
+/* Dialog buttons (OK/Cancel, Rename/Close): macOS capsules. The accept
+   button keeps the accent fill via primary=true. */
+QDialogButtonBox QPushButton,
+QDialogButtonBox QPushButton[primary="true"],
+QPushButton[dialogButton="true"],
+QPushButton[dialogButton="true"][primary="true"] {
+    border-radius: {{radiusSearch}}px;
+    padding: {{space4}}px {{space16}}px;
+    min-width: 48px;
+}
+
+/* Preferences: icon-over-label page switcher (macOS settings toolbar). */
+QWidget#preferencesPageBar {
+    background: transparent;
+    border-bottom: 1px solid {{separator}};
+}
+
+QToolButton[preferencesPage="true"] {
+    background: transparent;
+    color: {{textSecondary}};
+    border: none;
+    border-radius: {{radiusControl}}px;
+    padding: {{space4}}px {{space8}}px;
+    min-width: 56px;
+    font-size: {{fontCaptionPx}}px;
+}
+
+QToolButton[preferencesPage="true"]:hover {
+    background: {{hover}};
+    color: {{textPrimary}};
+}
+
+QToolButton[preferencesPage="true"]:checked {
+    background: {{accentTint}};
+    color: {{accent}};
+}
+
+QToolButton[preferencesPage="true"]:pressed {
+    background: {{bg3}};
 }

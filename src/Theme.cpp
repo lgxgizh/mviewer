@@ -4,6 +4,7 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QColor>
+#include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QEvent>
@@ -13,6 +14,8 @@
 #include <QHash>
 #include <QLabel>
 #include <QList>
+#include <QMenu>
+#include <QPainter>
 #include <QPalette>
 #include <QProxyStyle>
 #include <QRegularExpression>
@@ -20,6 +23,8 @@
 #include <QStyle>
 #include <QStyleFactory>
 #include <QStyleHints>
+#include <QStyleOption>
+#include <algorithm>
 
 static void ensureThemeResources()
 {
@@ -109,6 +114,10 @@ class ScaledStyle : public QProxyStyle
         case PM_LayoutTopMargin:
         case PM_LayoutRightMargin:
         case PM_LayoutBottomMargin:
+            // Dialogs (ours, QMessageBox, QInputDialog) breathe a little more
+            // than the main window: one 20 px inset everywhere.
+            if (qobject_cast<const QDialog *>(widget) != nullptr)
+                return m::kDialogMargin;
             return (widget != nullptr && widget->isWindow()) ? m::kWindowMargin : m::kChildMargin;
         case PM_LayoutHorizontalSpacing:
         case PM_LayoutVerticalSpacing:
@@ -116,6 +125,90 @@ class ScaledStyle : public QProxyStyle
         default:
             return QProxyStyle::pixelMetric(metric, option, widget);
         }
+    }
+
+    QSize sizeFromContents(ContentsType type, const QStyleOption *option, const QSize &size,
+                           const QWidget *widget) const override
+    {
+        QSize result = QProxyStyle::sizeFromContents(type, option, size, widget);
+        if (type == CT_MenuItem && isPopupMenuItem(option, widget))
+            result.setHeight(std::max(result.height(), mviewer::ui::metrics::kMenuItemHeight));
+        return result;
+    }
+
+    void drawControl(ControlElement element, const QStyleOption *option, QPainter *painter,
+                     const QWidget *widget) const override
+    {
+        if (element == CE_MenuItem && isPopupMenuItem(option, widget))
+        {
+            drawMenuItem(*qstyleoption_cast<const QStyleOptionMenuItem *>(option), painter, widget);
+            return;
+        }
+        QProxyStyle::drawControl(element, option, painter, widget);
+    }
+
+  private:
+    // Popup menu rows only: combo box popups and separators keep Fusion/QSS.
+    static bool isPopupMenuItem(const QStyleOption *option, const QWidget *widget)
+    {
+        const auto *item = qstyleoption_cast<const QStyleOptionMenuItem *>(option);
+        return item != nullptr && item->menuItemType != QStyleOptionMenuItem::Separator &&
+               qobject_cast<const QMenu *>(widget) != nullptr &&
+               qobject_cast<const QComboBox *>(widget) == nullptr;
+    }
+
+    // macOS-style menu row: rounded accent highlight inside the menu padding,
+    // label from Fusion, shortcut right-aligned in secondary grey.
+    void drawMenuItem(const QStyleOptionMenuItem &option, QPainter *painter,
+                      const QWidget *widget) const
+    {
+        namespace m = mviewer::ui::metrics;
+        const bool enabled = option.state.testFlag(State_Enabled);
+        const bool selected = enabled && option.state.testFlag(State_Selected);
+
+        QStyleOptionMenuItem item(option);
+        QString shortcut;
+        const qsizetype tab = item.text.indexOf(QLatin1Char('\t'));
+        if (tab >= 0)
+        {
+            shortcut = item.text.mid(tab + 1);
+            item.text.truncate(tab);
+        }
+
+        painter->save();
+        if (selected)
+        {
+            painter->setRenderHint(QPainter::Antialiasing, true);
+            painter->setPen(Qt::NoPen);
+            painter->setBrush(option.palette.highlight());
+            painter->drawRoundedRect(QRectF(option.rect), m::kRadiusChip, m::kRadiusChip);
+            // Fusion would paint its own square highlight; hand it a plain row
+            // whose text roles already carry the on-accent color.
+            item.state.setFlag(State_Selected, false);
+            const QBrush onAccent = option.palette.highlightedText();
+            item.palette.setBrush(QPalette::Text, onAccent);
+            item.palette.setBrush(QPalette::ButtonText, onAccent);
+            item.palette.setBrush(QPalette::WindowText, onAccent);
+        }
+        QProxyStyle::drawControl(CE_MenuItem, &item, painter, widget);
+
+        if (!shortcut.isEmpty())
+        {
+            QColor color(g_tokens.textSecondary);
+            if (!enabled)
+                color = QColor(g_tokens.textDisabled);
+            else if (selected)
+                color = option.palette.highlightedText().color();
+            const QRect area = option.rect.adjusted(0, 0, -m::kSpace12, 0);
+            painter->setFont(option.font);
+            painter->setPen(color);
+            painter->drawText(
+                visualRect(option.direction, option.rect, area),
+                int(QStyle::visualAlignment(option.direction, Qt::AlignRight | Qt::AlignVCenter)) |
+                    Qt::TextSingleLine,
+                shortcut);
+        }
+        painter->restore();
     }
 };
 

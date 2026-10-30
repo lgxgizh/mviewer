@@ -32,4 +32,11 @@ constexpr int kWindowMargin = kSpace12;
 constexpr int kChildMargin = kSpace8;
 constexpr int kLayoutSpacing = kSpace8;
 
+// Dialogs: one 20 px inset, 12 px between groups, right-aligned form labels.
+constexpr int kDialogMargin = 20;
+constexpr int kDialogSpacing = kSpace12;
+constexpr int kFormRowSpacing = 10;
+// Popup menu rows (macOS ~22 pt; 26 px fits the 13 px body font).
+constexpr int kMenuItemHeight = 26;
+
 } // namespace mviewer::ui::metrics

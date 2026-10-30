@@ -13,6 +13,7 @@
 #include "widgets/ViewModeSegment.h"
 
 #include <QAbstractButton>
+#include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QDebug>
@@ -20,8 +21,10 @@
 #include <QDialogButtonBox>
 #include <QIcon>
 #include <QImage>
+#include <QKeySequence>
 #include <QLabel>
 #include <QListView>
+#include <QMenu>
 #include <QPushButton>
 #include <QSettings>
 #include <QStringList>
@@ -454,8 +457,21 @@ int main(int argc, char **argv)
                   mviewer::ui::metrics::kLayoutSpacing,
               "app style uses the spacing scale between layout items");
         CHECK(QApplication::style()->pixelMetric(QStyle::PM_LayoutLeftMargin, nullptr, &dialog) ==
+                  mviewer::ui::metrics::kDialogMargin,
+              "dialogs get the 20 px dialog margin");
+        QWidget plainWindow;
+        CHECK(QApplication::style()->pixelMetric(QStyle::PM_LayoutLeftMargin, nullptr,
+                                                 &plainWindow) ==
                   mviewer::ui::metrics::kWindowMargin,
-              "dialogs get the window margin from the spacing scale");
+              "plain windows get the window margin from the spacing scale");
+        {
+            QMenu menu;
+            QAction *action = menu.addAction(QStringLiteral("Open"));
+            action->setShortcut(QKeySequence(QStringLiteral("Ctrl+O")));
+            menu.ensurePolished();
+            CHECK(menu.actionGeometry(action).height() >= mviewer::ui::metrics::kMenuItemHeight,
+                  "menu rows are at least the menu item height");
+        }
         CHECK(QApplication::style()->pixelMetric(QStyle::PM_LayoutLeftMargin, nullptr, &child) ==
                   mviewer::ui::metrics::kChildMargin,
               "child widgets get the child margin from the spacing scale");

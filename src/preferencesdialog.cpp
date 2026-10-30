@@ -1,11 +1,14 @@
 #include "preferencesdialog.h"
 #include "Language.h"
 #include "Theme.h"
+#include "ThemeIcons.h"
+#include "ThemeMetrics.h"
 #include "core/image/decoder/RawDecodePlan.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
 #include "thumbnailpanel.h"
 
+#include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -15,7 +18,8 @@
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
-#include <QTabWidget>
+#include <QStackedWidget>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
 
@@ -212,24 +216,91 @@ QWidget *PreferencesDialog::buildAnalysisTab(QSettings &s)
     return analysis;
 }
 
+namespace
+{
+
+// macOS settings layout: labels right-aligned against their controls, one
+// rhythm for row/column gaps on every page.
+void polishFormLayouts(QWidget *page)
+{
+    namespace m = mviewer::ui::metrics;
+    for (auto *form : page->findChildren<QFormLayout *>())
+    {
+        form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        form->setFormAlignment(Qt::AlignHCenter | Qt::AlignTop);
+        form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+        form->setHorizontalSpacing(m::kDialogSpacing);
+        form->setVerticalSpacing(m::kFormRowSpacing);
+    }
+}
+
+} // namespace
+
 // F1 (M22) Preferences dialog.
 PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
 {
+    namespace m = mviewer::ui::metrics;
     setWindowTitle(tr("Preferences"));
-    resize(440, 380);
+    resize(480, 420);
     QSettings s;
 
-    auto *tabs = new QTabWidget(this);
-    tabs->addTab(buildGeneralTab(s), tr("General"));
-    tabs->addTab(buildCompareTab(s), tr("Compare"));
-    tabs->addTab(buildAnalysisTab(s), tr("Analyze"));
+    // Page switcher: icon-over-label toolbar buttons (macOS System Settings
+    // style) driving a stacked widget, instead of underline tabs.
+    auto *pages = new QStackedWidget(this);
+    pages->setObjectName(QStringLiteral("preferencesPages"));
+    auto *pageBar = new QWidget(this);
+    pageBar->setObjectName(QStringLiteral("preferencesPageBar"));
+    pageBar->setAttribute(Qt::WA_StyledBackground, true);
+    auto *pageBarLayout = new QHBoxLayout(pageBar);
+    pageBarLayout->setContentsMargins(0, 0, 0, m::kSpace8);
+    pageBarLayout->setSpacing(m::kSpace4);
+    pageBarLayout->addStretch(1);
+    auto *pageGroup = new QButtonGroup(this);
+    pageGroup->setExclusive(true);
+
+    struct Page
+    {
+        QWidget *widget;
+        QString title;
+        const char *icon;
+        const char *objectName;
+    };
+    const Page kPages[] = {
+        {buildGeneralTab(s), tr("General"), "view_grid", "preferencesPageGeneral"},
+        {buildCompareTab(s), tr("Compare"), "compare", "preferencesPageCompare"},
+        {buildAnalysisTab(s), tr("Analyze"), "histogram", "preferencesPageAnalyze"},
+    };
+    for (const auto &page : kPages)
+    {
+        polishFormLayouts(page.widget);
+        const int index = pages->addWidget(page.widget);
+        auto *button = new QToolButton(pageBar);
+        button->setObjectName(QLatin1String(page.objectName));
+        button->setProperty("preferencesPage", true);
+        button->setText(page.title);
+        button->setIcon(mviewer::ui::toolbarIcon(page.icon));
+        button->setIconSize(QSize(22, 22));
+        button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        button->setCheckable(true);
+        button->setAutoRaise(true);
+        button->setFocusPolicy(Qt::TabFocus);
+        pageGroup->addButton(button, index);
+        pageBarLayout->addWidget(button);
+    }
+    pageBarLayout->addStretch(1);
+    connect(pageGroup, &QButtonGroup::idClicked, pages, &QStackedWidget::setCurrentIndex);
+    if (auto *first = pageGroup->button(0))
+        first->setChecked(true);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &PreferencesDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 
     auto *main = new QVBoxLayout(this);
-    main->addWidget(tabs);
+    main->setContentsMargins(m::kDialogMargin, m::kSpace12, m::kDialogMargin, m::kDialogMargin);
+    main->setSpacing(m::kDialogSpacing);
+    main->addWidget(pageBar);
+    main->addWidget(pages, 1);
     main->addWidget(buttons);
 }
 
