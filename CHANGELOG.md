@@ -28,6 +28,16 @@
   accent filename pill with white text. Rating stars, color labels, the
   rejected tint and frame badges use theme (Apple system) colors.
 
+- **macOS-style compare toolbar (C4):** Compare chrome is one toolbar band.
+  The modes (flicker, split, swipe, overlay, checkerboard, diff) form a joined
+  segmented track; Sync, Adjust, Screenshot and More are capsule pop-up
+  buttons. Wide windows fit everything on one row; narrow ones wrap to two
+  without clipping. The PSNR/SSIM readout uses the system font with tabular
+  digits instead of accent-coloured monospace. Image overlays (filename, zoom,
+  ROI size and stats chips, pane header, corner badges) share one chip style:
+  55% black, 6 px radius, the same padding and caption type. Snapshots
+  (Ctrl+C / Ctrl+S) keep showing the chips as on screen.
+
 - **macOS-style dialogs and menus (D):** Preferences switches pages with an
   icon toolbar instead of tabs, with right-aligned labels. Dialogs use 20 px
   margins and capsule buttons, with the accept button filled in the accent

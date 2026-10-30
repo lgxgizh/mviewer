@@ -318,17 +318,15 @@ void RawImageView::computeFit()
 
 void RawImageView::drawCornerBadge(QPainter &p, const QString &txt, const QColor &bg, bool right)
 {
-    QFont bf = p.font();
-    bf.setBold(true);
-    bf.setPointSize(9);
-    p.setFont(bf);
-    const int ts = p.fontMetrics().horizontalAdvance(txt);
-    const int bw = ts + 12, bh = 18;
+    p.setFont(mviewer::ui::overlayChipFont(p.font()));
+    const QSizeF chip = mviewer::ui::overlayChipSize(p.fontMetrics(), txt);
+    const int bw = static_cast<int>(chip.width()), bh = static_cast<int>(chip.height());
     const int x = right ? width() - bw - 6 : 6;
     const int y = 6;
-    p.setPen(Qt::NoPen);
-    p.setBrush(bg);
-    p.drawRoundedRect(x, y, bw, bh, 3, 3);
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, true);
+    mviewer::ui::paintOverlayChipBackground(p, QRectF(x, y, bw, bh), bg);
+    p.restore();
     p.setPen(Qt::white);
     p.drawText(QRect(x, y, bw, bh), Qt::AlignCenter, txt);
 }

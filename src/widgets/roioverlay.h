@@ -1,6 +1,7 @@
 #pragma once
 
 #include "domain/SelectionMapping.h"
+#include "widgets/overlaychip.h"
 
 #include <QFont>
 #include <QPainter>
@@ -57,18 +58,15 @@ inline void drawROIOverlay(QPainter &p, const mviewer::domain::Selection &select
                               handleSize, handleSize));
     }
 
-    QFont font = p.font();
-    font.setPointSize(9);
-    font.setBold(true);
-    p.setFont(font);
+    p.setFont(overlayChipFont(p.font()));
     const QString sizeText = QStringLiteral("%1×%2").arg(selection.width).arg(selection.height);
     const QString label = paneTag.isEmpty() ? QStringLiteral("ROI %1").arg(sizeText)
                                             : QStringLiteral("%1  %2").arg(paneTag, sizeText);
-    const int labelWidth = p.fontMetrics().horizontalAdvance(label) + 10;
-    const QRectF labelRect(box.left(), std::max(0.0, box.top() - 20.0), labelWidth, 18.0);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 140));
-    p.drawRoundedRect(labelRect, 6, 6);
+    const QSizeF chip = overlayChipSize(p.fontMetrics(), label);
+    const QRectF labelRect(box.left(), std::max(0.0, box.top() - chip.height() - 2.0), chip.width(),
+                           chip.height());
+    p.setRenderHint(QPainter::Antialiasing, true);
+    paintOverlayChipBackground(p, labelRect);
     p.setPen(Qt::white);
     p.drawText(labelRect, Qt::AlignCenter, label);
     p.restore();
