@@ -4,6 +4,7 @@
 
 #include "SquareLetterbox.h"
 #include "hoverfade.h"
+#include "thumbnailcard_style.h"
 
 #include <QDir>
 #include <QFontMetrics>
@@ -114,18 +115,26 @@ QString thumbInfoText(const ThumbnailPanel::Entry *entry, const QString &suffix)
 }
 
 void drawThumbBackground(QPainter *painter, const QRect &card, const QRect &itemRect, bool selected,
-                         qreal hover, const QStyleOptionViewItem &option)
+                         qreal hover, bool withShadow, const QStyleOptionViewItem &option)
 {
     const QColor base = option.palette.color(QPalette::Base);
     const QColor accent = option.palette.color(QPalette::Highlight);
+    const bool dark = thumb_card::isDarkPalette(option.palette);
+    // Cards sit one step above the content: lighter in dark, a soft grey in light.
+    const QColor surface = blended(base, option.palette.color(QPalette::Text), dark ? 14 : 8);
     // hover is 0..1 from the hover fade, so the tint eases in instead of snapping.
-    const QColor cardBg = selected
-                              ? blended(base, accent, 30)
-                              : (hover > 0.0 ? blended(base, accent, qRound(12 * hover)) : base);
+    const QColor cardBg =
+        selected ? blended(surface, accent, 34)
+                 : (hover > 0.0 ? blended(surface, accent, qRound(14 * hover)) : surface);
     painter->fillRect(itemRect, base);
+    // The shadow is a cached pixmap per card size and theme: no blur per paint.
+    if (withShadow && !selected)
+        thumb_card::drawCardShadow(painter, card, dark);
+    painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setPen(Qt::NoPen);
     painter->setBrush(cardBg);
-    painter->drawRoundedRect(card, 8, 8);
+    painter->drawRoundedRect(card, thumb_card::kCardRadius, thumb_card::kCardRadius);
+    painter->setRenderHint(QPainter::Antialiasing, false);
 }
 
 void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &path,
@@ -142,7 +151,9 @@ void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &pa
             thumb_delegate::cachedScaledPixmap(displayPhoto(pm), thumbRect.size());
         painter->drawPixmap(thumbRect.x() + (thumbRect.width() - scaled.width()) / 2,
                             thumbRect.y() + (thumbRect.height() - scaled.height()) / 2, scaled);
-        painter->setPen(option.palette.color(QPalette::Mid));
+        // Opaque, quiet hairline: it frames the photo edge the same way in
+        // both themes (a translucent stroke would let the photo bleed past it).
+        painter->setPen(blended(base, option.palette.color(QPalette::Text), 40));
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(thumbRect.adjusted(0, 0, -1, -1));
     }
@@ -163,7 +174,8 @@ void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &pa
     }
 }
 
-void drawFrameBadge(QPainter *painter, const QRect &card, const ThumbnailPanel::Entry *entry)
+void drawFrameBadge(QPainter *painter, const QRect &card, const ThumbnailPanel::Entry *entry,
+                    const QPalette &palette)
 {
     if (!entry || entry->frameCount <= 1)
         return;
@@ -175,16 +187,19 @@ void drawFrameBadge(QPainter *painter, const QRect &card, const ThumbnailPanel::
     const QSize badgeSize = metrics.size(Qt::TextSingleLine, badge) + QSize(10, 4);
     const QRect badgeRect(card.right() - badgeSize.width() - 5, card.top() + 5, badgeSize.width(),
                           badgeSize.height());
+    painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setPen(Qt::NoPen);
-    painter->setBrush(QColor(25, 25, 25, 190));
-    painter->drawRoundedRect(badgeRect, 5, 5);
-    painter->setPen(Qt::white);
+    painter->setBrush(thumb_card::badgeBackground(palette));
+    painter->drawRoundedRect(badgeRect, badgeRect.height() / 2.0, badgeRect.height() / 2.0);
+    painter->setRenderHint(QPainter::Antialiasing, false);
+    painter->setPen(thumb_card::badgeText(palette));
     painter->drawText(badgeRect, Qt::AlignCenter | Qt::TextSingleLine, badge);
 }
 
 void drawThumbFooter(QPainter *painter, const QRect &card, const QRect &thumbRect,
                      const ThumbnailPanel::Entry *entry, const QString &path, const QString &name,
-                     bool richFooter, bool nameFooter, const QStyleOptionViewItem &option)
+                     bool richFooter, bool nameFooter, bool selected,
+                     const QStyleOptionViewItem &option)
 {
     if (richFooter)
     {
@@ -197,7 +212,9 @@ void drawThumbFooter(QPainter *painter, const QRect &card, const QRect &thumbRec
         QFont infoFont = painter->font();
         infoFont.setPointSize(qMax(7, infoFont.pointSize() - 1));
         painter->setFont(infoFont);
-        painter->setPen(option.palette.color(QPalette::Text));
+        // Secondary caption: text blended toward the base, readable in both themes.
+        painter->setPen(blended(option.palette.color(QPalette::Text),
+                                option.palette.color(QPalette::Base), 100));
         const QString info = thumbInfoText(entry, thumb_delegate::fileSuffixFromPath(path));
         const QString infoText =
             painter->fontMetrics().elidedText(info, Qt::ElideRight, infoRect.width());
@@ -207,25 +224,20 @@ void drawThumbFooter(QPainter *painter, const QRect &card, const QRect &thumbRec
         QFont nameFont = painter->font();
         nameFont.setPointSize(qMax(8, nameFont.pointSize()));
         painter->setFont(nameFont);
-        const QString nameText =
-            painter->fontMetrics().elidedText(name, Qt::ElideRight, nameRect.width());
-        painter->drawText(nameRect, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextSingleLine,
-                          nameText);
+        thumb_card::drawNameText(painter, nameRect, name, selected, option.palette);
     }
     else if (nameFooter)
     {
         const QRect nameRect(card.x() + 5, thumbRect.bottom() + 3, qMax(1, card.width() - 10),
                              qMax(1, card.bottom() - thumbRect.bottom() - 5));
-        painter->setPen(option.palette.color(QPalette::Text));
-        const QString nameText =
-            painter->fontMetrics().elidedText(name, Qt::ElideRight, nameRect.width());
-        painter->drawText(nameRect, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextSingleLine,
-                          nameText);
+        thumb_card::drawNameText(painter, nameRect, name, selected, option.palette);
     }
 }
 
-void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const QString &path)
+void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const QString &path,
+                             const QPalette &palette)
 {
+    const bool dark = thumb_card::isDarkPalette(palette);
     const auto &rs = mviewer::core::RatingStore::instance();
     const auto flags = rs.fileFlags(path.toStdString());
     if (flags.rating > 0)
@@ -233,7 +245,7 @@ void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const 
         QFont sf = painter->font();
         sf.setPixelSize(15);
         painter->setFont(sf);
-        painter->setPen(QColor(255, 215, 0));
+        painter->setPen(thumb_card::ratingColor(dark));
         QString starStr;
         starStr.reserve(5);
         for (int s = 0; s < 5; ++s)
@@ -242,24 +254,29 @@ void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const 
                           Qt::AlignLeft | Qt::AlignTop | Qt::TextSingleLine, starStr);
     }
 
-    static const QColor kColors[7] = {QColor(),
-                                      QColor(229, 57, 53),
-                                      QColor(251, 140, 0),
-                                      QColor(249, 215, 41),
-                                      QColor(67, 160, 71),
-                                      QColor(30, 136, 229),
-                                      QColor(142, 36, 170)};
-    if (flags.colorLabel > 0)
-        painter->fillRect(QRect(overlayRect.left(), overlayRect.top(), 4, overlayRect.height()),
-                          kColors[flags.colorLabel]);
+    if (flags.colorLabel > 0 && flags.colorLabel <= 6)
+    {
+        // A rounded stripe inset from the card's left edge so it follows the radius.
+        const QRect stripe(overlayRect.left() + 3, overlayRect.top() + thumb_card::kCardRadius, 4,
+                           qMax(1, overlayRect.height() - thumb_card::kCardRadius * 2));
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(thumb_card::labelColor(flags.colorLabel, dark));
+        painter->drawRoundedRect(stripe, 2, 2);
+        painter->setRenderHint(QPainter::Antialiasing, false);
+    }
     if (flags.rejected)
     {
-        painter->fillRect(overlayRect, QColor(200, 30, 30, 90));
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(thumb_card::rejectTint(palette));
+        painter->drawRoundedRect(overlayRect, thumb_card::kCardRadius, thumb_card::kCardRadius);
+        painter->setRenderHint(QPainter::Antialiasing, false);
         QFont rf = painter->font();
         rf.setPixelSize(22);
         rf.setBold(true);
         painter->setFont(rf);
-        painter->setPen(QColor(255, 255, 255));
+        painter->setPen(palette.color(QPalette::HighlightedText));
         painter->drawText(overlayRect, Qt::AlignCenter, QStringLiteral("✕"));
     }
     if (flags.picked)
@@ -267,32 +284,33 @@ void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const 
         QFont pf = painter->font();
         pf.setPixelSize(15);
         painter->setFont(pf);
-        painter->setPen(QColor(255, 215, 0));
+        painter->setPen(thumb_card::ratingColor(dark));
         painter->drawText(overlayRect.adjusted(4, 2, -4, -2),
                           Qt::AlignRight | Qt::AlignTop | Qt::TextSingleLine, QStringLiteral("⚑"));
     }
 }
 
-void drawThumbCardBorder(QPainter *painter, const QRect &card, bool selected, qreal hover,
-                         const QStyleOptionViewItem &option)
+void drawThumbCardBorder(QPainter *painter, const QRect &card, int outset, bool selected,
+                         qreal hover, const QStyleOptionViewItem &option)
 {
     if (selected)
     {
-        QPen border(option.palette.color(QPalette::Highlight));
-        border.setWidth(2);
-        painter->setPen(border);
-        painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 8, 8);
+        // Finder style: a 3 px accent ring just outside the card.
+        thumb_card::drawSelectionRing(painter, card, outset,
+                                      option.palette.color(QPalette::Highlight));
     }
     else if (hover > 0.0)
     {
-        QColor edge = option.palette.color(QPalette::Midlight);
-        edge.setAlphaF(static_cast<float>(hover));
+        QColor edge = option.palette.color(QPalette::Text);
+        edge.setAlphaF(static_cast<float>(0.18 * hover));
         QPen border(edge);
         border.setWidth(1);
+        painter->setRenderHint(QPainter::Antialiasing, true);
         painter->setPen(border);
         painter->setBrush(Qt::NoBrush);
-        painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 8, 8);
+        painter->drawRoundedRect(QRectF(card).adjusted(0.5, 0.5, -0.5, -0.5),
+                                 thumb_card::kCardRadius, thumb_card::kCardRadius);
+        painter->setRenderHint(QPainter::Antialiasing, false);
     }
 }
 
@@ -489,9 +507,9 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
     painter->save();
     painter->setClipRect(option.rect);
 
-    const QRect card = option.rect.adjusted(compactImageOnly ? 1 : 3, compactImageOnly ? 1 : 3,
-                                            compactImageOnly ? -1 : -3, compactImageOnly ? -1 : -3);
-    drawThumbBackground(painter, card, option.rect, selected, hover, option);
+    const int inset = compactImageOnly ? 1 : thumb_card::kRingWidth;
+    const QRect card = option.rect.adjusted(inset, inset, -inset, -inset);
+    drawThumbBackground(painter, card, option.rect, selected, hover, !compactImageOnly, option);
 
     const int footerHeight = richFooter ? 42 : (nameFooter ? 20 : 0);
     const int imagePadding = compactImageOnly ? 4 : 7;
@@ -502,10 +520,11 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
                           imageSize, imageSize);
 
     drawThumbImage(painter, thumbRect, path, m_panel, option);
-    drawFrameBadge(painter, card, entry);
-    drawThumbFooter(painter, card, thumbRect, entry, path, name, richFooter, nameFooter, option);
-    drawThumbRatingOverlays(painter, card, path);
-    drawThumbCardBorder(painter, card, selected, hover, option);
+    drawFrameBadge(painter, card, entry, option.palette);
+    drawThumbFooter(painter, card, thumbRect, entry, path, name, richFooter, nameFooter, selected,
+                    option);
+    drawThumbRatingOverlays(painter, card, path, option.palette);
+    drawThumbCardBorder(painter, card, inset, selected, hover, option);
 
     painter->restore();
 }
@@ -565,11 +584,18 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
 
     const bool sel = option.state & QStyle::State_Selected;
     const bool hover = option.state & QStyle::State_MouseOver;
-    QColor bg = sel ? option.palette.color(QPalette::Highlight)
-                    : (hover ? option.palette.color(QPalette::Midlight)
-                             : option.palette.color(index.row() & 1 ? QPalette::AlternateBase
-                                                                    : QPalette::Base));
-    painter->fillRect(option.rect, bg);
+    painter->fillRect(option.rect, option.palette.color(QPalette::Base));
+    if (sel || hover)
+    {
+        // Rounded row pill, like the sidebar and Finder's list selection.
+        painter->save();
+        painter->setRenderHint(QPainter::Antialiasing, true);
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(sel ? option.palette.color(QPalette::Highlight)
+                              : option.palette.color(QPalette::Midlight));
+        painter->drawRoundedRect(QRectF(option.rect).adjusted(2, 1, -2, -1), 5, 5);
+        painter->restore();
+    }
 
     const QRect r = option.rect.adjusted(4, 0, -4, 0);
     const int icon = 16;
