@@ -382,6 +382,7 @@ class CompareWorkspace : public QWidget
     void updatePaneIndexBadges();
     bool temporaryHoldBlocked() const;
     void applyTemporaryDisplay(int targetPane, int sourcePane);
+    void reassertTemporaryDisplay(); // re-hold after setImage() dropped it
     void syncEngineBlink();
     bool isSplitOrSwipe() const;
 

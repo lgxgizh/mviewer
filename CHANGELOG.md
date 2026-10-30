@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Compare Space / 1-8 hold survives a sharper raster:** holding Space right
+  after a zoom or pan no longer snaps the held pane back to its own image when
+  the sharp / region raster lands mid-hold (`setImage()` dropped the transient
+  view). The workspace re-applies the held view after every raster delivery.
+- **Nightly publish-health:** the generated-docs commit is rebased onto the
+  latest master and retried when master moved during the run (was a hard
+  non-fast-forward failure).
+
 ## [1.0.156] - 2026-10-30
 
 ### Release

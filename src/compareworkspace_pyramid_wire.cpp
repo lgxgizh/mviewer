@@ -277,6 +277,8 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
     // tryPaintFromPyramid -> setImage() fits the raster. A swap has already
     // stored the destination scale; put it back on the view before paint.
     reapplyPinnedCellTransforms();
+    // setImage() also dropped a held Space / 1-8 view; keep showing it.
+    reassertTemporaryDisplay();
 
     std::vector<ImageData> pixels;
     std::vector<mviewer::domain::ImageMetadata> metadata;
@@ -420,6 +422,10 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 
     updateTemporaryCompareAvailability();
+    // A raster landing mid-hold (sharp / region upgrade after a zoom or pan)
+    // went through setImage(), which drops the held view. Space / 1-8 must keep
+    // presenting the source pane exactly as that pane shows it now.
+    reassertTemporaryDisplay();
     update();
     followUpDisplayBatch(r);
 }

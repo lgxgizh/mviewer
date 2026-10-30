@@ -605,7 +605,26 @@ jobs:
             echo "health: nothing to commit"
           else
             git commit -m "auto: M23 health publish — dashboard / trend / test-matrix [skip ci]"
-            git push
+            # master can move while the nightly runs (a PR merged mid-run made
+            # 2026-10-30 fail as non-fast-forward). Rebase the generated-docs
+            # commit onto the latest master and retry; a real conflict aborts.
+            branch="${GITHUB_REF_NAME:-master}"
+            for attempt in 1 2 3 4 5; do
+              if git push origin "HEAD:${branch}"; then
+                echo "health: published (attempt ${attempt})"
+                exit 0
+              fi
+              echo "health: push rejected (attempt ${attempt}); rebasing onto origin/${branch}"
+              git fetch origin "${branch}"
+              if ! git rebase "origin/${branch}"; then
+                git rebase --abort || true
+                echo "::error::health publish: rebase onto origin/${branch} conflicted"
+                exit 1
+              fi
+              sleep $((attempt * 5))
+            done
+            echo "::error::health publish: push still rejected after 5 attempts"
+            exit 1
           fi
 
   # ---------------------------------------------------------------------------
