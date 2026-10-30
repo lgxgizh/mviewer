@@ -6795,6 +6795,16 @@ Build: %2</source>
         <translation>仅在有新版本时提示；帮助菜单中的「检查更新」仍可手动使用。</translation>
     </message>
     <message>
+        <location filename="../src/preferencesdialog.cpp" line="155"/>
+        <source>Use translucent sidebar (Windows 11)</source>
+        <translation>侧栏和工具栏使用半透明效果（Windows 11）</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="157"/>
+        <source>Mica backdrop behind the toolbar and sidebar. Needs Windows 11 22H2 or later; takes effect after restart.</source>
+        <translation>在工具栏和侧栏后显示 Mica 半透明背景。需要 Windows 11 22H2 或更高版本，重启后生效。</translation>
+    </message>
+    <message>
         <location filename="../src/preferencesdialog.cpp" line="175"/>
         <source>Auto-align by integer-pixel shift before comparison (eliminate translation misalignment)</source>
         <translation>比较前按整数像素平移自动对齐（消除平移错位）</translation>

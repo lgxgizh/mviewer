@@ -871,6 +871,29 @@ QMenu::separator {
     margin: {{space4}}px {{space8}}px;
 }
 
+/* Windows 11: DWM rounds and outlines popup menus (WindowChrome sets
+   winRounded), so the QSS edge would draw a second, square-cornered frame. */
+QMenu[winRounded="true"] {
+    border: none;
+    border-radius: 0px;
+}
+
+/* Windows 11 Mica (Preferences, opt-in): the toolbar and sidebar clear their
+   fill so the backdrop shows. Gallery, viewer, preview and compare stay opaque. */
+QMainWindow[mica="true"] {
+    background: transparent;
+}
+
+QMainWindow[mica="true"] QMenuBar,
+QMainWindow[mica="true"] QToolBar#browserToolBar,
+QMainWindow[mica="true"] QSplitter#navigationPanel,
+QMainWindow[mica="true"] QWidget#foldersSection,
+QMainWindow[mica="true"] QSplitter#navigationPanel QTreeView,
+QMainWindow[mica="true"] QSplitter#navigationPanel QListWidget {
+    background: transparent;
+    background-color: transparent;
+}
+
 QToolTip {
     background: {{bg1}};
     color: {{textPrimary}};

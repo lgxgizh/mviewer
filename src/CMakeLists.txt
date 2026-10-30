@@ -315,6 +315,7 @@ add_library(mviewer_ui STATIC
     usmcomparedialog.cpp
     usmcomparedialog_load.cpp
     Theme.cpp
+    platform/WindowChrome.cpp
     Language.cpp
     ThemeIcons.cpp
     hoverfade.cpp
@@ -322,6 +323,12 @@ add_library(mviewer_ui STATIC
     analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
 )
+
+# Native window chrome (DWM title bar, corners, Mica). Stubs elsewhere.
+if(WIN32)
+    target_sources(mviewer_ui PRIVATE platform/WindowChrome_win.cpp)
+    target_link_libraries(mviewer_ui PUBLIC dwmapi)
+endif()
 
 target_link_libraries(mviewer_ui PUBLIC
     Qt6::Widgets
@@ -478,6 +485,7 @@ add_executable(test_ui_models
     workspacemodel.cpp
     analyzermodel.cpp
     Theme.cpp
+    platform/WindowChrome.cpp
     Language.cpp
     ThemeIcons.cpp
     hoverfade.cpp
@@ -490,6 +498,10 @@ target_link_libraries(test_ui_models
         Qt6::Widgets
         Qt6::Core
 )
+if(WIN32)
+    target_sources(test_ui_models PRIVATE platform/WindowChrome_win.cpp)
+    target_link_libraries(test_ui_models PRIVATE dwmapi)
+endif()
 target_compile_features(test_ui_models PRIVATE cxx_std_20)
 target_include_directories(test_ui_models PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 

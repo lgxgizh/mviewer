@@ -11,6 +11,7 @@
 #include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
 #include "core/SettingsIO.h"
+#include "platform/WindowChrome.h"
 #include "runtime_storage.h"
 
 #include <QApplication>
@@ -122,6 +123,7 @@ int main(int argc, char *argv[])
         MainWindow mainWindow;
         if (!g_openOnLaunch.isEmpty())
             mainWindow.setOpenOnLaunch(g_openOnLaunch);
+        mviewer::platform::WindowChrome::prepareMainWindow(&mainWindow);
         mainWindow.show();
 
         exitCode = app.exec();

@@ -4,6 +4,7 @@
 #include "core/image/decoder/RawDecodePlan.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
+#include "platform/WindowChrome.h"
 #include "thumbnailpanel.h"
 
 #include <QCheckBox>
@@ -152,6 +153,15 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_autoCheckUpdates->setChecked(s.value(QStringLiteral("autoCheckUpdates"), true).toBool());
     gl->addRow(m_autoCheckUpdates);
 
+    m_translucentSidebar = new QCheckBox(tr("Use translucent sidebar (Windows 11)"));
+    m_translucentSidebar->setObjectName(QStringLiteral("preferencesTranslucentSidebar"));
+    m_translucentSidebar->setToolTip(tr("Mica backdrop behind the toolbar and sidebar. Needs "
+                                        "Windows 11 22H2 or later; takes effect after restart."));
+    m_translucentSidebar->setChecked(mviewer::platform::WindowChrome::translucentSidebarEnabled());
+    m_translucentSidebar->setEnabled(mviewer::platform::WindowChrome::currentFeatures().mica ||
+                                     m_translucentSidebar->isChecked());
+    gl->addRow(m_translucentSidebar);
+
     m_rawDisplayPolicy = new QComboBox;
     m_rawDisplayPolicy->setObjectName(QStringLiteral("preferencesRawDisplayPolicy"));
     m_rawDisplayPolicy->addItem(tr("Prefer embedded preview (fast)"), 0);
@@ -266,6 +276,8 @@ void PreferencesDialog::accept()
     const bool colorManagement = m_colorManagement->isChecked();
     s.setValue("display/colorManagement", colorManagement);
     s.setValue(QStringLiteral("autoCheckUpdates"), m_autoCheckUpdates->isChecked());
+    mviewer::platform::WindowChrome::setTranslucentSidebarEnabled(
+        m_translucentSidebar->isChecked());
     const int rawPolicy = m_rawDisplayPolicy ? m_rawDisplayPolicy->currentData().toInt() : 0;
     s.setValue(QStringLiteral("raw/displayPolicy"), rawPolicy);
     mviewer::core::setRawDisplayPolicy(mviewer::core::rawDisplayPolicyFromInt(rawPolicy));
