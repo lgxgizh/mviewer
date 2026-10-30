@@ -92,6 +92,25 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
     update();
 }
 
+void CompareWorkspace::reassertTemporaryDisplay()
+{
+    if (!m_temporaryCompareActive || m_canvasTemporaryPane >= 0)
+        return;
+    const int target = m_temporaryTargetPane;
+    const int source = m_temporarySourcePane;
+    if (target < 0 || source < 0 || target >= m_cellViews.size() || source >= m_cellViews.size())
+        return;
+    RawImageView *targetView = m_cellViews[target];
+    RawImageView *sourceView = m_cellViews[source];
+    if (!targetView || !sourceView || sourceView->displayImage().isNull() ||
+        !sourceView->sourceSize().isValid())
+        return;
+    // Replay from the source pane's current raster and viewport: covers both a
+    // delivery to the held pane (its transient was dropped) and a sharper
+    // raster landing on the source pane (the held copy would be stale).
+    applyTemporaryDisplay(target, source);
+}
+
 void CompareWorkspace::beginClassicTemporaryCompare()
 {
     // Toolbar button: always classic A<-B regardless of cursor position.

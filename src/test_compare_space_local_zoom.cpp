@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 
 namespace
 {
@@ -157,7 +158,10 @@ bool sameState(const ViewState &a, const ViewState &b)
 
 // Holds Space over `target`, checks it presents `source` exactly as `source`
 // presents it (mapped by fit when the panes differ in size), then releases.
-void holdAndCheck(QWidget *ws, RawImageView *target, RawImageView *source, const char *label)
+// `whileHeld` runs once the hold is up, before the checks (e.g. waits for a
+// raster to land on a pane mid-hold).
+void holdAndCheck(QWidget *ws, RawImageView *target, RawImageView *source, const char *label,
+                  const std::function<void()> &whileHeld = {})
 {
     const ViewState ownTarget = stateOf(target);
     const ViewState ownSource = stateOf(source);
@@ -166,6 +170,8 @@ void holdAndCheck(QWidget *ws, RawImageView *target, RawImageView *source, const
     hover(target);
     space(ws, true);
     check(waitTrue([&] { return target->hasTransientDisplay(); }, 3000), label);
+    if (whileHeld)
+        whileHeld();
     pump(150);
     const double shown = target->presentedScale();
     const QPointF shownOffset = target->presentedOffset();
@@ -266,6 +272,33 @@ int main(int argc, char **argv)
         pump(400);
     }
     holdAndCheck(ws, low, high, "linked zoom + local zoom still replays the right pane");
+
+    // 4) A raster landing mid-hold must not drop the held view. Ctrl+wheel the
+    //    right (3072x4096) pane and hold Space over it right away: its sharper
+    //    LOD raster is requested after an 80 ms debounce, so it lands while the
+    //    hold is up. RawImageView::setImage() clears the transient display; the
+    //    workspace has to put the held view back (GCC ASan nightly 2026-10-30
+    //    caught this as a timing-dependent failure of cases 2 and 3).
+    {
+        const QPointF at(high->width() * 0.4, high->height() * 0.6);
+        QWheelEvent wheel(at, high->mapToGlobal(at), QPoint(0, 0), QPoint(0, 120), Qt::NoButton,
+                          Qt::ControlModifier, Qt::NoScrollPhase, false);
+        QApplication::sendEvent(high, &wheel);
+        check(waitTrue([&] { return closeRel(high->scale(), ws->engine().cellScale(1), 1e-6); },
+                       3000),
+              "right pane took the new local zoom");
+        const qint64 rasterBefore = high->image().cacheKey();
+        holdAndCheck(ws, high, low, "raster landing mid-hold keeps the held view",
+                     [&]
+                     {
+                         const bool landed = waitTrue(
+                             [&] { return high->image().cacheKey() != rasterBefore; }, 10000);
+                         std::printf("  raster for the held pane %s during the hold\n",
+                                     landed ? "landed" : "did not land");
+                         check(high->hasTransientDisplay(),
+                               "held pane still presents the other image after a raster landed");
+                     });
+    }
 
     std::printf("%d failure(s)\n", g_failures);
     return g_failures ? 1 : 0;
