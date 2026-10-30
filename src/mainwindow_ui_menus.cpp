@@ -534,6 +534,11 @@ void MainWindow::retranslateUi()
         if (entry.menu)
             entry.menu->setTitle(tr(entry.text));
     }
+    if (m_actCompare)
+        m_actCompare->setIconText(tr("Compare"));
+    if (m_actToggleNavigation)
+        m_actToggleNavigation->setToolTip(tr("Toggle sidebar"));
+    refreshBrowserLocation(currentDir());
     retranslateBrowseBar();
 }
 

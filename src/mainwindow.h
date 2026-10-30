@@ -172,6 +172,13 @@ class MainWindow : public QMainWindow
     void buildViewZoomActions(QMenu *viewMenu);
     void buildToolsHelpMenus(QMenuBar *menuBar);
     void buildBrowserShell();
+    void buildUnifiedToolbar();
+    QWidget *makeBrowserLocation(QWidget *parent);
+    void addTrailingBrowserActions(QToolBar *bar);
+    void addComparePill(QWidget *cluster);
+    void attachUnifiedToolbarControls();
+    void refreshBrowserLocation(const QString &path);
+    void syncViewModeSegmentToolTips();
     void installNavigationCollapse();
     void polishGalleryToolbar(QWidget *sortBar);
     void placeGalleryCompareButton(QWidget *sortBar);

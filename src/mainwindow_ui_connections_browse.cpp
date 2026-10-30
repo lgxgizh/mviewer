@@ -90,9 +90,7 @@ void MainWindow::connectNavigationSignals()
                 if (m_selection)
                     m_selection->clear();
                 resetFiltersOnFolderChange();
-                m_breadcrumb->setPath(path); // M15: update breadcrumb bar
-                if (m_pathEdit)
-                    m_pathEdit->setText(QDir::toNativeSeparators(path));
+                refreshBrowserLocation(path);
                 m_directory->setCurrentDirectory(path);
                 if (m_directoryMonitor)
                     m_directoryMonitor->setActiveDirectory(path);

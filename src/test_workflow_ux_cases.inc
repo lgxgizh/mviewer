@@ -392,8 +392,19 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     const int galleryTop = thumbnailPanel ? thumbnailPanel->mapTo(&w, QPoint(0, 0)).y() : -1;
     CHECK(galleryToolbarBottom >= 0 && galleryTop > galleryToolbarBottom,
           "gallery toolbar occupies space above the thumbnail panel");
-    CHECK(viewModeCombo && viewModeCombo->isVisible() && viewModeCombo->isEnabled(),
-          "gallery view mode control is visible and enabled");
+    auto *viewModeSegment = w.findChild<QWidget *>(QStringLiteral("viewModeSegment"));
+    CHECK(viewModeSegment && viewModeSegment->isVisible() && viewModeSegment->isEnabled(),
+          "segmented view control is visible and enabled");
+    CHECK(viewModeCombo && viewModeCombo->isEnabled() && viewModeCombo->count() > 0,
+          "view mode combo stays enabled as the source of truth");
+    auto *typeFilter = w.findChild<QComboBox *>(QStringLiteral("typeFilterCombo"));
+    CHECK(typeFilter && typeFilter->property("pill").toBool() && typeFilter->isVisible(),
+          "format filter is a visible pill");
+    auto *comparePill = w.findChild<QToolButton *>(QStringLiteral("compareToolbarButton"));
+    CHECK(comparePill && comparePill->property("pill").toBool() &&
+              comparePill->property("primary").toBool() && browserToolBar &&
+              browserToolBar->isAncestorOf(comparePill),
+          "Compare is an accent pill on the browse toolbar");
     CHECK(advancedFilterToggle && advancedFilterToggle->isVisible() &&
               advancedFilterToggle->isEnabled(),
           "advanced gallery filter toggle is visible and enabled");
@@ -409,13 +420,19 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(viewModeCombo && thumbnailPanel,
           "thumbnail view controls expose a stable panel and combo");
     CHECK(pathEdit != nullptr, "directory path input is discoverable");
-    if (pathEdit && gallerySearchEdit)
+    if (pathEdit && gallerySearchEdit && browserToolBar)
     {
-        const int pathBottom = pathEdit->mapTo(&w, pathEdit->rect().bottomLeft()).y();
-        const int searchTop = gallerySearchEdit->mapTo(&w, QPoint(0, 0)).y();
-        CHECK(pathBottom <= searchTop + 2,
-              "address bar sits on the gallery toolbar strip above sort/search controls");
+        CHECK(browserToolBar->isAncestorOf(gallerySearchEdit),
+              "filename search sits in the unified browse toolbar");
+        const int searchBottom =
+            gallerySearchEdit->mapTo(&w, gallerySearchEdit->rect().bottomLeft()).y();
+        const int pathTop = pathEdit->mapTo(&w, QPoint(0, 0)).y();
+        CHECK(searchBottom <= pathTop + 2, "unified toolbar sits above the editable address bar");
     }
+    CHECK(w.statusBar() && w.statusBar()->height() >= 22 && w.statusBar()->height() <= 24,
+          "status bar is a thin 22-24px caption strip");
+    auto *folderTitle = w.findChild<QLabel *>(QStringLiteral("folderTitleLabel"));
+    CHECK(folderTitle && folderTitle->isVisible(), "folder title is shown in the browse toolbar");
     auto *emptyState = w.findChild<QLabel *>("emptyStateLabel");
     auto *emptyFolder = w.findChild<QLabel *>("emptyFolderLabel");
     CHECK(emptyState != nullptr, "empty-state hint has a stable object name");
@@ -450,7 +467,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "empty Browse disables favorite commands without an active folder");
     CHECK(compareAction && !compareAction->isEnabled(),
           "empty Browse disables Compare until at least two images are available");
-    CHECK(browserToolBar && browserToolBar->actions().contains(compareAction),
+    auto *compareButton = w.findChild<QToolButton *>(QStringLiteral("compareToolbarButton"));
+    CHECK(browserToolBar && compareButton && compareButton->defaultAction() == compareAction &&
+              browserToolBar->isAncestorOf(compareButton) && compareButton->isVisible(),
           "compare action is located on browser toolbar");
     CHECK(compareAction && compareAction->toolTip().contains(QStringLiteral("2–8")),
           "compare action tooltip explains 2–8 selection requirement when disabled");

@@ -15,6 +15,12 @@
   chosen so 125% and 150% scaling stay sharp. Checkbox, radio and chevron
   indicators use the same stroke.
 
+- **macOS-style toolbar (C1):** The browse toolbar is one strip: sidebar
+  toggle, back, forward and up, the folder title and path, a segmented view
+  switch, the format filter as a pill, a Compare pill and rounded search.
+  Split-pane toolbars use the same icon buttons. The status bar is a thin
+  caption line.
+
 ## [1.0.155] - 2026-10-29
 
 ### Release

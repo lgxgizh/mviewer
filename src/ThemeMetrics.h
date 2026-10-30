@@ -14,6 +14,8 @@ constexpr int kSpace16 = 16;
 constexpr int kControlHeight = 28;
 // Toolbar strips that host kControlHeight controls with kSpace4 padding.
 constexpr int kBarHeight = 40;
+// Caption status strip. Matches the QStatusBar min/max height in dark.qss.
+constexpr int kStatusBarHeight = 22;
 
 constexpr int kRadiusControl = 7;
 constexpr int kRadiusPanel = 10;

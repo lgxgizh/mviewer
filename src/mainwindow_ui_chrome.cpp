@@ -1,3 +1,4 @@
+#include "ThemeIcons.h"
 #include "ThemeMetrics.h"
 #include "mainwindow_p.h"
 
@@ -18,16 +19,20 @@ void MainWindow::installNavigationCollapse()
     m_actToggleNavigation->setObjectName(QStringLiteral("toggleNavigationPanelAction"));
     m_actToggleNavigation->setCheckable(true);
     m_actToggleNavigation->setChecked(true);
-    m_actToggleNavigation->setToolTip(tr("Show or hide the folder and preview sidebars"));
+    m_actToggleNavigation->setIcon(mviewer::ui::toolbarIcon("sidebar"));
+    m_actToggleNavigation->setToolTip(tr("Toggle sidebar"));
     if (auto *bar = findChild<QToolBar *>(QStringLiteral("browserToolBar")))
     {
-        bar->setIconSize(QSize(16, 16));
+        bar->setIconSize(QSize(mviewer::ui::kToolbarIconPx, mviewer::ui::kToolbarIconPx));
         bar->setFixedHeight(mviewer::ui::metrics::kBarHeight);
         auto *button = new QToolButton(bar);
         button->setObjectName(QStringLiteral("toggleNavigationPanelButton"));
         button->setDefaultAction(m_actToggleNavigation);
-        button->setToolButtonStyle(Qt::ToolButtonTextOnly);
-        button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
+        button->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        button->setAutoRaise(true);
+        button->setIconSize(QSize(mviewer::ui::kToolbarIconPx, mviewer::ui::kToolbarIconPx));
+        button->setFixedSize(mviewer::ui::metrics::kControlHeight,
+                             mviewer::ui::metrics::kControlHeight);
         QAction *first = bar->actions().isEmpty() ? nullptr : bar->actions().constFirst();
         bar->insertWidget(first, button);
     }
