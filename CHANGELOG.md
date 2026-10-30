@@ -21,6 +21,16 @@
   Split-pane toolbars use the same icon buttons. The status bar is a thin
   caption line.
 
+- **macOS-style compare toolbar (C4):** Compare chrome is one toolbar band.
+  The modes (flicker, split, swipe, overlay, checkerboard, diff) form a joined
+  segmented track; Sync, Adjust, Screenshot and More are capsule pop-up
+  buttons. Wide windows fit everything on one row; narrow ones wrap to two
+  without clipping. The PSNR/SSIM readout uses the system font with tabular
+  digits instead of accent-coloured monospace. Image overlays (filename, zoom,
+  ROI size and stats chips, pane header, corner badges) share one chip style:
+  55% black, 6 px radius, the same padding and caption type. Snapshots
+  (Ctrl+C / Ctrl+S) keep showing the chips as on screen.
+
 ## [1.0.155] - 2026-10-29
 
 ### Release

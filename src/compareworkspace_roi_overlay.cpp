@@ -35,8 +35,8 @@ QLabel *roiChip(QWidget *owner, int index)
     chip = new QLabel(owner);
     chip->setObjectName(name);
     chip->setAttribute(Qt::WA_TransparentForMouseEvents);
-    chip->setStyleSheet("QLabel{background:rgba(0,0,0,140);color:#ffffff;border:1px solid #FFD233;"
-                        "border-radius:6px;padding:2px 4px;font-size:11px;font-weight:600;}");
+    chip->setStyleSheet(mviewer::ui::overlayChipStyle(QStringLiteral("QLabel"),
+                                                      QStringLiteral("1px solid #FFD233")));
     return chip;
 }
 // Grid: the ROI as the pane presents it now. While a temporary switch is held
