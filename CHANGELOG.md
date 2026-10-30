@@ -21,6 +21,13 @@
   Split-pane toolbars use the same icon buttons. The status bar is a thin
   caption line.
 
+- **Finder-style sidebar and thumbnail cards (C2):** The sidebar insets its
+  content under small grey captions, with rounded pill selections and the
+  preview in a rounded info card at the bottom. Thumbnails are 8 px rounded
+  cards with a soft cached shadow; selection is a 3 px accent ring plus an
+  accent filename pill with white text. Rating stars, color labels, the
+  rejected tint and frame badges use theme (Apple system) colors.
+
 - **macOS-style dialogs and menus (D):** Preferences switches pages with an
   icon toolbar instead of tabs, with right-aligned labels. Dialogs use 20 px
   margins and capsule buttons, with the accept button filled in the accent
