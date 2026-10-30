@@ -58,9 +58,10 @@ BatchDialog::BatchDialog(QWidget *parent) : QDialog(parent)
     setSizeGripEnabled(true);
 
     auto *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(mviewer::ui::metrics::kSpace12, mviewer::ui::metrics::kSpace12,
-                                   mviewer::ui::metrics::kSpace12, mviewer::ui::metrics::kSpace12);
-    mainLayout->setSpacing(mviewer::ui::metrics::kSpace8);
+    mainLayout->setContentsMargins(
+        mviewer::ui::metrics::kDialogMargin, mviewer::ui::metrics::kDialogMargin,
+        mviewer::ui::metrics::kDialogMargin, mviewer::ui::metrics::kDialogMargin);
+    mainLayout->setSpacing(mviewer::ui::metrics::kDialogSpacing);
 
     m_folderLabel = new QLabel;
     m_folderLabel->setObjectName(QStringLiteral("batchFolderLabel"));
@@ -93,8 +94,11 @@ BatchDialog::BatchDialog(QWidget *parent) : QDialog(parent)
     m_renameBtn = new QPushButton(tr("Rename"));
     m_renameBtn->setObjectName(QStringLiteral("batchRenameButton"));
     m_renameBtn->setDefault(true);
+    m_renameBtn->setProperty("primary", true);
+    m_renameBtn->setProperty("dialogButton", true);
     m_closeBtn = new QPushButton(tr("Close"));
     m_closeBtn->setObjectName(QStringLiteral("batchCloseButton"));
+    m_closeBtn->setProperty("dialogButton", true);
     buttons->addWidget(m_renameBtn);
     buttons->addWidget(m_closeBtn);
     mainLayout->addLayout(buttons);

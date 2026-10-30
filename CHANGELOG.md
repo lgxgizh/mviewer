@@ -38,6 +38,12 @@
   55% black, 6 px radius, the same padding and caption type. Snapshots
   (Ctrl+C / Ctrl+S) keep showing the chips as on screen.
 
+- **macOS-style dialogs and menus (D):** Preferences switches pages with an
+  icon toolbar instead of tabs, with right-aligned labels. Dialogs use 20 px
+  margins and capsule buttons, with the accept button filled in the accent
+  color. Menu rows are 26 px tall with a rounded highlight and grey
+  right-aligned shortcuts.
+
 ## [1.0.155] - 2026-10-29
 
 ### Release
