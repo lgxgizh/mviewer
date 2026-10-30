@@ -53,7 +53,7 @@ void MainWindow::buildBrowserShell()
     browserToolBar->setMovable(false);
     browserToolBar->setFloatable(false);
     browserToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    browserToolBar->setIconSize(QSize(18, 18));
+    browserToolBar->setIconSize(QSize(mviewer::ui::kToolbarIconPx, mviewer::ui::kToolbarIconPx));
     auto addBrowserAction =
         [browserToolBar](QAction *action, const char *iconName, const QString &tip = {})
     {
@@ -79,7 +79,7 @@ void MainWindow::buildBrowserShell()
                      actTip(tr("Analysis panel"), m_actToggleAnalysis));
     addBrowserAction(m_actToggleSearch, "search", actTip(tr("Global search"), m_actToggleSearch));
     browserToolBar->addSeparator();
-    addBrowserAction(m_actBrowseWorkspace, "browse");
+    addBrowserAction(m_actBrowseWorkspace, "browse_workspace");
     browserToolBar->addSeparator();
     if (m_actRotateCCW)
     {
@@ -112,13 +112,12 @@ void MainWindow::buildBrowserShell()
     }
     if (m_actUsmCompare)
     {
-        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("analysis"));
+        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("usm"));
         m_actUsmCompare->setObjectName("usmCompareAction");
         m_actUsmCompare->setToolTip(
             actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));
         browserToolBar->addAction(m_actUsmCompare);
     }
-    browserToolBar->setIconSize(QSize(16, 16));
     installNavigationCollapse();
 
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
