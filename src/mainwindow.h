@@ -175,7 +175,7 @@ class MainWindow : public QMainWindow
     void buildUnifiedToolbar();
     QWidget *makeBrowserLocation(QWidget *parent);
     void addTrailingBrowserActions(QToolBar *bar);
-    void addComparePill(QToolBar *bar);
+    void addComparePill(QWidget *cluster);
     void attachUnifiedToolbarControls();
     void refreshBrowserLocation(const QString &path);
     void syncViewModeSegmentToolTips();

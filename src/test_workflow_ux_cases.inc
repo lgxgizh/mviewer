@@ -467,7 +467,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "empty Browse disables favorite commands without an active folder");
     CHECK(compareAction && !compareAction->isEnabled(),
           "empty Browse disables Compare until at least two images are available");
-    CHECK(browserToolBar && browserToolBar->actions().contains(compareAction),
+    auto *compareButton = w.findChild<QToolButton *>(QStringLiteral("compareToolbarButton"));
+    CHECK(browserToolBar && compareButton && compareButton->defaultAction() == compareAction &&
+              browserToolBar->isAncestorOf(compareButton) && compareButton->isVisible(),
           "compare action is located on browser toolbar");
     CHECK(compareAction && compareAction->toolTip().contains(QStringLiteral("2–8")),
           "compare action tooltip explains 2–8 selection requirement when disabled");

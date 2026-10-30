@@ -8,8 +8,10 @@
 #include "widgets/ViewModeSegment.h"
 
 #include <QDir>
+#include <QEvent>
 #include <QFileInfo>
 #include <QFontMetrics>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QLayout>
 #include <QMouseEvent>
@@ -23,6 +25,53 @@
 
 namespace
 {
+
+// Keeps the trailing cluster (view segment, filter, Compare, search) pinned to
+// the right edge of the toolbar. QToolBar overflows items from the end into its
+// extension menu, so hosting the cluster as ordinary items let the search field
+// vanish on narrower windows. The bar reserves the cluster width as a right
+// contents margin; only the action buttons can overflow.
+class TrailingClusterPin final : public QObject
+{
+  public:
+    TrailingClusterPin(QToolBar *bar, QWidget *cluster)
+        : QObject(bar), m_bar(bar), m_cluster(cluster)
+    {
+        bar->installEventFilter(this);
+        cluster->installEventFilter(this);
+    }
+
+    void place()
+    {
+        if (!m_bar || !m_cluster)
+            return;
+        const QSize hint = m_cluster->sizeHint();
+        constexpr int kEdge = 8;
+        const int reserve = hint.width() + kEdge;
+        if (m_bar->contentsMargins() != QMargins(0, 0, reserve, 0))
+            m_bar->setContentsMargins(0, 0, reserve, 0);
+        const int y = qMax(0, (m_bar->height() - hint.height()) / 2);
+        m_cluster->setGeometry(m_bar->width() - reserve, y, hint.width(), hint.height());
+        m_cluster->raise();
+    }
+
+  protected:
+    bool eventFilter(QObject *watched, QEvent *event) override
+    {
+        const QEvent::Type type = event->type();
+        if (type == QEvent::Resize || type == QEvent::Show || type == QEvent::LayoutRequest ||
+            type == QEvent::StyleChange || type == QEvent::FontChange)
+        {
+            if (watched == m_bar || watched == m_cluster)
+                place();
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+  private:
+    QToolBar *m_bar;
+    QWidget *m_cluster;
+};
 
 // Folder title and path share one narrow slot. sizeHint follows the full
 // string (clamped); the painted text elides so a long path cannot widen the bar.
@@ -245,27 +294,24 @@ void MainWindow::buildUnifiedToolbar()
     installNavigationCollapse();
 }
 
-void MainWindow::addComparePill(QToolBar *bar)
+void MainWindow::addComparePill(QWidget *cluster)
 {
-    if (!bar || !m_actCompare)
+    if (!cluster || !m_actCompare)
         return;
     m_actCompare->setIcon(mviewer::ui::toolbarIcon("compare"));
     m_actCompare->setIconText(tr("Compare"));
     m_actCompare->setToolTip(actTip(tr("Select 2–8 images to compare"), m_actCompare));
-    if (!bar->actions().contains(m_actCompare))
-        bar->addAction(m_actCompare);
-    auto *button = qobject_cast<QToolButton *>(bar->widgetForAction(m_actCompare));
-    if (!button)
-        return;
+    auto *button = new QToolButton(cluster);
     button->setObjectName(QStringLiteral("compareToolbarButton"));
+    button->setDefaultAction(m_actCompare);
     button->setAutoRaise(false);
     button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    button->setIconSize(QSize(mviewer::ui::kToolbarIconPx, mviewer::ui::kToolbarIconPx));
     button->setProperty("pill", true);
     button->setProperty("primary", true);
     button->setFocusPolicy(Qt::NoFocus);
     button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
-    button->style()->unpolish(button);
-    button->style()->polish(button);
+    cluster->layout()->addWidget(button);
 }
 
 void MainWindow::attachUnifiedToolbarControls()
@@ -274,12 +320,17 @@ void MainWindow::attachUnifiedToolbarControls()
     if (!bar || bar->property("unifiedControls").toBool())
         return;
     bar->setProperty("unifiedControls", true);
+    auto *cluster = new QWidget(bar);
+    cluster->setObjectName(QStringLiteral("browserToolbarTrailing"));
+    auto *row = new QHBoxLayout(cluster);
+    row->setContentsMargins(0, 0, 0, 0);
+    row->setSpacing(6);
     if (m_viewModeCombo)
     {
         detachFromLayout(m_viewModeCombo);
         m_viewModeCombo->setParent(bar);
         m_viewModeCombo->hide();
-        auto *segment = new ViewModeSegment(bar);
+        auto *segment = new ViewModeSegment(cluster);
         segment->setObjectName(QStringLiteral("viewModeSegment"));
         segment->setProperty("segmented", true);
         segment->setFixedHeight(mviewer::ui::metrics::kControlHeight);
@@ -292,29 +343,31 @@ void MainWindow::attachUnifiedToolbarControls()
             segmentMode(int(Mode::Filmstrip), icon("view_filmstrip"), {}),
         });
         segment->bind(m_viewModeCombo);
-        bar->addWidget(segment);
+        row->addWidget(segment);
         syncViewModeSegmentToolTips();
     }
     if (m_typeFilterCombo)
     {
         detachFromLayout(m_typeFilterCombo);
-        m_typeFilterCombo->setParent(bar);
+        m_typeFilterCombo->setParent(cluster);
         m_typeFilterCombo->setProperty("pill", true);
         m_typeFilterCombo->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
         m_typeFilterCombo->setMaximumWidth(168);
-        bar->addWidget(m_typeFilterCombo);
+        row->addWidget(m_typeFilterCombo);
         m_typeFilterCombo->show();
     }
-    addComparePill(bar);
+    addComparePill(cluster);
     if (m_searchEdit)
     {
         detachFromLayout(m_searchEdit);
-        m_searchEdit->setParent(bar);
-        m_searchEdit->setMinimumWidth(96);
-        m_searchEdit->setMaximumWidth(220);
-        bar->addWidget(m_searchEdit);
+        m_searchEdit->setParent(cluster);
+        m_searchEdit->setFixedWidth(176);
+        row->addWidget(m_searchEdit);
         m_searchEdit->show();
     }
+    auto *pin = new TrailingClusterPin(bar, cluster);
+    cluster->show();
+    pin->place();
 }
 
 void MainWindow::syncViewModeSegmentToolTips()
