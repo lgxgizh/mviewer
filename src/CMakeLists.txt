@@ -44,6 +44,7 @@ add_library(mviewer_core SHARED
     core/image/Encoder.cpp
     core/image/ImageFormats.cpp
     core/image/FrameSequence.cpp
+    core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
     core/image/ImageFileRotate.cpp
