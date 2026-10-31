@@ -18,7 +18,9 @@
 #include "core/TagStore.h"
 #include "core/filesystem/AtomicFile.h"
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QTemporaryDir>
 
 #include <chrono>
@@ -210,16 +212,46 @@ void testRatingStoreCoalescingAndFlush()
           "official ratings file byte-identical after a failed flush");
 
     // Retry: the worker re-arms the dirty bit after a failure and persists on
-    // the next quiet period; the last update must NOT be dropped.
+    // the next quiet period; the last update must NOT be dropped. The fault
+    // stays up across one quiet period (the worker waits 100 ms) so the first
+    // attempt fails. The assertion is the poll for the line, not a fixed
+    // 350 ms sleep on either side of clearing the fault.
     setAtomicWriteFaults({false, true, false});
     rs.setRating("img_retry.png", 3);
-    std::this_thread::sleep_for(std::chrono::milliseconds(350)); // worker retry window
-    setAtomicWriteFaults({});
-    std::this_thread::sleep_for(std::chrono::milliseconds(350)); // successful retry
+    const auto retryStart = std::chrono::steady_clock::now();
+    auto retryDeadline = retryStart + std::chrono::seconds(3);
+    bool faultCleared = false;
+    bool persisted = false;
+    while (std::chrono::steady_clock::now() < retryDeadline)
+    {
+        if (QCoreApplication::instance())
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        const bool hasLine = readAll(ratingsPath).find("3|img_retry.png") != std::string::npos;
+        if (!faultCleared)
+        {
+            if (hasLine)
+                break;
+            const auto heldFor = std::chrono::steady_clock::now() - retryStart;
+            if (heldFor >= std::chrono::milliseconds(200))
+            {
+                setAtomicWriteFaults({});
+                faultCleared = true;
+                // The successful retry gets its own multi-second deadline.
+                // Clearing the fault is not the assertion.
+                retryDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            }
+        }
+        else if (hasLine)
+        {
+            persisted = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (!faultCleared)
+        setAtomicWriteFaults({});
+    CHECK(persisted, "the retried write persisted the update that first failed");
     CHECK(rs.save(), "post-retry flush succeeds");
-    onDisk = readAll(ratingsPath);
-    CHECK(onDisk.find("3|img_retry.png") != std::string::npos,
-          "the retried write persisted the update that first failed");
 
     QDir(tmp.path()).removeRecursively();
 }
