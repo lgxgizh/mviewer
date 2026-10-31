@@ -26,15 +26,24 @@ $ErrorActionPreference = 'Stop'
 $commit = ((git -C $Repo rev-parse --short HEAD 2>$null) + '')
 $date = Get-Date -Format 'yyyy-MM-dd'
 
-# Locate the current run's report.
+# Locate the current run's report. An explicit -BenchmarkJson is the nightly
+# quality artifact; a missing file is a failure so publish-health does not
+# commit a trend with no point. A bare invocation may still skip.
+$explicit = -not [string]::IsNullOrWhiteSpace($BenchmarkJson)
 $bj = $BenchmarkJson
-if (-not $bj -or -not (Test-Path $bj)) {
+if ($explicit) {
+    if (-not (Test-Path -LiteralPath $bj)) {
+        Write-Host "benchmark_trend: benchmark report not found: $BenchmarkJson"
+        exit 1
+    }
+}
+else {
     $cand = Get-ChildItem -Path (Join-Path $Repo 'build_msvc') -Recurse -Filter benchmark_report.json -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($cand) { $bj = $cand.FullName }
-}
-if (-not $bj -or -not (Test-Path $bj)) {
-    Write-Host "benchmark_trend: no benchmark_report.json found; skipping"
-    exit 0
+    if (-not $bj -or -not (Test-Path -LiteralPath $bj)) {
+        Write-Host "benchmark_trend: no benchmark_report.json found; skipping"
+        exit 0
+    }
 }
 
 try { $b = Get-Content $bj -Raw -Encoding UTF8 | ConvertFrom-Json }

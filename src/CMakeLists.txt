@@ -2620,6 +2620,14 @@ add_test(NAME architecture_gate_regression
         ${CMAKE_SOURCE_DIR})
 set_tests_properties(architecture_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
+# ADR gate: ImageRepository, src/core/compare/, and compareworkspace are
+# protected, and a failed git diff is a non-zero result rather than a pass.
+add_test(NAME adr_gate_regression
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/adr_gate_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(adr_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # M52: complexity responsibility-TU guardrail regression. A planted 1001-line
 # responsibility file must fail, while two legal sub-1000-line TUs remain
 # visible as warnings and pass the hard gate.

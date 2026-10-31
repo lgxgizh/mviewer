@@ -37,6 +37,9 @@ jobs:
   asan:
     name: ASan / LSan (clang-cl)
     runs-on: windows-2022
+    # MSVC configure+build is about 40 min. 180 covers that plus the suite so
+    # one hung test cannot hold the nightly concurrency group for 6 h.
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -111,7 +114,7 @@ jobs:
           # hook, so the product minidump handler never runs (the test stays in
           # the PR Gate suite). bench_* budgets are meaningless under ASan.
           $excludeRegex = "product_workflow_gate|product_browse_tests|crashhandler_tests|bench_"
-          ctest --output-on-failure -j4 -E $excludeRegex
+          ctest --output-on-failure -j4 --timeout 600 -E $excludeRegex
 
   # ---------------------------------------------------------------------------
   # asan-linux — AddressSanitizer + LeakSanitizer via native Linux GCC
@@ -178,7 +181,7 @@ jobs:
           # deliberate crash is Windows SEH / minidump (and ASan intercepts it).
           # The rest are PowerShell script gates (COMMAND powershell in
           # src/CMakeLists.txt); Linux runners have no powershell.
-          ctest --output-on-failure -j 4 --timeout 600 -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
+          ctest --output-on-failure -j 4 --timeout 600 -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
   # ---------------------------------------------------------------------------
   # ubsan — UndefinedBehaviorSanitizer via clang-cl
@@ -186,6 +189,8 @@ jobs:
   ubsan:
     name: UBSan (clang-cl)
     runs-on: windows-2022
+    # Same bound as the Windows ASan job: build is about 40 min, tests the rest.
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -269,11 +274,14 @@ jobs:
           # UI-responsiveness check. bench_* budgets are meaningless under
           # UBSan (bench_smoke alone was about a minute).
           $excludeRegex = "product_workflow_gate|product_browse_tests|bench_"
-          ctest --output-on-failure -j4 -E $excludeRegex
+          ctest --output-on-failure -j4 --timeout 600 -E $excludeRegex
 
       - name: Locate UBSan traps (diagnostic)
         # Trap mode prints nothing, so ctest only says "Illegal". Re-run the
-        # first few failing tests under cdb and print the stack at the ud2.
+        # first few failing tests under cdb. clang's ud1 ModRM byte is the
+        # UBSan check kind; a Select-String filter drops those faulting bytes.
+        # Print rip, the surrounding disassembly, and the raw bytes, and keep
+        # the full cdb transcript for the artifact upload below.
         if: failure()
         continue-on-error: true
         timeout-minutes: 15
@@ -282,6 +290,8 @@ jobs:
           if (-not (Test-Path $cdb)) { Write-Host "cdb.exe not found"; exit 0 }
           $failed = "build_ubsan\Testing\Temporary\LastTestsFailed.log"
           if (-not (Test-Path $failed)) { Write-Host "no failed-test log"; exit 0 }
+          $logDir = Join-Path (Get-Location).Path "ubsan-cdb-logs"
+          New-Item -ItemType Directory -Force -Path $logDir | Out-Null
           $env:QT_QPA_PLATFORM = "offscreen"
           $tests = (ctest --test-dir build_ubsan --show-only=json-v1 | ConvertFrom-Json).tests
           $names = Get-Content $failed | ForEach-Object { ($_ -split ':', 2)[1] } | Select-Object -First 8
@@ -292,14 +302,36 @@ jobs:
             $testArgs = @($t.command | Select-Object -Skip 1)
             $wd = ($t.properties | Where-Object { $_.name -eq "WORKING_DIRECTORY" }).value
             if (-not $wd) { $wd = Split-Path $exe }
+            $safe = ($n -replace '[^A-Za-z0-9._-]', '_')
+            $log = Join-Path $logDir "$safe.log"
+            # r / u / db show the trap kind. db @rip is the faulting bytes
+            # (ud1 immediate); u starts before rip in case the trap advanced it.
+            $cmd = ".echo ===UBSAN_TRAP===; .lines -e; r; u @rip-0x10 L8; .echo ===UBSAN_BYTES===; db @rip L8; .echo ===UBSAN_STACK===; kb; q"
             Write-Host "::group::$n"
+            Write-Host "full cdb log: $log"
             Push-Location $wd
-            & $cdb -g -G -y (Split-Path $exe) -c ".lines -e; kn 30; ub @rip L20; u @rip L2; r; q" $exe @testArgs 2>&1 |
-              Select-String -Pattern 'Illegal instruction|Access violation|^[0-9a-f]{2} |^[0-9a-f]{8}`[0-9a-f]{8} |^r[a-z0-9]+=|^[A-Za-z_!:<>+0-9 ]+:$' |
-              Select-Object -First 70 | ForEach-Object { Write-Host $_.Line }
+            & $cdb -g -G -y (Split-Path $exe) -c $cmd $exe @testArgs *> $log
             Pop-Location
+            if (Test-Path -LiteralPath $log) {
+              $lines = @(Get-Content -LiteralPath $log)
+              $start = 0
+              for ($i = 0; $i -lt $lines.Count; $i++) {
+                if ($lines[$i] -match '===UBSAN_TRAP===') { $start = $i; break }
+              }
+              if ($lines.Count -gt 0) {
+                $lines[$start..($lines.Count - 1)] | ForEach-Object { Write-Host $_ }
+              }
+            }
             Write-Host "::endgroup::"
           }
+
+      - name: Upload UBSan cdb logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubsan-cdb-logs
+          path: ubsan-cdb-logs/
+          if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
   # clazy — Qt-aware static analysis (ubuntu, ADVISORY signal for nightly)
@@ -346,6 +378,10 @@ jobs:
   quality:
     name: Benchmark + Golden Image (MSVC)
     runs-on: windows-2022
+    # build.ps1 Test is an MSVC build (~40 min) plus the suite and a second
+    # benchmark. Bound the job so a hang cannot hold the nightly slot for 6 h.
+    # Per-test ctest timeout stays inside build.ps1 (not edited here).
+    timeout-minutes: 180
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -378,7 +414,10 @@ jobs:
           # Nightly compares against the committed CI-profile baseline. The PR
           # gate uses --profile auto, while this trend job remains stable when
           # the hosted runner's exposed core count changes.
-          & $b.FullName --enforce --regression --profile ci --budget benchmark/performance_budget.json 2>&1 | Tee-Object -FilePath benchmark_regression.txt
+          # --results is what publish-health's benchmark_trend / health_score
+          # read (uploaded below as nightly-quality-report). Without it the
+          # dashboard Performance cell stays n/a.
+          & $b.FullName --enforce --regression --profile ci --budget benchmark/performance_budget.json --results build_msvc/benchmark_report.json 2>&1 | Tee-Object -FilePath benchmark_regression.txt
         # Exit non-zero on >10% regression -> alerts the nightly run.
         # (golden_image is already verified inside `build.ps1 Test` above.)
 
@@ -453,6 +492,9 @@ jobs:
   coverage:
     name: Coverage (OpenCppCoverage, advisory)
     runs-on: windows-2022
+    # Advisory, but still bounded: an instrumented hang must not occupy the
+    # nightly concurrency group until the 6 h default.
+    timeout-minutes: 180
     continue-on-error: true
     steps:
       - name: Checkout
@@ -498,7 +540,7 @@ jobs:
             --sources "$env:GITHUB_WORKSPACE\src" `
             --excluded_sources "$env:GITHUB_WORKSPACE\src\benchmark" `
             --cover_children `
-            -- ctest --output-on-failure -j2 -E "crashhandler_tests|bench_|product_workflow_gate|product_browse_tests"
+            -- ctest --output-on-failure -j2 --timeout 600 -E "crashhandler_tests|bench_|product_workflow_gate|product_browse_tests"
           if (-not (Test-Path coverage.xml)) { Write-Host "::warning:: coverage.xml not produced"; exit 1 }
 
       - name: Per-module coverage summary + dashboard
@@ -558,7 +600,10 @@ jobs:
     name: Publish health (auto-commit quality docs)
     runs-on: ubuntu-latest
     needs: [quality, coverage]
-    if: github.event_name == 'schedule'
+    # Schedule only. A custom if replaces the implicit success() check, so
+    # name quality explicitly: a red quality job must not commit the dashboard.
+    # coverage stays advisory (continue-on-error) and is not required here.
+    if: ${{ github.event_name == 'schedule' && needs.quality.result == 'success' }}
     permissions:
       contents: write
     steps:
