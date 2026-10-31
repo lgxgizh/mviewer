@@ -18,6 +18,8 @@
 //   T7  corrupt/truncated + missing: probe may answer, decode fails cleanly;
 //       missing file -> nullptr
 //   T8  EXIF orientation probe: displayed geometry is swapped for orientation 6
+//   T8b oriented region: non-square clip of that fixture comes back at the
+//       requested post-transform size (orientations 5-8 swap the scale axes)
 //
 // Decoder registry mutations (T6) are test-local, restored between cases;
 // production code is untouched.
@@ -383,6 +385,43 @@ int main(int argc, char **argv)
                 // rotated image is 64x128 (aspect 1:2 preserved).
                 CHECK(lod.width == 64 && lod.height == 128,
                       "T8: oriented LOD respects the rotated aspect (64x128)");
+            }
+        }
+    }
+
+    // ── T8b: orientation-6 region scale is swapped before the transform ─────
+    // Raw file is 4000x2000, displayed 2000x4000. The top-left marker is red
+    // for about 250x125 raw pixels. A 200x100 raw clip of that marker, asked
+    // for as 100x200 displayed pixels, must come back 100x200. T8 already
+    // proves auto-transform on this file, so a 100x200 result is the oriented
+    // size, not the pre-transform scaled size. A missing swap rotates a
+    // 100x200 scale into 200x100.
+    {
+        MARK("T8b start");
+        auto src = SourceImage::open(orient6);
+        CHECK(src != nullptr, "T8b: orientation-6 fixture opens");
+        if (src)
+        {
+            auto regionR = src->decodeRegion({0, 0, 200, 100}, 100, 200);
+            ImageData region = regionR.pixels;
+            CHECK(regionR.ok && !region.isNull(), "T8b: oriented region decodes");
+            if (!region.isNull())
+            {
+                CHECK(region.width == 100 && region.height == 200,
+                      "T8b: post-transform region is 100x200 (not 200x100)");
+                CHECK(region.format == PixelFormat::RGB24 && region.buffer && region.width > 0 &&
+                          region.height > 0,
+                      "T8b: region is RGB24");
+                if (region.format == PixelFormat::RGB24 && region.buffer)
+                {
+                    const int cx = region.width / 2;
+                    const int cy = region.height / 2;
+                    const uint8_t *p = region.buffer->data() +
+                                       static_cast<size_t>(cy) * region.stride() +
+                                       static_cast<size_t>(cx) * 3;
+                    CHECK(p[0] > 180 && p[1] < 80 && p[2] < 80,
+                          "T8b: clip stays inside the red top-left marker");
+                }
             }
         }
     }

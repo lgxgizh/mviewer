@@ -2,7 +2,42 @@
 // mainwindow_ui_connections.cpp to stay under the line budget.
 #include "mainwindow_p.h"
 
+#include <QHash>
+
+#include <algorithm>
+#include <iterator>
 #include <vector>
+
+namespace
+{
+// Images whose base name matches an added, modified or removed sidecar. The
+// gallery is indexed once per delta so a sidecar burst is not files x sidecars.
+QStringList imagesForSidecarDelta(const mviewer::core::DirectoryDelta &delta,
+                                  const QList<ThumbnailPanel::Entry> &images)
+{
+    const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
+        &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
+    QStringList out;
+    if (std::all_of(std::begin(lists), std::end(lists), [](const auto *l) { return l->empty(); }))
+        return out;
+    QHash<QString, QStringList> imagesByBase;
+    imagesByBase.reserve(images.size());
+    for (const auto &image : images)
+        imagesByBase[QFileInfo(image.path).completeBaseName()].append(image.path);
+    for (const auto *list : lists)
+    {
+        for (const auto &entry : *list)
+        {
+            const QString sidecar =
+                QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
+            const auto found = imagesByBase.constFind(QFileInfo(sidecar).completeBaseName());
+            if (found != imagesByBase.cend())
+                out.append(found.value());
+        }
+    }
+    return out;
+}
+} // namespace
 
 void MainWindow::connectNavigationSignals()
 {
@@ -22,21 +57,8 @@ void MainWindow::connectNavigationSignals()
     connect(m_directoryMonitor, &DirectoryMonitor::directoryDeltaReady, this,
             [this](const mviewer::core::DirectoryDelta &delta)
             {
-                QStringList sidecarImages;
-                const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
-                    &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
-                for (const auto *list : lists)
-                {
-                    for (const auto &entry : *list)
-                    {
-                        const QString sidecar = QString::fromUtf8(
-                            entry.path.data(), static_cast<int>(entry.path.size()));
-                        const QString base = QFileInfo(sidecar).completeBaseName();
-                        for (const auto &image : m_thumbnailPanel->entries())
-                            if (QFileInfo(image.path).completeBaseName() == base)
-                                sidecarImages.append(image.path);
-                    }
-                }
+                QStringList sidecarImages =
+                    imagesForSidecarDelta(delta, m_thumbnailPanel->entries());
                 sidecarImages.removeDuplicates();
                 scheduleSidecarImportPaths(sidecarImages);
             });
@@ -47,10 +69,9 @@ void MainWindow::connectNavigationSignals()
                     !DirectoryTree::equivalentPath(m_directory->currentDirectory(), path))
                     return;
                 if (!available)
-                    statusBar()->showMessage(
-                        QStringLiteral("Directory temporarily unavailable: %1").arg(path));
+                    statusBar()->showMessage(tr("Directory temporarily unavailable: %1").arg(path));
                 else if (statusBar()->currentMessage().startsWith(
-                             QStringLiteral("Directory temporarily unavailable")))
+                             tr("Directory temporarily unavailable: %1").section('%', 0, 0)))
                     statusBar()->clearMessage();
             });
     // M37: the asynchronous gallery scan publishes the final visible sequence
@@ -72,8 +93,7 @@ void MainWindow::connectNavigationSignals()
                     m_imageList->setPaths(paths, directory);
                 if (activeThumbnailPanel() == m_thumbnailPanel && !paths.isEmpty() && m_directory &&
                     DirectoryTree::equivalentPath(m_directory->currentDirectory(), directory))
-                    statusBar()->showMessage(QStringLiteral("Loaded %1 images").arg(paths.size()),
-                                             2500);
+                    statusBar()->showMessage(tr("Loaded %1 images").arg(paths.size()), 2500);
             });
     connect(m_imageList, &ImageListModel::pathsChanged, m_imageViewer,
             &ImageViewer::setBrowseSequence);
@@ -109,7 +129,7 @@ void MainWindow::connectNavigationSignals()
                 // import for every navigation entry point, including tree
                 // clicks/Enter, breadcrumb, Back/Forward, refresh, and restore.
                 scheduleSidecarImport(path);
-                statusBar()->showMessage(QStringLiteral("Scanning…"), 8000);
+                statusBar()->showMessage(tr("Scanning…"), 8000);
                 // With no image selected yet, the title carries the folder.
                 if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));

@@ -112,7 +112,7 @@ void ThumbnailPanel::armScanWatchdog(int gen)
                            if (!m_allEntries.isEmpty())
                                return;
                            m_scanStallAnnounced = true;
-                           emit browseStatusChanged(QStringLiteral("Failed to load directory"));
+                           emit browseStatusChanged(tr("Failed to load directory"));
                        });
 }
 
@@ -124,5 +124,5 @@ void ThumbnailPanel::noteScanProgress(int gen)
     m_scanStallAnnounced = false;
     armScanWatchdog(gen);
     if (resumed)
-        emit browseStatusChanged(QStringLiteral("Scanning…"));
+        emit browseStatusChanged(tr("Scanning…"));
 }

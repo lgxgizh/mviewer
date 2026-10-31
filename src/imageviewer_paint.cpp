@@ -568,7 +568,10 @@ void ImageViewer::drawDisplayRaster(QPainter &painter) const
             scheduleLodOverlayDerivation();
     }
     painter.save();
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    // Nearest when the view is at least one device pixel per source pixel.
+    // Downsamples (fit-to-window) stay smooth.
+    painter.setRenderHint(QPainter::SmoothPixmapTransform,
+                          lodRasterUsesSmoothing(m_view.scale, devicePixelRatioF()));
     painter.drawImage(QRect(sx, sy, sw, sh), *drawn);
     painter.restore();
 }
@@ -632,27 +635,38 @@ void ImageViewer::drawSelection(QPainter &painter)
 {
     if (!m_selectMode)
         return;
-    const QRect region = m_selecting ? QRect(m_selStart, m_selEnd).normalized() : selectedRegion();
-    if (!region.isValid() || (!m_selecting && region.width() <= 5) ||
-        (!m_selecting && region.height() <= 5))
+    const QRect region = selectionWidgetRect();
+    // The 5 px threshold is only for an in-progress drag. A committed image
+    // rect is drawn at whatever size the current zoom maps it to.
+    if (region.isEmpty() || (m_selecting && (region.width() <= 5 || region.height() <= 5)))
         return;
     painter.save();
     painter.setPen(QPen(QColor(255, 255, 0), 1));
     painter.setBrush(QColor(255, 255, 0, 80));
     painter.drawRect(region);
-    if (m_frame && m_frame->width() > 0)
+    int imageWidth = 0;
+    int imageHeight = 0;
+    if (m_selecting)
     {
-        const int imageWidth = static_cast<int>(region.width() / m_view.scale);
-        const int imageHeight = static_cast<int>(region.height() / m_view.scale);
-        if (imageWidth > 0 && imageHeight > 0)
+        if (hasDisplayImage() && m_view.scale > 0.0)
         {
-            const QString sizeText = QString("%1×%2").arg(imageWidth).arg(imageHeight);
-            painter.setPen(QColor(255, 255, 0));
-            QFont font = painter.font();
-            font.setBold(true);
-            painter.setFont(font);
-            painter.drawText(region.bottomRight() + QPoint(8, 14), sizeText);
+            imageWidth = static_cast<int>(region.width() / m_view.scale);
+            imageHeight = static_cast<int>(region.height() / m_view.scale);
         }
+    }
+    else if (!m_selectionImage.isEmpty())
+    {
+        imageWidth = m_selectionImage.width();
+        imageHeight = m_selectionImage.height();
+    }
+    if (imageWidth > 0 && imageHeight > 0)
+    {
+        const QString sizeText = QString("%1×%2").arg(imageWidth).arg(imageHeight);
+        painter.setPen(QColor(255, 255, 0));
+        QFont font = painter.font();
+        font.setBold(true);
+        painter.setFont(font);
+        painter.drawText(region.bottomRight() + QPoint(8, 14), sizeText);
     }
     painter.restore();
 }

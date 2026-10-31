@@ -567,35 +567,6 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
     return true;
 }
 
-bool ImageViewer::hasRealSelection() const
-{
-    // Same threshold as the ROI commit: QRect's inclusive edge makes a click
-    // 1×1, and a couple of pixels of jitter is still not a drag.
-    const QRect region = QRect(m_selStart, m_selEnd).normalized();
-    return region.width() > 5 && region.height() > 5;
-}
-
-bool ImageViewer::clearRealSelectionForEscape()
-{
-    if (!hasRealSelection())
-    {
-        if (m_selecting || m_selStart != m_selEnd)
-        {
-            m_selecting = false;
-            m_selStart = m_selEnd = QPoint();
-            update();
-        }
-        return false;
-    }
-    m_selecting = false;
-    m_selStart = m_selEnd = QPoint();
-    if (m_selectMode)
-        setSelectMode(false);
-    else
-        update();
-    return true;
-}
-
 bool ImageViewer::dismissOpenMetadata()
 {
     bool dismissed = false;
@@ -636,41 +607,6 @@ bool ImageViewer::handleViewerEscape()
     exitFullscreenForClose();
     close();
     return true;
-}
-
-void ImageViewer::commitSelectionDrag()
-{
-    m_selecting = false;
-    if (!hasRealSelection())
-    {
-        m_selStart = m_selEnd = QPoint();
-        update();
-        return;
-    }
-    const QRect r = selectedRegion();
-    // ROI stats come from the decoded frame, off the UI thread.
-    if (!(m_view.scale > 0.0))
-        return;
-    const QRect imgRect =
-        QRect(static_cast<int>(std::floor((r.x() - m_view.offsetX) / m_view.scale)),
-              static_cast<int>(std::floor((r.y() - m_view.offsetY) / m_view.scale)),
-              static_cast<int>(std::round(r.width() / m_view.scale)),
-              static_cast<int>(std::round(r.height() / m_view.scale)))
-            .normalized();
-    const QSize bounds = displaySize();
-    const QRect valid = bounds.isEmpty()
-                            ? QRect()
-                            : imgRect.intersected(QRect(0, 0, bounds.width(), bounds.height()));
-    if (!valid.isEmpty())
-    {
-        scheduleRoiStats(valid);
-        emit selectionChanged(valid);
-    }
-    else
-    {
-        cancelRoiStats();
-        emit selectionChanged(QRect());
-    }
 }
 
 void ImageViewer::revealInExplorer()

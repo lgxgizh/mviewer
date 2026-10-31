@@ -2,7 +2,8 @@
 //  * every rating/flag writer (keyboard, gallery context menu, metadata panel)
 //    re-evaluates an active gallery rating/pick filter (single pipeline);
 //  * an empty ImageViewer selection reaches the AnalysisPanel, and loading a
-//    new image drops an unlocked ROI.
+//    new image drops an unlocked ROI;
+//  * a committed viewer ROI is stored in image pixels and follows pan.
 #include "directorymodel.h"
 #include "directorytree.h"
 #include "imageviewer.h"
@@ -211,6 +212,62 @@ void testRoiResetOnNewImage(const QString &a, const QString &b)
     viewer.close();
     pump(30);
 }
+
+void testSelectionFollowsPan(const QString &path)
+{
+    std::cout << "── P0: committed ROI is image space and follows pan ──\n";
+    ImageViewer viewer;
+    viewer.resize(640, 480);
+    viewer.show();
+    std::shared_ptr<ImageFrame> ready;
+    QObject::connect(&viewer, &ImageViewer::imageReady,
+                     [&ready](const std::shared_ptr<ImageFrame> &f) { ready = f; });
+    QList<QRect> published;
+    QObject::connect(&viewer, &ImageViewer::selectionChanged,
+                     [&published](const QRect &r) { published << r; });
+    viewer.setImage(path);
+    CHECK(waitFor([&] { return ready != nullptr; }), "image becomes ready for selection");
+    pump(60);
+    dragSelection(viewer);
+    const QRect committed = viewer.committedSelectionForTest();
+    CHECK(!committed.isEmpty(), "commit stores an image rect");
+    CHECK(!published.isEmpty() && published.last() == committed,
+          "selectionChanged matches the stored image rect");
+    CHECK(committed.width() <= 64 && committed.height() <= 48,
+          "stored rect is image pixels, not the widget drag");
+    const QRect screenBefore = viewer.selectionScreenRectForTest();
+    CHECK(!screenBefore.isEmpty(), "committed rect maps into the widget");
+
+    const QPointF a(viewer.width() * 0.25, viewer.height() * 0.25);
+    const QPointF b = a + QPointF(60, 40);
+    QMouseEvent press(QEvent::MouseButtonPress, a, viewer.mapToGlobal(a), Qt::MiddleButton,
+                      Qt::MiddleButton, Qt::NoModifier);
+    QApplication::sendEvent(&viewer, &press);
+    QMouseEvent move(QEvent::MouseMove, b, viewer.mapToGlobal(b), Qt::NoButton, Qt::MiddleButton,
+                     Qt::NoModifier);
+    QApplication::sendEvent(&viewer, &move);
+    QMouseEvent release(QEvent::MouseButtonRelease, b, viewer.mapToGlobal(b), Qt::MiddleButton,
+                        Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(&viewer, &release);
+    pump(20);
+
+    CHECK(viewer.committedSelectionForTest() == committed, "pan leaves the image rect unchanged");
+    const QRect screenAfter = viewer.selectionScreenRectForTest();
+    CHECK(screenAfter.x() == screenBefore.x() + 60 && screenAfter.y() == screenBefore.y() + 40,
+          "mapped selection shifts by the pan");
+    CHECK(screenAfter.size() == screenBefore.size(), "pan does not resize the mapped selection");
+
+    viewer.zoomIn();
+    CHECK(viewer.committedSelectionForTest() == committed, "zoom leaves the image rect unchanged");
+    const QRect screenZoomed = viewer.selectionScreenRectForTest();
+    CHECK(screenZoomed.size() != screenAfter.size(), "zoom changes the mapped selection size");
+
+    QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+    QApplication::sendEvent(&viewer, &esc);
+    CHECK(viewer.committedSelectionForTest().isEmpty(), "Esc clears the stored image rect");
+    CHECK(viewer.selectionScreenRectForTest().isEmpty(), "Esc clears the mapped selection");
+    pump(20);
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -239,6 +296,7 @@ int main(int argc, char **argv)
 
     testRatingPipeline(dir, paths);
     testRoiResetOnNewImage(paths[0], paths[1]);
+    testSelectionFollowsPan(paths[0]);
 
     std::cout << "=== P0 rating/ROI tests: " << (g_failures == 0 ? "PASS" : "FAIL") << " ("
               << g_failures << " failures) ===\n";

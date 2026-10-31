@@ -224,4 +224,10 @@ class ImageRepository
     // this toolchain).
     void loadDirectoryAsyncImpl(const std::string &dirPath,
                                 std::function<void(std::vector<Result>)> callback, int maxImages);
+
+    // load() already probed multi-frame sources. Passing that sequence avoids
+    // a second probe in loadFrame and a third inside decode.
+    Result loadFrameWithSequence(const std::string &filePath, int frameIndex,
+                                 const LoadOptions &opts,
+                                 const mviewer::core::FrameSequenceInfo &probed);
 };

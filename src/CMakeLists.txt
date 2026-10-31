@@ -44,6 +44,7 @@ add_library(mviewer_core SHARED
     core/image/Encoder.cpp
     core/image/ImageFormats.cpp
     core/image/FrameSequence.cpp
+    core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
     core/image/ImageFileRotate.cpp
@@ -226,6 +227,7 @@ add_library(mviewer_ui STATIC
     imageviewer_loadingbar.cpp
     imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp
+    imageviewer_selection.cpp
     imageviewer_transform.cpp
     directorytree.cpp
     directorytree_navigate.cpp
