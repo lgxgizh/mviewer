@@ -279,23 +279,28 @@ int main(int argc, char **argv)
     //    hold is up. RawImageView::setImage() clears the transient display; the
     //    workspace has to put the held view back (GCC ASan nightly 2026-10-30
     //    caught this as a timing-dependent failure of cases 2 and 3).
+    //    Do not pump the event loop before the hold. A multi-second wait for the
+    //    scale lets that 80 ms timer deliver the raster first, and the hold then
+    //    has nothing to observe. repaint() pushes the engine scale without
+    //    running timers. The case fails if no new raster arrives while Space
+    //    is held.
     {
         const QPointF at(high->width() * 0.4, high->height() * 0.6);
         QWheelEvent wheel(at, high->mapToGlobal(at), QPoint(0, 0), QPoint(0, 120), Qt::NoButton,
                           Qt::ControlModifier, Qt::NoScrollPhase, false);
         QApplication::sendEvent(high, &wheel);
-        check(waitTrue([&] { return closeRel(high->scale(), ws->engine().cellScale(1), 1e-6); },
-                       3000),
+        ws->repaint();
+        check(closeRel(high->scale(), ws->engine().cellScale(1), 1e-6),
               "right pane took the new local zoom");
         const qint64 rasterBefore = high->image().cacheKey();
         holdAndCheck(ws, high, low, "raster landing mid-hold keeps the held view",
                      [&]
                      {
                          const bool landed = waitTrue(
-                             [&] { return high->image().cacheKey() != rasterBefore; }, 10000);
+                             [&] { return high->image().cacheKey() != rasterBefore; }, 5000);
                          std::printf("  raster for the held pane %s during the hold\n",
                                      landed ? "landed" : "did not land");
-                         check(high->hasTransientDisplay(),
+                         check(landed && high->hasTransientDisplay(),
                                "held pane still presents the other image after a raster landed");
                      });
     }

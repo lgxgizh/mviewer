@@ -1683,6 +1683,11 @@ add_test(NAME pluginexamples_tests COMMAND test_pluginexamples)
 target_sources(test_pluginexamples PRIVATE ${CMAKE_SOURCE_DIR}/plugins/example/ExampleExporterPlugin.cpp)
 add_test(NAME m3acceptance_tests COMMAND test_m3acceptance)
 add_test(NAME product_browse_tests COMMAND product_browse_tests)
+# Wall-clock budgets (directory listing, first thumbnail). Parallel ctest
+# makes them flake; the budgets themselves are unchanged. product_workflow_gate
+# is a separate chain, not a second registration of this test, and is serial
+# below because it launches this executable again.
+set_tests_properties(product_browse_tests PROPERTIES RUN_SERIAL TRUE)
 add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)
 add_test(NAME histogram_tests COMMAND histogram_tests)
 add_test(NAME ratingstore_tests COMMAND ratingstore_tests)
@@ -2836,6 +2841,10 @@ add_test(NAME product_workflow_gate
     COMMAND powershell -ExecutionPolicy Bypass -File
         ${CMAKE_SOURCE_DIR}/scripts/product_workflow_gate.ps1
         $<TARGET_FILE_DIR:product_browse_tests>)
+# The chain runs product_browse_tests.exe again. Those wall-clock budgets must
+# not share the CPU with the rest of the suite. This is not a duplicate
+# registration: the gate also runs compare, analysis, export, and workspace.
+set_tests_properties(product_workflow_gate PROPERTIES RUN_SERIAL TRUE)
 
 # ─── M10 Performance Engineering ─────────────────────────────────────────────
 # MemoryTracker + benchmark scenario structural tests are folded into core_tests
