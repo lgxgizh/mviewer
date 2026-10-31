@@ -2,6 +2,7 @@
 // mainwindow_ui_connections.cpp to stay under the line budget.
 #include "mainwindow_p.h"
 
+#include <QHash>
 #include <vector>
 
 void MainWindow::connectNavigationSignals()
@@ -25,16 +26,35 @@ void MainWindow::connectNavigationSignals()
                 QStringList sidecarImages;
                 const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
                     &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
+                bool hasSidecars = false;
                 for (const auto *list : lists)
                 {
-                    for (const auto &entry : *list)
+                    if (!list->empty())
                     {
-                        const QString sidecar = QString::fromUtf8(
-                            entry.path.data(), static_cast<int>(entry.path.size()));
-                        const QString base = QFileInfo(sidecar).completeBaseName();
-                        for (const auto &image : m_thumbnailPanel->entries())
-                            if (QFileInfo(image.path).completeBaseName() == base)
-                                sidecarImages.append(image.path);
+                        hasSidecars = true;
+                        break;
+                    }
+                }
+                if (hasSidecars)
+                {
+                    QHash<QString, QStringList> imagesByBase;
+                    const auto &images = m_thumbnailPanel->entries();
+                    imagesByBase.reserve(images.size());
+                    for (const auto &image : images)
+                    {
+                        imagesByBase[QFileInfo(image.path).completeBaseName()].append(image.path);
+                    }
+                    for (const auto *list : lists)
+                    {
+                        for (const auto &entry : *list)
+                        {
+                            const QString sidecar = QString::fromUtf8(
+                                entry.path.data(), static_cast<int>(entry.path.size()));
+                            const QString base = QFileInfo(sidecar).completeBaseName();
+                            const auto found = imagesByBase.constFind(base);
+                            if (found != imagesByBase.cend())
+                                sidecarImages.append(found.value());
+                        }
                     }
                 }
                 sidecarImages.removeDuplicates();

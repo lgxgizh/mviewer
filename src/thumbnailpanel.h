@@ -504,6 +504,9 @@ class ThumbnailPanel : public QListView
     void updateVisibleRange();
     QString thumbCacheKey(const QString &path, int size) const;
     void enforceThumbPixmapBudgetLocked() const;
+    // Caller holds m_thumbMtx. cacheKey is galleryPathKey + separator + size.
+    void rememberThumbReadyKeyLocked(const QString &cacheKey) const;
+    void forgetThumbReadyKeyLocked(const QString &cacheKey) const;
     bool hasRatingOrFlagFilter() const;
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
     struct ContextMenuActions;
@@ -560,7 +563,9 @@ class ThumbnailPanel : public QListView
     mutable QMutex m_thumbMtx;
     using ReadyPixmap = mviewer::tp::ReadyPixmap;
     mutable QHash<QString, ReadyPixmap> m_thumbReady; // key = path + size
-    mutable std::list<QString> m_thumbReadyLru;       // MRU at front, LRU at back
+    // galleryPathKey -> most recent full cache key. Alternate-size lookup is O(1).
+    mutable QHash<QString, QString> m_thumbReadyByPath;
+    mutable std::list<QString> m_thumbReadyLru; // MRU at front, LRU at back
     mutable qint64 m_thumbReadyBytes = 0;
     mutable uint64_t m_thumbReadyClock = 0;
     QSet<QString> m_thumbPending;

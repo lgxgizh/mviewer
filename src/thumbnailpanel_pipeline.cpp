@@ -31,6 +31,7 @@ void ThumbnailPanel::invalidateThumbnailCacheFor(const QString &path)
         {
             m_thumbReadyBytes = std::max<qint64>(0, m_thumbReadyBytes - it.value().bytes);
             m_thumbReadyLru.erase(it.value().lruIt);
+            forgetThumbReadyKeyLocked(it.key());
             it = m_thumbReady.erase(it);
         }
         else
@@ -63,6 +64,24 @@ void ThumbnailPanel::invalidateSourceImage(const QString &path)
     updateVisibleRange();
 }
 
+void ThumbnailPanel::rememberThumbReadyKeyLocked(const QString &cacheKey) const
+{
+    const int sep = cacheKey.indexOf(QChar(0x1f));
+    if (sep < 0)
+        return;
+    m_thumbReadyByPath.insert(cacheKey.left(sep), cacheKey);
+}
+
+void ThumbnailPanel::forgetThumbReadyKeyLocked(const QString &cacheKey) const
+{
+    const int sep = cacheKey.indexOf(QChar(0x1f));
+    if (sep < 0)
+        return;
+    auto mapped = m_thumbReadyByPath.find(cacheKey.left(sep));
+    if (mapped != m_thumbReadyByPath.end() && mapped.value() == cacheKey)
+        m_thumbReadyByPath.erase(mapped);
+}
+
 void ThumbnailPanel::enforceThumbPixmapBudgetLocked() const
 {
     while (!m_thumbReadyLru.empty() && (m_thumbReady.size() > kThumbPixmapCacheMaxEntries ||
@@ -74,6 +93,7 @@ void ThumbnailPanel::enforceThumbPixmapBudgetLocked() const
         if (it != m_thumbReady.end())
         {
             m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - it->bytes);
+            forgetThumbReadyKeyLocked(oldestKey);
             m_thumbReady.erase(it);
         }
     }
@@ -259,7 +279,9 @@ void ThumbnailPanel::flushThumbUpdates()
 QPixmap ThumbnailPanel::thumbReady(const QString &path) const
 {
     QMutexLocker lk(&m_thumbMtx);
-    auto it = m_thumbReady.find(thumbCacheKey(path, m_thumbSize));
+    const QString pathKey = galleryPathKey(path);
+    const QString exactKey = pathKey + QChar(0x1f) + QString::number(m_thumbSize);
+    auto it = m_thumbReady.find(exactKey);
     if (it != m_thumbReady.end())
     {
         it->lastUse = ++m_thumbReadyClock;
@@ -268,12 +290,13 @@ QPixmap ThumbnailPanel::thumbReady(const QString &path) const
     }
     // Fallback: if this path was decoded at any other size in memory, reuse it
     // instead of showing a blank placeholder (particularly in Details mode where
-    // any thumbnail can be scaled to 48x48).
-    const QString prefix = galleryPathKey(path) + QChar(0x1f);
-    for (auto alt = m_thumbReady.begin(); alt != m_thumbReady.end(); ++alt)
+    // any thumbnail can be scaled to 48x48). The by-path index keeps this O(1).
+    const auto altKey = m_thumbReadyByPath.constFind(pathKey);
+    if (altKey != m_thumbReadyByPath.cend())
     {
-        if (alt.key().startsWith(prefix) && !alt.value().pixmap.isNull())
-            return alt.value().pixmap;
+        const auto alt = m_thumbReady.constFind(*altKey);
+        if (alt != m_thumbReady.cend() && !alt->pixmap.isNull())
+            return alt->pixmap;
     }
     const ImageData img = ThumbnailPipeline::instance().findCached(path.toStdString(), m_thumbSize);
     if (!img.isNull())
@@ -284,15 +307,15 @@ QPixmap ThumbnailPanel::thumbReady(const QString &path) const
             const qint64 pixmapBytes = static_cast<qint64>(q.sizeInBytes());
             if (pixmapBytes <= kThumbPixmapCacheMaxBytes)
             {
-                const QString cacheKey = thumbCacheKey(path, m_thumbSize);
-                m_thumbReadyLru.push_front(cacheKey);
+                m_thumbReadyLru.push_front(exactKey);
                 ThumbnailPanel::ReadyPixmap ready;
                 ready.pixmap = QPixmap::fromImage(q);
                 ready.bytes = pixmapBytes;
                 ready.lastUse = ++m_thumbReadyClock;
                 ready.lruIt = m_thumbReadyLru.begin();
                 m_thumbReadyBytes += ready.bytes;
-                m_thumbReady.insert(cacheKey, ready);
+                m_thumbReady.insert(exactKey, ready);
+                rememberThumbReadyKeyLocked(exactKey);
                 enforceThumbPixmapBudgetLocked();
                 return ready.pixmap;
             }
