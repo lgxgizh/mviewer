@@ -177,12 +177,10 @@ void MetadataOverlay::requestMetadata()
         [guard, path,
          generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
-            if (!guard)
+            // The callback may run on a worker thread, so it must not touch
+            // the QPointer there.
+            if (!qApp)
                 return;
-            // The service defers delivery through the process main-thread
-            // dispatcher, but the overlay must not depend on that: hop
-            // explicitly so a test/headless run without a dispatcher cannot
-            // paint from a worker thread.
             QMetaObject::invokeMethod(
                 qApp,
                 [guard, path, generation, snapshot]()

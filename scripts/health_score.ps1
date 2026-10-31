@@ -128,6 +128,17 @@ if ($bj) {
             $t = $b.scenarios.Count
             if ($t -gt 0) { $perf = [math]::Round(100.0 * $p / $t, 1) }
         }
+        elseif ($null -ne $b.results) {
+            # mviewer_bench --results writes { results: [{name, value, passed}] }
+            # with no top-level passed/total. Count those rows or Performance
+            # stays n/a even when the nightly report was produced.
+            $rows = @($b.results)
+            $t = $rows.Count
+            if ($t -gt 0) {
+                $p = @($rows | Where-Object { $_.passed -eq $true }).Count
+                $perf = [math]::Round(100.0 * $p / $t, 1)
+            }
+        }
     } catch {}
 }
 

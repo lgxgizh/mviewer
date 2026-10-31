@@ -12,7 +12,9 @@
 #include "core/command/FileRenameCommand.h"
 #include "core/filesystem/Utf8Path.h"
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QImage>
 #include <QTemporaryDir>
@@ -379,13 +381,25 @@ int main()
     std::filesystem::remove(recentFlags, recentEc);
     s.setFilePath(recentRatings.string());
     s.addRecent("debounced.png");
-    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    // The worker waits 100 ms of quiet time, then restarts that wait on every
+    // new change. A fixed 250 ms sleep fails when the thread is scheduled late.
+    // Poll until the line is on disk or the deadline passes.
     bool recentWritten = false;
+    const auto recentDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    for (;;)
     {
-        std::ifstream flags(recentFlags);
-        std::string line;
-        while (std::getline(flags, line))
-            recentWritten = recentWritten || line == "N|debounced.png";
+        if (QCoreApplication::instance())
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+        recentWritten = false;
+        {
+            std::ifstream flags(recentFlags);
+            std::string line;
+            while (std::getline(flags, line))
+                recentWritten = recentWritten || line == "N|debounced.png";
+        }
+        if (recentWritten || std::chrono::steady_clock::now() >= recentDeadline)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     CHECK(recentWritten, "recent is written after the debounce quiet period");
     s.setFilePath(recentRatings.string());
