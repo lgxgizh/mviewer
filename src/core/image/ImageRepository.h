@@ -177,8 +177,10 @@ class ImageRepository
 
     // M27: defensive budget for the synchronous loadDirectory(). Default is 5
     // minutes; tests shrink it to exercise the timeout path without waiting.
-    // When the budget expires, outstanding accepted tasks are cancelled and
-    // their slots become explicit "timed out" failure Results.
+    // When the budget expires, the caller claims every unfinished slot as an
+    // explicit "timed out" failure. A worker publishes only if it still owns
+    // that slot (the catch path included) and the call does not wait for a
+    // decode that cannot be interrupted.
     void setSyncLoadBudget(std::chrono::milliseconds budget);
     std::chrono::milliseconds syncLoadBudget() const;
 

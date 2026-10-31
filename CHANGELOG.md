@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Directory load timeout**: a decode still running when `loadDirectory` hits
+  its budget no longer races the caller on that result. The caller claims
+  unfinished slots; a late worker publishes only if it still owns the slot.
+- **Crash dumps**: the exception filter keeps its paths in fixed buffers filled
+  before it is installed, and it claims the crash only when the minidump write
+  succeeds. A failed dump is passed to the previous filter so Windows Error
+  Reporting can still run.
+- **Atomic saves**: on Windows the temp file is flushed to disk before it
+  replaces ratings, tags, or sidecars.
+- **Thumbnails**: a failed thumbnail is tried again when the gallery rebuilds
+  for a filter, sort, or rescan, and stays failed across ordinary scrolling.
+- **Sidecar saves**: if the IO pool rejects the write, the rating change is
+  kept dirty and retried off the thread that edited it.
+
 ## [1.0.157] - 2026-10-30
 
 ### Release

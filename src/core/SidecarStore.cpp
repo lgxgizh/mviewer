@@ -8,6 +8,8 @@
 #include "core/scheduler/TaskScheduler.h"
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <condition_variable>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -15,7 +17,9 @@
 #include <mutex>
 #include <sstream>
 #include <system_error>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 namespace mviewer::core
 {
@@ -219,6 +223,7 @@ struct SidecarWriteState
 {
     bool running = false;
     bool dirty = false;
+    bool retryArmed = false;
     std::function<void(const std::string &)> onFailure;
 };
 
@@ -276,12 +281,97 @@ void runSidecarWrite(const std::string &imagePath)
     }
 }
 
+// One process-lifetime worker retries submits the IO pool rejected. Leaked on
+// purpose (same reason as AtomicFile's sweep set): a function-local static
+// would be destroyed while this thread can still be asleep at shutdown.
+struct SidecarRetry
+{
+    std::mutex mu;
+    std::condition_variable cv;
+    bool pending = false;
+    bool started = false;
+};
+
+SidecarRetry &sidecarRetry()
+{
+    static SidecarRetry *retry = new SidecarRetry();
+    return *retry;
+}
+
+void scheduleSidecarWrite(const std::string &imagePath);
+
+void sidecarRetryMain()
+{
+    SidecarRetry &retry = sidecarRetry();
+    for (;;)
+    {
+        {
+            std::unique_lock<std::mutex> lock(retry.mu);
+            retry.cv.wait(lock, [&retry] { return retry.pending; });
+            retry.pending = false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        std::vector<std::string> paths;
+        try
+        {
+            {
+                std::lock_guard<std::mutex> lock(sidecarWriteMutex());
+                for (auto &entry : sidecarWrites())
+                {
+                    if (!entry.second.retryArmed)
+                        continue;
+                    entry.second.retryArmed = false;
+                    paths.push_back(entry.first);
+                }
+            }
+            for (const std::string &path : paths)
+                scheduleSidecarWrite(path);
+        }
+        catch (...)
+        {
+        }
+    }
+}
+
+void armSidecarRetry()
+{
+    SidecarRetry &retry = sidecarRetry();
+    bool start = false;
+    {
+        std::lock_guard<std::mutex> lock(retry.mu);
+        retry.pending = true;
+        if (!retry.started)
+        {
+            retry.started = true;
+            start = true;
+        }
+    }
+    if (start)
+        std::thread(sidecarRetryMain).detach();
+    retry.cv.notify_one();
+}
+
 void scheduleSidecarWrite(const std::string &imagePath)
 {
     auto handle = TaskScheduler::instance().submit(TaskScheduler::IOPool,
                                                    [imagePath]() { runSidecarWrite(imagePath); });
-    if (!handle)
-        runSidecarWrite(imagePath);
+    if (handle)
+        return;
+
+    // Never write on the caller. Keep the path running so later edits coalesce,
+    // mark it dirty so the eventual worker stores the latest rating, and retry
+    // the submit from the sidecar worker above.
+    {
+        std::lock_guard<std::mutex> lock(sidecarWriteMutex());
+        auto it = sidecarWrites().find(imagePath);
+        if (it == sidecarWrites().end())
+            return;
+        it->second.dirty = true;
+        if (it->second.retryArmed)
+            return;
+        it->second.retryArmed = true;
+    }
+    armSidecarRetry();
 }
 
 } // namespace

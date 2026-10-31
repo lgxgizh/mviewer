@@ -129,6 +129,57 @@ static void testSidecarAsync()
     mviewer::core::setAtomicWriteFaults({});
 }
 
+static void testSidecarRejectedSubmitRetries()
+{
+    struct ResumeIo
+    {
+        ~ResumeIo()
+        {
+            TaskScheduler::instance().resume(TaskScheduler::IOPool);
+        }
+    } resumeIo;
+
+    QTemporaryDir dir;
+    check(dir.isValid(), "rejected-submit sidecar temp dir");
+    const QString imagePath = dir.filePath(QStringLiteral("photo.jpg"));
+    QFile image(imagePath);
+    check(image.open(QIODevice::WriteOnly), "create rejected-submit image placeholder");
+    image.write("x");
+    image.close();
+
+    const std::string path = imagePath.toUtf8().toStdString();
+    auto &ratings = mviewer::core::RatingStore::instance();
+    auto &sched = TaskScheduler::instance();
+    sched.pause(TaskScheduler::IOPool);
+    ratings.setRating(path, 1);
+    mviewer::core::SidecarStore::instance().writeSidecarAsync(path);
+    ratings.setRating(path, 5);
+    mviewer::core::SidecarStore::instance().writeSidecarAsync(path);
+
+    // Long enough for the off-thread retry to attempt a submit and fail again
+    // while the pool is still paused. An inline fallback would have written.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    check(readFile(sidecarFileFor(path)).find("\"rating\"") == std::string::npos,
+          "rejected sidecar submit does not write on the caller");
+
+    sched.resume(TaskScheduler::IOPool);
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    bool wroteLatest = false;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        if (readFile(sidecarFileFor(path)).find("\"rating\": 5") != std::string::npos)
+        {
+            wroteLatest = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    check(wroteLatest, "sidecar retry runs off the caller and keeps the latest rating");
+    check(sched.drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
+          "sidecar retry drained");
+    ratings.clearRating(path);
+}
+
 static int g_restoredWarnings = 0;
 
 static void restoredMessageHandler(QtMsgType, const QMessageLogContext &, const QString &message)
@@ -233,6 +284,7 @@ int main(int argc, char **argv)
 
     testWritableDirectoryCache();
     testSidecarAsync();
+    testSidecarRejectedSubmitRetries();
     testFileLogger();
     testTraceRing();
 

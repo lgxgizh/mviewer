@@ -9,7 +9,9 @@
 //   2. any failed write leaves the PREVIOUS official version intact — a legal
 //      state file can never become a half-written JSON/text file;
 //   3. the official file is replaced only after the temp file is fully
-//      written, flushed and closed (temp -> flush/close -> replace);
+//      written, flushed and closed (temp -> flush/close -> durable flush ->
+//      replace). On Windows the durable flush is FlushFileBuffers on the temp
+//      file before MoveFileExW; flush() alone only reaches the OS cache;
 //   4. temp files are uniquely named and are NEVER read as official state, so
 //      a stale temp left by a crashed process cannot corrupt the next start;
 //      stale temps from crashed processes are swept (age-gated) before a write;
@@ -32,9 +34,10 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
 // untouched. Production code never sets these.
 struct AtomicWriteFaults
 {
-    bool failTempCreate = false;  // temp file creation fails
-    bool failWrite = false;       // the write/flush reports failure
-    bool failReplace = false;     // the final replace fails
+    bool failTempCreate = false; // temp file creation fails
+    bool failWrite = false;      // the write/flush reports failure
+    bool failReplace = false;    // the final replace fails
+    bool failFlush = false;      // the durable flush reports failure
 };
 
 void setAtomicWriteFaults(const AtomicWriteFaults &faults);

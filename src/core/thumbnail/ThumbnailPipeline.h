@@ -177,6 +177,26 @@ struct ThumbnailPipeline
             m_sources = slot.sources;
     }
 
+    // Failed keys block scroll refills. A source rebuild (filter, sort, scan)
+    // drops them for paths that are still listed so the next schedule tries
+    // once. scheduleLocked does not clear m_failed.
+    void dropFailedForPathsLocked(const std::vector<std::string> &paths)
+    {
+        if (m_failed.empty())
+            return;
+        for (const auto &p : paths)
+        {
+            const std::string prefix = p + "\x1f";
+            for (auto it = m_failed.begin(); it != m_failed.end();)
+            {
+                if (it->rfind(prefix, 0) == 0)
+                    it = m_failed.erase(it);
+                else
+                    ++it;
+            }
+        }
+    }
+
     void replaceSourcesForConsumer(int cid, const std::vector<std::string> &paths)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
@@ -184,6 +204,7 @@ struct ThumbnailPipeline
         slot.sources = paths;
         if (cid == 0)
             m_sources = paths;
+        dropFailedForPathsLocked(paths);
         cancelObsoleteHandlesLocked();
         scheduleLocked(false);
     }
@@ -195,6 +216,7 @@ struct ThumbnailPipeline
         slot.sources = paths;
         if (cid == 0)
             m_sources = paths;
+        dropFailedForPathsLocked(paths);
         cancelObsoleteHandlesLocked();
         scheduleLocked(false);
     }
