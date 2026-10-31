@@ -127,8 +127,7 @@ FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
     if (sequence.animated && sequence.countKnown && sequence.frameCount <= kMaxTimingProbeFrames)
     {
         int64_t total = 0;
-        if (!probeAnimationDurationMs(reader.fileName().toStdString(), sequence.frameCount,
-                                      total))
+        if (!probeAnimationDurationMs(reader.fileName().toStdString(), sequence.frameCount, total))
             return sequence; // cancelled
         sequence.totalDurationMs = total;
         sequence.durationKnown = true;
