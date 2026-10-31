@@ -288,7 +288,7 @@ struct AnimationSlot
 
 struct AnimationCache
 {
-    AnimationSlot slots[kMaxAnimationSessions];
+    AnimationSlot entries[kMaxAnimationSessions];
     int size = 0;
     uint64_t clock = 0;
 };
@@ -340,7 +340,7 @@ int animationSlotIndex(const AnimationCache &cache, const std::string &path)
 {
     for (int i = 0; i < cache.size; ++i)
     {
-        if (cache.slots[i].session && animationPathMatches(*cache.slots[i].session, path))
+        if (cache.entries[i].session && animationPathMatches(*cache.entries[i].session, path))
             return i;
     }
     return -1;
@@ -351,7 +351,7 @@ int leastRecentAnimationSlot(const AnimationCache &cache)
     int oldest = 0;
     for (int i = 1; i < cache.size; ++i)
     {
-        if (cache.slots[i].stamp < cache.slots[oldest].stamp)
+        if (cache.entries[i].stamp < cache.entries[oldest].stamp)
             oldest = i;
     }
     return oldest;
@@ -365,7 +365,7 @@ std::shared_ptr<AnimationSession> prepareAnimationSession(const std::string &pat
     const int existing = animationSlotIndex(cache, path);
     if (existing >= 0)
     {
-        AnimationSlot &slot = cache.slots[existing];
+        AnimationSlot &slot = cache.entries[existing];
         const bool keep = slot.session && !slot.session->abandon.load() &&
                           animationFileMatches(*slot.session, path, info) &&
                           !animationNeedsRewind(*slot.session, frameIndex);
@@ -389,12 +389,12 @@ std::shared_ptr<AnimationSession> prepareAnimationSession(const std::string &pat
     else
     {
         index = leastRecentAnimationSlot(cache);
-        if (cache.slots[index].session)
-            cache.slots[index].session->abandon.store(true);
+        if (cache.entries[index].session)
+            cache.entries[index].session->abandon.store(true);
     }
-    cache.slots[index].session = std::move(session);
-    cache.slots[index].stamp = ++cache.clock;
-    return cache.slots[index].session;
+    cache.entries[index].session = std::move(session);
+    cache.entries[index].stamp = ++cache.clock;
+    return cache.entries[index].session;
 }
 
 bool copyCachedAnimationFrame(const AnimationSession &session, int frameIndex, int maxEdge,
@@ -871,8 +871,8 @@ void FrameSequenceReader::releaseFile(const std::string &path)
         {
             for (int i = 0; i < cache.size; ++i)
             {
-                if (cache.slots[i].session)
-                    dropped[droppedCount++] = std::move(cache.slots[i].session);
+                if (cache.entries[i].session)
+                    dropped[droppedCount++] = std::move(cache.entries[i].session);
             }
             cache.size = 0;
         }
@@ -881,14 +881,14 @@ void FrameSequenceReader::releaseFile(const std::string &path)
             const int index = animationSlotIndex(cache, path);
             if (index < 0)
                 return;
-            if (cache.slots[index].session)
-                dropped[droppedCount++] = std::move(cache.slots[index].session);
+            if (cache.entries[index].session)
+                dropped[droppedCount++] = std::move(cache.entries[index].session);
             for (int i = index + 1; i < cache.size; ++i)
-                cache.slots[i - 1] = std::move(cache.slots[i]);
+                cache.entries[i - 1] = std::move(cache.entries[i]);
             if (cache.size > 0)
             {
-                cache.slots[cache.size - 1].session.reset();
-                cache.slots[cache.size - 1].stamp = 0;
+                cache.entries[cache.size - 1].session.reset();
+                cache.entries[cache.size - 1].stamp = 0;
                 --cache.size;
             }
         }
