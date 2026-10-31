@@ -13,12 +13,12 @@
     {                                                                                              \
         if (!(cond))                                                                               \
         {                                                                                          \
-            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            std::cerr << "FAIL: " << msg << '\n';                                                  \
             return 1;                                                                              \
         }                                                                                          \
         else                                                                                       \
         {                                                                                          \
-            std::cout << "PASS: " << msg << std::endl;                                             \
+            std::cout << "PASS: " << msg << '\n' << std::flush;                                    \
         }                                                                                          \
     } while (0)
 
@@ -129,7 +129,7 @@ int main()
         // ignored flag runs the rest of the ~1 s bound and fails this.
         CHECK(doneIters < atCancel + 800, "cancelled job stopped soon after cancel");
         std::cout << "  iterations before cancel: " << atCancel << " at stop: " << doneIters
-                  << std::endl;
+                  << '\n';
     }
 
     // 3) Dependency ordering: dependent job runs only after its parent.
