@@ -1474,6 +1474,16 @@
         <translation>直方图（ROI %1,%2 %3×%4）</translation>
     </message>
     <message>
+        <location filename="../src/compareworkspace_analysis.cpp" line="823"/>
+        <source>Histogram (per-pane ROI)</source>
+        <translation type="finished">直方图（各窗格 ROI）</translation>
+    </message>
+    <message>
+        <location filename="../src/compareworkspace_analysis.cpp" line="825"/>
+        <source>Histogram (pane %1 ROI %2,%3 %4×%5)</source>
+        <translation type="finished">直方图（窗格 %1 ROI %2,%3 %4×%5）</translation>
+    </message>
+    <message>
         <location filename="../src/compareworkspace_analysis.cpp" line="766"/>
         <source>Histogram and dynamic range clipping analysis</source>
         <translation>直方图与动态范围截断分析</translation>

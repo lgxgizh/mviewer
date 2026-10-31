@@ -128,30 +128,34 @@ void CompareWorkspace::drawCanvasPixelGrid(QPainter &p)
 {
     if (!m_pixelGridEnabled || !m_compareCanvas || m_cellViews.size() < 2)
         return;
-    const auto drawPane = [this, &p](int pane)
+    // Same index as drawCanvasROI: a Space / 1-8 hold draws the other image
+    // in this slot, so the lattice uses that image's raster and destination.
+    const auto drawSlot = [this, &p](int slot)
     {
-        if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        const int image = displayedImageIndex(slot);
+        if (image < 0 || image >= m_cellViews.size() || !m_cellViews[image])
             return;
-        const RawImageView *view = m_cellViews[pane];
+        const RawImageView *view = m_cellViews[image];
         const QSize sourceSize = view->sourceSize();
         if (!sourceSize.isValid() || sourceSize.width() <= 0 || sourceSize.height() <= 0)
             return;
         // Same gate as RawImageView: no lattice over a soft / lower-density raster.
+        // Raster, source rect, and soft-load flag belong to the image just drawn.
         if (!mviewer::pixelGridMatchesRaster(view->image().width(), view->image().height(),
                                              view->sourceRect().width(),
                                              view->sourceRect().height(), view->softLoading()))
             return;
-        const QRectF geom = canvasPaneGeometry(pane);
-        const QRectF dest = cellFullDestRect(pane, geom);
+        const QRectF geom = canvasPaneGeometry(slot);
+        const QRectF dest = cellFullDestRect(image, geom);
         mviewer::ui::drawPixelGrid(p, dest, 0, 0, sourceSize.width(), sourceSize.height(), geom);
     };
     if (m_splitChk && m_splitChk->isChecked())
     {
-        drawPane(0);
-        drawPane(1);
+        drawSlot(0);
+        drawSlot(1);
     }
     else
-        drawPane(0);
+        drawSlot(0);
 }
 
 void CompareWorkspace::drawCanvasInfoOverlays(QPainter &p)

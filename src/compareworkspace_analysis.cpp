@@ -597,10 +597,10 @@ CompareWorkspace::collectHistogramIndices(bool includeMain, const std::vector<in
 
 void CompareWorkspace::computeHistogramBatch(
     const std::vector<ImageData> &pixels, const std::vector<CellAdjust> &adjusts, bool roiEnabled,
-    const mviewer::domain::Selection &roi, const std::vector<int> &unionIdx,
-    const std::vector<int> &mainIndices, const std::vector<int> &panes, int paneCount,
-    bool updateMain, uint64_t gen, const QPointer<CompareWorkspace> &guard,
-    const TaskScheduler::TaskContext &ctx)
+    const std::vector<mviewer::domain::Selection> &rois, int titlePane,
+    const std::vector<int> &unionIdx, const std::vector<int> &mainIndices,
+    const std::vector<int> &panes, int paneCount, bool updateMain, uint64_t gen,
+    const QPointer<CompareWorkspace> &guard, const TaskScheduler::TaskContext &ctx)
 {
     if (ctx.isCancelled())
         return;
@@ -609,8 +609,22 @@ void CompareWorkspace::computeHistogramBatch(
     r.generation = gen;
     r.paneCount = paneCount;
     r.updateMain = updateMain;
-    r.roiEnabled = roiEnabled;
-    r.roi = roi;
+    r.roiPane = titlePane;
+    if (titlePane >= 0 && titlePane < static_cast<int>(rois.size()))
+    {
+        r.roi = rois[static_cast<size_t>(titlePane)];
+        r.roiEnabled = !r.roi.isEmpty();
+    }
+    else if (titlePane == -2)
+    {
+        r.roiEnabled = roiEnabled;
+        r.roi = {};
+    }
+    else
+    {
+        r.roiEnabled = roiEnabled;
+        r.roi = rois.empty() ? mviewer::domain::Selection{} : rois.front();
+    }
 
     const auto adjustFor = [&adjusts](int idx) -> CellAdjust
     {
@@ -636,10 +650,14 @@ void CompareWorkspace::computeHistogramBatch(
             return;
         if (adjusted.isNull())
             continue;
+        const mviewer::domain::Selection paneRoi = idx >= 0 && idx < static_cast<int>(rois.size())
+                                                       ? rois[static_cast<size_t>(idx)]
+                                                       : mviewer::domain::Selection{};
+        // No selection on this pane: count the whole image.
         mviewer::core::Histogram h =
-            roiEnabled
-                ? mviewer::core::computeHistogram(adjusted, roi.x, roi.y, roi.width, roi.height)
-                : mviewer::core::computeDisplayHistogram(adjusted);
+            paneRoi.isEmpty() ? mviewer::core::computeDisplayHistogram(adjusted)
+                              : mviewer::core::computeHistogram(adjusted, paneRoi.x, paneRoi.y,
+                                                                paneRoi.width, paneRoi.height);
         if (ctx.isCancelled())
             return;
         HistogramBatchResult::CellHist cell;
@@ -725,19 +743,56 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
         pixels.push_back(img ? img->pixels() : ImageData());
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
-    const bool roiEnabled = m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
-    const mviewer::domain::Selection roi = m_lastSelection;
+    // Linked panes share m_lastSelection. Unlinked panes each keep the
+    // rectangle on that view; an empty selection is not a crop.
+    const bool roiToggle = m_roiHistChk && m_roiHistChk->isChecked();
+    const bool linkedRoi = linkedROIAvailable();
+    std::vector<mviewer::domain::Selection> rois(static_cast<size_t>(paneCount));
+    if (roiToggle)
+    {
+        if (linkedRoi)
+        {
+            if (!m_lastSelection.isEmpty())
+            {
+                for (mviewer::domain::Selection &paneRoi : rois)
+                    paneRoi = m_lastSelection;
+            }
+        }
+        else
+        {
+            for (int i = 0; i < paneCount && i < m_cellViews.size(); ++i)
+            {
+                if (m_cellViews[i])
+                    rois[static_cast<size_t>(i)] = m_cellViews[i]->selection();
+            }
+        }
+    }
+    bool anyRoi = false;
+    for (const mviewer::domain::Selection &paneRoi : rois)
+    {
+        if (!paneRoi.isEmpty())
+        {
+            anyRoi = true;
+            break;
+        }
+    }
+    // -1 shared title, -2 per-pane title, >=0 the one pane the main histogram shows.
+    int titlePane = -1;
+    if (anyRoi && !linkedRoi)
+        titlePane = plan.mainIndices.size() == 1 ? plan.mainIndices.front() : -2;
+    const bool roiEnabled = anyRoi;
     const uint64_t gen = m_histGen;
     QPointer<CompareWorkspace> guard(this);
 
     auto handle = TaskScheduler::instance().submit(
         deferredAnalysisPriority(),
-        [pixels = std::move(pixels), adjusts = std::move(adjusts), roiEnabled, roi,
-         unionIdx = plan.unionIdx, mainIndices = plan.mainIndices, panes = plan.panes, paneCount,
+        [pixels = std::move(pixels), adjusts = std::move(adjusts), roiEnabled,
+         rois = std::move(rois), titlePane, unionIdx = plan.unionIdx,
+         mainIndices = plan.mainIndices, panes = plan.panes, paneCount,
          updateMain = plan.updateMain, gen, guard](const TaskScheduler::TaskContext &ctx)
         {
-            computeHistogramBatch(pixels, adjusts, roiEnabled, roi, unionIdx, mainIndices, panes,
-                                  paneCount, updateMain, gen, guard, ctx);
+            computeHistogramBatch(pixels, adjusts, roiEnabled, rois, titlePane, unionIdx,
+                                  mainIndices, panes, paneCount, updateMain, gen, guard, ctx);
         });
     if (!handle)
         return;
@@ -762,7 +817,18 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
         // histogram (zero-image / no-valid-source current state).
         if (m_histTitle)
         {
-            QString title = histogramTitleText(r.roiEnabled, r.roi);
+            QString title;
+            if (r.roiPane == -2 && r.roiEnabled)
+                title = tr("Histogram (per-pane ROI)");
+            else if (r.roiPane >= 0 && r.roiEnabled && !r.roi.isEmpty())
+                title = tr("Histogram (pane %1 ROI %2,%3 %4×%5)")
+                            .arg(QChar('A' + r.roiPane))
+                            .arg(r.roi.x)
+                            .arg(r.roi.y)
+                            .arg(r.roi.width)
+                            .arg(r.roi.height);
+            else
+                title = histogramTitleText(r.roiEnabled, r.roi);
             QString tip = tr("Histogram and dynamic range clipping analysis");
             if (!r.main.empty() && r.main[0].total > 0 && r.main[0].bins == 256)
             {

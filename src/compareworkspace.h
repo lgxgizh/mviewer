@@ -745,8 +745,8 @@ class CompareWorkspace : public QWidget
     void clearMainHistogramForEmptyPlan(bool updateMain);
     static void computeHistogramBatch(const std::vector<ImageData> &pixels,
                                       const std::vector<CellAdjust> &adjusts, bool roiEnabled,
-                                      const mviewer::domain::Selection &roi,
-                                      const std::vector<int> &unionIdx,
+                                      const std::vector<mviewer::domain::Selection> &rois,
+                                      int titlePane, const std::vector<int> &unionIdx,
                                       const std::vector<int> &mainIndices,
                                       const std::vector<int> &panes, int paneCount, bool updateMain,
                                       uint64_t gen, const QPointer<CompareWorkspace> &guard,

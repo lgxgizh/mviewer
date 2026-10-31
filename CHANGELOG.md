@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Compare canvas ROI:** a box drawn on one half of an unlinked (different-size)
+  compare stays on that pane. A right-click that does not drag only opens the
+  export menu.
+- **Compare Space on the grid:** the wheel and pan no longer zoom or slide the
+  hidden pane. The held image's cached surface follows the pan on screen.
+- **Compare canvas pixel grid:** while Space is held, the lattice follows the
+  image actually shown in that half.
+- **Unlinked ROI histogram and copy:** each pane's histogram uses that pane's
+  selection, and Copy ROI Measurements writes one ROI line per pane. Linked
+  compares still share one rectangle and one footer line.
+
 ## [1.0.157] - 2026-10-30
 
 ### Release

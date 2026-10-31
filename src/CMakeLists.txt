@@ -2256,6 +2256,25 @@ target_include_directories(compare_space_roi_tests PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME compare_space_roi_tests COMMAND compare_space_roi_tests)
 set_tests_properties(compare_space_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
+# Unlinked canvas ROI stays on the pane it was drawn on; grid Space ignores
+# wheel and pan; canvas pixel grid follows the held image; ROI histogram and
+# copy use each pane's selection when sizes differ.
+add_executable(compare_unlinked_hold_tests
+    test_compare_unlinked_hold.cpp
+)
+target_link_libraries(compare_unlinked_hold_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_unlinked_hold_tests PRIVATE cxx_std_20)
+target_include_directories(compare_unlinked_hold_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_unlinked_hold_tests COMMAND compare_unlinked_hold_tests)
+set_tests_properties(compare_unlinked_hold_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # M52: pure source-backed Compare display planning regression matrix. The
 # planner owns no widget or decoder state, so this remains deterministic and
 # proves placeholder/Fit/zoom/pan/DPR/crop/rotation/supersession semantics.

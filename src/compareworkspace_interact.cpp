@@ -100,6 +100,10 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 
 bool CompareWorkspace::handleCellWheel(RawImageView *view, int idx, QEvent *event)
 {
+    // Space / 1-8 on the grid only swaps what is drawn. The wheel must not
+    // change the hidden pane's engine transform. Canvas wheel is separate.
+    if (m_temporaryCompareActive)
+        return true;
     auto *we = static_cast<QWheelEvent *>(event);
     const int wheelDelta = verticalWheelDelta(we);
     if (wheelDelta == 0)
@@ -136,6 +140,9 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
     if (event->type() == QEvent::MouseButtonPress)
     {
         auto *me = static_cast<QMouseEvent *>(event);
+        // A press on a held grid cell would pan the pane underneath.
+        if (m_temporaryCompareActive)
+            return true;
         if (me->button() == Qt::LeftButton)
         {
             // A-4.3: in Pixel Link mode, click places a shared image-space marker.
@@ -172,6 +179,21 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
     if (event->type() == QEvent::MouseMove)
     {
         auto *me = static_cast<QMouseEvent *>(event);
+        if (m_temporaryCompareActive)
+        {
+            // Drop a drag that started before the hold so release cannot
+            // apply the leftover delta to the hidden pane.
+            if (m_dragging)
+            {
+                m_dragging = false;
+                for (RawImageView *cv : m_cellViews)
+                {
+                    if (cv)
+                        cv->setDragging(false);
+                }
+            }
+            return true;
+        }
         if (m_dragging)
         {
             const QPoint delta = me->pos() - m_lastMouse;
@@ -392,8 +414,21 @@ bool CompareWorkspace::handleCanvasRelease(QEvent *event)
         const bool showMenu = !m_canvasSelectionMoved;
         const int pane = m_canvasSelectionPane;
         const QPoint globalPos = me->globalPosition().toPoint();
-        applySelectionToAll(showMenu ? m_canvasSelectionOrigin : m_lastSelection);
         m_canvasSelectionHandle = mviewer::domain::SelectionHandle::None;
+        // A click that did not drag only opens the export menu. Re-applying
+        // the saved rectangle would move an unlinked ROI onto pane A.
+        if (!showMenu)
+        {
+            if (!linkedROIAvailable())
+            {
+                RawImageView *view =
+                    pane >= 0 && pane < m_cellViews.size() ? m_cellViews[pane] : nullptr;
+                const mviewer::domain::Selection drawn = view ? view->selection() : m_lastSelection;
+                applySelectionFromView(view, drawn);
+            }
+            else
+                applySelectionToAll(m_lastSelection);
+        }
         if (showMenu)
             queueCellExportMenu(pane, globalPos);
         me->accept();

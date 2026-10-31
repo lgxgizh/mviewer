@@ -505,12 +505,33 @@ void CompareWorkspace::copyROIMeasurements()
                                                     : QString());
         lines << cells.join('\t');
     }
-    lines << QStringLiteral("ROI	X=%1	Y=%2	W=%3	H=%4	Pixels=%5")
-                 .arg(m_lastSelection.x)
-                 .arg(m_lastSelection.y)
-                 .arg(m_lastSelection.width)
-                 .arg(m_lastSelection.height)
-                 .arg(static_cast<qint64>(m_lastSelection.width) * m_lastSelection.height);
+    // Linked sessions share one rectangle. Unlinked sizes keep a line per pane
+    // so the paste names the box that pane's row was measured with.
+    if (linkedROIAvailable())
+    {
+        lines << QStringLiteral("ROI\tX=%1\tY=%2\tW=%3\tH=%4\tPixels=%5")
+                     .arg(m_lastSelection.x)
+                     .arg(m_lastSelection.y)
+                     .arg(m_lastSelection.width)
+                     .arg(m_lastSelection.height)
+                     .arg(static_cast<qint64>(m_lastSelection.width) * m_lastSelection.height);
+    }
+    else
+    {
+        for (int row = 0; row < m_roiTable->rowCount(); ++row)
+        {
+            mviewer::domain::Selection sel;
+            if (row < m_cellViews.size() && m_cellViews[row])
+                sel = m_cellViews[row]->selection();
+            lines << QStringLiteral("ROI\t%1\tX=%2\tY=%3\tW=%4\tH=%5\tPixels=%6")
+                         .arg(QChar('A' + row))
+                         .arg(sel.x)
+                         .arg(sel.y)
+                         .arg(sel.width)
+                         .arg(sel.height)
+                         .arg(static_cast<qint64>(sel.width) * sel.height);
+        }
+    }
     if (m_roiDeltaLabel)
         lines << m_roiDeltaLabel->text();
     QApplication::clipboard()->setText(lines.join('\n'));
