@@ -38,6 +38,15 @@
 #include <cstdio>
 #include <functional>
 
+// Friend declared in compareworkspace.h; this executable has its own definition.
+struct CompareSourceDisplayTestAccess
+{
+    static bool linkedROIAvailable(const CompareWorkspace &ws)
+    {
+        return ws.linkedROIAvailable();
+    }
+};
+
 namespace
 {
 int g_failures = 0;
@@ -358,7 +367,8 @@ void testUnlinkedHold(const QDir &dir)
     const QSize sizeB(96, 40);
     check(waitTrue([&] { return panesReady(ws, a, b, sizeA, sizeB); }, 30000),
           "both panes show their image");
-    check(!ws->linkedROIAvailable(), "different sizes leave ROI unlinked");
+    check(!CompareSourceDisplayTestAccess::linkedROIAvailable(*ws),
+          "different sizes leave ROI unlinked");
     pump(200);
 
     phase("grid Space ignores wheel and pan");
@@ -534,7 +544,7 @@ void testLinkedFooter(const QDir &dir)
         unload(host, ws);
         return;
     }
-    check(ws->linkedROIAvailable(), "equal sizes link ROI");
+    check(CompareSourceDisplayTestAccess::linkedROIAvailable(*ws), "equal sizes link ROI");
     QCheckBox *split = findCheckBox(ws, QStringLiteral("Split"));
     QWidget *canvas = ws->findChild<QWidget *>(QStringLiteral("compareCanvas"));
     if (split)
