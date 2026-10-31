@@ -13,7 +13,11 @@
 #       converges on it — there is no sanctioned direct-Repository exception).
 #   R3  Compare module must NOT depend on the Thumbnail module
 #       (ThumbnailPanel / ThumbnailProvider / ThumbnailCache). Coupling these
-#       two view modules is the classic source of sync bugs.
+#       two view modules is the classic source of sync bugs. The compare module
+#       in this tree is src/compareworkspace* and src/core/compare/ (there is
+#       no src/compare/ directory). src/core/compare/ stays layer "core" so R5
+#       still covers its headers and R2 does not newly flag CompareEngine.cpp
+#       (it includes ImageRepository.h). R3 still applies to that prefix.
 #   R4  Domain layer must NOT include anything from Core / UI / Application.
 #       Domain is the zero-dependency base; an upward edge breaks the whole
 #       layering contract.
@@ -58,12 +62,25 @@ function ConvertTo-RepoRelative([string]$FullName) {
 function Get-Layer([string]$RelativePath) {
     $path = $RelativePath -replace '\\', '/'
     if ($path -match '^src/domain/') { return 'domain' }
+    # src/core/compare/ stays core on purpose. See Test-CompareModule / R3.
     if ($path -match '^src/core/') { return 'core' }
     if ($path -match '^src/compare/') { return 'compare' }
+    if ($path -match '^src/compareworkspace') { return 'compare' }
     if ($path -match '^src/application/') { return 'application' }
     if ($path -match '^src/widgets/') { return 'ui' }
     if ($path -match '^src/[^/]+\.(c|cc|cpp|cxx|h|hpp)$') { return 'ui' }
     return 'other'
+}
+
+function Test-CompareModule([string]$RelativePath) {
+    # Product compare UI is src/compareworkspace*. The engine lives in
+    # src/core/compare/ and keeps the core layer (R2/R5). Both are R3's scope.
+    # src/compare/ is retained so a future directory of that name is covered.
+    $path = $RelativePath -replace '\\', '/'
+    if ($path -match '^src/compare/') { return $true }
+    if ($path -match '^src/compareworkspace') { return $true }
+    if ($path -match '^src/core/compare/') { return $true }
+    return $false
 }
 
 function Test-Harness([string]$RelativePath, [string]$Name) {
@@ -181,7 +198,7 @@ try {
                         message='Widget/Compare accesses Repository directly (go through the ImageLoading facade)' })
                 }
             }
-            if ($layer -eq 'compare') {
+            if (Test-CompareModule $rel) {
                 if (Test-ThumbnailHeader $inc) {
                     $violations.Add([ordered]@{ file=$rel; line=($i+1); include=$inc; rule='R3';
                         message='Compare depends on Thumbnail module (decouple the two view modules)' })

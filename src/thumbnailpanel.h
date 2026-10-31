@@ -324,8 +324,8 @@ class ThumbnailPanel : public QListView
     // Open the folder currently shown in the gallery in the OS file manager.
     void openCurrentFolder();
     // Paste clipboard images/files into the current browse directory.
-    // Returns the destination paths that were written (empty if nothing usable).
-    QStringList pasteClipboardIntoCurrentDirectory();
+    // `failure`, when set, names a copy/save error; empty means no image data.
+    QStringList pasteClipboardIntoCurrentDirectory(QString *failure = nullptr);
     void invertSelection();
     void copySelectedPaths();
     void copySelectedFileNames();

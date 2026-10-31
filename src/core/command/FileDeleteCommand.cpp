@@ -6,6 +6,47 @@
 
 namespace fs = std::filesystem;
 
+namespace
+{
+
+struct PrivateTrashStatus
+{
+    bool ready = false;
+    std::string error;
+};
+
+PrivateTrashStatus privateTrashStatus(const std::string &trashDir,
+                                      const std::shared_ptr<mviewer::core::FileSystemAdapter> &fs)
+{
+    PrivateTrashStatus status;
+    if (trashDir.empty())
+    {
+        status.error = "Cannot create trash directory: " + trashDir;
+        return status;
+    }
+
+    const fs::path trashDirectory = mviewer::core::pathFromUtf8(trashDir);
+    std::error_code ec;
+    if (fs->exists(trashDirectory, ec))
+    {
+        if (!fs->isDirectory(trashDirectory, ec))
+            status.error = "Trash path is not a directory: " + trashDir;
+        else
+            status.ready = true;
+        return status;
+    }
+    if (ec || !fs->createDirectories(trashDirectory, ec) || ec)
+    {
+        status.error = "Cannot create trash directory: " + trashDir +
+                       (ec ? ": " + ec.message() : std::string{});
+        return status;
+    }
+    status.ready = true;
+    return status;
+}
+
+} // namespace
+
 FileDeleteCommand::FileDeleteCommand(std::vector<std::string> paths, std::string trashDir,
                                      std::shared_ptr<mviewer::core::FileSystemAdapter> fileSystem)
     : m_paths(std::move(paths)), m_trashDir(std::move(trashDir)),
@@ -37,23 +78,16 @@ void FileDeleteCommand::execute()
     m_executed = false;
     m_unresolved = false;
     m_state = State::Idle;
-    const fs::path trashDirectory = mviewer::core::pathFromUtf8(m_trashDir);
-    std::error_code ec;
-    if (m_fileSystem->exists(trashDirectory, ec))
+    const PrivateTrashStatus trash = privateTrashStatus(m_trashDir, m_fileSystem);
+    // The private directory is only the fallback. A system recycle bin can
+    // still take the files when that directory cannot be created.
+    if (!trash.ready && !m_systemTrash)
     {
-        if (!m_fileSystem->isDirectory(trashDirectory, ec))
-        {
-            setFailure("Trash path is not a directory: " + m_trashDir);
-            return;
-        }
-    }
-    else if (ec || !m_fileSystem->createDirectories(trashDirectory, ec) || ec)
-    {
-        setFailure("Cannot create trash directory: " + m_trashDir +
-                   (ec ? ": " + ec.message() : std::string{}));
+        setFailure(trash.error);
         return;
     }
 
+    std::error_code ec;
     std::vector<std::pair<fs::path, fs::path>> plan;
     std::vector<uintmax_t> planSizes;
     plan.reserve(m_paths.size());
@@ -67,13 +101,17 @@ void FileDeleteCommand::execute()
             setFailure("Source file is missing or not regular: " + path);
             return;
         }
-        std::string destinationError;
-        const fs::path destination = mviewer::core::collisionFreeDestination(
-            source, trashDirectory, m_fileSystem, destinationError);
-        if (destination.empty())
+        fs::path destination;
+        if (trash.ready)
         {
-            setFailure(destinationError);
-            return;
+            std::string destinationError;
+            destination = mviewer::core::collisionFreeDestination(
+                source, mviewer::core::pathFromUtf8(m_trashDir), m_fileSystem, destinationError);
+            if (destination.empty())
+            {
+                setFailure(destinationError);
+                return;
+            }
         }
         plan.emplace_back(source, destination);
         const uintmax_t size = m_fileSystem->fileSize(source, ec);
@@ -107,6 +145,12 @@ void FileDeleteCommand::execute()
             if (m_transferObserver)
                 m_transferObserver(completedBytes, totalBytes);
             continue;
+        }
+        if (destination.empty())
+        {
+            setFailure(trash.error);
+            rollback();
+            return;
         }
         const auto result =
             mviewer::core::moveFileSafely(source, destination, m_fileSystem, observer);

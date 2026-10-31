@@ -36,7 +36,9 @@ class FileDeleteCommand : public ICommand
     }
     bool canExecute() const override
     {
-        return !m_paths.empty() && !m_trashDir.empty();
+        // An empty private directory is allowed once the UI has installed a
+        // system recycle-bin callback. execute() tries that before refusing.
+        return !m_paths.empty() && (!m_trashDir.empty() || static_cast<bool>(m_systemTrash));
     }
 
     // Paths successfully moved to trash (original → trash path pairs).
