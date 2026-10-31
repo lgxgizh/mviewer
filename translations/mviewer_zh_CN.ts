@@ -3921,6 +3921,11 @@ or double-click a thumbnail to view</source>
         <source>Comma/period: Previous/Next page</source>
         <translation>逗号/句号：上一页/下一页</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer.cpp" line="269"/>
+        <source>ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9</source>
+        <translation>ROI [%1,%2,%3,%4]：亮度=%5，V=%6，R=%7，G=%8，B=%9</translation>
+    </message>
 </context>
 <context>
     <name>Language</name>

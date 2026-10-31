@@ -226,6 +226,7 @@ add_library(mviewer_ui STATIC
     imageviewer_loadingbar.cpp
     imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp
+    imageviewer_selection.cpp
     imageviewer_transform.cpp
     directorytree.cpp
     directorytree_navigate.cpp

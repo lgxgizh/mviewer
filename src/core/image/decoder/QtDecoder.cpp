@@ -641,9 +641,20 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
 #endif
 
     // The clip rect is in source (pre-transform) coordinates per Qt semantics.
+    // setScaledSize is applied before qt_imageTransform. Orientations 5-8 swap
+    // axes, so the pre-transform size is (targetH, targetW) and the oriented
+    // result is targetW x targetH. Handlers that ignore ScaledSize are scaled
+    // by QImageReader with the same size, still before the transform. The
+    // Windows WIC TIFF path above is unchanged.
+    const auto transform = reader.transformation();
     reader.setClipRect(QRect(x, y, w, h));
     if (targetW > 0 && targetH > 0)
-        reader.setScaledSize(QSize(targetW, targetH));
+    {
+        QSize scaled(targetW, targetH);
+        if (transformSwapsDimensions(transform))
+            scaled = QSize(targetH, targetW);
+        reader.setScaledSize(scaled);
+    }
     const QImage::Format sourceFormat = reader.imageFormat();
     const QImage img = reader.read();
     if (img.isNull())
@@ -652,10 +663,9 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
         meta.filePath = path;
     meta.width = full.width();
     meta.height = full.height();
-    const auto t = reader.transformation();
-    if (transformSwapsDimensions(t))
+    if (transformSwapsDimensions(transform))
         std::swap(meta.width, meta.height);
-    meta.orientation = orientationFromTransform(t);
+    meta.orientation = orientationFromTransform(transform);
     meta.format = formatName(reader);
     mviewer::core::qtmetadata::applyReaderRasterMetadata(sourceFormat, img, meta);
     return toImageData(img);
