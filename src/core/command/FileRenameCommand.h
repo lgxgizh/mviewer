@@ -1,8 +1,9 @@
 #pragma once
 
-#include "ICommand.h"
 #include "FileSystemAdapter.h"
+#include "ICommand.h"
 
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -49,10 +50,18 @@ class FileRenameCommand : public ICommand
     }
 
   private:
+    // Two-step rename used when the names differ only by case and both paths
+    // are the same file (Windows). `failurePrefix` is an existing file-op phrase.
+    bool commitCaseOnlyRename(const std::filesystem::path &from, const std::filesystem::path &to,
+                              const char *failurePrefix);
+
     std::string m_oldPath;
     std::string m_newPath;
     bool m_executed = false;
     bool m_unresolved = false;
     std::shared_ptr<mviewer::core::FileSystemAdapter> m_fileSystem;
     std::string m_lastError;
+    // Set when a case-only rename stops on its temporary name. Undo moves that
+    // file back to m_oldPath.
+    std::string m_caseRenameTemp;
 };

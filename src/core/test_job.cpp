@@ -13,12 +13,12 @@
     {                                                                                              \
         if (!(cond))                                                                               \
         {                                                                                          \
-            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            std::cerr << "FAIL: " << (msg) << '\n';                                                \
             return 1;                                                                              \
         }                                                                                          \
         else                                                                                       \
         {                                                                                          \
-            std::cout << "PASS: " << msg << std::endl;                                             \
+            std::cout << "PASS: " << (msg) << '\n' << std::flush;                                  \
         }                                                                                          \
     } while (0)
 
@@ -66,33 +66,70 @@ int main()
         CHECK(h->currentProgress() == 100, "handle reports progress 100");
     }
 
-    // 2) Cancellation: a long job cancelled early stops its work early.
+    // 2) Cancellation: the job loops until the flag is set, or until a hard
+    //    bound (~1 s). Ignoring the flag runs that bound out. The old check
+    //    waited ~140 ms against 100 x 5 ms of work, so iterations < 100 was
+    //    true whether or not cancel stopped the loop. Poll until the worker
+    //    is idle (the bound fits inside the deadline), then require an early
+    //    stop and a cancelled handle.
     {
+        constexpr int kHardBound = 2000;
         std::atomic<int> iterations{0};
-        std::atomic<int> progress{0};
+        std::atomic<bool> stopped{false};
         Job job;
         job.name = "cancel-job";
         job.priority = TaskScheduler::Priority::Background;
         job.work = [&](const TaskScheduler::TaskContext &ctx)
         {
-            for (int i = 1; i <= 100; ++i)
+            for (int i = 0; i < kHardBound; ++i)
             {
                 if (ctx.isCancelled())
-                    return;
-                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                    break;
+                // Steady-clock slice, not sleep_for(1ms): the Windows tick is
+                // often ~15 ms, which would push an ignored cancel past the
+                // idle poll. yield() lets the test thread cancel on one core.
+                const auto sliceEnd =
+                    std::chrono::steady_clock::now() + std::chrono::microseconds(500);
+                while (std::chrono::steady_clock::now() < sliceEnd)
+                {
+                    if (ctx.isCancelled())
+                        break;
+                    std::this_thread::yield();
+                }
+                if (ctx.isCancelled())
+                    break;
                 ++iterations;
-                const_cast<TaskScheduler::TaskContext &>(ctx).reportProgress(i);
             }
+            stopped.store(true);
         };
-        job.onProgress = [&](int p) { progress = p; };
 
         auto h = js.submit(job);
-        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        CHECK(h != nullptr, "cancel job returns a handle");
+        {
+            const auto deadline =
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+            while (iterations.load() == 0 && !stopped.load() &&
+                   std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        CHECK(iterations.load() > 0, "cancel job started its work");
+        const int atCancel = iterations.load();
         JobSystem::cancel(h);
-        std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        {
+            const auto deadline =
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(5000);
+            while (!stopped.load() && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        const int doneIters = iterations.load();
+        CHECK(stopped.load(), "cancelled job became idle");
         CHECK(h->isCancelled(), "handle reports cancelled");
-        CHECK(iterations.load() < 100, "cancelled job stopped its work early");
-        std::cout << "  iterations before cancel: " << iterations.load() << std::endl;
+        CHECK(doneIters < kHardBound, "cancelled job stopped before the hard bound");
+        // 800 steps is ~400 ms. A live cancel returns on the next slice; an
+        // ignored flag runs the rest of the ~1 s bound and fails this.
+        CHECK(doneIters < atCancel + 800, "cancelled job stopped soon after cancel");
+        std::cout << "  iterations before cancel: " << atCancel << " at stop: " << doneIters
+                  << '\n';
     }
 
     // 3) Dependency ordering: dependent job runs only after its parent.
