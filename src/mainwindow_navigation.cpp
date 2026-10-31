@@ -36,13 +36,10 @@ void MainWindow::scheduleSidecarImport(const QString &dir)
                         QDir::cleanPath(QDir::fromNativeSeparators(
                             guard->m_directory->currentDirectory())) != expectedDir)
                         return;
-                    if (guard->m_thumbnailPanel)
-                    {
-                        // Rating/flag filters read RatingStore at evaluation
-                        // time. Re-run the active filter after import so a
-                        // sidecar never requires a manual refresh to converge.
-                        guard->m_thumbnailPanel->invalidateRatings();
-                    }
+                    // Rating/flag filters read RatingStore at evaluation time.
+                    // Re-run the active filter after import so a sidecar never
+                    // requires a manual refresh to converge.
+                    guard->invalidateBrowseRatings();
                     if (guard->m_metadataPanel && !guard->currentImagePath().isEmpty())
                         guard->m_metadataPanel->setImage(guard->currentImagePath());
                 },
@@ -131,10 +128,37 @@ void MainWindow::navigate(int delta)
         m_slideshowTimer->start();
 }
 
+QString MainWindow::activeBrowseDirectory() const
+{
+    if (secondaryNavActive() && m_secondaryThumbnailPanel)
+        return m_secondaryThumbnailPanel->currentDir();
+    return currentDir();
+}
+
+void MainWindow::refreshActiveBrowse()
+{
+    if (m_directoryTree)
+        m_directoryTree->refresh();
+    if (secondaryNavActive())
+    {
+        if (m_secondaryThumbnailPanel)
+            m_secondaryThumbnailPanel->refresh();
+        if (m_secondaryDirectoryMonitor)
+            m_secondaryDirectoryMonitor->reconcileNow();
+        return;
+    }
+    if (m_directoryMonitor)
+        m_directoryMonitor->reconcileNow();
+}
+
 void MainWindow::updateNavigationActions()
 {
-    const QString activeDir = currentDir();
-    const bool hasDirectory = !activeDir.isEmpty();
+    const QString navDir = activeBrowseDirectory();
+    const bool hasLeftDirectory = !currentDir().isEmpty();
+    const bool hasActiveDirectory = !navDir.isEmpty();
+    // Sidebar refresh stays available while either pane has a folder. Open
+    // and favorite follow the pane the toolbar is acting on.
+    const bool hasDirectory = hasLeftDirectory || hasActiveDirectory;
     if (m_actHistoryBack)
         m_actHistoryBack->setEnabled(m_historyIndex > 0);
     if (m_actHistoryForward)
@@ -147,19 +171,19 @@ void MainWindow::updateNavigationActions()
                                     m_dirHistoryIndex + 1 < m_dirHistory.size());
     if (m_actDirUp)
     {
-        QDir parent(activeDir);
-        m_actDirUp->setEnabled(hasDirectory && parent.cdUp());
+        QDir parent(navDir);
+        m_actDirUp->setEnabled(hasActiveDirectory && parent.cdUp());
     }
     updateSecondaryNavButtons();
     if (m_actRefresh)
         m_actRefresh->setEnabled(hasDirectory);
     if (m_actOpenCurrentFolder)
-        m_actOpenCurrentFolder->setEnabled(hasDirectory);
-    const bool isFavorite = m_directory && m_directory->hasFavorite(activeDir);
+        m_actOpenCurrentFolder->setEnabled(hasActiveDirectory);
+    const bool isFavorite = m_directory && m_directory->hasFavorite(navDir);
     if (m_actAddFavorite)
-        m_actAddFavorite->setEnabled(hasDirectory && !isFavorite);
+        m_actAddFavorite->setEnabled(hasActiveDirectory && !isFavorite);
     if (m_actRemoveFavorite)
-        m_actRemoveFavorite->setEnabled(hasDirectory && isFavorite);
+        m_actRemoveFavorite->setEnabled(hasActiveDirectory && isFavorite);
 }
 
 void MainWindow::navigatePage(int key)
@@ -485,24 +509,24 @@ void MainWindow::rebuildFavoritesMenu()
 
 void MainWindow::addFavoriteCurrent()
 {
-    if (currentDir().isEmpty())
+    const QString dir = activeBrowseDirectory();
+    if (dir.isEmpty())
     {
         statusBar()->showMessage(tr("No folder to add to favorites"), 3000);
         return;
     }
-    m_appState.addFavorite(currentDir());
-    m_directory->addFavorite(currentDir());
+    m_appState.addFavorite(dir);
+    m_directory->addFavorite(dir);
     m_appState.save();
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
     updateSelectionActions();
-    statusBar()->showMessage(tr("Added to favorites: %1").arg(QFileInfo(currentDir()).fileName()),
-                             3000);
+    statusBar()->showMessage(tr("Added to favorites: %1").arg(QFileInfo(dir).fileName()), 3000);
 }
 
 void MainWindow::removeFavorite(const QString &dir)
 {
-    const QString target = dir.isEmpty() ? currentDir() : dir;
+    const QString target = dir.isEmpty() ? activeBrowseDirectory() : dir;
     if (target.isEmpty())
         return;
     m_appState.removeFavorite(target);
@@ -537,12 +561,13 @@ void MainWindow::clearAllFilters()
         m_ratingFilter->setCurrentIndex(0);
     if (m_flagFilter)
         m_flagFilter->setCurrentIndex(0);
-    if (m_thumbnailPanel)
-    {
-        m_thumbnailPanel->clearFlagFilters();
-        m_thumbnailPanel->setRatingFilter(0);
-        m_thumbnailPanel->setFilter(QString(), false);
-    }
+    eachFilterPanel(
+        [](ThumbnailPanel *panel)
+        {
+            panel->clearFlagFilters();
+            panel->setRatingFilter(0);
+            panel->setFilter(QString(), false);
+        });
     statusBar()->showMessage(tr("All filters cleared"), 2000);
 }
 
@@ -557,10 +582,64 @@ void MainWindow::resetFiltersOnFolderChange()
         m_ratingFilter->setCurrentIndex(0);
     if (m_flagFilter)
         m_flagFilter->setCurrentIndex(0);
-    if (m_thumbnailPanel)
+    eachFilterPanel(
+        [](ThumbnailPanel *panel)
+        {
+            panel->clearFlagFilters();
+            panel->setRatingFilter(0);
+            panel->setFilter(QString(), false);
+        });
+}
+
+void MainWindow::applyFlagFilterToPanel(ThumbnailPanel *panel, int rating, int flag)
+{
+    if (!panel)
+        return;
+    panel->clearFlagFilters();
+    panel->setRatingFilter(rating);
+    switch (flag)
     {
-        m_thumbnailPanel->clearFlagFilters();
-        m_thumbnailPanel->setRatingFilter(0);
-        m_thumbnailPanel->setFilter(QString(), false);
+    case 1:
+        panel->setPickFilter(true);
+        break;
+    case 2:
+        panel->setRejectFilter(true);
+        break;
+    case 3:
+        panel->setRecentFilter(true);
+        break;
+    case 11:
+        panel->setLabelFilter(1);
+        break;
+    case 12:
+        panel->setLabelFilter(2);
+        break;
+    case 13:
+        panel->setLabelFilter(3);
+        break;
+    case 14:
+        panel->setLabelFilter(4);
+        break;
+    case 15:
+        panel->setLabelFilter(5);
+        break;
+    case 16:
+        panel->setLabelFilter(6);
+        break;
+    default:
+        break;
     }
+}
+
+void MainWindow::invalidateBrowseRatings()
+{
+    eachBrowsePanel([](ThumbnailPanel *panel) { panel->invalidateRatings(); });
+}
+
+void MainWindow::applySharedSearchFilter()
+{
+    const QString text = m_searchEdit ? m_searchEdit->text() : QString();
+    const bool recursive = m_searchRecursive && m_searchRecursive->isChecked();
+    eachFilterPanel([text, recursive](ThumbnailPanel *panel)
+                    { panel->setFilter(text, recursive); });
 }

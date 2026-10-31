@@ -151,9 +151,16 @@ void MainWindow::setupCommands()
                 panel->revealSelected();
         },
         std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
-    // Ctrl+F focuses the gallery address bar (pathEdit).
+    // Ctrl+F focuses the active pane's address bar. A right-pane line edit
+    // that already has focus keeps the key (see filterKeyPress).
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "dir_filter", "Address Bar (Ctrl+F)", [this]() { focusAddressBar(); },
+        "dir_filter", "Address Bar (Ctrl+F)",
+        [this]()
+        {
+            if (secondaryLineEditOwns(QApplication::focusWidget()))
+                return;
+            focusAddressBar();
+        },
         std::vector<CommandShortcut>{{Qt::Key_F, Qt::ControlModifier}}));
 }
 
@@ -207,11 +214,10 @@ bool MainWindow::handleWindowKey(QKeyEvent *event)
         }
     }
     // M56: F5 refreshes the tree and reconciles; it does not re-enter navigation.
+    // With the right pane active, that refresh is the right folder.
     if (event->key() == Qt::Key_F5 && !mod)
     {
-        m_directoryTree->refresh();
-        if (m_directoryMonitor)
-            m_directoryMonitor->reconcileNow();
+        refreshActiveBrowse();
         event->accept();
         return true;
     }

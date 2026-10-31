@@ -319,7 +319,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::onSearchMetaToggled(bool on)
 {
-    m_thumbnailPanel->setMetaSearch(on);
+    eachFilterPanel([on](ThumbnailPanel *panel) { panel->setMetaSearch(on); });
 }
 
 void MainWindow::scheduleReindex()
@@ -403,7 +403,8 @@ void MainWindow::reindexSearch()
 
 void MainWindow::onRatingFilterChanged(int)
 {
-    m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
+    const int rating = m_ratingFilter->currentData().toInt();
+    eachFilterPanel([rating](ThumbnailPanel *panel) { panel->setRatingFilter(rating); });
 }
 
 void MainWindow::rateCurrentImage(int stars)
@@ -412,7 +413,7 @@ void MainWindow::rateCurrentImage(int stars)
         return;
     mviewer::core::RatingStore::instance().setRating(currentImagePath().toUtf8().toStdString(),
                                                      stars);
-    m_thumbnailPanel->invalidateRatings();
+    invalidateBrowseRatings();
     m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
     writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(
@@ -421,41 +422,10 @@ void MainWindow::rateCurrentImage(int stars)
 
 void MainWindow::onFlagFilterChanged(int)
 {
-    const int v = m_flagFilter->currentData().toInt();
-    m_thumbnailPanel->clearFlagFilters();
-    m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
-    switch (v)
-    {
-    case 1:
-        m_thumbnailPanel->setPickFilter(true);
-        break;
-    case 2:
-        m_thumbnailPanel->setRejectFilter(true);
-        break;
-    case 3:
-        m_thumbnailPanel->setRecentFilter(true);
-        break;
-    case 11:
-        m_thumbnailPanel->setLabelFilter(1);
-        break;
-    case 12:
-        m_thumbnailPanel->setLabelFilter(2);
-        break;
-    case 13:
-        m_thumbnailPanel->setLabelFilter(3);
-        break;
-    case 14:
-        m_thumbnailPanel->setLabelFilter(4);
-        break;
-    case 15:
-        m_thumbnailPanel->setLabelFilter(5);
-        break;
-    case 16:
-        m_thumbnailPanel->setLabelFilter(6);
-        break;
-    default:
-        break;
-    }
+    const int rating = m_ratingFilter ? m_ratingFilter->currentData().toInt() : 0;
+    const int flag = m_flagFilter ? m_flagFilter->currentData().toInt() : 0;
+    eachFilterPanel([this, rating, flag](ThumbnailPanel *panel)
+                    { applyFlagFilterToPanel(panel, rating, flag); });
 }
 
 void MainWindow::onFlagsEdited(const QString &path, int label, bool rejected, bool picked)
@@ -465,7 +435,7 @@ void MainWindow::onFlagsEdited(const QString &path, int label, bool rejected, bo
     Q_UNUSED(rejected);
     Q_UNUSED(picked);
     // invalidateRatings() re-applies the active filter (single pipeline).
-    m_thumbnailPanel->invalidateRatings();
+    invalidateBrowseRatings();
 }
 
 void MainWindow::setCurrentColorLabel(int label)
@@ -474,7 +444,7 @@ void MainWindow::setCurrentColorLabel(int label)
         return;
     mviewer::core::RatingStore::instance().setColorLabel(currentImagePath().toUtf8().toStdString(),
                                                          label);
-    m_thumbnailPanel->invalidateRatings();
+    invalidateBrowseRatings();
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
     const QString name = QFileInfo(currentImagePath()).fileName();
@@ -490,7 +460,7 @@ void MainWindow::toggleCurrentPick()
     auto &rs = mviewer::core::RatingStore::instance();
     const bool v = !rs.picked(currentImagePath().toUtf8().toStdString());
     rs.setPicked(currentImagePath().toUtf8().toStdString(), v);
-    m_thumbnailPanel->invalidateRatings();
+    invalidateBrowseRatings();
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(v ? tr("Picked %1").arg(QFileInfo(currentImagePath()).fileName())
@@ -505,7 +475,7 @@ void MainWindow::toggleCurrentReject()
     auto &rs = mviewer::core::RatingStore::instance();
     const bool v = !rs.rejected(currentImagePath().toUtf8().toStdString());
     rs.setRejected(currentImagePath().toUtf8().toStdString(), v);
-    m_thumbnailPanel->invalidateRatings();
+    invalidateBrowseRatings();
     m_metadataPanel->setImage(currentImagePath());
     writeCurrentSidecarAsync(this, currentImagePath());
     statusBar()->showMessage(v ? tr("Rejected %1").arg(QFileInfo(currentImagePath()).fileName())
@@ -609,12 +579,17 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     // P0: Auto-locate the directory tree to the image's parent folder. The tree
     // short-circuits an already-selected directory in memory. A new folder is
     // confirmed off the GUI thread so a stale volume cannot freeze selection.
+    // In split browse only a file in the left gallery may move the tree; a
+    // right-pane image must not retarget it. absolutePath() keeps C:/ intact.
     const int slash = path.lastIndexOf(QChar('/'));
     const int backslash = path.lastIndexOf(QChar('\\'));
     const int separator = qMax(slash, backslash);
-    const QString dir = separator > 0 ? path.left(separator) : QString();
-    if (m_directoryTree && !dir.isEmpty())
-        m_directoryTree->navigateTo(dir);
+    const QString imageDir = QFileInfo(path).absolutePath();
+    const QString leftDir = m_thumbnailPanel ? m_thumbnailPanel->currentDir() : QString();
+    const bool leftImage = !m_splitBrowseEnabled ||
+                           (!leftDir.isEmpty() && DirectoryTree::equivalentPath(imageDir, leftDir));
+    if (m_directoryTree && !imageDir.isEmpty() && leftImage)
+        m_directoryTree->navigateTo(imageDir);
 
     mviewer::core::RatingStore::instance().addRecent(path.toUtf8().toStdString()); // P3 recents
 

@@ -3,6 +3,7 @@
 
 #include <QDir>
 #include <QKeyEvent>
+#include <QLineEdit>
 #include <QMouseEvent>
 
 bool MainWindow::secondaryBrowseOwns(QObject *watched) const
@@ -11,6 +12,27 @@ bool MainWindow::secondaryBrowseOwns(QObject *watched) const
     if (!widget || !m_splitBrowseEnabled || !m_secondaryBrowsePane)
         return false;
     return widget == m_secondaryBrowsePane || m_secondaryBrowsePane->isAncestorOf(widget);
+}
+
+bool MainWindow::secondaryLineEditOwns(QObject *watched) const
+{
+    if (!watched || !m_secondaryBrowsePane)
+        return false;
+    for (QObject *cursor = watched; cursor && cursor != m_secondaryBrowsePane;
+         cursor = cursor->parent())
+    {
+        if (qobject_cast<QLineEdit *>(cursor) && secondaryBrowseOwns(cursor))
+            return true;
+    }
+    return false;
+}
+
+bool MainWindow::secondaryEditorKeepsKey(QObject *watched, const QKeyEvent *ke) const
+{
+    // Letting Ctrl+F through runs the address-bar command and moves focus away
+    // from the focused right-pane editor.
+    const auto mods = ke->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
+    return mods == Qt::ControlModifier && ke->key() == Qt::Key_F && secondaryLineEditOwns(watched);
 }
 
 bool MainWindow::secondaryNavActive() const

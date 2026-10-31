@@ -170,8 +170,7 @@ class ThumbnailPanel : public QListView
         return m_viewMode;
     }
 
-    // Details column widths (Explorer-style resize). Clamped to per-column mins;
-    // persists via QSettings when changed from the header drag gesture.
+    // Details column widths: clamped to per-column mins, persisted on header drag.
     void setDetailColumnWidth(DetailColumn column, int width);
     int detailColumnWidth(DetailColumn column) const;
     int detailContentWidth() const;
@@ -205,8 +204,7 @@ class ThumbnailPanel : public QListView
     // matching subfolder images until the next setDirectory. Empty clears.
     void setFilter(const QString &text, bool recursive = false);
 
-    // P1: metadata-aware search (camera / lens / ISO / date / …) and star-rating
-    // filter. Both refine the same filtered view produced by setFilter().
+    // P1: metadata search (camera/lens/ISO/date) and star filter; both refine setFilter().
     void setMetaSearch(bool on);
     void setRatingFilter(int stars);
 
@@ -321,6 +319,7 @@ class ThumbnailPanel : public QListView
     void copySelectedTo();
     void moveSelectedTo();
     void revealSelected();
+    void revealPath(const QString &path); // OS file manager; empty is ignored
     // Open the folder currently shown in the gallery in the OS file manager.
     void openCurrentFolder();
     // Paste clipboard images/files into the current browse directory.
@@ -483,6 +482,7 @@ class ThumbnailPanel : public QListView
     // First progressive batch is in the model, or the scan settled (including
     // empty). DirectoryTree uses this to start its highlight after first paint.
     void galleryModelReady();
+    void ratingsChanged(); // batch rating/label/flag write; host repaints all panes
 
   private slots:
     void onThumbReady(const QString &path);
