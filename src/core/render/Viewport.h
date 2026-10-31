@@ -42,6 +42,29 @@ inline int snapScreenEdge(double value)
     return static_cast<int>(floored);
 }
 
+// Zoom window for a view whose fit scale is `fit`: 0.05x..50x the fit, never
+// narrower than the historic absolute 0.05..50 (so 100% stays reachable), and
+// inside the 1e-4..256 backstop. A missing or invalid fit gives 0.05..50.
+struct ZoomLimits
+{
+    double lo;
+    double hi;
+};
+
+inline ZoomLimits zoomLimitsForFit(double fit)
+{
+    double lo = 0.05;
+    double hi = 50.0;
+    if (fit > 0.0 && std::isfinite(fit))
+    {
+        lo = std::min(lo, fit * 0.05);
+        hi = std::max(hi, fit * 50.0);
+    }
+    lo = std::max(lo, 1e-4);
+    hi = std::min(hi, 256.0);
+    return {lo, hi};
+}
+
 struct Viewport
 {
     // Screen-space size of the viewport (widget client area), in pixels.
@@ -54,6 +77,8 @@ struct Viewport
     // Screen-space translation (top-left of the image in widget coords).
     double offsetX = 0.0;
     double offsetY = 0.0;
+    // Scale set by the last fit(); 0 when no fit has run.
+    double fitScale = 0.0;
 
     Viewport() = default;
     Viewport(int sw, int sh, double s, double ox, double oy)
@@ -77,6 +102,7 @@ struct Viewport
             scale = 1.0;
             offsetX = 0.0;
             offsetY = 0.0;
+            fitScale = 0.0;
             return;
         }
         const double m = (margin > 0.0 && std::isfinite(margin)) ? margin : kComfortFitMargin;
@@ -85,16 +111,26 @@ struct Viewport
         scale = std::min(sx, sy) * m;
         if (scale <= 0.0 || !std::isfinite(scale))
             scale = 1.0;
+        fitScale = scale;
         offsetX = (static_cast<double>(screenW) - static_cast<double>(imageW) * scale) / 2.0;
         offsetY = (static_cast<double>(screenH) - static_cast<double>(imageH) * scale) / 2.0;
     }
 
     // Zoom about a fixed screen anchor (keeps the image point under `anchor`
-    // stationary). Clamped to [minScale, maxScale].
-    void zoomAt(double anchorX, double anchorY, double factor, double minScale = 0.05,
-                double maxScale = 50.0)
+    // stationary). Limits follow zoomLimitsForFit(fitScale).
+    void zoomAt(double anchorX, double anchorY, double factor)
+    {
+        const ZoomLimits z = zoomLimitsForFit(fitScale);
+        zoomAt(anchorX, anchorY, factor, z.lo, z.hi);
+    }
+
+    void zoomAt(double anchorX, double anchorY, double factor, double minScale, double maxScale)
     {
         if (!(factor > 0.0) || !std::isfinite(factor) || !(scale > 0.0) || !std::isfinite(scale))
+            return;
+        // Stale fit: already outside the window. Moving further away must not
+        // jump onto the limit.
+        if ((factor < 1.0 && scale < minScale) || (factor > 1.0 && scale > maxScale))
             return;
         const double imgX = (anchorX - offsetX) / scale;
         const double imgY = (anchorY - offsetY) / scale;
