@@ -353,6 +353,7 @@ class CompareWorkspace : public QWidget
     uint64_t m_roiGen = 0;
     TaskScheduler::TaskHandle m_roiTask;
     bool m_roiLinked = false;
+    bool m_sharedUnlinkedRoi = false; // API/session ROI: every pane histogram
     mviewer::ui::ROIMeasurementState m_roiState = mviewer::ui::ROIMeasurementState::Idle;
     QString m_roiStateDetail;
     std::optional<ROIStatsBatchResult> m_roiResult;
@@ -745,8 +746,8 @@ class CompareWorkspace : public QWidget
     void clearMainHistogramForEmptyPlan(bool updateMain);
     static void computeHistogramBatch(const std::vector<ImageData> &pixels,
                                       const std::vector<CellAdjust> &adjusts, bool roiEnabled,
-                                      const mviewer::domain::Selection &roi,
-                                      const std::vector<int> &unionIdx,
+                                      const std::vector<mviewer::domain::Selection> &rois,
+                                      int titlePane, const std::vector<int> &unionIdx,
                                       const std::vector<int> &mainIndices,
                                       const std::vector<int> &panes, int paneCount, bool updateMain,
                                       uint64_t gen, const QPointer<CompareWorkspace> &guard,

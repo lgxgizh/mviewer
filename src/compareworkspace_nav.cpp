@@ -531,6 +531,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         if (m_sessionState)
             m_sessionState->setCurrentROI(m_lastSelection);
         m_roiLinked = false;
+        m_sharedUnlinkedRoi = !m_lastSelection.isEmpty();
         m_engine.selection().setSelection(m_lastSelection);
         for (int i = 0; i < m_cellViews.size(); ++i)
         {
@@ -581,6 +582,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     if (m_sessionState)
         m_sessionState->setCurrentROI(m_lastSelection);
     m_roiLinked = !m_lastSelection.isEmpty();
+    m_sharedUnlinkedRoi = false;
     // Engine owns the frames; it mirrors the synchronized ROI to every ImageFrame.
     if (m_roiLinked)
         m_engine.applySelectionToAll(m_lastSelection);
@@ -628,6 +630,7 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
     if (!linkedROIAvailable())
     {
         m_roiLinked = false;
+        m_sharedUnlinkedRoi = false;
         const QSize srcSize = view->sourceSize();
         const int w = srcSize.isValid() ? srcSize.width() : 0;
         const int h = srcSize.isValid() ? srcSize.height() : 0;
@@ -654,6 +657,7 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
     m_lastSelection = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
                                                           sel.y + sel.height, width, height);
     m_roiLinked = !m_lastSelection.isEmpty();
+    m_sharedUnlinkedRoi = false;
     for (RawImageView *other : m_cellViews)
     {
         if (!other)
@@ -685,6 +689,7 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
     }
 
     m_roiLinked = false;
+    m_sharedUnlinkedRoi = false;
     const QSize srcSize = view->sourceSize();
     const int w = srcSize.isValid() ? srcSize.width() : 0;
     const int h = srcSize.isValid() ? srcSize.height() : 0;

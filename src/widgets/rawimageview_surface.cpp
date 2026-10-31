@@ -95,8 +95,11 @@ void RawImageView::drawCoalescedSurface(QPainter &p) const
     }
     const double factor = presented / cached;
     const QPointF center(width() / 2.0, height() / 2.0);
+    // Key the coalesce shift on the pan that is on screen. A Space hold keeps
+    // its own offset while the hidden pane's engine pan changes.
+    const QPointF presentedPan = presentedOffset();
     p.save();
-    p.translate(center + m_offset - factor * m_cachedOffset);
+    p.translate(center + presentedPan - factor * m_cachedOffset);
     p.scale(factor, factor);
     p.translate(-center);
     p.drawImage(rect(), m_baseSurface);
@@ -128,12 +131,13 @@ void RawImageView::ensureBaseSurface()
     const qint64 imageKey = surfaceImageKey(image);
     const qint64 overlayKey = surfaceImageKey(m_overlay);
     const double presented = presentedScale();
+    const QPointF presentedPan = presentedOffset();
     const SurfacePixelKey pixels{imageKey, overlayKey, m_overlayAlpha, viewport, dpr, sourceRect};
     const SurfacePixelKey cached{m_cachedImageKey, m_cachedOverlayKey, m_cachedOverlayAlpha,
                                  m_cachedViewport, m_cachedDpr,        m_cachedSourceRect};
     const bool samePixels = sameSurfacePixels(pixels, cached);
     const bool sameTransform =
-        sameSurfaceTransform(presented, m_cachedScale, m_offset, m_cachedOffset);
+        sameSurfaceTransform(presented, m_cachedScale, presentedPan, m_cachedOffset);
     if (m_baseSurfaceValid && samePixels && sameTransform)
     {
         m_deferSurfaceRebuild = false;
@@ -182,7 +186,7 @@ void RawImageView::ensureBaseSurface()
     m_cachedOverlayKey = overlayKey;
     m_cachedOverlayAlpha = m_overlayAlpha;
     m_cachedScale = presented;
-    m_cachedOffset = m_offset;
+    m_cachedOffset = presentedPan;
     m_cachedViewport = viewport;
     m_cachedDpr = dpr;
     m_cachedSourceRect = sourceRect;

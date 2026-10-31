@@ -115,6 +115,9 @@ struct HistogramBatchResult
     // M23: coherent title and histogram data delivered as one pair.
     bool roiEnabled = false;
     mviewer::domain::Selection roi;
+    // -1: one shared ROI (linked, or ROI off). -2: unlinked, several panes.
+    // >=0: unlinked title names that pane's own selection.
+    int roiPane = -1;
     std::vector<int> mainIndices;
     std::vector<mviewer::core::Histogram> main; // main surface, in main order
 
