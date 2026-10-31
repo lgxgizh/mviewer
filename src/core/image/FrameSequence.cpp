@@ -26,23 +26,15 @@ namespace
 {
 
 constexpr int kUnknownFrameCount = 1;
-constexpr int kMinimumAnimationDelayMs = 10;
-// Delays of 0–10 ms are the GIF/WebP "as fast as possible" sentinel. Browsers
-// present them for 100 ms so playback stays watchable.
-constexpr int kBrowserAnimationDelayMs = 100;
 constexpr int kMaxTimingProbeFrames = 256;
 // A crafted container can declare an absurd page/frame count, and every
 // consumer uses the declared count as a loop bound, so it is clamped.
 constexpr int kMaxFrameCount = 100000;
-// Sequential animation walk bound. Page sources seek with jumpToImage and may
-// use any index in [0, frameCount). Real animations stay far below this (60 s
-// at 60 fps is 3600 frames); the bound keeps a session file with a wild frame
-// index from decoding for minutes.
+// Sequential animation walk bound (pages seek with jumpToImage instead). 60 s at
+// 60 fps is 3600 frames; a wild session frame index must not decode for minutes.
 constexpr int kMaxSequentialFrameWalk = 4096;
-// Compare is two panes; one slot used to make the second open abandon the
-// first. A few readers cover playback plus the other pane.
+// A few readers cover playback plus the other compare pane (one slot thrashed).
 constexpr int kMaxAnimationSessions = 4;
-constexpr int kTimingProbeEdge = 1;
 
 QString qpath(const std::string &path)
 {
@@ -117,85 +109,6 @@ void fillMetadata(const std::string &path, QImageReader &reader, const QImage &i
     }
 }
 
-int normalizedAnimationDelayMs(int delayMs)
-{
-    if (delayMs <= kMinimumAnimationDelayMs)
-        return kBrowserAnimationDelayMs;
-    return delayMs;
-}
-
-// Plugins publish the frame delay either before the advance or after it. A
-// non-positive "after" keeps "before" so a 0 ms sentinel that follows a short
-// frame is not replaced by that short frame.
-int delayAcrossAdvance(int before, int after)
-{
-    const int delay = after > 0 ? after : before;
-    return normalizedAnimationDelayMs(delay);
-}
-
-// True when every frame delay was visible without read(). qgif and qwebp do
-// not override jumpToNextImage() (the base handler returns false) and only
-// fill nextImageDelay() inside read(); they take the scaled-read fallback.
-bool sumDelaysWithoutPixels(const QString &fileName, int frameCount, int64_t &total,
-                            bool &cancelled)
-{
-    cancelled = false;
-    total = 0;
-    if (fileName.isEmpty() || frameCount <= 0)
-        return false;
-    QImageReader timing(fileName);
-    timing.setAutoTransform(true);
-    for (int i = 0; i < frameCount; ++i)
-    {
-        if (cooperativeCancelRequested())
-        {
-            cancelled = true;
-            return false;
-        }
-        const int before = timing.nextImageDelay();
-        const int number = timing.currentImageNumber();
-        if (i + 1 < frameCount)
-        {
-            if (!timing.jumpToNextImage() || timing.currentImageNumber() == number)
-                return false;
-        }
-        const int after = timing.nextImageDelay();
-        if (before <= 0 && after <= 0)
-            return false;
-        total += delayAcrossAdvance(before, after);
-    }
-    return true;
-}
-
-// scale == true asks for a 1x1 decode. Handlers that honor ScaledSize skip the
-// native raster; others still report the container delay. A null image returns
-// false so the caller can retry once at native size (historical probe).
-bool sumDelaysByRead(const QString &fileName, int frameCount, bool scale, int64_t &total,
-                     bool &cancelled)
-{
-    cancelled = false;
-    total = 0;
-    QImageReader timing(fileName);
-    timing.setAutoTransform(true);
-    if (scale)
-        timing.setScaledSize(QSize(kTimingProbeEdge, kTimingProbeEdge));
-    for (int i = 0; i < frameCount; ++i)
-    {
-        if (cooperativeCancelRequested())
-        {
-            cancelled = true;
-            return false;
-        }
-        const int before = timing.nextImageDelay();
-        const QImage image = timing.read();
-        if (image.isNull())
-            return false;
-        const int after = timing.nextImageDelay();
-        total += delayAcrossAdvance(before, after);
-    }
-    return true;
-}
-
 FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
 {
     FrameSequenceInfo sequence;
@@ -209,27 +122,14 @@ FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
     sequence.animated = sequence.kind == FrameSequenceKind::Animation;
     sequence.loopCount = reader.supportsAnimation() ? reader.loopCount() : -1;
 
-    // Duration probing is intentionally bounded. A 10,000-frame source still
-    // gets an O(1) open/probe; frameInfo() supplies the current delay on demand.
-    // Short animations sum delays without a native-size decode when the handler
-    // can either jump without pixels or honor a 1x1 ScaledSize.
+    // Bounded: a 10,000-frame source still opens in O(1) and frameInfo() supplies
+    // the current delay on demand. See probeAnimationDurationMs for the strategy.
     if (sequence.animated && sequence.countKnown && sequence.frameCount <= kMaxTimingProbeFrames)
     {
-        // Fresh reader: qgif/qwebp expose the first frame through read(), not
-        // jumpToImage(0), and the caller's reader stays put for a later decode.
         int64_t total = 0;
-        bool cancelled = false;
-        bool summed =
-            sumDelaysWithoutPixels(reader.fileName(), sequence.frameCount, total, cancelled);
-        if (!summed && !cancelled)
-        {
-            summed =
-                sumDelaysByRead(reader.fileName(), sequence.frameCount, true, total, cancelled);
-        }
-        if (!summed && !cancelled)
-            sumDelaysByRead(reader.fileName(), sequence.frameCount, false, total, cancelled);
-        if (cancelled)
-            return sequence;
+        if (!probeAnimationDurationMs(reader.fileName().toStdString(), sequence.frameCount,
+                                      total))
+            return sequence; // cancelled
         sequence.totalDurationMs = total;
         sequence.durationKnown = true;
     }
@@ -295,8 +195,7 @@ struct AnimationCache
 
 AnimationCache &animationCache()
 {
-    // Same lifetime as animationMutex(): the slot table must outlive
-    // QCoreApplication. Readers themselves are dropped by releaseFile().
+    // Outlives QCoreApplication like animationMutex(); releaseFile() drops readers.
     static auto *cache = new AnimationCache();
     return *cache;
 }
@@ -620,67 +519,6 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
             selected.error = "image reader cannot select frame";
     }
     return selected;
-}
-
-QSize sizeWithOrientation(QImageReader &reader)
-{
-    // size() is the stored size. read() with autoTransform displays the
-    // transposed geometry, so a header-only answer has to swap too.
-    QSize size = reader.size();
-    if (qtmetadata::transformSwapsDimensions(reader.transformation()))
-        size.transpose();
-    return size;
-}
-
-bool fillEmptySize(QImageReader &reader, QSize &size)
-{
-    if (!size.isEmpty())
-        return true;
-    const QImage image = reader.read();
-    if (image.isNull())
-        return false;
-    size = image.size();
-    return true;
-}
-
-FrameInfo stillFrameInfo(const std::string &path, int frameIndex)
-{
-    QImageReader reader(qpath(path));
-    reader.setAutoTransform(true);
-    QSize size;
-    if (frameIndex == 0 || reader.jumpToImage(frameIndex))
-    {
-        size = sizeWithOrientation(reader);
-        if (!fillEmptySize(reader, size))
-            return {};
-    }
-    else
-    {
-        QImageReader sequential(qpath(path));
-        sequential.setAutoTransform(true);
-        for (int i = 0; i <= frameIndex; ++i)
-        {
-            if (cooperativeCancelRequested())
-                return {};
-            if (i == frameIndex)
-            {
-                size = sizeWithOrientation(sequential);
-                if (!fillEmptySize(sequential, size))
-                    return {};
-                break;
-            }
-            if (sequential.jumpToNextImage())
-                continue;
-            sequential.setScaledSize(QSize(kTimingProbeEdge, kTimingProbeEdge));
-            const bool advanced = !sequential.read().isNull();
-            sequential.setScaledSize(QSize());
-            if (!advanced)
-                return {};
-        }
-    }
-    if (size.isEmpty())
-        return {};
-    return {frameIndex, 0, size.width(), size.height()};
 }
 
 FrameDecodeResult decodeImpl(const std::string &path, int frameIndex, int maxEdge,
