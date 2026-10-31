@@ -244,6 +244,7 @@ add_library(mviewer_ui STATIC
     browseformats.cpp
     formatfiltercombo.cpp
     thumbnailpanel_fileops.cpp
+    thumbnailpanel_paste.cpp
     thumbnailpanel_transfer.cpp
     thumbnailcard_style.cpp
     thumbnailpanel_delegates.cpp
@@ -570,6 +571,9 @@ foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_p
     target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endforeach()
+# Case-only rename and trash-directory fallback. Kept beside test_commandstack.cpp
+# so that file stays under the 800-line complexity cap.
+target_sources(test_commandstack PRIVATE core/test_commandstack_case.cpp)
 # The QPainter compositing half of the RenderCommand pipeline is a UI adapter
 # (ADR-016); the core render test exercises it without linking all of mviewer_ui.
 target_sources(test_render_pipeline PRIVATE rendercommandpainter.cpp)
