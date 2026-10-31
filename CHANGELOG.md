@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.158] - 2026-10-31
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.158** (multi-angle review batch #269–#280, viewer/canvas zoom follow-ups #281, nightly test stabilisation #282, ADR gate push-event diff fix).
+
 ### Fixed
 
 - **Compare canvas zoom percent:** in overlay, swipe, split and checker modes
