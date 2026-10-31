@@ -51,8 +51,9 @@ jobs:
   format:
     name: Format check
     runs-on: ubuntu-latest
-    # Legacy formatting debt is reported but must not block build/test gates.
-    continue-on-error: true
+    # Required: ci-gate fails unless needs.format.result is success. Job-level
+    # continue-on-error would report success even when clang-format or
+    # markdownlint exited non-zero, so this job must be allowed to fail.
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -361,7 +362,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # adr-gate — M23: architectural PRs MUST add/update an ADR (REQUIRED).
-  # Blocks merge if src/core/{repository,cache,scheduler} or src/compare change
+  # Blocks merge if Repository (src/core/image/ImageRepository*), Cache,
+  # Scheduler, src/core/compare/ or src/compare/ change
   # without a corresponding docs/adr/* change. Prevents architecture rot — six
   # months later the code explains WHY, not just what.
   # ---------------------------------------------------------------------------
