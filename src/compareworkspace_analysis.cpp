@@ -750,7 +750,7 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
     std::vector<mviewer::domain::Selection> rois(static_cast<size_t>(paneCount));
     if (roiToggle)
     {
-        if (linkedRoi)
+        if (linkedRoi || m_sharedUnlinkedRoi)
         {
             if (!m_lastSelection.isEmpty())
             {
@@ -778,7 +778,7 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
     }
     // -1 shared title, -2 per-pane title, >=0 the one pane the main histogram shows.
     int titlePane = -1;
-    if (anyRoi && !linkedRoi)
+    if (anyRoi && !linkedRoi && !m_sharedUnlinkedRoi)
         titlePane = plan.mainIndices.size() == 1 ? plan.mainIndices.front() : -2;
     const bool roiEnabled = anyRoi;
     const uint64_t gen = m_histGen;

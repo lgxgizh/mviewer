@@ -531,6 +531,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         if (m_sessionState)
             m_sessionState->setCurrentROI(m_lastSelection);
         m_roiLinked = false;
+        m_sharedUnlinkedRoi = !m_lastSelection.isEmpty();
         m_engine.selection().setSelection(m_lastSelection);
         for (int i = 0; i < m_cellViews.size(); ++i)
         {
@@ -685,6 +686,7 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
     }
 
     m_roiLinked = false;
+    m_sharedUnlinkedRoi = false;
     const QSize srcSize = view->sourceSize();
     const int w = srcSize.isValid() ? srcSize.width() : 0;
     const int h = srcSize.isValid() ? srcSize.height() : 0;
