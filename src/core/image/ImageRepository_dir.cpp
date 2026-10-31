@@ -45,16 +45,59 @@ struct DirectoryLoadSlots
     std::unique_ptr<ImageRepository::Result[]> results;
 };
 
-bool claimDirectorySlot(DirectoryLoadSlots &slots, int index, ImageRepository::Result value)
+bool claimDirectorySlot(DirectoryLoadSlots &table, int index, ImageRepository::Result value)
 {
     int expected = 0;
-    auto &state = slots.states[static_cast<size_t>(index)];
+    auto &state = table.states[static_cast<size_t>(index)];
     if (!state.compare_exchange_strong(expected, 1, std::memory_order_acq_rel,
                                        std::memory_order_acquire))
         return false;
-    slots.results[static_cast<size_t>(index)] = std::move(value);
+    table.results[static_cast<size_t>(index)] = std::move(value);
     state.store(2, std::memory_order_release);
     return true;
+}
+
+// Claims every slot the workers have not finished publishing, then copies the
+// published Results. This does not wait for an in-flight load(); a worker that
+// loses the claim drops its Result, including its catch path.
+std::vector<ImageRepository::Result> collectDirectoryResults(DirectoryLoadSlots &table,
+                                                             const std::vector<std::string> &files)
+{
+    using Result = ImageRepository::Result;
+    const int n = static_cast<int>(files.size());
+    for (int i = 0; i < n; ++i)
+    {
+        if (table.states[static_cast<size_t>(i)].load(std::memory_order_acquire) == 2)
+            continue;
+        Result err;
+        err.error = "loadDirectory timed out for: " + files[i];
+        claimDirectorySlot(table, i, std::move(err));
+    }
+
+    // State 1 is only the Result move after a won claim, not the decode. One
+    // shared grace covers every slot so a large directory cannot multiply it.
+    std::vector<Result> out(static_cast<size_t>(n));
+    constexpr auto kPublishGrace = std::chrono::milliseconds(25);
+    const auto graceDeadline = std::chrono::steady_clock::now() + kPublishGrace;
+    for (int i = 0; i < n; ++i)
+    {
+        const size_t idx = static_cast<size_t>(i);
+        int state = table.states[idx].load(std::memory_order_acquire);
+        while (state == 1 && std::chrono::steady_clock::now() < graceDeadline)
+        {
+            std::this_thread::yield();
+            state = table.states[idx].load(std::memory_order_acquire);
+        }
+        if (state == 2)
+        {
+            out[idx] = table.results[idx];
+            continue;
+        }
+        Result timedOut;
+        timedOut.error = "loadDirectory timed out for: " + files[i];
+        out[idx] = std::move(timedOut);
+    }
+    return out;
 }
 
 } // namespace
@@ -74,7 +117,7 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
         return {};
 
     const int n = static_cast<int>(files->size());
-    auto slots = std::make_shared<DirectoryLoadSlots>(n);
+    auto table = std::make_shared<DirectoryLoadSlots>(n);
     auto completed = std::make_shared<std::atomic<int>>(0);
     auto handles = std::make_shared<std::vector<TaskScheduler::TaskHandle>>(n);
 
@@ -87,7 +130,7 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
     {
         auto handle = TaskScheduler::instance().submit(
             TaskScheduler::Priority::Decode,
-            [this, files, slots, completed, i](const TaskScheduler::TaskContext &ctx)
+            [this, files, table, completed, i](const TaskScheduler::TaskContext &ctx)
             {
                 try
                 {
@@ -98,7 +141,7 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
                         // failure instead of decoding into a superseded load.
                         Result err;
                         err.error = "loadDirectory timed out for: " + (*files)[i];
-                        claimDirectorySlot(*slots, i, std::move(err));
+                        claimDirectorySlot(*table, i, std::move(err));
                     }
                     else
                     {
@@ -106,14 +149,14 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
                         // Publish only when this worker still owns the slot.
                         // The timeout path may have claimed it while load()
                         // was inside a decode that cannot be interrupted.
-                        claimDirectorySlot(*slots, i, std::move(loaded));
+                        claimDirectorySlot(*table, i, std::move(loaded));
                     }
                 }
                 catch (...)
                 {
                     Result err;
                     err.error = "load threw for: " + (*files)[i];
-                    claimDirectorySlot(*slots, i, std::move(err));
+                    claimDirectorySlot(*table, i, std::move(err));
                 }
                 completed->fetch_add(1, std::memory_order_release);
             });
@@ -121,7 +164,7 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
         {
             Result err;
             err.error = "scheduler rejected submission for: " + (*files)[i];
-            claimDirectorySlot(*slots, i, std::move(err));
+            claimDirectorySlot(*table, i, std::move(err));
             completed->fetch_add(1, std::memory_order_release);
         }
         else
@@ -155,42 +198,7 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
                 TaskScheduler::cancelTree(h->id);
         }
     }
-    // Claim every slot the workers have not finished publishing. This does not
-    // wait for an in-flight load(); a worker that loses the claim drops its
-    // Result, including the catch path above.
-    for (int i = 0; i < n; ++i)
-    {
-        if (slots->states[static_cast<size_t>(i)].load(std::memory_order_acquire) == 2)
-            continue;
-        Result err;
-        err.error = "loadDirectory timed out for: " + (*files)[i];
-        claimDirectorySlot(*slots, i, std::move(err));
-    }
-
-    // State 1 is only the Result move after a won claim, not the decode. One
-    // shared grace covers every slot so a large directory cannot multiply it.
-    std::vector<Result> out(static_cast<size_t>(n));
-    constexpr auto kPublishGrace = std::chrono::milliseconds(25);
-    const auto graceDeadline = std::chrono::steady_clock::now() + kPublishGrace;
-    for (int i = 0; i < n; ++i)
-    {
-        const size_t idx = static_cast<size_t>(i);
-        int state = slots->states[idx].load(std::memory_order_acquire);
-        while (state == 1 && std::chrono::steady_clock::now() < graceDeadline)
-        {
-            std::this_thread::yield();
-            state = slots->states[idx].load(std::memory_order_acquire);
-        }
-        if (state == 2)
-        {
-            out[idx] = slots->results[idx];
-            continue;
-        }
-        Result timedOut;
-        timedOut.error = "loadDirectory timed out for: " + (*files)[i];
-        out[idx] = std::move(timedOut);
-    }
-    return out;
+    return collectDirectoryResults(*table, *files);
 }
 
 void ImageRepository::loadDirectoryAsync(const std::string &dirPath,
