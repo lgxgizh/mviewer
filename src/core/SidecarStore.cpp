@@ -329,6 +329,9 @@ void sidecarRetryMain()
         }
         catch (...)
         {
+            // Out of memory or a failed thread start: drop this pass. The paths
+            // stay dirty in the store and the next delta re-arms the retry.
+            paths.clear();
         }
     }
 }
