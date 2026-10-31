@@ -236,19 +236,17 @@ void ThumbnailPanel::ensureMetaIndex()
         paths,
         [alive, self, gen](const std::vector<mviewer::core::MetadataIndexer::Entry> &batch)
         {
-            if (!alive->load() || !self)
+            // The callback may run on a worker thread, so it must not touch
+            // the QPointer there.
+            if (!alive->load() || !qApp)
                 return;
-            // The indexer defers batches through the process main-thread
-            // dispatcher, but the panel state must only ever be touched from
-            // the GUI thread — hop explicitly instead of relying on the
-            // producer's delivery thread.
-            ThumbnailPanel *panel = self.data();
             QMetaObject::invokeMethod(
                 qApp,
-                [alive, panel, gen, batch]()
+                [alive, self, gen, batch]()
                 {
-                    if (!alive->load() || gen != panel->m_dirGen)
+                    if (!alive->load() || !self || gen != self->m_dirGen)
                         return;
+                    ThumbnailPanel *panel = self.data();
                     for (const auto &e : batch)
                     {
                         const QString p = galleryPathKey(
@@ -273,7 +271,9 @@ void ThumbnailPanel::ensureMetaIndex()
         },
         [alive, self, gen]()
         {
-            if (!alive->load() || !self)
+            // The callback may run on a worker thread, so it must not touch
+            // the QPointer there.
+            if (!alive->load() || !qApp)
                 return;
             QMetaObject::invokeMethod(
                 qApp,
