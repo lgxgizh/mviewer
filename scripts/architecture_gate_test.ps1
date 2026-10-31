@@ -2,9 +2,10 @@
 #
 # Proves BOTH directions of the gate contract:
 #   1. a planted direct Repository include in a UI-layer TU is flagged (R2),
-#      and a planted Compare-layer Repository include is flagged (R2 now covers
-#      Compare — the stale imageviewer/preview loading-boundary exemption is
-#      gone because the ImageLoading facade exists);
+#      and a planted compareworkspace Repository include is flagged (R2).
+#      A planted thumbnail include under src/compareworkspace* and under
+#      src/core/compare/ is flagged as R3 (those are the real compare paths;
+#      src/compare/ does not exist in this tree);
 #   2. a planted Domain->Core include is flagged (R4);
 #   3. the REAL tree reports zero architecture warnings — the gate's "0" means
 #      the current architecture is actually enforced, not exempted.
@@ -51,10 +52,19 @@ try {
     Set-Content -Path (Join-Path $tmp 'src\fake_ui_widget.cpp') -Value $uiViolation -Encoding UTF8
 
     $compareViolation = @'
-// planted Compare-layer violation (R2 now covers Compare)
+// planted compareworkspace violations: thumbnail (R3) and repository (R2)
+#include "thumbnailpanel.h"
 #include "core/image/ImageRepository.h"
 '@
-    Set-Content -Path (Join-Path $tmp 'src\fake_compare_workspace.cpp') -Value $compareViolation -Encoding UTF8
+    Set-Content -Path (Join-Path $tmp 'src\compareworkspace_plant.cpp') -Value $compareViolation -Encoding UTF8
+
+    # src/core/compare stays layer core, so this thumbnail include is R3 only.
+    New-Item -ItemType Directory -Path (Join-Path $tmp 'src\core\compare') -Force | Out-Null
+    $coreCompareViolation = @'
+// planted core compare-engine thumbnail include (R3)
+#include "thumbnailpanel.h"
+'@
+    Set-Content -Path (Join-Path $tmp 'src\core\compare\plant_engine.cpp') -Value $coreCompareViolation -Encoding UTF8
 
     $domainViolation = @'
 // planted Domain-layer violation (R4)
@@ -96,8 +106,16 @@ try {
     $rules = @($j.violations | ForEach-Object { $_.rule })
     Check ($rules -contains 'R2' -and @($j.violations | Where-Object { $_.file -match 'fake_ui_widget' }).Count -eq 1) `
         'planted UI-layer Repository include is flagged (R2)'
-    Check ($rules -contains 'R2' -and @($j.violations | Where-Object { $_.file -match 'fake_compare_workspace' }).Count -eq 1) `
-        'planted Compare-layer Repository include is flagged (R2)'
+    $plantedCompare = @($j.violations | Where-Object { $_.file -match 'compareworkspace_plant' })
+    Check (@($plantedCompare | Where-Object { $_.rule -eq 'R3' -and $_.include -match 'thumbnailpanel' }).Count -eq 1) `
+        'planted compareworkspace thumbnail include is flagged (R3)'
+    Check (@($plantedCompare | Where-Object { $_.rule -eq 'R2' }).Count -eq 1) `
+        'planted compareworkspace Repository include is flagged (R2)'
+    $plantedEngine = @($j.violations | Where-Object { $_.file -match 'core/compare/plant_engine' })
+    Check (@($plantedEngine | Where-Object { $_.rule -eq 'R3' }).Count -eq 1) `
+        'planted src/core/compare thumbnail include is flagged (R3)'
+    Check (@($plantedEngine | Where-Object { $_.rule -eq 'R2' }).Count -eq 0) `
+        'src/core/compare thumbnail plant is not reclassified into R2'
     Check ($rules -contains 'R4') 'planted Domain->Core include is flagged (R4)'
     Check ($rules -contains 'R5' -and @($j.violations | Where-Object { $_.file -match 'fake_core_header' }).Count -eq 1) `
         'planted Qt include in a core header is flagged (R5)'

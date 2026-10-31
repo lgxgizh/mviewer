@@ -244,6 +244,7 @@ add_library(mviewer_ui STATIC
     browseformats.cpp
     formatfiltercombo.cpp
     thumbnailpanel_fileops.cpp
+    thumbnailpanel_paste.cpp
     thumbnailpanel_transfer.cpp
     thumbnailcard_style.cpp
     thumbnailpanel_delegates.cpp
@@ -570,6 +571,9 @@ foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_p
     target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endforeach()
+# Case-only rename and trash-directory fallback. Kept beside test_commandstack.cpp
+# so that file stays under the 800-line complexity cap.
+target_sources(test_commandstack PRIVATE core/test_commandstack_case.cpp)
 # The QPainter compositing half of the RenderCommand pipeline is a UI adapter
 # (ADR-016); the core render test exercises it without linking all of mviewer_ui.
 target_sources(test_render_pipeline PRIVATE rendercommandpainter.cpp)
@@ -1683,6 +1687,11 @@ add_test(NAME pluginexamples_tests COMMAND test_pluginexamples)
 target_sources(test_pluginexamples PRIVATE ${CMAKE_SOURCE_DIR}/plugins/example/ExampleExporterPlugin.cpp)
 add_test(NAME m3acceptance_tests COMMAND test_m3acceptance)
 add_test(NAME product_browse_tests COMMAND product_browse_tests)
+# Wall-clock budgets (directory listing, first thumbnail). Parallel ctest
+# makes them flake; the budgets themselves are unchanged. product_workflow_gate
+# is a separate chain, not a second registration of this test, and is serial
+# below because it launches this executable again.
+set_tests_properties(product_browse_tests PROPERTIES RUN_SERIAL TRUE)
 add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)
 add_test(NAME histogram_tests COMMAND histogram_tests)
 add_test(NAME ratingstore_tests COMMAND ratingstore_tests)
@@ -2611,6 +2620,14 @@ add_test(NAME architecture_gate_regression
         ${CMAKE_SOURCE_DIR})
 set_tests_properties(architecture_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
+# ADR gate: ImageRepository, src/core/compare/, and compareworkspace are
+# protected, and a failed git diff is a non-zero result rather than a pass.
+add_test(NAME adr_gate_regression
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/adr_gate_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(adr_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # M52: complexity responsibility-TU guardrail regression. A planted 1001-line
 # responsibility file must fail, while two legal sub-1000-line TUs remain
 # visible as warnings and pass the hard gate.
@@ -2836,6 +2853,10 @@ add_test(NAME product_workflow_gate
     COMMAND powershell -ExecutionPolicy Bypass -File
         ${CMAKE_SOURCE_DIR}/scripts/product_workflow_gate.ps1
         $<TARGET_FILE_DIR:product_browse_tests>)
+# The chain runs product_browse_tests.exe again. Those wall-clock budgets must
+# not share the CPU with the rest of the suite. This is not a duplicate
+# registration: the gate also runs compare, analysis, export, and workspace.
+set_tests_properties(product_workflow_gate PROPERTIES RUN_SERIAL TRUE)
 
 # ─── M10 Performance Engineering ─────────────────────────────────────────────
 # MemoryTracker + benchmark scenario structural tests are folded into core_tests

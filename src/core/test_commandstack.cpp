@@ -132,6 +132,11 @@ static void testCommandStack()
     CHECK(!stack.canUndo(), "fully undone: no more undo");
 }
 
+void testCaseOnlyFileRename(const std::filesystem::path &dir, int &passed, int &failed);
+void testDeleteWithoutPrivateTrash(const std::filesystem::path &dir,
+                                   const std::filesystem::path &bin,
+                                   const std::filesystem::path &source, int &passed, int &failed);
+
 static void writeFile(const std::filesystem::path &p, const std::string &content)
 {
     std::ofstream out(p, std::ios::binary);
@@ -413,6 +418,8 @@ static void testFileRenameCommand()
               "rename retries a briefly locked source instead of failing");
     }
 
+    testCaseOnlyFileRename(dir, g_pass, g_fail);
+
     fs::remove_all(dir);
 }
 
@@ -468,6 +475,8 @@ static void testFileDeleteCommand()
           "recycle bin failure falls back to the app trash");
     fallback.undo();
     CHECK(fs::exists(a), "undo restores from the fallback trash");
+
+    testDeleteWithoutPrivateTrash(dir, bin, a, g_pass, g_fail);
 
     fs::remove_all(dir);
 }

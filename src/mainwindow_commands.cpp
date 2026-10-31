@@ -403,9 +403,15 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
         if (isThumbnailPanelPasteTarget())
         {
             ThumbnailPanel *panel = activeThumbnailPanel();
+            QString pasteError;
             const QStringList written =
-                panel ? panel->pasteClipboardIntoCurrentDirectory() : QStringList();
-            if (written.isEmpty())
+                panel ? panel->pasteClipboardIntoCurrentDirectory(&pasteError) : QStringList();
+            if (!pasteError.isEmpty())
+            {
+                if (statusBar())
+                    statusBar()->showMessage(pasteError, 5000);
+            }
+            else if (written.isEmpty())
             {
                 if (statusBar())
                     statusBar()->showMessage(tr("No image data on the clipboard"), 3000);
