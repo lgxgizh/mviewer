@@ -12,7 +12,8 @@
 //      outstanding work must be cancelled on timeout.
 //   4. Late completions (workers resuming after the caller returned) must be
 //      safe: no crash, no UAF, scheduler converges, results are explicit
-//      failures.
+//      failures. A decode still inside load() publishes only if it wins the
+//      slot; the timeout path claims the rest and does not wait it out.
 //   5. Normal (no-timeout) directory load still succeeds.
 //   6. A QUEUED loadAsyncCancellable request cancelled via cancelAsync() never
 //      fires its callback and never warms the cache; DecodePool bookkeeping
@@ -221,6 +222,7 @@ int main(int argc, char **argv)
     testLoadAsyncRejection();
     testLoadAsyncSuccess();
     testLoadDirectoryTimeoutLateCompletion();
+    testLoadDirectoryInFlightSlotOwnership();
     testLoadDirectoryNormal();
     testPreloadHistogramPreserved();
     testPreloadAsyncBackgroundAndHandle();

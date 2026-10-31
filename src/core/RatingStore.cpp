@@ -546,9 +546,11 @@ bool RatingStore::saveSnapshot() const
 {
     // Snapshot the complete state under the state mutex, then write each
     // file through the crash-safe atomic replace helper (temp -> flush/close
-    // -> replace). A failed write leaves the previous official file intact;
-    // both files are individually atomic, and the snapshot is a consistent
-    // point-in-time view of every field.
+    // -> durable flush -> replace). A failed write leaves the previous
+    // official file intact. Each file is atomic on its own. Folding ratings
+    // and flags into one on-disk snapshot is deferred — a crash between the
+    // two replaces can still pair the new stars with the previous labels.
+    // The file format stays ratings.txt + flags.txt.
     std::string ratingsPath;
     std::string flagsPath;
     std::map<std::string, int> labels;

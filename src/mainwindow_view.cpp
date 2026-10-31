@@ -776,8 +776,17 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         auto *me = static_cast<QMouseEvent *>(event);
         if (me->button() == Qt::LeftButton)
         {
-            if (m_thumbnailPanel)
-                m_thumbnailPanel->revealSelected();
+            const QString shown = currentImagePath();
+            ThumbnailPanel *panel = activeThumbnailPanel();
+            if (!panel)
+                panel = m_thumbnailPanel;
+            if (panel)
+            {
+                if (!shown.isEmpty())
+                    panel->revealPath(shown);
+                else
+                    panel->revealSelected();
+            }
             return true;
         }
         if (me->button() == Qt::RightButton)

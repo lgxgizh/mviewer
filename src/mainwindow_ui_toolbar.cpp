@@ -385,13 +385,9 @@ void MainWindow::syncViewModeSegmentToolTips()
     }
 }
 
-void MainWindow::refreshBrowserLocation(const QString &path)
+void MainWindow::applyBrowserLocationTitle(const QString &path)
 {
-    if (m_breadcrumb)
-        m_breadcrumb->setPath(path);
     const QString native = QDir::toNativeSeparators(path);
-    if (m_pathEdit)
-        m_pathEdit->setText(native);
     const QString name = folderDisplayName(path);
     const QString click = tr("Click to edit the folder path");
     auto *title =
@@ -408,4 +404,25 @@ void MainWindow::refreshBrowserLocation(const QString &path)
         caption->setFullText(native);
         caption->setToolTip(native.isEmpty() ? click : QStringLiteral("%1\n%2").arg(native, click));
     }
+}
+
+void MainWindow::syncActiveBrowserTitle()
+{
+    QString path = currentDir();
+    if (secondaryNavActive() && m_secondaryThumbnailPanel)
+        path = m_secondaryThumbnailPanel->currentDir();
+    applyBrowserLocationTitle(path);
+}
+
+void MainWindow::refreshBrowserLocation(const QString &path)
+{
+    if (m_breadcrumb)
+        m_breadcrumb->setPath(path);
+    if (m_pathEdit)
+        m_pathEdit->setText(QDir::toNativeSeparators(path));
+    QString titlePath = path;
+    if (secondaryNavActive() && m_secondaryThumbnailPanel &&
+        !m_secondaryThumbnailPanel->currentDir().isEmpty())
+        titlePath = m_secondaryThumbnailPanel->currentDir();
+    applyBrowserLocationTitle(titlePath);
 }

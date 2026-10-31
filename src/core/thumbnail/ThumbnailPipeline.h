@@ -146,24 +146,9 @@ struct ThumbnailPipeline
         }
         else
         {
-            for (const auto &p : paths)
-            {
-                const std::string prefix = p + "\x1f";
-                for (auto it = m_failed.begin(); it != m_failed.end();)
-                {
-                    if (it->rfind(prefix, 0) == 0)
-                        it = m_failed.erase(it);
-                    else
-                        ++it;
-                }
-                for (auto it = m_attemptedKeys.begin(); it != m_attemptedKeys.end();)
-                {
-                    if (it->rfind(prefix, 0) == 0)
-                        it = m_attemptedKeys.erase(it);
-                    else
-                        ++it;
-                }
-            }
+            const std::unordered_set<std::string> listed(paths.begin(), paths.end());
+            erasePathKeys(m_failed, listed);
+            erasePathKeys(m_attemptedKeys, listed);
         }
         cancelObsoleteHandlesLocked();
     }
@@ -177,6 +162,28 @@ struct ThumbnailPipeline
             m_sources = slot.sources;
     }
 
+    // Drops "path\x1f..." keys whose path is listed: one pass, not paths x keys.
+    static void erasePathKeys(std::unordered_set<std::string> &keys,
+                              const std::unordered_set<std::string> &listed)
+    {
+        std::erase_if(keys,
+                      [&listed](const std::string &key)
+                      {
+                          const auto sep = key.find('\x1f');
+                          return sep != std::string::npos && listed.count(key.substr(0, sep)) != 0;
+                      });
+    }
+
+    // Failed keys block scroll refills. A source rebuild (filter, sort, scan)
+    // retries listed paths once; scheduleLocked does not clear m_failed.
+    void dropFailedForPathsLocked(const std::vector<std::string> &paths)
+    {
+        if (m_failed.empty())
+            return;
+        const std::unordered_set<std::string> listed(paths.begin(), paths.end());
+        erasePathKeys(m_failed, listed);
+    }
+
     void replaceSourcesForConsumer(int cid, const std::vector<std::string> &paths)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
@@ -184,6 +191,7 @@ struct ThumbnailPipeline
         slot.sources = paths;
         if (cid == 0)
             m_sources = paths;
+        dropFailedForPathsLocked(paths);
         cancelObsoleteHandlesLocked();
         scheduleLocked(false);
     }
@@ -195,6 +203,7 @@ struct ThumbnailPipeline
         slot.sources = paths;
         if (cid == 0)
             m_sources = paths;
+        dropFailedForPathsLocked(paths);
         cancelObsoleteHandlesLocked();
         scheduleLocked(false);
     }
