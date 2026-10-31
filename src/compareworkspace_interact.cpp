@@ -498,8 +498,9 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
     if (isFit)
     {
         const double shown = displayedScale(refCell);
-        const double factor = std::abs(shown - 1.0) < 0.005 ? 2.0
-                              : (!(shown > 0.0) ? (1.0 / currentScale) : (1.0 / shown));
+        const double factor = std::abs(shown - 1.0) < 0.005
+                                  ? 2.0
+                                  : (!(shown > 0.0) ? (1.0 / currentScale) : (1.0 / shown));
         const double ratio = canvasOffsetRatio(refCell);
         applyAnchorZoom(refCell, anchorX / ratio, anchorY / ratio, factor);
         showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("View zoom: 200%")
