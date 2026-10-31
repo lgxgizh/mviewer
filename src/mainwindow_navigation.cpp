@@ -2,9 +2,6 @@
 #include "directorytree.h"
 #include "mainwindow_p.h"
 
-#include <QLineEdit>
-#include <QSpinBox>
-
 void MainWindow::scheduleSidecarImport(const QString &dir)
 {
     TaskScheduler::cancel(m_sidecarImportTask);
@@ -145,10 +142,7 @@ void MainWindow::refreshActiveBrowse()
     if (secondaryNavActive())
     {
         if (m_secondaryThumbnailPanel)
-        {
             m_secondaryThumbnailPanel->refresh();
-            reapplySharedBrowseFilters(m_secondaryThumbnailPanel);
-        }
         if (m_secondaryDirectoryMonitor)
             m_secondaryDirectoryMonitor->reconcileNow();
         return;
@@ -567,7 +561,7 @@ void MainWindow::clearAllFilters()
         m_ratingFilter->setCurrentIndex(0);
     if (m_flagFilter)
         m_flagFilter->setCurrentIndex(0);
-    eachBrowsePanel(
+    eachFilterPanel(
         [](ThumbnailPanel *panel)
         {
             panel->clearFlagFilters();
@@ -588,7 +582,7 @@ void MainWindow::resetFiltersOnFolderChange()
         m_ratingFilter->setCurrentIndex(0);
     if (m_flagFilter)
         m_flagFilter->setCurrentIndex(0);
-    eachBrowsePanel(
+    eachFilterPanel(
         [](ThumbnailPanel *panel)
         {
             panel->clearFlagFilters();
@@ -637,30 +631,6 @@ void MainWindow::applyFlagFilterToPanel(ThumbnailPanel *panel, int rating, int f
     }
 }
 
-void MainWindow::reapplySharedBrowseFilters(ThumbnailPanel *panel)
-{
-    if (!panel)
-        return;
-    if (m_searchMeta)
-        panel->setMetaSearch(m_searchMeta->isChecked());
-    const int rating = m_ratingFilter ? m_ratingFilter->currentData().toInt() : 0;
-    const int flag = m_flagFilter ? m_flagFilter->currentData().toInt() : 0;
-    applyFlagFilterToPanel(panel, rating, flag);
-    if (auto *cam = findChild<QLineEdit *>(QStringLiteral("cameraFilterEdit")))
-        panel->setCameraFilter(cam->text());
-    if (auto *lens = findChild<QLineEdit *>(QStringLiteral("lensFilterEdit")))
-        panel->setLensFilter(lens->text());
-    if (auto *iso = findChild<QSpinBox *>(QStringLiteral("isoFilterSpin")))
-        panel->setIsoFilter(iso->value());
-    if (auto *tag = findChild<QLineEdit *>(QStringLiteral("tagFilterEdit")))
-        panel->setTagFilter(tag->text());
-    const QString text = m_searchEdit ? m_searchEdit->text() : QString();
-    const bool recursive = m_searchRecursive && m_searchRecursive->isChecked();
-    // Last: setDirectory clears the filename query, and earlier setters must
-    // already be in the snapshot this rebuild publishes.
-    panel->setFilter(text, recursive);
-}
-
 void MainWindow::invalidateBrowseRatings()
 {
     eachBrowsePanel([](ThumbnailPanel *panel) { panel->invalidateRatings(); });
@@ -670,6 +640,6 @@ void MainWindow::applySharedSearchFilter()
 {
     const QString text = m_searchEdit ? m_searchEdit->text() : QString();
     const bool recursive = m_searchRecursive && m_searchRecursive->isChecked();
-    eachBrowsePanel([text, recursive](ThumbnailPanel *panel)
+    eachFilterPanel([text, recursive](ThumbnailPanel *panel)
                     { panel->setFilter(text, recursive); });
 }

@@ -318,10 +318,6 @@ void MainWindow::openRightDirectory(const QString &dir)
     setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
     updateSwapButtonEnabled();
     updateSecondaryNavButtons();
-    // setDirectory clears the filename query. Copy the shared filters back,
-    // including when this pane was already the active one.
-    if (m_secondaryThumbnailPanel)
-        reapplySharedBrowseFilters(m_secondaryThumbnailPanel);
     syncActiveBrowserTitle();
 }
 
@@ -362,7 +358,6 @@ void MainWindow::swapBrowsePanes()
         m_secondaryBrowseHistory.push(QDir::cleanPath(leftDir));
         if (m_selection)
             m_selection->setPaneSelection(SelectionModel::PaneSlot::Secondary, leftSel);
-        reapplySharedBrowseFilters(m_secondaryThumbnailPanel);
     }
     updateSecondaryNavButtons();
     updateSplitBrowseCompareButton();

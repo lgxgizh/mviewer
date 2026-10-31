@@ -309,7 +309,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::onSearchMetaToggled(bool on)
 {
-    eachBrowsePanel([on](ThumbnailPanel *panel) { panel->setMetaSearch(on); });
+    eachFilterPanel([on](ThumbnailPanel *panel) { panel->setMetaSearch(on); });
 }
 
 void MainWindow::scheduleReindex()
@@ -394,7 +394,7 @@ void MainWindow::reindexSearch()
 void MainWindow::onRatingFilterChanged(int)
 {
     const int rating = m_ratingFilter->currentData().toInt();
-    eachBrowsePanel([rating](ThumbnailPanel *panel) { panel->setRatingFilter(rating); });
+    eachFilterPanel([rating](ThumbnailPanel *panel) { panel->setRatingFilter(rating); });
 }
 
 void MainWindow::rateCurrentImage(int stars)
@@ -414,7 +414,7 @@ void MainWindow::onFlagFilterChanged(int)
 {
     const int rating = m_ratingFilter ? m_ratingFilter->currentData().toInt() : 0;
     const int flag = m_flagFilter ? m_flagFilter->currentData().toInt() : 0;
-    eachBrowsePanel([this, rating, flag](ThumbnailPanel *panel)
+    eachFilterPanel([this, rating, flag](ThumbnailPanel *panel)
                     { applyFlagFilterToPanel(panel, rating, flag); });
 }
 
@@ -569,15 +569,16 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     // P0: Auto-locate the directory tree to the image's parent folder. The tree
     // short-circuits an already-selected directory in memory. A new folder is
     // confirmed off the GUI thread so a stale volume cannot freeze selection.
-    // Only a file in the left gallery may move the tree. absolutePath() keeps
-    // drive roots (C:/); a right-pane image must not retarget the highlight.
+    // In split browse only a file in the left gallery may move the tree; a
+    // right-pane image must not retarget it. absolutePath() keeps C:/ intact.
     const int slash = path.lastIndexOf(QChar('/'));
     const int backslash = path.lastIndexOf(QChar('\\'));
     const int separator = qMax(slash, backslash);
     const QString imageDir = QFileInfo(path).absolutePath();
     const QString leftDir = m_thumbnailPanel ? m_thumbnailPanel->currentDir() : QString();
-    if (m_directoryTree && !imageDir.isEmpty() && !leftDir.isEmpty() &&
-        DirectoryTree::equivalentPath(imageDir, leftDir))
+    const bool leftImage = !m_splitBrowseEnabled ||
+                           (!leftDir.isEmpty() && DirectoryTree::equivalentPath(imageDir, leftDir));
+    if (m_directoryTree && !imageDir.isEmpty() && leftImage)
         m_directoryTree->navigateTo(imageDir);
 
     mviewer::core::RatingStore::instance().addRecent(path.toUtf8().toStdString()); // P3 recents

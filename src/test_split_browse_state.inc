@@ -1,6 +1,6 @@
 // Included by test_split_browse_acceptance.cpp (inside its anonymous
 // namespace): split-browse selection, folder tree, active-pane commands,
-// the right address bar, and shared filters.
+// the right address bar, and left-only filters.
 
 bool titleShowsFolder(QLabel *title, const QString &name)
 {
@@ -21,7 +21,7 @@ void pumpUi(int turns)
 }
 
 // Regression: left navigation, the folder tree, active-pane commands, the
-// right address bar, and shared filters stay on the pane they belong to.
+// right address bar, and filters stay on the pane they belong to.
 void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const QString &thirdDir)
 {
     std::cout << "--- TC-SB-19: split browse pane state ---" << std::endl;
@@ -55,12 +55,8 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
     EXPECT(right != nullptr, "right pane exists");
     if (!right)
         return;
-    EXPECT(
-        waitUntil(
-            [&]()
-            { return sameDirPath(right->currentDir(), leftDir) && right->pathList().size() == 1; },
-            200),
-        "opening split copies the filename search onto the right pane");
+    EXPECT(waitUntil([&]() { return sameDirPath(right->currentDir(), leftDir); }, 200),
+           "opening split mirrors the left folder");
     if (search)
         search->clear();
     mw.openRightDirectory(rightDir);
@@ -117,10 +113,8 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
     if (rating)
     {
         rating->setCurrentIndex(5);
-        EXPECT(waitUntil([&]()
-                         { return left->pathList().isEmpty() && right->pathList().isEmpty(); },
-                         200),
-               "rating filter applies to both panes");
+        EXPECT(waitUntil([&]() { return left->pathList().isEmpty(); }, 200),
+               "rating filter applies to the left gallery");
         rating->setCurrentIndex(0);
         EXPECT(waitUntil([&]()
                          { return left->pathList().size() >= 2 && right->pathList().size() >= 2; },
@@ -216,6 +210,7 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
            "Alt+D selects the left address bar");
 
     mw.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
+    pathEdit->setFocus(Qt::OtherFocusReason);
     pathEdit->setText(QDir::toNativeSeparators(right->currentDir()));
     pathEdit->setCursorPosition(1);
     pathEdit->deselect();
@@ -227,19 +222,16 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
 
     if (search)
         search->setText(QStringLiteral("_a"));
-    EXPECT(waitUntil([&]()
-                     { return left->pathList().size() == 1 && right->pathList().size() == 1; },
-                     200),
-           "filename search filters both panes while split is open");
+    EXPECT(waitUntil([&]() { return left->pathList().size() == 1; }, 200),
+           "filename search filters the left gallery while split is open");
     auto *refresh = mw.findChild<QAction *>(QStringLiteral("refreshDirectoryAction"));
     EXPECT(refresh && refresh->isEnabled(), "refresh is enabled for the active right folder");
     if (refresh)
         refresh->trigger();
-    EXPECT(waitUntil([&]() { return right->pathList().size() == 1; }, 200),
-           "refresh of the right pane settles on the shared search");
+    EXPECT(waitUntil([&]() { return right->pathList().size() >= 2; }, 200),
+           "refresh of the right pane relists its folder");
     pumpUi(40);
-    EXPECT(right->pathList().size() == 1 && sameDirPath(right->currentDir(), rightDir),
-           "refresh keeps the shared filename filter on the right pane");
+    EXPECT(sameDirPath(right->currentDir(), rightDir), "refresh keeps the right folder");
     if (search)
         search->clear();
 }

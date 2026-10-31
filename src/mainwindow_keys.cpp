@@ -91,10 +91,8 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
     // that owns the event insert the character or copy its own selection.
     if (mviewer_keys::textEntryOwnsKey(qobject_cast<QWidget *>(watched), ke))
         return false;
-    // A focused right-pane editor keeps Ctrl+F. Letting it through runs the
-    // address-bar command and moves focus to the path field.
-    const auto ctrl = ke->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
-    if (ctrl == Qt::ControlModifier && ke->key() == Qt::Key_F && secondaryLineEditOwns(watched))
+    // A focused right-pane editor keeps Ctrl+F (see secondaryEditorKeepsKey).
+    if (secondaryEditorKeepsKey(watched, ke))
         return true;
     if (watched == m_searchEdit)
     {

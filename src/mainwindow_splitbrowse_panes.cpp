@@ -220,9 +220,6 @@ void MainWindow::mirrorPrimaryIntoSecondary()
     m_secondaryThumbnailPanel->clearSelection();
     if (m_selection)
         m_selection->setPaneSelection(SelectionModel::PaneSlot::Secondary, QStringList());
-    // Same folder skips setDirectory, which is also what clears a search that
-    // was typed before the split opened. Copy the shared filters either way.
-    reapplySharedBrowseFilters(m_secondaryThumbnailPanel);
 }
 
 void MainWindow::disableSplitBrowseUi()

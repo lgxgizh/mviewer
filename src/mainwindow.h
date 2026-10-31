@@ -212,6 +212,7 @@ class MainWindow : public QMainWindow
     bool secondaryBrowseOwns(QObject *watched) const;
     // True when `watched` is a line edit inside the right browse pane.
     bool secondaryLineEditOwns(QObject *watched) const;
+    bool secondaryEditorKeepsKey(QObject *watched, const QKeyEvent *ke) const;
     void enableSplitBrowseUi();
     void mirrorPrimaryIntoSecondary();
     void disableSplitBrowseUi();
@@ -560,8 +561,7 @@ class MainWindow : public QMainWindow
     void updateCacheStat();
     static QString formatBytes(qint64 bytes);
 
-    // Filename, rating, flag, and metadata filters are shared. While split
-    // browse is open they apply to both panes.
+    // Rating repaints reach every open pane.
     template <typename Fn> void eachBrowsePanel(Fn &&fn)
     {
         if (m_thumbnailPanel)
@@ -569,8 +569,15 @@ class MainWindow : public QMainWindow
         if (m_splitBrowseEnabled && m_secondaryThumbnailPanel)
             fn(m_secondaryThumbnailPanel);
     }
+    // Filename, rating, flag, and metadata filters drive the left gallery only.
+    // Mirroring them onto the right pane is deferred: re-filtering that pane
+    // during split entry and left navigation disturbed both pane selections.
+    template <typename Fn> void eachFilterPanel(Fn &&fn)
+    {
+        if (m_thumbnailPanel)
+            fn(m_thumbnailPanel);
+    }
     void applyFlagFilterToPanel(ThumbnailPanel *panel, int rating, int flag);
-    void reapplySharedBrowseFilters(ThumbnailPanel *panel);
     void invalidateBrowseRatings();
     void applySharedSearchFilter();
 
@@ -650,6 +657,7 @@ class MainWindow : public QMainWindow
     // Keep directory/image history and folder command boundaries in sync.
     void updateNavigationActions();
     void refreshActiveBrowse();
+    void clearPrimarySelectionForFolderChange();
     // M19: ensure ImageListModel is populated for the current directory.
     void ensureImageList();
     // M19: apply SelectionModel multi-selection onto the gallery (one-way).

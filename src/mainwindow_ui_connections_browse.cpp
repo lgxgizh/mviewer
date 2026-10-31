@@ -87,15 +87,7 @@ void MainWindow::connectNavigationSignals()
                 // across folders. The stats callback below selects the first
                 // new item exactly once after the scan has produced rows.
                 m_autoSelectFirstPending = true;
-                if (m_selection)
-                {
-                    // The right pane keeps its own selection. Single-pane still
-                    // drops focused and compared images with the selection.
-                    if (m_selection->isSplitModeEnabled())
-                        m_selection->clearPane(SelectionModel::PaneSlot::Primary);
-                    else
-                        m_selection->clear();
-                }
+                clearPrimarySelectionForFolderChange();
                 resetFiltersOnFolderChange();
                 refreshBrowserLocation(path);
                 m_directory->setCurrentDirectory(path);
@@ -209,4 +201,16 @@ void MainWindow::onPanelThumbnailReady(ThumbnailPanel *panel, const QString &pat
     if (m_imageViewer && !m_imageViewer->isHidden() &&
         ImageViewer::browsePathEquals(m_imageViewer->currentPath(), path))
         m_imageViewer->setProvisionalImage(path, warm.toImage(), knownSourceSize);
+}
+
+void MainWindow::clearPrimarySelectionForFolderChange()
+{
+    if (!m_selection)
+        return;
+    // The right pane keeps its own selection. Single-pane still drops focused
+    // and compared images with the selection.
+    if (m_selection->isSplitModeEnabled())
+        m_selection->clearPane(SelectionModel::PaneSlot::Primary);
+    else
+        m_selection->clear();
 }
