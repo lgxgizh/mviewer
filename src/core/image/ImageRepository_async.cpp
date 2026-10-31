@@ -192,7 +192,7 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     {
         const auto sequence = mviewer::core::FrameSequenceReader::probeSequence(filePath);
         if (sequence.valid && sequence.frameCount > 1)
-            return loadFrame(filePath, sequence.defaultFrame, opts);
+            return loadFrameWithSequence(filePath, sequence.defaultFrame, opts, sequence);
     }
 
     Result res;
