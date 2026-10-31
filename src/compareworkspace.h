@@ -353,9 +353,7 @@ class CompareWorkspace : public QWidget
     uint64_t m_roiGen = 0;
     TaskScheduler::TaskHandle m_roiTask;
     bool m_roiLinked = false;
-    // Unlinked ROI set by applySelectionToAll (API/session): histograms
-    // apply m_lastSelection to every pane, as before per-pane drawing.
-    bool m_sharedUnlinkedRoi = false;
+    bool m_sharedUnlinkedRoi = false; // API/session ROI: every pane histogram
     mviewer::ui::ROIMeasurementState m_roiState = mviewer::ui::ROIMeasurementState::Idle;
     QString m_roiStateDetail;
     std::optional<ROIStatsBatchResult> m_roiResult;
