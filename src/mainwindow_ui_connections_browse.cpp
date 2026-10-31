@@ -3,7 +3,41 @@
 #include "mainwindow_p.h"
 
 #include <QHash>
+
+#include <algorithm>
+#include <iterator>
 #include <vector>
+
+namespace
+{
+// Images whose base name matches an added, modified or removed sidecar. The
+// gallery is indexed once per delta so a sidecar burst is not files x sidecars.
+QStringList imagesForSidecarDelta(const mviewer::core::DirectoryDelta &delta,
+                                  const QList<ThumbnailPanel::Entry> &images)
+{
+    const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
+        &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
+    QStringList out;
+    if (std::all_of(std::begin(lists), std::end(lists), [](const auto *l) { return l->empty(); }))
+        return out;
+    QHash<QString, QStringList> imagesByBase;
+    imagesByBase.reserve(images.size());
+    for (const auto &image : images)
+        imagesByBase[QFileInfo(image.path).completeBaseName()].append(image.path);
+    for (const auto *list : lists)
+    {
+        for (const auto &entry : *list)
+        {
+            const QString sidecar =
+                QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
+            const auto found = imagesByBase.constFind(QFileInfo(sidecar).completeBaseName());
+            if (found != imagesByBase.cend())
+                out.append(found.value());
+        }
+    }
+    return out;
+}
+} // namespace
 
 void MainWindow::connectNavigationSignals()
 {
@@ -23,40 +57,8 @@ void MainWindow::connectNavigationSignals()
     connect(m_directoryMonitor, &DirectoryMonitor::directoryDeltaReady, this,
             [this](const mviewer::core::DirectoryDelta &delta)
             {
-                QStringList sidecarImages;
-                const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
-                    &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
-                bool hasSidecars = false;
-                for (const auto *list : lists)
-                {
-                    if (!list->empty())
-                    {
-                        hasSidecars = true;
-                        break;
-                    }
-                }
-                if (hasSidecars)
-                {
-                    QHash<QString, QStringList> imagesByBase;
-                    const auto &images = m_thumbnailPanel->entries();
-                    imagesByBase.reserve(images.size());
-                    for (const auto &image : images)
-                    {
-                        imagesByBase[QFileInfo(image.path).completeBaseName()].append(image.path);
-                    }
-                    for (const auto *list : lists)
-                    {
-                        for (const auto &entry : *list)
-                        {
-                            const QString sidecar = QString::fromUtf8(
-                                entry.path.data(), static_cast<int>(entry.path.size()));
-                            const QString base = QFileInfo(sidecar).completeBaseName();
-                            const auto found = imagesByBase.constFind(base);
-                            if (found != imagesByBase.cend())
-                                sidecarImages.append(found.value());
-                        }
-                    }
-                }
+                QStringList sidecarImages =
+                    imagesForSidecarDelta(delta, m_thumbnailPanel->entries());
                 sidecarImages.removeDuplicates();
                 scheduleSidecarImportPaths(sidecarImages);
             });

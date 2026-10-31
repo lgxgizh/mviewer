@@ -64,6 +64,8 @@ void ThumbnailPanel::invalidateSourceImage(const QString &path)
     updateVisibleRange();
 }
 
+// Caller holds m_thumbMtx. cacheKey is galleryPathKey + 0x1f + size; the
+// by-path index keeps the alternate-size fallback in thumbReady() O(1).
 void ThumbnailPanel::rememberThumbReadyKeyLocked(const QString &cacheKey) const
 {
     const int sep = cacheKey.indexOf(QChar(0x1f));
