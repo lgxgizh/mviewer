@@ -280,12 +280,12 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     isoSpin->setToolTip(tr("Filter by exact ISO (0 = all)"));
     isoSpin->setFixedWidth(72);
     advancedLayout->addWidget(isoSpin);
-    connect(camEdit, &QLineEdit::textChanged, this,
-            [this](const QString &t) { m_thumbnailPanel->setCameraFilter(t); });
-    connect(lensEdit, &QLineEdit::textChanged, this,
-            [this](const QString &t) { m_thumbnailPanel->setLensFilter(t); });
-    connect(isoSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
-            [this](int v) { m_thumbnailPanel->setIsoFilter(v); });
+    connect(camEdit, &QLineEdit::textChanged, this, [this](const QString &t)
+            { eachBrowsePanel([&t](ThumbnailPanel *panel) { panel->setCameraFilter(t); }); });
+    connect(lensEdit, &QLineEdit::textChanged, this, [this](const QString &t)
+            { eachBrowsePanel([&t](ThumbnailPanel *panel) { panel->setLensFilter(t); }); });
+    connect(isoSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v)
+            { eachBrowsePanel([v](ThumbnailPanel *panel) { panel->setIsoFilter(v); }); });
 
     // P0 #①: free-form tag filter.
     auto *tagEdit = new QLineEdit(sortBar);
@@ -295,8 +295,8 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     tagEdit->setClearButtonEnabled(true);
     tagEdit->setToolTip(tr("Filter by tag exactly (empty = all)"));
     advancedLayout->addWidget(tagEdit);
-    connect(tagEdit, &QLineEdit::textChanged, this,
-            [this](const QString &t) { m_thumbnailPanel->setTagFilter(t); });
+    connect(tagEdit, &QLineEdit::textChanged, this, [this](const QString &t)
+            { eachBrowsePanel([&t](ThumbnailPanel *panel) { panel->setTagFilter(t); }); });
 
     // Clear Filters resets the transient filters only; the file type set is
     // a persisted browse preference (RAW hidden by default) and stays.

@@ -333,10 +333,8 @@ void MainWindow::connectFilterSignals()
 
     // M18: live search → gallery filter (debounced via textChanged; recursive
     // checkbox re-applies immediately).
-    connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString &)
-            { m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked()); });
-    connect(m_searchRecursive, &QCheckBox::toggled, this, [this](bool)
-            { m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked()); });
+    connect(m_searchEdit, &QLineEdit::textChanged, this, &MainWindow::applySharedSearchFilter);
+    connect(m_searchRecursive, &QCheckBox::toggled, this, &MainWindow::applySharedSearchFilter);
     // P1: metadata search toggle — re-applies the active filter against embedded
     // metadata instead of just filenames.
     connect(m_searchMeta, &QCheckBox::toggled, this, &MainWindow::onSearchMetaToggled);
@@ -361,8 +359,13 @@ void MainWindow::connectFilterSignals()
                 Q_UNUSED(path);
                 // Same pipeline as keyboard and context-menu ratings: repaint
                 // and re-evaluate an active rating/flag filter.
-                m_thumbnailPanel->invalidateRatings();
+                invalidateBrowseRatings();
             });
+    auto refreshRatings = [this]() { invalidateBrowseRatings(); };
+    if (m_thumbnailPanel)
+        connect(m_thumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
+    if (m_secondaryThumbnailPanel)
+        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
 }
 
 void MainWindow::connectMenuSignals()
@@ -387,19 +390,14 @@ void MainWindow::connectMenuSignals()
                 if (!currentDir().isEmpty() && parent.cdUp())
                     changeDirectory(parent.absolutePath());
             });
-    connect(m_actRefresh, &QAction::triggered, this,
-            [this]()
-            {
-                if (m_directoryTree)
-                    m_directoryTree->refresh();
-                if (m_directoryMonitor)
-                    m_directoryMonitor->reconcileNow();
-            });
+    connect(m_actRefresh, &QAction::triggered, this, [this]() { refreshActiveBrowse(); });
     connect(m_actOpenCurrentFolder, &QAction::triggered, this,
             [this]()
             {
-                if (m_thumbnailPanel)
-                    m_thumbnailPanel->openCurrentFolder();
+                ThumbnailPanel *panel =
+                    secondaryNavActive() ? m_secondaryThumbnailPanel : m_thumbnailPanel;
+                if (panel)
+                    panel->openCurrentFolder();
             });
 
     // Path input bar: pressing Enter navigates to the typed directory.

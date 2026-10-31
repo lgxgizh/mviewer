@@ -645,20 +645,27 @@ void ThumbnailPanel::movePathsTo(const QStringList &paths)
     ThumbnailPanelTransfer::movePathsInto(*this, paths, dir);
 }
 
+void ThumbnailPanel::revealPath(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    const QString native = QDir::toNativeSeparators(path);
+    // startDetached, not execute(): QProcess::execute blocks until the child
+    // exits, and handing off to the shell can take hundreds of ms to seconds
+    // (busy Explorer / slow or network path) with the UI frozen for all of it.
+#ifdef Q_OS_WIN
+    QProcess::startDetached("explorer.exe", QStringList{QStringLiteral("/select,") + native});
+#else
+    QProcess::startDetached("xdg-open", QStringList() << QFileInfo(path).absolutePath());
+#endif
+}
+
 void ThumbnailPanel::revealSelected()
 {
     const QStringList paths = selectedPaths();
     if (paths.isEmpty())
         return;
-    const QString p = QDir::toNativeSeparators(paths.first());
-    // startDetached, not execute(): QProcess::execute blocks until the child
-    // exits, and handing off to the shell can take hundreds of ms to seconds
-    // (busy Explorer / slow or network path) with the UI frozen for all of it.
-#ifdef Q_OS_WIN
-    QProcess::startDetached("explorer.exe", QStringList{QStringLiteral("/select,") + p});
-#else
-    QProcess::startDetached("xdg-open", QStringList() << QFileInfo(paths.first()).absolutePath());
-#endif
+    revealPath(paths.first());
 }
 
 void ThumbnailPanel::openCurrentFolder()

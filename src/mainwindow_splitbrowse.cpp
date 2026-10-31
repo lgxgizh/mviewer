@@ -43,9 +43,22 @@ QWidget *MainWindow::buildSecondaryHeaderBar(QWidget *pane)
     connect(m_secondaryPathEdit, &QLineEdit::returnPressed, this,
             [this]()
             {
-                const QString p = m_secondaryPathEdit->text().trimmed();
-                if (!p.isEmpty())
-                    openRightDirectory(p);
+                const QString typed = m_secondaryPathEdit->text().trimmed();
+                if (typed.isEmpty())
+                    return;
+                const QString text = QDir::fromNativeSeparators(typed);
+                const QFileInfo info(text);
+                if (QDir(text).exists() && info.exists() && info.isDir())
+                {
+                    openRightDirectory(QDir::cleanPath(text));
+                    return;
+                }
+                if (statusBar())
+                    statusBar()->showMessage(tr("Path does not exist: %1").arg(text), 5000);
+                const QString current =
+                    m_secondaryThumbnailPanel ? m_secondaryThumbnailPanel->currentDir() : QString();
+                if (!current.isEmpty())
+                    m_secondaryPathEdit->setText(QDir::toNativeSeparators(current));
             });
     hLayout->addWidget(m_secondaryPathEdit, 1);
 
@@ -305,6 +318,11 @@ void MainWindow::openRightDirectory(const QString &dir)
     setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
     updateSwapButtonEnabled();
     updateSecondaryNavButtons();
+    // setDirectory clears the filename query. Copy the shared filters back,
+    // including when this pane was already the active one.
+    if (m_secondaryThumbnailPanel)
+        reapplySharedBrowseFilters(m_secondaryThumbnailPanel);
+    syncActiveBrowserTitle();
 }
 
 void MainWindow::swapBrowsePanes()
@@ -344,6 +362,7 @@ void MainWindow::swapBrowsePanes()
         m_secondaryBrowseHistory.push(QDir::cleanPath(leftDir));
         if (m_selection)
             m_selection->setPaneSelection(SelectionModel::PaneSlot::Secondary, leftSel);
+        reapplySharedBrowseFilters(m_secondaryThumbnailPanel);
     }
     updateSecondaryNavButtons();
     updateSplitBrowseCompareButton();
@@ -367,6 +386,7 @@ void MainWindow::setActiveBrowsePane(SelectionModel::PaneSlot pane)
         m_selection->setActivePane(pane);
     updateActivePaneIndicator();
     updateNavigationActions();
+    syncActiveBrowserTitle();
 }
 
 void MainWindow::updateSplitBrowseCompareButton()

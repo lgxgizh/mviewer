@@ -88,7 +88,14 @@ void MainWindow::connectNavigationSignals()
                 // new item exactly once after the scan has produced rows.
                 m_autoSelectFirstPending = true;
                 if (m_selection)
-                    m_selection->clear();
+                {
+                    // The right pane keeps its own selection. Single-pane still
+                    // drops focused and compared images with the selection.
+                    if (m_selection->isSplitModeEnabled())
+                        m_selection->clearPane(SelectionModel::PaneSlot::Primary);
+                    else
+                        m_selection->clear();
+                }
                 resetFiltersOnFolderChange();
                 refreshBrowserLocation(path);
                 m_directory->setCurrentDirectory(path);
@@ -159,7 +166,13 @@ void MainWindow::connectGallerySignals()
                 }
                 if (!m_autoSelectFirstPending || total <= 0 || !m_selection || !m_thumbnailPanel)
                     return;
-                if (!m_selection->currentImage().isEmpty())
+                // In split mode the merged current image can be the right pane.
+                // Only a left-pane current image cancels this auto-select.
+                const bool split = m_selection->isSplitModeEnabled();
+                const QString already =
+                    split ? m_selection->paneCurrentImage(SelectionModel::PaneSlot::Primary)
+                          : m_selection->currentImage();
+                if (!already.isEmpty())
                 {
                     m_autoSelectFirstPending = false;
                     return;
@@ -168,7 +181,14 @@ void MainWindow::connectGallerySignals()
                 if (first.isEmpty())
                     return;
                 m_autoSelectFirstPending = false;
-                m_selection->setCurrentImage(first);
+                if (split)
+                {
+                    m_selection->setPaneSelection(SelectionModel::PaneSlot::Primary,
+                                                  QStringList{first}, first);
+                    syncGalleryFromSelection();
+                }
+                else
+                    m_selection->setCurrentImage(first);
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::currentThumbnailReady, this,
             [this](const QString &path) { onPanelThumbnailReady(m_thumbnailPanel, path); });

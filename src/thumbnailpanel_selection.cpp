@@ -303,6 +303,7 @@ void ThumbnailPanel::batchRateSelected(int stars)
     }
     asyncWriteSidecars(toWrite);
     invalidateRatings();
+    emit ratingsChanged();
 }
 
 void ThumbnailPanel::batchSetColorLabelSelected(int label)
@@ -321,6 +322,7 @@ void ThumbnailPanel::batchSetColorLabelSelected(int label)
     }
     asyncWriteSidecars(toWrite);
     invalidateRatings();
+    emit ratingsChanged();
 }
 
 void ThumbnailPanel::batchSetFlagSelected(bool reject, bool pick)
@@ -340,6 +342,7 @@ void ThumbnailPanel::batchSetFlagSelected(bool reject, bool pick)
     }
     asyncWriteSidecars(toWrite);
     invalidateRatings();
+    emit ratingsChanged();
 }
 
 void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)

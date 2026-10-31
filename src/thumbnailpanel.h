@@ -321,6 +321,8 @@ class ThumbnailPanel : public QListView
     void copySelectedTo();
     void moveSelectedTo();
     void revealSelected();
+    // Reveal `path` in the OS file manager. Empty paths are ignored.
+    void revealPath(const QString &path);
     // Open the folder currently shown in the gallery in the OS file manager.
     void openCurrentFolder();
     // Paste clipboard images/files into the current browse directory.
@@ -483,6 +485,9 @@ class ThumbnailPanel : public QListView
     // First progressive batch is in the model, or the scan settled (including
     // empty). DirectoryTree uses this to start its highlight after first paint.
     void galleryModelReady();
+    // A rating, color label, pick, or reject was written from this gallery.
+    // The host repaints every open pane; invalidateRatings() itself does not emit.
+    void ratingsChanged();
 
   private slots:
     void onThumbReady(const QString &path);

@@ -178,6 +178,8 @@ class MainWindow : public QMainWindow
     void addComparePill(QWidget *cluster);
     void attachUnifiedToolbarControls();
     void refreshBrowserLocation(const QString &path);
+    void applyBrowserLocationTitle(const QString &path);
+    void syncActiveBrowserTitle();
     void syncViewModeSegmentToolTips();
     void installNavigationCollapse();
     void polishGalleryToolbar(QWidget *sortBar);
@@ -208,6 +210,8 @@ class MainWindow : public QMainWindow
     bool routeSecondaryBrowseKey(QObject *watched, QEvent *event);
     bool routeDirectoryHistoryMouse(QObject *watched, QEvent *event);
     bool secondaryBrowseOwns(QObject *watched) const;
+    // True when `watched` is a line edit inside the right browse pane.
+    bool secondaryLineEditOwns(QObject *watched) const;
     void enableSplitBrowseUi();
     void mirrorPrimaryIntoSecondary();
     void disableSplitBrowseUi();
@@ -556,6 +560,20 @@ class MainWindow : public QMainWindow
     void updateCacheStat();
     static QString formatBytes(qint64 bytes);
 
+    // Filename, rating, flag, and metadata filters are shared. While split
+    // browse is open they apply to both panes.
+    template <typename Fn> void eachBrowsePanel(Fn &&fn)
+    {
+        if (m_thumbnailPanel)
+            fn(m_thumbnailPanel);
+        if (m_splitBrowseEnabled && m_secondaryThumbnailPanel)
+            fn(m_secondaryThumbnailPanel);
+    }
+    void applyFlagFilterToPanel(ThumbnailPanel *panel, int rating, int flag);
+    void reapplySharedBrowseFilters(ThumbnailPanel *panel);
+    void invalidateBrowseRatings();
+    void applySharedSearchFilter();
+
     // P1: gallery search/filter controls.
     void onSearchMetaToggled(bool on);
     void onRatingFilterChanged(int index);
@@ -631,12 +649,15 @@ class MainWindow : public QMainWindow
     void moveViewerImage();
     // Keep directory/image history and folder command boundaries in sync.
     void updateNavigationActions();
+    void refreshActiveBrowse();
     // M19: ensure ImageListModel is populated for the current directory.
     void ensureImageList();
     // M19: apply SelectionModel multi-selection onto the gallery (one-way).
     void syncGalleryFromSelection();
     // Convenience accessors over the UI models (read-only mirrors for call sites).
     QString currentDir() const;
+    // Left folder, or the right folder while that pane is the active one.
+    QString activeBrowseDirectory() const;
     QString currentImagePath() const;
     // M15: crash recovery
     void autosaveSession();

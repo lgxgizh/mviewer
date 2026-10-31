@@ -21,6 +21,7 @@
 #include "compareworkspace_caption.h"
 #include "core/image/ImageFormats.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
+#include "directorytree.h"
 #include "formatfiltercombo.h"
 #include "mainwindow.h"
 #include "naturalnameorder.h"
@@ -35,6 +36,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -42,6 +44,7 @@
 #include <QSettings>
 #include <QSplitter>
 #include <QStandardPaths>
+#include <QStatusBar>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QToolBar>
@@ -632,6 +635,7 @@ void testUnionCompareAndHeader(const QString &leftDir, const QString &rightDir)
 }
 
 #include "test_split_browse_mirror.inc"
+#include "test_split_browse_state.inc"
 #include "test_split_browse_typefilter.inc"
 
 void testBrowseUx()
@@ -658,6 +662,7 @@ void testBrowseUx()
     QDir().mkpath(thirdDir);
     writeBrowseFixture(thirdDir, QStringLiteral("t"));
     testSplitMirrorsSinglePane(leftDir, rightDir, thirdDir);
+    testSplitBrowseState(leftDir, rightDir, thirdDir);
 }
 
 } // namespace

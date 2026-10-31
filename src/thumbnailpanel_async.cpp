@@ -470,9 +470,11 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     // Progressive batches used replaceSources for convergence; completed scan
     // and subsequent filter rebuilds must use updateSources so in-flight
     // viewport decodes are retained across the rebuild.
+    // A filter applied while the scan runs (the right pane restores the shared
+    // filename search after setDirectory clears it) still has to win.
     const bool wasProgressive = m_scanProgressive && m_paths.size() == entries.size();
     m_scanProgressive = false;
-    if (wasProgressive)
+    if (wasProgressive && !hasActiveBrowseFilter())
     {
         pruneThumbnailState();
         ThumbnailPipeline::instance().updateSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
