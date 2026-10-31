@@ -84,10 +84,11 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
 {
     if (!sb || (sb->window() && !sb->window()->isVisible()))
         return;
+    const QString pixelPrefix = MainWindow::tr("Pixel [%1,%2]").section('%', 0, 0);
     if (!valid)
     {
         // Leaving the image restores the previous message; it does not clear it.
-        if (!sb->currentMessage().startsWith(QLatin1String("Pixel [")))
+        if (!sb->currentMessage().startsWith(pixelPrefix))
             return;
         const QString base = sb->property("statusBase").toString();
         const qint64 until = sb->property("statusBaseUntil").toLongLong();
@@ -103,11 +104,12 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
             sb->showMessage(base);
         return;
     }
-    if (!sb->currentMessage().startsWith(QLatin1String("Pixel [")))
+    if (!sb->currentMessage().startsWith(pixelPrefix))
     {
         const QString current = sb->currentMessage();
         sb->setProperty("statusBase", current);
-        const bool sticky = current.startsWith(QStringLiteral("Directory temporarily unavailable"));
+        const bool sticky = current.startsWith(
+            MainWindow::tr("Directory temporarily unavailable: %1").section('%', 0, 0));
         const qint64 untilMs =
             current.isEmpty() || sticky ? qint64{0} : QDateTime::currentMSecsSinceEpoch() + 4000;
         sb->setProperty("statusBaseUntil", untilMs);
@@ -117,7 +119,7 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
                             .arg(g, 2, 16, QChar('0'))
                             .arg(b, 2, 16, QChar('0'))
                             .toUpper();
-    QString text = QStringLiteral("Pixel [%1,%2]").arg(x).arg(y);
+    QString text = MainWindow::tr("Pixel [%1,%2]").arg(x).arg(y);
     if (rawKind == 2)
         text += QStringLiteral("RGB(%1,%2,%3)  16bit(%4,%5,%6)  %7")
                     .arg(r)
@@ -445,7 +447,7 @@ void MainWindow::connectMenuSignals()
             [this](const QString &path)
             {
                 statusBar()->showMessage(
-                    QString("Unable to load image: %1").arg(QFileInfo(path).fileName()), 5000);
+                    tr("Unable to load image: %1").arg(QFileInfo(path).fileName()), 5000);
             });
     connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
             [this](const QString &msg, int timeoutMs)

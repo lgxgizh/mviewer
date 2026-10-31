@@ -41,6 +41,7 @@ void FormatFilterCombo::rebuildItems()
     setToolTip(tr("File types shown in both browse panes (multi-select)"));
     updateGeometry();
     update();
+    refreshAccessibility();
 }
 
 void FormatFilterCombo::retranslate()
@@ -58,6 +59,7 @@ void FormatFilterCombo::setHiddenGroups(const QStringList &hidden)
         item->setData(m_hidden.contains(id) ? Qt::Unchecked : Qt::Checked, Qt::CheckStateRole);
     }
     update();
+    refreshAccessibility();
 }
 
 QStringList FormatFilterCombo::hiddenGroups() const
@@ -90,6 +92,7 @@ void FormatFilterCombo::toggleRow(int row)
         m_hidden.append(id);
     item->setData(m_hidden.contains(id) ? Qt::Unchecked : Qt::Checked, Qt::CheckStateRole);
     update();
+    refreshAccessibility();
     emit hiddenGroupsChanged(m_hidden);
 }
 
@@ -103,6 +106,26 @@ QString FormatFilterCombo::summaryText() const
     if (shown == total)
         return tr("All types");
     return tr("Types: %1/%2").arg(shown).arg(total);
+}
+
+void FormatFilterCombo::refreshAccessibility()
+{
+    setAccessibleName(tr("File types"));
+    QStringList hiddenLabels;
+    for (int row = 0; row < m_model->rowCount(); ++row)
+    {
+        const QStandardItem *item = m_model->item(row);
+        if (!item || !m_hidden.contains(item->data(kGroupIdRole).toString()))
+            continue;
+        hiddenLabels.append(item->text());
+    }
+    QString description = summaryText();
+    if (!hiddenLabels.isEmpty())
+    {
+        description += QLatin1Char(' ');
+        description += tr("Hidden: %1").arg(hiddenLabels.join(QStringLiteral(", ")));
+    }
+    setAccessibleDescription(description);
 }
 
 bool FormatFilterCombo::eventFilter(QObject *watched, QEvent *event)

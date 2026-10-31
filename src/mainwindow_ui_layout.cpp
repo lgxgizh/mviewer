@@ -620,7 +620,7 @@ void MainWindow::buildStatusBarUi()
                 if (!m_lblZoom)
                     return;
                 m_lblZoom->setText(
-                    pct < 0 ? QStringLiteral("Zoom")
+                    pct < 0 ? tr("Zoom")
                             : QString::fromLatin1(mviewer::core::formatZoomPercent(pct).c_str()));
             });
 
@@ -631,5 +631,5 @@ void MainWindow::buildStatusBarUi()
     // A-3.4: initial enablement for selection-dependent actions.
     updateSelectionActions();
 
-    statusBar()->showMessage("Ready", 2000);
+    statusBar()->showMessage(tr("Ready"), 2000);
 }
