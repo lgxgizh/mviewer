@@ -42,6 +42,11 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
            "left pane listed its folder");
     if (!left)
         return;
+    // An earlier case saved a split session; let its deferred restore run,
+    // then start from a single pane so the split below really mirrors.
+    pumpUi(10);
+    if (mw.isSplitBrowseEnabled())
+        mw.toggleSplitBrowse(false);
 
     auto *search = mw.findChild<QLineEdit *>(QStringLiteral("searchEdit"));
     EXPECT(search != nullptr, "search field exists");
@@ -211,6 +216,9 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
 
     mw.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
     pathEdit->setFocus(Qt::OtherFocusReason);
+    // The address bar selects all on a deferred timer after focus-in; let it
+    // run before clearing the selection under test.
+    pumpUi(3);
     pathEdit->setText(QDir::toNativeSeparators(right->currentDir()));
     pathEdit->setCursorPosition(1);
     pathEdit->deselect();

@@ -498,10 +498,12 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     if (entries.isEmpty() && m_selection)
     {
         const QString existing = m_selection->paneCurrentImage(m_paneSlot);
+        // Write this pane's slot: in split mode the active pane may be the
+        // other one, and its selection must survive this pane's reload.
         if (hadVisibleRows)
-            m_selection->setSelection({}, {});
+            m_selection->setPaneSelection(m_paneSlot, {}, {});
         else
-            m_selection->setSelection({}, existing);
+            m_selection->setPaneSelection(m_paneSlot, {}, existing);
     }
 
     pruneThumbnailState();

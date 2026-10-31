@@ -122,7 +122,7 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
     if (!renamedFrom.isEmpty())
         emit pathsRenamed(renamedFrom, renamedTo);
     if (!renamedFrom.isEmpty() && m_selection)
-        m_selection->setSelection(previousSelection, previousCurrent);
+        m_selection->setPaneSelection(m_paneSlot, previousSelection, previousCurrent);
     if (!removedPaths.isEmpty())
         emit pathsRemoved(removedPaths);
     QStringList modifiedPaths;
@@ -539,7 +539,7 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
             for (const QString &path : previousSelection)
                 if (m_rowByPath.contains(galleryPathKey(path)))
                     validSelection.append(path);
-            m_selection->setSelection(validSelection, nextCurrent);
+            m_selection->setPaneSelection(m_paneSlot, validSelection, nextCurrent);
         }
     }
     if (!nextCurrent.isEmpty() && m_rowByPath.contains(galleryPathKey(nextCurrent)))
