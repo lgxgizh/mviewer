@@ -75,6 +75,39 @@ QWindow *hostWindowHandle(const QWidget *widget)
     return host ? host->windowHandle() : nullptr;
 }
 
+// Zoomed in: a bounded region raster covering the visible source rect
+// (inflated by 1/8) at viewport density `d`, capped by kMaxRasterPixels.
+// False when no source pixel is visible.
+bool fillRegionRasterRequest(RasterRequest &req, const QRect &visible, const QSize &source,
+                             double d)
+{
+    if (visible.width() <= 0 || visible.height() <= 0)
+        return false;
+    const int inflateX = std::max(1, visible.width() / 8);
+    const int inflateY = std::max(1, visible.height() / 8);
+    const int x0 = std::max(0, visible.x() - inflateX);
+    const int y0 = std::max(0, visible.y() - inflateY);
+    const int x1 = std::min(source.width(), visible.x() + visible.width() + inflateX);
+    const int y1 = std::min(source.height(), visible.y() + visible.height() + inflateY);
+    req.fullLod = false;
+    req.rx = x0;
+    req.ry = y0;
+    req.rw = x1 - x0;
+    req.rh = y1 - y0;
+    double tw = std::ceil(static_cast<double>(req.rw) * d * kRasterOverscan);
+    double th = std::ceil(static_cast<double>(req.rh) * d * kRasterOverscan);
+    const double total = tw * th;
+    if (total > kMaxRasterPixels)
+    {
+        const double f = std::sqrt(kMaxRasterPixels / total);
+        tw *= f;
+        th *= f;
+    }
+    req.tw = std::max(1, static_cast<int>(tw));
+    req.th = std::max(1, static_cast<int>(th));
+    return true;
+}
+
 } // namespace
 
 void ImageViewer::presentLoadFailure()
@@ -425,34 +458,10 @@ void ImageViewer::requestDisplayRasterImpl()
         }
         else
         {
-            // Zoomed in: bounded region raster covering the visible source
-            // rect (inflated) at the viewport density, capped by kMaxRasterPixels.
             int vx = 0, vy = 0, vw = 0, vh = 0;
             m_view.visibleImageRect(sw, sh, vx, vy, vw, vh);
-            if (vw <= 0 || vh <= 0)
+            if (!fillRegionRasterRequest(req, QRect(vx, vy, vw, vh), QSize(sw, sh), d))
                 return;
-            const int inflateX = std::max(1, vw / 8);
-            const int inflateY = std::max(1, vh / 8);
-            const int x0 = std::max(0, vx - inflateX);
-            const int y0 = std::max(0, vy - inflateY);
-            const int x1 = std::min(sw, vx + vw + inflateX);
-            const int y1 = std::min(sh, vy + vh + inflateY);
-            req.fullLod = false;
-            req.rx = x0;
-            req.ry = y0;
-            req.rw = x1 - x0;
-            req.rh = y1 - y0;
-            double tw = std::ceil(static_cast<double>(req.rw) * d * kRasterOverscan);
-            double th = std::ceil(static_cast<double>(req.rh) * d * kRasterOverscan);
-            const double total = tw * th;
-            if (total > kMaxRasterPixels)
-            {
-                const double f = std::sqrt(kMaxRasterPixels / total);
-                tw *= f;
-                th *= f;
-            }
-            req.tw = std::max(1, static_cast<int>(tw));
-            req.th = std::max(1, static_cast<int>(th));
         }
     }
 
@@ -699,3 +708,37 @@ bool ImageViewer::acceptDisplayRaster(const QImage &image, const QRect &covered,
 }
 
 #include "imageviewer_lod_overlay.inc"
+
+bool ImageViewer::lodRasterUsesSmoothing(double viewScale, double devicePixelRatio)
+{
+    const double dpr = devicePixelRatio > 1.0 ? devicePixelRatio : 1.0;
+    return !(viewScale * dpr >= 1.0);
+}
+
+bool ImageViewer::displayRasterCoversView(const QRect &covered, const QRect &visible)
+{
+    if (visible.width() <= 0 || visible.height() <= 0 || covered.width() <= 0 ||
+        covered.height() <= 0)
+        return false;
+    QRect expanded = covered;
+    expanded.adjust(-expanded.width() / 8, -expanded.height() / 8, expanded.width() / 8,
+                    expanded.height() / 8);
+    return expanded.contains(visible);
+}
+
+bool ImageViewer::shouldAcceptDisplayRaster(bool haveCurrent, const QRect &currentCovered,
+                                            double currentDensity, const QRect &incomingCovered,
+                                            double incomingDensity, const QRect &visible)
+{
+    if (!haveCurrent || !(incomingDensity > 0.0) || !(currentDensity > 0.0))
+        return true;
+    if (visible.width() <= 0 || visible.height() <= 0)
+        return true;
+    const bool incomingCovers = displayRasterCoversView(incomingCovered, visible);
+    const bool currentCovers = displayRasterCoversView(currentCovered, visible);
+    if (incomingCovers && !currentCovers)
+        return true;
+    if (!incomingCovers && currentCovers)
+        return false;
+    return incomingDensity <= currentDensity + 1e-6;
+}
