@@ -469,7 +469,7 @@ void CompareWorkspace::fitAll()
 
 void CompareWorkspace::zoomActual()
 {
-    const double currentScale = m_engine.cellTransform(0).scale;
+    const double currentScale = displayedScale(0);
     if (currentScale > 0.0)
     {
         applyAnchorZoom(0, 0.0, 0.0, 1.0 / currentScale);

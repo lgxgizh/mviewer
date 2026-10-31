@@ -412,6 +412,7 @@ class CompareWorkspace : public QWidget
     QRectF cellFullDestRect(int idx, const QRectF &geom) const;
     QRectF cellDestRect(int idx, const QRectF &geom) const;
     double canvasOffsetRatio(int pane) const; // canvas pixels per stored offset pixel
+    double displayedScale(int pane) const;    // zoom actually drawn (canvas-aware)
     QCheckBox *m_splitChk = nullptr;
     QCheckBox *m_swipeChk = nullptr;
     double m_splitPos = 0.5;
@@ -432,7 +433,6 @@ class CompareWorkspace : public QWidget
     void drawSwipeCompare(QPainter &p, int x);
     void drawOverlayCompare(QPainter &p);
     void drawCellCompare(QPainter &p, int idx, const QRect &clipRect, const QRectF &geomRect);
-
     // M23: checkerboard compare mode — alternating A/B blocks.
     QCheckBox *m_checkerChk = nullptr;
     QSlider *m_checkerSizeSlider = nullptr;

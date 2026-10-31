@@ -3,6 +3,7 @@
 #include "domain/SelectionMapping.h"
 
 #include "core/analysis/PixelInspector.h"
+#include "core/render/Viewport.h"
 
 #include <QKeyEvent>
 #include <QWheelEvent>
@@ -496,7 +497,10 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
 
     if (isFit)
     {
-        const double factor = std::abs(fitScale - 1.0) < 0.005 ? 2.0 : (1.0 / currentScale);
+        const double shown = displayedScale(refCell);
+        const double factor = std::abs(shown - 1.0) < 0.005
+                                  ? 2.0
+                                  : (!(shown > 0.0) ? (1.0 / currentScale) : (1.0 / shown));
         const double ratio = canvasOffsetRatio(refCell);
         applyAnchorZoom(refCell, anchorX / ratio, anchorY / ratio, factor);
         showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("View zoom: 200%")
@@ -570,10 +574,10 @@ int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
     return 0;
 }
 
-// Shared anchored-zoom transform. Clamps the TARGET scale to [0.05, 50] x the
-// pane fit scale (absolute backstop 1e-4..256) and derives the effective factor
-// from that clamped target, so a limit hit derives the offset from the clamped
-// factor instead of recomputing it after the offset was already applied.
+// Shared anchored-zoom transform. Clamps the TARGET scale to
+// zoomLimitsForFit(pane fit) (core/render/Viewport.h) and derives the effective
+// factor from that clamped target, so a limit hit derives the offset from the
+// clamped factor instead of recomputing it after the offset was already applied.
 // Respects all four syncZoom / syncDrag combinations.
 void CompareWorkspace::ensureLocalZoomMultipliers(int n)
 {
@@ -607,19 +611,10 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
     const double currentScale = m_engine.cellTransform(refIdx).scale;
     if (!(currentScale > 0.0) || !std::isfinite(currentScale))
         return; // invalid baseline: consume without zooming
-    double lo = 0.05;
-    double hi = 50.0;
-    if (refIdx < m_fitScales.size())
-    {
-        const double fit = m_fitScales[refIdx];
-        if (fit > 0.0 && std::isfinite(fit))
-        {
-            lo = fit * 0.05;
-            hi = fit * 50.0;
-        }
-    }
-    lo = std::max(lo, 1e-4);
-    hi = std::min(hi, 256.0);
+    const double fit = refIdx < m_fitScales.size() ? m_fitScales[refIdx] : 0.0;
+    const ZoomLimits limits = zoomLimitsForFit(fit);
+    const double lo = limits.lo;
+    const double hi = limits.hi;
     // Stale fit: scale is already outside the window. Zooming further away must
     // not jump the image onto the new limit.
     if ((factor < 1.0 && currentScale < lo) || (factor > 1.0 && currentScale > hi))
@@ -720,6 +715,16 @@ double CompareWorkspace::canvasOffsetRatio(int pane) const
         return 1.0;
     const double ratio = dest.width() / (source.width() * engineScale);
     return std::isfinite(ratio) && ratio > 0.0 ? ratio : 1.0;
+}
+
+// Zoom the user sees for `pane`: the engine scale, times the canvas ratio when a
+// canvas compare mode draws the panes.
+double CompareWorkspace::displayedScale(int pane) const
+{
+    const double s = m_engine.cellTransform(pane).scale;
+    if (!(s > 0.0) || !std::isfinite(s))
+        return s;
+    return anyCanvasCompareMode() ? s * canvasOffsetRatio(pane) : s;
 }
 
 QPointF CompareWorkspace::canvasSourcePoint(const QPoint &pos, int pane) const

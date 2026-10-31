@@ -180,7 +180,9 @@ QPixmap CompareWorkspace::grabComparisonView()
     SnapshotAnnotations a;
     a.modeText = snapshotModeText(m_splitChk, m_swipeChk, m_overlayChk, m_checkerChk,
                                   m_diffHighlightChk, m_blinkChk);
-    a.zoomPercent = snapshotZoomPercent(m_cellViews, m_sharedZoomRatio);
+    a.zoomPercent = anyCanvasCompareMode() && !m_cellViews.isEmpty() && m_cellViews[0]
+                        ? static_cast<int>(std::round(displayedScale(0) * 100.0))
+                        : snapshotZoomPercent(m_cellViews, m_sharedZoomRatio);
     a.compDetail = snapshotComparedDetail(comparedImages());
     if (!m_lastSelection.isEmpty())
     {

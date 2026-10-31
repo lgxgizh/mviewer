@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- **Compare canvas zoom percent:** in overlay, swipe, split and checker modes
+  the 100% double-click, the zoom status and the Ctrl+C banner use the zoom
+  actually drawn, not the grid zoom.
+- **Viewer zoom limits:** the image viewer uses the same fit-relative zoom
+  limits as compare, so a very large image no longer jumps larger on the first
+  zoom-out and a small one can zoom to 50x its fit. 100% is always reachable.
 - **Compare zoom limits and pan:** zoom limits are relative to each pane's fit,
   so a very large image no longer jumps larger on the first zoom-out and a small
   one can still reach 50x its fit. Overlay, swipe, and checker modes and pane
