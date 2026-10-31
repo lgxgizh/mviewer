@@ -3305,6 +3305,14 @@ ROI diff: %1%  Mean %2  Peak %3</source>
 <context>
     <name>FormatFilterCombo</name>
     <message>
+        <source>File types</source>
+        <translation>文件类型</translation>
+    </message>
+    <message>
+        <source>Hidden: %1</source>
+        <translation>已隐藏：%1</translation>
+    </message>
+    <message>
         <location filename="../src/formatfiltercombo.cpp" line="41"/>
         <source>File types shown in both browse panes (multi-select)</source>
         <translation>两个浏览窗格中显示的文件类型（可多选）</translation>
@@ -3932,6 +3940,22 @@ or double-click a thumbnail to view</source>
 </context>
 <context>
     <name>MainWindow</name>
+    <message>
+        <source>Directory temporarily unavailable: %1</source>
+        <translation>目录暂时不可用：%1</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation>正在扫描…</translation>
+    </message>
+    <message>
+        <source>Pixel [%1,%2]</source>
+        <translation>像素 [%1,%2]</translation>
+    </message>
+    <message>
+        <source>Unable to load image: %1</source>
+        <translation>无法加载图像：%1</translation>
+    </message>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="259"/>
         <location filename="../src/mainwindow_ui_menus.cpp" line="481"/>
@@ -6929,6 +6953,12 @@ or press Ctrl+O to open a folder</source>
 <context>
     <name>QObject</name>
     <message>
+        <source>Cannot
+load</source>
+        <translation>无法
+加载</translation>
+    </message>
+    <message>
         <location filename="../src/compareworkspace_analysis.cpp" line="79"/>
         <source>Copy cell contents (%1)</source>
         <translation>复制单元格内容 (%1)</translation>
@@ -7204,6 +7234,18 @@ Continue?</source>
 </context>
 <context>
     <name>ThumbnailPanel</name>
+    <message>
+        <source>Failed to load directory</source>
+        <translation>加载目录失败</translation>
+    </message>
+    <message>
+        <source>No images yet</source>
+        <translation>暂无图像</translation>
+    </message>
+    <message>
+        <source>Scanning…</source>
+        <translation>正在扫描…</translation>
+    </message>
     <message>
         <location filename="../src/thumbnailpanel_selection.cpp" line="104"/>
         <source>Select 2-8 images across panes to compare (currently %1)</source>

@@ -48,9 +48,9 @@ void MainWindow::connectNavigationSignals()
                     return;
                 if (!available)
                     statusBar()->showMessage(
-                        QStringLiteral("Directory temporarily unavailable: %1").arg(path));
+                        tr("Directory temporarily unavailable: %1").arg(path));
                 else if (statusBar()->currentMessage().startsWith(
-                             QStringLiteral("Directory temporarily unavailable")))
+                             tr("Directory temporarily unavailable: %1").section('%', 0, 0)))
                     statusBar()->clearMessage();
             });
     // M37: the asynchronous gallery scan publishes the final visible sequence
@@ -72,8 +72,7 @@ void MainWindow::connectNavigationSignals()
                     m_imageList->setPaths(paths, directory);
                 if (activeThumbnailPanel() == m_thumbnailPanel && !paths.isEmpty() && m_directory &&
                     DirectoryTree::equivalentPath(m_directory->currentDirectory(), directory))
-                    statusBar()->showMessage(QStringLiteral("Loaded %1 images").arg(paths.size()),
-                                             2500);
+                    statusBar()->showMessage(tr("Loaded %1 images").arg(paths.size()), 2500);
             });
     connect(m_imageList, &ImageListModel::pathsChanged, m_imageViewer,
             &ImageViewer::setBrowseSequence);
@@ -109,7 +108,7 @@ void MainWindow::connectNavigationSignals()
                 // import for every navigation entry point, including tree
                 // clicks/Enter, breadcrumb, Back/Forward, refresh, and restore.
                 scheduleSidecarImport(path);
-                statusBar()->showMessage(QStringLiteral("Scanning…"), 8000);
+                statusBar()->showMessage(tr("Scanning…"), 8000);
                 // With no image selected yet, the title carries the folder.
                 if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
