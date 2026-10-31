@@ -119,6 +119,19 @@ bool CompareWorkspace::handleCellWheel(RawImageView *view, int idx, QEvent *even
     return true;
 }
 
+namespace
+{
+// Pan-drag cursor state for every grid cell view.
+template <typename Views> void setViewsDragging(const Views &views, bool on)
+{
+    for (RawImageView *cv : views)
+    {
+        if (cv)
+            cv->setDragging(on);
+    }
+}
+} // namespace
+
 bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *event)
 {
     trackCellPointerForExportMenu(idx, event);
@@ -159,11 +172,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
                 return true; // consume — do not start pan drag
             }
             m_dragging = true;
-            for (RawImageView *cv : m_cellViews)
-            {
-                if (cv)
-                    cv->setDragging(true);
-            }
+            setViewsDragging(m_cellViews, true);
             noteCompareInteraction();
             m_lastMouse = me->pos();
             m_dragStartPos = me->pos();
@@ -186,11 +195,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
             if (m_dragging)
             {
                 m_dragging = false;
-                for (RawImageView *cv : m_cellViews)
-                {
-                    if (cv)
-                        cv->setDragging(false);
-                }
+                setViewsDragging(m_cellViews, false);
             }
             return true;
         }
@@ -229,11 +234,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
         if (me->button() == Qt::LeftButton)
         {
             m_dragging = false;
-            for (RawImageView *cv : m_cellViews)
-            {
-                if (cv)
-                    cv->setDragging(false);
-            }
+            setViewsDragging(m_cellViews, false);
             // Click (no significant drag): select cell for editing & per-pane histogram.
             const QPoint delta = me->pos() - m_dragStartPos;
             if (delta.manhattanLength() < 4 && m_dragIdx >= 0 &&
