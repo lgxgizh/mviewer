@@ -39,7 +39,10 @@ $archRe = 'src[\\/]core[\\/](repository|cache|scheduler)|src[\\/]compare[\\/]|' 
 function Get-GitDiffNames([string]$Range) {
     # stderr is part of the output stream so a missing ref cannot be mistaken
     # for an empty (clean) diff. Only real path lines count as files.
-    $output = @(git -C $Repo diff --name-only $Range 2>&1)
+    # A range such as 'HEAD~1 HEAD' is two revisions; pass them as separate
+    # arguments (one quoted string made git reject the push-event diff).
+    $revs = @($Range -split '\s+' | Where-Object { $_ })
+    $output = @(git -C $Repo diff --name-only @revs 2>&1)
     $code = $LASTEXITCODE
     $names = @($output | Where-Object {
         $_ -is [string] -and -not [string]::IsNullOrWhiteSpace($_)
