@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- **Compare zoom limits and pan:** zoom limits are relative to each pane's fit,
+  so a very large image no longer jumps larger on the first zoom-out and a small
+  one can still reach 50x its fit. Overlay, swipe, and checker modes and pane
+  resizes keep the point you panned to centered.
 - **Compare canvas ROI:** a box drawn on one half of an unlinked (different-size)
   compare stays on that pane. A right-click that does not drag only opens the
   export menu.

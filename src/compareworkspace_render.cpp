@@ -171,16 +171,23 @@ QRectF CompareWorkspace::cellFullDestRect(int idx, const QRectF &geom) const
         return {};
     const auto &ct = m_engine.cellTransform(idx);
     double sc = ct.scale;
+    double offsetScale = 1.0;
     if (!m_uniformScale && m_syncZoom)
     {
         const double canvasFit =
             std::min(geom.width() / sourceSize.width(), geom.height() / sourceSize.height());
         sc = canvasFit * m_sharedZoomRatio * localZoomMultiplier(idx);
+        if (ct.scale > 0.0 && std::isfinite(ct.scale))
+        {
+            const double ratio = sc / ct.scale;
+            if (std::isfinite(ratio) && ratio > 0.0)
+                offsetScale = ratio;
+        }
     }
     if (!(sc > 0.0) || !std::isfinite(sc))
         return {};
-    const double ox = ct.offset.x;
-    const double oy = ct.offset.y;
+    const double ox = ct.offset.x * offsetScale;
+    const double oy = ct.offset.y * offsetScale;
     const double dw = sourceSize.width() * sc;
     const double dh = sourceSize.height() * sc;
     const QPointF center(geom.x() + geom.width() / 2.0 + ox, geom.y() + geom.height() / 2.0 + oy);
@@ -496,8 +503,10 @@ double CompareWorkspace::scaleKeepingFit(int pane, double engineScale)
     if (!std::isfinite(rel) || std::abs(rel - 1.0) <= kStaleFitRatio)
         return engineScale;
     const double scale = fitNow * sharedZoomRatio(m_sharedZoomRatio) * localZoomMultiplier(pane);
+    const Vec2 o = m_engine.cellTransform(pane).offset;
     m_fitScales[pane] = fitNow;
     m_engine.setCellScale(pane, scale);
+    m_engine.setCellOffset(pane, o.x * rel, o.y * rel);
     return scale;
 }
 
