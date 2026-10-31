@@ -2,6 +2,7 @@
 
 #include "core/cache/CacheManager.h"
 #include "core/image/FrameSequence.h"
+#include "core/image/FrameSequenceDetail.h"
 #include "core/image/MetadataReader.h"
 
 #include <algorithm>
@@ -9,15 +10,24 @@
 ImageRepository::Result ImageRepository::loadFrame(const std::string &filePath, int frameIndex,
                                                    const LoadOptions &opts)
 {
-    Result result;
     if (filePath.empty() || frameIndex < 0)
     {
+        Result result;
         result.error = "invalid frame request";
         return result;
     }
 
-    const int decodeVariant = std::max(0, opts.frameMaxEdge);
     const auto sequence = mviewer::core::FrameSequenceReader::probeSequence(filePath);
+    return loadFrameWithSequence(filePath, frameIndex, opts, sequence);
+}
+
+ImageRepository::Result
+ImageRepository::loadFrameWithSequence(const std::string &filePath, int frameIndex,
+                                       const LoadOptions &opts,
+                                       const mviewer::core::FrameSequenceInfo &sequence)
+{
+    Result result;
+    const int decodeVariant = std::max(0, opts.frameMaxEdge);
     if (!sequence.valid || sequence.kind == mviewer::core::FrameSequenceKind::Static)
     {
         if (frameIndex != 0)
@@ -61,8 +71,8 @@ ImageRepository::Result ImageRepository::loadFrame(const std::string &filePath, 
         }
     }
 
-    const auto decoded = mviewer::core::FrameSequenceReader::decode(filePath, frameIndex,
-                                                                      decodeVariant);
+    const auto decoded =
+        mviewer::core::decodeKnownSequence(filePath, sequence, frameIndex, decodeVariant);
     if (!decoded.ok)
     {
         result.error = decoded.error.empty() ? "frame decode failed" : decoded.error;

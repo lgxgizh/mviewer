@@ -17,6 +17,11 @@
   for a filter, sort, or rescan, and stays failed across ordinary scrolling.
 - **Sidecar saves**: if the IO pool rejects the write, the rating change is
   kept dirty and retried off the thread that edited it.
+- **Multi-frame open and Details dimensions:** stills and TIFF pages take their
+  size from the header, including EXIF orientation, instead of a full decode.
+  A short GIF or WebP probe no longer decodes every frame at native size, two
+  compare panes can play different animations at once, and a page past 4096
+  opens when the file can seek to it.
 - **Case-only rename:** renaming a file to the same name with different case
   (`IMG.JPG` → `img.jpg`) succeeds on Windows, and Undo restores the previous
   spelling. A different file that already uses the target name is still rejected.

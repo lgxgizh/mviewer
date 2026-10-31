@@ -776,8 +776,8 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                     statusBar()->showMessage(tr("Current: %1").arg(QFileInfo(current).fileName()),
                                              3000);
                 else if (m_imageList && m_imageList->count() > 0)
-                    statusBar()->showMessage(
-                        QStringLiteral("Loaded %1 images").arg(m_imageList->count()), 2500);
+                    statusBar()->showMessage(tr("Loaded %1 images").arg(m_imageList->count()),
+                                             2500);
                 else
                     statusBar()->showMessage(tr("Ready"), 2000);
             });

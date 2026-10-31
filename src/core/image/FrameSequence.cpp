@@ -1,6 +1,8 @@
 #include "core/image/FrameSequence.h"
 
+#include "core/async/CooperativeCancel.h"
 #include "core/filesystem/Utf8Path.h"
+#include "core/image/FrameSequenceDetail.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
 #include "core/image/QtMetadataSemantics.h"
@@ -12,6 +14,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -23,18 +26,15 @@ namespace
 {
 
 constexpr int kUnknownFrameCount = 1;
-constexpr int kMinimumAnimationDelayMs = 10;
-// Delays of 0–10 ms are the GIF/WebP "as fast as possible" sentinel. Browsers
-// present them for 100 ms so playback stays watchable.
-constexpr int kBrowserAnimationDelayMs = 100;
 constexpr int kMaxTimingProbeFrames = 256;
 // A crafted container can declare an absurd page/frame count, and every
 // consumer uses the declared count as a loop bound, so it is clamped.
 constexpr int kMaxFrameCount = 100000;
-// Frames decoded to reach one requested animation frame. Real animations stay
-// far below this (60 s at 60 fps is 3600 frames); the bound keeps a session
-// file with a wild frame index from decoding for minutes.
+// Sequential animation walk bound (pages seek with jumpToImage instead). 60 s at
+// 60 fps is 3600 frames; a wild session frame index must not decode for minutes.
 constexpr int kMaxSequentialFrameWalk = 4096;
+// A few readers cover playback plus the other compare pane (one slot thrashed).
+constexpr int kMaxAnimationSessions = 4;
 
 QString qpath(const std::string &path)
 {
@@ -109,13 +109,6 @@ void fillMetadata(const std::string &path, QImageReader &reader, const QImage &i
     }
 }
 
-int normalizedAnimationDelayMs(int delayMs)
-{
-    if (delayMs <= kMinimumAnimationDelayMs)
-        return kBrowserAnimationDelayMs;
-    return delayMs;
-}
-
 FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
 {
     FrameSequenceInfo sequence;
@@ -129,26 +122,13 @@ FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
     sequence.animated = sequence.kind == FrameSequenceKind::Animation;
     sequence.loopCount = reader.supportsAnimation() ? reader.loopCount() : -1;
 
-    // Duration probing is intentionally bounded. A 10,000-frame source still
-    // gets an O(1) open/probe; frameInfo() supplies the current delay on demand.
+    // Bounded: a 10,000-frame source still opens in O(1) and frameInfo() supplies
+    // the current delay on demand. See probeAnimationDurationMs for the strategy.
     if (sequence.animated && sequence.countKnown && sequence.frameCount <= kMaxTimingProbeFrames)
     {
-        // qgif/qwebp expose the first frame through read(), not
-        // jumpToImage(0).  Probe on a fresh reader so the caller's reader
-        // remains positioned for the subsequent decode.
-        QImageReader timing(reader.fileName());
-        timing.setAutoTransform(true);
         int64_t total = 0;
-        for (int i = 0; i < sequence.frameCount; ++i)
-        {
-            const int before = timing.nextImageDelay();
-            const QImage image = timing.read();
-            if (image.isNull())
-                break;
-            const int after = timing.nextImageDelay();
-            const int delay = after > 0 ? after : before;
-            total += normalizedAnimationDelayMs(delay);
-        }
+        if (!probeAnimationDurationMs(reader.fileName().toStdString(), sequence.frameCount, total))
+            return sequence; // cancelled
         sequence.totalDurationMs = total;
         sequence.durationKnown = true;
     }
@@ -199,10 +179,24 @@ std::mutex &animationMutex()
     return *mutex;
 }
 
-std::shared_ptr<AnimationSession> &animationSession()
+struct AnimationSlot
 {
-    static auto *session = new std::shared_ptr<AnimationSession>();
-    return *session;
+    std::shared_ptr<AnimationSession> session;
+    uint64_t stamp = 0;
+};
+
+struct AnimationCache
+{
+    AnimationSlot entries[kMaxAnimationSessions];
+    int size = 0;
+    uint64_t clock = 0;
+};
+
+AnimationCache &animationCache()
+{
+    // Outlives QCoreApplication like animationMutex(); releaseFile() drops readers.
+    static auto *cache = new AnimationCache();
+    return *cache;
 }
 
 bool animationPathMatches(const AnimationSession &session, const std::string &path)
@@ -240,21 +234,65 @@ bool animationNeedsRewind(const AnimationSession &session, int frameIndex)
     return next > frameIndex && last != frameIndex;
 }
 
+int animationSlotIndex(const AnimationCache &cache, const std::string &path)
+{
+    for (int i = 0; i < cache.size; ++i)
+    {
+        if (cache.entries[i].session && animationPathMatches(*cache.entries[i].session, path))
+            return i;
+    }
+    return -1;
+}
+
+int leastRecentAnimationSlot(const AnimationCache &cache)
+{
+    int oldest = 0;
+    for (int i = 1; i < cache.size; ++i)
+    {
+        if (cache.entries[i].stamp < cache.entries[oldest].stamp)
+            oldest = i;
+    }
+    return oldest;
+}
+
 std::shared_ptr<AnimationSession> prepareAnimationSession(const std::string &path, int frameIndex)
 {
     const QFileInfo info(qpath(path));
     std::lock_guard<std::mutex> lock(animationMutex());
-    auto &session = animationSession();
-    const bool keep = session && !session->abandon.load() &&
-                      animationFileMatches(*session, path, info) &&
-                      !animationNeedsRewind(*session, frameIndex);
-    if (!keep)
+    auto &cache = animationCache();
+    const int existing = animationSlotIndex(cache, path);
+    if (existing >= 0)
     {
-        if (session)
-            session->abandon.store(true);
-        session = openAnimationSession(path, info);
+        AnimationSlot &slot = cache.entries[existing];
+        const bool keep = slot.session && !slot.session->abandon.load() &&
+                          animationFileMatches(*slot.session, path, info) &&
+                          !animationNeedsRewind(*slot.session, frameIndex);
+        if (!keep)
+        {
+            // Rewind, replace, or a changed file. Another path's reader stays.
+            if (slot.session)
+                slot.session->abandon.store(true);
+            slot.session = openAnimationSession(path, info);
+        }
+        slot.stamp = ++cache.clock;
+        return slot.session;
     }
-    return session;
+
+    auto session = openAnimationSession(path, info);
+    int index = cache.size;
+    if (cache.size < kMaxAnimationSessions)
+    {
+        ++cache.size;
+    }
+    else
+    {
+        index = leastRecentAnimationSlot(cache);
+        if (cache.entries[index].session)
+            cache.entries[index].session->abandon.store(true);
+    }
+    cache.entries[index].session = std::move(session);
+    cache.entries[index].stamp = ++cache.clock;
+    return cache.entries[index].session;
 }
 
 bool copyCachedAnimationFrame(const AnimationSession &session, int frameIndex, int maxEdge,
@@ -312,7 +350,7 @@ SelectedFrame finishAnimationRead(AnimationSession &session, int frameIndex, int
     QImageReader &reader = *session.reader;
     while (session.nextIndex.load() <= frameIndex)
     {
-        if (session.abandon.load())
+        if (session.abandon.load() || cooperativeCancelRequested())
         {
             selected.error = "frame decode cancelled";
             return selected;
@@ -367,9 +405,11 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
                           int frameIndex, int maxEdge)
 {
     SelectedFrame selected;
-    // The index can come from a restored session file, so bound it before it
-    // becomes a loop count (the sequential fallbacks below decode up to it).
-    if (frameIndex < 0 || frameIndex > kMaxSequentialFrameWalk)
+    // The index can come from a restored session file. The walk cap applies
+    // only to sequential animation reads. Pages seek with jumpToImage and may
+    // be any index in [0, frameCount); decodeImpl already rejected the rest.
+    if (frameIndex < 0 ||
+        (sequence.kind == FrameSequenceKind::Animation && frameIndex > kMaxSequentialFrameWalk))
     {
         selected.error = "frame index out of range";
         return selected;
@@ -425,11 +465,22 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
     {
         // Some Qt image handlers implement sequential animation reads but
         // intentionally return false from jumpToImage.  Walk only as far as
-        // the requested frame on a fresh reader in that case.
+        // the requested frame on a fresh reader in that case. Pages that
+        // can seek never reach here; this loop is the capped walk.
+        if (frameIndex > kMaxSequentialFrameWalk)
+        {
+            selected.error = "frame index out of range";
+            return selected;
+        }
         QImageReader sequential(qpath(path));
         sequential.setAutoTransform(false);
         for (int i = 0; i <= frameIndex; ++i)
         {
+            if (cooperativeCancelRequested())
+            {
+                selected.error = "frame decode cancelled";
+                return selected;
+            }
             QSize candidateSize;
             if (sequence.kind != FrameSequenceKind::Animation)
                 candidateSize = sequential.size();
@@ -469,19 +520,27 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
     return selected;
 }
 
-FrameDecodeResult decodeImpl(const std::string &path, int frameIndex, int maxEdge)
+FrameDecodeResult decodeImpl(const std::string &path, int frameIndex, int maxEdge,
+                             const FrameSequenceInfo *known)
 {
     FrameDecodeResult result;
-    const QString suffix = QFileInfo(qpath(path)).suffix().toLower();
-    QImageReader probe(qpath(path));
-    probe.setAutoTransform(true);
-    result.sequence = probeReader(probe, suffix);
-    if (!result.sequence.valid)
+    if (known && known->valid)
     {
-        result.error = probe.errorString().toStdString();
-        if (result.error.empty())
-            result.error = "image reader cannot read source";
-        return result;
+        result.sequence = *known;
+    }
+    else
+    {
+        const QString suffix = QFileInfo(qpath(path)).suffix().toLower();
+        QImageReader probe(qpath(path));
+        probe.setAutoTransform(true);
+        result.sequence = probeReader(probe, suffix);
+        if (!result.sequence.valid)
+        {
+            result.error = probe.errorString().toStdString();
+            if (result.error.empty())
+                result.error = "image reader cannot read source";
+            return result;
+        }
     }
 
     if (frameIndex < 0 || frameIndex >= result.sequence.frameCount)
@@ -550,7 +609,24 @@ FrameDecodeResult FrameSequenceReader::decode(const std::string &path, int frame
 {
     try
     {
-        return decodeImpl(path, frameIndex, maxEdge);
+        return decodeImpl(path, frameIndex, maxEdge, nullptr);
+    }
+    catch (...)
+    {
+        FrameDecodeResult result;
+        result.error = "unexpected frame decoder failure";
+        return result;
+    }
+}
+
+FrameDecodeResult decodeKnownSequence(const std::string &path, const FrameSequenceInfo &sequence,
+                                      int frameIndex, int maxEdge)
+{
+    try
+    {
+        if (!sequence.valid)
+            return decodeImpl(path, frameIndex, maxEdge, nullptr);
+        return decodeImpl(path, frameIndex, maxEdge, &sequence);
     }
     catch (...)
     {
@@ -570,31 +646,23 @@ FrameInfo FrameSequenceReader::frameInfo(const std::string &path, int frameIndex
         if (!sequence.valid || frameIndex < 0 || frameIndex >= sequence.frameCount)
             return {};
 
+        if (sequence.kind != FrameSequenceKind::Animation)
+            return stillFrameInfo(path, frameIndex);
+
         QImageReader reader(qpath(path));
         reader.setAutoTransform(true);
 
         QSize size;
         int delay = 0;
-        const bool animation = sequence.kind == FrameSequenceKind::Animation;
         if (frameIndex == 0 || reader.jumpToImage(frameIndex))
         {
-            if (!animation)
-            {
-                // size() is the stored size; report what read() displays.
-                size = reader.size();
-                if (qtmetadata::transformSwapsDimensions(reader.transformation()))
-                    size.transpose();
-            }
             const int before = reader.nextImageDelay();
             const QImage image = reader.read();
             if (image.isNull())
                 return {};
-            if (size.isEmpty())
-                size = image.size();
+            size = image.size();
             const int after = reader.nextImageDelay();
             delay = after > 0 ? after : before;
-            if (size.isEmpty())
-                size = image.size();
         }
         else
         {
@@ -614,10 +682,7 @@ FrameInfo FrameSequenceReader::frameInfo(const std::string &path, int frameIndex
                 }
             }
         }
-        if (sequence.kind != FrameSequenceKind::Animation)
-            delay = 0;
-        else
-            delay = normalizedAnimationDelayMs(delay);
+        delay = normalizedAnimationDelayMs(delay);
         return {frameIndex, delay, size.width(), size.height()};
     }
     catch (...)
@@ -634,18 +699,42 @@ bool FrameSequenceReader::isSequencePath(const std::string &path)
 
 void FrameSequenceReader::releaseFile(const std::string &path)
 {
-    std::shared_ptr<AnimationSession> current;
+    std::shared_ptr<AnimationSession> dropped[kMaxAnimationSessions];
+    int droppedCount = 0;
     {
         std::lock_guard<std::mutex> lock(animationMutex());
-        auto &session = animationSession();
-        if (!session)
-            return;
-        if (!path.empty() && !animationPathMatches(*session, path))
-            return;
-        current = std::move(session);
+        auto &cache = animationCache();
+        if (path.empty())
+        {
+            for (int i = 0; i < cache.size; ++i)
+            {
+                if (cache.entries[i].session)
+                    dropped[droppedCount++] = std::move(cache.entries[i].session);
+            }
+            cache.size = 0;
+        }
+        else
+        {
+            const int index = animationSlotIndex(cache, path);
+            if (index < 0)
+                return;
+            if (cache.entries[index].session)
+                dropped[droppedCount++] = std::move(cache.entries[index].session);
+            for (int i = index + 1; i < cache.size; ++i)
+                cache.entries[i - 1] = std::move(cache.entries[i]);
+            if (cache.size > 0)
+            {
+                cache.entries[cache.size - 1].session.reset();
+                cache.entries[cache.size - 1].stamp = 0;
+                --cache.size;
+            }
+        }
     }
-    if (current)
-        current->abandon.store(true);
+    for (int i = 0; i < droppedCount; ++i)
+    {
+        if (dropped[i])
+            dropped[i]->abandon.store(true);
+    }
 }
 
 } // namespace mviewer::core

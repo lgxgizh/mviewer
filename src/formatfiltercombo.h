@@ -37,6 +37,7 @@ class FormatFilterCombo : public QComboBox
   private:
     void rebuildItems();
     void toggleRow(int row);
+    void refreshAccessibility();
 
     QStandardItemModel *m_model = nullptr;
     QStringList m_hidden;

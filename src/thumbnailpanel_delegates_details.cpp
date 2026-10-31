@@ -23,7 +23,7 @@ void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &pat
         QFont f = painter->font();
         f.setPointSize(qMax(7, f.pointSize() - 1));
         painter->setFont(f);
-        painter->drawText(thumbR, Qt::AlignCenter, QStringLiteral("Cannot\\nload"));
+        painter->drawText(thumbR, Qt::AlignCenter, QObject::tr("Cannot\nload"));
     }
     else
     {
@@ -68,8 +68,13 @@ void drawDetailsLabel(QPainter *painter, const QRect &labelR, const QString &pat
                                                QColor(67, 160, 71),
                                                QColor(30, 136, 229),
                                                QColor(142, 36, 170)};
-        static const char *kLabelNames[7] = {"",      "Red",  "Orange", "Yellow",
-                                             "Green", "Blue", "Purple"};
+        static const char *const kLabelNames[7] = {"",
+                                                   QT_TRANSLATE_NOOP("QObject", "Red"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Orange"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Yellow"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Green"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Blue"),
+                                                   QT_TRANSLATE_NOOP("QObject", "Purple")};
         const QColor chip = kLabelColors[label];
         const int cs = 12;
         const QRect chipR(labelR.x(), labelR.y() + (labelR.height() - cs) / 2, cs, cs);
@@ -81,7 +86,7 @@ void drawDetailsLabel(QPainter *painter, const QRect &labelR, const QString &pat
         const QRect chipTextR(labelR.x() + cs + 6, labelR.y(), labelR.width() - cs - 6,
                               labelR.height());
         painter->drawText(chipTextR, Qt::AlignVCenter | Qt::TextSingleLine,
-                          QString::fromUtf8(kLabelNames[label]));
+                          QObject::tr(kLabelNames[label]));
     }
     else
     {

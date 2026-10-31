@@ -59,16 +59,9 @@ void ImageViewer::scheduleRasterRoiStats(const QRect &selection)
                     if (!viewer || viewer->m_roiRevision != revision ||
                         viewer->m_currentPath != path || !result->valid)
                         return;
-                    const QString text = QString("ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9")
-                                             .arg(region.x)
-                                             .arg(region.y)
-                                             .arg(region.width)
-                                             .arg(region.height)
-                                             .arg(result->lumMean, 0, 'f', 1)
-                                             .arg(result->vMean, 0, 'f', 1)
-                                             .arg(result->rMean)
-                                             .arg(result->gMean)
-                                             .arg(result->bMean);
+                    const QString text = ImageViewer::roiStatsText(
+                        region.x, region.y, region.width, region.height, result->lumMean,
+                        result->vMean, result->rMean, result->gMean, result->bMean);
                     emit viewer->regionStats(text);
                 },
                 Qt::QueuedConnection);

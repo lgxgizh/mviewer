@@ -46,7 +46,10 @@ void ViewModeSegment::setModeToolTip(int data, const QString &toolTip)
             mode.toolTip = toolTip;
     }
     if (QAbstractButton *button = buttonForData(data))
+    {
         button->setToolTip(toolTip);
+        button->setAccessibleName(toolTip);
+    }
 }
 
 QAbstractButton *ViewModeSegment::buttonForData(int data) const
@@ -95,9 +98,10 @@ void ViewModeSegment::rebuild()
         button->setIcon(mode.icon);
         button->setIconSize(QSize(16, 16));
         button->setToolTip(mode.toolTip);
+        button->setAccessibleName(mode.toolTip);
         button->setCheckable(true);
         button->setAutoExclusive(false);
-        button->setFocusPolicy(Qt::NoFocus);
+        button->setFocusPolicy(Qt::TabFocus);
         button->setCursor(Qt::PointingHandCursor);
         button->setFixedSize(28, 24);
         m_group->addButton(button);

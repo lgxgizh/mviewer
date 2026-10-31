@@ -504,6 +504,8 @@ class ThumbnailPanel : public QListView
     void updateVisibleRange();
     QString thumbCacheKey(const QString &path, int size) const;
     void enforceThumbPixmapBudgetLocked() const;
+    void rememberThumbReadyKeyLocked(const QString &cacheKey) const;
+    void forgetThumbReadyKeyLocked(const QString &cacheKey) const;
     bool hasRatingOrFlagFilter() const;
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
     struct ContextMenuActions;
@@ -559,26 +561,23 @@ class ThumbnailPanel : public QListView
     // Thread-safe ready thumbnail pixmaps (filled from the pipeline result fn).
     mutable QMutex m_thumbMtx;
     using ReadyPixmap = mviewer::tp::ReadyPixmap;
-    mutable QHash<QString, ReadyPixmap> m_thumbReady; // key = path + size
-    mutable std::list<QString> m_thumbReadyLru;       // MRU at front, LRU at back
+    mutable QHash<QString, ReadyPixmap> m_thumbReady;   // key = path + size
+    mutable QHash<QString, QString> m_thumbReadyByPath; // path key -> newest size key
+    mutable std::list<QString> m_thumbReadyLru;         // MRU at front, LRU at back
     mutable qint64 m_thumbReadyBytes = 0;
     mutable uint64_t m_thumbReadyClock = 0;
     QSet<QString> m_thumbPending;
     QSet<QString> m_thumbFailed; // key = path + size; decode returned null
 
-    // Drops this panel's pixmap caches (every size) for one source path. The
-    // panel key is path+size with no revision component, so an in-place
-    // overwrite would otherwise keep serving the stale pixmap and a one-off
-    // decode failure would stay negative-cached for the whole directory.
+    // Drops this panel's pixmap caches (every size) for one path: keys carry no
+    // revision, so an overwrite would keep a stale pixmap or failure cached.
     void invalidateThumbnailCacheFor(const QString &path);
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
     CommandStack *m_cmdStack = nullptr;    // A-10: optional reversible file ops
     SelectionModel *m_selection = nullptr; // P0-2: hover target (not owned)
-    // M24: bounded worker pool for the directory scan / dimension resolve
-    // tasks (max 2). Replaces detached std::thread so rapid folder switching
-    // can never grow thread count without bound, and destruction waits for
-    // in-flight tasks (which abort early via m_alive).
+    // M24: bounded pool (max 2) for scan / dimension tasks; destruction waits
+    // for in-flight tasks, which abort early via m_alive.
     QThreadPool m_scanPool;
     // M24 (S3): one pending coalesced DecorationRole flush per event-loop turn.
     bool m_thumbDirty = false;

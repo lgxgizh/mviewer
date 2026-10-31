@@ -1,4 +1,5 @@
 #include "application/Shutdown.h"
+#include "core/async/CooperativeCancel.h"
 #include "core/compare/CompareEngine.h"
 #include "core/image/FramePlaybackController.h"
 #include "core/image/FrameSequence.h"
@@ -14,9 +15,11 @@
 #include <QTemporaryFile>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -81,7 +84,7 @@ QByteArray makeAnimatedGifDelays(const std::vector<int> &centiseconds)
         gif.append(frame == 0 ? '\x00' : '\x80');
         if (frame != 0)
         {
-            gif.append(colors[frame], 3);
+            gif.append(colors[frame % 3], 3);
             gif.append("\x00\x00\x00", 3);
         }
         // LZW minimum code size 8, followed by a 16-pixel zero-index scanline.
@@ -135,13 +138,12 @@ QByteArray makeAnimatedWebp()
     return result;
 }
 
-QByteArray makeMultipageTiff()
+QByteArray makeMultipageTiff(int pageCount = 3)
 {
-    constexpr int pageCount = 3;
     constexpr int ifdStart = 8;
     constexpr int ifdSize = 2 + 9 * 12 + 4;
-    constexpr int bitsStart = ifdStart + pageCount * ifdSize;
-    constexpr int pixelsStart = bitsStart + pageCount * 6;
+    const int bitsStart = ifdStart + pageCount * ifdSize;
+    const int pixelsStart = bitsStart + pageCount * 6;
     QByteArray tiff(pixelsStart + pageCount * 48, '\0');
     tiff[0] = 'I';
     tiff[1] = 'I';
@@ -172,12 +174,16 @@ QByteArray makeMultipageTiff()
         put32(tiff, entries + 9 * 12, page + 1 < pageCount ? ifd + ifdSize : 0);
         for (int channel = 0; channel < 3; ++channel)
             put16(tiff, bitsStart + page * 6 + channel * 2, 8);
+        const bool first = page == 0;
+        const bool last = page + 1 == pageCount;
         for (int pixel = 0; pixel < 16; ++pixel)
         {
             const int at = pixelsStart + page * 48 + pixel * 3;
-            tiff[at + 0] = page == 0 ? char(0xff) : 0;
-            tiff[at + 1] = page == 1 ? char(0xff) : 0;
-            tiff[at + 2] = page == 2 ? char(0xff) : 0;
+            // 3 pages stay red/green/blue. Longer files keep that for the
+            // ends so a seek to the last page is distinguishable from page 0.
+            tiff[at + 0] = first ? char(0xff) : 0;
+            tiff[at + 1] = (!first && !last) ? char(0xff) : 0;
+            tiff[at + 2] = (last && !first) ? char(0xff) : 0;
         }
     }
     return tiff;
@@ -360,6 +366,266 @@ bool checkPlaybackLoopEdges()
     return ok;
 }
 
+int manualDelayTotal(const QString &path, int frameCount)
+{
+    QImageReader timing(path);
+    timing.setAutoTransform(true);
+    int total = 0;
+    for (int i = 0; i < frameCount; ++i)
+    {
+        const int before = timing.nextImageDelay();
+        const QImage image = timing.read();
+        if (image.isNull())
+            break;
+        const int after = timing.nextImageDelay();
+        const int delay = after > 0 ? after : before;
+        total += delay <= 10 ? 100 : delay;
+    }
+    return total;
+}
+
+bool checkProbeDelayMatchesRead(const QString &path, const char *label)
+{
+    using mviewer::core::FrameSequenceReader;
+    const auto probed = FrameSequenceReader::probe(path.toUtf8().toStdString());
+    const int manual = manualDelayTotal(path, probed.frameCount);
+    return check(probed.valid && probed.durationKnown && probed.totalDurationMs == manual,
+                 std::string(label) + " probe duration matches an unscaled delay sum");
+}
+
+QString writeExifJpeg(const QString &path, int rawW, int rawH, int orientation)
+{
+    QImage image(rawW, rawH, QImage::Format_RGB32);
+    image.fill(qRgb(90, 120, 200));
+    QByteArray jpeg;
+    const QString plain = path + ".plain.jpg";
+    if (!image.save(plain, "JPEG", 90))
+        return {};
+    QFile sink(plain);
+    if (!sink.open(QIODevice::ReadOnly))
+        return {};
+    jpeg = sink.readAll();
+    sink.close();
+    QFile::remove(plain);
+    if (jpeg.size() < 4)
+        return {};
+    const char tiff[] = {'I',
+                         'I',
+                         42,
+                         0,
+                         8,
+                         0,
+                         0,
+                         0,
+                         1,
+                         0,
+                         0x12,
+                         0x01,
+                         3,
+                         0,
+                         1,
+                         0,
+                         0,
+                         0,
+                         static_cast<char>(orientation),
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0};
+    QByteArray payload("Exif\0\0", 6);
+    payload.append(tiff, sizeof(tiff));
+    QByteArray app1;
+    app1.append(static_cast<char>(0xFF));
+    app1.append(static_cast<char>(0xE1));
+    const int len = static_cast<int>(payload.size()) + 2;
+    app1.append(static_cast<char>((len >> 8) & 0xFF));
+    app1.append(static_cast<char>(len & 0xFF));
+    app1.append(payload);
+    jpeg.insert(2, app1);
+    QFile out(path);
+    if (!out.open(QIODevice::WriteOnly) || out.write(jpeg) != jpeg.size())
+        return {};
+    return path;
+}
+
+bool checkStillFrameInfo(const QString &root, const QString &tiff)
+{
+    using mviewer::core::FrameSequenceReader;
+    const QString png = root + "/dims.png";
+    QImage image(8, 5, QImage::Format_RGB32);
+    image.fill(Qt::red);
+    bool ok = check(image.save(png), "still dimension fixture was written");
+    const auto pngInfo = FrameSequenceReader::frameInfo(png.toUtf8().toStdString(), 0);
+    ok = check(pngInfo.width == 8 && pngInfo.height == 5 && pngInfo.durationMs == 0,
+               "still frameInfo reports the stored size and a zero delay") &&
+         ok;
+
+    const auto page = FrameSequenceReader::frameInfo(tiff.toUtf8().toStdString(), 2);
+    ok = check(page.index == 2 && page.width == 4 && page.height == 4 && page.durationMs == 0,
+               "page frameInfo reports the stored size without an animation delay") &&
+         ok;
+
+    const QString rotated = root + "/exif6.jpg";
+    ok = check(!writeExifJpeg(rotated, 32, 16, 6).isEmpty(), "EXIF-6 JPEG was written") && ok;
+    const auto oriented = FrameSequenceReader::frameInfo(rotated.toUtf8().toStdString(), 0);
+    ok = check(oriented.width == 16 && oriented.height == 32 && oriented.durationMs == 0,
+               "still frameInfo transposes EXIF orientation 6") &&
+         ok;
+    return ok;
+}
+
+bool checkSessionsAndCancel(const QString &root, const QByteArray &gifBytes)
+{
+    using mviewer::core::FrameSequenceReader;
+    using mviewer::core::ScopedCancelProbe;
+    std::vector<std::string> paths;
+    bool ok = true;
+    for (int i = 0; i < 5; ++i)
+    {
+        const QString path = root + "/session_" + QString::number(i) + ".gif";
+        ok = check(writeBytes(path, gifBytes), "session gif was written") && ok;
+        paths.push_back(path.toUtf8().toStdString());
+    }
+    if (!ok)
+        return false;
+    FrameSequenceReader::releaseFile({});
+    for (const auto &path : paths)
+    {
+        const auto decoded = FrameSequenceReader::decodeFull(path, 0);
+        ok = check(decoded.ok && checkColor(decoded.pixels, 255, 0, 0, "session frame 0"),
+                   "animation sessions keep more than one file") &&
+             ok;
+    }
+    const auto reopened = FrameSequenceReader::decodeFull(paths[0], 2);
+    ok = check(reopened.ok && checkColor(reopened.pixels, 0, 0, 255, "evicted file"),
+               "an evicted animation file still decodes") &&
+         ok;
+
+    FrameSequenceReader::releaseFile(paths[0]);
+    const auto kept = FrameSequenceReader::decodeFull(paths[1], 2);
+    const auto named = FrameSequenceReader::decodeFull(paths[0], 0);
+    ok = check(kept.ok && checkColor(kept.pixels, 0, 0, 255, "kept file") && named.ok &&
+                   checkColor(named.pixels, 255, 0, 0, "released file"),
+               "releaseFile drops only the named animation") &&
+         ok;
+
+    FrameSequenceReader::releaseFile({});
+    std::atomic<int> started{0};
+    std::atomic<int> failures{0};
+    auto worker = [&](const std::string &path)
+    {
+        started.fetch_add(1, std::memory_order_acq_rel);
+        while (started.load(std::memory_order_acquire) < 2)
+            std::this_thread::yield();
+        for (int n = 0; n < 12; ++n)
+        {
+            const int index = (n % 2 == 0) ? 2 : 0;
+            const auto decoded = FrameSequenceReader::decodeFull(path, index);
+            const auto px = samplePixel(decoded.pixels, 0, 0);
+            const int expectR = index == 0 ? 255 : 0;
+            const int expectB = index == 0 ? 0 : 255;
+            if (!decoded.ok || !px.valid || px.r != expectR || px.g != 0 || px.b != expectB)
+                failures.fetch_add(1, std::memory_order_relaxed);
+        }
+    };
+    std::thread left(worker, paths[0]);
+    std::thread right(worker, paths[1]);
+    left.join();
+    right.join();
+    ok =
+        check(failures.load() == 0, "two animation files decode together without cancelling") && ok;
+
+    FrameSequenceReader::releaseFile({});
+    {
+        const ScopedCancelProbe probe([]() { return true; });
+        const auto cancelled = FrameSequenceReader::decodeFull(paths[0], 2);
+        ok = check(!cancelled.ok && cancelled.error == "frame decode cancelled",
+                   "animation walk stops when the cooperative cancel probe is set") &&
+             ok;
+    }
+    const auto after = FrameSequenceReader::decodeFull(paths[0], 2);
+    ok = check(after.ok && checkColor(after.pixels, 0, 0, 255, "after cancel"),
+               "a cancelled walk does not poison the next decode") &&
+         ok;
+    FrameSequenceReader::releaseFile(paths[0]);
+    {
+        const ScopedCancelProbe live([]() { return false; });
+        const auto walked = FrameSequenceReader::decodeFull(paths[0], 2);
+        ok = check(walked.ok && checkColor(walked.pixels, 0, 0, 255, "live probe"),
+                   "a clear cancel probe still decodes the animation") &&
+             ok;
+    }
+    FrameSequenceReader::releaseFile({});
+    return ok;
+}
+
+bool checkWalkCap(const QString &root)
+{
+    using mviewer::core::FrameSequenceKind;
+    using mviewer::core::FrameSequenceReader;
+    constexpr int kCount = 4098;
+    constexpr int kPastCap = 4097;
+    const QString tiffPath = root + "/many.tiff";
+    bool ok = check(writeBytes(tiffPath, makeMultipageTiff(kCount)), "long TIFF was written");
+    const std::string tiff = tiffPath.toUtf8().toStdString();
+    const auto pages = FrameSequenceReader::probe(tiff);
+    ok = check(pages.valid && pages.kind == FrameSequenceKind::Pages &&
+                   pages.frameCount == kCount && !pages.animated,
+               "long TIFF is pages, not an animation walk") &&
+         ok;
+    const auto info = FrameSequenceReader::frameInfo(tiff, kPastCap);
+    ok =
+        check(info.index == kPastCap && info.width == 4 && info.height == 4 && info.durationMs == 0,
+              "page frameInfo past the animation walk cap keeps the stored size") &&
+        ok;
+    const auto decoded = FrameSequenceReader::decodeFull(tiff, kPastCap);
+    ok = check(decoded.ok && decoded.frame.index == kPastCap &&
+                   checkColor(decoded.pixels, 0, 0, 255, "page past cap"),
+               "Pages jumpToImage accepts an index past the animation walk cap") &&
+         ok;
+    auto &repo = ImageRepository::instance();
+    const auto loaded = repo.loadFrame(tiff, kPastCap);
+    ok = check(loaded.success() && loaded.frame && loaded.frame->frameIndex() == kPastCap,
+               "repository loads a page past the animation walk cap") &&
+         ok;
+
+    const QString gifPath = root + "/long.gif";
+    ok = check(writeBytes(gifPath, makeAnimatedGifDelays(std::vector<int>(kCount, 10))),
+               "long GIF was written") &&
+         ok;
+    const std::string gif = gifPath.toUtf8().toStdString();
+    const auto animation = FrameSequenceReader::probe(gif);
+    ok = check(animation.valid && animation.kind == FrameSequenceKind::Animation &&
+                   animation.frameCount == kCount && !animation.durationKnown,
+               "a long GIF probe stays count-only") &&
+         ok;
+    const auto rejected = FrameSequenceReader::decodeFull(gif, kPastCap);
+    ok = check(!rejected.ok && rejected.error == "frame index out of range",
+               "animation walk still rejects an index past the cap") &&
+         ok;
+    const auto first = FrameSequenceReader::decodeFull(gif, 0);
+    ok = check(first.ok && checkColor(first.pixels, 255, 0, 0, "long gif frame 0"),
+               "frame 0 of a long GIF still decodes") &&
+         ok;
+    FrameSequenceReader::releaseFile({});
+    return ok;
+}
+
+bool checkLoadKeepsProbedSequence(const std::string &gifPath)
+{
+    using mviewer::core::FrameSequenceReader;
+    const auto probed = FrameSequenceReader::probe(gifPath);
+    const auto loaded = ImageRepository::instance().load(gifPath);
+    return check(loaded.success() && loaded.frame && loaded.frame->frameIndex() == 0 &&
+                     loaded.frame->sequenceInfo().frameCount == probed.frameCount &&
+                     loaded.frame->sequenceInfo().durationKnown == probed.durationKnown &&
+                     loaded.frame->sequenceInfo().totalDurationMs == probed.totalDurationMs,
+                 "repository load keeps the probed animation sequence");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -471,7 +737,13 @@ int main(int argc, char **argv)
          ok;
 
     ok = checkGifTiming(root, gif) && ok;
+    ok = checkProbeDelayMatchesRead(gif, "GIF") && ok;
+    ok = checkProbeDelayMatchesRead(webp, "WebP") && ok;
+    ok = checkStillFrameInfo(root, tiff) && ok;
     ok = checkSequentialCursor(gif) && ok;
+    ok = checkSessionsAndCancel(root, makeAnimatedGif()) && ok;
+    ok = checkWalkCap(root) && ok;
+    ok = checkLoadKeepsProbedSequence(gif.toUtf8().toStdString()) && ok;
     ok = checkPlaybackSuspension() && ok;
     ok = checkPlaybackLoopEdges() && ok;
     mviewer::core::FrameSequenceReader::releaseFile({});

@@ -54,6 +54,7 @@ struct RasterRequest
 {
     QString path;
     uint64_t generation = 0;
+    uint64_t serial = 0; // display-request serial; stale pans are dropped
     mviewer::core::DisplayColorContext target = mviewer::core::DisplayColorContext::sRGB();
     bool fullLod = true;                // true = decodeLod over the full source
     int maxEdge = 0;                    // fullLod target
@@ -72,6 +73,39 @@ QWindow *hostWindowHandle(const QWidget *widget)
         return own;
     const QWidget *host = widget->window();
     return host ? host->windowHandle() : nullptr;
+}
+
+// Zoomed in: a bounded region raster covering the visible source rect
+// (inflated by 1/8) at viewport density `d`, capped by kMaxRasterPixels.
+// False when no source pixel is visible.
+bool fillRegionRasterRequest(RasterRequest &req, const QRect &visible, const QSize &source,
+                             double d)
+{
+    if (visible.width() <= 0 || visible.height() <= 0)
+        return false;
+    const int inflateX = std::max(1, visible.width() / 8);
+    const int inflateY = std::max(1, visible.height() / 8);
+    const int x0 = std::max(0, visible.x() - inflateX);
+    const int y0 = std::max(0, visible.y() - inflateY);
+    const int x1 = std::min(source.width(), visible.x() + visible.width() + inflateX);
+    const int y1 = std::min(source.height(), visible.y() + visible.height() + inflateY);
+    req.fullLod = false;
+    req.rx = x0;
+    req.ry = y0;
+    req.rw = x1 - x0;
+    req.rh = y1 - y0;
+    double tw = std::ceil(static_cast<double>(req.rw) * d * kRasterOverscan);
+    double th = std::ceil(static_cast<double>(req.rh) * d * kRasterOverscan);
+    const double total = tw * th;
+    if (total > kMaxRasterPixels)
+    {
+        const double f = std::sqrt(kMaxRasterPixels / total);
+        tw *= f;
+        th *= f;
+    }
+    req.tw = std::max(1, static_cast<int>(tw));
+    req.th = std::max(1, static_cast<int>(th));
+    return true;
 }
 
 } // namespace
@@ -172,7 +206,8 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         // cannot be represented by SourceImage (for example a legacy/plugin
         // decoder without probe metadata). Only the former is terminal.
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
-                                          QImage(), QRect(), QSize(), 1.0, req.target, true);
+                                          QImage(), QRect(), QSize(), 1.0, req.target, true,
+                                          req.serial);
         return;
     }
     if (!source)
@@ -181,7 +216,7 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         // the existing full-frame ImageLoadingService path decide whether the
         // decoder can load the image. Do not surface this as loadFailed here.
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, nullptr, QImage(),
-                                          QRect(), QSize(), 1.0, req.target, false);
+                                          QRect(), QSize(), 1.0, req.target, false, req.serial);
         return;
     }
     const QSize srcSize(source->metadata().width, source->metadata().height);
@@ -190,7 +225,8 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         // Small source: the existing full-frame fast path owns the display;
         // only propagate the source dims (keeps the worker contract uniform).
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
-                                          QImage(), QRect(), srcSize, 1.0, req.target);
+                                          QImage(), QRect(), srcSize, 1.0, req.target, false,
+                                          req.serial);
         return;
     }
     if (ctx.isCancelled())
@@ -224,8 +260,11 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
             const mviewer::core::SourceRect coveredD = mviewer::core::rawRectToOriented(
                 r.coveredRect, source->rawWidth(), source->rawHeight(), orientation);
             covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
-            if (r.ok && !r.pixels.isNull())
-                density = static_cast<double>(raw.w) / r.pixels.width;
+            // Oriented source pixels per output pixel. Orientations 5-8 swap
+            // axes, so the raw clip width is not the displayed width.
+            if (r.ok && !r.pixels.isNull() && r.pixels.width > 0 && covered.width() > 0)
+                density =
+                    static_cast<double>(covered.width()) / static_cast<double>(r.pixels.width);
         }
     }
     catch (...)
@@ -247,20 +286,23 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     }
     ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
                                       std::move(raster), covered, srcSize, density, req.target,
-                                      decodeFailed);
+                                      decodeFailed, req.serial);
 }
 
-void ImageViewer::marshalDisplayRaster(
-    const std::shared_ptr<QPointer<ImageViewer>> &guard, const QString &path, uint64_t generation,
-    std::shared_ptr<mviewer::core::SourceImage> source, QImage image, QRect sourceRect,
-    QSize sourceSize, double density, const mviewer::core::DisplayColorContext &target, bool failed)
+void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard,
+                                       const QString &path, uint64_t generation,
+                                       std::shared_ptr<mviewer::core::SourceImage> source,
+                                       QImage image, QRect sourceRect, QSize sourceSize,
+                                       double density,
+                                       const mviewer::core::DisplayColorContext &target,
+                                       bool failed, uint64_t serial)
 {
     if (!qApp)
         return; // app teardown
     QMetaObject::invokeMethod(
         qApp,
         [guard, path, generation, source = std::move(source), image = std::move(image), sourceRect,
-         sourceSize, density, target, failed]() mutable
+         sourceSize, density, target, failed, serial]() mutable
         {
             try
             {
@@ -268,7 +310,7 @@ void ImageViewer::marshalDisplayRaster(
                 if (!viewer)
                     return; // viewer destroyed; never touch it
                 viewer->applyDisplayRaster(path, generation, std::move(source), std::move(image),
-                                           sourceRect, sourceSize, density, target, failed);
+                                           sourceRect, sourceSize, density, target, failed, serial);
             }
             catch (...)
             {
@@ -289,14 +331,19 @@ void ImageViewer::startLodDisplay(const QString &path, uint64_t generation)
     if (auto warm = takeWarmDisplayRaster(path))
     {
         applyDisplayRaster(path, generation, std::move(warm->source), std::move(warm->image),
-                           warm->sourceRect, warm->sourceSize, warm->density, warm->target, false);
+                           warm->sourceRect, warm->sourceSize, warm->density, warm->target, false,
+                           m_displayRequestSerial);
         return;
     }
     if (m_promotedDisplayRasterPreload.handle)
     {
         auto promoted = std::move(m_promotedDisplayRasterPreload);
         m_promotedDisplayRasterPreload = DisplayRasterPreload{};
-        promoted.state->promotedGeneration.store(generation, std::memory_order_release);
+        if (promoted.state)
+        {
+            promoted.state->promotedGeneration.store(generation, std::memory_order_release);
+            promoted.state->displaySerial.store(m_displayRequestSerial, std::memory_order_release);
+        }
         m_displayRequest = std::move(promoted.handle);
         return;
     }
@@ -338,11 +385,7 @@ bool ImageViewer::displayNeedsUpgrade() const
         return false;
     // Coverage: the visible source rect must fit inside the covered rect with
     // a margin (so small pans do not re-request).
-    QRect covered = m_raster.sourceRect;
-    covered.adjust(-covered.width() / 8, -covered.height() / 8, covered.width() / 8,
-                   covered.height() / 8);
-    const QRect visible(vx, vy, vw, vh);
-    if (!covered.contains(visible))
+    if (!displayRasterCoversView(m_raster.sourceRect, QRect(vx, vy, vw, vh)))
         return true;
     // Density: the raster must provide at least the view density (with
     // overscan), otherwise the display is upscaling a too-coarse raster.
@@ -415,37 +458,15 @@ void ImageViewer::requestDisplayRasterImpl()
         }
         else
         {
-            // Zoomed in: bounded region raster covering the visible source
-            // rect (inflated) at the viewport density, capped by kMaxRasterPixels.
             int vx = 0, vy = 0, vw = 0, vh = 0;
             m_view.visibleImageRect(sw, sh, vx, vy, vw, vh);
-            if (vw <= 0 || vh <= 0)
+            if (!fillRegionRasterRequest(req, QRect(vx, vy, vw, vh), QSize(sw, sh), d))
                 return;
-            const int inflateX = std::max(1, vw / 8);
-            const int inflateY = std::max(1, vh / 8);
-            const int x0 = std::max(0, vx - inflateX);
-            const int y0 = std::max(0, vy - inflateY);
-            const int x1 = std::min(sw, vx + vw + inflateX);
-            const int y1 = std::min(sh, vy + vh + inflateY);
-            req.fullLod = false;
-            req.rx = x0;
-            req.ry = y0;
-            req.rw = x1 - x0;
-            req.rh = y1 - y0;
-            double tw = std::ceil(static_cast<double>(req.rw) * d * kRasterOverscan);
-            double th = std::ceil(static_cast<double>(req.rh) * d * kRasterOverscan);
-            const double total = tw * th;
-            if (total > kMaxRasterPixels)
-            {
-                const double f = std::sqrt(kMaxRasterPixels / total);
-                tw *= f;
-                th *= f;
-            }
-            req.tw = std::max(1, static_cast<int>(tw));
-            req.th = std::max(1, static_cast<int>(th));
         }
     }
 
+    req.serial = m_displayRequestSerial + 1;
+    m_displayRequestSerial = req.serial;
     auto guard = std::make_shared<QPointer<ImageViewer>>(this);
     // Display-warmth work (probe + LOD/region decode) runs on the Thumbnail
     // pool: it must never count as a foreground DecodePool submission (the
@@ -470,7 +491,7 @@ void ImageViewer::requestDisplayRasterImpl()
                     try
                     {
                         marshalDisplayRaster(guard, req.path, req.generation, nullptr, QImage(),
-                                             QRect(), QSize(), 1.0, req.target, true);
+                                             QRect(), QSize(), 1.0, req.target, true, req.serial);
                     }
                     catch (...)
                     {
@@ -485,6 +506,9 @@ void ImageViewer::requestDisplayRasterImpl()
         {}, std::chrono::steady_clock::time_point::max(), [] {});
     if (!m_displayRequest)
     {
+        // The worker never started, so the serial must not drop a delivery
+        // that was already queued for the previous request.
+        m_displayRequestSerial = req.serial - 1;
         // A rejected display probe must still reach the pre-M47 full-frame
         // terminal path. In particular, a paused ThumbnailPool must not leave
         // m_largeSourcePending/m_loading set forever.
@@ -497,11 +521,17 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
                                      std::shared_ptr<mviewer::core::SourceImage> source,
                                      QImage image, QRect sourceRect, QSize sourceSize,
                                      double density,
-                                     const mviewer::core::DisplayColorContext &target, bool failed)
+                                     const mviewer::core::DisplayColorContext &target, bool failed,
+                                     uint64_t serial)
 {
     if (path != m_currentPath || generation != m_requestGen ||
         target.cacheKey() != m_displayColorTarget.cacheKey())
         return; // superseded (A -> B -> A) or stale request
+    // A pan issues a new serial. A worker that already queued this delivery
+    // cannot be recalled; drop it before it replaces the raster on screen.
+    // Do not clear m_displayRequest: that handle belongs to the newer request.
+    if (serial != m_displayRequestSerial)
+        return;
     if (m_fullRawLoading ||
         (m_frame && m_frame->metadata().rawSource == mviewer::domain::RawSource::FullDemosaic))
     {
@@ -551,7 +581,7 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
         return;
     }
 
-    if (!acceptDisplayRaster(image, m_raster.sourceRect, density))
+    if (!acceptDisplayRaster(image, sourceRect, density))
     {
         if (displayNeedsUpgrade())
             scheduleDisplayUpgrade();
@@ -667,18 +697,48 @@ bool ImageViewer::acceptDisplayRaster(const QImage &image, const QRect &covered,
 {
     if (image.isNull())
         return false;
-    if (m_raster.image.isNull() || !(density > 0.0) || !(m_raster.density > 0.0))
-        return true;
     int vx = 0;
     int vy = 0;
     int vw = 0;
     int vh = 0;
     m_view.visibleImageRect(m_raster.sourceSize.width(), m_raster.sourceSize.height(), vx, vy, vw,
                             vh);
-    const bool covers = vw > 0 && vh > 0 && covered.contains(QRect(vx, vy, vw, vh));
-    if (!covers)
-        return true;
-    return density <= m_raster.density + 1e-6;
+    return shouldAcceptDisplayRaster(!m_raster.image.isNull(), m_raster.sourceRect,
+                                     m_raster.density, covered, density, QRect(vx, vy, vw, vh));
 }
 
 #include "imageviewer_lod_overlay.inc"
+
+bool ImageViewer::lodRasterUsesSmoothing(double viewScale, double devicePixelRatio)
+{
+    const double dpr = devicePixelRatio > 1.0 ? devicePixelRatio : 1.0;
+    return !(viewScale * dpr >= 1.0);
+}
+
+bool ImageViewer::displayRasterCoversView(const QRect &covered, const QRect &visible)
+{
+    if (visible.width() <= 0 || visible.height() <= 0 || covered.width() <= 0 ||
+        covered.height() <= 0)
+        return false;
+    QRect expanded = covered;
+    expanded.adjust(-expanded.width() / 8, -expanded.height() / 8, expanded.width() / 8,
+                    expanded.height() / 8);
+    return expanded.contains(visible);
+}
+
+bool ImageViewer::shouldAcceptDisplayRaster(bool haveCurrent, const QRect &currentCovered,
+                                            double currentDensity, const QRect &incomingCovered,
+                                            double incomingDensity, const QRect &visible)
+{
+    if (!haveCurrent || !(incomingDensity > 0.0) || !(currentDensity > 0.0))
+        return true;
+    if (visible.width() <= 0 || visible.height() <= 0)
+        return true;
+    const bool incomingCovers = displayRasterCoversView(incomingCovered, visible);
+    const bool currentCovers = displayRasterCoversView(currentCovered, visible);
+    if (incomingCovers && !currentCovers)
+        return true;
+    if (!incomingCovers && currentCovers)
+        return false;
+    return incomingDensity <= currentDensity + 1e-6;
+}
