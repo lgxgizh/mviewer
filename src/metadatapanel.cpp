@@ -217,11 +217,10 @@ void MetadataPanel::requestMetadata()
         [guard, path,
          generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
-            if (!guard)
+            // The callback may run on a worker thread, so it must not touch
+            // the QPointer there.
+            if (!qApp)
                 return;
-            // Explicit hop: the service already defers to the process
-            // main-thread dispatcher, but the panel must stay correct even
-            // without one (tests / headless runs).
             QMetaObject::invokeMethod(
                 qApp,
                 [guard, path, generation, snapshot]()
