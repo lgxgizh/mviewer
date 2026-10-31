@@ -118,6 +118,38 @@ void sweepStaleTemps(const std::filesystem::path &dir, const std::string &base)
     }
 }
 
+// ofstream::flush() only hands bytes to the OS cache. On Windows, flush those
+// bytes to the device before the replace. MOVEFILE_WRITE_THROUGH makes the
+// rename itself durable; it does not flush data written through another handle.
+bool flushTempForReplace(const std::filesystem::path &temp, const std::string &path,
+                         std::string *errorOut)
+{
+#ifdef _WIN32
+    const HANDLE file =
+        CreateFileW(temp.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                    nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE)
+    {
+        if (errorOut)
+            *errorOut = "durable flush open failed for: " + path;
+        return false;
+    }
+    const BOOL flushed = FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!flushed)
+    {
+        if (errorOut)
+            *errorOut = "durable flush failed for: " + path;
+        return false;
+    }
+#else
+    (void)temp;
+    (void)path;
+    (void)errorOut;
+#endif
+    return true;
+}
+
 bool commitAtomicReplace(const std::filesystem::path &temp, const std::filesystem::path &target,
                          const std::string &path, std::string *errorOut)
 {
@@ -221,6 +253,19 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
         cleanup();
         if (errorOut)
             *errorOut = "close failed for: " + pathToUtf8(temp);
+        return false;
+    }
+
+    if (faults.failFlush)
+    {
+        cleanup();
+        if (errorOut)
+            *errorOut = "fault injection: flush failure";
+        return false;
+    }
+    if (!flushTempForReplace(temp, path, errorOut))
+    {
+        cleanup();
         return false;
     }
 

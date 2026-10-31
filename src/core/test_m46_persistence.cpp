@@ -2,9 +2,9 @@
 //
 // Contracts under test:
 //   P1  atomicWriteFile: a successful write leaves the COMPLETE new version;
-//       every injected failure (temp create / write / replace) returns false
-//       and leaves the PREVIOUS official version byte-identical — a legal
-//       state file can never become a half-written text/JSON file.
+//       every injected failure (temp create / write / durable flush / replace)
+//       returns false and leaves the PREVIOUS official version byte-identical
+//       — a legal state file can never become a half-written text/JSON file.
 //   P2  no temp files are left behind after a failed write; stale temps from
 //       a crashed process are never read as state and are swept once aged.
 //   P3  RatingStore: rapid updates coalesce, the LAST update wins after the
@@ -97,9 +97,10 @@ void testAtomicWriteBasics()
     // Failure injection matrix: every step failure must leave v1 intact and
     // clean up its temp file.
     const AtomicWriteFaults faults[] = {
-        {true, false, false}, // temp create
-        {false, true, false}, // write
-        {false, false, true}, // replace
+        {true, false, false},        // temp create
+        {false, true, false},        // write
+        {false, false, true},        // replace
+        {false, false, false, true}, // durable flush
     };
     for (const auto &f : faults)
     {

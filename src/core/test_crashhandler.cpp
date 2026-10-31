@@ -26,6 +26,14 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+
+static int g_previousFilterCalls = 0;
+
+static LONG WINAPI testPreviousCrashFilter(EXCEPTION_POINTERS *)
+{
+    ++g_previousFilterCalls;
+    return 0x51;
+}
 #endif
 
 static int g_pass = 0;
@@ -137,8 +145,44 @@ int main(int argc, char **argv)
         QFile::remove(reports.filePath(name));
     }
     CHECK(hasDump && hasText, "crash report pair has .dmp and sibling .txt files");
+
+    QSet<QString> beforeFault;
+    for (const QFileInfo &file : reports.entryInfoList(
+             {QStringLiteral("MViewer-*.dmp"), QStringLiteral("MViewer-*.txt")}, QDir::Files))
+        beforeFault.insert(file.fileName());
+
+    g_previousFilterCalls = 0;
+    SetUnhandledExceptionFilter(testPreviousCrashFilter);
+    mviewer::core::setCrashDumpWriteFaultForTest(true);
+    mviewer::core::installCrashHandler("MViewer");
+    mviewer::core::installCrashHandler("MViewer");
+    const long chained = mviewer::core::invokeCrashFilterForTest();
+    CHECK(chained == 0x51, "failed dump returns the previous filter's code");
+    CHECK(g_previousFilterCalls == 1, "failed dump chains to the previous filter once");
+
+    g_previousFilterCalls = 0;
+    SetUnhandledExceptionFilter(nullptr);
+    mviewer::core::installCrashHandler("MViewer");
+    const long searched = mviewer::core::invokeCrashFilterForTest();
+    CHECK(searched == EXCEPTION_CONTINUE_SEARCH,
+          "failed dump continues the search when no previous filter is installed");
+    CHECK(g_previousFilterCalls == 0, "a cleared previous filter is not called");
+    mviewer::core::setCrashDumpWriteFaultForTest(false);
+
+    bool strayDump = false;
+    for (const QFileInfo &file : reports.entryInfoList(
+             {QStringLiteral("MViewer-*.dmp"), QStringLiteral("MViewer-*.txt")}, QDir::Files))
+    {
+        if (beforeFault.contains(file.fileName()))
+            continue;
+        strayDump = strayDump || file.fileName().endsWith(QStringLiteral(".dmp"));
+        QFile::remove(file.absoluteFilePath());
+    }
+    CHECK(!strayDump, "a failed dump does not leave a .dmp behind");
 #else
     std::printf("  SKIP: real child SEH crash qualification is Windows-only\n");
+    CHECK(mviewer::core::invokeCrashFilterForTest() == 0,
+          "crash filter invoke is a no-op off Windows");
 #endif
 
     printf("\n==== CrashHandler test: %d passed, %d failed ====\n", g_pass, g_fail);

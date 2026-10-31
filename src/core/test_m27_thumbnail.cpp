@@ -9,6 +9,9 @@
 //      converge to zero and the same key stays re-requestable.
 //   4. Generation switch while a decoder throws/cancels leaves no residue and
 //      the current generation can retry.
+//   5. A failed thumbnail is not retried by a scroll refill. updateSources /
+//      replaceSources drop m_failed for paths still listed, so the rebuild
+//      tries once.
 //
 // Deadlock scenarios run under a watchdog thread: pre-fix the callback-under-
 // lock deadlocks forever and the watchdog aborts the process (a FAIL). Post-
@@ -321,6 +324,81 @@ void testGenerationSwitchWithThrowingDecoder()
     CHECK(deliveries.load() >= 1, "current generation still delivers");
 }
 
+// ─── 7. Failed thumbs retry on source rebuild, not on every refill ─────────
+void testFailedThumbRetriesOnSourceRebuild()
+{
+    printf("\n[7. failed thumbs retry once on update/replace, not on refill]\n");
+    fflush(stdout);
+    auto &sched = TaskScheduler::instance();
+    sched.setPoolMaxThreads(PoolType::ThumbnailPool, 1);
+
+    ThumbnailPipeline pipe;
+    std::atomic<int> decodes{0};
+    pipe.setPredictiveCount(0);
+    pipe.setDecodeFn(
+        [&](const std::string &, int) -> ImageData
+        {
+            decodes.fetch_add(1);
+            return {};
+        });
+    pipe.setSources({"a.jpg", "b.jpg"});
+    pipe.setVisibleRange(0, 2);
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(decodes.load() == 2, "each visible path is decoded once");
+    CHECK(pipe.findCached("a.jpg", pipe.currentThumbSize()).isNull(),
+          "a failed thumb is not cached");
+
+    pipe.setVisibleRange(0, 2);
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(decodes.load() == 2, "a scroll refill does not retry failed thumbs");
+
+    pipe.updateSources({"a.jpg"});
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(decodes.load() == 3, "updateSources retries only the path still listed");
+
+    pipe.setVisibleRange(0, 1);
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(decodes.load() == 3, "the retried failure stays failed across a refill");
+
+    // Store a window that covers both paths. The list is still {a}, and a is
+    // failed, so this refill does not decode. replaceSources then schedules both.
+    pipe.setVisibleRange(0, 2);
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(decodes.load() == 3, "widening the window does not retry a failed thumb");
+
+    pipe.replaceSources({"a.jpg", "b.jpg"});
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(decodes.load() == 5, "replaceSources retries every path still listed");
+
+    pipe.setVisibleRange(0, 2);
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(decodes.load() == 5, "replaceSources does not re-arm a retry on the next refill");
+
+    ThumbnailPipeline once;
+    std::atomic<int> onceDecodes{0};
+    once.setPredictiveCount(0);
+    once.setDecodeFn(
+        [&](const std::string &, int size) -> ImageData
+        {
+            if (onceDecodes.fetch_add(1) == 0)
+                return {};
+            return makeImageData(size, size, PixelFormat::RGB24);
+        });
+    once.setSources({"ok.jpg"});
+    once.setVisibleRange(0, 1);
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(once.findCached("ok.jpg", once.currentThumbSize()).isNull(),
+          "the first failure leaves the cell empty");
+    once.updateSources({"ok.jpg"});
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(onceDecodes.load() == 2, "updateSources decodes the failed path one more time");
+    CHECK(!once.findCached("ok.jpg", once.currentThumbSize()).isNull(),
+          "the rebuild retry stores a successful thumb");
+    once.setVisibleRange(0, 1);
+    sched.drain(PoolType::ThumbnailPool, kDrain);
+    CHECK(onceDecodes.load() == 2, "a recovered thumb is not decoded again on refill");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -336,6 +414,7 @@ int main(int argc, char **argv)
     testThrowingResultCallback();
     testThrowingDecoder();
     testGenerationSwitchWithThrowingDecoder();
+    testFailedThumbRetriesOnSourceRebuild();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

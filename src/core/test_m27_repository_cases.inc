@@ -721,4 +721,150 @@ void testCancelPromotedRunningPreload()
     cleanupDir(dir);
 }
 
+// Blocks inside decode until released, so loadDirectory's budget expires while
+// the worker is still in load() — past the cancel check and before publish.
+struct DirectoryRaceGate
+{
+    std::atomic<bool> entered{false};
+    std::atomic<bool> release{false};
+};
+
+class DirectoryRaceDecoder : public IDecoder
+{
+  public:
+    explicit DirectoryRaceDecoder(std::shared_ptr<DirectoryRaceGate> gate) : m_gate(std::move(gate))
+    {
+    }
+
+    bool canDecode(const std::string &path) const override
+    {
+        const std::string ext = ".png";
+        return path.size() > ext.size() &&
+               path.compare(path.size() - ext.size(), ext.size(), ext) == 0;
+    }
+
+    ImageData decodeFull(const std::string &path) const override
+    {
+        mviewer::domain::ImageMetadata meta;
+        return decodeFull(path, meta);
+    }
+
+    ImageData decodeFull(const std::string &path,
+                         mviewer::domain::ImageMetadata &outMeta) const override
+    {
+        (void)path;
+        m_gate->entered.store(true, std::memory_order_release);
+        while (!m_gate->release.load(std::memory_order_acquire))
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        outMeta.width = 4;
+        outMeta.height = 4;
+        outMeta.channels = 3;
+        outMeta.bitDepth = 8;
+        outMeta.format = "TEST";
+        return makeImageData(4, 4, PixelFormat::RGB24);
+    }
+
+    ImageData decodeScaled(const std::string &path, int maxEdge) const override
+    {
+        (void)maxEdge;
+        mviewer::domain::ImageMetadata meta;
+        return decodeFull(path, meta);
+    }
+
+    std::vector<std::string> extensions() const override
+    {
+        return {"png"};
+    }
+
+    const char *name() const override
+    {
+        return "DirectoryRaceDecoder";
+    }
+
+  private:
+    std::shared_ptr<DirectoryRaceGate> m_gate;
+};
+
+// ─── 3b. In-flight decode cannot race the timeout path on the result slot ──
+void testLoadDirectoryInFlightSlotOwnership()
+{
+    printf("\n[3b. loadDirectory: in-flight decode loses the slot to timeout]\n");
+    fflush(stdout);
+    auto &sched = TaskScheduler::instance();
+    auto &repo = ImageRepository::instance();
+
+    auto gate = std::make_shared<DirectoryRaceGate>();
+    struct Cleanup
+    {
+        std::shared_ptr<DirectoryRaceGate> gate;
+        TaskScheduler *sched = nullptr;
+        ImageRepository *repo = nullptr;
+
+        Cleanup(std::shared_ptr<DirectoryRaceGate> g, TaskScheduler *s, ImageRepository *r)
+            : gate(std::move(g)), sched(s), repo(r)
+        {
+        }
+        ~Cleanup()
+        {
+            if (gate)
+                gate->release.store(true, std::memory_order_release);
+            if (sched)
+                sched->drain(PoolType::DecodePool, std::chrono::seconds(15));
+            DecoderRegistry::instance().resetToDefaults();
+            if (repo)
+                repo->setSyncLoadBudget(std::chrono::milliseconds(5 * 60 * 1000));
+        }
+    } cleanup{gate, &sched, &repo};
+
+    CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(15)),
+          "DecodePool idle before the in-flight slot test");
+
+    // QtDecoder would claim .png before the gate. Drop it so the blocked
+    // decoder is the one load() actually enters.
+    DecoderRegistry::instance().unregister("QtDecoder");
+    DecoderRegistry::instance().registerDecoder(std::make_shared<DirectoryRaceDecoder>(gate));
+
+    repo.setSyncLoadBudget(std::chrono::milliseconds(800));
+    const std::string dir = makeDir(4);
+    const auto t0 = std::chrono::steady_clock::now();
+    // Hangs here if the timeout path waits for the decode: the gate stays
+    // closed until this call returns.
+    auto results = repo.loadDirectory(dir, 1000);
+    const auto elapsed = std::chrono::steady_clock::now() - t0;
+
+    CHECK(gate->entered.load(std::memory_order_acquire),
+          "a decode was in flight when the budget expired");
+    CHECK(elapsed < std::chrono::seconds(8),
+          "loadDirectory does not wait for the in-flight decode");
+    CHECK(results.size() == 4, "in-flight timeout still returns one result per file");
+
+    int timedOut = 0;
+    std::vector<std::string> errors;
+    errors.reserve(results.size());
+    for (const auto &r : results)
+    {
+        errors.push_back(r.error);
+        if (!r.success() && r.frame == nullptr && r.error.find("timed out") != std::string::npos)
+            ++timedOut;
+    }
+    CHECK(timedOut == 4, "every slot, including the in-flight one, is an owned timeout");
+
+    gate->release.store(true, std::memory_order_release);
+    const auto churnUntil = std::chrono::steady_clock::now() + std::chrono::milliseconds(300);
+    while (std::chrono::steady_clock::now() < churnUntil)
+    {
+        for (int i = 0; i < 32; ++i)
+            churnStack();
+    }
+    CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(15)),
+          "DecodePool drains after the late publish");
+
+    bool stable = results.size() == errors.size();
+    for (size_t i = 0; stable && i < results.size(); ++i)
+        stable = results[i].frame == nullptr && results[i].error == errors[i];
+    CHECK(stable, "late workers do not mutate the vector the caller already owns");
+
+    cleanupDir(dir);
+}
+
 } // namespace
