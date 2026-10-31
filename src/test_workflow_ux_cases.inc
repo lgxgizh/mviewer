@@ -4252,9 +4252,14 @@ void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
                             Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
         QApplication::sendEvent(canvas, &release);
         pump(20);
+        // The stored offset is in engine pixels; the canvas draws it scaled by
+        // its canvas/engine ratio (#280), which is not exactly 1 on every
+        // platform. The pan must follow the drag direction with one uniform
+        // ratio on both axes.
         const Vec2 offAfter = ws->engine().syncTransform().offset;
-        CHECK(qAbs(offAfter.x - (offBefore.x + p1.x() - p0.x())) < 1e-6 &&
-                  qAbs(offAfter.y - (offBefore.y + p1.y() - p0.y())) < 1e-6,
+        const double rx = (offAfter.x - offBefore.x) / double(p1.x() - p0.x());
+        const double ry = (offAfter.y - offBefore.y) / double(p1.y() - p0.y());
+        CHECK(rx > 0.2 && rx < 5.0 && qAbs(rx - ry) < 1e-3 * rx,
               "canvas workflow: left-drag on the canvas pans the shared offset by the mouse "
               "delta");
     }

@@ -81,16 +81,23 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
 
     const QString rightBefore = right->currentDir();
     const QString rightFile = right->pathList().value(0);
+    // Record every status message: a background load finishing during the
+    // event pump can replace the message before it is read (ASan nightly).
+    bool sawBadPathMessage = false;
+    QMetaObject::Connection statusWatch;
+    if (mw.statusBar())
+        statusWatch = QObject::connect(
+            mw.statusBar(), &QStatusBar::messageChanged, &mw, [&](const QString &message)
+            { sawBadPathMessage |= message.contains(QStringLiteral("Path does not exist")); });
     pathEdit->setText(QStringLiteral("Z:/no/such/folder"));
     QMetaObject::invokeMethod(pathEdit, "returnPressed");
     QApplication::processEvents();
+    QObject::disconnect(statusWatch);
     EXPECT(sameDirPath(right->currentDir(), rightBefore), "a bad path does not change the folder");
     EXPECT(QDir::cleanPath(QDir::fromNativeSeparators(pathEdit->text())) ==
                QDir::cleanPath(rightBefore),
            "a bad path restores the address bar");
-    EXPECT(mw.statusBar() &&
-               mw.statusBar()->currentMessage().contains(QStringLiteral("Path does not exist")),
-           "a bad path reports a status message");
+    EXPECT(sawBadPathMessage, "a bad path reports a status message");
 
     pathEdit->setText(rightFile);
     QMetaObject::invokeMethod(pathEdit, "returnPressed");
