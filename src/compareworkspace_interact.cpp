@@ -275,7 +275,8 @@ bool CompareWorkspace::handleCanvasWheel(QEvent *event)
         anchorX = pos.x() - (half.x() + half.width() / 2.0);
         anchorY = pos.y() - (half.y() + half.height() / 2.0);
     }
-    applyAnchorZoom(refIdx, anchorX, anchorY, factor, localOnly);
+    const double ratio = canvasOffsetRatio(refIdx);
+    applyAnchorZoom(refIdx, anchorX / ratio, anchorY / ratio, factor, localOnly);
     if (m_compareCanvas)
         m_compareCanvas->update();
     update();
@@ -385,16 +386,20 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
             const int count = m_engine.imageCount();
             for (int i = 0; i < count; ++i)
             {
+                const double r = canvasOffsetRatio(i);
                 const Vec2 o = m_engine.cellTransform(i).offset;
-                m_engine.setCellOffset(i, o.x + delta.x(), o.y + delta.y());
+                m_engine.setCellOffset(i, o.x + delta.x() / r, o.y + delta.y() / r);
             }
+            const double r0 = canvasOffsetRatio(0);
             const Vec2 shared = m_engine.syncTransform().offset;
-            m_engine.setOffset(shared.x + delta.x(), shared.y + delta.y());
+            m_engine.setOffset(shared.x + delta.x() / r0, shared.y + delta.y() / r0);
         }
         else
         {
+            const double r = canvasOffsetRatio(m_dragIdx);
             const Vec2 oldOffset = m_engine.cellTransform(m_dragIdx).offset;
-            m_engine.setCellOffset(m_dragIdx, oldOffset.x + delta.x(), oldOffset.y + delta.y());
+            m_engine.setCellOffset(m_dragIdx, oldOffset.x + delta.x() / r,
+                                   oldOffset.y + delta.y() / r);
         }
         if (m_compareCanvas)
             m_compareCanvas->update();
@@ -492,7 +497,8 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
     if (isFit)
     {
         const double factor = std::abs(fitScale - 1.0) < 0.005 ? 2.0 : (1.0 / currentScale);
-        applyAnchorZoom(refCell, anchorX, anchorY, factor);
+        const double ratio = canvasOffsetRatio(refCell);
+        applyAnchorZoom(refCell, anchorX / ratio, anchorY / ratio, factor);
         showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("View zoom: 200%")
                                                          : tr("View zoom: 100%"));
     }
@@ -699,6 +705,21 @@ QRectF CompareWorkspace::canvasPaneGeometry(int pane) const
         return pane == 1 ? QRectF(halves.second) : QRectF(halves.first);
     }
     return QRectF(canvas);
+}
+
+// Offsets are stored at the grid-cell scale; the canvas paints them scaled by
+// its own fit (cellFullDestRect). Canvas input divides by this ratio.
+double CompareWorkspace::canvasOffsetRatio(int pane) const
+{
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        return 1.0;
+    const QSize source = m_cellViews[pane]->sourceSize();
+    const double engineScale = m_engine.cellTransform(pane).scale;
+    const QRectF dest = cellFullDestRect(pane, canvasPaneGeometry(pane));
+    if (source.width() <= 0 || dest.isEmpty() || !(engineScale > 0.0))
+        return 1.0;
+    const double ratio = dest.width() / (source.width() * engineScale);
+    return std::isfinite(ratio) && ratio > 0.0 ? ratio : 1.0;
 }
 
 QPointF CompareWorkspace::canvasSourcePoint(const QPoint &pos, int pane) const

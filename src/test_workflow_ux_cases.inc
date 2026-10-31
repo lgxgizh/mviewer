@@ -2768,25 +2768,27 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             CHECK(qAbs(pane1->scale() - p1Scale) < 1e-9 && pane1->offset() == p1Off,
                   "wheel gate: independent wheel zoom leaves the other pane untouched");
 
-            // Upper limit: a wheel past 50x must clamp to the ceiling and keep
+            // Upper limit: a wheel past the ceiling must clamp to it and keep
             // the anchor (offset derived from the effective factor, not a post-zoom
             // clamp that would recompute the offset with the unclamped factor).
+            // The limit is 50x the pane fit; a 32x32 source in a pane wider than
+            // 164 px hits the 256x absolute backstop first.
             ws->setSyncEnabled(true);
             pump(20);
-            ws->engine().setScale(48.0);
+            ws->engine().setScale(250.0);
             ws->engine().setOffset(12.0, -7.0);
             ws->update();
             pump(60);
             CHECK(wheelDrift(120) < 0.2,
-                  "wheel gate: sync wheel zoom keeps the anchor at the 50x ceiling");
-            CHECK(qAbs(pane0->scale() - 50.0) < 1e-9,
-                  "wheel gate: sync wheel zoom clamps to the 50x ceiling");
+                  "wheel gate: sync wheel zoom keeps the anchor at the ceiling");
+            CHECK(qAbs(pane0->scale() - 256.0) < 1e-9,
+                  "wheel gate: sync wheel zoom clamps to the ceiling");
             const QPointF limOff = pane0->offset();
             const quint64 ceilingRenders = pane0->property("baseSurfaceRenderCount").toULongLong();
             CHECK(wheelDrift(120) < 0.2,
                   "wheel gate: further wheel at the ceiling keeps the anchor");
-            CHECK(qAbs(pane0->scale() - 50.0) < 1e-9 && pane0->offset() == limOff,
-                  "wheel gate: scale stays at 50x with an identical transform");
+            CHECK(qAbs(pane0->scale() - 256.0) < 1e-9 && pane0->offset() == limOff,
+                  "wheel gate: scale stays at the ceiling with an identical transform");
             CHECK(pane0->property("baseSurfaceRenderCount").toULongLong() == ceilingRenders,
                   "wheel gate: ceiling no-op schedules no pane re-rasterization");
 
