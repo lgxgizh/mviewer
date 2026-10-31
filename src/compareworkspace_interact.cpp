@@ -497,7 +497,9 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
 
     if (isFit)
     {
-        const double factor = std::abs(fitScale - 1.0) < 0.005 ? 2.0 : (1.0 / currentScale);
+        const double shown = displayedScale(refCell);
+        const double factor = std::abs(shown - 1.0) < 0.005 ? 2.0
+                              : (!(shown > 0.0) ? (1.0 / currentScale) : (1.0 / shown));
         const double ratio = canvasOffsetRatio(refCell);
         applyAnchorZoom(refCell, anchorX / ratio, anchorY / ratio, factor);
         showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("View zoom: 200%")
@@ -712,6 +714,16 @@ double CompareWorkspace::canvasOffsetRatio(int pane) const
         return 1.0;
     const double ratio = dest.width() / (source.width() * engineScale);
     return std::isfinite(ratio) && ratio > 0.0 ? ratio : 1.0;
+}
+
+// Zoom the user sees for `pane`: the engine scale, times the canvas ratio when a
+// canvas compare mode draws the panes.
+double CompareWorkspace::displayedScale(int pane) const
+{
+    const double s = m_engine.cellTransform(pane).scale;
+    if (!(s > 0.0) || !std::isfinite(s))
+        return s;
+    return anyCanvasCompareMode() ? s * canvasOffsetRatio(pane) : s;
 }
 
 QPointF CompareWorkspace::canvasSourcePoint(const QPoint &pos, int pane) const

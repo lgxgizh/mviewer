@@ -411,7 +411,7 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
     {
         const double factor = isZoomIn ? 1.15 : (1.0 / 1.15);
         applyAnchorZoom(0, 0.0, 0.0, factor);
-        const double currentScale = m_engine.cellTransform(0).scale;
+        const double currentScale = displayedScale(0);
         const int pct = static_cast<int>(std::round(currentScale * 100.0));
         showCompareStatus(isZoomIn ? tr("View zoomed in (%1%)").arg(pct)
                                    : tr("View zoomed out (%1%)").arg(pct));
