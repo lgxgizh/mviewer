@@ -39,11 +39,21 @@ void writeCurrentSidecarAsync(MainWindow *window, const QString &path)
         path.toUtf8().toStdString(),
         [alive](const std::string &failedPath)
         {
-            if (!alive)
+            // The callback may run on a worker thread, so it must not touch
+            // the QPointer there.
+            if (!qApp)
                 return;
-            const QString name = QFileInfo(QString::fromStdString(failedPath)).fileName();
-            alive->statusBar()->showMessage(
-                MainWindow::tr("Cannot write the sidecar file for %1").arg(name), 4000);
+            QMetaObject::invokeMethod(
+                qApp,
+                [alive, failedPath]()
+                {
+                    if (!alive)
+                        return;
+                    const QString name = QFileInfo(QString::fromStdString(failedPath)).fileName();
+                    alive->statusBar()->showMessage(
+                        MainWindow::tr("Cannot write the sidecar file for %1").arg(name), 4000);
+                },
+                Qt::QueuedConnection);
         });
 }
 
@@ -628,10 +638,10 @@ void MainWindow::onCurrentImageChanged(const QString &path)
         [guard, requestedPath,
          generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
-            if (!guard)
+            // The callback may run on a worker thread, so it must not touch
+            // the QPointer there.
+            if (!qApp)
                 return;
-            // Explicit hop: the service defers to the process main-thread
-            // dispatcher, but the status strip must stay correct without one.
             QMetaObject::invokeMethod(
                 qApp,
                 [guard, requestedPath, generation, snapshot]()

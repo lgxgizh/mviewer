@@ -7,7 +7,8 @@
 //   thumbnailpanel_async.cpp       scan + dimension-probe workers          482
 //   thumbnailpanel_delegates.cpp          thumb / list delegates + scale cache  589
 //   thumbnailpanel_delegates_details.cpp  details-row delegate                 219
-//   thumbnailpanel_fileops.cpp     rename / trash / copy / move / batch export 765
+//   thumbnailpanel_fileops.cpp     rename / trash / copy / move / batch export
+//   thumbnailpanel_paste.cpp       clipboard paste into the open folder
 //   thumbnailpanel_filters.cpp     filtering / sorting / metadata index    722
 //   thumbnailpanel_live.cpp        incremental live-folder delta apply     492
 //   thumbnailpanel_pipeline.cpp    visible-range scheduling / delivery     219

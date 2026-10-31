@@ -7432,6 +7432,36 @@ Continue?</source>
         <translation>无法创建回收目录。</translation>
     </message>
     <message>
+        <location filename="../src/thumbnailpanel_paste.cpp" line="54"/>
+        <source>copy failed</source>
+        <translation>复制失败</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_paste.cpp" line="55"/>
+        <source>Could not copy %1: %2</source>
+        <translation>无法复制 %1：%2</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_paste.cpp" line="90"/>
+        <source>Could not copy %1: no free destination name.</source>
+        <translation>无法复制 %1：没有可用的目标文件名。</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_paste.cpp" line="122"/>
+        <source>Could not save the clipboard image: no free destination name.</source>
+        <translation>无法保存剪贴板图片：没有可用的目标文件名。</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_paste.cpp" line="124"/>
+        <source>Could not save the clipboard image as %1.</source>
+        <translation>无法将剪贴板图片保存为 %1。</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_paste.cpp" line="134"/>
+        <source>Pasted %1 file(s). %2</source>
+        <translation>已粘贴 %1 个文件。%2</translation>
+    </message>
+    <message>
         <location filename="../src/thumbnailpanel_fileops.cpp" line="610"/>
         <source>Recycle Bin</source>
         <translation>回收站</translation>

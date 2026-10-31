@@ -8,17 +8,13 @@
 #include "splitbrowse_transfer.h"
 #include "thumbnailpanel_transfer.h"
 
-#include <QClipboard>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QImage>
-#include <QMimeData>
 #include <QSettings>
 #include <QUrl>
-#include <QVariant>
 
 namespace
 {
@@ -61,7 +57,36 @@ struct AsyncCopyState
     int copied = 0;
     bool cancelled = false;
     QStringList failures;
+    QStringList created;
 };
+
+void publishFinishedCopy(ThumbnailPanel *panel, const AsyncCopyState &state)
+{
+    QStringList published;
+    for (const QString &path : state.created)
+    {
+        if (QFileInfo::exists(path))
+            published.append(path);
+    }
+    if (!published.isEmpty())
+        emit panel->filesTransferred(QFileInfo(published.first()).absolutePath(), published);
+
+    const QString summary =
+        ThumbnailPanel::tr("Copy complete: %1 succeeded, %2 failed.%3")
+            .arg(state.copied)
+            .arg(state.failures.size())
+            .arg(state.failures.isEmpty()
+                     ? QString()
+                     : QStringLiteral("\n") + state.failures.join(QStringLiteral("\n")));
+    if (state.cancelled)
+        QMessageBox::warning(panel, ThumbnailPanel::tr("Copy"),
+                             ThumbnailPanel::tr("Copy cancelled.\n") + summary);
+    else if (state.failures.isEmpty())
+        emit panel->browseStatusChanged(
+            ThumbnailPanel::tr("Successfully copied %1 files").arg(state.copied));
+    else
+        QMessageBox::warning(panel, ThumbnailPanel::tr("Copy"), summary);
+}
 
 // Same app-private trash directory as ThumbnailPanel::moveToTrashSelected.
 QString mviewerTrashDirectory()
@@ -95,33 +120,6 @@ void pruneInternalTrash(const QString &trashDir)
     }
 }
 
-QString uniqueDestinationPath(const QDir &dir, const QString &fileName)
-{
-    if (!dir.exists(fileName))
-        return dir.filePath(fileName);
-    const QFileInfo info(fileName);
-    const QString base = info.completeBaseName();
-    const QString suffix = info.suffix();
-    for (int n = 2; n < 10000; ++n)
-    {
-        const QString candidate = suffix.isEmpty()
-                                      ? QStringLiteral("%1-%2").arg(base).arg(n)
-                                      : QStringLiteral("%1-%2.%3").arg(base).arg(n).arg(suffix);
-        if (!dir.exists(candidate))
-            return dir.filePath(candidate);
-    }
-    return {};
-}
-
-bool isLocalImageUrl(const QUrl &url)
-{
-    if (!url.isLocalFile())
-        return false;
-    const QString path = url.toLocalFile();
-    if (path.isEmpty() || !QFileInfo::exists(path) || !QFileInfo(path).isFile())
-        return false;
-    return mviewer::core::ImageFormats::isSupportedPath(path.toUtf8().toStdString());
-}
 bool moveToSystemTrash(const std::string &source, std::string &pathInTrash)
 {
     QString trashed;
@@ -363,7 +361,11 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                         return !ctx.isCancelled();
                     });
                 if (result.state == mviewer::core::FileTransferState::Succeeded)
+                {
                     ++state->copied;
+                    state->created.append(
+                        QString::fromStdString(mviewer::core::pathToUtf8(destination)));
+                }
                 else
                 {
                     state->failures.append(path + ": " +
@@ -399,21 +401,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                         panel->m_fileProgress->deleteLater();
                         panel->m_fileProgress = nullptr;
                     }
-                    const QString summary =
-                        ThumbnailPanel::tr("Copy complete: %1 succeeded, %2 failed.%3")
-                            .arg(state->copied)
-                            .arg(state->failures.size())
-                            .arg(state->failures.isEmpty()
-                                     ? QString()
-                                     : QStringLiteral("\n") + state->failures.join("\n"));
-                    if (state->cancelled)
-                        QMessageBox::warning(panel, ThumbnailPanel::tr("Copy"),
-                                             ThumbnailPanel::tr("Copy cancelled.\n") + summary);
-                    else if (state->failures.isEmpty())
-                        emit panel->browseStatusChanged(
-                            ThumbnailPanel::tr("Successfully copied %1 files").arg(state->copied));
-                    else
-                        QMessageBox::warning(panel, ThumbnailPanel::tr("Copy"), summary);
+                    publishFinishedCopy(panel, *state);
                 },
                 Qt::QueuedConnection);
         },
@@ -572,17 +560,13 @@ void ThumbnailPanel::moveToTrashPaths(const QStringList &paths, const QString &c
         if (answer != QMessageBox::Yes)
             return;
     }
-    // System recycle bin first (Undo moves the file back from there); the
-    // app-private directory is only the fallback, pruned by age and size.
+    // System recycle bin first (Undo moves the file back from there). The
+    // app-private directory is only the fallback, so failing to create it must
+    // not skip QFile::moveToTrash.
     const QString trashDir = mviewerTrashDirectory();
-    if (trashDir.isEmpty() || !QDir().mkpath(trashDir))
-    {
-        QMessageBox::warning(this, tr("Delete failed"),
-                             tr("Unable to create the recycle directory."));
-        return;
-    }
+    if (!trashDir.isEmpty() && QDir().mkpath(trashDir))
+        pruneInternalTrash(trashDir);
 
-    pruneInternalTrash(trashDir);
     auto cmd =
         std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
     cmd->setSystemTrash(&moveToSystemTrash);
@@ -669,76 +653,6 @@ void ThumbnailPanel::openCurrentFolder()
     if (!info.exists() || !info.isDir())
         return;
     QDesktopServices::openUrl(QUrl::fromLocalFile(info.absoluteFilePath()));
-}
-
-QStringList ThumbnailPanel::pasteClipboardIntoCurrentDirectory()
-{
-    QStringList written;
-    if (m_currentDir.isEmpty())
-        return written;
-    const QDir destDir(m_currentDir);
-    if (!destDir.exists())
-        return written;
-
-    const QClipboard *clipboard = QApplication::clipboard();
-    if (!clipboard)
-        return written;
-    const QMimeData *mime = clipboard->mimeData();
-    if (!mime)
-        return written;
-
-    // Prefer file URLs so Explorer/Finder copies keep original names.
-    if (mime->hasUrls())
-    {
-        for (const QUrl &url : mime->urls())
-        {
-            if (!isLocalImageUrl(url))
-                continue;
-            const QString source = QFileInfo(url.toLocalFile()).absoluteFilePath();
-            const QString destPath = uniqueDestinationPath(destDir, QFileInfo(source).fileName());
-            // uniqueDestinationPath never returns an existing path, so pasting a
-            // file that already lives here creates foo-2.jpg instead of no-op.
-            if (destPath.isEmpty() || !QFile::copy(source, destPath))
-                continue;
-            written.append(destPath);
-        }
-    }
-
-    if (written.isEmpty() && mime->hasImage())
-    {
-        const QImage image = qvariant_cast<QImage>(mime->imageData());
-        if (!image.isNull())
-        {
-            const bool jpeg = mime->hasFormat(QStringLiteral("image/jpeg"));
-            const QString ext = jpeg ? QStringLiteral("jpg") : QStringLiteral("png");
-            const char *format = jpeg ? "JPEG" : "PNG";
-            const QString stamp =
-                QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss"));
-            const QString fileName = QStringLiteral("clipboard-%1.%2").arg(stamp, ext);
-            const QString destPath = uniqueDestinationPath(destDir, fileName);
-            if (!destPath.isEmpty() && image.save(destPath, format))
-                written.append(destPath);
-        }
-    }
-
-    if (written.isEmpty())
-        return written;
-
-    if (m_liveDirectoryMonitoring)
-    {
-        emit directoryContentsChanged(m_currentDir);
-        selectPath(written.last());
-    }
-    else
-    {
-        mviewer::core::DirectoryDelta delta;
-        delta.path = m_currentDir.toUtf8().toStdString();
-        for (const QString &path : written)
-            delta.added.push_back(directoryEntryForPath(path));
-        applyDirectoryDelta(delta);
-        selectPaths(written, written.last());
-    }
-    return written;
 }
 
 void ThumbnailPanel::batchAnalyzeExport()

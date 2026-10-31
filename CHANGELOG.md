@@ -14,6 +14,15 @@
 - **Unlinked ROI histogram and copy:** each pane's histogram uses that pane's
   selection, and Copy ROI Measurements writes one ROI line per pane. Linked
   compares still share one rectangle and one footer line.
+- **Case-only rename:** renaming a file to the same name with different case
+  (`IMG.JPG` → `img.jpg`) succeeds on Windows, and Undo restores the previous
+  spelling. A different file that already uses the target name is still rejected.
+- **Paste errors:** Ctrl+V reports the copy or save failure when the clipboard
+  holds an image that could not be written into the folder.
+- **Copy To:** files copied with Copy To show up in a gallery that is already
+  open on the destination folder.
+- **Delete:** when the private recycle directory cannot be created, Delete tries
+  the system Recycle Bin and refuses only if that also fails.
 
 ## [1.0.157] - 2026-10-30
 
