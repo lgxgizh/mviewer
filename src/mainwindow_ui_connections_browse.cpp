@@ -47,8 +47,7 @@ void MainWindow::connectNavigationSignals()
                     !DirectoryTree::equivalentPath(m_directory->currentDirectory(), path))
                     return;
                 if (!available)
-                    statusBar()->showMessage(
-                        tr("Directory temporarily unavailable: %1").arg(path));
+                    statusBar()->showMessage(tr("Directory temporarily unavailable: %1").arg(path));
                 else if (statusBar()->currentMessage().startsWith(
                              tr("Directory temporarily unavailable: %1").section('%', 0, 0)))
                     statusBar()->clearMessage();
