@@ -564,10 +564,11 @@ int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
     return 0;
 }
 
-// Shared anchored-zoom transform. Clamps the TARGET scale to [0.05, 50.0] and
-// derives the effective factor from that clamped target, so a limit hit derives
-// the offset from the clamped factor instead of recomputing it after the offset
-// was already applied. Respects all four syncZoom / syncDrag combinations.
+// Shared anchored-zoom transform. Clamps the TARGET scale to [0.05, 50] x the
+// pane fit scale (absolute backstop 1e-4..256) and derives the effective factor
+// from that clamped target, so a limit hit derives the offset from the clamped
+// factor instead of recomputing it after the offset was already applied.
+// Respects all four syncZoom / syncDrag combinations.
 void CompareWorkspace::ensureLocalZoomMultipliers(int n)
 {
     if (n < 0)
@@ -600,7 +601,24 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
     const double currentScale = m_engine.cellTransform(refIdx).scale;
     if (!(currentScale > 0.0) || !std::isfinite(currentScale))
         return; // invalid baseline: consume without zooming
-    const double targetScale = std::clamp(currentScale * factor, 0.05, 50.0);
+    double lo = 0.05;
+    double hi = 50.0;
+    if (refIdx < m_fitScales.size())
+    {
+        const double fit = m_fitScales[refIdx];
+        if (fit > 0.0 && std::isfinite(fit))
+        {
+            lo = fit * 0.05;
+            hi = fit * 50.0;
+        }
+    }
+    lo = std::max(lo, 1e-4);
+    hi = std::min(hi, 256.0);
+    // Stale fit: scale is already outside the window. Zooming further away must
+    // not jump the image onto the new limit.
+    if ((factor < 1.0 && currentScale < lo) || (factor > 1.0 && currentScale > hi))
+        return; // consume without zooming
+    const double targetScale = std::clamp(currentScale * factor, lo, hi);
     const double effectiveFactor = targetScale / currentScale;
     if (effectiveFactor == 1.0)
         return; // at a clamp: no transform change, no repaint
