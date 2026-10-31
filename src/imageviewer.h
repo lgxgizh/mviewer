@@ -153,6 +153,58 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_raster.image;
     }
+    // Committed ROI in image pixels. Empty during a drag and after Esc.
+    QRect committedSelectionForTest() const
+    {
+        return m_selectionImage;
+    }
+    // Widget rect drawSelection uses: the drag, or the committed image rect
+    // mapped through the current view.
+    QRect selectionScreenRectForTest() const
+    {
+        return selectionWidgetRect();
+    }
+    // True when the LOD raster is magnified to at least one device pixel per
+    // source pixel. Downsamples stay smooth.
+    static bool lodRasterUsesSmoothing(double viewScale, double devicePixelRatio)
+    {
+        const double dpr = devicePixelRatio > 1.0 ? devicePixelRatio : 1.0;
+        return !(viewScale * dpr >= 1.0);
+    }
+    // Same margin as displayNeedsUpgrade: inflate `covered` by 1/8 on each
+    // side, then require it to contain `visible`.
+    static bool displayRasterCoversView(const QRect &covered, const QRect &visible)
+    {
+        if (visible.width() <= 0 || visible.height() <= 0 || covered.width() <= 0 ||
+            covered.height() <= 0)
+            return false;
+        QRect expanded = covered;
+        expanded.adjust(-expanded.width() / 8, -expanded.height() / 8, expanded.width() / 8,
+                        expanded.height() / 8);
+        return expanded.contains(visible);
+    }
+    // `incomingCovered` is the raster that just arrived. Prefer a raster that
+    // covers the view over a sharper number that misses it. When coverage
+    // agrees, take a finer or equal density (smaller source-px per raster-px).
+    static bool shouldAcceptDisplayRaster(bool haveCurrent, const QRect &currentCovered,
+                                          double currentDensity, const QRect &incomingCovered,
+                                          double incomingDensity, const QRect &visible)
+    {
+        if (!haveCurrent || !(incomingDensity > 0.0) || !(currentDensity > 0.0))
+            return true;
+        if (visible.width() <= 0 || visible.height() <= 0)
+            return true;
+        const bool incomingCovers = displayRasterCoversView(incomingCovered, visible);
+        const bool currentCovers = displayRasterCoversView(currentCovered, visible);
+        if (incomingCovers && !currentCovers)
+            return true;
+        if (!incomingCovers && currentCovers)
+            return false;
+        return incomingDensity <= currentDensity + 1e-6;
+    }
+    // One sentence for both the full-frame and LOD ROI stats deliveries.
+    static QString roiStatsText(int x, int y, int w, int h, double lumMean, double vMean, int rMean,
+                                int gMean, int bMean);
     int displayRasterWarmCount() const
     {
         return static_cast<int>(m_displayRasterWarm.size());
@@ -452,11 +504,13 @@ class ImageViewer : public QOpenGLWidget
     // M47: worker -> UI-thread marshal for display raster results (static so
     // the worker lambda captures no raw `this`; the QPointer guard is checked
     // on the UI thread before any viewer access).
-    static void
-    marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard, const QString &path,
-                         uint64_t generation, std::shared_ptr<mviewer::core::SourceImage> source,
-                         QImage image, QRect sourceRect, QSize sourceSize, double density,
-                         const mviewer::core::DisplayColorContext &target, bool failed = false);
+    static void marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard,
+                                     const QString &path, uint64_t generation,
+                                     std::shared_ptr<mviewer::core::SourceImage> source,
+                                     QImage image, QRect sourceRect, QSize sourceSize,
+                                     double density,
+                                     const mviewer::core::DisplayColorContext &target, bool failed,
+                                     uint64_t serial);
     // M47: the raster worker body (probe -> classify -> decodeLod/decodeRegion
     // -> marshal). Runs inside the submit lambda; an unexpected decoder
     // exception is caught at the call site so it can never escape the worker.
@@ -466,10 +520,14 @@ class ImageViewer : public QOpenGLWidget
     void applyDisplayRaster(const QString &path, uint64_t generation,
                             std::shared_ptr<mviewer::core::SourceImage> source, QImage image,
                             QRect sourceRect, QSize sourceSize, double density,
-                            const mviewer::core::DisplayColorContext &target, bool failed);
+                            const mviewer::core::DisplayColorContext &target, bool failed,
+                            uint64_t serial);
     struct DisplayRasterPreloadState
     {
         std::atomic<uint64_t> promotedGeneration{0};
+        // Serial of the viewer display request this preload was promoted into.
+        // A later pan bumps the viewer serial and drops this delivery.
+        std::atomic<uint64_t> displaySerial{0};
     };
     struct DisplayRasterPreloadResult
     {
@@ -519,8 +577,29 @@ class ImageViewer : public QOpenGLWidget
     PixelRGBA sampleAnalysisPixel(int ix, int iy) const;
     void scheduleRasterRoiStats(const QRect &selection);
     void drawDisplayRaster(QPainter &painter) const;
-    // Keep a covering raster that is already at least as sharp as `density`.
+    // `covered` is the incoming source rect. Coverage uses the same margin as
+    // displayNeedsUpgrade; a covering raster wins over a sharper miss.
     bool acceptDisplayRaster(const QImage &image, const QRect &covered, double density) const;
+    QRect imageRectFromScreen(const QRect &screen) const;
+    QRect clampedImageSelection(const QRect &imageRect) const;
+    void publishImageSelection(const QRect &imageRect);
+    QRect selectionWidgetRect() const
+    {
+        if (m_selecting)
+            return QRect(m_selStart, m_selEnd).normalized();
+        if (m_selectionImage.isEmpty() || !(m_view.scale > 0.0))
+            return {};
+        int sx = 0;
+        int sy = 0;
+        int sw = 0;
+        int sh = 0;
+        m_view.imageRectToScreen(m_selectionImage.x(), m_selectionImage.y(),
+                                 m_selectionImage.width(), m_selectionImage.height(), sx, sy, sw,
+                                 sh);
+        if (sw <= 0 || sh <= 0)
+            return {};
+        return QRect(sx, sy, sw, sh);
+    }
     void drawPixelGridOverlay(QPainter &painter);
     void drawOverlayBadge(QPainter &painter);
     void drawRawSourceBadge(QPainter &painter);
@@ -746,6 +825,9 @@ class ImageViewer : public QOpenGLWidget
     mutable bool m_lodOverlayPending = false;
     mutable uint64_t m_lodOverlayRequest = 0;
     TaskScheduler::TaskHandle m_displayRequest; // in-flight raster worker
+    // Bumped for each issued display-raster request. A queued delivery whose
+    // serial does not match is a stale pan and is dropped.
+    uint64_t m_displayRequestSerial = 0;
     DisplayRasterPreload m_promotedDisplayRasterPreload;
     std::vector<DisplayRasterPreload> m_displayRasterPreloads;
     std::vector<DisplayRasterWarm> m_displayRasterWarm;
@@ -766,6 +848,12 @@ class ImageViewer : public QOpenGLWidget
     bool m_selecting = false;
     bool m_selectMode = false;
     QPoint m_selStart, m_selEnd;
+    // Committed ROI in image pixels. Widget drag points are only valid while
+    // m_selecting is true; pan and zoom redraw this rect through the view.
+    QRect m_selectionImage;
+    // Screen rect captured when a locked-zoom navigation starts, so the ROI
+    // can be reprojected onto the recentered next image.
+    QRect m_lockedScreenRoi;
     PixelRGBA m_lastHoverPixel{};
     int m_lastHoverX = -1;
     int m_lastHoverY = -1;
@@ -780,6 +868,4 @@ class ImageViewer : public QOpenGLWidget
     void restoreWindowGeometry();
     void persistWindowGeometry();
     void markClosing();
-
-    QRect selectedRegion() const;
 };

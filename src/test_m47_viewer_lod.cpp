@@ -13,6 +13,9 @@
 //   V5 idle convergence: scheduler pools return to zero after the churn.
 //   V6 small-image fast path preserved: a 300x200 JPEG still delivers a full
 //      frame through imageReady and does NOT use the raster display.
+//   Policy (no fixtures): display-raster accept prefers coverage over a
+//      sharper miss, LOD smoothing is off at >= 1 device pixel per source
+//      pixel, and the ROI stats sentence keeps its English source.
 
 #include "core/image/SourceImage.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -144,6 +147,43 @@ SchedSample sampleDecodePools()
     return s;
 }
 
+void testDisplayPolicy()
+{
+    MARK("policy start");
+    const QRect view(0, 0, 100, 80);
+    const QRect full(0, 0, 400, 300);
+    const QRect sharpMiss(500, 500, 40, 40);
+    CHECK(ImageViewer::shouldAcceptDisplayRaster(false, QRect(), 1.0, sharpMiss, 4.0, view),
+          "no current raster accepts the incoming one");
+    CHECK(ImageViewer::shouldAcceptDisplayRaster(true, sharpMiss, 1.0, full, 8.0, view),
+          "a covering raster beats a sharper one that misses the view");
+    CHECK(!ImageViewer::shouldAcceptDisplayRaster(true, full, 2.0, sharpMiss, 1.0, view),
+          "a miss is dropped while the current raster still covers");
+    CHECK(ImageViewer::shouldAcceptDisplayRaster(true, full, 4.0, full, 2.0, view),
+          "equal coverage takes a finer density");
+    CHECK(!ImageViewer::shouldAcceptDisplayRaster(true, full, 2.0, full, 4.0, view),
+          "equal coverage rejects a coarser density");
+    CHECK(ImageViewer::shouldAcceptDisplayRaster(true, sharpMiss, 2.0, sharpMiss, 2.0, view),
+          "when neither covers, an equal density is kept");
+    CHECK(ImageViewer::shouldAcceptDisplayRaster(true, full, 2.0, sharpMiss, 4.0, QRect()),
+          "an empty visible rect still accepts");
+    CHECK(ImageViewer::displayRasterCoversView(QRect(10, 10, 80, 80), QRect(0, 0, 100, 100)),
+          "coverage uses the 1/8 margin");
+    CHECK(!ImageViewer::displayRasterCoversView(QRect(10, 10, 80, 80), QRect(-1, 0, 100, 100)),
+          "coverage rejects a rect outside the margin");
+
+    CHECK(ImageViewer::lodRasterUsesSmoothing(0.5, 1.0), "downsample stays smooth");
+    CHECK(!ImageViewer::lodRasterUsesSmoothing(1.0, 1.0), "1:1 is nearest");
+    CHECK(!ImageViewer::lodRasterUsesSmoothing(2.0, 1.0), "magnify is nearest");
+    CHECK(ImageViewer::lodRasterUsesSmoothing(0.4, 2.0), "scale 0.4 at dpr 2 still downsamples");
+    CHECK(!ImageViewer::lodRasterUsesSmoothing(0.5, 2.0), "scale 0.5 at dpr 2 is 1:1 device");
+    CHECK(ImageViewer::lodRasterUsesSmoothing(0.99, 1.0), "just under 1 stays smooth");
+
+    const QString text = ImageViewer::roiStatsText(1, 2, 3, 4, 5.26, 6.04, 7, 8, 9);
+    CHECK(text == QStringLiteral("ROI [1,2,3,4]: lum=5.3, V=6.0, R=7,G=8,B=9"),
+          "ROI stats sentence keeps the English source");
+}
+
 QString writeSmallJpeg(const QTemporaryDir &dir)
 {
     const QString p = dir.path() + "/small.jpg";
@@ -158,11 +198,12 @@ QString writeSmallJpeg(const QTemporaryDir &dir)
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    testDisplayPolicy();
     if (!QDir(QString::fromStdString(fixtureRoot())).exists())
     {
         std::printf("fixture root missing: %s\n", fixtureRoot().c_str());
         std::printf("run: python testdata/generate_large_fixtures.py --ensure\n");
-        return 2;
+        return g_failures == 0 ? 2 : 1;
     }
 
     const QString jpeg100 = QString::fromStdString(fixture("large_jpeg_100mp.jpg"));

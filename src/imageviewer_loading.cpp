@@ -365,11 +365,38 @@ void ImageViewer::resetSelectionForNewImage(const QString &path)
     // empty selection is published (panel falls back to whole-image stats).
     if (browsePathEquals(path, m_currentPath))
         return;
+    // Ask before clearing the drag: a committed ROI lives in m_selectionImage,
+    // and a drag still in progress lives in the widget points.
+    const bool real = hasRealSelection();
+    if (m_lockZoom && real)
+    {
+        // Snapshot the box in screen space before the next image recenters.
+        // recommitLockedSelection() projects it back into the new image.
+        if (!m_selectionImage.isEmpty())
+        {
+            int sx = 0;
+            int sy = 0;
+            int sw = 0;
+            int sh = 0;
+            m_view.imageRectToScreen(m_selectionImage.x(), m_selectionImage.y(),
+                                     m_selectionImage.width(), m_selectionImage.height(), sx, sy,
+                                     sw, sh);
+            m_lockedScreenRoi = (sw > 0 && sh > 0) ? QRect(sx, sy, sw, sh) : QRect();
+        }
+        else
+        {
+            const QRect widget = QRect(m_selStart, m_selEnd).normalized();
+            m_lockedScreenRoi = (widget.width() > 5 && widget.height() > 5) ? widget : QRect();
+        }
+        m_selecting = false;
+        m_selStart = m_selEnd = QPoint();
+        return;
+    }
     m_selecting = false;
-    if (m_lockZoom && hasRealSelection())
-        return; // kept; recommitLockedSelection() re-measures it on the new frame
-    const bool had = m_selStart != m_selEnd;
+    const bool had = !m_selectionImage.isEmpty() || m_selStart != m_selEnd;
     m_selStart = m_selEnd = QPoint();
+    m_selectionImage = QRect();
+    m_lockedScreenRoi = QRect();
     cancelRoiStats();
     if (had)
     {
@@ -380,8 +407,18 @@ void ImageViewer::resetSelectionForNewImage(const QString &path)
 
 void ImageViewer::recommitLockedSelection()
 {
-    if (m_lockZoom && !m_selecting && hasRealSelection())
-        commitSelectionDrag();
+    if (!m_lockZoom || m_selecting)
+        return;
+    if (!m_lockedScreenRoi.isEmpty())
+    {
+        const QRect screen = m_lockedScreenRoi;
+        m_lockedScreenRoi = QRect();
+        publishImageSelection(imageRectFromScreen(screen));
+        return;
+    }
+    // Same-path reload returns before the snapshot. Re-publish the image rect.
+    if (!m_selectionImage.isEmpty())
+        publishImageSelection(m_selectionImage);
 }
 
 void ImageViewer::applyPendingView()
@@ -717,9 +754,10 @@ void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult res
             startLodDisplay(result.path, promotedGeneration);
             return;
         }
+        const uint64_t serial = result.state->displaySerial.load(std::memory_order_acquire);
         applyDisplayRaster(result.path, promotedGeneration, std::move(result.source),
                            std::move(result.image), result.sourceRect, result.sourceSize,
-                           result.density, result.target, false);
+                           result.density, result.target, false, serial);
         return;
     }
 

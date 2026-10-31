@@ -569,26 +569,35 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
 
 bool ImageViewer::hasRealSelection() const
 {
-    // Same threshold as the ROI commit: QRect's inclusive edge makes a click
-    // 1×1, and a couple of pixels of jitter is still not a drag.
-    const QRect region = QRect(m_selStart, m_selEnd).normalized();
-    return region.width() > 5 && region.height() > 5;
+    // QRect's inclusive edge makes a click 1×1, and a couple of pixels of
+    // jitter is still not a drag. A committed ROI is an image rect: zoom-out
+    // can shrink its widget size below that threshold, so the stored rect is
+    // the hit test once the drag has ended.
+    if (m_selecting)
+    {
+        const QRect region = QRect(m_selStart, m_selEnd).normalized();
+        return region.width() > 5 && region.height() > 5;
+    }
+    return m_selectionImage.width() > 0 && m_selectionImage.height() > 0;
 }
 
 bool ImageViewer::clearRealSelectionForEscape()
 {
     if (!hasRealSelection())
     {
-        if (m_selecting || m_selStart != m_selEnd)
+        if (m_selecting || m_selStart != m_selEnd || !m_lockedScreenRoi.isEmpty())
         {
             m_selecting = false;
             m_selStart = m_selEnd = QPoint();
+            m_lockedScreenRoi = QRect();
             update();
         }
         return false;
     }
     m_selecting = false;
     m_selStart = m_selEnd = QPoint();
+    m_selectionImage = QRect();
+    m_lockedScreenRoi = QRect();
     if (m_selectMode)
         setSelectMode(false);
     else
@@ -638,39 +647,59 @@ bool ImageViewer::handleViewerEscape()
     return true;
 }
 
-void ImageViewer::commitSelectionDrag()
+QRect ImageViewer::imageRectFromScreen(const QRect &screen) const
 {
-    m_selecting = false;
-    if (!hasRealSelection())
-    {
-        m_selStart = m_selEnd = QPoint();
-        update();
-        return;
-    }
-    const QRect r = selectedRegion();
-    // ROI stats come from the decoded frame, off the UI thread.
-    if (!(m_view.scale > 0.0))
-        return;
-    const QRect imgRect =
-        QRect(static_cast<int>(std::floor((r.x() - m_view.offsetX) / m_view.scale)),
-              static_cast<int>(std::floor((r.y() - m_view.offsetY) / m_view.scale)),
-              static_cast<int>(std::round(r.width() / m_view.scale)),
-              static_cast<int>(std::round(r.height() / m_view.scale)))
-            .normalized();
+    if (!(m_view.scale > 0.0) || screen.isEmpty())
+        return {};
+    const double scale = m_view.scale;
+    return QRect(static_cast<int>(std::floor((screen.x() - m_view.offsetX) / scale)),
+                 static_cast<int>(std::floor((screen.y() - m_view.offsetY) / scale)),
+                 static_cast<int>(std::round(screen.width() / scale)),
+                 static_cast<int>(std::round(screen.height() / scale)))
+        .normalized();
+}
+
+QRect ImageViewer::clampedImageSelection(const QRect &imageRect) const
+{
     const QSize bounds = displaySize();
-    const QRect valid = bounds.isEmpty()
-                            ? QRect()
-                            : imgRect.intersected(QRect(0, 0, bounds.width(), bounds.height()));
+    if (bounds.isEmpty() || imageRect.isEmpty())
+        return {};
+    return imageRect.normalized().intersected(QRect(0, 0, bounds.width(), bounds.height()));
+}
+
+void ImageViewer::publishImageSelection(const QRect &imageRect)
+{
+    const QRect valid = clampedImageSelection(imageRect);
     if (!valid.isEmpty())
     {
+        m_selectionImage = valid;
         scheduleRoiStats(valid);
         emit selectionChanged(valid);
     }
     else
     {
+        m_selectionImage = QRect();
         cancelRoiStats();
         emit selectionChanged(QRect());
     }
+    update();
+}
+
+void ImageViewer::commitSelectionDrag()
+{
+    // Capture the drag before clearing it. A tiny release is not a new ROI
+    // and must not emit; the press already dropped the previous image rect.
+    const QRect widget = QRect(m_selStart, m_selEnd).normalized();
+    const bool real = widget.width() > 5 && widget.height() > 5;
+    m_selecting = false;
+    m_selStart = m_selEnd = QPoint();
+    m_lockedScreenRoi = QRect();
+    if (!real || !(m_view.scale > 0.0))
+    {
+        update();
+        return;
+    }
+    publishImageSelection(imageRectFromScreen(widget));
 }
 
 void ImageViewer::revealInExplorer()
