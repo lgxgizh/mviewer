@@ -12,6 +12,10 @@
   as an integer and range-checked before use, because some image plugins
   return an uninitialized value (Nightly clang-cl UBSan load-invalid-value
   trap in `QtDecoder::decodeFullResult`).
+- **Ghosted text and white file names on Windows 11:** Mica is now applied
+  to the title bar only and the window contents are drawn opaque, so menus,
+  headers, the path bar and icons are no longer drawn twice over stale pixels,
+  and unselected file names in the light theme use the normal dark text color.
 
 ## [1.0.158] - 2026-10-31
 
