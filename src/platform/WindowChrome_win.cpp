@@ -130,9 +130,10 @@ void applyWindowChrome(QWidget *widget, bool forceFrameRefresh)
     }
     if (mica)
     {
-        const MARGINS margins{-1, -1, -1, -1};
-        if (SUCCEEDED(DwmExtendFrameIntoClientArea(hwnd, &margins)))
-            setAttribute(hwnd, kDwmSystemBackdropType, kBackdropMainWindow);
+        // Mica in the title bar only. Extending the frame into the client
+        // area (with a translucent Qt window) left text ghosted and glyphs
+        // see-through on the transparent toolbar, sidebar and menu bar.
+        setAttribute(hwnd, kDwmSystemBackdropType, kBackdropMainWindow);
     }
     if (forceFrameRefresh)
     {
@@ -182,10 +183,11 @@ void WindowChrome::prepareMainWindow(QWidget *window)
     installChromeFilter();
     if (window == nullptr || !currentFeatures().mica || !translucentSidebarEnabled())
         return;
-    // Mica draws behind the client area only where Qt leaves pixels
-    // transparent. The QSS [mica="true"] rules clear the toolbar and sidebar;
-    // the gallery, viewer and compare canvases keep painting opaque.
-    window->setAttribute(Qt::WA_TranslucentBackground, true);
+    // The client area stays opaque: no WA_TranslucentBackground and no
+    // DwmExtendFrameIntoClientArea. With them, partial repaints of the
+    // cleared toolbar/sidebar/menu bar kept stale pixels (offset "double"
+    // text and icons) and text glyphs let the backdrop through (white-looking
+    // file names on light rows). Mica is applied to the title bar only.
     window->setProperty("mica", true);
 }
 

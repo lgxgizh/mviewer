@@ -120,6 +120,14 @@ int main(int argc, char **argv)
         }
     }
     check(WindowChrome::translucentSidebarEnabled(), "checked translucent sidebar persists true");
+    {
+        // Ghosting regression (2026-11-01): the main window must never become
+        // a translucent top-level, even with Mica on; only the title bar uses it.
+        QWidget window;
+        WindowChrome::prepareMainWindow(&window);
+        check(!window.testAttribute(Qt::WA_TranslucentBackground),
+              "prepareMainWindow keeps the client area opaque");
+    }
 
     // Build gates: Win10 gets the dark title bar only; Win11 adds corners and
     // caption color; 22H2 adds Mica.
