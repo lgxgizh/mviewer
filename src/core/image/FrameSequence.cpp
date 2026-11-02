@@ -78,7 +78,7 @@ void fillMetadata(const std::string &path, QImageReader &reader, const QImage &i
     // are authoritative in both cases.
     meta.width = image.width();
     meta.height = image.height();
-    const QImage::Format sourceFormat = reader.imageFormat();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     qtmetadata::applyReaderRasterMetadata(sourceFormat, image, meta);
     meta.format = QString::fromLatin1(reader.format()).toUpper().toStdString();
     if (meta.format.empty())

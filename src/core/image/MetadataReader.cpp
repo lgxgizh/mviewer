@@ -53,7 +53,7 @@ void populateImageInfo(mviewer::domain::ImageMetadata &meta, QImageReader &reade
     // Number of color channels and bits per channel.  QImage::depth() is
     // packed storage (RGB32 is 32 bits for three 8-bit channels), so it must
     // never be exposed as the per-channel metadata value.
-    const QImage::Format imgFmt = reader.imageFormat();
+    const QImage::Format imgFmt = mviewer::core::qtmetadata::readerImageFormat(reader);
     if (imgFmt != QImage::Format_Invalid)
     {
         const QImage probe(1, 1, imgFmt);
