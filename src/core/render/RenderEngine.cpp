@@ -385,8 +385,13 @@ RenderEngine::RenderEngine() : m_backend(std::make_unique<SoftwareRenderer>())
 
 RenderEngine &RenderEngine::instance()
 {
-    static RenderEngine inst;
-    return inst;
+    // Intentionally immortal. Tile and thumbnail workers can still be running
+    // while static destructors execute at process exit; a function-local
+    // static RenderEngine was destroyed under them and its m_backend read as
+    // null (Nightly ASan SEGV in scaleRegion from a viewer tile job). The
+    // pointer stays reachable, so LeakSanitizer does not report it.
+    static RenderEngine *const inst = new RenderEngine();
+    return *inst;
 }
 
 void RenderEngine::setBackend(std::unique_ptr<Renderer> r)
@@ -401,23 +406,31 @@ std::string RenderEngine::backendName() const
 
 ImageData RenderEngine::scale(const ImageData &src, const RenderSize &target, RenderInterp mode)
 {
+    if (!m_backend)
+        return ImageData();
     return m_backend->scale(src, target, mode);
 }
 
 ImageData RenderEngine::overlayDifference(const ImageData &base, const ImageData &diff,
                                           double alpha) const
 {
+    if (!m_backend)
+        return ImageData();
     return m_backend->overlayDifference(base, diff, alpha);
 }
 
 ImageData RenderEngine::heatMap(const ImageData &gray, const RenderRect &rect) const
 {
+    if (!m_backend)
+        return ImageData();
     return m_backend->heatMap(gray, rect);
 }
 
 ImageData RenderEngine::scaleRegion(const ImageData &src, const RenderRect &region,
                                     const RenderSize &target, RenderInterp mode)
 {
+    if (!m_backend)
+        return ImageData();
     return m_backend->scaleRegion(src, region, target, mode);
 }
 
@@ -517,7 +530,7 @@ ImageData RenderEngine::executeCommand(const RenderCommand &cmd) const
         return cmd.overlayImage;
     case RenderCommandType::DrawHeatmap:
     {
-        if (cmd.srcImage.isNull())
+        if (cmd.srcImage.isNull() || !m_backend)
             return ImageData();
         return m_backend->heatMap(cmd.srcImage, cmd.rect);
     }
@@ -603,7 +616,7 @@ ImageData RenderEngine::executeCommand(const RenderCommand &cmd, const ImageData
         return produced;
     case RenderCommandType::DrawOverlay:
     {
-        if (produced.isNull())
+        if (produced.isNull() || !m_backend)
             return buffer;
         return m_backend->overlayDifference(buffer, produced, cmd.alpha);
     }

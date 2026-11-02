@@ -101,7 +101,7 @@ QtFallbackDecoder::decodeFullResult(const std::string &path,
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImageReader reader(qPath);
     reader.setAutoTransform(true);
-    const QImage::Format sourceFormat = reader.imageFormat();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     const QImage img = reader.read();
     if (img.isNull())
     {
@@ -154,7 +154,7 @@ ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge,
         outMeta.filePath = path;
     outMeta.fileSize =
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).size();
-    const QImage::Format sourceFormat = reader.imageFormat();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     QImage img;
     if (full.width() <= maxEdge && full.height() <= maxEdge)
         img = reader.read();

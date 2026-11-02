@@ -9,11 +9,26 @@
 #include <QColorSpace>
 #include <QImage>
 #include <QImageIOHandler>
+#include <QImageReader>
 
 #include <algorithm>
 
 namespace mviewer::core::qtmetadata
 {
+
+inline QImage::Format readerImageFormat(const QImageReader &reader)
+{
+    // Some image plugins answer QImageIOHandler::ImageFormat with an
+    // uninitialized value (0xBAADF00D under the Windows debug heap), which is
+    // not a QImage::Format. Holding that in a QImage::Format variable is UB
+    // (clang-cl UBSan load-invalid-value trap in QtDecoder::decodeFullResult)
+    // and later code would misread it. Capture it as int and range-check it.
+    const int raw = static_cast<int>(reader.imageFormat());
+    if (raw <= static_cast<int>(QImage::Format_Invalid) ||
+        raw >= static_cast<int>(QImage::NImageFormats))
+        return QImage::Format_Invalid;
+    return static_cast<QImage::Format>(raw);
+}
 
 inline int orientationFromTransform(QImageIOHandler::Transformations transform)
 {
