@@ -71,7 +71,27 @@ const std::array<QColor, 7> &labelColors(bool dark)
 
 bool isDarkPalette(const QPalette &palette)
 {
-    return palette.color(QPalette::Text).lightness() > palette.color(QPalette::Base).lightness();
+    return palette.color(QPalette::Base).lightness() < 140;
+}
+
+QColor itemTextColor(bool selected, const QPalette &palette)
+{
+    if (selected)
+    {
+        const QColor hi = palette.color(QPalette::HighlightedText);
+        // Accent rows need light ink; fall back if HighlightedText is missing.
+        return hi.lightness() >= 140 ? hi : QColor(0xff, 0xff, 0xff);
+    }
+    const QColor base = palette.color(QPalette::Base);
+    const QColor text = palette.color(QPalette::Text);
+    const bool lightSurface = base.lightness() >= 140;
+    // QSS on QListView often leaves Text == onAccent (#fff) for custom
+    // delegates; style-painted widgets still look fine via the color rule.
+    if (lightSurface && text.lightness() > 140)
+        return QColor(0x1d, 0x1d, 0x1f);
+    if (!lightSurface && text.lightness() < 140)
+        return QColor(0xeb, 0xeb, 0xf0);
+    return text;
 }
 
 int shadowMargin()
@@ -131,7 +151,7 @@ void drawNameText(QPainter *painter, const QRect &rect, const QString &name, boo
     const QString text = fm.elidedText(name, Qt::ElideRight, qMax(1, rect.width() - padX * 2));
     if (!selected)
     {
-        painter->setPen(palette.color(QPalette::Text));
+        painter->setPen(itemTextColor(false, palette));
         painter->drawText(rect, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextSingleLine, text);
         return;
     }
@@ -146,7 +166,7 @@ void drawNameText(QPainter *painter, const QRect &rect, const QString &name, boo
     painter->setBrush(palette.color(QPalette::Highlight));
     painter->drawRoundedRect(pill, pillH / 2.0, pillH / 2.0);
     painter->restore();
-    painter->setPen(palette.color(QPalette::HighlightedText));
+    painter->setPen(itemTextColor(true, palette));
     painter->drawText(pill, Qt::AlignCenter | Qt::TextSingleLine, text);
 }
 
@@ -178,7 +198,7 @@ QColor badgeBackground(const QPalette &palette)
 
 QColor badgeText(const QPalette &palette)
 {
-    return palette.color(QPalette::Text);
+    return itemTextColor(false, palette);
 }
 
 int shadowCacheSizeForTest()

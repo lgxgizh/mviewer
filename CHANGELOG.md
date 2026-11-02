@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Browse list/details unreadable names in light theme:** custom item
+  delegates no longer trust a stylesheet-polluted `QPalette::Text` (often left
+  white/`onAccent` on `QListView`). Unselected rows force `#1d1d1f` on light
+  surfaces; selected accent rows keep white. `#285` only exercised thumbnail
+  `drawNameText` with a healthy palette, so list/details stayed washed out
+  after 1.0.159.
+
 ## [1.0.159] - 2026-11-01
 
 ### Release

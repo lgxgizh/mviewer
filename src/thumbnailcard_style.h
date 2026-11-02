@@ -18,8 +18,15 @@ namespace thumb_card
 constexpr int kCardRadius = 8;
 constexpr int kRingWidth = 3;
 
-// True when the palette is a dark theme (text lighter than the base).
+// True when the surface (Base) is dark. Uses Base lightness only — QSS can
+// leave Text white even in light theme, which used to flip this the wrong way.
 bool isDarkPalette(const QPalette &palette);
+
+// Ink for browse list / details / thumbnail filenames. Selected rows use
+// HighlightedText (white on accent). Unselected rows force a dark ink on light
+// surfaces and a light ink on dark surfaces when option.palette Text has been
+// polluted by QSS (common for QListView custom delegates).
+QColor itemTextColor(bool selected, const QPalette &palette);
 
 // Soft drop shadow for a card of cardSize. The returned pixmap is larger than
 // the card by shadowMargin() on each side and is cached per size and theme.
