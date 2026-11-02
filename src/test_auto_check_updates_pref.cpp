@@ -1,11 +1,14 @@
 // Preferences round-trip and default for autoCheckUpdates (startup silent update gate).
 #include "platform/WindowChrome.h"
 #include "preferencesdialog.h"
+#include "thumbnailcard_style.h"
 
 #include <QApplication>
 #include <QCheckBox>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
+#include <QImage>
+#include <QPainter>
 #include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
@@ -148,6 +151,36 @@ int main(int argc, char **argv)
         QWidget window;
         WindowChrome::prepareMainWindow(&window);
         check(!WindowChrome::micaActive(&window), "no Mica on an OS without DWM backdrops");
+    }
+
+    {
+        // Light theme browse labels: an unselected file name is drawn in the
+        // palette text color (dark), never white; white is for the accent pill.
+        QPalette light;
+        light.setColor(QPalette::Text, QColor(0x1d, 0x1d, 0x1f));
+        light.setColor(QPalette::Base, QColor(0xfb, 0xfb, 0xfd));
+        light.setColor(QPalette::Highlight, QColor(0x00, 0x7a, 0xff));
+        light.setColor(QPalette::HighlightedText, QColor(0xff, 0xff, 0xff));
+        QImage img(160, 24, QImage::Format_ARGB32_Premultiplied);
+        img.fill(light.color(QPalette::Base));
+        {
+            QPainter p(&img);
+            thumb_card::drawNameText(&p, img.rect(), QStringLiteral("IMG_0001.jpeg"), false, light);
+        }
+        const QRgb base = light.color(QPalette::Base).rgb();
+        int darkest = 255;
+        bool inked = false;
+        for (int y = 0; y < img.height(); ++y)
+            for (int x = 0; x < img.width(); ++x)
+            {
+                const QRgb px = img.pixel(x, y);
+                inked = inked || px != base;
+                darkest = qMin(darkest, QColor(px).lightness());
+            }
+        if (inked)
+            check(darkest < 120, "unselected light-theme file name is drawn dark");
+        else
+            std::cout << "[skip] no font available to draw the file name\n";
     }
 
     QSettings().clear();
