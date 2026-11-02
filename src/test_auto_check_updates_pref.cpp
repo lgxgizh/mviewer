@@ -154,20 +154,33 @@ int main(int argc, char **argv)
     }
 
     {
-        // Light theme browse labels: an unselected file name is drawn in the
-        // palette text color (dark), never white; white is for the accent pill.
-        QPalette light;
-        light.setColor(QPalette::Text, QColor(0x1d, 0x1d, 0x1f));
-        light.setColor(QPalette::Base, QColor(0xfb, 0xfb, 0xfd));
-        light.setColor(QPalette::Highlight, QColor(0x00, 0x7a, 0xff));
-        light.setColor(QPalette::HighlightedText, QColor(0xff, 0xff, 0xff));
+        // Light theme browse list/details: QSS often leaves QPalette::Text white
+        // on QListView even when Base is light (#285 only tested a healthy
+        // palette, so list rows stayed unreadable). itemTextColor must still
+        // return dark ink; drawNameText must paint it.
+        QPalette polluted;
+        polluted.setColor(QPalette::Text, QColor(0xff, 0xff, 0xff)); // onAccent leak
+        polluted.setColor(QPalette::WindowText, QColor(0xff, 0xff, 0xff));
+        polluted.setColor(QPalette::Base, QColor(0xfb, 0xfb, 0xfd));
+        polluted.setColor(QPalette::AlternateBase, QColor(0xf5, 0xf5, 0xf7));
+        polluted.setColor(QPalette::Highlight, QColor(0x00, 0x7a, 0xff));
+        polluted.setColor(QPalette::HighlightedText, QColor(0xff, 0xff, 0xff));
+
+        const QColor unselected = thumb_card::itemTextColor(false, polluted);
+        check(unselected.lightness() < 80, "unselected list ink is dark on light Base");
+        check(unselected == QColor(0x1d, 0x1d, 0x1f), "unselected list ink is #1d1d1f");
+        check(!thumb_card::isDarkPalette(polluted), "light Base is not classified dark");
+        const QColor selected = thumb_card::itemTextColor(true, polluted);
+        check(selected.lightness() > 200, "selected list ink stays light on accent");
+
         QImage img(160, 24, QImage::Format_ARGB32_Premultiplied);
-        img.fill(light.color(QPalette::Base));
+        img.fill(polluted.color(QPalette::Base));
         {
             QPainter p(&img);
-            thumb_card::drawNameText(&p, img.rect(), QStringLiteral("IMG_0001.jpeg"), false, light);
+            thumb_card::drawNameText(&p, img.rect(), QStringLiteral("IMG_0001.jpeg"), false,
+                                     polluted);
         }
-        const QRgb base = light.color(QPalette::Base).rgb();
+        const QRgb base = polluted.color(QPalette::Base).rgb();
         int darkest = 255;
         bool inked = false;
         for (int y = 0; y < img.height(); ++y)
@@ -181,6 +194,15 @@ int main(int argc, char **argv)
             check(darkest < 120, "unselected light-theme file name is drawn dark");
         else
             std::cout << "[skip] no font available to draw the file name\n";
+
+        // Dark theme polluted the other way (dark Text on dark Base) still inks light.
+        QPalette darkPolluted;
+        darkPolluted.setColor(QPalette::Text, QColor(0x1d, 0x1d, 0x1f));
+        darkPolluted.setColor(QPalette::Base, QColor(0x1c, 0x1c, 0x1e));
+        darkPolluted.setColor(QPalette::HighlightedText, QColor(0xff, 0xff, 0xff));
+        const QColor darkInk = thumb_card::itemTextColor(false, darkPolluted);
+        check(darkInk.lightness() > 200, "unselected dark-theme ink is light");
+        check(thumb_card::isDarkPalette(darkPolluted), "dark Base is classified dark");
     }
 
     QSettings().clear();

@@ -1,5 +1,6 @@
 // ThumbnailPanel details-row delegate. Split from thumbnailpanel_delegates.cpp
 // so each translation unit stays under the 800-line cap.
+#include "thumbnailcard_style.h"
 #include "thumbnailpanel_p.h"
 
 #include <QFontMetrics>
@@ -101,8 +102,7 @@ void drawDetailsExif(QPainter *painter, const DetailLayout &L, const QString &pa
     const QString lens = panel->metaLensForPath(path).trimmed();
     const int iso = panel->metaIsoForPath(path);
     painter->setFont(option.font);
-    painter->setPen(sel ? option.palette.color(QPalette::HighlightedText)
-                        : option.palette.color(QPalette::Text));
+    painter->setPen(thumb_card::itemTextColor(sel, option.palette));
     painter->drawText(L.camera, Qt::AlignVCenter | Qt::TextSingleLine,
                       cam.isEmpty() ? QStringLiteral("-") : cam);
     painter->drawText(L.lens, Qt::AlignVCenter | Qt::TextSingleLine,
@@ -160,8 +160,7 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
     const QRect thumbR(L.thumb.x(), r.y() + (r.height() - 48) / 2, 48, 48);
     drawDetailsThumb(painter, thumbR, path, m_panel, option);
 
-    const QColor textColor = sel ? option.palette.color(QPalette::HighlightedText)
-                                 : option.palette.color(QPalette::Text);
+    const QColor textColor = thumb_card::itemTextColor(sel, option.palette);
     painter->setPen(textColor);
 
     QFont nameFont = painter->font();

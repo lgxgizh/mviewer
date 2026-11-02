@@ -609,8 +609,7 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
         painter->fillRect(iconR, option.palette.color(QPalette::AlternateBase));
 
     const QRect textR(iconR.right() + 6, r.y(), r.right() - iconR.right() - 6, r.height());
-    painter->setPen(sel ? option.palette.color(QPalette::HighlightedText)
-                        : option.palette.color(QPalette::Text));
+    painter->setPen(thumb_card::itemTextColor(sel, option.palette));
     painter->drawText(textR, Qt::AlignVCenter | Qt::TextSingleLine, name);
 }
 
