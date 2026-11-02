@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.160] - 2026-11-02
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.160** (light-theme browse list/details readability #287).
+
 ### Fixed
 
 - **Browse list/details unreadable names in light theme:** custom item
