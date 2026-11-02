@@ -882,22 +882,9 @@ QMenu[winRounded="true"] {
     border-radius: 0px;
 }
 
-/* Windows 11 Mica (Preferences, on by default): the toolbar and sidebar clear their
-   fill so the backdrop shows. Gallery, viewer, the preview card and compare stay opaque. */
-QMainWindow[mica="true"] {
-    background: transparent;
-}
-
-QMainWindow[mica="true"] QMenuBar,
-QMainWindow[mica="true"] QToolBar#browserToolBar,
-QMainWindow[mica="true"] QSplitter#navigationPanel,
-QMainWindow[mica="true"] QWidget#foldersSection,
-QMainWindow[mica="true"] QWidget#previewSection,
-QMainWindow[mica="true"] QSplitter#navigationPanel QTreeView,
-QMainWindow[mica="true"] QSplitter#navigationPanel QListWidget {
-    background: transparent;
-    background-color: transparent;
-}
+/* Windows 11 Mica (Preferences) is title-bar only: the toolbar, sidebar and
+   menu bar keep their opaque fills. Clearing them over a translucent window
+   ghosted text and icons on repaint. */
 
 QToolTip {
     background: {{bg1}};

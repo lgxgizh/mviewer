@@ -32,8 +32,9 @@ class WindowChrome
     static void setTranslucentSidebarEnabled(bool enabled);
     static const char *translucentSidebarSettingsKey();
 
-    // Call before the main window is first shown. Opts it into Mica when the
-    // OS supports it and the preference is on; otherwise does nothing.
+    // Call before the main window is first shown. Opts its title bar into
+    // Mica when the OS supports it and the preference is on; otherwise does
+    // nothing. The client area always paints opaque.
     static void prepareMainWindow(QWidget *window);
     // True when prepareMainWindow enabled Mica on this window.
     static bool micaActive(const QWidget *window);
