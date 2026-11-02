@@ -94,7 +94,8 @@ void populateWicTiffMetadata(const QString &filename, const std::string &path, c
 {
     QImageReader metadataReader(filename);
     metadataReader.setAutoTransform(true);
-    const QImage::Format sourceFormat = metadataReader.imageFormat();
+    const QImage::Format sourceFormat =
+        mviewer::core::qtmetadata::readerImageFormat(metadataReader);
     fillMetadata(metadataReader, sourceFormat, output, meta);
     if (meta.filePath.empty())
         meta.filePath = path;
@@ -109,7 +110,8 @@ void populateWicTiffMetadata(const QString &filename, const std::string &path, c
     QImageReader profileReader(filename);
     profileReader.setAutoTransform(true);
     profileReader.setScaledSize(QSize(1, 1));
-    const QImage::Format profileFormat = profileReader.imageFormat();
+    const QImage::Format profileFormat =
+        mviewer::core::qtmetadata::readerImageFormat(profileReader);
     QImage tiny;
     if (profileReader.read(&tiny))
         mviewer::core::qtmetadata::applyReaderRasterMetadata(profileFormat, tiny, meta);
@@ -379,7 +381,7 @@ QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetad
     const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImageReader reader(qPath);
     reader.setAutoTransform(false);
-    const QImage::Format sourceFormat = reader.imageFormat();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     const bool sixteen = isSixteenBitFormat(sourceFormat);
     if (!sixteen)
         reader.setAutoTransform(true);
@@ -483,7 +485,7 @@ bool QtDecoder::probeMetadata(const std::string &path, mviewer::domain::ImageMet
     // without pixels. JPEG ICC is scraped from APP2 "ICC_PROFILE" markers;
     // PNG/TIFF ICC and any missing raster fields are filled on the first
     // decodeLod/decodeFull via fillMetadata.
-    const QImage::Format sourceFormat = reader.imageFormat();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     if (sourceFormat != QImage::Format_Invalid)
     {
         const QImage probe(1, 1, sourceFormat);
@@ -598,7 +600,7 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         reader.setScaledSize(
             QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
     }
-    const QImage::Format sourceFormat = reader.imageFormat();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     const QImage img = reader.read();
     if (img.isNull())
         return ImageData();
@@ -655,7 +657,7 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
             scaled = QSize(targetH, targetW);
         reader.setScaledSize(scaled);
     }
-    const QImage::Format sourceFormat = reader.imageFormat();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     const QImage img = reader.read();
     if (img.isNull())
         return ImageData();

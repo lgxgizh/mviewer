@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Exit-time crash in tile rendering:** the render engine is no longer
+  destroyed at process exit while viewer tile workers may still use it, and
+  every backend call checks for a missing backend (Nightly ASan SEGV in
+  `RenderEngine::scaleRegion`).
+- **Invalid image format from plugins:** `QImageReader::imageFormat()` is read
+  as an integer and range-checked before use, because some image plugins
+  return an uninitialized value (Nightly clang-cl UBSan load-invalid-value
+  trap in `QtDecoder::decodeFullResult`).
+
 ## [1.0.158] - 2026-10-31
 
 ### Release
