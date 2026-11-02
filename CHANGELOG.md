@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.159] - 2026-11-01
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.159** (Nightly sanitizer fixes #284, Windows 11 Mica ghosting / light-theme labels #285).
+
 ### Fixed
 
 - **Exit-time crash in tile rendering:** the render engine is no longer

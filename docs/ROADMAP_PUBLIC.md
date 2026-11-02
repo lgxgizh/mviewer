@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.158**
+## Where we are now — **Beta / 1.0.159**
 
-MViewer remains in **Beta**; the current release is **`v1.0.158`**
-(2026-10-31, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+MViewer remains in **Beta**; the current release is **`v1.0.159`**
+(2026-11-01, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
 
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.158** (current) | Reliability and polish pass: zoom limits follow the fit in the viewer and in Compare (huge images no longer jump on zoom-out, tiny ones zoom to 50x), overlay/swipe/checker pan and zoom track the mouse and report the zoom actually drawn, unlinked ROI histograms per pane, split browse keeps each pane's own state, safer saves, deletes, renames, pastes and crash dumps, and translated status texts | 🔵 Beta |
+| **1.0.159** (current) | Nightly sanitizer fixes and Windows 11 chrome polish: render engine stays alive past exit so tile workers cannot crash on a null backend, image-plugin formats are range-checked before use, and Mica is title-bar only so menus/path bar/icons no longer ghost and light-theme file names keep their dark text color | 🔵 Beta |
+| **1.0.158** | Reliability and polish pass: zoom limits follow the fit in the viewer and in Compare (huge images no longer jump on zoom-out, tiny ones zoom to 50x), overlay/swipe/checker pan and zoom track the mouse and report the zoom actually drawn, unlinked ROI histograms per pane, split browse keeps each pane's own state, safer saves, deletes, renames, pastes and crash dumps, and translated status texts | ✅ Previous patch |
 | **1.0.157** | Steady Space hold: holding Space (or 1–8) in Compare right after a zoom or pan keeps showing the other pane even when a sharper preview finishes loading mid-hold; nightly health publishing retries instead of failing when master moves | ✅ Previous patch |
 | **1.0.156** | macOS-style UI redesign: Apple system blue themes, SF Symbols-style icons, unified browse toolbar, Finder-style sidebar and thumbnail cards, Windows 11 chrome with Mica (on by default), compare toolbar segmented modes / capsule menus, and polished dialogs & menus | ✅ Previous patch |
 | **1.0.155** | Batch Rename: Ctrl+Shift+B loads every image of the current folder, previews current → new names live and renames the originals in place (swaps safe, a replaced file goes to the Recycle Bin); the crowded batch processing options are gone | ✅ Previous patch |
@@ -90,7 +91,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.158` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.159` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
