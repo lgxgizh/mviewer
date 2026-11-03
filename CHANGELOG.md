@@ -42,6 +42,18 @@
   cross-format equivalence (I420 = YV12 = NV12 = NV21, 4:2:2 planar = packed),
   odd sizes, truncated frames and fuzz loops. Not yet wired into the viewer.
 
+- **YUV batch 4 — `.yuv` / `.y4m` open and thumbnails (ADR 032):** new
+  `core/image/yuv/YuvSource` resolves a file's parameters (y4m header, then
+  parameters saved per file in `YuvParamStore`, then file name / folder / size
+  inference), indexes complete frames and renders a frame to RGB24, downscaling
+  thumbnails by converting only the sampled rows. New `YuvDecoder` is registered
+  after `RawDecoder`, so `.yuv` and `.y4m` appear in browse and open dialogs and
+  open on their first frame. When the size or format cannot be resolved it
+  returns no pixels (the standard placeholder shows) and never guesses a size.
+  Metadata reports the source size, bit depth, `YUV`/`Y4M` and the matrix/range.
+  Tests: `yuv_source_tests`, `yuv_decoder_tests` (temp files, unknown
+  parameters, saved parameters, y4m, truncated file, registry order).
+
 ## [1.0.161] - 2026-11-03
 
 ### Release

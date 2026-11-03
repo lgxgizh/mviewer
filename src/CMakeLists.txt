@@ -22,6 +22,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
+    core/image/decoder/YuvDecoder.cpp
     core/image/decoder/RawDecoder_libraw.cpp
     core/image/decoder/RawDecodePolicy.cpp
     core/image/ImageObject.cpp
@@ -49,6 +50,7 @@ add_library(mviewer_core SHARED
     core/image/yuv/YuvParamInference.cpp
     core/image/yuv/YuvUnpack.cpp
     core/image/yuv/YuvToRgb.cpp
+    core/image/yuv/YuvSource.cpp
     core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
@@ -1259,6 +1261,18 @@ target_link_libraries(test_yuv_to_rgb PRIVATE mviewer_core)
 target_compile_features(test_yuv_to_rgb PRIVATE cxx_std_20)
 target_include_directories(test_yuv_to_rgb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_to_rgb_tests COMMAND test_yuv_to_rgb)
+
+add_executable(test_yuv_source core/test_yuv_source.cpp)
+target_link_libraries(test_yuv_source PRIVATE mviewer_core)
+target_compile_features(test_yuv_source PRIVATE cxx_std_20)
+target_include_directories(test_yuv_source PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_source_tests COMMAND test_yuv_source)
+
+add_executable(test_yuv_decoder core/test_yuv_decoder.cpp)
+target_link_libraries(test_yuv_decoder PRIVATE mviewer_core)
+target_compile_features(test_yuv_decoder PRIVATE cxx_std_20)
+target_include_directories(test_yuv_decoder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_decoder_tests COMMAND test_yuv_decoder)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert
