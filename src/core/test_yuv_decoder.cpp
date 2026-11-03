@@ -2,11 +2,7 @@
 // Unit tests for YuvDecoder (ADR 032): extension claim, resolved frames,
 // unknown parameters, Y4M, truncation, and registry order.
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wunused-parameter"
 #include "core/image/decoder/YuvDecoder.h"
-#pragma clang diagnostic pop
 #include "core/image/yuv/Y4mHeader.h"
 #include "core/image/yuv/YuvFormat.h"
 
