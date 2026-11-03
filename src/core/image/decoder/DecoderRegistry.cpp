@@ -9,6 +9,7 @@
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
 #include "core/image/decoder/RawDecoder.h"
+#include "core/image/decoder/YuvDecoder.h"
 #include <cstring>
 
 DecoderRegistry &DecoderRegistry::instance()
@@ -37,6 +38,8 @@ void DecoderRegistry::resetToDefaults()
     // empty ImageData when no embedded JPEG preview is found, so non-RAW and
     // preview-less RAW fall through to the Qt decoders below.
     defaults.push_back(std::make_shared<RawDecoder>());
+    // ADR 032: raw .yuv / .y4m; returns no pixels when parameters are unknown.
+    defaults.push_back(std::make_shared<YuvDecoder>());
     defaults.push_back(std::make_shared<QtDecoder>());
     // The fallback must remain LAST so specific decoders get first pick.
     defaults.push_back(std::make_shared<QtFallbackDecoder>());
