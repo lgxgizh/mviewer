@@ -158,7 +158,7 @@ static void testPlanes()
     CHECK(g.cb == 0 && g.cr == 0);
     const std::string grayText = formatYuvSample(g);
     CHECK(grayText.find("U=") == std::string::npos);
-    CHECK(grayText.find("Y=") == 0);
+    CHECK(grayText.starts_with("Y="));
     CHECK(grayText.find("(8-bit)") != std::string::npos);
 
     Format ten = makeFormat("yuv420p10le", 2, 2, 10);
@@ -332,3 +332,4 @@ int main()
     std::printf("ok\n");
     return 0;
 }
+// NOLINTEND

@@ -1,9 +1,6 @@
 #pragma once
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
 #include "core/image/ImageBuffer.h"
-#pragma clang diagnostic pop
 #include "core/image/yuv/Y4mHeader.h"
 #include "core/image/yuv/YuvParamInference.h"
 #include "core/image/yuv/YuvToRgb.h"
