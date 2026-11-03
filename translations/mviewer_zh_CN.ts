@@ -506,6 +506,11 @@
         <source>Path:</source>
         <translation>路径：</translation>
     </message>
+    <message>
+        <location filename="../src/analysispanel_pages.cpp" line="1"/>
+        <source>&lt;br&gt;&lt;b&gt;YUV sample&lt;/b&gt; %1</source>
+        <translation>&lt;br&gt;&lt;b&gt;YUV 采样&lt;/b&gt; %1</translation>
+    </message>
 </context>
 <context>
     <name>AnalyzerDescription</name>

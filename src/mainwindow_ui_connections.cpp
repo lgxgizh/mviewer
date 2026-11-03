@@ -80,7 +80,8 @@ void MainWindow::connectSelectionSignals()
 }
 
 static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, int b, int a,
-                                    int r16, int g16, int b16, int rawKind, bool valid)
+                                    int r16, int g16, int b16, int rawKind, bool valid,
+                                    const QString &yuvText)
 {
     if (!sb || (sb->window() && !sb->window()->isVisible()))
         return;
@@ -135,7 +136,28 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
         text += QStringLiteral("RGBA(%1,%2,%3,%4)  %5").arg(r).arg(g).arg(b).arg(a).arg(hex);
     else
         text += QStringLiteral("RGB(%1,%2,%3)  %4").arg(r).arg(g).arg(b).arg(hex);
+    if (!yuvText.isEmpty())
+        text += QStringLiteral("  ") + yuvText;
     sb->showMessage(text);
+}
+
+// Pixel Inspector feed: status bar + analysis panel, plus the raw Y/U/V
+// readout for .yuv / .y4m sources (ADR 032).
+void MainWindow::connectViewerPixelInfo()
+{
+    connect(m_imageViewer, &ImageViewer::pixelInfo, this,
+            [this](int x, int y, int r, int g, int b, int a, int r16, int g16, int b16, int rawKind,
+                   bool valid)
+            {
+                // ADR 032: raw Y/U/V code values under the cursor for .yuv / .y4m.
+                const QString yuvText = valid ? yuvSampleText(m_imageViewer->currentPath(),
+                                                              m_imageViewer->frameIndex(), x, y)
+                                              : QString();
+                updateViewerPixelStatus(statusBar(), x, y, r, g, b, a, r16, g16, b16, rawKind,
+                                        valid, yuvText);
+                m_analysisPanel->setYuvSampleText(yuvText);
+                m_analysisPanel->showPixel(x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
+            });
 }
 
 void MainWindow::connectViewerSignals()
@@ -234,14 +256,7 @@ void MainWindow::connectViewerSignals()
                         m_metadataPanel->setImage(path);
                 }
             });
-    connect(m_imageViewer, &ImageViewer::pixelInfo, this,
-            [this](int x, int y, int r, int g, int b, int a, int r16, int g16, int b16, int rawKind,
-                   bool valid)
-            {
-                updateViewerPixelStatus(statusBar(), x, y, r, g, b, a, r16, g16, b16, rawKind,
-                                        valid);
-                m_analysisPanel->showPixel(x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
-            });
+    connectViewerPixelInfo();
     if (m_lblZoom)
     {
         m_lblZoom->setCursor(Qt::PointingHandCursor);

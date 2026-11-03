@@ -135,6 +135,13 @@ class AnalysisPanel : public QWidget
     // viewer).
     void showPixel(int x, int y, int leftR, int leftG, int leftB, int leftA, int r16, int g16,
                    int b16, int rawKind, bool valid);
+    // ADR 032: raw Y/U/V readout for .yuv / .y4m (empty otherwise). Call before
+    // showPixel; ignored while the inspector is frozen.
+    void setYuvSampleText(const QString &text)
+    {
+        if (!m_frozen)
+            m_yuvSampleText = text;
+    }
 
     // Set the left image as an ImageFrame so ROI analysis routes through the
     // AnalyzerRegistry (Selection-based), not the legacy QImage path.
@@ -271,6 +278,7 @@ class AnalysisPanel : public QWidget
     int m_r16 = 0, m_g16 = 0, m_b16 = 0;
     uint16_t m_rawMax = 0;
     int m_rawKind = 0; // 0=8-bit, 1=RAW preview, 2=true 16-bit
+    QString m_yuvSampleText; // ADR 032: "Y=.. U=.. V=.." for raw YUV sources
 
     // M15 P0 #2: Pixel Inspector Pro — selected color space + NxN kernel.
     mviewer::core::ColorSpace m_colorSpace = mviewer::core::ColorSpace::RGB;

@@ -376,6 +376,8 @@ class MainWindow : public QMainWindow
     // ADR 032 (mainwindow_yuv.cpp): raw .yuv parameter dialog and load-failure hint.
     void editYuvParams(const QString &path);
     bool showYuvLoadHint(const QString &path);
+    static QString yuvSampleText(const QString &path, int frameIndex, int x, int y);
+    void connectViewerPixelInfo();
     void toggleFocusBrowse();
 
     void keyPressEvent(QKeyEvent *event) override;

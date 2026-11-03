@@ -109,6 +109,9 @@ void AnalysisPanel::updateInspectorPage()
                    .arg(m_pB / 255.0, 0, 'f', 4);
     }
 
+    if (!m_yuvSampleText.isEmpty())
+        txt += tr("<br><b>YUV sample</b> %1").arg(m_yuvSampleText.toHtmlEscaped());
+
     // NxN neighborhood luminance statistics over the left image (real pixels,
     // read from m_imageA which is Format_RGB32). Clipped to image bounds.
     if (m_hasA && !m_imageA.isNull())
