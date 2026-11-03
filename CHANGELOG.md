@@ -53,6 +53,13 @@
   Metadata reports the source size, bit depth, `YUV`/`Y4M` and the matrix/range.
   Tests: `yuv_source_tests`, `yuv_decoder_tests` (temp files, unknown
   parameters, saved parameters, y4m, truncated file, registry order).
+- **YUV batch 5 — frame stepping and cache identity (ADR 032):** new
+  `core/image/yuv/YuvFile` opens a `.yuv` / `.y4m` file once for the decoder
+  and the frame-sequence reader. Multi-frame files are now page sequences: the
+  viewer shows "frame N of M" and `,` / `.` step through frames (no timed
+  playback yet). Saved parameters are part of the cache key (`|yuv=<format>`),
+  so changing them never serves a stale decode. Tests: `yuv_sequence_tests`
+  (probe, every frame, out-of-range index, trailing bytes, cache-key changes).
 
 ## [1.0.161] - 2026-11-03
 

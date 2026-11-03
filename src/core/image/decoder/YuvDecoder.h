@@ -4,8 +4,6 @@
 #include "core/image/decoder/IDecoder.h"
 #include "core/image/yuv/YuvSource.h"
 
-#include <fstream>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -37,8 +35,4 @@ class YuvDecoder : public IDecoder, public mviewer::core::ISourceImageCapabiliti
     bool canNativeRegion(const std::string &path) const override;
     ImageData decodeLod(const std::string &path, int maxEdge,
                         mviewer::domain::ImageMetadata &meta) const override;
-
-  private:
-    bool openSource(const std::string &path, mviewer::core::yuv::YuvSourceInfo &info,
-                    std::shared_ptr<std::ifstream> &file) const;
 };
