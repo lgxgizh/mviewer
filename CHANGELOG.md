@@ -72,6 +72,15 @@
   header parameters. zh_CN translations added. Tests: `yuv_params_dialog_tests`
   (summary, size presets, settings round trip and garbage lines) and
   `canonicalPixFmtNames()` in `yuv_format_tests`.
+- **YUV batch 7 — raw Y/U/V in the pixel inspector (ADR 032):** hovering a
+  `.yuv` / `.y4m` image now shows the stored code values under the cursor, for
+  example `Y=235 U=128 V=128 (10-bit, chroma 3,2)`, in the status bar and the
+  Pixel Inspector, for the frame being viewed. Chroma coordinates follow the
+  subsampling (odd sizes included). New Qt-free `core/image/yuv/YuvSampleProbe`
+  keeps one unpacked frame cached, so moving the cursor does not re-read the
+  file; changing the parameters or the file invalidates it. Tests:
+  `yuv_sample_tests` (420/422/444/gray mapping, 10-bit, out-of-range, cache
+  reuse, truncated file, unknown parameters, coordinate fuzz).
 
 ## [1.0.161] - 2026-11-03
 

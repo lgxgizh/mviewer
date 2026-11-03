@@ -1,4 +1,5 @@
-// ADR 032: raw .yuv parameter dialog entry point and load-failure hint.
+// ADR 032: raw .yuv parameter dialog entry point, load-failure hint and the
+// pixel-inspector Y/U/V readout.
 // The dialog saves per-file parameters into YuvParamStore (and QSettings);
 // every cached decode and thumbnail of that file is then dropped so the next
 // load uses the new parameters.
@@ -7,6 +8,7 @@
 
 #include "core/image/ImageLoadingFacade.h"
 #include "core/image/yuv/YuvFile.h"
+#include "core/image/yuv/YuvSampleProbe.h"
 #include "imageviewer.h"
 #include "metadatapanel.h"
 #include "previewpanel.h"
@@ -58,4 +60,15 @@ bool MainWindow::showYuvLoadHint(const QString &path)
             .arg(QFileInfo(path).fileName()),
         8000);
     return true;
+}
+
+QString MainWindow::yuvSampleText(const QString &path, int frameIndex, int x, int y)
+{
+    const std::string utf8 = path.toUtf8().toStdString();
+    if (!mviewer::core::yuv::isYuvPath(utf8))
+        return {};
+    // One unpacked frame is cached, so moving the cursor does not re-read the file.
+    const mviewer::core::yuv::YuvSample sample =
+        mviewer::core::yuv::YuvSampleProbe::instance().sample(utf8, frameIndex, x, y);
+    return QString::fromStdString(mviewer::core::yuv::formatYuvSample(sample));
 }
