@@ -43,10 +43,30 @@ int16_t toTwelveBit(uint16_t sample, int bitDepth);
 void convertRowScalar(const int16_t *y12, const int16_t *u12, const int16_t *v12, int n,
                       const YuvCoeffs &c, uint8_t *rgb24);
 
+// Bit-exact with convertRowScalar. On non-x86, or when built without that ISA,
+// each falls back to convertRowScalar.
+void convertRowSse2(const int16_t *y12, const int16_t *u12, const int16_t *v12, int n,
+                    const YuvCoeffs &c, uint8_t *rgb24);
+void convertRowAvx2(const int16_t *y12, const int16_t *u12, const int16_t *v12, int n,
+                    const YuvCoeffs &c, uint8_t *rgb24);
+
 using RowConverterFn = void (*)(const int16_t *, const int16_t *, const int16_t *, int,
                                 const YuvCoeffs &, uint8_t *);
 
-// Returns the fastest available row converter (scalar until SIMD lands).
+enum class RowConverterKind : std::uint8_t
+{
+    Scalar,
+    Sse2,
+    Avx2
+};
+
+// Scalar when this CPU cannot run the requested kind.
+RowConverterFn rowConverterFor(RowConverterKind kind);
+
+// Avx2, else Sse2, else Scalar.
+RowConverterKind bestRowConverterKind();
+
+// Returns the fastest available row converter.
 RowConverterFn selectRowConverter();
 
 // Converts a whole frame into RGB24 rows of dstStride bytes (>= width * 3).

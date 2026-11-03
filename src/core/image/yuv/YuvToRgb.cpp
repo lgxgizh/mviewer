@@ -197,7 +197,7 @@ void convertRowScalar(const int16_t *y12, const int16_t *u12, const int16_t *v12
 
 RowConverterFn selectRowConverter()
 {
-    return &convertRowScalar;
+    return rowConverterFor(bestRowConverterKind());
 }
 
 bool convertToRgb24(const YuvPlanes &p, const Format &f, ChromaUpsample up, uint8_t *dst,

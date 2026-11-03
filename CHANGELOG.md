@@ -96,6 +96,15 @@
   identical → inf, SSIM symmetry and range, odd sizes, gray, mismatches,
   truncated / missing files, cancel, frame limits) and
   `yuv_compare_dialog_tests`.
+- **YUV batch 9 — SSE2 / AVX2 YUV→RGB conversion (ADR 032):** the row
+  converter now has in-house SSE2 (8 px) and AVX2 (16 px) paths built on exact
+  16-bit multiply-add, picked at runtime by `CpuFeatures` (AVX2, then SSE2,
+  then scalar; other CPUs stay scalar). Output is byte-identical to the scalar
+  reference. `yuv_simd_tests` checks every matrix × range × bit depth, row
+  lengths 0–70, extreme and random samples, gray rows, unaligned pointers,
+  output bounds and a whole odd-sized frame. `bench_yuv_to_rgb` (not run by
+  CTest) reports Mpx/s per path; on the dev box, a 1920×1080 frame ran at about
+  120 (scalar), 1700 (SSE2) and 1900 (AVX2) Mpx/s.
 
 ## [1.0.161] - 2026-11-03
 
