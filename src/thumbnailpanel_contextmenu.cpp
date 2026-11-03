@@ -3,6 +3,8 @@
 #include "thumbnailpanel_p.h"
 #include "thumbnailpanel_transfer.h"
 
+#include "core/image/yuv/YuvFile.h"
+
 struct ThumbnailPanel::ContextMenuActions
 {
     QAction *aOpen = nullptr;
@@ -19,6 +21,7 @@ struct ThumbnailPanel::ContextMenuActions
     QAction *aCopyName = nullptr;
     QAction *aCompare = nullptr;
     QAction *aUsmCompare = nullptr;
+    QAction *aYuvParams = nullptr; // only for a single .yuv/.y4m selection
     QAction *aAnalyze = nullptr;
     QAction *aAddTag = nullptr;
     QMenu *rmTagMenu = nullptr;
@@ -92,6 +95,8 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCompare->setEnabled(compareCount >= 2 && compareCount <= 8);
     acts.aUsmCompare = menu.addAction(tr("USM Sharpen Compare..."));
     acts.aUsmCompare->setEnabled(selPaths.size() == 1);
+    if (selPaths.size() == 1 && mviewer::core::yuv::isYuvPath(selPaths.front().toStdString()))
+        acts.aYuvParams = menu.addAction(tr("YUV Parameters..."));
     acts.aAnalyze = menu.addAction(tr("Batch Analysis Export"));
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     acts.aAnalyze->setEnabled(!selPaths.isEmpty());
@@ -206,6 +211,8 @@ void ThumbnailPanel::handleContextMenuAction(const ContextMenuActions &actions, 
         requestCompare();
     else if (chosen == actions.aUsmCompare)
         emit usmCompareRequested(path);
+    else if (actions.aYuvParams && chosen == actions.aYuvParams)
+        emit yuvParamsRequested(path);
     else if (chosen == actions.aAnalyze)
         batchAnalyzeExport();
     else if (chosen == actions.aAddTag)

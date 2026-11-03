@@ -404,6 +404,7 @@ QWidget *MainWindow::buildGalleryPanel()
     m_thumbnailPanel->setPaneSlot(SelectionModel::PaneSlot::Primary);
     connect(m_thumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
+    connect(m_thumbnailPanel, &ThumbnailPanel::yuvParamsRequested, this, &MainWindow::editYuvParams);
     m_thumbnailPanel->setHiddenFormatGroups(m_hiddenFormatGroups);
     wireTypeHiddenHint(m_thumbnailPanel);
     m_thumbnailPanel->setCommandStack(&m_cmdStack);
@@ -531,6 +532,7 @@ void MainWindow::buildImageViewerUi()
     m_imageViewer->setWindowTitle(tr("Image Viewer - MViewer"));
     connect(m_imageViewer, &ImageViewer::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
+    connect(m_imageViewer, &ImageViewer::yuvParamsRequested, this, &MainWindow::editYuvParams);
 
     // P0-3: metadata overlay on the image viewer (toggle with I / M / Image Info)
     m_metadataOverlay = new MetadataOverlay(m_imageViewer);

@@ -297,6 +297,36 @@ static void testFuzz()
     std::printf("  fuzz accepted %d inputs\n", accepted);
 }
 
+static bool containsName(const std::vector<std::string> &names, const char *wanted)
+{
+    for (const std::string &name : names)
+    {
+        if (name == wanted)
+            return true;
+    }
+    return false;
+}
+
+static void testCanonicalNames()
+{
+    const std::vector<std::string> names = canonicalPixFmtNames();
+    CHECK(!names.empty());
+    CHECK(containsName(names, "yuv420p"));
+    CHECK(containsName(names, "nv12"));
+    CHECK(containsName(names, "p010le"));
+    CHECK(containsName(names, "yuyv422"));
+    CHECK(containsName(names, "gray"));
+    CHECK(!containsName(names, "i420"));
+    for (const std::string &name : names)
+    {
+        Format f;
+        f.width = 16;
+        f.height = 16;
+        CHECK(applyPixFmtName(name, f));
+        CHECK(pixFmtName(f) == name);
+    }
+}
+
 static void testFrameCount()
 {
     FrameCount c = computeFrameCount(3110400 * 10, 0, 0, 3110400);
@@ -335,6 +365,7 @@ int main()
     testAliases();
     testParseRejects();
     testFuzz();
+    testCanonicalNames();
     testFrameCount();
     if (g_failures == 0)
         std::printf("test_yuv_format: all passed\n");

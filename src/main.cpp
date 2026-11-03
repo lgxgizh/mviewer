@@ -13,6 +13,7 @@
 #include "core/SettingsIO.h"
 #include "platform/WindowChrome.h"
 #include "runtime_storage.h"
+#include "yuvparamsettings.h"
 
 #include <QApplication>
 #include <QDebug>
@@ -85,6 +86,9 @@ int main(int argc, char *argv[])
 
     // Settings schema migration (idempotent, runs once per schema bump).
     mviewer::core::migrateSettingsIfNeeded();
+
+    // ADR 032: per-file .yuv parameters saved by the YUV Parameters dialog.
+    mviewer::ui::loadYuvParamSettings();
 
     // P5: headless release self-test gate. Runs before any window is created so
     // a release pipeline can verify the decode path without a display.

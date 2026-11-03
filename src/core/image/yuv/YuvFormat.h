@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // YUV frame geometry and FFmpeg-style pixel-format names.
 // Byte sizes follow ITU-R BT.601 / BT.709 / BT.2020 sampling (4:4:4, 4:2:2, 4:2:0, 4:0:0).
@@ -124,6 +125,9 @@ bool isValid(const Format &f, std::string *why = nullptr);
 
 std::string pixFmtName(const Format &f);
 bool applyPixFmtName(std::string_view name, Format &inout);
+
+// Canonical pix-fmt names in table order (no aliases such as "i420"/"yuy2").
+std::vector<std::string> canonicalPixFmtNames();
 
 std::string_view matrixName(Matrix m);
 std::string_view rangeName(Range r);

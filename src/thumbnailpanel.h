@@ -451,6 +451,7 @@ class ThumbnailPanel : public QListView
     // The empty-folder hint's "Show" button: the user asked to un-hide `groups`.
     void showHiddenFormatGroupsRequested(const QStringList &groups);
     void usmCompareRequested(const QString &path);
+    void yuvParamsRequested(const QString &path); // ADR 032: raw .yuv parameter dialog
     // External files/folders dropped onto the gallery (forwarded to MainWindow).
     void filesDropped(const QStringList &paths);
     // Emitted after a delete/trash operation so the host can advance the viewer

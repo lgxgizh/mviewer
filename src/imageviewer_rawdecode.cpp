@@ -2,6 +2,7 @@
 
 #include "core/image/ImageFormats.h"
 #include "core/image/decoder/RawDecodePlan.h"
+#include "core/image/yuv/YuvFile.h"
 #include "rawsourcebadge.h"
 
 #include <QApplication>
@@ -79,6 +80,8 @@ void ImageViewer::cancelFullRawDecode()
 
 QAction *ImageViewer::addRawDecodeAction(QMenu &menu)
 {
+    if (mviewer::core::yuv::isYuvPath(m_currentPath.toUtf8().toStdString()))
+        return menu.addAction(tr("YUV Parameters..."));
     return menu.addAction(m_fullRawLoading ? tr("Cancel Full RAW Decode") : tr("Decode Full RAW"));
 }
 
@@ -86,6 +89,11 @@ bool ImageViewer::handleRawDecodeAction(QAction *chosen, QAction *fullRaw)
 {
     if (chosen != fullRaw)
         return false;
+    if (mviewer::core::yuv::isYuvPath(m_currentPath.toUtf8().toStdString()))
+    {
+        emit yuvParamsRequested(m_currentPath);
+        return true;
+    }
     if (m_fullRawLoading)
         cancelFullRawDecode();
     else

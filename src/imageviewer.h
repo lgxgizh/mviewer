@@ -309,7 +309,7 @@ class ImageViewer : public QOpenGLWidget
     void loadFailed(const QString &path);
     void exportFinished(bool success, const QString &message);
     void statusMessageRequested(const QString &message, int timeoutMs = 2000);
-
+    void yuvParamsRequested(const QString &path); // ADR 032: raw .yuv parameter dialog
     void usmCompareRequested(const QString &path);
     void fullRawActivityChanged(bool active);
     void regionStats(const QString &text);
@@ -419,9 +419,9 @@ class ImageViewer : public QOpenGLWidget
     void applyFullRawResult(const QString &path, uint64_t generation,
                             const ImageLoadResult &result);
     void stopFullRawDecode(bool notify);
-    // Context-menu entry for the explicit full-RAW decode. The label and the
-    // chosen-action dispatch live with the decode helpers so the menu builder
-    // stays under the cyclomatic cap.
+    // Context-menu entry for the explicit full-RAW decode (or, for .yuv/.y4m,
+    // "YUV Parameters..."). Label and dispatch live with the decode helpers so
+    // the menu builder stays under the cyclomatic cap.
     QAction *addRawDecodeAction(QMenu &menu);
     bool handleRawDecodeAction(QAction *chosen, QAction *fullRaw);
     void applyPendingView();

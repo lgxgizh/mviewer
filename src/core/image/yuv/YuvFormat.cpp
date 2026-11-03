@@ -1,6 +1,7 @@
 #include "core/image/yuv/YuvFormat.h"
 
 #include <limits>
+#include <vector>
 
 namespace mviewer::core::yuv
 {
@@ -104,6 +105,17 @@ constexpr Alias kAliases[] = {
 
 constexpr int kSpecCount = static_cast<int>(sizeof(kSpecs) / sizeof(kSpecs[0]));
 static_assert(kSpecCount == 58, "canonical pixel-format table size");
+
+std::vector<std::string> copyCanonicalPixFmtNames()
+{
+    std::vector<std::string> names;
+    names.reserve(static_cast<std::size_t>(kSpecCount));
+    for (const PixSpec &spec : kSpecs)
+    {
+        names.emplace_back(spec.name);
+    }
+    return names;
+}
 
 std::string lowerAscii(std::string_view text)
 {
@@ -745,6 +757,11 @@ FrameCount computeFrameCount(int64_t fileSize, int64_t headerBytes, int64_t perF
     none.frames = payload / stride;
     none.trailingBytes = payload % stride;
     return none;
+}
+
+std::vector<std::string> canonicalPixFmtNames()
+{
+    return copyCanonicalPixFmtNames();
 }
 
 } // namespace mviewer::core::yuv
