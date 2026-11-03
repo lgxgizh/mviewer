@@ -96,7 +96,9 @@ infrastructure while product detail gaps remain.
 
 **Frozen — do not refactor or extend (mature enough):**
 `CacheManager`, `Scheduler`, `DecoderRegistry`, Build System, CI, Plugin
-Framework, Workspace base architecture, Performance Gate.
+Framework, Workspace base architecture, Performance Gate. (ADR 032 exception:
+`YuvDecoder` is one entry in `DecoderRegistry::resetToDefaults()`; the
+registry API stays frozen.)
 
 **Milestone framing:** M14 Professional Browser · M15 Professional Compare ·
 M16 Professional Analysis · M17 Professional Productivity (Batch / Workspace
@@ -104,7 +106,9 @@ enhancement / auto-recovery / release installer / crash report / auto-update).
 
 **Post-M22 direction (2026-07 external review):** the project has left the
 architecture-exploration phase. Do NOT add new capability categories (AI, more
-plugins, more formats, more analyzers). Priorities are convergence +
+plugins, more formats, more analyzers). The one scoped exception is raw
+YUV / Y4M viewing and per-plane YUV compare (ADR 032), written clean-room from
+public specs under `src/core/image/yuv/`. Priorities are convergence +
 productization + performance closure, aiming Beta → RC:
 
 1. Keep UI complexity down. Hard guardrails (ADR 014): `mainwindow.cpp`

@@ -56,12 +56,16 @@ features.
 ### Scenario A — Algorithm-result inspection *(corrected from review)*
 
 **Review premise:** "1000 YUV frames to JPEG".
-**Tree reality:** MViewer has **no `.yuv` file decoder** (only a `RawImageView`
+**Tree reality (at M12):** MViewer had **no `.yuv` file decoder** (only a `RawImageView`
 preview widget, not YUV decode). Adopting the YUV premise would make this a
 *new feature* — out of M11.1/M12 scope and contradicting the "don't add formats
 casually" freeze. **Correction:** the scenario uses the formats MViewer already
 decodes — **JPEG / PNG / TIFF** — which is the realistic algorithm-output case
 (model dumps are typically PNG/JPEG).
+
+**Update (ADR 032, 2026-11):** raw `.yuv` and `.y4m` viewing and per-plane
+YUV compare are now in scope as a scoped exception to the format freeze, so
+the original "YUV frames" premise is supported directly.
 
 Flow (as wired today):
 ```
@@ -138,7 +142,8 @@ concern and it is already *detectable today* via the TIFF SKIP. Closing it
 
 - ❌ Refactor ImageRepository / CacheManager / RenderEngine.
 - ❌ Add a 6th cache layer, Rust, GPU pipeline, plugin-ABI freeze.
-- ❌ New image formats (YUV/RAW file decode) — correct the scenario instead.
+- ❌ New image formats — correct the scenario instead. (Exception: raw YUV /
+  Y4M viewing and compare, ADR 032.)
 - ❌ Modify `build.ps1` / `CMakePresets.json` / `ci.yml`.
 
 ## 6. Suggested execution order (after review approval)
