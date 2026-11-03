@@ -4,6 +4,7 @@
 #include "core/image/yuv/YuvToRgb.h"
 #include "core/simd/CpuFeatures.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <random>
@@ -191,7 +192,16 @@ int main()
     runKind("avx2", mviewer::core::CpuFeatures::hasAvx2(), &convertRowAvx2);
     const RowConverterKind best = bestRowConverterKind();
     CHECK(rowConverterFor(best) == selectRowConverter());
-    CHECK(rowConverterFor(RowConverterKind::Scalar) == &convertRowScalar);
+    // Function-pointer identity is not stable across MSVC DLL/ICF thunks; compare outputs.
+    {
+        std::mt19937 rng(7u);
+        std::vector<int16_t> y;
+        std::vector<int16_t> u;
+        std::vector<int16_t> v;
+        fillRand(rng, y, u, v, 33);
+        const YuvCoeffs c = makeYuvCoeffs(Matrix::BT709, Range::Limited, 8);
+        compareRow(rowConverterFor(RowConverterKind::Scalar), y.data(), u.data(), v.data(), 33, c);
+    }
     checkFrame();
     if (g_failures != 0)
     {
