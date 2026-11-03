@@ -2,12 +2,15 @@
 
 #include "core/filesystem/Utf8Path.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <utility>
+#include <vector>
 
 namespace mviewer::core::yuv
 {
@@ -112,6 +115,73 @@ int clampFrameCount(int64_t count)
     return static_cast<int>(count);
 }
 
+// Resolving a y4m indexes every frame header. Frame stepping, thumbnails and the
+// sample probe reopen the same file again and again, so keep the last few
+// resolved y4m sources keyed by path, size, modification time and header bytes.
+struct Y4mCacheEntry
+{
+    std::string key;
+    int64_t fileSize = 0;
+    std::filesystem::file_time_type mtime{};
+    std::vector<std::uint8_t> header;
+    YuvSourceInfo info;
+};
+
+constexpr std::size_t kY4mCacheEntries = 8;
+
+std::mutex &y4mCacheMutex()
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
+std::vector<Y4mCacheEntry> &y4mCache()
+{
+    static std::vector<Y4mCacheEntry> entries;
+    return entries;
+}
+
+bool sameY4m(const Y4mCacheEntry &e, const std::string &key, int64_t fileSize,
+             std::filesystem::file_time_type mtime, const std::vector<std::uint8_t> &header)
+{
+    return e.key == key && e.fileSize == fileSize && e.mtime == mtime && e.header == header;
+}
+
+YuvSourceInfo resolveY4mCached(const std::filesystem::path &native, const std::string &path,
+                               const std::string &fileName, const std::string &folderName,
+                               int64_t fileSize, const ReadAtFn &read)
+{
+    std::error_code ec;
+    const auto mtime = std::filesystem::last_write_time(native, ec);
+    std::vector<std::uint8_t> header(kMaxY4mHeaderBytes);
+    header.resize(read(0, header.data(), header.size()));
+    if (ec)
+        return resolveYuvSource(fileName, folderName, fileSize, read, std::nullopt);
+    const std::string key = yuvParamKey(path);
+    {
+        std::lock_guard<std::mutex> lock(y4mCacheMutex());
+        auto &entries = y4mCache();
+        for (std::size_t i = 0; i < entries.size(); ++i)
+        {
+            if (!sameY4m(entries[i], key, fileSize, mtime, header))
+                continue;
+            // Move to the front (most recently used).
+            std::rotate(entries.begin(), entries.begin() + static_cast<std::ptrdiff_t>(i),
+                        entries.begin() + static_cast<std::ptrdiff_t>(i) + 1);
+            return entries.front().info;
+        }
+    }
+    YuvSourceInfo info = resolveYuvSource(fileName, folderName, fileSize, read, std::nullopt);
+    if (!info.known)
+        return info;
+    std::lock_guard<std::mutex> lock(y4mCacheMutex());
+    auto &entries = y4mCache();
+    entries.insert(entries.begin(), Y4mCacheEntry{key, fileSize, mtime, std::move(header), info});
+    if (entries.size() > kY4mCacheEntries)
+        entries.resize(kY4mCacheEntries);
+    return info;
+}
+
 } // namespace
 
 bool isYuvPath(const std::string &path)
@@ -151,6 +221,12 @@ bool openYuvFile(const std::string &path, OpenedYuvFile &out)
         splitPathNames(path, fileName, folderName);
         out.read = [file](int64_t offset, std::uint8_t *buf, std::size_t n)
         { return readAt(file, offset, buf, n); };
+        if (isY4mFileName(fileName))
+        {
+            // Saved params are ignored for y4m (ADR 032), so the cache needs no store key.
+            out.info = resolveY4mCached(native, path, fileName, folderName, out.fileSize, out.read);
+            return true;
+        }
         const auto saved = YuvParamStore::instance().get(yuvParamKey(path));
         out.info = resolveYuvSource(fileName, folderName, out.fileSize, out.read, saved);
         return true;
@@ -162,6 +238,23 @@ bool openYuvFile(const std::string &path, OpenedYuvFile &out)
         if (out.info.why.empty())
             out.info.why = "exception while opening file";
         return false;
+    }
+}
+
+ReadAtFn openYuvReader(const std::string &path)
+{
+    try
+    {
+        auto file =
+            std::make_shared<std::ifstream>(mviewer::core::pathFromUtf8(path), std::ios::binary);
+        if (!file || !file->is_open())
+            return ReadAtFn{};
+        return [file](int64_t offset, std::uint8_t *buf, std::size_t n)
+        { return readAt(file, offset, buf, n); };
+    }
+    catch (...)
+    {
+        return ReadAtFn{};
     }
 }
 

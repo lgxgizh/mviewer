@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 // YUV -> 8-bit RGB conversion (ITU-R BT.601 / BT.709 / BT.2020 non-constant
@@ -68,6 +69,15 @@ RowConverterKind bestRowConverterKind();
 
 // Returns the fastest available row converter.
 RowConverterFn selectRowConverter();
+
+// Runs fn over row bands [y0, y1) that together cover [0, rowCount), possibly on
+// several threads, and returns when every band is done. fn must not throw.
+using YuvRowsRunner = void (*)(int rowCount, const std::function<void(int, int)> &fn);
+
+// Installs the runner convertToRgb24 uses for large frames (nullptr = serial, the
+// default). The yuv module stays std-only; the app side installs a thread pool.
+void setYuvRowsRunner(YuvRowsRunner runner) noexcept;
+YuvRowsRunner yuvRowsRunner() noexcept;
 
 // Converts a whole frame into RGB24 rows of dstStride bytes (>= width * 3).
 // False when the planes do not match the format or dst is too small.

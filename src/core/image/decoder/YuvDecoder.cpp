@@ -112,10 +112,9 @@ ImageData YuvDecoder::decodeScaled(const std::string &path, int maxEdge,
         OpenedYuvFile opened;
         if (!openKnown(path, opened))
             return ImageData{};
-        YuvPlanes planes;
-        if (!mviewer::core::yuv::readYuvFrame(opened.info, 0, opened.read, planes, nullptr))
-            return ImageData{};
-        ImageData image = mviewer::core::yuv::renderYuvImage(planes, opened.info.format, maxEdge);
+        // Samples the raw frame directly: no full-frame unpack for thumbnails.
+        ImageData image =
+            mviewer::core::yuv::readYuvFrameImage(opened.info, 0, opened.read, maxEdge);
         if (image.isNull())
             return ImageData{};
         mviewer::core::yuv::fillYuvMetadata(opened, path, 0, outMeta);

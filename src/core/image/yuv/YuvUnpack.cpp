@@ -1,5 +1,7 @@
 #include "core/image/yuv/YuvUnpack.h"
 
+#include "core/image/yuv/YuvUnpackDetail.h"
+
 #include <algorithm>
 
 namespace mviewer::core::yuv
@@ -7,95 +9,84 @@ namespace mviewer::core::yuv
 namespace
 {
 
-// Reads sample 'index' (in samples) of a row and converts it to a code value.
-struct SampleReader
-{
-    int bytes = 1;
-    bool bigEndian = false;
-    int shift = 0;     // MSB-aligned formats shift down by 16 - bitDepth
-    uint16_t mask = 0; // keeps only bitDepth bits
-
-    uint16_t operator()(const uint8_t *row, size_t index) const
-    {
-        if (bytes == 1)
-            return row[index];
-        const uint8_t *p = row + index * 2;
-        const auto raw = static_cast<uint16_t>(bigEndian ? (p[0] << 8) | p[1] : (p[1] << 8) | p[0]);
-        return static_cast<uint16_t>((raw >> shift) & mask);
-    }
-};
-
-SampleReader makeReader(const Format &f)
-{
-    SampleReader r;
-    r.bytes = bytesPerSample(f);
-    r.bigEndian = f.endian == Endian::Big;
-    r.shift = f.msbAligned ? 16 - f.bitDepth : 0;
-    r.mask = static_cast<uint16_t>((1U << f.bitDepth) - 1U);
-    return r;
-}
+using unpack_detail::makeReader;
+using unpack_detail::packedOrder;
+using unpack_detail::PackedOrder;
+using unpack_detail::SampleReader;
 
 size_t area(int w, int h)
 {
     return static_cast<size_t>(w) * static_cast<size_t>(h);
 }
 
-// Copies 'g' starting every 'step' samples at 'first' into 'dst' (g.width per row).
-void readPlane(const uint8_t *data, const PlaneGeometry &g, const SampleReader &rd, size_t step,
-               size_t first, std::vector<uint16_t> &dst, int outWidth)
+// Reads n samples at first, first + Step, ... of one row (same values as SampleReader).
+// Compile-time byte width, endianness and step keep the loop branch-free.
+template <int Bytes, bool BigEndian, size_t Step>
+void readRowT(const uint8_t *row, size_t first, int n, const SampleReader &rd, uint16_t *out)
+{
+    if constexpr (Bytes == 1)
+    {
+        const uint8_t *p = row + first;
+        for (int x = 0; x < n; ++x)
+            out[x] = p[static_cast<size_t>(x) * Step];
+    }
+    else
+    {
+        const uint8_t *p = row + first * 2;
+        const int shift = rd.shift;
+        const uint16_t mask = rd.mask;
+        for (int x = 0; x < n; ++x)
+        {
+            const uint8_t *s = p + static_cast<size_t>(x) * Step * 2;
+            const auto raw =
+                static_cast<uint16_t>(BigEndian ? (s[0] << 8) | s[1] : (s[1] << 8) | s[0]);
+            out[x] = static_cast<uint16_t>((raw >> shift) & mask);
+        }
+    }
+}
+
+template <size_t Step>
+void readRow(const uint8_t *row, size_t first, int n, const SampleReader &rd, uint16_t *out)
+{
+    if (rd.bytes == 1)
+        readRowT<1, false, Step>(row, first, n, rd, out);
+    else if (rd.bigEndian)
+        readRowT<2, true, Step>(row, first, n, rd, out);
+    else
+        readRowT<2, false, Step>(row, first, n, rd, out);
+}
+
+// Copies 'g' starting every 'Step' samples at 'first' into 'dst' (outWidth per row).
+template <size_t Step>
+void readPlane(const uint8_t *data, const PlaneGeometry &g, const SampleReader &rd, size_t first,
+               std::vector<uint16_t> &dst, int outWidth)
 {
     dst.resize(area(outWidth, g.height));
     for (int y = 0; y < g.height; ++y)
     {
         const uint8_t *row = data + g.offset + static_cast<int64_t>(y) * g.rowBytes;
-        uint16_t *out = dst.data() + area(outWidth, y);
-        for (int x = 0; x < outWidth; ++x)
-            out[x] = rd(row, first + static_cast<size_t>(x) * step);
+        readRow<Step>(row, first, outWidth, rd, dst.data() + area(outWidth, y));
     }
 }
 
 void unpackPlanar(const Format &f, const FrameLayout &l, const uint8_t *data,
                   const SampleReader &rd, YuvPlanes &out)
 {
-    readPlane(data, l.planes[0], rd, 1, 0, out.y, out.width);
+    readPlane<1>(data, l.planes[0], rd, 0, out.y, out.width);
     if (f.subsampling == Subsampling::S400)
         return;
     const bool vu = f.order == PlaneOrder::VU;
-    readPlane(data, l.planes[1], rd, 1, 0, vu ? out.v : out.u, out.chromaWidth);
-    readPlane(data, l.planes[2], rd, 1, 0, vu ? out.u : out.v, out.chromaWidth);
+    readPlane<1>(data, l.planes[1], rd, 0, vu ? out.v : out.u, out.chromaWidth);
+    readPlane<1>(data, l.planes[2], rd, 0, vu ? out.u : out.v, out.chromaWidth);
 }
 
 void unpackSemiPlanar(const Format &f, const FrameLayout &l, const uint8_t *data,
                       const SampleReader &rd, YuvPlanes &out)
 {
-    readPlane(data, l.planes[0], rd, 1, 0, out.y, out.width);
+    readPlane<1>(data, l.planes[0], rd, 0, out.y, out.width);
     const bool vu = f.order == PlaneOrder::VU;
-    readPlane(data, l.planes[1], rd, 2, vu ? 1 : 0, out.u, out.chromaWidth);
-    readPlane(data, l.planes[1], rd, 2, vu ? 0 : 1, out.v, out.chromaWidth);
-}
-
-// Byte positions (in samples) of Y0, U, Y1, V inside one 4-sample macropixel.
-struct PackedOrder
-{
-    size_t y0;
-    size_t u;
-    size_t y1;
-    size_t v;
-};
-
-PackedOrder packedOrder(Packing p)
-{
-    switch (p)
-    {
-    case Packing::UYVY:
-        return {1, 0, 3, 2};
-    case Packing::YVYU:
-        return {0, 3, 2, 1};
-    case Packing::YUYV:
-    case Packing::None:
-    default:
-        return {0, 1, 2, 3};
-    }
+    readPlane<2>(data, l.planes[1], rd, vu ? 1 : 0, out.u, out.chromaWidth);
+    readPlane<2>(data, l.planes[1], rd, vu ? 0 : 1, out.v, out.chromaWidth);
 }
 
 void unpackPacked(const Format &f, const FrameLayout &l, const uint8_t *data,
@@ -109,18 +100,9 @@ void unpackPacked(const Format &f, const FrameLayout &l, const uint8_t *data,
     for (int y = 0; y < out.height; ++y)
     {
         const uint8_t *row = data + g.offset + static_cast<int64_t>(y) * g.rowBytes;
-        uint16_t *ys = out.y.data() + area(out.width, y);
-        for (int c = 0; c < out.chromaWidth; ++c)
-        {
-            const size_t base = static_cast<size_t>(c) * 4;
-            const size_t ci = area(out.chromaWidth, y) + static_cast<size_t>(c);
-            const size_t lx = static_cast<size_t>(c) * 2;
-            ys[lx] = rd(row, base + o.y0);
-            if (lx + 1 < static_cast<size_t>(out.width))
-                ys[lx + 1] = rd(row, base + o.y1);
-            out.u[ci] = rd(row, base + o.u);
-            out.v[ci] = rd(row, base + o.v);
-        }
+        readRow<2>(row, o.y0, out.width, rd, out.y.data() + area(out.width, y));
+        readRow<4>(row, o.u, out.chromaWidth, rd, out.u.data() + area(out.chromaWidth, y));
+        readRow<4>(row, o.v, out.chromaWidth, rd, out.v.data() + area(out.chromaWidth, y));
     }
 }
 
@@ -136,6 +118,10 @@ bool fail(std::string *why, const char *msg)
 bool unpackYuvFrame(const Format &f, const uint8_t *data, size_t size, YuvPlanes &out,
                     std::string *why)
 {
+    // Keep the sample buffers' capacity so a reused YuvPlanes does not reallocate.
+    std::vector<uint16_t> keepY = std::move(out.y);
+    std::vector<uint16_t> keepU = std::move(out.u);
+    std::vector<uint16_t> keepV = std::move(out.v);
     out = YuvPlanes{};
     const auto layout = computeFrameLayout(f, why);
     if (!layout)
@@ -145,8 +131,11 @@ bool unpackYuvFrame(const Format &f, const uint8_t *data, size_t size, YuvPlanes
     out.width = f.width;
     out.height = f.height;
     out.bitDepth = f.bitDepth;
+    out.y = std::move(keepY);
     if (f.subsampling != Subsampling::S400)
     {
+        out.u = std::move(keepU);
+        out.v = std::move(keepV);
         out.chromaWidth = chromaWidth(f);
         out.chromaHeight = chromaHeight(f);
     }
