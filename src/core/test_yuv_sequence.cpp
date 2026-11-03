@@ -1,11 +1,7 @@
 // NOLINTBEGIN
 // Multi-frame YUV navigation, frame info, and cache-key identity.
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wunused-parameter"
 #include "core/image/FrameSequence.h"
-#pragma clang diagnostic pop
 #include "core/image/yuv/Y4mHeader.h"
 #include "core/image/yuv/YuvFile.h"
 #include "core/image/yuv/YuvFormat.h"
