@@ -45,6 +45,7 @@ add_library(mviewer_core SHARED
     core/image/ImageFormats.cpp
     core/image/FrameSequence.cpp
     core/image/yuv/YuvFormat.cpp
+    core/image/yuv/Y4mHeader.cpp
     core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
@@ -1230,6 +1231,13 @@ target_link_libraries(test_yuv_format PRIVATE mviewer_core)
 target_compile_features(test_yuv_format PRIVATE cxx_std_20)
 target_include_directories(test_yuv_format PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_format_tests COMMAND test_yuv_format)
+
+# ─── YUV4MPEG2 header parsing ──────────────────────────────────────────────────
+add_executable(test_yuv_y4m core/test_yuv_y4m.cpp)
+target_link_libraries(test_yuv_y4m PRIVATE mviewer_core)
+target_compile_features(test_yuv_y4m PRIVATE cxx_std_20)
+target_include_directories(test_yuv_y4m PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_y4m_tests COMMAND test_yuv_y4m)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert
