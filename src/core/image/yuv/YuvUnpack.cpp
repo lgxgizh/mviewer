@@ -114,9 +114,10 @@ void unpackPacked(const Format &f, const FrameLayout &l, const uint8_t *data,
         {
             const size_t base = static_cast<size_t>(c) * 4;
             const size_t ci = area(out.chromaWidth, y) + static_cast<size_t>(c);
-            ys[2 * c] = rd(row, base + o.y0);
-            if (2 * c + 1 < out.width)
-                ys[2 * c + 1] = rd(row, base + o.y1);
+            const size_t lx = static_cast<size_t>(c) * 2;
+            ys[lx] = rd(row, base + o.y0);
+            if (lx + 1 < static_cast<size_t>(out.width))
+                ys[lx + 1] = rd(row, base + o.y1);
             out.u[ci] = rd(row, base + o.u);
             out.v[ci] = rd(row, base + o.v);
         }
