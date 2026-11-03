@@ -259,7 +259,7 @@ void MainWindow::saveWorkspace()
     auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
     const uint64_t generation = ++m_persistenceGeneration;
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("Saving workspace in the background…"));
+    statusBar()->showMessage(tr("Saving workspace in the background…"));
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
@@ -474,7 +474,7 @@ void MainWindow::saveProject()
     auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
     const uint64_t generation = ++m_persistenceGeneration;
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("Saving project in the background…"));
+    statusBar()->showMessage(tr("Saving project in the background…"));
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
@@ -591,7 +591,7 @@ void MainWindow::openProjectFile(const QString &filePath)
     const uint64_t generation = ++m_restoreGeneration;
     auto result = std::make_shared<RestoreFileResult>();
     QPointer<MainWindow> guard(this);
-    statusBar()->showMessage(QStringLiteral("Opening project…"));
+    statusBar()->showMessage(tr("Opening project…"));
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [filePath, result](const TaskScheduler::TaskContext &ctx)
@@ -613,7 +613,7 @@ void MainWindow::openProjectFile(const QString &filePath)
                     {
                         QMessageBox::critical(window, tr("Open Project"), result->error);
                         window->statusBar()->showMessage(
-                            QStringLiteral("Failed to open project: %1").arg(result->error));
+                            tr("Failed to open project: %1").arg(result->error));
                         return; // the live session is untouched
                     }
                     window->restoreWorkspaceState(result->workspace, result->filePath);

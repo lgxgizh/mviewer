@@ -20,7 +20,7 @@ void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &pat
     else if (panel->thumbFailed(path))
     {
         painter->fillRect(thumbR, option.palette.color(QPalette::Mid));
-        painter->setPen(option.palette.color(QPalette::Text));
+        painter->setPen(thumb_card::itemTextColor(false, option.palette));
         QFont f = painter->font();
         f.setPointSize(qMax(7, f.pointSize() - 1));
         painter->setFont(f);

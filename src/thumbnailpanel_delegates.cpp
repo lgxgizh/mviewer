@@ -160,11 +160,11 @@ void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &pa
     else if (panel->thumbFailed(path))
     {
         painter->fillRect(thumbRect, blended(well, option.palette.color(QPalette::Mid), 35));
-        painter->setPen(option.palette.color(QPalette::Text));
+        painter->setPen(thumb_card::itemTextColor(false, option.palette));
         QFont f = painter->font();
         f.setPointSize(qMax(7, f.pointSize() - 1));
         painter->setFont(f);
-        painter->drawText(thumbRect, Qt::AlignCenter, QStringLiteral("Unable to Load"));
+        painter->drawText(thumbRect, Qt::AlignCenter, QObject::tr("Unable to Load"));
     }
     else
     {
@@ -212,8 +212,9 @@ void drawThumbFooter(QPainter *painter, const QRect &card, const QRect &thumbRec
         QFont infoFont = painter->font();
         infoFont.setPointSize(qMax(7, infoFont.pointSize() - 1));
         painter->setFont(infoFont);
-        // Secondary caption: text blended toward the base, readable in both themes.
-        painter->setPen(blended(option.palette.color(QPalette::Text),
+        // Secondary caption: contrast-safe ink blended toward Base. QSS can
+        // leave QPalette::Text white on a light Base, so mix from itemTextColor.
+        painter->setPen(blended(thumb_card::itemTextColor(selected, option.palette),
                                 option.palette.color(QPalette::Base), 100));
         const QString info = thumbInfoText(entry, thumb_delegate::fileSuffixFromPath(path));
         const QString infoText =
