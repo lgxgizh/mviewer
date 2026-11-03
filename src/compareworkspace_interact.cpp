@@ -8,7 +8,9 @@
 #include <QKeyEvent>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace
 {
@@ -32,15 +34,20 @@ void applyPanDelta(CompareEngine &engine, int pane, bool all, const QPoint &delt
     const int count = engine.imageCount();
     if (all)
     {
+        // setOffset() with Sync Drag on overwrites every cell offset with the
+        // shared one, so read the cells first and apply their deltas after it.
+        std::vector<Vec2> cells(static_cast<size_t>(std::max(count, 0)));
         for (int i = 0; i < count; ++i)
-        {
-            const double r = ratio(i);
-            const Vec2 o = engine.cellTransform(i).offset;
-            engine.setCellOffset(i, o.x + delta.x() / r, o.y + delta.y() / r);
-        }
+            cells[static_cast<size_t>(i)] = engine.cellTransform(i).offset;
         const double r0 = ratio(0);
         const Vec2 shared = engine.syncTransform().offset;
         engine.setOffset(shared.x + delta.x() / r0, shared.y + delta.y() / r0);
+        for (int i = 0; i < count; ++i)
+        {
+            const double r = ratio(i);
+            const Vec2 o = cells[static_cast<size_t>(i)];
+            engine.setCellOffset(i, o.x + delta.x() / r, o.y + delta.y() / r);
+        }
         return;
     }
     if (pane < 0 || pane >= count)
