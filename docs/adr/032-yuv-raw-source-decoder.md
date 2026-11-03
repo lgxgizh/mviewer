@@ -100,6 +100,9 @@ sizes), 64-bit frame sizes stored in `int`, and a y4m parser that ignores
     SSIM, plus a 6:1:1 and a 1:1:1 average) when their sizes, subsampling and
     bit depths match. Otherwise compare falls back to the existing RGB metrics
     and the UI states why.
+    Implemented (batch 8) as `core/analysis/YuvMetrics` plus a separate
+    "Compare YUV (PSNR / SSIM)" dialog for two selected files; the compare
+    workspace itself keeps its RGB metrics.
 
 ## Consequences
 

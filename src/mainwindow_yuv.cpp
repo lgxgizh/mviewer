@@ -1,5 +1,5 @@
 // ADR 032: raw .yuv parameter dialog entry point, load-failure hint and the
-// pixel-inspector Y/U/V readout.
+// pixel-inspector Y/U/V readout, and the two-file YUV PSNR / SSIM compare.
 // The dialog saves per-file parameters into YuvParamStore (and QSettings);
 // every cached decode and thumbnail of that file is then dropped so the next
 // load uses the new parameters.
@@ -14,11 +14,13 @@
 #include "previewpanel.h"
 #include "thumbnailpanel.h"
 #include "thumbnailprovider.h"
+#include "yuvcomparedialog.h"
 #include "yuvparamsdialog.h"
 
 #include <QFileInfo>
 #include <QStatusBar>
 #include <QString>
+#include <QStringList>
 
 #include <string>
 
@@ -71,4 +73,19 @@ QString MainWindow::yuvSampleText(const QString &path, int frameIndex, int x, in
     const mviewer::core::yuv::YuvSample sample =
         mviewer::core::yuv::YuvSampleProbe::instance().sample(utf8, frameIndex, x, y);
     return QString::fromStdString(mviewer::core::yuv::formatYuvSample(sample));
+}
+
+void MainWindow::onYuvToolRequested(const QStringList &paths)
+{
+    if (paths.size() == 1)
+        editYuvParams(paths.front());
+    else if (paths.size() == 2)
+        compareYuv(paths.at(0), paths.at(1));
+}
+
+void MainWindow::compareYuv(const QString &pathA, const QString &pathB)
+{
+    // Per-plane metrics on code values (ADR 032); the dialog explains when the
+    // pair is not comparable as YUV and points at the RGB compare view.
+    runYuvCompare(this, pathA, pathB);
 }

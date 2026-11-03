@@ -82,6 +82,21 @@
   `yuv_sample_tests` (420/422/444/gray mapping, 10-bit, out-of-range, cache
   reuse, truncated file, unknown parameters, coordinate fuzz).
 
+- **YUV batch 8 — YUV PSNR / SSIM compare (ADR 032):** select exactly two
+  `.yuv` / `.y4m` files in the thumbnail grid and choose right-click >
+  **Compare YUV (PSNR / SSIM)...**. A dialog compares every frame pair in the
+  background (cancellable) and lists Y / U / V PSNR and SSIM per frame plus the
+  6:1:1 averages, with a mean row; **Copy** puts the table on the clipboard as
+  tab-separated text. Metrics run on stored code values (peak `2^bits - 1`), so
+  files that differ only in layout (for example NV12 vs I420) or in matrix /
+  range still compare; a size, subsampling or bit-depth mismatch is explained
+  and points to the normal RGB compare view. New Qt-free
+  `core/analysis/YuvMetrics` (8×8 / step-4 SSIM windows, uint64 squared-error
+  sums). Tests: `yuv_metrics_tests` (golden PSNR values for 8/10/16-bit,
+  identical → inf, SSIM symmetry and range, odd sizes, gray, mismatches,
+  truncated / missing files, cancel, frame limits) and
+  `yuv_compare_dialog_tests`.
+
 ## [1.0.161] - 2026-11-03
 
 ### Release

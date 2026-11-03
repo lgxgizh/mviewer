@@ -404,8 +404,8 @@ QWidget *MainWindow::buildGalleryPanel()
     m_thumbnailPanel->setPaneSlot(SelectionModel::PaneSlot::Primary);
     connect(m_thumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
-    connect(m_thumbnailPanel, &ThumbnailPanel::yuvParamsRequested, this,
-            &MainWindow::editYuvParams);
+    connect(m_thumbnailPanel, &ThumbnailPanel::yuvToolRequested, this,
+            &MainWindow::onYuvToolRequested);
     m_thumbnailPanel->setHiddenFormatGroups(m_hiddenFormatGroups);
     wireTypeHiddenHint(m_thumbnailPanel);
     m_thumbnailPanel->setCommandStack(&m_cmdStack);

@@ -5,6 +5,8 @@
 
 #include "core/image/yuv/YuvFile.h"
 
+#include <algorithm>
+
 struct ThumbnailPanel::ContextMenuActions
 {
     QAction *aOpen = nullptr;
@@ -21,7 +23,9 @@ struct ThumbnailPanel::ContextMenuActions
     QAction *aCopyName = nullptr;
     QAction *aCompare = nullptr;
     QAction *aUsmCompare = nullptr;
-    QAction *aYuvParams = nullptr; // only for a single .yuv/.y4m selection
+    QAction *aYuvParams = nullptr;  // only for a single .yuv/.y4m selection
+    QAction *aYuvCompare = nullptr; // only for exactly two .yuv/.y4m files
+    QStringList yuvPaths;
     QAction *aAnalyze = nullptr;
     QAction *aAddTag = nullptr;
     QMenu *rmTagMenu = nullptr;
@@ -95,8 +99,15 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aCompare->setEnabled(compareCount >= 2 && compareCount <= 8);
     acts.aUsmCompare = menu.addAction(tr("USM Sharpen Compare..."));
     acts.aUsmCompare->setEnabled(selPaths.size() == 1);
-    if (selPaths.size() == 1 && mviewer::core::yuv::isYuvPath(selPaths.front().toStdString()))
-        acts.aYuvParams = menu.addAction(tr("YUV Parameters..."));
+    if (std::all_of(selPaths.begin(), selPaths.end(), [](const QString &p)
+                    { return mviewer::core::yuv::isYuvPath(p.toUtf8().toStdString()); }))
+    {
+        acts.yuvPaths = selPaths;
+        if (selPaths.size() == 1)
+            acts.aYuvParams = menu.addAction(tr("YUV Parameters..."));
+        else if (selPaths.size() == 2)
+            acts.aYuvCompare = menu.addAction(tr("Compare YUV (PSNR / SSIM)..."));
+    }
     acts.aAnalyze = menu.addAction(tr("Batch Analysis Export"));
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     acts.aAnalyze->setEnabled(!selPaths.isEmpty());
@@ -211,8 +222,8 @@ void ThumbnailPanel::handleContextMenuAction(const ContextMenuActions &actions, 
         requestCompare();
     else if (chosen == actions.aUsmCompare)
         emit usmCompareRequested(path);
-    else if (actions.aYuvParams && chosen == actions.aYuvParams)
-        emit yuvParamsRequested(path);
+    else if (chosen != nullptr && (chosen == actions.aYuvParams || chosen == actions.aYuvCompare))
+        emit yuvToolRequested(actions.yuvPaths);
     else if (chosen == actions.aAnalyze)
         batchAnalyzeExport();
     else if (chosen == actions.aAddTag)
