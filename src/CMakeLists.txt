@@ -47,6 +47,8 @@ add_library(mviewer_core SHARED
     core/image/yuv/YuvFormat.cpp
     core/image/yuv/Y4mHeader.cpp
     core/image/yuv/YuvParamInference.cpp
+    core/image/yuv/YuvUnpack.cpp
+    core/image/yuv/YuvToRgb.cpp
     core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
@@ -1245,6 +1247,18 @@ target_link_libraries(test_yuv_inference PRIVATE mviewer_core)
 target_compile_features(test_yuv_inference PRIVATE cxx_std_20)
 target_include_directories(test_yuv_inference PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_inference_tests COMMAND test_yuv_inference)
+
+add_executable(test_yuv_unpack core/test_yuv_unpack.cpp)
+target_link_libraries(test_yuv_unpack PRIVATE mviewer_core)
+target_compile_features(test_yuv_unpack PRIVATE cxx_std_20)
+target_include_directories(test_yuv_unpack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_unpack_tests COMMAND test_yuv_unpack)
+
+add_executable(test_yuv_to_rgb core/test_yuv_to_rgb.cpp)
+target_link_libraries(test_yuv_to_rgb PRIVATE mviewer_core)
+target_compile_features(test_yuv_to_rgb PRIVATE cxx_std_20)
+target_include_directories(test_yuv_to_rgb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_to_rgb_tests COMMAND test_yuv_to_rgb)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert

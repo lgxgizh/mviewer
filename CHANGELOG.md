@@ -29,6 +29,19 @@
   odd sizes, truncated frames, int64 overflow, 60+ file-name cases and fuzz
   loops. Not yet wired into the viewer.
 
+- **YUV batch 3 — unpacking and YUV→RGB conversion (ADR 032):** new Qt-free
+  `core/image/yuv/YuvUnpack` turns one raw frame (planar, NV12/NV21-style
+  semi-planar, YUYV/UYVY/YVYU packed; 8–16 bit LE/BE; P010-style MSB alignment)
+  into native-resolution sample planes, masking stray high bits and never
+  reading past the buffer. `core/image/yuv/YuvToRgb` converts them to 8-bit RGB
+  with BT.601 / BT.709 / BT.2020 matrices, limited or full range, in Q16 integer
+  math on 12-bit normalized samples; the scalar row converter is the bit-exact
+  reference for later SIMD paths. Chroma is upsampled by nearest (default) or
+  bilinear with left / center / top-left siting. `yuv_unpack_tests` and
+  `yuv_to_rgb_tests` cover golden colour bars at 8/10/16 bit, clamping,
+  cross-format equivalence (I420 = YV12 = NV12 = NV21, 4:2:2 planar = packed),
+  odd sizes, truncated frames and fuzz loops. Not yet wired into the viewer.
+
 ## [1.0.161] - 2026-11-03
 
 ### Release
