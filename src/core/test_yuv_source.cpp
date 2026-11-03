@@ -290,8 +290,7 @@ void testY4m()
 
     YuvPlanes planes;
     CHECK(readYuvFrame(info, 2, readerFor(file), planes, nullptr));
-    CHECK(!planes.y.empty());
-    CHECK(planes.y[0] == 3);
+    CHECK(!planes.y.empty() && planes.y[0] == 3);
 
     const std::vector<uint8_t> cut = buildY4m(jpeg, 3, true);
     const YuvSourceInfo trunc =
