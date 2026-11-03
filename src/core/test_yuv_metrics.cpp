@@ -311,11 +311,11 @@ static void testFiles(const std::filesystem::path &root)
 
     const auto missing = compareYuvFiles((dir / "missing_yuv420p.yuv").string(), pathA.string());
     CHECK(!missing.valid);
-    CHECK(missing.why.rfind("A: ", 0) == 0);
+    CHECK(missing.why.starts_with("A: "));
 
     const auto missingB = compareYuvFiles(pathA.string(), (dir / "no_b_yuv420p.yuv").string());
     CHECK(!missingB.valid);
-    CHECK(missingB.why.rfind("B: ", 0) == 0);
+    CHECK(missingB.why.starts_with("B: "));
 
     const auto same = compareYuvFiles(pathA.string(), pathC.string());
     CHECK(same.valid);
