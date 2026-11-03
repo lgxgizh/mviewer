@@ -4,6 +4,11 @@
 
 ### Added
 
+- **YUV viewing and compare (planned, ADR 032):** raw `.yuv` / `.y4m` support
+  is now in scope as a scoped exception to the format freeze. ADR 032 records
+  the clean-room rule, the decoder registration, the BT.709 limited-range
+  default and the supported pixel formats. Features land in follow-up entries.
+
 - **YUV batch 1 — format model (ADR 032):** new Qt-free
   `core/image/yuv/YuvFormat` describes raw YUV frames (planar, semi-planar and
   packed 4:2:2; 4:4:4 / 4:2:2 / 4:2:0 / 4:0:0; 8–16 bit, LE/BE, P010-style

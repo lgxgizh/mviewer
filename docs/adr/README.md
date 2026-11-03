@@ -11,6 +11,7 @@
 | [002](002-why-image-data-not-qimage.md) | Core layer uses `ImageData`, not `QImage` | Core must be Qt-free and support >8-bit / multi-plane formats |
 | [008](008-why-unified-image-frame.md) | A single `ImageFrame` runs through decode → cache → render | Eliminate cross-layer format conversion and copies |
 | [023](023-const-image-view.md) | Read-only pixels go through `ConstImageView` / `constView()` | Remove const `view()`; a const image no longer hands out a writable pointer |
+| [032](032-yuv-raw-source-decoder.md) | Raw YUV / Y4M viewing and per-plane compare, clean-room, one `YuvDecoder` entry in the default registry | The only scoped exception to the post-M22 format freeze; BT.709 limited is the default when unknown |
 
 ### Layering and dependencies
 
