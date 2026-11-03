@@ -86,6 +86,7 @@ add_library(mviewer_core SHARED
     core/analysis/ImageOverlay.cpp
     core/analysis/AnalysisEngine.cpp
     core/analysis/AnalysisEngine_metrics.cpp
+    core/analysis/YuvMetrics.cpp
     core/analysis/PixelInspector.cpp
     core/analysis/PixelInspector_adjust.cpp
     core/analysis/ExportReport.cpp
@@ -329,6 +330,7 @@ add_library(mviewer_ui STATIC
     preferencesdialog.cpp
     usmcomparedialog.cpp
     usmcomparedialog_load.cpp
+    yuvcomparedialog.cpp
     yuvparamsdialog.cpp
     yuvparamsettings.cpp
     Theme.cpp
@@ -1006,6 +1008,23 @@ target_include_directories(yuv_params_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME yuv_params_dialog_tests COMMAND yuv_params_dialog_tests)
 set_tests_properties(yuv_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
+# ADR 032: two-file YUV PSNR / SSIM compare dialog (worker thread, cancel, report).
+add_executable(yuv_compare_dialog_tests
+    test_yuv_compare_dialog.cpp
+)
+target_link_libraries(yuv_compare_dialog_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(yuv_compare_dialog_tests PRIVATE cxx_std_20)
+target_include_directories(yuv_compare_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_compare_dialog_tests COMMAND yuv_compare_dialog_tests)
+set_tests_properties(yuv_compare_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 30)
+
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
     test_rotate_selection.cpp
@@ -1308,6 +1327,13 @@ target_link_libraries(test_yuv_sample PRIVATE mviewer_core)
 target_compile_features(test_yuv_sample PRIVATE cxx_std_20)
 target_include_directories(test_yuv_sample PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_sample_tests COMMAND test_yuv_sample)
+
+# ADR 032: per-plane YUV PSNR / SSIM and sequence compare.
+add_executable(test_yuv_metrics core/test_yuv_metrics.cpp)
+target_link_libraries(test_yuv_metrics PRIVATE mviewer_core)
+target_compile_features(test_yuv_metrics PRIVATE cxx_std_20)
+target_include_directories(test_yuv_metrics PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_metrics_tests COMMAND test_yuv_metrics)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert

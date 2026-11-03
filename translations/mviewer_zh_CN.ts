@@ -7813,6 +7813,11 @@ Continue?</source>
         <source>YUV Parameters...</source>
         <translation>YUV 参数...</translation>
     </message>
+    <message>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="1"/>
+        <source>Compare YUV (PSNR / SSIM)...</source>
+        <translation>比较 YUV (PSNR / SSIM)...</translation>
+    </message>
 </context>
 <context>
     <name>UsmCompareDialog</name>
@@ -8124,6 +8129,114 @@ Continue?</source>
         <location filename="../src/yuvparamsdialog.cpp" line="1"/>
         <source>Y4M files carry their parameters in the file header.</source>
         <translation>Y4M 文件的参数保存在文件头中。</translation>
+    </message>
+</context>
+<context>
+    <name>YuvCompareDialog</name>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Frame</source>
+        <translation>帧</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Y PSNR</source>
+        <translation>Y PSNR</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>U PSNR</source>
+        <translation>U PSNR</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>V PSNR</source>
+        <translation>V PSNR</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>6:1:1 PSNR</source>
+        <translation>6:1:1 PSNR</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Y SSIM</source>
+        <translation>Y SSIM</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>U SSIM</source>
+        <translation>U SSIM</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>V SSIM</source>
+        <translation>V SSIM</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>6:1:1 SSIM</source>
+        <translation>6:1:1 SSIM</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Compare YUV</source>
+        <translation>比较 YUV</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>A: %1</source>
+        <translation>A：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>B: %1</source>
+        <translation>B：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Comparing...</source>
+        <translation>正在比较...</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Cancel</source>
+        <translation>取消</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Copy</source>
+        <translation>复制</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Cancelled.</source>
+        <translation>已取消。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Cannot compare as YUV: %1</source>
+        <translation>无法按 YUV 比较：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Use the normal compare view for an RGB comparison.</source>
+        <translation>请使用普通比较视图进行 RGB 比较。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>%1 frames compared (A has %2, B has %3)</source>
+        <translation>已比较 %1 帧（A 共 %2 帧，B 共 %3 帧）</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvcomparedialog.cpp" line="1"/>
+        <source>Mean</source>
+        <translation>平均</translation>
     </message>
 </context>
 </TS>
