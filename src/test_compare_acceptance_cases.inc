@@ -1896,6 +1896,171 @@ void testLocalZoomAcceptance(const QString &a, const QString &b)
     }
 }
 
+// ─── Local pan (Ctrl+drag) acceptance — LP-01..07 ─────────────────────────────
+// Left-drag `view` from `from` through `moves`; each move carries its own modifiers
+// so a test can press or release Ctrl mid-drag.
+void sendPaneDrag(QWidget *view, const QPoint &from,
+                  const QList<QPair<QPoint, Qt::KeyboardModifiers>> &moves,
+                  Qt::KeyboardModifiers pressMods)
+{
+    if (!view)
+        return;
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(from), view->mapToGlobal(from),
+                      Qt::LeftButton, Qt::LeftButton, pressMods);
+    QApplication::sendEvent(view, &press);
+    QPoint last = from;
+    Qt::KeyboardModifiers lastMods = pressMods;
+    for (const auto &step : moves)
+    {
+        QMouseEvent move(QEvent::MouseMove, QPointF(step.first), view->mapToGlobal(step.first),
+                         Qt::NoButton, Qt::LeftButton, step.second);
+        QApplication::sendEvent(view, &move);
+        last = step.first;
+        lastMods = step.second;
+    }
+    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(last), view->mapToGlobal(last),
+                        Qt::LeftButton, Qt::NoButton, lastMods);
+    QApplication::sendEvent(view, &release);
+}
+
+bool offsetMoved(const Vec2 &before, const Vec2 &after, double dx, double dy)
+{
+    return std::abs((after.x - before.x) - dx) < 1.0 && std::abs((after.y - before.y) - dy) < 1.0;
+}
+
+bool sameOffset(const Vec2 &a, const Vec2 &b)
+{
+    return std::abs(a.x - b.x) < 1e-9 && std::abs(a.y - b.y) < 1e-9;
+}
+
+void testLocalPanAcceptance(const QString &a, const QString &b)
+{
+    std::cout << "── Local pan (Ctrl+drag) LP-01..07 ──\n";
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImages({a, b});
+    dlg.resize(1100, 750);
+    dlg.show();
+    waitForCompareCount(ws, 2);
+    pump(100);
+
+    RawImageView *v0 = comparePaneView(ws, 0);
+    RawImageView *v1 = comparePaneView(ws, 1);
+    CHECK(v0 && v1, "local-pan: both panes exist");
+    if (!v0 || !v1)
+        return;
+    if (QCheckBox *z = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck")))
+        z->setChecked(true);
+    if (QCheckBox *d = ws->findChild<QCheckBox *>(QStringLiteral("syncDragCheck")))
+        d->setChecked(true);
+    tapCompareKey(ws, Qt::Key_F, Qt::NoModifier);
+    pump(60);
+    const auto cell = [ws](int i) { return ws->engine().cellTransform(i).offset; };
+    using Steps = QList<QPair<QPoint, Qt::KeyboardModifiers>>;
+
+    // LP-01: Sync Drag on, Ctrl+drag pane 0 moves pane 0 only (shared offset too).
+    {
+        const Vec2 o0 = cell(0), o1 = cell(1), shared = ws->engine().syncTransform().offset;
+        sendPaneDrag(v0, QPoint(80, 80), Steps{{QPoint(130, 110), Qt::ControlModifier}},
+                     Qt::ControlModifier);
+        pump(30);
+        CHECK(offsetMoved(o0, cell(0), 50.0, 30.0), "LP-01: Ctrl+drag moves pane 0");
+        CHECK(sameOffset(o1, cell(1)), "LP-01: Ctrl+drag leaves pane 1 with Sync Drag on");
+        CHECK(sameOffset(shared, ws->engine().syncTransform().offset),
+              "LP-01: Ctrl+drag leaves the shared offset");
+    }
+    // LP-02: plain drag with Sync Drag on still moves both by the same delta.
+    {
+        const Vec2 o0 = cell(0), o1 = cell(1);
+        sendPaneDrag(v0, QPoint(80, 80), Steps{{QPoint(60, 120), Qt::NoModifier}}, Qt::NoModifier);
+        pump(30);
+        CHECK(offsetMoved(o0, cell(0), -20.0, 40.0) && offsetMoved(o1, cell(1), -20.0, 40.0),
+              "LP-02: plain drag with Sync Drag on moves both panes");
+    }
+    // LP-03: Ctrl is read per move — pressing it mid-drag pans locally, releasing resyncs.
+    {
+        const Vec2 o0 = cell(0), o1 = cell(1);
+        sendPaneDrag(v0, QPoint(80, 80),
+                     Steps{{QPoint(90, 80), Qt::NoModifier},
+                           {QPoint(120, 80), Qt::ControlModifier},
+                           {QPoint(125, 80), Qt::NoModifier}},
+                     Qt::NoModifier);
+        pump(30);
+        CHECK(offsetMoved(o0, cell(0), 45.0, 0.0), "LP-03: pane 0 gets every move");
+        CHECK(offsetMoved(o1, cell(1), 15.0, 0.0), "LP-03: pane 1 skips only the Ctrl move");
+    }
+    // LP-04: Space over pane 0 shows pane 1 at its Ctrl+dragged position.
+    {
+        sendPaneDrag(v1, QPoint(100, 100), Steps{{QPoint(260, 170), Qt::ControlModifier}},
+                     Qt::ControlModifier);
+        pump(60);
+        const QPointF srcOff = v1->offset();
+        const QPointF ownOff = v0->offset();
+        CHECK(std::abs(srcOff.x() - ownOff.x()) > 60.0, "LP-04: panes now differ in offset");
+        pointAtComparePane(v0);
+        QKeyEvent press(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+        QApplication::sendEvent(ws, &press);
+        pump(40);
+        CHECK(v0->hasTransientDisplay(), "LP-04: Space installs transient on pane 0");
+        const QPointF held = v0->presentedOffset();
+        CHECK(std::abs(held.x() - srcOff.x()) < 3.0 && std::abs(held.y() - srcOff.y()) < 3.0,
+              "LP-04: held view uses pane 1's Ctrl+dragged offset");
+        QKeyEvent release(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier);
+        QApplication::sendEvent(ws, &release);
+        pump(40);
+        CHECK(!v0->hasTransientDisplay(), "LP-04: releasing Space clears transient");
+        CHECK(std::abs(v0->offset().x() - ownOff.x()) < 1e-6,
+              "LP-04: pane 0 keeps its own offset after Space");
+    }
+    // LP-05: X swap carries each pane's local offset with it.
+    {
+        const Vec2 o0 = cell(0), o1 = cell(1);
+        tapCompareKey(ws, Qt::Key_X, Qt::NoModifier);
+        pump(80);
+        CHECK(sameOffset(cell(0), o1) && sameOffset(cell(1), o0),
+              "LP-05: X swaps the per-pane offsets");
+        CHECK(std::abs(v0->offset().x() - o1.x) < 1e-6, "LP-05: pane 0 view shows swapped offset");
+        tapCompareKey(ws, Qt::Key_X, Qt::NoModifier);
+        pump(80);
+    }
+    // LP-06: Swipe canvas — Ctrl+drag right of the divider pans pane 1 only.
+    if (QCheckBox *swipe = findChk(ws, QStringLiteral("Swipe")))
+    {
+        swipe->setChecked(true);
+        pump(50);
+        QWidget *canvas = ws->findChild<QWidget *>(QStringLiteral("compareCanvas"));
+        CHECK(canvas != nullptr, "LP-06: compare canvas exists in Swipe");
+        if (canvas)
+        {
+            const Vec2 o0 = cell(0), o1 = cell(1);
+            const QPoint right(int(canvas->width() * 0.75), canvas->height() / 2);
+            sendPaneDrag(canvas, right, Steps{{right + QPoint(40, 20), Qt::ControlModifier}},
+                         Qt::ControlModifier);
+            pump(40);
+            CHECK(sameOffset(o0, cell(0)), "LP-06: Swipe Ctrl+drag leaves pane 0");
+            CHECK(!sameOffset(o1, cell(1)), "LP-06: Swipe Ctrl+drag pans pane 1");
+            const Vec2 p0 = cell(0), p1 = cell(1);
+            sendPaneDrag(canvas, right, Steps{{right + QPoint(-30, 0), Qt::NoModifier}},
+                         Qt::NoModifier);
+            pump(40);
+            CHECK(!sameOffset(p0, cell(0)) && !sameOffset(p1, cell(1)),
+                  "LP-06: Swipe plain drag still pans both");
+        }
+        swipe->setChecked(false);
+        pump(30);
+    }
+    // LP-07: F resets every local offset.
+    tapCompareKey(ws, Qt::Key_F, Qt::NoModifier);
+    pump(80);
+    CHECK(std::abs(cell(0).x) < 1e-9 && std::abs(cell(0).y) < 1e-9 && std::abs(cell(1).x) < 1e-9 &&
+              std::abs(cell(1).y) < 1e-9,
+          "LP-07: Fit resets the Ctrl+drag offsets");
+}
+
 void testUsmCompareDialogSpaceHold(const QDir &dir)
 {
     std::cout << "── USM Compare Dialog focus & Space key behavior ──\n";

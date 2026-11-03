@@ -707,7 +707,7 @@ void CompareWorkspace::refreshPanCoverage()
     if (!uncovered)
         return;
     m_panLodRefreshArmed = true;
-    const int pane = m_syncDrag ? -1 : m_dragIdx;
+    const int pane = (m_syncDrag && !m_dragLocalOnly) ? -1 : m_dragIdx;
     QPointer<CompareWorkspace> guard(this);
     QTimer::singleShot(100, this,
                        [guard, pane]()

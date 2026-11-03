@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Compare: Ctrl+drag pans one pane:** holding Ctrl while left-dragging moves
+  only the pane under the cursor, even with Sync Drag on (grid and the
+  Swipe / Overlay / Checkerboard canvas). It mirrors Ctrl+wheel local zoom: the
+  status bar shows "Pane A local pan (Ctrl+drag)", Ctrl is read on every move
+  so pressing or releasing it mid-drag switches live, Space / 1–8 peeks and X
+  swap keep the moved view, and F / 0 fit resets it.
+
 ## [1.0.160] - 2026-11-02
 
 ### Release

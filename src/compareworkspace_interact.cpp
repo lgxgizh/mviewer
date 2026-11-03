@@ -8,7 +8,9 @@
 #include <QKeyEvent>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <cmath>
+#include <vector>
 
 namespace
 {
@@ -21,7 +23,55 @@ int verticalWheelDelta(const QWheelEvent *event)
         return event->angleDelta().y();
     return event->pixelDelta().y();
 }
+
+// Pan by a screen delta. `all` adds the delta to every pane's own offset and to
+// the shared offset (L3: local Ctrl+wheel anchors survive a sync pan); otherwise
+// only `pane` moves and the shared offset stays put. `ratio(i)` converts screen
+// pixels into pane i's stored offset units (1.0 on the grid; canvas modes scale).
+template <typename Ratio>
+void applyPanDelta(CompareEngine &engine, int pane, bool all, const QPoint &delta, Ratio ratio)
+{
+    const int count = engine.imageCount();
+    if (all)
+    {
+        // setOffset() with Sync Drag on overwrites every cell offset with the
+        // shared one, so read the cells first and apply their deltas after it.
+        std::vector<Vec2> cells(static_cast<size_t>(std::max(count, 0)));
+        for (int i = 0; i < count; ++i)
+            cells[static_cast<size_t>(i)] = engine.cellTransform(i).offset;
+        const double r0 = ratio(0);
+        const Vec2 shared = engine.syncTransform().offset;
+        engine.setOffset(shared.x + delta.x() / r0, shared.y + delta.y() / r0);
+        for (int i = 0; i < count; ++i)
+        {
+            const double r = ratio(i);
+            const Vec2 o = cells[static_cast<size_t>(i)];
+            engine.setCellOffset(i, o.x + delta.x() / r, o.y + delta.y() / r);
+        }
+        return;
+    }
+    if (pane < 0 || pane >= count)
+        return;
+    const double r = ratio(pane);
+    const Vec2 o = engine.cellTransform(pane).offset;
+    engine.setCellOffset(pane, o.x + delta.x() / r, o.y + delta.y() / r);
+}
 } // namespace
+
+// Ctrl+drag pans only the pressed pane even with Sync Drag on (mirrors Ctrl+wheel
+// local zoom). Ctrl is read on every move, so pressing or releasing it mid-drag
+// switches live between local and synced panning. Returns true for a sync pan.
+bool CompareWorkspace::updateDragLocalOnly(const QMouseEvent *me)
+{
+    const bool localOnly = (me->modifiers() & Qt::ControlModifier) != 0;
+    if (localOnly && !m_dragLocalOnly && m_dragIdx >= 0)
+    {
+        const QChar tag = QChar('A' + (m_dragIdx % 26));
+        showCompareStatus(tr("Pane %1 local pan (Ctrl+drag)").arg(tag));
+    }
+    m_dragLocalOnly = localOnly;
+    return m_syncDrag && !localOnly;
+}
 
 bool CompareWorkspace::forwardFocusedCompareKey(QEvent *event)
 {
@@ -178,6 +228,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
             m_lastMouse = me->pos();
             m_dragStartPos = me->pos();
             m_dragIdx = idx;
+            m_dragLocalOnly = false;
             // Select the pressed pane immediately so rotate/flip resolve even when
             // a synthetic press/release pair fails to synthesize a "click".
             m_explicitEditIdx = idx;
@@ -204,24 +255,8 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
         {
             const QPoint delta = me->pos() - m_lastMouse;
             m_lastMouse = me->pos();
-            if (m_syncDrag)
-            {
-                // L3: add the screen delta to each pane's own offset so local
-                // Ctrl+wheel anchor differences survive a sync pan.
-                const int count = m_engine.imageCount();
-                for (int i = 0; i < count; ++i)
-                {
-                    const Vec2 o = m_engine.cellTransform(i).offset;
-                    m_engine.setCellOffset(i, o.x + delta.x(), o.y + delta.y());
-                }
-                const Vec2 shared = m_engine.syncTransform().offset;
-                m_engine.setOffset(shared.x + delta.x(), shared.y + delta.y());
-            }
-            else
-            {
-                const Vec2 oldOff = m_engine.cellTransform(m_dragIdx).offset;
-                m_engine.setCellOffset(m_dragIdx, oldOff.x + delta.x(), oldOff.y + delta.y());
-            }
+            applyPanDelta(m_engine, m_dragIdx, updateDragLocalOnly(me), delta,
+                          [](int) { return 1.0; });
             update();
             positionROIHud();
             refreshPanCoverage();
@@ -334,6 +369,7 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
         m_lastMouse = me->pos();
         m_dragStartPos = me->pos();
         m_dragIdx = canvasRefCellAt(me->pos());
+        m_dragLocalOnly = false;
     }
     return true;
 }
@@ -382,26 +418,8 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
     {
         const QPoint delta = me->pos() - m_lastMouse;
         m_lastMouse = me->pos();
-        if (m_syncDrag)
-        {
-            const int count = m_engine.imageCount();
-            for (int i = 0; i < count; ++i)
-            {
-                const double r = canvasOffsetRatio(i);
-                const Vec2 o = m_engine.cellTransform(i).offset;
-                m_engine.setCellOffset(i, o.x + delta.x() / r, o.y + delta.y() / r);
-            }
-            const double r0 = canvasOffsetRatio(0);
-            const Vec2 shared = m_engine.syncTransform().offset;
-            m_engine.setOffset(shared.x + delta.x() / r0, shared.y + delta.y() / r0);
-        }
-        else
-        {
-            const double r = canvasOffsetRatio(m_dragIdx);
-            const Vec2 oldOffset = m_engine.cellTransform(m_dragIdx).offset;
-            m_engine.setCellOffset(m_dragIdx, oldOffset.x + delta.x() / r,
-                                   oldOffset.y + delta.y() / r);
-        }
+        applyPanDelta(m_engine, m_dragIdx, updateDragLocalOnly(me), delta,
+                      [this](int i) { return canvasOffsetRatio(i); });
         if (m_compareCanvas)
             m_compareCanvas->update();
         else

@@ -321,7 +321,7 @@ class CompareWorkspace : public QWidget
     QStackedLayout *buildCanvasPage();
     QList<QLabel *> m_cellLabels;
     QList<RawImageView *> m_cellViews;
-    bool m_dragging = false;
+    bool m_dragging = false, m_dragLocalOnly = false; // m_dragLocalOnly: Ctrl+drag pane pan
     QPoint m_lastMouse;
     QPoint m_dragStartPos;
     int m_dragIdx = -1;
@@ -386,7 +386,6 @@ class CompareWorkspace : public QWidget
     void reassertTemporaryDisplay(); // re-hold after setImage() dropped it
     void syncEngineBlink();
     bool isSplitOrSwipe() const;
-
     void updateCanvasModeVisibility();
     void paintCompareCanvas();
     QRect canvasRect() const;
@@ -396,6 +395,7 @@ class CompareWorkspace : public QWidget
     bool handleCanvasPress(QEvent *event);
     bool handleCanvasDoubleClick(QEvent *event);
     bool handleCanvasMove(QEvent *event);
+    bool updateDragLocalOnly(const QMouseEvent *me); // true: sync pan; Ctrl: this pane only
     bool handleCanvasRelease(QEvent *event);
     bool handleCanvasLeave(QEvent *event);
     int canvasRefCellAt(const QPoint &pos) const;
