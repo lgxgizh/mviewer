@@ -122,16 +122,6 @@ size_t readAt(const std::shared_ptr<std::ifstream> &file, int64_t offset, uint8_
     }
     catch (...)
     {
-        if (file)
-        {
-            try
-            {
-                file->clear();
-            }
-            catch (...)
-            {
-            }
-        }
         return 0;
     }
 }
