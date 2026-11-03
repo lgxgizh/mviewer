@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.161] - 2026-11-03
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.161**
+  (Compare Ctrl+drag local pan #291; light-theme failed-thumb / footer caption
+  contrast and session status i18n #290; Nightly `mviewer_bench`-only quality
+  gate #289).
+
 ### Added
 
 - **YUV viewing and compare (planned, ADR 032):** raw `.yuv` / `.y4m` support
@@ -24,7 +33,24 @@
   Swipe / Overlay / Checkerboard canvas). It mirrors Ctrl+wheel local zoom: the
   status bar shows "Pane A local pan (Ctrl+drag)", Ctrl is read on every move
   so pressing or releasing it mid-drag switches live, Space / 1–8 peeks and X
-  swap keep the moved view, and F / 0 fit resets it.
+  swap keep the moved view, and F / 0 fit resets it (#291).
+
+### Fixed
+
+- **Browse failed-thumb and footer caption contrast in light theme:** failed-thumb
+  labels and the rich thumbnail footer caption no longer use a QSS-polluted
+  `QPalette::Text` (often white on light Base). They take ink from
+  `thumb_card::itemTextColor` so "Unable to Load" and the secondary caption stay
+  readable; selected accent cards keep a readable blend (#290).
+- **Session status strings are translatable:** saving workspace/project, opening
+  a project, and the open-project failure message go through `tr()` (#290).
+
+### Changed
+
+- **Nightly quality regression uses `mviewer_bench.exe` only:** the legacy
+  `benchmark.exe` ignores `--enforce` / `--results` and always exits 0; picking
+  it first false-greened the gate and left Publish health without
+  `benchmark_report.json` (#289).
 
 ## [1.0.160] - 2026-11-02
 
