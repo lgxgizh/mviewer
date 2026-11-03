@@ -550,6 +550,8 @@ void MainWindow::wireSecondaryBrowseHostSignals()
             [this](const QStringList &images) { openCompare(images); });
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::usmCompareRequested, this,
             [this](const QString &path) { openUsmCompare(path); });
+    connect(m_secondaryThumbnailPanel, &ThumbnailPanel::yuvParamsRequested, this,
+            &MainWindow::editYuvParams);
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::filesDropped, this,
             &MainWindow::handleSecondaryDroppedPaths);
     connect(m_secondaryThumbnailPanel, &ThumbnailPanel::pathsRemoved, this,

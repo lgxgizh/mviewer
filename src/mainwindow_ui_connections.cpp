@@ -444,6 +444,8 @@ void MainWindow::connectMenuSignals()
     connect(m_imageViewer, &ImageViewer::loadFailed, this,
             [this](const QString &path)
             {
+                if (showYuvLoadHint(path))
+                    return;
                 statusBar()->showMessage(
                     tr("Unable to load image: %1").arg(QFileInfo(path).fileName()), 5000);
             });

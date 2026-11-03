@@ -3949,6 +3949,11 @@ or double-click a thumbnail to view</source>
         <source>ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9</source>
         <translation>ROI [%1,%2,%3,%4]：亮度=%5，V=%6，R=%7，G=%8，B=%9</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="1"/>
+        <source>YUV Parameters...</source>
+        <translation>YUV 参数...</translation>
+    </message>
 </context>
 <context>
     <name>Language</name>
@@ -6011,6 +6016,16 @@ Build: %2</source>
         <source>Both panes show the same directory</source>
         <translation>两栏是同一目录</translation>
     </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>YUV parameters updated: %1</source>
+        <translation>YUV 参数已更新：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>Cannot show %1: set its size and pixel format with right-click &gt; YUV Parameters...</source>
+        <translation>无法显示 %1：请通过右键 &gt; YUV 参数... 设置其尺寸和像素格式</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>
@@ -7788,6 +7803,11 @@ Continue?</source>
         <source>Show these types</source>
         <translation>显示这些类型</translation>
     </message>
+    <message>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="1"/>
+        <source>YUV Parameters...</source>
+        <translation>YUV 参数...</translation>
+    </message>
 </context>
 <context>
     <name>UsmCompareDialog</name>
@@ -7996,6 +8016,109 @@ Continue?</source>
         <location filename="../src/usmcomparedialog.cpp" line="487"/>
         <source>Images (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;All Files (*)</source>
         <translation>图片 (*.png *.jpg *.jpeg *.webp *.bmp *.tif *.tiff);;所有文件 (*)</translation>
+    </message>
+</context>
+<context>
+    <name>YuvParamsDialog</name>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>YUV Parameters</source>
+        <translation>YUV 参数</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>YUV Parameters - %1</source>
+        <translation>YUV 参数 - %1</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Custom</source>
+        <translation>自定义</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Size preset:</source>
+        <translation>尺寸预设：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Width:</source>
+        <translation>宽度：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Height:</source>
+        <translation>高度：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Pixel format:</source>
+        <translation>像素格式：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>BT.601</source>
+        <translation>BT.601</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>BT.709</source>
+        <translation>BT.709</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>BT.2020</source>
+        <translation>BT.2020</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Matrix:</source>
+        <translation>矩阵：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Limited (TV)</source>
+        <translation>有限范围 (TV)</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Full (PC)</source>
+        <translation>全范围 (PC)</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Range:</source>
+        <translation>范围：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Forget Saved</source>
+        <translation>清除已保存</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Invalid parameters: %1</source>
+        <translation>参数无效：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Frame: %1 bytes, frames: %2, trailing: %3 bytes</source>
+        <translation>每帧：%1 字节，帧数：%2，剩余：%3 字节</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>The file is smaller than one frame.</source>
+        <translation>文件小于一帧。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Cannot open %1.</source>
+        <translation>无法打开 %1。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Y4M files carry their parameters in the file header.</source>
+        <translation>Y4M 文件的参数保存在文件头中。</translation>
     </message>
 </context>
 </TS>

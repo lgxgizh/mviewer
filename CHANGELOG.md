@@ -60,6 +60,18 @@
   playback yet). Saved parameters are part of the cache key (`|yuv=<format>`),
   so changing them never serves a stale decode. Tests: `yuv_sequence_tests`
   (probe, every frame, out-of-range index, trailing bytes, cache-key changes).
+- **YUV batch 6 — parameter dialog (ADR 032):** right-click a raw `.yuv` in
+  the viewer or gallery and choose **YUV Parameters...** to set width, height,
+  pixel format (all 58 canonical formats), matrix (BT.601 / 709 / 2020) and
+  range. Size presets from file-name / file-size inference are offered, and a
+  live summary shows the frame size, frame count and trailing bytes; OK is
+  disabled until at least one frame fits. Parameters are saved per file in
+  settings (up to 256 files; **Forget Saved** clears one), and saving refreshes
+  the thumbnail, preview, metadata and viewer. A `.yuv` that cannot be decoded
+  now shows a status-bar hint pointing at the dialog. Y4M files keep their
+  header parameters. zh_CN translations added. Tests: `yuv_params_dialog_tests`
+  (summary, size presets, settings round trip and garbage lines) and
+  `canonicalPixFmtNames()` in `yuv_format_tests`.
 
 ## [1.0.161] - 2026-11-03
 

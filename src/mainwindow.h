@@ -373,6 +373,9 @@ class MainWindow : public QMainWindow
     void applyColorManagementPreference();
     void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
     void openUsmCompare(const QString &path = {});
+    // ADR 032 (mainwindow_yuv.cpp): raw .yuv parameter dialog and load-failure hint.
+    void editYuvParams(const QString &path);
+    bool showYuvLoadHint(const QString &path);
     void toggleFocusBrowse();
 
     void keyPressEvent(QKeyEvent *event) override;

@@ -208,6 +208,7 @@ add_library(mviewer_ui STATIC
     mainwindow_ui_chrome.cpp
     mainwindow_ui_menus.cpp
     mainwindow_filetransform.cpp
+    mainwindow_yuv.cpp
     mainwindow_ui_connections.cpp
     mainwindow_ui_connections_browse.cpp
     mainwindow_commands.cpp
@@ -327,6 +328,8 @@ add_library(mviewer_ui STATIC
     preferencesdialog.cpp
     usmcomparedialog.cpp
     usmcomparedialog_load.cpp
+    yuvparamsdialog.cpp
+    yuvparamsettings.cpp
     Theme.cpp
     platform/WindowChrome.cpp
     Language.cpp
@@ -984,6 +987,23 @@ target_compile_features(usm_dialog_tests PRIVATE cxx_std_20)
 target_include_directories(usm_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME usm_dialog_tests COMMAND usm_dialog_tests)
 set_tests_properties(usm_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
+# ADR 032: YUV parameter dialog summary and QSettings persistence.
+add_executable(yuv_params_dialog_tests
+    test_yuv_params_dialog.cpp
+)
+target_link_libraries(yuv_params_dialog_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(yuv_params_dialog_tests PRIVATE cxx_std_20)
+target_include_directories(yuv_params_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_params_dialog_tests COMMAND yuv_params_dialog_tests)
+set_tests_properties(yuv_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
