@@ -124,6 +124,18 @@ jobs:
     name: ASan / LSan (Linux GCC)
     runs-on: ubuntu-latest
     steps:
+      - name: Free runner disk space
+        # ~1250 ASan+UBSan Debug targets each statically link libmviewer_ui.a;
+        # Nightly 41702768688 died in the link step with "No space left on
+        # device" (30 MB free). Drop preinstalled toolchains this job never
+        # uses (.NET, Android SDK, GHC, CodeQL, Swift) and cached docker images.
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/share/swift || true
+          sudo docker image prune --all --force > /dev/null 2>&1 || true
+          df -h /
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -153,12 +165,17 @@ jobs:
           cmake -B build_asan_linux -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g1" \
+            -DCMAKE_CXX_FLAGS_DEBUG="-g1" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
             -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
 
       - name: Build (ASan)
-        run: cmake --build build_asan_linux -j 4
+        # -g1 (line tables only) keeps file:line in sanitizer stacks while
+        # cutting per-binary debug info several-fold; full -g ran the disk out.
+        run: |
+          cmake --build build_asan_linux -j 4
+          df -h /
 
       - name: Generate testdata fixtures
         run: |
