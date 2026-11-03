@@ -407,8 +407,13 @@ jobs:
       - name: Benchmark regression vs baseline (alert on >10%)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
-          $b = Get-ChildItem build_msvc -Recurse -Include mviewer_bench.exe,benchmark.exe | Select-Object -First 1
-          if (-not $b) { Write-Host "::error:: benchmark binary not found"; exit 1 }
+          # Prefer mviewer_bench only. Legacy benchmark.exe (benchmark_main.cpp)
+          # ignores --enforce/--regression/--results and always exits 0, so a
+          # filesystem-order First-1 pick both false-greens the regression gate
+          # and skips benchmark_report.json (Publish health then fails).
+          $b = Get-ChildItem build_msvc -Recurse -Filter mviewer_bench.exe | Select-Object -First 1
+          if (-not $b) { Write-Host "::error:: mviewer_bench.exe not found under build_msvc"; exit 1 }
+          Write-Host "Using $($b.FullName)"
           # --enforce loads the committed baseline and enables the ±10% regression
           # diff (main.cpp: requires --enforce AND --regression to diff baseline).
           # Nightly compares against the committed CI-profile baseline. The PR
