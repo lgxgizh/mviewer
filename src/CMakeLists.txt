@@ -86,6 +86,7 @@ add_library(mviewer_core SHARED
     core/analysis/ImageOverlay.cpp
     core/analysis/AnalysisEngine.cpp
     core/analysis/AnalysisEngine_metrics.cpp
+    core/analysis/YuvMetrics.cpp
     core/analysis/PixelInspector.cpp
     core/analysis/PixelInspector_adjust.cpp
     core/analysis/ExportReport.cpp
@@ -1308,6 +1309,13 @@ target_link_libraries(test_yuv_sample PRIVATE mviewer_core)
 target_compile_features(test_yuv_sample PRIVATE cxx_std_20)
 target_include_directories(test_yuv_sample PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_sample_tests COMMAND test_yuv_sample)
+
+# ADR 032: per-plane YUV PSNR / SSIM and sequence compare.
+add_executable(test_yuv_metrics core/test_yuv_metrics.cpp)
+target_link_libraries(test_yuv_metrics PRIVATE mviewer_core)
+target_compile_features(test_yuv_metrics PRIVATE cxx_std_20)
+target_include_directories(test_yuv_metrics PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_metrics_tests COMMAND test_yuv_metrics)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert
