@@ -51,6 +51,7 @@ add_library(mviewer_core SHARED
     core/image/yuv/YuvParamInference.cpp
     core/image/yuv/YuvUnpack.cpp
     core/image/yuv/YuvToRgb.cpp
+    core/image/yuv/YuvToRgb_simd.cpp
     core/image/yuv/YuvSource.cpp
     core/image/yuv/YuvFile.cpp
     core/image/yuv/YuvSampleProbe.cpp
@@ -1303,6 +1304,18 @@ target_link_libraries(test_yuv_to_rgb PRIVATE mviewer_core)
 target_compile_features(test_yuv_to_rgb PRIVATE cxx_std_20)
 target_include_directories(test_yuv_to_rgb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_to_rgb_tests COMMAND test_yuv_to_rgb)
+
+add_executable(test_yuv_simd core/test_yuv_simd.cpp)
+target_link_libraries(test_yuv_simd PRIVATE mviewer_core)
+target_compile_features(test_yuv_simd PRIVATE cxx_std_20)
+target_include_directories(test_yuv_simd PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_simd_tests COMMAND test_yuv_simd)
+
+# Benchmark only (not registered with CTest): bench_yuv_to_rgb prints Mpx/s per converter.
+add_executable(bench_yuv_to_rgb core/bench_yuv_to_rgb.cpp)
+target_link_libraries(bench_yuv_to_rgb PRIVATE mviewer_core)
+target_compile_features(bench_yuv_to_rgb PRIVATE cxx_std_20)
+target_include_directories(bench_yuv_to_rgb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_yuv_source core/test_yuv_source.cpp)
 target_link_libraries(test_yuv_source PRIVATE mviewer_core)
