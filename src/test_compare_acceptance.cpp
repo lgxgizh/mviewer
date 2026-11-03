@@ -36,7 +36,9 @@
 #include <QImage>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QList>
 #include <QMouseEvent>
+#include <QPair>
 #include <QPointer>
 #include <QPushButton>
 #include <QSlider>
@@ -256,6 +258,7 @@ int main(int argc, char **argv)
     testComparePresetSanitize();
     testPlainDigitsReservedForPreview(dir);
     testLocalZoomAcceptance(paths8[0], paths8[1]);
+    testLocalPanAcceptance(paths8[0], paths8[1]);
     testUsmCompareDialogSpaceHold(dir);
     testTemporarySwitchOverlaysFollowImage(dir);
     testUsmTitlesFollowHold(dir);

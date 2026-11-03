@@ -1318,6 +1318,11 @@
         <translation>窗格 %1 局部缩放: %2% (Ctrl+滚轮)</translation>
     </message>
     <message>
+        <location filename="../src/compareworkspace_interact.cpp" line="63"/>
+        <source>Pane %1 local pan (Ctrl+drag)</source>
+        <translation>窗格 %1 单独平移 (Ctrl+拖动)</translation>
+    </message>
+    <message>
         <location filename="../src/compareworkspace.cpp" line="425"/>
         <source>Loading %1 images…</source>
         <translation>正在加载 %1 张图片…</translation>

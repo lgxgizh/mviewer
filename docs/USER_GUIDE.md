@@ -62,6 +62,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
    - Hold **1–8** to temporarily preview image N in the pane under the cursor; release to restore. Without a pane under the cursor the focused pane is used, otherwise the first pane. Out-of-range digits only show a hint. Layout presets are **Ctrl+2 / Ctrl+4 / Ctrl+8**. **Ctrl+1** is 100% actual size, **0 / Ctrl+0** fits the window.
 6. **Synchronization**:
    - **Z** / **D**: toggle sync zoom / sync pan.
+   - **Ctrl+wheel** / **Ctrl+drag**: zoom / pan only the pane under the cursor, even with sync on. Ctrl is read while you drag, so pressing or releasing it mid-drag switches between a local and a synced pan. Space / 1–8 peeks and **X** keep that pane's own view; **F** / **0** fit resets it.
    - "Fit window (F)" on the tool row (next to Analyze and Export Report; shortcut **F** / **Ctrl+0**): with "Uniform Pixel Scale" checked, every pane fits at one shared scale; unchecked, each pane fits its own resolution so images with the same field of view appear at a similar size. Peek, flicker or image swaps keep that on-screen size.
    - **R**: synchronized crosshair.
    - **L**: pixel link markers (compare the RGB and Δ of corresponding pixels across images).
@@ -195,6 +196,7 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 | Key | Action |
 |---|---|
 | **Z** / **D** | Toggle sync zoom / sync pan |
+| **Ctrl+wheel** / **Ctrl+drag** | Zoom / pan only the pane under the cursor (even with sync on) |
 | **Space** (hold) | Show the other side under the cursor; release to restore |
 | **B** / **S** / **W** / **O** / **K** | Flicker / Split / Swipe / Overlay / Checkerboard |
 | **H** | Difference highlight and heatmap |

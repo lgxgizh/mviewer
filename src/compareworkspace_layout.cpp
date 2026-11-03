@@ -136,10 +136,8 @@ void CompareWorkspace::reapplyPinnedCellTransforms(bool clearPins)
         if (!view)
             continue;
         const auto cell = m_engine.cellTransform(index);
-        const QPointF offset = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
-                                                    m_engine.syncTransform().offset.y)
-                                          : QPointF(cell.offset.x, cell.offset.y);
-        view->setTransform(cell.scale, offset);
+        // L2: per-cell offset, so a Ctrl+drag / Ctrl+wheel local view survives X.
+        view->setTransform(cell.scale, QPointF(cell.offset.x, cell.offset.y));
     }
     if (clearPins)
         m_session->reapplyCellTransform.clear();
