@@ -4,6 +4,11 @@
 
 ### Added
 
+- **YUV viewing and compare (planned, ADR 032):** raw `.yuv` / `.y4m` support
+  is now in scope as a scoped exception to the format freeze. ADR 032 records
+  the clean-room rule, the decoder registration, the BT.709 limited-range
+  default and the supported pixel formats. Features land in follow-up entries.
+
 - **Compare: Ctrl+drag pans one pane:** holding Ctrl while left-dragging moves
   only the pane under the cursor, even with Sync Drag on (grid and the
   Swipe / Overlay / Checkerboard canvas). It mirrors Ctrl+wheel local zoom: the
