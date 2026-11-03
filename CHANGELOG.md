@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Added
+
+- **YUV batch 1 — format model (ADR 032):** new Qt-free
+  `core/image/yuv/YuvFormat` describes raw YUV frames (planar, semi-planar and
+  packed 4:2:2; 4:4:4 / 4:2:2 / 4:2:0 / 4:0:0; 8–16 bit, LE/BE, P010-style
+  MSB alignment). It computes overflow-checked plane offsets and frame sizes
+  (odd sizes round chroma up), maps FFmpeg-style pixel-format names and common
+  aliases (I420, YV12, NV12, P010, YUY2, UYVY, Y800, …), and round-trips a
+  `WxH:pixfmt:matrix:range:siting` text form. `yuv_format_tests` covers
+  geometry, rejects, int64 overflow and a parser fuzz loop. Not yet wired into
+  the viewer.
+
+- **YUV batch 2 — Y4M headers and parameter inference (ADR 032):** new
+  Qt-free `core/image/yuv/Y4mHeader` parses the YUV4MPEG2 stream header
+  (`W`/`H`/`F`/`A`/`I`/`C`/`X` tags, including `XCOLORRANGE`) and per-frame
+  `FRAME` headers, and indexes frame offsets without loading pixel data
+  (a truncated last frame is skipped, never read past the end). New
+  `core/image/yuv/YuvParamInference` guesses raw `.yuv` parameters from the file
+  name (`1920x1080`, `1280X720`, `cif`, `1080p`, `4k`, …; pixel-format, bit-depth,
+  subsampling, matrix and range tokens), then the extension (`.nv12`, `.p010`,
+  `.uyvy`, …), then the parent folder name, and finally the file size when
+  exactly one common size divides it; ambiguous sizes are listed for the
+  parameter dialog instead of guessed. Unknown matrix / range default to BT.709
+  limited. `yuv_y4m_tests` and `yuv_inference_tests` cover malformed headers,
+  odd sizes, truncated frames, int64 overflow, 60+ file-name cases and fuzz
+  loops. Not yet wired into the viewer.
+
 ## [1.0.161] - 2026-11-03
 
 ### Release
@@ -17,16 +44,6 @@
   is now in scope as a scoped exception to the format freeze. ADR 032 records
   the clean-room rule, the decoder registration, the BT.709 limited-range
   default and the supported pixel formats. Features land in follow-up entries.
-
-- **YUV batch 1 — format model (ADR 032):** new Qt-free
-  `core/image/yuv/YuvFormat` describes raw YUV frames (planar, semi-planar and
-  packed 4:2:2; 4:4:4 / 4:2:2 / 4:2:0 / 4:0:0; 8–16 bit, LE/BE, P010-style
-  MSB alignment). It computes overflow-checked plane offsets and frame sizes
-  (odd sizes round chroma up), maps FFmpeg-style pixel-format names and common
-  aliases (I420, YV12, NV12, P010, YUY2, UYVY, Y800, …), and round-trips a
-  `WxH:pixfmt:matrix:range:siting` text form. `yuv_format_tests` covers
-  geometry, rejects, int64 overflow and a parser fuzz loop. Not yet wired into
-  the viewer.
 
 - **Compare: Ctrl+drag pans one pane:** holding Ctrl while left-dragging moves
   only the pane under the cursor, even with Sync Drag on (grid and the
