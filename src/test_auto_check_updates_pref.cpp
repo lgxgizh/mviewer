@@ -173,6 +173,15 @@ int main(int argc, char **argv)
         const QColor selected = thumb_card::itemTextColor(true, polluted);
         check(selected.lightness() > 200, "selected list ink stays light on accent");
 
+        // Secondary caption: same channel mix as drawThumbFooter (alpha 100/255).
+        const QColor captionBase = polluted.color(QPalette::Base);
+        const int mix = 100;
+        QColor caption = unselected;
+        caption.setRed((unselected.red() * (255 - mix) + captionBase.red() * mix) / 255);
+        caption.setGreen((unselected.green() * (255 - mix) + captionBase.green() * mix) / 255);
+        caption.setBlue((unselected.blue() * (255 - mix) + captionBase.blue() * mix) / 255);
+        check(caption.lightness() < 200, "secondary caption blend stays readable on light Base");
+
         QImage img(160, 24, QImage::Format_ARGB32_Premultiplied);
         img.fill(polluted.color(QPalette::Base));
         {
