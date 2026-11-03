@@ -44,6 +44,7 @@ add_library(mviewer_core SHARED
     core/image/Encoder.cpp
     core/image/ImageFormats.cpp
     core/image/FrameSequence.cpp
+    core/image/yuv/YuvFormat.cpp
     core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
@@ -1222,6 +1223,13 @@ target_compile_features(test_pixelinspector PRIVATE cxx_std_20)
 target_include_directories(test_pixelinspector PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(NAME pixelinspector_tests COMMAND test_pixelinspector)
+
+# ─── YUV format geometry and pixel-format names ───────────────────────────────
+add_executable(test_yuv_format core/test_yuv_format.cpp)
+target_link_libraries(test_yuv_format PRIVATE mviewer_core)
+target_compile_features(test_yuv_format PRIVATE cxx_std_20)
+target_include_directories(test_yuv_format PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_format_tests COMMAND test_yuv_format)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert

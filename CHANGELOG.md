@@ -4,6 +4,16 @@
 
 ### Added
 
+- **YUV batch 1 — format model (ADR 032):** new Qt-free
+  `core/image/yuv/YuvFormat` describes raw YUV frames (planar, semi-planar and
+  packed 4:2:2; 4:4:4 / 4:2:2 / 4:2:0 / 4:0:0; 8–16 bit, LE/BE, P010-style
+  MSB alignment). It computes overflow-checked plane offsets and frame sizes
+  (odd sizes round chroma up), maps FFmpeg-style pixel-format names and common
+  aliases (I420, YV12, NV12, P010, YUY2, UYVY, Y800, …), and round-trips a
+  `WxH:pixfmt:matrix:range:siting` text form. `yuv_format_tests` covers
+  geometry, rejects, int64 overflow and a parser fuzz loop. Not yet wired into
+  the viewer.
+
 - **Compare: Ctrl+drag pans one pane:** holding Ctrl while left-dragging moves
   only the pane under the cursor, even with Sync Drag on (grid and the
   Swipe / Overlay / Checkerboard canvas). It mirrors Ctrl+wheel local zoom: the
