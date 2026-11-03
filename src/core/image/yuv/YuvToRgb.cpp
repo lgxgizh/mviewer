@@ -103,11 +103,9 @@ void chromaSourceRow(const ChromaRowContext &ctx, const std::vector<uint16_t> &p
         return;
     }
     const int base = std::min(y >> 1, ch - 1);
-    int other = base;
-    if (ctx.cositedY)
-        other = (y & 1) == 0 ? base : std::min(base + 1, ch - 1);
-    else
-        other = (y & 1) == 0 ? std::max(base - 1, 0) : std::min(base + 1, ch - 1);
+    const int next = std::min(base + 1, ch - 1);
+    const int prev = ctx.cositedY ? base : std::max(base - 1, 0);
+    const int other = (y & 1) == 0 ? prev : next;
     const uint16_t *ra = rowPtr(base);
     const uint16_t *rb = rowPtr(other);
     for (int x = 0; x < cw; ++x)
