@@ -149,9 +149,8 @@ bool openYuvFile(const std::string &path, OpenedYuvFile &out)
         std::string fileName;
         std::string folderName;
         splitPathNames(path, fileName, folderName);
-        const std::shared_ptr<std::ifstream> opened = file;
-        out.read = [opened](int64_t offset, std::uint8_t *buf, std::size_t n)
-        { return readAt(opened, offset, buf, n); };
+        out.read = [file](int64_t offset, std::uint8_t *buf, std::size_t n)
+        { return readAt(file, offset, buf, n); };
         const auto saved = YuvParamStore::instance().get(yuvParamKey(path));
         out.info = resolveYuvSource(fileName, folderName, out.fileSize, out.read, saved);
         return true;
