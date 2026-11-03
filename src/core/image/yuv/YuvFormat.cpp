@@ -287,7 +287,7 @@ std::optional<FrameLayout> reject(std::string *why, const char *reason)
     return std::nullopt;
 }
 
-std::optional<FrameLayout> accept(std::string *why, FrameLayout layout)
+std::optional<FrameLayout> accept(std::string *why, const FrameLayout &layout)
 {
     if (why != nullptr)
     {

@@ -13,14 +13,14 @@
 namespace mviewer::core::yuv
 {
 
-enum class Layout
+enum class Layout : std::uint8_t
 {
     Planar,
     SemiPlanar,
     Packed
 };
 
-enum class Subsampling
+enum class Subsampling : std::uint8_t
 {
     S444,
     S422,
@@ -28,13 +28,13 @@ enum class Subsampling
     S400
 };
 
-enum class PlaneOrder
+enum class PlaneOrder : std::uint8_t
 {
     UV,
     VU
 };
 
-enum class Packing
+enum class Packing : std::uint8_t
 {
     None,
     YUYV,
@@ -42,27 +42,27 @@ enum class Packing
     YVYU
 };
 
-enum class Matrix
+enum class Matrix : std::uint8_t
 {
     BT601,
     BT709,
     BT2020
 };
 
-enum class Range
+enum class Range : std::uint8_t
 {
     Limited,
     Full
 };
 
-enum class ChromaSiting
+enum class ChromaSiting : std::uint8_t
 {
     Left,
     Center,
     TopLeft
 };
 
-enum class Endian
+enum class Endian : std::uint8_t
 {
     Little,
     Big
