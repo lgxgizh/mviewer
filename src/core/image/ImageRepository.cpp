@@ -7,6 +7,7 @@
 #include "core/image/ImageFrame.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/decoder/RawDecodePlan.h"
+#include "core/image/yuv/YuvFile.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/trace/Trace.h"
 
@@ -44,6 +45,9 @@ std::string ImageRepository::makeKey(const std::string &filePath) const
     const std::string suffix = mviewer::core::rawCacheKeySuffix(filePath);
     if (!suffix.empty())
         key += suffix;
+    const std::string yuvSuffix = mviewer::core::yuv::yuvCacheKeySuffix(filePath);
+    if (!yuvSuffix.empty())
+        key += yuvSuffix;
     rememberKey(filePath, key);
     return key;
 }

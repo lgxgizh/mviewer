@@ -23,4 +23,9 @@ bool probeAnimationDurationMs(const std::string &path, int frameCount, int64_t &
 // Header-only size of a still/page frame (orientation applied); {} on failure.
 FrameInfo stillFrameInfo(const std::string &path, int frameIndex);
 
+// FrameSequence_yuv.cpp: raw .yuv / .y4m multi-frame navigation.
+FrameSequenceInfo probeYuvSequence(const std::string &path);
+FrameDecodeResult decodeYuvSequenceFrame(const std::string &path, int frameIndex, int maxEdge);
+FrameInfo yuvFrameInfo(const std::string &path, int frameIndex);
+
 } // namespace mviewer::core

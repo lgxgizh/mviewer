@@ -6,6 +6,7 @@
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
 #include "core/image/QtMetadataSemantics.h"
+#include "core/image/yuv/YuvFile.h"
 
 #include <QFileInfo>
 #include <QImageIOHandler>
@@ -523,6 +524,8 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
 FrameDecodeResult decodeImpl(const std::string &path, int frameIndex, int maxEdge,
                              const FrameSequenceInfo *known)
 {
+    if (mviewer::core::yuv::isYuvPath(path))
+        return decodeYuvSequenceFrame(path, frameIndex, maxEdge);
     FrameDecodeResult result;
     if (known && known->valid)
     {
@@ -593,6 +596,8 @@ std::string FrameIdentity::cacheKey() const
 
 FrameSequenceInfo FrameSequenceReader::probe(const std::string &path)
 {
+    if (mviewer::core::yuv::isYuvPath(path))
+        return probeYuvSequence(path);
     try
     {
         QImageReader reader(qpath(path));
@@ -638,6 +643,8 @@ FrameDecodeResult decodeKnownSequence(const std::string &path, const FrameSequen
 
 FrameInfo FrameSequenceReader::frameInfo(const std::string &path, int frameIndex)
 {
+    if (mviewer::core::yuv::isYuvPath(path))
+        return yuvFrameInfo(path, frameIndex);
     try
     {
         QImageReader probe(qpath(path));

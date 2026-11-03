@@ -115,8 +115,8 @@ static void testClip4x2()
     CHECK(meta.height == 2);
     CHECK(meta.format == "YUV");
     CHECK(meta.colorSpace.find("709") != std::string::npos);
-    CHECK(meta.frameCount == 1);
-    CHECK(meta.sequenceKind == "static");
+    CHECK(meta.frameCount == 3);
+    CHECK(meta.sequenceKind == "pages");
 }
 
 static void testScaled()
@@ -131,6 +131,8 @@ static void testScaled()
     CHECK(image.height == 8);
     CHECK(meta.width == 64);
     CHECK(meta.height == 32);
+    CHECK(meta.frameCount == 1);
+    CHECK(meta.sequenceKind == "static");
 }
 
 static void testUnknownThenSaved()

@@ -6,6 +6,7 @@
 #include "core/image/ImageRepository.h"
 
 #include "core/image/decoder/RawDecodePlan.h"
+#include "core/image/yuv/YuvFile.h"
 
 #include "core/image/FrameSequence.h"
 
@@ -35,7 +36,8 @@ bool sequenceCandidate(const std::string &path)
     std::string suffix = path.substr(dot + 1);
     for (char &c : suffix)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return suffix == "gif" || suffix == "webp" || suffix == "tif" || suffix == "tiff";
+    return suffix == "gif" || suffix == "webp" || suffix == "tif" || suffix == "tiff" ||
+           suffix == "yuv" || suffix == "y4m";
 }
 
 } // namespace
@@ -199,6 +201,9 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     const std::string rawSuffix = mviewer::core::rawCacheKeySuffix(filePath);
     std::string key = cachedKeyForPath(filePath);
     if (!key.empty() && !mviewer::core::rawCacheKeyAgrees(key, rawSuffix))
+        key.clear();
+    if (!key.empty() && !mviewer::core::yuv::yuvCacheKeyAgrees(
+                            key, mviewer::core::yuv::yuvCacheKeySuffix(filePath)))
         key.clear();
     const bool hadCachedKey = !key.empty();
     if (key.empty())

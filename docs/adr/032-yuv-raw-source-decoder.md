@@ -107,6 +107,10 @@ sizes), 64-bit frame sizes stored in `int`, and a y4m parser that ignores
   by this ADR. Other new formats still need their own ADR.
 - `DecoderRegistry::resetToDefaults()` gains one entry. Tests that count the
   default lineup must include `YuvDecoder`.
+- `ImageRepository` appends `yuvCacheKeySuffix()` ("|yuv=<params>") to the
+  cache key of a `.yuv`/`.y4m` path, and drops a remembered key whose suffix no
+  longer agrees, so editing a file's parameters never serves stale pixels.
+  `.yuv` and `.y4m` are frame-sequence candidates (each frame is a page).
 - New files stay within the complexity caps. YUV logic goes into new
   translation units, not into `compareworkspace.h`, `FrameSequence.cpp` or
   `AnalysisEngine_metrics.cpp`.
