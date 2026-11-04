@@ -50,6 +50,10 @@ QColor rowInk(Row row, const QColor &background, const QColor &preferred)
         return {0x8e, 0x8e, 0x93};
     const QColor dark(0x1d, 0x1d, 0x1f);
     const QColor light(0xff, 0xff, 0xff);
+    // The accent highlight is mid-luminance (#007aff reads about 4:1 against
+    // either ink); keep white there, as macOS and the QSS label color do.
+    if (row == Row::Selected && contrastRatio(light, background) >= 3.0)
+        return light;
     return contrastRatio(dark, background) >= contrastRatio(light, background) ? dark : light;
 }
 

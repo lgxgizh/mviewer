@@ -26,12 +26,11 @@
 #include "metadataoverlay.h"
 #include "runtime_storage.h"
 #include "selectionmodel.h"
+#include "test_browse_viewmode.h"
 #include "thumbnailpanel.h"
-#include "widgets/ViewModeSegment.h"
 
 #include <QAbstractButton>
 #include <QApplication>
-#include <QComboBox>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -42,7 +41,6 @@
 #include <QHelpEvent>
 #include <QImage>
 #include <QInputDialog>
-#include <QKeyEvent>
 #include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -533,62 +531,6 @@ void testDegradedInputs(QTemporaryDir &tmp)
 }
 
 // ─── A#10: metadata overlay reflects the current image only ──────────────────
-// The toolbar's list-icon segment must open the Details view (Ctrl+3), not
-// the plain List view (Ctrl+2), and every segment must stay in sync with the
-// Ctrl+1..6 shortcuts.
-void testViewModeSegmentMapping()
-{
-    std::cout << "── Browse: view-mode segment mapping ──\n";
-    QSettings().clear();
-    MainWindow w;
-    w.resize(1100, 750);
-    w.show();
-    pump(80);
-    auto *segment = w.findChild<ViewModeSegment *>(QStringLiteral("viewModeSegment"));
-    auto *combo = w.findChild<QComboBox *>(QStringLiteral("thumbnailViewModeCombo"));
-    auto *panel = w.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
-    CHECK(segment && combo && panel, "segment, view-mode combo and panel exist");
-    if (!segment || !combo || !panel)
-        return;
-    QAbstractButton *details = segment->buttonForData(int(ThumbnailPanel::Details));
-    CHECK(details != nullptr, "the list-icon segment is bound to Details");
-    CHECK(segment->buttonForData(int(ThumbnailPanel::List)) == nullptr,
-          "no segment selects the plain List view");
-    const auto pressCtrl = [&w](Qt::Key key)
-    {
-        QKeyEvent press(QEvent::KeyPress, key, Qt::ControlModifier);
-        QApplication::sendEvent(&w, &press);
-        pump(20);
-    };
-    pressCtrl(Qt::Key_1);
-    CHECK(panel->viewMode() == ThumbnailPanel::Thumbnail, "Ctrl+1 selects Grid");
-    CHECK(segment->checkedData() == int(ThumbnailPanel::Thumbnail), "Ctrl+1 lights Grid");
-    if (details)
-        details->click();
-    pump(20);
-    CHECK(panel->viewMode() == ThumbnailPanel::Details, "details segment selects Details");
-    CHECK(combo->currentData().toInt() == int(ThumbnailPanel::Details),
-          "details segment drives the combo to Details");
-    CHECK(details && details->isChecked(), "details segment stays checked after the click");
-    pressCtrl(Qt::Key_1);
-    pressCtrl(Qt::Key_3);
-    CHECK(panel->viewMode() == ThumbnailPanel::Details, "Ctrl+3 selects Details");
-    CHECK(segment->checkedData() == int(ThumbnailPanel::Details), "Ctrl+3 lights Details");
-    pressCtrl(Qt::Key_2);
-    CHECK(panel->viewMode() == ThumbnailPanel::List, "Ctrl+2 selects List");
-    CHECK(segment->checkedData() == int(ThumbnailPanel::Details),
-          "Ctrl+2 lights the list-icon segment");
-    pressCtrl(Qt::Key_4);
-    CHECK(segment->checkedData() == int(ThumbnailPanel::Filmstrip), "Ctrl+4 lights Filmstrip");
-    pressCtrl(Qt::Key_5);
-    CHECK(segment->checkedData() == int(ThumbnailPanel::Thumbnail),
-          "Ctrl+5 (small icons) lights Grid");
-    if (QAbstractButton *film = segment->buttonForData(int(ThumbnailPanel::Filmstrip)))
-        film->click();
-    pump(20);
-    CHECK(panel->viewMode() == ThumbnailPanel::Filmstrip, "filmstrip segment selects Filmstrip");
-}
-
 void testMetadataOverlayCurrent(const QString &dirPath, const QStringList &paths)
 {
     std::cout << "── Browse A#10: metadata overlay currency ──\n";
@@ -821,7 +763,7 @@ int main(int argc, char **argv)
     testCompareSelectionAffordance(tmp.filePath("compare_selection"));
     testFileOpsUndo(dirPath);
     testDegradedInputs(tmp);
-    testViewModeSegmentMapping();
+    g_failures += runViewModeSegmentTests();
     {
         // A#10 uses MainWindow which restores sessions; keep it isolated.
         const QStringList paths = {
