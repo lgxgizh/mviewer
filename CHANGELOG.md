@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.164] - 2026-11-04
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.164**
+  (rotate/flip save no longer fails while the image is held open, unsupported
+  formats disable rotate/flip #310; delete/move retry on transient Windows
+  sharing errors #311).
+
 ### Fixed
 
 - Rotate/flip no longer fails with "Rotation failed" when the image is still
