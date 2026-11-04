@@ -106,8 +106,8 @@ std::vector<uint8_t> pack(const Samples &s, const Format &f)
         for (int r = 0; r < s.h; ++r)
             for (int cx = 0; cx < s.cw; ++cx)
             {
-                const uint16_t y0 = s.y[size_t(r) * s.w + 2 * cx];
-                const uint16_t y1 = 2 * cx + 1 < s.w ? s.y[size_t(r) * s.w + 2 * cx + 1] : 0;
+                const uint16_t y0 = s.y[size_t(r) * s.w + 2 * size_t(cx)];
+                const uint16_t y1 = 2 * cx + 1 < s.w ? s.y[size_t(r) * s.w + 2 * size_t(cx) + 1] : 0;
                 const uint16_t u = s.u[size_t(r) * s.cw + cx], v = s.v[size_t(r) * s.cw + cx];
                 uint16_t q[4];
                 switch (f.packing)
@@ -205,7 +205,7 @@ void referenceRgb(const Format &f, double Y, double U, double V, uint8_t rgb[3])
     const double c[3] = {r, g, b};
     for (int i = 0; i < 3; ++i)
     {
-        const double v = std::lround(c[i] * 255.0);
+        const long v = std::lround(c[i] * 255.0);
         rgb[i] = uint8_t(v < 0 ? 0 : v > 255 ? 255 : v);
     }
 }
@@ -307,7 +307,9 @@ void testCrossLayoutIdentity()
     // size, so nothing complains, but the colours are wrong.
     Format planar = f;
     CHECK(applyPixFmtName("yuv420p", planar));
-    CHECK(computeFrameLayout(planar)->frameBytes == computeFrameLayout(f)->frameBytes);
+    const auto planarLayout = computeFrameLayout(planar);
+    const auto semiLayout = computeFrameLayout(f);
+    CHECK(planarLayout && semiLayout && planarLayout->frameBytes == semiLayout->frameBytes);
     const ImageData wrong = decode(pack(s, f), planar);
     CHECK(!wrong.isNull() && *wrong.buffer != want);
     // The luma is still right, only chroma moves: grey stays grey.
