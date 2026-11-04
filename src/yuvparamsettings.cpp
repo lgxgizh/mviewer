@@ -99,4 +99,40 @@ void clearYuvParam(const std::string &key)
     writeLines(withoutKey(readLines(), keyText));
 }
 
+std::vector<mviewer::core::yuv::ExtensionRule> loadYuvExtensionMapSettings()
+{
+    namespace yuv = mviewer::core::yuv;
+    QSettings settings;
+    const QString key = QString::fromLatin1(kYuvExtensionMapSettingsKey);
+    if (!settings.contains(key))
+    {
+        return yuv::setExtensionRules(yuv::defaultExtensionRules());
+    }
+    std::vector<yuv::ExtensionRule> rules;
+    const QStringList lines = settings.value(key).toStringList();
+    for (const QString &line : lines)
+    {
+        if (const auto rule = yuv::parseExtensionRule(line.toStdString()))
+        {
+            rules.push_back(*rule);
+        }
+    }
+    return yuv::setExtensionRules(rules);
+}
+
+std::vector<mviewer::core::yuv::ExtensionRule>
+saveYuvExtensionMap(const std::vector<mviewer::core::yuv::ExtensionRule> &rules)
+{
+    namespace yuv = mviewer::core::yuv;
+    const std::vector<yuv::ExtensionRule> installed = yuv::setExtensionRules(rules);
+    QStringList lines;
+    for (const yuv::ExtensionRule &rule : installed)
+    {
+        lines.push_back(QString::fromStdString(yuv::formatExtensionRule(rule)));
+    }
+    QSettings settings;
+    settings.setValue(QString::fromLatin1(kYuvExtensionMapSettingsKey), lines);
+    return installed;
+}
+
 } // namespace mviewer::ui

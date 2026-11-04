@@ -6031,6 +6031,11 @@ Build: %2</source>
         <source>Cannot show %1: set its size and pixel format with right-click &gt; YUV Parameters...</source>
         <translation>无法显示 %1：请通过右键 &gt; YUV 参数... 设置其尺寸和像素格式</translation>
     </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>YUV file extension mapping updated</source>
+        <translation>YUV 文件后缀映射已更新</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>
@@ -6973,6 +6978,16 @@ Build: %2</source>
         <location filename="../src/test_language.cpp" line="102"/>
         <source>RAW display</source>
         <translation>RAW 显示</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>YUV</source>
+        <translation>YUV</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>YUV file extensions</source>
+        <translation>YUV 文件后缀</translation>
     </message>
 </context>
 <context>
@@ -8130,6 +8145,11 @@ Continue?</source>
         <source>Y4M files carry their parameters in the file header.</source>
         <translation>Y4M 文件的参数保存在文件头中。</translation>
     </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Pixel format</source>
+        <translation>像素格式</translation>
+    </message>
 </context>
 <context>
     <name>YuvCompareDialog</name>
@@ -8237,6 +8257,187 @@ Continue?</source>
         <location filename="../src/yuvcomparedialog.cpp" line="1"/>
         <source>Mean</source>
         <translation>平均</translation>
+    </message>
+</context>
+<context>
+    <name>YuvPixFmtPicker</name>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>4:2:0</source>
+        <translation>4:2:0</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>4:2:2</source>
+        <translation>4:2:2</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>4:4:4</source>
+        <translation>4:4:4</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>4:0:0 (luma only)</source>
+        <translation>4:0:0（仅亮度）</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Chroma subsampling:</source>
+        <translation>色度采样：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Planar (Y, U, V planes)</source>
+        <translation>平面（Y、U、V 分平面）</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>UV interleaved (semi-planar, NV12 style)</source>
+        <translation>UV 交错（半平面，NV12 类）</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Packed (YUYV style)</source>
+        <translation>打包（YUYV 类）</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Semi-planar files store a Y plane followed by one plane of interleaved U/V pairs (NV12, NV21, P010). Planar files store separate U and V planes (I420, YV12). Both have the same frame size, so the file size cannot tell them apart.</source>
+        <translation>半平面文件先存 Y 平面，再存一个 U/V 交错的色度平面（NV12、NV21、P010）。平面文件分别存储 U 和 V 平面（I420、YV12）。两者帧大小相同，无法通过文件大小区分。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Layout:</source>
+        <translation>布局：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Component order:</source>
+        <translation>分量顺序：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>%1-bit</source>
+        <translation>%1 位</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Bit depth:</source>
+        <translation>位深：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Little-endian</source>
+        <translation>小端</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Big-endian</source>
+        <translation>大端</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Byte order:</source>
+        <translation>字节序：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>MSB-aligned (P010 style)</source>
+        <translation>高位对齐（P010 类）</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>LSB-aligned</source>
+        <translation>低位对齐</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Where the significant bits sit in each 16-bit sample. P010/P016 camera output is MSB-aligned; yuv420p10le is LSB-aligned.</source>
+        <translation>有效位在每个 16 位采样中的位置。P010/P016 相机输出为高位对齐；yuv420p10le 为低位对齐。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Sample alignment:</source>
+        <translation>采样对齐：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>Format name:</source>
+        <translation>格式名称：</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>U before V (YUV: NV12, I420)</source>
+        <translation>U 在前 V 在后（YUV：NV12、I420）</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvpixfmtpicker.cpp" line="1"/>
+        <source>V before U (YVU: NV21, YV12)</source>
+        <translation>V 在前 U 在后（YVU：NV21、YV12）</translation>
+    </message>
+</context>
+<context>
+    <name>YuvExtensionMapEditor</name>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Auto-detect</source>
+        <translation>自动检测</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Files with these extensions open as raw YUV with the chosen pixel format. A y4m header, saved per-file parameters and format names in the file name still take priority.</source>
+        <translation>以下后缀的文件将按所选像素格式作为原始 YUV 打开。y4m 文件头、已保存的单文件参数以及文件名中的格式名称仍然优先。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Extension</source>
+        <translation>后缀</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Pixel format</source>
+        <translation>像素格式</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Add</source>
+        <translation>添加</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Remove</source>
+        <translation>移除</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Restore Defaults</source>
+        <translation>恢复默认</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Row %1: enter a file extension.</source>
+        <translation>第 %1 行：请输入文件后缀。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Row %1: &quot;%2&quot; is not a usable extension (letters, digits and _ only; .y4m is always read from its header).</source>
+        <translation>第 %1 行：“%2”不是可用的后缀（仅限字母、数字和 _；.y4m 始终从文件头读取）。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Extension .%1 is listed twice.</source>
+        <translation>后缀 .%1 重复出现。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Extension .%1 already belongs to another image format.</source>
+        <translation>后缀 .%1 已属于其他图像格式。</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvextensionmapeditor.cpp" line="1"/>
+        <source>Row %1: unknown pixel format &quot;%2&quot;.</source>
+        <translation>第 %1 行：未知像素格式“%2”。</translation>
     </message>
 </context>
 </TS>

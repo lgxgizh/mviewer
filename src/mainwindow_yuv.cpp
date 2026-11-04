@@ -53,6 +53,24 @@ void MainWindow::editYuvParams(const QString &path)
                                  4000);
 }
 
+void MainWindow::onYuvExtensionMapChanged()
+{
+    // New suffixes appear in (and removed ones leave) the file list; decode and
+    // thumbnail keys of unsaved raw files carry the mapping fingerprint, so the
+    // relisted files decode with the new pixel format instead of a stale cache.
+    refreshActiveBrowse();
+    const QString current = m_imageViewer ? m_imageViewer->currentPath() : QString();
+    if (!current.isEmpty() && mviewer::core::yuv::isYuvPath(current.toUtf8().toStdString()))
+    {
+        const std::string utf8 = current.toUtf8().toStdString();
+        mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+        if (!m_imageViewer->isHidden())
+            m_imageViewer->refreshSource(current);
+    }
+    if (statusBar())
+        statusBar()->showMessage(tr("YUV file extension mapping updated"), 4000);
+}
+
 bool MainWindow::showYuvLoadHint(const QString &path)
 {
     if (!mviewer::core::yuv::isYuvPath(path.toUtf8().toStdString()) || !statusBar())

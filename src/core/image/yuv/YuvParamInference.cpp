@@ -1,4 +1,5 @@
 #include "core/image/yuv/YuvParamInference.h"
+#include "core/image/yuv/YuvExtensionMap.h"
 
 #include <array>
 #include <optional>
@@ -255,20 +256,13 @@ std::string_view extensionOf(std::string_view fileName, std::string_view &stem)
     return fileName.substr(dot + 1);
 }
 
+// The user-editable extension mapping (YuvExtensionMap); defaults cover
+// .nv12 .nv21 .i420 .yv12 .p010 .yuyv .yuy2 .uyvy .nv16 .gray.
 std::optional<Format> extensionPixFmt(std::string_view ext)
 {
-    std::string lowered;
-    for (char c : ext.substr(0, 8))
-        lowered.push_back(lowerChar(c));
-    static constexpr const char *kDirect[] = {"nv12", "nv21", "yv12", "i420", "p010",
-                                              "uyvy", "yuyv", "yuy2", "gray"};
+    const std::optional<std::string> name = mappedPixFmt(ext);
     Format f;
-    for (const char *name : kDirect)
-    {
-        if (lowered == name && ext.size() <= 8 && applyPixFmtName(name, f))
-            return f;
-    }
-    if (lowered == "y" && applyPixFmtName("gray", f))
+    if (name && applyPixFmtName(*name, f))
         return f;
     return std::nullopt;
 }
@@ -378,7 +372,10 @@ Inference inferYuvParams(std::string_view fileName, std::string_view folderName,
     NameHints stemHints = scanName(stem);
     const auto extFmt = extensionPixFmt(ext);
     if (extFmt && (!stemHints.pixFmt || stemHints.pixFmtDerived))
+    {
         stemHints.pixFmt = extFmt;
+        stemHints.pixFmtDerived = false;
+    }
     applyHints(stemHints, inf, SizeSource::FileName);
     if (!folderName.empty())
         applyHints(scanName(folderName), inf, SizeSource::FolderName);

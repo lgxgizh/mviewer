@@ -103,6 +103,17 @@ sizes), 64-bit frame sizes stored in `int`, and a y4m parser that ignores
     Implemented (batch 8) as `core/analysis/YuvMetrics` plus a separate
     "Compare YUV (PSNR / SSIM)" dialog for two selected files; the compare
     workspace itself keeps its RGB metrics.
+11. **Layout picker and extension mapping (amendment, 1.0.163).** NV12 and
+    I420 frames have the same size, so a semi-planar file inferred as planar
+    decodes silently wrong. The parameters dialog therefore exposes the format
+    as separate controls (subsampling, layout, component order, bit depth,
+    byte order, MSB/LSB alignment), and Preferences → YUV holds a user-editable
+    extension → pixel-format map (`core/image/yuv/YuvExtensionMap`, persisted
+    as `yuv/extensionMap`). Mapped extensions are YUV for decoding, browsing,
+    sequence candidates and thumbnails. Inference priority: y4m header >
+    saved per-file parameters > file-name tokens > extension map > defaults.
+    Unsaved raw files key their cache entries on a fingerprint of the map, so
+    editing it never serves stale pixels.
 
 ## Consequences
 

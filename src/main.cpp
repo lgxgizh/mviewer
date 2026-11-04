@@ -121,6 +121,8 @@ int main(int argc, char *argv[])
 
     // ADR 032: per-file .yuv parameters saved by the YUV Parameters dialog.
     mviewer::ui::loadYuvParamSettings();
+    // User-editable YUV extension -> pixel format mapping (Preferences > YUV).
+    mviewer::ui::loadYuvExtensionMapSettings();
 
     // P5: headless release self-test gate. Runs before any window is created so
     // a release pipeline can verify the decode path without a display.

@@ -1,4 +1,5 @@
 // MainWindow view behaviors: drag&drop, overlays, fullscreen, slideshow, status (M20 P0#1).
+#include "core/image/yuv/YuvExtensionMap.h"
 #include "mainwindow_p.h"
 
 #include "application/ExternalOpen.h"
@@ -453,8 +454,14 @@ void MainWindow::openPreferences()
     // actually changed, so an untouched "default view mode" no longer resets
     // the live List/Compact view or a hand-picked analysis overlay.
     const QVariantMap before = preferenceSnapshot();
+    const std::string yuvMapBefore = mviewer::core::yuv::extensionRulesFingerprint();
     connect(&dlg, &PreferencesDialog::settingsChanged, this,
-            [this, before]() { applyPreferences(before); });
+            [this, before, yuvMapBefore]()
+            {
+                applyPreferences(before);
+                if (mviewer::core::yuv::extensionRulesFingerprint() != yuvMapBefore)
+                    onYuvExtensionMapChanged();
+            });
     dlg.exec();
 }
 
