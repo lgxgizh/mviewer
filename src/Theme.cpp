@@ -1,4 +1,5 @@
 #include "Theme.h"
+#include "MenuItemInk.h"
 #include "ThemeMetrics.h"
 #include "platform/WindowChrome.h"
 
@@ -176,22 +177,41 @@ class ScaledStyle : public QProxyStyle
             item.text.truncate(tab);
         }
 
+        // One contrast-checked ink for label, indicator and icon, picked
+        // against the fill painted under the row (QPalette::Text may be white
+        // on a light menu; see MenuItemInk.h).
+        const QColor highlight = option.palette.highlight().color();
+        const QColor ink =
+            !enabled ? menu_ink::rowInk(menu_ink::Row::Disabled, QColor(g_tokens.bg1),
+                                        QColor(g_tokens.textDisabled))
+            : selected
+                ? menu_ink::rowInk(menu_ink::Row::Selected, highlight, QColor(g_tokens.onAccent))
+                : menu_ink::rowInk(menu_ink::Row::Normal, QColor(g_tokens.bg1),
+                                   QColor(g_tokens.textPrimary));
+
         painter->save();
         if (selected)
         {
             painter->setRenderHint(QPainter::Antialiasing, true);
             painter->setPen(Qt::NoPen);
-            painter->setBrush(option.palette.highlight());
+            painter->setBrush(highlight);
             painter->drawRoundedRect(QRectF(option.rect), m::kRadiusChip, m::kRadiusChip);
-            // Fusion would paint its own square highlight; hand it a plain row
-            // whose text roles already carry the on-accent color.
+            // Fusion would paint its own square highlight; hand it a plain row.
             item.state.setFlag(State_Selected, false);
-            const QBrush onAccent = option.palette.highlightedText();
-            item.palette.setBrush(QPalette::Text, onAccent);
-            item.palette.setBrush(QPalette::ButtonText, onAccent);
-            item.palette.setBrush(QPalette::WindowText, onAccent);
         }
-        QProxyStyle::drawControl(CE_MenuItem, &item, painter, widget);
+        item.palette.setColor(QPalette::Text, ink);
+        item.palette.setColor(QPalette::ButtonText, ink);
+        item.palette.setColor(QPalette::WindowText, ink);
+        // Fusion inks its check box from QPalette::Text and tints icons by
+        // mode/state; it draws only the label here and we paint the column.
+        QStyleOptionMenuItem label(item);
+        label.checkType = QStyleOptionMenuItem::NotCheckable;
+        label.checked = false;
+        label.state.setFlag(State_On, false);
+        label.icon = QIcon();
+        QProxyStyle::drawControl(CE_MenuItem, &label, painter, widget);
+        const int iconPx = pixelMetric(PM_SmallIconSize, &option, widget);
+        menu_ink::drawIndicator(painter, item, ink, QSize(iconPx, iconPx));
 
         if (!shortcut.isEmpty())
         {
