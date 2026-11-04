@@ -113,7 +113,7 @@ void testSplitPixelFormatControls()
     check(picker->pixFmtName() == QStringLiteral("nv21"), "VU order gives nv21");
 
     picker->layoutBox()->setCurrentIndex(picker->layoutBox()->findData(int(Layout::Planar)));
-    check(picker->pixFmtName() == QStringLiteral("yvu420p"), "planar VU is yvu420p (YV12)");
+    check(picker->pixFmtName() == QStringLiteral("yv12"), "planar VU is yv12");
 
     picker->layoutBox()->setCurrentIndex(picker->layoutBox()->findData(int(Layout::SemiPlanar)));
     picker->orderBox()->setCurrentIndex(picker->orderBox()->findData(int(PlaneOrder::UV)));

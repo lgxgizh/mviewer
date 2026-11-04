@@ -82,7 +82,11 @@ static void testIsYuvPath()
 static void testCacheKey()
 {
     const std::string bare = "/tmp/no-such-seq.yuv";
-    CHECK(yuvCacheKeySuffix(bare).empty());
+    // Unsaved raw files key on the extension mapping that drives inference.
+    const std::string autoSuffix = yuvCacheKeySuffix(bare);
+    CHECK(autoSuffix.rfind("|yuv=auto:", 0) == 0);
+    CHECK(yuvCacheKeySuffix("/tmp/no-such.png").empty());
+    CHECK(yuvCacheKeySuffix("/tmp/no-such.y4m").empty());
     CHECK(yuvCacheKeyAgrees("rev", ""));
     CHECK(!yuvCacheKeyAgrees("rev|yuv=saved", ""));
     const std::string suffix = "|yuv=w16";
@@ -96,15 +100,16 @@ static void testCacheKey()
     const auto path = g_root / "saved_key.yuv";
     writeBytes(path, std::vector<std::uint8_t>(16, 0));
     const std::string keyPath = utf8(path);
-    CHECK(yuvCacheKeySuffix(keyPath).empty());
+    CHECK(yuvCacheKeySuffix(keyPath) == autoSuffix);
     YuvParamStore::instance().set(yuvParamKey(keyPath), format);
     const std::string saved = yuvCacheKeySuffix(keyPath);
     CHECK(saved.rfind("|yuv=", 0) == 0);
     CHECK(saved.size() > 5);
+    CHECK(saved != autoSuffix);
     CHECK(yuvCacheKeyAgrees("abc" + saved, saved));
     CHECK(!yuvCacheKeyAgrees("abc", saved));
     YuvParamStore::instance().clear(yuvParamKey(keyPath));
-    CHECK(yuvCacheKeySuffix(keyPath).empty());
+    CHECK(yuvCacheKeySuffix(keyPath) == autoSuffix);
 }
 
 static void testSequence()
