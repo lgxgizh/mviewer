@@ -1,6 +1,6 @@
-<p align="center"><img src="resources/mviewer.svg" width="128" alt="MViewer icon"></p>
-
 # MViewer
+
+<p align="center"><img src="resources/mviewer.svg" width="128" alt="MViewer icon"></p>
 
 **Visual analysis platform for image algorithm engineers** — compare, validate, and analyze image processing algorithm outputs.
 
