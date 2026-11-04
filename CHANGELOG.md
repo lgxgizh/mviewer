@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.162] - 2026-11-03
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.162**
+  (raw YUV / Y4M viewing and per-plane compare, ADR 032 #293–#302; Nightly
+  Linux ASan disk fix and B4/B7 benchmark baseline #303; YUV performance pass
+  #304).
+
 ### Added
 
 - **YUV batch 1 — format model (ADR 032):** new Qt-free
@@ -12,7 +21,7 @@
   aliases (I420, YV12, NV12, P010, YUY2, UYVY, Y800, …), and round-trips a
   `WxH:pixfmt:matrix:range:siting` text form. `yuv_format_tests` covers
   geometry, rejects, int64 overflow and a parser fuzz loop. Not yet wired into
-  the viewer.
+  the viewer (#294).
 
 - **YUV batch 2 — Y4M headers and parameter inference (ADR 032):** new
   Qt-free `core/image/yuv/Y4mHeader` parses the YUV4MPEG2 stream header
@@ -27,7 +36,7 @@
   parameter dialog instead of guessed. Unknown matrix / range default to BT.709
   limited. `yuv_y4m_tests` and `yuv_inference_tests` cover malformed headers,
   odd sizes, truncated frames, int64 overflow, 60+ file-name cases and fuzz
-  loops. Not yet wired into the viewer.
+  loops. Not yet wired into the viewer (#295).
 
 - **YUV batch 3 — unpacking and YUV→RGB conversion (ADR 032):** new Qt-free
   `core/image/yuv/YuvUnpack` turns one raw frame (planar, NV12/NV21-style
@@ -40,7 +49,7 @@
   bilinear with left / center / top-left siting. `yuv_unpack_tests` and
   `yuv_to_rgb_tests` cover golden colour bars at 8/10/16 bit, clamping,
   cross-format equivalence (I420 = YV12 = NV12 = NV21, 4:2:2 planar = packed),
-  odd sizes, truncated frames and fuzz loops. Not yet wired into the viewer.
+  odd sizes, truncated frames and fuzz loops. Not yet wired into the viewer (#296).
 
 - **YUV batch 4 — `.yuv` / `.y4m` open and thumbnails (ADR 032):** new
   `core/image/yuv/YuvSource` resolves a file's parameters (y4m header, then
@@ -52,14 +61,16 @@
   returns no pixels (the standard placeholder shows) and never guesses a size.
   Metadata reports the source size, bit depth, `YUV`/`Y4M` and the matrix/range.
   Tests: `yuv_source_tests`, `yuv_decoder_tests` (temp files, unknown
-  parameters, saved parameters, y4m, truncated file, registry order).
+  parameters, saved parameters, y4m, truncated file, registry order) (#297).
+
 - **YUV batch 5 — frame stepping and cache identity (ADR 032):** new
   `core/image/yuv/YuvFile` opens a `.yuv` / `.y4m` file once for the decoder
   and the frame-sequence reader. Multi-frame files are now page sequences: the
   viewer shows "frame N of M" and `,` / `.` step through frames (no timed
   playback yet). Saved parameters are part of the cache key (`|yuv=<format>`),
   so changing them never serves a stale decode. Tests: `yuv_sequence_tests`
-  (probe, every frame, out-of-range index, trailing bytes, cache-key changes).
+  (probe, every frame, out-of-range index, trailing bytes, cache-key changes) (#298).
+
 - **YUV batch 6 — parameter dialog (ADR 032):** right-click a raw `.yuv` in
   the viewer or gallery and choose **YUV Parameters...** to set width, height,
   pixel format (all 58 canonical formats), matrix (BT.601 / 709 / 2020) and
@@ -71,7 +82,8 @@
   now shows a status-bar hint pointing at the dialog. Y4M files keep their
   header parameters. zh_CN translations added. Tests: `yuv_params_dialog_tests`
   (summary, size presets, settings round trip and garbage lines) and
-  `canonicalPixFmtNames()` in `yuv_format_tests`.
+  `canonicalPixFmtNames()` in `yuv_format_tests` (#299).
+
 - **YUV batch 7 — raw Y/U/V in the pixel inspector (ADR 032):** hovering a
   `.yuv` / `.y4m` image now shows the stored code values under the cursor, for
   example `Y=235 U=128 V=128 (10-bit, chroma 3,2)`, in the status bar and the
@@ -80,7 +92,7 @@
   keeps one unpacked frame cached, so moving the cursor does not re-read the
   file; changing the parameters or the file invalidates it. Tests:
   `yuv_sample_tests` (420/422/444/gray mapping, 10-bit, out-of-range, cache
-  reuse, truncated file, unknown parameters, coordinate fuzz).
+  reuse, truncated file, unknown parameters, coordinate fuzz) (#300).
 
 - **YUV batch 8 — YUV PSNR / SSIM compare (ADR 032):** select exactly two
   `.yuv` / `.y4m` files in the thumbnail grid and choose right-click >
@@ -95,7 +107,8 @@
   sums). Tests: `yuv_metrics_tests` (golden PSNR values for 8/10/16-bit,
   identical → inf, SSIM symmetry and range, odd sizes, gray, mismatches,
   truncated / missing files, cancel, frame limits) and
-  `yuv_compare_dialog_tests`.
+  `yuv_compare_dialog_tests` (#301).
+
 - **YUV batch 9 — SSE2 / AVX2 YUV→RGB conversion (ADR 032):** the row
   converter now has in-house SSE2 (8 px) and AVX2 (16 px) paths built on exact
   16-bit multiply-add, picked at runtime by `CpuFeatures` (AVX2, then SSE2,
@@ -104,7 +117,7 @@
   lengths 0–70, extreme and random samples, gray rows, unaligned pointers,
   output bounds and a whole odd-sized frame. `bench_yuv_to_rgb` (not run by
   CTest) reports Mpx/s per path; on the dev box, a 1920×1080 frame ran at about
-  120 (scalar), 1700 (SSE2) and 1900 (AVX2) Mpx/s.
+  120 (scalar), 1700 (SSE2) and 1900 (AVX2) Mpx/s (#302).
 
 ### Changed
 
@@ -134,7 +147,11 @@
   - `yuv_fast_paths_tests` checks each fast path against its reference:
     SSIM at 8–16 bit and odd sizes, raw thumbnails for 11 pixel formats,
     threaded vs serial RGB, buffer reuse across formats, parallel compare
-    order and cancel, and Y4M cache invalidation.
+    order and cancel, and Y4M cache invalidation (#304).
+- **Nightly Linux ASan no longer runs out of disk:** the job frees unused
+  preinstalled toolchains before building and uses `-g1` line tables (stacks
+  keep file:line). The B4 / B7 benchmark baseline is seeded from windows-2022
+  runner values (B4 40.0 thumbs/s, B7 1.2 ms) instead of dev-box numbers (#303).
 
 ## [1.0.161] - 2026-11-03
 
