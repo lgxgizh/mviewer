@@ -1,3 +1,5 @@
+<p align="center"><img src="resources/mviewer.svg" width="128" alt="MViewer icon"></p>
+
 # MViewer
 
 **Visual analysis platform for image algorithm engineers** — compare, validate, and analyze image processing algorithm outputs.
@@ -340,6 +342,11 @@ The license text is in [resources/icons/LICENSE-lucide](resources/icons/LICENSE-
 SVG files under `resources/icons/` are the source artwork. The application tints
 the matching pre-rendered PNG masks (1x, 1.5x, 2x and 3x) at runtime.
 Regenerate them with `scripts/render_icons.py` (PySide6, offscreen).
+
+The application icon master is `resources/mviewer.svg`. `scripts/make_app_icon.py`
+(shapely, resvg-py, Pillow) regenerates it together with `resources/mviewer.png`
+(1024 px) and `resources/mviewer.ico` (16 to 256 px, with simplified artwork at
+32 px and below).
 
 ## License
 
