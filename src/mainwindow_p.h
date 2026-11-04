@@ -147,6 +147,10 @@ inline constexpr qint64 kMaxRecoveryStateBytes = 16LL * 1024 * 1024;
 // mainwindow_session_recovery.cpp.
 bool sessionPromptsSuppressed();
 
+// Writable-format helpers for rotate/flip (mainwindow_transformsupport.cpp).
+bool anyRotatableFile(const QStringList &paths);
+QStringList rotatableFiles(const QStringList &paths);
+
 // Read a whole persisted state file within `maxBytes`. Returns false (filling
 // `error` when provided) if the file is missing, unreadable or too large.
 inline bool readBoundedStateFile(QFile &file, const QString &path, qint64 maxBytes, QByteArray &out,

@@ -3,6 +3,7 @@
 #include "core/image/Encoder.h"
 #include "core/image/ExifOrientation.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageFileReplace.h"
 #include "core/image/JpegExif.h"
 #include "core/image/QtConvert.h"
 
@@ -13,30 +14,17 @@
 #include <QIODevice>
 #include <QImage>
 #include <QImageReader>
-#include <QSaveFile>
 #include <QString>
-
-#ifdef Q_OS_WIN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#endif
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <optional>
-#include <thread>
 #include <vector>
 
 namespace mviewer::core
 {
 namespace
 {
-
-constexpr int kWriteAttempts = 3;
-constexpr auto kRetryDelay = std::chrono::milliseconds(80);
 
 std::string lowerAscii(std::string s)
 {
@@ -90,90 +78,6 @@ ImageData applyFilePixelOp(const ImageData &src, FilePixelOp op, int degreesCw)
         return flipVertical(src);
     }
     return ImageData{};
-}
-
-// i18n-allow-begin: the Chinese tokens below match error text produced by a
-// zh-CN Windows/Qt runtime; they classify OS messages and are never shown.
-bool looksLikeSharing(const QString &lower)
-{
-    return lower.contains(QLatin1String("sharing")) ||
-           lower.contains(QLatin1String("being used")) ||
-           lower.contains(QLatin1String("used by another")) ||
-           lower.contains(QString::fromUtf8("正在使用")) ||
-           lower.contains(QString::fromUtf8("已锁定"));
-}
-
-bool looksLikeAccessDenied(const QString &lower)
-{
-    return lower.contains(QLatin1String("denied")) || lower.contains(QLatin1String("permission")) ||
-           lower.contains(QString::fromUtf8("拒绝访问"));
-}
-// i18n-allow-end
-
-ImageRotateError classifySaveError(const QSaveFile &file, bool duringCommit)
-{
-    const QString lower = file.errorString().toLower();
-    if (looksLikeSharing(lower))
-        return ImageRotateError::SharingViolation;
-    if (looksLikeAccessDenied(lower) || file.error() == QFileDevice::PermissionsError)
-        return duringCommit ? ImageRotateError::SharingViolation : ImageRotateError::AccessDenied;
-#ifdef Q_OS_WIN
-    const DWORD native = GetLastError();
-    if (native == ERROR_SHARING_VIOLATION || native == ERROR_LOCK_VIOLATION)
-        return ImageRotateError::SharingViolation;
-    if (native == ERROR_ACCESS_DENIED)
-        return duringCommit ? ImageRotateError::SharingViolation : ImageRotateError::AccessDenied;
-#endif
-    return ImageRotateError::WriteFailed;
-}
-
-bool isRetryableWrite(ImageRotateError code)
-{
-    return code == ImageRotateError::AccessDenied || code == ImageRotateError::SharingViolation;
-}
-
-bool atomicWriteBytes(const QString &path, const std::vector<uint8_t> &bytes, std::string *err,
-                      ImageRotateError *code)
-{
-    std::string lastErr = "write failed";
-    ImageRotateError lastCode = ImageRotateError::WriteFailed;
-    for (int attempt = 0; attempt < kWriteAttempts; ++attempt)
-    {
-        if (attempt > 0)
-            std::this_thread::sleep_for(kRetryDelay);
-
-        QSaveFile out(path);
-        if (!out.open(QIODevice::WriteOnly))
-        {
-            lastErr = out.errorString().toStdString();
-            lastCode = classifySaveError(out, false);
-            if (!isRetryableWrite(lastCode))
-                break;
-            continue;
-        }
-        const qint64 n = static_cast<qint64>(bytes.size());
-        if (out.write(reinterpret_cast<const char *>(bytes.data()), n) != n)
-        {
-            out.cancelWriting();
-            lastErr = "short write";
-            lastCode = ImageRotateError::ShortWrite;
-            break;
-        }
-        if (!out.commit())
-        {
-            lastErr = out.errorString().toStdString();
-            lastCode = classifySaveError(out, true);
-            if (!isRetryableWrite(lastCode))
-                break;
-            continue;
-        }
-        return true;
-    }
-    if (err)
-        *err = lastErr.empty() ? "write failed" : lastErr;
-    if (code)
-        *code = lastCode;
-    return false;
 }
 
 // Load with auto-orientation, then destroy the reader before any overwrite so
@@ -275,10 +179,9 @@ std::optional<ImageFileRotateResult> rewriteTaggedJpegOrientation(const QString 
     {
         return failResult("jpeg orientation tag rewrite failed", ImageRotateError::WriteFailed);
     }
-    std::string err;
-    ImageRotateError code = ImageRotateError::WriteFailed;
-    if (!atomicWriteBytes(qPath, bytes, &err, &code))
-        return failResult(err.empty() ? "write failed" : err, code);
+    const FileReplaceResult written = replaceFileContents(qPath.toStdString(), bytes);
+    if (!written.ok)
+        return failResult(written.error.empty() ? "write failed" : written.error, written.code);
 
     ImageFileRotateResult result;
     result.ok = true;
@@ -362,9 +265,9 @@ ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelO
             encoded = spliceJpegApp1Exif(encoded, app1, true);
     }
 
-    ImageRotateError writeCode = ImageRotateError::WriteFailed;
-    if (!atomicWriteBytes(qPath, encoded, &err, &writeCode))
-        return failResult(err.empty() ? "write failed" : err, writeCode);
+    const FileReplaceResult written = replaceFileContents(qPath.toStdString(), encoded);
+    if (!written.ok)
+        return failResult(written.error.empty() ? "write failed" : written.error, written.code);
 
     ImageFileRotateResult r;
     r.ok = true;
@@ -422,13 +325,11 @@ bool readFileBytes(const std::string &utf8Path, std::vector<uint8_t> &out, std::
 bool writeFileBytesAtomic(const std::string &utf8Path, const std::vector<uint8_t> &bytes,
                           std::string *error)
 {
-    const QString path = QString::fromUtf8(utf8Path.data(), static_cast<int>(utf8Path.size()));
-    std::string err;
-    ImageRotateError code = ImageRotateError::WriteFailed;
-    if (!atomicWriteBytes(path, bytes, &err, &code))
+    const FileReplaceResult written = replaceFileContents(utf8Path, bytes);
+    if (!written.ok)
     {
         if (error)
-            *error = err.empty() ? "write failed" : err;
+            *error = written.error.empty() ? "write failed" : written.error;
         return false;
     }
     return true;

@@ -163,6 +163,16 @@ bool startFileTransform(ImageViewer *viewer, QString *pathOut)
     return true;
 }
 
+QString appendDiagnostic(const QString &user, const std::string &raw)
+{
+    if (raw.empty())
+        return user;
+    const QString extra = QString::fromStdString(raw);
+    if (extra == user)
+        return user;
+    return user + QLatin1Char('\n') + extra;
+}
+
 } // namespace
 
 QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRotateResult &result)
@@ -171,10 +181,14 @@ QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRota
     switch (result.errorCode)
     {
     case ImageRotateError::NotWritable:
-    case ImageRotateError::AccessDenied:
         return tr("The file or its folder does not have write permission");
+    case ImageRotateError::AccessDenied:
+        return appendDiagnostic(tr("The file or its folder does not have write permission"),
+                                result.error);
     case ImageRotateError::SharingViolation:
-        return tr("File is in use (including decoding by this program) and cannot be overwritten");
+        return appendDiagnostic(
+            tr("File is in use (including decoding by this program) and cannot be overwritten"),
+            result.error);
     case ImageRotateError::UnsupportedFormat:
     {
         std::string suffix = result.error;
@@ -183,12 +197,25 @@ QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRota
             suffix = suffix.substr(pos + 2);
         if (suffix.empty() || suffix == "(none)")
             suffix = "?";
-        return tr("Rewriting .%1 is not supported yet (currently only PNG/JPEG/BMP/WebP)")
+        return tr("Rewriting .%1 is not supported (only JPEG, PNG, BMP and WebP)")
             .arg(QString::fromStdString(suffix));
     }
     case ImageRotateError::NotFound:
     case ImageRotateError::EmptyPath:
         return tr("File not found");
+    case ImageRotateError::WriteFailed:
+    {
+        const QString error = QString::fromStdString(result.error);
+        const LooseIo loose = classifyLooseIo(error);
+        if (loose == LooseIo::PathTooLong)
+            return appendDiagnostic(tr("Path is too long; the system cannot open or write"),
+                                    result.error);
+        if (loose == LooseIo::Network)
+            return appendDiagnostic(tr("Network path is unreachable or timed out"), result.error);
+        if (error.isEmpty())
+            return tr("Unknown error");
+        return error;
+    }
     case ImageRotateError::None:
     case ImageRotateError::InvalidAngle:
     case ImageRotateError::ReadFailed:
@@ -196,7 +223,6 @@ QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRota
     case ImageRotateError::RotateFailed:
     case ImageRotateError::EncodeFailed:
     case ImageRotateError::ShortWrite:
-    case ImageRotateError::WriteFailed:
     {
         const QString error = QString::fromStdString(result.error);
         const LooseIo loose = classifyLooseIo(error);

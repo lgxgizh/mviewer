@@ -3771,8 +3771,8 @@ ROI diff: %1%  Mean %2  Peak %3</source>
     </message>
     <message>
         <location filename="../src/imageviewer_transform.cpp" line="186"/>
-        <source>Rewriting .%1 is not supported yet (currently only PNG/JPEG/BMP/WebP)</source>
-        <translation>暂不支持改写 .%1（当前仅 PNG/JPEG/BMP/WebP）</translation>
+        <source>Rewriting .%1 is not supported (only JPEG, PNG, BMP and WebP)</source>
+        <translation>不支持改写 .%1（仅支持 JPEG、PNG、BMP 和 WebP）</translation>
     </message>
     <message>
         <location filename="../src/imageviewer_transform.cpp" line="191"/>
@@ -4430,6 +4430,16 @@ or double-click a thumbnail to view</source>
         <location filename="../src/mainwindow_filetransform.cpp" line="274"/>
         <source>Rotation complete: %1 succeeded, %2 failed</source>
         <translation>旋转完成：%1 成功，%2 失败</translation>
+    </message>
+    <message>
+        <source>Rotate/flip rewrites the file and supports only JPEG, PNG, BMP and WebP</source>
+        <translation>旋转/翻转会改写文件，仅支持 JPEG、PNG、BMP 和 WebP</translation>
+    </message>
+    <message numerus="yes">
+        <source>%n unsupported file(s) skipped</source>
+        <translation>
+            <numerusform>已跳过 %n 个不支持的文件</numerusform>
+        </translation>
     </message>
     <message>
         <location filename="../src/mainwindow_filetransform.cpp" line="298"/>
