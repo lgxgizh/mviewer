@@ -10,6 +10,7 @@
 #include "core/image/decoder/DecoderRegistry.h"
 #endif
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -77,9 +78,12 @@ static void testCanDecode()
     CHECK(!decoder.canDecode("x.yuvx"));
     CHECK(!decoder.canDecode("x.png"));
     const auto ext = decoder.extensions();
-    CHECK(ext.size() == 2);
-    CHECK(ext[0] == "yuv");
-    CHECK(ext[1] == "y4m");
+    // .yuv/.y4m plus the default extension mapping (.nv12, .i420, .p010, ...).
+    const auto has = [&ext](const char *e)
+    { return std::find(ext.begin(), ext.end(), e) != ext.end(); };
+    CHECK(has("yuv") && has("y4m") && has("nv12") && has("nv21") && has("i420") && has("p010"));
+    CHECK(!has("png"));
+    CHECK(decoder.canDecode("clip.NV12"));
     CHECK(std::string(decoder.name()) == "YuvDecoder");
 }
 

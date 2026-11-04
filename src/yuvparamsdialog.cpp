@@ -3,16 +3,19 @@
 #include "core/image/yuv/YuvFile.h"
 #include "core/image/yuv/YuvSource.h"
 #include "yuvparamsettings.h"
+#include "yuvpixfmtpicker.h"
 
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QDialogButtonBox>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QVBoxLayout>
 
 #include <cstdint>
 #include <optional>
@@ -29,16 +32,6 @@ void selectMatrix(QComboBox *box, mviewer::core::yuv::Matrix matrix)
 {
     const int wanted = static_cast<int>(matrix);
     const int index = box->findData(wanted);
-    if (index >= 0)
-    {
-        box->setCurrentIndex(index);
-    }
-}
-
-void selectPixFmt(QComboBox *box, const mviewer::core::yuv::Format &format)
-{
-    const QString name = QString::fromStdString(mviewer::core::yuv::pixFmtName(format));
-    const int index = box->findText(name);
     if (index >= 0)
     {
         box->setCurrentIndex(index);
@@ -86,13 +79,11 @@ void YuvParamsDialog::addFields(QFormLayout *form,
     form->addRow(tr("Width:"), m_width);
     form->addRow(tr("Height:"), m_height);
 
-    m_pix = new QComboBox(this);
-    for (const std::string &name : mviewer::core::yuv::canonicalPixFmtNames())
-    {
-        m_pix->addItem(QString::fromStdString(name));
-    }
-    selectPixFmt(m_pix, m_initial);
-    form->addRow(tr("Pixel format:"), m_pix);
+    auto *pixGroup = new QGroupBox(tr("Pixel format"), this);
+    auto *pixLayout = new QVBoxLayout(pixGroup);
+    m_picker = new YuvPixFmtPicker(m_initial, pixGroup);
+    pixLayout->addWidget(m_picker);
+    form->addRow(pixGroup);
 
     m_matrix = new QComboBox(this);
     m_matrix->addItem(tr("BT.601"), static_cast<int>(mviewer::core::yuv::Matrix::BT601));
@@ -130,16 +121,14 @@ void YuvParamsDialog::wireSignals()
     }
     connect(m_width, &QSpinBox::valueChanged, this, &YuvParamsDialog::updateSummary);
     connect(m_height, &QSpinBox::valueChanged, this, &YuvParamsDialog::updateSummary);
-    connect(m_pix, &QComboBox::currentIndexChanged, this, &YuvParamsDialog::updateSummary);
+    connect(m_picker, &YuvPixFmtPicker::changed, this, &YuvParamsDialog::updateSummary);
     connect(m_matrix, &QComboBox::currentIndexChanged, this, &YuvParamsDialog::updateSummary);
     connect(m_range, &QComboBox::currentIndexChanged, this, &YuvParamsDialog::updateSummary);
 }
 
 mviewer::core::yuv::Format YuvParamsDialog::format() const
 {
-    mviewer::core::yuv::Format out = m_initial;
-    const std::string name = m_pix->currentText().toStdString();
-    mviewer::core::yuv::applyPixFmtName(name, out);
+    mviewer::core::yuv::Format out = m_picker->apply(m_initial);
     out.width = m_width->value();
     out.height = m_height->value();
     const int matrixValue = m_matrix->currentData().toInt();
@@ -202,12 +191,15 @@ void YuvParamsDialog::setFrameSize(int w, int h)
 
 void YuvParamsDialog::setPixFmt(const QString &name)
 {
-    const int index = m_pix->findText(name);
-    if (index < 0)
+    mviewer::core::yuv::Format f = format();
+    if (!mviewer::core::yuv::applyPixFmtName(name.trimmed().toStdString(), f))
     {
         return;
     }
-    m_pix->setCurrentIndex(index);
+    if (m_picker->setFormat(f))
+    {
+        updateSummary();
+    }
 }
 
 void YuvParamsDialog::updateSummary()

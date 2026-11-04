@@ -14,6 +14,7 @@ class QDialogButtonBox;
 class QFormLayout;
 class QLabel;
 class QSpinBox;
+class YuvPixFmtPicker;
 
 class YuvParamsDialog : public QDialog
 {
@@ -31,7 +32,13 @@ class YuvParamsDialog : public QDialog
     QString summaryText() const;
 
     void setFrameSize(int w, int h);
+    // Selects the controls for a pixel-format name (e.g. "nv12", "p010le");
+    // unknown names are ignored.
     void setPixFmt(const QString &name);
+    YuvPixFmtPicker *pixFmtPicker() const
+    {
+        return m_picker;
+    }
 
   private slots:
     void updateSummary();
@@ -48,7 +55,7 @@ class YuvParamsDialog : public QDialog
     QComboBox *m_preset = nullptr;
     QSpinBox *m_width = nullptr;
     QSpinBox *m_height = nullptr;
-    QComboBox *m_pix = nullptr;
+    YuvPixFmtPicker *m_picker = nullptr;
     QComboBox *m_matrix = nullptr;
     QComboBox *m_range = nullptr;
     QLabel *m_summary = nullptr;

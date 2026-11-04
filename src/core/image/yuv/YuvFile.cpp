@@ -1,4 +1,5 @@
 #include "core/image/yuv/YuvFile.h"
+#include "core/image/yuv/YuvExtensionMap.h"
 
 #include "core/filesystem/Utf8Path.h"
 
@@ -186,7 +187,14 @@ YuvSourceInfo resolveY4mCached(const std::filesystem::path &native, const std::s
 
 bool isYuvPath(const std::string &path)
 {
-    return endsWithIgnoreCase(path, ".yuv") || endsWithIgnoreCase(path, ".y4m");
+    // .yuv / .y4m plus every extension in the user's extension mapping.
+    const size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos || dot + 1 >= path.size())
+        return false;
+    const size_t slash = path.find_last_of("/\\");
+    if (slash != std::string::npos && slash > dot)
+        return false;
+    return isYuvExtension(std::string_view(path).substr(dot + 1));
 }
 
 std::string yuvParamKey(const std::string &path)
@@ -283,10 +291,14 @@ std::string yuvCacheKeySuffix(const std::string &path)
 {
     try
     {
-        const auto saved = YuvParamStore::instance().get(yuvParamKey(path));
-        if (!saved.has_value())
+        if (!isYuvPath(path) || isY4mFileName(path))
             return {};
-        return std::string("|yuv=") + toString(*saved);
+        const auto saved = YuvParamStore::instance().get(yuvParamKey(path));
+        if (saved.has_value())
+            return std::string("|yuv=") + toString(*saved);
+        // Unsaved raw files are decoded from inference, which depends on the
+        // extension mapping: key on it so editing the table misses old entries.
+        return std::string("|yuv=auto:") + extensionRulesFingerprint();
     }
     catch (...)
     {

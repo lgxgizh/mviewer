@@ -2,6 +2,7 @@
 
 #include "application/Shutdown.h"
 #include "core/FileIdentity.h"
+#include "core/image/yuv/YuvFile.h"
 #include "runtime_storage.h"
 
 #include "core/trace/Trace.h"
@@ -93,8 +94,20 @@ QString ThumbnailCache::keyForIdentity(const QString &path, int size, qint64 mti
         return QString();
     const QByteArray utf8 = path.toUtf8();
     const std::string utf8Path(utf8.constData(), static_cast<size_t>(utf8.size()));
-    const std::string key =
+    std::string key =
         mviewer::core::thumbnailDiskKey(utf8Path, size, mtimeMs, fileSize, kSchemaVersion);
+    // Raw YUV pixels depend on the saved/inferred parameters, not just the file:
+    // fold them in (after the path prefix, so invalidatePath still matches).
+    const std::string yuv = mviewer::core::yuv::yuvCacheKeySuffix(utf8Path);
+    if (!yuv.empty())
+    {
+        const QByteArray h =
+            QCryptographicHash::hash(QByteArray::fromStdString(yuv), QCryptographicHash::Sha1)
+                .toHex()
+                .left(12);
+        key += "_y";
+        key.append(h.constData(), static_cast<size_t>(h.size()));
+    }
     return QString::fromUtf8(key.data(), static_cast<int>(key.size()));
 }
 

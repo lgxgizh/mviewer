@@ -1,4 +1,5 @@
 #include "core/image/decoder/YuvDecoder.h"
+#include "core/image/yuv/YuvExtensionMap.h"
 
 #include "core/image/yuv/YuvFile.h"
 
@@ -42,7 +43,9 @@ bool YuvDecoder::canDecode(const std::string &path) const
 
 std::vector<std::string> YuvDecoder::extensions() const
 {
-    return {"yuv", "y4m"};
+    // Live: the registry re-reads this, so a Preferences edit of the YUV
+    // extension mapping reaches browse filters and the file list.
+    return mviewer::core::yuv::yuvExtensions();
 }
 
 const char *YuvDecoder::name() const

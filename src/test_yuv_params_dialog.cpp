@@ -1,7 +1,10 @@
 // NOLINTBEGIN
+#include "yuvextensionmapeditor.h"
 #include "yuvparamsdialog.h"
 #include "yuvparamsettings.h"
+#include "yuvpixfmtpicker.h"
 
+#include "core/image/ImageFormats.h"
 #include "core/image/yuv/YuvFormat.h"
 #include "core/image/yuv/YuvSource.h"
 
@@ -9,9 +12,11 @@
 #include <QComboBox>
 #include <QCoreApplication>
 #include <QSettings>
+#include <QStandardItemModel>
 #include <QStringList>
 
 #include <iostream>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -76,6 +81,139 @@ void testSizePresetCombo()
     check(boxes.size() >= 4, "size preset adds a fourth combo box");
 }
 
+bool comboItemEnabled(QComboBox *box, int data)
+{
+    auto *model = qobject_cast<QStandardItemModel *>(box->model());
+    const int index = box->findData(data);
+    return model && index >= 0 && model->item(index)->isEnabled();
+}
+
+void testSplitPixelFormatControls()
+{
+    using namespace mviewer::core::yuv;
+    // The bug report: a 4:2:0 file with interleaved UV. Start from what inference
+    // guessed (planar yuv420p) and fix it with the layout and order controls.
+    YuvParamsDialog dialog(QStringLiteral("cam.yuv"), 240, makeFormat("yuv420p", 16, 10), {},
+                           false);
+    YuvPixFmtPicker *picker = dialog.pixFmtPicker();
+    check(picker != nullptr, "dialog has the split pixel-format picker");
+    if (!picker)
+        return;
+    check(picker->pixFmtName() == QStringLiteral("yuv420p"), "initial yuv420p shown");
+    check(picker->endianBox()->isHidden(), "byte order hidden at 8 bit");
+    check(picker->alignmentBox()->isHidden(), "alignment hidden at 8 bit");
+    check(!comboItemEnabled(picker->layoutBox(), int(Layout::Packed)), "packed disabled for 4:2:0");
+
+    picker->layoutBox()->setCurrentIndex(picker->layoutBox()->findData(int(Layout::SemiPlanar)));
+    check(picker->pixFmtName() == QStringLiteral("nv12"), "UV interleaved 4:2:0 is nv12");
+    check(dialog.format().layout == Layout::SemiPlanar, "dialog format is semi-planar");
+    check(dialog.canAccept(), "nv12 16x10 frame fits 240 bytes");
+
+    picker->orderBox()->setCurrentIndex(picker->orderBox()->findData(int(PlaneOrder::VU)));
+    check(picker->pixFmtName() == QStringLiteral("nv21"), "VU order gives nv21");
+
+    picker->layoutBox()->setCurrentIndex(picker->layoutBox()->findData(int(Layout::Planar)));
+    check(picker->pixFmtName() == QStringLiteral("yvu420p"), "planar VU is yvu420p (YV12)");
+
+    picker->layoutBox()->setCurrentIndex(picker->layoutBox()->findData(int(Layout::SemiPlanar)));
+    picker->orderBox()->setCurrentIndex(picker->orderBox()->findData(int(PlaneOrder::UV)));
+    picker->depthBox()->setCurrentIndex(picker->depthBox()->findData(10));
+    check(!picker->endianBox()->isHidden(), "byte order shown above 8 bit");
+    check(!picker->alignmentBox()->isHidden(), "alignment shown for 10-bit semi-planar");
+    check(picker->pixFmtName() == QStringLiteral("p010le"),
+          "10-bit UV interleaved defaults to P010");
+    picker->alignmentBox()->setCurrentIndex(picker->alignmentBox()->findData(0));
+    check(picker->pixFmtName() == QStringLiteral("nv12p10lelsb"), "LSB 10-bit semi-planar name");
+    Format lsb = dialog.format();
+    check(lsb.bitDepth == 10 && !lsb.msbAligned && lsb.layout == Layout::SemiPlanar,
+          "LSB 10-bit semi-planar format");
+    picker->endianBox()->setCurrentIndex(picker->endianBox()->findData(int(Endian::Big)));
+    check(dialog.format().endian == Endian::Big, "big-endian applies");
+
+    picker->subsamplingBox()->setCurrentIndex(
+        picker->subsamplingBox()->findData(int(Subsampling::S422)));
+    picker->depthBox()->setCurrentIndex(picker->depthBox()->findData(8));
+    check(comboItemEnabled(picker->layoutBox(), int(Layout::Packed)), "packed enabled for 4:2:2");
+    picker->layoutBox()->setCurrentIndex(picker->layoutBox()->findData(int(Layout::Packed)));
+    check(picker->pixFmtName() == QStringLiteral("yuyv422"), "packed 4:2:2 defaults to YUYV");
+    picker->orderBox()->setCurrentIndex(picker->orderBox()->findData(int(Packing::UYVY)));
+    check(picker->pixFmtName() == QStringLiteral("uyvy422"), "UYVY order");
+    check(!comboItemEnabled(picker->depthBox(), 10), "packed is 8-bit only");
+
+    picker->subsamplingBox()->setCurrentIndex(
+        picker->subsamplingBox()->findData(int(Subsampling::S400)));
+    check(picker->pixFmtName() == QStringLiteral("gray"), "4:0:0 is gray");
+    check(!picker->orderBox()->isEnabled(), "order disabled without chroma");
+
+    dialog.setPixFmt(QStringLiteral("p010le"));
+    const Format p010 = dialog.format();
+    check(p010.layout == Layout::SemiPlanar && p010.bitDepth == 10 && p010.msbAligned,
+          "setPixFmt(p010le) selects the controls");
+    dialog.setPixFmt(QStringLiteral("NV21"));
+    check(picker->pixFmtName() == QStringLiteral("nv21"), "setPixFmt is case-insensitive");
+    check(dialog.format().width == 16 && dialog.format().height == 10, "size kept across edits");
+}
+
+void testExtensionMapSettings()
+{
+    using namespace mviewer::core::yuv;
+    QSettings().clear();
+    const auto defaults = mviewer::ui::loadYuvExtensionMapSettings();
+    check(defaults == extensionRules() && !defaults.empty(), "missing key installs the defaults");
+    check(isYuvExtension("nv12") && mappedPixFmt("nv12") == std::optional<std::string>("nv12"),
+          "default .nv12 mapping");
+
+    auto rules = defaults;
+    for (auto &r : rules)
+        if (r.ext == "yuv")
+            r.pixFmt = "nv12";
+    rules.push_back({"cam", "nv21"});
+    mviewer::ui::saveYuvExtensionMap(rules);
+    const QStringList lines =
+        QSettings()
+            .value(QString::fromLatin1(mviewer::ui::kYuvExtensionMapSettingsKey))
+            .toStringList();
+    check(lines.contains(QStringLiteral("yuv=nv12")) && lines.contains(QStringLiteral("cam=nv21")),
+          "mapping persisted as ext=pixfmt lines");
+
+    setExtensionRules(defaultExtensionRules());
+    const auto reloaded = mviewer::ui::loadYuvExtensionMapSettings();
+    check(reloaded.size() == rules.size(), "every saved rule reloads");
+    check(isYuvExtension("cam") && mappedPixFmt("yuv") == std::optional<std::string>("nv12"),
+          "saved mapping reloads");
+
+    QSettings().setValue(QString::fromLatin1(mviewer::ui::kYuvExtensionMapSettingsKey),
+                         QStringList{QStringLiteral("raw=nv12"), QStringLiteral("x=bogus"),
+                                     QStringLiteral("garbage")});
+    mviewer::ui::loadYuvExtensionMapSettings();
+    check(isYuvExtension("raw") && !isYuvExtension("x"), "bad lines skipped");
+    check(isYuvExtension("yuv") && isYuvExtension("y4m"), ".yuv/.y4m always readable");
+
+    // Editor widget: round trip and validation.
+    setExtensionRules(defaultExtensionRules());
+    YuvExtensionMapEditor editor;
+    editor.setRules(extensionRules());
+    check(editor.rowCount() == int(extensionRules().size()), "editor lists every rule");
+    check(editor.validationError().isEmpty(), "defaults validate");
+    check(editor.rules() == extensionRules(), "editor round-trips the rules");
+    editor.addRow(QStringLiteral(".Bin"), QStringLiteral("nv12"));
+    check(editor.validationError().isEmpty(), "new .bin row validates");
+    check(editor.rules().back() == (ExtensionRule{"bin", "nv12"}), "row normalised");
+    editor.addRow(QStringLiteral("bin"), QString());
+    check(!editor.validationError().isEmpty(), "duplicate extension rejected");
+    editor.setRules(extensionRules());
+    editor.addRow(QStringLiteral("png"), QStringLiteral("nv12"));
+    // Only meaningful when a decoder registered .png in this process.
+    if (mviewer::core::ImageFormats::isSupportedSuffix("png"))
+        check(!editor.validationError().isEmpty(), "existing image format rejected");
+    editor.setRules(extensionRules());
+    editor.addRow(QStringLiteral("foo"), QStringLiteral("not-a-format"));
+    check(!editor.validationError().isEmpty(), "unknown pixel format rejected");
+
+    setExtensionRules(defaultExtensionRules());
+    QSettings().clear();
+}
+
 void testSettingsRoundTrip()
 {
     QSettings().clear();
@@ -124,6 +262,8 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName(QStringLiteral("mviewer-test-yuvparams"));
     testDialogSummary();
     testSizePresetCombo();
+    testSplitPixelFormatControls();
+    testExtensionMapSettings();
     testSettingsRoundTrip();
     return g_failures == 0 ? 0 : 1;
 }

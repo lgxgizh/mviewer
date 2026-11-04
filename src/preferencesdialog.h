@@ -9,6 +9,7 @@ class QCheckBox;
 class QSlider;
 class QSettings;
 class QFormLayout;
+class YuvExtensionMapEditor;
 
 // F1 (M22): centralized Preferences dialog. Reads/writes the existing QSettings
 // keys plus the new toggles introduced by F2/F3/F4 (autoAlignBeforeDiff,
@@ -32,6 +33,7 @@ class PreferencesDialog : public QDialog
     QWidget *buildGeneralTab(QSettings &s);
     QWidget *buildCompareTab(QSettings &s);
     QWidget *buildAnalysisTab(QSettings &s);
+    QWidget *buildYuvTab();
 
     QComboBox *m_uiTheme = nullptr;
     QComboBox *m_uiLanguage = nullptr;
@@ -51,4 +53,5 @@ class PreferencesDialog : public QDialog
     QComboBox *m_rawDisplayPolicy = nullptr;
     QComboBox *m_analysisOverlay = nullptr;
     QSlider *m_zebraThreshold = nullptr;
+    YuvExtensionMapEditor *m_yuvExtensionMap = nullptr;
 };

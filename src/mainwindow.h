@@ -378,6 +378,7 @@ class MainWindow : public QMainWindow
     void onYuvToolRequested(const QStringList &paths); // 1 = parameters, 2 = compare
     void compareYuv(const QString &pathA, const QString &pathB);
     bool showYuvLoadHint(const QString &path);
+    void onYuvExtensionMapChanged(); // Preferences > YUV edited the suffix mapping
     static QString yuvSampleText(const QString &path, int frameIndex, int x, int y);
     void connectViewerPixelInfo();
     void toggleFocusBrowse();

@@ -1,4 +1,5 @@
 #include "core/image/yuv/YuvFormat.h"
+#include "core/image/yuv/YuvPixFmtGeneric.h"
 
 #include <limits>
 #include <vector>
@@ -87,24 +88,32 @@ constexpr PixSpec kSpecs[] = {
     {"nv24", L::SemiPlanar, S::S444, O::UV, P::None, 8, false, E::Little},
     {"p010le", L::SemiPlanar, S::S420, O::UV, P::None, 10, true, E::Little},
     {"p010be", L::SemiPlanar, S::S420, O::UV, P::None, 10, true, E::Big},
+    {"p012le", L::SemiPlanar, S::S420, O::UV, P::None, 12, true, E::Little},
+    {"p012be", L::SemiPlanar, S::S420, O::UV, P::None, 12, true, E::Big},
     {"p016le", L::SemiPlanar, S::S420, O::UV, P::None, 16, true, E::Little},
     {"p016be", L::SemiPlanar, S::S420, O::UV, P::None, 16, true, E::Big},
     {"p210le", L::SemiPlanar, S::S422, O::UV, P::None, 10, true, E::Little},
+    {"p210be", L::SemiPlanar, S::S422, O::UV, P::None, 10, true, E::Big},
     {"p410le", L::SemiPlanar, S::S444, O::UV, P::None, 10, true, E::Little},
+    {"p410be", L::SemiPlanar, S::S444, O::UV, P::None, 10, true, E::Big},
     {"yuyv422", L::Packed, S::S422, O::UV, P::YUYV, 8, false, E::Little},
     {"uyvy422", L::Packed, S::S422, O::UV, P::UYVY, 8, false, E::Little},
     {"yvyu422", L::Packed, S::S422, O::VU, P::YVYU, 8, false, E::Little},
 };
 
 constexpr Alias kAliases[] = {
-    {"i420", "yuv420p"},    {"iyuv", "yuv420p"},    {"yuy2", "yuyv422"}, {"yuyv", "yuyv422"},
-    {"uyvy", "uyvy422"},    {"y422", "uyvy422"},    {"yvyu", "yvyu422"}, {"y800", "gray"},
-    {"gray8", "gray"},      {"y8", "gray"},         {"i422", "yuv422p"}, {"i444", "yuv444p"},
-    {"gray16", "gray16le"}, {"gray10", "gray10le"}, {"p010", "p010le"},  {"p016", "p016le"},
+    {"i420", "yuv420p"},    {"iyuv", "yuv420p"},    {"yuy2", "yuyv422"},   {"yuyv", "yuyv422"},
+    {"uyvy", "uyvy422"},    {"y422", "uyvy422"},    {"yvyu", "yvyu422"},   {"y800", "gray"},
+    {"gray8", "gray"},      {"y8", "gray"},         {"i422", "yuv422p"},   {"i444", "yuv444p"},
+    {"gray16", "gray16le"}, {"gray10", "gray10le"}, {"p010", "p010le"},    {"p016", "p016le"},
+    {"p012", "p012le"},     {"p210", "p210le"},     {"p410", "p410le"},    {"yv16", "yvu422p"},
+    {"yv24", "yvu444p"},    {"yuv420sp", "nv12"},   {"yuv422sp", "nv16"},  {"yuv444sp", "nv24"},
+    {"yvu420sp", "nv21"},   {"yuv420", "yuv420p"},  {"yuv422", "yuv422p"}, {"yuv444", "yuv444p"},
+    {"yuv400", "gray"},     {"i400", "gray"},
 };
 
 constexpr int kSpecCount = static_cast<int>(sizeof(kSpecs) / sizeof(kSpecs[0]));
-static_assert(kSpecCount == 58, "canonical pixel-format table size");
+static_assert(kSpecCount == 62, "canonical pixel-format table size");
 
 std::vector<std::string> copyCanonicalPixFmtNames()
 {
@@ -573,7 +582,9 @@ std::string pixFmtName(const Format &f)
     const PixSpec *spec = findByFormat(f);
     if (spec == nullptr)
     {
-        return {};
+        // Combinations outside the FFmpeg-style table (VU planar above 8 bit,
+        // NV61, LSB-aligned semi-planar, ...) get a systematic name.
+        return detail::genericPixFmtName(f);
     }
     return spec->name;
 }
@@ -584,10 +595,11 @@ bool applyPixFmtName(std::string_view name, Format &inout)
     {
         return false;
     }
-    const PixSpec *spec = findByName(canonicalizePixToken(lowerAscii(name)));
+    const std::string canonical = canonicalizePixToken(lowerAscii(name));
+    const PixSpec *spec = findByName(canonical);
     if (spec == nullptr)
     {
-        return false;
+        return detail::parseGenericPixFmtName(canonical, inout);
     }
     inout.layout = spec->layout;
     inout.subsampling = spec->sub;

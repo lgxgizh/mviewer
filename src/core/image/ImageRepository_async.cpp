@@ -6,6 +6,7 @@
 #include "core/image/ImageRepository.h"
 
 #include "core/image/decoder/RawDecodePlan.h"
+#include "core/image/yuv/YuvExtensionMap.h"
 #include "core/image/yuv/YuvFile.h"
 
 #include "core/image/FrameSequence.h"
@@ -37,7 +38,7 @@ bool sequenceCandidate(const std::string &path)
     for (char &c : suffix)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     return suffix == "gif" || suffix == "webp" || suffix == "tif" || suffix == "tiff" ||
-           suffix == "yuv" || suffix == "y4m";
+           mviewer::core::yuv::isYuvExtension(suffix);
 }
 
 } // namespace

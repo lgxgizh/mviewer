@@ -48,6 +48,8 @@ add_library(mviewer_core SHARED
     core/image/FrameSequence.cpp
     core/image/FrameSequence_yuv.cpp
     core/image/yuv/YuvFormat.cpp
+    core/image/yuv/YuvPixFmtGeneric.cpp
+    core/image/yuv/YuvExtensionMap.cpp
     core/image/yuv/Y4mHeader.cpp
     core/image/yuv/YuvParamInference.cpp
     core/image/yuv/YuvUnpack.cpp
@@ -336,6 +338,8 @@ add_library(mviewer_ui STATIC
     yuvcomparedialog.cpp
     yuvparamsdialog.cpp
     yuvparamsettings.cpp
+    yuvextensionmapeditor.cpp
+    yuvpixfmtpicker.cpp
     Theme.cpp
     platform/WindowChrome.cpp
     Language.cpp
@@ -1294,6 +1298,12 @@ target_link_libraries(test_yuv_inference PRIVATE mviewer_core)
 target_compile_features(test_yuv_inference PRIVATE cxx_std_20)
 target_include_directories(test_yuv_inference PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_inference_tests COMMAND test_yuv_inference)
+
+add_executable(test_yuv_layout_reference core/test_yuv_layout_reference.cpp)
+target_link_libraries(test_yuv_layout_reference PRIVATE mviewer_core)
+target_compile_features(test_yuv_layout_reference PRIVATE cxx_std_20)
+target_include_directories(test_yuv_layout_reference PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_layout_reference_tests COMMAND test_yuv_layout_reference)
 
 add_executable(test_yuv_unpack core/test_yuv_unpack.cpp)
 target_link_libraries(test_yuv_unpack PRIVATE mviewer_core)

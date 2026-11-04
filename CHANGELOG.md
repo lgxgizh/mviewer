@@ -2,6 +2,32 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **YUV pixel format picker:** the YUV Parameters dialog replaces the long
+  pixel-format list with separate controls: chroma subsampling
+  (4:2:0 / 4:2:2 / 4:4:4 / 4:0:0), layout (planar / UV interleaved
+  semi-planar / packed 4:2:2), component order (UV or VU; YUYV / UYVY / YVYU
+  for packed), bit depth (8 / 10 / 12 / 16), byte order and MSB/LSB alignment
+  (shown only above 8 bit). Invalid combinations are disabled and the
+  canonical format name is shown read-only. NV12 and I420 frames have the
+  same size, so a semi-planar file guessed as planar decoded silently wrong;
+  the explicit layout control fixes that in one click.
+
+### Added
+
+- **YUV extension mapping:** Preferences → YUV holds an editable
+  extension → pixel-format table (saved in settings; defaults cover .yuv,
+  .nv12, .nv21, .i420, .yv12, .p010, .yuyv/.yuy2, .uyvy, .nv16, .gray, .y).
+  Mapped extensions open, browse and thumbnail as raw YUV. Priority: y4m
+  header > saved per-file parameters > filename tokens > extension mapping >
+  defaults. Generic names such as `nv12p10lelsb` and `yvu444p12be` cover every
+  layout/depth combination.
+- **Tests:** `yuv_layout_reference_tests` checks every layout against an
+  independent float BT.601/709/2020 reference (within one code value), the
+  name grammar round trip, and mapping/inference priority; the dialog test
+  drives the new controls and the extension-map settings.
+
 ## [1.0.162] - 2026-11-03
 
 ### Release

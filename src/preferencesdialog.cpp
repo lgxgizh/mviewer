@@ -8,6 +8,8 @@
 #include "gpu/GpuTileUploader.h"
 #include "platform/WindowChrome.h"
 #include "thumbnailpanel.h"
+#include "yuvextensionmapeditor.h"
+#include "yuvparamsettings.h"
 
 #include <QButtonGroup>
 #include <QCheckBox>
@@ -16,6 +18,7 @@
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMessageBox>
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
@@ -279,6 +282,7 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
         {buildGeneralTab(s), tr("General"), "view_grid", "preferencesPageGeneral"},
         {buildCompareTab(s), tr("Compare"), "compare", "preferencesPageCompare"},
         {buildAnalysisTab(s), tr("Analyze"), "histogram", "preferencesPageAnalyze"},
+        {buildYuvTab(), tr("YUV"), "filter", "preferencesPageYuv"},
     };
     for (const auto &page : kPages)
     {
@@ -314,8 +318,27 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     main->addWidget(buttons);
 }
 
+QWidget *PreferencesDialog::buildYuvTab()
+{
+    m_yuvExtensionMap = new YuvExtensionMapEditor(this);
+    m_yuvExtensionMap->setRules(mviewer::core::yuv::extensionRules());
+    return m_yuvExtensionMap;
+}
+
 void PreferencesDialog::accept()
 {
+    if (m_yuvExtensionMap)
+    {
+        const QString problem = m_yuvExtensionMap->validationError();
+        if (!problem.isEmpty())
+        {
+            QMessageBox::warning(this, tr("YUV file extensions"), problem);
+            return;
+        }
+        const auto rules = m_yuvExtensionMap->rules();
+        if (rules != mviewer::core::yuv::extensionRules())
+            mviewer::ui::saveYuvExtensionMap(rules);
+    }
     QSettings s;
     if (m_uiTheme)
     {
