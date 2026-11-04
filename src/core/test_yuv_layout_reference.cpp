@@ -107,7 +107,8 @@ std::vector<uint8_t> pack(const Samples &s, const Format &f)
             for (int cx = 0; cx < s.cw; ++cx)
             {
                 const uint16_t y0 = s.y[size_t(r) * s.w + 2 * size_t(cx)];
-                const uint16_t y1 = 2 * cx + 1 < s.w ? s.y[size_t(r) * s.w + 2 * size_t(cx) + 1] : 0;
+                const uint16_t y1 =
+                    2 * cx + 1 < s.w ? s.y[size_t(r) * s.w + 2 * size_t(cx) + 1] : 0;
                 const uint16_t u = s.u[size_t(r) * s.cw + cx], v = s.v[size_t(r) * s.cw + cx];
                 uint16_t q[4];
                 switch (f.packing)
