@@ -1,0 +1,37 @@
+// mviewer.rc.in - Windows resources for MViewer.exe.
+// GENERATED into the build tree by src/CMakeLists.txt (configure_file) so the
+// version fields follow CMake project(VERSION), the single version source.
+// Do not hard-code a version here.
+
+#include <winver.h>
+
+IDI_ICON1 ICON "@MVIEWER_RC_ICON@"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "MViewer contributors"
+            VALUE "FileDescription", "MViewer image viewer"
+            VALUE "FileVersion", "@PROJECT_VERSION@.0"
+            VALUE "InternalName", "MViewer"
+            VALUE "LegalCopyright", "(c) MViewer contributors"
+            VALUE "OriginalFilename", "MViewer.exe"
+            VALUE "ProductName", "MViewer"
+            VALUE "ProductVersion", "@PROJECT_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
