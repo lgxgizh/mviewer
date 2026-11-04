@@ -20,6 +20,18 @@
 #include <QIcon>
 #include <QTimer>
 
+#ifdef Q_OS_WIN
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+
+#include <cstdio>
+#endif
+
 #include <exception>
 #include <functional>
 #include <string>
@@ -27,6 +39,26 @@
 
 class MainWindow;
 static QStringList g_openOnLaunch;
+
+#ifdef Q_OS_WIN
+// MViewer.exe is a GUI-subsystem binary, so it starts without a console. For
+// the --selftest CLI mode, print into the terminal it was typed in. When the
+// caller already redirected stdout/stderr (CI pipes, ctest), the inherited
+// handles are valid and are left alone so the redirected output is kept.
+static void attachParentConsoleForCli()
+{
+    const HANDLE out = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (out != nullptr && out != INVALID_HANDLE_VALUE)
+        return;
+    if (!AttachConsole(ATTACH_PARENT_PROCESS))
+        return;
+    FILE *stream = nullptr;
+    if (freopen_s(&stream, "CONOUT$", "w", stdout) != 0)
+        stream = nullptr;
+    if (freopen_s(&stream, "CONOUT$", "w", stderr) != 0)
+        stream = nullptr;
+}
+#endif
 
 class MViewerApplication final : public QApplication
 {
@@ -98,7 +130,12 @@ int main(int argc, char *argv[])
     for (int i = 1; i < arguments.size(); ++i)
     {
         if (arguments.at(i) == QStringLiteral("--selftest"))
+        {
+#ifdef Q_OS_WIN
+            attachParentConsoleForCli();
+#endif
             return mviewer::core::runSelfTest();
+        }
     }
 
     // M51: collect positional arguments first. Classification happens after

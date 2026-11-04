@@ -37,6 +37,7 @@ Unicode True
 
 VIProductVersion "${VI_VERSION}"
 VIAddVersionKey "ProductName" "${APPNAME}"
+VIAddVersionKey "CompanyName" "MViewer contributors"
 VIAddVersionKey "FileVersion" "${VI_VERSION}"
 VIAddVersionKey "ProductVersion" "${VI_VERSION}"
 VIAddVersionKey "LegalCopyright" "(c) MViewer contributors"
