@@ -166,7 +166,8 @@ double planeSsim8x8(const uint16_t *a, const uint16_t *b, int width, const std::
         std::fill(cAB.begin(), cAB.end(), Acc{0});
         for (int r = 0; r < kWindow; ++r)
         {
-            const std::size_t base = static_cast<std::size_t>(oy + r) * w;
+            const std::size_t base =
+                (static_cast<std::size_t>(oy) + static_cast<std::size_t>(r)) * w;
             const uint16_t *ra = a + base;
             const uint16_t *rb = b + base;
             for (std::size_t x = 0; x < w; ++x)
@@ -189,7 +190,7 @@ double planeSsim8x8(const uint16_t *a, const uint16_t *b, int width, const std::
             Acc sAB = 0;
             for (int k = 0; k < kWindow; ++k)
             {
-                const auto i = static_cast<std::size_t>(ox + k);
+                const std::size_t i = static_cast<std::size_t>(ox) + static_cast<std::size_t>(k);
                 sA += cA[i];
                 sB += cB[i];
                 sAA += cAA[i];
