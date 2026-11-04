@@ -72,8 +72,24 @@ void MainWindow::updateSelectionActions()
         m_zoomPresetsMenu->menuAction()->setEnabled(canZoom);
     enableActionIf(m_actSlideshow, hasCurrent && !currentDir().isEmpty());
     const bool canTransform = hasCurrent || (n > 0);
+    QStringList transformTargets;
+    if (n > 0)
+        transformTargets = m_selection->selection();
+    else if (hasCurrent)
+        transformTargets.append(currentImagePath());
+    const bool hasRotatable = anyRotatableFile(transformTargets);
+    const bool enableTransform = canTransform && hasRotatable;
+    const bool unsupportedTargets = canTransform && !hasRotatable;
+    const QString unsupportedTip =
+        unsupportedTargets
+            ? tr("Rotate/flip rewrites the file and supports only JPEG, PNG, BMP and WebP")
+            : QString();
     for (QAction *act : {m_actRotateCW, m_actRotateCCW, m_actFlipH, m_actFlipV})
-        enableActionIf(act, canTransform);
+    {
+        enableActionIf(act, enableTransform);
+        if (act)
+            act->setStatusTip(unsupportedTip);
+    }
     updateOtherPaneTransferActions();
     applyActivePaneStatusBar();
     updateNavigationActions();

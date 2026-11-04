@@ -63,6 +63,7 @@ add_library(mviewer_core SHARED
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
     core/image/ImageFileRotate.cpp
+    core/image/ImageFileReplace.cpp
     core/image/JpegExif.cpp
     core/image/QtConvert.cpp
     core/image/ImageStats.cpp
@@ -215,6 +216,7 @@ add_library(mviewer_ui STATIC
     mainwindow_ui_chrome.cpp
     mainwindow_ui_menus.cpp
     mainwindow_filetransform.cpp
+    mainwindow_transformsupport.cpp
     mainwindow_yuv.cpp
     mainwindow_ui_connections.cpp
     mainwindow_ui_connections_browse.cpp
@@ -599,7 +601,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode raw_extensions raw_display crashhandler pluginabi pluginexamples encoder imagetransform imagerotate jpegexif rotatefiles filecopycommand differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode raw_extensions raw_display crashhandler pluginabi pluginexamples encoder imagetransform imagerotate imagerotate_io jpegexif rotatefiles filecopycommand differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1934,6 +1936,7 @@ add_test(NAME crashhandler_tests COMMAND test_crashhandler)
 add_test(NAME encoder_tests COMMAND test_encoder)
 add_test(NAME imagetransform_tests COMMAND test_imagetransform)
 add_test(NAME imagerotate_tests COMMAND test_imagerotate)
+add_test(NAME imagerotate_io_tests COMMAND test_imagerotate_io)
 add_test(NAME jpegexif_tests COMMAND test_jpegexif)
 add_test(NAME rotatefiles_tests COMMAND test_rotatefiles)
 add_test(NAME filecopycommand_tests COMMAND test_filecopycommand)

@@ -1,5 +1,6 @@
 #include "FileSystemAdapter.h"
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <fstream>
@@ -60,8 +61,13 @@ class StdFileSystemAdapter final : public FileSystemAdapter
 
     bool rename(const fs::path &from, const fs::path &to, std::error_code &ec) override
     {
-        // Bounded exponential backoff: 10+20+40+80+160 ms (~0.3 s) worst case.
-        constexpr int kAttempts = 6;
+        // Bounded exponential backoff capped at 400 ms per step:
+        // 10+20+40+80+160+320+400+400 ms (~1.4 s) worst case. On Windows a
+        // decode still in flight (this program's viewer/thumbnail workers,
+        // Windows Search, antivirus) holds the file without FILE_SHARE_DELETE
+        // and briefly blocks the rename; 0.3 s was too short in practice.
+        constexpr int kAttempts = 9;
+        constexpr std::chrono::milliseconds kMaxDelay(400);
         std::chrono::milliseconds delay(10);
         for (int attempt = 1;; ++attempt)
         {
@@ -70,7 +76,7 @@ class StdFileSystemAdapter final : public FileSystemAdapter
             if (!ec || attempt >= kAttempts || !isTransientRenameError(ec))
                 return !ec;
             std::this_thread::sleep_for(delay);
-            delay *= 2;
+            delay = std::min(delay * 2, kMaxDelay);
         }
     }
 

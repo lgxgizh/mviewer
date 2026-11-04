@@ -3,6 +3,7 @@
 #include "mainwindow_p.h"
 
 #include "core/command/RotateFilesCommand.h"
+#include "core/image/FrameSequence.h"
 #include "core/image/ImageFileRotate.h"
 #include "core/image/ImageLoadingFacade.h"
 #include "imageviewer.h"
@@ -146,6 +147,7 @@ void releaseSourceForRewrite(ImageViewer *viewer, PreviewPanel *preview, const Q
         viewer->releaseSourceHandles(path);
     if (preview)
         preview->releaseSourceHandles(path);
+    mviewer::core::FrameSequenceReader::releaseFile(utf8);
     mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
     ThumbnailProvider::invalidateSource(utf8);
 }
@@ -433,6 +435,30 @@ FileTransformBatch batchFromRotateCommand(const RotateFilesCommand &command)
     return batch;
 }
 
+void mentionSkippedUnsupported(QStatusBar *bar, int skipped)
+{
+    if (skipped <= 0 || !bar)
+        return;
+    const QString extra = MainWindow::tr("%n unsupported file(s) skipped", nullptr, skipped);
+    const QString current = bar->currentMessage();
+    if (current.isEmpty())
+        bar->showMessage(extra, 3000);
+    else
+        bar->showMessage(current + QStringLiteral(" — ") + extra, 3000);
+}
+
+QStringList filterListedTransformPaths(QWidget *parent, const QStringList &paths, bool rotate)
+{
+    const QStringList supported = rotatableFiles(paths);
+    if (!supported.isEmpty() || paths.isEmpty())
+        return supported;
+    const QString reason =
+        MainWindow::tr("Rotate/flip rewrites the file and supports only JPEG, PNG, BMP and WebP");
+    QMessageBox::information(
+        parent, rotate ? MainWindow::tr("Rotation failed") : MainWindow::tr("Flip failed"), reason);
+    return {};
+}
+
 void showUndoLimitStatus(QStatusBar *bar, const RotateFilesCommand &command)
 {
     if (command.blockedByPerFileLimit())
@@ -477,21 +503,25 @@ void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int d
 {
     if (paths.isEmpty())
         return;
+    const QStringList supported = filterListedTransformPaths(this, paths, rotate);
+    if (supported.isEmpty())
+        return;
+    const int skippedUnsupported = static_cast<int>(paths.size() - supported.size());
     const FileTransformKind kind = rotate ? FileTransformKind::Rotate : FileTransformKind::Flip;
-    if (!confirmTransform(this, paths, kind))
+    if (!confirmTransform(this, supported, kind))
         return;
 
     const SplitSelectionRestorePlan selectionPlan = captureTransformSelection();
     std::vector<std::string> utf8Paths;
-    utf8Paths.reserve(static_cast<size_t>(paths.size()));
-    for (const QString &path : paths)
+    utf8Paths.reserve(static_cast<size_t>(supported.size()));
+    for (const QString &path : supported)
         utf8Paths.push_back(path.toUtf8().toStdString());
 
     const RotateFilesCommand::Op op =
         rotate ? RotateFilesCommand::Op::Rotate
                : (horizontal ? RotateFilesCommand::Op::FlipH : RotateFilesCommand::Op::FlipV);
     auto command = std::make_unique<RotateFilesCommand>(std::move(utf8Paths), op, degrees);
-    BatchFileProgress progress(this, static_cast<int>(paths.size()), kind);
+    BatchFileProgress progress(this, static_cast<int>(supported.size()), kind);
     command->setProgressCallback(
         [&progress](int finished, int)
         {
@@ -512,7 +542,7 @@ void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int d
                 refreshed.append(QString::fromStdString(path));
             guard->refreshTransformedPaths(refreshed);
         });
-    for (const QString &path : paths)
+    for (const QString &path : supported)
     {
         releaseSourceForRewrite(m_imageViewer, m_previewPanel, path, path.toUtf8().toStdString());
     }
@@ -525,10 +555,11 @@ void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int d
     const FileTransformBatch batch = batchFromRotateCommand(*command);
     applyTransformSelection(selectionPlan);
     if (rotate)
-        reportRotateBatch(this, statusBar(), paths, batch, degrees);
+        reportRotateBatch(this, statusBar(), supported, batch, degrees);
     else
-        reportFlipBatch(this, statusBar(), paths, batch, horizontal);
+        reportFlipBatch(this, statusBar(), supported, batch, horizontal);
     showUndoLimitStatus(statusBar(), *command);
+    mentionSkippedUnsupported(statusBar(), skippedUnsupported);
 
     command->setProgressCallback({});
     if (command->lastError().empty() && command->canUndo())

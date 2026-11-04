@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Rotate/flip no longer fails with "Rotation failed" when the image is still
+  being read (by this program's viewer/thumbnail workers, Windows Search or
+  antivirus) or the folder is read-only; unsupported formats now disable
+  rotate/flip with a clear reason.
+- Rename/move now waits up to about 1.4 s (was 0.3 s) for another reader to
+  release the file before failing.
+
 ## [1.0.163] - 2026-11-03
 
 ### Release
