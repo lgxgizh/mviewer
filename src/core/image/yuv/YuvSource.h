@@ -89,6 +89,14 @@ int64_t yuvFrameOffset(const YuvSourceInfo &info, int64_t index);
 bool readYuvFrame(const YuvSourceInfo &info, int64_t index, const ReadAtFn &read, YuvPlanes &out,
                   std::string *why = nullptr);
 
+// Reads frame 'index' and renders it: identical pixels to readYuvFrame followed by
+// renderYuvImage(planes, info.format, maxEdge, up), but when the frame is scaled
+// down only the sampled pixels are decoded from the raw bytes (no full unpack).
+// Empty ImageData (and *why when the read fails) on failure.
+ImageData readYuvFrameImage(const YuvSourceInfo &info, int64_t index, const ReadAtFn &read,
+                            int maxEdge, ChromaUpsample up = ChromaUpsample::Nearest,
+                            std::string *why = nullptr);
+
 // Converts planes to an RGB24 ImageData. maxEdge > 0 and the longest edge larger
 // than maxEdge -> output scaled down (aspect kept, longest edge == maxEdge, each
 // dimension >= 1) by nearest sampling of the converted image (convert only the

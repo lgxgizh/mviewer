@@ -29,6 +29,10 @@ struct OpenedYuvFile
 // is resolved (out.info.known may be false). Never throws.
 bool openYuvFile(const std::string &path, OpenedYuvFile &out);
 
+// A ReadAtFn on its own stream for 'path' (empty when it cannot be opened), so
+// several threads can read one file at once. Never throws.
+ReadAtFn openYuvReader(const std::string &path);
+
 // Fills source size, file size, names, bit depth, channels (1 gray else 3),
 // format "YUV"/"Y4M", color space such as "BT.709 limited", frameCount clamped
 // to [1, INT_MAX], currentFrame, sequenceKind ("pages" when frameCount > 1,

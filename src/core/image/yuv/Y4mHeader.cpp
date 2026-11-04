@@ -1,5 +1,6 @@
 #include "core/image/yuv/Y4mHeader.h"
 
+#include <algorithm>
 #include <array>
 #include <limits>
 #include <string_view>
@@ -466,9 +467,21 @@ std::vector<int64_t> indexY4mFrames(const Y4mInfo &info, int64_t fileSize, const
         size_t toRead = kMaxY4mHeaderBytes;
         if (remain < static_cast<int64_t>(kMaxY4mHeaderBytes))
             toRead = static_cast<size_t>(remain);
-        const size_t gotRaw = read(cursor, buffer.data(), toRead);
-        const size_t got = gotRaw < toRead ? gotRaw : toRead;
-        const int64_t headerLen = parseY4mFrameHeader(buffer.data(), got);
+        // Frame headers are usually just "FRAME\n": try a short read first and
+        // only fall back to the full window when that does not contain the header.
+        constexpr size_t kShortRead = 64;
+        int64_t headerLen = -1;
+        if (toRead > kShortRead)
+        {
+            const size_t gotShort = read(cursor, buffer.data(), kShortRead);
+            headerLen = parseY4mFrameHeader(buffer.data(), std::min(gotShort, kShortRead));
+        }
+        if (headerLen < 0)
+        {
+            const size_t gotRaw = read(cursor, buffer.data(), toRead);
+            const size_t got = gotRaw < toRead ? gotRaw : toRead;
+            headerLen = parseY4mFrameHeader(buffer.data(), got);
+        }
         if (headerLen < 0)
             break;
         int64_t pixel = 0;

@@ -23,6 +23,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
     core/image/decoder/YuvDecoder.cpp
+    core/image/decoder/YuvParallelRows.cpp
     core/image/decoder/RawDecoder_libraw.cpp
     core/image/decoder/RawDecodePolicy.cpp
     core/image/ImageObject.cpp
@@ -53,6 +54,7 @@ add_library(mviewer_core SHARED
     core/image/yuv/YuvToRgb.cpp
     core/image/yuv/YuvToRgb_simd.cpp
     core/image/yuv/YuvSource.cpp
+    core/image/yuv/YuvScaledRender.cpp
     core/image/yuv/YuvFile.cpp
     core/image/yuv/YuvSampleProbe.cpp
     core/image/FrameSequenceProbe.cpp
@@ -1347,6 +1349,14 @@ target_link_libraries(test_yuv_metrics PRIVATE mviewer_core)
 target_compile_features(test_yuv_metrics PRIVATE cxx_std_20)
 target_include_directories(test_yuv_metrics PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_metrics_tests COMMAND test_yuv_metrics)
+
+# YUV fast paths (integer SSIM, raw thumbnails, threaded RGB, parallel compare,
+# y4m resolve cache) must match the reference results exactly.
+add_executable(test_yuv_fast_paths core/test_yuv_fast_paths.cpp)
+target_link_libraries(test_yuv_fast_paths PRIVATE mviewer_core)
+target_compile_features(test_yuv_fast_paths PRIVATE cxx_std_20)
+target_include_directories(test_yuv_fast_paths PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME yuv_fast_paths_tests COMMAND test_yuv_fast_paths)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert

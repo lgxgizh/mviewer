@@ -75,16 +75,17 @@ FrameDecodeResult decodeYuvSequenceFrame(const std::string &path, int frameIndex
             return result;
         }
 
-        mviewer::core::yuv::YuvPlanes planes;
+        // Scaled requests (thumbnails / filmstrip) sample the raw frame directly.
         std::string why;
-        if (!mviewer::core::yuv::readYuvFrame(opened.info, static_cast<int64_t>(frameIndex),
-                                              opened.read, planes, &why))
+        const int edge = maxEdge > 0 ? maxEdge : 0;
+        result.pixels = mviewer::core::yuv::readYuvFrameImage(
+            opened.info, static_cast<int64_t>(frameIndex), opened.read, edge,
+            mviewer::core::yuv::ChromaUpsample::Nearest, &why);
+        if (result.pixels.isNull() && !why.empty())
         {
-            result.error = why.empty() ? std::string("YUV frame read failed") : why;
+            result.error = why;
             return result;
         }
-        const int edge = maxEdge > 0 ? maxEdge : 0;
-        result.pixels = mviewer::core::yuv::renderYuvImage(planes, opened.info.format, edge);
         result.frame = {frameIndex, 0, opened.info.format.width, opened.info.format.height};
         mviewer::core::yuv::fillYuvMetadata(opened, path, frameIndex, result.metadata);
         const std::string suffix = mviewer::core::yuv::yuvCacheKeySuffix(path);

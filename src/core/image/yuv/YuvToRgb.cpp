@@ -1,6 +1,7 @@
 #include "core/image/yuv/YuvToRgb.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 
 namespace mviewer::core::yuv
@@ -57,22 +58,21 @@ bool planesMatch(const YuvPlanes &p, const Format &f)
            planeOk(p.v, p.chromaWidth, p.chromaHeight);
 }
 
-// Weighted pick of two chroma neighbours for one output position along an axis.
-// 'cosited': chroma sits on even luma positions; otherwise it sits between them (3:1).
-int16_t upsampleAxis(const int16_t *c, int count, int pos, bool cosited)
+// Normalizes one row of samples to 12 bits (same result as toTwelveBit per sample).
+// The shift is uniform across the row, so the loop vectorizes.
+void toTwelveBitRow(const uint16_t *src, int n, int bitDepth, int16_t *dst)
 {
-    const int base = pos >> 1;
-    const int last = count - 1;
-    const int a = std::min(base, last);
-    if (cosited)
+    const int depth = std::clamp(bitDepth, 1, 16);
+    if (depth >= 12)
     {
-        if ((pos & 1) == 0)
-            return c[a];
-        const int b = std::min(base + 1, last);
-        return static_cast<int16_t>((c[a] + c[b] + 1) >> 1);
+        const int shift = depth - 12;
+        for (int x = 0; x < n; ++x)
+            dst[x] = static_cast<int16_t>(std::min(static_cast<int>(src[x]) >> shift, 4095));
+        return;
     }
-    const int b = (pos & 1) == 0 ? std::max(base - 1, 0) : std::min(base + 1, last);
-    return static_cast<int16_t>((3 * c[a] + c[b] + 2) >> 2);
+    const int shift = 12 - depth;
+    for (int x = 0; x < n; ++x)
+        dst[x] = static_cast<int16_t>(std::min(static_cast<int>(src[x]) << shift, 4095));
 }
 
 struct ChromaRowContext
@@ -85,29 +85,52 @@ struct ChromaRowContext
     bool cositedY;
 };
 
-// Builds one 12-bit chroma plane row (subsampled width) for luma row 'y'.
-void chromaSourceRow(const ChromaRowContext &ctx, const std::vector<uint16_t> &plane, int y,
-                     std::vector<int16_t> &out)
+// Chroma plane rows (a, b) and blend mode that produce the chroma row for luma row 'y'.
+// Rows with equal taps produce identical chroma, so the caller reuses them.
+struct ChromaTaps
 {
-    const int cw = ctx.planes->chromaWidth;
+    int a = 0;
+    int b = 0;
+    bool blend = false;
+
+    bool operator==(const ChromaTaps &) const = default;
+};
+
+ChromaTaps chromaTapsFor(const ChromaRowContext &ctx, int y)
+{
     const int ch = ctx.planes->chromaHeight;
-    const int depth = ctx.planes->bitDepth;
-    out.resize(static_cast<size_t>(cw));
-    auto rowPtr = [&](int cy)
-    { return plane.data() + static_cast<size_t>(cy) * static_cast<size_t>(cw); };
+    ChromaTaps t;
     if (ctx.shiftY == 0 || ctx.up == ChromaUpsample::Nearest)
     {
-        const uint16_t *r = rowPtr(std::min(y >> ctx.shiftY, ch - 1));
-        for (int x = 0; x < cw; ++x)
-            out[static_cast<size_t>(x)] = toTwelveBit(r[x], depth);
-        return;
+        t.a = std::min(y >> ctx.shiftY, ch - 1);
+        t.b = t.a;
+        return t;
     }
     const int base = std::min(y >> 1, ch - 1);
     const int next = std::min(base + 1, ch - 1);
     const int prev = ctx.cositedY ? base : std::max(base - 1, 0);
-    const int other = (y & 1) == 0 ? prev : next;
-    const uint16_t *ra = rowPtr(base);
-    const uint16_t *rb = rowPtr(other);
+    t.a = base;
+    t.b = (y & 1) == 0 ? prev : next;
+    t.blend = true;
+    return t;
+}
+
+// Builds one 12-bit chroma plane row (subsampled width) from the taps.
+void chromaSourceRow(const ChromaRowContext &ctx, const std::vector<uint16_t> &plane,
+                     const ChromaTaps &t, std::vector<int16_t> &out)
+{
+    const int cw = ctx.planes->chromaWidth;
+    const int depth = ctx.planes->bitDepth;
+    out.resize(static_cast<size_t>(cw));
+    auto rowPtr = [&](int cy)
+    { return plane.data() + static_cast<size_t>(cy) * static_cast<size_t>(cw); };
+    if (!t.blend)
+    {
+        toTwelveBitRow(rowPtr(t.a), cw, depth, out.data());
+        return;
+    }
+    const uint16_t *ra = rowPtr(t.a);
+    const uint16_t *rb = rowPtr(t.b);
     for (int x = 0; x < cw; ++x)
     {
         const int a = toTwelveBit(ra[x], depth);
@@ -117,7 +140,9 @@ void chromaSourceRow(const ChromaRowContext &ctx, const std::vector<uint16_t> &p
     }
 }
 
-// Expands a subsampled 12-bit chroma row to luma width.
+// Expands a subsampled 12-bit chroma row to luma width (2:1 horizontally when shiftX
+// is 1). Bilinear: cosited chroma sits on even luma positions (odd ones average the
+// two neighbours); centered chroma weights the nearer neighbour 3:1. Edges clamp.
 void expandRow(const ChromaRowContext &ctx, const std::vector<int16_t> &src, int width,
                int16_t *dst)
 {
@@ -127,12 +152,38 @@ void expandRow(const ChromaRowContext &ctx, const std::vector<int16_t> &src, int
         std::copy(src.begin(), src.begin() + std::min(cw, width), dst);
         return;
     }
-    for (int x = 0; x < width; ++x)
+    const int16_t *c = src.data();
+    const int last = cw - 1;
+    if (ctx.up == ChromaUpsample::Nearest)
     {
-        if (ctx.up == ChromaUpsample::Nearest)
-            dst[x] = src[static_cast<size_t>(std::min(x >> 1, cw - 1))];
-        else
-            dst[x] = upsampleAxis(src.data(), cw, x, ctx.cositedX);
+        for (int k = 0; k < cw; ++k)
+        {
+            const int x = 2 * k;
+            if (x < width)
+                dst[x] = c[k];
+            if (x + 1 < width)
+                dst[x + 1] = c[k];
+        }
+        return;
+    }
+    for (int k = 0; k < cw; ++k)
+    {
+        const int x = 2 * k;
+        const int a = c[k];
+        const int nextC = c[std::min(k + 1, last)];
+        if (ctx.cositedX)
+        {
+            if (x < width)
+                dst[x] = static_cast<int16_t>(a);
+            if (x + 1 < width)
+                dst[x + 1] = static_cast<int16_t>((a + nextC + 1) >> 1);
+            continue;
+        }
+        const int prevC = c[std::max(k - 1, 0)];
+        if (x < width)
+            dst[x] = static_cast<int16_t>((3 * a + prevC + 2) >> 2);
+        if (x + 1 < width)
+            dst[x + 1] = static_cast<int16_t>((3 * a + nextC + 2) >> 2);
     }
 }
 
@@ -144,6 +195,56 @@ struct RowBuffers
     std::vector<int16_t> srcU;
     std::vector<int16_t> srcV;
 };
+
+struct FrameJob
+{
+    const YuvPlanes *p;
+    YuvCoeffs c;
+    RowConverterFn convert;
+    bool gray;
+    ChromaRowContext ctx;
+    uint8_t *dst;
+    size_t dstStride;
+};
+
+// Converts luma rows [y0, y1). Each call owns its scratch, so bands run concurrently.
+void convertRows(const FrameJob &job, int y0, int y1)
+{
+    const YuvPlanes &p = *job.p;
+    const auto w = static_cast<size_t>(p.width);
+    RowBuffers b;
+    b.y.resize(w);
+    b.u.resize(job.gray ? 0 : w);
+    b.v.resize(job.gray ? 0 : w);
+    ChromaTaps lastTaps;
+    bool haveChroma = false;
+    for (int row = y0; row < y1; ++row)
+    {
+        const size_t r = static_cast<size_t>(row);
+        toTwelveBitRow(p.y.data() + r * w, p.width, p.bitDepth, b.y.data());
+        if (!job.gray)
+        {
+            const ChromaTaps taps = chromaTapsFor(job.ctx, row);
+            if (!haveChroma || !(taps == lastTaps))
+            {
+                chromaSourceRow(job.ctx, p.u, taps, b.srcU);
+                chromaSourceRow(job.ctx, p.v, taps, b.srcV);
+                expandRow(job.ctx, b.srcU, p.width, b.u.data());
+                expandRow(job.ctx, b.srcV, p.width, b.v.data());
+                lastTaps = taps;
+                haveChroma = true;
+            }
+        }
+        job.convert(b.y.data(), job.gray ? nullptr : b.u.data(), job.gray ? nullptr : b.v.data(),
+                    p.width, job.c, job.dst + r * job.dstStride);
+    }
+}
+
+std::atomic<YuvRowsRunner> g_rowsRunner{nullptr};
+
+// Frames below this many pixels convert on the calling thread.
+constexpr int64_t kParallelMinPixels = int64_t{1} << 20;
+constexpr int kParallelMinRows = 64;
 
 } // namespace
 
@@ -200,6 +301,16 @@ RowConverterFn selectRowConverter()
     return rowConverterFor(bestRowConverterKind());
 }
 
+void setYuvRowsRunner(YuvRowsRunner runner) noexcept
+{
+    g_rowsRunner.store(runner, std::memory_order_release);
+}
+
+YuvRowsRunner yuvRowsRunner() noexcept
+{
+    return g_rowsRunner.load(std::memory_order_acquire);
+}
+
 bool convertToRgb24(const YuvPlanes &p, const Format &f, ChromaUpsample up, uint8_t *dst,
                     size_t dstSize, size_t dstStride)
 {
@@ -209,35 +320,37 @@ bool convertToRgb24(const YuvPlanes &p, const Format &f, ChromaUpsample up, uint
     const auto h = static_cast<size_t>(p.height);
     if (dstStride < w * 3 || dstSize < dstStride * (h - 1) + w * 3)
         return false;
-    const YuvCoeffs c = makeYuvCoeffs(f.matrix, f.range, f.bitDepth);
-    const RowConverterFn convert = selectRowConverter();
     const bool gray = f.subsampling == Subsampling::S400;
-    const ChromaRowContext ctx{&p,
-                               up,
-                               chromaShiftX(f.subsampling),
-                               chromaShiftY(f.subsampling),
-                               f.siting != ChromaSiting::Center,
-                               f.siting == ChromaSiting::TopLeft};
-    RowBuffers b;
-    b.y.resize(w);
-    b.u.resize(gray ? 0 : w);
-    b.v.resize(gray ? 0 : w);
-    for (size_t row = 0; row < h; ++row)
+    const FrameJob job{
+        &p,
+        makeYuvCoeffs(f.matrix, f.range, f.bitDepth),
+        selectRowConverter(),
+        gray,
+        ChromaRowContext{&p, up, chromaShiftX(f.subsampling), chromaShiftY(f.subsampling),
+                         f.siting != ChromaSiting::Center, f.siting == ChromaSiting::TopLeft},
+        dst,
+        dstStride};
+    const YuvRowsRunner runner = yuvRowsRunner();
+    const int64_t pixels = static_cast<int64_t>(p.width) * static_cast<int64_t>(p.height);
+    if (runner == nullptr || pixels < kParallelMinPixels || p.height < kParallelMinRows)
     {
-        const uint16_t *ys = p.y.data() + row * w;
-        for (size_t x = 0; x < w; ++x)
-            b.y[x] = toTwelveBit(ys[x], p.bitDepth);
-        if (!gray)
-        {
-            chromaSourceRow(ctx, p.u, static_cast<int>(row), b.srcU);
-            chromaSourceRow(ctx, p.v, static_cast<int>(row), b.srcV);
-            expandRow(ctx, b.srcU, p.width, b.u.data());
-            expandRow(ctx, b.srcV, p.width, b.v.data());
-        }
-        convert(b.y.data(), gray ? nullptr : b.u.data(), gray ? nullptr : b.v.data(), p.width, c,
-                dst + row * dstStride);
+        convertRows(job, 0, p.height);
+        return true;
     }
-    return true;
+    std::atomic<bool> failed{false};
+    runner(p.height,
+           [&job, &failed](int y0, int y1)
+           {
+               try
+               {
+                   convertRows(job, y0, y1);
+               }
+               catch (...)
+               {
+                   failed.store(true, std::memory_order_relaxed);
+               }
+           });
+    return !failed.load(std::memory_order_relaxed);
 }
 
 std::vector<uint8_t> toRgb24(const YuvPlanes &p, const Format &f, ChromaUpsample up)

@@ -3,12 +3,17 @@
 #include "core/image/yuv/YuvFile.h"
 #include "core/image/yuv/YuvSource.h"
 
+#include <algorithm>
 #include <cmath>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <limits>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -117,6 +122,98 @@ double windowSsim(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b
         return 1.0;
     return num / den;
 }
+// SSIM of one 8x8 window from integer sums. With n = 64 every quantity the
+// two-pass windowSsim accumulates is exact in double (mean has at most 6
+// fractional bits; squares and products stay below 2^50), so
+// sum((a - mean)^2) == (64 * sum(a^2) - sum(a)^2) / 64 exactly and this returns
+// bit-identical values.
+double windowSsimFromSums(int64_t sA, int64_t sB, int64_t sAA, int64_t sBB, int64_t sAB, double c1,
+                          double c2)
+{
+    constexpr double n = 64.0;
+    const double muA = static_cast<double>(sA) / n;
+    const double muB = static_cast<double>(sB) / n;
+    const double varA = (static_cast<double>(64 * sAA - sA * sA) / n) / n;
+    const double varB = (static_cast<double>(64 * sBB - sB * sB) / n) / n;
+    const double cov = (static_cast<double>(64 * sAB - sA * sB) / n) / n;
+    const double num = (2.0 * muA * muB + c1) * (2.0 * cov + c2);
+    const double den = (muA * muA + muB * muB + c1) * (varA + varB + c2);
+    if (den == 0.0)
+        return 1.0;
+    return num / den;
+}
+
+// 8x8 windows only: column sums over each window band, then 8-column sums per
+// window. Acc is uint32_t when 64 * max^2 fits, else uint64_t. Same window
+// order (rows, then columns) and summation as the reference loop.
+template <typename Acc>
+double planeSsim8x8(const uint16_t *a, const uint16_t *b, int width, const std::vector<int> &xs,
+                    const std::vector<int> &ys, double c1, double c2)
+{
+    const auto w = static_cast<std::size_t>(width);
+    std::vector<Acc> cA(w);
+    std::vector<Acc> cB(w);
+    std::vector<Acc> cAA(w);
+    std::vector<Acc> cBB(w);
+    std::vector<Acc> cAB(w);
+    double sum = 0.0;
+    for (int oy : ys)
+    {
+        std::fill(cA.begin(), cA.end(), Acc{0});
+        std::fill(cB.begin(), cB.end(), Acc{0});
+        std::fill(cAA.begin(), cAA.end(), Acc{0});
+        std::fill(cBB.begin(), cBB.end(), Acc{0});
+        std::fill(cAB.begin(), cAB.end(), Acc{0});
+        for (int r = 0; r < kWindow; ++r)
+        {
+            const std::size_t base =
+                (static_cast<std::size_t>(oy) + static_cast<std::size_t>(r)) * w;
+            const uint16_t *ra = a + base;
+            const uint16_t *rb = b + base;
+            for (std::size_t x = 0; x < w; ++x)
+            {
+                const Acc va = ra[x];
+                const Acc vb = rb[x];
+                cA[x] += va;
+                cB[x] += vb;
+                cAA[x] += va * va;
+                cBB[x] += vb * vb;
+                cAB[x] += va * vb;
+            }
+        }
+        for (int ox : xs)
+        {
+            Acc sA = 0;
+            Acc sB = 0;
+            Acc sAA = 0;
+            Acc sBB = 0;
+            Acc sAB = 0;
+            for (int k = 0; k < kWindow; ++k)
+            {
+                const std::size_t i = static_cast<std::size_t>(ox) + static_cast<std::size_t>(k);
+                sA += cA[i];
+                sB += cB[i];
+                sAA += cAA[i];
+                sBB += cBB[i];
+                sAB += cAB[i];
+            }
+            sum += windowSsimFromSums(static_cast<int64_t>(sA), static_cast<int64_t>(sB),
+                                      static_cast<int64_t>(sAA), static_cast<int64_t>(sBB),
+                                      static_cast<int64_t>(sAB), c1, c2);
+        }
+    }
+    const double count = static_cast<double>(xs.size()) * static_cast<double>(ys.size());
+    return sum / count;
+}
+
+uint16_t maxSample(const std::vector<uint16_t> &v, std::size_t count)
+{
+    uint16_t m = 0;
+    for (std::size_t i = 0; i < count; ++i)
+        m = v[i] > m ? v[i] : m;
+    return m;
+}
+
 double planeSsim(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b, int width,
                  int height, double c1, double c2)
 {
@@ -126,6 +223,16 @@ double planeSsim(const std::vector<uint16_t> &a, const std::vector<uint16_t> &b,
     const std::vector<int> ys = axisStarts(height, kWindow);
     if (xs.empty() || ys.empty() || winW <= 0 || winH <= 0)
         return 1.0;
+    if (winW == kWindow && winH == kWindow)
+    {
+        const std::size_t count =
+            static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+        const uint16_t peak = std::max(maxSample(a, count), maxSample(b, count));
+        // 64 * 8191^2 < 2^32: 32-bit sums are exact for 8..13-bit content.
+        if (peak <= 8191)
+            return planeSsim8x8<uint32_t>(a.data(), b.data(), width, xs, ys, c1, c2);
+        return planeSsim8x8<uint64_t>(a.data(), b.data(), width, xs, ys, c1, c2);
+    }
     double sum = 0.0;
     for (int oy : ys)
     {
@@ -250,6 +357,198 @@ bool openKnown(const std::string &path, const char *tag, OpenedYuvFile &out, std
     }
     return true;
 }
+struct FrameOutcome
+{
+    YuvFrameMetrics metrics;
+    std::string why; // Non-empty: the frame failed with this (prefixed) message.
+    std::exception_ptr error;
+};
+
+// Reads frame 'index' of both files and compares it. Error text matches the
+// serial loop: "A: frame N: ...", "B: frame N: ...", "frame N: ...".
+FrameOutcome compareFrameAt(const YuvSourceInfo &infoA, const ReadAtFn &readA,
+                            const YuvSourceInfo &infoB, const ReadAtFn &readB, int64_t index,
+                            YuvPlanes &planesA, YuvPlanes &planesB)
+{
+    FrameOutcome out;
+    std::string readWhy;
+    if (!readYuvFrame(infoA, index, readA, planesA, &readWhy))
+    {
+        out.why = "A: frame " + std::to_string(index) + ": " + readWhy;
+        return out;
+    }
+    if (!readYuvFrame(infoB, index, readB, planesB, &readWhy))
+    {
+        out.why = "B: frame " + std::to_string(index) + ": " + readWhy;
+        return out;
+    }
+    out.metrics = compareYuvFrames(planesA, planesB);
+    if (!out.metrics.valid)
+        out.why = "frame " + std::to_string(index) + ": " + out.metrics.why;
+    return out;
+}
+
+constexpr int kMaxCompareWorkers = 8;
+constexpr int64_t kCompareMemoryBudget = int64_t{768} << 20;
+
+int compareWorkerCount(const OpenedYuvFile &a, const OpenedYuvFile &b, int64_t total)
+{
+    if (total < 2)
+        return 0;
+    const unsigned hw = std::thread::hardware_concurrency();
+    int64_t workers = hw > 1 ? static_cast<int64_t>(hw) : 1;
+    workers = std::min<int64_t>({workers, kMaxCompareWorkers, total});
+    // Each worker keeps one raw frame and the unpacked 16-bit planes per file.
+    const auto frameCost = [](const OpenedYuvFile &f)
+    {
+        const auto layout = computeFrameLayout(f.info.format);
+        const int64_t raw = layout ? layout->frameBytes : 0;
+        return raw * 5;
+    };
+    const int64_t perWorker = frameCost(a) + frameCost(b);
+    if (perWorker > 0)
+        workers =
+            std::min<int64_t>(workers, std::max<int64_t>(1, kCompareMemoryBudget / perWorker));
+    return workers > 1 ? static_cast<int>(workers) : 0;
+}
+
+class FramePipeline
+{
+  public:
+    FramePipeline(const OpenedYuvFile &a, const OpenedYuvFile &b, const std::string &pathA,
+                  const std::string &pathB, int64_t total)
+        : a_(a), b_(b), total_(total)
+    {
+        const int workers = compareWorkerCount(a, b, total);
+        window_ = static_cast<int64_t>(workers) * 2;
+        // Workers never run more than window_ frames past the consumer, so a ring of
+        // window_ slots holds every frame in flight.
+        slots_.resize(static_cast<std::size_t>(window_));
+        for (int i = 0; i < workers; ++i)
+        {
+            ReadAtFn readA = openYuvReader(pathA);
+            ReadAtFn readB = openYuvReader(pathB);
+            if (!readA || !readB)
+                break;
+            try
+            {
+                threads_.emplace_back([this, readA = std::move(readA), readB = std::move(readB)]
+                                      { run(readA, readB); });
+            }
+            catch (...)
+            {
+                break;
+            }
+        }
+    }
+
+    FramePipeline(const FramePipeline &) = delete;
+    FramePipeline &operator=(const FramePipeline &) = delete;
+
+    ~FramePipeline()
+    {
+        stop();
+    }
+
+    FrameOutcome take(int64_t index)
+    {
+        if (threads_.empty())
+            return compareFrameAt(a_.info, a_.read, b_.info, b_.read, index, serialA_, serialB_);
+        std::unique_lock<std::mutex> lock(mutex_);
+        consumed_ = index;
+        cv_.notify_all();
+        Slot &slot = slotFor(index);
+        cv_.wait(lock, [&] { return slot.done; });
+        FrameOutcome out = std::move(slot.outcome);
+        slot.outcome = FrameOutcome{};
+        slot.done = false;
+        consumed_ = index + 1;
+        cv_.notify_all();
+        lock.unlock();
+        if (out.error)
+        {
+            stop();
+            std::rethrow_exception(out.error);
+        }
+        return out;
+    }
+
+    void stop()
+    {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stopping_ = true;
+        }
+        cv_.notify_all();
+        for (std::thread &t : threads_)
+        {
+            if (t.joinable())
+                t.join();
+        }
+    }
+
+  private:
+    struct Slot
+    {
+        bool done = false;
+        FrameOutcome outcome;
+    };
+
+    Slot &slotFor(int64_t index)
+    {
+        return slots_[static_cast<std::size_t>(index % window_)];
+    }
+
+    void run(const ReadAtFn &readA, const ReadAtFn &readB)
+    {
+        YuvPlanes planesA;
+        YuvPlanes planesB;
+        for (;;)
+        {
+            int64_t index = 0;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                cv_.wait(lock, [&]
+                         { return stopping_ || next_ >= total_ || next_ < consumed_ + window_; });
+                if (stopping_ || next_ >= total_)
+                    return;
+                index = next_++;
+            }
+            FrameOutcome out;
+            try
+            {
+                out = compareFrameAt(a_.info, readA, b_.info, readB, index, planesA, planesB);
+            }
+            catch (...)
+            {
+                out = FrameOutcome{};
+                out.error = std::current_exception();
+            }
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                Slot &slot = slotFor(index);
+                slot.outcome = std::move(out);
+                slot.done = true;
+            }
+            cv_.notify_all();
+        }
+    }
+
+    const OpenedYuvFile &a_;
+    const OpenedYuvFile &b_;
+    const int64_t total_;
+    int64_t window_ = 0;
+    std::vector<Slot> slots_;
+    std::vector<std::thread> threads_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    int64_t next_ = 0;
+    int64_t consumed_ = 0;
+    bool stopping_ = false;
+    YuvPlanes serialA_;
+    YuvPlanes serialB_;
+};
+
 std::string fixedText(double value, int precision, bool infAsWord)
 {
     if (infAsWord && std::isinf(value))
@@ -389,6 +688,10 @@ YuvSequenceMetrics compareYuvFiles(const std::string &pathA, const std::string &
     int64_t total = result.framesA < result.framesB ? result.framesA : result.framesB;
     if (maxFrames > 0 && maxFrames < total)
         total = maxFrames;
+
+    // Frames are read and compared ahead on worker threads; the caller still
+    // reports progress, stops and collects results strictly in frame order.
+    FramePipeline pipeline(fileA, fileB, pathA, pathB, total);
     for (int64_t index = 0; index < total; ++index)
     {
         if (progress && !progress(index, total))
@@ -396,28 +699,16 @@ YuvSequenceMetrics compareYuvFiles(const std::string &pathA, const std::string &
             result.why = "cancelled";
             return result;
         }
-        YuvPlanes planesA;
-        YuvPlanes planesB;
-        std::string readWhy;
-        if (!readYuvFrame(fileA.info, index, fileA.read, planesA, &readWhy))
+        FrameOutcome outcome = pipeline.take(index);
+        if (!outcome.why.empty())
         {
-            result.why = "A: frame " + std::to_string(index) + ": " + readWhy;
+            result.why = std::move(outcome.why);
             return result;
         }
-        if (!readYuvFrame(fileB.info, index, fileB.read, planesB, &readWhy))
-        {
-            result.why = "B: frame " + std::to_string(index) + ": " + readWhy;
-            return result;
-        }
-        YuvFrameMetrics frame = compareYuvFrames(planesA, planesB);
-        if (!frame.valid)
-        {
-            result.why = "frame " + std::to_string(index) + ": " + frame.why;
-            return result;
-        }
-        result.frames.push_back(std::move(frame));
+        result.frames.push_back(std::move(outcome.metrics));
         result.framesCompared = index + 1;
     }
+    pipeline.stop();
     if (progress && total > 0 && !progress(total, total))
     {
         result.why = "cancelled";
@@ -427,6 +718,7 @@ YuvSequenceMetrics compareYuvFiles(const std::string &pathA, const std::string &
     result.valid = true;
     return result;
 }
+
 std::string formatYuvFrameMetrics(const YuvFrameMetrics &m)
 {
     if (!m.valid)

@@ -106,6 +106,36 @@
   CTest) reports Mpx/s per path; on the dev box, a 1920×1080 frame ran at about
   120 (scalar), 1700 (SSE2) and 1900 (AVX2) Mpx/s.
 
+### Changed
+
+- **YUV performance pass (ADR 032):** faster raw YUV / Y4M viewing,
+  thumbnails and compare. All output is bit-identical to before.
+  - Unpacking reads each plane with one fixed-stride loop per sample size and
+    endianness, and reuses the plane buffers between frames; the raw frame
+    buffer is reused per thread.
+  - RGB conversion converts each chroma row to 12 bit once (reusing it for both
+    rows of a 4:2:0 pair), and large frames (1 Mpx and up) are converted in row
+    bands on the shared thread pool.
+  - Thumbnails and sequence frames that are downscaled now sample the raw frame
+    directly, without unpacking the whole frame first.
+  - SSIM uses exact integer window sums for 8×8 windows, and
+    `compareYuvFiles` reads and compares frames on up to 8 worker threads
+    (bounded by a memory budget). Progress, cancel and errors are still
+    reported in frame order.
+  - Y4M files keep their resolved frame index in a small cache keyed by
+    path, size, modification time and header bytes, and frame headers are
+    found with a short read.
+  - Measured on the Linux dev box (clang -O2, warm cache), before → after:
+    1080p 4:2:0 read+unpack 1.6 → 0.8 ms; 1080p RGB 3.7 → 2.0 ms single-threaded;
+    4K 4:2:0 unpack 4.3 → 1.2 ms; 4K 4:4:4 unpack 18.9 → 2.3 ms;
+    256 px thumbnail of a 1080p frame (open to image) 3.0 → 0.9 ms, 4K 4:4:4
+    40.8 → 5.1 ms; 1080p sequence compare 28.9 → 1.3 ms per frame (8 cores);
+    first open of a 300-frame 1080p Y4M 4.1 → 0.9 ms.
+  - `yuv_fast_paths_tests` checks each fast path against its reference:
+    SSIM at 8–16 bit and odd sizes, raw thumbnails for 11 pixel formats,
+    threaded vs serial RGB, buffer reuse across formats, parallel compare
+    order and cancel, and Y4M cache invalidation.
+
 ## [1.0.161] - 2026-11-03
 
 ### Release
