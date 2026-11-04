@@ -16,6 +16,22 @@
   → Run anyway" prompt. The Release workflow and a `gui_subsystem` ctest fail
   unless MViewer.exe in the portable zip and Setup.exe has PE subsystem 2.
 
+### Fixed
+
+- **Browse details toggle opens Details**: the list-icon segment of the
+  browse view-mode control now switches to Details (Ctrl+3, the browse
+  default) instead of List (Ctrl+2), and its tooltip says so. It stays checked
+  in sync with Ctrl+1/2/3; List (Ctrl+2) still lights it. Covered by
+  `test_browse_acceptance`.
+- **Light-theme menu check marks, radio dots and icons are visible**: popup
+  menu rows now paint their indicator column with one contrast-checked ink
+  (`MenuItemInk`): dark on light menus, white on the hover highlight, light on
+  dark menus. Fusion inked check boxes from a `QPalette::Text` that QSS can
+  leave white, tinted icons Accent on the accent highlight and drew a dark
+  sunken plate behind checked icons. Applies to every menu bar and context
+  menu. `test_ui_models` renders rows through the real style with a polluted
+  palette in both themes.
+
 ## [1.0.162] - 2026-11-03
 
 ### Release

@@ -337,6 +337,7 @@ add_library(mviewer_ui STATIC
     yuvparamsdialog.cpp
     yuvparamsettings.cpp
     Theme.cpp
+    MenuItemInk.cpp
     platform/WindowChrome.cpp
     Language.cpp
     ThemeIcons.cpp
@@ -515,6 +516,7 @@ target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 # M19: UI models (Selection / Directory / ImageList / Workspace / Analyzer) headless unit test.
 add_executable(test_ui_models
     test_ui_models.cpp
+    test_menu_ink.cpp
     naturalnameorder.cpp
     runtime_storage.cpp
     selectionmodel.cpp
@@ -523,6 +525,7 @@ add_executable(test_ui_models
     workspacemodel.cpp
     analyzermodel.cpp
     Theme.cpp
+    MenuItemInk.cpp
     platform/WindowChrome.cpp
     Language.cpp
     ThemeIcons.cpp
@@ -854,6 +857,7 @@ set_tests_properties(async_lifetime_tests PROPERTIES RUN_SERIAL TRUE)
 # ops / degraded inputs / metadata overlay currency) ─────────────────────────
 add_executable(browse_acceptance_tests
     test_browse_acceptance.cpp
+    test_browse_viewmode.cpp
 )
 
 target_link_libraries(browse_acceptance_tests

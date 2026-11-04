@@ -339,7 +339,9 @@ void MainWindow::attachUnifiedToolbarControls()
         segment->setModes({
             segmentMode(int(Mode::Thumbnail), icon("view_grid"),
                         {int(Mode::LargeIcon), int(Mode::SmallIcon), int(Mode::Compact)}),
-            segmentMode(int(Mode::List), icon("view_list"), {int(Mode::Details)}),
+            // The list-icon segment is the Details view (Ctrl+3, the browse
+            // default), not the plain List view (Ctrl+2); List still lights it.
+            segmentMode(int(Mode::Details), icon("view_list"), {int(Mode::List)}),
             segmentMode(int(Mode::Filmstrip), icon("view_filmstrip"), {}),
         });
         segment->bind(m_viewModeCombo);
@@ -375,7 +377,7 @@ void MainWindow::syncViewModeSegmentToolTips()
     auto *segment = findChild<ViewModeSegment *>(QStringLiteral("viewModeSegment"));
     if (!segment || !m_viewModeCombo)
         return;
-    const int primaries[] = {int(ThumbnailPanel::Thumbnail), int(ThumbnailPanel::List),
+    const int primaries[] = {int(ThumbnailPanel::Thumbnail), int(ThumbnailPanel::Details),
                              int(ThumbnailPanel::Filmstrip)};
     for (int data : primaries)
     {

@@ -8,6 +8,7 @@
 #include "imagelistmodel.h"
 #include "naturalnameorder.h"
 #include "selectionmodel.h"
+#include "test_menu_ink.h"
 #include "workspacemodel.h"
 
 #include "widgets/ViewModeSegment.h"
@@ -548,6 +549,9 @@ int main(int argc, char **argv)
         combo.setCurrentIndex(combo.findData(4));
         CHECK(segment.checkedData() == 4, "switching the combo again updates the segment");
     }
+
+    // ---- Popup menu indicator / icon ink ----
+    g_failures += runMenuInkTests();
 
     std::printf("\n%s (%d failures)\n", g_failures == 0 ? "ALL PASS" : "HAS FAILURES", g_failures);
     return g_failures == 0 ? 0 : 1;

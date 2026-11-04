@@ -26,6 +26,7 @@
 #include "metadataoverlay.h"
 #include "runtime_storage.h"
 #include "selectionmodel.h"
+#include "test_browse_viewmode.h"
 #include "thumbnailpanel.h"
 
 #include <QAbstractButton>
@@ -762,6 +763,7 @@ int main(int argc, char **argv)
     testCompareSelectionAffordance(tmp.filePath("compare_selection"));
     testFileOpsUndo(dirPath);
     testDegradedInputs(tmp);
+    g_failures += runViewModeSegmentTests();
     {
         // A#10 uses MainWindow which restores sessions; keep it isolated.
         const QStringList paths = {
