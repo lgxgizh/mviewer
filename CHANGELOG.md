@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.165] - 2026-11-04
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.165**
+  (new application icon #313).
+
+### Changed
+
+- New application icon: a spectrum aperture ring on a frosted squircle tile.
+  The exe, installer, uninstaller, Start-menu shortcut and window icon all use
+  it. Small sizes (32 px and below) use simplified artwork so they stay legible.
+  The vector master is `resources/mviewer.svg`, and
+  `scripts/make_app_icon.py` regenerates the PNG and ICO from it.
+
 ## [1.0.164] - 2026-11-04
 
 ### Release
