@@ -15,11 +15,11 @@ namespace mviewer::core
 namespace
 {
 
-// Windows refuses to rename a file another process (antivirus, the search
-// indexer, a thumbnail decoder, Explorer's preview) briefly holds open without
-// FILE_SHARE_DELETE. Those holds last milliseconds, so a short bounded retry
+// Windows refuses to rename or delete a file another process (antivirus, the
+// search indexer, a thumbnail decoder, Explorer's preview) briefly holds open
+// without FILE_SHARE_DELETE. Those holds last milliseconds, so a short bounded retry
 // turns a spurious "Rename failed" into success; real errors still surface.
-bool isTransientRenameError(const std::error_code &ec)
+bool isTransientFileError(const std::error_code &ec)
 {
 #ifdef _WIN32
     constexpr int kErrorAccessDenied = 5;      // ERROR_ACCESS_DENIED
@@ -34,6 +34,25 @@ bool isTransientRenameError(const std::error_code &ec)
     (void)ec;
     return false;
 #endif
+}
+
+// Run `op` until it succeeds, fails with a non-transient error, or the bounded
+// backoff (10+20+40+80+160+320+400+400 ms, ~1.4 s worst case) is exhausted.
+// 0.3 s was too short in practice for an in-flight decode to let go.
+template <class Op> bool retryTransient(Op &&op, std::error_code &ec)
+{
+    constexpr int kAttempts = 9;
+    constexpr std::chrono::milliseconds kMaxDelay(400);
+    std::chrono::milliseconds delay(10);
+    for (int attempt = 1;; ++attempt)
+    {
+        ec.clear();
+        op(ec);
+        if (!ec || attempt >= kAttempts || !isTransientFileError(ec))
+            return !ec;
+        std::this_thread::sleep_for(delay);
+        delay = std::min(delay * 2, kMaxDelay);
+    }
 }
 
 class StdFileSystemAdapter final : public FileSystemAdapter
@@ -61,23 +80,7 @@ class StdFileSystemAdapter final : public FileSystemAdapter
 
     bool rename(const fs::path &from, const fs::path &to, std::error_code &ec) override
     {
-        // Bounded exponential backoff capped at 400 ms per step:
-        // 10+20+40+80+160+320+400+400 ms (~1.4 s) worst case. On Windows a
-        // decode still in flight (this program's viewer/thumbnail workers,
-        // Windows Search, antivirus) holds the file without FILE_SHARE_DELETE
-        // and briefly blocks the rename; 0.3 s was too short in practice.
-        constexpr int kAttempts = 9;
-        constexpr std::chrono::milliseconds kMaxDelay(400);
-        std::chrono::milliseconds delay(10);
-        for (int attempt = 1;; ++attempt)
-        {
-            ec.clear();
-            fs::rename(from, to, ec);
-            if (!ec || attempt >= kAttempts || !isTransientRenameError(ec))
-                return !ec;
-            std::this_thread::sleep_for(delay);
-            delay = std::min(delay * 2, kMaxDelay);
-        }
+        return retryTransient([&](std::error_code &e) { fs::rename(from, to, e); }, ec);
     }
 
     bool copyFile(const fs::path &from, const fs::path &to, std::error_code &ec) override
@@ -148,7 +151,10 @@ class StdFileSystemAdapter final : public FileSystemAdapter
 
     bool remove(const fs::path &path, std::error_code &ec) override
     {
-        return fs::remove(path, ec);
+        // fs::remove reports a missing file as false with no error; keep that.
+        bool removed = false;
+        retryTransient([&](std::error_code &e) { removed = fs::remove(path, e); }, ec);
+        return removed && !ec;
     }
 
     uintmax_t fileSize(const fs::path &path, std::error_code &ec) const override

@@ -10,6 +10,9 @@
   rotate/flip with a clear reason.
 - Rename/move now waits up to about 1.4 s (was 0.3 s) for another reader to
   release the file before failing.
+- Deleting or moving (across drives) an image another reader still has open
+  (thumbnail decode, Windows Search, antivirus) now retries for the same
+  window instead of failing immediately.
 
 ## [1.0.163] - 2026-11-03
 
