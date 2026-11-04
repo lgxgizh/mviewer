@@ -379,7 +379,23 @@ add_executable(MViewer
     main.cpp
 )
 if(WIN32)
-    target_sources(MViewer PRIVATE ${CMAKE_SOURCE_DIR}/resources/mviewer.rc)
+    # Version resource generated from project(VERSION); see resources/mviewer.rc.in.
+    set(MVIEWER_RC_ICON "${CMAKE_SOURCE_DIR}/resources/mviewer.ico")
+    configure_file(${CMAKE_SOURCE_DIR}/resources/mviewer.rc.in
+                   ${MVIEWER_GENERATED_INCLUDE_DIR}/mviewer.rc @ONLY)
+    target_sources(MViewer PRIVATE
+        ${MVIEWER_GENERATED_INCLUDE_DIR}/mviewer.rc
+        ${CMAKE_SOURCE_DIR}/resources/mviewer.manifest)
+    # Windows GUI subsystem: launching from Explorer or a shortcut opens no
+    # console window. Qt6::Core links Qt's entry point (WinMain -> main) into
+    # WIN32_EXECUTABLE targets. Only MViewer is a GUI app; tests, benchmarks
+    # and CLI tools stay console programs. The release workflow and the
+    # gui_subsystem test below fail if this ever regresses.
+    set_target_properties(MViewer PROPERTIES WIN32_EXECUTABLE TRUE)
+    if(MSVC)
+        # resources/mviewer.manifest carries the asInvoker trustInfo.
+        target_link_options(MViewer PRIVATE /MANIFESTUAC:NO)
+    endif()
 endif()
 
 target_link_libraries(MViewer
@@ -607,6 +623,14 @@ target_link_libraries(test_cache PRIVATE Qt6::Sql)
 add_test(NAME selftest COMMAND MViewer --selftest)
 set_tests_properties(selftest PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+
+# MViewer.exe must stay a Windows GUI-subsystem binary (no console window).
+if(WIN32)
+    add_test(NAME gui_subsystem
+        COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+                -File ${CMAKE_SOURCE_DIR}/scripts/check_pe_subsystem.ps1
+                -Path $<TARGET_FILE:MViewer> -Expected 2)
+endif()
 
 # M24: version-consistency gate — CMake project(VERSION) is the single source
 # of truth; fails if the generated version file, hard-coded literals, packaging

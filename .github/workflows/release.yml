@@ -206,6 +206,38 @@ jobs:
           }
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Version $ver -OutDir dist
 
+      - name: Verify MViewer.exe is a GUI-subsystem binary (no console)
+        run: |
+          # Fail the release unless every shipped MViewer.exe has PE subsystem
+          # 2 (WINDOWS_GUI): the portable zip and the NSIS Setup payload.
+          $ErrorActionPreference = 'Stop'
+          $check = Join-Path $PWD 'scripts/check_pe_subsystem.ps1'
+          $zip = Get-ChildItem dist -Filter 'MViewer-*-portable.zip' | Select-Object -First 1
+          $setup = Get-ChildItem dist -Filter 'MViewer-*-Setup.exe' | Select-Object -First 1
+          if (-not $zip -or -not $setup) { throw 'portable zip or Setup.exe missing in dist/' }
+          $work = Join-Path $env:RUNNER_TEMP 'pe-check'
+          Expand-Archive -LiteralPath $zip.FullName -DestinationPath (Join-Path $work 'portable') -Force
+          # 7-Zip (preinstalled on Windows runners) unpacks the NSIS payload.
+          & 7z x -y ("-o" + (Join-Path $work 'setup')) $setup.FullName | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "7z could not unpack $($setup.Name)" }
+          $setupExe = Get-ChildItem (Join-Path $work 'setup') -Recurse -Filter 'MViewer.exe' | Select-Object -First 1
+          if (-not $setupExe) { throw "no MViewer.exe inside $($setup.Name)" }
+          $targets = @(
+            (Join-Path $work 'portable/MViewer.exe'),
+            $setupExe.FullName
+          )
+          foreach ($t in $targets) { if (-not (Test-Path -LiteralPath $t)) { throw "missing $t" } }
+          & $check -Path $targets -Expected 2
+          if ($LASTEXITCODE -ne 0) { throw 'MViewer.exe is not a Windows GUI-subsystem binary' }
+          # The Setup payload must be the same MViewer.exe as the portable zip.
+          $h = $targets | ForEach-Object { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash }
+          if ($h[0] -ne $h[1]) { throw 'Setup.exe and portable zip carry different MViewer.exe builds' }
+          $info = [Diagnostics.FileVersionInfo]::GetVersionInfo($targets[0])
+          Write-Host "MViewer.exe version resource: $($info.ProductName) $($info.ProductVersion) / $($info.FileDescription) / $($info.CompanyName)"
+          if ([string]::IsNullOrWhiteSpace($info.ProductName) -or [string]::IsNullOrWhiteSpace($info.FileVersion)) {
+            throw 'MViewer.exe has no VERSIONINFO resource'
+          }
+
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
