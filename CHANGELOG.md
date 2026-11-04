@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.0.163] - 2026-11-03
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.163**
+  (YUV layout picker + extension map #306; Windows GUI subsystem / no console
+  window #307; Browse details = Ctrl+3 and light-theme menu indicators #308).
+
 ### Changed
 
 - **YUV pixel format picker:** the YUV Parameters dialog replaces the long
