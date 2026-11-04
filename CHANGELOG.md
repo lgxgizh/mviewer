@@ -14,6 +14,18 @@
   same size, so a semi-planar file guessed as planar decoded silently wrong;
   the explicit layout control fixes that in one click.
 
+- **No console window:** MViewer.exe is a Windows GUI-subsystem program again,
+  so launching it from Explorer, a shortcut or the installer opens no CMD
+  window. Tests, benchmarks and CLI tools stay console programs.
+  `MViewer.exe --selftest` typed in a terminal still prints there; redirected
+  output (CI) is unchanged. The executable now carries a full version resource
+  (company, description, product, version, copyright, original filename) and
+  an application manifest (asInvoker, Windows 10/11, PerMonitorV2 DPI, long
+  paths). 1.0.25 reverted the GUI build because the unsigned binary with no
+  metadata was quarantined; unsigned builds still get a SmartScreen "More info
+  → Run anyway" prompt. The Release workflow and a `gui_subsystem` ctest fail
+  unless MViewer.exe in the portable zip and Setup.exe has PE subsystem 2.
+
 ### Added
 
 - **YUV extension mapping:** Preferences → YUV holds an editable
@@ -27,18 +39,6 @@
   independent float BT.601/709/2020 reference (within one code value), the
   name grammar round trip, and mapping/inference priority; the dialog test
   drives the new controls and the extension-map settings.
-
-- **No console window:** MViewer.exe is a Windows GUI-subsystem program again,
-  so launching it from Explorer, a shortcut or the installer opens no CMD
-  window. Tests, benchmarks and CLI tools stay console programs.
-  `MViewer.exe --selftest` typed in a terminal still prints there; redirected
-  output (CI) is unchanged. The executable now carries a full version resource
-  (company, description, product, version, copyright, original filename) and
-  an application manifest (asInvoker, Windows 10/11, PerMonitorV2 DPI, long
-  paths). 1.0.25 reverted the GUI build because the unsigned binary with no
-  metadata was quarantined; unsigned builds still get a SmartScreen "More info
-  → Run anyway" prompt. The Release workflow and a `gui_subsystem` ctest fail
-  unless MViewer.exe in the portable zip and Setup.exe has PE subsystem 2.
 
 ### Fixed
 
