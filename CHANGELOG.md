@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.166] - 2026-11-05
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.166**
+  (larger application icon and browse chrome).
+
+### Changed
+
+- Application icon fills more of the tile, closer to a Chrome-sized glyph.
+  Small sizes stay simplified. Regenerate with `scripts/make_app_icon.py`.
+- Browse chrome is larger: 52 px toolbar, 34 px controls, 20 px toolbar icons,
+  15 px body text, taller menus, sidebar rows, list rows and the Details header.
+  Compare controls use the same sizes. Saved thumbnail size is unchanged.
+
 ## [1.0.165] - 2026-11-04
 
 ### Release

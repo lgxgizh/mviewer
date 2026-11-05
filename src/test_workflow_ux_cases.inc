@@ -429,8 +429,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         const int pathTop = pathEdit->mapTo(&w, QPoint(0, 0)).y();
         CHECK(searchBottom <= pathTop + 2, "unified toolbar sits above the editable address bar");
     }
-    CHECK(w.statusBar() && w.statusBar()->height() >= 22 && w.statusBar()->height() <= 24,
-          "status bar is a thin 22-24px caption strip");
+    CHECK(w.statusBar() && w.statusBar()->height() == mviewer::ui::metrics::kStatusBarHeight,
+          "status bar matches the caption strip height");
     auto *folderTitle = w.findChild<QLabel *>(QStringLiteral("folderTitleLabel"));
     CHECK(folderTitle && folderTitle->isVisible(), "folder title is shown in the browse toolbar");
     auto *emptyState = w.findChild<QLabel *>("emptyStateLabel");

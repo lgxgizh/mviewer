@@ -1,5 +1,6 @@
 #include "Theme.h"
 #include "MenuItemInk.h"
+#include "ThemeIcons.h"
 #include "ThemeMetrics.h"
 #include "platform/WindowChrome.h"
 
@@ -93,7 +94,7 @@ void applyThemeFont(const ThemeTokens &tokens)
     QFont font;
     font.setFamilies({QStringLiteral("Segoe UI Variable Text"), QStringLiteral("Segoe UI Variable"),
                       QStringLiteral("Microsoft YaHei UI"), QStringLiteral("Segoe UI")});
-    // 13 px body at the 96 DPI baseline (9.75 pt). Point size tracks DPI.
+    // Body px at the 96 DPI baseline. Point size tracks DPI.
     font.setPointSizeF(tokens.fontBodyPx * 72.0 / 96.0);
     font.setStyleHint(QFont::SansSerif, QFont::PreferOutline);
     QApplication::setFont(font);
@@ -124,6 +125,10 @@ class ScaledStyle : public QProxyStyle
         case PM_LayoutHorizontalSpacing:
         case PM_LayoutVerticalSpacing:
             return m::kLayoutSpacing;
+        case PM_SmallIconSize:
+        case PM_ToolBarIconSize:
+        case PM_ButtonIconSize:
+            return mviewer::ui::kToolbarIconPx;
         default:
             return QProxyStyle::pixelMetric(metric, option, widget);
         }

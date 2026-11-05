@@ -114,11 +114,11 @@ def blades(R, r, gap, round_r, bend, twist):
 
 def build_svg(variant="full"):
     if variant == "full":
-        margin, R, r, gap, rr, bend, shadow = 100, 272, 54, 20, 13, 50, True
+        margin, R, r, gap, rr, bend, shadow = 36, 392, 78, 24, 14, 54, True
     elif variant == "mid":
-        margin, R, r, gap, rr, bend, shadow = 56, 300, 74, 30, 16, 44, False
+        margin, R, r, gap, rr, bend, shadow = 28, 408, 92, 32, 16, 46, False
     else:  # small
-        margin, R, r, gap, rr, bend, shadow = 24, 340, 92, 50, 18, 40, False
+        margin, R, r, gap, rr, bend, shadow = 12, 430, 108, 50, 18, 40, False
     size = 1024 - 2 * margin
     tile = squircle(margin, margin, size)
     tile_d = path_d(tile)
@@ -140,20 +140,22 @@ def build_svg(variant="full"):
         '<stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>',
     ]
     if shadow:
+        # The tile sits close to the canvas edge (Chrome-like fill). Keep the
+        # drop shadow inside the 1024 viewBox so it is not clipped to a hard line.
         defs.append(
-            '<filter id="tileShadow" x="-20%" y="-20%" width="140%" height="150%">'
-            '<feGaussianBlur in="SourceAlpha" stdDeviation="18"/>'
-            '<feOffset dy="16" result="b"/>'
+            '<filter id="tileShadow" x="-12%" y="-8%" width="124%" height="124%">'
+            '<feGaussianBlur in="SourceAlpha" stdDeviation="10"/>'
+            '<feOffset dy="8" result="b"/>'
             '<feFlood flood-color="#1E2F55" flood-opacity="0.26"/>'
             '<feComposite in2="b" operator="in" result="s1"/>'
-            '<feGaussianBlur in="SourceAlpha" stdDeviation="3"/><feOffset dy="3" result="c"/>'
+            '<feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dy="2" result="c"/>'
             '<feFlood flood-color="#1E2F55" flood-opacity="0.18"/>'
             '<feComposite in2="c" operator="in" result="s2"/>'
             '<feMerge><feMergeNode in="s1"/><feMergeNode in="s2"/></feMerge></filter>')
         defs.append(
-            '<filter id="bladeShadow" x="-30%" y="-30%" width="160%" height="170%">'
-            '<feGaussianBlur in="SourceGraphic" stdDeviation="10"/>'
-            '<feOffset dy="8"/><feComponentTransfer><feFuncA type="linear" slope="0.38"/>'
+            '<filter id="bladeShadow" x="-20%" y="-20%" width="140%" height="150%">'
+            '<feGaussianBlur in="SourceGraphic" stdDeviation="6"/>'
+            '<feOffset dy="4"/><feComponentTransfer><feFuncA type="linear" slope="0.38"/>'
             '</feComponentTransfer></filter>')
 
     blade_paths = []

@@ -621,7 +621,7 @@ void testDetailsColumnResize()
     CHECK(header != nullptr, "Details: column header widget is present");
     if (header)
     {
-        CHECK(header->height() == 24, "Details: header uses the reserved strip height");
+        CHECK(header->height() == 34, "Details: header uses the reserved strip height");
         CHECK(header->testAttribute(Qt::WA_TransparentForMouseEvents) == false,
               "Details: header accepts mouse events for resize");
 

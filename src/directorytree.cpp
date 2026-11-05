@@ -117,7 +117,7 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     setColumnHidden(2, true);
     setColumnHidden(3, true);
     setAnimated(true);
-    setIndentation(15);
+    setIndentation(18);
 
     // A-1.4: QFileSystemWatcher for auto-refresh when the file system changes.
     m_watcher = new QFileSystemWatcher(this);

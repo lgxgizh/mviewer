@@ -1,5 +1,7 @@
 #include "widgets/ViewModeSegment.h"
 
+#include "ThemeIcons.h"
+
 #include <QAbstractButton>
 #include <QButtonGroup>
 #include <QComboBox>
@@ -96,14 +98,14 @@ void ViewModeSegment::rebuild()
         button->setObjectName(QStringLiteral("viewModeSegment_%1").arg(mode.data));
         button->setProperty("modeData", mode.data);
         button->setIcon(mode.icon);
-        button->setIconSize(QSize(16, 16));
+        button->setIconSize(QSize(mviewer::ui::kToolbarIconPx, mviewer::ui::kToolbarIconPx));
         button->setToolTip(mode.toolTip);
         button->setAccessibleName(mode.toolTip);
         button->setCheckable(true);
         button->setAutoExclusive(false);
         button->setFocusPolicy(Qt::TabFocus);
         button->setCursor(Qt::PointingHandCursor);
-        button->setFixedSize(28, 24);
+        button->setFixedSize(36, 30);
         m_group->addButton(button);
         m_layout->addWidget(button);
         const int data = mode.data;

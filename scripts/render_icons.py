@@ -5,7 +5,7 @@ MViewer does not link Qt Svg (the Linux CI image only has qt6-base). Toolbar
 icons are tinted at runtime from these masks, so each SVG is drawn once per
 scale with QSvgRenderer and saved as an alpha PNG.
 
-Toolbar masks (logical size 16, matching kToolbarIconPx):
+Toolbar masks (logical size 20, matching kToolbarIconPx):
 
     resources/icons/<id>.png
     resources/icons/<id>@1.5x.png
@@ -15,8 +15,8 @@ Toolbar masks (logical size 16, matching kToolbarIconPx):
 Theme indicator masks (Qt stylesheets load @2x and @3x automatically when the
 qrc alias sits next to the 1x name):
 
-    check / dot             16, 32, 48
-    chevron-up / chevron-down   10, 20, 30
+    check / dot             18, 36, 54
+    chevron-up / chevron-down   12, 24, 36
 
 Requires PySide6. Headless:
 
@@ -45,7 +45,7 @@ ICON_DIR = ROOT / "resources" / "icons"
 THEME_DIR = ROOT / "resources" / "theme"
 
 # Logical toolbar pixel size. Keep in sync with mviewer::ui::kToolbarIconPx.
-TOOLBAR_PX = 16
+TOOLBAR_PX = 20
 TOOLBAR_SCALES = (
     ("", 1.0),
     ("@1.5x", 1.5),
@@ -53,13 +53,13 @@ TOOLBAR_SCALES = (
     ("@3x", 3.0),
 )
 
-# (logical px, scales). Chevrons are 10px in the stylesheet; check and dot
-# fill a 16px indicator.
+# (logical px, scales). Chevrons are 12px in the stylesheet; check and dot
+# fill an 18px indicator.
 THEME_SPECS = {
-    "check": (16, (1.0, 2.0, 3.0)),
-    "dot": (16, (1.0, 2.0, 3.0)),
-    "chevron-up": (10, (1.0, 2.0, 3.0)),
-    "chevron-down": (10, (1.0, 2.0, 3.0)),
+    "check": (18, (1.0, 2.0, 3.0)),
+    "dot": (18, (1.0, 2.0, 3.0)),
+    "chevron-up": (12, (1.0, 2.0, 3.0)),
+    "chevron-down": (12, (1.0, 2.0, 3.0)),
 }
 
 

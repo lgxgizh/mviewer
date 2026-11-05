@@ -41,16 +41,16 @@ struct ThemeTokens
     int space8 = 8;
     int space12 = 12;
     int space16 = 16;
-    int radiusControl = 7;
+    int radiusControl = 8;
     int radiusPanel = 10;
     int radiusChip = 5;
-    int radiusSearch = 14;
+    int radiusSearch = 17;
     int radiusTooltip = 6;
-    int fontPt = 10;
-    int fontBodyPx = 13;
-    int fontCaptionPx = 11;
-    int fontTitlePx = 15;
-    int fontLargeTitlePx = 20;
+    int fontPt = 11;
+    int fontBodyPx = 15;
+    int fontCaptionPx = 13;
+    int fontTitlePx = 18;
+    int fontLargeTitlePx = 22;
 };
 
 inline ThemeTokens makeThemeTokens(bool dark)
@@ -86,11 +86,13 @@ inline ThemeTokens makeThemeTokens(bool dark)
     tokens.fontFamily = QString::fromLatin1(
         "\"Segoe UI Variable Text\", \"Segoe UI Variable\", \"Microsoft YaHei UI\", "
         "\"Segoe UI\", sans-serif");
-    tokens.fontPt = 10;
-    tokens.fontBodyPx = 13;
-    tokens.fontCaptionPx = 11;
-    tokens.fontTitlePx = 15;
-    tokens.fontLargeTitlePx = 20;
+    tokens.radiusControl = 8;
+    tokens.radiusSearch = 17;
+    tokens.fontPt = 11;
+    tokens.fontBodyPx = 15;
+    tokens.fontCaptionPx = 13;
+    tokens.fontTitlePx = 18;
+    tokens.fontLargeTitlePx = 22;
     return tokens;
 }
 
