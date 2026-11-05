@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.165**
+## Where we are now — **Beta / 1.0.166**
 
-MViewer remains in **Beta**; the current release is **`v1.0.165`**
-(2026-11-04, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+MViewer remains in **Beta**; the current release is **`v1.0.166`**
+(2026-11-05, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
 
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.165** (current) | New application icon: a spectrum aperture ring on a frosted squircle, with simplified artwork at small sizes so it stays legible in Explorer and the taskbar | 🔵 Beta |
+| **1.0.166** (current) | Larger application icon (the aperture fills the tile) and larger browse chrome: toolbar, controls, icons, body text, menus, sidebar, list rows and the Details header. Compare uses the same control size. Thumbnail size stays a saved setting | 🔵 Beta |
+| **1.0.165** | New application icon: a spectrum aperture ring on a frosted squircle, with simplified artwork at small sizes so it stays legible in Explorer and the taskbar | ✅ Previous patch |
 | **1.0.164** | Rotate/flip saves reliably even while the image is still being read (viewer, thumbnails, Windows Search, antivirus), including Chinese paths; rotate/flip disabled with a reason for formats it cannot rewrite; rename/delete/move wait briefly for other readers instead of failing | ✅ Previous patch |
 | **1.0.163** | YUV layout picker and extension→format map; no console window on launch (GUI subsystem + VERSIONINFO/manifest); Browse details toggle = Ctrl+3; light-theme menu check/radio/icon ink | ✅ Previous patch |
 | **1.0.162** | Raw YUV / Y4M viewing and compare (ADR 032): open `.yuv` / `.y4m` with inferred or saved parameters, step frames, read raw Y/U/V in the pixel inspector and compare two files with per-plane PSNR / SSIM; SIMD conversion and a performance pass (bit-identical output); Nightly Linux ASan disk fix and runner-calibrated benchmark baseline | ✅ Previous patch |
@@ -97,7 +98,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.165` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.166` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
