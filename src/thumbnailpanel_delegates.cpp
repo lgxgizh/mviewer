@@ -601,7 +601,7 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
     }
 
     const QRect r = option.rect.adjusted(4, 0, -4, 0);
-    const int icon = 16;
+    const int icon = 24;
     const QRect iconR(r.x(), r.y() + (r.height() - icon) / 2, icon, icon);
     QPixmap pm = m_panel->thumbReady(path);
     if (!pm.isNull())

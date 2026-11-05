@@ -21,6 +21,7 @@
 // Maps one-to-one to the "Browsing / Compare / View" items of docs/beta_checklist.md.
 
 #include "Language.h"
+#include "ThemeMetrics.h"
 #include "analysispanel.h"
 #include "appstate.h"
 #include "batchdialog.h"

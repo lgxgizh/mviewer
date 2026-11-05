@@ -173,10 +173,10 @@ void bindFileTransferObserver(ICommand *command,
 // the header row stay perfectly aligned. Column widths are user-resizable via
 // DetailsHeader (Explorer-style drag on separators); name still absorbs any
 // leftover width when the row is wider than the preferred total.
-inline constexpr int kDetailsHeaderH = 24;
-inline constexpr int kListItemWidth = 220;
-inline constexpr int kListItemHeight = 22;
-inline constexpr int kDetailsItemHeight = 52;
+inline constexpr int kDetailsHeaderH = 34;
+inline constexpr int kListItemWidth = 260;
+inline constexpr int kListItemHeight = 36;
+inline constexpr int kDetailsItemHeight = 64;
 inline constexpr int kDetailGap = 12;
 inline constexpr int kDetailSidePad = 4;
 inline constexpr int kDetailSepHitSlop = 4;

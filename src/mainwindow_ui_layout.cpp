@@ -221,7 +221,7 @@ void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLay
     // A-2.2: sort direction toggle (ascending / descending).
     m_sortDirBtn = new QPushButton(QStringLiteral("↑"), sortBar);
     m_sortDirBtn->setObjectName("sortDirBtn");
-    m_sortDirBtn->setFixedWidth(28);
+    m_sortDirBtn->setFixedWidth(mviewer::ui::metrics::kControlHeight);
     m_sortDirBtn->setCheckable(true);
     m_sortDirBtn->setToolTip(sortDirectionToolTip(true));
     sortLayout->addWidget(m_sortDirBtn);

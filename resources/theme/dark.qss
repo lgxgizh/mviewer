@@ -63,8 +63,8 @@ QToolBar#browserToolBar {
     border-bottom: 1px solid {{separator}};
     spacing: {{space4}}px;
     padding: 0px {{space8}}px;
-    min-height: 40px;
-    max-height: 44px;
+    min-height: 52px;
+    max-height: 56px;
 }
 
 QToolBar#browserToolBar QToolButton {
@@ -108,8 +108,8 @@ QToolButton {
     border: 1px solid transparent;
     border-radius: {{radiusControl}}px;
     padding: {{space4}}px;
-    min-height: 20px;
-    min-width: 20px;
+    min-height: 26px;
+    min-width: 26px;
     color: {{textPrimary}};
 }
 
@@ -170,7 +170,7 @@ QPushButton {
     border: 1px solid {{border}};
     border-radius: {{radiusControl}}px;
     padding: {{space4}}px {{space12}}px;
-    min-height: 20px;
+    min-height: 26px;
 }
 
 QPushButton:hover {
@@ -283,7 +283,7 @@ QWidget#viewModeSegment QPushButton {
     padding: 1px 4px;
     min-width: 0px;
     min-height: 0px;
-    max-height: 24px;
+    max-height: 30px;
     border: none;
     background: transparent;
 }
@@ -342,8 +342,8 @@ QRadioButton:disabled {
 }
 
 QCheckBox::indicator {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border: 1px solid {{border}};
     border-radius: {{radiusChip}}px;
     background: {{bg2}};
@@ -370,10 +370,10 @@ QCheckBox::indicator:disabled {
 }
 
 QRadioButton::indicator {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border: 1px solid {{border}};
-    border-radius: 8px;
+    border-radius: 9px;
     background: {{bg2}};
 }
 
@@ -433,8 +433,8 @@ QDoubleSpinBox {
     background: {{bg2}};
     border: 1px solid {{border}};
     border-radius: {{radiusControl}}px;
-    padding: 3px {{space8}}px;
-    min-height: 20px;
+    padding: 4px {{space8}}px;
+    min-height: 24px;
     color: {{textPrimary}};
     selection-background-color: {{selection}};
     selection-color: {{textPrimary}};
@@ -482,22 +482,22 @@ QComboBox::drop-down {
 
 QComboBox::down-arrow {
     image: url(:/theme/chevron-down.png);
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
 }
 
 QSpinBox::up-arrow,
 QDoubleSpinBox::up-arrow {
     image: url(:/theme/chevron-up.png);
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
 }
 
 QSpinBox::down-arrow,
 QDoubleSpinBox::down-arrow {
     image: url(:/theme/chevron-down.png);
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
 }
 
 QSpinBox::up-button,
@@ -535,7 +535,7 @@ QComboBox QAbstractItemView {
 }
 
 QComboBox QAbstractItemView::item {
-    min-height: 20px;
+    min-height: 28px;
     padding: 6px 12px;
     border-radius: {{radiusChip}}px;
 }
@@ -675,7 +675,7 @@ QTabBar::tab {
     border-radius: 6px;
     padding: {{space4}}px {{space12}}px;
     margin: 2px;
-    min-height: 20px;
+    min-height: 26px;
 }
 
 QTabBar::tab:selected {
@@ -761,8 +761,8 @@ QTreeView {
 QTreeView::item,
 QTableView::item,
 QListWidget::item {
-    padding: 2px {{space8}}px;
-    min-height: 22px;
+    padding: 4px {{space8}}px;
+    min-height: 30px;
     border-radius: 6px;
 }
 
@@ -902,8 +902,8 @@ QStatusBar {
     border: none;
     border-top: 1px solid {{separator}};
     font-size: {{fontCaptionPx}}px;
-    min-height: 22px;
-    max-height: 24px;
+    min-height: 28px;
+    max-height: 32px;
     padding: 0px;
 }
 
@@ -1134,8 +1134,8 @@ QToolButton[capsule="true"]::menu-indicator {
     subcontrol-origin: padding;
     subcontrol-position: center right;
     right: {{space8}}px;
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
 }
 
 QToolButton[capsule="true"]:hover {

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Application icon fills more of the tile, closer to a Chrome-sized glyph.
+  Small sizes stay simplified. Regenerate with `scripts/make_app_icon.py`.
+- Browse chrome is larger: 52 px toolbar, 34 px controls, 20 px toolbar icons,
+  15 px body text, taller menus, sidebar rows, list rows and the Details header.
+
 ## [1.0.165] - 2026-11-04
 
 ### Release

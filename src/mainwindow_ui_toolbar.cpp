@@ -96,12 +96,12 @@ class ElidingLabel final : public QLabel
     QSize sizeHint() const override
     {
         const int textW = fontMetrics().horizontalAdvance(m_full);
-        return QSize(qBound(72, textW + 8, 220), QLabel::sizeHint().height());
+        return QSize(qBound(96, textW + 8, 320), QLabel::sizeHint().height());
     }
 
     QSize minimumSizeHint() const override
     {
-        return QSize(48, QLabel::minimumSizeHint().height());
+        return QSize(72, QLabel::minimumSizeHint().height());
     }
 
   protected:
@@ -211,8 +211,8 @@ QWidget *MainWindow::makeBrowserLocation(QWidget *parent)
     host->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     // kBarHeight includes the toolbar hairline, so the title block sits inside it.
     host->setFixedHeight(mviewer::ui::metrics::kBarHeight - 4);
-    host->setMinimumWidth(72);
-    host->setMaximumWidth(280);
+    host->setMinimumWidth(96);
+    host->setMaximumWidth(360);
     auto *layout = new QVBoxLayout(host);
     layout->setContentsMargins(mviewer::ui::metrics::kSpace8, 1, mviewer::ui::metrics::kSpace8, 1);
     layout->setSpacing(0);
@@ -354,7 +354,7 @@ void MainWindow::attachUnifiedToolbarControls()
         m_typeFilterCombo->setParent(cluster);
         m_typeFilterCombo->setProperty("pill", true);
         m_typeFilterCombo->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
-        m_typeFilterCombo->setMaximumWidth(168);
+        m_typeFilterCombo->setMaximumWidth(210);
         row->addWidget(m_typeFilterCombo);
         m_typeFilterCombo->show();
     }
@@ -363,7 +363,7 @@ void MainWindow::attachUnifiedToolbarControls()
     {
         detachFromLayout(m_searchEdit);
         m_searchEdit->setParent(cluster);
-        m_searchEdit->setFixedWidth(176);
+        m_searchEdit->setFixedWidth(210);
         row->addWidget(m_searchEdit);
         m_searchEdit->show();
     }

@@ -171,7 +171,7 @@ void ThumbnailPanel::configureDetailsMode()
     setWrapping(false);
     setUniformItemSizes(false);
     setGridSize(QSize());
-    setIconSize(QSize(48, 48));
+    setIconSize(QSize(56, 56));
     setSpacing(0);
     // Swap to the details delegate.
     replaceDelegate(new DetailsDelegate(this, this));
@@ -235,7 +235,7 @@ void ThumbnailPanel::configureListMode()
     setUniformItemSizes(true);
     setGridSize(QSize());
     setSpacing(2);
-    setIconSize(QSize(16, 16));
+    setIconSize(QSize(24, 24));
     setResizeMode(QListView::Adjust);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);

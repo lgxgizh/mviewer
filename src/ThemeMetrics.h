@@ -11,21 +11,22 @@ constexpr int kSpace12 = 12;
 constexpr int kSpace16 = 16;
 
 // Buttons, combo boxes, line edits and toolbar widgets share one height.
-constexpr int kControlHeight = 28;
-// Toolbar strips that host kControlHeight controls with kSpace4 padding.
-constexpr int kBarHeight = 40;
+// Chrome's toolbar controls are ~32–36 px; 34 px is the browse-bar target.
+constexpr int kControlHeight = 34;
+// Toolbar strips that host kControlHeight controls with vertical padding.
+constexpr int kBarHeight = 52;
 // Caption status strip. Matches the QStatusBar min/max height in dark.qss.
-constexpr int kStatusBarHeight = 22;
+constexpr int kStatusBarHeight = 28;
 
-constexpr int kRadiusControl = 7;
+constexpr int kRadiusControl = 8;
 constexpr int kRadiusPanel = 10;
 constexpr int kRadiusChip = 5;
 
-// Font sizes (px). Body is 13 px (~9.75 pt at 96 DPI).
-constexpr int kFontCaptionPx = 11;
-constexpr int kFontBodyPx = 13;
-constexpr int kFontTitlePx = 15;
-constexpr int kFontLargeTitlePx = 20;
+// Font sizes (px). Body is 15 px (~11.25 pt at 96 DPI).
+constexpr int kFontCaptionPx = 13;
+constexpr int kFontBodyPx = 15;
+constexpr int kFontTitlePx = 18;
+constexpr int kFontLargeTitlePx = 22;
 
 // Layout defaults handed to Qt through the application style.
 constexpr int kWindowMargin = kSpace12;
@@ -36,7 +37,7 @@ constexpr int kLayoutSpacing = kSpace8;
 constexpr int kDialogMargin = 20;
 constexpr int kDialogSpacing = kSpace12;
 constexpr int kFormRowSpacing = 10;
-// Popup menu rows (macOS ~22 pt; 26 px fits the 13 px body font).
-constexpr int kMenuItemHeight = 26;
+// Popup menu rows. 32 px fits the 15 px body font with a Chrome-like hit target.
+constexpr int kMenuItemHeight = 32;
 
 } // namespace mviewer::ui::metrics
