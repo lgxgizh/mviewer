@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.167] - 2026-11-06
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.167**
+  (Chrome-like icon fill and shortcut icon refresh on upgrade).
+
+### Changed
+
+- Application icon: the tile nearly fills the canvas (margin 16/1024) and the
+  aperture ring nearly fills the tile, leaving a thin white rim. Small sizes
+  stay simplified; the soft shadow stays inside the canvas.
+
+### Fixed
+
+- Installer upgrades now delete and recreate the desktop and Start-menu
+  shortcuts with an explicit icon and always notify the shell, so Explorer
+  stops showing the previous icon after an upgrade.
+
 ## [1.0.166] - 2026-11-05
 
 ### Release
