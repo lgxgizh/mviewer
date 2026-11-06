@@ -54,13 +54,25 @@ Section "Install"
   ; Deploy the entire pre-built app directory verbatim.
   File /r "${APP_DIR}\*.*"
 
+  ; Shortcuts. On upgrade, delete any existing .lnk first (both the per-user
+  ; and all-users locations) so Explorer does not keep showing the icon it
+  ; cached for the old shortcut, then recreate them with an explicit icon.
+  SetShellVarContext all
+  Delete "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk"
+  Delete "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk"
+  Delete "$DESKTOP\${APPNAME}.lnk"
+  SetShellVarContext current
+  Delete "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk"
+  Delete "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk"
+  Delete "$DESKTOP\${APPNAME}.lnk"
+
   ; Start-menu shortcut
   CreateDirectory "$SMPROGRAMS\${APPNAME}"
-  CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\MViewer.exe"
-  CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk" "$INSTDIR\Uninstall.exe"
+  CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\MViewer.exe" "" "$INSTDIR\MViewer.exe" 0
+  CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk" "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
 
   ; Desktop shortcut
-  CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\MViewer.exe"
+  CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\MViewer.exe" "" "$INSTDIR\MViewer.exe" 0
 
   ; ── P2 #⑩: File associations ────────────────────────────────────────
   ; Native workspace/project associations. These extensions are the only
@@ -98,12 +110,9 @@ Section "Install"
   !insertmacro AssocExt "rw2"
   !insertmacro AssocExt "orf"
   !insertmacro AssocExt "raw"
-  ; Refresh shell associations
-  ${If} ${Silent}
-    ; no-op in silent mode
-  ${Else}
-    System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
-  ${EndIf}
+  ; Refresh shell associations and shortcut/file icons (SHCNE_ASSOCCHANGED).
+  ; Run in silent mode too: silent upgrades also need the icon refresh.
+  System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
 
   ; Uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"

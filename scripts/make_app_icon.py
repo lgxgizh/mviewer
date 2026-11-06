@@ -114,11 +114,14 @@ def blades(R, r, gap, round_r, bend, twist):
 
 def build_svg(variant="full"):
     if variant == "full":
-        margin, R, r, gap, rr, bend, shadow = 36, 392, 78, 24, 14, 54, True
+        # Chrome-like fill: the tile nearly touches the canvas (16/1024 margin,
+        # just enough for the soft shadow) and the ring nearly fills the tile,
+        # leaving only a thin white rim.
+        margin, R, r, gap, rr, bend, shadow = 16, 456, 90, 26, 14, 62, True
     elif variant == "mid":
-        margin, R, r, gap, rr, bend, shadow = 28, 408, 92, 32, 16, 46, False
+        margin, R, r, gap, rr, bend, shadow = 8, 466, 104, 34, 16, 54, False
     else:  # small
-        margin, R, r, gap, rr, bend, shadow = 12, 430, 108, 50, 18, 40, False
+        margin, R, r, gap, rr, bend, shadow = 4, 462, 116, 52, 18, 46, False
     size = 1024 - 2 * margin
     tile = squircle(margin, margin, size)
     tile_d = path_d(tile)
@@ -144,9 +147,9 @@ def build_svg(variant="full"):
         # drop shadow inside the 1024 viewBox so it is not clipped to a hard line.
         defs.append(
             '<filter id="tileShadow" x="-12%" y="-8%" width="124%" height="124%">'
-            '<feGaussianBlur in="SourceAlpha" stdDeviation="10"/>'
-            '<feOffset dy="8" result="b"/>'
-            '<feFlood flood-color="#1E2F55" flood-opacity="0.26"/>'
+            '<feGaussianBlur in="SourceAlpha" stdDeviation="4"/>'
+            '<feOffset dy="4" result="b"/>'
+            '<feFlood flood-color="#1E2F55" flood-opacity="0.30"/>'
             '<feComposite in2="b" operator="in" result="s1"/>'
             '<feGaussianBlur in="SourceAlpha" stdDeviation="2"/><feOffset dy="2" result="c"/>'
             '<feFlood flood-color="#1E2F55" flood-opacity="0.18"/>'
