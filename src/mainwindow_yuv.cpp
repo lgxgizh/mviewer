@@ -37,7 +37,8 @@ void MainWindow::editYuvParams(const QString &path)
     const std::string utf8 = path.toUtf8().toStdString();
     mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
     ThumbnailProvider::invalidateSource(utf8);
-    for (ThumbnailPanel *panel : {m_thumbnailPanel, m_secondaryThumbnailPanel})
+    for (ThumbnailPanel *panel :
+         {m_thumbnailPanel, m_secondaryThumbnailPanel, m_tertiaryThumbnailPanel})
     {
         if (panel)
             panel->invalidateSourceImage(path);

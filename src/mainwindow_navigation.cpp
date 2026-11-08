@@ -130,6 +130,8 @@ void MainWindow::navigate(int delta)
 
 QString MainWindow::activeBrowseDirectory() const
 {
+    if (tertiaryNavActive() && m_tertiaryThumbnailPanel)
+        return m_tertiaryThumbnailPanel->currentDir();
     if (secondaryNavActive() && m_secondaryThumbnailPanel)
         return m_secondaryThumbnailPanel->currentDir();
     return currentDir();
@@ -139,6 +141,13 @@ void MainWindow::refreshActiveBrowse()
 {
     if (m_directoryTree)
         m_directoryTree->refresh();
+    if (tertiaryNavActive())
+    {
+        m_tertiaryThumbnailPanel->refresh();
+        if (m_tertiaryDirectoryMonitor)
+            m_tertiaryDirectoryMonitor->reconcileNow();
+        return;
+    }
     if (secondaryNavActive())
     {
         if (m_secondaryThumbnailPanel)
@@ -175,6 +184,7 @@ void MainWindow::updateNavigationActions()
         m_actDirUp->setEnabled(hasActiveDirectory && parent.cdUp());
     }
     updateSecondaryNavButtons();
+    updateTertiaryNavButtons();
     if (m_actRefresh)
         m_actRefresh->setEnabled(hasDirectory);
     if (m_actOpenCurrentFolder)
@@ -297,6 +307,11 @@ void MainWindow::pushDirHistory(const QString &dir)
 
 void MainWindow::goDirBack()
 {
+    if (tertiaryNavActive())
+    {
+        navigateTertiaryBack();
+        return;
+    }
     if (secondaryNavActive())
     {
         navigateSecondaryBack();
@@ -322,6 +337,11 @@ void MainWindow::goDirBack()
 
 void MainWindow::goDirForward()
 {
+    if (tertiaryNavActive())
+    {
+        navigateTertiaryForward();
+        return;
+    }
     if (secondaryNavActive())
     {
         navigateSecondaryForward();

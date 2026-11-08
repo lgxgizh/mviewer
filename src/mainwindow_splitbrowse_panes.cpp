@@ -103,6 +103,10 @@ void restorePanelScroll(ThumbnailPanel *panel, int scroll)
 
 ThumbnailPanel *MainWindow::activeThumbnailPanel() const
 {
+    if (m_tripleBrowseEnabled && m_tertiaryThumbnailPanel &&
+        browsePaneExposed(m_tertiaryBrowsePane, this) &&
+        m_activeBrowsePane == SelectionModel::PaneSlot::Tertiary)
+        return m_tertiaryThumbnailPanel;
     if (m_splitBrowseEnabled && m_secondaryThumbnailPanel &&
         browsePaneExposed(m_secondaryBrowsePane, this) &&
         m_activeBrowsePane == SelectionModel::PaneSlot::Secondary)
@@ -114,6 +118,8 @@ ThumbnailPanel *MainWindow::thumbnailPanelForPath(const QString &path, Thumbnail
 {
     if (panelContainsPath(prefer, path))
         return prefer;
+    if (m_tripleBrowseEnabled && panelContainsPath(m_tertiaryThumbnailPanel, path))
+        return m_tertiaryThumbnailPanel;
     if (m_splitBrowseEnabled && panelContainsPath(m_secondaryThumbnailPanel, path))
         return m_secondaryThumbnailPanel;
     if (panelContainsPath(m_thumbnailPanel, path))
@@ -127,22 +133,32 @@ void MainWindow::applyGallerySplitterSizes()
 {
     if (!m_gallerySplitter)
         return;
-    if (m_appState.gallerySplitterSizes.size() == 2 && m_appState.gallerySplitterSizes[0] > 0 &&
-        m_appState.gallerySplitterSizes[1] > 0)
+    const int count = browseColumnCount();
+    const auto &saved = m_appState.gallerySplitterSizes;
+    if (saved.size() == 3 && saved[0] > 0 && (count < 2 || saved[1] > 0) &&
+        (count < 3 || saved[2] > 0))
     {
-        m_gallerySplitter->setSizes(m_appState.gallerySplitterSizes);
+        m_gallerySplitter->setSizes(saved);
         return;
     }
-    const int w = m_gallerySplitter->width();
-    const int half = w > 0 ? w / 2 : 400;
-    m_gallerySplitter->setSizes({half, half});
+    // Old two-pane sessions remain readable after adding the hidden third widget.
+    if (count == 2 && saved.size() == 2 && saved[0] > 0 && saved[1] > 0)
+    {
+        m_gallerySplitter->setSizes({saved[0], saved[1], 0});
+        return;
+    }
+    const int share = qMax(1, m_gallerySplitter->width() / count);
+    m_gallerySplitter->setSizes({share, count >= 2 ? share : 0, count == 3 ? share : 0});
 }
 
 void MainWindow::updateActivePaneIndicator()
 {
     const bool split = m_splitBrowseEnabled && browsePaneExposed(m_secondaryBrowsePane, this);
     const bool secondaryActive = split && m_activeBrowsePane == SelectionModel::PaneSlot::Secondary;
-    applyPaneActiveStyle(m_primaryBrowsePane, split && !secondaryActive);
+    const bool tertiaryActive =
+        m_tripleBrowseEnabled && m_activeBrowsePane == SelectionModel::PaneSlot::Tertiary;
+    applyPaneActiveStyle(m_primaryBrowsePane, split && !secondaryActive && !tertiaryActive);
+    applyPaneActiveStyle(m_tertiaryBrowsePane, tertiaryActive);
     applyPaneActiveStyle(m_secondaryBrowsePane, secondaryActive);
 }
 
@@ -154,6 +170,10 @@ void MainWindow::updateSwapButtonEnabled()
     const bool rightOpen =
         m_secondaryThumbnailPanel && !m_secondaryThumbnailPanel->currentDir().isEmpty();
     m_secondarySwapBtn->setEnabled(m_splitBrowseEnabled && leftOpen && rightOpen);
+    if (m_tertiarySwapBtn)
+        m_tertiarySwapBtn->setEnabled(m_tripleBrowseEnabled && leftOpen &&
+                                      m_tertiaryThumbnailPanel &&
+                                      !m_tertiaryThumbnailPanel->currentDir().isEmpty());
 }
 
 void MainWindow::enableSplitBrowseUi()
@@ -330,6 +350,10 @@ void MainWindow::refreshVisibleBrowsePanes()
         browsePaneExposed(m_secondaryBrowsePane, this) &&
         !m_secondaryThumbnailPanel->currentDir().isEmpty())
         m_secondaryThumbnailPanel->refresh();
+    if (m_tripleBrowseEnabled && m_tertiaryThumbnailPanel &&
+        browsePaneExposed(m_tertiaryBrowsePane, this) &&
+        !m_tertiaryThumbnailPanel->currentDir().isEmpty())
+        m_tertiaryThumbnailPanel->refresh();
 }
 
 void MainWindow::dropRemovedPathsFromPanel(ThumbnailPanel *panel, const QStringList &deleted)
@@ -375,6 +399,8 @@ void MainWindow::onGalleryPathsRemoved(ThumbnailPanel *source, const QStringList
         dropRemovedPathsFromPanel(m_thumbnailPanel, deleted);
     if (m_secondaryThumbnailPanel && m_secondaryThumbnailPanel != source)
         dropRemovedPathsFromPanel(m_secondaryThumbnailPanel, deleted);
+    if (m_tertiaryThumbnailPanel && m_tertiaryThumbnailPanel != source)
+        dropRemovedPathsFromPanel(m_tertiaryThumbnailPanel, deleted);
     if (!viewerOpen || shown.isEmpty() || !deleted.contains(shown))
         return;
     const int next = nextIndexAfterRemoval(oldIndex, oldCount, removedIndices);
@@ -412,6 +438,8 @@ void MainWindow::onGalleryPathsModified(const QStringList &paths)
             m_thumbnailPanel->invalidateSourceImage(path);
         if (m_secondaryThumbnailPanel)
             m_secondaryThumbnailPanel->invalidateSourceImage(path);
+        if (m_tertiaryThumbnailPanel)
+            m_tertiaryThumbnailPanel->invalidateSourceImage(path);
         if (path == currentImagePath())
         {
             if (m_previewPanel)
@@ -471,7 +499,15 @@ void MainWindow::applyActivePaneStatusBar()
         const int left = m_thumbnailPanel ? m_thumbnailPanel->selectedPaths().size() : 0;
         const int right =
             m_secondaryThumbnailPanel ? m_secondaryThumbnailPanel->selectedPaths().size() : 0;
-        m_lblSize->setText(splitSelectionStatusText(left, right));
+        if (m_tripleBrowseEnabled)
+        {
+            const int third =
+                m_tertiaryThumbnailPanel ? m_tertiaryThumbnailPanel->selectedPaths().size() : 0;
+            m_lblSize->setText(
+                tr("Left: %1 | Middle: %2 | Right: %3 selected").arg(left).arg(right).arg(third));
+        }
+        else
+            m_lblSize->setText(splitSelectionStatusText(left, right));
         m_lblSize->show();
         return;
     }
@@ -629,8 +665,11 @@ void MainWindow::onBrowseFocusChanged(QWidget *, QWidget *now)
 {
     if (!now || !m_splitBrowseEnabled)
         return;
-    if (m_secondaryBrowsePane &&
-        (now == m_secondaryBrowsePane || m_secondaryBrowsePane->isAncestorOf(now)))
+    if (m_tripleBrowseEnabled && m_tertiaryBrowsePane &&
+        (now == m_tertiaryBrowsePane || m_tertiaryBrowsePane->isAncestorOf(now)))
+        setActiveBrowsePane(SelectionModel::PaneSlot::Tertiary);
+    else if (m_secondaryBrowsePane &&
+             (now == m_secondaryBrowsePane || m_secondaryBrowsePane->isAncestorOf(now)))
         setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
     else if (m_primaryBrowsePane &&
              (now == m_primaryBrowsePane || m_primaryBrowsePane->isAncestorOf(now)))

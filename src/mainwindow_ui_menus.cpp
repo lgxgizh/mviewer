@@ -263,6 +263,11 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actSplitBrowse->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S));
     connect(m_actSplitBrowse, &QAction::toggled, this, &MainWindow::toggleSplitBrowse);
     viewMenu->addAction(m_actSplitBrowse);
+    m_actTripleBrowse = new QAction(tr("Triple Browse View"), this);
+    m_actTripleBrowse->setObjectName("tripleBrowseAction");
+    m_actTripleBrowse->setCheckable(true);
+    connect(m_actTripleBrowse, &QAction::toggled, this, &MainWindow::toggleTripleBrowse);
+    viewMenu->addAction(m_actTripleBrowse);
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
     m_actToggleSearch = new QAction(tr("Global &Search"), this);
@@ -479,6 +484,7 @@ void MainWindow::retranslateUi()
         {m_actCopyOtherPane, QT_TR_NOOP("Copy to Other Pane")},
         {m_actMoveOtherPane, QT_TR_NOOP("Move to Other Pane")},
         {m_actSplitBrowse, QT_TR_NOOP("Split Browse View")},
+        {m_actTripleBrowse, QT_TR_NOOP("Triple Browse View")},
         {m_actCompare, QT_TR_NOOP("Compare Mode (&C)")},
         {m_actToggleAnalysis, QT_TR_NOOP("Analysis Panel(&H)")},
         {m_actHistoryBack, QT_TR_NOOP("&Back")},

@@ -157,7 +157,8 @@ void MainWindow::setupCommands()
         "dir_filter", "Address Bar (Ctrl+F)",
         [this]()
         {
-            if (secondaryLineEditOwns(QApplication::focusWidget()))
+            if (tertiaryLineEditOwns(QApplication::focusWidget()) ||
+                secondaryLineEditOwns(QApplication::focusWidget()))
                 return;
             focusAddressBar();
         },

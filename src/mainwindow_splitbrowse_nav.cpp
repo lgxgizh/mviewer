@@ -91,7 +91,14 @@ bool MainWindow::routeDirectoryHistoryMouse(QObject *watched, QEvent *event)
     if (me->button() != Qt::BackButton && me->button() != Qt::ForwardButton)
         return false;
     const bool back = me->button() == Qt::BackButton;
-    if (secondaryBrowseOwns(watched))
+    if (tertiaryBrowseOwns(watched))
+    {
+        if (back)
+            navigateTertiaryBack();
+        else
+            navigateTertiaryForward();
+    }
+    else if (secondaryBrowseOwns(watched))
     {
         if (back)
             navigateSecondaryBack();

@@ -27,7 +27,9 @@ bool yieldPrintableToFocusedEntry(const QKeyEvent *key)
 void MainWindow::focusAddressBar()
 {
     QLineEdit *edit = m_pathEdit;
-    if (secondaryNavActive() && m_secondaryPathEdit)
+    if (tertiaryNavActive() && m_tertiaryPathEdit)
+        edit = m_tertiaryPathEdit;
+    else if (secondaryNavActive() && m_secondaryPathEdit)
         edit = m_secondaryPathEdit;
     if (!edit)
         return;
@@ -92,7 +94,7 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
     if (mviewer_keys::textEntryOwnsKey(qobject_cast<QWidget *>(watched), ke))
         return false;
     // A focused right-pane editor keeps Ctrl+F (see secondaryEditorKeepsKey).
-    if (secondaryEditorKeepsKey(watched, ke))
+    if (tertiaryEditorKeepsKey(watched, ke) || secondaryEditorKeepsKey(watched, ke))
         return true;
     if (watched == m_searchEdit)
     {

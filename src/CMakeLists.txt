@@ -208,6 +208,10 @@ add_library(mviewer_ui STATIC
     mainwindow_ui_layout.cpp
     mainwindow_ui_toolbar.cpp
     mainwindow_ui_retranslate.cpp
+    mainwindow_triplebrowse.cpp
+    mainwindow_triplebrowse_ui.cpp
+    mainwindow_triplebrowse_state.cpp
+    mainwindow_triplebrowse_nav.cpp
     mainwindow_splitbrowse.cpp
     mainwindow_splitbrowse_panes.cpp
     mainwindow_split_transfer.cpp

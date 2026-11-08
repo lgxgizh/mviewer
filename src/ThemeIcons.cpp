@@ -40,6 +40,7 @@ const char *const kToolbarIconIds[] = {
     "rotate_ccw",
     "rotate_cw",
     "split_browse",
+    "triple_browse",
     "sidebar",
     "view_grid",
     "view_list",

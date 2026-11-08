@@ -92,6 +92,10 @@
         <file alias="rotate_cw@1.5x.png">icons/rotate_cw@1.5x.png</file>
         <file alias="rotate_cw@2x.png">icons/rotate_cw@2x.png</file>
         <file alias="rotate_cw@3x.png">icons/rotate_cw@3x.png</file>
+        <file alias="triple_browse.png">icons/triple_browse.png</file>
+        <file alias="triple_browse@1.5x.png">icons/triple_browse@1.5x.png</file>
+        <file alias="triple_browse@2x.png">icons/triple_browse@2x.png</file>
+        <file alias="triple_browse@3x.png">icons/triple_browse@3x.png</file>
         <file alias="split_browse.png">icons/split_browse.png</file>
         <file alias="split_browse@1.5x.png">icons/split_browse@1.5x.png</file>
         <file alias="split_browse@2x.png">icons/split_browse@2x.png</file>

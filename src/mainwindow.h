@@ -101,9 +101,22 @@ class MainWindow : public QMainWindow
         return m_splitBrowseEnabled;
     }
     void toggleSplitBrowse(bool enabled);
+    void toggleTripleBrowse(bool enabled);
+    void setBrowseColumnCount(int count);
+    int browseColumnCount() const
+    {
+        return m_tripleBrowseEnabled ? 3 : (m_splitBrowseEnabled ? 2 : 1);
+    }
+    void openThirdDirectory(const QString &dir);
+    void swapThirdBrowsePane();
+    void cloneLeftToThirdPane();
+    ThumbnailPanel *tertiaryThumbnailPanel() const
+    {
+        return m_tertiaryThumbnailPanel;
+    }
     void openRightDirectory(const QString &dir);
     // Browse file type filter (browseformats.h group ids), persisted and
-    // applied to both panes; both type combos stay in sync.
+    // applied to every browse pane; the type combos stay in sync.
     void setBrowseHiddenFormatGroups(const QStringList &groups);
     QStringList browseHiddenFormatGroups() const;
     // Route a pane's "Show hidden files" hint click to the shared type filter.
@@ -187,6 +200,28 @@ class MainWindow : public QMainWindow
     void dockCompareButton(ThumbnailPanel *panel, QWidget *host, QHBoxLayout *row, QWidget *after);
     QWidget *buildNavigationPanel();
     QWidget *buildGalleryPanel();
+    QWidget *buildTertiaryBrowsePane();
+    QWidget *buildTertiaryHeaderBar(QWidget *pane);
+    void wireTertiaryPanelSignals();
+    void wireTertiaryBrowseHostSignals();
+    QHBoxLayout *buildTertiarySortControls(QWidget *headerBar, QVBoxLayout *headerLayout);
+    void navigateTertiaryBack();
+    void navigateTertiaryForward();
+    void navigateTertiaryUp();
+    void updateTertiaryNavButtons();
+    bool tertiaryNavActive() const;
+    bool routeTertiaryBrowseKey(QObject *watched, QEvent *event);
+    bool tertiaryBrowseOwns(QObject *watched) const;
+    bool tertiaryLineEditOwns(QObject *watched) const;
+    bool tertiaryEditorKeepsKey(QObject *watched, const QKeyEvent *ke) const;
+    void mirrorPrimaryIntoTertiary();
+    void applyTertiarySortFromState();
+    void persistTertiaryBrowseState();
+    void restoreTertiaryBrowsePosition();
+    void applyPendingTertiaryBrowseRestore(const QString &directory, const QStringList &paths);
+    void handleTertiaryDroppedPaths(const QStringList &paths);
+    void onTertiaryStatsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
+    void onTertiarySequenceChanged(const QString &directory, const QStringList &paths);
     QWidget *buildSecondaryBrowsePane();
     QWidget *buildSecondaryHeaderBar(QWidget *pane);
     void wireSecondaryPanelSignals();
@@ -396,6 +431,7 @@ class MainWindow : public QMainWindow
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     bool m_splitBrowseEnabled = false;
+    bool m_tripleBrowseEnabled = false;
     SelectionModel::PaneSlot m_activeBrowsePane = SelectionModel::PaneSlot::Primary;
     QSplitter *m_gallerySplitter = nullptr;
     QWidget *m_primaryBrowsePane = nullptr;
@@ -413,11 +449,25 @@ class MainWindow : public QMainWindow
     ThumbnailPanel *m_secondaryThumbnailPanel = nullptr;
     DirectoryMonitor *m_secondaryDirectoryMonitor = nullptr;
     bool m_pendingSecondaryScrollRestore = false;
+    QWidget *m_tertiaryBrowsePane = nullptr;
+    QLineEdit *m_tertiaryPathEdit = nullptr;
+    FormatFilterCombo *m_tertiaryTypeFilterCombo = nullptr;
+    QPushButton *m_tertiaryBrowseBtn = nullptr;
+    QPushButton *m_tertiaryCloneBtn = nullptr;
+    QPushButton *m_tertiarySwapBtn = nullptr;
+    QPushButton *m_tertiaryCloseBtn = nullptr;
+    QComboBox *m_tertiarySortCombo = nullptr;
+    QPushButton *m_tertiarySortDirBtn = nullptr;
+    ThumbnailPanel *m_tertiaryThumbnailPanel = nullptr;
+    DirectoryMonitor *m_tertiaryDirectoryMonitor = nullptr;
+    bool m_pendingTertiaryScrollRestore = false;
     // Split entry source: session restore keeps the saved right pane; an
     // explicit right-pane target skips mirroring the left folder.
     bool m_splitRestoringSession = false;
     bool m_splitOpeningTarget = false;
+    bool m_tripleOpeningTarget = false;
     QAction *m_actSplitBrowse = nullptr;
+    QAction *m_actTripleBrowse = nullptr;
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
     QLabel *m_emptyFolderLabel =
         nullptr; // gallery empty-folder hint (objectName: emptyFolderLabel)
@@ -576,6 +626,8 @@ class MainWindow : public QMainWindow
             fn(m_thumbnailPanel);
         if (m_splitBrowseEnabled && m_secondaryThumbnailPanel)
             fn(m_secondaryThumbnailPanel);
+        if (m_tripleBrowseEnabled && m_tertiaryThumbnailPanel)
+            fn(m_tertiaryThumbnailPanel);
     }
     // Filename, rating, flag, and metadata filters drive the left gallery only.
     // Mirroring them onto the right pane is deferred: re-filtering that pane
@@ -620,6 +672,7 @@ class MainWindow : public QMainWindow
     QStringList m_dirHistory;
     int m_dirHistoryIndex = -1;
     SecondaryBrowseHistory m_secondaryBrowseHistory;
+    SecondaryBrowseHistory m_tertiaryBrowseHistory;
     // P0: Favorites bar widget in the left sidebar.
     QListWidget *m_favoritesBar = nullptr;
     // Persisted, cross-session app state (favorites + restore position).

@@ -259,6 +259,7 @@ void MainWindow::addTrailingBrowserActions(QToolBar *bar)
     addBrowserAction(bar, m_actRotateCW, "rotate_cw", {});
     addBrowserAction(bar, m_actSplitBrowse, "split_browse",
                      actTip(tr("Split Browse View (Ctrl+Shift+S)"), m_actSplitBrowse));
+    addBrowserAction(bar, m_actTripleBrowse, "triple_browse", tr("Triple Browse View"));
     if (m_actUsmCompare)
         m_actUsmCompare->setObjectName(QStringLiteral("usmCompareAction"));
     addBrowserAction(
@@ -411,7 +412,9 @@ void MainWindow::applyBrowserLocationTitle(const QString &path)
 void MainWindow::syncActiveBrowserTitle()
 {
     QString path = currentDir();
-    if (secondaryNavActive() && m_secondaryThumbnailPanel)
+    if (tertiaryNavActive() && m_tertiaryThumbnailPanel)
+        path = m_tertiaryThumbnailPanel->currentDir();
+    else if (secondaryNavActive() && m_secondaryThumbnailPanel)
         path = m_secondaryThumbnailPanel->currentDir();
     applyBrowserLocationTitle(path);
 }
@@ -423,8 +426,11 @@ void MainWindow::refreshBrowserLocation(const QString &path)
     if (m_pathEdit)
         m_pathEdit->setText(QDir::toNativeSeparators(path));
     QString titlePath = path;
-    if (secondaryNavActive() && m_secondaryThumbnailPanel &&
-        !m_secondaryThumbnailPanel->currentDir().isEmpty())
+    if (tertiaryNavActive() && m_tertiaryThumbnailPanel &&
+        !m_tertiaryThumbnailPanel->currentDir().isEmpty())
+        titlePath = m_tertiaryThumbnailPanel->currentDir();
+    else if (secondaryNavActive() && m_secondaryThumbnailPanel &&
+             !m_secondaryThumbnailPanel->currentDir().isEmpty())
         titlePath = m_secondaryThumbnailPanel->currentDir();
     applyBrowserLocationTitle(titlePath);
 }
