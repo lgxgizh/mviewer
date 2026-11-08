@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-06 · Version: **1.0.167** · Release tag: **v1.0.167**
+> Snapshot: 2026-11-08 · Version: **1.0.168** · Release tag: **v1.0.168**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,15 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.168 — Three-column directory browsing (2026-11-08)
+
+- Browse supports one, two or three independent directory panes, with a separate
+  three-column toolbar/menu action, per-pane navigation and sorting, shared
+  selection/Compare, transfer destination choice and saved session state.
+- Single/two-column behavior and Ctrl+3 Details are preserved. Automated
+  regression coverage is in the existing browse acceptance and workflow suites;
+  native display/DPI and long-session visual review remain separate.
 
 ## 1.0.55 — Format conversion SIMD vectorization & search scalability (2026-09-18)
 
