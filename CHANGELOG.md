@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.168] - 2026-11-08
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.168**
+  (three-column directory browsing).
+
 ### Added
 
 - Add three-column directory browsing with a separate toolbar/menu action,
