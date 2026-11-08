@@ -86,14 +86,15 @@ void testTripleBrowse(const QString &leftDir, const QString &middleDir, const QS
                third->viewMode() == ThumbnailPanel::Details &&
                middle->viewMode() == ThumbnailPanel::Details,
            "size and Details sync across panes");
-    bool detailsShortcut = false;
+    bool actionOwnsCtrl3 = false;
     for (QAction *action : mw.findChildren<QAction *>())
         if (action->shortcut() == QKeySequence(Qt::CTRL | Qt::Key_3))
-        {
-            detailsShortcut = true;
-            action->trigger();
-        }
-    EXPECT(detailsShortcut && left->viewMode() == ThumbnailPanel::Details,
+            actionOwnsCtrl3 = true;
+    left->setViewMode(ThumbnailPanel::Thumbnail);
+    QKeyEvent detailsKey(QEvent::KeyPress, Qt::Key_3, Qt::ControlModifier);
+    QApplication::sendEvent(&mw, &detailsKey);
+    EXPECT(!actionOwnsCtrl3 && left->viewMode() == ThumbnailPanel::Details &&
+               tripleAction->isChecked() && mw.browseColumnCount() == 3,
            "Ctrl+3 remains Details, not triple browse");
     left->selectPath(left->pathList().first());
     middle->selectPath(middle->pathList().first());
