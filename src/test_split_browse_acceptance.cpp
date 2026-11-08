@@ -254,6 +254,8 @@ void testThumbnailPipelineIsolation()
     pipe.setSourcesForConsumer(0, {"/dirA/1.png", "/dirA/2.png"});
     pipe.setSourcesForConsumer(1, {"/dirB/1.png", "/dirB/2.png"});
 
+    pipe.setSourcesForConsumer(2, {"/dirC/1.png"});
+    const uint64_t gen2 = pipe.consumerGeneration(2);
     const uint64_t gen0 = pipe.consumerGeneration(0);
     const uint64_t gen1 = pipe.consumerGeneration(1);
 
@@ -261,6 +263,11 @@ void testThumbnailPipelineIsolation()
     pipe.setSourcesForConsumer(1, {"/dirB_new/1.png"});
     EXPECT(pipe.consumerGeneration(0) == gen0, "Consumer 0 generation is undisturbed");
     EXPECT(pipe.consumerGeneration(1) > gen1, "Consumer 1 generation advanced");
+    EXPECT(pipe.consumerGeneration(2) == gen2, "third consumer stays independent");
+    const uint64_t nextGen1 = pipe.consumerGeneration(1);
+    pipe.setSourcesForConsumer(2, {"/dirC_new/1.png"});
+    EXPECT(pipe.consumerGeneration(0) == gen0 && pipe.consumerGeneration(1) == nextGen1,
+           "navigating third consumer does not invalidate either original pane");
 }
 
 void testAppStatePersistence()
@@ -615,9 +622,12 @@ void testUnionCompareAndHeader(const QString &leftDir, const QString &rightDir)
     EXPECT(emits == 2 && emitted.size() == 2, "Compare action (P) sends the 1+1 union");
 
     const auto buttons = mw.findChildren<QPushButton *>(QStringLiteral("compareSelectionButton"));
-    EXPECT(buttons.size() == 2, "one Compare button per pane");
+    EXPECT(buttons.size() == 3, "one Compare button per pane, including the hidden third pane");
     for (QPushButton *btn : buttons)
     {
+        if (mw.tertiaryThumbnailPanel() &&
+            mw.findChild<QWidget *>(QStringLiteral("tertiaryBrowsePane"))->isAncestorOf(btn))
+            continue;
         EXPECT(btn->isVisible() && btn->isEnabled(), "Compare button live for the 1+1 union");
         EXPECT(!left->isAncestorOf(btn) && !right->isAncestorOf(btn),
                "Compare button docked in the toolbar, not over the list header");
@@ -637,6 +647,7 @@ void testUnionCompareAndHeader(const QString &leftDir, const QString &rightDir)
 #include "test_split_browse_mirror.inc"
 #include "test_split_browse_state.inc"
 #include "test_split_browse_typefilter.inc"
+#include "test_triple_browse.inc"
 
 void testBrowseUx()
 {
@@ -663,6 +674,9 @@ void testBrowseUx()
     writeBrowseFixture(thirdDir, QStringLiteral("t"));
     testSplitMirrorsSinglePane(leftDir, rightDir, thirdDir);
     testSplitBrowseState(leftDir, rightDir, thirdDir);
+    testTripleSelectionModel();
+    testTripleBrowse(leftDir, rightDir, thirdDir);
+    testTriplePersistence(leftDir, rightDir, thirdDir);
 }
 
 } // namespace

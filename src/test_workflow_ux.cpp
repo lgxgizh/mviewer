@@ -110,6 +110,7 @@
 #include <QStatusBar>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QTemporaryDir>
 #include <QTextCursor>
 #include <QTextEdit>
 #include <QThread>
@@ -646,6 +647,7 @@ QPushButton *findBtn(QWidget *root, const QString &textPrefix)
 // Workflow1/16 also verify empty-state command availability, Viewer zoom state,
 // slideshow/navigation state, and Browse boundaries.
 #include "test_workflow_ux_cases.inc"
+#include "test_workflow_ux_triple.inc"
 int main(int argc, char **argv)
 {
     // Force QFileDialog::getSaveFileName through Qt's event-loop-backed dialog
@@ -711,6 +713,7 @@ int main(int argc, char **argv)
     workflow20_viewer_fileop_targets(workDir.absolutePath(), paths);
     workflow20_raw_display_chrome();
     workflow21_split_pane_transfer();
+    workflow22_triple_browse();
     workflow22_right_pane_history_status();
     workflow23_language_switch_browse_bar();
     workflow10_compare_canvas(paths[0], paths[2]);

@@ -96,6 +96,8 @@ AppState AppState::load()
             s.navHistory.append(v.toString());
     s.navHistoryIndex = o.value("navHistoryIndex").toInt(-1);
     s.splitBrowseEnabled = o.value("splitBrowseEnabled").toBool(false);
+    s.tripleBrowseEnabled = o.value("tripleBrowseEnabled").toBool(false);
+    s.splitBrowseEnabled = s.splitBrowseEnabled || s.tripleBrowseEnabled;
     s.secondaryLastDir = o.value("secondaryLastDir").toString();
     const QJsonArray secondaryHistory = o.value("secondaryDirHistory").toArray();
     for (const auto &v : secondaryHistory)
@@ -112,6 +114,20 @@ AppState AppState::load()
         s.hasSecondarySort = true;
         s.secondarySortField = o.value(QStringLiteral("secondarySortField")).toInt(0);
         s.secondarySortAscending = o.value(QStringLiteral("secondarySortAscending")).toBool(true);
+    }
+    s.tertiaryLastDir = o.value("tertiaryLastDir").toString();
+    const QJsonArray tertiaryHistory = o.value("tertiaryDirHistory").toArray();
+    for (const auto &v : tertiaryHistory)
+        if (v.isString())
+            s.tertiaryDirHistory.append(v.toString());
+    s.tertiaryDirHistoryIndex = o.value("tertiaryDirHistoryIndex").toInt(-1);
+    s.tertiaryLastImage = o.value("tertiaryLastImage").toString();
+    s.tertiaryThumbScroll = o.value("tertiaryThumbScroll").toInt(0);
+    if (o.contains(QStringLiteral("tertiarySortField")))
+    {
+        s.hasTertiarySort = true;
+        s.tertiarySortField = o.value(QStringLiteral("tertiarySortField")).toInt(0);
+        s.tertiarySortAscending = o.value(QStringLiteral("tertiarySortAscending")).toBool(true);
     }
     return s;
 }
@@ -153,6 +169,7 @@ bool AppState::save() const
     o["navHistory"] = nav;
     o["navHistoryIndex"] = navHistoryIndex;
     o["splitBrowseEnabled"] = splitBrowseEnabled;
+    o["tripleBrowseEnabled"] = tripleBrowseEnabled;
     o["secondaryLastDir"] = secondaryLastDir;
     QJsonArray secondaryHistory;
     for (const auto &entry : secondaryDirHistory)
@@ -169,6 +186,20 @@ bool AppState::save() const
     {
         o["secondarySortField"] = secondarySortField;
         o["secondarySortAscending"] = secondarySortAscending;
+    }
+
+    o["tertiaryLastDir"] = tertiaryLastDir;
+    QJsonArray tertiaryHistory;
+    for (const auto &entry : tertiaryDirHistory)
+        tertiaryHistory.append(entry);
+    o["tertiaryDirHistory"] = tertiaryHistory;
+    o["tertiaryDirHistoryIndex"] = tertiaryDirHistoryIndex;
+    o["tertiaryLastImage"] = tertiaryLastImage;
+    o["tertiaryThumbScroll"] = tertiaryThumbScroll;
+    if (hasTertiarySort)
+    {
+        o["tertiarySortField"] = tertiarySortField;
+        o["tertiarySortAscending"] = tertiarySortAscending;
     }
 
     QSaveFile f(path);

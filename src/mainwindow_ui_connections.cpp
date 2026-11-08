@@ -383,6 +383,8 @@ void MainWindow::connectFilterSignals()
         connect(m_thumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
     if (m_secondaryThumbnailPanel)
         connect(m_secondaryThumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
+    if (m_tertiaryThumbnailPanel)
+        connect(m_tertiaryThumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
 }
 
 void MainWindow::connectMenuSignals()
@@ -398,6 +400,11 @@ void MainWindow::connectMenuSignals()
     connect(m_actDirUp, &QAction::triggered, this,
             [this]()
             {
+                if (tertiaryNavActive())
+                {
+                    navigateTertiaryUp();
+                    return;
+                }
                 if (secondaryNavActive())
                 {
                     navigateSecondaryUp();
@@ -411,8 +418,7 @@ void MainWindow::connectMenuSignals()
     connect(m_actOpenCurrentFolder, &QAction::triggered, this,
             [this]()
             {
-                ThumbnailPanel *panel =
-                    secondaryNavActive() ? m_secondaryThumbnailPanel : m_thumbnailPanel;
+                ThumbnailPanel *panel = activeThumbnailPanel();
                 if (panel)
                     panel->openCurrentFolder();
             });
@@ -589,7 +595,8 @@ void MainWindow::connectPanelSignals()
                             [this](const QString &dir, const QString &summary)
                             {
                                 for (ThumbnailPanel *panel :
-                                     {m_thumbnailPanel, m_secondaryThumbnailPanel})
+                                     {m_thumbnailPanel, m_secondaryThumbnailPanel,
+                                      m_tertiaryThumbnailPanel})
                                 {
                                     if (panel && QDir::cleanPath(panel->currentDir()) ==
                                                      QDir::cleanPath(dir))

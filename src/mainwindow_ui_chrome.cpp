@@ -122,12 +122,14 @@ void MainWindow::setBrowseHiddenFormatGroups(const QStringList &groups)
     normalized.sort();
     m_hiddenFormatGroups = normalized;
     mviewer::browseformats::saveHiddenGroups(normalized);
-    for (FormatFilterCombo *combo : {m_typeFilterCombo, m_secondaryTypeFilterCombo})
+    for (FormatFilterCombo *combo :
+         {m_typeFilterCombo, m_secondaryTypeFilterCombo, m_tertiaryTypeFilterCombo})
     {
         if (combo)
             combo->setHiddenGroups(normalized);
     }
-    for (ThumbnailPanel *panel : {m_thumbnailPanel, m_secondaryThumbnailPanel})
+    for (ThumbnailPanel *panel :
+         {m_thumbnailPanel, m_secondaryThumbnailPanel, m_tertiaryThumbnailPanel})
     {
         if (panel)
             panel->setHiddenFormatGroups(normalized);

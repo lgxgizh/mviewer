@@ -487,6 +487,8 @@ void MainWindow::refreshTransformedPaths(const QStringList &paths)
         noteTransformSuccess(m_thumbnailPanel, path, utf8);
         if (m_secondaryThumbnailPanel)
             m_secondaryThumbnailPanel->invalidateSourceImage(path);
+        if (m_tertiaryThumbnailPanel)
+            m_tertiaryThumbnailPanel->invalidateSourceImage(path);
     }
     const QString current = currentImagePath();
     if (!current.isEmpty() && paths.contains(current))
@@ -619,9 +621,17 @@ SplitSelectionRestorePlan MainWindow::captureTransformSelection() const
     const QStringList primaryList = m_thumbnailPanel ? m_thumbnailPanel->pathList() : QStringList();
     const QStringList secondaryList =
         m_secondaryThumbnailPanel ? m_secondaryThumbnailPanel->pathList() : QStringList();
-    return splitSelectionRestorePlan(split, primary, primaryCurrent, secondary, secondaryCurrent,
-                                     primaryList, secondaryList, single, singleCurrent,
-                                     currentImagePath());
+    auto plan = splitSelectionRestorePlan(split, primary, primaryCurrent, secondary,
+                                          secondaryCurrent, primaryList, secondaryList, single,
+                                          singleCurrent, currentImagePath());
+    if (m_tripleBrowseEnabled && m_selection && m_tertiaryThumbnailPanel)
+    {
+        plan.tertiaryModel = m_selection->paneSelection(Pane::Tertiary);
+        plan.tertiaryCurrent = m_selection->paneCurrentImage(Pane::Tertiary);
+        plan.tertiaryView =
+            orderPreservingIntersect(plan.tertiaryModel, m_tertiaryThumbnailPanel->pathList());
+    }
+    return plan;
 }
 
 void MainWindow::applyTransformSelection(const SplitSelectionRestorePlan &plan)
@@ -637,6 +647,8 @@ void MainWindow::applyTransformSelection(const SplitSelectionRestorePlan &plan)
     {
         m_selection->setPaneSelection(Pane::Primary, plan.primaryModel, plan.primaryCurrent);
         m_selection->setPaneSelection(Pane::Secondary, plan.secondaryModel, plan.secondaryCurrent);
+        if (m_tripleBrowseEnabled)
+            m_selection->setPaneSelection(Pane::Tertiary, plan.tertiaryModel, plan.tertiaryCurrent);
     }
     const auto focusOf = [](const QStringList &view, const QString &current)
     { return view.contains(current) ? current : QString(); };
@@ -648,6 +660,9 @@ void MainWindow::applyTransformSelection(const SplitSelectionRestorePlan &plan)
         m_secondaryThumbnailPanel->selectPaths(
             plan.secondaryView, focusOf(plan.secondaryView, plan.secondaryCurrent), false);
     }
+    if (m_tripleBrowseEnabled && m_tertiaryThumbnailPanel)
+        m_tertiaryThumbnailPanel->selectPaths(
+            plan.tertiaryView, focusOf(plan.tertiaryView, plan.tertiaryCurrent), false);
     if (m_selection && !plan.globalCurrent.isEmpty())
         m_selection->setCurrentImage(plan.globalCurrent);
 }

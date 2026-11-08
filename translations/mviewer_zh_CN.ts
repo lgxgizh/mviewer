@@ -6046,6 +6046,50 @@ Build: %2</source>
         <source>YUV file extension mapping updated</source>
         <translation>YUV 文件后缀映射已更新</translation>
     </message>
+    <message>
+        <source>Triple Browse View</source>
+        <translation>三栏浏览</translation>
+    </message>
+    <message>
+        <source>Enter tertiary directory path...</source>
+        <translation>输入第三栏目录路径…</translation>
+    </message>
+    <message>
+        <source>Open Tertiary Directory</source>
+        <translation>打开第三栏目录</translation>
+    </message>
+    <message>
+        <source>Sync third pane to the left pane directory</source>
+        <translation>将第三栏同步到左栏目录</translation>
+    </message>
+    <message>
+        <source>Swap left and third pane directories and selections</source>
+        <translation>交换左栏与第三栏的目录和选择</translation>
+    </message>
+    <message>
+        <source>Close Triple Browse View</source>
+        <translation>关闭三栏浏览</translation>
+    </message>
+    <message>
+        <source>Left: %1 | Middle: %2 | Right: %3 selected</source>
+        <translation>左栏：%1 | 中栏：%2 | 右栏：%3 项已选</translation>
+    </message>
+    <message>
+        <source>Select 2 to 8 images across browse panes to compare (currently %1 selected)</source>
+        <translation>从浏览栏中选择 2 到 8 张图片进行比较（当前已选 %1 张）</translation>
+    </message>
+    <message>
+        <source>Select 2 to 8 images across browse panes to compare</source>
+        <translation>从浏览栏中选择 2 到 8 张图片进行比较</translation>
+    </message>
+    <message>
+        <source>Sync middle pane to the left pane directory</source>
+        <translation>将中栏同步到左栏目录</translation>
+    </message>
+    <message>
+        <source>Swap left and middle pane directories and selections</source>
+        <translation>交换左栏与中栏的目录和选择</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>
@@ -7842,6 +7886,42 @@ Continue?</source>
         <location filename="../src/thumbnailpanel_contextmenu.cpp" line="1"/>
         <source>Compare YUV (PSNR / SSIM)...</source>
         <translation>比较 YUV (PSNR / SSIM)...</translation>
+    </message>
+    <message>
+        <source>Choose Destination Pane</source>
+        <translation>选择目标栏</translation>
+    </message>
+    <message>
+        <source>Destination directory:</source>
+        <translation>目标目录：</translation>
+    </message>
+    <message>
+        <source>Copy %1 file(s) from:
+%2
+
+to:
+%3</source>
+        <translation>将 %1 个文件从：
+%2
+
+复制到：
+%3</translation>
+    </message>
+    <message>
+        <source>Move %1 file(s) from:
+%2
+
+to:
+%3</source>
+        <translation>将 %1 个文件从：
+%2
+
+移动到：
+%3</translation>
+    </message>
+    <message>
+        <source>Move %1 selected file(s) from the browse panes to the Recycle Bin?</source>
+        <translation>将浏览栏中选中的 %1 个文件移到回收站吗？</translation>
     </message>
 </context>
 <context>

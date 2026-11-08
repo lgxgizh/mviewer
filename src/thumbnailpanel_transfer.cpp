@@ -6,6 +6,7 @@
 
 #include <QDateTime>
 #include <QFileInfo>
+#include <QInputDialog>
 #include <QMessageBox>
 #include <QSettings>
 
@@ -29,6 +30,23 @@ mviewer::core::DirectoryEntry directoryEntryForTransfer(const QString &path)
     return entry;
 }
 
+QString chooseOtherPaneDirectory(ThumbnailPanel &panel)
+{
+    if (!panel.property("tripleBrowse").toBool())
+        return panel.property("otherPaneDirectory").toString();
+    QStringList destinations;
+    for (const QString &dir : panel.property("otherPaneDirectories").toStringList())
+        if (!dir.isEmpty() && !transferDirectoriesMatch(dir, panel.currentDir()))
+            destinations.append(dir);
+    if (destinations.size() <= 1)
+        return destinations.value(0);
+    bool accepted = false;
+    const QString selected = QInputDialog::getItem(
+        &panel, ThumbnailPanel::tr("Choose Destination Pane"),
+        ThumbnailPanel::tr("Destination directory:"), destinations, 0, false, &accepted);
+    return accepted ? selected : QString();
+}
+
 bool confirmOtherPaneTransfer(ThumbnailPanel *panel, PaneTransferKind kind, bool fromLeft,
                               int count, const QString &destination)
 {
@@ -36,7 +54,13 @@ bool confirmOtherPaneTransfer(ThumbnailPanel *panel, PaneTransferKind kind, bool
         return true;
     const QString title = kind == PaneTransferKind::Copy ? ThumbnailPanel::tr("Copy to Other Pane")
                                                          : ThumbnailPanel::tr("Move to Other Pane");
-    const QString text = otherPaneTransferConfirmText(kind, fromLeft, count, destination);
+    const QString text = panel->property("tripleBrowse").toBool()
+                             ? (kind == PaneTransferKind::Copy
+                                    ? ThumbnailPanel::tr("Copy %1 file(s) from:\n%2\n\nto:\n%3")
+                                    : ThumbnailPanel::tr("Move %1 file(s) from:\n%2\n\nto:\n%3"))
+                                   .arg(count)
+                                   .arg(panel->currentDir(), destination)
+                             : otherPaneTransferConfirmText(kind, fromLeft, count, destination);
     return QMessageBox::question(panel, title, text, QMessageBox::Yes | QMessageBox::No,
                                  QMessageBox::No) == QMessageBox::Yes;
 }
@@ -105,7 +129,9 @@ void ThumbnailPanelTransfer::movePathsInto(ThumbnailPanel &panel, const QStringL
 void ThumbnailPanelTransfer::copySelectedToOtherPane(ThumbnailPanel &panel)
 {
     const QStringList paths = panel.selectedPaths();
-    const QString other = panel.property("otherPaneDirectory").toString();
+    if (paths.isEmpty() || panel.m_fileOperationBusy)
+        return;
+    const QString other = chooseOtherPaneDirectory(panel);
     const bool split = panel.m_selection && panel.m_selection->isSplitModeEnabled();
     const auto decision = decideOtherPaneTransfer(split, paths.size(), panel.currentDir(), other);
     if (decision == OtherPaneTransferDecision::SameDirectory)
@@ -124,7 +150,9 @@ void ThumbnailPanelTransfer::copySelectedToOtherPane(ThumbnailPanel &panel)
 void ThumbnailPanelTransfer::moveSelectedToOtherPane(ThumbnailPanel &panel)
 {
     const QStringList paths = panel.selectedPaths();
-    const QString other = panel.property("otherPaneDirectory").toString();
+    if (paths.isEmpty() || panel.m_fileOperationBusy)
+        return;
+    const QString other = chooseOtherPaneDirectory(panel);
     const bool split = panel.m_selection && panel.m_selection->isSplitModeEnabled();
     const auto decision = decideOtherPaneTransfer(split, paths.size(), panel.currentDir(), other);
     if (decision == OtherPaneTransferDecision::SameDirectory)

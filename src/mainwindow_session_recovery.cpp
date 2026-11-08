@@ -103,7 +103,7 @@ void MainWindow::restoreLastSession()
                 // Restore the saved right pane (folder, sort, scroll) instead
                 // of mirroring the left one like an interactive split does.
                 m_splitRestoringSession = true;
-                toggleSplitBrowse(true);
+                setBrowseColumnCount(m_appState.tripleBrowseEnabled ? 3 : 2);
                 m_splitRestoringSession = false;
                 applyGallerySplitterSizes();
             }
@@ -153,6 +153,7 @@ void MainWindow::restoreSessionPostScroll()
     if (!m_appState.lastImage.isEmpty() && m_thumbnailPanel)
         m_thumbnailPanel->scrollToPath(m_appState.lastImage);
     restoreSecondaryBrowsePosition();
+    restoreTertiaryBrowsePosition();
 
     // A-6.3: restore viewer zoom/pan from QSettings (same logic as
     // crash-recovery path, but for normal session restore).
@@ -282,6 +283,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
     m_appState.splitBrowseEnabled = m_splitBrowseEnabled;
     persistSecondaryBrowseState();
+    persistTertiaryBrowseState();
+    m_appState.tripleBrowseEnabled = m_tripleBrowseEnabled;
     if (m_gallerySplitter)
         m_appState.gallerySplitterSizes = m_gallerySplitter->sizes();
 

@@ -130,6 +130,7 @@ void MainWindow::retranslateBrowseBar()
     static const TextEntry kNamed[] = {
         {"sortFieldLabel", QT_TR_NOOP("Sort:"), nullptr},
         {"secondarySortLabel", QT_TR_NOOP("Sort:"), nullptr},
+        {"tertiarySortLabel", QT_TR_NOOP("Sort:"), nullptr},
         {"ratingFilterLabel", QT_TR_NOOP("Rating:"), nullptr},
         {"flagFilterLabel", QT_TR_NOOP("Flag:"), nullptr},
         {"advancedFilterToggle", QT_TR_NOOP("Advanced Filter"),
@@ -179,10 +180,12 @@ void MainWindow::retranslateBrowseBar()
 
     applySortComboItems(m_sortCombo);
     applySortComboItems(m_secondarySortCombo);
+    applySortComboItems(m_tertiarySortCombo);
     applyViewModeComboItems(m_viewModeCombo);
     applyRatingFilterItems(m_ratingFilter);
     applyFlagFilterItems(m_flagFilter);
-    for (FormatFilterCombo *combo : {m_typeFilterCombo, m_secondaryTypeFilterCombo})
+    for (FormatFilterCombo *combo :
+         {m_typeFilterCombo, m_secondaryTypeFilterCombo, m_tertiaryTypeFilterCombo})
     {
         if (combo)
             combo->retranslate();
@@ -194,6 +197,8 @@ void MainWindow::retranslateBrowseBar()
         m_sortDirBtn->setToolTip(sortDirectionToolTip(true));
     if (m_secondarySortDirBtn)
         m_secondarySortDirBtn->setToolTip(sortDirectionToolTip(false));
+    if (m_tertiarySortDirBtn)
+        m_tertiarySortDirBtn->setToolTip(sortDirectionToolTip(false));
     if (m_searchEdit)
         m_searchEdit->setPlaceholderText(tr("Filter by filename..."));
     if (m_searchRecursive)
@@ -228,6 +233,12 @@ void MainWindow::retranslateSplitHeader()
         {m_secondarySwapBtn, QT_TR_NOOP("Swap"),
          QT_TR_NOOP("Swap left and right pane directories and selections")},
         {m_secondaryCloseBtn, nullptr, QT_TR_NOOP("Close Split Browse View")},
+        {m_tertiaryBrowseBtn, QT_TR_NOOP("Browse..."), nullptr},
+        {m_tertiaryCloneBtn, QT_TR_NOOP("Clone Left"),
+         QT_TR_NOOP("Sync third pane to the left pane directory")},
+        {m_tertiarySwapBtn, QT_TR_NOOP("Swap"),
+         QT_TR_NOOP("Swap left and third pane directories and selections")},
+        {m_tertiaryCloseBtn, nullptr, QT_TR_NOOP("Close Triple Browse View")},
     };
     for (const ButtonEntry &entry : buttons)
     {
@@ -238,6 +249,18 @@ void MainWindow::retranslateSplitHeader()
         if (entry.toolTip)
             entry.button->setToolTip(tr(entry.toolTip));
     }
+    if (m_tripleBrowseEnabled)
+    {
+        if (m_secondaryCloneBtn)
+            m_secondaryCloneBtn->setToolTip(tr("Sync middle pane to the left pane directory"));
+        if (m_secondarySwapBtn)
+            m_secondarySwapBtn->setToolTip(
+                tr("Swap left and middle pane directories and selections"));
+    }
+    if (m_tertiaryCloseBtn)
+        m_tertiaryCloseBtn->setAccessibleName(tr("Close Triple Browse View"));
+    if (m_tertiaryPathEdit)
+        m_tertiaryPathEdit->setPlaceholderText(tr("Enter tertiary directory path..."));
     if (m_secondaryCloseBtn)
         m_secondaryCloseBtn->setAccessibleName(tr("Close Split Browse View"));
     if (m_secondaryPathEdit)

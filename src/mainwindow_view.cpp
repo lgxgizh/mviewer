@@ -724,7 +724,7 @@ void MainWindow::updateCacheStat()
 // P1-4: also forward global workflow shortcuts from child widgets.
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
-    if (routeSecondaryBrowseKey(watched, event))
+    if (routeTertiaryBrowseKey(watched, event) || routeSecondaryBrowseKey(watched, event))
         return true;
     if (event->type() == QEvent::KeyPress)
     {
@@ -737,8 +737,11 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         auto *widget = qobject_cast<QWidget *>(watched);
         if (widget && m_splitBrowseEnabled)
         {
-            if (m_secondaryBrowsePane &&
-                (widget == m_secondaryBrowsePane || m_secondaryBrowsePane->isAncestorOf(widget)))
+            if (m_tripleBrowseEnabled && m_tertiaryBrowsePane &&
+                (widget == m_tertiaryBrowsePane || m_tertiaryBrowsePane->isAncestorOf(widget)))
+                setActiveBrowsePane(SelectionModel::PaneSlot::Tertiary);
+            else if (m_secondaryBrowsePane && (widget == m_secondaryBrowsePane ||
+                                               m_secondaryBrowsePane->isAncestorOf(widget)))
                 setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
             else if (m_primaryBrowsePane &&
                      (widget == m_primaryBrowsePane || m_primaryBrowsePane->isAncestorOf(widget)))

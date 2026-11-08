@@ -421,6 +421,9 @@ QWidget *MainWindow::buildGalleryPanel()
     m_secondaryBrowsePane = buildSecondaryBrowsePane();
     m_gallerySplitter->addWidget(m_secondaryBrowsePane);
     m_secondaryBrowsePane->hide();
+    m_tertiaryBrowsePane = buildTertiaryBrowsePane();
+    m_gallerySplitter->addWidget(m_tertiaryBrowsePane);
+    m_tertiaryBrowsePane->hide();
     m_primaryBrowsePane->lower();
 
     rightLayout->addWidget(m_gallerySplitter, 1);

@@ -273,26 +273,7 @@ QHBoxLayout *MainWindow::buildSecondarySortControls(QWidget *headerBar, QVBoxLay
 
 void MainWindow::toggleSplitBrowse(bool enabled)
 {
-    if (m_splitBrowseEnabled == enabled && m_secondaryBrowsePane &&
-        m_secondaryBrowsePane->isVisibleTo(this) == enabled)
-        return;
-
-    m_splitBrowseEnabled = enabled;
-    if (m_actSplitBrowse && m_actSplitBrowse->isChecked() != enabled)
-    {
-        const QSignalBlocker blocker(m_actSplitBrowse);
-        m_actSplitBrowse->setChecked(enabled);
-    }
-
-    if (m_selection)
-        m_selection->setSplitModeEnabled(enabled);
-
-    if (enabled)
-        enableSplitBrowseUi();
-    else
-        disableSplitBrowseUi();
-    updateSplitBrowseCompareButton();
-    syncOtherPaneDirectories();
+    setBrowseColumnCount(enabled ? 2 : 1);
 }
 
 void MainWindow::openRightDirectory(const QString &dir)
@@ -381,6 +362,7 @@ void MainWindow::setActiveBrowsePane(SelectionModel::PaneSlot pane)
         m_selection->setActivePane(pane);
     updateActivePaneIndicator();
     updateNavigationActions();
+    updateTertiaryNavButtons();
     syncActiveBrowserTitle();
 }
 
@@ -393,14 +375,19 @@ void MainWindow::updateSplitBrowseCompareButton()
         m_actCompare->setEnabled(canCompare);
         if (count > 8)
         {
-            m_actCompare->setToolTip(tr("Select 2 to 8 images across left and right panes to "
-                                        "compare (currently %1 selected)")
-                                         .arg(count));
+            m_actCompare->setToolTip(
+                (m_tripleBrowseEnabled ? tr("Select 2 to 8 images across browse panes to compare "
+                                            "(currently %1 selected)")
+                                       : tr("Select 2 to 8 images across left and right panes to "
+                                            "compare (currently %1 selected)"))
+                    .arg(count));
         }
         else if (count < 2)
         {
             m_actCompare->setToolTip(
-                tr("Select 2 to 8 images across left and right panes to compare"));
+                m_tripleBrowseEnabled
+                    ? tr("Select 2 to 8 images across browse panes to compare")
+                    : tr("Select 2 to 8 images across left and right panes to compare"));
         }
         else
         {
@@ -409,7 +396,8 @@ void MainWindow::updateSplitBrowseCompareButton()
     }
     // Each pane's Compare button counts the cross-pane union, so a selection
     // change in one pane must refresh the other pane's button too.
-    for (ThumbnailPanel *panel : {m_thumbnailPanel, m_secondaryThumbnailPanel})
+    for (ThumbnailPanel *panel :
+         {m_thumbnailPanel, m_secondaryThumbnailPanel, m_tertiaryThumbnailPanel})
     {
         if (panel)
             panel->refreshCompareButton();
@@ -427,18 +415,6 @@ QStringList MainWindow::sortPathsForCompare(const QStringList &paths) const
     const QStringList &secondarySel =
         m_selection->paneSelection(SelectionModel::PaneSlot::Secondary);
 
-    bool hasPrimary = false;
-    bool hasSecondary = false;
-    for (const QString &p : paths)
-    {
-        if (primarySel.contains(p))
-            hasPrimary = true;
-        if (secondarySel.contains(p))
-            hasSecondary = true;
-    }
-    if (!hasPrimary || !hasSecondary)
-        return sortPathsByNaturalFileName(paths);
-
     struct ItemKey
     {
         QString path;
@@ -452,7 +428,7 @@ QStringList MainWindow::sortPathsForCompare(const QStringList &paths) const
         ItemKey k;
         k.path = p;
         k.fileName = QFileInfo(p).fileName();
-        k.paneRank = primarySel.contains(p) ? 0 : 1;
+        k.paneRank = primarySel.contains(p) ? 0 : (secondarySel.contains(p) ? 1 : 2);
         items.push_back(std::move(k));
     }
 

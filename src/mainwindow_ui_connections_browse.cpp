@@ -88,7 +88,11 @@ void MainWindow::connectNavigationSignals()
                 const bool currentFromSecondary =
                     m_splitBrowseEnabled && m_secondaryThumbnailPanel && !paths.contains(current) &&
                     m_secondaryThumbnailPanel->rowForPath(current) >= 0;
-                const bool viewingThis = current.isEmpty() || !currentFromSecondary;
+                const bool currentFromTertiary =
+                    m_tripleBrowseEnabled && m_tertiaryThumbnailPanel && !paths.contains(current) &&
+                    m_tertiaryThumbnailPanel->rowForPath(current) >= 0;
+                const bool viewingThis =
+                    current.isEmpty() || (!currentFromSecondary && !currentFromTertiary);
                 if (viewingThis)
                     m_imageList->setPaths(paths, directory);
                 if (activeThumbnailPanel() == m_thumbnailPanel && !paths.isEmpty() && m_directory &&

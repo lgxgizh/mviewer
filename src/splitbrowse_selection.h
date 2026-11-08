@@ -14,6 +14,9 @@ struct SplitSelectionRestorePlan
     bool split = false;
     QStringList primaryModel;
     QStringList secondaryModel;
+    QStringList tertiaryModel;
+    QStringList tertiaryView;
+    QString tertiaryCurrent;
     QStringList primaryView;
     QStringList secondaryView;
     QString primaryCurrent;

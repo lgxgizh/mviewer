@@ -523,19 +523,19 @@ void ThumbnailPanel::renamePath(const QString &oldPath, bool multiSelectionNotic
 void ThumbnailPanel::moveToTrashSelected()
 {
     const bool splitActive = m_selection && m_selection->isSplitModeEnabled();
-    const QStringList paths =
-        splitActive
-            ? splitDeleteUnion(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
-                               m_selection->paneSelection(SelectionModel::PaneSlot::Secondary))
-            : selectedPaths();
+    const QStringList paths = splitActive ? m_selection->selection() : selectedPaths();
     QString confirm;
     if (splitActive && !paths.isEmpty())
     {
         const QString name = paths.size() == 1 ? QFileInfo(paths.first()).fileName() : QString();
-        confirm = splitDeleteConfirmMessage(
-            splitDeletePrompt(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
-                              m_selection->paneSelection(SelectionModel::PaneSlot::Secondary)),
-            true, name);
+        if (!m_selection->paneSelection(SelectionModel::PaneSlot::Tertiary).isEmpty())
+            confirm = tr("Move %1 selected file(s) from the browse panes to the Recycle Bin?")
+                          .arg(paths.size());
+        else
+            confirm = splitDeleteConfirmMessage(
+                splitDeletePrompt(m_selection->paneSelection(SelectionModel::PaneSlot::Primary),
+                                  m_selection->paneSelection(SelectionModel::PaneSlot::Secondary)),
+                true, name);
     }
     moveToTrashPaths(paths, confirm);
 }

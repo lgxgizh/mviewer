@@ -113,6 +113,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     // P0: load persisted cross-session state + recent-folders LRU before UI.
     m_appState = AppState::load();
+    m_tertiaryBrowseHistory.restore(m_appState.tertiaryDirHistory,
+                                    m_appState.tertiaryDirHistoryIndex);
     m_secondaryBrowseHistory.restore(m_appState.secondaryDirHistory,
                                      m_appState.secondaryDirHistoryIndex);
     m_directory->setFavorites(m_appState.favorites);

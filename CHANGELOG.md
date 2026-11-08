@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added
+
+- Add three-column directory browsing with a separate toolbar/menu action,
+  independent navigation and sorting, shared cross-pane selection, destination
+  choice for file transfers, and session restore. Single/two-column browsing
+  and the Ctrl+3 Details shortcut are preserved.
+
 ## [1.0.167] - 2026-11-06
 
 ### Release

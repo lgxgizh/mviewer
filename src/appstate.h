@@ -44,6 +44,7 @@ struct AppState
 
     // Split Browse View session state
     bool splitBrowseEnabled = false;
+    bool tripleBrowseEnabled = false;
     QString secondaryLastDir;
     QStringList secondaryDirHistory;
     int secondaryDirHistoryIndex = -1;
@@ -53,6 +54,14 @@ struct AppState
     bool hasSecondarySort = false;
     int secondarySortField = 0;
     bool secondarySortAscending = true;
+    QString tertiaryLastDir;
+    QStringList tertiaryDirHistory;
+    int tertiaryDirHistoryIndex = -1;
+    QString tertiaryLastImage;
+    int tertiaryThumbScroll = 0;
+    bool hasTertiarySort = false;
+    int tertiarySortField = 0;
+    bool tertiarySortAscending = true;
 
     // Load from the per-user config path. Missing/corrupt file => defaults
     // (empty favorites, empty lastDir). Never throws.

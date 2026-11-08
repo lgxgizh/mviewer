@@ -10,7 +10,7 @@
 // (m_currentImagePath), the thumbnail grid (its own QItemSelectionModel) and the
 // keyboard-navigation path — so the views could drift out of sync.
 //
-// Extended for Split Browse View: tracks primary and secondary pane selection
+// Browse columns: tracks primary, secondary and tertiary pane selection
 // slots independently while presenting a transparent merged selection to the
 // rest of the application.
 class SelectionModel : public QObject
@@ -20,7 +20,8 @@ class SelectionModel : public QObject
     enum class PaneSlot : int
     {
         Primary = 0,
-        Secondary = 1
+        Secondary = 1,
+        Tertiary = 2
     };
     Q_ENUM(PaneSlot)
 
@@ -80,6 +81,7 @@ class SelectionModel : public QObject
 
     // Split browse slots
     void setSplitModeEnabled(bool enabled);
+    void setBrowsePaneCount(int count);
     void setActivePane(PaneSlot pane);
     void setPaneSelection(PaneSlot pane, const QStringList &paths,
                           const QString &current = QString());
@@ -100,9 +102,10 @@ class SelectionModel : public QObject
     void rebuildMergedSelection(bool emitSignals = true);
 
     bool m_splitModeEnabled = false;
+    int m_browsePaneCount = 1;
     PaneSlot m_activePane = PaneSlot::Primary;
-    QStringList m_paneSelections[2];
-    QString m_paneCurrentImage[2];
+    QStringList m_paneSelections[3];
+    QString m_paneCurrentImage[3];
 
     QString m_current;
     QStringList m_selection;

@@ -46,3 +46,33 @@ The directory-change handler clears the sequence and SelectionModel before the
 worker result arrives. A late scan is discarded by the existing directory
 generation guard and cannot overwrite a newer directory. The UI handler does
 not synchronously enumerate or sort image files.
+
+## Browse columns
+
+The gallery supports one, two, or three independent directory panes. The View
+menu and top toolbar expose Split Browse View (two) and Triple Browse View
+(three); the actions show the currently selected layout, not thumbnail view mode.
+Ctrl+3 remains the Details thumbnail view shortcut. Turning off Triple Browse
+View returns to two columns; turning off Split Browse View returns to one.
+
+On interactive entry, new panes mirror the primary directory, sort, thumbnail
+size and view mode, then navigate and sort independently. The shared type filter,
+thumbnail size and view mode apply to all visible panes. Each pane has a unique
+thumbnail consumer and directory monitor. Focus/click routes the common address,
+back/forward/up/refresh commands to that pane. Three-column headers place folder
+actions on a separate row to avoid requiring three wide one-line toolbars.
+
+`SelectionModel::setBrowsePaneCount(1..3)` enables only the visible pane slots.
+Selections are merged in primary/secondary/tertiary order, de-duplicated by path;
+hidden panes cannot publish selections. Compare, trash and rotate/flip operate
+on that union while preserving per-pane selection. In three-column mode,
+copy/move to another pane chooses between the other distinct directory paths
+when two destinations are available; the confirmation identifies source and
+destination paths. Existing two-column transfer behavior is unchanged.
+
+Session state keeps the original split/secondary keys and adds
+`tripleBrowseEnabled`, `tertiaryLastDir`, `tertiaryDirHistory`,
+`tertiaryDirHistoryIndex`, `tertiaryLastImage`, `tertiaryThumbScroll`,
+`tertiarySortField` and `tertiarySortAscending`. Three splitter widths are saved;
+legacy two-width sessions still restore. Session restore uses saved directories
+and sort/position rather than interactively mirroring over them.

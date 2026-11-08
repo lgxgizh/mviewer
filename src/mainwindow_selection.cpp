@@ -169,6 +169,12 @@ void MainWindow::syncGalleryFromSelection()
                           m_selection->paneSelection(SelectionModel::PaneSlot::Secondary),
                           m_selection->paneCurrentImage(SelectionModel::PaneSlot::Secondary));
         }
+        if (m_tertiaryThumbnailPanel && m_tertiaryThumbnailPanel->isVisible())
+        {
+            syncPanelSlot(m_tertiaryThumbnailPanel,
+                          m_selection->paneSelection(SelectionModel::PaneSlot::Tertiary),
+                          m_selection->paneCurrentImage(SelectionModel::PaneSlot::Tertiary));
+        }
     }
     m_syncingSelection = false;
 }
