@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.171] - 2026-11-09
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.171**
+  (restore browse gallery content background after #322 over-scoped QSS).
+
 ### Fixed
 
 - Browse gallery backgrounds no longer go black after the tertiary row-chrome fix:
