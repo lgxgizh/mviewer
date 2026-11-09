@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-09 · Version: **1.0.170** · Release tag: **v1.0.170**
+> Snapshot: 2026-11-09 · Version: **1.0.171** · Release tag: **v1.0.171**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,15 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.171 — Browse gallery content background (2026-11-09)
+
+- Browse mode no longer paints a black field under gallery thumbs after the
+  tertiary row-chrome fix: drop the over-broad transparent `::item` QSS (Qt
+  paints `rgba(0,0,0,0)` into the opaque viewport as `#000000`) and stop pinning
+  gallery `alternate-background-color` to content `bg0`. Tertiary pane/panel
+  selectors and the flat Details unselected fill remain. Coverage is in the
+  theme/UI model checks.
 
 ## 1.0.170 — Tertiary browse row backgrounds (2026-11-09)
 
