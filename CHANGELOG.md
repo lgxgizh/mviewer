@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Three-column browse: the rightmost column no longer shows blue/gray alternating
+  row backgrounds that look like a selection. Gallery QSS now includes the
+  tertiary pane (active border + transparent item chrome so custom delegates
+  own paints), and Details view uses a flat unselected row fill like List mode.
+
 ## [1.0.169] - 2026-11-09
 
 ### Release
