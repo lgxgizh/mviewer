@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-09 · Version: **1.0.169** · Release tag: **v1.0.169**
+> Snapshot: 2026-11-09 · Version: **1.0.170** · Release tag: **v1.0.170**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,14 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.170 — Tertiary browse row backgrounds (2026-11-09)
+
+- Three-column browse no longer paints blue/gray alternating unselected row
+  backgrounds that look like selection: gallery QSS includes the tertiary pane,
+  and Details uses a flat Base fill for unselected rows (same as List). Real
+  selection highlighting is unchanged. Coverage is in the theme/UI model checks
+  and browse acceptance suites.
 
 ## 1.0.169 — Triple-browse selection and layout restore (2026-11-09)
 

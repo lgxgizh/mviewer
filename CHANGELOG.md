@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.170] - 2026-11-09
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.170**
+  (tertiary browse row backgrounds no longer look selected).
+
 ### Fixed
 
 - Three-column browse: the rightmost column no longer shows blue/gray alternating
