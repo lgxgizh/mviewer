@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-08 · Version: **1.0.168** · Release tag: **v1.0.168**
+> Snapshot: 2026-11-09 · Version: **1.0.169** · Release tag: **v1.0.169**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,16 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.169 — Triple-browse selection and layout restore (2026-11-09)
+
+- Enabling three-column browse clears parked ThumbnailPanel pending/filter
+  selection state when a pane is mirrored or hidden, so the rightmost pane no
+  longer reselects stale files.
+- Turning three-column browse off restores the interactive prior 1- or 2-column
+  layout (session-restored triple still falls back to two columns). Coverage is
+  in the existing browse acceptance suites; native display/DPI review remains
+  separate.
 
 ## 1.0.168 — Three-column directory browsing (2026-11-08)
 
