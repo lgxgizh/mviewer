@@ -368,6 +368,16 @@ int main(int argc, char **argv)
               "light stylesheet has no unresolved placeholders");
         CHECK(lightSheet.contains(QStringLiteral("#007aff")),
               "light stylesheet contains the accent");
+        // Three-column browse panes must share the same gallery QSS as the
+        // primary/secondary columns (active border + no style-driven item chrome).
+        CHECK(lightSheet.contains(QStringLiteral("tertiaryBrowsePane")),
+              "light stylesheet styles tertiaryBrowsePane");
+        CHECK(lightSheet.contains(QStringLiteral("tertiaryThumbnailPanel")),
+              "light stylesheet styles tertiaryThumbnailPanel");
+        CHECK(darkSheet.contains(QStringLiteral("tertiaryBrowsePane")),
+              "dark stylesheet styles tertiaryBrowsePane");
+        CHECK(darkSheet.contains(QStringLiteral("tertiaryThumbnailPanel")),
+              "dark stylesheet styles tertiaryThumbnailPanel");
 
         mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::System);
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::System,
