@@ -16,6 +16,7 @@
 #include <QAbstractButton>
 #include <QAction>
 #include <QApplication>
+#include <QColor>
 #include <QComboBox>
 #include <QDebug>
 #include <QDialog>
@@ -26,6 +27,7 @@
 #include <QLabel>
 #include <QListView>
 #include <QMenu>
+#include <QPalette>
 #include <QPushButton>
 #include <QSettings>
 #include <QStringList>
@@ -368,8 +370,9 @@ int main(int argc, char **argv)
               "light stylesheet has no unresolved placeholders");
         CHECK(lightSheet.contains(QStringLiteral("#007aff")),
               "light stylesheet contains the accent");
-        // Three-column browse panes must share the same gallery QSS as the
-        // primary/secondary columns (active border + no style-driven item chrome).
+        // Three-column browse panes share the gallery content fill and the
+        // active-pane border. Item backgrounds stay unset: a transparent
+        // ::item fill is painted black in the opaque viewport.
         CHECK(lightSheet.contains(QStringLiteral("tertiaryBrowsePane")),
               "light stylesheet styles tertiaryBrowsePane");
         CHECK(lightSheet.contains(QStringLiteral("tertiaryThumbnailPanel")),
@@ -378,6 +381,30 @@ int main(int argc, char **argv)
               "dark stylesheet styles tertiaryBrowsePane");
         CHECK(darkSheet.contains(QStringLiteral("tertiaryThumbnailPanel")),
               "dark stylesheet styles tertiaryThumbnailPanel");
+        CHECK(!darkSheet.contains(QStringLiteral("QListView#thumbnailPanel::item")),
+              "dark gallery QSS leaves thumbnailPanel items unstyled");
+        CHECK(!darkSheet.contains(QStringLiteral("QListView#secondaryThumbnailPanel::item")),
+              "dark gallery QSS leaves secondaryThumbnailPanel items unstyled");
+        CHECK(!darkSheet.contains(QStringLiteral("QListView#tertiaryThumbnailPanel::item")),
+              "dark gallery QSS leaves tertiaryThumbnailPanel items unstyled");
+        CHECK(!lightSheet.contains(QStringLiteral("QListView#tertiaryThumbnailPanel::item")),
+              "light gallery QSS leaves tertiaryThumbnailPanel items unstyled");
+        CHECK(!darkSheet.contains(QStringLiteral("alternate-background-color: ") + darkTokens.bg0),
+              "dark stylesheet keeps alternate background off content bg0");
+        CHECK(
+            !lightSheet.contains(QStringLiteral("alternate-background-color: ") + lightTokens.bg0),
+            "light stylesheet keeps alternate background off content bg0");
+
+        mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::Light);
+        QListView galleryProbe;
+        galleryProbe.setObjectName(QStringLiteral("thumbnailPanel"));
+        galleryProbe.ensurePolished();
+        const QColor probedBase = galleryProbe.palette().color(QPalette::Active, QPalette::Base);
+        const QColor probedAlt =
+            galleryProbe.palette().color(QPalette::Active, QPalette::AlternateBase);
+        CHECK(probedBase == QColor(lightTokens.bg0), "gallery Base is content bg0");
+        CHECK(probedAlt == QColor(lightTokens.bg1), "gallery wells keep the bg1 step");
+        CHECK(probedBase != QColor(0x12, 0x12, 0x14), "gallery Base stays off the image canvas");
 
         mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::System);
         CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::System,

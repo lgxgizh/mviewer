@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Browse gallery backgrounds no longer go black after the tertiary row-chrome fix:
+  drop the over-broad `QListView#…::item { background: transparent }` rules (Qt
+  paints that zero-alpha brush into the opaque viewport as `#000000`) and stop
+  pinning `alternate-background-color` to content `bg0` (which flattened thumb
+  wells). Tertiary pane/panel selectors and the flat Details unselected fill stay.
+
 ## [1.0.170] - 2026-11-09
 
 ### Release
