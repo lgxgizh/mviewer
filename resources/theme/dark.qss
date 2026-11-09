@@ -1048,43 +1048,18 @@ QSplitter#navigationPanel QListWidget::item:hover {
     background: {{hover}};
 }
 
-/* Gallery panes paint selection/hover/zebra in custom delegates. Keep the
-   stylesheet from laying accent/alternate item chrome underneath — that read
-   as "selected" on the tertiary column after three-column browse landed
-   without these object-name rules. */
+/* Tertiary shares the content fill with the other gallery columns.
+   Leave ::item background unset. `transparent` is rgba(0,0,0,0), and Qt
+   paints that brush into the opaque QListView viewport, so the gutters and
+   the empty area under the thumbs come out black (#000000).
+   Leave alternate-background-color unset too. Pinning it to bg0 sets
+   AlternateBase to the content color and the thumb wells disappear.
+   Delegates already paint hover, selection, and the flat Details row. */
 QListView#thumbnailPanel,
 QListView#secondaryThumbnailPanel,
 QListView#tertiaryThumbnailPanel {
     background-color: {{bg0}};
-    alternate-background-color: {{bg0}};
     border: none;
-    outline: none;
-}
-
-QListView#thumbnailPanel::item,
-QListView#secondaryThumbnailPanel::item,
-QListView#tertiaryThumbnailPanel::item,
-QListView#thumbnailPanel::item:hover,
-QListView#secondaryThumbnailPanel::item:hover,
-QListView#tertiaryThumbnailPanel::item:hover,
-QListView#thumbnailPanel::item:selected,
-QListView#secondaryThumbnailPanel::item:selected,
-QListView#tertiaryThumbnailPanel::item:selected,
-QListView#thumbnailPanel:!focus::item:selected,
-QListView#secondaryThumbnailPanel:!focus::item:selected,
-QListView#tertiaryThumbnailPanel:!focus::item:selected,
-QListView#thumbnailPanel::item:selected:!active,
-QListView#secondaryThumbnailPanel::item:selected:!active,
-QListView#tertiaryThumbnailPanel::item:selected:!active,
-QListView#thumbnailPanel:focus::item:selected:hover,
-QListView#secondaryThumbnailPanel:focus::item:selected:hover,
-QListView#tertiaryThumbnailPanel:focus::item:selected:hover {
-    /* Transparent so custom delegates own selection/hover fills. Do not force
-       item color here — that would override HighlightedText and wash out
-       selected ink on the accent fill the delegates paint. */
-    background: transparent;
-    border: none;
-    border-radius: 0px;
 }
 
 QWidget#breadcrumbBar QToolButton {
