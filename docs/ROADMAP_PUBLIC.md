@@ -4,9 +4,9 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.169**
+## Where we are now — **Beta / 1.0.170**
 
-MViewer remains in **Beta**; the current release is **`v1.0.169`**
+MViewer remains in **Beta**; the current release is **`v1.0.170`**
 (2026-11-09, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified; the non-prerelease 1.0 work
 (signed installer, docs site, frozen plugin ABI) and final human review remain:
@@ -59,7 +59,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.169** (current) | Triple-browse selection and layout restore: enabling three columns clears parked pending/filter selection so the rightmost pane no longer reselects stale files; turning triple off restores the prior 1- or 2-column layout | 🔵 Beta |
+| **1.0.170** (current) | Tertiary browse row backgrounds: three-column Details no longer shows blue/gray alternating unselected rows that look selected; gallery QSS includes the tertiary pane and Details uses a flat unselected fill like List | 🔵 Beta |
+| **1.0.169** | Triple-browse selection and layout restore: enabling three columns clears parked pending/filter selection so the rightmost pane no longer reselects stale files; turning triple off restores the prior 1- or 2-column layout | ✅ Previous patch |
 | **1.0.168** | Three-column directory browsing: independent navigation and sort, separate toolbar/menu action, cross-pane selection and transfer destinations, and saved sessions. One/two-column browsing and Ctrl+3 Details stay unchanged | ✅ Previous patch |
 | **1.0.167** | Chrome-like application icon: the frosted tile nearly fills the canvas and the aperture ring nearly fills the tile. Upgrades recreate the desktop and Start-menu shortcuts so the new icon shows right away | ✅ Previous patch |
 | **1.0.166** | Larger application icon (the aperture fills the tile) and larger browse chrome: toolbar, controls, icons, body text, menus, sidebar, list rows and the Details header. Compare uses the same control size. Thumbnail size stays a saved setting | ✅ Previous patch |
@@ -101,7 +102,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.169` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.170` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
