@@ -65,9 +65,9 @@ void MainWindow::mirrorPrimaryIntoTertiary()
     m_tertiaryBrowseHistory.push(leftDir);
     m_pendingTertiaryScrollRestore = false;
     // The left pane keeps the selection; the new third pane starts clean.
-    m_tertiaryThumbnailPanel->clearSelection();
-    if (m_selection)
-        m_selection->setPaneSelection(SelectionModel::PaneSlot::Tertiary, QStringList());
+    // clearSelection alone leaves parked pending/filter restores that can
+    // re-select rows after setDirectory / scheduleFilter completes.
+    m_tertiaryThumbnailPanel->clearMirroredSelectionState();
 }
 
 void MainWindow::applyTertiarySortFromState()

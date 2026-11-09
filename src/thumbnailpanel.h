@@ -257,17 +257,14 @@ class ThumbnailPanel : public QListView
         captureScrollAnchor(anchorPath, anchorOffset);
     }
 
-    // Selected rows in model order (MainWindow and acceptance tests read it).
-    QStringList selectedPaths() const;
-    // Compare set: the cross-pane union in split browse, else selectedPaths().
-    QStringList compareSelection() const;
+    QStringList selectedPaths() const;    // model-order selection for MainWindow/tests
+    void clearMirroredSelectionState();   // view + parked pending/filter restores
+    QStringList compareSelection() const; // split: cross-pane union; else selectedPaths
     void refreshCompareButton();
-    // Hidden browse format groups (browseformats.h ids, e.g. "raw"). Re-partitions
-    // the scanned listing in place, keeping selection, current item and scroll.
+    // Hidden browse format groups (browseformats.h ids). Re-partitions in place.
     void setHiddenFormatGroups(const QStringList &groups);
     QStringList hiddenFormatGroups() const;
-    // Files of this folder hidden only by the type filter, and their groups.
-    int typeHiddenCount() const;
+    int typeHiddenCount() const; // type-filter-only hidden count/groups
     QStringList typeHiddenGroups() const;
 
   private:

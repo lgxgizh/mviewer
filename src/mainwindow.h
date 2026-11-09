@@ -466,6 +466,9 @@ class MainWindow : public QMainWindow
     bool m_splitRestoringSession = false;
     bool m_splitOpeningTarget = false;
     bool m_tripleOpeningTarget = false;
+    // Layout in force just before interactive triple on; used by triple off.
+    int m_browseColumnsBeforeTriple = 2;
+    bool m_hasBrowseColumnsBeforeTriple = false;
     QAction *m_actSplitBrowse = nullptr;
     QAction *m_actTripleBrowse = nullptr;
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)

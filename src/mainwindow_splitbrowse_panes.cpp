@@ -237,9 +237,9 @@ void MainWindow::mirrorPrimaryIntoSecondary()
     m_secondaryBrowseHistory.push(leftDir);
     m_pendingSecondaryScrollRestore = false;
     // The left pane keeps the selection; the new right pane starts clean.
-    m_secondaryThumbnailPanel->clearSelection();
-    if (m_selection)
-        m_selection->setPaneSelection(SelectionModel::PaneSlot::Secondary, QStringList());
+    // clearSelection alone leaves parked pending/filter restores that can
+    // re-select rows after setDirectory / scheduleFilter completes.
+    m_secondaryThumbnailPanel->clearMirroredSelectionState();
 }
 
 void MainWindow::disableSplitBrowseUi()
@@ -247,6 +247,10 @@ void MainWindow::disableSplitBrowseUi()
     m_pendingSecondaryScrollRestore = false;
     if (m_secondaryBrowsePane)
         m_secondaryBrowsePane->hide();
+    if (m_secondaryThumbnailPanel)
+        m_secondaryThumbnailPanel->clearMirroredSelectionState();
+    if (m_tertiaryThumbnailPanel)
+        m_tertiaryThumbnailPanel->clearMirroredSelectionState();
     setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
     updateActivePaneIndicator();
     updateSwapButtonEnabled();

@@ -232,6 +232,26 @@ QStringList ThumbnailPanel::selectedPaths() const
     return r;
 }
 
+void ThumbnailPanel::clearMirroredSelectionState()
+{
+    m_pendingSelect.clear();
+    m_pendingFilterSelection.clear();
+    m_pendingFilterCurrent.clear();
+    m_pendingFilterGeneration = 0;
+    m_incrementalPrevSelection.clear();
+    m_incrementalPrevCurrent.clear();
+    m_incrementalPreviousCurrentRow = -1;
+    m_incrementalApply = false;
+    m_incrementalAnchorPath.clear();
+    if (selectionModel())
+    {
+        selectionModel()->clearSelection();
+        selectionModel()->setCurrentIndex(QModelIndex(), QItemSelectionModel::Clear);
+    }
+    if (m_selection)
+        m_selection->setPaneSelection(m_paneSlot, QStringList());
+}
+
 void ThumbnailPanel::invertSelection()
 {
     if (!selectionModel() || !m_model)
