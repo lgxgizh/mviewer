@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.0.169] - 2026-11-09
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.169**
+  (triple-browse selection clear and prior-layout restore).
+
+### Fixed
+
+- Enabling three-column browse no longer reselects stale files in the rightmost
+  pane: mirrored or hidden panes clear parked ThumbnailPanel pending/filter
+  selection state before reuse.
+- Turning three-column browse off restores the 1- or 2-column layout that was
+  active before triple was turned on interactively (a session that started
+  already in triple still falls back to two columns).
+
 ## [1.0.168] - 2026-11-08
 
 ### Release
