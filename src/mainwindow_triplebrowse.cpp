@@ -115,7 +115,22 @@ void MainWindow::cloneLeftToThirdPane()
 
 void MainWindow::toggleTripleBrowse(bool enabled)
 {
-    setBrowseColumnCount(enabled ? 3 : 2);
+    if (enabled)
+    {
+        // Remember 1- or 2-column layout so turning triple off restores it.
+        if (!m_tripleBrowseEnabled)
+        {
+            m_browseColumnsBeforeTriple = browseColumnCount();
+            m_hasBrowseColumnsBeforeTriple = true;
+        }
+        setBrowseColumnCount(3);
+        return;
+    }
+    // No interactive prior (e.g. session restored into triple): fall back to
+    // two columns, matching the saved split+triple session shape.
+    const int restore = m_hasBrowseColumnsBeforeTriple ? m_browseColumnsBeforeTriple : 2;
+    m_hasBrowseColumnsBeforeTriple = false;
+    setBrowseColumnCount(restore < 1 ? 1 : (restore > 2 ? 2 : restore));
 }
 
 void MainWindow::setBrowseColumnCount(int count)
@@ -126,6 +141,8 @@ void MainWindow::setBrowseColumnCount(int count)
     const bool wasTriple = m_tripleBrowseEnabled;
     m_splitBrowseEnabled = count >= 2;
     m_tripleBrowseEnabled = count == 3;
+    if (count != 3)
+        m_hasBrowseColumnsBeforeTriple = false;
     compactPaneHeader(
         m_secondarySortCombo,
         {m_secondaryBrowseBtn, m_secondaryCloneBtn, m_secondarySwapBtn, m_secondaryCloseBtn},
@@ -154,6 +171,9 @@ void MainWindow::setBrowseColumnCount(int count)
     if (m_tripleBrowseEnabled && !wasTriple && m_tertiaryThumbnailPanel)
     {
         m_tertiaryBrowsePane->show();
+        // Drop parked restores before setSort/setViewMode can scheduleFilter and
+        // capture a stale multi-select into pending filter state.
+        m_tertiaryThumbnailPanel->clearMirroredSelectionState();
         m_tertiaryThumbnailPanel->setThumbSize(m_thumbnailPanel->thumbSize());
         m_tertiaryThumbnailPanel->setViewMode(m_thumbnailPanel->viewMode());
         if (m_splitRestoringSession)
@@ -175,9 +195,10 @@ void MainWindow::setBrowseColumnCount(int count)
     {
         m_pendingTertiaryScrollRestore = false;
         m_tertiaryBrowsePane->hide();
-        if (m_selection && m_splitBrowseEnabled)
+        if (m_tertiaryThumbnailPanel)
+            m_tertiaryThumbnailPanel->clearMirroredSelectionState();
+        else if (m_selection && m_splitBrowseEnabled)
             m_selection->clearPane(SelectionModel::PaneSlot::Tertiary);
-        m_tertiaryThumbnailPanel->selectPaths({}, {}, false);
         if (m_activeBrowsePane == SelectionModel::PaneSlot::Tertiary)
             setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
     }

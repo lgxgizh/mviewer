@@ -259,6 +259,9 @@ class ThumbnailPanel : public QListView
 
     // Selected rows in model order (MainWindow and acceptance tests read it).
     QStringList selectedPaths() const;
+    // Drop visible selection and any parked restore that could re-select after a
+    // mirror/setDirectory/scheduleFilter (pending path, filter restore, incremental).
+    void clearMirroredSelectionState();
     // Compare set: the cross-pane union in split browse, else selectedPaths().
     QStringList compareSelection() const;
     void refreshCompareButton();

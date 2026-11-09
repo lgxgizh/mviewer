@@ -676,6 +676,8 @@ void testBrowseUx()
     testSplitBrowseState(leftDir, rightDir, thirdDir);
     testTripleSelectionModel();
     testTripleBrowse(leftDir, rightDir, thirdDir);
+    testTripleMirrorStartsWithoutSelection(leftDir);
+    testTripleRestoresPriorColumnCount(leftDir);
     testTriplePersistence(leftDir, rightDir, thirdDir);
 }
 

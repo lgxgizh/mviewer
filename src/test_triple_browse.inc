@@ -129,6 +129,120 @@ void testTripleBrowse(const QString &leftDir, const QString &middleDir, const QS
            "single-column mode still works after triple mode");
 }
 
+void testTripleMirrorStartsWithoutSelection(const QString &leftDir)
+{
+    using Pane = SelectionModel::PaneSlot;
+    AppState().save();
+    MainWindow mw;
+    mw.resize(1800, 900);
+    mw.show();
+    QApplication::processEvents();
+    mw.openExternalTargets({leftDir});
+    auto *left = mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
+    auto *tripleAction = mw.findChild<QAction *>(QStringLiteral("tripleBrowseAction"));
+    auto *doubleAction = mw.findChild<QAction *>(QStringLiteral("splitBrowseAction"));
+    EXPECT(waitUntil([&]() { return left && left->pathList().size() >= 3; }, 160),
+           "mirror-selection fixture primary directory loaded");
+    if (!left || !tripleAction || !doubleAction)
+        return;
+    const QStringList picked = {left->pathList().value(0), left->pathList().value(1)};
+    left->selectPaths(picked, picked.first());
+    QApplication::processEvents();
+    EXPECT(left->selectedPaths().size() >= 2, "primary keeps a multi-selection before triple");
+
+    tripleAction->trigger();
+    auto *middle = mw.secondaryThumbnailPanel();
+    auto *third = mw.tertiaryThumbnailPanel();
+    EXPECT(waitUntil(
+               [&]()
+               {
+                   return mw.browseColumnCount() == 3 && middle && third &&
+                          middle->pathList().size() >= 3 && third->pathList().size() >= 3;
+               },
+               200),
+           "1→3 mirrors both extra panes");
+    if (!middle || !third)
+        return;
+    EXPECT(left->selectedPaths() == picked, "primary multi-selection survives enabling triple");
+    EXPECT(middle->selectedPaths().isEmpty() && third->selectedPaths().isEmpty(),
+           "mirrored panes start without a selection");
+    EXPECT(mw.selectionModel()->paneSelection(Pane::Secondary).isEmpty() &&
+               mw.selectionModel()->paneSelection(Pane::Tertiary).isEmpty(),
+           "SelectionModel extra slots stay empty on mirror entry");
+
+    // Park a stale tertiary multi-select, hide the pane, then re-enter: must not return.
+    third->selectPaths(picked, picked.first());
+    QApplication::processEvents();
+    EXPECT(third->selectedPaths().size() >= 2, "fixture: tertiary can hold a multi-selection");
+    doubleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 2 && !tripleAction->isChecked(),
+           "leaving triple for two columns");
+    EXPECT(third->selectedPaths().isEmpty(), "hiding tertiary clears its selection");
+    tripleAction->trigger();
+    EXPECT(waitUntil([&]() { return mw.browseColumnCount() == 3 && third->pathList().size() >= 3; },
+                     200),
+           "re-enter triple");
+    EXPECT(third->selectedPaths().isEmpty(),
+           "re-entering triple does not restore a stale tertiary multi-selection");
+}
+
+void testTripleRestoresPriorColumnCount(const QString &leftDir)
+{
+    AppState().save();
+    MainWindow mw;
+    mw.resize(1600, 900);
+    mw.show();
+    QApplication::processEvents();
+    mw.openExternalTargets({leftDir});
+    auto *left = mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
+    auto *tripleAction = mw.findChild<QAction *>(QStringLiteral("tripleBrowseAction"));
+    auto *doubleAction = mw.findChild<QAction *>(QStringLiteral("splitBrowseAction"));
+    EXPECT(waitUntil([&]() { return left && !left->pathList().isEmpty(); }, 160),
+           "prior-layout fixture loaded");
+    if (!left || !tripleAction || !doubleAction)
+        return;
+
+    EXPECT(mw.browseColumnCount() == 1, "start in single column");
+    tripleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 3 && tripleAction->isChecked() && !doubleAction->isChecked(),
+           "1→3 enables triple exclusively");
+    tripleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 1 && !tripleAction->isChecked() && !doubleAction->isChecked(),
+           "1→3→off restores single column");
+
+    doubleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 2 && doubleAction->isChecked(), "enter two columns");
+    tripleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 3 && tripleAction->isChecked() && !doubleAction->isChecked(),
+           "2→3 enables triple exclusively");
+    tripleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 2 && doubleAction->isChecked() && !tripleAction->isChecked(),
+           "2→3→off restores two columns");
+
+    // Repeated toggles keep restoring the layout captured on the latest enter.
+    tripleAction->trigger();
+    tripleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 2 && doubleAction->isChecked(),
+           "repeated triple toggle from two columns returns to two");
+    doubleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 1, "single column still available after triple toggles");
+    tripleAction->trigger();
+    tripleAction->trigger();
+    EXPECT(mw.browseColumnCount() == 1 && !tripleAction->isChecked() && !doubleAction->isChecked(),
+           "repeated triple toggle from single column returns to single");
+
+    bool actionOwnsCtrl3 = false;
+    for (QAction *action : mw.findChildren<QAction *>())
+        if (action->shortcut() == QKeySequence(Qt::CTRL | Qt::Key_3))
+            actionOwnsCtrl3 = true;
+    left->setViewMode(ThumbnailPanel::Thumbnail);
+    QKeyEvent detailsKey(QEvent::KeyPress, Qt::Key_3, Qt::ControlModifier);
+    QApplication::sendEvent(&mw, &detailsKey);
+    EXPECT(!actionOwnsCtrl3 && left->viewMode() == ThumbnailPanel::Details &&
+               mw.browseColumnCount() == 1,
+           "Ctrl+3 remains Details after prior-layout toggles");
+}
+
 void testTriplePersistence(const QString &leftDir, const QString &middleDir,
                            const QString &thirdDir)
 {
