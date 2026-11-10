@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.172] - 2026-11-09
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.172**
+  (restore Details zebra from v1.0.168; remove rating/color-label/mark/tag UI).
+
 ### Fixed
 
 - Restore Details browse zebra (Base / AlternateBase) from v1.0.168 on every
