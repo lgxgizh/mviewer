@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-09 · Version: **1.0.171** · Release tag: **v1.0.171**
+> Snapshot: 2026-11-09 · Version: **1.0.172** · Release tag: **v1.0.172**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,18 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.172 — Details zebra restore and rating/tag UI removal (2026-11-09)
+
+- Details browse rows again use the v1.0.168 Base/AlternateBase zebra on every
+  column, including single-column. Tertiary gallery QSS keeps the third column
+  on the same stripe colors; selection stays Highlight. Transparent `::item`
+  rules stay gone so gutters do not go black.
+- Rating, color-label, pick/reject mark, and tag feature surface is removed:
+  shortcuts, metadata-panel editors, browse filters, Details columns, thumbnail
+  badges and tooltips, sort-by-rating, and the F1 cheat-sheet section. Folder
+  Favorites and the recently-viewed filter remain. RatingStore/TagStore stay as
+  inert persistence only. Coverage is in browse acceptance and theme/UI checks.
 
 ## 1.0.171 — Browse gallery content background (2026-11-09)
 
