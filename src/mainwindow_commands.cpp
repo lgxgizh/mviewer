@@ -279,46 +279,6 @@ bool MainWindow::handleWindowKey(QKeyEvent *event)
 bool MainWindow::handleMetadataKey(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
-    // P3 tail: Ctrl+Shift+1..6 set a color label; Ctrl+Shift+0 clears it;
-    // Ctrl+Shift+P toggles pick; Ctrl+Shift+X toggles reject.
-    // Alt+0..6 sets color labels (moved from Ctrl+Shift+0..6 to free those for
-    // star ratings, which in turn were moved from Ctrl+0..5 to avoid colliding
-    // with Ctrl+1..6 view-mode shortcuts).
-    if ((mod & Qt::AltModifier) && !event->isAutoRepeat())
-    {
-        if (event->key() >= Qt::Key_0 && event->key() <= Qt::Key_6)
-        {
-            setCurrentColorLabel(event->key() - Qt::Key_0);
-            event->accept();
-            return true;
-        }
-    }
-    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier))
-    {
-        if (event->key() == Qt::Key_P)
-        {
-            toggleCurrentPick();
-            event->accept();
-            return true;
-        }
-        if (event->key() == Qt::Key_X)
-        {
-            toggleCurrentReject();
-            event->accept();
-            return true;
-        }
-    }
-    // P1: Ctrl+Shift+0..5 rate the current image; Ctrl+Shift+0 clears.
-    // (Was Ctrl+0..5, which collided with the Ctrl+1..6 view-mode shortcuts —
-    //  Ctrl+1..5 could never reach view-mode switching.)
-    const int digit = mviewer::ui::shortcutDigit(event);
-    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier) && digit >= 0 && digit <= 5)
-    {
-        // Windows reports Ctrl+Shift+1 as Key_Exclam; shortcutDigit maps it.
-        rateCurrentImage(digit);
-        event->accept();
-        return true;
-    }
     // P0-3 / P1-4 / M19: 'I' or 'M' toggles the metadata overlay (I is the
     // product-facing shortcut; M kept for muscle memory).
     if ((event->key() == Qt::Key_I || event->key() == Qt::Key_M) && !mod)

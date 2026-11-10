@@ -102,7 +102,6 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
                              {QT_TR_NOOP("Size"), ThumbnailPanel::SortSize},
                              {QT_TR_NOOP("Resolution"), ThumbnailPanel::SortResolution},
                              {QT_TR_NOOP("Type"), ThumbnailPanel::SortType},
-                             {QT_TR_NOOP("Rating"), ThumbnailPanel::SortRating},
                              {QT_TR_NOOP("Camera"), ThumbnailPanel::SortCamera},
                              {QT_TR_NOOP("Lens"), ThumbnailPanel::SortLens}};
     for (const auto &e : kSM)

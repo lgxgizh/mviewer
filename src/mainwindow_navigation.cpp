@@ -577,15 +577,14 @@ void MainWindow::clearAllFilters()
 {
     if (m_searchEdit)
         m_searchEdit->clear();
-    if (m_ratingFilter)
-        m_ratingFilter->setCurrentIndex(0);
-    if (m_flagFilter)
-        m_flagFilter->setCurrentIndex(0);
+    if (m_recentFilter)
+        m_recentFilter->setChecked(false);
     eachFilterPanel(
         [](ThumbnailPanel *panel)
         {
             panel->clearFlagFilters();
             panel->setRatingFilter(0);
+            panel->setTagFilter(QString());
             panel->setFilter(QString(), false);
         });
     statusBar()->showMessage(tr("All filters cleared"), 2000);
@@ -594,14 +593,11 @@ void MainWindow::clearAllFilters()
 void MainWindow::resetFiltersOnFolderChange()
 {
     const QSignalBlocker b1(m_searchEdit);
-    const QSignalBlocker b2(m_ratingFilter);
-    const QSignalBlocker b3(m_flagFilter);
+    const QSignalBlocker b2(m_recentFilter);
     if (m_searchEdit)
         m_searchEdit->clear();
-    if (m_ratingFilter)
-        m_ratingFilter->setCurrentIndex(0);
-    if (m_flagFilter)
-        m_flagFilter->setCurrentIndex(0);
+    if (m_recentFilter)
+        m_recentFilter->setChecked(false);
     eachFilterPanel(
         [](ThumbnailPanel *panel)
         {
@@ -609,46 +605,6 @@ void MainWindow::resetFiltersOnFolderChange()
             panel->setRatingFilter(0);
             panel->setFilter(QString(), false);
         });
-}
-
-void MainWindow::applyFlagFilterToPanel(ThumbnailPanel *panel, int rating, int flag)
-{
-    if (!panel)
-        return;
-    panel->clearFlagFilters();
-    panel->setRatingFilter(rating);
-    switch (flag)
-    {
-    case 1:
-        panel->setPickFilter(true);
-        break;
-    case 2:
-        panel->setRejectFilter(true);
-        break;
-    case 3:
-        panel->setRecentFilter(true);
-        break;
-    case 11:
-        panel->setLabelFilter(1);
-        break;
-    case 12:
-        panel->setLabelFilter(2);
-        break;
-    case 13:
-        panel->setLabelFilter(3);
-        break;
-    case 14:
-        panel->setLabelFilter(4);
-        break;
-    case 15:
-        panel->setLabelFilter(5);
-        break;
-    case 16:
-        panel->setLabelFilter(6);
-        break;
-    default:
-        break;
-    }
 }
 
 void MainWindow::invalidateBrowseRatings()

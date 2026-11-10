@@ -237,62 +237,6 @@ void drawThumbFooter(QPainter *painter, const QRect &card, const QRect &thumbRec
     }
 }
 
-void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const QString &path,
-                             const QPalette &palette)
-{
-    const bool dark = thumb_card::isDarkPalette(palette);
-    const auto &rs = mviewer::core::RatingStore::instance();
-    const auto flags = rs.fileFlags(path.toStdString());
-    if (flags.rating > 0)
-    {
-        QFont sf = painter->font();
-        sf.setPixelSize(15);
-        painter->setFont(sf);
-        painter->setPen(thumb_card::ratingColor(dark));
-        QString starStr;
-        starStr.reserve(5);
-        for (int s = 0; s < 5; ++s)
-            starStr += (s < flags.rating ? QStringLiteral("★") : QStringLiteral("☆"));
-        painter->drawText(overlayRect.adjusted(4, 2, -4, -2),
-                          Qt::AlignLeft | Qt::AlignTop | Qt::TextSingleLine, starStr);
-    }
-
-    if (flags.colorLabel > 0 && flags.colorLabel <= 6)
-    {
-        // A rounded stripe inset from the card's left edge so it follows the radius.
-        const QRect stripe(overlayRect.left() + 3, overlayRect.top() + thumb_card::kCardRadius, 4,
-                           qMax(1, overlayRect.height() - thumb_card::kCardRadius * 2));
-        painter->setRenderHint(QPainter::Antialiasing, true);
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(thumb_card::labelColor(flags.colorLabel, dark));
-        painter->drawRoundedRect(stripe, 2, 2);
-        painter->setRenderHint(QPainter::Antialiasing, false);
-    }
-    if (flags.rejected)
-    {
-        painter->setRenderHint(QPainter::Antialiasing, true);
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(thumb_card::rejectTint(palette));
-        painter->drawRoundedRect(overlayRect, thumb_card::kCardRadius, thumb_card::kCardRadius);
-        painter->setRenderHint(QPainter::Antialiasing, false);
-        QFont rf = painter->font();
-        rf.setPixelSize(22);
-        rf.setBold(true);
-        painter->setFont(rf);
-        painter->setPen(palette.color(QPalette::HighlightedText));
-        painter->drawText(overlayRect, Qt::AlignCenter, QStringLiteral("✕"));
-    }
-    if (flags.picked)
-    {
-        QFont pf = painter->font();
-        pf.setPixelSize(15);
-        painter->setFont(pf);
-        painter->setPen(thumb_card::ratingColor(dark));
-        painter->drawText(overlayRect.adjusted(4, 2, -4, -2),
-                          Qt::AlignRight | Qt::AlignTop | Qt::TextSingleLine, QStringLiteral("⚑"));
-    }
-}
-
 void drawThumbCardBorder(QPainter *painter, const QRect &card, int outset, bool selected,
                          qreal hover, const QStyleOptionViewItem &option)
 {
@@ -427,37 +371,6 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QMod
         lines << QObject::tr("Modified: %1")
                      .arg(entry->date.toString(QStringLiteral("yyyy-MM-dd hh:mm:ss")));
 
-    const auto &rs = mviewer::core::RatingStore::instance();
-    const std::string ep = path.toStdString();
-    const int stars = rs.rating(ep);
-    const int label = rs.colorLabel(ep);
-    const bool rejected = rs.rejected(ep);
-
-    QStringList metaTags;
-    if (stars > 0)
-    {
-        QString starStr;
-        for (int s = 0; s < 5; ++s)
-            starStr += (s < stars ? QStringLiteral("★") : QStringLiteral("☆"));
-        metaTags << starStr;
-    }
-    if (label > 0)
-    {
-        static const char *const kLabelNames[7] = {"",
-                                                   QT_TRANSLATE_NOOP("QObject", "Red"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Orange"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Yellow"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Green"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Blue"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Purple")};
-        metaTags << QObject::tr("%1 label").arg(QObject::tr(kLabelNames[label]));
-    }
-    if (rejected)
-        metaTags << QObject::tr("Excluded (Rejected)");
-
-    if (!metaTags.isEmpty())
-        lines << metaTags.join(QStringLiteral(" · "));
-
     const QString cam = panel->metaCameraForPath(path).trimmed();
     const QString lens = panel->metaLensForPath(path).trimmed();
     const int iso = panel->metaIsoForPath(path);
@@ -526,7 +439,6 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
     drawFrameBadge(painter, card, entry, option.palette);
     drawThumbFooter(painter, card, thumbRect, entry, path, name, richFooter, nameFooter, selected,
                     option);
-    drawThumbRatingOverlays(painter, card, path, option.palette);
     drawThumbCardBorder(painter, card, inset, selected, hover, option);
 
     painter->restore();

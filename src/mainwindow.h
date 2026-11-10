@@ -276,8 +276,6 @@ class MainWindow : public QMainWindow
                              QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout);
     void applySortComboItems(QComboBox *combo);
     void applyViewModeComboItems(QComboBox *combo);
-    void applyRatingFilterItems(QComboBox *combo);
-    void applyFlagFilterItems(QComboBox *combo);
     QString sortDirectionToolTip(bool detailed) const;
     void retranslateBrowseBar();
     void retranslateSplitHeader();
@@ -593,11 +591,10 @@ class MainWindow : public QMainWindow
     QCheckBox *m_searchRecursive = nullptr;
     // P1: metadata-aware search + star-rating filter.
     QCheckBox *m_searchMeta = nullptr;
-    QComboBox *m_ratingFilter = nullptr;
     QComboBox *m_sortCombo = nullptr; // persisted across sessions via QSettings
     QPushButton *m_sortDirBtn = nullptr;
     QComboBox *m_viewModeCombo = nullptr;
-    QComboBox *m_flagFilter = nullptr; // P3 tail: color label / reject / pick / recents
+    QCheckBox *m_recentFilter = nullptr; // recently viewed only
     QWidget *m_advancedFilterPanel = nullptr;
     bool m_focusBrowse = false;
     bool m_focusNavigationVisible = true;
@@ -640,20 +637,12 @@ class MainWindow : public QMainWindow
         if (m_thumbnailPanel)
             fn(m_thumbnailPanel);
     }
-    void applyFlagFilterToPanel(ThumbnailPanel *panel, int rating, int flag);
     void invalidateBrowseRatings();
     void applySharedSearchFilter();
 
     // P1: gallery search/filter controls.
     void onSearchMetaToggled(bool on);
-    void onRatingFilterChanged(int index);
-    void onFlagFilterChanged(int index);
-    void onFlagsEdited(const QString &path, int label, bool rejected, bool picked);
-    void rateCurrentImage(int stars);
     // P3 tail: shortcuts for color label / reject / pick on the current image.
-    void setCurrentColorLabel(int label);
-    void toggleCurrentPick();
-    void toggleCurrentReject();
     void clearAllFilters();
     void resetFiltersOnFolderChange();
 

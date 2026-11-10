@@ -6330,18 +6330,16 @@ void workflow23_language_switch_browse_bar()
     using mviewer::ui::LanguageMode;
     MainWindow window;
     pump(40);
-    auto *flag = window.findChild<QComboBox *>(QStringLiteral("flagFilterCombo"));
-    auto *rating = window.findChild<QComboBox *>(QStringLiteral("ratingFilterCombo"));
+    auto *recent = window.findChild<QCheckBox *>(QStringLiteral("recentFilterCheck"));
     auto *sortLabel = window.findChild<QLabel *>(QStringLiteral("sortFieldLabel"));
     auto *advanced = window.findChild<QPushButton *>(QStringLiteral("advancedFilterToggle"));
     auto *viewMode = window.findChild<QComboBox *>(QStringLiteral("thumbnailViewModeCombo"));
-    CHECK(flag && rating && sortLabel && advanced && viewMode, "browse bar widgets exist");
-    if (!flag || !rating || !sortLabel || !advanced || !viewMode)
+    CHECK(recent && sortLabel && advanced && viewMode, "browse bar widgets exist");
+    if (!recent || !sortLabel || !advanced || !viewMode)
         return;
-    flag->setCurrentIndex(flag->findData(12));
-    rating->setCurrentIndex(rating->findData(3));
+    recent->setChecked(true);
     const int viewIndex = viewMode->currentIndex();
-    const QString flagEn = flag->currentText();
+    const QString recentEn = recent->text();
     const QString viewEn = viewMode->currentText();
 
     Language::apply(LanguageMode::ChineseSimplified);
@@ -6349,16 +6347,15 @@ void workflow23_language_switch_browse_bar()
     CHECK(sortLabel->text() != QStringLiteral("Sort:"), "sort label switches to Chinese");
     CHECK(advanced->text() != QStringLiteral("Advanced Filter"),
           "advanced filter toggle switches to Chinese");
-    CHECK(flag->currentText() != flagEn, "flag filter items switch to Chinese");
+    CHECK(recent->text() != recentEn, "recent-filter label switches to Chinese");
     CHECK(viewMode->currentText() != viewEn, "view mode items switch to Chinese");
-    CHECK(flag->currentData().toInt() == 12, "flag filter keeps its selection");
-    CHECK(rating->currentData().toInt() == 3, "rating filter keeps its selection");
+    CHECK(recent->isChecked(), "recent filter keeps its selection");
     CHECK(viewMode->currentIndex() == viewIndex, "view mode keeps its selection");
 
     Language::apply(LanguageMode::English);
     pump(40);
     CHECK(sortLabel->text() == QStringLiteral("Sort:"), "sort label switches back to English");
-    CHECK(flag->currentText() == flagEn, "flag filter switches back to English");
+    CHECK(recent->text() == recentEn, "recent-filter label switches back to English");
 
     // P1-12: no QAction may claim Alt+<letter> used by a top-level menu mnemonic.
     QStringList conflicts;

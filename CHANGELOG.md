@@ -13,8 +13,15 @@
 ### Changed
 
 - Browse context menu no longer offers Set rating, Set color label, Set mark,
-  Add Tag, or Remove Tag from Selection. Keyboard shortcuts, filters, and
-  the metadata panel are unchanged.
+  Add Tag, or Remove Tag from Selection.
+
+### Removed
+
+- Remove the rating, color-label, pick/reject mark, and tag feature surface:
+  shortcuts (Ctrl+Shift+0..5, Alt+0..6, Ctrl+Shift+P/X), metadata-panel editors,
+  browse filters, Details columns, thumbnail badges and tooltips, sort-by-rating,
+  and the F1 cheat-sheet section. Folder Favorites and the recently-viewed
+  filter remain. RatingStore/TagStore stay as inert persistence only.
 
 ## [1.0.171] - 2026-11-09
 

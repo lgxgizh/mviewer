@@ -104,8 +104,6 @@ class ThumbnailPanel : public QListView
         DetailColSize,
         DetailColDate,
         DetailColFmt,
-        DetailColRate,
-        DetailColLabel,
         DetailColCamera,
         DetailColLens,
         DetailColIso,

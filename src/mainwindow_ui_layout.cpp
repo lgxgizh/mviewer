@@ -251,7 +251,7 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     auto *advancedFilterToggle = new QPushButton(tr("Advanced Filter"), sortBar);
     advancedFilterToggle->setObjectName("advancedFilterToggle");
     advancedFilterToggle->setCheckable(true);
-    advancedFilterToggle->setToolTip(tr("Show camera, lens, rating, and metadata filters"));
+    advancedFilterToggle->setToolTip(tr("Show camera, lens, and metadata filters"));
     sortLayout->addWidget(advancedFilterToggle);
     connect(advancedFilterToggle, &QPushButton::toggled, advancedFilterPanel, &QWidget::setVisible);
     auto *clearFilters = new QPushButton(tr("Clear Filters"), sortBar);
@@ -287,31 +287,19 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
     connect(isoSpin, QOverload<int>::of(&QSpinBox::valueChanged), this, [this](int v)
             { eachFilterPanel([v](ThumbnailPanel *panel) { panel->setIsoFilter(v); }); });
 
-    // P0 #①: free-form tag filter.
-    auto *tagEdit = new QLineEdit(sortBar);
-    tagEdit->setObjectName(QStringLiteral("tagFilterEdit"));
-    tagEdit->setPlaceholderText(tr("Label"));
-    tagEdit->setFixedWidth(90);
-    tagEdit->setClearButtonEnabled(true);
-    tagEdit->setToolTip(tr("Filter by tag exactly (empty = all)"));
-    advancedLayout->addWidget(tagEdit);
-    connect(tagEdit, &QLineEdit::textChanged, this, [this](const QString &t)
-            { eachFilterPanel([&t](ThumbnailPanel *panel) { panel->setTagFilter(t); }); });
-
     // Clear Filters resets the transient filters only; the file type set is
     // a persisted browse preference (RAW hidden by default) and stays.
     connect(clearFilters, &QPushButton::clicked, this,
-            [camEdit, lensEdit, isoSpin, tagEdit, this]()
+            [camEdit, lensEdit, isoSpin, this]()
             {
                 camEdit->clear();
                 lensEdit->clear();
                 isoSpin->setValue(0);
-                tagEdit->clear();
                 m_searchEdit->clear();
                 m_searchRecursive->setChecked(false);
                 m_searchMeta->setChecked(false);
-                m_ratingFilter->setCurrentIndex(0);
-                m_flagFilter->setCurrentIndex(0);
+                if (m_recentFilter)
+                    m_recentFilter->setChecked(false);
             });
 }
 
@@ -349,23 +337,13 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     m_searchMeta = new QCheckBox(tr("Metadata"), sortBar);
     advancedLayout->addWidget(m_searchMeta);
 
-    // P1: star-rating filter.
-    auto *ratingLabel = new QLabel(tr("Rating:"), advancedFilterPanel);
-    ratingLabel->setObjectName(QStringLiteral("ratingFilterLabel"));
-    advancedLayout->addWidget(ratingLabel);
-    m_ratingFilter = new QComboBox(sortBar);
-    m_ratingFilter->setObjectName(QStringLiteral("ratingFilterCombo"));
-    applyRatingFilterItems(m_ratingFilter);
-    advancedLayout->addWidget(m_ratingFilter);
-
-    // P3 tail: color label / reject / pick / recents filter.
-    auto *flagLabel = new QLabel(tr("Flag:"), advancedFilterPanel);
-    flagLabel->setObjectName(QStringLiteral("flagFilterLabel"));
-    advancedLayout->addWidget(flagLabel);
-    m_flagFilter = new QComboBox(sortBar);
-    m_flagFilter->setObjectName(QStringLiteral("flagFilterCombo"));
-    applyFlagFilterItems(m_flagFilter);
-    advancedLayout->addWidget(m_flagFilter);
+    // Recently viewed is independent of the removed rating / label / mark UI.
+    m_recentFilter = new QCheckBox(tr("Recently viewed"), advancedFilterPanel);
+    m_recentFilter->setObjectName(QStringLiteral("recentFilterCheck"));
+    m_recentFilter->setToolTip(tr("Show only recently viewed images"));
+    advancedLayout->addWidget(m_recentFilter);
+    connect(m_recentFilter, &QCheckBox::toggled, this, [this](bool on)
+            { eachFilterPanel([on](ThumbnailPanel *panel) { panel->setRecentFilter(on); }); });
 
     auto *resetFilterBtn = new QPushButton(tr("Reset Filters"), advancedFilterPanel);
     resetFilterBtn->setObjectName("resetFiltersButton");

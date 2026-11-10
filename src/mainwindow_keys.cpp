@@ -164,17 +164,12 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
             return true;
         }
     }
-    // Viewer focus: rename, delete, refresh, ratings, color labels, pick, reject.
+    // Viewer focus: F5 refresh still reaches the main window.
     if (watched == m_imageViewer)
     {
         const int key = mviewer::ui::normalizedShortcutKey(ke);
-        const bool ctrlShift = mods == (Qt::ControlModifier | Qt::ShiftModifier);
-        const bool altOnly = mods == Qt::AltModifier;
         const bool refresh = mods == Qt::NoModifier && key == Qt::Key_F5;
-        const bool rateOrFlag = ctrlShift && ((key >= Qt::Key_0 && key <= Qt::Key_5) ||
-                                              key == Qt::Key_P || key == Qt::Key_X);
-        const bool colorLabel = altOnly && key >= Qt::Key_0 && key <= Qt::Key_6;
-        if (rateOrFlag || colorLabel || refresh)
+        if (refresh)
         {
             keyPressEvent(ke);
             return true;
