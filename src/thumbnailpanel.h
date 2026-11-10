@@ -104,8 +104,6 @@ class ThumbnailPanel : public QListView
         DetailColSize,
         DetailColDate,
         DetailColFmt,
-        DetailColRate,
-        DetailColLabel,
         DetailColCamera,
         DetailColLens,
         DetailColIso,
@@ -256,6 +254,8 @@ class ThumbnailPanel : public QListView
     {
         captureScrollAnchor(anchorPath, anchorOffset);
     }
+    // Titles from the same menu contextMenuEvent builds (no exec).
+    QStringList browseContextMenuTitlesForTest(const QStringList &selPaths);
 
     QStringList selectedPaths() const;    // model-order selection for MainWindow/tests
     void clearMirroredSelectionState();   // view + parked pending/filter restores
@@ -328,7 +328,6 @@ class ThumbnailPanel : public QListView
     void batchRateSelected(int stars);
     void batchSetColorLabelSelected(int label);
     void batchSetFlagSelected(bool reject, bool pick);
-    void populateRatingContextMenu(QMenu *menu);
 
     // A-10: reversible file ops via CommandStack (null = direct, irreversible).
     void setCommandStack(class CommandStack *stack)

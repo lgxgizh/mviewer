@@ -120,18 +120,18 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
     // Empty models publish selection onto the active pane. Stay on the left
     // so a filter does not wipe the right pane's slot.
     mw.setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
-    auto *rating = mw.findChild<QComboBox *>(QStringLiteral("ratingFilterCombo"));
-    EXPECT(rating != nullptr, "rating filter exists");
-    if (rating)
+    auto *camera = mw.findChild<QLineEdit *>(QStringLiteral("cameraFilterEdit"));
+    EXPECT(camera != nullptr, "camera filter exists");
+    if (camera)
     {
-        rating->setCurrentIndex(5);
+        camera->setText(QStringLiteral("__no_such_camera__"));
         EXPECT(waitUntil([&]() { return left->pathList().isEmpty(); }, 200),
-               "rating filter applies to the left gallery");
-        rating->setCurrentIndex(0);
+               "camera filter applies to the left gallery");
+        camera->clear();
         EXPECT(waitUntil([&]()
                          { return left->pathList().size() >= 2 && right->pathList().size() >= 2; },
                          200),
-               "clearing the rating filter restores both panes");
+               "clearing the camera filter restores both panes");
     }
 
     mw.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);

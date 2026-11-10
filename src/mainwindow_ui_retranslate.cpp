@@ -56,7 +56,6 @@ void MainWindow::applySortComboItems(QComboBox *combo)
         {QT_TR_NOOP("Size"), ThumbnailPanel::SortSize},
         {QT_TR_NOOP("Resolution"), ThumbnailPanel::SortResolution},
         {QT_TR_NOOP("Type"), ThumbnailPanel::SortType},
-        {QT_TR_NOOP("Rating"), ThumbnailPanel::SortRating},
         {QT_TR_NOOP("Camera"), ThumbnailPanel::SortCamera},
         {QT_TR_NOOP("Lens"), ThumbnailPanel::SortLens},
     };
@@ -74,33 +73,6 @@ void MainWindow::applyViewModeComboItems(QComboBox *combo)
         {QT_TR_NOOP("Details (Ctrl+3)"), ThumbnailPanel::Details},
         {QT_TR_NOOP("Filmstrip (Ctrl+4)"), ThumbnailPanel::Filmstrip},
         {QT_TR_NOOP("Compact (Ctrl+6)"), ThumbnailPanel::Compact},
-    };
-    applyIntItems(combo, kItems, int(std::size(kItems)),
-                  [this](const char *text) { return tr(text); });
-}
-
-void MainWindow::applyRatingFilterItems(QComboBox *combo)
-{
-    static const IntItem kItems[] = {
-        {QT_TR_NOOP("All"), 0},
-        {QT_TR_NOOP("★ and above"), 1},
-        {QT_TR_NOOP("★★ and above"), 2},
-        {QT_TR_NOOP("★★★ and above"), 3},
-        {QT_TR_NOOP("★★★★ and above"), 4},
-        {QT_TR_NOOP("★★★★★"), 5},
-    };
-    applyIntItems(combo, kItems, int(std::size(kItems)),
-                  [this](const char *text) { return tr(text); });
-}
-
-void MainWindow::applyFlagFilterItems(QComboBox *combo)
-{
-    static const IntItem kItems[] = {
-        {QT_TR_NOOP("All"), 0},           {QT_TR_NOOP("Favorited"), 1},
-        {QT_TR_NOOP("Rejected"), 2},      {QT_TR_NOOP("Recently viewed"), 3},
-        {QT_TR_NOOP("Red label"), 11},    {QT_TR_NOOP("Orange label"), 12},
-        {QT_TR_NOOP("Yellow label"), 13}, {QT_TR_NOOP("Green label"), 14},
-        {QT_TR_NOOP("Blue label"), 15},   {QT_TR_NOOP("Purple label"), 16},
     };
     applyIntItems(combo, kItems, int(std::size(kItems)),
                   [this](const char *text) { return tr(text); });
@@ -131,10 +103,8 @@ void MainWindow::retranslateBrowseBar()
         {"sortFieldLabel", QT_TR_NOOP("Sort:"), nullptr},
         {"secondarySortLabel", QT_TR_NOOP("Sort:"), nullptr},
         {"tertiarySortLabel", QT_TR_NOOP("Sort:"), nullptr},
-        {"ratingFilterLabel", QT_TR_NOOP("Rating:"), nullptr},
-        {"flagFilterLabel", QT_TR_NOOP("Flag:"), nullptr},
         {"advancedFilterToggle", QT_TR_NOOP("Advanced Filter"),
-         QT_TR_NOOP("Show camera, lens, rating, and metadata filters")},
+         QT_TR_NOOP("Show camera, lens, and metadata filters")},
         {"clearFiltersButton", QT_TR_NOOP("Clear Filters"), nullptr},
         {"resetFiltersButton", QT_TR_NOOP("Reset Filters"),
          QT_TR_NOOP("Clear all search and filter conditions")},
@@ -162,7 +132,6 @@ void MainWindow::retranslateBrowseBar()
         {"cameraFilterEdit", QT_TR_NOOP("Camera"),
          QT_TR_NOOP("Filter by camera (brand/model), substring match")},
         {"lensFilterEdit", QT_TR_NOOP("Lens"), QT_TR_NOOP("Filter by lens model, substring match")},
-        {"tagFilterEdit", QT_TR_NOOP("Label"), QT_TR_NOOP("Filter by tag exactly (empty = all)")},
     };
     for (const EditEntry &entry : kEdits)
     {
@@ -182,8 +151,6 @@ void MainWindow::retranslateBrowseBar()
     applySortComboItems(m_secondarySortCombo);
     applySortComboItems(m_tertiarySortCombo);
     applyViewModeComboItems(m_viewModeCombo);
-    applyRatingFilterItems(m_ratingFilter);
-    applyFlagFilterItems(m_flagFilter);
     for (FormatFilterCombo *combo :
          {m_typeFilterCombo, m_secondaryTypeFilterCombo, m_tertiaryTypeFilterCombo})
     {
@@ -192,6 +159,11 @@ void MainWindow::retranslateBrowseBar()
     }
     if (m_viewModeCombo)
         m_viewModeCombo->setToolTip(tr("Switch thumbnail view mode (common modes Ctrl+1..6)"));
+    if (m_recentFilter)
+    {
+        m_recentFilter->setText(tr("Recently viewed"));
+        m_recentFilter->setToolTip(tr("Show only recently viewed images"));
+    }
     syncViewModeSegmentToolTips();
     if (m_sortDirBtn)
         m_sortDirBtn->setToolTip(sortDirectionToolTip(true));

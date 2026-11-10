@@ -398,8 +398,6 @@ std::optional<ThumbnailPanel::SortMode> sortModeForDetailColumn(ThumbnailPanel::
         return ThumbnailPanel::SortDate;
     case ThumbnailPanel::DetailColFmt:
         return ThumbnailPanel::SortType;
-    case ThumbnailPanel::DetailColRate:
-        return ThumbnailPanel::SortRating;
     case ThumbnailPanel::DetailColCamera:
         return ThumbnailPanel::SortCamera;
     case ThumbnailPanel::DetailColLens:
@@ -428,8 +426,7 @@ int DetailsHeader::separatorAt(int x) const
     // x is in header widget coords; convert to content coords via h-scroll.
     const int contentX = x + m_panel->horizontalScrollBar()->value();
     const DetailLayout L = detailLayout(contentRect(), m_panel->detailColWidths());
-    const QRect cols[] = {L.thumb, L.name,  L.res,    L.size, L.date, L.fmt,
-                          L.rate,  L.label, L.camera, L.lens, L.iso};
+    const QRect cols[] = {L.thumb, L.name, L.res, L.size, L.date, L.fmt, L.camera, L.lens, L.iso};
     for (int i = 0; i < ThumbnailPanel::DetailColCount; ++i)
     {
         const int edge = cols[i].right() + 1;
@@ -443,8 +440,7 @@ int DetailsHeader::columnAt(int x) const
 {
     const int contentX = x + m_panel->horizontalScrollBar()->value();
     const DetailLayout L = detailLayout(contentRect(), m_panel->detailColWidths());
-    const QRect cols[] = {L.thumb, L.name,  L.res,    L.size, L.date, L.fmt,
-                          L.rate,  L.label, L.camera, L.lens, L.iso};
+    const QRect cols[] = {L.thumb, L.name, L.res, L.size, L.date, L.fmt, L.camera, L.lens, L.iso};
     for (int i = 0; i < ThumbnailPanel::DetailColCount; ++i)
     {
         if (contentX >= cols[i].left() && contentX <= cols[i].right())
@@ -487,8 +483,6 @@ void DetailsHeader::paintEvent(QPaintEvent *)
     drawCol(L.size, ThumbnailPanel::tr("Size"), ThumbnailPanel::SortSize);
     drawCol(L.date, ThumbnailPanel::tr("Date modified"), ThumbnailPanel::SortDate);
     drawCol(L.fmt, ThumbnailPanel::tr("Format"), ThumbnailPanel::SortType);
-    drawCol(L.rate, ThumbnailPanel::tr("Rating"), ThumbnailPanel::SortRating);
-    p.drawText(L.label, flags, ThumbnailPanel::tr("Label"));
     drawCol(L.camera, ThumbnailPanel::tr("Camera"), ThumbnailPanel::SortCamera);
     drawCol(L.lens, ThumbnailPanel::tr("Lens"), ThumbnailPanel::SortLens);
     p.drawText(L.iso, flags, ThumbnailPanel::tr("ISO"));

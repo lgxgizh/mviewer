@@ -32,69 +32,6 @@ void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &pat
     }
 }
 
-void drawDetailsRating(QPainter *painter, const QRect &rateR, const QString &path, bool sel,
-                       const QColor &textColor)
-{
-    const auto &rs = mviewer::core::RatingStore::instance();
-    const std::string ep = path.toStdString();
-    const int stars = rs.rating(ep);
-    if (stars > 0)
-    {
-        QString starStr;
-        starStr.reserve(5);
-        for (int s = 0; s < 5; ++s)
-            starStr += (s < stars ? QStringLiteral("★") : QStringLiteral("☆"));
-        painter->save();
-        painter->setPen(sel ? textColor : QColor(255, 179, 0));
-        painter->drawText(rateR, Qt::AlignVCenter | Qt::TextSingleLine, starStr);
-        painter->restore();
-    }
-    else
-    {
-        painter->drawText(rateR, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
-    }
-}
-
-void drawDetailsLabel(QPainter *painter, const QRect &labelR, const QString &path)
-{
-    const auto &rs = mviewer::core::RatingStore::instance();
-    const std::string ep = path.toStdString();
-    const int label = rs.colorLabel(ep);
-    if (label > 0)
-    {
-        static const QColor kLabelColors[7] = {QColor(),
-                                               QColor(229, 57, 53),
-                                               QColor(251, 140, 0),
-                                               QColor(249, 215, 41),
-                                               QColor(67, 160, 71),
-                                               QColor(30, 136, 229),
-                                               QColor(142, 36, 170)};
-        static const char *const kLabelNames[7] = {"",
-                                                   QT_TRANSLATE_NOOP("QObject", "Red"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Orange"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Yellow"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Green"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Blue"),
-                                                   QT_TRANSLATE_NOOP("QObject", "Purple")};
-        const QColor chip = kLabelColors[label];
-        const int cs = 12;
-        const QRect chipR(labelR.x(), labelR.y() + (labelR.height() - cs) / 2, cs, cs);
-        painter->save();
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(chip);
-        painter->drawRoundedRect(chipR, 3, 3);
-        painter->restore();
-        const QRect chipTextR(labelR.x() + cs + 6, labelR.y(), labelR.width() - cs - 6,
-                              labelR.height());
-        painter->drawText(chipTextR, Qt::AlignVCenter | Qt::TextSingleLine,
-                          QObject::tr(kLabelNames[label]));
-    }
-    else
-    {
-        painter->drawText(labelR, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
-    }
-}
-
 void drawDetailsExif(QPainter *painter, const DetailLayout &L, const QString &path, bool sel,
                      const QStyleOptionViewItem &option, const ThumbnailPanel *panel)
 {
@@ -142,16 +79,16 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
 
     const bool sel = option.state & QStyle::State_Selected;
     const bool hover = option.state & QStyle::State_MouseOver;
-    // Unselected rows use a flat Base fill (same as ListDelegate). The old
-    // Base/AlternateBase zebra read as blue/gray "selection" on light theme
-    // (#fbfbfd vs #f2f2f4), especially in the tertiary column.
+    // Unselected rows keep the v1.0.168 Base/AlternateBase zebra. After gallery
+    // polish that is content bg0 vs bg1 (light #fbfbfd / #f5f5f7). Selection
+    // still uses Highlight, so the stripe is not the accent.
     QColor bg;
     if (sel)
         bg = option.palette.color(QPalette::Highlight);
     else if (hover)
         bg = option.palette.color(QPalette::Midlight);
     else
-        bg = option.palette.color(QPalette::Base);
+        bg = option.palette.color(index.row() & 1 ? QPalette::AlternateBase : QPalette::Base);
     painter->fillRect(option.rect, bg);
 
     painter->save();
@@ -197,13 +134,7 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
     painter->drawText(L.fmt, Qt::AlignVCenter | Qt::TextSingleLine,
                       cachedSuffix.isEmpty() ? QStringLiteral("IMAGE") : cachedSuffix.toUpper());
 
-    // Column 7: rating (P0-4). Draw filled/empty stars from the RatingStore.
-    drawDetailsRating(painter, L.rate, path, sel, textColor);
-
-    // Column 8: color label (P0-4). Draw a small colored chip + name.
-    drawDetailsLabel(painter, L.label, path);
-
-    // Columns 9-11: EXIF (camera / lens / ISO) — P0 #① professional columns for
+    // Columns 7-9: EXIF (camera / lens / ISO) — P0 #① professional columns for
     // image algorithm engineers. Backed by the metadata index (ensureMetaIndex).
     drawDetailsExif(painter, L, path, sel, option, m_panel);
 

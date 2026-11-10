@@ -10,7 +10,6 @@
 #include <QDir>
 #include <QFocusEvent>
 #include <QKeyEvent>
-#include <QMenu>
 #include <QMouseEvent>
 #include <QRubberBand>
 
@@ -363,51 +362,6 @@ void ThumbnailPanel::batchSetFlagSelected(bool reject, bool pick)
     asyncWriteSidecars(toWrite);
     invalidateRatings();
     emit ratingsChanged();
-}
-
-void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)
-{
-    if (!menu)
-        return;
-    menu->addSeparator();
-    auto *rateMenu = menu->addMenu(tr("Set rating"));
-    for (int s = 5; s >= 1; --s)
-    {
-        QString stars;
-        for (int i = 0; i < s; ++i)
-            stars += QStringLiteral("★");
-        QAction *act = rateMenu->addAction(QStringLiteral("%1 (%2 stars)").arg(stars).arg(s));
-        connect(act, &QAction::triggered, this, [this, s]() { batchRateSelected(s); });
-    }
-    QAction *actClearRate = rateMenu->addAction(tr("Clear Rating"));
-    connect(actClearRate, &QAction::triggered, this, [this]() { batchRateSelected(0); });
-
-    auto *labelMenu = menu->addMenu(tr("Set color label"));
-    static const struct
-    {
-        const char *name;
-        int id;
-    } kLabels[] = {
-        {QT_TR_NOOP("Red"), 1},   {QT_TR_NOOP("Orange"), 2}, {QT_TR_NOOP("Yellow"), 3},
-        {QT_TR_NOOP("Green"), 4}, {QT_TR_NOOP("Blue"), 5},   {QT_TR_NOOP("Purple"), 6},
-    };
-    for (const auto &item : kLabels)
-    {
-        QAction *act = labelMenu->addAction(tr(item.name));
-        connect(act, &QAction::triggered, this,
-                [this, id = item.id]() { batchSetColorLabelSelected(id); });
-    }
-    QAction *actClearLabel = labelMenu->addAction(tr("No label"));
-    connect(actClearLabel, &QAction::triggered, this, [this]() { batchSetColorLabelSelected(0); });
-
-    auto *flagMenu = menu->addMenu(tr("Set Mark"));
-    QAction *actPick = flagMenu->addAction(tr("Mark as Pick (Pick)"));
-    connect(actPick, &QAction::triggered, this, [this]() { batchSetFlagSelected(false, true); });
-    QAction *actReject = flagMenu->addAction(tr("Mark as rejected (Reject)"));
-    connect(actReject, &QAction::triggered, this, [this]() { batchSetFlagSelected(true, false); });
-    QAction *actClearFlag = flagMenu->addAction(tr("Clear Markers"));
-    connect(actClearFlag, &QAction::triggered, this,
-            [this]() { batchSetFlagSelected(false, false); });
 }
 
 namespace

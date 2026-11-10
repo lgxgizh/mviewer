@@ -181,17 +181,17 @@ inline constexpr int kDetailGap = 12;
 inline constexpr int kDetailSidePad = 4;
 inline constexpr int kDetailSepHitSlop = 4;
 
-inline constexpr int kDetailDefaultW[ThumbnailPanel::DetailColCount] = {60, 140, 120, 100, 160, 80,
-                                                                        90, 90,  160, 240, 80};
-inline constexpr int kDetailMinW[ThumbnailPanel::DetailColCount] = {48, 80, 64, 56, 100, 48,
-                                                                    56, 56, 80, 80, 40};
+inline constexpr int kDetailDefaultW[ThumbnailPanel::DetailColCount] = {60, 140, 120, 100, 160,
+                                                                        80, 160, 240, 80};
+inline constexpr int kDetailMinW[ThumbnailPanel::DetailColCount] = {48, 80, 64, 56, 100,
+                                                                    48, 80, 80, 40};
 
 struct DetailLayout
 {
-    QRect thumb, name, res, size, date, fmt, rate, label, camera, lens, iso;
+    QRect thumb, name, res, size, date, fmt, camera, lens, iso;
 };
 
-// Gaps sit between name..iso (9 gaps). Thumb and name are adjacent.
+// Gaps sit between name..iso. Thumb and name are adjacent.
 inline int detailGapsWidth()
 {
     return kDetailGap * (ThumbnailPanel::DetailColCount - 2);
@@ -230,10 +230,6 @@ inline DetailLayout detailLayout(const QRect &row, const int *colW)
     x += colW[ThumbnailPanel::DetailColDate] + kDetailGap;
     L.fmt = QRect(x, r.y(), colW[ThumbnailPanel::DetailColFmt], r.height());
     x += colW[ThumbnailPanel::DetailColFmt] + kDetailGap;
-    L.rate = QRect(x, r.y(), colW[ThumbnailPanel::DetailColRate], r.height());
-    x += colW[ThumbnailPanel::DetailColRate] + kDetailGap;
-    L.label = QRect(x, r.y(), colW[ThumbnailPanel::DetailColLabel], r.height());
-    x += colW[ThumbnailPanel::DetailColLabel] + kDetailGap;
     L.camera = QRect(x, r.y(), colW[ThumbnailPanel::DetailColCamera], r.height());
     x += colW[ThumbnailPanel::DetailColCamera] + kDetailGap;
     L.lens = QRect(x, r.y(), colW[ThumbnailPanel::DetailColLens], r.height());

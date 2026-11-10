@@ -1,14 +1,11 @@
 #include "metadatapanel.h"
 #include "ThemeMetrics.h"
 
-#include "core/RatingStore.h"
 #include "core/image/MetadataReader.h"
 #include "metadatamodel.h"
-#include "widgets/ratingwidget.h"
 
 #include <QApplication>
 #include <QClipboard>
-#include <QComboBox>
 #include <QCursor>
 #include <QFileInfo>
 #include <QHeaderView>
@@ -61,96 +58,8 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     connect(m_tree, &QTreeView::doubleClicked, this, &MetadataPanel::onTreeDoubleClicked);
     layout->addWidget(m_tree, 1);
 
-    // P1: star-rating editor, persists to RatingStore.
-    auto *ratingBox = new QWidget(this);
-    auto *ratingLay = new QHBoxLayout(ratingBox);
-    ratingLay->setContentsMargins(0, 0, 0, 0);
-    ratingLay->setSpacing(mviewer::ui::metrics::kSpace8);
-    ratingLay->addWidget(new QLabel(tr("Rating:"), this));
-    m_rating = new RatingWidget(this);
-    ratingLay->addWidget(m_rating);
-    ratingLay->addStretch(1);
-    connect(m_rating, &RatingWidget::ratingChanged, this,
-            [this](int stars)
-            {
-                if (m_currentPath.isEmpty())
-                    return;
-                auto &rs = mviewer::core::RatingStore::instance();
-                rs.setRating(m_currentPath.toUtf8().toStdString(), stars);
-                emit ratingEdited(m_currentPath, stars);
-            });
-    layout->addWidget(ratingBox);
-
-    layout->addWidget(buildFlagsBox());
-
     // Until an image is selected, the model shows its "select an image" hint.
     m_model->clear();
-}
-
-QWidget *MetadataPanel::buildFlagsBox()
-{
-    // P3 tail: color label + reject / pick (favorite) controls.
-    auto *flagBox = new QWidget(this);
-    auto *flagLay = new QHBoxLayout(flagBox);
-    flagLay->setContentsMargins(0, 0, 0, 0);
-    flagLay->setSpacing(mviewer::ui::metrics::kSpace8);
-    flagLay->addWidget(new QLabel(tr("Color scale:"), this));
-    m_colorLabel = new QComboBox(this);
-    m_colorLabel->addItem(tr("None"), 0);
-    m_colorLabel->addItem(tr("Red"), 1);
-    m_colorLabel->addItem(tr("Orange"), 2);
-    m_colorLabel->addItem(tr("Yellow"), 3);
-    m_colorLabel->addItem(tr("Green"), 4);
-    m_colorLabel->addItem(tr("Blue"), 5);
-    m_colorLabel->addItem(tr("Purple"), 6);
-    flagLay->addWidget(m_colorLabel);
-    m_rejectBtn = new QPushButton(tr("Reject"), this);
-    m_rejectBtn->setCheckable(true);
-    m_pickBtn = new QPushButton(tr("Favorite"), this);
-    m_pickBtn->setCheckable(true);
-    flagLay->addWidget(m_rejectBtn);
-    flagLay->addWidget(m_pickBtn);
-    flagLay->addStretch(1);
-
-    const auto emitFlags = [this]
-    {
-        if (m_currentPath.isEmpty())
-            return;
-        auto &rs = mviewer::core::RatingStore::instance();
-        emit flagsEdited(m_currentPath, rs.colorLabel(m_currentPath.toUtf8().toStdString()),
-                         rs.rejected(m_currentPath.toUtf8().toStdString()),
-                         rs.picked(m_currentPath.toUtf8().toStdString()));
-    };
-
-    connect(m_colorLabel, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            [this, emitFlags](int)
-            {
-                if (m_currentPath.isEmpty())
-                    return;
-                auto &rs = mviewer::core::RatingStore::instance();
-                const int label = m_colorLabel->currentData().toInt();
-                rs.setColorLabel(m_currentPath.toUtf8().toStdString(), label);
-                emitFlags();
-            });
-    connect(m_rejectBtn, &QPushButton::toggled, this,
-            [this, emitFlags](bool on)
-            {
-                if (m_currentPath.isEmpty())
-                    return;
-                mviewer::core::RatingStore::instance().setRejected(
-                    m_currentPath.toUtf8().toStdString(), on);
-                emitFlags();
-            });
-    connect(m_pickBtn, &QPushButton::toggled, this,
-            [this, emitFlags](bool on)
-            {
-                if (m_currentPath.isEmpty())
-                    return;
-                mviewer::core::RatingStore::instance().setPicked(
-                    m_currentPath.toUtf8().toStdString(), on);
-                emitFlags();
-            });
-    return flagBox;
 }
 
 MetadataPanel::~MetadataPanel()
@@ -169,13 +78,6 @@ void MetadataPanel::setImage(const QString &path)
 {
     m_currentPath = path;
     ++m_requestGeneration;
-
-    auto &rs = mviewer::core::RatingStore::instance();
-    m_rating->setRating(rs.rating(path.toUtf8().toStdString()));
-    m_colorLabel->setCurrentIndex(
-        m_colorLabel->findData(rs.colorLabel(path.toUtf8().toStdString())));
-    m_rejectBtn->setChecked(!path.isEmpty() && rs.rejected(path.toUtf8().toStdString()));
-    m_pickBtn->setChecked(!path.isEmpty() && rs.picked(path.toUtf8().toStdString()));
 
     if (path.isEmpty())
     {
@@ -276,10 +178,6 @@ void MetadataPanel::clear()
     ++m_requestGeneration;
     m_currentPath.clear();
     m_model->clear();
-    m_rating->setRating(0);
-    m_colorLabel->setCurrentIndex(0);
-    m_rejectBtn->setChecked(false);
-    m_pickBtn->setChecked(false);
 }
 
 void MetadataPanel::copyAll()

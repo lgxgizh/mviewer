@@ -355,36 +355,10 @@ void MainWindow::connectFilterSignals()
     // P1: metadata search toggle — re-applies the active filter against embedded
     // metadata instead of just filenames.
     connect(m_searchMeta, &QCheckBox::toggled, this, &MainWindow::onSearchMetaToggled);
-    // P1: star-rating filter.
-    connect(m_ratingFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &MainWindow::onRatingFilterChanged);
-    // P3 tail: color label / reject / pick / recents filter.
-    connect(m_flagFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
-            &MainWindow::onFlagFilterChanged);
     // P0: MetadataPanel auto-syncs to SelectionModel (no manual push needed on image
-    // change). Editing callbacks (rating/flags/toggle) still push explicitly for
-    // immediate refresh after write — those are harmless redundancy, not SSOT drift.
+    // change).
     connect(m_selection, &SelectionModel::currentImageChanged, m_metadataPanel,
             &MetadataPanel::setImage);
-    // P3 tail: a flag change in the metadata panel refreshes the gallery overlay
-    // (and re-applies the active filter so list membership stays correct).
-    connect(m_metadataPanel, &MetadataPanel::flagsEdited, this, &MainWindow::onFlagsEdited);
-    // P1: a rating set in the metadata panel refreshes the gallery star overlay.
-    connect(m_metadataPanel, &MetadataPanel::ratingEdited, this,
-            [this](const QString &path, int)
-            {
-                Q_UNUSED(path);
-                // Same pipeline as keyboard and context-menu ratings: repaint
-                // and re-evaluate an active rating/flag filter.
-                invalidateBrowseRatings();
-            });
-    auto refreshRatings = [this]() { invalidateBrowseRatings(); };
-    if (m_thumbnailPanel)
-        connect(m_thumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
-    if (m_secondaryThumbnailPanel)
-        connect(m_secondaryThumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
-    if (m_tertiaryThumbnailPanel)
-        connect(m_tertiaryThumbnailPanel, &ThumbnailPanel::ratingsChanged, this, refreshRatings);
 }
 
 void MainWindow::connectMenuSignals()

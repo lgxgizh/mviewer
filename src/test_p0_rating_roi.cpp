@@ -1,6 +1,4 @@
 // P0 product-logic regressions:
-//  * every rating/flag writer (keyboard, gallery context menu, metadata panel)
-//    re-evaluates an active gallery rating/pick filter (single pipeline);
 //  * an empty ImageViewer selection reaches the AnalysisPanel, and loading a
 //    new image drops an unlocked ROI;
 //  * a committed viewer ROI is stored in image pixels and follows pan.
@@ -12,9 +10,6 @@
 #include "runtime_storage.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
-#include "widgets/ratingwidget.h"
-
-#include "core/RatingStore.h"
 
 #include <QApplication>
 #include <QDir>
@@ -72,86 +67,6 @@ QString writeImage(const QDir &dir, const QString &name, const QColor &color, in
     image.fill(color);
     image.save(path, "PNG");
     return QFileInfo(path).absoluteFilePath();
-}
-
-void sendShortcut(QWidget *target, int key)
-{
-    QKeyEvent press(QEvent::KeyPress, key, Qt::ControlModifier | Qt::ShiftModifier);
-    QApplication::sendEvent(target, &press);
-    QKeyEvent release(QEvent::KeyRelease, key, Qt::ControlModifier | Qt::ShiftModifier);
-    QApplication::sendEvent(target, &release);
-    pump(30);
-}
-
-void testRatingPipeline(const QDir &dir, const QStringList &paths)
-{
-    std::cout << "── P0: rating/flag writers re-evaluate the gallery filter ──\n";
-    MainWindow window;
-    window.resize(1100, 750);
-    window.show();
-    pump(80);
-    auto *tree = window.findChild<DirectoryTree *>();
-    auto *directory = window.findChild<DirectoryModel *>();
-    auto *panel = window.findChild<ThumbnailPanel *>();
-    auto *selection = window.findChild<SelectionModel *>();
-    auto *meta = window.findChild<MetadataPanel *>();
-    CHECK(tree && directory && panel && selection && meta, "MainWindow exposes gallery objects");
-    if (!tree || !directory || !panel || !selection || !meta)
-        return;
-    tree->navigateTo(dir.absolutePath(), true);
-    CHECK(waitFor([&] { return panel->pathList().size() == paths.size(); }),
-          "gallery lists every fixture");
-
-    panel->setRatingFilter(3);
-    CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
-          "rating filter >= 3 hides unrated images");
-
-    // Keyboard: Ctrl+Shift+4 on the current image.
-    selection->setCurrentImage(paths[0]);
-    pump(40);
-    sendShortcut(&window, Qt::Key_4);
-    CHECK(mviewer::core::RatingStore::instance().rating(paths[0].toUtf8().toStdString()) == 4,
-          "keyboard rating writes RatingStore");
-    CHECK(waitFor([&] { return panel->pathList() == QStringList{paths[0]}; }),
-          "keyboard rating immediately re-evaluates the rating filter");
-
-    // Gallery context menu (batch path).
-    panel->selectPaths({paths[0]}, paths[0]);
-    pump(30);
-    panel->batchRateSelected(1);
-    CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
-          "context-menu rating drops the image out of the filter");
-
-    // Metadata panel rating widget.
-    selection->setCurrentImage(paths[1]);
-    pump(40);
-    meta->setImage(paths[1]);
-    auto *stars = meta->findChild<RatingWidget *>();
-    CHECK(stars != nullptr, "metadata panel exposes its rating widget");
-    if (stars)
-    {
-        emit stars->ratingChanged(5);
-        CHECK(waitFor([&] { return panel->pathList() == QStringList{paths[1]}; }),
-              "metadata-panel rating re-evaluates the filter");
-    }
-
-    // Pick filter + keyboard Ctrl+Shift+P.
-    panel->setRatingFilter(0);
-    panel->setPickFilter(true);
-    CHECK(waitFor([&] { return panel->pathList().isEmpty(); }), "pick filter hides unpicked");
-    selection->setCurrentImage(paths[2]);
-    pump(40);
-    sendShortcut(&window, Qt::Key_P);
-    CHECK(waitFor([&] { return panel->pathList() == QStringList{paths[2]}; }),
-          "keyboard pick immediately re-evaluates the pick filter");
-    panel->selectPaths({paths[2]}, paths[2]);
-    pump(30);
-    panel->batchSetFlagSelected(false, false);
-    CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
-          "context-menu unpick re-evaluates the pick filter");
-    panel->clearFlagFilters();
-    window.close();
-    pump(40);
 }
 
 void dragSelection(ImageViewer &viewer)
@@ -291,14 +206,10 @@ int main(int argc, char **argv)
     const QStringList paths{writeImage(dir, QStringLiteral("a.png"), QColor(200, 30, 30)),
                             writeImage(dir, QStringLiteral("b.png"), QColor(30, 200, 30)),
                             writeImage(dir, QStringLiteral("c.png"), QColor(30, 30, 200))};
-    mviewer::core::RatingStore::instance().setFilePath(
-        root.filePath(QStringLiteral("ratings.txt")).toUtf8().toStdString());
-
-    testRatingPipeline(dir, paths);
     testRoiResetOnNewImage(paths[0], paths[1]);
     testSelectionFollowsPan(paths[0]);
 
-    std::cout << "=== P0 rating/ROI tests: " << (g_failures == 0 ? "PASS" : "FAIL") << " ("
-              << g_failures << " failures) ===\n";
+    std::cout << "=== P0 ROI tests: " << (g_failures == 0 ? "PASS" : "FAIL") << " (" << g_failures
+              << " failures) ===\n";
     return g_failures == 0 ? 0 : 1;
 }
