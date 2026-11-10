@@ -1054,7 +1054,7 @@ QSplitter#navigationPanel QListWidget::item:hover {
    the empty area under the thumbs come out black (#000000).
    Leave alternate-background-color unset too. Pinning it to bg0 sets
    AlternateBase to the content color and the thumb wells disappear.
-   Delegates already paint hover, selection, and the flat Details row. */
+   Delegates already paint hover, selection, and the Details zebra. */
 QListView#thumbnailPanel,
 QListView#secondaryThumbnailPanel,
 QListView#tertiaryThumbnailPanel {

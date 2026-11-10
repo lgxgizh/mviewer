@@ -26,6 +26,7 @@
 #include "metadataoverlay.h"
 #include "runtime_storage.h"
 #include "selectionmodel.h"
+#include "test_browse_row_chrome.h"
 #include "test_browse_viewmode.h"
 #include "thumbnailpanel.h"
 
@@ -764,6 +765,7 @@ int main(int argc, char **argv)
     testFileOpsUndo(dirPath);
     testDegradedInputs(tmp);
     g_failures += runViewModeSegmentTests();
+    g_failures += runBrowseRowChromeTests();
     {
         // A#10 uses MainWindow which restores sessions; keep it isolated.
         const QStringList paths = {

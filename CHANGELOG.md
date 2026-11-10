@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Restore Details browse zebra (Base / AlternateBase) from v1.0.168 on every
+  column, including single-column. Tertiary gallery QSS stays so the third
+  column uses the same stripe colors as the first two; selection remains
+  Highlight. The #322/#324 flat Base fill is reverted. Transparent `::item`
+  rules stay gone so gutters do not go black.
+
+### Changed
+
+- Browse context menu no longer offers Set rating, Set color label, Set mark,
+  Add Tag, or Remove Tag from Selection. Keyboard shortcuts, filters, and
+  the metadata panel are unchanged.
+
 ## [1.0.171] - 2026-11-09
 
 ### Release

@@ -142,16 +142,16 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
 
     const bool sel = option.state & QStyle::State_Selected;
     const bool hover = option.state & QStyle::State_MouseOver;
-    // Unselected rows use a flat Base fill (same as ListDelegate). The old
-    // Base/AlternateBase zebra read as blue/gray "selection" on light theme
-    // (#fbfbfd vs #f2f2f4), especially in the tertiary column.
+    // Unselected rows keep the v1.0.168 Base/AlternateBase zebra. After gallery
+    // polish that is content bg0 vs bg1 (light #fbfbfd / #f5f5f7). Selection
+    // still uses Highlight, so the stripe is not the accent.
     QColor bg;
     if (sel)
         bg = option.palette.color(QPalette::Highlight);
     else if (hover)
         bg = option.palette.color(QPalette::Midlight);
     else
-        bg = option.palette.color(QPalette::Base);
+        bg = option.palette.color(index.row() & 1 ? QPalette::AlternateBase : QPalette::Base);
     painter->fillRect(option.rect, bg);
 
     painter->save();

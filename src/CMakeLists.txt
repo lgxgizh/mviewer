@@ -868,6 +868,7 @@ set_tests_properties(async_lifetime_tests PROPERTIES RUN_SERIAL TRUE)
 add_executable(browse_acceptance_tests
     test_browse_acceptance.cpp
     test_browse_viewmode.cpp
+    test_browse_row_chrome.cpp
 )
 
 target_link_libraries(browse_acceptance_tests

@@ -1,5 +1,5 @@
 // P0 product-logic regressions:
-//  * every rating/flag writer (keyboard, gallery context menu, metadata panel)
+//  * every rating/flag writer (keyboard, batch helpers, metadata panel)
 //    re-evaluates an active gallery rating/pick filter (single pipeline);
 //  * an empty ImageViewer selection reaches the AnalysisPanel, and loading a
 //    new image drops an unlocked ROI;
@@ -115,7 +115,7 @@ void testRatingPipeline(const QDir &dir, const QStringList &paths)
     CHECK(waitFor([&] { return panel->pathList() == QStringList{paths[0]}; }),
           "keyboard rating immediately re-evaluates the rating filter");
 
-    // Gallery context menu (batch path).
+    // Batch rating helper (same path the old context menu used).
     panel->selectPaths({paths[0]}, paths[0]);
     pump(30);
     panel->batchRateSelected(1);

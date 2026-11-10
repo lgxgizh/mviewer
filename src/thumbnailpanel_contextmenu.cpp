@@ -27,29 +27,7 @@ struct ThumbnailPanel::ContextMenuActions
     QAction *aYuvCompare = nullptr; // only for exactly two .yuv/.y4m files
     QStringList yuvPaths;
     QAction *aAnalyze = nullptr;
-    QAction *aAddTag = nullptr;
-    QMenu *rmTagMenu = nullptr;
 };
-
-namespace
-{
-void populateRemoveTagMenu(QMenu *rmTagMenu, const QStringList &selPaths)
-{
-    QStringList tags;
-    for (const QString &sp : selPaths)
-    {
-        for (const auto &tg : mviewer::core::TagStore::instance().tags(sp.toStdString()))
-        {
-            if (const QString text = QString::fromStdString(tg); !tags.contains(text))
-                tags.append(text);
-        }
-    }
-    tags.sort();
-    for (const QString &tg : tags)
-        rmTagMenu->addAction(tg);
-    rmTagMenu->setEnabled(!tags.isEmpty());
-}
-} // namespace
 
 ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
                                                                     const QStringList &selPaths)
@@ -111,12 +89,24 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     acts.aAnalyze = menu.addAction(tr("Batch Analysis Export"));
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     acts.aAnalyze->setEnabled(!selPaths.isEmpty());
-    menu.addSeparator();
-    acts.aAddTag = menu.addAction(tr("Add Tag…"));
-    acts.aAddTag->setEnabled(!selPaths.isEmpty());
-    acts.rmTagMenu = menu.addMenu(tr("Remove Tag from Selection"));
-    populateRemoveTagMenu(acts.rmTagMenu, selPaths);
     return acts;
+}
+
+QStringList ThumbnailPanel::browseContextMenuTitlesForTest(const QStringList &selPaths)
+{
+    QMenu menu;
+    buildContextMenu(menu, selPaths);
+    QStringList titles;
+    for (QAction *action : menu.actions())
+    {
+        titles.append(action->text());
+        if (action->menu())
+        {
+            for (QAction *child : action->menu()->actions())
+                titles.append(child->text());
+        }
+    }
+    return titles;
 }
 
 void ThumbnailPanel::addTagToSelected()
@@ -226,10 +216,6 @@ void ThumbnailPanel::handleContextMenuAction(const ContextMenuActions &actions, 
         emit yuvToolRequested(actions.yuvPaths);
     else if (chosen == actions.aAnalyze)
         batchAnalyzeExport();
-    else if (chosen == actions.aAddTag)
-        addTagToSelected();
-    else if (actions.rmTagMenu && actions.rmTagMenu->actions().contains(chosen))
-        removeTagFromSelected(chosen->text());
 }
 
 void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
@@ -244,7 +230,6 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     const QStringList selPaths = selectedPaths();
     QMenu menu(this);
     const ContextMenuActions actions = buildContextMenu(menu, selPaths);
-    populateRatingContextMenu(&menu);
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
