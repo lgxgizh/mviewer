@@ -28,7 +28,8 @@
 #   * architecture gate reports zero layer / dependency violations
 #   * build succeeds on Linux (GCC) without syntax / SIMD attribute errors
 #   * build succeeds on windows-2022 (MSVC + Qt 6.8.0) with zero compiler warnings
-#   * unit tests (CTest) pass, including the bench_enforce perf hard-gate
+#   * unit tests (CTest) pass, except the "nightly" label (bench_enforce perf
+#     hard-gate and the long soak/torture suites run in nightly + release)
 # =============================================================================
 
 name: PR Gate (Tier 1)
@@ -258,12 +259,22 @@ jobs:
   windows-build-and-test:
     name: Build & Test (MSVC + Qt 6.8.0)
     runs-on: windows-2022
+    # Review P1-3: compiler cache. CMake reads CMAKE_<LANG>_COMPILER_LAUNCHER
+    # from the environment, so build.ps1 is unchanged. MSVC Release objects use
+    # /Z7 (CMakeLists.txt), which sccache can cache.
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -312,7 +323,9 @@ jobs:
           $logicalCores = [Environment]::ProcessorCount
           $testJobs = [Math]::Max(1, [Math]::Min(4, $logicalCores - 1))
           Write-Host "CTest parallelism: -j$testJobs (logical cores=$logicalCores)"
-          ctest --output-on-failure --output-junit test-results.xml "-j$testJobs"
+          # -LE nightly: bench_enforce and the soak/torture suites run in
+          # nightly `quality` and in the release workflow (build.ps1 Test).
+          ctest --output-on-failure --output-junit test-results.xml "-j$testJobs" -LE nightly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload test report

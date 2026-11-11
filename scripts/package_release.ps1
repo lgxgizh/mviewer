@@ -5,6 +5,8 @@
 # from the review's M11.3 checklist:
 #   1. dist/MViewer-<ver>-portable.zip   (self-contained, via package_portable.ps1)
 #   2. dist/MViewer-<ver>-Setup.exe       (NSIS installer, via installer/MViewer.nsi)
+#   3. dist/MViewer-<ver>-symbols.zip     (PDBs for MViewer.exe / mviewer_core.dll;
+#      never shipped inside the zip or installer, used to read crash dumps)
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts/package_release.ps1 [-Build] [-Version 0.11.0]
@@ -75,6 +77,20 @@ if ($makensis) {
     $setup = Join-Path $root (Join-Path $OutDir "MViewer-$Version-Setup.exe")
     if (Test-Path $setup) { Write-Host "=== installer: $setup ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB) ===" }
 } else { throw "makensis not found -- Strict RC packaging requires the installer" }
+
+# 3b) Review P0-4: debug symbols as a separate asset. The Release build writes
+# linker PDBs for the shipping binaries (CMakeLists.txt mviewer_release_pdb).
+$symbolNames = @('MViewer.pdb', 'mviewer_core.pdb')
+$symbolFiles = @()
+foreach ($name in $symbolNames) {
+    $pdb = Join-Path $root (Join-Path 'build_msvc/bin' $name)
+    if (-not (Test-Path -LiteralPath $pdb)) { throw "missing release PDB '$pdb' (Release must link with /DEBUG)" }
+    $symbolFiles += $pdb
+}
+$symbolsZip = Join-Path $root (Join-Path $OutDir "MViewer-$Version-symbols.zip")
+if (Test-Path -LiteralPath $symbolsZip) { Remove-Item -LiteralPath $symbolsZip -Force }
+Compress-Archive -LiteralPath $symbolFiles -DestinationPath $symbolsZip -CompressionLevel Optimal
+Write-Host "=== symbols: $symbolsZip ($([math]::Round((Get-Item $symbolsZip).Length/1MB,1)) MB) ==="
 
 # 4) M14.8/M51: SHA256SUMS + auto release notes
 Write-Host "=== release_manifest (M14.8) ==="

@@ -198,6 +198,7 @@ target_compile_features(mviewer_core PUBLIC cxx_std_20)
 # copy and crash on cross-module delete / teardown). Auto-export all symbols
 # so consumers link without per-symbol declspec markup.
 set_target_properties(mviewer_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+mviewer_release_pdb(mviewer_core)
 
 target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
     ${MVIEWER_GENERATED_INCLUDE_DIR})
@@ -389,6 +390,7 @@ target_compile_features(mviewer_application PUBLIC cxx_std_20)
 add_executable(MViewer
     main.cpp
 )
+mviewer_release_pdb(MViewer)
 if(WIN32)
     # Version resource generated from project(VERSION); see resources/mviewer.rc.in.
     set(MVIEWER_RC_ICON "${CMAKE_SOURCE_DIR}/resources/mviewer.ico")
@@ -3152,6 +3154,22 @@ foreach(_mviewer_test IN LISTS MVIEWER_REGISTERED_TESTS)
     set_tests_properties(${_mviewer_test} PROPERTIES
         ENVIRONMENT
         "QT_QPA_PLATFORM=offscreen;MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache")
+endforeach()
+
+# ─── Nightly-only tests (review P1-3) ───────────────────────────────────────
+# Long soak / torture / perf-enforcement suites carry the "nightly" label. The
+# PR gate runs `ctest -LE nightly`; nightly `quality` and the release workflow
+# still run the full suite through build.ps1 Test.
+set(MVIEWER_NIGHTLY_ONLY_TESTS
+    bench_enforce
+    m51_rc_soak
+    m27_lifecycle_torture
+    m47_large_soak
+    m53_large_source_soak)
+foreach(_mviewer_test IN LISTS MVIEWER_NIGHTLY_ONLY_TESTS)
+    if(TEST ${_mviewer_test})
+        set_property(TEST ${_mviewer_test} APPEND PROPERTY LABELS nightly)
+    endif()
 endforeach()
 
 # ─── Format target ──────────────────────────────────────────────────────────

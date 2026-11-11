@@ -536,7 +536,12 @@ jobs:
       - name: Install OpenCppCoverage
         run: choco install opencppcoverage -y --no-progress
 
-      - name: Build (Release)
+      - name: Build (Release, PDBs for every test executable)
+        # OpenCppCoverage maps lines through PDBs. Release used to emit none
+        # ("No modules were selected", 0% coverage). MVIEWER_ALL_PDBS makes
+        # CMakeLists.txt link every executable with /DEBUG (review P0-4).
+        env:
+          MVIEWER_ALL_PDBS: "ON"
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 
       - name: Generate testdata fixtures
