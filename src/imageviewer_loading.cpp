@@ -18,6 +18,7 @@ namespace
 constexpr int kDisplayWarmMaxEdge = 1024;
 constexpr qint64 kDisplayWarmMaxBytes = 64LL * 1024 * 1024;
 constexpr qint64 kDisplayWarmLodThresholdPixels = 16LL * 1000 * 1000;
+constexpr qint64 kFullPreloadMaxPixels = 48LL * 1000 * 1000;
 constexpr size_t kDisplayWarmMaxEntries = 2;
 } // namespace
 
@@ -494,6 +495,8 @@ void ImageViewer::preloadNeighbors(const QString &path)
         if (h)
             m_neighborPreloads.push_back({m_fileList[i], std::move(h)});
     }
+    // cancelDisplayRasterPreloads() does not touch m_neighborPreloads.
+    preloadDisplayRasterNeighbors(path);
 }
 
 void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
@@ -759,6 +762,23 @@ void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult res
                            std::move(result.image), result.sourceRect, result.sourceSize,
                            result.density, result.target, false, serial);
         return;
+    }
+
+    // Large neighbors (> 48 MP) are warmed as a bounded display raster only; review P2-4.
+    const qint64 pixels =
+        static_cast<qint64>(result.sourceSize.width()) * result.sourceSize.height();
+    if (pixels > kFullPreloadMaxPixels)
+    {
+        for (auto it = m_neighborPreloads.begin(); it != m_neighborPreloads.end();)
+        {
+            if (browsePathEquals(it->path, result.path))
+            {
+                mviewer::application::ImageLoadingService::instance().cancelAsync(it->handle);
+                it = m_neighborPreloads.erase(it);
+            }
+            else
+                ++it;
+        }
     }
 
     if (result.browseGeneration != m_displayRasterBrowseGeneration ||
