@@ -210,8 +210,7 @@ int main(int argc, char **argv)
         back->trigger();
         CHECK(waitFor([&] { return samePath(directory->currentDirectory(), aPath); }),
               "directory Back restores A");
-        CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
-              "Back restores A's gallery");
+        CHECK(waitFor([&] { return panel->pathList().size() == 1; }), "Back restores A's gallery");
         forward->trigger();
         CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
               "directory Forward remains available after Back");

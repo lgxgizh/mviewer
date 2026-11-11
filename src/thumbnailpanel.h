@@ -622,11 +622,11 @@ class ThumbnailPanel : public QListView
     uint64_t m_metaRequestId = 0;
     bool m_recursiveSearching = false;
     QList<Entry> m_recursiveHits; // recursive filename-search results (merged by applyFilter)
-    QString m_recursiveHitsFor;  // the filter text the current hits belong to
-    bool m_recentFilter = false; // show only recently-viewed images
-    QString m_cameraFilter;      // P0 #①: camera make/model substring
-    QString m_lensFilter;        // P0 #①: lens model substring
-    int m_isoFilter = 0;         // P0 #①: exact ISO (0 = any)
+    QString m_recursiveHitsFor;   // the filter text the current hits belong to
+    bool m_recentFilter = false;  // show only recently-viewed images
+    QString m_cameraFilter;       // P0 #①: camera make/model substring
+    QString m_lensFilter;         // P0 #①: lens model substring
+    int m_isoFilter = 0;          // P0 #①: exact ISO (0 = any)
     QHash<QString, QString> m_metaIndex;  // path -> lowercase searchable string
     QHash<QString, int> m_metaIso;        // path -> ISO (for exact ISO filter)
     QHash<QString, QString> m_metaCamera; // path -> "make model" (Details EXIF column)
@@ -647,14 +647,11 @@ class ThumbnailPanel : public QListView
     void scheduleFilter(bool debounce);
     void runFilterQuery();
     bool prepareFilterSource(const QString &text, QList<Entry> &source);
-    static bool matchesFilterSnapshot(const Entry &entry, const QString &text, bool useFuzzy,
-                                      const QRegularExpression &fuzzy,
-                                      const mviewer::core::BrowseQuery &query,
-                                      const std::unordered_set<std::string> &recents,
-                                      const QHash<QString, QString> &metaIndex,
-                                      const QHash<QString, int> &metaIso,
-                                      const QHash<QString, QString> &metaCamera,
-                                      const QHash<QString, QString> &metaLens);
+    static bool matchesFilterSnapshot(
+        const Entry &entry, const QString &text, bool useFuzzy, const QRegularExpression &fuzzy,
+        const mviewer::core::BrowseQuery &query, const std::unordered_set<std::string> &recents,
+        const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
+        const QHash<QString, QString> &metaCamera, const QHash<QString, QString> &metaLens);
     static QList<Entry> evaluateFilterSnapshot(const QList<Entry> &source, const QString &text,
                                                bool useFuzzy, const QRegularExpression &fuzzy,
                                                const mviewer::core::BrowseQuery &query,

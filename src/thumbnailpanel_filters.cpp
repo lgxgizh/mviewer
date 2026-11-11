@@ -365,9 +365,9 @@ void ThumbnailPanel::runFilterQuery()
         {
             if (ctx.isCancelled() || cancel->load(std::memory_order_acquire) || !alive->load())
                 return;
-            const QList<Entry> out = ThumbnailPanel::evaluateFilterSnapshot(
-                src, t, useFuzzy, fuzzyRe, query, recents, metaIndex, metaIso, metaCamera,
-                metaLens);
+            const QList<Entry> out =
+                ThumbnailPanel::evaluateFilterSnapshot(src, t, useFuzzy, fuzzyRe, query, recents,
+                                                       metaIndex, metaIso, metaCamera, metaLens);
             if (ctx.isCancelled() || cancel->load(std::memory_order_acquire) || !alive->load() ||
                 !self)
                 return;
