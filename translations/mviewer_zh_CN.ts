@@ -3956,6 +3956,11 @@ or double-click a thumbnail to view</source>
         <source>YUV Parameters...</source>
         <translation>YUV 参数...</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="1"/>
+        <source>RAW Parameters...</source>
+        <translation>RAW 参数...</translation>
+    </message>
 </context>
 <context>
     <name>Language</name>
@@ -6018,6 +6023,21 @@ Build: %2</source>
         <source>Swap left and middle pane directories and selections</source>
         <translation>交换左栏与中栏的目录和选择</translation>
     </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>RAW parameters updated: %1</source>
+        <translation>RAW 参数已更新：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>RAW default parameters updated</source>
+        <translation>RAW 默认参数已更新</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>Cannot show %1: set its size and storage with right-click &gt; RAW Parameters...</source>
+        <translation>无法显示 %1：请右键 &gt; RAW 参数... 设置尺寸和存储格式</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>
@@ -6941,6 +6961,21 @@ Build: %2</source>
         <source>YUV file extensions</source>
         <translation>YUV 文件后缀</translation>
     </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>RAW</source>
+        <translation>RAW</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>Defaults for plain .raw sensor dumps (no header). The size is read from the file name, e.g. name_4096x3072.raw, and checked against the file size. Right-click a file &gt; RAW Parameters... to change one file for this session.</source>
+        <translation>纯原始 .raw 传感器数据（无文件头）的默认参数。尺寸从文件名读取（例如 name_4096x3072.raw），并用文件大小校验。右键文件 &gt; RAW 参数... 可只修改这个文件，仅本次运行有效。</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>RAW defaults</source>
+        <translation>RAW 默认参数</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPanel</name>
@@ -7684,6 +7719,11 @@ to:
         <source>Move %1 selected file(s) from the browse panes to the Recycle Bin?</source>
         <translation>将浏览栏中选中的 %1 个文件移到回收站吗？</translation>
     </message>
+    <message>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="1"/>
+        <source>RAW Parameters...</source>
+        <translation>RAW 参数...</translation>
+    </message>
 </context>
 <context>
     <name>UsmCompareDialog</name>
@@ -8289,6 +8329,277 @@ to:
         <location filename="../src/yuvpixfmtpicker.cpp" line="219"/>
         <source>V before U (YVU: NV21, YV12)</source>
         <translation>V 在前 U 在后（YVU：NV21、YV12）</translation>
+    </message>
+</context>
+<context>
+    <name>PlainRawParamsEditor</name>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>These RAW parameters are not valid: %1</source>
+        <translation>RAW 参数无效：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>%1 bit</source>
+        <translation>%1 位</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Little endian</source>
+        <translation>小端</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Big endian</source>
+        <translation>大端</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>RGGB</source>
+        <translation>RGGB</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>BGGR</source>
+        <translation>BGGR</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>GRBG</source>
+        <translation>GRBG</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>GBRG</source>
+        <translation>GBRG</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Mono (no colour filter)</source>
+        <translation>黑白（无滤色阵列）</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>None</source>
+        <translation>不做</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Gray world</source>
+        <translation>灰度世界</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>White patch (brightest area)</source>
+        <translation>白块法（最亮区域）</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Manual</source>
+        <translation>手动</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>1x</source>
+        <translation>1x</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>2x</source>
+        <translation>2x</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>4x</source>
+        <translation>4x</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>8x</source>
+        <translation>8x</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Custom</source>
+        <translation>自定义</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>From file name</source>
+        <translation>从文件名读取</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Width:</source>
+        <translation>宽度：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Height:</source>
+        <translation>高度：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Bit depth:</source>
+        <translation>位深：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Storage:</source>
+        <translation>存储格式：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Byte order:</source>
+        <translation>字节序：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source> B</source>
+        <translation> 字节</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Header offset:</source>
+        <translation>文件头偏移：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Tightly packed</source>
+        <translation>紧密排列</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Row stride:</source>
+        <translation>行跨度：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Black level:</source>
+        <translation>黑电平：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Auto (2^bits - 1)</source>
+        <translation>自动（2^位深 - 1）</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>White level:</source>
+        <translation>白电平：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Bayer pattern:</source>
+        <translation>Bayer 排列：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>White balance:</source>
+        <translation>白平衡：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Red gain:</source>
+        <translation>红色增益：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Blue gain:</source>
+        <translation>蓝色增益：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>x</source>
+        <translation>x</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>Brightness gain:</source>
+        <translation>亮度增益：</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>sRGB gamma</source>
+        <translation>sRGB gamma</translation>
+    </message>
+</context>
+<context>
+    <name>PlainRawParamsDialog</name>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>RAW Parameters - %1</source>
+        <translation>RAW 参数 - %1</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Plain sensor dump: set how the bytes are stored.</source>
+        <translation>纯原始传感器数据：请设置数据的存储方式。</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Sizes that match this file</source>
+        <translation>与文件大小匹配的组合</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Use Defaults</source>
+        <translation>使用默认值</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>%1 x %2, %3: %4 bytes expected, the file matches.</source>
+        <translation>%1 x %2，%3：预期 %4 字节，与文件一致。</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>%1 x %2, %3: %4 bytes expected, the file has %5 bytes (%6 extra bytes ignored).</source>
+        <translation>%1 x %2，%3：预期 %4 字节，文件有 %5 字节（多出的 %6 字节已忽略）。</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>%1 x %2, %3: %4 bytes expected, the file has only %5 bytes. Pick a size below or fix width, height or storage.</source>
+        <translation>%1 x %2，%3：预期 %4 字节，文件只有 %5 字节。请从下方选择一个组合，或修改宽度、高度或存储格式。</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>%1-bit, %2</source>
+        <translation>%1 位，%2</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>8-bit</source>
+        <translation>8 位</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>16-bit container, LSB aligned</source>
+        <translation>16 位容器，低位对齐</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>16-bit container, MSB aligned</source>
+        <translation>16 位容器，高位对齐</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>MIPI RAW10 (packed)</source>
+        <translation>MIPI RAW10（紧凑打包）</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>MIPI RAW12 (packed)</source>
+        <translation>MIPI RAW12（紧凑打包）</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>RAW Parameters</source>
+        <translation>RAW 参数</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Cannot open %1.</source>
+        <translation>无法打开 %1。</translation>
     </message>
 </context>
 </TS>

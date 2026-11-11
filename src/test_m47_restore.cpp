@@ -85,6 +85,63 @@ bool waitTrue(const std::function<bool()> &pred, int ms)
     return pred();
 }
 
+// The terminal line ("Workspace opened" / "Project opened" / "Failed to open…")
+// is not sticky. changeDirectory's scan later emits sequenceChanged, and
+// mainwindow_ui_connections_browse.cpp posts "Loaded N images" (2500 ms). That
+// write often runs in the same processEvents() as the restore apply, so a poll
+// of currentMessage() never observes the terminal text even though it was
+// shown. Latch messageChanged instead of sampling the bar.
+class StatusLatch
+{
+  public:
+    StatusLatch() = default;
+    StatusLatch(const StatusLatch &) = delete;
+    StatusLatch &operator=(const StatusLatch &) = delete;
+
+    void arm(QStatusBar *bar)
+    {
+        disarm();
+        if (!bar)
+            return;
+        m_messages.push_back(bar->currentMessage());
+        m_conn = QObject::connect(bar, &QStatusBar::messageChanged, bar,
+                                  [this](const QString &text) { m_messages.push_back(text); });
+    }
+
+    void disarm()
+    {
+        if (m_conn)
+            QObject::disconnect(m_conn);
+        m_conn = {};
+        m_messages.clear();
+    }
+
+    ~StatusLatch()
+    {
+        disarm();
+    }
+
+    bool seen(const QString &fragment) const
+    {
+        for (const QString &text : m_messages)
+        {
+            if (text.contains(fragment))
+                return true;
+        }
+        return false;
+    }
+
+  private:
+    QMetaObject::Connection m_conn;
+    QStringList m_messages;
+};
+
+bool waitForStatus(StatusLatch &latch, QStatusBar *bar, const QString &fragment, int ms)
+{
+    latch.arm(bar);
+    return waitTrue([&] { return latch.seen(fragment); }, ms);
+}
+
 void writePng(const QString &path)
 {
     QImage img(64, 64, QImage::Format_RGB32);
@@ -191,13 +248,8 @@ int main(int argc, char **argv)
               "R1: the async open announces itself immediately");
         CHECK(!started.contains(QStringLiteral("Workspace opened")),
               "R1: the restore is NOT applied synchronously (async worker path)");
-        CHECK(waitTrue(
-                  [&]
-                  {
-                      return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Workspace opened"));
-                  },
-                  30000),
+        StatusLatch opened;
+        CHECK(waitForStatus(opened, w.statusBar(), QStringLiteral("Workspace opened"), 30000),
               "R1: the parsed workspace lands on a later UI delivery");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
         CHECK(model && model->currentDirectory() == rootA,
@@ -213,13 +265,8 @@ int main(int argc, char **argv)
         MainWindow w;
         w.show();
         w.openProjectFile(projA);
-        CHECK(waitTrue(
-                  [&]
-                  {
-                      return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Project opened"));
-                  },
-                  30000),
+        StatusLatch opened;
+        CHECK(waitForStatus(opened, w.statusBar(), QStringLiteral("Project opened"), 30000),
               "R1b: the project's embedded workspace restores");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
         CHECK(model && model->currentDirectory() == rootA,
@@ -232,13 +279,8 @@ int main(int argc, char **argv)
         MainWindow w;
         w.show();
         w.openWorkspaceFile(wsA);
-        CHECK(waitTrue(
-                  [&]
-                  {
-                      return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Workspace opened"));
-                  },
-                  30000),
+        StatusLatch opened;
+        CHECK(waitForStatus(opened, w.statusBar(), QStringLiteral("Workspace opened"), 30000),
               "R2: baseline workspace applied");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
         WorkspaceModel *wm = w.findChild<WorkspaceModel *>();
@@ -252,22 +294,19 @@ int main(int argc, char **argv)
             closer.start();
             w.openWorkspaceFile(dir + "/no_such_file.mvws");
             // Wait (bounded) for the failure terminal instead of a fixed 4 s
-            // pump: the assertions below read that message.
-            (void)waitTrue(
-                [&]
-                {
-                    return w.statusBar()->currentMessage().contains(
-                        QStringLiteral("Failed to open workspace"));
-                },
-                15000);
+            // pump: the assertion below reads that delivery, not whatever
+            // status text is current after later UI updates.
+            StatusLatch failed;
+            (void)waitForStatus(failed, w.statusBar(), QStringLiteral("Failed to open workspace"),
+                                15000);
             closer.stop();
+            CHECK(failed.seen(QStringLiteral("Failed to open workspace")),
+                  "R2: the failure terminal is reported (session untouched)");
         }
         CHECK(model && model->currentDirectory() == dirBefore,
               "R2: a missing file does not change the current directory");
         CHECK(wm && wm->comparedImages() == cmpBefore,
               "R2: a missing file does not change the compare image set");
-        CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("Failed to open workspace")),
-              "R2: the failure terminal is reported (session untouched)");
 
         // Corrupt file: same transactional contract.
         {
@@ -282,14 +321,12 @@ int main(int argc, char **argv)
             w.openWorkspaceFile(bad);
             // Same bounded terminal wait: a corrupt document reports through the
             // same failure path (mainwindow_session.cpp: invalid or empty workspace file).
-            (void)waitTrue(
-                [&]
-                {
-                    return w.statusBar()->currentMessage().contains(
-                        QStringLiteral("Failed to open workspace"));
-                },
-                15000);
+            StatusLatch failed;
+            (void)waitForStatus(failed, w.statusBar(), QStringLiteral("Failed to open workspace"),
+                                15000);
             closer.stop();
+            CHECK(failed.seen(QStringLiteral("Failed to open workspace")),
+                  "R2: a corrupt file reports the failure terminal");
         }
         CHECK(model && model->currentDirectory() == dirBefore,
               "R2: a corrupt file does not change the current directory");
@@ -307,13 +344,8 @@ int main(int argc, char **argv)
         // the event loop dispatches A's delivery.
         w.openWorkspaceFile(wsA);
         w.openWorkspaceFile(wsB);
-        CHECK(waitTrue(
-                  [&]
-                  {
-                      return w.statusBar()->currentMessage().contains(
-                          QStringLiteral("Workspace opened"));
-                  },
-                  30000),
+        StatusLatch opened;
+        CHECK(waitForStatus(opened, w.statusBar(), QStringLiteral("Workspace opened"), 30000),
               "R3: the final open lands");
         pump(500); // allow any stale A delivery to attempt landing
         DirectoryModel *model = w.findChild<DirectoryModel *>();

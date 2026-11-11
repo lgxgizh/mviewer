@@ -12,6 +12,7 @@
 #include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
 #include "core/SettingsIO.h"
+#include "plainrawsettings.h"
 #include "platform/WindowChrome.h"
 #include "runtime_storage.h"
 #include "yuvparamsettings.h"
@@ -128,6 +129,8 @@ int main(int argc, char *argv[])
 
     // ADR 032: per-file .yuv parameters saved by the YUV Parameters dialog.
     mviewer::ui::loadYuvParamSettings();
+    // ADR 033: Preferences > RAW defaults for plain .raw sensor dumps.
+    mviewer::ui::loadPlainRawDefaults();
     // User-editable YUV extension -> pixel format mapping (Preferences > YUV).
     mviewer::ui::loadYuvExtensionMapSettings();
 

@@ -7,10 +7,12 @@
 #include "mainwindow_p.h"
 
 #include "core/image/ImageLoadingFacade.h"
+#include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/yuv/YuvFile.h"
 #include "core/image/yuv/YuvSampleProbe.h"
 #include "imageviewer.h"
 #include "metadatapanel.h"
+#include "plainrawparamsdialog.h"
 #include "previewpanel.h"
 #include "thumbnailpanel.h"
 #include "thumbnailprovider.h"
@@ -32,9 +34,11 @@ void MainWindow::editYuvParams(const QString &path)
         (m_imageViewer && m_imageViewer->isVisible() && m_imageViewer->currentPath() == path)
             ? static_cast<QWidget *>(m_imageViewer)
             : static_cast<QWidget *>(this);
-    if (!editYuvParamsForPath(parent, path))
-        return;
     const std::string utf8 = path.toUtf8().toStdString();
+    // ADR 033: plain .raw sensor dumps share this entry point (session override).
+    const bool plainRaw = mviewer::core::rawplain::isPlainRawPath(utf8);
+    if (!(plainRaw ? editPlainRawParamsForPath(parent, path) : editYuvParamsForPath(parent, path)))
+        return;
     mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
     ThumbnailProvider::invalidateSource(utf8);
     for (ThumbnailPanel *panel :
@@ -50,8 +54,10 @@ void MainWindow::editYuvParams(const QString &path)
     if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == path)
         m_imageViewer->refreshSource(path);
     if (statusBar())
-        statusBar()->showMessage(tr("YUV parameters updated: %1").arg(QFileInfo(path).fileName()),
-                                 4000);
+        statusBar()->showMessage(
+            (plainRaw ? tr("RAW parameters updated: %1") : tr("YUV parameters updated: %1"))
+                .arg(QFileInfo(path).fileName()),
+            4000);
 }
 
 void MainWindow::onYuvExtensionMapChanged()
@@ -72,8 +78,33 @@ void MainWindow::onYuvExtensionMapChanged()
         statusBar()->showMessage(tr("YUV file extension mapping updated"), 4000);
 }
 
+void MainWindow::onPlainRawDefaultsChanged()
+{
+    // ADR 033: thumbnail and decode keys carry the effective parameters, so a
+    // relist re-renders every .raw file with the new defaults.
+    refreshActiveBrowse();
+    const QString current = m_imageViewer ? m_imageViewer->currentPath() : QString();
+    const std::string utf8 = current.toUtf8().toStdString();
+    if (!current.isEmpty() && mviewer::core::rawplain::isPlainRawPath(utf8))
+    {
+        mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+        if (!m_imageViewer->isHidden())
+            m_imageViewer->refreshSource(current);
+    }
+    if (statusBar())
+        statusBar()->showMessage(tr("RAW default parameters updated"), 4000);
+}
+
 bool MainWindow::showYuvLoadHint(const QString &path)
 {
+    if (mviewer::core::rawplain::isPlainRawPath(path.toUtf8().toStdString()) && statusBar())
+    {
+        statusBar()->showMessage(
+            tr("Cannot show %1: set its size and storage with right-click > RAW Parameters...")
+                .arg(QFileInfo(path).fileName()),
+            8000);
+        return true;
+    }
     if (!mviewer::core::yuv::isYuvPath(path.toUtf8().toStdString()) || !statusBar())
         return false;
     statusBar()->showMessage(
@@ -86,6 +117,8 @@ bool MainWindow::showYuvLoadHint(const QString &path)
 QString MainWindow::yuvSampleText(const QString &path, int frameIndex, int x, int y)
 {
     const std::string utf8 = path.toUtf8().toStdString();
+    if (mviewer::core::rawplain::isPlainRawPath(utf8))
+        return QString::fromStdString(mviewer::core::rawplain::plainRawSampleText(utf8, x, y));
     if (!mviewer::core::yuv::isYuvPath(utf8))
         return {};
     // One unpacked frame is cached, so moving the cursor does not re-read the file.

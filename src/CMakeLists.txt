@@ -356,6 +356,9 @@ add_library(mviewer_ui STATIC
     usmcomparedialog_load.cpp
     yuvcomparedialog.cpp
     yuvparamsdialog.cpp
+    plainrawparamseditor.cpp
+    plainrawparamsdialog.cpp
+    plainrawsettings.cpp
     yuvparamsettings.cpp
     yuvextensionmapeditor.cpp
     yuvpixfmtpicker.cpp
@@ -1045,6 +1048,23 @@ add_test(NAME usm_dialog_tests COMMAND usm_dialog_tests)
 set_tests_properties(usm_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # ADR 032: YUV parameter dialog summary and QSettings persistence.
+# ADR 033: plain .raw parameters editor, dialog and Preferences persistence.
+add_executable(plainraw_params_dialog_tests
+    test_plainraw_params_dialog.cpp
+)
+target_link_libraries(plainraw_params_dialog_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(plainraw_params_dialog_tests PRIVATE cxx_std_20)
+target_include_directories(plainraw_params_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME plainraw_params_dialog_tests COMMAND plainraw_params_dialog_tests)
+set_tests_properties(plainraw_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
 add_executable(yuv_params_dialog_tests
     test_yuv_params_dialog.cpp
 )

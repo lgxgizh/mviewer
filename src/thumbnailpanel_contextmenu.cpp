@@ -4,6 +4,7 @@
 #include "thumbnailpanel_testaccess.h"
 #include "thumbnailpanel_transfer.h"
 
+#include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/yuv/YuvFile.h"
 
 #include <algorithm>
@@ -86,6 +87,13 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
             acts.aYuvParams = menu.addAction(tr("YUV Parameters..."));
         else if (selPaths.size() == 2)
             acts.aYuvCompare = menu.addAction(tr("Compare YUV (PSNR / SSIM)..."));
+    }
+    else if (selPaths.size() == 1 &&
+             mviewer::core::rawplain::isPlainRawPath(selPaths.front().toUtf8().toStdString()))
+    {
+        // ADR 033: same signal as the YUV dialog; MainWindow routes by suffix.
+        acts.yuvPaths = selPaths;
+        acts.aYuvParams = menu.addAction(tr("RAW Parameters..."));
     }
     acts.aAnalyze = menu.addAction(tr("Batch Analysis Export"));
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));

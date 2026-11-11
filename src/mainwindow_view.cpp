@@ -1,4 +1,5 @@
 // MainWindow view behaviors: drag&drop, overlays, fullscreen, slideshow, status (M20 P0#1).
+#include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/yuv/YuvExtensionMap.h"
 #include "mainwindow_p.h"
 
@@ -455,12 +456,17 @@ void MainWindow::openPreferences()
     // the live List/Compact view or a hand-picked analysis overlay.
     const QVariantMap before = preferenceSnapshot();
     const std::string yuvMapBefore = mviewer::core::yuv::extensionRulesFingerprint();
+    const auto rawDefaultsBefore =
+        mviewer::core::rawplain::PlainRawParamStore::instance().defaults();
     connect(&dlg, &PreferencesDialog::settingsChanged, this,
-            [this, before, yuvMapBefore]()
+            [this, before, yuvMapBefore, rawDefaultsBefore]()
             {
                 applyPreferences(before);
                 if (mviewer::core::yuv::extensionRulesFingerprint() != yuvMapBefore)
                     onYuvExtensionMapChanged();
+                if (!(mviewer::core::rawplain::PlainRawParamStore::instance().defaults() ==
+                      rawDefaultsBefore))
+                    onPlainRawDefaultsChanged();
             });
     dlg.exec();
 }

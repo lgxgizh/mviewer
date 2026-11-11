@@ -140,6 +140,16 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 - **View → Decode Full RAW** (**Ctrl+Shift+D**, also in the viewer context menu) decodes the sensor data for the current image; run it again to cancel a decode in progress.
 - **Preferences → RAW display** chooses: prefer embedded preview, full decode when the preview is smaller than 90% of the sensor, or always decode full RAW.
 
+### Plain `.raw` sensor dumps
+
+A `.raw` file is always treated as a headerless sensor dump (Bayer or mono samples straight from the sensor), never as a camera RAW. Other camera RAW extensions (`.cr2`, `.nef`, `.arw`, `.dng`, `.rw2` and so on) are unchanged.
+
+- **Size** comes from the file name: `4096x3072` or `4096X3072` anywhere in the name (for example `cam_4096x3072_10bit.raw`). The size is checked against the file size. If it does not match, MViewer tries the common storage formats (16-bit container, MIPI RAW10, MIPI RAW12, 8-bit) and uses the first exact match. If nothing matches, the thumbnail shows a placeholder and the status bar tells you to set the parameters.
+- **Preferences → RAW** holds the defaults for every `.raw` file: width and height (default: from the file name), bit depth (8 / 10 / 12 / 14 / 16), storage (default **16-bit container, LSB aligned**; also MSB aligned, MIPI RAW10, MIPI RAW12, 8-bit), byte order (default little endian), header offset and row stride (default 0), black level (in the chosen bit depth), white level (default 2^bits − 1), Bayer pattern (RGGB, BGGR, GRBG, GBRG, Mono), white balance (none, **gray world** by default, white patch, manual R/B gains), brightness gain (default **1×**, presets 1× / 2× / 4× / 8× or any value from 0.125× to 64×) and sRGB gamma (on by default).
+- **Right-click → RAW Parameters...** (browse or viewer) changes the parameters of one file for the current session. The dialog shows the expected and actual byte counts and lists other combinations that match the file size; double-click one to use it. **Use Defaults** drops the per-file change. Every change redraws the image and its thumbnail.
+- The picture is a quick preview: black level, white balance, gain, bilinear demosaic and sRGB gamma. The status bar pixel readout adds the stored sensor value, for example `RAW G=512 (10-bit)`; in compare mode the value is shown while the cell is not rotated, flipped or cropped.
+- `.raw` files are read-only: rotate and flip in the normal viewer are greyed out. Compare mode's temporary rotation works as for any image.
+
 ---
 
 ## 9. File operations
@@ -165,6 +175,8 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 - **General**: interface theme, UI language (switches immediately), default view mode, default sort, thumbnail size, slideshow interval and loop, confirmations before delete / copy or move / modifying the original, GPU rendering, color management, automatic update check, RAW display.
 - **Compare**: compare window defaults.
 - **Analyze**: default analysis overlay (zebra, false color, single channels) and the zebra threshold.
+- **YUV**: file extension → pixel format mapping for raw YUV.
+- **RAW**: defaults for plain `.raw` sensor dumps (see section 8).
 
 ---
 
