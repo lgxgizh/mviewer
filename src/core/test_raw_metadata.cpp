@@ -71,7 +71,7 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
         return v;
     };
     writeEntry(0x010F, 2, 4, inlineAscii("SONY"));
-    writeEntry(0x0110, 2, 4, inlineAscii("A7R\0"));
+    writeEntry(0x0110, 2, 4, inlineAscii("A7R")); // 3 chars + NUL = 4 bytes
 
     // Next IFD offset (0 = none)
     uint32_t nextIfd = 0;
