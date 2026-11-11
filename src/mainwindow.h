@@ -156,6 +156,10 @@ class MainWindow : public QMainWindow
     // public so tests can verify it stays in sync with registered commands).
     static QString shortcutsHelpHtml();
     static QString userGuideHtml();
+    bool transformBusyForTest() const
+    {
+        return m_transformBusy;
+    }
 
   protected:
     void changeEvent(QEvent *event) override;
@@ -174,6 +178,12 @@ class MainWindow : public QMainWindow
     bool eventFilter(QObject *watched, QEvent *event) override;
     bool filterKeyPress(QObject *watched, QKeyEvent *ke);
     bool routeViewerFileOpKeys(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods);
+    void activateBrowsePaneForEvent(QObject *watched, QEvent *event);
+    bool handleZoomLabelEvent(QEvent *event);
+    bool handleImageLabelEvent(QEvent *event);
+    void handleViewerAndGalleryLayoutEvent(QObject *watched, QEvent *event);
+    bool routeSearchEditKey(QKeyEvent *ke);
+    int routeViewerModifierKeys(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods);
 
   private:
     void buildMenus();
@@ -739,6 +749,8 @@ class MainWindow : public QMainWindow
     TaskScheduler::TaskHandle m_reportTask;
     QProgressDialog *m_reportProgress = nullptr;
     uint64_t m_reportGeneration = 0;
+    bool m_transformBusy = false;
+    TaskScheduler::TaskHandle m_transformTask;
 
     // Slideshow: auto-advance through the current folder on a timer.
     void toggleSlideshow();

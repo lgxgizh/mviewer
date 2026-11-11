@@ -10,7 +10,6 @@
 //      filters are field-scoped, filter rebuild preserves ready thumbnails.
 #include "core/filesystem/FileSystem.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
-#include "runtime_storage.h"
 #include "thumbnailcache.h"
 #include "thumbnailpanel.h"
 
@@ -53,9 +52,25 @@ void pump(int ms = 30)
     QElapsedTimer t;
     t.start();
     do
-    {
         QApplication::processEvents(QEventLoop::AllEvents, 10);
-    } while (t.elapsed() < ms);
+    while (t.elapsed() < ms);
+}
+
+// Earlier suites in this process can still be writing the shared thumbnail
+// cache and pipeline. Drain pools, then pump until the singleton pipeline is
+// idle, before any test that reads those process-wide totals.
+static void drainBackgroundWork()
+{
+    auto &sched = TaskScheduler::instance();
+    for (auto pool :
+         {TaskScheduler::MetadataPool, TaskScheduler::DecodePool, TaskScheduler::ThumbnailPool,
+          TaskScheduler::AnalysisPool, TaskScheduler::IOPool})
+        sched.drain(pool, std::chrono::seconds(10));
+
+    QElapsedTimer t;
+    t.start();
+    while (ThumbnailPipeline::instance().pendingCount() != 0 && t.elapsed() < 10000)
+        QApplication::processEvents(QEventLoop::AllEvents, 10);
 }
 
 // Minimal little-endian TIFF (DNG-like) carrying ISO/Make/Model/LensModel so
@@ -86,15 +101,10 @@ static bool writeFakeDng(const std::string &path, const std::string &make, const
     // (e.g. Model "Z6\0"); only longer strings use an offset.
     auto writeAscii = [&](uint16_t tag, const std::string &text, long offset)
     {
-        const auto cnt = static_cast<uint32_t>(text.size()) + 1;
         uint32_t val = static_cast<uint32_t>(offset);
-        if (cnt <= 4)
-        {
-            uint8_t inlineBytes[4] = {0, 0, 0, 0};
-            std::memcpy(inlineBytes, text.c_str(), text.size());
-            std::memcpy(&val, inlineBytes, 4);
-        }
-        writeEntry(tag, 2, cnt, val);
+        if (text.size() < 4) // text + NUL fits the 4-byte field
+            std::memcpy(&val, (text + std::string(4 - text.size(), '\0')).data(), 4);
+        writeEntry(tag, 2, static_cast<uint32_t>(text.size()) + 1, val);
     };
     writeEntry(0x8827, 3, 1, iso);       // ISO (SHORT inline)
     writeAscii(0x010F, make, makeOff);   // Make (ASCII)
@@ -113,6 +123,7 @@ static bool writeFakeDng(const std::string &path, const std::string &make, const
 // ─── 1. ThumbnailCache identity ─────────────────────────────────────────────
 static void testThumbnailCacheIdentity()
 {
+    drainBackgroundWork();
     std::printf("\n── ThumbnailCache identity ──\n");
     QTemporaryDir tmp;
     const QString path = tmp.filePath("photo.png");
@@ -479,14 +490,15 @@ static void testPanelFieldScopedFilters(const QString &dirPath)
           "ISO filter matches the 6400-ISO file (sensor ISO populated)");
 }
 
-// M29/P2-05 — ThumbnailCache bounded-LRU capacity contract. Runs LAST so it
-// can freely clear/resize the shared singleton cache without disturbing the
-// earlier suites.
+// M29/P2-05 — ThumbnailCache bounded-LRU capacity contract. Uses a private
+// cache directory so in-flight singleton writers cannot perturb the byte
+// calibration.
 static void testThumbnailCacheCapacity()
 {
+    drainBackgroundWork();
     std::printf("\n── ThumbnailCache capacity (M29/P2-05) ──\n");
-    auto &cache = ThumbnailCache::instance();
-    const quint64 savedCap = cache.maxBytes();
+    QTemporaryDir cacheRoot;
+    ThumbnailCache cache(cacheRoot.path());
     cache.clear();
     CHECK(cache.maxBytes() == ThumbnailCache::kDefaultMaxBytes, "default budget is 512 MiB");
     CHECK(cache.totalBytes() == 0, "clear leaves zero accounted bytes");
@@ -567,9 +579,7 @@ static void testThumbnailCacheCapacity()
 
     // Existing cache files written by an earlier process count toward the
     // budget once the lazy startup scan runs on first access.
-    const QString cacheBase = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
-    const QString thumbDir =
-        cacheBase.isEmpty() ? QString() : QDir(cacheBase).filePath("thumbnails");
+    const QString thumbDir = cacheRoot.path();
     CHECK(QDir().mkpath(thumbDir), "thumbnail folder reachable in test mode");
 
     // Restore a sufficient cap BEFORE clearing/writing the historical files,
@@ -724,13 +734,14 @@ static void testThumbnailCacheCapacity()
 
     // Restore the default budget and leave no state for later suites.
     cache.clear();
-    cache.setMaxBytes(savedCap);
-    CHECK(cache.maxBytes() == savedCap, "default budget restored");
+    cache.setMaxBytes(ThumbnailCache::kDefaultMaxBytes);
+    CHECK(cache.maxBytes() == ThumbnailCache::kDefaultMaxBytes, "default budget restored");
     CHECK(cache.totalBytes() == 0, "cache left clean after capacity tests");
 }
 
 static void testThumbnailCacheIdentityHints()
 {
+    drainBackgroundWork();
     std::printf("\n── ThumbnailCache identity hints (network browse) ──\n");
     auto &cache = ThumbnailCache::instance();
     cache.clear();

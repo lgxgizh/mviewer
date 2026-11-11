@@ -1,6 +1,7 @@
 // M59 Browse regression: exercise the production ThumbnailPanel evaluator and
 // its generation-guarded latest-wins UI projection over a large source.
 
+#include "check.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "thumbnailpanel.h"
 
@@ -39,14 +40,7 @@ int g_failures = 0;
 
 template <typename Predicate> bool waitFor(Predicate &&predicate, int timeoutMs = 10000)
 {
-    QElapsedTimer timer;
-    timer.start();
-    while (!predicate() && timer.elapsed() < timeoutMs)
-    {
-        QApplication::processEvents(QEventLoop::AllEvents, 5);
-        QThread::msleep(2);
-    }
-    return predicate();
+    return mviewer::test::waitFor(std::forward<Predicate>(predicate), timeoutMs);
 }
 
 QList<ThumbnailPanel::Entry> makeEntries(int count)

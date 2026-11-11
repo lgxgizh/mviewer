@@ -720,18 +720,8 @@ void MainWindow::updateCacheStat()
     m_lblImage->setToolTip(tip);
 }
 
-// P0-3: click / hover on the image viewer shows the metadata overlay.
-// P1-4: also forward global workflow shortcuts from child widgets.
-bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+void MainWindow::activateBrowsePaneForEvent(QObject *watched, QEvent *event)
 {
-    if (routeTertiaryBrowseKey(watched, event) || routeSecondaryBrowseKey(watched, event))
-        return true;
-    if (event->type() == QEvent::KeyPress)
-    {
-        if (filterKeyPress(watched, static_cast<QKeyEvent *>(event)))
-            return true;
-    }
-
     if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn)
     {
         auto *widget = qobject_cast<QWidget *>(watched);
@@ -748,69 +738,71 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 setActiveBrowsePane(SelectionModel::PaneSlot::Primary);
         }
     }
+}
 
-    if (routeDirectoryHistoryMouse(watched, event))
-        return true;
-
-    if (watched == m_lblZoom)
+bool MainWindow::handleZoomLabelEvent(QEvent *event)
+{
+    if (event->type() == QEvent::MouseButtonDblClick)
     {
-        if (event->type() == QEvent::MouseButtonDblClick)
+        if (m_compareView && !m_compareView->isHidden())
         {
-            if (m_compareView && !m_compareView->isHidden())
-            {
-                m_compareView->fitAll();
-                return true;
-            }
-            if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
-            {
-                if (m_imageViewer->isFitMode())
-                    m_imageViewer->zoomActual();
-                else
-                    m_imageViewer->zoomFit();
-            }
+            m_compareView->fitAll();
             return true;
         }
-        if (event->type() == QEvent::MouseButtonPress)
+        if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
         {
-            auto *me = static_cast<QMouseEvent *>(event);
-            if (me->button() == Qt::LeftButton || me->button() == Qt::RightButton)
-            {
-                showZoomPresetMenu(me->globalPosition().toPoint());
-                return true;
-            }
+            if (m_imageViewer->isFitMode())
+                m_imageViewer->zoomActual();
+            else
+                m_imageViewer->zoomFit();
         }
+        return true;
     }
-
-    if (watched == m_lblImage && event->type() == QEvent::MouseButtonPress)
+    if (event->type() == QEvent::MouseButtonPress)
     {
         auto *me = static_cast<QMouseEvent *>(event);
-        if (me->button() == Qt::LeftButton)
+        if (me->button() == Qt::LeftButton || me->button() == Qt::RightButton)
         {
-            const QString shown = currentImagePath();
-            ThumbnailPanel *panel = activeThumbnailPanel();
-            if (!panel)
-                panel = m_thumbnailPanel;
-            if (panel)
-            {
-                if (!shown.isEmpty())
-                    panel->revealPath(shown);
-                else
-                    panel->revealSelected();
-            }
-            return true;
-        }
-        if (me->button() == Qt::RightButton)
-        {
-            const QString p = currentImagePath();
-            if (!p.isEmpty())
-            {
-                QApplication::clipboard()->setText(QDir::toNativeSeparators(p));
-                statusBar()->showMessage(tr("File path copied to clipboard"), 3000);
-            }
+            showZoomPresetMenu(me->globalPosition().toPoint());
             return true;
         }
     }
+    return false;
+}
 
+bool MainWindow::handleImageLabelEvent(QEvent *event)
+{
+    auto *me = static_cast<QMouseEvent *>(event);
+    if (me->button() == Qt::LeftButton)
+    {
+        const QString shown = currentImagePath();
+        ThumbnailPanel *panel = activeThumbnailPanel();
+        if (!panel)
+            panel = m_thumbnailPanel;
+        if (panel)
+        {
+            if (!shown.isEmpty())
+                panel->revealPath(shown);
+            else
+                panel->revealSelected();
+        }
+        return true;
+    }
+    if (me->button() == Qt::RightButton)
+    {
+        const QString p = currentImagePath();
+        if (!p.isEmpty())
+        {
+            QApplication::clipboard()->setText(QDir::toNativeSeparators(p));
+            statusBar()->showMessage(tr("File path copied to clipboard"), 3000);
+        }
+        return true;
+    }
+    return false;
+}
+
+void MainWindow::handleViewerAndGalleryLayoutEvent(QObject *watched, QEvent *event)
+{
     if (watched == m_imageViewer)
     {
         // Image-surface clicks and hover belong to pan / double-click Fit↔100%.
@@ -828,5 +820,37 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         if (m_emptyFolderLabel && m_emptyFolderLabel->isVisible())
             m_emptyFolderLabel->setGeometry(m_thumbnailPanel->rect());
     }
+}
+
+// P0-3: click / hover on the image viewer shows the metadata overlay.
+// P1-4: also forward global workflow shortcuts from child widgets.
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (routeTertiaryBrowseKey(watched, event) || routeSecondaryBrowseKey(watched, event))
+        return true;
+    if (event->type() == QEvent::KeyPress)
+    {
+        if (filterKeyPress(watched, static_cast<QKeyEvent *>(event)))
+            return true;
+    }
+
+    activateBrowsePaneForEvent(watched, event);
+
+    if (routeDirectoryHistoryMouse(watched, event))
+        return true;
+
+    if (watched == m_lblZoom)
+    {
+        if (handleZoomLabelEvent(event))
+            return true;
+    }
+
+    if (watched == m_lblImage && event->type() == QEvent::MouseButtonPress)
+    {
+        if (handleImageLabelEvent(event))
+            return true;
+    }
+
+    handleViewerAndGalleryLayoutEvent(watched, event);
     return QMainWindow::eventFilter(watched, event);
 }

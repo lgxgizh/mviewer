@@ -1,4 +1,5 @@
 // NOLINTBEGIN
+#include "check.h"
 #include "yuvcomparedialog.h"
 
 #include <QApplication>
@@ -39,13 +40,7 @@ bool writeRaw(const QString &path, const QByteArray &bytes)
 
 void waitUntilFinished(YuvCompareDialog *dialog)
 {
-    QElapsedTimer timer;
-    timer.start();
-    while (!dialog->isFinished() && timer.elapsed() < 5000)
-    {
-        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
-        QThread::msleep(10);
-    }
+    mviewer::test::waitFor([dialog] { return dialog->isFinished(); }, 5000);
 }
 
 void testPsnrAndGrayRow()

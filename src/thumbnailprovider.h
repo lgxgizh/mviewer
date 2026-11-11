@@ -37,4 +37,10 @@ class ThumbnailProvider
     // Fit `q` into a transparent size×size image, centered with
     // KeepAspectRatio + SmoothTransformation. Null image if `q` is null.
     static QImage squareFitImage(const QImage &q, int size);
+
+    // Review P2-3: Preferences cache controls. UI code goes through the
+    // provider instead of including thumbnailcache.h (architecture rule R1).
+    static quint64 diskCacheMaxBytes();
+    static void setDiskCacheMaxBytes(quint64 bytes);
+    static void clearDiskCache();
 };

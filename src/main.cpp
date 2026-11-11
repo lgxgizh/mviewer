@@ -6,6 +6,7 @@
 #include "application/CommandLine.h"
 #include "application/Shutdown.h"
 #include "application/Startup.h"
+#include "cache_settings.h"
 #include "core/CrashHandler.h"
 #include "core/Logger.h"
 #include "core/MainThreadDispatcher.h"
@@ -169,6 +170,7 @@ int main(int argc, char *argv[])
 
     int exitCode = 0;
     {
+        mviewer::ui::applyCacheSettings();
         MainWindow mainWindow;
         if (!g_openOnLaunch.isEmpty())
             mainWindow.setOpenOnLaunch(g_openOnLaunch);

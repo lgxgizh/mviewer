@@ -1,4 +1,5 @@
 include(${CMAKE_SOURCE_DIR}/cmake/LibRaw.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/MViewerTesting.cmake)
 
 # ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
 # OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
@@ -40,6 +41,7 @@ add_library(mviewer_core SHARED
     core/image/MetadataDpi.cpp
     core/image/RawMetadata.cpp
     core/image/ImageCache.cpp
+    core/memory/MemoryBudget.cpp
     core/image/DiskCache.cpp
     core/cache/CacheManager.cpp
     core/cache/MipmapPyramid.cpp
@@ -305,6 +307,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_live_diff.cpp
     compareworkspace_render_canvas.cpp
     compareworkspace_roi.cpp
+    compare_roi_stats_presenter.cpp
     compareworkspace_roi_overlay.cpp
     compareworkspace_temporary.cpp
     compareworkspace_load.cpp
@@ -340,6 +343,7 @@ add_library(mviewer_ui STATIC
     widgets/histogramwidget.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
+    cache_settings.cpp
     usmcomparedialog.cpp
     usmcomparedialog_load.cpp
     yuvcomparedialog.cpp
@@ -935,6 +939,7 @@ target_link_libraries(split_browse_acceptance
 )
 target_compile_features(split_browse_acceptance PRIVATE cxx_std_20)
 target_include_directories(split_browse_acceptance PRIVATE )
+mviewer_test_support(split_browse_acceptance)
 add_test(NAME split_browse_acceptance COMMAND split_browse_acceptance)
 set_tests_properties(split_browse_acceptance PROPERTIES RUN_SERIAL TRUE)
 
@@ -1049,21 +1054,10 @@ add_test(NAME yuv_params_dialog_tests COMMAND yuv_params_dialog_tests)
 set_tests_properties(yuv_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # ADR 032: two-file YUV PSNR / SSIM compare dialog (worker thread, cancel, report).
-add_executable(yuv_compare_dialog_tests
-    test_yuv_compare_dialog.cpp
-)
-target_link_libraries(yuv_compare_dialog_tests
-    PRIVATE
-        Qt6::Widgets
-        Qt6::Gui
-        Qt6::Core
-        mviewer_core
-        mviewer_ui
-)
-target_compile_features(yuv_compare_dialog_tests PRIVATE cxx_std_20)
-target_include_directories(yuv_compare_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-add_test(NAME yuv_compare_dialog_tests COMMAND yuv_compare_dialog_tests)
-set_tests_properties(yuv_compare_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 30)
+mviewer_add_test(yuv_compare_dialog_tests
+    SRCS test_yuv_compare_dialog.cpp
+    LIBS mviewer_ui
+    TIMEOUT 30 SERIAL)
 
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
@@ -1899,6 +1893,22 @@ target_compile_definitions(recentstore_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE
 
 add_test(NAME recentstore_tests COMMAND recentstore_tests)
 
+add_executable(memory_budget_tests
+    core/test_memory_budget.cpp
+)
+
+target_link_libraries(memory_budget_tests
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(memory_budget_tests PRIVATE cxx_std_20)
+target_include_directories(memory_budget_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(memory_budget_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME memory_budget_tests COMMAND memory_budget_tests)
+
 # Audit #41 / #47 — preset paths and settings restore.
 add_executable(audit_persistence_tests
     core/test_audit_persistence.cpp
@@ -2231,21 +2241,10 @@ add_test(NAME m59_phase0_metadata_tests COMMAND m59_phase0_metadata_tests)
 set_tests_properties(m59_phase0_metadata_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
 # ─── Big folders: hashed path lookups + progressive scan order ─────────────
-add_executable(big_folder_tests
-    test_big_folder.cpp
-)
-target_link_libraries(big_folder_tests
-    PRIVATE
-        Qt6::Widgets
-        Qt6::Gui
-        Qt6::Core
-        mviewer_core
-        mviewer_ui
-)
-target_compile_features(big_folder_tests PRIVATE cxx_std_20)
-target_include_directories(big_folder_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-add_test(NAME big_folder_tests COMMAND big_folder_tests)
-set_tests_properties(big_folder_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+mviewer_add_test(big_folder_tests
+    SRCS test_big_folder.cpp
+    LIBS mviewer_ui
+    TIMEOUT 180 SERIAL)
 
 # ─── M59 Browse regression: production evaluator + latest-wins panel ───────
 add_executable(m59_browse_regression_tests
@@ -2261,6 +2260,7 @@ target_link_libraries(m59_browse_regression_tests
 )
 target_compile_features(m59_browse_regression_tests PRIVATE cxx_std_20)
 target_include_directories(m59_browse_regression_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+mviewer_test_support(m59_browse_regression_tests)
 add_test(NAME m59_browse_regression_tests COMMAND m59_browse_regression_tests)
 set_tests_properties(m59_browse_regression_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
@@ -2610,6 +2610,22 @@ target_include_directories(compare_components_tests PRIVATE ${CMAKE_CURRENT_SOUR
 add_test(NAME compare_components_tests COMMAND compare_components_tests)
 set_tests_properties(compare_components_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
+add_executable(compare_roi_stats_presenter_tests
+    test_compare_roi_stats_presenter.cpp
+)
+target_link_libraries(compare_roi_stats_presenter_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_roi_stats_presenter_tests PRIVATE cxx_std_20)
+target_include_directories(compare_roi_stats_presenter_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_roi_stats_presenter_tests COMMAND compare_roi_stats_presenter_tests)
+set_tests_properties(compare_roi_stats_presenter_tests PROPERTIES TIMEOUT 60)
+
 # ADR-014 CompareWorkspace componentization tests (CompareDiffRenderer)
 add_executable(compare_diff_renderer_tests
     test_compare_diff_renderer.cpp
@@ -2818,7 +2834,7 @@ add_test(NAME architecture_gate_regression
     COMMAND powershell -ExecutionPolicy Bypass -File
         ${CMAKE_SOURCE_DIR}/scripts/architecture_gate_test.ps1
         ${CMAKE_SOURCE_DIR})
-set_tests_properties(architecture_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+set_tests_properties(architecture_gate_regression PROPERTIES TIMEOUT 120)
 
 # ADR gate: ImageRepository, src/core/compare/, and compareworkspace are
 # protected, and a failed git diff is a non-zero result rather than a pass.
@@ -2826,7 +2842,7 @@ add_test(NAME adr_gate_regression
     COMMAND powershell -ExecutionPolicy Bypass -File
         ${CMAKE_SOURCE_DIR}/scripts/adr_gate_test.ps1
         ${CMAKE_SOURCE_DIR})
-set_tests_properties(adr_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+set_tests_properties(adr_gate_regression PROPERTIES TIMEOUT 120)
 
 # M52: complexity responsibility-TU guardrail regression. A planted 1001-line
 # responsibility file must fail, while two legal sub-1000-line TUs remain
@@ -2835,7 +2851,7 @@ add_test(NAME complexity_gate_regression
     COMMAND powershell -ExecutionPolicy Bypass -File
         ${CMAKE_SOURCE_DIR}/scripts/complexity_gate_test.ps1
         ${CMAKE_SOURCE_DIR})
-set_tests_properties(complexity_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+set_tests_properties(complexity_gate_regression PROPERTIES TIMEOUT 120)
 
 # M52: execute the generators through Windows PowerShell 5.1 and validate the
 # emitted files as strict UTF-8 without common mojibake tokens.
@@ -2843,7 +2859,7 @@ add_test(NAME script_encoding_regression
     COMMAND powershell -ExecutionPolicy Bypass -File
         ${CMAKE_SOURCE_DIR}/scripts/script_encoding_test.ps1
         ${CMAKE_SOURCE_DIR})
-set_tests_properties(script_encoding_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+set_tests_properties(script_encoding_regression PROPERTIES TIMEOUT 120)
 
 # ─── M46: real-workflow soak (short CI form; --extended for Release) ────────
 # One workload driver, two durations: the CTest here runs the short form; the
@@ -3145,10 +3161,11 @@ foreach(_mviewer_test IN LISTS MVIEWER_REGISTERED_TESTS)
         "${_mviewer_root}/temp"
         "${_mviewer_root}/config"
         "${_mviewer_root}/data"
-        "${_mviewer_root}/cache")
+        "${_mviewer_root}/cache"
+        "${_mviewer_root}/home")
     set_tests_properties(${_mviewer_test} PROPERTIES
         ENVIRONMENT
-        "QT_QPA_PLATFORM=offscreen;MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache")
+        "QT_QPA_PLATFORM=offscreen;MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache;HOME=${_mviewer_root}/home")
 endforeach()
 
 # ─── Nightly-only tests (review P1-3) ───────────────────────────────────────

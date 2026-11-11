@@ -57,6 +57,13 @@ class ThumbnailCache
 
     static ThumbnailCache &instance();
 
+    // Test isolation: a cache rooted at `directory` instead of the process
+    // CacheLocation folder. Production code keeps using instance().
+    explicit ThumbnailCache(const QString &directory);
+    ~ThumbnailCache();
+    ThumbnailCache(const ThumbnailCache &) = delete;
+    ThumbnailCache &operator=(const ThumbnailCache &) = delete;
+
     // Join bootstrap/invalidation workers. Call while QCoreApplication is
     // still alive (ADR 017). Idempotent.
     void shutdown();
@@ -112,7 +119,6 @@ class ThumbnailCache
     };
 
     ThumbnailCache() = default;
-    ~ThumbnailCache();
     QString cacheDir() const;
 
     void ensureIndexed();
@@ -126,6 +132,9 @@ class ThumbnailCache
     void removeKey(const QString &key, const QString &file);
     void pruneToCap();
     static bool writeFileAtomically(const QString &file, const QImage &img);
+
+    // Empty means cacheDir() uses CacheLocation/thumbnails (the singleton).
+    QString m_directoryOverride;
 
     mutable QMutex m_mutex;
     QHash<QString, Entry> m_entries;
