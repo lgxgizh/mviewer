@@ -41,11 +41,6 @@ void drawSelectionRing(QPainter *painter, const QRect &card, int outset, const Q
 void drawNameText(QPainter *painter, const QRect &rect, const QString &name, bool selected,
                   const QPalette &palette);
 
-// Apple system colors for the label stripe (index 1..6), rating stars and the
-// rejected overlay, resolved for the active theme.
-QColor labelColor(int index, bool dark);
-QColor ratingColor(bool dark);
-QColor rejectTint(const QPalette &palette);
 QColor badgeBackground(const QPalette &palette);
 QColor badgeText(const QPalette &palette);
 

@@ -89,7 +89,7 @@ namespace
 void sweepStaleTemps(const std::filesystem::path &dir, const std::string &base)
 {
     namespace fs = std::filesystem;
-    // Intentionally leaked for process lifetime (ADR 017). RatingStore /
+    // Intentionally leaked for process lifetime (ADR 017). RecentStore /
     // HistoryStore workers may still call atomicWriteFile during static
     // destruction; a normal function-local static would already be gone and
     // trigger heap-use-after-free under ASan (audit_misc_tests on Linux).
@@ -178,113 +178,111 @@ bool commitAtomicReplace(const std::filesystem::path &temp, const std::filesyste
 }
 } // namespace
 
-bool atomicWriteFile(const std::string &path, const std::string &content,
-                     std::string *errorOut)
+bool atomicWriteFile(const std::string &path, const std::string &content, std::string *errorOut)
 {
     try
     {
-    namespace fs = std::filesystem;
-    const AtomicWriteFaults faults = atomicWriteFaults();
+        namespace fs = std::filesystem;
+        const AtomicWriteFaults faults = atomicWriteFaults();
 
-    std::error_code ec;
-    const fs::path target = pathFromUtf8(path);
-    const fs::path dir = target.parent_path();
-    if (!dir.empty())
-        fs::create_directories(dir, ec);
+        std::error_code ec;
+        const fs::path target = pathFromUtf8(path);
+        const fs::path dir = target.parent_path();
+        if (!dir.empty())
+            fs::create_directories(dir, ec);
 
-    // Unique temp name in the SAME directory (same volume => replace is
-    // atomic). The pid + counter + timestamp component guarantees a crashed
-    // process's temp can never be mistaken for (or collide with) a live one.
-    const int serial = tempCounter().fetch_add(1, std::memory_order_relaxed);
-    const unsigned long pid =
+        // Unique temp name in the SAME directory (same volume => replace is
+        // atomic). The pid + counter + timestamp component guarantees a crashed
+        // process's temp can never be mistaken for (or collide with) a live one.
+        const int serial = tempCounter().fetch_add(1, std::memory_order_relaxed);
+        const unsigned long pid =
 #ifdef _WIN32
-        static_cast<unsigned long>(GetCurrentProcessId());
+            static_cast<unsigned long>(GetCurrentProcessId());
 #else
-        static_cast<unsigned long>(::getpid());
+            static_cast<unsigned long>(::getpid());
 #endif
-    const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::string base = pathToUtf8(target.filename());
-    const std::string tempName = base + "." + std::to_string(pid) + "." +
-                                 std::to_string(now) + "." + std::to_string(serial) + ".tmp";
-    const fs::path temp = dir.empty() ? pathFromUtf8(tempName)
-                                      : dir / pathFromUtf8(tempName);
+        const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
+        const std::string base = pathToUtf8(target.filename());
+        const std::string tempName = base + "." + std::to_string(pid) + "." + std::to_string(now) +
+                                     "." + std::to_string(serial) + ".tmp";
+        const fs::path temp = dir.empty() ? pathFromUtf8(tempName) : dir / pathFromUtf8(tempName);
 
-    auto cleanup = [&]()
-    {
-        std::error_code rmEc;
-        fs::remove(temp, rmEc);
-    };
+        auto cleanup = [&]()
+        {
+            std::error_code rmEc;
+            fs::remove(temp, rmEc);
+        };
 
-    // Sweep stale temps from crashed writers (age-gated: anything older than
-    // one hour for this target's base name). They are garbage, never state —
-    // load() only ever reads the official path.
-    sweepStaleTemps(dir, base);
+        // Sweep stale temps from crashed writers (age-gated: anything older than
+        // one hour for this target's base name). They are garbage, never state —
+        // load() only ever reads the official path.
+        sweepStaleTemps(dir, base);
 
-    if (faults.failTempCreate)
-    {
-        if (errorOut)
-            *errorOut = "fault injection: temp create failure";
-        return false;
-    }
+        if (faults.failTempCreate)
+        {
+            if (errorOut)
+                *errorOut = "fault injection: temp create failure";
+            return false;
+        }
 
-    // 1) Write the temp file fully.
-    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-    if (!out)
-    {
-        if (errorOut)
-            *errorOut = "cannot create temp file: " + pathToUtf8(temp);
-        return false;
-    }
-    out.write(content.data(), static_cast<std::streamsize>(content.size()));
-    if (faults.failWrite)
-        out.setstate(std::ios::failbit); // deterministic write-failure injection
-    out.flush();
-    if (out.fail())
-    {
+        // 1) Write the temp file fully.
+        std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+        if (!out)
+        {
+            if (errorOut)
+                *errorOut = "cannot create temp file: " + pathToUtf8(temp);
+            return false;
+        }
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        if (faults.failWrite)
+            out.setstate(std::ios::failbit); // deterministic write-failure injection
+        out.flush();
+        if (out.fail())
+        {
+            out.close();
+            cleanup();
+            if (errorOut)
+                *errorOut = "write/flush failed for: " + pathToUtf8(temp);
+            return false;
+        }
         out.close();
-        cleanup();
-        if (errorOut)
-            *errorOut = "write/flush failed for: " + pathToUtf8(temp);
-        return false;
-    }
-    out.close();
-    if (out.fail())
-    {
-        cleanup();
-        if (errorOut)
-            *errorOut = "close failed for: " + pathToUtf8(temp);
-        return false;
-    }
+        if (out.fail())
+        {
+            cleanup();
+            if (errorOut)
+                *errorOut = "close failed for: " + pathToUtf8(temp);
+            return false;
+        }
 
-    if (faults.failFlush)
-    {
-        cleanup();
-        if (errorOut)
-            *errorOut = "fault injection: flush failure";
-        return false;
-    }
-    if (!flushTempForReplace(temp, path, errorOut))
-    {
-        cleanup();
-        return false;
-    }
+        if (faults.failFlush)
+        {
+            cleanup();
+            if (errorOut)
+                *errorOut = "fault injection: flush failure";
+            return false;
+        }
+        if (!flushTempForReplace(temp, path, errorOut))
+        {
+            cleanup();
+            return false;
+        }
 
-    if (faults.failReplace)
-    {
-        cleanup();
-        if (errorOut)
-            *errorOut = "fault injection: replace failure";
-        return false;
-    }
+        if (faults.failReplace)
+        {
+            cleanup();
+            if (errorOut)
+                *errorOut = "fault injection: replace failure";
+            return false;
+        }
 
-    // 2) Atomic replace: the official file is either the complete old version
-    // or the complete new version — never a mix.
-    if (!commitAtomicReplace(temp, target, path, errorOut))
-    {
-        cleanup();
-        return false;
-    }
-    return true;
+        // 2) Atomic replace: the official file is either the complete old version
+        // or the complete new version — never a mix.
+        if (!commitAtomicReplace(temp, target, path, errorOut))
+        {
+            cleanup();
+            return false;
+        }
+        return true;
     }
     catch (const std::exception &ex)
     {

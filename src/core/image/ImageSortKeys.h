@@ -40,7 +40,6 @@ struct ImageSortKey
     int64_t resolution = 0; // width * height
     std::string camera;     // "make model" (lowercased)
     std::string lens;       // lens model (lowercased)
-    int rating = 0;
 };
 
 // The two expensive readers, injected so tests can COUNT the I/O:
