@@ -11,7 +11,7 @@
 #   cppcheck               — supplemental static analysis (required)
 #   clang-tidy             — bug-finding static analysis, REQUIRED, PR-incremental
 #   architecture-gate      — layered architecture rules, REQUIRED (zero violations)
-#   build-linux            — Linux GCC compilation check (catches SIMD/syntax/header issues)
+#   build-linux            — Linux GCC build + CTest (offscreen, Qt 6.8.0 gcc_64)
 #   windows-build-and-test — MSVC + Qt 6.8.0, zero compiler warnings + CTest
 #   adr-gate               — architectural PRs must update an ADR
 #   known-issues           — bug issues linked to regression tests
@@ -228,13 +228,17 @@ jobs:
         run: ./scripts/architecture_gate.ps1 -Strict
 
   # ---------------------------------------------------------------------------
-  # build-linux — Linux GCC compilation check (REQUIRED, fast)
+  # build-linux — Linux GCC build + CTest (REQUIRED)
   # Catches compiler-specific syntax errors, SIMD attribute mismatches
-  # (e.g. MV_TARGET_AVX2), and non-Windows header/portability regressions.
+  # (e.g. MV_TARGET_AVX2), non-Windows header/portability regressions, and
+  # platform-dependent UI test failures (the 1.0.172 Details zebra assertions
+  # only failed on Linux and were first seen in the next morning's nightly).
+  # Uses the same Qt 6.8.0 gcc_64 + offscreen setup as nightly asan-linux.
   # ---------------------------------------------------------------------------
   build-linux:
     name: Build check (Linux GCC)
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -242,12 +246,43 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y qt6-base-dev libgl1-mesa-dev cmake ninja-build g++
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libegl1 \
+            libfontconfig1 libfreetype6 libdbus-1-3 libx11-6 \
+            cmake ninja-build g++
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtimageformats
+          cache: true
 
       - name: Configure and build
         run: |
-          cmake -B build_linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -B build_linux -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
           cmake --build build_linux -j 4
+
+      - name: Generate testdata fixtures
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check Pillow
+          python3 testdata/generate_fixtures.py --size 256x256
+          python3 testdata/generate_large_fixtures.py --ensure
+
+      - name: Test (ctest, offscreen)
+        timeout-minutes: 40
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          cd build_linux
+          # Same exclusions as nightly asan-linux: golden_image is a Windows
+          # pixel reference, bench_* budgets are calibrated on the MSVC runner,
+          # crashhandler_tests needs Windows SEH/minidumps, and the rest are
+          # PowerShell script gates (Linux runners have no powershell).
+          ctest --output-on-failure -j 4 --timeout 600 \
+            -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
   # ---------------------------------------------------------------------------
   # windows-build-and-test — MSVC + Qt 6.8.0, build + warnings gate + CTest
