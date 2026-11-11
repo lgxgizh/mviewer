@@ -3,45 +3,10 @@
 > Snapshot: 2026-11-09 · Version: **1.0.172** · Release tag: **v1.0.172**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
-> Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
-> `docs/review/M24_TEST_CREDIBILITY_2026-08-05.md`,
-> `docs/review/M24_PERFORMANCE_2026-08-05.md`,
-> `docs/review/M24_FINAL_VERDICT_2026-08-05.md`,
-> `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md`,
-> `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md`,
-> `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`,
-> `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md`,
-> `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`,
-> `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`,
-> `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md`,
-> `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`,
-> `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md`,
-> `docs/review/M45_NATIVE_WINDOWS_PRODUCT_QUALIFICATION_2026-08-16.md`,
-> `docs/review/M46_RELIABILITY_SOAK_2026-08-17.md`,
-> `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md`,
-> `docs/review/M47_PHASE0_BASELINE_2026-08-17.md`,
-> `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md`,
-> `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md` and
-> `docs/review/M50_RELEASE_CANDIDATE_CONVERGENCE_2026-08-27.md`,
-> `docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md` and
-> `docs/review/M52_RELEASE_QUALITY_WORKFLOW_CONVERGENCE_2026-08-28.md` and
-> `docs/review/M53_PHASE0_BASELINE_2026-08-28.md` and
-> `docs/review/M53_LARGE_SOURCE_NATIVE_RELEASE_CLOSURE_2026-08-29.md`,
-> `docs/review/M54_PERCEIVED_PERFORMANCE_BASELINE_2026-08-29.md`,
-> `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md`,
-> `docs/review/M55_PHASE0_BASELINE_2026-08-29.md`,
-> `docs/review/M55_INTERACTIVE_LATENCY_MEMORY_NAVIGATION_CLOSURE_2026-08-29.md` and
-> `docs/review/M57_PHASE0_MULTIFRAME_BASELINE_2026-08-29.md`,
-> `docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md`, and
-> `docs/review/M58_PHASE0_LARGE_DIRECTORY_QUERY_BASELINE_2026-09-01.md`,
-> `docs/review/M58_LARGE_DIRECTORY_QUERY_CLOSURE_2026-09-01.md`,
-> `docs/review/M59_PHASE0_COLOR_METADATA_BASELINE_2026-09-01.md`,
-> `docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md`,
-> `docs/review/M60_LINKED_ROI_PHASE0_LINKED_ROI_2026-09-02.md`,
-> `docs/review/M60_LINKED_ROI_CLOSURE_2026-09-02.md`,
-> `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
-> `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
-> `.\build.ps1 Test`.
+> Current state summary: Beta, Windows x64 installer + portable zip, English and
+> Simplified Chinese UI. Release evidence (milestone review and qualification
+> reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
+> the live gate is `.\build.ps1 Test` plus GitHub CI.
 
 ## 1.0.172 — Details zebra restore and rating/tag UI removal (2026-11-09)
 

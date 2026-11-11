@@ -8,8 +8,10 @@
 
 MViewer remains in **Beta**; the current release is **`v1.0.172`**
 (2026-11-09, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-The product loop below is built and verified; the non-prerelease 1.0 work
-(signed installer, docs site, frozen plugin ABI) and final human review remain:
+The product loop below is built and verified. The `1.0.x` numbers are the Beta
+patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
+signing certificate yet), a docs site, a frozen plugin ABI and final human
+review:
 
 - **Browse** — open a 1000-image directory without UI freeze; thumbnails stream
   in; first thumbnail < ~35 ms (cold).
@@ -100,12 +102,12 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.0.31–1.0.132** | Performance, UX and reliability patch line (per-version detail in `CHANGELOG.md`) | ✅ Previous patches |
 | **1.0.30** | Review hardening: bounded file/settings input, deterministic delivery, teardown evidence | ✅ Previous patch |
 | **1.0.9–1.0.29** | Product loop, Windows qualification, color management, linked ROI, Compare inspection chrome | ✅ Previous patches |
-| **1.0** | First non-prerelease: signed installer, docs site, stable plugin ABI | ⬜ Release work |
+| **1.0 GA** | Leave Beta: code-signed installer, docs site, frozen plugin ABI (the `1.0.x` patches above ship as Beta) | ⬜ Blocked on a signing certificate |
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.172` patch line. The remaining 1.0 work is
-productization and release review.
+The repository verifies the `v1.0.172` patch line. The remaining 1.0 GA work is
+productization (signing, ABI freeze) and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
 PASS means zero measured hard failures, while advisory complexity warnings are

@@ -21,7 +21,7 @@ MViewer is **not a general-purpose image viewer** — it is a **visual analysis 
 - **Pixel Inspector & Color Metrics**: Real-time pixel sampling supporting RGB, HSV, Lab (with CIE $\Delta E_{76}$ perceptual difference), YUV, YCbCr, XYZ, and HEX color spaces; configurable $N \times N$ statistical neighborhood; histogram shadow underexposure ($Y=0$) and highlight clipping ($Y=255$) detection
 - **Performance & SIMD**: Background async decode, 5-level cache, predictive preloading, CPU tile pipeline (100 MP visible-region decode), format-specialized vector traversal, capability-gated GPU tile upload, UI never blocks
 - **Plugin**: Extensible analyzer system via `AnalyzerRegistry` (PSNR, SSIM, MTF50, noise, entropy, dead-pixel, ColorChecker)
-- **Browse & Manage**: File-name search with recursive subfolder scan, live gallery filter; per-image Metadata panel (format, dimensions, bit depth, channels, color space, DPI, EXIF orientation, ICC profile, embedded EXIF/XMP text); batch rating, labeling, triage pick/reject; file actions — rename, move to recycle bin, copy/move to…, reveal in Explorer
+- **Browse & Manage**: File-name search with recursive subfolder scan, live gallery filter; per-image Metadata panel (format, dimensions, bit depth, channels, color space, DPI, EXIF orientation, ICC profile, embedded EXIF/XMP text); Recently-viewed filter and folder Favorites; file actions — rename, move to recycle bin, copy/move to…, reveal in Explorer
 
 ---
 
