@@ -312,7 +312,7 @@ void lineariseFrame(const std::vector<std::uint16_t> &samples, int w, int h,
     {
         const int rowSlot = (y & 1) << 1;
         const auto &evenLut = luts[static_cast<std::size_t>(rowSlot)];
-        const auto &oddLut = luts[static_cast<std::size_t>(rowSlot + 1)];
+        const auto &oddLut = luts[static_cast<std::size_t>(rowSlot) + 1U];
         const std::size_t row = static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
         for (int x = 0; x < w; ++x)
         {

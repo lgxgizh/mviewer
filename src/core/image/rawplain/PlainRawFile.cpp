@@ -248,15 +248,9 @@ Params PlainRawParamStore::defaults() const
 
 void PlainRawParamStore::setDefaults(const Params &p)
 {
-    try
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_defaults = p;
-        ++m_revision;
-    }
-    catch (...)
-    {
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_defaults = p;
+    ++m_revision;
 }
 
 std::optional<Params> PlainRawParamStore::override(const std::string &key) const
@@ -277,42 +271,24 @@ std::optional<Params> PlainRawParamStore::override(const std::string &key) const
 
 void PlainRawParamStore::setOverride(const std::string &key, const Params &p)
 {
-    try
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_overrides[key] = p;
-        ++m_revision;
-    }
-    catch (...)
-    {
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_overrides[key] = p;
+    ++m_revision;
 }
 
 void PlainRawParamStore::clearOverride(const std::string &key)
 {
-    try
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_overrides.erase(key);
-        ++m_revision;
-    }
-    catch (...)
-    {
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_overrides.erase(key);
+    ++m_revision;
 }
 
 void PlainRawParamStore::clearAll()
 {
-    try
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        m_defaults = Params{};
-        m_overrides.clear();
-        ++m_revision;
-    }
-    catch (...)
-    {
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    m_defaults = Params{};
+    m_overrides.clear();
+    ++m_revision;
 }
 
 uint64_t PlainRawParamStore::revision() const
