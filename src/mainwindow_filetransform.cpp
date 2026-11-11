@@ -29,6 +29,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -488,6 +489,58 @@ void showUndoLimitStatus(QStatusBar *bar, const RotateFilesCommand &command)
     }
 }
 
+// Cancel flag + worker progress callback; UI updates are posted to the UI
+// thread. `alive` only gates the queued progress update.
+void wireListedTransformProgress(const std::shared_ptr<ListedTransformJob> &state,
+                                 const QPointer<QObject> &alive)
+{
+    if (QProgressDialog *dialog = state->progress->dialog())
+    {
+        std::atomic_bool *cancelFlag = &state->cancel;
+        QObject::connect(dialog, &QProgressDialog::canceled, dialog,
+                         [cancelFlag]() { cancelFlag->store(true, std::memory_order_relaxed); });
+    }
+    state->command->setProgressCallback(
+        [state, alive](int finished, int)
+        {
+            if (state->cancel.load(std::memory_order_relaxed))
+                return false;
+            state->finished.store(finished, std::memory_order_relaxed);
+            QMetaObject::invokeMethod(
+                qApp,
+                [state, alive]()
+                {
+                    if (!alive || !state->progress)
+                        return;
+                    state->progress->advance(state->finished.load(std::memory_order_relaxed));
+                },
+                Qt::QueuedConnection);
+            return !state->cancel.load(std::memory_order_relaxed);
+        });
+}
+
+// Undo/Redo run on the UI thread: refresh synchronously as before. execute()
+// runs on a worker: hop to the UI thread.
+void wireListedTransformRefresh(RotateFilesCommand &command,
+                                std::function<void(const QStringList &)> refresh)
+{
+    command.setPathsChangedCallback(
+        [refresh = std::move(refresh)](const std::vector<std::string> &changed)
+        {
+            QStringList refreshed;
+            refreshed.reserve(static_cast<int>(changed.size()));
+            for (const std::string &path : changed)
+                refreshed.append(QString::fromStdString(path));
+            if (QThread::currentThread() == qApp->thread())
+            {
+                refresh(refreshed);
+                return;
+            }
+            QMetaObject::invokeMethod(
+                qApp, [refresh, refreshed]() { refresh(refreshed); }, Qt::QueuedConnection);
+        });
+}
+
 } // namespace
 
 void MainWindow::refreshTransformedPaths(const QStringList &paths)
@@ -545,54 +598,13 @@ void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int d
     state->rotate = rotate;
     state->degrees = degrees;
     state->horizontal = horizontal;
-    if (QProgressDialog *dialog = state->progress->dialog())
-    {
-        std::atomic_bool *cancelFlag = &state->cancel;
-        QObject::connect(dialog, &QProgressDialog::canceled, dialog,
-                         [cancelFlag]() { cancelFlag->store(true, std::memory_order_relaxed); });
-    }
-    state->command->setProgressCallback(
-        [state, guard](int finished, int)
-        {
-            if (state->cancel.load(std::memory_order_relaxed))
-                return false;
-            state->finished.store(finished, std::memory_order_relaxed);
-            QMetaObject::invokeMethod(
-                qApp,
-                [state, guard]()
-                {
-                    if (!guard || !state->progress)
-                        return;
-                    state->progress->advance(state->finished.load(std::memory_order_relaxed));
-                },
-                Qt::QueuedConnection);
-            return !state->cancel.load(std::memory_order_relaxed);
-        });
-    state->command->setPathsChangedCallback(
-        [guard](const std::vector<std::string> &changed)
-        {
-            QStringList refreshed;
-            refreshed.reserve(static_cast<int>(changed.size()));
-            for (const std::string &path : changed)
-                refreshed.append(QString::fromStdString(path));
-            // Undo/Redo run on the UI thread: refresh synchronously as before.
-            // execute() runs on a worker: hop to the UI thread.
-            if (QThread::currentThread() == qApp->thread())
-            {
-                if (guard)
-                    guard->refreshTransformedPaths(refreshed);
-                return;
-            }
-            QMetaObject::invokeMethod(
-                qApp,
-                [guard, refreshed]()
-                {
-                    if (!guard)
-                        return;
-                    guard->refreshTransformedPaths(refreshed);
-                },
-                Qt::QueuedConnection);
-        });
+    wireListedTransformProgress(state, guard);
+    wireListedTransformRefresh(*state->command,
+                               [guard](const QStringList &refreshed)
+                               {
+                                   if (guard)
+                                       guard->refreshTransformedPaths(refreshed);
+                               });
     for (const QString &path : supported)
     {
         releaseSourceForRewrite(m_imageViewer, m_previewPanel, path, path.toUtf8().toStdString());
