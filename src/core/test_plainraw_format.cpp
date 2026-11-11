@@ -210,20 +210,20 @@ int main()
         const int64_t lsb = int64_t{4096} * 3072 * 2;
         auto g1 = guessFromFileSize(base, lsb);
         CHECK(!g1.empty());
-        CHECK(g1.front().packing == Packing::Lsb16);
-        CHECK(g1.front().bitDepth == 10);
+        CHECK(!g1.empty() && g1.front().packing == Packing::Lsb16);
+        CHECK(!g1.empty() && g1.front().bitDepth == 10);
 
         const int64_t mipi = int64_t{4096} * 3072 * 5 / 4;
         auto g2 = guessFromFileSize(base, mipi);
         CHECK(!g2.empty());
-        CHECK(g2.front().packing == Packing::Mipi10);
+        CHECK(!g2.empty() && g2.front().packing == Packing::Mipi10);
 
         const int64_t b8 = int64_t{4096} * 3072;
         auto g3 = guessFromFileSize(base, b8);
         CHECK(!g3.empty());
-        CHECK(g3.front().packing == Packing::Bits8);
-        CHECK(g3.front().bitDepth == 8);
-        CHECK(g3.front().blackLevel == 16);
+        CHECK(!g3.empty() && g3.front().packing == Packing::Bits8);
+        CHECK(!g3.empty() && g3.front().bitDepth == 8);
+        CHECK(!g3.empty() && g3.front().blackLevel == 16);
     }
 
     {
