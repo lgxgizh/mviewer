@@ -87,40 +87,34 @@ bool MainWindow::forwardGlobalShortcut(QObject *watched, QKeyEvent *ke, Qt::Keyb
     return true;
 }
 
-bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
+bool MainWindow::routeSearchEditKey(QKeyEvent *ke)
 {
-    // Editors keep printable keys and Ctrl+C. Returning false lets the widget
-    // that owns the event insert the character or copy its own selection.
-    if (mviewer_keys::textEntryOwnsKey(qobject_cast<QWidget *>(watched), ke))
-        return false;
-    // A focused right-pane editor keeps Ctrl+F (see secondaryEditorKeepsKey).
-    if (tertiaryEditorKeepsKey(watched, ke) || secondaryEditorKeepsKey(watched, ke))
-        return true;
-    if (watched == m_searchEdit)
+    if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter)
     {
-        if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter)
-        {
-            if (m_thumbnailPanel)
-                m_thumbnailPanel->setFocus();
-            return true;
-        }
-        if (ke->key() == Qt::Key_Escape)
-        {
-            if (!m_searchEdit->text().isEmpty())
-                m_searchEdit->clear();
-            if (m_thumbnailPanel)
-                m_thumbnailPanel->setFocus();
-            return true;
-        }
-        // Letters, digits, and Space are filter text, not shortcuts.
-        return false;
+        if (m_thumbnailPanel)
+            m_thumbnailPanel->setFocus();
+        return true;
     }
+    if (ke->key() == Qt::Key_Escape)
+    {
+        if (!m_searchEdit->text().isEmpty())
+            m_searchEdit->clear();
+        if (m_thumbnailPanel)
+            m_thumbnailPanel->setFocus();
+        return true;
+    }
+    // Letters, digits, and Space are filter text, not shortcuts.
+    return false;
+}
+
+// -1: not handled, continue. 0: filterKeyPress returns false. 1: returns true.
+int MainWindow::routeViewerModifierKeys(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods)
+{
     // Animated sequences own bare Space (play/pause). Still images keep
     // Space = quick compare via the global forward below.
-    const auto mods = ke->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
     if (watched == m_imageViewer && ke->key() == Qt::Key_Space && mods == Qt::NoModifier &&
         m_imageViewer->sequenceInfo().animated)
-        return false;
+        return 0;
     // Shift+C / Shift+B copy the pixel under the cursor (hex / RGB). Plain C
     // is compare and plain B is a browse-mode key; those modifiers must reach
     // ImageViewer instead of being consumed as global shortcuts.
@@ -129,13 +123,13 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
     if (shiftBare == Qt::ShiftModifier && (ke->key() == Qt::Key_C || ke->key() == Qt::Key_B))
     {
         if (watched == m_imageViewer)
-            return false;
+            return 0;
         if (m_imageViewer)
         {
             QApplication::sendEvent(m_imageViewer, ke);
-            return true;
+            return 1;
         }
-        return false;
+        return 0;
     }
     // Esc stops a running slideshow before the viewer's own ladder (clear a
     // real drag selection, else close metadata the user opened, else leave
@@ -145,14 +139,14 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         m_slideshowTimer->isActive())
     {
         stopSlideshow();
-        return true;
+        return 1;
     }
     // While the viewer window has focus (e.g. slideshow fullscreen), 'S'
     // still toggles the slideshow; the viewer itself has no such binding.
     if (watched == m_imageViewer && ke->key() == Qt::Key_S && !ke->modifiers())
     {
         toggleSlideshow();
-        return true;
+        return 1;
     }
     // Gallery Ctrl+L locks viewer zoom. Plain L stays a normal key, and text
     // editors keep Ctrl+L.
@@ -161,7 +155,7 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         if (!mviewer_keys::textEntryWidget(qobject_cast<QWidget *>(watched)) && m_imageViewer)
         {
             QApplication::sendEvent(m_imageViewer, ke);
-            return true;
+            return 1;
         }
     }
     // Viewer focus: F5 refresh still reaches the main window.
@@ -172,9 +166,29 @@ bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
         if (refresh)
         {
             keyPressEvent(ke);
-            return true;
+            return 1;
         }
     }
+    return -1;
+}
+
+bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
+{
+    // Editors keep printable keys and Ctrl+C. Returning false lets the widget
+    // that owns the event insert the character or copy its own selection.
+    if (mviewer_keys::textEntryOwnsKey(qobject_cast<QWidget *>(watched), ke))
+        return false;
+    // A focused right-pane editor keeps Ctrl+F (see secondaryEditorKeepsKey).
+    if (tertiaryEditorKeepsKey(watched, ke) || secondaryEditorKeepsKey(watched, ke))
+        return true;
+    if (watched == m_searchEdit)
+        return routeSearchEditKey(ke);
+    const auto mods = ke->modifiers() & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
+    const int viewerMods = routeViewerModifierKeys(watched, ke, mods);
+    if (viewerMods == 0)
+        return false;
+    if (viewerMods == 1)
+        return true;
     // Viewer Delete / F2 / Ctrl+M name the image on screen. A viewer that is
     // only open behind the browser must not take those keys.
     if (routeViewerFileOpKeys(watched, ke, mods))
