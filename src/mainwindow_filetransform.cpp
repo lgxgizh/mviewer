@@ -1,5 +1,5 @@
-// Batch rotate / flip of the current selection. Synchronous for the caller:
-// the UI waits on a local event loop until the in-flight file finishes.
+// Batch rotate / flip of the current selection. Filtering, confirmation, and
+// source-handle release stay on the UI thread. execute() runs on TaskScheduler.
 #include "mainwindow_p.h"
 
 #include "core/command/RotateFilesCommand.h"
@@ -15,7 +15,6 @@
 
 #include <QApplication>
 #include <QCheckBox>
-#include <QEventLoop>
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QPointer>
@@ -24,9 +23,13 @@
 #include <QStatusBar>
 #include <QString>
 #include <QStringList>
+#include <QThread>
 #include <QWidget>
 
+#include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -47,10 +50,9 @@ struct FileTransformBatch
     QStringList failedErrors;
 };
 
-// setValue() pumps events only after shownOnce. forceShow() is protected and
-// latches that flag; calling it after construction makes Cancel work between
-// files. The extra processEvents pass excludes user input so offscreen tests
-// do not re-enter QProgressDialog's private cancel-button connection.
+// forceShow() is protected and latches shownOnce so the dialog appears
+// immediately. Cancel is delivered by the dialog's own event loop; this type
+// does not pump events.
 class ShownProgressDialog final : public QProgressDialog
 {
   public:
@@ -71,8 +73,7 @@ class BatchFileProgress
             return;
         const QString label = kind == FileTransformKind::Rotate ? MainWindow::tr("Rotating…")
                                                                 : MainWindow::tr("Flipping…");
-        m_dialog = std::make_unique<ShownProgressDialog>(label, MainWindow::tr("Cancel"), 0, total,
-                                                         parent);
+        m_dialog = new ShownProgressDialog(label, MainWindow::tr("Cancel"), 0, total, parent);
         m_dialog->setObjectName(QStringLiteral("batchRotateFlipProgress"));
         m_dialog->setWindowModality(Qt::WindowModal);
         m_dialog->setAutoClose(false);
@@ -80,7 +81,6 @@ class BatchFileProgress
         m_dialog->setMinimumDuration(0);
         m_dialog->setValue(0);
         m_dialog->reveal();
-        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
     }
 
     ~BatchFileProgress()
@@ -90,20 +90,24 @@ class BatchFileProgress
     BatchFileProgress(const BatchFileProgress &) = delete;
     BatchFileProgress &operator=(const BatchFileProgress &) = delete;
 
-    bool wasCanceled() const
+    QProgressDialog *dialog() const
     {
-        return m_dialog && m_dialog->wasCanceled();
+        return m_dialog.data();
     }
 
+    // A modal QProgressDialog::setValue() calls processEvents(), which can run
+    // the queued completion (dismiss()) before setValue() returns. Deleting
+    // the dialog there is a use-after-free, so dismiss() defers to here.
     void advance(int finished)
     {
-        if (!m_dialog || m_dialog->wasCanceled())
+        if (!m_dialog || m_dialog->wasCanceled() || m_advancing)
             return;
+        m_advancing = true;
         m_dialog->setLabelText(finishedLabel(finished));
         m_dialog->setValue(finished);
-        if (!m_dialog || m_dialog->wasCanceled())
-            return;
-        QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        m_advancing = false;
+        if (m_dismissPending)
+            dismiss();
     }
 
     void dismiss()
@@ -111,7 +115,14 @@ class BatchFileProgress
         if (!m_dialog)
             return;
         m_dialog->hide();
-        m_dialog.reset();
+        if (m_advancing)
+        {
+            m_dismissPending = true;
+            return;
+        }
+        m_dismissPending = false;
+        delete m_dialog.data();
+        m_dialog.clear();
     }
 
   private:
@@ -122,9 +133,25 @@ class BatchFileProgress
                    : MainWindow::tr("Flipped %1 / %2").arg(finished).arg(m_total);
     }
 
-    std::unique_ptr<ShownProgressDialog> m_dialog;
+    QPointer<ShownProgressDialog> m_dialog;
+    bool m_advancing = false;
+    bool m_dismissPending = false;
     int m_total = 0;
     FileTransformKind m_kind = FileTransformKind::Rotate;
+};
+
+struct ListedTransformJob
+{
+    std::unique_ptr<RotateFilesCommand> command;
+    std::unique_ptr<BatchFileProgress> progress;
+    std::atomic<int> finished{0};
+    std::atomic_bool cancel{false};
+    SplitSelectionRestorePlan selectionPlan;
+    QStringList supported;
+    int skippedUnsupported = 0;
+    bool rotate = false;
+    int degrees = 0;
+    bool horizontal = false;
 };
 
 QStringList transformTargetPaths(SelectionModel *selection, ThumbnailPanel *panel,
@@ -477,6 +504,58 @@ void showUndoLimitStatus(QStatusBar *bar, const RotateFilesCommand &command)
     }
 }
 
+// Cancel flag + worker progress callback; UI updates are posted to the UI
+// thread. `alive` only gates the queued progress update.
+void wireListedTransformProgress(const std::shared_ptr<ListedTransformJob> &state,
+                                 const QPointer<QObject> &alive)
+{
+    if (QProgressDialog *dialog = state->progress->dialog())
+    {
+        std::atomic_bool *cancelFlag = &state->cancel;
+        QObject::connect(dialog, &QProgressDialog::canceled, dialog,
+                         [cancelFlag]() { cancelFlag->store(true, std::memory_order_relaxed); });
+    }
+    state->command->setProgressCallback(
+        [state, alive](int finished, int)
+        {
+            if (state->cancel.load(std::memory_order_relaxed))
+                return false;
+            state->finished.store(finished, std::memory_order_relaxed);
+            QMetaObject::invokeMethod(
+                qApp,
+                [state, alive]()
+                {
+                    if (!alive || !state->progress)
+                        return;
+                    state->progress->advance(state->finished.load(std::memory_order_relaxed));
+                },
+                Qt::QueuedConnection);
+            return !state->cancel.load(std::memory_order_relaxed);
+        });
+}
+
+// Undo/Redo run on the UI thread: refresh synchronously as before. execute()
+// runs on a worker: hop to the UI thread.
+void wireListedTransformRefresh(RotateFilesCommand &command,
+                                std::function<void(const QStringList &)> refresh)
+{
+    command.setPathsChangedCallback(
+        [refresh = std::move(refresh)](const std::vector<std::string> &changed)
+        {
+            QStringList refreshed;
+            refreshed.reserve(static_cast<int>(changed.size()));
+            for (const std::string &path : changed)
+                refreshed.append(QString::fromStdString(path));
+            if (QThread::currentThread() == qApp->thread())
+            {
+                refresh(refreshed);
+                return;
+            }
+            QMetaObject::invokeMethod(
+                qApp, [refresh, refreshed]() { refresh(refreshed); }, Qt::QueuedConnection);
+        });
+}
+
 } // namespace
 
 void MainWindow::refreshTransformedPaths(const QStringList &paths)
@@ -503,7 +582,7 @@ void MainWindow::refreshTransformedPaths(const QStringList &paths)
 void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int degrees,
                                     bool horizontal)
 {
-    if (paths.isEmpty())
+    if (paths.isEmpty() || m_transformBusy)
         return;
     const QStringList supported = filterListedTransformPaths(this, paths, rotate);
     if (supported.isEmpty())
@@ -523,49 +602,77 @@ void MainWindow::runListedTransform(const QStringList &paths, bool rotate, int d
         rotate ? RotateFilesCommand::Op::Rotate
                : (horizontal ? RotateFilesCommand::Op::FlipH : RotateFilesCommand::Op::FlipV);
     auto command = std::make_unique<RotateFilesCommand>(std::move(utf8Paths), op, degrees);
-    BatchFileProgress progress(this, static_cast<int>(supported.size()), kind);
-    command->setProgressCallback(
-        [&progress](int finished, int)
-        {
-            if (progress.wasCanceled())
-                return false;
-            progress.advance(finished);
-            return !progress.wasCanceled();
-        });
     const QPointer<MainWindow> guard(this);
-    command->setPathsChangedCallback(
-        [guard](const std::vector<std::string> &changed)
-        {
-            if (!guard)
-                return;
-            QStringList refreshed;
-            refreshed.reserve(static_cast<int>(changed.size()));
-            for (const std::string &path : changed)
-                refreshed.append(QString::fromStdString(path));
-            guard->refreshTransformedPaths(refreshed);
-        });
+    auto state = std::make_shared<ListedTransformJob>();
+    state->command = std::move(command);
+    state->progress =
+        std::make_unique<BatchFileProgress>(this, static_cast<int>(supported.size()), kind);
+    state->selectionPlan = selectionPlan;
+    state->supported = supported;
+    state->skippedUnsupported = skippedUnsupported;
+    state->rotate = rotate;
+    state->degrees = degrees;
+    state->horizontal = horizontal;
+    wireListedTransformProgress(state, guard);
+    wireListedTransformRefresh(*state->command,
+                               [guard](const QStringList &refreshed)
+                               {
+                                   if (guard)
+                                       guard->refreshTransformedPaths(refreshed);
+                               });
     for (const QString &path : supported)
     {
         releaseSourceForRewrite(m_imageViewer, m_previewPanel, path, path.toUtf8().toStdString());
     }
 
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    command->execute();
-    QApplication::restoreOverrideCursor();
-    progress.dismiss();
+    m_transformBusy = true;
+    m_transformTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::UI, [state](const TaskScheduler::TaskContext &)
+        { state->command->execute(); }, {}, std::chrono::steady_clock::time_point::max(),
+        [guard, state]()
+        {
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, state]()
+                {
+                    if (!guard)
+                    {
+                        // Break the state -> command -> progress callback ->
+                        // state cycle when the window is already gone.
+                        if (state->command)
+                            state->command->setProgressCallback({});
+                        return;
+                    }
+                    MainWindow *window = guard.data();
+                    window->m_transformBusy = false;
+                    window->m_transformTask.reset();
+                    if (state->progress)
+                        state->progress->dismiss();
 
-    const FileTransformBatch batch = batchFromRotateCommand(*command);
-    applyTransformSelection(selectionPlan);
-    if (rotate)
-        reportRotateBatch(this, statusBar(), supported, batch, degrees);
-    else
-        reportFlipBatch(this, statusBar(), supported, batch, horizontal);
-    showUndoLimitStatus(statusBar(), *command);
-    mentionSkippedUnsupported(statusBar(), skippedUnsupported);
+                    RotateFilesCommand *command = state->command.get();
+                    const FileTransformBatch batch = batchFromRotateCommand(*command);
+                    window->applyTransformSelection(state->selectionPlan);
+                    if (state->rotate)
+                        reportRotateBatch(window, window->statusBar(), state->supported, batch,
+                                          state->degrees);
+                    else
+                        reportFlipBatch(window, window->statusBar(), state->supported, batch,
+                                        state->horizontal);
+                    showUndoLimitStatus(window->statusBar(), *command);
+                    mentionSkippedUnsupported(window->statusBar(), state->skippedUnsupported);
 
-    command->setProgressCallback({});
-    if (command->lastError().empty() && command->canUndo())
-        m_cmdStack.recordExecuted(std::move(command));
+                    command->setProgressCallback({});
+                    if (command->lastError().empty() && command->canUndo())
+                        window->m_cmdStack.recordExecuted(std::move(state->command));
+                },
+                Qt::QueuedConnection);
+        });
+    if (!m_transformTask)
+    {
+        m_transformBusy = false;
+        if (state->progress)
+            state->progress->dismiss();
+    }
 }
 
 void MainWindow::rotateCurrentImage(int degrees)

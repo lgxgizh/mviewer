@@ -156,6 +156,10 @@ class MainWindow : public QMainWindow
     // public so tests can verify it stays in sync with registered commands).
     static QString shortcutsHelpHtml();
     static QString userGuideHtml();
+    bool transformBusyForTest() const
+    {
+        return m_transformBusy;
+    }
 
   protected:
     void changeEvent(QEvent *event) override;
@@ -739,6 +743,8 @@ class MainWindow : public QMainWindow
     TaskScheduler::TaskHandle m_reportTask;
     QProgressDialog *m_reportProgress = nullptr;
     uint64_t m_reportGeneration = 0;
+    bool m_transformBusy = false;
+    TaskScheduler::TaskHandle m_transformTask;
 
     // Slideshow: auto-advance through the current folder on a timer.
     void toggleSlideshow();

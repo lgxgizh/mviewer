@@ -67,6 +67,14 @@ bool waitFor(const std::function<bool()> &predicate, int timeoutMs = 4000)
     return predicate();
 }
 
+void waitTransformIdle(MainWindow &mw)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (mw.transformBusyForTest() && timer.elapsed() < 20000)
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+}
+
 QString writeSizedPng(const QDir &dir, const QString &name, int w, int h, const QColor &color)
 {
     const QString path = dir.filePath(name);
@@ -264,6 +272,7 @@ int main(int argc, char **argv)
     app.installEventFilter(&progressSpy);
     dismiss.start();
     rotateCw->trigger();
+    waitTransformIdle(window);
     pump(50);
     dismiss.stop();
     dismissMessageBoxes();
@@ -299,6 +308,7 @@ int main(int argc, char **argv)
         progressSpy.reset();
         dismiss.start();
         flipH->trigger();
+        waitTransformIdle(window);
         pump(50);
         dismiss.stop();
         dismissMessageBoxes();
@@ -326,6 +336,7 @@ int main(int argc, char **argv)
     progressSpy.reset();
     dismiss.start();
     rotateCw->trigger();
+    waitTransformIdle(window);
     pump(50);
     dismiss.stop();
     dismissMessageBoxes();
@@ -371,6 +382,7 @@ int main(int argc, char **argv)
     dismiss.start();
     if (flipH)
         flipH->trigger();
+    waitTransformIdle(window);
     pump(50);
     dismiss.stop();
     dismissMessageBoxes();
