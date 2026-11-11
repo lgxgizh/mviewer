@@ -28,7 +28,8 @@
 #   * architecture gate reports zero layer / dependency violations
 #   * build succeeds on Linux (GCC) without syntax / SIMD attribute errors
 #   * build succeeds on windows-2022 (MSVC + Qt 6.8.0) with zero compiler warnings
-#   * unit tests (CTest) pass, including the bench_enforce perf hard-gate
+#   * unit tests (CTest) pass, except the "nightly" label (bench_enforce perf
+#     hard-gate and the long soak/torture suites run in nightly + release)
 # =============================================================================
 
 name: PR Gate (Tier 1)
@@ -239,6 +240,10 @@ jobs:
     name: Build check (Linux GCC)
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -259,6 +264,9 @@ jobs:
           arch: linux_gcc_64
           modules: qtimageformats
           cache: true
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Configure and build
         run: |
@@ -281,7 +289,7 @@ jobs:
           # pixel reference, bench_* budgets are calibrated on the MSVC runner,
           # crashhandler_tests needs Windows SEH/minidumps, and the rest are
           # PowerShell script gates (Linux runners have no powershell).
-          ctest --output-on-failure -j 4 --timeout 600 \
+          ctest --output-on-failure -j 4 --timeout 600 -LE nightly \
             -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
   # ---------------------------------------------------------------------------
@@ -293,12 +301,22 @@ jobs:
   windows-build-and-test:
     name: Build & Test (MSVC + Qt 6.8.0)
     runs-on: windows-2022
+    # Review P1-3: compiler cache. CMake reads CMAKE_<LANG>_COMPILER_LAUNCHER
+    # from the environment, so build.ps1 is unchanged. MSVC Release objects use
+    # /Z7 (CMakeLists.txt), which sccache can cache.
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -347,7 +365,9 @@ jobs:
           $logicalCores = [Environment]::ProcessorCount
           $testJobs = [Math]::Max(1, [Math]::Min(4, $logicalCores - 1))
           Write-Host "CTest parallelism: -j$testJobs (logical cores=$logicalCores)"
-          ctest --output-on-failure --output-junit test-results.xml "-j$testJobs"
+          # -LE nightly: bench_enforce and the soak/torture suites run in
+          # nightly `quality` and in the release workflow (build.ps1 Test).
+          ctest --output-on-failure --output-junit test-results.xml "-j$testJobs" -LE nightly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload test report
