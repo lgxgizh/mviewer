@@ -2,6 +2,7 @@
 // lookup), and a progressive scan publishes rows already in the final
 // natural-name order so the gallery does not jump when the scan completes.
 // NOLINTBEGIN
+#include "check.h"
 #include "imagelistmodel.h"
 #include "thumbnailpanel.h"
 
@@ -32,14 +33,7 @@ static int g_fail = 0;
 
 static bool waitUntil(const std::function<bool()> &done, int timeoutMs)
 {
-    QElapsedTimer t;
-    t.start();
-    while (!done() && t.elapsed() < timeoutMs)
-    {
-        QApplication::processEvents(QEventLoop::AllEvents, 20);
-        QThread::msleep(2);
-    }
-    return done();
+    return mviewer::test::waitFor(done, timeoutMs);
 }
 
 static void testFiftyThousandNavigation()

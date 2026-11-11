@@ -18,6 +18,7 @@
 
 #include "appstate.h"
 #include "browseformats.h"
+#include "check.h"
 #include "compareworkspace_caption.h"
 #include "core/image/ImageFormats.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
@@ -298,16 +299,12 @@ void testAppStatePersistence()
     AppState().save();
 }
 
-bool waitUntil(const std::function<bool()> &pred, int tries = 80)
+// Event-driven wait (tests/support/check.h): returns as soon as the product
+// state converges; the cap scales with MVIEWER_TEST_TIMEOUT_SCALE. The old
+// 80 x 25 ms sleep loop (2 s) was the split_browse_acceptance flake.
+bool waitUntil(const std::function<bool()> &pred, int timeoutMs = 5000)
 {
-    for (int i = 0; i < tries; ++i)
-    {
-        if (pred())
-            return true;
-        QApplication::processEvents();
-        QThread::msleep(25);
-    }
-    return pred();
+    return mviewer::test::waitFor(pred, timeoutMs);
 }
 
 // Layout can settle a row or so away from the saved scrollbar value.
@@ -364,7 +361,7 @@ void testSessionRestoreMainWindow()
                        auto *sec = mw.secondaryThumbnailPanel();
                        return sec && sec->pathList().size() >= kRightImages;
                    },
-                   160),
+                   8000),
                "right pane scan populated");
         ThumbnailPanel *sec = mw.secondaryThumbnailPanel();
         if (!sec)
@@ -377,7 +374,7 @@ void testSessionRestoreMainWindow()
                        auto *bar = sec->verticalScrollBar();
                        return bar && bar->maximum() > 0;
                    },
-                   160),
+                   8000),
                "right pane has a scroll range");
         if (auto *bar = sec->verticalScrollBar(); bar && bar->maximum() > 0)
         {
@@ -412,7 +409,7 @@ void testSessionRestoreMainWindow()
                    auto *sec = restored.secondaryThumbnailPanel();
                    return sec && !sec->isHidden() && sec->pathList().size() >= kRightImages;
                },
-               160),
+               8000),
            "restored right pane populated");
     ThumbnailPanel *sec = restored.secondaryThumbnailPanel();
     if (!sec)
@@ -430,7 +427,7 @@ void testSessionRestoreMainWindow()
                    return restoredScrollNear(savedScroll, sec->scrollOffset(),
                                              sec->gridSize().height(), span);
                },
-               160),
+               8000),
            "right pane scroll restored");
     const QString current = sec->pathList().value(sec->currentIndex().row());
     EXPECT(QFileInfo(current).fileName() == QFileInfo(lastImage).fileName() ||
@@ -632,7 +629,7 @@ void testUnionCompareAndHeader(const QString &leftDir, const QString &rightDir)
                    return left && right && left->pathList().size() >= 2 &&
                           right->pathList().size() >= 2;
                },
-               160),
+               8000),
            "both panes listed their fixtures");
     if (!left || !right || left->pathList().isEmpty() || right->pathList().isEmpty())
         return;
