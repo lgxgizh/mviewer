@@ -1,6 +1,7 @@
 #include "compareworkspace_p.h"
 
 #include "Theme.h"
+#include "compare_roi_stats_presenter.h"
 #include "core/analysis/PixelInspector.h"
 #include "core/image/ExifOrientation.h"
 #include "core/image/SourceImage.h"
@@ -8,7 +9,6 @@
 
 #include <QApplication>
 #include <QClipboard>
-#include <QCoreApplication>
 #include <QHeaderView>
 #include <QMetaObject>
 #include <QTableWidget>
@@ -17,47 +17,6 @@
 
 namespace
 {
-QString ratioText(const mviewer::core::ROIChannelStats &stats, bool red)
-{
-    if (!stats.ratiosValid)
-        return QStringLiteral("—");
-    return QString::number(red ? stats.rOverG : stats.bOverG, 'f', 4);
-}
-
-QString meanText(double value)
-{
-    return QString::number(value, 'f', 2);
-}
-
-// Shortest signed hue step in degrees, so a shift across 0° stays near zero.
-QString signedHueDelta(double later, double earlier)
-{
-    double delta = later - earlier;
-    if (delta > 180.0)
-        delta -= 360.0;
-    else if (delta < -180.0)
-        delta += 360.0;
-    return QString::number(delta, 'f', 2);
-}
-
-QString roiDeltaMetrics(const mviewer::core::ROIChannelStats &base,
-                        const mviewer::core::ROIChannelStats &other)
-{
-    const QString redGreen = (base.ratiosValid && other.ratiosValid)
-                                 ? QString::number(other.rOverG - base.rOverG, 'f', 4)
-                                 : QStringLiteral("—");
-    const QString blueGreen = (base.ratiosValid && other.ratiosValid)
-                                  ? QString::number(other.bOverG - base.bOverG, 'f', 4)
-                                  : QStringLiteral("—");
-    return CompareWorkspace::tr("ΔH %1  ΔS %2  ΔV %3  ΔR %4  ΔG %5  ΔB %6  ΔR/G %7  ΔB/G %8")
-        .arg(signedHueDelta(other.hMean, base.hMean),
-             QString::number(other.sMean - base.sMean, 'f', 2),
-             QString::number(other.vMean - base.vMean, 'f', 2),
-             QString::number(other.rMean - base.rMean, 'f', 2),
-             QString::number(other.gMean - base.gMean, 'f', 2),
-             QString::number(other.bMean - base.bMean, 'f', 2), redGreen, blueGreen);
-}
-
 QString measurementStateText(mviewer::ui::ROIMeasurementState state)
 {
     using State = mviewer::ui::ROIMeasurementState;
@@ -79,36 +38,6 @@ QString measurementStateText(mviewer::ui::ROIMeasurementState state)
     return CompareWorkspace::tr("Idle");
 }
 
-// ROI reasons are English QT_TRANSLATE_NOOP("CompareRoi", ...) literals set on
-// the worker thread (or an exception message); translate them for display.
-QString roiReasonText(const std::string &reason)
-{
-    return QCoreApplication::translate("CompareRoi", reason.c_str());
-}
-
-QString paneStateText(const mviewer::ui::ROIPaneMeasurement &pane)
-{
-    using State = mviewer::ui::ROIPaneState;
-    switch (pane.state)
-    {
-    case State::Ready:
-        return CompareWorkspace::tr("Ready");
-    case State::Unsupported:
-        return CompareWorkspace::tr("Unsupported: %1").arg(roiReasonText(pane.reason));
-    case State::Failed:
-        return CompareWorkspace::tr("Failed: %1").arg(roiReasonText(pane.reason));
-    case State::Cancelled:
-        return CompareWorkspace::tr("Cancelled");
-    }
-    return CompareWorkspace::tr("Failed");
-}
-
-QString paneName(const mviewer::domain::ImageMetadata &metadata, int index)
-{
-    const QString name = metadata.fileName.empty() ? QStringLiteral("#%1").arg(index + 1)
-                                                   : QString::fromStdString(metadata.fileName);
-    return QStringLiteral("%1 — %2").arg(QChar('A' + index), name);
-}
 } // namespace
 
 void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
@@ -349,98 +278,37 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
     m_roiResult = result;
     if (!m_roiTable)
         return;
-    m_roiTable->setRowCount(static_cast<int>(result.panes.size()));
-    bool unsupported = false;
-    bool failed = false;
-    bool hasAnyValid = false;
+
+    std::vector<mviewer::domain::ImageMetadata> paneMetadata;
+    paneMetadata.reserve(result.panes.size());
     for (int row = 0; row < static_cast<int>(result.panes.size()); ++row)
     {
-        const auto &pane = result.panes[static_cast<size_t>(row)];
         const ImageFrame *frame = m_engine.imageAt(row);
-        const mviewer::domain::ImageMetadata metadata =
-            frame ? frame->metadata() : mviewer::domain::ImageMetadata{};
-        const QString stateText =
-            (!result.linked && !pane.stats.valid) ? tr("No selection") : paneStateText(pane);
-        const QStringList cells = {
-            paneName(metadata, row),
-            pane.stats.valid ? meanText(pane.stats.hMean) : QStringLiteral("—"),
-            pane.stats.valid ? meanText(pane.stats.sMean) : QStringLiteral("—"),
-            pane.stats.valid ? meanText(pane.stats.vMean) : QStringLiteral("—"),
-            pane.stats.valid ? meanText(pane.stats.rMean) : QStringLiteral("—"),
-            pane.stats.valid ? meanText(pane.stats.gMean) : QStringLiteral("—"),
-            pane.stats.valid ? meanText(pane.stats.bMean) : QStringLiteral("—"),
-            pane.stats.valid ? ratioText(pane.stats, true) : QStringLiteral("—"),
-            pane.stats.valid ? ratioText(pane.stats, false) : QStringLiteral("—"),
-            pane.stats.valid ? QString::number(pane.stats.pixelCount) : QStringLiteral("—"),
-            stateText};
-        for (int column = 0; column < cells.size(); ++column)
+        paneMetadata.push_back(frame ? frame->metadata() : mviewer::domain::ImageMetadata{});
+    }
+    const mviewer::ui::RoiStatsView view = mviewer::ui::presentRoiStats(result, paneMetadata);
+    m_roiTable->setRowCount(static_cast<int>(view.rows.size()));
+    for (int row = 0; row < static_cast<int>(view.rows.size()); ++row)
+    {
+        const auto &statsRow = view.rows[static_cast<size_t>(row)];
+        for (int column = 0; column < statsRow.cells.size(); ++column)
         {
-            auto *item = new QTableWidgetItem(cells[column]);
+            auto *item = new QTableWidgetItem(statsRow.cells[column]);
             if (column > 0 && column < 10)
                 item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             if (column == 0)
-                item->setToolTip(QString::fromStdString(metadata.filePath));
+                item->setToolTip(statsRow.nameToolTip);
             if (column == 10)
-                item->setToolTip(cells[column]);
+                item->setToolTip(statsRow.stateToolTip);
             m_roiTable->setItem(row, column, item);
         }
-        if (pane.stats.valid)
-            hasAnyValid = true;
-        if (result.linked)
-        {
-            unsupported = unsupported || pane.state == mviewer::ui::ROIPaneState::Unsupported;
-            failed = failed || pane.state == mviewer::ui::ROIPaneState::Failed;
-        }
-        else
-        {
-            failed = failed || pane.state == mviewer::ui::ROIPaneState::Failed;
-        }
     }
-
-    if (m_roiDeltaLabel && result.panes.size() >= 2 && result.panes[0].stats.valid)
-    {
-        const auto &a = result.panes[0].stats;
-        if (result.panes.size() == 2)
-        {
-            const auto &b = result.panes[1].stats;
-            m_roiDeltaLabel->setText(b.valid
-                                         ? tr("Difference (B − A): %1").arg(roiDeltaMetrics(a, b))
-                                         : tr("Delta (B − A): —"));
-        }
-        else
-        {
-            QStringList deltaLines;
-            const int count = std::min(8, static_cast<int>(result.panes.size()));
-            for (int i = 1; i < count; ++i)
-            {
-                const auto &p = result.panes[static_cast<size_t>(i)];
-                const QChar paneChar('A' + i);
-                deltaLines
-                    << (p.stats.valid
-                            ? tr("Δ(%1−A): %2").arg(QString(paneChar), roiDeltaMetrics(a, p.stats))
-                            : tr("Δ(%1−A): —").arg(paneChar));
-            }
-            m_roiDeltaLabel->setText(deltaLines.join('\n'));
-        }
-    }
-    else if (m_roiDeltaLabel)
-    {
-        m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
-    }
-
-    if (failed)
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Failed,
-                               tr("Some source images failed to measure"));
-    else if (unsupported)
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
-                               tr("Cannot decode this region precisely from the source image"));
-    else if (hasAnyValid)
-        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Ready,
-                               result.linked
-                                   ? tr("Source RGB · Full-resolution coordinates · 8-bit analysis")
-                                   : tr("Independent selection · Source pixel RGB analysis"));
-    else
+    if (m_roiDeltaLabel)
+        m_roiDeltaLabel->setText(view.deltaText);
+    if (view.state == mviewer::ui::ROIMeasurementState::Idle)
         setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
+    else
+        setROIMeasurementState(view.state, view.stateDetail);
 
     updateROISurfaces();
 }

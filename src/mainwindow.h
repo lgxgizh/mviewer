@@ -178,6 +178,12 @@ class MainWindow : public QMainWindow
     bool eventFilter(QObject *watched, QEvent *event) override;
     bool filterKeyPress(QObject *watched, QKeyEvent *ke);
     bool routeViewerFileOpKeys(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods);
+    void activateBrowsePaneForEvent(QObject *watched, QEvent *event);
+    bool handleZoomLabelEvent(QEvent *event);
+    bool handleImageLabelEvent(QEvent *event);
+    void handleViewerAndGalleryLayoutEvent(QObject *watched, QEvent *event);
+    bool routeSearchEditKey(QKeyEvent *ke);
+    int routeViewerModifierKeys(QObject *watched, QKeyEvent *ke, Qt::KeyboardModifiers mods);
 
   private:
     void buildMenus();

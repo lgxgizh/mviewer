@@ -304,6 +304,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_live_diff.cpp
     compareworkspace_render_canvas.cpp
     compareworkspace_roi.cpp
+    compare_roi_stats_presenter.cpp
     compareworkspace_roi_overlay.cpp
     compareworkspace_temporary.cpp
     compareworkspace_load.cpp
@@ -2608,6 +2609,22 @@ target_compile_features(compare_components_tests PRIVATE cxx_std_20)
 target_include_directories(compare_components_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_components_tests COMMAND compare_components_tests)
 set_tests_properties(compare_components_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+add_executable(compare_roi_stats_presenter_tests
+    test_compare_roi_stats_presenter.cpp
+)
+target_link_libraries(compare_roi_stats_presenter_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_roi_stats_presenter_tests PRIVATE cxx_std_20)
+target_include_directories(compare_roi_stats_presenter_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_roi_stats_presenter_tests COMMAND compare_roi_stats_presenter_tests)
+set_tests_properties(compare_roi_stats_presenter_tests PROPERTIES TIMEOUT 60)
 
 # ADR-014 CompareWorkspace componentization tests (CompareDiffRenderer)
 add_executable(compare_diff_renderer_tests
