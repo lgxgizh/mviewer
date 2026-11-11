@@ -21,6 +21,7 @@
 
 #include "thumbnailpanel.h"
 
+#include "gallery_filter_engine.h"
 #include "naturalnameorder.h"
 
 #include "core/analysis/ExportReport.h"
@@ -270,12 +271,6 @@ namespace mviewer::core
 struct ImageSortKey;
 }
 
-// Primary key follows `ascending`. Equal keys stay name-then-path, A→Z.
-bool browseOrderedLess(int primary, QStringView nameA, QStringView nameB, const QString &pathA,
-                       const QString &pathB, bool ascending);
-int browsePrimaryCompare(mviewer::core::BrowseSortField field, const ThumbnailPanel::Entry &a,
-                         const ThumbnailPanel::Entry &b, const QHash<QString, QString> &metaCamera,
-                         const QHash<QString, QString> &metaLens);
 bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString &nameA,
                     const mviewer::core::ImageSortKey &keyA, const QString &nameB,
                     const mviewer::core::ImageSortKey &keyB);

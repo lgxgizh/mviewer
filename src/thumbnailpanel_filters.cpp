@@ -6,7 +6,6 @@
 #include "thumbnailpanel_p.h"
 
 #include "core/RecentStore.h"
-#include "core/filesystem/Utf8Path.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/ImageSortKeys.h"
 #include "core/metadata/MetadataIndexer.h"
@@ -325,16 +324,20 @@ void ThumbnailPanel::runFilterQuery()
     query.sort = static_cast<mviewer::core::BrowseSortField>(m_sortMode);
     query.ascending = m_sortAscending;
     query.generation = m_filterGeneration;
-    std::unordered_set<std::string> recents;
+    mviewer::ui::GalleryFilterSnapshot snapshot;
+    snapshot.text = t;
+    snapshot.useFuzzy = useFuzzy;
+    snapshot.fuzzy = fuzzyRe;
+    snapshot.query = query;
     if (m_recentFilter)
     {
         const auto listed = mviewer::core::RecentStore::instance().recents();
-        recents.insert(listed.begin(), listed.end());
+        snapshot.recents.insert(listed.begin(), listed.end());
     }
-    const auto metaIndex = m_metaIndex;
-    const auto metaIso = m_metaIso;
-    const auto metaCamera = m_metaCamera;
-    const auto metaLens = m_metaLens;
+    snapshot.metaIndex = m_metaIndex;
+    snapshot.metaIso = m_metaIso;
+    snapshot.metaCamera = m_metaCamera;
+    snapshot.metaLens = m_metaLens;
     const bool incremental = m_incrementalApply;
     const QStringList prevSelection = m_incrementalPrevSelection;
     const QString prevCurrent = m_incrementalPrevCurrent;
@@ -349,8 +352,7 @@ void ThumbnailPanel::runFilterQuery()
     // directories always take the cancellable worker path below.
     if (src.size() <= 256)
     {
-        const QList<Entry> out = evaluateFilterSnapshot(src, t, useFuzzy, fuzzyRe, query, recents,
-                                                        metaIndex, metaIso, metaCamera, metaLens);
+        const QList<Entry> out = mviewer::ui::evaluateGalleryFilter(src, snapshot);
         if (m_incrementalApply)
             applyDisplayedEntriesIncremental(out, prevSelection, prevCurrent, anchorPath,
                                              anchorOffset);
@@ -360,15 +362,12 @@ void ThumbnailPanel::runFilterQuery()
     }
     m_filterTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
-        [self, alive, cancel, generation, src, t, fuzzyRe, useFuzzy, query, recents, metaIndex,
-         metaIso, metaCamera, metaLens, incremental, prevSelection, prevCurrent, anchorPath,
-         anchorOffset](const TaskScheduler::TaskContext &ctx) mutable
+        [self, alive, cancel, generation, src, snapshot, incremental, prevSelection, prevCurrent,
+         anchorPath, anchorOffset](const TaskScheduler::TaskContext &ctx) mutable
         {
             if (ctx.isCancelled() || cancel->load(std::memory_order_acquire) || !alive->load())
                 return;
-            const QList<Entry> out =
-                ThumbnailPanel::evaluateFilterSnapshot(src, t, useFuzzy, fuzzyRe, query, recents,
-                                                       metaIndex, metaIso, metaCamera, metaLens);
+            const QList<Entry> out = mviewer::ui::evaluateGalleryFilter(src, snapshot);
             if (ctx.isCancelled() || cancel->load(std::memory_order_acquire) || !alive->load() ||
                 !self)
                 return;
@@ -388,41 +387,6 @@ void ThumbnailPanel::runFilterQuery()
                 },
                 Qt::QueuedConnection);
         });
-}
-
-QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
-    const QList<Entry> &source, const QString &text, bool useFuzzy, const QRegularExpression &fuzzy,
-    const mviewer::core::BrowseQuery &query, const std::unordered_set<std::string> &recents,
-    const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
-    const QHash<QString, QString> &metaCamera, const QHash<QString, QString> &metaLens)
-{
-    QList<Entry> out;
-    out.reserve(source.size());
-    const auto passesType = [&](const QString &path)
-    {
-        if (query.type.empty())
-            return true;
-        const int dot = path.lastIndexOf('.');
-        if (dot < 0 || dot + 1 >= path.length())
-            return false;
-        const QByteArray suffix = path.mid(dot + 1).toUtf8();
-        return mviewer::core::suffixMatchesTypeFilter(
-            std::string_view(suffix.constData(), static_cast<size_t>(suffix.size())), query.type);
-    };
-    for (const Entry &entry : source)
-    {
-        if (passesType(entry.path) &&
-            matchesFilterSnapshot(entry, text, useFuzzy, fuzzy, query, recents, metaIndex, metaIso,
-                                  metaCamera, metaLens))
-            out.append(entry);
-    }
-    const auto less = [&query, &metaCamera, &metaLens](const Entry &a, const Entry &b)
-    {
-        const int primary = browsePrimaryCompare(query.sort, a, b, metaCamera, metaLens);
-        return browseOrderedLess(primary, a.name, b.name, a.path, b.path, query.ascending);
-    };
-    std::stable_sort(out.begin(), out.end(), less);
-    return out;
 }
 
 bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
@@ -498,33 +462,6 @@ bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
         m_recursiveHits.clear();
     }
     return true;
-}
-
-bool ThumbnailPanel::matchesFilterSnapshot(
-    const Entry &e, const QString &t, bool useFuzzy, const QRegularExpression &fuzzy,
-    const mviewer::core::BrowseQuery &query, const std::unordered_set<std::string> &recents,
-    const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
-    const QHash<QString, QString> &metaCamera, const QHash<QString, QString> &metaLens)
-{
-    const QString pathKey = galleryPathKey(e.path);
-    const std::string ep = e.path.toStdString();
-    if (query.recentOnly && recents.find(mviewer::core::normalizeKey(ep)) == recents.end())
-        return false;
-    if (!query.camera.empty() &&
-        !metaCamera.value(pathKey).toLower().contains(QString::fromStdString(query.camera)))
-        return false;
-    if (!query.lens.empty() &&
-        !metaLens.value(pathKey).toLower().contains(QString::fromStdString(query.lens)))
-        return false;
-    if (query.iso > 0 && metaIso.value(pathKey, -1) != query.iso)
-        return false;
-    if (t.isEmpty())
-        return true;
-    if (query.metadata)
-        return metaIndex.value(pathKey).contains(t);
-    if (useFuzzy)
-        return fuzzy.match(e.name).hasMatch();
-    return e.name.toLower().contains(t);
 }
 
 // static

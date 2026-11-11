@@ -1,6 +1,7 @@
 #include "browse_file_clipboard.h"
 #include "splitbrowse_transfer.h"
 #include "thumbnailpanel_p.h"
+#include "thumbnailpanel_testaccess.h"
 #include "thumbnailpanel_transfer.h"
 
 #include "core/image/yuv/YuvFile.h"
@@ -92,10 +93,11 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     return acts;
 }
 
-QStringList ThumbnailPanel::browseContextMenuTitlesForTest(const QStringList &selPaths)
+QStringList ThumbnailPanelTestAccess::browseContextMenuTitles(ThumbnailPanel &panel,
+                                                              const QStringList &selPaths)
 {
     QMenu menu;
-    buildContextMenu(menu, selPaths);
+    panel.buildContextMenu(menu, selPaths);
     QStringList titles;
     for (QAction *action : menu.actions())
     {

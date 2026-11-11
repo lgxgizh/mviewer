@@ -31,6 +31,7 @@
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "imageviewer.h"
 #include "thumbnailpanel.h"
+#include "thumbnailpanel_testaccess.h"
 
 #include <QApplication>
 #include <QCursor>
@@ -312,7 +313,7 @@ void testScanSupersessionBounded()
         panel.resize(900, 600);
         panel.show();
         pump(100);
-        ps->token = panel.scanGenTokenForTest();
+        ps->token = ThumbnailPanelTestAccess::scanGenToken(panel);
         ps->genA = 1; // first setDirectory bumps m_dirGen 0 -> 1
 
         ThumbnailPanel::setScanIterationProbe(
@@ -377,7 +378,7 @@ void testDimensionSupersessionBounded()
         panel.setViewMode(ThumbnailPanel::Details); // triggers ensureDimensions
         panel.show();
         pump(100);
-        ps->token = panel.scanGenTokenForTest();
+        ps->token = ThumbnailPanelTestAccess::scanGenToken(panel);
         ps->genA = 1;
         // Deterministic slow probe: once armed it sleeps per iteration, which
         // stretches the 1500-file dimension pass over seconds so the directory

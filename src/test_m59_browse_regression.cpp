@@ -4,6 +4,7 @@
 #include "check.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "thumbnailpanel.h"
+#include "thumbnailpanel_testaccess.h"
 
 #include <QApplication>
 #include <QColor>
@@ -81,7 +82,7 @@ int main(int argc, char **argv)
         metaIndex.insert(entry.path, QStringLiteral("m59 camera lens"));
         metaIso.insert(entry.path, 100 + (entry.size % 3));
     }
-    const auto evaluated = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto evaluated = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         source, QStringLiteral("camera"), false, QRegularExpression(), cameraQuery, noRecents,
         metaIndex, metaIso, metaCamera, metaLens);
     CHECK(evaluated.size() == source.size(), "production evaluator keeps all matching 10k rows");
@@ -95,7 +96,7 @@ int main(int argc, char **argv)
     largeQuery.text = "camera";
     largeQuery.type = "jpg";
     largeQuery.sort = mviewer::core::BrowseSortField::Name;
-    const auto largeEvaluated = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto largeEvaluated = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         largeSource, QStringLiteral("camera"), false, QRegularExpression(), largeQuery, noRecents,
         {}, {}, {}, {});
     CHECK(largeEvaluated.size() == largeSource.size(),
@@ -112,7 +113,7 @@ int main(int argc, char **argv)
     exactQuery.camera = "camera";
     exactQuery.lens = "lens";
     exactQuery.iso = 200;
-    const auto exact = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto exact = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         source, QString(), false, QRegularExpression(), exactQuery, noRecents, metaIndex, metaIso,
         metaCamera, metaLens);
     CHECK(exact.size() == 1 && exact.first().path == focus,
@@ -121,7 +122,7 @@ int main(int argc, char **argv)
     recents.insert(mviewer::core::normalizeKey(focus.toStdString()));
     mviewer::core::BrowseQuery recentQuery;
     recentQuery.recentOnly = true;
-    const auto recentKept = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto recentKept = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         source, QString(), false, QRegularExpression(), recentQuery, recents, {}, {}, {}, {});
     CHECK(recentKept.size() == 1 && recentKept.first().path == focus,
           "production evaluator keeps only the recent path");
@@ -139,7 +140,7 @@ int main(int argc, char **argv)
     mviewer::core::BrowseQuery mixedQuery;
     mixedQuery.camera = "canon";
     mixedQuery.metadata = true;
-    const auto mixedKept = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto mixedKept = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         {mixed}, QStringLiteral("portrait"), false, QRegularExpression(), mixedQuery, noRecents,
         mixedIndex, {}, mixedCamera, {});
     CHECK(mixedKept.size() == 1 && mixedKept.first().path == mixed.path,
@@ -202,20 +203,20 @@ int main(int argc, char **argv)
     mviewer::core::BrowseQuery sizeDesc;
     sizeDesc.sort = mviewer::core::BrowseSortField::Size;
     sizeDesc.ascending = false;
-    const auto bySize = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto bySize = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         ties, QString(), false, QRegularExpression(), sizeDesc, noRecents, {}, {}, {}, {});
     CHECK(namesOf(bySize) == QStringLiteral("a.png,b.png,img2.png,img02.png,img10.png"),
           "descending size keeps natural name order for equal sizes");
     mviewer::core::BrowseQuery byName;
     byName.sort = mviewer::core::BrowseSortField::Name;
-    const auto named = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto named = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         ties, QString(), false, QRegularExpression(), byName, noRecents, {}, {}, {}, {});
     CHECK(namesOf(named) == QStringLiteral("a.png,b.png,img2.png,img02.png,img10.png"),
           "natural names put img2 before img10 and a shorter zero-run first");
     mviewer::core::BrowseQuery dateDesc;
     dateDesc.sort = mviewer::core::BrowseSortField::Date;
     dateDesc.ascending = false;
-    const auto byDate = ThumbnailPanel::evaluateQuerySnapshotForTest(
+    const auto byDate = ThumbnailPanelTestAccess::evaluateQuerySnapshot(
         ties, QString(), false, QRegularExpression(), dateDesc, noRecents, {}, {}, {}, {});
     CHECK(namesOf(byDate) == QStringLiteral("a.png,b.png,img02.png,img2.png,img10.png"),
           "descending date keeps name order when timestamps match");
@@ -336,7 +337,7 @@ int main(int argc, char **argv)
 
             QString anchorPath;
             int anchorOffset = 0;
-            panel.captureScrollAnchorForTest(anchorPath, anchorOffset);
+            ThumbnailPanelTestAccess::captureScrollAnchor(panel, anchorPath, anchorOffset);
             CHECK(!anchorPath.isEmpty(), "Progressive scroll test: anchor captured");
             const int oldRow = panel.pathList().indexOf(anchorPath);
             CHECK(oldRow >= 0, "Progressive scroll test: old row valid");
@@ -347,7 +348,7 @@ int main(int argc, char **argv)
             batch.append({testDir.filePath(QStringLiteral("scroll_0000_early.png")),
                           QStringLiteral("scroll_0000_early.png"), 100, 16, 16,
                           QDateTime::currentDateTime()});
-            panel.insertProgressiveRowsForTest(batch);
+            ThumbnailPanelTestAccess::insertProgressiveRows(panel, batch);
 
             // Anchor item must remain at the exact same screen position
             const int newRow = panel.pathList().indexOf(anchorPath);

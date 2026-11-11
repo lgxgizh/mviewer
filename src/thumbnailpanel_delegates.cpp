@@ -1,6 +1,7 @@
 // ThumbnailPanel item delegates: thumbnail grid and list row (M20 P0#3).
 // The details row lives in thumbnailpanel_delegates_details.cpp.
 #include "thumbnailpanel_p.h"
+#include "thumbnailpanel_testaccess.h"
 
 #include "SquareLetterbox.h"
 #include "hoverfade.h"
@@ -394,7 +395,7 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view, const QMod
 }
 } // namespace thumb_delegate
 
-int ThumbnailPanel::scaleCacheHitsForTest()
+int ThumbnailPanelTestAccess::scaleCacheHits()
 {
     return g_scaledCacheHits;
 }
