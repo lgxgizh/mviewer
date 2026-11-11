@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- zh_CN: recompile the embedded `.qm` from `translations/mviewer_zh_CN.ts`.
+  v1.0.172 shipped 19 untranslated strings (Triple Browse menu, pane status
+  text, copy/move/delete confirmations, rotate errors).
+- Details zebra test compares a multi-point sample of each row's top band with
+  the view palette, so Linux font metrics no longer move the probe onto text;
+  the test now covers dark mode too.
+
+### Tests / CI
+
+- New `i18n_qm_sync_gate` (`scripts/check_qm_sync.py`) fails when a finished
+  `.ts` translation is missing from the committed `.qm`.
+- PR gate `build-linux` now builds with Qt 6.8.0 gcc_64 and runs CTest
+  offscreen (same exclusions as nightly asan-linux), so Linux-only UI test
+  failures block the PR instead of turning the next nightly red.
+
 ## [1.0.172] - 2026-11-09
 
 ### Release
