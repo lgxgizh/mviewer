@@ -118,9 +118,10 @@ std::vector<std::string> ImageFormats::wildcardFilters()
 const std::vector<std::string_view> &rawExtensions()
 {
     // Union of the historical decoder, metadata, thumbnail, and combo lists.
+    // ADR 033: ".raw" is a plain sensor dump (PlainRawDecoder), never LibRaw.
     static const std::vector<std::string_view> kExts = {
-        "3fr", "arw", "cr2", "cr3", "crw", "dcr", "dng", "erf", "fff", "iiq", "kdc", "mef", "mos",
-        "mrw", "nef", "nrw", "orf", "pef", "raf", "raw", "rw2", "rwz", "sr2", "srw", "x3f"};
+        "3fr", "arw", "cr2", "cr3", "crw", "dcr", "dng", "erf", "fff", "iiq", "kdc", "mef",
+        "mos", "mrw", "nef", "nrw", "orf", "pef", "raf", "rw2", "rwz", "sr2", "srw", "x3f"};
     return kExts;
 }
 

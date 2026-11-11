@@ -142,8 +142,8 @@ concern and it is already *detectable today* via the TIFF SKIP. Closing it
 
 - ❌ Refactor ImageRepository / CacheManager / RenderEngine.
 - ❌ Add a 6th cache layer, Rust, GPU pipeline, plugin-ABI freeze.
-- ❌ New image formats — correct the scenario instead. (Exception: raw YUV /
-  Y4M viewing and compare, ADR 032.)
+- ❌ New image formats — correct the scenario instead. (Exceptions: raw YUV /
+  Y4M viewing and compare, ADR 032; headerless `.raw` sensor dumps, ADR 033.)
 - ❌ Modify `build.ps1` / `CMakePresets.json` / `ci.yml`.
 
 ## 6. Suggested execution order (after review approval)

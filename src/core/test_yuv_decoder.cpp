@@ -229,8 +229,13 @@ static void testRegistryOrder()
     int raw = -1;
     int yuv = -1;
     int qt = -1;
+    int plainRaw = -1; // ADR 033
     for (std::size_t i = 0; i < names.size(); ++i)
     {
+        if (names[i] == "PlainRawDecoder")
+        {
+            plainRaw = static_cast<int>(i);
+        }
         if (names[i] == "RawDecoder")
         {
             raw = static_cast<int>(i);
@@ -246,7 +251,8 @@ static void testRegistryOrder()
     }
     CHECK(raw >= 0);
     CHECK(yuv == raw + 1);
-    CHECK(qt == yuv + 1);
+    CHECK(plainRaw == yuv + 1);
+    CHECK(qt == plainRaw + 1);
 }
 #endif
 

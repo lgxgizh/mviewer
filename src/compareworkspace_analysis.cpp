@@ -5,6 +5,7 @@
 
 #include "Theme.h"
 #include "core/analysis/PixelInspector.h"
+#include "core/image/rawplain/PlainRawFile.h"
 
 #include <cmath>
 #include <utility>
@@ -895,6 +896,21 @@ QString CompareWorkspace::formatPixelInfo(int cellIndex, const QString &cellName
                        .arg(sample.r)
                        .arg(sample.g)
                        .arg(sample.b);
+    // ADR 033: stored sensor value of a plain .raw cell shown untransformed
+    // (a temporary rotate / flip / crop moves pixels off source coordinates).
+    const ImageFrame *cellFrame = m_engine.imageAt(cellIndex);
+    const CellAdjust cellAdjust =
+        cellIndex >= 0 && cellIndex < static_cast<int>(m_cellAdjusts.size())
+            ? m_cellAdjusts[static_cast<size_t>(cellIndex)]
+            : CellAdjust{};
+    if (cellFrame && cellAdjust.rotation % 360 == 0 && !cellAdjust.flipH && !cellAdjust.flipV &&
+        !cellAdjust.hasCrop)
+    {
+        const std::string rawText =
+            mviewer::core::rawplain::plainRawSampleText(cellFrame->metadata().filePath, x, y);
+        if (!rawText.empty())
+            info += QStringLiteral("  ") + QString::fromStdString(rawText);
+    }
     const int baseIdx = diffBaseIndex();
     if (cellIndex != baseIdx && baseIdx >= 0 && baseIdx < m_engine.imageCount())
     {

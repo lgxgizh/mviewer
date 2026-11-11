@@ -34,11 +34,11 @@ static std::string upperExt(std::string_view ext)
 static void testCatalog()
 {
     const auto &exts = mviewer::core::rawExtensions();
-    check(exts.size() == 25, "RAW catalog has the union of the old lists");
+    check(exts.size() == 24, "RAW catalog has the union of the old lists minus plain .raw");
     check(std::is_sorted(exts.begin(), exts.end()), "RAW catalog is sorted");
     const std::vector<std::string_view> required = {
-        "3fr", "arw", "cr2", "cr3", "crw", "dcr", "dng", "erf", "fff", "iiq", "kdc", "mef", "mos",
-        "mrw", "nef", "nrw", "orf", "pef", "raf", "raw", "rw2", "rwz", "sr2", "srw", "x3f"};
+        "3fr", "arw", "cr2", "cr3", "crw", "dcr", "dng", "erf", "fff", "iiq", "kdc", "mef",
+        "mos", "mrw", "nef", "nrw", "orf", "pef", "raf", "rw2", "rwz", "sr2", "srw", "x3f"};
     check(exts.size() == required.size(), "required union size matches");
     for (std::size_t i = 0; i < required.size() && i < exts.size(); ++i)
         check(exts[i] == required[i], "catalog entry matches the union");
@@ -51,6 +51,10 @@ static void testCatalog()
     check(mviewer::core::suffixMatchesTypeFilter("SRW", joined), "SRW passes the RAW filter");
     check(mviewer::core::suffixMatchesTypeFilter("jpg", joined) == false,
           "jpg is not a RAW filter hit");
+    // ADR 033: .raw is a plain sensor dump, never a camera RAW for LibRaw.
+    check(!mviewer::core::isRawExtension("raw") && !mviewer::core::isRawExtension("RAW"),
+          ".raw is not a camera RAW extension");
+    check(!mviewer::core::suffixMatchesTypeFilter("raw", joined), ".raw is not a RAW filter hit");
     check(mviewer::core::suffixMatchesTypeFilter("srw", "raw"), "raw alias matches srw");
     check(mviewer::core::suffixMatchesTypeFilter("nrw", "raw"), "raw alias matches nrw");
     check(mviewer::core::suffixMatchesTypeFilter("tif", "tiff"), "tiff alias matches tif");

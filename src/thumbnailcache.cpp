@@ -2,6 +2,7 @@
 
 #include "application/Shutdown.h"
 #include "core/FileIdentity.h"
+#include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/yuv/YuvFile.h"
 #include "runtime_storage.h"
 
@@ -104,7 +105,9 @@ QString ThumbnailCache::keyForIdentity(const QString &path, int size, qint64 mti
         mviewer::core::thumbnailDiskKey(utf8Path, size, mtimeMs, fileSize, kSchemaVersion);
     // Raw YUV pixels depend on the saved/inferred parameters, not just the file:
     // fold them in (after the path prefix, so invalidatePath still matches).
-    const std::string yuv = mviewer::core::yuv::yuvCacheKeySuffix(utf8Path);
+    // ADR 033: plain .raw sensor dumps likewise depend on their parameters.
+    const std::string yuv = mviewer::core::yuv::yuvCacheKeySuffix(utf8Path) +
+                            mviewer::core::rawplain::plainRawCacheKeySuffix(utf8Path);
     if (!yuv.empty())
     {
         const QByteArray h =
