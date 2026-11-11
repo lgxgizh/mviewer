@@ -7,20 +7,10 @@
 //       — a legal state file can never become a half-written text/JSON file.
 //   P2  no temp files are left behind after a failed write; stale temps from
 //       a crashed process are never read as state and are swept once aged.
-//   P3  RatingStore: rapid updates coalesce, the LAST update wins after the
-//       flush boundary, and a failed worker write is retried (not dropped).
-//   P4  TagStore / SidecarStore writes are atomic with the same failure
-//       semantics (old version intact on failure).
-//   P5  Application-shutdown-style flush persists the latest state.
 
-#include "core/RatingStore.h"
-#include "core/SidecarStore.h"
-#include "core/TagStore.h"
 #include "core/filesystem/AtomicFile.h"
 
-#include <QCoreApplication>
 #include <QDir>
-#include <QEventLoop>
 #include <QTemporaryDir>
 
 #include <chrono>
@@ -28,7 +18,6 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <thread>
 #include <vector>
 
 static int g_pass = 0;
@@ -164,172 +153,6 @@ void testStaleTempHandling()
     QDir(tmp.path()).removeRecursively();
 }
 
-void testRatingStoreCoalescingAndFlush()
-{
-    printf("\n[P3. RatingStore coalesced updates, flush boundary, failure retry]\n");
-    QTemporaryDir tmp;
-    tmp.setAutoRemove(false);
-    const std::string dir = tmp.path().toStdString();
-    const std::string ratingsPath = dir + "/ratings.txt";
-    const std::string flagsPath = dir + "/flags.txt";
-
-    auto &rs = RatingStore::instance();
-    rs.setFilePath(ratingsPath);
-
-    // Rapid burst: only the LAST value per path may survive.
-    constexpr int kFiles = 40;
-    for (int i = 0; i < kFiles; ++i)
-    {
-        rs.setRating("img_" + std::to_string(i) + ".png", 1 + (i % 5));
-        rs.setColorLabel("img_" + std::to_string(i) + ".png", 1 + (i % 6));
-    }
-    for (int i = 0; i < kFiles; ++i)
-        rs.setRating("img_" + std::to_string(i) + ".png", 5 - (i % 5)); // overwrite
-    CHECK(rs.rating("img_0.png") == 5, "in-memory read is immediate (last value)");
-
-    // Flush boundary: complete latest state must be on disk NOW (no debounce
-    // sleep needed).
-    CHECK(rs.save(), "explicit flush succeeds");
-    std::string onDisk = readAll(ratingsPath);
-    CHECK(onDisk.find("5|img_0.png") != std::string::npos,
-          "flushed ratings contain the LAST update for img_0");
-    CHECK(onDisk.find("1|img_0.png") == std::string::npos,
-          "flushed ratings contain no stale first update");
-
-    // Reload semantics: point away and back, then read from disk.
-    rs.setFilePath(dir + "/empty_ratings.txt");
-    CHECK(!rs.load(), "missing file load returns false");
-    rs.setFilePath(ratingsPath);
-    CHECK(rs.load(), "reload of the flushed file succeeds");
-    CHECK(rs.rating("img_0.png") == 5, "reloaded rating matches the flushed value");
-
-    // Failure semantics: a failed flush must not corrupt the official file.
-    const std::string before = readAll(ratingsPath);
-    setAtomicWriteFaults({false, true, false}); // fail the write step
-    rs.setRating("img_fail.png", 4);            // schedules a worker write
-    CHECK(!rs.save(), "flush reports the injected write failure");
-    setAtomicWriteFaults({});
-    CHECK(readAll(ratingsPath) == before,
-          "official ratings file byte-identical after a failed flush");
-
-    // Retry: the worker re-arms the dirty bit after a failure and persists on
-    // the next quiet period; the last update must NOT be dropped. The fault
-    // stays up across one quiet period (the worker waits 100 ms) so the first
-    // attempt fails. The assertion is the poll for the line, not a fixed
-    // 350 ms sleep on either side of clearing the fault.
-    setAtomicWriteFaults({false, true, false});
-    rs.setRating("img_retry.png", 3);
-    const auto retryStart = std::chrono::steady_clock::now();
-    auto retryDeadline = retryStart + std::chrono::seconds(3);
-    bool faultCleared = false;
-    bool persisted = false;
-    while (std::chrono::steady_clock::now() < retryDeadline)
-    {
-        if (QCoreApplication::instance())
-            QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
-        const bool hasLine = readAll(ratingsPath).find("3|img_retry.png") != std::string::npos;
-        if (!faultCleared)
-        {
-            if (hasLine)
-                break;
-            const auto heldFor = std::chrono::steady_clock::now() - retryStart;
-            if (heldFor >= std::chrono::milliseconds(200))
-            {
-                setAtomicWriteFaults({});
-                faultCleared = true;
-                // The successful retry gets its own multi-second deadline.
-                // Clearing the fault is not the assertion.
-                retryDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-            }
-        }
-        else if (hasLine)
-        {
-            persisted = true;
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }
-    if (!faultCleared)
-        setAtomicWriteFaults({});
-    CHECK(persisted, "the retried write persisted the update that first failed");
-    CHECK(rs.save(), "post-retry flush succeeds");
-
-    QDir(tmp.path()).removeRecursively();
-}
-
-void testTagAndSidecarAtomicity()
-{
-    printf("\n[P4. TagStore / SidecarStore atomic failure semantics]\n");
-    QTemporaryDir tmp;
-    tmp.setAutoRemove(false);
-    const std::string dir = tmp.path().toStdString();
-
-    auto &ts = TagStore::instance();
-    const std::string tagsPath = dir + "/tags.txt";
-    ts.setFilePath(tagsPath);
-    ts.clearTags("a.png");
-    ts.addTag("a.png", "keep");
-    ts.addTag("C:\\photos\\tagged.png", "keep");
-    CHECK(ts.snapshot().hasTag("C:/photos/tagged.png", "keep"),
-          "tag snapshot matches the other slash style");
-    ts.clearTags("C:/photos/tagged.png");
-    CHECK(ts.save(), "tags initial save succeeds");
-    const std::string before = readAll(tagsPath);
-
-    setAtomicWriteFaults({false, false, true}); // fail the replace
-    ts.addTag("a.png", "newtag");
-    CHECK(!ts.save(), "tags save reports the injected failure");
-    setAtomicWriteFaults({});
-    CHECK(readAll(tagsPath) == before, "tags file intact after the injected failure");
-    CHECK(ts.save(), "tags save succeeds after the fault clears");
-    CHECK(readAll(tagsPath).find("newtag") != std::string::npos,
-          "tags update persisted after recovery");
-
-    // SidecarStore: same semantics on the per-image .mviewer.json file.
-    auto &ss = SidecarStore::instance();
-    const std::string imgPath = dir + "/photo.jpg";
-    const std::string sidecar = SidecarStore::sidecarPath(imgPath);
-    auto &rs = RatingStore::instance();
-    rs.setRating(imgPath, 4);
-    CHECK(ss.writeSidecar(imgPath), "sidecar initial write succeeds");
-    const std::string sidecarBefore = readAll(sidecar);
-    CHECK(sidecarBefore.find("\"rating\": 4") != std::string::npos, "sidecar contains the rating");
-
-    setAtomicWriteFaults({true, false, false}); // fail temp create
-    rs.setRating(imgPath, 5);
-    CHECK(!ss.writeSidecar(imgPath), "sidecar write reports the injected failure");
-    setAtomicWriteFaults({});
-    CHECK(readAll(sidecar) == sidecarBefore, "sidecar file intact after the injected failure");
-    CHECK(ss.writeSidecar(imgPath), "sidecar write succeeds after the fault clears");
-    CHECK(readAll(sidecar).find("\"rating\": 5") != std::string::npos,
-          "sidecar updated to the new rating");
-    rs.setRating(imgPath, 0); // clean up the global store state
-
-    QDir(tmp.path()).removeRecursively();
-}
-
-void testShutdownFlush()
-{
-    printf("\n[P5. shutdown-style flush persists the latest state]\n");
-    QTemporaryDir tmp;
-    tmp.setAutoRemove(false);
-    const std::string dir = tmp.path().toStdString();
-    const std::string ratingsPath = dir + "/ratings.txt";
-
-    auto &rs = RatingStore::instance();
-    rs.setFilePath(ratingsPath);
-    rs.setRating("last.png", 2);
-    // Shutdown boundary: the store's destructor joins the worker, which
-    // flushes the dirty state. The flushSave()/save() API is the observable
-    // in-process equivalent — the worker path is exercised through the
-    // destructor at process exit AND through save() here.
-    rs.flushSave();
-    const std::string onDisk = readAll(ratingsPath);
-    CHECK(onDisk.find("2|last.png") != std::string::npos,
-          "latest rating persisted at the flush boundary");
-    QDir(tmp.path()).removeRecursively();
-}
-
 } // namespace
 
 int main()
@@ -339,9 +162,6 @@ int main()
 
     testAtomicWriteBasics();
     testStaleTempHandling();
-    testRatingStoreCoalescingAndFlush();
-    testTagAndSidecarAtomicity();
-    testShutdownFlush();
 
     setAtomicWriteFaults({}); // never leak fault injection
 

@@ -27,15 +27,10 @@ struct BrowseQuery
     std::string text;
     bool recursive = false;
     bool metadata = false;
-    int ratingMinimum = 0;
-    int colorLabel = 0;
-    bool rejectedOnly = false;
-    bool pickedOnly = false;
     bool recentOnly = false;
     std::string camera;
     std::string lens;
     int iso = 0;
-    std::string tag;
     std::string type;
     BrowseSortField sort = BrowseSortField::Name;
     bool ascending = true;
@@ -43,9 +38,8 @@ struct BrowseQuery
 
     bool empty() const
     {
-        return text.empty() && ratingMinimum == 0 && colorLabel == 0 && !rejectedOnly &&
-               !pickedOnly && !recentOnly && camera.empty() && lens.empty() && iso == 0 &&
-               tag.empty() && type.empty();
+        return text.empty() && !recentOnly && camera.empty() && lens.empty() && iso == 0 &&
+               type.empty();
     }
 };
 

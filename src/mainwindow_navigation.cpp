@@ -2,101 +2,6 @@
 #include "directorytree.h"
 #include "mainwindow_p.h"
 
-void MainWindow::scheduleSidecarImport(const QString &dir)
-{
-    TaskScheduler::cancel(m_sidecarImportTask);
-    if (m_sidecarImportAlive)
-        m_sidecarImportAlive->store(false, std::memory_order_release);
-
-    auto alive = std::make_shared<std::atomic<bool>>(true);
-    m_sidecarImportAlive = alive;
-    const std::string utf8Dir = dir.toUtf8().toStdString();
-    const QString expectedDir = QDir::cleanPath(QDir::fromNativeSeparators(dir));
-    const QPointer<MainWindow> guard(this);
-    m_sidecarImportTask = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Background,
-        [alive, utf8Dir](const TaskScheduler::TaskContext &context)
-        {
-            if (context.isCancelled() || !alive->load(std::memory_order_acquire))
-                return;
-            mviewer::core::SidecarStore::instance().importDirectory(
-                utf8Dir, [alive, &context]
-                { return context.isCancelled() || !alive->load(std::memory_order_acquire); });
-        },
-        {}, std::chrono::steady_clock::time_point::max(),
-        [guard, alive, expectedDir]()
-        {
-            if (!guard || !qApp || !alive->load(std::memory_order_acquire))
-                return;
-            QMetaObject::invokeMethod(
-                qApp,
-                [guard, alive, expectedDir]()
-                {
-                    if (!guard || !alive->load(std::memory_order_acquire) || !guard->m_directory ||
-                        QDir::cleanPath(QDir::fromNativeSeparators(
-                            guard->m_directory->currentDirectory())) != expectedDir)
-                        return;
-                    // Rating/flag filters read RatingStore at evaluation time.
-                    // Re-run the active filter after import so a sidecar never
-                    // requires a manual refresh to converge.
-                    guard->invalidateBrowseRatings();
-                    if (guard->m_metadataPanel && !guard->currentImagePath().isEmpty())
-                        guard->m_metadataPanel->setImage(guard->currentImagePath());
-                },
-                Qt::QueuedConnection);
-        });
-}
-
-void MainWindow::scheduleSidecarImportPaths(const QStringList &imagePaths)
-{
-    if (imagePaths.isEmpty())
-        return;
-    TaskScheduler::cancel(m_sidecarImportTask);
-    if (m_sidecarImportAlive)
-        m_sidecarImportAlive->store(false, std::memory_order_release);
-
-    auto alive = std::make_shared<std::atomic<bool>>(true);
-    m_sidecarImportAlive = alive;
-    const QString expectedDir = currentDir();
-    const QPointer<MainWindow> guard(this);
-    std::vector<std::string> paths;
-    paths.reserve(static_cast<size_t>(imagePaths.size()));
-    for (const QString &path : imagePaths)
-        paths.push_back(path.toUtf8().toStdString());
-    m_sidecarImportTask = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Background,
-        [alive, paths = std::move(paths)](const TaskScheduler::TaskContext &context)
-        {
-            if (context.isCancelled() || !alive->load(std::memory_order_acquire))
-                return;
-            for (const std::string &path : paths)
-            {
-                if (context.isCancelled() || !alive->load(std::memory_order_acquire))
-                    return;
-                mviewer::core::SidecarStore::instance().readSidecar(path);
-            }
-        },
-        {}, std::chrono::steady_clock::time_point::max(),
-        [guard, alive, expectedDir, imagePaths]()
-        {
-            if (!guard || !qApp || !alive->load(std::memory_order_acquire))
-                return;
-            QMetaObject::invokeMethod(
-                qApp,
-                [guard, alive, expectedDir, imagePaths]()
-                {
-                    if (!guard || !alive->load(std::memory_order_acquire) ||
-                        !DirectoryTree::equivalentPath(guard->currentDir(), expectedDir))
-                        return;
-                    if (guard->m_thumbnailPanel)
-                        guard->m_thumbnailPanel->refreshSidecarPaths(imagePaths);
-                    if (guard->m_metadataPanel && !guard->currentImagePath().isEmpty())
-                        guard->m_metadataPanel->setImage(guard->currentImagePath());
-                },
-                Qt::QueuedConnection);
-        });
-}
-
 void MainWindow::navigate(int delta)
 {
     if (currentDir().isEmpty() || currentImagePath().isEmpty())
@@ -583,8 +488,6 @@ void MainWindow::clearAllFilters()
         [](ThumbnailPanel *panel)
         {
             panel->clearFlagFilters();
-            panel->setRatingFilter(0);
-            panel->setTagFilter(QString());
             panel->setFilter(QString(), false);
         });
     statusBar()->showMessage(tr("All filters cleared"), 2000);
@@ -602,14 +505,8 @@ void MainWindow::resetFiltersOnFolderChange()
         [](ThumbnailPanel *panel)
         {
             panel->clearFlagFilters();
-            panel->setRatingFilter(0);
             panel->setFilter(QString(), false);
         });
-}
-
-void MainWindow::invalidateBrowseRatings()
-{
-    eachBrowsePanel([](ThumbnailPanel *panel) { panel->invalidateRatings(); });
 }
 
 void MainWindow::applySharedSearchFilter()

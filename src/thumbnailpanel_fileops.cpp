@@ -13,8 +13,13 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QPointer>
 #include <QSettings>
+#include <QThreadPool>
 #include <QUrl>
+
+#include <atomic>
+#include <memory>
 
 namespace
 {
@@ -101,6 +106,9 @@ QString mviewerTrashDirectory()
 constexpr qint64 kInternalTrashMaxAgeDays = 30;
 constexpr qint64 kInternalTrashMaxBytes = qint64(2) * 1024 * 1024 * 1024;
 
+// Runs on the thread pool (review P2-10): listing and deleting a large
+// trash directory must not block the UI thread on every delete. Every
+// permanent removal is logged.
 void pruneInternalTrash(const QString &trashDir)
 {
     QDir dir(trashDir);
@@ -113,11 +121,19 @@ void pruneInternalTrash(const QString &trashDir)
     {
         if (info.lastModified() < cutoff || total + info.size() > kInternalTrashMaxBytes)
         {
-            QFile::remove(info.absoluteFilePath());
+            const bool removed = QFile::remove(info.absoluteFilePath());
+            qInfo().noquote() << "internal trash prune:"
+                              << (removed ? "removed" : "failed to remove")
+                              << info.absoluteFilePath() << info.size() << "bytes";
             continue;
         }
         total += info.size();
     }
+}
+
+void pruneInternalTrashInBackground(const QString &trashDir)
+{
+    QThreadPool::globalInstance()->start([trashDir]() { pruneInternalTrash(trashDir); });
 }
 
 bool moveToSystemTrash(const std::string &source, std::string &pathInTrash)
@@ -565,12 +581,49 @@ void ThumbnailPanel::moveToTrashPaths(const QStringList &paths, const QString &c
     // not skip QFile::moveToTrash.
     const QString trashDir = mviewerTrashDirectory();
     if (!trashDir.isEmpty() && QDir().mkpath(trashDir))
-        pruneInternalTrash(trashDir);
+        pruneInternalTrashInBackground(trashDir);
 
     auto cmd =
         std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
-    cmd->setSystemTrash(&moveToSystemTrash);
+    // Review P2-10: when the recycle bin refuses a file (e.g. network shares)
+    // it lands in the bounded app trash. Tell the user once per operation.
+    auto fallbackNoticed = std::make_shared<std::atomic_bool>(false);
+    const QPointer<ThumbnailPanel> guard(this);
+    cmd->setSystemTrash(
+        [fallbackNoticed, guard](const std::string &source, std::string &pathInTrash)
+        {
+            if (moveToSystemTrash(source, pathInTrash))
+                return true;
+            if (!fallbackNoticed->exchange(true))
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [guard]()
+                    {
+                        if (guard)
+                            guard->notifyInternalTrashFallback();
+                    },
+                    Qt::QueuedConnection);
+            return false;
+        });
     startCommandFileOperation(std::move(cmd), paths, tr("Delete"));
+}
+
+void ThumbnailPanel::notifyInternalTrashFallback()
+{
+    const QString message =
+        tr("Some files could not go to the Recycle Bin (for example on network drives). They "
+           "were moved to MViewer's own trash, which keeps them for %1 days and up to %2 GB; "
+           "older files beyond that are deleted permanently. Use \"Open trash folder\" to "
+           "restore them.")
+            .arg(kInternalTrashMaxAgeDays)
+            .arg(kInternalTrashMaxBytes / (qint64(1024) * 1024 * 1024));
+    emit browseStatusChanged(message);
+    static bool shownThisSession = false;
+    if (!shownThisSession)
+    {
+        shownThisSession = true;
+        QMessageBox::information(this, tr("Delete"), message);
+    }
 }
 
 void ThumbnailPanel::openTrashFolder()

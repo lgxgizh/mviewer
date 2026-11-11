@@ -12,7 +12,7 @@ namespace mviewer::core
 std::filesystem::path pathFromUtf8(const std::string &path);
 std::string pathToUtf8(const std::filesystem::path &path);
 
-// One path-key normalizer for RatingStore / TagStore load and lookup.
+// One path-key normalizer for RecentStore load and lookup.
 // Applies QDir::fromNativeSeparators and QDir::cleanPath (slash form, "." /
 // ".." collapsed). On Windows the key is also case-folded, because the
 // filesystem is case-insensitive. Elsewhere case is preserved.

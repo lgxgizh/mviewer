@@ -1,10 +1,5 @@
-// M50 Phase 0/1: directory-transition and asynchronous Sidecar convergence.
-//
-// This exercises the production MainWindow + DirectoryTree signal path rather
-// than calling ThumbnailPanel::setDirectory directly. The test deliberately
-// keeps a rating filter active so a missing post-import refresh is observable:
-// the sidecar import must update the active gallery without blocking the
-// initial directory transition.
+// M50 Phase 0/1: directory-transition through the production MainWindow +
+// DirectoryTree signal path rather than ThumbnailPanel::setDirectory.
 
 #include "compareworkspace.h"
 #include "directorymodel.h"
@@ -14,8 +9,6 @@
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 
-#include "core/RatingStore.h"
-#include "core/SidecarStore.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include "widgets/rawimageview.h"
@@ -166,27 +159,6 @@ int main(int argc, char **argv)
         file.write("not an image");
     }
 
-    auto &ratings = mviewer::core::RatingStore::instance();
-    const QString ratingsPath = root.filePath(QStringLiteral("ratings.txt"));
-    ratings.setFilePath(ratingsPath.toUtf8().toStdString());
-    const std::string imageAUtf8 = imageA.toUtf8().toStdString();
-    const std::string imageBUtf8 = imageB.toUtf8().toStdString();
-    ratings.setRating(imageAUtf8, 5);
-    ratings.setColorLabel(imageAUtf8, 3);
-    ratings.setPicked(imageAUtf8, true);
-    ratings.setRejected(imageAUtf8, true);
-    ratings.flushSave();
-    CHECK(mviewer::core::SidecarStore::instance().writeSidecar(imageAUtf8),
-          "write a real Unicode sidecar fixture");
-    ratings.setRating(imageAUtf8, 0);
-    ratings.setColorLabel(imageAUtf8, 0);
-    ratings.setPicked(imageAUtf8, false);
-    ratings.setRejected(imageAUtf8, false);
-    ratings.flushSave();
-    CHECK(ratings.rating(imageAUtf8) == 0 && ratings.colorLabel(imageAUtf8) == 0 &&
-              !ratings.picked(imageAUtf8) && !ratings.rejected(imageAUtf8),
-          "clear in-store metadata before opening the directory");
-
     {
         MainWindow window;
         window.resize(1100, 750);
@@ -220,36 +192,30 @@ int main(int argc, char **argv)
         CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
               "external-open dispatcher sends one directory to Browse");
 
-        panel->setRatingFilter(5);
         CHECK(navigate(tree, directory, aPath),
               "Unicode directory A commits through DirectoryTree");
         CHECK(waitFor([&] { return samePath(panel->currentDir(), aPath); }),
               "gallery follows the committed directory A");
         CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
-              "async sidecar import converges the active rating filter in directory A");
-        CHECK(ratings.rating(imageAUtf8) == 5 && ratings.colorLabel(imageAUtf8) == 3 &&
-                  ratings.picked(imageAUtf8) && ratings.rejected(imageAUtf8),
-              "sidecar import restores rating, label, picked, and rejected state");
+              "directory A publishes its image");
         CHECK(selection->currentImage() == imageA,
-              "sidecar convergence preserves the gallery current-image publication");
+              "directory A preserves the gallery current-image publication");
 
         CHECK(navigate(tree, directory, bPath), "directory B commits through the same owner");
         CHECK(waitFor([&] { return samePath(panel->currentDir(), bPath); }),
               "gallery follows directory B");
-        CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
-              "directory B does not inherit directory A's active rating filter result");
-        CHECK(ratings.rating(imageBUtf8) == 0, "directory B has no stale rating import");
+        CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
+              "directory B publishes its own image");
 
         back->trigger();
         CHECK(waitFor([&] { return samePath(directory->currentDirectory(), aPath); }),
               "directory Back restores A");
-        CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
-              "Back re-runs Sidecar convergence for A");
+        CHECK(waitFor([&] { return panel->pathList().size() == 1; }), "Back restores A's gallery");
         forward->trigger();
         CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
               "directory Forward remains available after Back");
-        CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
-              "Forward restores B's filtered result");
+        CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
+              "Forward restores B's gallery");
 
         pathEdit->setText(QDir::toNativeSeparators(aPath));
         pathEdit->returnPressed();
@@ -259,7 +225,6 @@ int main(int argc, char **argv)
         // M52: adversarial boundary checks use production entry points. The last
         // directory request wins, and a source removed before its scan lands must
         // not become a stale gallery item.
-        panel->setRatingFilter(0);
         tree->navigateTo(aPath, true);
         tree->navigateTo(bPath, true);
         tree->navigateTo(cPath, true);

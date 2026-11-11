@@ -266,20 +266,10 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
 
 void ThumbnailPanel::sortDirectoryDeltaEntries(QList<Entry> &entries) const
 {
-    QHash<QString, int> ratingCache;
-    if (m_sortMode == SortRating)
-    {
-        ratingCache.reserve(entries.size());
-        auto &rs = mviewer::core::RatingStore::instance();
-        for (const auto &e : entries)
-            ratingCache.insert(e.path, rs.rating(e.path.toStdString()));
-    }
-
     const auto field = static_cast<mviewer::core::BrowseSortField>(m_sortMode);
-    auto compareEntries = [this, &ratingCache, field](const Entry &a, const Entry &b)
+    auto compareEntries = [this, field](const Entry &a, const Entry &b)
     {
-        const int primary =
-            browsePrimaryCompare(field, a, b, ratingCache, m_metaCamera, m_metaLens);
+        const int primary = browsePrimaryCompare(field, a, b, m_metaCamera, m_metaLens);
         return browseOrderedLess(primary, a.name, b.name, a.path, b.path, m_sortAscending);
     };
     std::stable_sort(entries.begin(), entries.end(), compareEntries);
@@ -333,31 +323,10 @@ void ThumbnailPanel::captureScrollAnchor(QString &anchorPath, int &anchorOffset)
     }
 }
 
-void ThumbnailPanel::refreshSidecarPaths(const QStringList &paths)
-{
-    if (m_currentDir.isEmpty() || paths.isEmpty())
-        return;
-
-    const QStringList previousSelection = selectedPaths();
-    const QString previousCurrent = currentIndex().isValid()
-                                        ? m_paths.value(currentIndex().row())
-                                        : (m_selection ? m_selection->currentImage() : QString());
-    QString anchorPath;
-    int anchorOffset = 0;
-    captureScrollAnchor(anchorPath, anchorOffset);
-    m_incrementalApply = true;
-    m_incrementalPrevSelection = previousSelection;
-    m_incrementalPrevCurrent = previousCurrent;
-    m_incrementalAnchorPath = anchorPath;
-    m_incrementalAnchorOffset = anchorOffset;
-    m_incrementalPreviousCurrentRow = m_paths.indexOf(previousCurrent);
-    applyFilter();
-}
-
 // Progressive rows land where the finished scan's sort will put them, so the
 // list no longer jumps when the scan completes (directory order is not the
-// natural-name order). Sort fields that need metadata snapshots (rating,
-// camera, lens, resolution) are not known yet and still append.
+// natural-name order). Sort fields that need metadata snapshots (camera,
+// lens, resolution) are not known yet and still append.
 void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch)
 {
     QString anchorPath;
@@ -373,11 +342,9 @@ void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch)
     std::vector<int> oldPos(static_cast<size_t>(sorted.size()), m_displayEntries.size());
     if (sortable)
     {
-        const QHash<QString, int> noRatings;
-        const auto less = [this, field, &noRatings](const Entry &a, const Entry &b)
+        const auto less = [this, field](const Entry &a, const Entry &b)
         {
-            const int primary =
-                browsePrimaryCompare(field, a, b, noRatings, m_metaCamera, m_metaLens);
+            const int primary = browsePrimaryCompare(field, a, b, m_metaCamera, m_metaLens);
             return browseOrderedLess(primary, a.name, b.name, a.path, b.path, m_sortAscending);
         };
         std::stable_sort(sorted.begin(), sorted.end(), less);
@@ -624,8 +591,7 @@ bool browseOrderedLess(int primary, QStringView nameA, QStringView nameB, const 
 }
 
 int browsePrimaryCompare(mviewer::core::BrowseSortField field, const ThumbnailPanel::Entry &a,
-                         const ThumbnailPanel::Entry &b, const QHash<QString, int> &ratingCache,
-                         const QHash<QString, QString> &metaCamera,
+                         const ThumbnailPanel::Entry &b, const QHash<QString, QString> &metaCamera,
                          const QHash<QString, QString> &metaLens)
 {
     switch (field)
@@ -651,7 +617,7 @@ int browsePrimaryCompare(mviewer::core::BrowseSortField field, const ThumbnailPa
     case mviewer::core::BrowseSortField::Type:
         return nameExtension(a.name).compare(nameExtension(b.name), Qt::CaseInsensitive);
     case mviewer::core::BrowseSortField::Rating:
-        return ratingCache.value(a.path) - ratingCache.value(b.path);
+        return 0;
     case mviewer::core::BrowseSortField::Camera:
         return QString::compare(metaCamera.value(ThumbnailPanel::galleryPathKey(a.path)),
                                 metaCamera.value(ThumbnailPanel::galleryPathKey(b.path)),
@@ -691,8 +657,6 @@ bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString
             primary = keyA.suffix < keyB.suffix ? -1 : 1;
         break;
     case ThumbnailPanel::SortRating:
-        if (keyA.rating != keyB.rating)
-            primary = keyA.rating < keyB.rating ? -1 : 1;
         break;
     case ThumbnailPanel::SortCamera:
         if (keyA.camera != keyB.camera)

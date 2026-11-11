@@ -152,9 +152,9 @@ In the app: **Help → User Guide** (shown in the current UI language). Full key
 
 ## 10. Sort and filter
 
-- The sort bar sorts by file name, date, size, resolution, type, rating, camera or lens; the arrow button switches ascending / descending. Equal items keep file-name order.
+- The sort bar sorts by file name, date, size, resolution, type, camera or lens; the arrow button switches ascending / descending. Equal items keep file-name order.
 - **Search** filters by file name; **Include Subfolders** and **Metadata** widen the search.
-- **Advanced Filter** shows camera, lens, ISO, tag, rating and flag/color-label filters plus a file-type filter. **Clear Filters** / **Reset Filters** remove every condition.
+- **Advanced Filter** shows camera, lens, ISO and Recently-viewed filters plus a file-type filter. **Clear Filters** / **Reset Filters** remove every condition.
 
 ---
 

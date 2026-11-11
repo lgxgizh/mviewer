@@ -1,3 +1,4 @@
+#include "browse_sort_restore.h"
 #include "mainwindow.h"
 #include "mainwindow_p.h"
 #include "splitbrowse_statusbar.h"
@@ -271,17 +272,8 @@ void MainWindow::applySecondarySortFromState()
         }
         return;
     }
-    const auto mode = static_cast<ThumbnailPanel::SortMode>(m_appState.secondarySortField);
+    const auto mode = restoredBrowseSortMode(m_appState.secondarySortField, m_secondarySortCombo);
     m_secondaryThumbnailPanel->setSort(mode, m_appState.secondarySortAscending);
-    if (m_secondarySortCombo)
-    {
-        const int idx = m_secondarySortCombo->findData(mode);
-        if (idx >= 0)
-        {
-            const QSignalBlocker b(m_secondarySortCombo);
-            m_secondarySortCombo->setCurrentIndex(idx);
-        }
-    }
     if (m_secondarySortDirBtn)
     {
         const bool desc = !m_appState.secondarySortAscending;

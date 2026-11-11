@@ -95,6 +95,7 @@ extern "C"
 #endif
     }
 
+#ifndef AUDIT_PLUGIN_NO_EXPORTS
     MVIEWER_PLUGIN_EXPORT int mviewer_plugin_api_version()
     {
 #ifdef AUDIT_PLUGIN_LEGACY_MISMATCH
@@ -103,8 +104,9 @@ extern "C"
         return MVIEWER_API_VERSION;
 #endif
     }
+#endif
 
-#ifndef AUDIT_PLUGIN_LEGACY_MISMATCH
+#if !defined(AUDIT_PLUGIN_LEGACY_MISMATCH) && !defined(AUDIT_PLUGIN_NO_EXPORTS)
     MVIEWER_PLUGIN_EXPORT const PluginABI *mviewer_plugin_abi()
     {
         static const PluginABI abi;
