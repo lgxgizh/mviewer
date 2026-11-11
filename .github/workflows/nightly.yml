@@ -5,6 +5,7 @@
 # sensitive checks that must NOT sit in the PR gate:
 #   * ASan  — out-of-bounds / use-after-free / heap overflow (+ leak detect)
 #   * UBSan — integer overflow / undefined behaviour (alignment off on clang-cl trap)
+#   * fuzz  — libFuzzer on the EXIF/TIFF/RAW/Y4M/YUV parsers (Linux clang)
 #   * clazy — Qt-aware static analysis (advisory signal)
 #   * quality — CTest bench_* perf hard-gate + golden_image UI regression
 #   * perfetto — capture a Chrome-trace JSON under instrumentation (best-effort)
@@ -199,6 +200,77 @@ jobs:
           # The rest are PowerShell script gates (COMMAND powershell in
           # src/CMakeLists.txt); Linux runners have no powershell.
           ctest --output-on-failure -j 4 --timeout 600 -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
+
+  # ---------------------------------------------------------------------------
+  # fuzz-linux — libFuzzer + ASan/UBSan on the hand-written binary parsers
+  # (review P1-5): TIFF/RAW IFD walker, JPEG EXIF/GPS/ICC scrapers, Y4M
+  # headers/frame index, raw-YUV name inference. ~5 min of fuzzing in total.
+  # Seeds live in tests/fuzz/corpus/<target>; CTest replays them on every PR.
+  # A crash uploads its reproducer: add it to the seed corpus with the fix.
+  # ---------------------------------------------------------------------------
+  fuzz-linux:
+    name: Fuzz parsers (Linux clang libFuzzer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang libgl1-mesa-dev libxkbcommon-dev libegl1 \
+            libfontconfig1 libfreetype6 libdbus-1-3 libx11-6 cmake ninja-build
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Configure (clang + libFuzzer + ASan/UBSan)
+        run: |
+          cmake -B build_fuzz -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}" \
+            -DMVIEWER_FUZZ=ON \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined,fuzzer-no-link -fno-omit-frame-pointer -g1" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build fuzz targets
+        run: |
+          cmake --build build_fuzz -j 4 --target \
+            fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference
+
+      - name: Fuzz (75 s per target)
+        run: |
+          export QT_QPA_PLATFORM=offscreen
+          export ASAN_OPTIONS="detect_leaks=0:abort_on_error=1"
+          export UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1"
+          mkdir -p fuzz-artifacts
+          status=0
+          for t in fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference; do
+            mkdir -p "fuzz-work/$t"
+            cp tests/fuzz/corpus/$t/* "fuzz-work/$t/"
+            echo "::group::$t"
+            build_fuzz/bin/$t "fuzz-work/$t" -max_total_time=75 -rss_limit_mb=2048 \
+              -timeout=10 -artifact_prefix="fuzz-artifacts/$t-" -print_final_stats=1 || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+      - name: Upload crash reproducers
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-artifacts
+          path: fuzz-artifacts/
 
   # ---------------------------------------------------------------------------
   # ubsan — UndefinedBehaviorSanitizer via clang-cl
@@ -700,7 +772,7 @@ jobs:
   qa-report:
     name: QA report (Tier 2)
     runs-on: ubuntu-latest
-    needs: [asan, asan-linux, ubsan, clazy, quality, perfetto, coverage]
+    needs: [asan, asan-linux, fuzz-linux, ubsan, clazy, quality, perfetto, coverage]
     if: always()
     steps:
       - name: Nightly summary

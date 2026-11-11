@@ -63,3 +63,4 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGL OpenGLWidgets)
 
 add_subdirectory(src)
 add_subdirectory(plugins/example)
+add_subdirectory(tests/fuzz)
