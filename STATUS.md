@@ -1,12 +1,22 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-09 · Version: **1.0.172** · Release tag: **v1.0.172**
+> Snapshot: 2026-11-11 · Version: **1.0.173** · Release tag: **v1.0.173**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.173 — Project-review pass (2026-11-11)
+
+- All findings of the 2026-11-11 project review except the Qt patch upgrade
+  (P1-7): full zh_CN, Linux tests in the PR gate, release PDBs/symbols zip,
+  RAW/TIFF parser 64-bit and byte-order fixes with nightly fuzzing, rating/tag
+  backend removed (recently viewed in `recents.txt`), async batch rotate/flip,
+  cache limits and Clear caches in Preferences, plugin DLL hardening, CI
+  supply-chain hardening (SHA-pinned actions, provenance attestations).
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.172 — Details zebra restore and rating/tag UI removal (2026-11-09)
 
