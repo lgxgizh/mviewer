@@ -674,6 +674,13 @@ if(Python3_Interpreter_FOUND)
     # Nightly benchmark regression rules (median, floors, stale baseline).
     add_test(NAME perf_regression_selftest
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/perf_regression.py --self-test)
+    # The embedded .qm must contain every finished .ts translation (lrelease is
+    # not part of the normal build; v1.0.172 shipped 19 strings untranslated).
+    add_test(NAME i18n_qm_sync_gate
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check_qm_sync.py
+                --ts ${CMAKE_SOURCE_DIR}/translations/mviewer_zh_CN.ts
+                --qm ${CMAKE_SOURCE_DIR}/resources/i18n/mviewer_zh_CN.qm
+                --qm ${CMAKE_SOURCE_DIR}/translations/mviewer_zh_CN.qm)
 endif()
 
 # M35: the canonical local Test entry point must never turn a failing CTest
