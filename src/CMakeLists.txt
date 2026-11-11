@@ -1,4 +1,5 @@
 include(${CMAKE_SOURCE_DIR}/cmake/LibRaw.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/MViewerTesting.cmake)
 
 # ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
 # OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
@@ -944,6 +945,7 @@ target_link_libraries(split_browse_acceptance
 )
 target_compile_features(split_browse_acceptance PRIVATE cxx_std_20)
 target_include_directories(split_browse_acceptance PRIVATE )
+mviewer_test_support(split_browse_acceptance)
 add_test(NAME split_browse_acceptance COMMAND split_browse_acceptance)
 set_tests_properties(split_browse_acceptance PROPERTIES RUN_SERIAL TRUE)
 
@@ -1058,21 +1060,10 @@ add_test(NAME yuv_params_dialog_tests COMMAND yuv_params_dialog_tests)
 set_tests_properties(yuv_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # ADR 032: two-file YUV PSNR / SSIM compare dialog (worker thread, cancel, report).
-add_executable(yuv_compare_dialog_tests
-    test_yuv_compare_dialog.cpp
-)
-target_link_libraries(yuv_compare_dialog_tests
-    PRIVATE
-        Qt6::Widgets
-        Qt6::Gui
-        Qt6::Core
-        mviewer_core
-        mviewer_ui
-)
-target_compile_features(yuv_compare_dialog_tests PRIVATE cxx_std_20)
-target_include_directories(yuv_compare_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-add_test(NAME yuv_compare_dialog_tests COMMAND yuv_compare_dialog_tests)
-set_tests_properties(yuv_compare_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 30)
+mviewer_add_test(yuv_compare_dialog_tests
+    SRCS test_yuv_compare_dialog.cpp
+    LIBS mviewer_ui
+    TIMEOUT 30 SERIAL)
 
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
@@ -2241,21 +2232,10 @@ add_test(NAME m59_phase0_metadata_tests COMMAND m59_phase0_metadata_tests)
 set_tests_properties(m59_phase0_metadata_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
 # ─── Big folders: hashed path lookups + progressive scan order ─────────────
-add_executable(big_folder_tests
-    test_big_folder.cpp
-)
-target_link_libraries(big_folder_tests
-    PRIVATE
-        Qt6::Widgets
-        Qt6::Gui
-        Qt6::Core
-        mviewer_core
-        mviewer_ui
-)
-target_compile_features(big_folder_tests PRIVATE cxx_std_20)
-target_include_directories(big_folder_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-add_test(NAME big_folder_tests COMMAND big_folder_tests)
-set_tests_properties(big_folder_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+mviewer_add_test(big_folder_tests
+    SRCS test_big_folder.cpp
+    LIBS mviewer_ui
+    TIMEOUT 180 SERIAL)
 
 # ─── M59 Browse regression: production evaluator + latest-wins panel ───────
 add_executable(m59_browse_regression_tests
@@ -2271,6 +2251,7 @@ target_link_libraries(m59_browse_regression_tests
 )
 target_compile_features(m59_browse_regression_tests PRIVATE cxx_std_20)
 target_include_directories(m59_browse_regression_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+mviewer_test_support(m59_browse_regression_tests)
 add_test(NAME m59_browse_regression_tests COMMAND m59_browse_regression_tests)
 set_tests_properties(m59_browse_regression_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
@@ -3155,10 +3136,11 @@ foreach(_mviewer_test IN LISTS MVIEWER_REGISTERED_TESTS)
         "${_mviewer_root}/temp"
         "${_mviewer_root}/config"
         "${_mviewer_root}/data"
-        "${_mviewer_root}/cache")
+        "${_mviewer_root}/cache"
+        "${_mviewer_root}/home")
     set_tests_properties(${_mviewer_test} PROPERTIES
         ENVIRONMENT
-        "QT_QPA_PLATFORM=offscreen;MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache")
+        "QT_QPA_PLATFORM=offscreen;MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache;HOME=${_mviewer_root}/home")
 endforeach()
 
 # ─── Format target ──────────────────────────────────────────────────────────
