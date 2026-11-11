@@ -1,6 +1,15 @@
 #include "core/thumbnail/ThumbnailPipeline.h"
 
 #include <algorithm>
+#include <atomic>
+#include <cstdint>
+
+namespace
+{
+// Throwing result callbacks are swallowed so one subscriber cannot starve the
+// others; counted so the failure is at least observable in a debugger.
+std::atomic<uint64_t> g_resultCallbackFailures{0};
+} // namespace
 
 ThumbnailPipeline::ResultToken ThumbnailPipeline::addResultFn(ResultFn fn)
 {
@@ -500,6 +509,8 @@ void ThumbnailPipeline::enqueueLocked(const std::string &path, int cid, uint64_t
                 }
                 catch (...)
                 {
+                    // A throwing subscriber must not stop delivery to the others.
+                    g_resultCallbackFailures.fetch_add(1, std::memory_order_relaxed);
                 }
             };
             deliverOne(cb);
