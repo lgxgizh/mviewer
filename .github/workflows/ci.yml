@@ -119,6 +119,9 @@ jobs:
 
       - name: Install cppcheck + Qt6 headers
         run: |
+          # Ubuntu archive DNS outage 2026-11-11: use the Azure mirror and retry.
+          sudo sed -i -E 's#https?://(security|archive)\.ubuntu\.com#http://azure.archive.ubuntu.com#g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors.txt 2>/dev/null || true
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
           sudo apt-get update
           sudo apt-get install -y cppcheck qt6-base-dev
 
@@ -167,6 +170,9 @@ jobs:
 
       - name: Install clang-tidy + clang
         run: |
+          # Ubuntu archive DNS outage 2026-11-11: use the Azure mirror and retry.
+          sudo sed -i -E 's#https?://(security|archive)\.ubuntu\.com#http://azure.archive.ubuntu.com#g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors.txt 2>/dev/null || true
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
           sudo apt-get update
           sudo apt-get install -y clang clang-tidy clang-tools cmake ninja-build
 
@@ -270,6 +276,9 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Ubuntu archive DNS outage 2026-11-11: use the Azure mirror and retry.
+          sudo sed -i -E 's#https?://(security|archive)\.ubuntu\.com#http://azure.archive.ubuntu.com#g' /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/apt-mirrors.txt 2>/dev/null || true
+          printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libegl1 \
             libfontconfig1 libfreetype6 libdbus-1-3 libx11-6 \
