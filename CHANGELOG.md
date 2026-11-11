@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+## [1.0.174] - 2026-11-11
+
+Plain `.raw` sensor-dump viewing (ADR 033).
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.174**.
+
+### Added
+
+- **Plain `.raw` sensor dumps** (ADR 033): a `.raw` file is always read as a
+  headerless Bayer or mono dump and never goes to LibRaw (other camera RAW
+  extensions are unchanged). The size comes from `WxH` in the file name and is
+  checked against the file size; if it does not match, the common storage
+  formats are tried. Bit depth 8/10/12/14/16; storage 16-bit LSB (default) or
+  MSB aligned, MIPI RAW10/RAW12 packed, or 8-bit; little/big endian; header
+  offset and row stride; black and white level; RGGB/BGGR/GRBG/GBRG/Mono;
+  white balance none / gray world (default) / white patch / manual R/B gains;
+  digital gain 1× (default, 0.125×–64×); sRGB gamma; bilinear demosaic.
+- **Preferences → RAW** holds the defaults; **right-click → RAW Parameters...**
+  overrides one file for the session, shows expected vs actual bytes and lists
+  matching combinations. Changes redraw the image and its thumbnail.
+- The pixel readout adds the stored sensor value (e.g. `RAW G=512 (10-bit)`),
+  in compare mode while the cell is not rotated, flipped or cropped.
+- `.raw` files are read-only: rotate/flip in the normal viewer are disabled;
+  compare mode's temporary rotation works as for other images.
+- zh_CN strings for the new UI.
+
+### Tests / CI
+
+- Unit tests for unpacking, size inference, rendering and file access; UI test
+  for the RAW editor, dialog and settings.
+- `m47_restore_tests` latches status-bar messages instead of polling them, so a
+  later "Loaded N images" message can no longer hide the restore result.
+- PR gate Linux jobs switch apt to the Azure Ubuntu mirror with retries and
+  timeouts.
+
 ## [1.0.173] - 2026-11-11
 
 Project-review pass (2026-11-11): every P0/P1/P2 finding except the Qt
