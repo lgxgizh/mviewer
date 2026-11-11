@@ -700,6 +700,7 @@ class ThumbnailPanel : public QListView
     void ensureBatchProgressDialog();
     void finishBatchAnalyzeExport(bool cancelled, bool writeOk, size_t resultCount,
                                   const QString &output);
+    void notifyInternalTrashFallback();
     void startCommandFileOperation(std::unique_ptr<ICommand> command, const QStringList &paths,
                                    const QString &label);
     void startCopyFileOperation(const QStringList &paths, const QString &destinationDirectory);

@@ -29,6 +29,22 @@ file(WRITE ${CMAKE_BINARY_DIR}/version_info.txt
 # The generated header dir is a usage requirement of mviewer_core (PUBLIC in
 # src/CMakeLists.txt), not a directory-wide include path.
 set(MVIEWER_GENERATED_INCLUDE_DIR ${CMAKE_BINARY_DIR}/generated)
+# Review P2-14: the configure-time describe above goes stale after an
+# incremental build (About dialog and logs showed an old describe). This target
+# refreshes it before every build; mviewer_core depends on it.
+add_custom_target(mviewer_version_stamp
+    COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DPROJECT_VERSION=${PROJECT_VERSION}
+            -DPROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+            -DPROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+            -DPROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH}
+            -P ${CMAKE_SOURCE_DIR}/cmake/MViewerVersionStamp.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/MViewerVersion.h
+               ${CMAKE_BINARY_DIR}/version_info.txt
+    COMMENT "Refreshing git describe in MViewerVersion.h"
+    VERBATIM)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

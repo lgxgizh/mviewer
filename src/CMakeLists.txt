@@ -127,6 +127,7 @@ add_library(mviewer_core SHARED
     core/render/DisplayResampleSimd.cpp
     core/render/AsyncTileRequestManager.cpp
     core/thumbnail/ThumbnailPipeline.h
+    core/plugin/PluginLibrary.cpp
     core/plugin/PluginLoader.cpp
     core/plugin/PluginManager.cpp
     core/export/IExporter.h
@@ -198,6 +199,7 @@ target_compile_features(mviewer_core PUBLIC cxx_std_20)
 # copy and crash on cross-module delete / teardown). Auto-export all symbols
 # so consumers link without per-symbol declspec markup.
 set_target_properties(mviewer_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+add_dependencies(mviewer_core mviewer_version_stamp)
 
 target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
     ${MVIEWER_GENERATED_INCLUDE_DIR})

@@ -60,3 +60,6 @@ third_party/*.tar.gz
 
 # Local manual-acceptance wizard output
 artifacts/
+
+# LibRaw tag archive cached by cmake/LibRaw.cmake (review P2-11)
+third_party/LibRaw-*.tar.gz

@@ -345,6 +345,14 @@ jobs:
         shell: pwsh
         run: ./scripts/architecture_gate.ps1
 
+      - name: Complexity (lizard reference count, ratchet)
+        # The PowerShell gate's brace parser undercounts (review P2-9). lizard
+        # is the reference; the counts may only go down.
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check lizard
+          python3 scripts/complexity_lizard.py --summary "$GITHUB_STEP_SUMMARY" \
+            --max-ccn25 41 --max-long-functions 2
+
       - name: Health score + dashboard
         shell: pwsh
         run: |

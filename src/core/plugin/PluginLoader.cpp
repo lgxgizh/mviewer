@@ -1,6 +1,7 @@
 #include "core/plugin/PluginLoader.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/plugin/PluginABI.h"
+#include "core/plugin/PluginLibrary.h"
 
 #include <QDebug>
 
@@ -98,12 +99,8 @@ struct PluginModulePin
 
 void *reopenPlugin(const std::string &path)
 {
-#ifdef _WIN32
-    const std::filesystem::path nativePath = mviewer::core::pathFromUtf8(path);
-    return reinterpret_cast<void *>(LoadLibraryW(nativePath.native().c_str()));
-#else
-    return dlopen(path.c_str(), RTLD_LAZY);
-#endif
+    std::string ignored;
+    return mviewer::core::loadPluginLibrary(path, ignored);
 }
 
 std::shared_ptr<PluginModulePin> pinPluginModule(const std::string &path)
@@ -157,9 +154,17 @@ bool pluginAbiAccepted(void *handle, const std::string &path, std::string &error
         return true;
     }
 
+    // Review P2-1: a module with no contract export at all is rejected; its
+    // DllMain already ran, but no plugin entry point is resolved or called.
+    if (!versionFn)
+    {
+        error = mviewer::core::kPluginMissingAbiError;
+        logRejectedPlugin(path, error);
+        return false;
+    }
     // Legacy single-version export. Same gate on every platform; only the
     // version query itself is called before this decision.
-    if (versionFn && versionFn() != MVIEWER_PLUGIN_API_VERSION)
+    if (versionFn() != MVIEWER_PLUGIN_API_VERSION)
     {
         error = "plugin API version mismatch (legacy export)";
         logRejectedPlugin(path, error);
@@ -248,25 +253,12 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
     result.path = path;
 
     void *handle = nullptr;
-#ifdef _WIN32
-    const std::filesystem::path nativePath = mviewer::core::pathFromUtf8(path);
-    handle = reinterpret_cast<void *>(LoadLibraryW(nativePath.native().c_str()));
+    handle = mviewer::core::loadPluginLibrary(path, result.error);
     if (!handle)
     {
-        result.error = "LoadLibrary failed: " + std::to_string(GetLastError());
         s_lastError = result.error;
         return result;
     }
-#else
-    handle = dlopen(path.c_str(), RTLD_LAZY);
-    if (!handle)
-    {
-        const char *reason = dlerror();
-        result.error = "dlopen failed: " + std::string(reason ? reason : "unknown");
-        s_lastError = result.error;
-        return result;
-    }
-#endif
 
     // ABI / legacy version check before any symbol other than the version query.
     if (!pluginAbiAccepted(handle, path, result.error))
