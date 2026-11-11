@@ -1,25 +1,18 @@
 // Focused regressions for audit items that had no home in an existing suite:
-// writable-directory cache (#51), async sidecar writes (#53), the file logger
-// (#56), and the trace ring (#58).
+// writable-directory cache (#51), the file logger (#56), and the trace ring
+// (#58).
 #include "core/Logger.h"
-#include "core/MainThreadDispatcher.h"
-#include "core/RatingStore.h"
-#include "core/SidecarStore.h"
-#include "core/filesystem/AtomicFile.h"
-#include "core/scheduler/TaskScheduler.h"
 #include "core/trace/TraceSink.h"
 #include "runtime_storage.h"
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QFile>
 #include <QStandardPaths>
 #include <QString>
 #include <QTemporaryDir>
 #include <QtGlobal>
 
 #include <atomic>
-#include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <sstream>
@@ -34,14 +27,6 @@ static void check(bool condition, const char *message)
         return;
     std::fprintf(stderr, "FAIL: %s\n", message);
     ++g_failures;
-}
-
-static std::string sidecarFileFor(const std::string &imagePath)
-{
-    std::string modern = imagePath + ".mviewer.json";
-    if (std::ifstream(modern, std::ios::binary))
-        return modern;
-    return imagePath + ".xmp";
 }
 
 static std::string readFile(const std::string &path)
@@ -80,104 +65,6 @@ static void testWritableDirectoryCache()
     a.join();
     b.join();
     check(!left.empty() && left == right, "concurrent writableDirectory calls agree");
-}
-
-static void testSidecarAsync()
-{
-    QTemporaryDir dir;
-    check(dir.isValid(), "sidecar temp dir");
-    const QString imagePath = dir.filePath(QStringLiteral("photo.jpg"));
-    QFile image(imagePath);
-    check(image.open(QIODevice::WriteOnly), "create sidecar image placeholder");
-    image.write("x");
-    image.close();
-
-    const std::string path = imagePath.toUtf8().toStdString();
-    auto &ratings = mviewer::core::RatingStore::instance();
-    for (int stars = 1; stars <= 5; ++stars)
-    {
-        ratings.setRating(path, stars);
-        mviewer::core::SidecarStore::instance().writeSidecarAsync(path);
-    }
-    check(TaskScheduler::instance().drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
-          "sidecar burst drained");
-    check(readFile(sidecarFileFor(path)).find("\"rating\": 5") != std::string::npos,
-          "later sidecar writes win for the same path");
-
-    std::atomic<int> failures{0};
-    mviewer::core::setAtomicWriteFaults({true, false, false});
-    ratings.setRating(path, 4);
-    mviewer::core::SidecarStore::instance().writeSidecarAsync(path, [&failures](const std::string &)
-                                                              { failures.fetch_add(1); });
-    check(TaskScheduler::instance().drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
-          "failed sidecar write drained");
-    check(failures.load() == 1, "sidecar write failure is reported");
-    check(readFile(sidecarFileFor(path)).find("\"rating\": 5") != std::string::npos,
-          "a failed atomic write leaves the previous sidecar");
-
-    mviewer::core::setAtomicWriteFaults({});
-    ratings.setRating(path, 3);
-    mviewer::core::SidecarStore::instance().writeSidecarAsync(path, [&failures](const std::string &)
-                                                              { failures.fetch_add(1); });
-    check(TaskScheduler::instance().drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
-          "sidecar retry drained");
-    check(failures.load() == 1, "a successful sidecar write does not report failure");
-    check(readFile(sidecarFileFor(path)).find("\"rating\": 3") != std::string::npos,
-          "sidecar retry writes the latest rating");
-
-    ratings.clearRating(path);
-    mviewer::core::setAtomicWriteFaults({});
-}
-
-static void testSidecarRejectedSubmitRetries()
-{
-    struct ResumeIo
-    {
-        ~ResumeIo()
-        {
-            TaskScheduler::instance().resume(TaskScheduler::IOPool);
-        }
-    } resumeIo;
-
-    QTemporaryDir dir;
-    check(dir.isValid(), "rejected-submit sidecar temp dir");
-    const QString imagePath = dir.filePath(QStringLiteral("photo.jpg"));
-    QFile image(imagePath);
-    check(image.open(QIODevice::WriteOnly), "create rejected-submit image placeholder");
-    image.write("x");
-    image.close();
-
-    const std::string path = imagePath.toUtf8().toStdString();
-    auto &ratings = mviewer::core::RatingStore::instance();
-    auto &sched = TaskScheduler::instance();
-    sched.pause(TaskScheduler::IOPool);
-    ratings.setRating(path, 1);
-    mviewer::core::SidecarStore::instance().writeSidecarAsync(path);
-    ratings.setRating(path, 5);
-    mviewer::core::SidecarStore::instance().writeSidecarAsync(path);
-
-    // Long enough for the off-thread retry to attempt a submit and fail again
-    // while the pool is still paused. An inline fallback would have written.
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    check(readFile(sidecarFileFor(path)).find("\"rating\"") == std::string::npos,
-          "rejected sidecar submit does not write on the caller");
-
-    sched.resume(TaskScheduler::IOPool);
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    bool wroteLatest = false;
-    while (std::chrono::steady_clock::now() < deadline)
-    {
-        if (readFile(sidecarFileFor(path)).find("\"rating\": 5") != std::string::npos)
-        {
-            wroteLatest = true;
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    check(wroteLatest, "sidecar retry runs off the caller and keeps the latest rating");
-    check(sched.drain(TaskScheduler::IOPool, std::chrono::milliseconds(5000)),
-          "sidecar retry drained");
-    ratings.clearRating(path);
 }
 
 static int g_restoredWarnings = 0;
@@ -283,8 +170,6 @@ int main(int argc, char **argv)
     QCoreApplication::setApplicationName(QStringLiteral("MViewerAuditMisc"));
 
     testWritableDirectoryCache();
-    testSidecarAsync();
-    testSidecarRejectedSubmitRetries();
     testFileLogger();
     testTraceRing();
 

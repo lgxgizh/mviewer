@@ -122,9 +122,6 @@ class ThumbnailPanel : public QListView
     // M56: apply an already-reconciled filesystem delta without crossing the
     // directory navigation boundary or resetting the whole gallery model.
     void applyDirectoryDelta(const mviewer::core::DirectoryDelta &delta);
-    // M56: re-evaluate the active filter after a sidecar import. Source rows
-    // stay intact and any membership change is row-local.
-    void refreshSidecarPaths(const QStringList &paths);
     // P0-1: F5 refresh — reload the current directory from disk.
     void refresh();
     QString currentDir() const

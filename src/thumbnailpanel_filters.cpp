@@ -416,18 +416,9 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
                                   metaCamera, metaLens))
             out.append(entry);
     }
-    QHash<QString, int> ratingCache;
-    if (query.sort == mviewer::core::BrowseSortField::Rating)
+    const auto less = [&query, &metaCamera, &metaLens](const Entry &a, const Entry &b)
     {
-        const auto ratings = mviewer::core::RatingStore::instance().snapshot();
-        ratingCache.reserve(out.size());
-        for (const auto &entry : out)
-            ratingCache.insert(entry.path, ratings.rating(entry.path.toStdString()));
-    }
-    const auto less = [&query, &ratingCache, &metaCamera, &metaLens](const Entry &a, const Entry &b)
-    {
-        const int primary =
-            browsePrimaryCompare(query.sort, a, b, ratingCache, metaCamera, metaLens);
+        const int primary = browsePrimaryCompare(query.sort, a, b, metaCamera, metaLens);
         return browseOrderedLess(primary, a.name, b.name, a.path, b.path, query.ascending);
     };
     std::stable_sort(out.begin(), out.end(), less);

@@ -2,9 +2,9 @@
 // Copyright (c) 2026 mviewer project. All rights reserved.
 // SPDX-License-Identifier: MIT
 //
-// RecentStore — recently-viewed path list (review P1-1, step 2a). Split out of
-// RatingStore so the filter keeps working after rating/label/flag/tag UI is
-// gone. One UTF-8 path per line in recents.txt, most recent first.
+// RecentStore — recently-viewed path list (review P1-1, step 2a). Kept so the
+// filter still works after rating/label/flag/tag UI is gone. One UTF-8 path
+// per line in recents.txt, most recent first.
 //
 #pragma once
 

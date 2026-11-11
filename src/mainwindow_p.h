@@ -22,10 +22,8 @@
 #include "MViewerVersion.h" // M24 version SSOT (generated from CMake project VERSION)
 
 #include "appstate.h"
-#include "core/RatingStore.h"
 #include "core/RecentStore.h"
 #include "core/SettingsIO.h"
-#include "core/SidecarStore.h"
 #include "core/analysis/ReportHtml.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/cache/CacheManager.h"

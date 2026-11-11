@@ -54,7 +54,7 @@ RecentStore &RecentStore::instance()
 {
     // Function-local static. The constructor does not touch disk: the path is
     // resolved on first use, after QCoreApplication exists (same deferral as
-    // TagStore / the rating-store app-data location).
+    // the app-data location).
     static RecentStore s;
     return s;
 }
@@ -138,7 +138,7 @@ void RecentStore::loadLocked() const
         return;
     }
 
-    // One-time migration from RatingStore's flags.txt. Read only "N|<path>"
+    // One-time migration from the legacy flags.txt. Read only "N|<path>"
     // lines, in file order. Never modify or delete flags.txt.
     const std::string flagsPath = flagsPathFor(m_filePath);
     if (!std::filesystem::exists(pathFromUtf8(flagsPath), ec) || ec)
