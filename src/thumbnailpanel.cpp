@@ -2,6 +2,7 @@
 #include "hoverfade.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
+#include "thumbnailpanel_testaccess.h"
 #include "thumbnailprovider.h"
 
 // P0#3: DetailsHeader (the column-title strip above the Details list) is now
@@ -688,35 +689,36 @@ void ThumbnailPanel::showEvent(QShowEvent *event)
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
-void ThumbnailPanel::seedDisplayThumbForTest(const QString &path, const QPixmap &pixmap)
+void ThumbnailPanelTestAccess::seedDisplayThumb(ThumbnailPanel &panel, const QString &path,
+                                                const QPixmap &pixmap)
 {
-    Entry entry;
+    ThumbnailPanel::Entry entry;
     entry.path = path;
     entry.name = QStringLiteral("wide.jpg");
     entry.width = 0;
     entry.height = 0;
-    buildModel({entry});
-    QMutexLocker lk(&m_thumbMtx);
-    const QString key = thumbCacheKey(path, m_thumbSize);
-    auto old = m_thumbReady.find(key);
-    if (old != m_thumbReady.end())
+    panel.buildModel({entry});
+    QMutexLocker lk(&panel.m_thumbMtx);
+    const QString key = panel.thumbCacheKey(path, panel.m_thumbSize);
+    auto old = panel.m_thumbReady.find(key);
+    if (old != panel.m_thumbReady.end())
     {
-        m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - old->bytes);
-        m_thumbReadyLru.erase(old->lruIt);
-        forgetThumbReadyKeyLocked(key);
-        m_thumbReady.erase(old);
+        panel.m_thumbReadyBytes = qMax<qint64>(0, panel.m_thumbReadyBytes - old->bytes);
+        panel.m_thumbReadyLru.erase(old->lruIt);
+        panel.forgetThumbReadyKeyLocked(key);
+        panel.m_thumbReady.erase(old);
     }
-    m_thumbReadyLru.push_front(key);
-    ReadyPixmap ready;
+    panel.m_thumbReadyLru.push_front(key);
+    ThumbnailPanel::ReadyPixmap ready;
     ready.pixmap = pixmap;
     const int edgeW = qMax(1, pixmap.width());
     const int edgeH = qMax(1, pixmap.height());
     ready.bytes = static_cast<qint64>(edgeW) * edgeH * 4;
-    ready.lastUse = ++m_thumbReadyClock;
-    ready.lruIt = m_thumbReadyLru.begin();
-    m_thumbReadyBytes += ready.bytes;
-    m_thumbReady.insert(key, std::move(ready));
-    rememberThumbReadyKeyLocked(key);
+    ready.lastUse = ++panel.m_thumbReadyClock;
+    ready.lruIt = panel.m_thumbReadyLru.begin();
+    panel.m_thumbReadyBytes += ready.bytes;
+    panel.m_thumbReady.insert(key, std::move(ready));
+    panel.rememberThumbReadyKeyLocked(key);
 }
 
 void ThumbnailPanel::stopThumbnailWorker()

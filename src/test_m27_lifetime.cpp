@@ -18,6 +18,7 @@
 #include "imageviewer.h"
 #include "previewpanel.h"
 #include "thumbnailpanel.h"
+#include "thumbnailpanel_testaccess.h"
 
 #include "core/cache/CacheManager.h"
 #include "core/image/ImageRepository.h"
@@ -338,7 +339,7 @@ void testDistantPreviewLetterboxDoesNotJump()
     gallery.setViewMode(ThumbnailPanel::Thumbnail);
     QStyleOptionViewItem option;
     const QSize gridBefore = gallery.itemDelegate()->sizeHint(option, QModelIndex());
-    gallery.seedDisplayThumbForTest(path, QPixmap::fromImage(square));
+    ThumbnailPanelTestAccess::seedDisplayThumb(gallery, path, QPixmap::fromImage(square));
     const QSize gridAfter = gallery.itemDelegate()->sizeHint(option, QModelIndex());
     const QSize uniform(gallery.thumbSize() + 24, gallery.thumbSize() + 62);
     CHECK(gridBefore == gridAfter && gridBefore == uniform,
@@ -361,17 +362,17 @@ void testDistantPreviewLetterboxDoesNotJump()
     const int matPixels = blackMatPixels(cell, slot.intersected(cell.rect()));
     CHECK(slot.contains(photo) && matPixels == 0,
           "PASS gallery cell does not paint the black mat as the photo");
-    const int hitsBefore = ThumbnailPanel::scaleCacheHitsForTest();
+    const int hitsBefore = ThumbnailPanelTestAccess::scaleCacheHits();
     {
         QPainter again(&cell);
         gallery.itemDelegate()->paint(&again, option, gallery.model()->index(0, 0));
     }
-    CHECK(ThumbnailPanel::scaleCacheHitsForTest() == hitsBefore + 1,
+    CHECK(ThumbnailPanelTestAccess::scaleCacheHits() == hitsBefore + 1,
           "PASS second paint of the same thumb reuses the scaled pixmap");
     QImage solid(160, 160, QImage::Format_RGB32);
     solid.fill(qRgb(20, 140, 60));
-    gallery.seedDisplayThumbForTest(path, QPixmap::fromImage(solid));
-    const int plainBefore = ThumbnailPanel::scaleCacheHitsForTest();
+    ThumbnailPanelTestAccess::seedDisplayThumb(gallery, path, QPixmap::fromImage(solid));
+    const int plainBefore = ThumbnailPanelTestAccess::scaleCacheHits();
     {
         QPainter first(&cell);
         gallery.itemDelegate()->paint(&first, option, gallery.model()->index(0, 0));
@@ -380,7 +381,7 @@ void testDistantPreviewLetterboxDoesNotJump()
         QPainter second(&cell);
         gallery.itemDelegate()->paint(&second, option, gallery.model()->index(0, 0));
     }
-    CHECK(ThumbnailPanel::scaleCacheHitsForTest() == plainBefore + 1,
+    CHECK(ThumbnailPanelTestAccess::scaleCacheHits() == plainBefore + 1,
           "PASS second paint of a thumb without letterbox reuses the scaled pixmap");
 
     PreviewPanel panel;

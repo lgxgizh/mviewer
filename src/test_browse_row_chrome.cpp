@@ -2,6 +2,7 @@
 
 #include "Theme.h"
 #include "thumbnailpanel.h"
+#include "thumbnailpanel_testaccess.h"
 
 #include <QApplication>
 #include <QColor>
@@ -172,7 +173,7 @@ int runBrowseRowChromeTests()
     std::cout << "── Browse: Details zebra and context menu ──\n";
 
     ThumbnailPanel titlesPanel;
-    const QStringList titles = titlesPanel.browseContextMenuTitlesForTest({});
+    const QStringList titles = ThumbnailPanelTestAccess::browseContextMenuTitles(titlesPanel, {});
     const auto hasTitle = [&](const char *source)
     { return titles.contains(ThumbnailPanel::tr(source)); };
     CHECK(hasTitle("Open") && hasTitle("Rename") && hasTitle("Copy"),

@@ -6,7 +6,6 @@
 #include <list>
 #include <memory>
 #include <string>
-#include <unordered_set>
 
 #include <QDate>
 #include <QDateTime>
@@ -30,6 +29,7 @@
 #include "core/filesystem/DirectorySnapshot.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/search/BrowseQuery.h"
+#include "gallery_filter_engine.h"
 #include "thumbnailpanel_transfer.h"
 #include "thumbnailpanel_types.h"
 
@@ -44,7 +44,7 @@ class CommandStack;
 class ICommand;
 #include "selectionmodel.h"
 class QProgressDialog;
-class QRegularExpression;
+struct ThumbnailPanelTestAccess;
 
 // Virtualized thumbnail gallery (P0 #①/#②).
 //
@@ -184,17 +184,7 @@ class ThumbnailPanel : public QListView
     }
 
     // Entry metadata — public so DetailsDelegate can read it.
-    struct Entry
-    {
-        QString path;
-        QString name;
-        qint64 size = 0;
-        int width = 0;
-        int height = 0;
-        QDateTime date;
-        int frameCount = 1;
-        bool animated = false;
-    };
+    using Entry = mviewer::ui::GalleryEntry;
 
     // M18: live filename search (case-insensitive substring); `recursive` appends
     // matching subfolder images until the next setDirectory. Empty clears.
@@ -225,27 +215,6 @@ class ThumbnailPanel : public QListView
     // Test seam for the background latency probe. Empty in production. The
     // hook runs on the probe worker, never inside isHighLatencyBrowsePath().
     static void setHighLatencyProbeHook(const std::function<void()> &hook);
-    // M46 test observability: the shared scan-generation token, read from the
-    // iteration probe to attribute iterations to a directory generation.
-    std::shared_ptr<std::atomic<uint64_t>> scanGenTokenForTest() const
-    {
-        return m_scanGenToken;
-    }
-    // Paint-test seam: one gallery row whose bitmap is already in the cache
-    // the cell painter reads. Width and height stay unknown.
-    void seedDisplayThumbForTest(const QString &path, const QPixmap &pixmap);
-    // Times the cell painter reused a scaled pixmap instead of scaling again.
-    static int scaleCacheHitsForTest();
-    void insertProgressiveRowsForTest(const QList<Entry> &batch)
-    {
-        insertProgressiveRows(batch);
-    }
-    void captureScrollAnchorForTest(QString &anchorPath, int &anchorOffset) const
-    {
-        captureScrollAnchor(anchorPath, anchorOffset);
-    }
-    // Titles from the same menu contextMenuEvent builds (no exec).
-    QStringList browseContextMenuTitlesForTest(const QStringList &selPaths);
 
     QStringList selectedPaths() const;    // model-order selection for MainWindow/tests
     void clearMirroredSelectionState();   // view + parked pending/filter restores
@@ -352,30 +321,11 @@ class ThumbnailPanel : public QListView
         return m_displayEntries;
     }
 
-    // M59 deterministic seam: evaluate the same immutable source/query
-    // snapshot used by the background filter worker.  Keeping this wrapper
-    // value-only lets the large-directory gate exercise the real Browse
-    // evaluator without constructing one widget per row.
-    static QList<Entry> evaluateQuerySnapshotForTest(
-        const QList<Entry> &source, const QString &text, bool useFuzzy,
-        const QRegularExpression &fuzzy, const mviewer::core::BrowseQuery &query,
-        const std::unordered_set<std::string> &recents, const QHash<QString, QString> &metaIndex,
-        const QHash<QString, int> &metaIso, const QHash<QString, QString> &metaCamera,
-        const QHash<QString, QString> &metaLens)
-    {
-        return evaluateFilterSnapshot(source, text, useFuzzy, fuzzy, query, recents, metaIndex,
-                                      metaIso, metaCamera, metaLens);
-    }
-
     // Slash-stable key for m_rowByPath and the other gallery path hashes.
     // absoluteFilePath, history, and paste can disagree on '/' vs '\\'.
     static QString galleryPathKey(const QString &path)
     {
-        if (path.isEmpty())
-            return path;
-        QString normalized = path;
-        normalized.replace(QLatin1Char('\\'), QLatin1Char('/'));
-        return QDir::cleanPath(normalized);
+        return mviewer::ui::galleryPathKey(path);
     }
 
     // Resolve a path to the current filtered model row (scroll / repaint).
@@ -564,6 +514,7 @@ class ThumbnailPanel : public QListView
     // buildModel once the path is present; cleared when applied.
     QString m_pendingSelect;
     friend class ThumbnailPanelTransfer;
+    friend struct ThumbnailPanelTestAccess;
     ThumbnailPanelTransferState m_transferState;
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
@@ -644,19 +595,6 @@ class ThumbnailPanel : public QListView
     void scheduleFilter(bool debounce);
     void runFilterQuery();
     bool prepareFilterSource(const QString &text, QList<Entry> &source);
-    static bool matchesFilterSnapshot(
-        const Entry &entry, const QString &text, bool useFuzzy, const QRegularExpression &fuzzy,
-        const mviewer::core::BrowseQuery &query, const std::unordered_set<std::string> &recents,
-        const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
-        const QHash<QString, QString> &metaCamera, const QHash<QString, QString> &metaLens);
-    static QList<Entry> evaluateFilterSnapshot(const QList<Entry> &source, const QString &text,
-                                               bool useFuzzy, const QRegularExpression &fuzzy,
-                                               const mviewer::core::BrowseQuery &query,
-                                               const std::unordered_set<std::string> &recents,
-                                               const QHash<QString, QString> &metaIndex,
-                                               const QHash<QString, int> &metaIso,
-                                               const QHash<QString, QString> &metaCamera,
-                                               const QHash<QString, QString> &metaLens);
     void ensureMetaIndex(); // lazily index metadata for m_allEntries
     void applyThumbSize(int size, bool rememberGridSize);
     void runBatchAnalyzeExportAsync(const QStringList &paths, const std::string &analyzerId,

@@ -269,6 +269,7 @@ add_library(mviewer_ui STATIC
     thumbnailpanel_selection.cpp
     thumbnailpanel_pipeline.cpp
     thumbnailpanel_filters.cpp
+    gallery_filter_engine.cpp
     thumbnailpanel_typehint.cpp
     browseformats.cpp
     formatfiltercombo.cpp
@@ -2263,6 +2264,22 @@ target_include_directories(m59_browse_regression_tests PRIVATE ${CMAKE_CURRENT_S
 mviewer_test_support(m59_browse_regression_tests)
 add_test(NAME m59_browse_regression_tests COMMAND m59_browse_regression_tests)
 set_tests_properties(m59_browse_regression_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
+add_executable(gallery_filter_engine_tests
+    test_gallery_filter_engine.cpp
+)
+target_link_libraries(gallery_filter_engine_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(gallery_filter_engine_tests PRIVATE cxx_std_20)
+target_include_directories(gallery_filter_engine_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME gallery_filter_engine_tests COMMAND gallery_filter_engine_tests)
+set_tests_properties(gallery_filter_engine_tests PROPERTIES TIMEOUT 60)
 
 # ─── M59 adversarial source/presentation color contract ─────────────────────
 add_executable(m59_color_managed_tests

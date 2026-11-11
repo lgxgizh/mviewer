@@ -567,69 +567,6 @@ void ThumbnailPanel::preserveScrollAnchor(const QString &anchorPath, int anchorO
     }
 }
 
-namespace
-{
-
-QStringView nameExtension(const QString &name)
-{
-    const int dot = name.lastIndexOf(QLatin1Char('.'));
-    return dot >= 0 ? QStringView(name).mid(dot + 1) : QStringView();
-}
-
-} // namespace
-
-bool browseOrderedLess(int primary, QStringView nameA, QStringView nameB, const QString &pathA,
-                       const QString &pathB, bool ascending)
-{
-    if (primary != 0)
-        return ascending ? primary < 0 : primary > 0;
-    const int byName = compareNaturalName(nameA, nameB);
-    if (byName != 0)
-        return byName < 0;
-    return QString::compare(ThumbnailPanel::galleryPathKey(pathA),
-                            ThumbnailPanel::galleryPathKey(pathB), Qt::CaseSensitive) < 0;
-}
-
-int browsePrimaryCompare(mviewer::core::BrowseSortField field, const ThumbnailPanel::Entry &a,
-                         const ThumbnailPanel::Entry &b, const QHash<QString, QString> &metaCamera,
-                         const QHash<QString, QString> &metaLens)
-{
-    switch (field)
-    {
-    case mviewer::core::BrowseSortField::Name:
-        return compareNaturalName(a.name, b.name);
-    case mviewer::core::BrowseSortField::Date:
-        if (a.date == b.date)
-            return 0;
-        return a.date < b.date ? -1 : 1;
-    case mviewer::core::BrowseSortField::Size:
-        if (a.size == b.size)
-            return 0;
-        return a.size < b.size ? -1 : 1;
-    case mviewer::core::BrowseSortField::Resolution:
-    {
-        const qint64 left = static_cast<qint64>(a.width) * a.height;
-        const qint64 right = static_cast<qint64>(b.width) * b.height;
-        if (left == right)
-            return 0;
-        return left < right ? -1 : 1;
-    }
-    case mviewer::core::BrowseSortField::Type:
-        return nameExtension(a.name).compare(nameExtension(b.name), Qt::CaseInsensitive);
-    case mviewer::core::BrowseSortField::Rating:
-        return 0;
-    case mviewer::core::BrowseSortField::Camera:
-        return QString::compare(metaCamera.value(ThumbnailPanel::galleryPathKey(a.path)),
-                                metaCamera.value(ThumbnailPanel::galleryPathKey(b.path)),
-                                Qt::CaseInsensitive);
-    case mviewer::core::BrowseSortField::Lens:
-        return QString::compare(metaLens.value(ThumbnailPanel::galleryPathKey(a.path)),
-                                metaLens.value(ThumbnailPanel::galleryPathKey(b.path)),
-                                Qt::CaseInsensitive);
-    }
-    return 0;
-}
-
 bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString &nameA,
                     const mviewer::core::ImageSortKey &keyA, const QString &nameB,
                     const mviewer::core::ImageSortKey &keyB)
