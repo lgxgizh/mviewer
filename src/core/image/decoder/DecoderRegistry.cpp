@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "core/filesystem/Utf8Path.h"
+#include "core/image/decoder/PlainRawDecoder.h"
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
 #include "core/image/decoder/RawDecoder.h"
@@ -40,6 +41,8 @@ void DecoderRegistry::resetToDefaults()
     defaults.push_back(std::make_shared<RawDecoder>());
     // ADR 032: raw .yuv / .y4m; returns no pixels when parameters are unknown.
     defaults.push_back(std::make_shared<YuvDecoder>());
+    // ADR 033: headerless .raw sensor dumps; no pixels when the size is unknown.
+    defaults.push_back(std::make_shared<PlainRawDecoder>());
     defaults.push_back(std::make_shared<QtDecoder>());
     // The fallback must remain LAST so specific decoders get first pick.
     defaults.push_back(std::make_shared<QtFallbackDecoder>());

@@ -6,6 +6,7 @@
 #include "core/image/ImageRepository.h"
 
 #include "core/image/decoder/RawDecodePlan.h"
+#include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/yuv/YuvExtensionMap.h"
 #include "core/image/yuv/YuvFile.h"
 
@@ -205,6 +206,9 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
         key.clear();
     if (!key.empty() && !mviewer::core::yuv::yuvCacheKeyAgrees(
                             key, mviewer::core::yuv::yuvCacheKeySuffix(filePath)))
+        key.clear();
+    if (!key.empty() && !mviewer::core::rawplain::plainRawCacheKeyAgrees(
+                            key, mviewer::core::rawplain::plainRawCacheKeySuffix(filePath)))
         key.clear();
     const bool hadCachedKey = !key.empty();
     if (key.empty())

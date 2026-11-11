@@ -25,6 +25,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/RawDecoder.cpp
     core/image/decoder/YuvDecoder.cpp
     core/image/decoder/YuvParallelRows.cpp
+    core/image/decoder/PlainRawDecoder.cpp
     core/image/decoder/RawDecoder_libraw.cpp
     core/image/decoder/RawDecodePolicy.cpp
     core/image/ImageObject.cpp
@@ -61,6 +62,12 @@ add_library(mviewer_core SHARED
     core/image/yuv/YuvScaledRender.cpp
     core/image/yuv/YuvFile.cpp
     core/image/yuv/YuvSampleProbe.cpp
+    core/image/rawplain/PlainRawFormat.cpp
+    core/image/rawplain/PlainRawFormatText.cpp
+    core/image/rawplain/PlainRawInference.cpp
+    core/image/rawplain/PlainRawUnpack.cpp
+    core/image/rawplain/PlainRawRender.cpp
+    core/image/rawplain/PlainRawFile.cpp
     core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
@@ -1368,6 +1375,31 @@ target_link_libraries(test_yuv_decoder PRIVATE mviewer_core)
 target_compile_features(test_yuv_decoder PRIVATE cxx_std_20)
 target_include_directories(test_yuv_decoder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_decoder_tests COMMAND test_yuv_decoder)
+
+# ADR 033: plain .raw sensor dumps.
+add_executable(test_plainraw_format core/test_plainraw_format.cpp)
+target_link_libraries(test_plainraw_format PRIVATE mviewer_core)
+target_compile_features(test_plainraw_format PRIVATE cxx_std_20)
+target_include_directories(test_plainraw_format PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME plainraw_format_tests COMMAND test_plainraw_format)
+
+add_executable(test_plainraw_unpack core/test_plainraw_unpack.cpp)
+target_link_libraries(test_plainraw_unpack PRIVATE mviewer_core)
+target_compile_features(test_plainraw_unpack PRIVATE cxx_std_20)
+target_include_directories(test_plainraw_unpack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME plainraw_unpack_tests COMMAND test_plainraw_unpack)
+
+add_executable(test_plainraw_render core/test_plainraw_render.cpp)
+target_link_libraries(test_plainraw_render PRIVATE mviewer_core)
+target_compile_features(test_plainraw_render PRIVATE cxx_std_20)
+target_include_directories(test_plainraw_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME plainraw_render_tests COMMAND test_plainraw_render)
+
+add_executable(test_plainraw_file core/test_plainraw_file.cpp)
+target_link_libraries(test_plainraw_file PRIVATE mviewer_core)
+target_compile_features(test_plainraw_file PRIVATE cxx_std_20)
+target_include_directories(test_plainraw_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME plainraw_file_tests COMMAND test_plainraw_file)
 
 add_executable(test_yuv_sequence core/test_yuv_sequence.cpp)
 target_link_libraries(test_yuv_sequence PRIVATE mviewer_core)

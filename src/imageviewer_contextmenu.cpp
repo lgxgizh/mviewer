@@ -6,6 +6,7 @@
 #include "core/analysis/PixelInspector.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/image/QtConvert.h"
+#include "core/image/rawplain/PlainRawFile.h"
 #include "core/render/RenderEngine.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
@@ -271,6 +272,10 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     const bool hasPath = !m_currentPath.isEmpty();
     for (QAction *a : {aRotateCW, aRotateCCW, aFlipH, aFlipV, aCopy, aCopyPath, aCopyName, aReveal})
         a->setEnabled(hasPath);
+    // ADR 033: a plain .raw sensor dump is read-only (never rewritten).
+    if (mviewer::core::rawplain::isPlainRawPath(m_currentPath.toUtf8().toStdString()))
+        for (QAction *a : {aRotateCW, aRotateCCW, aFlipH, aFlipV})
+            a->setEnabled(false);
     const bool hasFrame = m_frame && m_frame->isValid();
     if (mCopyColor)
         mCopyColor->menuAction()->setEnabled(hasFrame);
