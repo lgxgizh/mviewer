@@ -11,6 +11,7 @@
 #include <QImage>
 #include <QImageReader>
 #include <QString>
+#include <QTransform>
 
 #include <algorithm>
 #include <atomic>
@@ -89,6 +90,23 @@ void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const
                   mviewer::domain::ImageMetadata &meta);
 
 #if defined(Q_OS_WIN)
+// Qt 6.8 qt_imageTransform: None is identity; Rotate270 is one 270° clockwise
+// turn (its bits also include Mirror|Flip, so it must not take the generic
+// path). Every other flag mirrors first (Mirror = horizontal, Flip = vertical)
+// and then rotates 90° clockwise when Rotate90 is set.
+static QImage applyQtTransformation(const QImage &img, QImageIOHandler::Transformations t)
+{
+    if (t == QImageIOHandler::TransformationNone)
+        return img;
+    if (t == QImageIOHandler::TransformationRotate270)
+        return img.transformed(QTransform().rotate(270), Qt::FastTransformation);
+    QImage out = img.mirrored(static_cast<bool>(t & QImageIOHandler::TransformationMirror),
+                              static_cast<bool>(t & QImageIOHandler::TransformationFlip));
+    if (t & QImageIOHandler::TransformationRotate90)
+        out = out.transformed(QTransform().rotate(90), Qt::FastTransformation);
+    return out;
+}
+
 void populateWicTiffMetadata(const QString &filename, const std::string &path, const QImage &output,
                              const QSize &fullSize, mviewer::domain::ImageMetadata &meta)
 {
@@ -552,6 +570,7 @@ mviewer::core::SourceRegionBehavior QtDecoder::sourceRegionBehavior(const std::s
 #if defined(Q_OS_WIN)
     // The M53 WIC adapter clips before CopyPixels. Rotated TIFF falls through
     // to Qt and therefore cannot make the same memory claim.
+    // rotated TIFF regions still use Qt; LOD uses WIC + post-rotation (review P2-5)
     if (ext == "tif" || ext == "tiff")
     {
         QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
@@ -579,18 +598,29 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).size();
 
 #if defined(Q_OS_WIN)
-    if (isTiffPath(path) && reader.transformation() == QImageIOHandler::TransformationNone)
+    // reader.size() is the stored (unrotated) raster. Scale that rect in WIC,
+    // then apply EXIF orientation to the small image. Region decode stays on
+    // Qt: rotated TIFF regions still use Qt; LOD uses WIC + post-rotation (review P2-5).
+    if (isTiffPath(path))
     {
         const int sourceEdge = std::max(full.width(), full.height());
         const int requestedEdge = std::min(sourceEdge, std::max(1, maxEdge));
         const double ratio = static_cast<double>(requestedEdge) / sourceEdge;
         const QSize target(std::max(1, static_cast<int>(std::lround(full.width() * ratio))),
                            std::max(1, static_cast<int>(std::lround(full.height() * ratio))));
-        const QImage img =
-            decodeTiffWic(path, QRect(0, 0, full.width(), full.height()), target, outMeta);
-        if (!img.isNull())
-            return toImageData(img);
-        return ImageData();
+        QImage img = decodeTiffWic(path, QRect(0, 0, full.width(), full.height()), target, outMeta);
+        if (img.isNull())
+            return ImageData();
+        const auto transform = reader.transformation();
+        img = applyQtTransformation(img, transform);
+        // Match the non-WIC autoTransform path below: report the displayed
+        // (post-orientation) source size, not the stored or scaled size.
+        outMeta.width = full.width();
+        outMeta.height = full.height();
+        if (transformSwapsDimensions(transform))
+            std::swap(outMeta.width, outMeta.height);
+        outMeta.orientation = orientationFromTransform(transform);
+        return toImageData(img);
     }
 #endif
 
@@ -628,6 +658,7 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
         return ImageData();
 
 #if defined(Q_OS_WIN)
+    // rotated TIFF regions still use Qt; LOD uses WIC + post-rotation (review P2-5)
     if (isTiffPath(path) && reader.transformation() == QImageIOHandler::TransformationNone)
     {
         const int x0 = std::max(0, x);
