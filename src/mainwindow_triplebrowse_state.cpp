@@ -1,4 +1,5 @@
 #include "application/ExternalOpen.h"
+#include "browse_sort_restore.h"
 #include "mainwindow_p.h"
 
 #include <QScrollBar>
@@ -83,17 +84,8 @@ void MainWindow::applyTertiarySortFromState()
         }
         return;
     }
-    const auto mode = static_cast<ThumbnailPanel::SortMode>(m_appState.tertiarySortField);
+    const auto mode = restoredBrowseSortMode(m_appState.tertiarySortField, m_tertiarySortCombo);
     m_tertiaryThumbnailPanel->setSort(mode, m_appState.tertiarySortAscending);
-    if (m_tertiarySortCombo)
-    {
-        const int idx = m_tertiarySortCombo->findData(mode);
-        if (idx >= 0)
-        {
-            const QSignalBlocker b(m_tertiarySortCombo);
-            m_tertiarySortCombo->setCurrentIndex(idx);
-        }
-    }
     if (m_tertiarySortDirBtn)
     {
         const bool desc = !m_appState.tertiarySortAscending;

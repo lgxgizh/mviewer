@@ -2,43 +2,6 @@
 // mainwindow_ui_connections.cpp to stay under the line budget.
 #include "mainwindow_p.h"
 
-#include <QHash>
-
-#include <algorithm>
-#include <iterator>
-#include <vector>
-
-namespace
-{
-// Images whose base name matches an added, modified or removed sidecar. The
-// gallery is indexed once per delta so a sidecar burst is not files x sidecars.
-QStringList imagesForSidecarDelta(const mviewer::core::DirectoryDelta &delta,
-                                  const QList<ThumbnailPanel::Entry> &images)
-{
-    const std::vector<mviewer::core::DirectoryEntry> *lists[] = {
-        &delta.sidecarAdded, &delta.sidecarModified, &delta.sidecarRemoved};
-    QStringList out;
-    if (std::all_of(std::begin(lists), std::end(lists), [](const auto *l) { return l->empty(); }))
-        return out;
-    QHash<QString, QStringList> imagesByBase;
-    imagesByBase.reserve(images.size());
-    for (const auto &image : images)
-        imagesByBase[QFileInfo(image.path).completeBaseName()].append(image.path);
-    for (const auto *list : lists)
-    {
-        for (const auto &entry : *list)
-        {
-            const QString sidecar =
-                QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
-            const auto found = imagesByBase.constFind(QFileInfo(sidecar).completeBaseName());
-            if (found != imagesByBase.cend())
-                out.append(found.value());
-        }
-    }
-    return out;
-}
-} // namespace
-
 void MainWindow::connectNavigationSignals()
 {
     m_thumbnailPanel->setLiveDirectoryMonitoring(true);
@@ -54,14 +17,6 @@ void MainWindow::connectNavigationSignals()
             &DirectoryMonitor::notifyDirectoryChanged);
     connect(m_directoryMonitor, &DirectoryMonitor::directoryDeltaReady, m_thumbnailPanel,
             &ThumbnailPanel::applyDirectoryDelta);
-    connect(m_directoryMonitor, &DirectoryMonitor::directoryDeltaReady, this,
-            [this](const mviewer::core::DirectoryDelta &delta)
-            {
-                QStringList sidecarImages =
-                    imagesForSidecarDelta(delta, m_thumbnailPanel->entries());
-                sidecarImages.removeDuplicates();
-                scheduleSidecarImportPaths(sidecarImages);
-            });
     connect(m_directoryMonitor, &DirectoryMonitor::directoryAvailabilityChanged, this,
             [this](const QString &path, bool available)
             {
@@ -128,10 +83,6 @@ void MainWindow::connectNavigationSignals()
                 rebuildRecentMenu();
                 // P0: the committed transition is the only history owner.
                 pushDirHistory(path);
-                // M50: the same committed transition owns cancellable Sidecar
-                // import for every navigation entry point, including tree
-                // clicks/Enter, breadcrumb, Back/Forward, refresh, and restore.
-                scheduleSidecarImport(path);
                 statusBar()->showMessage(tr("Scanning…"), 8000);
                 // With no image selected yet, the title carries the folder.
                 if (currentImagePath().isEmpty())

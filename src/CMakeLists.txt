@@ -335,7 +335,6 @@ add_library(mviewer_ui STATIC
     widgets/rawimageview.cpp
     widgets/ViewModeSegment.cpp
     widgets/rawimageview_surface.cpp
-    widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
     pluginsettings.cpp
     preferencesdialog.cpp

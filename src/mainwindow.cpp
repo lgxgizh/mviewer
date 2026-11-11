@@ -30,33 +30,6 @@ QDialog *createFullscreenCompareHost(QWidget *parent, CompareWorkspace **viewOut
     return dlg;
 }
 
-void writeCurrentSidecarAsync(MainWindow *window, const QString &path)
-{
-    if (!window || path.isEmpty())
-        return;
-    QPointer<MainWindow> alive(window);
-    mviewer::core::SidecarStore::instance().writeSidecarAsync(
-        path.toUtf8().toStdString(),
-        [alive](const std::string &failedPath)
-        {
-            // The callback may run on a worker thread, so it must not touch
-            // the QPointer there.
-            if (!qApp)
-                return;
-            QMetaObject::invokeMethod(
-                qApp,
-                [alive, failedPath]()
-                {
-                    if (!alive)
-                        return;
-                    const QString name = QFileInfo(QString::fromStdString(failedPath)).fileName();
-                    alive->statusBar()->showMessage(
-                        MainWindow::tr("Cannot write the sidecar file for %1").arg(name), 4000);
-                },
-                Qt::QueuedConnection);
-        });
-}
-
 void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const QStringList &imgs)
 {
     if (!compare || !viewer)
@@ -267,10 +240,6 @@ MainWindow::~MainWindow()
     // never touch freed MainWindow state.
     TaskScheduler::cancel(m_restoreTask);
     m_restoreTask.reset();
-    TaskScheduler::cancel(m_sidecarImportTask);
-    m_sidecarImportTask.reset();
-    if (m_sidecarImportAlive)
-        m_sidecarImportAlive->store(false, std::memory_order_release);
     // M27 lifetime closure: stop the async search re-index immediately. The
     // worker callback checks the alive token before marshaling, and the queued
     // UI lambda checks it again before touching any member — without this, a

@@ -2,8 +2,6 @@
 #include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 
-#include "core/SidecarStore.h"
-
 #include <QApplication>
 #include <QClipboard>
 #include <QCursor>
@@ -289,79 +287,6 @@ void ThumbnailPanel::copySelectedFileNames()
     for (const QString &p : paths)
         names.append(QFileInfo(p).fileName());
     QApplication::clipboard()->setText(names.join(QStringLiteral("\n")));
-}
-
-#include <QDebug>
-
-namespace
-{
-void asyncWriteSidecars(const std::vector<std::string> &paths)
-{
-    auto &sidecar = mviewer::core::SidecarStore::instance();
-    for (const auto &sp : paths)
-    {
-        sidecar.writeSidecarAsync(sp, [](const std::string &failed)
-                                  { qWarning("Sidecar write failed for %s", failed.c_str()); });
-    }
-}
-} // namespace
-
-void ThumbnailPanel::batchRateSelected(int stars)
-{
-    const QStringList paths = selectedPaths();
-    if (paths.isEmpty())
-        return;
-    auto &rs = mviewer::core::RatingStore::instance();
-    std::vector<std::string> toWrite;
-    toWrite.reserve(paths.size());
-    for (const QString &p : paths)
-    {
-        const std::string sp = p.toUtf8().toStdString();
-        rs.setRating(sp, stars);
-        toWrite.push_back(sp);
-    }
-    asyncWriteSidecars(toWrite);
-    invalidateRatings();
-    emit ratingsChanged();
-}
-
-void ThumbnailPanel::batchSetColorLabelSelected(int label)
-{
-    const QStringList paths = selectedPaths();
-    if (paths.isEmpty())
-        return;
-    auto &rs = mviewer::core::RatingStore::instance();
-    std::vector<std::string> toWrite;
-    toWrite.reserve(paths.size());
-    for (const QString &p : paths)
-    {
-        const std::string sp = p.toUtf8().toStdString();
-        rs.setColorLabel(sp, label);
-        toWrite.push_back(sp);
-    }
-    asyncWriteSidecars(toWrite);
-    invalidateRatings();
-    emit ratingsChanged();
-}
-
-void ThumbnailPanel::batchSetFlagSelected(bool reject, bool pick)
-{
-    const QStringList paths = selectedPaths();
-    if (paths.isEmpty())
-        return;
-    auto &rs = mviewer::core::RatingStore::instance();
-    std::vector<std::string> toWrite;
-    toWrite.reserve(paths.size());
-    for (const QString &p : paths)
-    {
-        const std::string sp = p.toUtf8().toStdString();
-        rs.setRejected(sp, reject);
-        rs.setPicked(sp, pick);
-        toWrite.push_back(sp);
-    }
-    asyncWriteSidecars(toWrite);
-    invalidateRatings();
-    emit ratingsChanged();
 }
 
 namespace

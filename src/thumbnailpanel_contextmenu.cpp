@@ -109,31 +109,6 @@ QStringList ThumbnailPanel::browseContextMenuTitlesForTest(const QStringList &se
     return titles;
 }
 
-void ThumbnailPanel::addTagToSelected()
-{
-    bool ok = false;
-    const QString tag =
-        QInputDialog::getText(this, tr("Add tag"), tr("Add a tag to the selected images:"),
-                              QLineEdit::Normal, QString(), &ok);
-    if (ok && !tag.trimmed().isEmpty())
-    {
-        const std::string tagStd = tag.trimmed().toStdString();
-        for (const QString &sp : selectedPaths())
-            mviewer::core::TagStore::instance().addTag(sp.toStdString(), tagStd);
-        applyFilter();
-        viewport()->update();
-    }
-}
-
-void ThumbnailPanel::removeTagFromSelected(const QString &tag)
-{
-    const std::string tagStd = tag.toStdString();
-    for (const QString &sp : selectedPaths())
-        mviewer::core::TagStore::instance().removeTag(sp.toStdString(), tagStd);
-    applyFilter();
-    viewport()->update();
-}
-
 bool ThumbnailPanel::handleFileContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
                                                  const QString &path)
 {
