@@ -435,6 +435,44 @@ void testSessionRestoreMainWindow()
            "right pane last image restored");
 }
 
+void testLegacySortRestoreFallsBackToName()
+{
+    std::cout << "--- TC-SB-08c: saved sort 5 and 99 restore Name ---" << std::endl;
+    QTemporaryDir tmp;
+    EXPECT(tmp.isValid(), "temp dir for sort fallback");
+    if (!tmp.isValid())
+        return;
+    const QString leftDir = tmp.filePath(QStringLiteral("sortleft"));
+    QDir().mkpath(leftDir);
+    createDummyImage(QDir(leftDir).filePath(QStringLiteral("one.png")));
+
+    const auto restoreField = [&](int stored, const char *label)
+    {
+        AppState persist;
+        persist.splitBrowseEnabled = true;
+        persist.lastDir = leftDir;
+        persist.hasSecondarySort = true;
+        persist.secondarySortField = stored;
+        persist.secondarySortAscending = true;
+        EXPECT(persist.save(), label);
+        MainWindow restored;
+        restored.resize(800, 600);
+        restored.show();
+        for (int i = 0; i < 30; ++i)
+            QApplication::processEvents();
+        ThumbnailPanel *sec = restored.secondaryThumbnailPanel();
+        auto *combo = restored.findChild<QComboBox *>(QStringLiteral("secondarySortCombo"));
+        EXPECT(sec && sec->sortMode() == ThumbnailPanel::SortName, label);
+        EXPECT(combo && combo->currentData().toInt() == static_cast<int>(ThumbnailPanel::SortName),
+               label);
+        EXPECT(combo && combo->currentText().contains(QStringLiteral("Name")), label);
+        restored.close();
+        QApplication::processEvents();
+    };
+    restoreField(static_cast<int>(ThumbnailPanel::SortRating), "saved secondarySortField 5");
+    restoreField(99, "saved secondarySortField 99");
+}
+
 void testActivePaneRouting(MainWindow &mw)
 {
     std::cout << "--- TC-SB-10: Active pane routing ---" << std::endl;
@@ -706,6 +744,7 @@ int main(int argc, char *argv[])
     testDeleteUnionPrompt();
     testToolbarActionIcons(mw);
     testSessionRestoreMainWindow();
+    testLegacySortRestoreFallsBackToName();
     testBrowseUx();
 
     std::cout << "\nResults: " << (g_failures == 0 ? "ALL PASS" : "FAILURES DETECTED") << " ("

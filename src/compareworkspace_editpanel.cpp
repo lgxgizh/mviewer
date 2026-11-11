@@ -96,7 +96,9 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
                                       "original file; export as a new PNG or TIFF"),
                                    m_editPanel);
     previewHint->setObjectName("previewOnlyHint");
-    previewHint->setStyleSheet("color:#f0c060;font-size:11px;");
+    previewHint->setStyleSheet(
+        QStringLiteral("color:%1;font-size:11px;")
+            .arg(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary)));
     previewHint->setWordWrap(true);
     editLay->addWidget(previewHint);
 

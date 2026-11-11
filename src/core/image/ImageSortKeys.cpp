@@ -1,13 +1,12 @@
 #include "core/image/ImageSortKeys.h"
 #include "core/filesystem/Utf8Path.h"
 
-#include "core/RatingStore.h"
 #include "core/image/RawMetadata.h"
 
 #include <QFileInfo>
 #include <QImageReader>
-#include <QString>
 #include <QSize>
+#include <QString>
 
 #include <algorithm>
 #include <cctype>
@@ -41,8 +40,7 @@ std::vector<ImageSortKey> computeSortKeys(const std::vector<std::string> &paths,
     keys.reserve(paths.size());
 
     const SortDimensionReader dims =
-        dimensionReader ? dimensionReader
-                        : [](const std::string &p) -> int64_t
+        dimensionReader ? dimensionReader : [](const std::string &p) -> int64_t
     {
         QImageReader reader(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
         reader.setAutoTransform(true);
@@ -57,7 +55,6 @@ std::vector<ImageSortKey> computeSortKeys(const std::vector<std::string> &paths,
     const bool needFileInfo = (field == SortField::Date || field == SortField::Size);
     const bool needResolution = (field == SortField::Resolution);
     const bool needCameraLens = (field == SortField::Camera || field == SortField::Lens);
-    const bool needRating = (field == SortField::Rating);
 
     for (const std::string &p : paths)
     {
@@ -93,8 +90,6 @@ std::vector<ImageSortKey> computeSortKeys(const std::vector<std::string> &paths,
             else
                 k.lens = lower(rm.lens);
         }
-        if (needRating)
-            k.rating = RatingStore::instance().rating(p);
         keys.push_back(std::move(k));
     }
     return keys;

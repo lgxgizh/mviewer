@@ -1,7 +1,6 @@
-// Audit regressions: preset path sanitizing (#41), tag-store path resolution
-// (#45), and settings integer restore (#47).
+// Audit regressions: preset path sanitizing (#41) and settings integer restore
+// (#47).
 #include "core/SettingsIO.h"
-#include "core/TagStore.h"
 #include "core/export/ExportManager.h"
 #include "core/filesystem/Utf8Path.h"
 #include "runtime_storage.h"
@@ -9,7 +8,6 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
-#include <QFileInfo>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -159,28 +157,6 @@ static void testPresetPaths(const std::string &suffix)
     removePreset(right.name);
 }
 
-static void testTagPathResolvedAfterApp(mviewer::core::TagStore &tags, bool cwdHadTags)
-{
-    printf("\n[audit tag store path]\n");
-    const QString cwdTags = QDir::current().filePath(QStringLiteral("tags.txt"));
-    const QString expected =
-        mviewer::runtime::filePath(QStandardPaths::AppDataLocation, QStringLiteral("tags.txt"));
-    CHECK(!expected.isEmpty(), "tags path resolves under the writable app data dir");
-    const std::string image = "/tmp/audit45.png";
-    tags.addTag(image, "keep");
-    CHECK(tags.hasTag(image, "keep"), "tag is stored in memory");
-    CHECK(tags.save(), "tag save writes the runtime path");
-    CHECK(QFileInfo::exists(expected), "tags.txt was created in the app data dir");
-    QFile file(expected);
-    CHECK(file.open(QIODevice::ReadOnly), "open app data tags.txt");
-    const QByteArray body = file.readAll();
-    file.close();
-    CHECK(QString::fromUtf8(body).contains(QStringLiteral("keep|")),
-          "app data file contains the tag");
-    CHECK(QFileInfo::exists(cwdTags) == cwdHadTags,
-          "tags.txt was not created in the working directory");
-}
-
 static void testSettingsRejectBadIntegers()
 {
     printf("\n[audit settings integer restore]\n");
@@ -253,12 +229,6 @@ int main(int argc, char **argv)
     setEnvVar("LOCALAPPDATA", home);
 #endif
 
-    const QString cwdTags = QDir::current().filePath(QStringLiteral("tags.txt"));
-    const bool cwdHadTags = QFileInfo::exists(cwdTags);
-    mviewer::core::TagStore &tags = mviewer::core::TagStore::instance();
-    CHECK(QFileInfo::exists(cwdTags) == cwdHadTags,
-          "TagStore::instance before QCoreApplication does not create tags.txt");
-
     QCoreApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("mviewer-audit2"));
     QCoreApplication::setApplicationName(QStringLiteral("mviewer-audit2"));
@@ -267,7 +237,6 @@ int main(int argc, char **argv)
     const std::string suffix =
         std::to_string(static_cast<long long>(QCoreApplication::applicationPid()));
     testPresetPaths(suffix);
-    testTagPathResolvedAfterApp(tags, cwdHadTags);
     testSettingsRejectBadIntegers();
 
     printf("\naudit_persistence_tests: %d passed, %d failed\n", g_pass, g_fail);

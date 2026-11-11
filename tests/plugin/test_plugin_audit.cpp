@@ -312,6 +312,7 @@ int main(int argc, char *argv[])
     const std::filesystem::path dir = exeDir(argc > 0 ? argv[0] : nullptr);
     const std::string audit = pluginFile(dir, "audit_analyzer");
     const std::string legacy = pluginFile(dir, "audit_legacy_mismatch");
+    const std::string noAbi = pluginFile(dir, "audit_no_abi");
     const std::string badAbi = pluginFile(dir, "example_analyzer_badabi");
     const std::string importer = pluginFile(dir, "example_importer");
     const std::string marker = utf8Absolute(dir / "audit_symbol_marker.txt");
@@ -324,6 +325,7 @@ int main(int argc, char *argv[])
     testRejectedPlugin(legacy, marker, "version mismatch", "legacy version mismatch");
     check(!containsId(AnalyzerRegistry::instance().availableAnalyzers(), "audit.legacy"),
           "legacy mismatch plugin is not registered");
+    testRejectedPlugin(noAbi, marker, "exports neither", "plugin without ABI exports");
     testImporterUnload(importer);
 
     if (g_fail)

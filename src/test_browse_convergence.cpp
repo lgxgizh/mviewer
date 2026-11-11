@@ -27,6 +27,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -98,13 +99,24 @@ static bool writeFakeDng(const std::string &path, const std::string &make, const
         std::fwrite(&cnt, 4, 1, f);
         std::fwrite(&val, 4, 1, f);
     };
-    writeEntry(0x8827, 3, 1, iso); // ISO (SHORT inline)
-    writeEntry(0x010F, 2, static_cast<uint32_t>(make.size()) + 1,
-               static_cast<uint32_t>(makeOff)); // Make (ASCII)
-    writeEntry(0x0110, 2, static_cast<uint32_t>(model.size()) + 1,
-               static_cast<uint32_t>(modelOff)); // Model (ASCII)
-    writeEntry(0xA434, 2, static_cast<uint32_t>(lens.size()) + 1,
-               static_cast<uint32_t>(lensOff)); // LensModel (ASCII)
+    // TIFF 6.0: values of <= 4 bytes are stored inline in the value field
+    // (e.g. Model "Z6\0"); only longer strings use an offset.
+    auto writeAscii = [&](uint16_t tag, const std::string &text, long offset)
+    {
+        const auto cnt = static_cast<uint32_t>(text.size()) + 1;
+        uint32_t val = static_cast<uint32_t>(offset);
+        if (cnt <= 4)
+        {
+            uint8_t inlineBytes[4] = {0, 0, 0, 0};
+            std::memcpy(inlineBytes, text.c_str(), text.size());
+            std::memcpy(&val, inlineBytes, 4);
+        }
+        writeEntry(tag, 2, cnt, val);
+    };
+    writeEntry(0x8827, 3, 1, iso);       // ISO (SHORT inline)
+    writeAscii(0x010F, make, makeOff);   // Make (ASCII)
+    writeAscii(0x0110, model, modelOff); // Model (ASCII)
+    writeAscii(0xA434, lens, lensOff);   // LensModel (ASCII)
     uint32_t nextIfd = 0;
     std::fwrite(&nextIfd, 4, 1, f);
     std::fseek(f, makeOff, SEEK_SET);

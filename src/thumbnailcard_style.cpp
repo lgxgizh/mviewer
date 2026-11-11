@@ -7,7 +7,6 @@
 #include <QPainterPath>
 
 #include <algorithm>
-#include <array>
 #include <vector>
 
 namespace thumb_card
@@ -47,25 +46,6 @@ QPixmap renderShadow(const QSize &cardSize, bool dark)
     }
     p.end();
     return QPixmap::fromImage(image);
-}
-
-const std::array<QColor, 7> &labelColors(bool dark)
-{
-    static const std::array<QColor, 7> kDark = {QColor(),
-                                                QColor(0xff, 0x45, 0x3a),
-                                                QColor(0xff, 0x9f, 0x0a),
-                                                QColor(0xff, 0xd6, 0x0a),
-                                                QColor(0x30, 0xd1, 0x58),
-                                                QColor(0x0a, 0x84, 0xff),
-                                                QColor(0xbf, 0x5a, 0xf2)};
-    static const std::array<QColor, 7> kLight = {QColor(),
-                                                 QColor(0xff, 0x3b, 0x30),
-                                                 QColor(0xff, 0x95, 0x00),
-                                                 QColor(0xff, 0xcc, 0x00),
-                                                 QColor(0x34, 0xc7, 0x59),
-                                                 QColor(0x00, 0x7a, 0xff),
-                                                 QColor(0xaf, 0x52, 0xde)};
-    return dark ? kDark : kLight;
 }
 } // namespace
 
@@ -168,25 +148,6 @@ void drawNameText(QPainter *painter, const QRect &rect, const QString &name, boo
     painter->restore();
     painter->setPen(itemTextColor(true, palette));
     painter->drawText(pill, Qt::AlignCenter | Qt::TextSingleLine, text);
-}
-
-QColor labelColor(int index, bool dark)
-{
-    if (index < 1 || index > 6)
-        return QColor();
-    return labelColors(dark)[static_cast<size_t>(index)];
-}
-
-QColor ratingColor(bool dark)
-{
-    return labelColor(3, dark);
-}
-
-QColor rejectTint(const QPalette &palette)
-{
-    QColor c = labelColor(1, isDarkPalette(palette));
-    c.setAlpha(90);
-    return c;
 }
 
 QColor badgeBackground(const QPalette &palette)

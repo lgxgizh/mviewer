@@ -81,9 +81,7 @@ add_library(mviewer_core SHARED
     core/compare/DifferenceEngine.cpp
     core/compare/DifferenceEngine_render.cpp
     core/compare/Aligner.cpp
-    core/RatingStore.cpp
-    core/TagStore.cpp
-    core/SidecarStore.cpp
+    core/RecentStore.cpp
     core/FileMetadataRelocation.cpp
     core/CrashHandler.cpp
     core/Logger.cpp
@@ -128,6 +126,7 @@ add_library(mviewer_core SHARED
     core/render/DisplayResampleSimd.cpp
     core/render/AsyncTileRequestManager.cpp
     core/thumbnail/ThumbnailPipeline.h
+    core/plugin/PluginLibrary.cpp
     core/plugin/PluginLoader.cpp
     core/plugin/PluginManager.cpp
     core/export/IExporter.h
@@ -199,6 +198,8 @@ target_compile_features(mviewer_core PUBLIC cxx_std_20)
 # copy and crash on cross-module delete / teardown). Auto-export all symbols
 # so consumers link without per-symbol declspec markup.
 set_target_properties(mviewer_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+add_dependencies(mviewer_core mviewer_version_stamp)
+mviewer_release_pdb(mviewer_core)
 
 target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
     ${MVIEWER_GENERATED_INCLUDE_DIR})
@@ -336,7 +337,6 @@ add_library(mviewer_ui STATIC
     widgets/rawimageview.cpp
     widgets/ViewModeSegment.cpp
     widgets/rawimageview_surface.cpp
-    widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
@@ -390,6 +390,7 @@ target_compile_features(mviewer_application PUBLIC cxx_std_20)
 add_executable(MViewer
     main.cpp
 )
+mviewer_release_pdb(MViewer)
 if(WIN32)
     # Version resource generated from project(VERSION); see resources/mviewer.rc.in.
     set(MVIEWER_RC_ICON "${CMAKE_SOURCE_DIR}/resources/mviewer.ico")
@@ -670,6 +671,9 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME i18n_tr_literal_gate
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check_tr_literals.py
                 --self-test --root ${CMAKE_SOURCE_DIR})
+    # Nightly benchmark regression rules (median, floors, stale baseline).
+    add_test(NAME perf_regression_selftest
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/perf_regression.py --self-test)
     # The embedded .qm must contain every finished .ts translation (lrelease is
     # not part of the normal build; v1.0.172 shipped 19 strings untranslated).
     add_test(NAME i18n_qm_sync_gate
@@ -742,7 +746,7 @@ target_include_directories(compare_workflow_tests PRIVATE ${CMAKE_CURRENT_SOURCE
 target_compile_definitions(compare_workflow_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # ─── M9-3 Analysis workflow acceptance tests ─────────────────────────────
-# ─── P0 #③ / P1 core unit tests (histogram, rating store) ───────────────────
+# ─── P0 #③ / P1 core unit tests (histogram) ──────────────────────────────────
 add_executable(histogram_tests
     core/test_histogram.cpp
 )
@@ -756,20 +760,6 @@ target_link_libraries(histogram_tests
 target_compile_features(histogram_tests PRIVATE cxx_std_20)
 target_include_directories(histogram_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(histogram_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-
-add_executable(ratingstore_tests
-    core/test_ratingstore.cpp
-)
-target_link_libraries(ratingstore_tests
-    PRIVATE
-        Qt6::Widgets
-        Qt6::Gui
-        Qt6::Core
-        mviewer_core
-)
-target_compile_features(ratingstore_tests PRIVATE cxx_std_20)
-target_include_directories(ratingstore_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_definitions(ratingstore_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_executable(analysis_panel_tests
     core/test_analysis_panel.cpp
@@ -1875,18 +1865,17 @@ add_test(NAME product_browse_tests COMMAND product_browse_tests)
 set_tests_properties(product_browse_tests PROPERTIES RUN_SERIAL TRUE)
 add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)
 add_test(NAME histogram_tests COMMAND histogram_tests)
-add_test(NAME ratingstore_tests COMMAND ratingstore_tests)
 add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
 add_test(NAME export_pipeline_tests COMMAND export_pipeline_tests)
 add_test(NAME export_job_tests COMMAND export_job_tests)
 
-# P3 tail — RatingStore flag persistence (color label / reject / pick / recents)
-add_executable(flags_tests
-    core/test_flags.cpp
+# P1-1 — RecentStore (recently-viewed list)
+add_executable(recentstore_tests
+    core/test_recentstore.cpp
 )
 
-target_link_libraries(flags_tests
+target_link_libraries(recentstore_tests
     PRIVATE
         Qt6::Widgets
         Qt6::Gui
@@ -1894,13 +1883,13 @@ target_link_libraries(flags_tests
         mviewer_core
 )
 
-target_compile_features(flags_tests PRIVATE cxx_std_20)
-target_include_directories(flags_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_definitions(flags_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_compile_features(recentstore_tests PRIVATE cxx_std_20)
+target_include_directories(recentstore_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(recentstore_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
-add_test(NAME flags_tests COMMAND flags_tests)
+add_test(NAME recentstore_tests COMMAND recentstore_tests)
 
-# Audit #41 / #45 / #47 — preset paths, lazy tag-store location, settings restore.
+# Audit #41 / #47 — preset paths and settings restore.
 add_executable(audit_persistence_tests
     core/test_audit_persistence.cpp
 )
@@ -3141,6 +3130,22 @@ foreach(_mviewer_test IN LISTS MVIEWER_REGISTERED_TESTS)
     set_tests_properties(${_mviewer_test} PROPERTIES
         ENVIRONMENT
         "QT_QPA_PLATFORM=offscreen;MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache;HOME=${_mviewer_root}/home")
+endforeach()
+
+# ─── Nightly-only tests (review P1-3) ───────────────────────────────────────
+# Long soak / torture / perf-enforcement suites carry the "nightly" label. The
+# PR gate runs `ctest -LE nightly`; nightly `quality` and the release workflow
+# still run the full suite through build.ps1 Test.
+set(MVIEWER_NIGHTLY_ONLY_TESTS
+    bench_enforce
+    m51_rc_soak
+    m27_lifecycle_torture
+    m47_large_soak
+    m53_large_source_soak)
+foreach(_mviewer_test IN LISTS MVIEWER_NIGHTLY_ONLY_TESTS)
+    if(TEST ${_mviewer_test})
+        set_property(TEST ${_mviewer_test} APPEND PROPERTY LABELS nightly)
+    endif()
 endforeach()
 
 # ─── Format target ──────────────────────────────────────────────────────────

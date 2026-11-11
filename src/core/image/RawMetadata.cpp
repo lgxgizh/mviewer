@@ -1,6 +1,7 @@
 #include "core/image/RawMetadata.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/ImageFormats.h"
+#include "core/image/RawTiffIo.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -25,159 +26,7 @@ static std::string toLower(const std::string &s)
     return r;
 }
 
-// Subtraction form prevents 32-bit/64-bit integer overflow when checking buffer bounds.
-static bool fits(uint64_t offset, uint64_t need, uint64_t size)
-{
-    return offset <= size && need <= size - offset;
-}
-
-// TIFF offsets are relative to the TIFF header. For RAW files that header is
-// the start of the file; for JPEG it sits inside the APP1 "Exif" segment, so
-// every offset seek is shifted by the header's file position.
-thread_local long t_tiffBase = 0;
-
-static int seekTiff(FILE *f, uint64_t offset)
-{
-    return std::fseek(f, t_tiffBase + static_cast<long>(offset), SEEK_SET);
-}
-
-struct TiffHeader
-{
-    bool littleEndian = false;
-    uint32_t ifdOffset = 0;
-};
-
-static bool readTiffHeader(FILE *f, uint64_t fileSize, TiffHeader &h)
-{
-    if (fileSize < 8)
-        return false;
-    uint8_t buf[8];
-    if (std::fread(buf, 1, 8, f) != 8)
-        return false;
-    if (buf[0] == 'I' && buf[1] == 'I')
-        h.littleEndian = true;
-    else if (buf[0] == 'M' && buf[1] == 'M')
-        h.littleEndian = false;
-    else
-        return false;
-    uint16_t magic = h.littleEndian ? static_cast<uint16_t>(buf[2] | (buf[3] << 8))
-                                    : static_cast<uint16_t>((buf[2] << 8) | buf[3]);
-    if (magic != 42)
-        return false;
-    h.ifdOffset =
-        h.littleEndian
-            ? static_cast<uint32_t>(buf[4] | (buf[5] << 8) | (buf[6] << 16) | (buf[7] << 24))
-            : static_cast<uint32_t>((buf[4] << 24) | (buf[5] << 16) | (buf[6] << 8) | buf[7]);
-    return fits(h.ifdOffset, 2, fileSize);
-}
-
-static uint16_t readU16(FILE *f, bool le)
-{
-    uint8_t b[2];
-    if (std::fread(b, 1, 2, f) != 2)
-        return 0;
-    return le ? static_cast<uint16_t>(b[0] | (b[1] << 8))
-              : static_cast<uint16_t>((b[0] << 8) | b[1]);
-}
-
-static uint32_t readU32(FILE *f, bool le)
-{
-    uint8_t b[4];
-    if (std::fread(b, 1, 4, f) != 4)
-        return 0;
-    return le ? static_cast<uint32_t>(b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24))
-              : static_cast<uint32_t>((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
-}
-
-struct IfdEntry
-{
-    uint16_t tag = 0;
-    uint16_t type = 0;
-    uint32_t count = 0;
-    uint32_t value = 0;
-};
-
-static bool readEntry(FILE *f, bool le, IfdEntry &e)
-{
-    uint8_t b[12];
-    if (std::fread(b, 1, 12, f) != 12)
-        return false;
-    if (le)
-    {
-        e.tag = static_cast<uint16_t>(b[0] | (b[1] << 8));
-        e.type = static_cast<uint16_t>(b[2] | (b[3] << 8));
-        e.count = static_cast<uint32_t>(b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24));
-        e.value = static_cast<uint32_t>(b[8] | (b[9] << 8) | (b[10] << 16) | (b[11] << 24));
-    }
-    else
-    {
-        e.tag = static_cast<uint16_t>((b[0] << 8) | b[1]);
-        e.type = static_cast<uint16_t>((b[2] << 8) | b[3]);
-        e.count = static_cast<uint32_t>((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
-        e.value = static_cast<uint32_t>((b[8] << 24) | (b[9] << 16) | (b[10] << 8) | b[11]);
-    }
-    return true;
-}
-
-static std::string readString(FILE *f, uint64_t fileSize, uint32_t offset, uint32_t count)
-{
-    if (count == 0 || count > 4096 || !fits(offset, count, fileSize))
-        return "";
-    const long cur = std::ftell(f);
-    if (seekTiff(f, offset) != 0)
-        return "";
-    std::string s(count, '\0');
-    const size_t readCount = std::fread(s.data(), 1, count, f);
-    std::fseek(f, cur, SEEK_SET);
-    if (readCount != count)
-        return "";
-    while (!s.empty() && s.back() == '\0')
-        s.pop_back();
-    return s;
-}
-
-static uint16_t readTagU16(FILE *f, bool le, uint64_t fileSize, uint32_t v, uint16_t type,
-                           uint32_t count)
-{
-    if (type == 3 && count <= 2)
-        return le ? static_cast<uint16_t>(v & 0xFFFF) : static_cast<uint16_t>((v >> 16) & 0xFFFF);
-    if (!fits(v, 2, fileSize))
-        return 0;
-    const long cur = std::ftell(f);
-    if (seekTiff(f, v) != 0)
-        return 0;
-    const uint16_t r = readU16(f, le);
-    std::fseek(f, cur, SEEK_SET);
-    return r;
-}
-
-static uint32_t readTagU32(FILE *f, bool le, uint64_t fileSize, uint32_t v, uint16_t type,
-                           uint32_t count)
-{
-    if (type == 4 && count == 1)
-        return v;
-    if (!fits(v, 4, fileSize))
-        return 0;
-    const long cur = std::ftell(f);
-    if (seekTiff(f, v) != 0)
-        return 0;
-    const uint32_t r = readU32(f, le);
-    std::fseek(f, cur, SEEK_SET);
-    return r;
-}
-
-static double readRational(FILE *f, bool le, uint64_t fileSize, uint32_t offset)
-{
-    if (!fits(offset, 8, fileSize))
-        return 0.0;
-    const long cur = std::ftell(f);
-    if (seekTiff(f, offset) != 0)
-        return 0.0;
-    const uint32_t num = readU32(f, le);
-    const uint32_t den = readU32(f, le);
-    std::fseek(f, cur, SEEK_SET);
-    return den == 0 ? 0.0 : static_cast<double>(num) / static_cast<double>(den);
-}
+using namespace raw_tiff;
 
 static bool parseCameraIdentityTag(FILE *f, uint64_t fileSize, const IfdEntry &e, RawMetadata &rm)
 {
@@ -185,11 +34,11 @@ static bool parseCameraIdentityTag(FILE *f, uint64_t fileSize, const IfdEntry &e
     {
     case 0x010F:
         if (e.type == 2 && e.count > 0 && rm.make.empty())
-            rm.make = readString(f, fileSize, e.value, e.count);
+            rm.make = readString(f, fileSize, e);
         return true;
     case 0x0110:
         if (e.type == 2 && e.count > 0 && rm.model.empty())
-            rm.model = readString(f, fileSize, e.value, e.count);
+            rm.model = readString(f, fileSize, e);
         return true;
     default:
         return false;
@@ -202,19 +51,19 @@ static bool parseDescriptionDateTag(FILE *f, uint64_t fileSize, const IfdEntry &
     {
     case 0x010E:
         if (e.type == 2 && e.count > 0 && rm.description.empty())
-            rm.description = readString(f, fileSize, e.value, e.count);
+            rm.description = readString(f, fileSize, e);
         return true;
     case 0x0132:
         if (e.type == 2 && e.count > 0 && rm.dateTime.empty())
-            rm.dateTime = readString(f, fileSize, e.value, e.count);
+            rm.dateTime = readString(f, fileSize, e);
         return true;
     case 0x9003:
         if (e.type == 2 && e.count > 0 && rm.dateTimeOriginal.empty())
-            rm.dateTimeOriginal = readString(f, fileSize, e.value, e.count);
+            rm.dateTimeOriginal = readString(f, fileSize, e);
         return true;
     case 0x9286:
         if (e.type == 7 && e.count > 0 && rm.description.empty())
-            rm.description = readString(f, fileSize, e.value, e.count);
+            rm.description = readString(f, fileSize, e);
         return true;
     default:
         return false;
@@ -227,19 +76,19 @@ static bool parseLensIdentityTag(FILE *f, uint64_t fileSize, const IfdEntry &e, 
     {
     case 0xA431:
         if (e.type == 2 && e.count > 0 && rm.serialNumber.empty())
-            rm.serialNumber = readString(f, fileSize, e.value, e.count);
+            rm.serialNumber = readString(f, fileSize, e);
         return true;
     case 0xA433:
         if (e.type == 2 && e.count > 0 && rm.lensMaker.empty())
-            rm.lensMaker = readString(f, fileSize, e.value, e.count);
+            rm.lensMaker = readString(f, fileSize, e);
         return true;
     case 0xA434:
         if (e.type == 2 && e.count > 0 && rm.lens.empty())
-            rm.lens = readString(f, fileSize, e.value, e.count);
+            rm.lens = readString(f, fileSize, e);
         return true;
     case 0xA435:
         if (e.type == 2 && e.count > 0 && rm.serialNumber.empty())
-            rm.serialNumber = readString(f, fileSize, e.value, e.count);
+            rm.serialNumber = readString(f, fileSize, e);
         return true;
     default:
         return false;
@@ -279,9 +128,11 @@ static bool parseExposureRationalTag(FILE *f, bool le, uint64_t fileSize, const 
     if (spec == std::end(kExposureRationalFields))
         return false;
     double &field = rm.*(spec->field);
-    if (e.type != 5 || e.count != 1 || field != 0.0)
+    // ShutterSpeedValue, BrightnessValue and ExposureBiasValue are SRATIONAL.
+    if ((e.type != 5 && e.type != 10) || e.count != 1 || field != 0.0)
         return true;
-    const double value = readRational(f, le, fileSize, e.value);
+    const double value = e.type == 10 ? readSRational(f, le, fileSize, e.value)
+                                      : readRational(f, le, fileSize, e.value);
     if (!spec->positiveOnly || value > 0.0)
         field = value;
     return true;
@@ -501,20 +352,18 @@ static bool parseSensorTag(FILE *f, bool le, uint64_t fileSize, const IfdEntry &
             uint8_t cfa[4] = {0xFF, 0xFF, 0xFF, 0xFF};
             if (e.type == 1 && e.count <= 4)
             {
-                cfa[0] = static_cast<uint8_t>(e.value & 0xFF);
-                cfa[1] = static_cast<uint8_t>((e.value >> 8) & 0xFF);
-                cfa[2] = static_cast<uint8_t>((e.value >> 16) & 0xFF);
-                cfa[3] = static_cast<uint8_t>((e.value >> 24) & 0xFF);
+                // Inline BYTEs are in file order regardless of II/MM.
+                std::memcpy(cfa, e.raw, 4);
             }
             else if (fits(e.value, 4, fileSize))
             {
-                const long cur = std::ftell(f);
+                const int64_t cur = tell64(f);
                 if (seekTiff(f, e.value) == 0)
                 {
                     if (std::fread(cfa, 1, 4, f) != 4)
                         std::memset(cfa, 0xFF, sizeof(cfa));
                 }
-                std::fseek(f, cur, SEEK_SET);
+                seek64(f, cur, SEEK_SET);
             }
             auto toChar = [](uint8_t v) -> char
             {
@@ -569,7 +418,8 @@ static void parseIfd(FILE *f, bool le, uint64_t fileSize, uint32_t ifdOffset, Ra
         return;
 
     uint32_t exifIfdOffset = 0;
-    uint32_t subIfdOffset = 0;
+    IfdEntry subIfdEntry;
+    bool hasSubIfd = false;
 
     for (uint16_t i = 0; i < count; ++i)
     {
@@ -579,8 +429,11 @@ static void parseIfd(FILE *f, bool le, uint64_t fileSize, uint32_t ifdOffset, Ra
 
         if (e.tag == 0x8769) // Exif IFD Pointer
             exifIfdOffset = e.value;
-        else if (e.tag == 0x014A) // SubIFD
-            subIfdOffset = e.value;
+        else if (e.tag == 0x014A) // SubIFD (LONG or IFD, count >= 1)
+        {
+            subIfdEntry = e;
+            hasSubIfd = true;
+        }
         else
         {
             parseIdentityTag(f, fileSize, e, rm) || parseExposureTag(f, le, fileSize, e, rm) ||
@@ -603,9 +456,27 @@ static void parseIfd(FILE *f, bool le, uint64_t fileSize, uint32_t ifdOffset, Ra
     if (exifIfdOffset > 0 && fits(exifIfdOffset, 2, fileSize))
         parseIfd(f, le, fileSize, exifIfdOffset, rm, visited, depth + 1);
 
-    // Traverse SubIFD if present
-    if (subIfdOffset > 0 && fits(subIfdOffset, 2, fileSize))
-        parseIfd(f, le, fileSize, subIfdOffset, rm, visited, depth + 1);
+    // Traverse every SubIFD (DNG/NEF store several: preview, full raw, ...).
+    // count == 1 keeps the offset inline; count > 1 points at an offset array.
+    if (hasSubIfd && subIfdEntry.count > 0)
+    {
+        constexpr uint32_t kMaxSubIfds = 8;
+        std::vector<uint32_t> subIfds;
+        if (subIfdEntry.count == 1)
+            subIfds.push_back(subIfdEntry.value);
+        else if (fits(subIfdEntry.value, uint64_t{4} * std::min(subIfdEntry.count, kMaxSubIfds),
+                      fileSize) &&
+                 seekTiff(f, subIfdEntry.value) == 0)
+        {
+            for (uint32_t k = 0; k < subIfdEntry.count && k < kMaxSubIfds; ++k)
+                subIfds.push_back(readU32(f, le));
+        }
+        for (const uint32_t sub : subIfds)
+        {
+            if (sub > 0 && fits(sub, 2, fileSize))
+                parseIfd(f, le, fileSize, sub, rm, visited, depth + 1);
+        }
+    }
 
     // Traverse Next IFD if top-level and not cyclic
     if (depth == 0 && nextIfd > 0 && fits(nextIfd, 2, fileSize) && visited.size() < 4)
@@ -636,20 +507,20 @@ FILE *openUtf8(const std::string &filePath)
 
 uint64_t fileSizeOf(FILE *f)
 {
-    if (std::fseek(f, 0, SEEK_END) != 0)
+    if (seek64(f, 0, SEEK_END) != 0)
         return 0;
-    const long endPos = std::ftell(f);
-    if (endPos <= 0 || std::fseek(f, 0, SEEK_SET) != 0)
+    const int64_t endPos = tell64(f);
+    if (endPos <= 0 || seek64(f, 0, SEEK_SET) != 0)
         return 0;
     return static_cast<uint64_t>(endPos);
 }
 
 // Parses the TIFF structure starting at file position `base` (`size` bytes).
-void parseTiffAt(FILE *f, long base, uint64_t size, RawMetadata &rm)
+void parseTiffAt(FILE *f, int64_t base, uint64_t size, RawMetadata &rm)
 {
     t_tiffBase = base;
     TiffHeader h;
-    if (std::fseek(f, base, SEEK_SET) == 0 && readTiffHeader(f, size, h))
+    if (seek64(f, base, SEEK_SET) == 0 && readTiffHeader(f, size, h))
     {
         std::vector<uint32_t> visited;
         parseIfd(f, h.littleEndian, size, h.ifdOffset, rm, visited, 0);
@@ -660,7 +531,7 @@ void parseTiffAt(FILE *f, long base, uint64_t size, RawMetadata &rm)
 
 // Finds the TIFF payload of the JPEG APP1 "Exif" segment. Header-only walk:
 // stops at SOS, never touches entropy-coded data.
-bool findJpegExif(FILE *f, uint64_t fileSize, long &base, uint64_t &size)
+bool findJpegExif(FILE *f, uint64_t fileSize, int64_t &base, uint64_t &size)
 {
     uint8_t b[4];
     if (std::fread(b, 1, 2, f) != 2 || b[0] != 0xFF || b[1] != 0xD8)
@@ -684,7 +555,7 @@ bool findJpegExif(FILE *f, uint64_t fileSize, long &base, uint64_t &size)
         const int len = (b[0] << 8) | b[1];
         if (len < 2)
             return false;
-        const long payloadPos = std::ftell(f);
+        const int64_t payloadPos = tell64(f);
         if (!fits(static_cast<uint64_t>(payloadPos), static_cast<uint64_t>(len - 2), fileSize))
             return false;
         char id[6] = {};
@@ -695,7 +566,7 @@ bool findJpegExif(FILE *f, uint64_t fileSize, long &base, uint64_t &size)
             size = static_cast<uint64_t>(len - 2 - 6);
             return true;
         }
-        if (std::fseek(f, payloadPos + len - 2, SEEK_SET) != 0)
+        if (seek64(f, payloadPos + len - 2, SEEK_SET) != 0)
             return false;
     }
     return false;
@@ -735,7 +606,7 @@ RawMetadata parseCaptureMetadata(const std::string &filePath)
     if (!f)
         return rm;
     const uint64_t fileSize = fileSizeOf(f);
-    long base = 0;
+    int64_t base = 0;
     uint64_t size = 0;
     if (fileSize > 0 && findJpegExif(f, fileSize, base, size))
         parseTiffAt(f, base, size, rm);

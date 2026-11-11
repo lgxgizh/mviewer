@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <exception>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -110,30 +111,43 @@ static std::wstring toWide(const std::string &s)
 // On Windows this uses the OS WinHTTP API (TLS 1.2/1.3, with timeouts so the
 // call never hangs). Other platforms keep the harmless stub. The caller must
 // run this from a worker thread since the request is synchronous/blocking.
+#if defined(_WIN32)
+// Review P2-15: RAII for WinHTTP handles so every early return closes them.
+struct WinHttpHandleCloser
+{
+    void operator()(void *h) const
+    {
+        if (h)
+            WinHttpCloseHandle(h);
+    }
+};
+using WinHttpHandle = std::unique_ptr<void, WinHttpHandleCloser>;
+#endif
+
 std::string httpGet(const std::string &url, std::string &error)
 {
 #if defined(_WIN32)
     const std::wstring wurl = toWide(url);
-    HINTERNET hSession =
-        WinHttpOpen(L"MViewer-UpdateChecker/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession)
+    const WinHttpHandle session(WinHttpOpen(L"MViewer-UpdateChecker/1.0",
+                                            WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                            WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0));
+    if (!session)
     {
         error = "UpdateChecker: WinHttpOpen failed";
         return {};
     }
 
     DWORD secure = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
-    WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &secure, sizeof(secure));
+    WinHttpSetOption(session.get(), WINHTTP_OPTION_SECURE_PROTOCOLS, &secure, sizeof(secure));
     // HTTPS only, and never follow an https→http downgrade. Cap the hop count.
     DWORD redirects = 5;
-    WinHttpSetOption(hSession, WINHTTP_OPTION_MAX_HTTP_AUTOMATIC_REDIRECTS, &redirects,
+    WinHttpSetOption(session.get(), WINHTTP_OPTION_MAX_HTTP_AUTOMATIC_REDIRECTS, &redirects,
                      sizeof(redirects));
     DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
-    WinHttpSetOption(hSession, WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy,
+    WinHttpSetOption(session.get(), WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy,
                      sizeof(redirectPolicy));
     // resolve, connect, send, receive timeouts (ms)
-    WinHttpSetTimeouts(hSession, 5000, 5000, 10000, 15000);
+    WinHttpSetTimeouts(session.get(), 5000, 5000, 10000, 15000);
 
     wchar_t hostBuf[256] = {0};
     wchar_t pathBuf[2048] = {0};
@@ -149,13 +163,11 @@ std::string httpGet(const std::string &url, std::string &error)
 
     if (!WinHttpCrackUrl(wurl.c_str(), (DWORD)wurl.size(), 0, &parts))
     {
-        WinHttpCloseHandle(hSession);
         error = "UpdateChecker: invalid URL";
         return {};
     }
     if (parts.nScheme != INTERNET_SCHEME_HTTPS)
     {
-        WinHttpCloseHandle(hSession);
         error = "UpdateChecker: only HTTPS is allowed";
         return {};
     }
@@ -167,50 +179,39 @@ std::string httpGet(const std::string &url, std::string &error)
     if (path.empty())
         path = L"/";
 
-    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), parts.nPort, 0);
-    if (!hConnect)
+    const WinHttpHandle connect(WinHttpConnect(session.get(), host.c_str(), parts.nPort, 0));
+    if (!connect)
     {
-        WinHttpCloseHandle(hSession);
         error = "UpdateChecker: connect failed";
         return {};
     }
 
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr,
-                                            WINHTTP_NO_REFERER, nullptr, WINHTTP_FLAG_SECURE);
-    if (!hRequest)
+    const WinHttpHandle request(WinHttpOpenRequest(connect.get(), L"GET", path.c_str(), nullptr,
+                                                   WINHTTP_NO_REFERER, nullptr,
+                                                   WINHTTP_FLAG_SECURE));
+    if (!request)
     {
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
         error = "UpdateChecker: open request failed";
         return {};
     }
 
-    if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, nullptr, 0, 0, 0) ||
-        !WinHttpReceiveResponse(hRequest, nullptr))
+    if (!WinHttpSendRequest(request.get(), WINHTTP_NO_ADDITIONAL_HEADERS, 0, nullptr, 0, 0, 0) ||
+        !WinHttpReceiveResponse(request.get(), nullptr))
     {
         error = "UpdateChecker: request failed";
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
         return {};
     }
 
     DWORD status = 0, slen = sizeof(status);
-    if (!WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+    if (!WinHttpQueryHeaders(request.get(), WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                              nullptr, &status, &slen, nullptr))
     {
         error = "UpdateChecker: HTTP status unavailable";
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
         return {};
     }
     if (status != 200)
     {
         error = "UpdateChecker: HTTP " + std::to_string(status);
-        WinHttpCloseHandle(hRequest);
-        WinHttpCloseHandle(hConnect);
-        WinHttpCloseHandle(hSession);
         return {};
     }
 
@@ -219,7 +220,7 @@ std::string httpGet(const std::string &url, std::string &error)
     // A release manifest is a few KB. Refuse an oversized body instead of
     // allocating whatever the server (or a hijacked endpoint) decides to send.
     constexpr size_t kMaxBodyBytes = 256 * 1024;
-    while (WinHttpQueryDataAvailable(hRequest, &avail) && avail > 0)
+    while (WinHttpQueryDataAvailable(request.get(), &avail) && avail > 0)
     {
         if (body.size() + avail > kMaxBodyBytes)
         {
@@ -229,14 +230,11 @@ std::string httpGet(const std::string &url, std::string &error)
         }
         std::string buf(avail, '\0');
         DWORD read = 0;
-        if (!WinHttpReadData(hRequest, buf.data(), avail, &read) || read == 0)
+        if (!WinHttpReadData(request.get(), buf.data(), avail, &read) || read == 0)
             break;
         body.append(buf, 0, read);
     }
-
-    WinHttpCloseHandle(hRequest);
-    WinHttpCloseHandle(hConnect);
-    WinHttpCloseHandle(hSession);
+    // Handles close in reverse order: request, connect, session.
     return body;
 #else
     error = "UpdateChecker: HTTP not supported on this platform";

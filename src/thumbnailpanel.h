@@ -5,6 +5,8 @@
 #include <functional>
 #include <list>
 #include <memory>
+#include <string>
+#include <unordered_set>
 
 #include <QDate>
 #include <QDateTime>
@@ -25,8 +27,6 @@
 #include <QThreadPool>
 #include <QVector>
 
-#include "core/RatingStore.h"
-#include "core/TagStore.h"
 #include "core/filesystem/DirectorySnapshot.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/search/BrowseQuery.h"
@@ -68,14 +68,15 @@ class ThumbnailPanel : public QListView
 
     enum SortMode
     {
-        SortName,
-        SortDate,
-        SortSize,
-        SortResolution,
-        SortType,   // A-2.2: sort by file extension
-        SortRating, // A-2.2: sort by star rating
-        SortCamera, // P0 #①: sort by camera make+model
-        SortLens    // P0 #①: sort by lens model
+        SortName = 0,
+        SortDate = 1,
+        SortSize = 2,
+        SortResolution = 3,
+        SortType = 4, // A-2.2: sort by file extension
+        // legacy, not offered in UI; restored values fall back to SortName
+        SortRating = 5,
+        SortCamera = 6, // P0 #①: sort by camera make+model
+        SortLens = 7    // P0 #①: sort by lens model
     };
 
     enum ViewMode
@@ -121,9 +122,6 @@ class ThumbnailPanel : public QListView
     // M56: apply an already-reconciled filesystem delta without crossing the
     // directory navigation boundary or resetting the whole gallery model.
     void applyDirectoryDelta(const mviewer::core::DirectoryDelta &delta);
-    // M56: re-evaluate the active filter after a sidecar import. Source rows
-    // stay intact and any membership change is row-local.
-    void refreshSidecarPaths(const QStringList &paths);
     // P0-1: F5 refresh — reload the current directory from disk.
     void refresh();
     QString currentDir() const
@@ -202,16 +200,10 @@ class ThumbnailPanel : public QListView
     // matching subfolder images until the next setDirectory. Empty clears.
     void setFilter(const QString &text, bool recursive = false);
 
-    // P1: metadata search (camera/lens/ISO/date) and star filter; both refine setFilter().
+    // P1: metadata search (camera/lens/ISO/date); refines setFilter().
     void setMetaSearch(bool on);
-    void setRatingFilter(int stars);
 
-    // P3 tail: color label / reject / pick / recents filters (each independent;
-    // applyFilter() combines them with AND). 0 label = any; recent uses the
-    // RatingStore recents list.
-    void setLabelFilter(int label);
-    void setRejectFilter(bool on);
-    void setPickFilter(bool on);
+    // Recently-viewed filter. clearFlagFilters() turns it off.
     void setRecentFilter(bool on);
     void clearFlagFilters();
 
@@ -220,8 +212,6 @@ class ThumbnailPanel : public QListView
     void setCameraFilter(const QString &camera);
     void setLensFilter(const QString &lens);
     void setIsoFilter(int iso);
-    // P0 #①: free-form tag filter (matches images carrying this exact tag).
-    void setTagFilter(const QString &tag);
     bool hasActiveBrowseFilter() const;
 
     // Quiesce background decode work (e.g. before a headless render where async
@@ -325,9 +315,6 @@ class ThumbnailPanel : public QListView
     void invertSelection();
     void copySelectedPaths();
     void copySelectedFileNames();
-    void batchRateSelected(int stars);
-    void batchSetColorLabelSelected(int label);
-    void batchSetFlagSelected(bool reject, bool pick);
 
     // A-10: reversible file ops via CommandStack (null = direct, irreversible).
     void setCommandStack(class CommandStack *stack)
@@ -372,13 +359,12 @@ class ThumbnailPanel : public QListView
     static QList<Entry> evaluateQuerySnapshotForTest(
         const QList<Entry> &source, const QString &text, bool useFuzzy,
         const QRegularExpression &fuzzy, const mviewer::core::BrowseQuery &query,
-        const mviewer::core::RatingStore::Snapshot &ratings,
-        const mviewer::core::TagStore::Snapshot &tags, const QHash<QString, QString> &metaIndex,
+        const std::unordered_set<std::string> &recents, const QHash<QString, QString> &metaIndex,
         const QHash<QString, int> &metaIso, const QHash<QString, QString> &metaCamera,
         const QHash<QString, QString> &metaLens)
     {
-        return evaluateFilterSnapshot(source, text, useFuzzy, fuzzy, query, ratings, tags,
-                                      metaIndex, metaIso, metaCamera, metaLens);
+        return evaluateFilterSnapshot(source, text, useFuzzy, fuzzy, query, recents, metaIndex,
+                                      metaIso, metaCamera, metaLens);
     }
 
     // Slash-stable key for m_rowByPath and the other gallery path hashes.
@@ -429,8 +415,6 @@ class ThumbnailPanel : public QListView
         return m_metaIso.value(galleryPathKey(path), -1);
     }
 
-    // P1: repaint the gallery to reflect a rating change made elsewhere.
-    void invalidateRatings();
     // Drop decoded thumbnails for one source path after an in-place file edit
     // (rotate/flip) and schedule a visible-range reload so the gallery updates.
     void invalidateSourceImage(const QString &path);
@@ -479,7 +463,6 @@ class ThumbnailPanel : public QListView
     // First progressive batch is in the model, or the scan settled (including
     // empty). DirectoryTree uses this to start its highlight after first paint.
     void galleryModelReady();
-    void ratingsChanged(); // batch rating/label/flag write; host repaints all panes
 
   private slots:
     void onThumbReady(const QString &path);
@@ -503,7 +486,6 @@ class ThumbnailPanel : public QListView
     void enforceThumbPixmapBudgetLocked() const;
     void rememberThumbReadyKeyLocked(const QString &cacheKey) const;
     void forgetThumbReadyKeyLocked(const QString &cacheKey) const;
-    bool hasRatingOrFlagFilter() const;
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
     struct ContextMenuActions;
     ContextMenuActions buildContextMenu(QMenu &menu, const QStringList &selPaths);
@@ -512,8 +494,6 @@ class ThumbnailPanel : public QListView
                                      const QString &path);
     void handleContextMenuAction(const ContextMenuActions &actions, QAction *chosen,
                                  const QString &path);
-    void addTagToSelected();
-    void removeTagFromSelected(const QString &tag);
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -621,7 +601,7 @@ class ThumbnailPanel : public QListView
     void wireThumbnailPipeline();
     void resetDirectoryState();
 
-    // P1: filter state for metadata search + star-rating filter.
+    // P1: filter state for metadata search.
     QList<Entry> m_allEntries; // full listing; source for filtering
     // M46: the entries currently DISPLAYED (post-filter, post-recursive-hit).
     // The delegates paint exclusively from this list via entryForPath(), so
@@ -640,15 +620,10 @@ class ThumbnailPanel : public QListView
     bool m_recursiveSearching = false;
     QList<Entry> m_recursiveHits; // recursive filename-search results (merged by applyFilter)
     QString m_recursiveHitsFor;   // the filter text the current hits belong to
-    int m_ratingFilter = 0;       // show only images rated >= this (0 = all)
-    int m_labelFilter = 0;        // show only images with this color label (0 = any)
-    bool m_rejectFilter = false;  // show only rejected images
-    bool m_pickFilter = false;    // show only picked (favorite) images
     bool m_recentFilter = false;  // show only recently-viewed images
     QString m_cameraFilter;       // P0 #①: camera make/model substring
     QString m_lensFilter;         // P0 #①: lens model substring
     int m_isoFilter = 0;          // P0 #①: exact ISO (0 = any)
-    QString m_tagFilter;          // P0 #①: exact tag (empty = any)
     QHash<QString, QString> m_metaIndex;  // path -> lowercase searchable string
     QHash<QString, int> m_metaIso;        // path -> ISO (for exact ISO filter)
     QHash<QString, QString> m_metaCamera; // path -> "make model" (Details EXIF column)
@@ -669,22 +644,15 @@ class ThumbnailPanel : public QListView
     void scheduleFilter(bool debounce);
     void runFilterQuery();
     bool prepareFilterSource(const QString &text, QList<Entry> &source);
-    bool matchesFilter(const Entry &entry, const QString &text, bool useFuzzy,
-                       const QRegularExpression &fuzzy) const;
-    static bool matchesFilterSnapshot(const Entry &entry, const QString &text, bool useFuzzy,
-                                      const QRegularExpression &fuzzy,
-                                      const mviewer::core::BrowseQuery &query,
-                                      const mviewer::core::RatingStore::Snapshot &ratings,
-                                      const mviewer::core::TagStore::Snapshot &tags,
-                                      const QHash<QString, QString> &metaIndex,
-                                      const QHash<QString, int> &metaIso,
-                                      const QHash<QString, QString> &metaCamera,
-                                      const QHash<QString, QString> &metaLens);
+    static bool matchesFilterSnapshot(
+        const Entry &entry, const QString &text, bool useFuzzy, const QRegularExpression &fuzzy,
+        const mviewer::core::BrowseQuery &query, const std::unordered_set<std::string> &recents,
+        const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
+        const QHash<QString, QString> &metaCamera, const QHash<QString, QString> &metaLens);
     static QList<Entry> evaluateFilterSnapshot(const QList<Entry> &source, const QString &text,
                                                bool useFuzzy, const QRegularExpression &fuzzy,
                                                const mviewer::core::BrowseQuery &query,
-                                               const mviewer::core::RatingStore::Snapshot &ratings,
-                                               const mviewer::core::TagStore::Snapshot &tags,
+                                               const std::unordered_set<std::string> &recents,
                                                const QHash<QString, QString> &metaIndex,
                                                const QHash<QString, int> &metaIso,
                                                const QHash<QString, QString> &metaCamera,
@@ -700,6 +668,7 @@ class ThumbnailPanel : public QListView
     void ensureBatchProgressDialog();
     void finishBatchAnalyzeExport(bool cancelled, bool writeOk, size_t resultCount,
                                   const QString &output);
+    void notifyInternalTrashFallback();
     void startCommandFileOperation(std::unique_ptr<ICommand> command, const QStringList &paths,
                                    const QString &label);
     void startCopyFileOperation(const QStringList &paths, const QString &destinationDirectory);

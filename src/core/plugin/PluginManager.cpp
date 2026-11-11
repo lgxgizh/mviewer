@@ -8,6 +8,7 @@
 #include "core/import/IImporter.h"
 #include "core/import/ImporterRegistry.h"
 #include "core/plugin/PluginABI.h"
+#include "core/plugin/PluginLibrary.h"
 
 #include <QDebug>
 
@@ -157,21 +158,7 @@ struct PluginModulePin
 
 PluginHandle openPluginHandle(const std::string &path, std::string &error)
 {
-#ifdef _WIN32
-    const std::filesystem::path nativePath = mviewer::core::pathFromUtf8(path);
-    PluginHandle handle = reinterpret_cast<PluginHandle>(LoadLibraryW(nativePath.native().c_str()));
-    if (!handle)
-        error = "LoadLibrary failed: " + std::to_string(GetLastError());
-    return handle;
-#else
-    PluginHandle handle = dlopen(path.c_str(), RTLD_LAZY);
-    if (!handle)
-    {
-        const char *reason = dlerror();
-        error = "dlopen failed: " + std::string(reason ? reason : "unknown");
-    }
-    return handle;
-#endif
+    return reinterpret_cast<PluginHandle>(mviewer::core::loadPluginLibrary(path, error));
 }
 
 std::shared_ptr<PluginModulePin> pinPluginModule(const std::string &path)
@@ -238,7 +225,11 @@ bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
         if (!warning.empty())
             std::cout << "[PluginManager] Warning: " << warning << '\n';
     }
-    else if (s.version && s.version() != MVIEWER_PLUGIN_API_VERSION)
+    else if (!s.version)
+    {
+        return rejectAbiMismatch(path, plugin, mviewer::core::kPluginMissingAbiError, error);
+    }
+    else if (s.version() != MVIEWER_PLUGIN_API_VERSION)
     {
         return rejectAbiMismatch(path, plugin, "plugin API version mismatch (legacy export)",
                                  error);

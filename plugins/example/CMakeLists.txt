@@ -131,10 +131,25 @@ set_target_properties(audit_legacy_mismatch PROPERTIES
     PREFIX ""
 )
 
+# Review P2-1: neither mviewer_plugin_abi nor mviewer_plugin_api_version.
+add_library(audit_no_abi SHARED
+    ${CMAKE_SOURCE_DIR}/tests/plugin/AuditAnalyzerPlugin.cpp
+)
+target_link_libraries(audit_no_abi PRIVATE mviewer_core)
+target_compile_features(audit_no_abi PRIVATE cxx_std_20)
+target_include_directories(audit_no_abi PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(audit_no_abi PRIVATE AUDIT_PLUGIN_NO_EXPORTS=1)
+set_target_properties(audit_no_abi PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    PREFIX ""
+)
+
 if(TARGET test_plugin_audit)
     add_dependencies(test_plugin_audit
         audit_analyzer
         audit_legacy_mismatch
+        audit_no_abi
         example_analyzer_badabi
         example_importer)
 endif()

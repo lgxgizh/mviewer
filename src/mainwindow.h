@@ -338,8 +338,6 @@ class MainWindow : public QMainWindow
     // folders, status bar, etc. Used by the menu "Open Directory" action, the
     // path input bar, and breadcrumb navigation.
     void changeDirectory(const QString &dir);
-    void scheduleSidecarImport(const QString &dir);
-    void scheduleSidecarImportPaths(const QStringList &imagePaths);
     // Shows/hides the gallery empty-state hint (no directory open yet).
     void updateEmptyState();
     void buildEmptyStateUi();
@@ -619,17 +617,7 @@ class MainWindow : public QMainWindow
     void updateCacheStat();
     static QString formatBytes(qint64 bytes);
 
-    // Rating repaints reach every open pane.
-    template <typename Fn> void eachBrowsePanel(Fn &&fn)
-    {
-        if (m_thumbnailPanel)
-            fn(m_thumbnailPanel);
-        if (m_splitBrowseEnabled && m_secondaryThumbnailPanel)
-            fn(m_secondaryThumbnailPanel);
-        if (m_tripleBrowseEnabled && m_tertiaryThumbnailPanel)
-            fn(m_tertiaryThumbnailPanel);
-    }
-    // Filename, rating, flag, and metadata filters drive the left gallery only.
+    // Filename and metadata filters drive the left gallery only.
     // Mirroring them onto the right pane is deferred: re-filtering that pane
     // during split entry and left navigation disturbed both pane selections.
     template <typename Fn> void eachFilterPanel(Fn &&fn)
@@ -637,7 +625,6 @@ class MainWindow : public QMainWindow
         if (m_thumbnailPanel)
             fn(m_thumbnailPanel);
     }
-    void invalidateBrowseRatings();
     void applySharedSearchFilter();
 
     // P1: gallery search/filter controls.
@@ -749,8 +736,6 @@ class MainWindow : public QMainWindow
     // (a newer open supersedes an in-flight one), cancelled on destruction.
     TaskScheduler::TaskHandle m_restoreTask;
     uint64_t m_restoreGeneration = 0;
-    TaskScheduler::TaskHandle m_sidecarImportTask;
-    std::shared_ptr<std::atomic<bool>> m_sidecarImportAlive;
     TaskScheduler::TaskHandle m_reportTask;
     QProgressDialog *m_reportProgress = nullptr;
     uint64_t m_reportGeneration = 0;

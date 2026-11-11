@@ -23,7 +23,6 @@
 
 #include "naturalnameorder.h"
 
-#include "core/RatingStore.h"
 #include "core/analysis/ExportReport.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/command/CommandStack.h"
@@ -45,6 +44,7 @@
 #include "thumbnailcache.h"
 
 #include <memory>
+#include <vector>
 
 #include <QHash>
 #include <QPointer>
@@ -274,8 +274,7 @@ struct ImageSortKey;
 bool browseOrderedLess(int primary, QStringView nameA, QStringView nameB, const QString &pathA,
                        const QString &pathB, bool ascending);
 int browsePrimaryCompare(mviewer::core::BrowseSortField field, const ThumbnailPanel::Entry &a,
-                         const ThumbnailPanel::Entry &b, const QHash<QString, int> &ratingCache,
-                         const QHash<QString, QString> &metaCamera,
+                         const ThumbnailPanel::Entry &b, const QHash<QString, QString> &metaCamera,
                          const QHash<QString, QString> &metaLens);
 bool sortedFileLess(ThumbnailPanel::SortMode mode, bool ascending, const QString &nameA,
                     const mviewer::core::ImageSortKey &keyA, const QString &nameB,

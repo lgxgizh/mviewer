@@ -4,8 +4,6 @@
 // it exercises the same value-snapshot/search path used by SearchPanel with
 // synthetic 10k/50k entries. Native GUI first-paint/typing feel remains a
 // separately recorded MANUAL/BLOCKED qualification item in the Phase-0 doc.
-#include "core/RatingStore.h"
-#include "core/TagStore.h"
 #include "core/metadata/MetadataIndexer.h"
 #include "core/search/BrowseQuery.h"
 #include "core/search/SearchEngine.h"
@@ -154,13 +152,6 @@ int main(int argc, char **argv)
     const auto copy = query;
     CHECK(copy.text == query.text && copy.generation == query.generation,
           "BrowseQuery copies text and generation by value");
-
-    // Snapshot APIs must be callable without exposing per-entry locking to a
-    // worker. The singleton data is intentionally empty in this hermetic test.
-    const auto ratings = mviewer::core::RatingStore::instance().snapshot();
-    const auto tags = mviewer::core::TagStore::instance().snapshot();
-    CHECK(ratings.rating("missing") == 0, "RatingStore snapshot returns zero for a missing path");
-    CHECK(!tags.hasTag("missing", "m58"), "TagStore snapshot has no tag for a missing path");
 
     runMetadataBatchCases();
     runCase(10000);

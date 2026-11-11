@@ -8,7 +8,10 @@
 #     / Cache Hit / Compare / GPU Upload / Memory Peak project-specific gates)
 #   * ui-regression       — full Golden Image UI regression (screenshots vs ref)
 #   * dr-memory           — Windows memory-error check (best-effort signal)
-#   * package             — portable zip + NSIS installer
+#   * warm-cache          — one MSVC Release compile into the sccache GHA cache;
+#                           the four Windows jobs below then mostly hit the
+#                           cache instead of each compiling the app from scratch
+#   * package             — portable zip + NSIS installer + symbols (PDB) zip
 #   * release             — published GitHub release with all artifacts
 #
 # Reference docs: docs/acceptance/M13.3_perf_budget_gate.md,
@@ -29,12 +32,20 @@ concurrency:
 permissions:
   contents: write   # needed to draft the GitHub release
 
+# Review P1-3: shared compiler cache. CMake reads CMAKE_<LANG>_COMPILER_LAUNCHER
+# from the environment, so build.ps1 stays unchanged. Release objects use /Z7
+# (see CMakeLists.txt), which sccache can cache.
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  CMAKE_C_COMPILER_LAUNCHER: sccache
+  CMAKE_CXX_COMPILER_LAUNCHER: sccache
+
 jobs:
   # ---------------------------------------------------------------------------
-  # performance-report — full benchmark sweep + dashboard
+  # warm-cache — compile once into the shared sccache (review P1-3)
   # ---------------------------------------------------------------------------
-  performance-report:
-    name: Performance report
+  warm-cache:
+    name: Compile once (sccache warm-up)
     runs-on: windows-2022
     steps:
       - name: Checkout
@@ -42,6 +53,41 @@ jobs:
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Build (Release)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
+
+      - name: sccache stats
+        if: always()
+        run: sccache --show-stats
+
+  # ---------------------------------------------------------------------------
+  # performance-report — full benchmark sweep + dashboard
+  # ---------------------------------------------------------------------------
+  performance-report:
+    name: Performance report
+    runs-on: windows-2022
+    needs: [warm-cache]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -85,12 +131,16 @@ jobs:
   ui-regression:
     name: Full UI regression (Golden Image)
     runs-on: windows-2022
+    needs: [warm-cache]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -128,6 +178,7 @@ jobs:
   dr-memory:
     name: Dr.Memory (memory errors, best-effort)
     runs-on: windows-2022
+    needs: [warm-cache]
     continue-on-error: true
     steps:
       - name: Checkout
@@ -135,6 +186,9 @@ jobs:
 
       - name: Setup MSVC (with PDBs for Dr.Memory symbols)
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -175,13 +229,16 @@ jobs:
   package:
     name: Package (zip + installer)
     runs-on: windows-2022
-    needs: [performance-report, ui-regression]
+    needs: [warm-cache, performance-report, ui-regression]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -245,6 +302,7 @@ jobs:
           path: |
             dist/MViewer-*-portable.zip
             dist/MViewer-*-Setup.exe
+            dist/MViewer-*-symbols.zip
             dist/SHA256SUMS.txt
             dist/RELEASE_NOTES.md
 
@@ -273,6 +331,7 @@ jobs:
           files: |
             artifacts/mviewer-release/MViewer-*-portable.zip
             artifacts/mviewer-release/MViewer-*-Setup.exe
+            artifacts/mviewer-release/MViewer-*-symbols.zip
             artifacts/mviewer-release/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
