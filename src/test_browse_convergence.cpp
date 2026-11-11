@@ -52,9 +52,8 @@ void pump(int ms = 30)
     QElapsedTimer t;
     t.start();
     do
-    {
         QApplication::processEvents(QEventLoop::AllEvents, 10);
-    } while (t.elapsed() < ms);
+    while (t.elapsed() < ms);
 }
 
 // Earlier suites in this process can still be writing the shared thumbnail
@@ -63,11 +62,10 @@ void pump(int ms = 30)
 static void drainBackgroundWork()
 {
     auto &sched = TaskScheduler::instance();
-    sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(10));
-    sched.drain(TaskScheduler::DecodePool, std::chrono::seconds(10));
-    sched.drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(10));
-    sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(10));
-    sched.drain(TaskScheduler::IOPool, std::chrono::seconds(10));
+    for (auto pool :
+         {TaskScheduler::MetadataPool, TaskScheduler::DecodePool, TaskScheduler::ThumbnailPool,
+          TaskScheduler::AnalysisPool, TaskScheduler::IOPool})
+        sched.drain(pool, std::chrono::seconds(10));
 
     QElapsedTimer t;
     t.start();
@@ -103,15 +101,10 @@ static bool writeFakeDng(const std::string &path, const std::string &make, const
     // (e.g. Model "Z6\0"); only longer strings use an offset.
     auto writeAscii = [&](uint16_t tag, const std::string &text, long offset)
     {
-        const auto cnt = static_cast<uint32_t>(text.size()) + 1;
         uint32_t val = static_cast<uint32_t>(offset);
-        if (cnt <= 4)
-        {
-            uint8_t inlineBytes[4] = {0, 0, 0, 0};
-            std::memcpy(inlineBytes, text.c_str(), text.size());
-            std::memcpy(&val, inlineBytes, 4);
-        }
-        writeEntry(tag, 2, cnt, val);
+        if (text.size() < 4) // text + NUL fits the 4-byte field
+            std::memcpy(&val, (text + std::string(4 - text.size(), '\0')).data(), 4);
+        writeEntry(tag, 2, static_cast<uint32_t>(text.size()) + 1, val);
     };
     writeEntry(0x8827, 3, 1, iso);       // ISO (SHORT inline)
     writeAscii(0x010F, make, makeOff);   // Make (ASCII)
