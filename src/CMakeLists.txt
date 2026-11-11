@@ -671,6 +671,9 @@ if(Python3_Interpreter_FOUND)
     add_test(NAME i18n_tr_literal_gate
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/check_tr_literals.py
                 --self-test --root ${CMAKE_SOURCE_DIR})
+    # Nightly benchmark regression rules (median, floors, stale baseline).
+    add_test(NAME perf_regression_selftest
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/perf_regression.py --self-test)
 endif()
 
 # M35: the canonical local Test entry point must never turn a failing CTest

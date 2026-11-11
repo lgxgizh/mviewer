@@ -421,27 +421,58 @@ jobs:
           python -m pip install --quiet --disable-pip-version-check Pillow
           powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
 
-      - name: Benchmark regression vs baseline (alert on >10%)
+      - name: Benchmark samples (absolute budgets + 5 samples)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           # Prefer mviewer_bench only. Legacy benchmark.exe (benchmark_main.cpp)
-          # ignores --enforce/--regression/--results and always exits 0, so a
-          # filesystem-order First-1 pick both false-greens the regression gate
-          # and skips benchmark_report.json (Publish health then fails).
+          # ignores --enforce/--results and always exits 0.
           $b = Get-ChildItem build_msvc -Recurse -Filter mviewer_bench.exe | Select-Object -First 1
           if (-not $b) { Write-Host "::error:: mviewer_bench.exe not found under build_msvc"; exit 1 }
           Write-Host "Using $($b.FullName)"
-          # --enforce loads the committed baseline and enables the ±10% regression
-          # diff (main.cpp: requires --enforce AND --regression to diff baseline).
-          # Nightly compares against the committed CI-profile baseline. The PR
-          # gate uses --profile auto, while this trend job remains stable when
-          # the hosted runner's exposed core count changes.
-          # --results is what publish-health's benchmark_trend / health_score
-          # read (uploaded below as nightly-quality-report). Without it the
-          # dashboard Performance cell stays n/a.
-          & $b.FullName --enforce --regression --profile ci --budget benchmark/performance_budget.json --results build_msvc/benchmark_report.json 2>&1 | Tee-Object -FilePath benchmark_regression.txt
-        # Exit non-zero on >10% regression -> alerts the nightly run.
-        # (golden_image is already verified inside `build.ps1 Test` above.)
+          New-Item -ItemType Directory -Force bench_samples | Out-Null
+          # Sample 1 enforces the absolute budgets (=== ALL PASS ===) exactly as
+          # before; it no longer runs the single-sample +/-10% baseline diff.
+          & $b.FullName --enforce --profile ci --budget benchmark/performance_budget.json --results bench_samples/run1.json 2>&1 | Tee-Object -FilePath benchmark_regression.txt
+          $budgetExit = $LASTEXITCODE
+          # Samples 2..5 only measure; the regression check uses the median.
+          foreach ($i in 2..5) {
+            & $b.FullName --profile ci --budget benchmark/performance_budget.json --results "bench_samples/run$i.json" 2>&1 | Out-File -Append benchmark_regression.txt
+          }
+          if ($budgetExit -ne 0) { Write-Host "::error:: absolute benchmark budgets failed"; exit $budgetExit }
+
+      - name: Fetch rolling baseline (last green nightly benchmark reports)
+        if: ${{ !cancelled() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Review P0-3: the baseline is the median of the last 5 nightly runs
+          # whose quality job succeeded, not a hand-pinned point value.
+          mkdir -p perf_history
+          found=0
+          for id in $(gh run list -R "$GITHUB_REPOSITORY" --workflow nightly.yml --limit 30 \
+                        --json databaseId,status -q '.[] | select(.status=="completed") | .databaseId'); do
+            [ "$id" = "$GITHUB_RUN_ID" ] && continue
+            ok=$(gh run view "$id" -R "$GITHUB_REPOSITORY" --json jobs \
+                   -q '.jobs[] | select(.name=="Benchmark + Golden Image (MSVC)") | .conclusion')
+            [ "$ok" = "success" ] || continue
+            if gh run download "$id" -R "$GITHUB_REPOSITORY" -n nightly-quality-report -D "perf_history/$id" >/dev/null 2>&1; then
+              found=$((found+1))
+            fi
+            [ "$found" -ge 5 ] && break
+          done
+          echo "rolling baseline reports: $found"
+
+      - name: Benchmark regression (median vs rolling baseline, report-only)
+        if: ${{ !cancelled() }}
+        run: |
+          # --mode report: regressions are annotated warnings while the rolling
+          # history fills up. Switch to --mode enforce once a week of green
+          # nightlies exists (tracked in QUALITY.md, "Performance trend").
+          python scripts/perf_regression.py --samples (Get-ChildItem bench_samples -Filter *.json | ForEach-Object FullName) `
+            --history-dir perf_history --baseline benchmark/perf_baseline.json `
+            --mode report --out build_msvc/benchmark_report.json --summary $env:GITHUB_STEP_SUMMARY 2>&1 | Tee-Object -Append -FilePath benchmark_regression.txt
+          exit $LASTEXITCODE
 
       - name: Upload benchmark + golden reports
         if: always()
@@ -451,6 +482,7 @@ jobs:
           path: |
             benchmark_regression.txt
             build_msvc/benchmark_report.json
+            bench_samples/
             golden/difference/
 
   # ---------------------------------------------------------------------------
