@@ -1,12 +1,22 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-11 · Version: **1.0.173** · Release tag: **v1.0.173**
+> Snapshot: 2026-11-11 · Version: **1.0.174** · Release tag: **v1.0.174**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.174 — Plain `.raw` sensor-dump viewing (2026-11-11)
+
+- ADR 033: `.raw` files are headerless Bayer/mono sensor dumps (never LibRaw).
+  Size from `WxH` in the file name, checked against the file size with
+  storage-format guessing; Preferences → RAW defaults (16-bit LSB container,
+  10-bit, little endian, RGGB, gray-world WB, 1× gain, sRGB gamma) and a
+  per-file RAW Parameters dialog; bilinear demosaic; sensor values in the pixel
+  readout; viewer rotate/flip disabled for `.raw`.
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.173 — Project-review pass (2026-11-11)
 
