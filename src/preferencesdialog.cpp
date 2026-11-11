@@ -3,10 +3,13 @@
 #include "Theme.h"
 #include "ThemeIcons.h"
 #include "ThemeMetrics.h"
+#include "cache_settings.h"
+#include "core/image/DiskCache.h"
 #include "core/image/decoder/RawDecodePlan.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
 #include "platform/WindowChrome.h"
+#include "thumbnailcache.h"
 #include "thumbnailpanel.h"
 #include "yuvextensionmapeditor.h"
 #include "yuvparamsettings.h"
@@ -19,6 +22,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPushButton>
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
@@ -180,6 +184,39 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     const int rawIdx = m_rawDisplayPolicy->findData(rawPolicy);
     m_rawDisplayPolicy->setCurrentIndex(rawIdx >= 0 ? rawIdx : 0);
     gl->addRow(tr("RAW display"), m_rawDisplayPolicy);
+
+    m_diskCacheMb = new QSpinBox;
+    m_diskCacheMb->setRange(mviewer::ui::kDiskCacheMbMin, mviewer::ui::kDiskCacheMbMax);
+    m_diskCacheMb->setSingleStep(mviewer::ui::kDiskCacheMbStep);
+    m_diskCacheMb->setValue(std::clamp(
+        s.value(mviewer::ui::kDiskCacheMaxMbKey, mviewer::ui::kDiskCacheMbDefault).toInt(),
+        mviewer::ui::kDiskCacheMbMin, mviewer::ui::kDiskCacheMbMax));
+    gl->addRow(tr("Decoded image disk cache limit (MB)"), m_diskCacheMb);
+
+    m_thumbCacheMb = new QSpinBox;
+    m_thumbCacheMb->setRange(mviewer::ui::kThumbCacheMbMin, mviewer::ui::kThumbCacheMbMax);
+    m_thumbCacheMb->setSingleStep(mviewer::ui::kThumbCacheMbStep);
+    m_thumbCacheMb->setValue(std::clamp(
+        s.value(mviewer::ui::kThumbCacheMaxMbKey, mviewer::ui::kThumbCacheMbDefault).toInt(),
+        mviewer::ui::kThumbCacheMbMin, mviewer::ui::kThumbCacheMbMax));
+    gl->addRow(tr("Thumbnail disk cache limit (MB)"), m_thumbCacheMb);
+
+    auto *clearCaches = new QPushButton(tr("Clear caches now"));
+    connect(clearCaches, &QPushButton::clicked, this,
+            [this]()
+            {
+                DiskCache::instance().clear();
+                ThumbnailCache::instance().clear();
+                QMessageBox::information(this, tr("Caches cleared"),
+                                         tr("Decoded image and thumbnail caches were cleared."));
+            });
+    gl->addRow(clearCaches);
+
+    auto *cacheNote = new QLabel(
+        tr("Decoded copies of viewed images are kept on disk to speed up reopening. Clearing "
+           "removes them."));
+    cacheNote->setWordWrap(true);
+    gl->addRow(cacheNote);
 
     return general;
 }
@@ -374,7 +411,12 @@ void PreferencesDialog::accept()
     const int rawPolicy = m_rawDisplayPolicy ? m_rawDisplayPolicy->currentData().toInt() : 0;
     s.setValue(QStringLiteral("raw/displayPolicy"), rawPolicy);
     mviewer::core::setRawDisplayPolicy(mviewer::core::rawDisplayPolicyFromInt(rawPolicy));
+    if (m_diskCacheMb)
+        s.setValue(mviewer::ui::kDiskCacheMaxMbKey, m_diskCacheMb->value());
+    if (m_thumbCacheMb)
+        s.setValue(mviewer::ui::kThumbCacheMaxMbKey, m_thumbCacheMb->value());
     s.sync();
+    mviewer::ui::applyCacheSettings();
     GpuTileUploader::resetEnabledCache();
     DisplayColorContextProvider::setColorManagementEnabled(colorManagement);
     emit settingsChanged();

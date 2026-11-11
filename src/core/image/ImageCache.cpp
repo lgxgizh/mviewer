@@ -1,5 +1,7 @@
 #include "core/image/ImageCache.h"
 
+#include "core/memory/MemoryBudget.h"
+
 ImageCache &ImageCache::instance()
 {
     // Intentionally leaked: see CacheManager::instance(). Tile workers can
@@ -10,10 +12,11 @@ ImageCache &ImageCache::instance()
 
 ImageCache::ImageCache()
 {
+    const double scale = mviewer::core::inMemoryCacheScale(mviewer::core::physicalMemoryBytes());
     m_pools[Metadata].maxBytes = kMetaMaxBytes;
     m_pools[Thumbnail].maxBytes = kThumbMaxBytes;
-    m_pools[Preview].maxBytes = kPreviewMaxBytes;
-    m_pools[Viewer].maxBytes = kViewerMaxBytes;
+    m_pools[Preview].maxBytes = mviewer::core::scaledCacheBytes(kPreviewMaxBytes, scale);
+    m_pools[Viewer].maxBytes = mviewer::core::scaledCacheBytes(kViewerMaxBytes, scale);
 }
 
 void ImageCache::touch(Pool &pool, std::list<std::string>::iterator it)

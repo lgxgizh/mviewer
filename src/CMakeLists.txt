@@ -40,6 +40,7 @@ add_library(mviewer_core SHARED
     core/image/MetadataDpi.cpp
     core/image/RawMetadata.cpp
     core/image/ImageCache.cpp
+    core/memory/MemoryBudget.cpp
     core/image/DiskCache.cpp
     core/cache/CacheManager.cpp
     core/cache/MipmapPyramid.cpp
@@ -340,6 +341,7 @@ add_library(mviewer_ui STATIC
     widgets/histogramwidget.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
+    cache_settings.cpp
     usmcomparedialog.cpp
     usmcomparedialog_load.cpp
     yuvcomparedialog.cpp
@@ -1913,6 +1915,22 @@ target_include_directories(flags_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(flags_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_test(NAME flags_tests COMMAND flags_tests)
+
+add_executable(memory_budget_tests
+    core/test_memory_budget.cpp
+)
+
+target_link_libraries(memory_budget_tests
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(memory_budget_tests PRIVATE cxx_std_20)
+target_include_directories(memory_budget_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(memory_budget_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME memory_budget_tests COMMAND memory_budget_tests)
 
 # Audit #41 / #45 / #47 — preset paths, lazy tag-store location, settings restore.
 add_executable(audit_persistence_tests

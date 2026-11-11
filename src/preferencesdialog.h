@@ -53,5 +53,7 @@ class PreferencesDialog : public QDialog
     QComboBox *m_rawDisplayPolicy = nullptr;
     QComboBox *m_analysisOverlay = nullptr;
     QSlider *m_zebraThreshold = nullptr;
+    QSpinBox *m_diskCacheMb = nullptr;
+    QSpinBox *m_thumbCacheMb = nullptr;
     YuvExtensionMapEditor *m_yuvExtensionMap = nullptr;
 };
