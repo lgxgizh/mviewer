@@ -1,7 +1,7 @@
 #include "cache_settings.h"
 
 #include "core/image/DiskCache.h"
-#include "thumbnailcache.h"
+#include "thumbnailprovider.h"
 
 #include <QSettings>
 
@@ -30,8 +30,8 @@ void applyCacheSettings()
     if (DiskCache::instance().maxBytes() != diskBytes)
         DiskCache::instance().setMaxBytes(diskBytes);
     const quint64 thumbBytes = static_cast<quint64>(thumbMb) * 1024u * 1024u;
-    if (ThumbnailCache::instance().maxBytes() != thumbBytes)
-        ThumbnailCache::instance().setMaxBytes(thumbBytes);
+    if (ThumbnailProvider::diskCacheMaxBytes() != thumbBytes)
+        ThumbnailProvider::setDiskCacheMaxBytes(thumbBytes);
 }
 
 } // namespace mviewer::ui

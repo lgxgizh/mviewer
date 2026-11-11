@@ -31,6 +31,7 @@ class PreferencesDialog : public QDialog
   private:
     void addUiAppearanceRows(QFormLayout *gl);
     QWidget *buildGeneralTab(QSettings &s);
+    void addCacheRows(QFormLayout *gl, QSettings &s);
     QWidget *buildCompareTab(QSettings &s);
     QWidget *buildAnalysisTab(QSettings &s);
     QWidget *buildYuvTab();

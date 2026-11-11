@@ -9,8 +9,8 @@
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
 #include "platform/WindowChrome.h"
-#include "thumbnailcache.h"
 #include "thumbnailpanel.h"
+#include "thumbnailprovider.h"
 #include "yuvextensionmapeditor.h"
 #include "yuvparamsettings.h"
 
@@ -185,6 +185,14 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
     m_rawDisplayPolicy->setCurrentIndex(rawIdx >= 0 ? rawIdx : 0);
     gl->addRow(tr("RAW display"), m_rawDisplayPolicy);
 
+    addCacheRows(gl, s);
+
+    return general;
+}
+
+// Review P2-3: disk cache limits and Clear caches (applied in accept()).
+void PreferencesDialog::addCacheRows(QFormLayout *gl, QSettings &s)
+{
     m_diskCacheMb = new QSpinBox;
     m_diskCacheMb->setRange(mviewer::ui::kDiskCacheMbMin, mviewer::ui::kDiskCacheMbMax);
     m_diskCacheMb->setSingleStep(mviewer::ui::kDiskCacheMbStep);
@@ -206,7 +214,7 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
             [this]()
             {
                 DiskCache::instance().clear();
-                ThumbnailCache::instance().clear();
+                ThumbnailProvider::clearDiskCache();
                 QMessageBox::information(this, tr("Caches cleared"),
                                          tr("Decoded image and thumbnail caches were cleared."));
             });
@@ -217,8 +225,6 @@ QWidget *PreferencesDialog::buildGeneralTab(QSettings &s)
            "removes them."));
     cacheNote->setWordWrap(true);
     gl->addRow(cacheNote);
-
-    return general;
 }
 
 QWidget *PreferencesDialog::buildCompareTab(QSettings &s)
