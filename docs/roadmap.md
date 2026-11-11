@@ -126,7 +126,7 @@
 ## Public versioning (M13+)
 
 Internal milestones stay (M13 = Product Beta). The **public** track is relabeled
-**Beta → 1.0 (first non-prerelease) → 1.1 → 2.0** so the product reads as a
+**Beta (1.0.x patch line) → 1.0 GA (signed, frozen plugin ABI) → 1.1 → 2.0** so the product reads as a
 shipping product, not an R&D line. The prior `v1.0.0-rc` (M11) is acknowledged
 as the *internal* pre-release; the real **1.0** is what M13 produces.
 
