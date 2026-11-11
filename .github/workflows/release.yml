@@ -29,13 +29,17 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# Review P2-12: read-only by default; only the publish job can write the
+# release and mint build-provenance attestations.
 permissions:
-  contents: write   # needed to draft the GitHub release
+  contents: read
 
 # Review P1-3: shared compiler cache. CMake reads CMAKE_<LANG>_COMPILER_LAUNCHER
 # from the environment, so build.ps1 stays unchanged. Release objects use /Z7
 # (see CMakeLists.txt), which sccache can cache.
 env:
+  # Review P2-11: a shipped build must never silently drop RAW demosaic.
+  MVIEWER_REQUIRE_LIBRAW: "ON"
   SCCACHE_GHA_ENABLED: "true"
   CMAKE_C_COMPILER_LAUNCHER: sccache
   CMAKE_CXX_COMPILER_LAUNCHER: sccache
@@ -49,16 +53,22 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
@@ -81,16 +91,22 @@ jobs:
     needs: [warm-cache]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
@@ -118,7 +134,7 @@ jobs:
 
       - name: Upload performance report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: performance-report
           path: |
@@ -134,16 +150,22 @@ jobs:
     needs: [warm-cache]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
@@ -165,7 +187,7 @@ jobs:
 
       - name: Upload golden diffs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ui-regression-diffs
           path: golden/difference/
@@ -182,16 +204,22 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Setup MSVC (with PDBs for Dr.Memory symbols)
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
@@ -218,7 +246,7 @@ jobs:
 
       - name: Upload Dr.Memory report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: drmemory-report
           path: drmemory_out/
@@ -232,16 +260,22 @@ jobs:
     needs: [warm-cache, performance-report, ui-regression]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
@@ -296,7 +330,7 @@ jobs:
           }
 
       - name: Upload release artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: mviewer-release
           path: |
@@ -317,14 +351,28 @@ jobs:
     # branch (e.g. master) is used to verify the pipeline runs and must NOT
     # create a bogus "master" release.
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write       # create the GitHub release
+      id-token: write       # sign the provenance attestation (Sigstore OIDC)
+      attestations: write   # store the attestation on the repository
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
+      # Review P2-12: SLSA build provenance for every shipped binary.
+      # Verify with: gh attestation verify <file> -R lgxgizh/mviewer
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: |
+            artifacts/mviewer-release/MViewer-*-portable.zip
+            artifacts/mviewer-release/MViewer-*-Setup.exe
+            artifacts/mviewer-release/MViewer-*-symbols.zip
+
       - name: Publish release (all verified artifacts)
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           draft: false
           body_path: artifacts/mviewer-release/RELEASE_NOTES.md

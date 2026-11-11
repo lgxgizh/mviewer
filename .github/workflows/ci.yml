@@ -45,6 +45,14 @@ concurrency:
   group: pr-${{ github.ref }}
   cancel-in-progress: true
 
+# Review P2-12: read-only token by default; no PR-gate job writes to the repo.
+permissions:
+  contents: read
+
+# Review P2-11: CI builds must never silently drop RAW demosaic.
+env:
+  MVIEWER_REQUIRE_LIBRAW: "ON"
+
 jobs:
   # ---------------------------------------------------------------------------
   # format — clang-format + markdownlint (ubuntu, fast)
@@ -57,7 +65,7 @@ jobs:
     # markdownlint exited non-zero, so this job must be allowed to fail.
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           # Incremental formatting compares the event range, so both endpoints
           # must be available on push and pull_request runs.
@@ -107,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install cppcheck + Qt6 headers
         run: |
@@ -129,7 +137,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cppcheck-report
           path: cppcheck.txt
@@ -147,9 +155,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history for diff)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Install clang-tidy + clang
         run: |
@@ -222,7 +236,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Verify zero architecture violations
         shell: pwsh
@@ -246,7 +260,13 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Install dependencies
         run: |
@@ -256,7 +276,7 @@ jobs:
             cmake ninja-build g++
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
         with:
           version: 6.8.0
           host: linux
@@ -266,7 +286,7 @@ jobs:
           cache: true
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       - name: Configure and build
         run: |
@@ -310,16 +330,22 @@ jobs:
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Cache LibRaw tag archive (review P2-11)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
 
       - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.9
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
@@ -372,7 +398,7 @@ jobs:
 
       - name: Upload test report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: test-results
           path: build_msvc/test-results.xml
@@ -390,7 +416,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Complexity gate (advisory)
         shell: pwsh
@@ -416,7 +442,7 @@ jobs:
 
       - name: Upload health artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: build-health
           path: |
@@ -435,7 +461,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout (full history for diff)
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
@@ -455,7 +481,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Known-issues (Bug) gate
         shell: pwsh
