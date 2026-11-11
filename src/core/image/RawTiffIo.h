@@ -78,10 +78,17 @@ inline bool readTiffHeader(FILE *f, uint64_t fileSize, TiffHeader &h)
     return fits(h.ifdOffset, 2, fileSize);
 }
 
+// clang-analyzer-unix.Stream: never read after a failed read left the stream
+// at EOF or with an error (position indeterminate).
+inline bool streamOk(FILE *f)
+{
+    return std::feof(f) == 0 && std::ferror(f) == 0;
+}
+
 inline uint16_t readU16(FILE *f, bool le)
 {
     uint8_t b[2];
-    if (std::fread(b, 1, 2, f) != 2)
+    if (!streamOk(f) || std::fread(b, 1, 2, f) != 2)
         return 0;
     return le ? static_cast<uint16_t>(b[0] | (b[1] << 8))
               : static_cast<uint16_t>((b[0] << 8) | b[1]);
@@ -90,7 +97,7 @@ inline uint16_t readU16(FILE *f, bool le)
 inline uint32_t readU32(FILE *f, bool le)
 {
     uint8_t b[4];
-    if (std::fread(b, 1, 4, f) != 4)
+    if (!streamOk(f) || std::fread(b, 1, 4, f) != 4)
         return 0;
     return le ? static_cast<uint32_t>(b[0] | (b[1] << 8) | (b[2] << 16) | (b[3] << 24))
               : static_cast<uint32_t>((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
@@ -111,7 +118,7 @@ struct IfdEntry
 inline bool readEntry(FILE *f, bool le, IfdEntry &e)
 {
     uint8_t b[12];
-    if (std::fread(b, 1, 12, f) != 12)
+    if (!streamOk(f) || std::fread(b, 1, 12, f) != 12)
         return false;
     std::memcpy(e.raw, b + 8, 4);
     if (le)
