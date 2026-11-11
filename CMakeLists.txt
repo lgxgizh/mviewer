@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(MViewer
-    VERSION 1.0.172
+    VERSION 1.0.173
     DESCRIPTION "A Qt 6 based image viewer"
     LANGUAGES CXX
 )

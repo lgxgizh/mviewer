@@ -2,22 +2,79 @@
 
 ## [Unreleased]
 
+## [1.0.173] - 2026-11-11
+
+Project-review pass (2026-11-11): every P0/P1/P2 finding except the Qt
+patch upgrade (P1-7). Code signing stays open: there is no certificate yet.
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.173**.
+- Release builds ship `MViewer-<ver>-symbols.zip` (PDBs for MViewer.exe and
+  the core DLL) next to the installer and portable zip; release artifacts
+  carry GitHub build-provenance attestations
+  (`gh attestation verify <file> -R lgxgizh/mviewer`).
+
 ### Fixed
 
 - zh_CN: recompile the embedded `.qm` from `translations/mviewer_zh_CN.ts`.
   v1.0.172 shipped 19 untranslated strings (Triple Browse menu, pane status
-  text, copy/move/delete confirmations, rotate errors).
+  text, copy/move/delete confirmations, rotate errors). Strings added in this
+  release are translated too.
 - Details zebra test compares a multi-point sample of each row's top band with
   the view palette, so Linux font metrics no longer move the probe onto text;
-  the test now covers dark mode too.
+  the test now covers dark mode too. Zebra colors are unchanged.
+- RAW/TIFF metadata parser: 64-bit file offsets, inline (≤4 byte) values,
+  big-endian (`MM`) files, SRATIONAL exposure bias and SubIFD traversal.
+- Rating/tag removal is finished in the backend: no more sidecar/XMP import,
+  rating cache or SidecarStore retry thread. Recently viewed now lives in its
+  own `recents.txt` (migrated from `flags.txt`); renames/moves still carry an
+  existing `<image>.mviewer.json` / `<image>.xmp`. Sort by rating (old
+  setting) falls back to name; saved sort values stay stable.
+- Plugin loading: the ABI export is mandatory, DLLs load with
+  `LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | SYSTEM32`, and the process calls
+  `SetDefaultDllDirectories` at startup.
+- Deleting files that the Recycle Bin refuses (e.g. network drives) now says
+  they went to MViewer's own trash folder (kept 30 days / 2 GB) and shows the
+  folder; pruning that folder runs in the background and is logged.
+- About/log version string is refreshed on every build, not only at CMake
+  configure time.
+
+### Changed
+
+- Batch rotate/flip runs on a worker; the UI stays responsive and the
+  progress dialog's Cancel works between files.
+- Preferences > General: decoded-image and thumbnail disk cache limits and a
+  "Clear caches now" button. Large in-memory image pools scale down on
+  machines with less than 12 GB RAM.
+- Viewer: neighbors above 48 MP are pre-warmed as a bounded display raster
+  instead of a full-resolution decode.
+- EXIF-rotated TIFFs use the bounded WIC path for LOD display.
+- Internal: ROI statistics presenter, gallery filter engine and MainWindow
+  key routing extracted from the UI classes; ThumbnailPipeline moved out of
+  its header; UpdateChecker uses RAII WinHTTP handles; compare edit-panel
+  hint color uses a theme token.
+- LibRaw is cached in `third_party/` at configure time; offline builds fall
+  back to embedded RAW previews unless `MVIEWER_REQUIRE_LIBRAW=ON` (set in CI
+  and release).
 
 ### Tests / CI
 
-- New `i18n_qm_sync_gate` (`scripts/check_qm_sync.py`) fails when a finished
-  `.ts` translation is missing from the committed `.qm`.
-- PR gate `build-linux` now builds with Qt 6.8.0 gcc_64 and runs CTest
-  offscreen (same exclusions as nightly asan-linux), so Linux-only UI test
-  failures block the PR instead of turning the next nightly red.
+- New `i18n_qm_sync_gate` fails when a finished `.ts` translation is missing
+  from a committed `.qm`.
+- PR gate builds and runs CTest on Linux (GCC, offscreen); sccache on Linux
+  and Windows; nightly-only tests carry the `nightly` label.
+- Nightly benchmark regression compares the median of 5 samples with the
+  median of the last 5 green nightlies (report-only for now).
+- libFuzzer targets for the RAW/TIFF, JPEG EXIF and YUV parsers (nightly
+  `fuzz-linux`).
+- Shared `tests/support/check.h` (CHECK, event-driven `waitFor` with
+  `MVIEWER_TEST_TIMEOUT_SCALE`) and `mviewer_add_test`; sleep-based waits
+  replaced; each test gets its own HOME; script gates no longer RUN_SERIAL.
+  ThumbnailPanel test hooks moved to `ThumbnailPanelTestAccess`.
+- lizard complexity ratchet in build-health (CCN>25 and NLOC>120 may not grow).
+- Workflows: actions pinned to commit SHAs, read-only default token
+  permissions, LibRaw archive cache.
 
 ## [1.0.172] - 2026-11-09
 
