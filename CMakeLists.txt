@@ -55,6 +55,37 @@ set(CMAKE_AUTOUIC ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# ── Release debug symbols (review P0-4) ──────────────────────────────────────
+# MSVC Release used to produce no PDBs, so user minidumps (CrashHandler) could
+# not be symbolized and OpenCppCoverage selected no modules (coverage 0%).
+# /Z7 stores debug info in each .obj (compiler-cache friendly, no shared
+# compile PDB); /DEBUG makes the linker write <target>.pdb; /OPT:REF and
+# /OPT:ICF restore the Release defaults that /DEBUG would otherwise turn off.
+# Code generation is unchanged. Linker PDBs are written only for the shipping
+# binaries (MViewer.exe, mviewer_core.dll, plugins) unless MVIEWER_ALL_PDBS is
+# ON (the nightly coverage job sets it through the environment), because ~150
+# test executables each statically link the UI library.
+if(DEFINED ENV{MVIEWER_ALL_PDBS})
+    set(_mviewer_all_pdbs_default "$ENV{MVIEWER_ALL_PDBS}")
+else()
+    set(_mviewer_all_pdbs_default OFF)
+endif()
+option(MVIEWER_ALL_PDBS "Write linker PDBs for every MSVC executable (coverage)"
+       ${_mviewer_all_pdbs_default})
+if(MSVC)
+    add_compile_options($<$<CONFIG:Release>:/Z7>)
+    if(MVIEWER_ALL_PDBS)
+        add_link_options($<$<CONFIG:Release>:/DEBUG> $<$<CONFIG:Release>:/OPT:REF>
+                         $<$<CONFIG:Release>:/OPT:ICF>)
+    endif()
+endif()
+function(mviewer_release_pdb target)
+    if(MSVC AND NOT MVIEWER_ALL_PDBS)
+        target_link_options(${target} PRIVATE $<$<CONFIG:Release>:/DEBUG>
+                            $<$<CONFIG:Release>:/OPT:REF> $<$<CONFIG:Release>:/OPT:ICF>)
+    endif()
+endfunction()
+
 # Enable CTest before add_subdirectory(src) so the add_test() calls in
 # src/CMakeLists.txt register into the generated CTestTestfile.
 enable_testing()

@@ -87,6 +87,11 @@ foreach ($name in @("MViewer-$Version-portable.zip", "MViewer-$Version-Setup.exe
         throw "Strict release manifest: missing exact artifact '$candidate'"
     }
 }
+# Optional debug-symbols asset (review P0-4): checksummed when present.
+$symbolsCandidate = Join-Path $outAbs "MViewer-$Version-symbols.zip"
+if ([IO.File]::Exists($symbolsCandidate)) {
+    $artifactPaths += $symbolsCandidate
+}
 if (-not $Strict) {
     foreach ($pat in @("MViewer-*-portable.zip", "MViewer-*-Setup.exe", "MViewer-*.zip", "MViewer-*.exe")) {
         try {
