@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <vector>
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -61,10 +62,16 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
     writeEntry(0x829A, 5, 1, static_cast<uint32_t>(dataOffset));
     // FocalLength (0x920A, RATIONAL, count=1) -> offset to data + 8
     writeEntry(0x920A, 5, 1, static_cast<uint32_t>(dataOffset + 8));
-    // Make (0x010F, ASCII, count=4) -> offset to data + 16
-    writeEntry(0x010F, 2, 4, static_cast<uint32_t>(dataOffset + 16));
-    // Model (0x0110, ASCII, count=4) -> offset to data + 20
-    writeEntry(0x0110, 2, 4, static_cast<uint32_t>(dataOffset + 20));
+    // Make / Model (ASCII, count=4): TIFF 6.0 stores values of <= 4 bytes
+    // inline in the value field, in file order.
+    auto inlineAscii = [](const char *s4)
+    {
+        uint32_t v = 0;
+        std::memcpy(&v, s4, 4); // little-endian host and file: bytes stay in order
+        return v;
+    };
+    writeEntry(0x010F, 2, 4, inlineAscii("SONY"));
+    writeEntry(0x0110, 2, 4, inlineAscii("A7R")); // 3 chars + NUL = 4 bytes
 
     // Next IFD offset (0 = none)
     uint32_t nextIfd = 0;
@@ -76,10 +83,8 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
     std::fwrite(&exposureDen, 4, 1, f);
     std::fwrite(&focalNum, 4, 1, f);
     std::fwrite(&focalDen, 4, 1, f);
-    const char *make = "SONY";
-    std::fwrite(make, 1, 4, f);
-    const char *model = "A7R\0";
-    std::fwrite(model, 1, 4, f);
+    // Decoy bytes where an offset-based reader of the inline strings would land.
+    std::fwrite("XXXXXXXX", 1, 8, f);
 
     std::fclose(f);
     return true;
@@ -202,6 +207,104 @@ static bool writeCyclicTiff(const std::string &path)
     return true;
 }
 
+// Big-endian ("MM") TIFF writer. Every multi-byte field is written high byte
+// first, exactly as a Motorola-order camera file stores it.
+struct BeWriter
+{
+    std::vector<uint8_t> bytes;
+    void u16(uint16_t v)
+    {
+        bytes.push_back(static_cast<uint8_t>(v >> 8));
+        bytes.push_back(static_cast<uint8_t>(v & 0xFF));
+    }
+    void u32(uint32_t v)
+    {
+        u16(static_cast<uint16_t>(v >> 16));
+        u16(static_cast<uint16_t>(v & 0xFFFF));
+    }
+    void entry(uint16_t tag, uint16_t type, uint32_t count, uint32_t value)
+    {
+        u16(tag);
+        u16(type);
+        u32(count);
+        u32(value);
+    }
+    void entryRaw(uint16_t tag, uint16_t type, uint32_t count, const uint8_t raw[4])
+    {
+        u16(tag);
+        u16(type);
+        u32(count);
+        bytes.insert(bytes.end(), raw, raw + 4);
+    }
+    void padTo(size_t offset)
+    {
+        if (bytes.size() < offset)
+            bytes.resize(offset, 0);
+    }
+};
+
+// MM TIFF: IFD0 { Make (offset), Model (inline, 3 bytes), ISO SHORT inline,
+// CFAPattern BYTE x4 inline, ExposureTime RATIONAL, ExposureBias SRATIONAL,
+// SubIFDs LONG x2 -> array } and two SubIFDs, each carrying one field.
+static bool writeBigEndianTiff(const std::string &path)
+{
+    BeWriter w;
+    const uint8_t hdr[4] = {'M', 'M', 0x00, 0x2A};
+    w.bytes.insert(w.bytes.end(), hdr, hdr + 4);
+    w.u32(8); // IFD0 at 8
+
+    const uint16_t n0 = 7;
+    w.u16(n0);
+    const uint32_t data = 8 + 2 + n0 * 12 + 4; // 98
+    const uint32_t makeOff = data;             // "Nikon\0" (6)
+    const uint32_t expOff = data + 8;          // 1/125
+    const uint32_t biasOff = data + 16;        // -2/3
+    const uint32_t subArr = data + 24;         // 2 x LONG
+    const uint32_t sub1 = data + 32;
+    const uint32_t sub2 = sub1 + 2 + 12 + 4;
+
+    w.entry(0x010F, 2, 6, makeOff);
+    const uint8_t model[4] = {'Z', '9', 0, 0};
+    w.entryRaw(0x0110, 2, 3, model);
+    // SHORT count 1 inline: the value sits in the FIRST two bytes (MM order).
+    const uint8_t iso[4] = {0x06, 0x40, 0x00, 0x00}; // 1600
+    w.entryRaw(0x8827, 3, 1, iso);
+    const uint8_t cfa[4] = {0, 1, 1, 2}; // R G G B in file order
+    w.entryRaw(0x828E, 1, 4, cfa);
+    w.entry(0x829A, 5, 1, expOff);
+    w.entry(0x9204, 10, 1, biasOff);
+    w.entry(0x014A, 4, 2, subArr);
+    w.u32(0); // next IFD
+
+    w.padTo(makeOff);
+    const char make[8] = {'N', 'i', 'k', 'o', 'n', 0, 0, 0};
+    w.bytes.insert(w.bytes.end(), make, make + 8);
+    w.u32(1);
+    w.u32(125);
+    w.u32(static_cast<uint32_t>(-2));
+    w.u32(3);
+    w.u32(sub1);
+    w.u32(sub2);
+
+    w.padTo(sub1); // SubIFD #1: BitsPerSample = 14
+    w.u16(1);
+    const uint8_t bits[4] = {0x00, 0x0E, 0x00, 0x00};
+    w.entryRaw(0x0102, 3, 1, bits);
+    w.u32(0);
+
+    w.padTo(sub2); // SubIFD #2: ImageWidth = 6048 (LONG)
+    w.u16(1);
+    w.entry(0x0100, 4, 1, 6048);
+    w.u32(0);
+
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f)
+        return false;
+    const bool ok = std::fwrite(w.bytes.data(), 1, w.bytes.size(), f) == w.bytes.size();
+    std::fclose(f);
+    return ok;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -237,6 +340,22 @@ int main(int argc, char **argv)
     CHECK(rmExif.focalLength > 49.9 && rmExif.focalLength < 50.1, "focal = 50mm from Exif IFD");
     CHECK(rmExif.colorSpace == "sRGB", "ColorSpace = sRGB");
     CHECK(rmExif.bayerPattern == "RGGB", "Bayer CFA pattern = RGGB");
+
+    // 2b) Big-endian (Motorola) file: inline BYTE / ASCII / SHORT values,
+    // SRATIONAL exposure bias and a two-entry SubIFD array.
+    const std::string bePath = tmp.path().toStdString() + "/motorola.nef";
+    CHECK(writeBigEndianTiff(bePath), "big-endian NEF written");
+    const auto be = mviewer::core::parseRawMetadata(bePath);
+    CHECK(be.parsed, "big-endian TIFF parsed");
+    CHECK(be.make == "Nikon", "MM Make read from offset");
+    CHECK(be.model == "Z9", "MM 3-byte Model read inline, not as an offset");
+    CHECK(be.iso == 1600, "MM inline SHORT ISO = 1600");
+    CHECK(be.bayerPattern == "RGGB", "MM inline CFAPattern keeps file order (RGGB, not BGGR)");
+    CHECK(be.exposureSec > 0.0079 && be.exposureSec < 0.0081, "MM exposure = 1/125s");
+    CHECK(be.exposureCompensation < -0.66 && be.exposureCompensation > -0.67,
+          "MM SRATIONAL exposure bias = -2/3 (signed)");
+    CHECK(be.bitsPerSample == 14, "first SubIFD of a two-entry array parsed");
+    CHECK(be.width == 6048, "second SubIFD of a two-entry array parsed");
 
     // 3) Hostile cyclic IFD -> must terminate cleanly without deadlock/infinite recursion
     const std::string cyclicPath = tmp.path().toStdString() + "/cyclic.nef";
