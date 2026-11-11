@@ -42,6 +42,10 @@ bool hasTransparentPixel(const QImage &img)
 }
 } // namespace
 
+ThumbnailCache::ThumbnailCache(const QString &directory) : m_directoryOverride(directory)
+{
+}
+
 ThumbnailCache &ThumbnailCache::instance()
 {
     // Function-local static: workers are joined at process shutdown while
@@ -80,6 +84,8 @@ ThumbnailCache::~ThumbnailCache()
 
 QString ThumbnailCache::cacheDir() const
 {
+    if (!m_directoryOverride.isEmpty())
+        return m_directoryOverride;
     const QString base = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
     if (base.isEmpty())
         return QString();
