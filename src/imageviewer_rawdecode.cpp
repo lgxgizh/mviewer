@@ -2,6 +2,7 @@
 
 #include "core/image/ImageFormats.h"
 #include "core/image/decoder/RawDecodePlan.h"
+#include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/yuv/YuvFile.h"
 #include "rawsourcebadge.h"
 
@@ -82,6 +83,8 @@ QAction *ImageViewer::addRawDecodeAction(QMenu &menu)
 {
     if (mviewer::core::yuv::isYuvPath(m_currentPath.toUtf8().toStdString()))
         return menu.addAction(tr("YUV Parameters..."));
+    if (mviewer::core::rawplain::isPlainRawPath(m_currentPath.toUtf8().toStdString()))
+        return menu.addAction(tr("RAW Parameters..."));
     return menu.addAction(m_fullRawLoading ? tr("Cancel Full RAW Decode") : tr("Decode Full RAW"));
 }
 
@@ -89,8 +92,10 @@ bool ImageViewer::handleRawDecodeAction(QAction *chosen, QAction *fullRaw)
 {
     if (chosen != fullRaw)
         return false;
-    if (mviewer::core::yuv::isYuvPath(m_currentPath.toUtf8().toStdString()))
+    const std::string current = m_currentPath.toUtf8().toStdString();
+    if (mviewer::core::yuv::isYuvPath(current) || mviewer::core::rawplain::isPlainRawPath(current))
     {
+        // ADR 033: plain .raw shares the parameters signal; MainWindow routes it.
         emit yuvParamsRequested(m_currentPath);
         return true;
     }

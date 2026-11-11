@@ -419,7 +419,8 @@ class MainWindow : public QMainWindow
     void onYuvToolRequested(const QStringList &paths); // 1 = parameters, 2 = compare
     void compareYuv(const QString &pathA, const QString &pathB);
     bool showYuvLoadHint(const QString &path);
-    void onYuvExtensionMapChanged(); // Preferences > YUV edited the suffix mapping
+    void onYuvExtensionMapChanged();  // Preferences > YUV edited the suffix mapping
+    void onPlainRawDefaultsChanged(); // Preferences > RAW edited the .raw defaults (ADR 033)
     static QString yuvSampleText(const QString &path, int frameIndex, int x, int y);
     void connectViewerPixelInfo();
     void toggleFocusBrowse();

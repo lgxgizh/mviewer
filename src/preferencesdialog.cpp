@@ -6,8 +6,11 @@
 #include "cache_settings.h"
 #include "core/image/DiskCache.h"
 #include "core/image/decoder/RawDecodePlan.h"
+#include "core/image/rawplain/PlainRawFile.h"
 #include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
+#include "plainrawparamseditor.h"
+#include "plainrawsettings.h"
 #include "platform/WindowChrome.h"
 #include "thumbnailpanel.h"
 #include "thumbnailprovider.h"
@@ -325,6 +328,7 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
         {buildCompareTab(s), tr("Compare"), "compare", "preferencesPageCompare"},
         {buildAnalysisTab(s), tr("Analyze"), "histogram", "preferencesPageAnalyze"},
         {buildYuvTab(), tr("YUV"), "filter", "preferencesPageYuv"},
+        {buildPlainRawTab(), tr("RAW"), "filter", "preferencesPageRaw"},
     };
     for (const auto &page : kPages)
     {
@@ -367,8 +371,42 @@ QWidget *PreferencesDialog::buildYuvTab()
     return m_yuvExtensionMap;
 }
 
+QWidget *PreferencesDialog::buildPlainRawTab()
+{
+    // ADR 033: global defaults for headerless .raw sensor dumps. Right-click >
+    // RAW Parameters... overrides them for one file in the current session.
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    auto *intro = new QLabel(
+        tr("Defaults for plain .raw sensor dumps (no header). The size is read from the file "
+           "name, e.g. name_4096x3072.raw, and checked against the file size. Right-click a "
+           "file > RAW Parameters... to change one file for this session."),
+        page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_plainRawDefaults = new PlainRawParamsEditor(PlainRawParamsEditor::Mode::Defaults, page);
+    m_plainRawDefaults->setObjectName(QStringLiteral("preferencesPlainRawDefaults"));
+    m_plainRawDefaults->setParams(
+        mviewer::core::rawplain::PlainRawParamStore::instance().defaults());
+    layout->addWidget(m_plainRawDefaults);
+    layout->addStretch(1);
+    return page;
+}
+
 void PreferencesDialog::accept()
 {
+    if (m_plainRawDefaults)
+    {
+        const QString problem = m_plainRawDefaults->validationError();
+        if (!problem.isEmpty())
+        {
+            QMessageBox::warning(this, tr("RAW defaults"), problem);
+            return;
+        }
+        const auto params = m_plainRawDefaults->params();
+        if (!(params == mviewer::core::rawplain::PlainRawParamStore::instance().defaults()))
+            mviewer::ui::savePlainRawDefaults(params);
+    }
     if (m_yuvExtensionMap)
     {
         const QString problem = m_yuvExtensionMap->validationError();
