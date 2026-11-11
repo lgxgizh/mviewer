@@ -91,6 +91,12 @@ class MViewerApplication final : public QApplication
 
 int main(int argc, char *argv[])
 {
+#ifdef Q_OS_WIN
+    // Review P2-1: never resolve DLLs from the current directory or PATH. Every
+    // later LoadLibrary (plugins, codecs, Qt plugins) searches only the app
+    // folder, System32 and directories added with AddDllDirectory.
+    SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+#endif
     MViewerApplication app(argc, argv);
     app.setApplicationName("MViewer");
     app.setOrganizationName("MViewer");

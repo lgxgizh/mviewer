@@ -56,6 +56,50 @@ if(MVIEWER_LIBRAW_ARCHIVE AND NOT EXISTS "${MVIEWER_LIBRAW_ARCHIVE}")
     message(WARNING "LibRaw: MVIEWER_LIBRAW_ARCHIVE='${MVIEWER_LIBRAW_ARCHIVE}' does not exist")
 endif()
 
+# Review P2-11: download once into third_party/ (git-ignored, cached by CI)
+# and degrade instead of failing when offline. A failed download builds
+# without LibRaw (RAW files fall back to their embedded previews) unless
+# MVIEWER_REQUIRE_LIBRAW is ON (CI and release set it through the environment,
+# so a shipped build can never silently lose RAW demosaic).
+if(DEFINED ENV{MVIEWER_REQUIRE_LIBRAW})
+    set(_libraw_require_default "$ENV{MVIEWER_REQUIRE_LIBRAW}")
+else()
+    set(_libraw_require_default OFF)
+endif()
+option(MVIEWER_REQUIRE_LIBRAW "Fail configure when LibRaw cannot be obtained"
+       ${_libraw_require_default})
+if(_libraw_fetch_url STREQUAL MVIEWER_LIBRAW_URL)
+    set(_libraw_cached "${CMAKE_SOURCE_DIR}/third_party/LibRaw-${MVIEWER_LIBRAW_VERSION}.tar.gz")
+    file(MAKE_DIRECTORY "${CMAKE_SOURCE_DIR}/third_party")
+    file(DOWNLOAD "${MVIEWER_LIBRAW_URL}" "${_libraw_cached}.part"
+         STATUS _libraw_dl_status TLS_VERIFY ON INACTIVITY_TIMEOUT 60 TIMEOUT 600)
+    list(GET _libraw_dl_status 0 _libraw_dl_code)
+    set(_libraw_dl_sha256 "")
+    if(_libraw_dl_code EQUAL 0)
+        file(SHA256 "${_libraw_cached}.part" _libraw_dl_sha256)
+    endif()
+    if(_libraw_dl_code EQUAL 0 AND _libraw_dl_sha256 STREQUAL MVIEWER_LIBRAW_SHA256)
+        file(RENAME "${_libraw_cached}.part" "${_libraw_cached}")
+        file(TO_CMAKE_PATH "${_libraw_cached}" _libraw_fetch_url)
+        message(STATUS "LibRaw: downloaded and cached ${_libraw_fetch_url}")
+    else()
+        file(REMOVE "${_libraw_cached}.part")
+        list(JOIN _libraw_dl_status " " _libraw_dl_text)
+        set(_libraw_reason "download of ${MVIEWER_LIBRAW_URL} failed (${_libraw_dl_text})")
+        if(_libraw_dl_code EQUAL 0)
+            set(_libraw_reason "downloaded archive SHA256 ${_libraw_dl_sha256} does not match")
+        endif()
+        if(MVIEWER_REQUIRE_LIBRAW)
+            message(FATAL_ERROR "LibRaw: ${_libraw_reason}. MVIEWER_REQUIRE_LIBRAW is ON.")
+        endif()
+        message(WARNING "LibRaw: ${_libraw_reason}. Building WITHOUT LibRaw: RAW files use "
+                        "their embedded previews. Put the ${MVIEWER_LIBRAW_VERSION} tag archive "
+                        "at third_party/LibRaw-${MVIEWER_LIBRAW_VERSION}.tar.gz or set "
+                        "MVIEWER_LIBRAW_ARCHIVE to build with RAW demosaic.")
+        return()
+    endif()
+endif()
+
 FetchContent_Declare(mviewer_libraw_src
     URL ${_libraw_fetch_url}
     URL_HASH SHA256=${MVIEWER_LIBRAW_SHA256}
