@@ -3,6 +3,7 @@
 #include "core/Logger.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/RatingStore.h"
+#include "core/RecentStore.h"
 #include "core/TagStore.h"
 #include "core/image/FrameSequence.h"
 #include "core/metadata/MetadataIndexer.h"
@@ -80,6 +81,7 @@ void shutdownProcessServices()
     mviewer::core::MetadataIndexer::instance().cancel();
     ThumbnailPipeline::instance().clear();
     mviewer::core::FrameSequenceReader::releaseFile({});
+    mviewer::core::RecentStore::instance().flush();
     mviewer::core::TagStore::joinBackgroundWorker();
     mviewer::core::RatingStore::joinBackgroundWorker();
 

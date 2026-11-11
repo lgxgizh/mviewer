@@ -5,6 +5,7 @@
 #include "browseformats.h"
 #include "thumbnailpanel_p.h"
 
+#include "core/RecentStore.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/ImageSortKeys.h"
@@ -327,7 +328,7 @@ void ThumbnailPanel::runFilterQuery()
     std::unordered_set<std::string> recents;
     if (m_recentFilter)
     {
-        const auto listed = mviewer::core::RatingStore::instance().recents();
+        const auto listed = mviewer::core::RecentStore::instance().recents();
         recents.insert(listed.begin(), listed.end());
     }
     const auto metaIndex = m_metaIndex;

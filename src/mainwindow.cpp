@@ -480,7 +480,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (m_directoryTree && !imageDir.isEmpty() && leftImage)
         m_directoryTree->navigateTo(imageDir);
 
-    mviewer::core::RatingStore::instance().addRecent(path.toUtf8().toStdString()); // P3 recents
+    mviewer::core::RecentStore::instance().addRecent(path.toUtf8().toStdString()); // P3 recents
 
     // Window title + status bar identity follow the current image. Dimensions
     // arrive from the shared metadata presentation service; never re-read the

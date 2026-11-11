@@ -81,6 +81,7 @@ add_library(mviewer_core SHARED
     core/compare/DifferenceEngine_render.cpp
     core/compare/Aligner.cpp
     core/RatingStore.cpp
+    core/RecentStore.cpp
     core/TagStore.cpp
     core/SidecarStore.cpp
     core/FileMetadataRelocation.cpp
@@ -1900,6 +1901,25 @@ target_include_directories(flags_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(flags_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_test(NAME flags_tests COMMAND flags_tests)
+
+# P1-1 — RecentStore (recently-viewed list split out of RatingStore)
+add_executable(recentstore_tests
+    core/test_recentstore.cpp
+)
+
+target_link_libraries(recentstore_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(recentstore_tests PRIVATE cxx_std_20)
+target_include_directories(recentstore_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(recentstore_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME recentstore_tests COMMAND recentstore_tests)
 
 # Audit #41 / #45 / #47 — preset paths, lazy tag-store location, settings restore.
 add_executable(audit_persistence_tests

@@ -1,6 +1,7 @@
 #include "FileMetadataRelocation.h"
 
 #include "RatingStore.h"
+#include "RecentStore.h"
 #include "SidecarStore.h"
 #include "TagStore.h"
 #include "core/filesystem/Utf8Path.h"
@@ -17,6 +18,7 @@ void relocateFileMetadata(const std::string &oldPath, const std::string &newPath
     if (normalizeKey(oldPath) == normalizeKey(newPath))
         return;
     RatingStore::instance().renamePath(oldPath, newPath);
+    RecentStore::instance().renamePath(oldPath, newPath);
     TagStore::instance().renamePath(oldPath, newPath);
     SidecarStore::instance().relocateSidecar(oldPath, newPath);
 }
