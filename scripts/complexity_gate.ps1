@@ -116,7 +116,6 @@ $knownFunctionDebt = @{
     # Surfaced by audit #59's reliable src walk (LiteralPath listing). Tracked
     # under ADR-014 until the next pass that splits these bodies.
     'src/core/update/UpdateChecker.cpp::httpGet'                    = 'span 133'
-    'src/core/thumbnail/ThumbnailPipeline.h::enqueueLocked'         = 'span 130'
 }
 
 $fails = 0
