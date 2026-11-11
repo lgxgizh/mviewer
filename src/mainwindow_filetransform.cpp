@@ -95,12 +95,19 @@ class BatchFileProgress
         return m_dialog.data();
     }
 
+    // A modal QProgressDialog::setValue() calls processEvents(), which can run
+    // the queued completion (dismiss()) before setValue() returns. Deleting
+    // the dialog there is a use-after-free, so dismiss() defers to here.
     void advance(int finished)
     {
-        if (!m_dialog || m_dialog->wasCanceled())
+        if (!m_dialog || m_dialog->wasCanceled() || m_advancing)
             return;
+        m_advancing = true;
         m_dialog->setLabelText(finishedLabel(finished));
         m_dialog->setValue(finished);
+        m_advancing = false;
+        if (m_dismissPending)
+            dismiss();
     }
 
     void dismiss()
@@ -108,6 +115,12 @@ class BatchFileProgress
         if (!m_dialog)
             return;
         m_dialog->hide();
+        if (m_advancing)
+        {
+            m_dismissPending = true;
+            return;
+        }
+        m_dismissPending = false;
         delete m_dialog.data();
         m_dialog.clear();
     }
@@ -121,6 +134,8 @@ class BatchFileProgress
     }
 
     QPointer<ShownProgressDialog> m_dialog;
+    bool m_advancing = false;
+    bool m_dismissPending = false;
     int m_total = 0;
     FileTransformKind m_kind = FileTransformKind::Rotate;
 };
