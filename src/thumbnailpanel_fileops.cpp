@@ -612,11 +612,11 @@ void ThumbnailPanel::notifyInternalTrashFallback()
 {
     const QString message =
         tr("Some files could not go to the Recycle Bin (for example on network drives). They "
-           "were moved to MViewer's own trash, which keeps them for %1 days and up to %2 GB; "
-           "older files beyond that are deleted permanently. Use \"Open trash folder\" to "
-           "restore them.")
+           "were moved to MViewer's own trash folder, which keeps them for %1 days and up to "
+           "%2 GB; older files beyond that are deleted permanently. Restore them from:\n%3")
             .arg(kInternalTrashMaxAgeDays)
-            .arg(kInternalTrashMaxBytes / (qint64(1024) * 1024 * 1024));
+            .arg(kInternalTrashMaxBytes / (qint64(1024) * 1024 * 1024))
+            .arg(QDir::toNativeSeparators(mviewerTrashDirectory()));
     emit browseStatusChanged(message);
     static bool shownThisSession = false;
     if (!shownThisSession)
