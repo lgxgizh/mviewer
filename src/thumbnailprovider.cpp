@@ -258,3 +258,18 @@ void ThumbnailProvider::invalidateSource(const std::string &path)
     ThumbnailCache::instance().invalidatePath(qp);
     mviewer::application::ImageLoadingService::instance().invalidateSource(path);
 }
+
+quint64 ThumbnailProvider::diskCacheMaxBytes()
+{
+    return ThumbnailCache::instance().maxBytes();
+}
+
+void ThumbnailProvider::setDiskCacheMaxBytes(quint64 bytes)
+{
+    ThumbnailCache::instance().setMaxBytes(bytes);
+}
+
+void ThumbnailProvider::clearDiskCache()
+{
+    ThumbnailCache::instance().clear();
+}
