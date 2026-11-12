@@ -237,9 +237,13 @@ bool isValid(const Params &p, std::string *why)
         }
         return false;
     };
-    if (p.width < 1 || p.width > kMaxDimension || p.height < 1 || p.height > kMaxDimension)
+    if (p.width < 1 || p.height < 1)
     {
         return fail("zero size");
+    }
+    if (p.width > kMaxDimension || p.height > kMaxDimension)
+    {
+        return fail("width or height above 65536");
     }
     int64_t pixels = 0;
     if (mulOverflow(static_cast<int64_t>(p.width), static_cast<int64_t>(p.height), &pixels) ||

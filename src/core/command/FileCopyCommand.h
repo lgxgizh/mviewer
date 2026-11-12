@@ -11,6 +11,8 @@
 
 // Reversible multi-file copy into a destination directory.
 // The source stays in place. Undo deletes only the copies this command made.
+// A plain .raw session override is copied with the file and cleared when
+// that copy is removed (undo and rollback).
 // Domain-free (core/command, no Qt).
 class FileCopyCommand : public ICommand
 {

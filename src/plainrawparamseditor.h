@@ -35,6 +35,8 @@ class PlainRawParamsEditor : public QWidget
 
   signals:
     void paramsChanged();
+    // Width or height spin edited by the user. setParams does not emit this.
+    void sizeEdited();
 
   private:
     void buildUi();

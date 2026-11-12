@@ -107,10 +107,22 @@ int main()
         bad = p;
         bad.width = 0;
         CHECK(!isValid(bad, &why));
+        CHECK(why == "zero size");
+
+        bad = p;
+        bad.height = 0;
+        CHECK(!isValid(bad, &why));
+        CHECK(why == "zero size");
 
         bad = p;
         bad.width = kMaxDimension + 1;
         CHECK(!isValid(bad, &why));
+        CHECK(why == "width or height above 65536");
+
+        bad = p;
+        bad.height = kMaxDimension + 1;
+        CHECK(!isValid(bad, &why));
+        CHECK(why == "width or height above 65536");
 
         bad = p;
         bad.width = 20000;
@@ -236,6 +248,7 @@ int main()
         CHECK(r.params.packing == Packing::Lsb16);
         CHECK(r.known);
         CHECK(r.check == SizeCheck::Exact);
+        CHECK(r.extraBytes == 0);
 
         auto m = resolveForFile(def, "cam_4096x3072_10bit.raw", int64_t{4096} * 3072 * 5 / 4);
         CHECK(m.guessed);
@@ -257,6 +270,68 @@ int main()
         CHECK(!small.known);
         CHECK(small.why.find("smaller than one frame") != std::string::npos);
         CHECK(small.why.find(std::to_string(need)) != std::string::npos);
+        CHECK(small.extraBytes == 0);
+
+        auto larger = resolveForFile(d2, "cam_64x32.raw", need + 24);
+        CHECK(larger.check == SizeCheck::Larger);
+        CHECK(larger.known);
+        CHECK(larger.extraBytes == 24);
+        CHECK(!larger.guessed);
+
+        const char *crop = "crop_128x128_from_4096x3072.raw";
+        const auto tokens = sizesFromFileName(crop);
+        CHECK(tokens.size() == 2);
+        CHECK(tokens[0].first == 128 && tokens[0].second == 128);
+        CHECK(tokens[1].first == 4096 && tokens[1].second == 3072);
+        auto firstToken = sizeFromFileName(crop);
+        CHECK(firstToken.has_value() && firstToken->first == 128 && firstToken->second == 128);
+
+        auto big = resolveForFile(def, crop, int64_t{4096} * 3072 * 2);
+        CHECK(big.sizeFromName);
+        CHECK(big.params.width == 4096);
+        CHECK(big.params.height == 3072);
+        CHECK(big.check == SizeCheck::Exact);
+        CHECK(big.extraBytes == 0);
+        CHECK(!big.guessed);
+
+        auto cropSmall = resolveForFile(def, crop, int64_t{128} * 128 * 2);
+        CHECK(cropSmall.params.width == 128);
+        CHECK(cropSmall.params.height == 128);
+        CHECK(cropSmall.check == SizeCheck::Exact);
+
+        auto named = resolveForFile(def, "a_640x480.raw", int64_t{640} * 480 * 2);
+        CHECK(named.sizeFromName);
+        CHECK(named.params.width == 640);
+        CHECK(named.params.height == 480);
+        CHECK(named.params.packing == Packing::Lsb16);
+        CHECK(named.check == SizeCheck::Exact);
+        CHECK(!named.guessed);
+        CHECK(sizesFromFileName("a_640x480.raw").size() == 1);
+
+        auto cropMipi = resolveForFile(def, crop, int64_t{4096} * 3072 * 5 / 4);
+        CHECK(cropMipi.params.width == 4096);
+        CHECK(cropMipi.params.height == 3072);
+        CHECK(cropMipi.guessed);
+        CHECK(cropMipi.params.packing == Packing::Mipi10);
+        CHECK(cropMipi.check == SizeCheck::Exact);
+    }
+
+    {
+        Params base;
+        base.packing = Packing::Lsb16;
+        base.bitDepth = 10;
+        const auto hd = guessCommonSize(base, int64_t{1920} * 1080 * 2);
+        CHECK(hd.has_value());
+        CHECK(hd->width == 1920 && hd->height == 1080);
+        CHECK(hd->packing == Packing::Lsb16);
+        CHECK(hd->bitDepth == 10);
+
+        const auto mipiHd = guessCommonSize(base, int64_t{1920} * 1080 * 5 / 4);
+        CHECK(mipiHd.has_value());
+        CHECK(mipiHd->width == 1920 && mipiHd->height == 1080);
+        CHECK(mipiHd->packing == Packing::Mipi10);
+
+        CHECK(!guessCommonSize(base, 12345).has_value());
     }
 
     if (g_failures != 0)

@@ -408,21 +408,25 @@ void PlainRawParamsEditor::buildUi()
 void PlainRawParamsEditor::wireSignals()
 {
     const auto notify = [this]() { emit paramsChanged(); };
-    const auto notifySpin = [this, notify](QSpinBox *box)
+    const auto notifySpin = [this, notify](QSpinBox *box, bool userSize)
     {
         connect(box, &QSpinBox::valueChanged, this,
-                [this, box, notify](int)
+                [this, box, notify, userSize](int)
                 {
                     clearForced(box);
+                    if (userSize)
+                    {
+                        emit sizeEdited();
+                    }
                     notify();
                 });
     };
-    notifySpin(m_width);
-    notifySpin(m_height);
-    notifySpin(m_headerOffset);
-    notifySpin(m_rowStride);
-    notifySpin(m_black);
-    notifySpin(m_white);
+    notifySpin(m_width, true);
+    notifySpin(m_height, true);
+    notifySpin(m_headerOffset, false);
+    notifySpin(m_rowStride, false);
+    notifySpin(m_black, false);
+    notifySpin(m_white, false);
 
     connect(m_bitDepth, &QComboBox::currentIndexChanged, this, [notify](int) { notify(); });
     connect(m_packing, &QComboBox::currentIndexChanged, this,

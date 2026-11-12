@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: MIT
 //
 // Keeps per-file metadata attached to a file when it changes path: the
-// recently-viewed entry and the app's own per-image sidecars
-// ("<image>.mviewer.json" and "<image>.xmp", never "<stem>.xmp"). Called by
-// the rename/move/delete commands on success and on undo/rollback so metadata
-// never stays behind on the old path.
+// recently-viewed entry, a plain .raw parameter override, and the app's own
+// per-image sidecars ("<image>.mviewer.json" and "<image>.xmp", never
+// "<stem>.xmp"). Called by the rename/move/delete commands on success and on
+// undo/rollback so metadata never stays behind on the old path.
 #pragma once
 
 #include <string>

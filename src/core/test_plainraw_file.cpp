@@ -1,4 +1,5 @@
 // NOLINTBEGIN
+#include "core/FileMetadataRelocation.h"
 #include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/rawplain/PlainRawUnpack.h"
 #ifndef PLAINRAW_NO_REGISTRY
@@ -33,6 +34,7 @@ using mviewer::core::rawplain::Cfa;
 using mviewer::core::rawplain::Packing;
 using mviewer::core::rawplain::Params;
 using mviewer::core::rawplain::PlainRawFileInfo;
+using mviewer::core::rawplain::plainRawParamKey;
 using mviewer::core::rawplain::PlainRawParamStore;
 using mviewer::core::rawplain::SizeCheck;
 using mviewer::domain::ImageMetadata;
@@ -96,6 +98,41 @@ Params sized(int w, int h)
     return p;
 }
 
+void testOverrideFollowsRename()
+{
+    auto &store = PlainRawParamStore::instance();
+    store.clearAll();
+    const Params params = sized(64, 32);
+    const std::string from = "/tmp/x/a_64x32.raw";
+    const std::string to = "/tmp/x/b_64x32.raw";
+    const std::string keyFrom = plainRawParamKey(from);
+    const std::string keyTo = plainRawParamKey(to);
+    store.setOverride(keyFrom, params);
+
+    mviewer::core::relocateFileMetadata(from, to);
+    CHECK(store.override(keyTo).has_value());
+    CHECK(store.override(keyTo)->width == 64);
+    CHECK(!store.override(keyFrom).has_value());
+
+    mviewer::core::relocateFileMetadata(to, from);
+    CHECK(store.override(keyFrom).has_value());
+    CHECK(!store.override(keyTo).has_value());
+
+    store.copyOverride("missing-plain-raw-key", "nowhere");
+    CHECK(!store.override("nowhere").has_value());
+
+    store.copyOverride(keyFrom, keyTo);
+    CHECK(store.override(keyFrom).has_value());
+    CHECK(store.override(keyTo).has_value());
+    CHECK(store.override(keyFrom)->width == store.override(keyTo)->width);
+
+    const uint64_t revision = store.revision();
+    store.moveOverride("missing-plain-raw-key", keyTo);
+    CHECK(store.revision() == revision);
+    CHECK(store.override(keyFrom).has_value());
+    store.clearAll();
+}
+
 } // namespace
 
 int main()
@@ -137,6 +174,8 @@ int main()
     store.clearAll();
     CHECK(store.defaults().bitDepth == 10);
     CHECK(store.revision() == rev0 + 4U);
+
+    testOverrideFollowsRename();
 
     std::mt19937 rng{std::random_device{}()};
     const auto dir =

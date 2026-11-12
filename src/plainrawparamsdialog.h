@@ -27,6 +27,9 @@ class PlainRawParamsDialog : public QDialog
     mviewer::core::rawplain::Params params() const;
     bool resetRequested() const;
     bool canAccept() const;
+    // When false, a file larger than the frame is refused until the user
+    // edits width or height. Default true, so existing callers stay trusted.
+    void setSizeTrusted(bool trusted);
     // e.g. "4096x3072, 16-bit LSB container: 25165824 bytes expected, file has
     // 25165824 bytes (match)"; names the mismatch when the size differs.
     QString summaryText() const;
@@ -44,8 +47,12 @@ class PlainRawParamsDialog : public QDialog
     void useDefaults();
 
   private:
+    bool largerSizeConfirmed() const;
+
     int64_t m_fileSize = 0;
     bool m_reset = false;
+    bool m_sizeTrusted = true;
+    bool m_sizeEdited = false;
     std::vector<mviewer::core::rawplain::Params> m_guesses;
     PlainRawParamsEditor *m_editor = nullptr;
     QLabel *m_summary = nullptr;
@@ -55,9 +62,12 @@ class PlainRawParamsDialog : public QDialog
 
 // Resolves the file (resolvePlainRawFile). With no override and a known
 // frame, reads samples once so a wider Lsb16 depth is detected. Pre-fills
-// the dialog with the effective params (width/height 0 -> 640x480), runs it.
-// Accept -> reset ? clearOverride : setOverride. Returns true when the store
-// changed. Not openable -> QMessageBox::warning, false.
+// the dialog from the effective params. Width or height 0: guessCommonSize
+// when that matches the file; otherwise 640x480 is an untrusted placeholder
+// (a larger file is not accepted until the user edits the size). Size from
+// the name or an override stays trusted. Accept -> reset ? clearOverride :
+// setOverride. Returns true when the store changed. Not openable ->
+// QMessageBox::warning, false.
 bool editPlainRawParamsForPath(QWidget *parent, const QString &path);
 
 // One-line translated label for a packing, e.g. "16-bit container, LSB aligned".

@@ -2,11 +2,32 @@
 
 #include "RecentStore.h"
 #include "core/filesystem/Utf8Path.h"
+#include "core/image/rawplain/PlainRawFile.h"
 
 #include <filesystem>
 
 namespace mviewer::core
 {
+
+namespace
+{
+
+void movePlainRawOverride(const std::string &oldPath, const std::string &newPath)
+{
+    try
+    {
+        namespace raw = mviewer::core::rawplain;
+        if (!raw::isPlainRawPath(oldPath) || !raw::isPlainRawPath(newPath))
+            return;
+        raw::PlainRawParamStore::instance().moveOverride(raw::plainRawParamKey(oldPath),
+                                                         raw::plainRawParamKey(newPath));
+    }
+    catch (...)
+    {
+    }
+}
+
+} // namespace
 
 void relocateFileMetadata(const std::string &oldPath, const std::string &newPath)
 {
@@ -16,6 +37,7 @@ void relocateFileMetadata(const std::string &oldPath, const std::string &newPath
     // rewrite the sidecar onto itself and then delete it.
     if (normalizeKey(oldPath) == normalizeKey(newPath))
         return;
+    movePlainRawOverride(oldPath, newPath);
     RecentStore::instance().renamePath(oldPath, newPath);
 
     // Full image name + suffix only. "<stem>.xmp" can be a third-party XMP.
