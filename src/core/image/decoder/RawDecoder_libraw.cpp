@@ -185,7 +185,7 @@ QImage makeSixteenBitImage(const libraw_processed_image_t &image)
         for (int x = 0; x < w; ++x)
         {
             const std::uint16_t *p = row + static_cast<size_t>(x) * static_cast<size_t>(colors);
-            const int i = x * 4;
+            const size_t i = static_cast<size_t>(x) * 4u;
             dst[i] = p[0];
             dst[i + 1] = colors > 1 ? p[1] : p[0];
             dst[i + 2] = colors > 2 ? p[2] : p[0];
@@ -215,9 +215,10 @@ ImageData unditheredImageDataFrom16(const libraw_processed_image_t &image)
         for (int x = 0; x < w; ++x)
         {
             const std::uint16_t *p = row + static_cast<size_t>(x) * static_cast<size_t>(colors);
-            d[x * 3] = undithered8(p[0]);
-            d[x * 3 + 1] = undithered8(colors > 1 ? p[1] : p[0]);
-            d[x * 3 + 2] = undithered8(colors > 2 ? p[2] : p[0]);
+            const size_t o = static_cast<size_t>(x) * 3u;
+            d[o] = undithered8(p[0]);
+            d[o + 1] = undithered8(colors > 1 ? p[1] : p[0]);
+            d[o + 2] = undithered8(colors > 2 ? p[2] : p[0]);
         }
     }
     return out;
@@ -228,29 +229,72 @@ ImageData unditheredImageDataFrom16(const libraw_processed_image_t &image)
 // is display-only and is dithered. A dither failure still returns pixels.
 ImageData imageDataFromLibraw16(const libraw_processed_image_t &image)
 {
-    try
+    const QImage sixteen = makeSixteenBitImage(image);
+    if (!sixteen.isNull())
     {
-        const QImage sixteen = makeSixteenBitImage(image);
-        if (!sixteen.isNull())
+        QImage dithered;
+        if (mviewer::core::ditherQImage16ToRgb888(sixteen, dithered))
         {
-            QImage dithered;
-            if (mviewer::core::ditherQImage16ToRgb888(sixteen, dithered))
-            {
-                ImageData out = imageDataFromRgb888(dithered);
-                if (!out.isNull())
-                    return out;
-            }
-            const QImage eight = sixteen.convertToFormat(QImage::Format_RGB888);
-            ImageData out = imageDataFromRgb888(eight);
+            ImageData out = imageDataFromRgb888(dithered);
             if (!out.isNull())
                 return out;
         }
-    }
-    catch (...)
-    {
-        // QImage allocation failed. The scale below still reads the LibRaw buffer.
+        const QImage eight = sixteen.convertToFormat(QImage::Format_RGB888);
+        ImageData out = imageDataFromRgb888(eight);
+        if (!out.isNull())
+            return out;
     }
     return unditheredImageDataFrom16(image);
+}
+
+bool librawMemImageUsable(const libraw_processed_image_t *image, int err)
+{
+    if (image == nullptr || err != LIBRAW_SUCCESS || (image->bits != 8 && image->bits != 16) ||
+        image->width <= 0 || image->height <= 0 || image->colors < 1)
+        return false;
+    const size_t srcChannels = static_cast<size_t>(image->colors < 1 ? 1 : image->colors);
+    const size_t pixels = static_cast<size_t>(image->width) * static_cast<size_t>(image->height);
+    const size_t sampleBytes = image->bits == 16 ? size_t{2} : size_t{1};
+    return image->data_size >= pixels * srcChannels * sampleBytes;
+}
+
+ImageData imageDataFromLibraw8(const libraw_processed_image_t &image)
+{
+    const int channels = image.colors >= 3 ? 3 : 1;
+    const size_t srcChannels = static_cast<size_t>(image.colors < 1 ? 1 : image.colors);
+    const size_t pixels = static_cast<size_t>(image.width) * static_cast<size_t>(image.height);
+    const PixelFormat format = channels == 1 ? PixelFormat::Grayscale8 : PixelFormat::RGB24;
+    ImageData out =
+        makeImageData(static_cast<int>(image.width), static_cast<int>(image.height), format);
+    if (out.isNull() || !out.buffer)
+        return {};
+    auto *dst = out.buffer->data();
+    const auto *src = image.data;
+    if (srcChannels == static_cast<size_t>(channels))
+    {
+        std::memcpy(dst, src, out.byteSize());
+        return out;
+    }
+    for (size_t i = 0; i < pixels; ++i)
+    {
+        const size_t d = i * 3u;
+        const size_t s = i * srcChannels;
+        dst[d] = src[s];
+        dst[d + 1] = src[s + 1];
+        dst[d + 2] = src[s + 2];
+    }
+    return out;
+}
+
+void applyLibrawProcessParams(LibRaw &raw, const RawDecoder::LibrawProcessParams &params)
+{
+    raw.imgdata.params.half_size = params.halfSize;
+    raw.imgdata.params.use_camera_wb = params.useCameraWb;
+    raw.imgdata.params.output_bps = params.outputBps;
+    raw.imgdata.params.no_auto_bright = params.noAutoBright;
+    raw.imgdata.params.output_color = 1; // sRGB
+    raw.imgdata.params.user_qual = params.userQual;
+    raw.imgdata.params.highlight = params.highlight;
 }
 #endif
 } // namespace
@@ -338,14 +382,7 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
 
         // Same values librawProcessParamsForTest() reports. The default full
         // decode stays AHD, 8-bit, clip.
-        const LibrawProcessParams params = librawProcessParamsForTest(halfSize);
-        raw.imgdata.params.half_size = params.halfSize;
-        raw.imgdata.params.use_camera_wb = params.useCameraWb;
-        raw.imgdata.params.output_bps = params.outputBps;
-        raw.imgdata.params.no_auto_bright = params.noAutoBright;
-        raw.imgdata.params.output_color = 1; // sRGB
-        raw.imgdata.params.user_qual = params.userQual;
-        raw.imgdata.params.highlight = params.highlight;
+        applyLibrawProcessParams(raw, librawProcessParamsForTest(halfSize));
         if (raw.unpack() != LIBRAW_SUCCESS)
         {
             raw.recycle();
@@ -376,57 +413,14 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
         int err = 0;
         std::unique_ptr<libraw_processed_image_t, MemImageDeleter> image(
             raw.dcraw_make_mem_image(&err));
-        if (!image || err != LIBRAW_SUCCESS || (image->bits != 8 && image->bits != 16) ||
-            image->width <= 0 || image->height <= 0 || image->colors < 1)
+        if (!librawMemImageUsable(image.get(), err))
         {
             raw.recycle();
             return {};
         }
 
-        const int channels = image->colors >= 3 ? 3 : 1;
-        const size_t srcChannels = static_cast<size_t>(image->colors < 1 ? 1 : image->colors);
-        const size_t pixels =
-            static_cast<size_t>(image->width) * static_cast<size_t>(image->height);
-        const size_t sampleBytes =
-            image->bits == 16 ? static_cast<size_t>(2) : static_cast<size_t>(1);
-        const size_t need = pixels * srcChannels * sampleBytes;
-        if (image->data_size < need)
-        {
-            raw.recycle();
-            return {};
-        }
-
-        ImageData out;
-        if (image->bits == 16)
-        {
-            out = imageDataFromLibraw16(*image);
-        }
-        else
-        {
-            const PixelFormat format = channels == 1 ? PixelFormat::Grayscale8 : PixelFormat::RGB24;
-            out = makeImageData(static_cast<int>(image->width), static_cast<int>(image->height),
-                                format);
-            if (out.isNull() || !out.buffer)
-            {
-                raw.recycle();
-                return {};
-            }
-            auto *dst = out.buffer->data();
-            const auto *src = image->data;
-            if (srcChannels == static_cast<size_t>(channels))
-            {
-                std::memcpy(dst, src, out.byteSize());
-            }
-            else
-            {
-                for (size_t i = 0; i < pixels; ++i)
-                {
-                    dst[i * 3] = src[i * srcChannels];
-                    dst[i * 3 + 1] = src[i * srcChannels + 1];
-                    dst[i * 3 + 2] = src[i * srcChannels + 2];
-                }
-            }
-        }
+        ImageData out =
+            image->bits == 16 ? imageDataFromLibraw16(*image) : imageDataFromLibraw8(*image);
         image.reset();
         raw.recycle();
         if (out.isNull())
