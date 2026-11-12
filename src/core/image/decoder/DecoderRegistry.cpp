@@ -13,6 +13,16 @@
 #include "core/image/decoder/YuvDecoder.h"
 #include <cstring>
 
+namespace
+{
+
+bool isTerminalDecoder(const IDecoder &d)
+{
+    return std::strcmp(d.name(), "PlainRawDecoder") == 0;
+}
+
+} // namespace
+
 DecoderRegistry &DecoderRegistry::instance()
 {
     static DecoderRegistry inst;
@@ -140,6 +150,7 @@ DecoderRegistry::decodeFullResult(const std::string &path,
         if (d && d->canDecode(path))
         {
             claimed = true;
+            const bool terminal = isTerminalDecoder(*d);
             try
             {
                 auto res = d->decodeFullResult(path, outMeta);
@@ -156,6 +167,11 @@ DecoderRegistry::decodeFullResult(const std::string &path,
             {
                 lastErr = {mviewer::domain::DecodeErrorCode::CorruptData,
                            "Decoder threw unexpected exception", path};
+            }
+            if (terminal)
+            {
+                return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::err(
+                    std::move(lastErr));
             }
         }
     }
@@ -187,6 +203,8 @@ ImageData DecoderRegistry::decodeFull(const std::string &path,
             ImageData out = d->decodeFull(path, outMeta);
             if (!out.isNull())
                 return out;
+            if (isTerminalDecoder(*d))
+                return ImageData();
         }
     }
     return ImageData();
@@ -208,6 +226,8 @@ ImageData DecoderRegistry::decodeScaled(const std::string &path, int maxEdge,
             ImageData out = d->decodeScaled(path, maxEdge, outMeta);
             if (!out.isNull())
                 return out;
+            if (isTerminalDecoder(*d))
+                return ImageData();
         }
     }
     return ImageData();

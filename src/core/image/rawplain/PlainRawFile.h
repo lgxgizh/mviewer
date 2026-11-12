@@ -51,6 +51,7 @@ struct PlainRawFileInfo
     bool fromOverride = false;
     int64_t fileSize = -1;       // -1 when the file cannot be sized
     std::vector<Params> guesses; // guessFromFileSize(resolved.params, fileSize)
+    std::string depthNote;       // non-empty when samples exceeded the configured bit depth
 };
 
 // Override for the file when set (resolveForFile is still run with the
@@ -60,11 +61,16 @@ struct PlainRawFileInfo
 PlainRawFileInfo resolvePlainRawFile(const std::string &path);
 
 // Reads frameBytes - headerOffset bytes at headerOffset and unpacks them.
-// False (why set) when !info.resolved.known, on short read or unpack failure.
-bool readPlainRawSamples(const std::string &path, const PlainRawFileInfo &info,
+// Lsb16 samples wider than bitDepth: without an override, bitDepth becomes
+// the smallest of 12/14/16 that fits, blackLevel shifts up and whiteLevel
+// becomes 0; with an override the samples are clipped. depthNote explains
+// either case. False (why set) when !info.resolved.known, on short read
+// or unpack failure.
+bool readPlainRawSamples(const std::string &path, PlainRawFileInfo &info,
                          std::vector<std::uint16_t> &samples, std::string *why = nullptr);
 
 // resolvePlainRawFile + readPlainRawSamples + renderPlainRaw(maxEdge).
+// *infoOut, when set, is the info after the sample read (detected depth).
 // Empty ImageData (why set) on failure.
 ImageData decodePlainRawFile(const std::string &path, int maxEdge,
                              PlainRawFileInfo *infoOut = nullptr, std::string *why = nullptr);
@@ -72,6 +78,8 @@ ImageData decodePlainRawFile(const std::string &path, int maxEdge,
 // Fills width, height, fileSize, fileName, filePath, bitDepth, channels
 // (1 for Mono else 3), format "RAW (plain)", colorSpace e.g. "RGGB 10-bit",
 // frameCount 1, currentFrame 0, sequenceKind "static", animated false.
+// When depthNote is set, colorSpace gains " (<note>)" and
+// textKeys["MViewer.PlainRaw.Note"] stores the note.
 void fillPlainRawMetadata(const PlainRawFileInfo &info, const std::string &path,
                           mviewer::domain::ImageMetadata &meta);
 

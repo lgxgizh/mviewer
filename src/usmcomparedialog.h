@@ -67,7 +67,7 @@ class UsmCompareDialog : public QDialog
     {
         return m_iccProfile;
     }
-    // RAW sources save as tif when the encoder maps it, otherwise png.
+    // Camera RAW and plain .raw save as tif when the encoder maps it, else png.
     // Other sources keep their suffix (empty becomes png).
     static QString defaultSaveExtension(const QString &sourceSuffix);
 

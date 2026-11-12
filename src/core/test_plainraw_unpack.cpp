@@ -120,11 +120,11 @@ int main()
     {
         Params p = makeP(2, 1, Packing::Lsb16, 10, ByteOrder::Little);
         std::vector<std::uint8_t> buf(4);
-        store16(buf.data(), static_cast<std::uint16_t>(0x1234), ByteOrder::Little);
+        store16(buf.data(), static_cast<std::uint16_t>(0x0155), ByteOrder::Little);
         store16(buf.data() + 2, static_cast<std::uint16_t>(0x03FF), ByteOrder::Little);
         std::vector<std::uint16_t> out;
         CHECK(unpackPlainRaw(p, buf.data(), buf.size(), out));
-        CHECK(out[0] == (0x1234 & 0x3FF));
+        CHECK(out[0] == 0x0155);
         CHECK(out[1] == 0x3FF);
         checkAllSamples(p, buf.data(), buf.size(), out);
     }
@@ -132,11 +132,11 @@ int main()
     {
         Params p = makeP(2, 1, Packing::Lsb16, 12, ByteOrder::Big);
         std::vector<std::uint8_t> buf(4);
-        store16(buf.data(), static_cast<std::uint16_t>(0xABCD), ByteOrder::Big);
+        store16(buf.data(), static_cast<std::uint16_t>(0x0ABC), ByteOrder::Big);
         store16(buf.data() + 2, static_cast<std::uint16_t>(0x0FFF), ByteOrder::Big);
         std::vector<std::uint16_t> out;
         CHECK(unpackPlainRaw(p, buf.data(), buf.size(), out));
-        CHECK(out[0] == (0xABCD & 0x0FFF));
+        CHECK(out[0] == 0x0ABC);
         CHECK(out[1] == 0x0FFF);
         checkAllSamples(p, buf.data(), buf.size(), out);
     }
@@ -271,6 +271,23 @@ int main()
             CHECK(o12 == src12);
             checkAllSamples(p12, b12.data(), b12.size(), o12);
         }
+    }
+
+    {
+        Params p = makeP(1, 1, Packing::Lsb16, 10);
+        std::vector<std::uint8_t> buf(2);
+        store16(buf.data(), static_cast<std::uint16_t>(3000), ByteOrder::Little);
+        std::vector<std::uint16_t> out;
+        CHECK(unpackPlainRaw(p, buf.data(), buf.size(), out));
+        CHECK(out.size() == 1);
+        CHECK(out[0] == 1023);
+        CHECK(out[0] != static_cast<std::uint16_t>(3000 & 1023));
+        CHECK(sampleAt(p, buf.data(), buf.size(), 0, 0) == 1023);
+        CHECK(lsb16SignificantBits(p, buf.data(), buf.size()) == 12);
+        std::vector<std::uint8_t> zeros(2, 0);
+        CHECK(lsb16SignificantBits(p, zeros.data(), zeros.size()) == 0);
+        Params mipi = makeP(4, 1, Packing::Mipi10, 10);
+        CHECK(lsb16SignificantBits(mipi, buf.data(), buf.size()) == mipi.bitDepth);
     }
 
     if (g_failures != 0)
