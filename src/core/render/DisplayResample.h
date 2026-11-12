@@ -93,6 +93,12 @@ void setDisplayResampleIsaForTest(int isa) noexcept;
 // in [1, 2), then a separable fixed-point Catmull-Rom. Preview uses bilinear
 // for that last step. Output is RGB24. `scratch` may be null. When `cancel`
 // becomes true the resample returns an empty image.
+//
+// Sharp resamples in linear light (sRGB EOTF, 16-bit intermediate, sRGB OETF
+// out). Its 2x box steps and the final Catmull-Rom both run in that linear
+// buffer. Preview is gamma-encoded bilinear, including its box steps. Untagged
+// and display-referred RGB both use the sRGB EOTF; there is no per-profile
+// transfer in this resample.
 ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &request,
                           DisplayResampleScratch *scratch = nullptr,
                           const std::atomic<bool> *cancel = nullptr);
