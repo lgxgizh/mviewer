@@ -54,8 +54,12 @@ fast pipeline is enough.
      checked against the file size. When the size does not match, common
      bit-depth / packing combinations (16-bit container, MIPI RAW10/12, 8-bit)
      are tried and the first exact match is used; otherwise the viewer shows a
-     hint with the expected and actual byte counts.
-   - Bit depth 8, 10, 12, 14, 16. Storage: 16-bit container LSB-aligned
+     hint with the expected and actual byte counts. A name with several
+     `WxH` tokens uses the one that matches the file size (amended 1.0.175).
+   - Bit depth 8 to 16. A 16-bit LSB container whose samples exceed the set
+     depth is never wrapped: with the defaults it is read at the detected
+     depth (12/14/16) and Details says so; with a per-file override values
+     above white are clipped and noted (amended 1.0.175). Storage: 16-bit container LSB-aligned
      (**default**), 16-bit MSB-aligned, MIPI RAW10, MIPI RAW12, 8-bit. Byte
      order (little-endian default) for 16-bit containers.
    - Header offset and row stride (both default 0 = none / tightly packed).
@@ -63,7 +67,8 @@ fast pipeline is enough.
      (default 2^bits − 1).
    - CFA: RGGB, BGGR, GRBG, GBRG, Mono.
    - White balance: none, gray world (default), white patch (brightest
-     non-clipped region), manual R/B gains.
+     non-clipped region), manual R/B gains. Gains are scaled so the smallest
+     is 1, so clipped highlights stay neutral (amended 1.0.175).
    - Digital gain: **default 1×**, presets 1/2/4/8× and a free value
      (0.125–64×). No automatic brightening by default.
    - sRGB gamma on by default.
@@ -72,7 +77,8 @@ fast pipeline is enough.
    "RAW Parameters..." on a `.raw` file opens a dialog that overrides the
    defaults for that file for the current session only; "Use defaults" drops
    the override. Every change re-renders the file and its thumbnail (the
-   cache key carries the effective parameters).
+   cache key carries the effective parameters). Overrides follow the file on
+   rename, move, delete-to-trash, undo and copy (amended 1.0.175).
 8. **Views.** `.raw` is read-only: rotate / flip in the normal view stay
    disabled (the file is never rewritten). Compare mode's temporary view
    rotation works as for any image. The pixel readout appends the stored

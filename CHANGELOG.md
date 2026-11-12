@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.0.175] - 2026-11-11
+
+Plain `.raw` follow-up: browse filter fix and the 2026-11-11 RAW review.
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.175**.
+
 ### Fixed
 
 - **Browse type filter**: plain `.raw` sensor dumps have their own
@@ -11,6 +19,44 @@
   existing saved filter choices keep the new group visible. `.raw` still never
   goes to LibRaw (ADR 033). New regression case TC-SB-18 checks that every type
   group hides exactly its own files and that Sensor RAW is visible by default.
+- **Bit depth** (review P1): 16-bit LSB containers whose samples exceed the
+  set bit depth are no longer wrapped. With the defaults the file is read at
+  the detected depth (12/14/16-bit) and Details notes it; with a per-file
+  override values above white are clipped and noted.
+- Changing **Preferences → RAW** now redraws `.raw` thumbnails in every browse
+  pane and the open compare cells, not only the viewer.
+- USM compare **Save** no longer suggests `name_usm.raw` for a `.raw` source
+  (it wrote PNG bytes under a `.raw` name).
+- A `.raw` file that cannot be shown now keeps its real reason (e.g. "file is
+  smaller than one frame") and points to right-click → RAW Parameters.
+- File names with several `WxH` tokens use the one that matches the file size.
+- **RAW Parameters** no longer accepts a made-up 640×480 on a larger file: it
+  tries common sensor sizes, and otherwise asks the user to confirm the size.
+- Per-file RAW overrides now follow the file on rename, move, delete-to-trash,
+  undo, and copy.
+- "width or height above 65536" instead of "zero size" for huge dimensions.
+- White balance gains are scaled so the smallest is 1, so clipped highlights
+  stay white instead of turning cyan or magenta.
+- The bit-depth list offers every depth from 8 to 16 bits.
+
+### Performance
+
+- The pixel readout for `.raw` no longer reads the file on the UI thread; its
+  cache has four slots and notices a same-size rewrite (mtime).
+- Thumbnails: white balance from a subsample on frames over 4 MP, and a
+  box-averaged preview instead of nearest sampling.
+- Full renders linearise in place (less peak memory) and run in row bands on
+  several cores.
+- `.raw` sources answer the source-image probe, so Details shows dimensions,
+  the compare size guard applies, and the LOD path is used.
+
+### Tests / CI
+
+- TC-SB-18 (every browse type group); unit tests for bit-depth detection,
+  multi-token names, common-size guess, override relocation, async readout
+  cache, preview averaging, banded render, min-1 gains, probe/region decode;
+  dialog tests for the untrusted size and every bit depth; a MainWindow test
+  that Preferences → RAW invalidates `.raw` thumbnails.
 
 ## [1.0.174] - 2026-11-11
 
