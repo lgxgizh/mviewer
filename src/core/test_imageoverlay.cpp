@@ -502,17 +502,9 @@ static void testChannelYMatrix()
     const uint8_t *a = px(rgba.view(), 0, 0);
     CHECK(a[0] == 54 && a[3] == 255, "RGBA32 bt709 Channel-Y red keeps alpha");
 
+    // fillSolid writes (b0,b1,b2) into packed bytes; on BGR24 that is B,G,R.
     ImageData bgr = makeImageData(2, 2, PixelFormat::BGR24);
-    const ImageBuffer vb = bgr.view();
-    for (int y = 0; y < vb.height; ++y)
-        for (int x = 0; x < vb.width; ++x)
-        {
-            uint8_t *bp =
-                vb.data + static_cast<size_t>(y) * vb.stride() + static_cast<size_t>(x) * 3;
-            bp[0] = 0;
-            bp[1] = 0;
-            bp[2] = 255;
-        }
+    fillSolid(bgr, 0, 0, 255);
     mviewer::applyOverlay(bgr, mviewer::OverlayMode::ChannelY, 2, Matrix::BT709);
     CHECK(px(bgr.view(), 0, 0)[0] == 54, "BGR24 bt709 Channel-Y red is 54");
 
