@@ -816,6 +816,11 @@
     </message>
     <message>
         <location filename="../src/browseformats.cpp" line="61"/>
+        <source>Sensor RAW (.raw)</source>
+        <translation>传感器 RAW (.raw)</translation>
+    </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="62"/>
         <source>Other formats</source>
         <translation>其他格式</translation>
     </message>

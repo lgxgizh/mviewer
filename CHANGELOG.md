@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Browse type filter**: plain `.raw` sensor dumps have their own
+  **Sensor RAW (.raw)** group (中文：传感器 RAW (.raw)), checked by default, so
+  they can be shown or hidden on their own (they were filed under "Other
+  formats"). The camera **RAW** group is unchanged and still hidden by default;
+  existing saved filter choices keep the new group visible. `.raw` still never
+  goes to LibRaw (ADR 033). New regression case TC-SB-18 checks that every type
+  group hides exactly its own files and that Sensor RAW is visible by default.
+
 ## [1.0.174] - 2026-11-11
 
 Plain `.raw` sensor-dump viewing (ADR 033).

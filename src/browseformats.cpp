@@ -1,6 +1,7 @@
 #include "browseformats.h"
 
 #include "core/image/ImageFormats.h"
+#include "core/image/rawplain/PlainRawFile.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -58,6 +59,7 @@ const std::vector<Group> &groups()
         {"gif", QT_TRANSLATE_NOOP("BrowseFormats", "GIF")},
         {"bmp", QT_TRANSLATE_NOOP("BrowseFormats", "BMP")},
         {"raw", QT_TRANSLATE_NOOP("BrowseFormats", "RAW")},
+        {"sensorraw", QT_TRANSLATE_NOOP("BrowseFormats", "Sensor RAW (.raw)")},
         {"other", QT_TRANSLATE_NOOP("BrowseFormats", "Other formats")},
     };
     return kGroups;
@@ -104,6 +106,9 @@ QString groupForSuffix(const QString &suffixNoDot)
         return QStringLiteral("other");
     if (mviewer::core::isRawExtension(s.toStdString()))
         return QStringLiteral("raw");
+    // ADR 033 - plain .raw has its own group, visible by default; camera RAW group unchanged.
+    if (mviewer::core::rawplain::isPlainRawPath(("x." + s).toUtf8().toStdString()))
+        return QStringLiteral("sensorraw");
     for (const Group &g : groups())
     {
         const QString id = QLatin1String(g.id);
@@ -122,6 +127,7 @@ bool isPathHidden(const QString &path, const QStringList &hiddenGroups)
     return hiddenGroups.contains(groupForSuffix(QFileInfo(path).suffix()));
 }
 
+// No migration: a saved hidden list never contains "sensorraw", so it stays visible.
 QStringList defaultHiddenGroups()
 {
     return {QStringLiteral("raw")};
