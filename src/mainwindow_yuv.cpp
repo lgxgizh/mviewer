@@ -127,10 +127,14 @@ void MainWindow::editYuvParams(const QString &path)
                               m_tertiaryThumbnailPanel, m_previewPanel, m_metadataPanel,
                               m_imageViewer, m_compareView);
     if (statusBar())
-        statusBar()->showMessage(
-            (plainRaw ? tr("RAW parameters updated: %1") : tr("YUV parameters updated: %1"))
-                .arg(QFileInfo(path).fileName()),
-            4000);
+    {
+        QString updated = tr("YUV parameters updated: %1");
+        if (plainRaw)
+            updated = tr("RAW parameters updated: %1");
+        if (plainRaw && mviewer::core::rawplain::isGrayRawPath(utf8))
+            updated = tr("Gray parameters updated: %1");
+        statusBar()->showMessage(updated.arg(QFileInfo(path).fileName()), 4000);
+    }
 }
 
 void MainWindow::onYuvExtensionMapChanged()
@@ -179,11 +183,28 @@ bool MainWindow::showYuvLoadHint(const QString &path)
     {
         const std::string why = mviewer::core::rawplain::resolvePlainRawFile(utf8).resolved.why;
         const QString name = QFileInfo(path).fileName();
-        if (why.empty())
+        const bool gray = mviewer::core::rawplain::isGrayRawPath(utf8);
+        if (why.empty() && gray)
+        {
+            statusBar()->showMessage(
+                tr("Cannot show %1: set its size and storage with right-click > Gray "
+                   "Parameters...")
+                    .arg(name),
+                8000);
+        }
+        else if (why.empty())
         {
             statusBar()->showMessage(
                 tr("Cannot show %1: set its size and storage with right-click > RAW Parameters...")
                     .arg(name),
+                8000);
+        }
+        else if (gray)
+        {
+            statusBar()->showMessage(
+                tr("Cannot show %1: %2. Set its size and storage with right-click > Gray "
+                   "Parameters...")
+                    .arg(name, QString::fromStdString(why)),
                 8000);
         }
         else

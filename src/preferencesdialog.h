@@ -37,6 +37,7 @@ class PreferencesDialog : public QDialog
     QWidget *buildAnalysisTab(QSettings &s);
     QWidget *buildYuvTab();
     QWidget *buildPlainRawTab();
+    QWidget *buildGrayRawTab();
 
     QComboBox *m_uiTheme = nullptr;
     QComboBox *m_uiLanguage = nullptr;
@@ -60,4 +61,5 @@ class PreferencesDialog : public QDialog
     QSpinBox *m_thumbCacheMb = nullptr;
     YuvExtensionMapEditor *m_yuvExtensionMap = nullptr;
     PlainRawParamsEditor *m_plainRawDefaults = nullptr;
+    PlainRawParamsEditor *m_grayRawDefaults = nullptr;
 };

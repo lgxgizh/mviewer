@@ -458,14 +458,21 @@ void MainWindow::openPreferences()
     const std::string yuvMapBefore = mviewer::core::yuv::extensionRulesFingerprint();
     const auto rawDefaultsBefore =
         mviewer::core::rawplain::PlainRawParamStore::instance().defaults();
+    const auto grayDefaultsBefore =
+        mviewer::core::rawplain::PlainRawParamStore::instance().defaults(
+            mviewer::core::rawplain::DumpKind::Gray);
     connect(&dlg, &PreferencesDialog::settingsChanged, this,
-            [this, before, yuvMapBefore, rawDefaultsBefore]()
+            [this, before, yuvMapBefore, rawDefaultsBefore, grayDefaultsBefore]()
             {
                 applyPreferences(before);
                 if (mviewer::core::yuv::extensionRulesFingerprint() != yuvMapBefore)
                     onYuvExtensionMapChanged();
-                if (!(mviewer::core::rawplain::PlainRawParamStore::instance().defaults() ==
-                      rawDefaultsBefore))
+                const auto &store = mviewer::core::rawplain::PlainRawParamStore::instance();
+                const bool rawChanged = !(store.defaults() == rawDefaultsBefore);
+                const bool grayChanged =
+                    !(store.defaults(mviewer::core::rawplain::DumpKind::Gray) ==
+                      grayDefaultsBefore);
+                if (rawChanged || grayChanged)
                     onPlainRawDefaultsChanged();
             });
     dlg.exec();
