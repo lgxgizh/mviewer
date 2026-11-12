@@ -1,5 +1,6 @@
 // Included by imageviewer_lod.cpp to handle LOD ROI stats scheduling
 // and overlay derivations without exceeding source line caps.
+#include "core/image/LumaMatrix.h"
 
 void ImageViewer::scheduleRasterRoiStats(const QRect &selection)
 {
@@ -78,39 +79,43 @@ void ImageViewer::scheduleLodOverlayDerivation() const
     // COW copy: the worker reads pixels that the UI thread may replace later,
     // without copying the payload.
     const QImage raster = m_raster.image;
-    const qint64 key = raster.cacheKey();
+    const auto matrix = mviewer::yuvMatrixFromMetadataOrTag(
+        m_frame ? &m_frame->metadata() : nullptr,
+        raster.text(QStringLiteral("MViewer.Yuv.Matrix")).toStdString());
+    const qint64 key = mviewer::lumaOverlayCacheKey(raster.cacheKey(), matrix);
     const mviewer::OverlayMode mode = m_overlayMode;
     const int threshold = m_zebraThreshold;
     QPointer<ImageViewer> guard(const_cast<ImageViewer *>(this));
-    TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Decode,
-        [guard, request, raster, key, mode, threshold](const TaskScheduler::TaskContext &ctx)
-        {
-            if (ctx.isCancelled())
-                return;
-            ImageData data = mvcore::fromQImage(raster);
-            QImage derived;
-            if (!data.isNull())
-            {
-                mviewer::applyOverlay(data, mode, threshold);
-                derived = mvcore::toQImageFast(data);
-            }
-            if (!qApp)
-                return;
-            QMetaObject::invokeMethod(
-                qApp,
-                [guard, request, derived, key, mode, threshold]()
-                {
-                    ImageViewer *viewer = guard.data();
-                    if (!viewer || request != viewer->m_lodOverlayRequest)
-                        return; // superseded, or the viewer is gone
-                    viewer->m_lodOverlayPending = false;
-                    viewer->m_lodOverlayImage = derived;
-                    viewer->m_lodOverlayKey = key;
-                    viewer->m_lodOverlayMode = mode;
-                    viewer->m_lodOverlayThreshold = threshold;
-                    viewer->update();
-                },
-                Qt::QueuedConnection);
-        });
+    TaskScheduler::instance().submit(TaskScheduler::Priority::Decode,
+                                     [guard, request, raster, key, mode, threshold,
+                                      matrix](const TaskScheduler::TaskContext &ctx)
+                                     {
+                                         if (ctx.isCancelled())
+                                             return;
+                                         ImageData data = mvcore::fromQImage(raster);
+                                         QImage derived;
+                                         if (!data.isNull())
+                                         {
+                                             mviewer::applyOverlay(data, mode, threshold, matrix);
+                                             derived = mvcore::toQImageFast(data);
+                                         }
+                                         if (!qApp)
+                                             return;
+                                         QMetaObject::invokeMethod(
+                                             qApp,
+                                             [guard, request, derived, key, mode, threshold]()
+                                             {
+                                                 ImageViewer *viewer = guard.data();
+                                                 if (!viewer ||
+                                                     request != viewer->m_lodOverlayRequest)
+                                                     return; // superseded, or the viewer is gone
+                                                 viewer->m_lodOverlayPending = false;
+                                                 viewer->m_lodOverlayImage = derived;
+                                                 viewer->m_lodOverlayKey = key;
+                                                 viewer->m_lodOverlayMode = mode;
+                                                 viewer->m_lodOverlayThreshold = threshold;
+                                                 viewer->update();
+                                             },
+                                             Qt::QueuedConnection);
+                                     });
 }

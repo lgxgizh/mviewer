@@ -145,7 +145,9 @@ QImage filteredPresentation(const QImage &src, mviewer::OverlayMode mode)
     ImageData data = mvcore::fromQImage(src);
     if (data.isNull())
         return {};
-    mviewer::applyOverlay(data, mode, 2);
+    const auto matrix =
+        mviewer::yuvMatrixFromTag(src.text(QStringLiteral("MViewer.Yuv.Matrix")).toStdString());
+    mviewer::applyOverlay(data, mode, 2, matrix);
     return mvcore::toQImage(data);
 }
 } // namespace

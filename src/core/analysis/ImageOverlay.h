@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/image/ImageBuffer.h"
+#include "core/image/LumaMatrix.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -19,7 +20,7 @@ enum class OverlayMode : std::uint8_t
     ChannelR = 3,   // grayscale of the red plane
     ChannelG = 4,   // grayscale of the green plane
     ChannelB = 5,   // grayscale of the blue plane
-    ChannelY = 6,   // grayscale of BT.601 luminance
+    ChannelY = 6,   // grayscale of source Y (Rec.601 unless MViewer.Yuv.Matrix is set)
     ChannelV = 7    // grayscale of HSV-V (max(R,G,B))
 };
 
@@ -54,7 +55,10 @@ inline const char *overlayModeLabel(OverlayMode mode)
     }
 }
 
-inline uint8_t channelPlaneValue(OverlayMode mode, int r, int g, int b)
+// ChannelY uses `matrix` (Rec.601 when omitted). Other planes ignore it.
+inline uint8_t
+channelPlaneValue(OverlayMode mode, int r, int g, int b,
+                  mviewer::core::yuv::Matrix matrix = mviewer::core::yuv::Matrix::BT601)
 {
     switch (mode)
     {
@@ -68,21 +72,24 @@ inline uint8_t channelPlaneValue(OverlayMode mode, int r, int g, int b)
         return static_cast<uint8_t>(std::max({r, g, b}));
     case OverlayMode::ChannelY:
     default:
-        return static_cast<uint8_t>(std::clamp(
-            luminance(static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b)), 0,
-            255));
+        return lumaMatrix8(r, g, b, matrix);
     }
 }
 
 // In-place overlay kernels (implemented in ImageOverlay.cpp). Each supports
 // RGB24 / RGBA32 / BGR24 / BGRA32; FalseColor and Zebra also Grayscale8.
 void applyFalseColor(ImageData &img);
-void applyChannelOverlay(ImageData &img, OverlayMode mode);
+// `matrix` affects ChannelY only. Zebra and false color stay Rec.601: they
+// mark displayed brightness, not the source Y plane.
+void applyChannelOverlay(ImageData &img, OverlayMode mode,
+                         mviewer::core::yuv::Matrix matrix = mviewer::core::yuv::Matrix::BT601);
 void applyZebraOverlay(ImageData &img, int zebraThresholdPct);
 
 // Apply an overlay in place on an ImageData. Supports RGB24 / RGBA32 /
 // BGR24 / BGRA32 / Grayscale8. Alpha is preserved for the *A variants.
 // Safe to call every frame: it operates on the passed buffer only.
-void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct);
+// ChannelY uses `matrix` (default Rec.601). Zebra and false color ignore it.
+void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct,
+                  mviewer::core::yuv::Matrix matrix = mviewer::core::yuv::Matrix::BT601);
 
 } // namespace mviewer

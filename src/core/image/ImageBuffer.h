@@ -310,15 +310,18 @@ inline PixelRGBA samplePixel(const ImageData &img, int x, int y) noexcept
     return out;
 }
 
-// Canonical 8-bit luma: Rec.601 weights on gamma-encoded R'G'B',
+// Canonical untagged 8-bit luma: Rec.601 weights on gamma-encoded R'G'B',
 // round(0.299 R + 0.587 G + 0.114 B) in 16.16 fixed point. The weights sum to
 // 65536, so a gray pixel maps to itself exactly; the previous float truncation
 // mapped 65 of the 256 gray levels one LSB low, and the analyzers' >>16 form
-// truncated as well. Every "luma" / "luminance" / "brightness" of an 8-bit
-// display-referred pixel uses this (histogram, stats, alignment, overlays,
-// analyzers, USM luma-only). A channel mean is a different quantity: see
-// rgbMean() in core/analyzer/PixelAccess.h. Linear-light CIE Y (Rec.709 /
-// sRGB primaries) in the Pixel Inspector and ColorChecker is also separate.
+// truncated as well. Untagged "luma" / "luminance" / "brightness" of an 8-bit
+// display-referred pixel uses this (histogram, stats, alignment, zebra,
+// false color, analyzers, USM luma-only). Channel-Y uses lumaMatrix8() when
+// MViewer.Yuv.Matrix names a matrix (LumaMatrix.h). The pixel inspector's
+// YUV / YCbCr readout uses the same Kr/Kb. Missing or unknown stays Rec.601.
+// A channel mean is a different quantity: see rgbMean()
+// in core/analyzer/PixelAccess.h. Linear-light CIE Y (Rec.709 / sRGB primaries)
+// in the Pixel Inspector and ColorChecker is also separate.
 constexpr int lumaRec601_8(int r, int g, int b) noexcept
 {
     return (19595 * r + 38470 * g + 7471 * b + 32768) >> 16;

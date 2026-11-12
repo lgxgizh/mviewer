@@ -643,6 +643,121 @@ static void test_embedded_thumb_aspect_crop()
     CHECK(cropThumbnailToAspect(QImage(), 4000, 3000).isNull());
 }
 
+static bool nearAbs(double a, double b)
+{
+    return std::abs(a - b) < 1e-12;
+}
+
+static bool sameTriple(const ColorTriple &a, const ColorTriple &b)
+{
+    return nearAbs(a.c1, b.c1) && nearAbs(a.c2, b.c2) && nearAbs(a.c3, b.c3);
+}
+
+// Historical Rec.601 formulas, hardcoded so a shared helper bug cannot hide.
+static void expectRec601(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
+{
+    const auto got = toColorSpace(r, g, b, space);
+    if (space == ColorSpace::YUV)
+    {
+        const double y = 0.299 * r + 0.587 * g + 0.114 * b;
+        CHECK(nearAbs(got.c1, y));
+        CHECK(nearAbs(got.c2, 0.564 * (b - y)));
+        CHECK(nearAbs(got.c3, 0.713 * (r - y)));
+        return;
+    }
+    CHECK(nearAbs(got.c1, 0.299 * r + 0.587 * g + 0.114 * b));
+    CHECK(nearAbs(got.c2, -0.168736 * r - 0.331264 * g + 0.5 * b + 128.0));
+    CHECK(nearAbs(got.c3, 0.5 * r - 0.418688 * g - 0.081312 * b + 128.0));
+}
+
+static void test_yuv_matrix_readout()
+{
+    using mviewer::core::yuv::lumaKrKb;
+    using mviewer::core::yuv::Matrix;
+    using mviewer::domain::ImageMetadata;
+
+    expectRec601(255, 0, 0, ColorSpace::YUV);
+    expectRec601(0, 255, 0, ColorSpace::YUV);
+    expectRec601(0, 0, 255, ColorSpace::YUV);
+    expectRec601(255, 0, 0, ColorSpace::YCbCr);
+    expectRec601(0, 255, 0, ColorSpace::YCbCr);
+    expectRec601(0, 0, 255, ColorSpace::YCbCr);
+
+    const auto redY = toColorSpace(255, 0, 0, ColorSpace::YUV);
+    const auto redC = toColorSpace(255, 0, 0, ColorSpace::YCbCr);
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YUV, Matrix::BT601), redY));
+    ImageMetadata empty;
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YUV, empty), redY));
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YCbCr, empty), redC));
+
+    auto withKey = [](const char *key, const char *value)
+    {
+        ImageMetadata meta;
+        meta.textKeys[key] = value;
+        return meta;
+    };
+    const auto garbage = withKey("MViewer.Yuv.Matrix", "not-a-matrix");
+    const auto unknown = withKey("MViewer.Yuv.Matrix", "bt999");
+    const auto blank = withKey("MViewer.Yuv.Matrix", "   ");
+    const auto wrong = withKey("yuv.matrix", "bt709");
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YUV, garbage), redY));
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YCbCr, garbage), redC));
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YUV, unknown), redY));
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YCbCr, unknown), redC));
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YUV, blank), redY));
+    CHECK(sameTriple(toColorSpace(255, 0, 0, ColorSpace::YUV, wrong), redY));
+
+    const auto k709 = lumaKrKb(Matrix::BT709);
+    CHECK(k709.kr == 0.2126 && k709.kb == 0.0722);
+    const auto bt709 = withKey("MViewer.Yuv.Matrix", "bt709");
+    const auto y709 = toColorSpace(255, 0, 0, ColorSpace::YUV, bt709);
+    const double yRed = k709.kr * 255.0;
+    CHECK(nearAbs(y709.c1, yRed));
+    CHECK(std::abs(y709.c1 - redY.c1) > 1.0);
+    const double uScale = 0.5 / (1.0 - k709.kb);
+    const double vScale = 0.5 / (1.0 - k709.kr);
+    CHECK(nearAbs(y709.c2, uScale * (0.0 - yRed)));
+    CHECK(nearAbs(y709.c3, vScale * (255.0 - yRed)));
+    const auto c709 = toColorSpace(255, 0, 0, ColorSpace::YCbCr, bt709);
+    CHECK(nearAbs(c709.c1, yRed));
+    CHECK(std::abs(c709.c1 - redC.c1) > 1.0);
+    CHECK(nearAbs(c709.c2, uScale * (0.0 - yRed) + 128.0));
+    CHECK(nearAbs(c709.c3, vScale * (255.0 - yRed) + 128.0));
+    const double kg = 1.0 - k709.kr - k709.kb;
+    const auto g709 = toColorSpace(0, 255, 0, ColorSpace::YUV, bt709);
+    CHECK(nearAbs(g709.c1, kg * 255.0));
+    CHECK(std::abs(kg * 255.0 - 0.587 * 255.0) > 1.0);
+
+    const auto k2020 = lumaKrKb(Matrix::BT2020);
+    CHECK(k2020.kr == 0.2627 && k2020.kb == 0.0593);
+    const auto bt2020 = withKey("MViewer.Yuv.Matrix", "bt2020");
+    const auto y2020 = toColorSpace(255, 0, 0, ColorSpace::YUV, bt2020);
+    CHECK(nearAbs(y2020.c1, k2020.kr * 255.0));
+    CHECK(std::abs(y2020.c1 - redY.c1) > 1.0);
+    const auto c2020 = toColorSpace(255, 0, 0, ColorSpace::YCbCr, bt2020);
+    CHECK(nearAbs(c2020.c1, 0.2627 * 255.0));
+
+    const auto grayY = toColorSpace(128, 128, 128, ColorSpace::YUV, bt709);
+    CHECK(std::abs(grayY.c1 - 128.0) < 1e-9 && std::abs(grayY.c2) < 1e-9 &&
+          std::abs(grayY.c3) < 1e-9);
+    const auto grayC = toColorSpace(128, 128, 128, ColorSpace::YCbCr, bt2020);
+    CHECK(std::abs(grayC.c1 - 128.0) < 1e-9 && std::abs(grayC.c2 - 128.0) < 1e-9 &&
+          std::abs(grayC.c3 - 128.0) < 1e-9);
+
+    const auto shown =
+        displayedColorSpace(255, 0, 0, false, 0, 0, 0, 0, ColorSpace::YUV, Matrix::BT709);
+    CHECK(sameTriple(shown, toColorSpace(255, 0, 0, ColorSpace::YUV, Matrix::BT709)));
+    const auto wide = toColorSpace(65535, 0, 0, 65535, ColorSpace::YUV, Matrix::BT709);
+    CHECK(nearAbs(wide.c1, 0.2126 * 255.0));
+    const auto via8 =
+        toColorSpace(static_cast<uint16_t>(255), 0, 0, 255, ColorSpace::YUV, Matrix::BT709);
+    CHECK(sameTriple(via8, y709));
+
+    const auto hsv = toColorSpace(255, 0, 0, ColorSpace::HSV, bt709);
+    CHECK(std::abs(hsv.c1) < 1e-6);
+    CHECK(std::abs(hsv.c3 - 100.0) < 1e-6);
+}
+
 int main()
 {
     test_color_spaces();
@@ -654,6 +769,7 @@ int main()
     test_display_orientation_and_alpha();
     test_embedded_thumb_aspect_crop();
     test_computeROIChannelStats16();
+    test_yuv_matrix_readout();
     if (g_failures == 0)
     {
         std::printf("PASS: pixelinspector_tests (%d checks)\n", 0);

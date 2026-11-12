@@ -403,6 +403,125 @@ static void testNullAndBoundaryGuards()
     CHECK(!ok.isNull() && ok.buffer && ok.buffer->size() == 18, "valid makeImageData byte count");
 }
 
+static void testChannelYMatrix()
+{
+    printf("\n[Channel-Y matrix]\n");
+    fflush(stdout);
+    using mviewer::lumaMatrix8;
+    using mviewer::core::yuv::Matrix;
+    using mviewer::domain::ImageMetadata;
+
+    CHECK(lumaMatrix8(255, 0, 0, Matrix::BT601) == lumaRec601_8(255, 0, 0),
+          "BT.601 red matches lumaRec601_8");
+    CHECK(lumaMatrix8(255, 0, 0, Matrix::BT601) == 76, "BT.601 pure red is 76");
+    CHECK(lumaMatrix8(0, 255, 0, Matrix::BT601) == 150, "BT.601 pure green is 150");
+    CHECK(lumaMatrix8(0, 0, 255, Matrix::BT601) == 29, "BT.601 pure blue is 29");
+    CHECK(lumaMatrix8(200, 10, 20, Matrix::BT601) == luminance(200, 10, 20),
+          "BT.601 mixed pixel matches luminance()");
+    CHECK(lumaMatrix8(1, 1, 1, Matrix::BT709) == 1, "BT.709 gray 1 is identity");
+    CHECK(lumaMatrix8(65, 65, 65, Matrix::BT709) == 65, "BT.709 gray 65 is identity");
+    CHECK(lumaMatrix8(128, 128, 128, Matrix::BT709) == 128, "BT.709 gray 128 is identity");
+    CHECK(lumaMatrix8(255, 255, 255, Matrix::BT709) == 255, "BT.709 gray 255 is identity");
+    CHECK(lumaMatrix8(1, 1, 1, Matrix::BT2020) == 1, "BT.2020 gray 1 is identity");
+    CHECK(lumaMatrix8(65, 65, 65, Matrix::BT2020) == 65, "BT.2020 gray 65 is identity");
+    CHECK(lumaMatrix8(128, 128, 128, Matrix::BT2020) == 128, "BT.2020 gray 128 is identity");
+    CHECK(lumaMatrix8(255, 255, 255, Matrix::BT2020) == 255, "BT.2020 gray 255 is identity");
+    CHECK(lumaMatrix8(255, 0, 0, Matrix::BT709) == 54, "BT.709 pure red is 54");
+    CHECK(lumaMatrix8(255, 0, 0, Matrix::BT709) != 76, "BT.709 red differs from Rec.601");
+    CHECK(lumaMatrix8(0, 255, 0, Matrix::BT709) == 182, "BT.709 pure green is 182");
+    CHECK(lumaMatrix8(255, 0, 0, Matrix::BT2020) == 67, "BT.2020 pure red is 67");
+    CHECK(mviewer::channelPlaneValue(mviewer::OverlayMode::ChannelY, 255, 0, 0) == 76,
+          "default ChannelY is Rec.601 red");
+    CHECK(mviewer::channelPlaneValue(mviewer::OverlayMode::ChannelY, 255, 0, 0, Matrix::BT709) ==
+              54,
+          "ChannelY plane follows the matrix");
+    CHECK(mviewer::channelPlaneValue(mviewer::OverlayMode::ChannelR, 255, 0, 0, Matrix::BT709) ==
+              255,
+          "ChannelR ignores the matrix");
+
+    auto paint = [](PixelFormat fmt, uint8_t r, uint8_t g, uint8_t b, Matrix matrix)
+    {
+        ImageData img = makeImageData(2, 2, fmt);
+        fillSolid(img, r, g, b);
+        mviewer::applyOverlay(img, mviewer::OverlayMode::ChannelY, 2, matrix);
+        return img;
+    };
+    ImageData untagged = makeImageData(2, 2, PixelFormat::RGB24);
+    fillSolid(untagged, 255, 0, 0);
+    mviewer::applyOverlay(untagged, mviewer::OverlayMode::ChannelY, 2);
+    CHECK(px(untagged.view(), 0, 0)[0] == 76, "untagged Channel-Y red is 76");
+    ImageData green = makeImageData(2, 2, PixelFormat::RGB24);
+    fillSolid(green, 0, 255, 0);
+    mviewer::applyOverlay(green, mviewer::OverlayMode::ChannelY, 2);
+    CHECK(px(green.view(), 0, 0)[0] == 150, "untagged Channel-Y green is 150");
+    ImageData blue = makeImageData(2, 2, PixelFormat::RGB24);
+    fillSolid(blue, 0, 0, 255);
+    mviewer::applyOverlay(blue, mviewer::OverlayMode::ChannelY, 2);
+    CHECK(px(blue.view(), 0, 0)[0] == 29, "untagged Channel-Y blue is 29");
+
+    ImageMetadata missing;
+    ImageMetadata garbage;
+    garbage.textKeys["MViewer.Yuv.Matrix"] = "not-a-matrix";
+    ImageMetadata blank;
+    blank.textKeys["MViewer.Yuv.Matrix"] = "   ";
+    ImageMetadata wrong;
+    wrong.textKeys["yuv.matrix"] = "bt709";
+    CHECK(mviewer::yuvMatrixFromMetadata(missing) == Matrix::BT601, "missing key is BT.601");
+    CHECK(mviewer::yuvMatrixFromMetadata(garbage) == Matrix::BT601, "garbage matrix is BT.601");
+    CHECK(mviewer::yuvMatrixFromMetadata(blank) == Matrix::BT601, "blank matrix is BT.601");
+    CHECK(mviewer::yuvMatrixFromMetadata(wrong) == Matrix::BT601, "wrong key spelling is BT.601");
+    CHECK(mviewer::yuvMatrixFromTag("") == Matrix::BT601, "empty tag is BT.601");
+    CHECK(mviewer::yuvMatrixFromTag("bt999") == Matrix::BT601, "bt999 is BT.601");
+    CHECK(mviewer::yuvMatrixFromTag("bt709") == Matrix::BT709, "bt709 tag parses");
+    CHECK(mviewer::yuvMatrixFromTag("bt2020") == Matrix::BT2020, "bt2020 tag parses");
+
+    ImageData redMissing =
+        paint(PixelFormat::RGB24, 255, 0, 0, mviewer::yuvMatrixFromMetadata(missing));
+    CHECK(px(redMissing.view(), 0, 0)[0] == 76, "missing metadata Channel-Y red is 76");
+    ImageData greenGarbage =
+        paint(PixelFormat::RGB24, 0, 255, 0, mviewer::yuvMatrixFromMetadata(garbage));
+    CHECK(px(greenGarbage.view(), 0, 0)[0] == 150, "garbage metadata Channel-Y green is 150");
+    ImageData blueWrong =
+        paint(PixelFormat::RGB24, 0, 0, 255, mviewer::yuvMatrixFromMetadata(wrong));
+    CHECK(px(blueWrong.view(), 0, 0)[0] == 29, "wrong key Channel-Y blue is 29");
+
+    ImageMetadata meta709;
+    meta709.textKeys["MViewer.Yuv.Matrix"] = "bt709";
+    ImageData red709 =
+        paint(PixelFormat::RGB24, 255, 0, 0, mviewer::yuvMatrixFromMetadata(meta709));
+    const uint8_t *p709 = px(red709.view(), 1, 1);
+    CHECK(p709[0] == 54 && p709[1] == 54 && p709[2] == 54, "bt709 Channel-Y red is 54");
+    ImageData green709 = paint(PixelFormat::RGB24, 0, 255, 0, Matrix::BT709);
+    CHECK(px(green709.view(), 0, 0)[0] == 182, "bt709 Channel-Y green is 182");
+    ImageData blue709 = paint(PixelFormat::RGB24, 0, 0, 255, Matrix::BT709);
+    CHECK(px(blue709.view(), 0, 0)[0] == lumaMatrix8(0, 0, 255, Matrix::BT709),
+          "bt709 Channel-Y blue uses the matrix");
+    CHECK(px(blue709.view(), 0, 0)[0] != 29, "bt709 Channel-Y blue differs from Rec.601");
+
+    ImageData rgba = paint(PixelFormat::RGBA32, 255, 0, 0, Matrix::BT709);
+    const uint8_t *a = px(rgba.view(), 0, 0);
+    CHECK(a[0] == 54 && a[3] == 255, "RGBA32 bt709 Channel-Y red keeps alpha");
+
+    // fillSolid writes (b0,b1,b2) into packed bytes; on BGR24 that is B,G,R.
+    ImageData bgr = makeImageData(2, 2, PixelFormat::BGR24);
+    fillSolid(bgr, 0, 0, 255);
+    mviewer::applyOverlay(bgr, mviewer::OverlayMode::ChannelY, 2, Matrix::BT709);
+    CHECK(px(bgr.view(), 0, 0)[0] == 54, "BGR24 bt709 Channel-Y red is 54");
+
+    ImageMetadata meta2020;
+    meta2020.textKeys["MViewer.Yuv.Matrix"] = "bt2020";
+    ImageData red2020 =
+        paint(PixelFormat::RGB24, 255, 0, 0, mviewer::yuvMatrixFromMetadata(meta2020));
+    CHECK(px(red2020.view(), 0, 0)[0] == 67, "bt2020 Channel-Y red is 67");
+
+    // 601 luma of (255,255,200) is 249; BT.709 is 251. Threshold 2 clips at 250.
+    ImageData zebra = makeImageData(4, 4, PixelFormat::RGB24);
+    fillSolid(zebra, 255, 255, 200);
+    mviewer::applyOverlay(zebra, mviewer::OverlayMode::Zebra, 2, Matrix::BT709);
+    const uint8_t *z = px(zebra.view(), 0, 0);
+    CHECK(z[0] == 255 && z[1] == 255 && z[2] == 200, "zebra stays on Rec.601 luma");
+}
+
 int main()
 {
     printf("=== ImageOverlay Tests (M22) ===\n");
@@ -416,6 +535,7 @@ int main()
     testPixelGrid();
     testSimdChannelParity();
     testNullAndBoundaryGuards();
+    testChannelYMatrix();
     printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

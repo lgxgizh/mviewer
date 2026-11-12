@@ -40,12 +40,13 @@ static uint16_t clampSample16(int value)
 }
 
 static QString formatPixelValues(mviewer::core::ColorSpace cs, int r, int g, int b, bool raw16,
-                                 int r16, int g16, int b16, int rawMax)
+                                 int r16, int g16, int b16, int rawMax,
+                                 mviewer::core::yuv::Matrix matrix)
 {
     const char *csLabel = mviewer::core::colorSpaceLabel(cs);
     const mviewer::core::ColorTriple px = mviewer::core::displayedColorSpace(
         clampByte(r), clampByte(g), clampByte(b), raw16, clampSample16(r16), clampSample16(g16),
-        clampSample16(b16), clampSample16(rawMax), cs);
+        clampSample16(b16), clampSample16(rawMax), cs, matrix);
     if (cs == mviewer::core::ColorSpace::HEX)
     {
         const QString hex = QString::fromStdString(mviewer::core::toHex(
@@ -77,8 +78,10 @@ void AnalysisPanel::updateInspectorPage()
     const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
     QString txt = QString("<h3>%1 — %2</h3>").arg(tr("Pixel Inspector"), csLabel);
     txt += tr("Coordinates: (%1, %2)<br>").arg(m_px).arg(m_py);
+    const auto matrix = m_frameA ? mviewer::yuvMatrixFromMetadata(m_frameA->metadata())
+                                 : mviewer::core::yuv::Matrix::BT601;
     txt += formatPixelValues(m_colorSpace, m_pR, m_pG, m_pB, m_rawKind == 2, m_r16, m_g16, m_b16,
-                             m_rawMax);
+                             m_rawMax, matrix);
     if (m_pA >= 0 && m_pA < 255)
         txt += QString("Alpha: %1<br>").arg(m_pA);
 
