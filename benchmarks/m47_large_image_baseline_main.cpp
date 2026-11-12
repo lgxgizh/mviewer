@@ -62,8 +62,10 @@
 #include <vector>
 
 #ifdef _WIN32
+// clang-format off
 #include <windows.h>
 #include <psapi.h>
+// clang-format on
 #endif
 
 namespace
@@ -132,8 +134,14 @@ class CountingDecoder : public IDecoder
         scaledCalls.fetch_add(1);
         return m_inner.decodeScaled(path, maxEdge, meta);
     }
-    std::vector<std::string> extensions() const override { return m_inner.extensions(); }
-    const char *name() const override { return "CountingBaselineDecoder"; }
+    std::vector<std::string> extensions() const override
+    {
+        return m_inner.extensions();
+    }
+    const char *name() const override
+    {
+        return "CountingBaselineDecoder";
+    }
 
   private:
     QtDecoder m_inner;
@@ -272,6 +280,8 @@ void viewerUiCostProbe(const QString &path)
     QObject::connect(&viewer, &ImageViewer::imageReady, &viewer,
                      [&](const std::shared_ptr<ImageFrame> &) { ready = true; });
     viewer.setImage(path);
+    // 24 MP is a feasible LOD still: the full frame is lazy until asked.
+    viewer.ensureAnalysisLoad();
     const double deadline = nowMs() + 120000.0;
     while (!ready && nowMs() < deadline)
         pump(1);
@@ -314,13 +324,14 @@ ViewerMeasure viewerOpen(const QString &path, int waitMs = 120000)
     viewer.resize(1280, 800);
     viewer.show();
     viewer.setBrowseSequence({path});
-    const double t0 = nowMs();
-    viewer.setImage(path);
-    // Wait for the first usable frame (imageReady is emitted from
-    // applyLoadedImage once the full decode is delivered).
     bool ready = false;
     QObject::connect(&viewer, &ImageViewer::imageReady, &viewer,
                      [&](const std::shared_ptr<ImageFrame> &) { ready = true; });
+    const double t0 = nowMs();
+    viewer.setImage(path);
+    // Feasible single-frame LOD stills defer the analysis full-frame load.
+    // This probe measures time-to-full-frame, so request it explicitly.
+    viewer.ensureAnalysisLoad();
     const double deadline = nowMs() + waitMs;
     while (!ready && nowMs() < deadline)
     {
@@ -551,9 +562,8 @@ int main(int argc, char **argv)
             const double before = rssMB();
             resetCounter();
             ViewerMeasure w = viewerOpen(viewerPath);
-            printf("    open #%d: %.1f ms  rss-delta=%+.1f MB  fullDecode=%d\n", i + 2,
-                   w.latencyMs, w.rssWhileHeldMB - before,
-                   g_counter ? g_counter->fullCalls.load() : 0);
+            printf("    open #%d: %.1f ms  rss-delta=%+.1f MB  fullDecode=%d\n", i + 2, w.latencyMs,
+                   w.rssWhileHeldMB - before, g_counter ? g_counter->fullCalls.load() : 0);
         }
     }
     else
@@ -604,8 +614,8 @@ int main(int argc, char **argv)
                "source=%dx%d  rss+%.1f MB  nativeLod=%llu fullDecodeScaled=%llu "
                "fullDecodeCrop=%llu fullDecode=%llu\n",
                c.latencyMs, c.paneCount, c.panesReady ? 1 : 0, c.pane0Raster.width(),
-               c.pane0Raster.height(), c.pane0Source.width(), c.pane0Source.height(),
-               c.rssDeltaMB, static_cast<unsigned long long>(c.nativeLod),
+               c.pane0Raster.height(), c.pane0Source.width(), c.pane0Source.height(), c.rssDeltaMB,
+               static_cast<unsigned long long>(c.nativeLod),
                static_cast<unsigned long long>(c.fullDecodeScaled),
                static_cast<unsigned long long>(c.fullDecodeCrop),
                static_cast<unsigned long long>(c.fullDecode));

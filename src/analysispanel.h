@@ -157,6 +157,9 @@ class AnalysisPanel : public QWidget
     // so the analysis workflow doesn't force the user into a menu. The MainWindow
     // wires this to its report-exporter for the current image.
     void exportRequested();
+    // Host should deliver a real ImageFrame (lazy analysis load). Emitted when
+    // the panel is shown or an analyzer runs and no frame is stored yet.
+    void frameRequired();
     // M21: user picked a history/pinned entry — MainWindow should open that image.
     void historyImageRequested(const QString &path);
 
@@ -277,7 +280,7 @@ class AnalysisPanel : public QWidget
     int m_pA = 0;
     int m_r16 = 0, m_g16 = 0, m_b16 = 0;
     uint16_t m_rawMax = 0;
-    int m_rawKind = 0; // 0=8-bit, 1=RAW preview, 2=true 16-bit
+    int m_rawKind = 0;       // 0=8-bit, 1=RAW preview, 2=true 16-bit
     QString m_yuvSampleText; // ADR 032: "Y=.. U=.. V=.." for raw YUV sources
 
     // M15 P0 #2: Pixel Inspector Pro — selected color space + NxN kernel.

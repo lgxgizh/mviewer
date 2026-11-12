@@ -660,7 +660,7 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
                            .arg(m_raster.sourceSize.height())
                            .arg(position));
         emit displayReady(m_raster.sourceSize);
-        // The first raster made this a LARGE source: decide the analysis load.
+        // Still within the cap may defer; small and multi-frame still load.
         runAnalysisLoadDecision(sourceValid, sourceSize);
     }
     // Region upgrades change the pixels under a stationary cursor.
@@ -668,32 +668,40 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
     update();
 }
 
-// ── Analysis-support load decision ──────────────────────────────────────────
-// Runs on the first raster-path verdict and issues at most ONE full-frame
-// load per image:
-//   * probe failed / small source -> full load (fast path owns small images);
-//   * large but within kAnalysisFeasiblePixels -> full load for exact samples;
-//   * larger than that (about 60 MP) -> do NOT materialize a full frame.
-//     Hover, ROI stats, and color sample use the bounded display raster so
-//     the inspector stays available without a UI-thread full-res decode.
+void ImageViewer::ensureAnalysisLoad()
+{
+    if (m_analysisLoadIssued || (m_frame && m_frame->isValid()) || m_currentPath.isEmpty())
+        return;
+    if (m_largeSourcePending)
+    {
+        setProperty("mviewerAnalysisWanted", true);
+        return;
+    }
+    const qint64 pixels = static_cast<qint64>(m_raster.sourceSize.width()) *
+                          static_cast<qint64>(m_raster.sourceSize.height());
+    // Over the cap: refuse, and drop a retained full preload so it cannot land.
+    if (m_lodMode && pixels > kAnalysisFeasiblePixels)
+        m_pendingAnalysisPreload.reset();
+    else
+        issueAnalysisLoad(m_currentPath, m_requestGen);
+    m_analysisLoadIssued = true;
+    setProperty("mviewerAnalysisWanted", false);
+}
+
 void ImageViewer::runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize)
 {
     if (m_analysisLoadIssued)
         return;
-    bool issueLoad = true;
-    if (sourceValid && m_lodMode)
-    {
-        const qint64 pixels = static_cast<qint64>(sourceSize.width()) * sourceSize.height();
-        issueLoad = pixels <= kAnalysisFeasiblePixels;
-    }
-    m_analysisLoadIssued = true;
-    if (issueLoad)
-    {
-        issueAnalysisLoad(m_currentPath, m_requestGen);
-        return;
-    }
-    m_pendingAnalysisPreload.reset();
-    resamplePixelUnderCursor();
+    const bool lod = sourceValid && m_lodMode;
+    const qint64 pixels = lod ? static_cast<qint64>(sourceSize.width()) * sourceSize.height() : 0;
+    const bool multi =
+        lod && m_sourceImage &&
+        (m_sourceImage->metadata().animated || m_sourceImage->metadata().frameCount > 1);
+    if (!lod || multi || property("mviewerAnalysisWanted").toBool() ||
+        (lod && pixels > kAnalysisFeasiblePixels))
+        ensureAnalysisLoad();
+    else
+        m_pendingAnalysisPreload.reset();
 }
 
 PixelRGBA ImageViewer::sampleAnalysisPixel(int ix, int iy) const

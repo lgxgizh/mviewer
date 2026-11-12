@@ -367,6 +367,7 @@ void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool c
     cancelExportJob();
     if (cfg.sources.empty())
         return;
+    ensureAnalysisLoad();
 
     auto cancel = std::make_shared<std::atomic<bool>>(false);
     cfg.cancel = cancel;

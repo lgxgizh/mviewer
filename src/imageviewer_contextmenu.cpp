@@ -216,11 +216,10 @@ QString copyPixelValue(const PixelRGBA &px, int format, int x = -1, int y = -1)
     return text;
 }
 
-void populateAnalyzeSubmenu(QMenu &menu, const std::shared_ptr<ImageFrame> &frame,
-                            QList<QAction *> &analyzeActions)
+void populateAnalyzeSubmenu(QMenu &menu, bool canAnalyze, QList<QAction *> &analyzeActions)
 {
     QMenu *analyzeMenu = menu.addMenu(QCoreApplication::translate("ImageViewer", "Analyze"));
-    if (frame)
+    if (canAnalyze)
     {
         const auto ids = AnalyzerRegistry::instance().availableAnalyzers();
         for (const auto &id : ids)
@@ -278,8 +277,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
             a->setEnabled(false);
     const bool hasFrame = m_frame && m_frame->isValid();
     if (mCopyColor)
-        mCopyColor->menuAction()->setEnabled(hasFrame);
-    aSaveAs->setEnabled(hasFrame);
+        mCopyColor->menuAction()->setEnabled(hasFrame || hasDisplayImage());
+    aSaveAs->setEnabled(hasPath && (hasFrame || hasDisplayImage()));
     aUsmCompare->setEnabled(hasPath && (hasFrame || hasDisplayImage()));
     QAction *aPlay = nullptr, *aRestart = nullptr, *aPrevFrame = nullptr, *aNextFrame = nullptr;
     if (isMultiFrame())
@@ -300,7 +299,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 
     // A-7.3: "Analyze" submenu — list every registered analyzer for one-click run.
     QList<QAction *> analyzeActions;
-    populateAnalyzeSubmenu(menu, m_frame, analyzeActions);
+    populateAnalyzeSubmenu(menu, hasFrame || hasDisplayImage(), analyzeActions);
     menu.addSeparator();
     QAction *aNext = nullptr;
     QAction *aPrev = nullptr;
@@ -311,13 +310,15 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     // A-7.3: route analyzer selection through AnalysisPanel (unified entry).
     // MainWindow shows the panel and runs the analyzer so results land in the
     // Plugin tab — not a one-off QMessageBox.
-    if (analyzeActions.contains(chosen) && m_frame)
+    if (analyzeActions.contains(chosen))
     {
+        ensureAnalysisLoad();
         emit analysisRequested(chosen->data().toString());
         return;
     }
     if (chosen == aUsmCompare)
     {
+        ensureAnalysisLoad();
         emit usmCompareRequested(m_currentPath);
         return;
     }
@@ -404,6 +405,9 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
 
     if (format >= 0)
     {
+        // Color copy wants the real sample. Coordinates stay on the raster.
+        if (format != 4 && !(m_frame && m_frame->isValid()))
+            ensureAnalysisLoad();
         const QPoint pos = event->pos();
         const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
         const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
@@ -449,6 +453,8 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         return flipVertical();
     if (shift && (key == Qt::Key_C || key == Qt::Key_B))
     {
+        if (!(m_frame && m_frame->isValid()))
+            ensureAnalysisLoad();
         PixelRGBA px = m_lastHoverPixel;
         if (!px.valid)
         {

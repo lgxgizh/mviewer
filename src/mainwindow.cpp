@@ -43,9 +43,7 @@ void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const
         const QImage warm = viewer->displayRaster(); // shared bits; no deep copy
         if (!warm.isNull())
         {
-            QSize srcSize;
-            if (const auto frame = viewer->frame())
-                srcSize = QSize(frame->metadata().width, frame->metadata().height);
+            QSize srcSize = viewer->displaySize();
             if (!srcSize.isValid())
                 srcSize = warm.size();
             compare->seedWarmDisplay(viewerPath, warm, srcSize);
