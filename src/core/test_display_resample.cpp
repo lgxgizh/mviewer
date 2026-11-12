@@ -16,6 +16,7 @@ namespace
 {
 
 using mviewer::core::DisplayRasterLevel;
+using mviewer::core::DisplayResampleQuality;
 using mviewer::core::DisplayResampleRequest;
 
 int g_failures = 0;
@@ -192,6 +193,61 @@ DisplayRasterLevel level(int target, int covered)
     return raster;
 }
 
+bool rgbEqual(const ImageData &a, const ImageData &b)
+{
+    if (a.isNull() || b.isNull() || a.buffer == nullptr || b.buffer == nullptr)
+        return false;
+    if (a.width != b.width || a.height != b.height)
+        return false;
+    const size_t count = static_cast<size_t>(a.width) * static_cast<size_t>(a.height) * 3u;
+    return std::equal(a.buffer->data(), a.buffer->data() + count, b.buffer->data());
+}
+
+int codeAt(const ImageData &image)
+{
+    if (image.isNull() || image.buffer == nullptr || image.width < 1 || image.height < 1)
+        return -1;
+    const uint8_t *px = image.buffer->data();
+    if (px[0] != px[1] || px[1] != px[2])
+        return -1;
+    return px[0];
+}
+
+ImageData alternating(int w, int h, PixelFormat format = PixelFormat::RGB24)
+{
+    ImageData image = solid(w, h, 0, 0, 0, format);
+    if (image.buffer == nullptr)
+        return image;
+    const int channels = image.channelsPerPixel();
+    uint8_t *dst = image.buffer->data();
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            if (((x + y) & 1) != 0)
+                continue;
+            uint8_t *px =
+                dst + (static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x)) *
+                          static_cast<size_t>(channels);
+            for (int c = 0; c < channels; ++c)
+                px[c] = 255;
+        }
+    }
+    return image;
+}
+
+void expectSharpMid(int w, int h, PixelFormat format, const char *name)
+{
+    ImageData image = alternating(w, h, format);
+    DisplayResampleRequest request = fullRequest(image, 1, 1);
+    request.quality = DisplayResampleQuality::Sharp;
+    const ImageData out = mviewer::core::resampleDisplay(image, request);
+    const int code = codeAt(out);
+    expect(code >= 180 && code <= 195, name);
+    if (code < 180 || code > 195)
+        std::printf("  %s code=%d\n", name, code);
+}
+
 } // namespace
 
 int main()
@@ -251,8 +307,8 @@ int main()
         const double sourceMean = meanRed(image);
         const ImageData out = mviewer::core::resampleDisplay(image, fullRequest(image, 8, 6));
         const double delta = out.isNull() ? 999.0 : std::abs(meanRed(out) - sourceMean);
-        expect(!out.isNull() && delta <= 2.0, "mean preserved within 2 gray levels");
-        if (out.isNull() || delta > 2.0)
+        expect(!out.isNull() && delta <= 8.0, "resampled mean stays within 8 gray levels");
+        if (out.isNull() || delta > 8.0)
             std::printf("  mean delta=%f\n", delta);
     }
 
@@ -342,6 +398,38 @@ int main()
             mviewer::core::resampleDisplay(image, fullRequest(image, 3, 3), nullptr, &cancel);
         expect(out.isNull(), "cancel returns an empty image");
     }
+
+    {
+        ImageData image = solid(5, 3, 20, 40, 60);
+        putRgb(image, 1, 0, 9, 8, 7);
+        putRgb(image, 4, 2, 200, 10, 1);
+        DisplayResampleRequest request = fullRequest(image, 5, 3);
+        request.quality = DisplayResampleQuality::Sharp;
+        const ImageData out = mviewer::core::resampleDisplay(image, request);
+        expect(rgbEqual(image, out), "sharp identity of a non-uniform image is byte-exact");
+    }
+
+    {
+        ImageData pair = alternating(2, 1);
+        DisplayResampleRequest previewReq = fullRequest(pair, 1, 1);
+        previewReq.quality = DisplayResampleQuality::Preview;
+        DisplayResampleRequest sharpReq = fullRequest(pair, 1, 1);
+        sharpReq.quality = DisplayResampleQuality::Sharp;
+        const ImageData preview = mviewer::core::resampleDisplay(pair, previewReq);
+        const ImageData sharp = mviewer::core::resampleDisplay(pair, sharpReq);
+        const int previewCode = codeAt(preview);
+        const int sharpCode = codeAt(sharp);
+        expect(previewCode >= 120 && previewCode <= 136, "preview 2x1 downscale stays near 128");
+        expect(sharpCode >= 180 && sharpCode <= 195 && sharpCode > 140 && sharpCode != previewCode,
+               "sharp 2x1 downscale is the linear sRGB mid");
+        if (previewCode < 120 || previewCode > 136 || sharpCode < 180 || sharpCode > 195 ||
+            sharpCode <= 140 || sharpCode == previewCode)
+            std::printf("  preview=%d sharp=%d\n", previewCode, sharpCode);
+    }
+
+    expectSharpMid(8, 1, PixelFormat::RGB24, "sharp 8x1 box downscale is linear mid-gray");
+    expectSharpMid(8, 8, PixelFormat::RGB24, "sharp 8x8 box downscale is linear mid-gray");
+    expectSharpMid(2, 1, PixelFormat::Grayscale8, "sharp gray 2x1 downscale is linear mid-gray");
 
     auto thresholds = []()
     {

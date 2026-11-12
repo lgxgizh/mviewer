@@ -78,6 +78,16 @@ struct RgbView
     std::shared_ptr<std::vector<uint8_t>> keep;
 };
 
+// 16-bit linear RGB for Sharp. 0 is 0 and 65535 is 1. Preview stays on RgbView.
+struct LinearRgb
+{
+    const uint16_t *data = nullptr;
+    int width = 0;
+    int height = 0;
+    int stride = 0;
+    std::shared_ptr<std::vector<uint16_t>> keep;
+};
+
 Isa activeIsa() noexcept;
 bool viewIsPackedRgb(const RgbView &view) noexcept;
 
@@ -140,6 +150,12 @@ bool boxReduce(const RgbView &src, uint8_t *dst, int dstW, int dstH, bool halfX,
                const std::atomic<bool> *cancel);
 bool resizeSeparable(const RgbView &src, uint8_t *dst, int dstW, int dstH, const AxisKernel &kx,
                      const AxisKernel &ky, const std::atomic<bool> *cancel);
+bool prepareSharpLinear(const RgbView &src, LinearRgb &linear, int dstW, int dstH,
+                        const std::atomic<bool> *cancel);
+bool encodeLinearToRgb(const LinearRgb &linear, uint8_t *dst, const std::atomic<bool> *cancel);
+bool resizeSeparableLinear(const LinearRgb &src, uint8_t *dst, int dstW, int dstH,
+                           const AxisKernel &kx, const AxisKernel &ky,
+                           const std::atomic<bool> *cancel);
 bool resizeBilinear(const RgbView &src, uint8_t *dst, int dstW, int dstH,
                     const std::atomic<bool> *cancel);
 bool reduceByBox(RgbView &view, const SampleLayout &original, const SourceRect &rect, int dstW,

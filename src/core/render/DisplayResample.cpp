@@ -200,13 +200,13 @@ struct KernelScratch
     KernelScratch &operator=(const KernelScratch &) = delete;
 };
 
-bool filterSeparable(const RgbView &view, uint8_t *dst, int dstW, int dstH,
-                     DisplayResampleScratch *scratch, const std::atomic<bool> *cancel)
+bool filterSeparableLinear(const LinearRgb &view, uint8_t *dst, int dstW, int dstH,
+                           DisplayResampleScratch *scratch, const std::atomic<bool> *cancel)
 {
     KernelScratch kernels(scratch);
     buildAxisKernel(kernels.x, view.width, dstW);
     buildAxisKernel(kernels.y, view.height, dstH);
-    return resizeSeparable(view, dst, dstW, dstH, kernels.x, kernels.y, cancel);
+    return resizeSeparableLinear(view, dst, dstW, dstH, kernels.x, kernels.y, cancel);
 }
 
 Isa activeIsa() noexcept
@@ -401,6 +401,28 @@ ImageData imageFromView(const resample_detail::RgbView &view)
     return out;
 }
 
+ImageData resampleSharp(const resample_detail::RgbView &view, int dstW, int dstH,
+                        DisplayResampleScratch *scratch, const std::atomic<bool> *cancel)
+{
+    resample_detail::LinearRgb linear;
+    if (!resample_detail::prepareSharpLinear(view, linear, dstW, dstH, cancel) ||
+        resample_detail::resampleCancelled(cancel))
+        return {};
+    ImageData out = makeImageData(dstW, dstH, PixelFormat::RGB24);
+    if (out.isNull() || out.buffer == nullptr)
+        return {};
+    const bool boxHit = linear.width == dstW && linear.height == dstH;
+    bool ok = false;
+    if (boxHit)
+        ok = resample_detail::encodeLinearToRgb(linear, out.buffer->data(), cancel);
+    else
+        ok = resample_detail::filterSeparableLinear(linear, out.buffer->data(), dstW, dstH, scratch,
+                                                    cancel);
+    if (!ok || resample_detail::resampleCancelled(cancel))
+        return {};
+    return out;
+}
+
 } // namespace
 
 double displayRasterDensity(const DisplayRasterLevel &level) noexcept
@@ -470,6 +492,8 @@ ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &re
     resample_detail::RgbView view = resample_detail::viewFromLayout(layout, rect);
     if (rect.width == request.targetWidth && rect.height == request.targetHeight)
         return imageFromView(view);
+    if (request.quality != DisplayResampleQuality::Preview)
+        return resampleSharp(view, request.targetWidth, request.targetHeight, scratch, cancel);
     if (!resample_detail::reduceByBox(view, layout, rect, request.targetWidth, request.targetHeight,
                                       cancel) ||
         resample_detail::resampleCancelled(cancel))
@@ -480,13 +504,8 @@ ImageData resampleDisplay(const ImageData &src, const DisplayResampleRequest &re
     ImageData out = makeImageData(request.targetWidth, request.targetHeight, PixelFormat::RGB24);
     if (out.isNull() || out.buffer == nullptr)
         return {};
-    bool ok = false;
-    if (request.quality == DisplayResampleQuality::Preview)
-        ok = resample_detail::resizeBilinear(view, out.buffer->data(), request.targetWidth,
-                                             request.targetHeight, cancel);
-    else
-        ok = resample_detail::filterSeparable(view, out.buffer->data(), request.targetWidth,
-                                              request.targetHeight, scratch, cancel);
+    const bool ok = resample_detail::resizeBilinear(view, out.buffer->data(), request.targetWidth,
+                                                    request.targetHeight, cancel);
     if (!ok || resample_detail::resampleCancelled(cancel))
         return {};
     return out;
