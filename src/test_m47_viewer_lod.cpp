@@ -16,6 +16,8 @@
 //   V7 a feasible LOD still (24 MP JPEG) displays from the raster alone.
 //      imageReady arrives only after ensureAnalysisLoad().
 //   V8 a warmed large neighbor matches the fit-to-window device-pixel size.
+//   V9 a 12 MP 16-bit TIFF (above the 4 MP fast path) displays from a
+//      viewport LOD. imageReady arrives only after ensureAnalysisLoad().
 //   Policy (no fixtures): display-raster accept prefers coverage over a
 //      sharper miss, LOD smoothing is off at >= 1 device pixel per source
 //      pixel, and the ROI stats sentence keeps its English source.
@@ -553,6 +555,43 @@ int main(int argc, char **argv)
         const int th = std::max(1, static_cast<int>(std::lround(h)));
         CHECK(warm.width() == tw && warm.height() == th,
               "V8: warm raster is the exact device-pixel fit");
+    }
+
+    // ── V9: 12 MP 16-bit still uses the viewport LOD, not a full frame ─────
+    {
+        MARK("V9 start");
+        const QString tiff16 = tmp.filePath(QStringLiteral("gray16_12mp.tiff"));
+        QImage gray16(4000, 3000, QImage::Format_Grayscale16);
+        gray16.fill(0x8000);
+        CHECK(gray16.save(tiff16, "TIFF"), "V9: 12 MP 16-bit TIFF is written");
+        ImageViewer viewer;
+        viewer.resize(1280, 800);
+        viewer.show();
+        pump(50);
+        bool display = false;
+        bool image = false;
+        QObject::connect(&viewer, &ImageViewer::displayReady, &viewer,
+                         [&](const QSize &) { display = true; });
+        QObject::connect(&viewer, &ImageViewer::imageReady, &viewer,
+                         [&](std::shared_ptr<ImageFrame>) { image = true; });
+        viewer.setBrowseSequence({tiff16});
+        viewer.setImage(tiff16);
+        CHECK(waitTrue([&] { return display; }, 30000),
+              "V9: 12 MP 16-bit TIFF displays without a full frame");
+        CHECK(waitTrue([&]
+                       { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
+                       15000),
+              "V9: decode pools drain without an analysis load");
+        pump(50);
+        const QImage raster = viewer.displayRaster();
+        CHECK(viewer.isLodDisplay(), "V9: viewer is in LOD display mode");
+        CHECK(!raster.isNull() && raster.width() < 4000 && raster.height() < 3000,
+              "V9: display raster is a viewport LOD, not the 4000x3000 source");
+        CHECK(!image && !viewer.frame(), "V9: imageReady / full frame is not required to display");
+        viewer.ensureAnalysisLoad();
+        CHECK(waitTrue([&] { return image && viewer.frame() && viewer.frame()->width() == 4000; },
+                       30000),
+              "V9: ensureAnalysisLoad delivers the full frame via imageReady");
     }
 
     std::printf("=== M47 viewer LOD-first display tests: %s ===\n",
