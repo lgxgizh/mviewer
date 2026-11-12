@@ -1,12 +1,24 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-11 · Version: **1.0.175** · Release tag: **v1.0.175**
+> Snapshot: 2026-11-12 · Version: **1.0.176** · Release tag: **v1.0.176**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.176 — Headerless grayscale `.gray` / `.grey` (2026-11-12)
+
+- ADR 034: `.gray` / `.grey` (any letter case) are headerless single-channel
+  images (never LibRaw, no longer YUV). Defaults: 8-bit, 1× gain, sRGB gamma
+  off; also 16-bit LSB/MSB containers (8–16 significant bits) and 1-bit
+  (MSB-first, rows padded to whole bytes, 1 = white). Size from `WxH` in the
+  file name, checked against the file size. Tools → Preferences → Gray
+  (`grayRaw/defaults`) and a per-file Gray Parameters dialog. Browse group
+  **Gray images (.gray/.grey)** is hidden by default (existing saved filters
+  are migrated once).
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.175 — Plain `.raw` follow-up and RAW review (2026-11-11)
 

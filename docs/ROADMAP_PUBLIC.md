@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.175**
+## Where we are now — **Beta / 1.0.176**
 
-MViewer remains in **Beta**; the current release is **`v1.0.175`**
-(2026-11-11, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+MViewer remains in **Beta**; the current release is **`v1.0.176`**
+(2026-11-12, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
 signing certificate yet), a docs site, a frozen plugin ABI and final human
@@ -61,7 +61,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.175** (current) | Plain `.raw` follow-up: own **Sensor RAW (.raw)** browse filter group (visible by default) and the RAW review fixes — bit-depth auto-detect instead of wrap, multi-size file names, override follows rename/copy, async pixel readout, faster thumbnails and renders, neutral clipped highlights | 🔵 Beta |
+| **1.0.176** (current) | Headerless grayscale `.gray` / `.grey` viewing (ADR 034): 8-bit default, 16-bit and 1-bit, Preferences → Gray and a per-file Gray Parameters dialog, hidden-by-default browse group | 🔵 Beta |
+| **1.0.175** | Plain `.raw` follow-up: own **Sensor RAW (.raw)** browse filter group (visible by default) and the RAW review fixes — bit-depth auto-detect instead of wrap, multi-size file names, override follows rename/copy, async pixel readout, faster thumbnails and renders, neutral clipped highlights | ✅ Previous patch |
 | **1.0.174** | Plain `.raw` sensor-dump viewing (ADR 033): size from the file name with file-size check and format guessing, Preferences → RAW defaults and a per-file RAW Parameters dialog (bit depth, MIPI/16-bit storage, black/white level, Bayer pattern, white balance, gain, sRGB gamma), sensor values in the pixel readout | ✅ Previous patch |
 | **1.0.173** | Project-review pass: complete Simplified Chinese UI, faster non-blocking batch rotate/flip, cache size limits and Clear caches in Preferences, safer plugin loading, RAW metadata fixes, release symbols and build-provenance attestations | ✅ Previous patch |
 | **1.0.172** | Restore Details browse zebra (white/gray stripes) on every column, including single-column; remove rating, color-label, pick/reject, and tag UI (shortcuts, filters, metadata editors, badges). Folder Favorites and recently-viewed remain | ✅ Previous patch |
@@ -109,7 +110,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.175` patch line. The remaining 1.0 GA work is
+The repository verifies the `v1.0.176` patch line. The remaining 1.0 GA work is
 productization (signing, ABI freeze) and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate
