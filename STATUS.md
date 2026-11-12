@@ -1,12 +1,25 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-11 · Version: **1.0.174** · Release tag: **v1.0.174**
+> Snapshot: 2026-11-11 · Version: **1.0.175** · Release tag: **v1.0.175**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.175 — Plain `.raw` follow-up and RAW review (2026-11-11)
+
+- Browse filter: `.raw` sensor dumps get their own **Sensor RAW (.raw)** group,
+  visible by default (camera RAW group unchanged, hidden by default).
+- 2026-11-11 RAW review (4 P1 + 11 P2) fixed: no silent bit-depth wrap (depth
+  auto-detected on defaults, clipped + noted on overrides), defaults refresh
+  every pane, USM save suffix, real load errors, multi-`WxH` names, no made-up
+  dialog size, overrides follow rename/move/copy, async pixel readout, cheaper
+  thumbnails, in-place banded render, source-image probe, neutral clipped
+  highlights, every bit depth 8–16.
+- Defaults unchanged: 16-bit LSB container, 10-bit, 1× gain, gray-world WB.
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.174 — Plain `.raw` sensor-dump viewing (2026-11-11)
 
