@@ -192,6 +192,8 @@ void MainWindow::exportReport()
 
         const QString path = currentImagePath();
         ctx.imagePath = path.toUtf8().toStdString();
+        if (m_imageViewer)
+            m_imageViewer->ensureAnalysisLoad();
         if (m_analyzer)
         {
             const AnalysisPanel::ReportAnalysisState state =
@@ -344,6 +346,8 @@ void MainWindow::openUsmCompare(const QString &path)
 
     ImageData imgData;
     mviewer::domain::ImageMetadata meta;
+    if (m_imageViewer && ImageViewer::browsePathEquals(m_imageViewer->currentPath(), target))
+        m_imageViewer->ensureAnalysisLoad();
     if (m_imageViewer)
     {
         const auto frame = m_imageViewer->frame();

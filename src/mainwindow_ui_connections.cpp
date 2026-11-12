@@ -527,6 +527,18 @@ void MainWindow::connectWorkspaceSignals()
 
 void MainWindow::connectPanelSignals()
 {
+    // A panel already open when the first raster lands needs a full frame.
+    // Hidden analysis and metadata leave a feasible still on the LOD raster.
+    connect(m_imageViewer, &ImageViewer::displayReady, this,
+            [this](const QSize &)
+            {
+                if ((m_analysisPanel && m_analysisPanel->isVisible()) ||
+                    (m_metadataPanel && m_metadataPanel->isVisible()) ||
+                    (m_metadataOverlay && m_metadataOverlay->isVisible()))
+                    m_imageViewer->ensureAnalysisLoad();
+            });
+    connect(m_analysisPanel, &AnalysisPanel::frameRequired, m_imageViewer,
+            &ImageViewer::ensureAnalysisLoad);
     connect(m_actToggleMetadata, &QAction::triggered, this,
             [this](bool checked)
             {
@@ -541,6 +553,8 @@ void MainWindow::connectPanelSignals()
                         positionMetadataPanel();
                         m_metadataPanel->show();
                         m_metadataPanel->raise();
+                        if (m_imageViewer)
+                            m_imageViewer->ensureAnalysisLoad();
                         // The panel is visibility-gated: show it before
                         // submitting the shared metadata request. A hidden
                         // panel records identity only and deliberately does no

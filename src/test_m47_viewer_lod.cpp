@@ -13,6 +13,8 @@
 //   V5 idle convergence: scheduler pools return to zero after the churn.
 //   V6 small-image fast path preserved: a 300x200 JPEG still delivers a full
 //      frame through imageReady and does NOT use the raster display.
+//   V7 a feasible LOD still (24 MP JPEG) displays from the raster alone.
+//      imageReady arrives only after ensureAnalysisLoad().
 //   Policy (no fixtures): display-raster accept prefers coverage over a
 //      sharper miss, LOD smoothing is off at >= 1 device pixel per source
 //      pixel, and the ROI stats sentence keeps its English source.
@@ -467,6 +469,40 @@ int main(int argc, char **argv)
         CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },
                        15000),
               "V6: pools drain");
+    }
+
+    // ── V7: feasible LOD still defers the full frame until asked ───────────
+    {
+        MARK("V7 start");
+        ImageViewer viewer;
+        viewer.resize(1280, 800);
+        viewer.show();
+        pump(50);
+        bool display = false;
+        bool image = false;
+        QObject::connect(&viewer, &ImageViewer::displayReady, &viewer,
+                         [&](const QSize &) { display = true; });
+        QObject::connect(&viewer, &ImageViewer::imageReady, &viewer,
+                         [&](std::shared_ptr<ImageFrame>) { image = true; });
+        viewer.setBrowseSequence({highCompression});
+        viewer.setImage(highCompression);
+        CHECK(waitTrue([&] { return display; }, 30000),
+              "V7: feasible LOD source displays without a full frame");
+        CHECK(waitTrue([&]
+                       { return sampleDecodePools().pending + sampleDecodePools().active == 0; },
+                       15000),
+              "V7: decode pools drain without an analysis load");
+        pump(50);
+        CHECK(viewer.isLodDisplay(), "V7: viewer is in LOD display mode");
+        CHECK(!image && !viewer.frame(), "V7: imageReady / full frame is not required to display");
+        viewer.ensureAnalysisLoad();
+        CHECK(waitTrue([&] { return image && viewer.frame() && viewer.frame()->width() == 6000; },
+                       30000),
+              "V7: ensureAnalysisLoad delivers the full frame via imageReady");
+        viewer.ensureAnalysisLoad();
+        pump(200);
+        CHECK(viewer.frame() && viewer.frame()->width() == 6000,
+              "V7: a second ensure does not drop the loaded frame");
     }
 
     std::printf("=== M47 viewer LOD-first display tests: %s ===\n",

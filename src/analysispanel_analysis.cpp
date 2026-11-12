@@ -54,6 +54,8 @@ void AnalysisPanel::runAnalyzer(const QString &id)
 // registry directly (M15 P0#3).
 void AnalysisPanel::reanalyze()
 {
+    if (!m_frameA || !m_frameA->isValid())
+        emit frameRequired();
     const QString id = m_analyzerCombo ? m_analyzerCombo->currentData().toString() : QString();
     if (m_frameDirty && m_frameA && m_frameA->isValid())
     {
@@ -222,6 +224,8 @@ void AnalysisPanel::showEvent(QShowEvent *event)
     // this only schedules (never blocks on conversion/stats/analyzer).
     if (m_frameDirty && m_frameA && m_frameA->isValid())
         scheduleAnalysis();
+    else if (!m_frameA || !m_frameA->isValid())
+        emit frameRequired();
 }
 
 void AnalysisPanel::invalidateAnalysis()

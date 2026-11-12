@@ -140,6 +140,7 @@ void ImageViewer::setImageImpl(const QString &path)
     m_lodMode = false;
     m_largeSourcePending = false;
     m_analysisLoadIssued = false;
+    setProperty("mviewerAnalysisWanted", false);
     m_sourceImage.reset();
     m_raster = DisplayRaster{};
     m_pendingAnalysisPreload = std::move(matchingPreload);
@@ -165,11 +166,9 @@ void ImageViewer::setImageImpl(const QString &path)
     // Close suppresses raster work so teardown cannot queue another decode.
     // The same viewer is shown again after Esc, so the next image must load.
     setProperty("mviewerClosing", false);
-    // M47: the raster-path verdict decides the full-frame load. The probe
-    // worker reports small-vs-large; small sources keep the existing fast
-    // path, large feasible sources get the analysis-support full load, and
-    // infeasible sources (> Qt's allocation limit) skip it until Phase 4's
-    // explicit source materialization. The display never waits for it.
+    // The raster verdict owns the full-frame decision. Small sources and
+    // multi-frame containers still load for first paint; a single still under
+    // the analysis cap waits until a consumer calls ensureAnalysisLoad().
     startLodDisplay(path, gen);
 }
 

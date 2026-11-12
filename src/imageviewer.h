@@ -139,6 +139,11 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_raster.image;
     }
+    // Full source size of the LOD raster or the loaded frame.
+    QSize displaySize() const;
+    // UI thread. One full-frame load per image, and only when a consumer needs
+    // ImageFrame pixels. No-op if already issued, already loaded, or over 60 MP.
+    void ensureAnalysisLoad();
     // Committed ROI in image pixels (empty during a drag and after Esc), and
     // the widget rect drawSelection uses for the drag or that committed rect.
     QRect committedSelectionForTest() const;
@@ -373,12 +378,6 @@ class ImageViewer : public QOpenGLWidget
     // this instead of the bare m_frame check so large images remain fully
     // interactive while their raster path is active.
     bool hasDisplayImage() const;
-    QSize displaySize() const; // full source dimensions of the current image
-    // M47: the raster-path verdict decides whether an analysis-support full
-    // frame load is issued (see applyDisplayRaster). Small sources keep the
-    // fast path; large feasible sources load the full frame for analysis
-    // consumers; infeasible sources (> Qt's allocation limit) skip the load
-    // until Phase 4's explicit source materialization.
     void issueAnalysisLoad(const QString &path, uint64_t generation);
     void fitToWidget();
     // Terminal open failure: drop the warm thumbnail, retitle, and clear zoom.

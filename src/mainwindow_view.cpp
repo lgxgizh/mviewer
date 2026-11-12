@@ -169,7 +169,11 @@ void MainWindow::scheduleMetadataHistogram()
         return;
     auto frame = m_imageViewer->frame();
     if (!frame || frame->pixels().isNull())
-        return; // no decoded frame yet; imageReady drives the schedule later
+    {
+        // Overlay is up and wants real samples. imageReady reschedules.
+        m_imageViewer->ensureAnalysisLoad();
+        return;
+    }
     const QString path = currentImagePath();
     if (path.isEmpty())
         return;
@@ -345,6 +349,8 @@ void MainWindow::toggleMetadataOverlay()
             m_metadataPanel->show();
             m_metadataPanel->raise();
             positionMetadataPanel();
+            if (m_imageViewer)
+                m_imageViewer->ensureAnalysisLoad();
             // Showing before setImage lets the panel request metadata through
             // the shared service. Hidden panel updates remain zero-work.
             m_metadataPanel->setImage(currentImagePath());
@@ -552,6 +558,7 @@ void MainWindow::openAnalysisOverlay()
     QImage img;
     if (m_imageViewer)
     {
+        m_imageViewer->ensureAnalysisLoad();
         const auto frame = m_imageViewer->frame();
         if (frame && !frame->pixels().isNull() && frame->metadata().filePath == path.toStdString())
         {
