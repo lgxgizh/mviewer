@@ -1,21 +1,3 @@
-// M47 Phase 2 — ImageViewer LOD-first display.
-//
-// For large sources the viewer no longer requires a full-resolution ImageFrame
-// to display: a bounded display raster is requested from the source-backed
-// SourceImage abstraction (core) and shown instead —
-//   * zoomed out:  a viewport-appropriate LOD (decodeLod; NativeLod for JPEG),
-//   * zoomed in:   a bounded region raster covering the visible source rect
-//                  (decodeRegion; BoundedRasterRegion classification).
-// The full-resolution frame (when it loads) remains the analysis/Inspector
-// source and is NEVER the display precondition. Small sources keep the
-// existing fast path untouched.
-//
-// Lifetime/cancellation mirrors the M46 contract: every request carries the
-// viewer's request generation and the consumer lifetime token; results are
-// marshalled to the UI thread through a QPointer guard and discarded when the
-// generation/path no longer match or the viewer is gone. One in-flight
-// request at a time (latest wins); view churn is debounced through a single-
-// shot timer so pan/zoom bursts coalesce.
 #include "imageviewer.h"
 
 #include "core/analysis/ImageOverlay.h"
@@ -23,6 +5,7 @@
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/image/SourceImage.h"
+#include "core/render/DisplayResample.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "display/DisplayColorContextProvider.h"
 
@@ -34,22 +17,15 @@
 
 #include <algorithm>
 #include <cmath>
-// Sources with at most this many pixels keep the existing full-frame fast
-// path (no probe-driven display change). constexpr at global scope: they are
-// file-local (internal linkage) and shared by the worker + the viewer members.
-constexpr qint64 kLodThresholdPixels = 16 * 1000 * 1000; // 16 MP
-// Bounds for a single display raster request (bounded memory by design).
-constexpr int kMaxLodEdge = 4096;                      // LOD longest edge (<= 48 MB RGB)
-constexpr double kMaxRasterPixels = 8.0 * 1000 * 1000; // region raster cap
-constexpr double kRasterOverscan = 1.25;               // request/keep margin around density
-// Analysis-support full frame loads are only issued for sources whose RGB
-// materialization fits comfortably under Qt's 256 MB allocation limit
-// (60 MP * 3 B = 180 MB, leaving headroom for QImage copies). Larger sources
-// skip the load — Phase 4 adds explicit analysis source materialization.
-constexpr qint64 kAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP
+// Zoomed-in regions keep kRasterOverscan as a density margin. Zoomed-out fit
+// asks the decoder for that margin and Sharp resampleDisplay consumes it.
+constexpr qint64 kLodThresholdPixels = 16 * 1000 * 1000; // 16 MP fast path
+constexpr int kMaxLodEdge = 4096;
+constexpr double kMaxRasterPixels = 8.0 * 1000 * 1000;
+constexpr double kRasterOverscan = 1.25;
+constexpr qint64 kAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP analysis cap
 
-// Defined at GLOBAL scope to match the forward declaration in imageviewer.h
-// (ImageViewer::runRasterWorker references it from the header).
+// Global: imageviewer.h forward-declares RasterRequest for runRasterWorker.
 struct RasterRequest
 {
     QString path;
@@ -60,6 +36,9 @@ struct RasterRequest
     int maxEdge = 0;                    // fullLod target
     int rx = 0, ry = 0, rw = 0, rh = 0; // region source rect
     int tw = 0, th = 0;                 // region raster target size
+    bool sharpFit = false;              // zoomed out: Sharp to exact device px
+    int exactW = 0;
+    int exactH = 0;
 };
 
 namespace
@@ -75,9 +54,7 @@ QWindow *hostWindowHandle(const QWidget *widget)
     return host ? host->windowHandle() : nullptr;
 }
 
-// Zoomed in: a bounded region raster covering the visible source rect
-// (inflated by 1/8) at viewport density `d`, capped by kMaxRasterPixels.
-// False when no source pixel is visible.
+// Zoomed in: visible source rect inflated by 1/8, at density `d`. False if empty.
 bool fillRegionRasterRequest(RasterRequest &req, const QRect &visible, const QSize &source,
                              double d)
 {
@@ -106,6 +83,57 @@ bool fillRegionRasterRequest(RasterRequest &req, const QRect &visible, const QSi
     req.tw = std::max(1, static_cast<int>(tw));
     req.th = std::max(1, static_cast<int>(th));
     return true;
+}
+
+// Device px of a source rect at `density` (device px / source px), LOD-capped.
+void devicePixelsForSource(int sourceW, int sourceH, double density, int &tw, int &th)
+{
+    tw = 1;
+    th = 1;
+    if (sourceW <= 0 || sourceH <= 0 || !(density > 0.0) || !std::isfinite(density))
+        return;
+    double w = static_cast<double>(sourceW) * density;
+    double h = static_cast<double>(sourceH) * density;
+    const double edge = std::max(w, h);
+    if (edge > static_cast<double>(kMaxLodEdge))
+    {
+        const double scale = static_cast<double>(kMaxLodEdge) / edge;
+        w *= scale;
+        h *= scale;
+    }
+    if (w * h > kMaxRasterPixels)
+    {
+        const double scale = std::sqrt(kMaxRasterPixels / (w * h));
+        w *= scale;
+        h *= scale;
+    }
+    tw = std::max(1, static_cast<int>(std::lround(w)));
+    th = std::max(1, static_cast<int>(std::lround(h)));
+}
+
+QImage sharpFitDisplayImage(const QImage &shown, int tw, int th, const std::atomic<bool> *cancel)
+{
+    if (shown.isNull() || tw < 1 || th < 1)
+        return shown;
+    if (shown.width() == tw && shown.height() == th)
+        return shown;
+    const ImageData src = mvcore::fromQImage(shown);
+    if (src.isNull())
+        return QImage();
+    thread_local mviewer::core::DisplayResampleScratch scratch;
+    mviewer::core::DisplayResampleRequest resample;
+    resample.source.width = src.width;
+    resample.source.height = src.height;
+    resample.targetWidth = tw;
+    resample.targetHeight = th;
+    resample.quality = mviewer::core::DisplayResampleQuality::Sharp;
+    const ImageData fitted = mviewer::core::resampleDisplay(src, resample, &scratch, cancel);
+    if (fitted.isNull())
+        return QImage();
+    QImage out = mvcore::toQImage(fitted);
+    if (shown.colorSpace().isValid())
+        out.setColorSpace(shown.colorSpace());
+    return out;
 }
 
 } // namespace
@@ -175,9 +203,7 @@ void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContex
     update();
 }
 
-// The raster worker body: probe -> classify -> decodeLod/decodeRegion ->
-// marshal. Private static member so it can reach marshalDisplayRaster while
-// the submit lambda captures no raw `this`.
+// Probe -> classify -> decodeLod/decodeRegion -> optional Sharp fit -> marshal.
 void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler::TaskContext &ctx,
                                   const std::shared_ptr<QPointer<ImageViewer>> &guard)
 {
@@ -191,20 +217,13 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     }
     catch (...)
     {
-        // A throwing probe is a TERMINAL failure: it must reach the viewer as
-        // loadFailed, never get stuck with a pending loading state (M48 F).
-        failed = true;
+        failed = true; // terminal: must reach loadFailed, not a stuck pending state
     }
-    // A viewport request can be superseded while the probe is running. A
-    // cancelled request is not a decode failure: do not let its late terminal
-    // result degrade the replacement request for the same image generation.
+    // Cancelled is not a decode failure: do not degrade the replacement request.
     if (ctx.isCancelled())
         return;
     if (failed)
     {
-        // A throwing capability probe is different from a source that simply
-        // cannot be represented by SourceImage (for example a legacy/plugin
-        // decoder without probe metadata). Only the former is terminal.
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
                                           QImage(), QRect(), QSize(), 1.0, req.target, true,
                                           req.serial);
@@ -212,9 +231,7 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     }
     if (!source)
     {
-        // Preserve the pre-M47 fallback: an unavailable capability probe lets
-        // the existing full-frame ImageLoadingService path decide whether the
-        // decoder can load the image. Do not surface this as loadFailed here.
+        // No SourceImage: the full-frame loader decides. Not loadFailed here.
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, nullptr, QImage(),
                                           QRect(), QSize(), 1.0, req.target, false, req.serial);
         return;
@@ -222,8 +239,6 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     const QSize srcSize(source->metadata().width, source->metadata().height);
     if (static_cast<qint64>(srcSize.width()) * srcSize.height() <= kLodThresholdPixels)
     {
-        // Small source: the existing full-frame fast path owns the display;
-        // only propagate the source dims (keeps the worker contract uniform).
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
                                           QImage(), QRect(), srcSize, 1.0, req.target, false,
                                           req.serial);
@@ -247,10 +262,8 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         }
         else
         {
-            // The visible rect is in DISPLAYED (oriented) coordinates;
-            // decodeRegion consumes RAW (pre-EXIF) coordinates. Map through the
-            // single authoritative contract (M48 B1/B2) so transformed sources
-            // decode the correct region.
+            // Visible rect is displayed (oriented). decodeRegion takes raw
+            // pre-EXIF coordinates (M48 B1/B2).
             const int orientation = source->orientation();
             const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
                 {req.rx, req.ry, req.rw, req.rh}, source->rawWidth(), source->rawHeight(),
@@ -260,8 +273,7 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
             const mviewer::core::SourceRect coveredD = mviewer::core::rawRectToOriented(
                 r.coveredRect, source->rawWidth(), source->rawHeight(), orientation);
             covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
-            // Oriented source pixels per output pixel. Orientations 5-8 swap
-            // axes, so the raw clip width is not the displayed width.
+            // Source px per output px in displayed space (orientations 5-8 swap axes).
             if (r.ok && !r.pixels.isNull() && r.pixels.width > 0 && covered.width() > 0)
                 density =
                     static_cast<double>(covered.width()) / static_cast<double>(r.pixels.width);
@@ -269,20 +281,31 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     }
     catch (...)
     {
-        // A throwing decoder is a terminal failure for this request; the
-        // viewer keeps any current good raster and is told via loadFailed.
-        decodeFailed = true;
+        decodeFailed = true; // keep any good raster; the viewer is told via loadFailed
     }
     if (ctx.isCancelled())
         return; // superseded during the decode
     decodeFailed = decodeFailed || !r.ok || r.pixels.isNull();
     QImage raster;
+    const bool sharp = !decodeFailed && req.sharpFit && req.exactW > 0 && req.exactH > 0;
     if (!decodeFailed)
     {
-        // M48 Phase 2: source-backed display goes through the SAME display
-        // conversion as the full-frame path (ICC applied) using the decoded
-        // result's authoritative metadata.
         raster = mvcore::toDisplayQImage(r.pixels, r.metadata, req.target);
+        if (sharp)
+            raster = sharpFitDisplayImage(raster, req.exactW, req.exactH, ctx.cancel.get());
+    }
+    if (ctx.isCancelled())
+        return;
+    if (sharp)
+    {
+        if (raster.isNull())
+            decodeFailed = true;
+        else if (raster.width() > 0)
+        {
+            const int coveredW = covered.width() > 0 ? covered.width() : srcSize.width();
+            if (coveredW > 0)
+                density = static_cast<double>(coveredW) / static_cast<double>(raster.width());
+        }
     }
     ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
                                       std::move(raster), covered, srcSize, density, req.target,
@@ -387,10 +410,18 @@ bool ImageViewer::displayNeedsUpgrade() const
     // a margin (so small pans do not re-request).
     if (!displayRasterCoversView(m_raster.sourceRect, QRect(vx, vy, vw, vh)))
         return true;
-    // Density: the raster must provide at least the view density (with
-    // overscan), otherwise the display is upscaling a too-coarse raster.
+    // Zoomed out: upgrade until the raster is the Sharp device-pixel size.
+    // Zoomed in keeps the overscan margin and is not Sharp-resampled.
     const double viewDensity = m_view.scale * std::max(1.0, devicePixelRatioF());
-    const double rasterDensity = 1.0 / m_raster.density; // raster px per source px
+    if (viewDensity < 1.0)
+    {
+        int tw = 1;
+        int th = 1;
+        devicePixelsForSource(m_raster.sourceRect.width(), m_raster.sourceRect.height(),
+                              viewDensity, tw, th);
+        return m_raster.image.width() != tw || m_raster.image.height() != th;
+    }
+    const double rasterDensity = 1.0 / m_raster.density;
     return rasterDensity < viewDensity / kRasterOverscan;
 }
 
@@ -450,11 +481,13 @@ void ImageViewer::requestDisplayRasterImpl()
         const double d = m_view.scale * dpr;
         if (d < 1.0)
         {
-            // Zoomed out: viewport LOD over the full source.
             req.fullLod = true;
-            const double longEdge = static_cast<double>(std::max(sw, sh));
-            req.maxEdge = static_cast<int>(std::ceil(longEdge * d * kRasterOverscan));
-            req.maxEdge = std::max(64, std::min(req.maxEdge, kMaxLodEdge));
+            req.sharpFit = true;
+            devicePixelsForSource(sw, sh, d, req.exactW, req.exactH);
+            const int wantEdge = std::max(req.exactW, req.exactH);
+            const int edged =
+                static_cast<int>(std::ceil(static_cast<double>(wantEdge) * kRasterOverscan));
+            req.maxEdge = std::max(64, std::min(edged, kMaxLodEdge));
         }
         else
         {
@@ -703,8 +736,20 @@ bool ImageViewer::acceptDisplayRaster(const QImage &image, const QRect &covered,
     int vh = 0;
     m_view.visibleImageRect(m_raster.sourceSize.width(), m_raster.sourceSize.height(), vx, vy, vw,
                             vh);
+    const QRect visible(vx, vy, vw, vh);
+    const double viewDensity = m_view.scale * std::max(1.0, devicePixelRatioF());
+    // A Sharp raster at the exact device size replaces a finer provisional
+    // that QPainter would only downsample.
+    if (viewDensity < 1.0 && displayRasterCoversView(covered, visible))
+    {
+        int tw = 1;
+        int th = 1;
+        devicePixelsForSource(covered.width(), covered.height(), viewDensity, tw, th);
+        if (image.width() == tw && image.height() == th)
+            return true;
+    }
     return shouldAcceptDisplayRaster(!m_raster.image.isNull(), m_raster.sourceRect,
-                                     m_raster.density, covered, density, QRect(vx, vy, vw, vh));
+                                     m_raster.density, covered, density, visible);
 }
 
 #include "imageviewer_lod_overlay.inc"

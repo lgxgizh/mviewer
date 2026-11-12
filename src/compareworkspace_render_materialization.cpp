@@ -41,10 +41,35 @@ bool mipDenseEnough(const ImageData &mip, int wantEdge, int sourceEdge)
            static_cast<long long>(need) * 9;
 }
 
-// Sharp fallback from the resident full frame: fit inside the (often square)
-// target keeping the source aspect and never upscale. scaleBoundedStatic fills
-// the target exactly, so a 4096x4096 box would stretch a 4096x3072 frame.
-ImageData scaleFullToFit(const ImageData &src, const QSize &target)
+bool sharpDisplayPass(const mviewer::ui::CompareDisplayRequest &request)
+{
+    return !request.preview && !request.provisional;
+}
+
+// Full-frame scale to an exact size. Sharp owns the non-preview pass.
+// Preview and provisional stay on gamma bilinear.
+ImageData scaleDisplayToTarget(const ImageData &src, int width, int height, bool sharp,
+                               const std::atomic<bool> *cancel)
+{
+    if (src.isNull() || width <= 0 || height <= 0)
+        return ImageData{};
+    if (src.width == width && src.height == height)
+        return src;
+    if (!sharp)
+        return RenderEngine::scaleBoundedStatic(src, RenderSize{width, height});
+    thread_local mviewer::core::DisplayResampleScratch scratch;
+    mviewer::core::DisplayResampleRequest resample;
+    resample.source.width = src.width;
+    resample.source.height = src.height;
+    resample.targetWidth = width;
+    resample.targetHeight = height;
+    resample.quality = mviewer::core::DisplayResampleQuality::Sharp;
+    return mviewer::core::resampleDisplay(src, resample, &scratch, cancel);
+}
+
+// Fit inside the target, keep aspect, never upscale. The box target would
+// stretch a non-square frame, so the fitted size is passed through explicitly.
+ImageData scaleFullToFit(const ImageData &src, const QSize &target, const std::atomic<bool> *cancel)
 {
     const double fit = std::min({1.0, static_cast<double>(target.width()) / src.width,
                                  static_cast<double>(target.height()) / src.height});
@@ -52,7 +77,7 @@ ImageData scaleFullToFit(const ImageData &src, const QSize &target)
         return src;
     const int w = std::max(1, static_cast<int>(std::lround(src.width * fit)));
     const int h = std::max(1, static_cast<int>(std::lround(src.height * fit)));
-    return RenderEngine::scaleBoundedStatic(src, RenderSize{w, h});
+    return scaleDisplayToTarget(src, w, h, true, cancel);
 }
 
 QRect coveredRectForRequest(const QSize &sourceDims,
@@ -90,27 +115,27 @@ ImageData resolveLodFromCachedFull(const ImageData &src,
     if (request.region && request.sourceRect.isValid())
         return resolveSharpRegion(src, request, cancel);
     const int wantEdge = std::max(request.target.width(), request.target.height());
+    const bool sharp = sharpDisplayPass(request);
     if (!pathKey.empty())
     {
         ImageData best = mviewer::core::ensureAndBestMip(pathKey, src, wantEdge);
         // The full frame is in hand: a sharp pass never settles for a coarser
         // cached mip (cheap and preview passes are followed by a sharp one).
-        const bool needsDense = !request.provisional && !request.preview;
-        if (needsDense && !best.isNull() &&
+        if (sharp && !best.isNull() &&
             !mipDenseEnough(best, wantEdge, std::max(src.width, src.height)))
-            return scaleFullToFit(src, request.target);
+            return scaleFullToFit(src, request.target, cancel);
         if (!best.isNull())
         {
             if (best.width > request.target.width() || best.height > request.target.height())
             {
-                return RenderEngine::scaleBoundedStatic(
-                    best, RenderSize{request.target.width(), request.target.height()});
+                return scaleDisplayToTarget(best, request.target.width(), request.target.height(),
+                                            sharp, cancel);
             }
             return best;
         }
     }
-    return RenderEngine::scaleBoundedStatic(
-        src, RenderSize{request.target.width(), request.target.height()});
+    return scaleDisplayToTarget(src, request.target.width(), request.target.height(), sharp,
+                                cancel);
 }
 
 HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool visible)
@@ -513,8 +538,8 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
         if (request.target.isValid() &&
             (mip.width > request.target.width() || mip.height > request.target.height()))
         {
-            mip = RenderEngine::scaleBoundedStatic(
-                mip, RenderSize{request.target.width(), request.target.height()});
+            mip = scaleDisplayToTarget(mip, request.target.width(), request.target.height(),
+                                       sharpDisplayPass(request), nullptr);
         }
         if (!mip.isNull())
         {
