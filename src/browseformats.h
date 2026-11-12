@@ -2,8 +2,9 @@
 // Browse format visibility: which image format groups the gallery lists.
 //
 // Formats are grouped (JPEG / PNG / WebP / TIFF / HEIC / GIF / BMP / RAW /
-// Other) for the multi-select file type dropdown ("typeFilterCombo"). The hidden set is persisted
-// in QSettings; RAW is hidden by default because RAW+JPEG shoots otherwise show every frame twice.
+// Sensor RAW / Other) for the multi-select file type dropdown ("typeFilterCombo").
+// The hidden set is persisted in QSettings; RAW is hidden by default because RAW+JPEG
+// shoots otherwise show every frame twice.
 // Hidden entries never enter a ThumbnailPanel's source list (filtered at the UI-thread insertion
 // points), so the progressive name-sorted scan fast path keeps working.
 
@@ -37,7 +38,7 @@ QStringList groupExtensions(const QString &id);
 QStringList availableGroupIds();
 
 // Group id for a suffix without the dot (case-insensitive). Unknown -> "other".
-// RAW covers camera RAW (LibRaw) and plain .raw dumps.
+// RAW = camera RAW (LibRaw); plain .raw dumps are "sensorraw" (ADR 033).
 QString groupForSuffix(const QString &suffixNoDot);
 
 // True when `path`'s extension belongs to one of `hiddenGroups`.

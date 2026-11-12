@@ -15,7 +15,8 @@
 //   TC-SB-15: Multi-select file type filter, RAW hidden by default
 //   TC-SB-16: Type filter change keeps selection, current item and scroll
 //   TC-SB-17: Type-filtered-only folder shows a "hidden by type" hint + Show
-//   TC-SB-18: Every type group hides exactly its files (incl. plain .raw)
+//   TC-SB-18: Every type group hides exactly its files
+//             (sensor RAW own group, visible by default)
 
 #include "appstate.h"
 #include "browseformats.h"

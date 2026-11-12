@@ -26,9 +26,11 @@ fast pipeline is enough.
    the RAW metadata reader or the RAW thumbnail path. Panasonic / Leica `.raw`
    camera files are therefore not supported; `.rw2` and all other
    camera RAW extensions are unchanged. In the browse type filter, `.raw`
-   belongs to the "RAW" group with camera RAW (amended after 1.0.174: filing it
-   under "Other formats" meant unchecking RAW left sensor dumps visible), so it
-   follows the RAW checkbox, including the hidden-by-default choice.
+   has its own group, "Sensor RAW (.raw)", which is checked (visible) by
+   default; the hidden-by-default "RAW" group keeps camera RAW only (amended
+   after 1.0.174: under "Other formats" the dumps did not follow any RAW
+   checkbox). Saved filter choices never name the new group, so existing users
+   see it visible without a migration.
 3. **Clean-room implementation** from public knowledge only: MIPI CSI-2
    RAW10/RAW12 byte packing, the IEC 61966-2-1 sRGB transfer function,
    textbook bilinear demosaicing and gray-world / white-patch white balance.

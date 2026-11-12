@@ -249,15 +249,19 @@ void testTypeHiddenHint(const QString &dir)
 
 void testFormatFilterEveryGroup(const QString &dir)
 {
-    std::cout << "--- TC-SB-18: every type group hides exactly its files (incl. plain .raw) ---"
+    std::cout << "--- TC-SB-18: every type group hides exactly its files "
+                 "(sensor RAW own group, visible by default) ---"
               << std::endl;
 
-    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("raw")) == QStringLiteral("raw"),
-           "groupForSuffix(\"raw\") is raw");
-    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("RAW")) == QStringLiteral("raw"),
-           "groupForSuffix(\"RAW\") is raw");
-    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral(".raw")) == QStringLiteral("raw"),
-           "groupForSuffix(\".raw\") is raw");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("raw")) ==
+               QStringLiteral("sensorraw"),
+           "groupForSuffix(\"raw\") is sensorraw");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("RAW")) ==
+               QStringLiteral("sensorraw"),
+           "groupForSuffix(\"RAW\") is sensorraw");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral(".raw")) ==
+               QStringLiteral("sensorraw"),
+           "groupForSuffix(\".raw\") is sensorraw");
     EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("dng")) == QStringLiteral("raw"),
            "groupForSuffix(\"dng\") is raw");
     EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("jpg")) == QStringLiteral("jpeg"),
@@ -270,18 +274,37 @@ void testFormatFilterEveryGroup(const QString &dir)
            "groupForSuffix(\"dib\") is bmp");
     EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("yuv")) == QStringLiteral("other"),
            "groupForSuffix(\"yuv\") is other");
-    EXPECT(mviewer::browseformats::groupExtensions(QStringLiteral("raw"))
+    EXPECT(mviewer::browseformats::groupExtensions(QStringLiteral("sensorraw"))
                .contains(QStringLiteral("raw")),
-           "groupExtensions(\"raw\") contains \"raw\"");
+           "groupExtensions(\"sensorraw\") contains \"raw\"");
+    EXPECT(!mviewer::browseformats::groupExtensions(QStringLiteral("raw"))
+                .contains(QStringLiteral("raw")),
+           "groupExtensions(\"raw\") does not contain \"raw\"");
     EXPECT(!mviewer::browseformats::groupExtensions(QStringLiteral("other"))
                 .contains(QStringLiteral("raw")),
            "groupExtensions(\"other\") does not contain \"raw\"");
     EXPECT(mviewer::browseformats::isPathHidden(QStringLiteral("/x/a.raw"),
-                                                QStringList{QStringLiteral("raw")}),
-           "isPathHidden(\"/x/a.raw\", {\"raw\"}) is true");
+                                                QStringList{QStringLiteral("sensorraw")}),
+           "isPathHidden(\"/x/a.raw\", {\"sensorraw\"}) is true");
+    EXPECT(!mviewer::browseformats::isPathHidden(QStringLiteral("/x/a.raw"),
+                                                 QStringList{QStringLiteral("raw")}),
+           "isPathHidden(\"/x/a.raw\", {\"raw\"}) is false");
     EXPECT(!mviewer::browseformats::isPathHidden(QStringLiteral("/x/a.raw"),
                                                  QStringList{QStringLiteral("other")}),
            "isPathHidden(\"/x/a.raw\", {\"other\"}) is false");
+    EXPECT(mviewer::browseformats::availableGroupIds().contains(QStringLiteral("sensorraw")),
+           "availableGroupIds() contains \"sensorraw\"");
+    EXPECT(!mviewer::browseformats::defaultHiddenGroups().contains(QStringLiteral("sensorraw")),
+           "defaultHiddenGroups() does not contain \"sensorraw\"");
+
+    QSettings().remove(QStringLiteral("browse/hiddenFormatGroups"));
+    EXPECT(!mviewer::browseformats::loadHiddenGroups().contains(QStringLiteral("sensorraw")) &&
+               mviewer::browseformats::loadHiddenGroups().contains(QStringLiteral("raw")),
+           "default hidden set shows sensorraw and hides raw");
+    mviewer::browseformats::saveHiddenGroups({QStringLiteral("raw"), QStringLiteral("bmp")});
+    EXPECT(!mviewer::browseformats::loadHiddenGroups().contains(QStringLiteral("sensorraw")),
+           "saved hidden list without sensorraw keeps the new group visible");
+    QSettings().remove(QStringLiteral("browse/hiddenFormatGroups"));
 
     bool everyDecodableInListedGroup = true;
     const QStringList listedIds = mviewer::browseformats::availableGroupIds();
@@ -325,9 +348,22 @@ void testFormatFilterEveryGroup(const QString &dir)
     mw.resize(1280, 800);
     mw.show();
     QApplication::processEvents();
-    mw.setBrowseHiddenFormatGroups(QStringList{});
     mw.openExternalTargets({dir});
     ThumbnailPanel *left = mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
+    if (kept.contains(QStringLiteral("raw")) && kept.contains(QStringLiteral("dng")))
+    {
+        EXPECT(waitUntil(
+                   [&]()
+                   {
+                       if (!left)
+                           return false;
+                       return listsSuffix(left, QStringLiteral("raw")) &&
+                              !listsSuffix(left, QStringLiteral("dng"));
+                   },
+                   8000),
+               "default: sensor RAW shown, camera RAW hidden");
+    }
+    mw.setBrowseHiddenFormatGroups(QStringList{});
     EXPECT(waitUntil(
                [&]()
                {
@@ -363,11 +399,15 @@ void testFormatFilterEveryGroup(const QString &dir)
                msg);
         if (id == QLatin1String("raw"))
         {
-            const bool yuvOk =
-                !kept.contains(QStringLiteral("yuv")) || listsSuffix(left, QStringLiteral("yuv"));
             EXPECT(!listsSuffix(left, QStringLiteral("dng")) &&
-                       !listsSuffix(left, QStringLiteral("raw")) && yuvOk,
-                   "hiding raw removes dng and raw; yuv stays if kept");
+                       listsSuffix(left, QStringLiteral("raw")),
+                   "hiding raw removes dng; raw stays");
+        }
+        if (id == QLatin1String("sensorraw"))
+        {
+            EXPECT(!listsSuffix(left, QStringLiteral("raw")) &&
+                       listsSuffix(left, QStringLiteral("dng")),
+                   "hiding sensorraw removes raw; dng stays");
         }
         if (id == QLatin1String("other"))
         {
