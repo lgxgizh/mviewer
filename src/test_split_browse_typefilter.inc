@@ -1,5 +1,5 @@
 // Included by test_split_browse_acceptance.cpp (inside its anonymous
-// namespace): browse type filter cases TC-SB-15..17.
+// namespace): browse type filter cases TC-SB-15..18.
 
 void testFormatFilter(const QString &leftDir, const QString &rightDir)
 {
@@ -244,5 +244,137 @@ void testTypeHiddenHint(const QString &dir)
     EXPECT(!mw.browseHiddenFormatGroups().contains(QStringLiteral("raw")) &&
                !mviewer::browseformats::loadHiddenGroups().contains(QStringLiteral("raw")),
            "Show is an explicit choice and is persisted");
+    mw.setBrowseHiddenFormatGroups(mviewer::browseformats::defaultHiddenGroups());
+}
+
+void testFormatFilterEveryGroup(const QString &dir)
+{
+    std::cout << "--- TC-SB-18: every type group hides exactly its files (incl. plain .raw) ---"
+              << std::endl;
+
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("raw")) == QStringLiteral("raw"),
+           "groupForSuffix(\"raw\") is raw");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("RAW")) == QStringLiteral("raw"),
+           "groupForSuffix(\"RAW\") is raw");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral(".raw")) == QStringLiteral("raw"),
+           "groupForSuffix(\".raw\") is raw");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("dng")) == QStringLiteral("raw"),
+           "groupForSuffix(\"dng\") is raw");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("jpg")) == QStringLiteral("jpeg"),
+           "groupForSuffix(\"jpg\") is jpeg");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("tif")) == QStringLiteral("tiff"),
+           "groupForSuffix(\"tif\") is tiff");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("heif")) ==
+               QStringLiteral("heic"),
+           "groupForSuffix(\"heif\") is heic");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("dib")) == QStringLiteral("bmp"),
+           "groupForSuffix(\"dib\") is bmp");
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("yuv")) == QStringLiteral("other"),
+           "groupForSuffix(\"yuv\") is other");
+    EXPECT(mviewer::browseformats::groupExtensions(QStringLiteral("raw"))
+               .contains(QStringLiteral("raw")),
+           "groupExtensions(\"raw\") contains \"raw\"");
+    EXPECT(!mviewer::browseformats::groupExtensions(QStringLiteral("other"))
+                .contains(QStringLiteral("raw")),
+           "groupExtensions(\"other\") does not contain \"raw\"");
+    EXPECT(mviewer::browseformats::isPathHidden(QStringLiteral("/x/a.raw"),
+                                                QStringList{QStringLiteral("raw")}),
+           "isPathHidden(\"/x/a.raw\", {\"raw\"}) is true");
+    EXPECT(!mviewer::browseformats::isPathHidden(QStringLiteral("/x/a.raw"),
+                                                 QStringList{QStringLiteral("other")}),
+           "isPathHidden(\"/x/a.raw\", {\"other\"}) is false");
+
+    bool everyDecodableInListedGroup = true;
+    const QStringList listedIds = mviewer::browseformats::availableGroupIds();
+    for (const std::string &ext : mviewer::core::ImageFormats::supportedSuffixes())
+    {
+        const QString group = mviewer::browseformats::groupForSuffix(QString::fromStdString(ext));
+        if (!listedIds.contains(group))
+            everyDecodableInListedGroup = false;
+    }
+    EXPECT(everyDecodableInListedGroup, "every decodable suffix lands in a listed group");
+
+    const QStringList names{QStringLiteral("a.jpg"),  QStringLiteral("b.png"),
+                            QStringLiteral("c.webp"), QStringLiteral("d.tif"),
+                            QStringLiteral("e.heic"), QStringLiteral("f.gif"),
+                            QStringLiteral("g.bmp"),  QStringLiteral("h.dng"),
+                            QStringLiteral("i.raw"),  QStringLiteral("j.yuv")};
+    QStringList kept;
+    for (const QString &name : names)
+    {
+        const QString suffix = QFileInfo(name).suffix().toLower();
+        if (!mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()))
+            continue;
+        const QString path = QDir(dir).filePath(name);
+        if (suffix == QLatin1String("png") || suffix == QLatin1String("bmp"))
+        {
+            QImage img(16, 16, QImage::Format_RGB32);
+            img.fill(Qt::blue);
+            img.save(path, suffix == QLatin1String("png") ? "PNG" : "BMP");
+        }
+        else
+        {
+            QFile f(path);
+            if (f.open(QIODevice::WriteOnly))
+                f.write("dummy");
+        }
+        kept.append(suffix);
+    }
+
+    QSettings().remove(QStringLiteral("browse/hiddenFormatGroups"));
+    MainWindow mw;
+    mw.resize(1280, 800);
+    mw.show();
+    QApplication::processEvents();
+    mw.setBrowseHiddenFormatGroups(QStringList{});
+    mw.openExternalTargets({dir});
+    ThumbnailPanel *left = mw.findChild<ThumbnailPanel *>(QStringLiteral("thumbnailPanel"));
+    EXPECT(waitUntil(
+               [&]()
+               {
+                   if (!left)
+                       return false;
+                   for (const QString &suffix : kept)
+                       if (!listsSuffix(left, suffix))
+                           return false;
+                   return true;
+               },
+               8000),
+           "all kept fixtures are listed");
+
+    for (const QString &id : mviewer::browseformats::availableGroupIds())
+    {
+        mw.setBrowseHiddenFormatGroups(QStringList{id});
+        const std::string msg =
+            std::string("hiding '") + id.toStdString() + "' hides exactly that group's files";
+        EXPECT(waitUntil(
+                   [&]()
+                   {
+                       if (!left)
+                           return false;
+                       for (const QString &suffix : kept)
+                       {
+                           const bool hidden =
+                               mviewer::browseformats::groupForSuffix(suffix) == id;
+                           if (listsSuffix(left, suffix) == hidden)
+                               return false;
+                       }
+                       return true;
+                   },
+                   5000),
+               msg);
+        if (id == QLatin1String("raw"))
+        {
+            const bool yuvOk = !kept.contains(QStringLiteral("yuv")) ||
+                               listsSuffix(left, QStringLiteral("yuv"));
+            EXPECT(!listsSuffix(left, QStringLiteral("dng")) &&
+                       !listsSuffix(left, QStringLiteral("raw")) && yuvOk,
+                   "hiding raw removes dng and raw; yuv stays if kept");
+        }
+        if (id == QLatin1String("other"))
+        {
+            EXPECT(listsSuffix(left, QStringLiteral("raw")), "hiding other still lists raw");
+        }
+    }
     mw.setBrowseHiddenFormatGroups(mviewer::browseformats::defaultHiddenGroups());
 }

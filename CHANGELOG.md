@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Browse type filter**: plain `.raw` sensor dumps are now in the **RAW** group,
+  so unchecking RAW hides them (they were filed under "Other formats"). `.raw`
+  still never goes to LibRaw (ADR 033). New regression case TC-SB-18 checks
+  that every type group hides exactly its own files.
+
 ## [1.0.174] - 2026-11-11
 
 Plain `.raw` sensor-dump viewing (ADR 033).

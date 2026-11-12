@@ -15,6 +15,7 @@
 //   TC-SB-15: Multi-select file type filter, RAW hidden by default
 //   TC-SB-16: Type filter change keeps selection, current item and scroll
 //   TC-SB-17: Type-filtered-only folder shows a "hidden by type" hint + Show
+//   TC-SB-18: Every type group hides exactly its files (incl. plain .raw)
 
 #include "appstate.h"
 #include "browseformats.h"
@@ -704,6 +705,9 @@ void testBrowseUx()
     QDir().mkpath(rawDir);
     testTypeFilterKeepsState(stateDir);
     testTypeHiddenHint(rawDir);
+    const QString everyTypeDir = tmp.filePath(QStringLiteral("uxeverytype"));
+    QDir().mkpath(everyTypeDir);
+    testFormatFilterEveryGroup(everyTypeDir);
     const QString thirdDir = tmp.filePath(QStringLiteral("uxthird"));
     QDir().mkpath(thirdDir);
     writeBrowseFixture(thirdDir, QStringLiteral("t"));

@@ -37,6 +37,7 @@ QStringList groupExtensions(const QString &id);
 QStringList availableGroupIds();
 
 // Group id for a suffix without the dot (case-insensitive). Unknown -> "other".
+// RAW covers camera RAW (LibRaw) and plain .raw dumps.
 QString groupForSuffix(const QString &suffixNoDot);
 
 // True when `path`'s extension belongs to one of `hiddenGroups`.

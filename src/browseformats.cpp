@@ -1,6 +1,7 @@
 #include "browseformats.h"
 
 #include "core/image/ImageFormats.h"
+#include "core/image/rawplain/PlainRawFile.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -103,6 +104,9 @@ QString groupForSuffix(const QString &suffixNoDot)
     if (s.isEmpty())
         return QStringLiteral("other");
     if (mviewer::core::isRawExtension(s.toStdString()))
+        return QStringLiteral("raw");
+    // ADR 033: .raw is plain, never LibRaw, but it is still RAW for the browse type filter.
+    if (mviewer::core::rawplain::isPlainRawPath(("x." + s).toUtf8().toStdString()))
         return QStringLiteral("raw");
     for (const Group &g : groups())
     {
