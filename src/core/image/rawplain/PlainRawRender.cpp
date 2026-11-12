@@ -307,10 +307,7 @@ void demosaicInteriorRows(const std::uint16_t *lin, int w, int h, const SiteKind
         return;
     }
     dispatchRows(h,
-                 [&](int y0, int y1)
-                 {
-                     demosaicInteriorBand(lin, w, h, y0, y1, kinds, enc, dst);
-                 });
+                 [&](int y0, int y1) { demosaicInteriorBand(lin, w, h, y0, y1, kinds, enc, dst); });
 }
 
 void demosaicBorder(const std::uint16_t *lin, int w, int h, const SiteKind kinds[4],
@@ -363,11 +360,7 @@ void lineariseInPlace(std::uint16_t *samples, int w, int h,
     {
         return;
     }
-    dispatchRows(h,
-                 [&](int y0, int y1)
-                 {
-                     lineariseBand(samples, w, y0, y1, luts);
-                 });
+    dispatchRows(h, [&](int y0, int y1) { lineariseBand(samples, w, y0, y1, luts); });
 }
 
 void encodeMonoBand(const std::uint16_t *lin, int w, int y0, int y1, const std::uint8_t *enc,
@@ -394,11 +387,7 @@ void encodeMono(const std::uint16_t *lin, int w, int h, const std::uint8_t *enc,
     {
         return;
     }
-    dispatchRows(h,
-                 [&](int y0, int y1)
-                 {
-                     encodeMonoBand(lin, w, y0, y1, enc, dst);
-                 });
+    dispatchRows(h, [&](int y0, int y1) { encodeMonoBand(lin, w, y0, y1, enc, dst); });
 }
 
 bool previewDimensions(int w, int h, int maxEdge, int &outW, int &outH)
