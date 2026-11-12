@@ -4,6 +4,7 @@
 #include "core/image/rawplain/PlainRawUnpack.h"
 #ifndef PLAINRAW_NO_REGISTRY
 #include "core/image/ImageFormats.h"
+#include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/PlainRawDecoder.h"
 #endif
@@ -11,6 +12,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -224,6 +226,70 @@ void testSampleReadCache(const std::filesystem::path &dir)
     testSampleTwoFiles(dir);
     waitUntilSampleIdle();
 }
+
+#ifndef PLAINRAW_NO_REGISTRY
+const uint8_t *imageRow(const ConstImageView &view, int y)
+{
+    const auto stride = static_cast<std::size_t>(view.stride());
+    return view.data + static_cast<std::size_t>(y) * stride;
+}
+
+bool topLeftEquals(const ImageData &full, const ImageData &part, int w, int h)
+{
+    if (full.isNull() || part.isNull() || part.width != w || part.height != h)
+        return false;
+    if (full.width < w || full.height < h || full.format != part.format)
+        return false;
+    const ConstImageView fullView = full.constView();
+    const ConstImageView partView = part.constView();
+    if (fullView.data == nullptr || partView.data == nullptr)
+        return false;
+    const int cpp = full.channelsPerPixel();
+    const auto bytes = static_cast<std::size_t>(w) * static_cast<std::size_t>(cpp);
+    for (int y = 0; y < h; ++y)
+    {
+        if (std::memcmp(imageRow(fullView, y), imageRow(partView, y), bytes) != 0)
+            return false;
+    }
+    return true;
+}
+
+void testPlainRawCapabilities(const std::string &scenePath, const std::string &unknownPath)
+{
+    PlainRawDecoder decoder;
+    CHECK(decoder.canProbe(scenePath) && !decoder.canProbe("photo.cr2"));
+    CHECK(!decoder.canNativeLod(scenePath) && !decoder.canNativeRegion(scenePath));
+    ImageMetadata probed;
+    CHECK(decoder.probeMetadata(scenePath, probed));
+    CHECK(probed.width == 64 && probed.height == 32);
+    ImageMetadata unknownMeta;
+    CHECK(!decoder.probeMetadata(unknownPath, unknownMeta));
+
+    DecoderRegistry::instance().resetToDefaults();
+    const auto src = mviewer::core::SourceImage::open(scenePath);
+    CHECK(src != nullptr && src->metadata().width == 64 && src->metadata().height == 32);
+    CHECK(src != nullptr && src->rawWidth() == 64 && src->rawHeight() == 32);
+
+    ImageMetadata fullMeta;
+    const ImageData full = decoder.decodeFull(scenePath, fullMeta);
+    ImageMetadata regionMeta;
+    const ImageData region = decoder.decodeRegion(scenePath, 0, 0, 32, 16, 32, 16, regionMeta);
+    CHECK(region.width == 32 && region.height == 16);
+    CHECK(topLeftEquals(full, region, 32, 16));
+    CHECK(regionMeta.width == 64 && regionMeta.height == 32);
+    ImageMetadata againMeta;
+    const ImageData again = decoder.decodeRegion(scenePath, 0, 0, 32, 16, 32, 16, againMeta);
+    CHECK(topLeftEquals(full, again, 32, 16));
+    if (src)
+    {
+        const auto opened = src->decodeRegion({0, 0, 32, 16}, 32, 16);
+        CHECK(opened.ok && topLeftEquals(full, opened.pixels, 32, 16));
+    }
+    ImageMetadata lodMeta;
+    const ImageData lod = decoder.decodeLod(scenePath, 16, lodMeta);
+    CHECK(lod.width == 16 && lod.height == 8);
+}
+#endif
 
 } // namespace
 
@@ -503,6 +569,8 @@ int main()
         CHECK(!truncRes.isOk());
         if (!truncRes.isOk())
             CHECK(contains(truncRes.error().message, "smaller than one frame"));
+
+        testPlainRawCapabilities(scenePath, nosizePath);
     }
 #endif
 
