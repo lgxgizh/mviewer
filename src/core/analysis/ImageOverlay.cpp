@@ -442,7 +442,8 @@ inline void applyChannel4Value(const ImageBuffer &v, bool isContiguous, size_t t
 }
 
 template <bool IsBgr>
-inline void applyChannel4Luma(const ImageBuffer &v, bool isContiguous, size_t totalPixels)
+inline void applyChannel4Luma(const ImageBuffer &v, bool isContiguous, size_t totalPixels,
+                              mviewer::core::yuv::Matrix matrix)
 {
     if (isContiguous)
     {
@@ -452,7 +453,7 @@ inline void applyChannel4Luma(const ImageBuffer &v, bool isContiguous, size_t to
             const uint8_t b = IsBgr ? p[0] : p[2];
             const uint8_t g = p[1];
             const uint8_t r = IsBgr ? p[2] : p[0];
-            const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+            const uint8_t val = lumaMatrix8(r, g, b, matrix);
             p[0] = val;
             p[1] = val;
             p[2] = val;
@@ -468,7 +469,7 @@ inline void applyChannel4Luma(const ImageBuffer &v, bool isContiguous, size_t to
             const uint8_t b = IsBgr ? p[0] : p[2];
             const uint8_t g = p[1];
             const uint8_t r = IsBgr ? p[2] : p[0];
-            const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+            const uint8_t val = lumaMatrix8(r, g, b, matrix);
             p[0] = val;
             p[1] = val;
             p[2] = val;
@@ -476,7 +477,8 @@ inline void applyChannel4Luma(const ImageBuffer &v, bool isContiguous, size_t to
     }
 }
 
-template <bool IsBgr> inline void applyChannel4(const ImageBuffer &v, OverlayMode mode)
+template <bool IsBgr>
+inline void applyChannel4(const ImageBuffer &v, OverlayMode mode, mviewer::core::yuv::Matrix matrix)
 {
     const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * 4);
     const size_t totalPixels = static_cast<size_t>(v.width) * static_cast<size_t>(v.height);
@@ -494,10 +496,11 @@ template <bool IsBgr> inline void applyChannel4(const ImageBuffer &v, OverlayMod
     else if (mode == OverlayMode::ChannelV)
         applyChannel4Value<IsBgr>(v, isContiguous, totalPixels);
     else
-        applyChannel4Luma<IsBgr>(v, isContiguous, totalPixels);
+        applyChannel4Luma<IsBgr>(v, isContiguous, totalPixels, matrix);
 }
 
-template <bool IsBgr> inline void applyChannel3(const ImageBuffer &v, OverlayMode mode)
+template <bool IsBgr>
+inline void applyChannel3(const ImageBuffer &v, OverlayMode mode, mviewer::core::yuv::Matrix matrix)
 {
     const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * 3);
     const size_t totalPixels = static_cast<size_t>(v.width) * static_cast<size_t>(v.height);
@@ -540,7 +543,7 @@ template <bool IsBgr> inline void applyChannel3(const ImageBuffer &v, OverlayMod
                 const uint8_t b = IsBgr ? p[0] : p[2];
                 const uint8_t g = p[1];
                 const uint8_t r = IsBgr ? p[2] : p[0];
-                const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+                const uint8_t val = lumaMatrix8(r, g, b, matrix);
                 p[0] = val;
                 p[1] = val;
                 p[2] = val;
@@ -587,7 +590,7 @@ template <bool IsBgr> inline void applyChannel3(const ImageBuffer &v, OverlayMod
                 const uint8_t b = IsBgr ? p[0] : p[2];
                 const uint8_t g = p[1];
                 const uint8_t r = IsBgr ? p[2] : p[0];
-                const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+                const uint8_t val = lumaMatrix8(r, g, b, matrix);
                 p[0] = val;
                 p[1] = val;
                 p[2] = val;
@@ -598,7 +601,7 @@ template <bool IsBgr> inline void applyChannel3(const ImageBuffer &v, OverlayMod
 
 } // namespace
 
-void applyChannelOverlay(ImageData &img, OverlayMode mode)
+void applyChannelOverlay(ImageData &img, OverlayMode mode, mviewer::core::yuv::Matrix matrix)
 {
     if (img.isNull() || img.width <= 0 || img.height <= 0 || img.format == PixelFormat::Grayscale8)
         return;
@@ -608,16 +611,16 @@ void applyChannelOverlay(ImageData &img, OverlayMode mode)
     switch (v.format)
     {
     case PixelFormat::RGB24:
-        applyChannel3<false>(v, mode);
+        applyChannel3<false>(v, mode, matrix);
         break;
     case PixelFormat::RGBA32:
-        applyChannel4<false>(v, mode);
+        applyChannel4<false>(v, mode, matrix);
         break;
     case PixelFormat::BGR24:
-        applyChannel3<true>(v, mode);
+        applyChannel3<true>(v, mode, matrix);
         break;
     case PixelFormat::BGRA32:
-        applyChannel4<true>(v, mode);
+        applyChannel4<true>(v, mode, matrix);
         break;
     default:
         break;
@@ -712,7 +715,8 @@ void applyZebraOverlay(ImageData &img, int zebraThresholdPct)
     }
 }
 
-void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct)
+void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct,
+                  mviewer::core::yuv::Matrix matrix)
 {
     if (mode == OverlayMode::None || img.isNull())
         return;
@@ -725,7 +729,7 @@ void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct)
 
     if (isChannelOverlay(mode))
     {
-        applyChannelOverlay(img, mode);
+        applyChannelOverlay(img, mode, matrix);
         return;
     }
 

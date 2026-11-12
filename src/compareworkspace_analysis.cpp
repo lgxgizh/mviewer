@@ -436,9 +436,11 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
         }
         else
         {
-            const auto color = mviewer::core::toColorSpace(static_cast<uint8_t>(sample.r),
-                                                           static_cast<uint8_t>(sample.g),
-                                                           static_cast<uint8_t>(sample.b), space);
+            const auto matrix = img ? mviewer::yuvMatrixFromMetadata(img->metadata())
+                                    : mviewer::core::yuv::Matrix::BT601;
+            const auto color = mviewer::core::toColorSpace(
+                static_cast<uint8_t>(sample.r), static_cast<uint8_t>(sample.g),
+                static_cast<uint8_t>(sample.b), space, matrix);
             setCellText(m_inspector, i, 2, formatChannel(space, color.c1));
             setCellText(m_inspector, i, 3, formatChannel(space, color.c2));
             setCellText(m_inspector, i, 4, formatChannel(space, color.c3));

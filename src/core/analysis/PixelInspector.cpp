@@ -11,12 +11,60 @@ namespace mviewer::core
 {
 namespace
 {
+// Display R'G'B' → YUV / YCbCr. `normalized` means r,g,b are 0..1 (the
+// high-bit path); otherwise they are 0..255. Rec.601 keeps the historical
+// coefficients so untagged readouts stay byte-identical. Other matrices use
+// lumaKrKb and U = (0.5/(1-Kb))*(B-Y), V = (0.5/(1-Kr))*(R-Y).
+ColorTriple yuvColor(double r, double g, double b, ColorSpace space, bool normalized,
+                     yuv::Matrix matrix)
+{
+    const bool ycbcr = space == ColorSpace::YCbCr;
+    if (matrix == yuv::Matrix::BT601)
+    {
+        if (normalized)
+        {
+            if (ycbcr)
+            {
+                return {(0.299 * r + 0.587 * g + 0.114 * b) * 255.0,
+                        (-0.168736 * r - 0.331264 * g + 0.5 * b) * 255.0 + 128.0,
+                        (0.5 * r - 0.418688 * g - 0.081312 * b) * 255.0 + 128.0};
+            }
+            const double Y = 0.299 * r + 0.587 * g + 0.114 * b;
+            return {Y * 255.0, 0.564 * (b - Y) * 255.0, 0.713 * (r - Y) * 255.0};
+        }
+        if (ycbcr)
+        {
+            return {0.299 * r + 0.587 * g + 0.114 * b,
+                    -0.168736 * r - 0.331264 * g + 0.5 * b + 128.0,
+                    0.5 * r - 0.418688 * g - 0.081312 * b + 128.0};
+        }
+        const double Y = 0.299 * r + 0.587 * g + 0.114 * b;
+        return {Y, 0.564 * (b - Y), 0.713 * (r - Y)};
+    }
+
+    const yuv::LumaKrKb k = yuv::lumaKrKb(matrix);
+    const double kg = 1.0 - k.kr - k.kb;
+    const double y = k.kr * r + kg * g + k.kb * b;
+    const double u = (0.5 / (1.0 - k.kb)) * (b - y);
+    const double v = (0.5 / (1.0 - k.kr)) * (r - y);
+    if (normalized)
+    {
+        if (ycbcr)
+            return {y * 255.0, u * 255.0 + 128.0, v * 255.0 + 128.0};
+        return {y * 255.0, u * 255.0, v * 255.0};
+    }
+    if (ycbcr)
+        return {y, u + 128.0, v + 128.0};
+    return {y, u, v};
+}
+
 // Chromaticity math for HSV/Lab/YUV/YCbCr/XYZ given channels normalized to
 // 0..1. Returns each channel in the same human-readable range the 8-bit
 // front-ends use (HSV 0..360/0..100/0..100, Lab 0..100/-128..127,
 // YUV Y 0..255 / U,V -128..127, YCbCr 0..255, XYZ ~0..1). RGB/HEX are handled
 // by the public overloads because their ranges depend on the source bit depth.
-ColorTriple toColorSpaceNorm(double R, double G, double B, ColorSpace space)
+// YUV / YCbCr follow `matrix` (Rec.601 keeps the formulas above).
+ColorTriple toColorSpaceNorm(double R, double G, double B, ColorSpace space, yuv::Matrix matrix)
 {
     ColorTriple out;
     switch (space)
@@ -64,24 +112,8 @@ ColorTriple toColorSpaceNorm(double R, double G, double B, ColorSpace space)
     }
 
     case ColorSpace::YUV:
-    {
-        // BT.601, Y in 0..255, U/V in -128..127. Scaled so a neutral
-        // gray (R=G=B) yields exactly U=V=0.
-        const double Y = 0.299 * R + 0.587 * G + 0.114 * B;
-        out.c1 = Y * 255.0;
-        out.c2 = 0.564 * (B - Y) * 255.0; // 0.564 ≈ 0.5 / (1 - 0.114)
-        out.c3 = 0.713 * (R - Y) * 255.0; // 0.713 ≈ 0.5 / (1 - 0.299)
-        break;
-    }
-
     case ColorSpace::YCbCr:
-    {
-        // BT.601, full range, Y/Cb/Cr in 0..255.
-        out.c1 = (0.299 * R + 0.587 * G + 0.114 * B) * 255.0;
-        out.c2 = (-0.168736 * R - 0.331264 * G + 0.5 * B) * 255.0 + 128.0;
-        out.c3 = (0.5 * R - 0.418688 * G - 0.081312 * B) * 255.0 + 128.0;
-        break;
-    }
+        return yuvColor(R, G, B, space, true, matrix);
 
     case ColorSpace::XYZ:
     {
@@ -120,7 +152,7 @@ const std::array<double, 256> &srgbToLinearTable()
 }
 } // namespace
 
-ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
+ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space, yuv::Matrix matrix)
 {
     if (space == ColorSpace::RGB || space == ColorSpace::HEX)
         return {double(r), double(g), double(b)};
@@ -143,16 +175,8 @@ ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
         const double fx = f(X), fy = f(Y), fz = f(Z);
         return {116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)};
     }
-    if (space == ColorSpace::YUV)
-    {
-        const double Y = 0.299 * r + 0.587 * g + 0.114 * b;
-        return {Y, 0.564 * (b - Y), 0.713 * (r - Y)};
-    }
-    if (space == ColorSpace::YCbCr)
-    {
-        return {0.299 * r + 0.587 * g + 0.114 * b, -0.168736 * r - 0.331264 * g + 0.5 * b + 128.0,
-                0.5 * r - 0.418688 * g - 0.081312 * b + 128.0};
-    }
+    if (space == ColorSpace::YUV || space == ColorSpace::YCbCr)
+        return yuvColor(r, g, b, space, false, matrix);
     if (space == ColorSpace::HSV)
     {
         const int mx = std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
@@ -178,16 +202,23 @@ ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
         const double s = mx > 0 ? (static_cast<double>(d) / mx) * 100.0 : 0.0;
         return {h, s, v};
     }
-    return toColorSpaceNorm(r / 255.0, g / 255.0, b / 255.0, space);
+    return toColorSpaceNorm(r / 255.0, g / 255.0, b / 255.0, space, matrix);
 }
 
-ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, ColorSpace space)
+ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space,
+                         const mviewer::domain::ImageMetadata &meta)
+{
+    return toColorSpace(r, g, b, space, mviewer::yuvMatrixFromMetadata(meta));
+}
+
+ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, ColorSpace space,
+                         yuv::Matrix matrix)
 {
     if (maxVal == 0)
         maxVal = 1;
     if (maxVal == 255)
         return toColorSpace(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
-                            static_cast<uint8_t>(b), space);
+                            static_cast<uint8_t>(b), space, matrix);
     if (space == ColorSpace::RGB)
         return {double(r), double(g), double(b)};
     if (space == ColorSpace::HEX)
@@ -196,18 +227,20 @@ ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, Co
         { return static_cast<uint8_t>(std::min<double>(255.0, v * 255.0 / maxVal + 0.5)); };
         return {double(map(r)), double(map(g)), double(map(b))};
     }
-    return toColorSpaceNorm(double(r) / maxVal, double(g) / maxVal, double(b) / maxVal, space);
+    return toColorSpaceNorm(double(r) / maxVal, double(g) / maxVal, double(b) / maxVal, space,
+                            matrix);
 }
 
 ColorTriple displayedColorSpace(uint8_t r, uint8_t g, uint8_t b, bool raw16, uint16_t r16,
-                                uint16_t g16, uint16_t b16, uint16_t maxVal, ColorSpace space)
+                                uint16_t g16, uint16_t b16, uint16_t maxVal, ColorSpace space,
+                                yuv::Matrix matrix)
 {
     if (raw16 && space != ColorSpace::RGB && space != ColorSpace::HEX)
     {
         const uint16_t scale = maxVal == 0 ? static_cast<uint16_t>(65535) : maxVal;
-        return toColorSpace(r16, g16, b16, scale, space);
+        return toColorSpace(r16, g16, b16, scale, space, matrix);
     }
-    return toColorSpace(r, g, b, space);
+    return toColorSpace(r, g, b, space, matrix);
 }
 
 const char *colorSpaceLabel(ColorSpace space)

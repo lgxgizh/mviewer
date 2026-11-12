@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/image/ImageBuffer.h"
+#include "core/image/LumaMatrix.h"
 #include "domain/Selection.h"
 
 // NOLINTBEGIN(performance-enum-size)
@@ -34,30 +35,49 @@ enum class ColorSpace
 //   RGB   → 0..255, 0..255, 0..255
 //   HSV   → H 0..360, S 0..100, V 0..100
 //   Lab   → L 0..100, a -128..127, b -128..127
-//   YUV   → Y 0..255, U -128..127, V -128..127  (BT.601)
-//   YCbCr → Y 0..255, Cb 0..255, Cr 0..255      (BT.601, full range)
+//   YUV   → Y 0..255, U/V nominal -128..127 (can slightly exceed)
+//   YCbCr → Y/Cb/Cr 0..255 (full range)
 //   XYZ   → X 0..~0.95, Y 0..1, Z 0..~1.08      (D65)
 //   HEX   → same as RGB (display formatted via toHex)
+// YUV and YCbCr are reconstructed from display R'G'B'. Kr/Kb follow
+// MViewer.Yuv.Matrix; a missing, empty, or unknown value is Rec.601.
+// Rec.601 keeps the historical 0.564 / 0.713 scales and the classic YCbCr
+// coefficients. Other matrices use lumaKrKb():
+//   U = (0.5 / (1 - Kb)) * (B - Y), V = (0.5 / (1 - Kr)) * (R - Y)
+//   (YCbCr adds 128 to U and V). Raw Y/U/V code values of a .yuv/.y4m file
+// stay on YuvSampleProbe; this readout does not open the file or cache planes.
 struct ColorTriple
 {
     double c1 = 0, c2 = 0, c3 = 0;
 };
 
 // Convert an sRGB pixel (0..255 each) into the requested color space.
-ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space);
+// `matrix` selects Kr/Kb for YUV and YCbCr. Other spaces ignore it.
+// Default Rec.601 keeps untagged callers byte-identical.
+ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space,
+                         mviewer::core::yuv::Matrix matrix = mviewer::core::yuv::Matrix::BT601);
+
+// Same conversion. YUV / YCbCr read MViewer.Yuv.Matrix (missing or unknown → 601).
+ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space,
+                         const mviewer::domain::ImageMetadata &meta);
 
 // Convert a high-bit-depth pixel (0..maxVal each channel) into the requested
 // color space. Used when a true 16-bit source is available so the Pixel
 // Inspector readout is not quantized to 8-bit. RGB/HEX return the integer
 // sample (RGB scaled to 8-bit for HEX display); chromaticity spaces are
 // computed from the normalized (0..1) sample and share the 8-bit output ranges.
-ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, ColorSpace space);
+// `matrix` applies to YUV and YCbCr only.
+ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, ColorSpace space,
+                         mviewer::core::yuv::Matrix matrix = mviewer::core::yuv::Matrix::BT601);
 
 // Inspector readout. RGB and HEX stay on the 8-bit display sample so the
 // number next to the separate raw-16 line remains 0..255. HSV/Lab/YUV/YCbCr/XYZ
 // use the 16-bit sample when raw16 is set. maxVal 0 means full-scale 65535.
-ColorTriple displayedColorSpace(uint8_t r, uint8_t g, uint8_t b, bool raw16, uint16_t r16,
-                                uint16_t g16, uint16_t b16, uint16_t maxVal, ColorSpace space);
+// YUV / YCbCr use `matrix` (default Rec.601).
+ColorTriple
+displayedColorSpace(uint8_t r, uint8_t g, uint8_t b, bool raw16, uint16_t r16, uint16_t g16,
+                    uint16_t b16, uint16_t maxVal, ColorSpace space,
+                    mviewer::core::yuv::Matrix matrix = mviewer::core::yuv::Matrix::BT601);
 
 struct NeighborhoodStats
 {

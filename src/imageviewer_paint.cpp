@@ -373,6 +373,8 @@ void ImageViewer::scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready)
 {
     if (m_overlayMode == mviewer::OverlayMode::None)
         return;
+    const auto matrix = m_frame ? mviewer::yuvMatrixFromMetadata(m_frame->metadata())
+                                : mviewer::core::yuv::Matrix::BT601;
     for (auto &rt : ready)
     {
         ImageData derived = m_overlayCache.get(rt.key);
@@ -383,13 +385,13 @@ void ImageViewer::scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready)
             QPointer<ImageViewer> guard(this);
             m_overlayRequests.requestDerived(
                 rt.key, rt.data, m_overlayGeneration,
-                [mode, threshold](const TileKey &, const ImageData &source)
+                [mode, threshold, matrix](const TileKey &, const ImageData &source)
                 {
                     ImageData value = makeImageData(source.width, source.height, source.format);
                     if (value.isNull())
                         return value;
                     std::memcpy(value.buffer->data(), source.buffer->data(), source.byteSize());
-                    mviewer::applyOverlay(value, mode, threshold);
+                    mviewer::applyOverlay(value, mode, threshold, matrix);
                     return value;
                 },
                 [guard, generation = m_overlayGeneration](const TileKey &)
@@ -559,7 +561,10 @@ void ImageViewer::drawDisplayRaster(QPainter &painter) const
     const QImage *drawn = &m_raster.image;
     if (m_overlayMode != mviewer::OverlayMode::None)
     {
-        const qint64 key = m_raster.image.cacheKey();
+        const auto matrix = mviewer::yuvMatrixFromMetadataOrTag(
+            m_frame ? &m_frame->metadata() : nullptr,
+            m_raster.image.text(QStringLiteral("MViewer.Yuv.Matrix")).toStdString());
+        const qint64 key = mviewer::lumaOverlayCacheKey(m_raster.image.cacheKey(), matrix);
         const bool ready = m_lodOverlayKey == key && m_lodOverlayMode == m_overlayMode &&
                            m_lodOverlayThreshold == m_zebraThreshold && !m_lodOverlayImage.isNull();
         if (ready)

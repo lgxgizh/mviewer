@@ -384,6 +384,19 @@ QColorSpace colorSpaceFromDisplayIcc(const std::string &base64Str)
     return res;
 }
 
+// Stamp the source matrix onto the display raster. setText does not change
+// pixels. Compare and LOD Channel-Y read this key when they no longer hold
+// the ImageFrame. Missing or empty leaves the image untagged (Rec.601).
+void stampDisplayYuvMatrix(QImage &image, const mviewer::domain::ImageMetadata &meta)
+{
+    if (image.isNull())
+        return;
+    const auto it = meta.textKeys.find("MViewer.Yuv.Matrix");
+    if (it == meta.textKeys.end() || it->second.empty())
+        return;
+    image.setText(QStringLiteral("MViewer.Yuv.Matrix"), QString::fromStdString(it->second));
+}
+
 } // namespace
 
 QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta)
@@ -407,22 +420,23 @@ QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadat
                        const mviewer::core::DisplayColorContext &target)
 {
     QImage out = toQImage(src);
-    if (out.isNull() || !target.colorManagementEnabled)
-        return out;
-
-    const QColorSpace source = sourceColorSpace(meta);
-    const QColorSpace destination = colorSpaceFromIcc(target.iccProfile);
-    out.setColorSpace(source);
-    if (source != destination)
+    if (!out.isNull() && target.colorManagementEnabled)
     {
-        // QColorSpace performs a direct source -> presentation-target
-        // transform. If a platform/plugin cannot build that transform, Qt
-        // leaves the raster usable; keep the source-tagged copy rather than
-        // returning black or throwing from an asynchronous paint path.
-        out.convertToColorSpace(destination);
+        const QColorSpace source = sourceColorSpace(meta);
+        const QColorSpace destination = colorSpaceFromIcc(target.iccProfile);
+        out.setColorSpace(source);
+        if (source != destination)
+        {
+            // QColorSpace performs a direct source -> presentation-target
+            // transform. If a platform/plugin cannot build that transform, Qt
+            // leaves the raster usable; keep the source-tagged copy rather than
+            // returning black or throwing from an asynchronous paint path.
+            out.convertToColorSpace(destination);
+        }
+        if (out.isNull())
+            out = toQImage(src);
     }
-    if (out.isNull())
-        return toQImage(src);
+    stampDisplayYuvMatrix(out, meta);
     return out;
 }
 

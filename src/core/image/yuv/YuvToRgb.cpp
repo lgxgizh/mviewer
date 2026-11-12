@@ -9,27 +9,6 @@ namespace mviewer::core::yuv
 namespace
 {
 
-struct KrKb
-{
-    double kr;
-    double kb;
-};
-
-KrKb lumaWeights(Matrix m)
-{
-    switch (m)
-    {
-    case Matrix::BT601:
-        return {0.299, 0.114};
-    case Matrix::BT2020:
-        // SDR Y'CbCr only: BT.2020 Kr/Kb. No PQ/HLG transfer, no HDR tone map.
-        return {0.2627, 0.0593};
-    case Matrix::BT709:
-    default:
-        return {0.2126, 0.0722};
-    }
-}
-
 int32_t q16(double v)
 {
     return static_cast<int32_t>(std::lround(65536.0 * v));
@@ -257,7 +236,7 @@ YuvCoeffs makeYuvCoeffs(Matrix m, Range r, int bitDepth)
     const double fullMax = depth >= 12 ? 4095.0 : double(((1 << depth) - 1) << (12 - depth));
     const double yRange = full ? fullMax : 3504.0;
     const double cRange = full ? fullMax : 3584.0;
-    const KrKb k = lumaWeights(m);
+    const LumaKrKb k = lumaKrKb(m);
     const double kg = 1.0 - k.kr - k.kb;
     YuvCoeffs c;
     c.yOff = full ? 0 : 256;

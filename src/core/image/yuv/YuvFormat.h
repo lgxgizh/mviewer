@@ -52,6 +52,31 @@ enum class Matrix : std::uint8_t
     BT2020
 };
 
+// Kr/Kb used by makeYuvCoeffs. Display-referred luma (lumaMatrix8) quantizes
+// these same weights; do not keep a second copy. Kg is 1 - kr - kb.
+// BT.601: 0.299 / 0.114. BT.709: 0.2126 / 0.0722.
+// BT.2020: 0.2627 / 0.0593 (SDR Y'CbCr, no PQ/HLG, no HDR tone map).
+// Any value other than the three enumerators uses BT.709, as makeYuvCoeffs did.
+struct LumaKrKb
+{
+    double kr = 0.2126;
+    double kb = 0.0722;
+};
+
+constexpr LumaKrKb lumaKrKb(Matrix m) noexcept
+{
+    switch (m)
+    {
+    case Matrix::BT601:
+        return {0.299, 0.114};
+    case Matrix::BT2020:
+        return {0.2627, 0.0593};
+    case Matrix::BT709:
+    default:
+        return {0.2126, 0.0722};
+    }
+}
+
 enum class Range : std::uint8_t
 {
     Limited,
