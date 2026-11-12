@@ -12,6 +12,8 @@
 #include "core/image/QtMetadataSemantics.h"
 
 #include <QBuffer>
+#include <QByteArray>
+#include <QFileInfo>
 #include <QHash>
 #include <QImage>
 #include <QImageReader>
@@ -19,6 +21,7 @@
 #include <QMutexLocker>
 #include <QPainter>
 
+#include <cstring>
 #include <deque>
 
 namespace
@@ -113,6 +116,54 @@ bool usableSize(const QSize &s)
 bool cheapHeaderProbe(const QString &path)
 {
     return !path.startsWith(QLatin1String("//")) && !path.startsWith(QLatin1String("\\\\"));
+}
+
+QByteArray toIccBytes(const std::vector<uint8_t> &icc)
+{
+    if (icc.empty())
+        return {};
+    QByteArray out(static_cast<qsizetype>(icc.size()), Qt::Uninitialized);
+    std::memcpy(out.data(), icc.data(), icc.size());
+    return out;
+}
+
+bool jpegExtension(const std::string &path)
+{
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
+    return ext == QLatin1String("jpg") || ext == QLatin1String("jpeg") ||
+           ext == QLatin1String("jpe");
+}
+
+QByteArray profileFromDisplayIcc(const mviewer::domain::ImageMetadata &meta)
+{
+    const auto it = meta.textKeys.find("MViewer.DisplayICC.Base64");
+    if (it == meta.textKeys.end() || it->second.empty())
+        return {};
+    const QByteArray encoded(it->second.data(), static_cast<qsizetype>(it->second.size()));
+    return QByteArray::fromBase64(encoded);
+}
+
+// JPEG APP2 is a header scrape. Other containers use the same MetadataReader
+// path the viewer uses for DisplayICC. An untagged JPEG stays empty.
+QByteArray mainImageIcc(const std::string &sourcePath)
+{
+    const QByteArray scraped =
+        toIccBytes(mviewer::core::MetadataReader::extractJpegIccProfile(sourcePath));
+    if (!scraped.isEmpty() || jpegExtension(sourcePath))
+        return scraped;
+    return profileFromDisplayIcc(mviewer::core::MetadataReader::read(sourcePath));
+}
+
+void attachExifThumbIcc(const QImage &thumb, const std::vector<uint8_t> &thumbBytes,
+                        const std::string &sourcePath, mviewer::domain::ImageMetadata &meta)
+{
+    const QByteArray thumbProfile =
+        toIccBytes(mviewer::core::MetadataReader::extractJpegIccProfile(thumbBytes));
+    QByteArray mainProfile;
+    if (thumbProfile.isEmpty() && !mviewer::core::qtmetadata::qimageHasSourceIcc(thumb))
+        mainProfile = mainImageIcc(sourcePath);
+    mviewer::core::qtmetadata::attachThumbSourceIcc(thumb, thumbProfile, mainProfile, meta);
 }
 
 } // namespace
@@ -214,7 +265,10 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
                     rememberSourceSize(qp, display);
                     thumb = cropThumbnailToAspect(thumb, display.width(), display.height());
                 }
+                // Embedded thumbs are often untagged. Pass the thumb ICC, or the
+                // main-image profile, so gallery color matches the viewer.
                 mviewer::domain::ImageMetadata meta;
+                attachExifThumbIcc(thumb, exifThumb, path, meta);
                 const QImage q = mvcore::toDisplayQImage(mvcore::fromQImage(thumb), meta);
                 const QImage fitted = squareFitImage(q.isNull() ? thumb : q, size);
                 if (!fitted.isNull())

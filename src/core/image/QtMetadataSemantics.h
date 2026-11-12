@@ -158,6 +158,38 @@ inline void applyIccProfileBytes(const QByteArray &profile, mviewer::domain::Ima
     meta.iccVersion = parsed.version;
 }
 
+inline bool hasDisplayIcc(const mviewer::domain::ImageMetadata &meta)
+{
+    const auto it = meta.textKeys.find("MViewer.DisplayICC.Base64");
+    return it != meta.textKeys.end() && !it->second.empty();
+}
+
+// Qt assigns built-in sRGB to an unprofiled JPEG. That is not an embedded
+// profile and must not hide the main image's ICC.
+inline bool isBuiltinSrgb(const QColorSpace &colorSpace)
+{
+    return colorSpace == QColorSpace(QColorSpace::SRgb);
+}
+
+inline bool qimageHasSourceIcc(const QImage &image)
+{
+    if (image.isNull())
+        return false;
+    const QColorSpace colorSpace = image.colorSpace();
+    if (!colorSpace.isValid() || isBuiltinSrgb(colorSpace))
+        return false;
+    return !colorSpace.iccProfile().isEmpty();
+}
+
+inline bool fillDisplayIccFromProfile(const QByteArray &profile,
+                                      mviewer::domain::ImageMetadata &meta)
+{
+    if (profile.isEmpty())
+        return false;
+    applyIccProfileBytes(profile, meta);
+    return hasDisplayIcc(meta);
+}
+
 inline void applyColorMetadata(const QImage &image, mviewer::domain::ImageMetadata &meta)
 {
     const QColorSpace colorSpace = image.colorSpace();
@@ -184,6 +216,27 @@ inline void applyColorMetadata(const QImage &image, mviewer::domain::ImageMetada
     meta.iccPcs = parsed.pcs;
     meta.iccRenderingIntent = parsed.renderingIntent;
     meta.iccVersion = parsed.version;
+}
+
+inline bool fillDisplayIccFromQImage(const QImage &image, mviewer::domain::ImageMetadata &meta)
+{
+    if (!qimageHasSourceIcc(image))
+        return false;
+    applyColorMetadata(image, meta);
+    return hasDisplayIcc(meta);
+}
+
+// EXIF gallery thumb: thumb JPEG ICC, then a real QImage color space, then
+// the main-image profile. Unchanged when none of those is usable.
+inline bool attachThumbSourceIcc(const QImage &thumb, const QByteArray &thumbProfile,
+                                 const QByteArray &mainProfile,
+                                 mviewer::domain::ImageMetadata &meta)
+{
+    if (fillDisplayIccFromProfile(thumbProfile, meta))
+        return true;
+    if (fillDisplayIccFromQImage(thumb, meta))
+        return true;
+    return fillDisplayIccFromProfile(mainProfile, meta);
 }
 
 inline void applyRasterMetadata(const QImage &image, mviewer::domain::ImageMetadata &meta)
