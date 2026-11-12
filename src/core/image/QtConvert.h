@@ -55,6 +55,12 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
                              const mviewer::core::DisplayColorContext &target);
 
+// Tag a display-referred QImage with the presentation color space and the
+// source YUV matrix (MViewer.Yuv.Matrix). Pixels are not converted. Callers
+// that already ran toDisplayImageData use this after the final toQImage.
+void tagDisplayQImage(QImage &image, const mviewer::domain::ImageMetadata &meta,
+                      const mviewer::core::DisplayColorContext &target);
+
 // QImage -> ImageData (format-aware: Grayscale8 is kept as grayscale, the rest are converted to
 // RGB24)
 ImageData fromQImage(const QImage &src);

@@ -111,28 +111,29 @@ void devicePixelsForSource(int sourceW, int sourceH, double density, int &tw, in
     th = std::max(1, static_cast<int>(std::lround(h)));
 }
 
-QImage sharpFitDisplayImage(const QImage &shown, int tw, int th, const std::atomic<bool> *cancel)
+// Color-manage first. Sharp's sRGB EOTF must see a display-referred raster.
+QImage sharpFitDisplayImage(const ImageData &pixels, const mviewer::domain::ImageMetadata &meta,
+                            const mviewer::core::DisplayColorContext &target, int tw, int th,
+                            const std::atomic<bool> *cancel)
 {
-    if (shown.isNull() || tw < 1 || th < 1)
-        return shown;
-    if (shown.width() == tw && shown.height() == th)
-        return shown;
-    const ImageData src = mvcore::fromQImage(shown);
-    if (src.isNull())
+    const ImageData display = mvcore::toDisplayImageData(pixels, meta, target);
+    if (display.isNull())
         return QImage();
-    thread_local mviewer::core::DisplayResampleScratch scratch;
-    mviewer::core::DisplayResampleRequest resample;
-    resample.source.width = src.width;
-    resample.source.height = src.height;
-    resample.targetWidth = tw;
-    resample.targetHeight = th;
-    resample.quality = mviewer::core::DisplayResampleQuality::Sharp;
-    const ImageData fitted = mviewer::core::resampleDisplay(src, resample, &scratch, cancel);
-    if (fitted.isNull())
-        return QImage();
+    ImageData fitted = display;
+    if (tw >= 1 && th >= 1 && (display.width != tw || display.height != th))
+    {
+        thread_local mviewer::core::DisplayResampleScratch scratch;
+        mviewer::core::DisplayResampleRequest resample;
+        resample.source = {0, 0, display.width, display.height};
+        resample.targetWidth = tw;
+        resample.targetHeight = th;
+        resample.quality = mviewer::core::DisplayResampleQuality::Sharp;
+        fitted = mviewer::core::resampleDisplay(display, resample, &scratch, cancel);
+        if (fitted.isNull())
+            return QImage();
+    }
     QImage out = mvcore::toQImage(fitted);
-    if (shown.colorSpace().isValid())
-        out.setColorSpace(shown.colorSpace());
+    mvcore::tagDisplayQImage(out, meta, target);
     return out;
 }
 
@@ -288,12 +289,11 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     decodeFailed = decodeFailed || !r.ok || r.pixels.isNull();
     QImage raster;
     const bool sharp = !decodeFailed && req.sharpFit && req.exactW > 0 && req.exactH > 0;
-    if (!decodeFailed)
-    {
+    if (sharp)
+        raster = sharpFitDisplayImage(r.pixels, r.metadata, req.target, req.exactW, req.exactH,
+                                      ctx.cancel.get());
+    else if (!decodeFailed)
         raster = mvcore::toDisplayQImage(r.pixels, r.metadata, req.target);
-        if (sharp)
-            raster = sharpFitDisplayImage(raster, req.exactW, req.exactH, ctx.cancel.get());
-    }
     if (ctx.isCancelled())
         return;
     if (sharp)
