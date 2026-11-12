@@ -485,13 +485,8 @@ void ImageViewer::preloadNeighbors(const QString &path)
 {
     if (m_currentIndex < 0)
         return;
-    // Drop a previous full-frame neighbor preload (this setting, or an older
-    // build that always started one) before deciding whether to start another.
     cancelPreloads();
-    // "viewer/preloadFullNeighbors" (bool, default false) restores a full
-    // prev/next decode (preloadAsync / decodeFullResult). The default warms
-    // only the display raster; open, 1:1 analysis, and compare still
-    // full-decode on demand.
+    // Optional full prev/next decode; default is display-raster only.
     if (QSettings().value(QStringLiteral("viewer/preloadFullNeighbors"), false).toBool())
     {
         for (int delta = -1; delta <= 1; ++delta)
