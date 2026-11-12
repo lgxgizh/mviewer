@@ -568,10 +568,15 @@ void ImageViewer::drawDisplayRaster(QPainter &painter) const
             scheduleLodOverlayDerivation();
     }
     painter.save();
-    // Nearest when the view is at least one device pixel per source pixel.
-    // Downsamples (fit-to-window) stay smooth.
-    painter.setRenderHint(QPainter::SmoothPixmapTransform,
-                          lodRasterUsesSmoothing(m_view.scale, devicePixelRatioF()));
+    // Nearest at >= 1 device px per source px. Zoomed out, Sharp already
+    // produced device pixels: blit nearest when dest matches, smooth only a
+    // resize-race mismatch.
+    const double dpr = devicePixelRatioF() > 1.0 ? devicePixelRatioF() : 1.0;
+    const int destW = std::max(1, static_cast<int>(std::lround(static_cast<double>(sw) * dpr)));
+    const int destH = std::max(1, static_cast<int>(std::lround(static_cast<double>(sh) * dpr)));
+    const bool identity = drawn->width() == destW && drawn->height() == destH;
+    const bool smooth = !identity && lodRasterUsesSmoothing(m_view.scale, devicePixelRatioF());
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, smooth);
     painter.drawImage(QRect(sx, sy, sw, sh), *drawn);
     painter.restore();
 }
