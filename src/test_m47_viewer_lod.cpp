@@ -44,6 +44,9 @@
 #include <thread>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 // clang-format off
 #include <windows.h>
 #include <psapi.h>
