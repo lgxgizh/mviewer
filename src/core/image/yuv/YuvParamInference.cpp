@@ -257,7 +257,8 @@ std::string_view extensionOf(std::string_view fileName, std::string_view &stem)
 }
 
 // The user-editable extension mapping (YuvExtensionMap); defaults cover
-// .nv12 .nv21 .i420 .yv12 .p010 .yuyv .yuy2 .uyvy .nv16 .gray.
+// .nv12 .nv21 .i420 .yv12 .p010 .yuyv .yuy2 .uyvy .nv16 .y.
+// .gray and .grey are reserved for ADR 034 gray dumps, not YUV.
 std::optional<Format> extensionPixFmt(std::string_view ext)
 {
     const std::optional<std::string> name = mappedPixFmt(ext);

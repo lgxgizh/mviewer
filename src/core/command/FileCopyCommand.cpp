@@ -16,6 +16,8 @@ bool copyPlainRawOverride(const std::string &sourcePath, const std::string &dest
         namespace raw = mviewer::core::rawplain;
         if (!raw::isPlainRawPath(sourcePath) || !raw::isPlainRawPath(destinationPath))
             return false;
+        if (raw::dumpKindForPath(sourcePath) != raw::dumpKindForPath(destinationPath))
+            return false;
         raw::PlainRawParamStore::instance().copyOverride(raw::plainRawParamKey(sourcePath),
                                                          raw::plainRawParamKey(destinationPath));
         return true;

@@ -27,18 +27,45 @@ std::string lastComponent(const std::string &path)
     return path.substr(slash + 1);
 }
 
-bool equalsRawExt(std::string_view ext)
+char asciiLower(char c)
 {
-    if (ext.size() != 3)
+    const auto u = static_cast<unsigned char>(c);
+    if (u >= 'A' && u <= 'Z')
+        return static_cast<char>(u - 'A' + 'a');
+    return static_cast<char>(u);
+}
+
+bool equalsLower(std::string_view text, std::string_view lower)
+{
+    if (text.size() != lower.size())
         return false;
-    auto lower = [](char c) -> char
+    for (std::size_t i = 0; i < text.size(); ++i)
     {
-        const auto u = static_cast<unsigned char>(c);
-        if (u >= 'A' && u <= 'Z')
-            return static_cast<char>(u - 'A' + 'a');
-        return static_cast<char>(u);
-    };
-    return lower(ext[0]) == 'r' && lower(ext[1]) == 'a' && lower(ext[2]) == 'w';
+        if (asciiLower(text[i]) != lower[i])
+            return false;
+    }
+    return true;
+}
+
+enum class SuffixKind : std::uint8_t
+{
+    Other,
+    Raw,
+    Gray
+};
+
+SuffixKind suffixKindOf(const std::string &path)
+{
+    const std::string name = lastComponent(path);
+    const std::size_t dot = name.find_last_of('.');
+    if (dot == std::string::npos || dot + 1 >= name.size())
+        return SuffixKind::Other;
+    const std::string_view ext = std::string_view(name).substr(dot + 1);
+    if (equalsLower(ext, "raw"))
+        return SuffixKind::Raw;
+    if (equalsLower(ext, "gray") || equalsLower(ext, "grey"))
+        return SuffixKind::Gray;
+    return SuffixKind::Other;
 }
 
 const char *cfaLabel(Cfa cfa)
@@ -57,6 +84,18 @@ const char *cfaLabel(Cfa cfa)
         return "Mono";
     }
     return "RGGB";
+}
+
+void assignPlainFormat(const Params &p, DumpKind kind, mviewer::domain::ImageMetadata &meta)
+{
+    if (kind == DumpKind::Gray)
+    {
+        meta.format = "Gray (headerless)";
+        meta.colorSpace = "Gray " + std::to_string(p.bitDepth) + "-bit";
+        return;
+    }
+    meta.format = "RAW (plain)";
+    meta.colorSpace = std::string(cfaLabel(p.cfa)) + " " + std::to_string(p.bitDepth) + "-bit";
 }
 
 void setWhy(std::string *why, const std::string &text)
@@ -137,15 +176,38 @@ bool isPlainRawPath(const std::string &path)
 {
     try
     {
-        const std::string name = lastComponent(path);
-        const std::size_t dot = name.find_last_of('.');
-        if (dot == std::string::npos || dot + 1 >= name.size())
-            return false;
-        return equalsRawExt(std::string_view(name).substr(dot + 1));
+        const SuffixKind kind = suffixKindOf(path);
+        return kind == SuffixKind::Raw || kind == SuffixKind::Gray;
     }
     catch (...)
     {
         return false;
+    }
+}
+
+bool isGrayRawPath(const std::string &path)
+{
+    try
+    {
+        return suffixKindOf(path) == SuffixKind::Gray;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+DumpKind dumpKindForPath(const std::string &path)
+{
+    try
+    {
+        if (suffixKindOf(path) == SuffixKind::Gray)
+            return DumpKind::Gray;
+        return DumpKind::Sensor;
+    }
+    catch (...)
+    {
+        return DumpKind::Sensor;
     }
 }
 
@@ -169,21 +231,38 @@ PlainRawParamStore &PlainRawParamStore::instance()
 
 Params PlainRawParamStore::defaults() const
 {
+    return defaults(DumpKind::Sensor);
+}
+
+Params PlainRawParamStore::defaults(DumpKind kind) const
+{
     try
     {
         std::lock_guard<std::mutex> lock(m_mutex);
+        if (kind == DumpKind::Gray)
+            return m_grayDefaults;
         return m_defaults;
     }
     catch (...)
     {
+        if (kind == DumpKind::Gray)
+            return grayDefaultParams();
         return {};
     }
 }
 
 void PlainRawParamStore::setDefaults(const Params &p)
 {
+    setDefaults(DumpKind::Sensor, p);
+}
+
+void PlainRawParamStore::setDefaults(DumpKind kind, const Params &p)
+{
     std::lock_guard<std::mutex> lock(m_mutex);
-    m_defaults = p;
+    if (kind == DumpKind::Gray)
+        m_grayDefaults = normalizedForKind(p, kind);
+    else
+        m_defaults = p;
     ++m_revision;
 }
 
@@ -248,6 +327,7 @@ void PlainRawParamStore::clearAll()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     m_defaults = Params{};
+    m_grayDefaults = grayDefaultParams();
     m_overrides.clear();
     ++m_revision;
 }
@@ -292,6 +372,15 @@ Resolved resolveOverride(const Params &p, int64_t fileSize)
     return r;
 }
 
+Resolved resolvedFromStore(const std::optional<Params> &saved, DumpKind kind, std::string_view name,
+                           int64_t fileSize)
+{
+    if (saved.has_value())
+        return resolveOverride(normalizedForKind(*saved, kind), fileSize);
+    const Params base = PlainRawParamStore::instance().defaults(kind);
+    return resolveForFile(base, name, fileSize, kind);
+}
+
 } // namespace
 
 PlainRawFileInfo resolvePlainRawFile(const std::string &path)
@@ -306,17 +395,14 @@ PlainRawFileInfo resolvePlainRawFile(const std::string &path)
         const int64_t fileSize = sizeOfFile(native, sized);
         if (!sized)
             return unopenable();
+        const DumpKind kind = dumpKindForPath(path);
         const std::string name = lastComponent(path);
-        const std::string key = plainRawParamKey(path);
-        const auto saved = PlainRawParamStore::instance().override(key);
+        const auto saved = PlainRawParamStore::instance().override(plainRawParamKey(path));
         PlainRawFileInfo info;
         info.fileSize = fileSize;
         info.fromOverride = saved.has_value();
-        info.resolved =
-            saved.has_value()
-                ? resolveOverride(*saved, fileSize)
-                : resolveForFile(PlainRawParamStore::instance().defaults(), name, fileSize);
-        info.guesses = guessFromFileSize(info.resolved.params, fileSize);
+        info.resolved = resolvedFromStore(saved, kind, name, fileSize);
+        info.guesses = guessFromFileSize(info.resolved.params, fileSize, kind);
         return info;
     }
     catch (...)
@@ -485,8 +571,7 @@ void fillPlainRawMetadata(const PlainRawFileInfo &info, const std::string &path,
         meta.filePath = path;
         meta.bitDepth = p.bitDepth;
         meta.channels = (p.cfa == Cfa::Mono) ? 1 : 3;
-        meta.format = "RAW (plain)";
-        meta.colorSpace = std::string(cfaLabel(p.cfa)) + " " + std::to_string(p.bitDepth) + "-bit";
+        assignPlainFormat(p, dumpKindForPath(path), meta);
         if (!info.depthNote.empty())
         {
             meta.colorSpace += " (";
@@ -511,10 +596,10 @@ std::string plainRawCacheKeySuffix(const std::string &path)
     {
         if (!isPlainRawPath(path))
             return {};
-        const std::string key = plainRawParamKey(path);
-        const auto saved = PlainRawParamStore::instance().override(key);
-        const Params params =
-            saved.has_value() ? *saved : PlainRawParamStore::instance().defaults();
+        const DumpKind kind = dumpKindForPath(path);
+        const auto saved = PlainRawParamStore::instance().override(plainRawParamKey(path));
+        const Params params = saved.has_value() ? normalizedForKind(*saved, kind)
+                                                : PlainRawParamStore::instance().defaults(kind);
         return std::string("|praw=") + toString(params);
     }
     catch (...)

@@ -8616,5 +8616,10 @@ to:
         <source>Check the size, or edit it to confirm.</source>
         <translation>请检查尺寸，或修改尺寸以确认。</translation>
     </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>1-bit (8 pixels per byte)</source>
+        <translation>1 位（每字节 8 像素）</translation>
+    </message>
 </context>
 </TS>

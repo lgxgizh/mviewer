@@ -82,9 +82,21 @@ std::vector<ExtensionRule> defaultExtensionRules()
     return {
         {"yuv", ""},         {"nv12", "nv12"},   {"nv21", "nv21"},    {"i420", "yuv420p"},
         {"yv12", "yv12"},    {"p010", "p010le"}, {"yuyv", "yuyv422"}, {"yuy2", "yuyv422"},
-        {"uyvy", "uyvy422"}, {"nv16", "nv16"},   {"gray", "gray"},    {"y", "gray"},
+        {"uyvy", "uyvy422"}, {"nv16", "nv16"},   {"y", "gray"},
     };
 }
+
+namespace
+{
+
+// y4m is always header-driven. gray and grey are reserved for ADR 034 gray dumps,
+// so a saved user rule cannot claim them (the row is dropped when loaded).
+bool reservedExtension(const std::string &ext)
+{
+    return ext == "y4m" || ext == "gray" || ext == "grey";
+}
+
+} // namespace
 
 std::string normalizeExtension(std::string_view text)
 {
@@ -104,7 +116,7 @@ std::string normalizeExtension(std::string_view text)
             return {};
         out.push_back(c);
     }
-    if (out == "y4m")
+    if (reservedExtension(out))
         return {};
     return out;
 }
