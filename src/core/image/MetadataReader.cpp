@@ -3,6 +3,7 @@
 #include "core/image/IccProfile.h"
 #include "core/image/QtMetadataSemantics.h"
 
+#include <QBuffer>
 #include <QColorSpace>
 #include <QFile>
 #include <QFileInfo>
@@ -530,27 +531,24 @@ std::vector<uint8_t> MetadataReader::extractExifThumbnail(const std::string &fil
     return {};
 }
 
-std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &filePath)
+static std::vector<uint8_t> jpegIccFromDevice(QIODevice &device)
 {
-    QFile file(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
-    if (!file.open(QIODevice::ReadOnly))
-        return {};
-    const QByteArray soi = file.read(2);
+    const QByteArray soi = device.read(2);
     if (soi.size() < 2 || static_cast<unsigned char>(soi[0]) != 0xFF ||
         static_cast<unsigned char>(soi[1]) != 0xD8)
         return {};
 
     std::vector<QByteArray> parts;
     int expectedParts = 0;
-    for (int guard = 0; guard < 512 && !file.atEnd(); ++guard)
+    for (int guard = 0; guard < 512 && !device.atEnd(); ++guard)
     {
         char b0 = 0;
-        if (file.read(&b0, 1) != 1)
+        if (device.read(&b0, 1) != 1)
             break;
         if (static_cast<unsigned char>(b0) != 0xFF)
             continue;
         char marker = 0;
-        while (file.read(&marker, 1) == 1 && static_cast<unsigned char>(marker) == 0xFF)
+        while (device.read(&marker, 1) == 1 && static_cast<unsigned char>(marker) == 0xFF)
         {
         }
         const auto code = static_cast<unsigned char>(marker);
@@ -558,7 +556,7 @@ std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &fi
             break;
         if (code == 0x01 || (code >= 0xD0 && code <= 0xD7))
             continue;
-        const QByteArray lenBytes = file.read(2);
+        const QByteArray lenBytes = device.read(2);
         if (lenBytes.size() < 2)
             break;
         int segmentSize = (static_cast<unsigned char>(lenBytes[0]) << 8) |
@@ -568,16 +566,16 @@ std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &fi
         segmentSize -= 2;
         if (code != 0xE2 || segmentSize < 14)
         {
-            if (!file.seek(file.pos() + segmentSize))
+            if (!device.seek(device.pos() + segmentSize))
                 break;
             continue;
         }
         // "ICC_PROFILE\0" (12) + seq + count
-        const QByteArray id = file.read(14);
+        const QByteArray id = device.read(14);
         segmentSize -= 14;
         if (id.size() < 14 || !id.startsWith(QByteArray("ICC_PROFILE", 11) + char(0)))
         {
-            if (!file.seek(file.pos() + segmentSize))
+            if (!device.seek(device.pos() + segmentSize))
                 break;
             continue;
         }
@@ -585,7 +583,7 @@ std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &fi
         const int count = static_cast<unsigned char>(id[13]);
         if (seq < 1 || count < 1 || seq > count)
         {
-            if (!file.seek(file.pos() + segmentSize))
+            if (!device.seek(device.pos() + segmentSize))
                 break;
             continue;
         }
@@ -596,11 +594,11 @@ std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &fi
         }
         else if (count != expectedParts)
         {
-            if (!file.seek(file.pos() + segmentSize))
+            if (!device.seek(device.pos() + segmentSize))
                 break;
             continue;
         }
-        const QByteArray chunk = file.read(segmentSize);
+        const QByteArray chunk = device.read(segmentSize);
         if (chunk.size() != segmentSize)
             return {};
         parts[static_cast<size_t>(seq - 1)] = chunk;
@@ -613,6 +611,26 @@ std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &fi
     for (const QByteArray &c : parts)
         all += c;
     return std::vector<uint8_t>(all.begin(), all.end());
+}
+
+std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::string &filePath)
+{
+    QFile file(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    return jpegIccFromDevice(file);
+}
+
+std::vector<uint8_t> MetadataReader::extractJpegIccProfile(const std::vector<uint8_t> &jpegBytes)
+{
+    if (jpegBytes.size() < 4)
+        return {};
+    QByteArray owned(static_cast<qsizetype>(jpegBytes.size()), Qt::Uninitialized);
+    std::memcpy(owned.data(), jpegBytes.data(), jpegBytes.size());
+    QBuffer buffer(&owned);
+    if (!buffer.open(QIODevice::ReadOnly))
+        return {};
+    return jpegIccFromDevice(buffer);
 }
 
 } // namespace mviewer::core

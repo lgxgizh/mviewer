@@ -45,22 +45,22 @@
 
 static int g_failures = 0;
 
-#define CHECK(c, m)                                                                                 \
-    do                                                                                              \
-    {                                                                                               \
-        if (!(c))                                                                                   \
-        {                                                                                           \
-            std::printf("FAIL: %s\n", m);                                                           \
-            std::fflush(stdout);                                                                    \
-            ++g_failures;                                                                           \
-        }                                                                                           \
+#define CHECK(c, m)                                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(c))                                                                                  \
+        {                                                                                          \
+            std::printf("FAIL: %s\n", m);                                                          \
+            std::fflush(stdout);                                                                   \
+            ++g_failures;                                                                          \
+        }                                                                                          \
     } while (false)
 
-#define MARK(t)                                                                                     \
-    do                                                                                              \
-    {                                                                                               \
-        std::printf("%s\n", t);                                                                     \
-        std::fflush(stdout);                                                                        \
+#define MARK(t)                                                                                    \
+    do                                                                                             \
+    {                                                                                              \
+        std::printf("%s\n", t);                                                                    \
+        std::fflush(stdout);                                                                       \
     } while (false)
 
 namespace
@@ -68,8 +68,8 @@ namespace
 
 using ::ImageData; // global scope (ImageBuffer.h)
 using mviewer::core::SourceDecodePath;
-using mviewer::core::SourceImage;
 using mviewer::core::SourceDecodeStats;
+using mviewer::core::SourceImage;
 
 std::string fixtureRoot()
 {
@@ -107,8 +107,14 @@ class PlainDelegatingDecoder : public IDecoder
     {
         return m_inner.decodeFull(path, meta);
     }
-    std::vector<std::string> extensions() const override { return m_inner.extensions(); }
-    const char *name() const override { return "PlainDelegatingDecoder"; }
+    std::vector<std::string> extensions() const override
+    {
+        return m_inner.extensions();
+    }
+    const char *name() const override
+    {
+        return "PlainDelegatingDecoder";
+    }
 
   private:
     QtDecoder m_inner;
@@ -134,16 +140,48 @@ QString writeProbeJpeg(const QTemporaryDir &dir)
     return p;
 }
 
+// P2-7: non-WIC decodeLod must lround and clamp each side to at least 1.
+// 1000x19 at maxEdge 100 -> ratio 0.1, lround(1.9)=2 (trunc would be 1).
+// 8000x1 at maxEdge 50 -> lround(0.00625)=0, clamped to 1.
+void expectScaledLod(const QTemporaryDir &dir, const char *name, int fullW, int fullH, int maxEdge,
+                     int expectW, int expectH, const char *msg)
+{
+    QImage image(fullW, fullH, QImage::Format_RGB32);
+    image.fill(qRgb(12, 34, 56));
+    const QString path = dir.path() + QStringLiteral("/") + QLatin1String(name);
+    CHECK(image.save(path, "PNG"), "P2-7: wide PNG saved");
+    QtDecoder decoder;
+    mviewer::domain::ImageMetadata meta;
+    const std::string utf8 = path.toStdString();
+    const ImageData lod = decoder.decodeLod(utf8, maxEdge, meta);
+    CHECK(!lod.isNull() && lod.width >= 1 && lod.height >= 1,
+          "P2-7: wide-short LOD has both sides >= 1");
+    CHECK(lod.width == expectW && lod.height == expectH, msg);
+}
+
+void testWideShortLod()
+{
+    MARK("P2-7 wide-short decodeLod");
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "P2-7: temp dir");
+    if (!dir.isValid())
+        return;
+    expectScaledLod(dir, "lround.png", 1000, 19, 100, 100, 2,
+                    "P2-7: lround keeps the short side at 2");
+    expectScaledLod(dir, "min1.png", 8000, 1, 50, 50, 1, "P2-7: short side stays at least 1");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    testWideShortLod();
     if (!QDir(QString::fromStdString(fixtureRoot())).exists())
     {
         std::printf("fixture root missing: %s\n", fixtureRoot().c_str());
         std::printf("run: python testdata/generate_large_fixtures.py --ensure\n");
-        return 2;
+        return g_failures == 0 ? 2 : 1;
     }
 
     const std::string jpeg100 = fixture("large_jpeg_100mp.jpg");
@@ -185,8 +223,10 @@ int main(int argc, char **argv)
             auto lodR = src->decodeLod(256);
             ImageData lod = lodR.pixels;
             CHECK(lodR.ok && !lod.isNull(), "T2: 100MP JPEG LOD(256) succeeds");
-            CHECK(lod.width == 256 && lod.height == 177,
-                  "T2: LOD output is 256x177 (aspect preserved)");
+            // 12000x8333, maxEdge 256: lround(8333*256/12000) = 178
+            // (integer truncation used to yield 177).
+            CHECK(lod.width == 256 && lod.height == 178,
+                  "T2: LOD output is 256x178 (aspect preserved)");
             CHECK(lodR.decodePath == SourceDecodePath::NativeLod,
                   "T2: classified NativeLod (no full raster)");
         }
@@ -236,8 +276,7 @@ int main(int argc, char **argv)
             ImageData region = regionR.pixels;
             CHECK(regionR.ok && !region.isNull(),
                   "T4: 100MP JPEG region(512x512) succeeds (bounded memory)");
-            CHECK(region.width == 512 && region.height == 512,
-                  "T4: region output is 512x512");
+            CHECK(region.width == 512 && region.height == 512, "T4: region output is 512x512");
             CHECK(regionR.decodePath == SourceDecodePath::BoundedRasterRegion,
                   "T4: classified BoundedRasterRegion (clip path, not native)");
         }
@@ -277,10 +316,10 @@ int main(int argc, char **argv)
                 {
                     for (int y = 0; y < region.height && identical; ++y)
                     {
-                        const uint8_t *a = region.buffer->data() +
-                                           static_cast<size_t>(y) * region.stride();
-                        const uint8_t *b = ref.buffer->data() +
-                                           static_cast<size_t>(y) * ref.stride();
+                        const uint8_t *a =
+                            region.buffer->data() + static_cast<size_t>(y) * region.stride();
+                        const uint8_t *b =
+                            ref.buffer->data() + static_cast<size_t>(y) * ref.stride();
                         for (int x = 0; x < region.width; ++x)
                             for (int ch = 0; ch < 3; ++ch)
                                 if (a[x * 3 + ch] != b[x * 3 + ch])
@@ -290,8 +329,7 @@ int main(int argc, char **argv)
                                 }
                     }
                 }
-                CHECK(identical,
-                      "T5: clip-path region is pixel-identical to the full-decode crop");
+                CHECK(identical, "T5: clip-path region is pixel-identical to the full-decode crop");
             }
         }
     }

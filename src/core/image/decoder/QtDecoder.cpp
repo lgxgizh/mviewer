@@ -627,8 +627,11 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
     if (full.width() > maxEdge || full.height() > maxEdge)
     {
         const double ratio = static_cast<double>(maxEdge) / std::max(full.width(), full.height());
-        reader.setScaledSize(
-            QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
+        // Same rule as the WIC TIFF target above: lround, then clamp each side
+        // to at least 1. Truncating a very wide, short frame asks Qt for height 0.
+        const QSize target(std::max(1, static_cast<int>(std::lround(full.width() * ratio))),
+                           std::max(1, static_cast<int>(std::lround(full.height() * ratio))));
+        reader.setScaledSize(target);
     }
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     const QImage img = reader.read();

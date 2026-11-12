@@ -7,7 +7,9 @@
 //  - robustness against truncated and malformed input (no crash / no hang)
 #include "core/image/IccProfile.h"
 #include "core/image/QtConvert.h"
+#include "core/image/QtMetadataSemantics.h"
 
+#include <QByteArray>
 #include <QColorSpace>
 #include <QImage>
 
@@ -147,11 +149,73 @@ std::vector<unsigned char> makeProfile(bool mlucDesc)
 }
 } // namespace
 
+static void testExifThumbDisplayIcc()
+{
+    namespace qtmeta = mviewer::core::qtmetadata;
+
+    ImageData pixels = makeImageData(1, 1, PixelFormat::RGB24);
+    (*pixels.buffer)[0] = 180;
+    (*pixels.buffer)[1] = 90;
+    (*pixels.buffer)[2] = 40;
+
+    const QByteArray adobe = QColorSpace(QColorSpace::AdobeRgb).iccProfile();
+    CHECK(!adobe.isEmpty(), "Adobe RGB ICC bytes available");
+
+    QImage reference(1, 1, QImage::Format_RGB888);
+    reference.setPixelColor(0, 0, QColor(180, 90, 40));
+    reference.setColorSpace(QColorSpace::AdobeRgb);
+    reference.convertToColorSpace(QColorSpace::SRgb);
+
+    QImage adobeThumb(1, 1, QImage::Format_RGB888);
+    adobeThumb.setPixelColor(0, 0, QColor(180, 90, 40));
+    adobeThumb.setColorSpace(QColorSpace::AdobeRgb);
+
+    mviewer::domain::ImageMetadata fromImage;
+    CHECK(qtmeta::attachThumbSourceIcc(adobeThumb, QByteArray(), QByteArray(), fromImage),
+          "Adobe RGB thumb QImage fills DisplayICC");
+    const QImage fromThumb = mvcore::toDisplayQImage(pixels, fromImage);
+    CHECK(fromThumb.pixelColor(0, 0) == reference.pixelColor(0, 0),
+          "thumb QImage ICC matches convertToColorSpace(SRgb)");
+
+    mviewer::domain::ImageMetadata untagged;
+    const QImage passthrough = mvcore::toDisplayQImage(pixels, untagged);
+    CHECK(passthrough.pixelColor(0, 0) == QColor(180, 90, 40), "untagged thumb keeps numeric sRGB");
+    CHECK(fromThumb.pixelColor(0, 0) != passthrough.pixelColor(0, 0),
+          "Adobe RGB thumb differs from untagged sRGB");
+
+    // Qt's built-in sRGB on an EXIF thumb must not hide the main profile.
+    QImage srgbThumb(1, 1, QImage::Format_RGB888);
+    srgbThumb.setColorSpace(QColorSpace::SRgb);
+    mviewer::domain::ImageMetadata fromMain;
+    CHECK(qtmeta::attachThumbSourceIcc(srgbThumb, QByteArray(), adobe, fromMain),
+          "main-image profile fills a built-in sRGB thumb");
+    const QImage viaMain = mvcore::toDisplayQImage(pixels, fromMain);
+    CHECK(viaMain.pixelColor(0, 0) == reference.pixelColor(0, 0),
+          "main Adobe RGB matches convertToColorSpace(SRgb)");
+    CHECK(viaMain.pixelColor(0, 0) != passthrough.pixelColor(0, 0),
+          "main-image profile differs from untagged sRGB");
+
+    const QByteArray p3 = QColorSpace(QColorSpace::DisplayP3).iccProfile();
+    mviewer::domain::ImageMetadata preferBytes;
+    CHECK(qtmeta::attachThumbSourceIcc(srgbThumb, adobe, p3, preferBytes),
+          "thumb ICC bytes win over the main profile");
+    CHECK(mvcore::sourceColorSpace(preferBytes) == QColorSpace::fromIccProfile(adobe),
+          "attached thumb bytes are Adobe RGB");
+
+    QImage bare(1, 1, QImage::Format_RGB888);
+    mviewer::domain::ImageMetadata none;
+    CHECK(!qtmeta::attachThumbSourceIcc(bare, QByteArray(), QByteArray(), none),
+          "no profile leaves metadata empty");
+    CHECK(none.textKeys.count("MViewer.DisplayICC.Base64") == 0,
+          "empty attach does not write DisplayICC");
+}
+
 int main()
 {
     using namespace mviewer::core;
 
     printf("IccProfile: parseIccProfile regression\n");
+    testExifThumbDisplayIcc();
 
     // 1) Well-formed v2.1.0 profile
     {

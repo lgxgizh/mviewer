@@ -384,6 +384,19 @@ static void testJpegIccHeaderScrape()
     CHECK(!scraped.empty() && scraped.size() == static_cast<size_t>(adobe.size()) &&
               std::memcmp(scraped.data(), adobe.constData(), scraped.size()) == 0,
           "extractJpegIccProfile bytes match embedded profile");
+
+    QFile reread(jpgPath);
+    CHECK(reread.open(QIODevice::ReadOnly), "reopen ICC jpeg");
+    const QByteArray raw = reread.readAll();
+    std::vector<uint8_t> jpegBytes(static_cast<size_t>(raw.size()));
+    if (!raw.isEmpty())
+        std::memcpy(jpegBytes.data(), raw.constData(), jpegBytes.size());
+    const auto fromBytes = mviewer::core::MetadataReader::extractJpegIccProfile(jpegBytes);
+    CHECK(fromBytes.size() == scraped.size() &&
+              std::memcmp(fromBytes.data(), scraped.data(), scraped.size()) == 0,
+          "in-memory JPEG ICC scrape matches the file scrape");
+    CHECK(mviewer::core::MetadataReader::extractJpegIccProfile(std::vector<uint8_t>{}).empty(),
+          "empty JPEG buffer -> empty ICC");
     CHECK(mviewer::core::MetadataReader::extractJpegIccProfile(path + ".missing").empty(),
           "missing file -> empty ICC");
 
