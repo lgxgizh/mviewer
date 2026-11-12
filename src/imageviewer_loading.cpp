@@ -20,7 +20,6 @@ namespace
 // Fallback LOD edge when the widget is unknown or the view is not zoomed out.
 constexpr int kDisplayWarmMaxEdge = 1024;
 constexpr qint64 kDisplayWarmMaxBytes = 64LL * 1024 * 1024;
-constexpr qint64 kDisplayWarmLodThresholdPixels = 16LL * 1000 * 1000;
 constexpr qint64 kFullPreloadMaxPixels = 48LL * 1000 * 1000;
 constexpr size_t kDisplayWarmMaxEntries = 2;
 } // namespace
@@ -656,8 +655,8 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
             QSize(result.source->metadata().width, result.source->metadata().height);
         const int sw = result.sourceSize.width();
         const int sh = result.sourceSize.height();
-        const qint64 pixels = static_cast<qint64>(sw) * sh;
-        if (pixels <= kDisplayWarmLodThresholdPixels)
+        // Same cut as runRasterWorker, so a mid-size warm raster can be promoted.
+        if (!shouldUseDisplayLod(result.source->metadata()))
         {
             queueDisplayRasterPreloadResult(guard, std::move(result));
             return;

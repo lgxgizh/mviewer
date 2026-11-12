@@ -17,6 +17,22 @@ inline constexpr int kMinLodEdge = 64;
 inline constexpr int kMaxLodEdge = 4096;
 inline constexpr double kMaxRasterPixels = 8.0 * 1000 * 1000;
 
+// Viewport LOD when a full frame is worth avoiding. 8-bit (unknown depth that
+// is not RAW counts as 8-bit) at or below 4 MP stays a full-frame fast path.
+// 16-bit and RAW stay on that path only at or below 1 MP.
+inline bool shouldUseDisplayLod(const mviewer::domain::ImageMetadata &meta)
+{
+    if (meta.width <= 0 || meta.height <= 0)
+        return false;
+    const qint64 pixels = static_cast<qint64>(meta.width) * static_cast<qint64>(meta.height);
+    const bool raw = meta.rawSource != mviewer::domain::RawSource::NotRaw || meta.format == "RAW";
+    constexpr qint64 kHeavyFastPathPixels = 1 * 1000 * 1000;
+    constexpr qint64 kSmallFastPathPixels = 4 * 1000 * 1000;
+    if (meta.bitDepth > 8 || raw)
+        return pixels > kHeavyFastPathPixels;
+    return pixels > kSmallFastPathPixels;
+}
+
 // Device px of a source rect at `density` (device px / source px), LOD-capped.
 inline void devicePixelsForSource(int sourceW, int sourceH, double density, int &tw, int &th)
 {

@@ -19,7 +19,6 @@
 #include <cmath>
 // Zoomed-in regions keep kRasterOverscan as a density margin. Sharp-owned
 // zoomed-out fit requests the exact device-pixel edge (no overscan).
-constexpr qint64 kLodThresholdPixels = 16 * 1000 * 1000; // 16 MP fast path
 constexpr double kRasterOverscan = 1.25;
 constexpr qint64 kAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP analysis cap
 
@@ -183,8 +182,9 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
                                           QRect(), QSize(), 1.0, req.target, false, req.serial);
         return;
     }
-    const QSize srcSize(source->metadata().width, source->metadata().height);
-    if (static_cast<qint64>(srcSize.width()) * srcSize.height() <= kLodThresholdPixels)
+    const mviewer::domain::ImageMetadata &meta = source->metadata();
+    const QSize srcSize(meta.width, meta.height);
+    if (!shouldUseDisplayLod(meta))
     {
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
                                           QImage(), QRect(), srcSize, 1.0, req.target, false,
