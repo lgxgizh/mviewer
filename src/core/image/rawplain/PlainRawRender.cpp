@@ -1,9 +1,13 @@
 #include "core/image/rawplain/PlainRawRender.h"
 
+#include "core/image/rawplain/PlainRawPreview.h"
+
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <utility>
 
 namespace mviewer::core::rawplain
@@ -19,8 +23,28 @@ enum class SiteKind : std::uint8_t
     GreenV
 };
 
-constexpr double kClipFraction = 0.98;
 constexpr int kLinearMax = 65535;
+
+std::atomic<PlainRawRowsRunner> &plainRawRowsSlot()
+{
+    static std::atomic<PlainRawRowsRunner> slot{nullptr};
+    return slot;
+}
+
+void dispatchRows(int rowCount, const std::function<void(int, int)> &fn)
+{
+    if (rowCount <= 0)
+    {
+        return;
+    }
+    const PlainRawRowsRunner runner = plainRawRowsSlot().load(std::memory_order_acquire);
+    if (runner == nullptr)
+    {
+        fn(0, rowCount);
+        return;
+    }
+    runner(rowCount, fn);
+}
 
 int mirrorIndex(int i, int n)
 {
@@ -241,14 +265,12 @@ void emitInterior(const std::uint16_t *row, const std::uint16_t *up, const std::
                       up[ix + 1], dn[ix - 1], dn[ix + 1], r, g, b);
 }
 
-void demosaicInteriorRows(const std::uint16_t *lin, int w, int h, const SiteKind kinds[4],
-                          const std::uint8_t *enc, std::uint8_t *dst)
+void demosaicInteriorBand(const std::uint16_t *lin, int w, int h, int y0, int y1,
+                          const SiteKind kinds[4], const std::uint8_t *enc, std::uint8_t *dst)
 {
-    if (w < 3 || h < 3)
-    {
-        return;
-    }
-    for (int y = 1; y < h - 1; ++y)
+    int begin = y0 < 1 ? 1 : y0;
+    int end = y1 > h - 1 ? h - 1 : y1;
+    for (int y = begin; y < end; ++y)
     {
         const std::size_t stride = static_cast<std::size_t>(w);
         const std::uint16_t *row = lin + static_cast<std::size_t>(y) * stride;
@@ -277,6 +299,20 @@ void demosaicInteriorRows(const std::uint16_t *lin, int w, int h, const SiteKind
     }
 }
 
+void demosaicInteriorRows(const std::uint16_t *lin, int w, int h, const SiteKind kinds[4],
+                          const std::uint8_t *enc, std::uint8_t *dst)
+{
+    if (w < 3 || h < 3)
+    {
+        return;
+    }
+    dispatchRows(h,
+                 [&](int y0, int y1)
+                 {
+                     demosaicInteriorBand(lin, w, h, y0, y1, kinds, enc, dst);
+                 });
+}
+
 void demosaicBorder(const std::uint16_t *lin, int w, int h, const SiteKind kinds[4],
                     const std::uint8_t *enc, std::uint8_t *dst)
 {
@@ -302,13 +338,10 @@ void demosaicBorder(const std::uint16_t *lin, int w, int h, const SiteKind kinds
     }
 }
 
-void lineariseFrame(const std::vector<std::uint16_t> &samples, int w, int h,
-                    const std::array<std::vector<std::uint16_t>, 4> &luts,
-                    std::vector<std::uint16_t> &lin)
+void lineariseBand(std::uint16_t *samples, int w, int y0, int y1,
+                   const std::array<std::vector<std::uint16_t>, 4> &luts)
 {
-    const std::size_t count = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
-    lin.resize(count);
-    for (int y = 0; y < h; ++y)
+    for (int y = y0; y < y1; ++y)
     {
         const int rowSlot = (y & 1) << 1;
         const auto &evenLut = luts[static_cast<std::size_t>(rowSlot)];
@@ -316,24 +349,56 @@ void lineariseFrame(const std::vector<std::uint16_t> &samples, int w, int h,
         const std::size_t row = static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
         for (int x = 0; x < w; ++x)
         {
-            const std::uint16_t sample = samples[row + static_cast<std::size_t>(x)];
+            std::uint16_t &sample = samples[row + static_cast<std::size_t>(x)];
             const auto &table = ((x & 1) == 0) ? evenLut : oddLut;
-            lin[row + static_cast<std::size_t>(x)] = lookupSample(table, sample);
+            sample = lookupSample(table, sample);
         }
     }
 }
 
-void encodeMono(const std::vector<std::uint16_t> &lin, const std::uint8_t *enc, std::uint8_t *dst)
+void lineariseInPlace(std::uint16_t *samples, int w, int h,
+                      const std::array<std::vector<std::uint16_t>, 4> &luts)
 {
-    const std::size_t n = lin.size();
-    for (std::size_t i = 0; i < n; ++i)
+    if (samples == nullptr || w < 1 || h < 1)
     {
-        const std::uint8_t v = enc[lin[i]];
-        std::uint8_t *pixel = dst + i * 3U;
-        pixel[0] = v;
-        pixel[1] = v;
-        pixel[2] = v;
+        return;
     }
+    dispatchRows(h,
+                 [&](int y0, int y1)
+                 {
+                     lineariseBand(samples, w, y0, y1, luts);
+                 });
+}
+
+void encodeMonoBand(const std::uint16_t *lin, int w, int y0, int y1, const std::uint8_t *enc,
+                    std::uint8_t *dst)
+{
+    for (int y = y0; y < y1; ++y)
+    {
+        const std::size_t row = static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
+        std::uint8_t *out = dst + row * 3U;
+        for (int x = 0; x < w; ++x)
+        {
+            const std::uint8_t v = enc[lin[row + static_cast<std::size_t>(x)]];
+            std::uint8_t *pixel = out + static_cast<std::size_t>(x) * 3U;
+            pixel[0] = v;
+            pixel[1] = v;
+            pixel[2] = v;
+        }
+    }
+}
+
+void encodeMono(const std::uint16_t *lin, int w, int h, const std::uint8_t *enc, std::uint8_t *dst)
+{
+    if (lin == nullptr || w < 1 || h < 1)
+    {
+        return;
+    }
+    dispatchRows(h,
+                 [&](int y0, int y1)
+                 {
+                     encodeMonoBand(lin, w, y0, y1, enc, dst);
+                 });
 }
 
 bool previewDimensions(int w, int h, int maxEdge, int &outW, int &outH)
@@ -372,120 +437,6 @@ bool previewDimensions(int w, int h, int maxEdge, int &outW, int &outH)
     return true;
 }
 
-std::uint16_t quadSample(const std::vector<std::uint16_t> &samples, int w,
-                         const std::array<std::vector<std::uint16_t>, 4> &luts, int x, int y)
-{
-    const std::size_t index =
-        static_cast<std::size_t>(y) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
-    const int slot = ((y & 1) << 1) | (x & 1);
-    return lookupSample(luts[static_cast<std::size_t>(slot)], samples[index]);
-}
-
-void colourFromQuad(const std::vector<std::uint16_t> &samples, int w, int h, Cfa cfa,
-                    const std::array<std::vector<std::uint16_t>, 4> &luts, int sx, int sy,
-                    std::uint16_t &r, std::uint16_t &g, std::uint16_t &b)
-{
-    if (sx < 0)
-    {
-        sx = 0;
-    }
-    if (sy < 0)
-    {
-        sy = 0;
-    }
-    if (sx >= w)
-    {
-        sx = w - 1;
-    }
-    if (sy >= h)
-    {
-        sy = h - 1;
-    }
-    if (w < 2 || h < 2 || cfa == Cfa::Mono)
-    {
-        const std::uint16_t v = quadSample(samples, w, luts, sx, sy);
-        r = v;
-        g = v;
-        b = v;
-        return;
-    }
-    int qx = sx & ~1;
-    int qy = sy & ~1;
-    const int maxX = (w - 2) & ~1;
-    const int maxY = (h - 2) & ~1;
-    if (qx > maxX)
-    {
-        qx = maxX;
-    }
-    if (qy > maxY)
-    {
-        qy = maxY;
-    }
-    if (qx < 0)
-    {
-        qx = 0;
-    }
-    if (qy < 0)
-    {
-        qy = 0;
-    }
-    std::uint16_t red = 0;
-    std::uint16_t blue = 0;
-    int gSum = 0;
-    int gCount = 0;
-    for (int dy = 0; dy < 2; ++dy)
-    {
-        for (int dx = 0; dx < 2; ++dx)
-        {
-            const std::uint16_t v = quadSample(samples, w, luts, qx + dx, qy + dy);
-            const CfaColor colour = cfaColorAt(cfa, qx + dx, qy + dy);
-            if (colour == CfaColor::Red)
-            {
-                red = v;
-            }
-            else if (colour == CfaColor::Blue)
-            {
-                blue = v;
-            }
-            else
-            {
-                gSum += v;
-                ++gCount;
-            }
-        }
-    }
-    r = red;
-    b = blue;
-    g = static_cast<std::uint16_t>(gCount > 0 ? (gSum + gCount / 2) / gCount : 0);
-}
-
-void renderPreview(const Params &p, const std::vector<std::uint16_t> &samples,
-                   const std::array<std::vector<std::uint16_t>, 4> &luts, const std::uint8_t *enc,
-                   int outW, int outH, std::uint8_t *dst)
-{
-    const int w = p.width;
-    const int h = p.height;
-    for (int oy = 0; oy < outH; ++oy)
-    {
-        const int sy =
-            static_cast<int>(static_cast<std::int64_t>(oy) * static_cast<std::int64_t>(h) /
-                             static_cast<std::int64_t>(outH));
-        std::uint8_t *row =
-            dst + static_cast<std::size_t>(oy) * static_cast<std::size_t>(outW) * 3U;
-        for (int ox = 0; ox < outW; ++ox)
-        {
-            const int sx =
-                static_cast<int>(static_cast<std::int64_t>(ox) * static_cast<std::int64_t>(w) /
-                                 static_cast<std::int64_t>(outW));
-            std::uint16_t r = 0;
-            std::uint16_t g = 0;
-            std::uint16_t b = 0;
-            colourFromQuad(samples, w, h, p.cfa, luts, sx, sy, r, g, b);
-            storeEncoded(row + static_cast<std::size_t>(ox) * 3U, enc, r, g, b);
-        }
-    }
-}
-
 ImageData allocateRgb(int w, int h)
 {
     ImageData image;
@@ -520,140 +471,6 @@ bool inputOk(const Params &p, const std::vector<std::uint16_t> &samples)
         return false;
     }
     return static_cast<std::size_t>(need) == samples.size();
-}
-
-int colourIndex(CfaColor colour)
-{
-    if (colour == CfaColor::Red)
-    {
-        return 0;
-    }
-    if (colour == CfaColor::Blue)
-    {
-        return 2;
-    }
-    return 1;
-}
-
-void accumulateHistograms(const Params &p, const std::vector<std::uint16_t> &samples, int white,
-                          std::array<std::vector<std::uint32_t>, 3> &hist)
-{
-    const int levels = 1 << p.bitDepth;
-    const std::size_t bins = static_cast<std::size_t>(levels);
-    for (auto &channel : hist)
-    {
-        channel.assign(bins, 0U);
-    }
-    const double clipAt = static_cast<double>(white) * kClipFraction;
-    const int w = p.width;
-    const int h = p.height;
-    for (int y = 0; y < h; ++y)
-    {
-        const int c0 = colourIndex(cfaColorAt(p.cfa, 0, y));
-        const int c1 = colourIndex(cfaColorAt(p.cfa, 1, y));
-        const std::size_t row = static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
-        for (int x = 0; x < w; ++x)
-        {
-            const std::uint16_t sample = samples[row + static_cast<std::size_t>(x)];
-            if (static_cast<double>(sample) >= clipAt)
-            {
-                continue;
-            }
-            int value = static_cast<int>(sample) - p.blackLevel;
-            if (value < 0)
-            {
-                value = 0;
-            }
-            if (value >= levels)
-            {
-                value = levels - 1;
-            }
-            const int channel = ((x & 1) == 0) ? c0 : c1;
-            hist[static_cast<std::size_t>(channel)][static_cast<std::size_t>(value)] += 1U;
-        }
-    }
-}
-
-double histogramMean(const std::vector<std::uint32_t> &hist)
-{
-    long double sum = 0.0L;
-    std::uint64_t count = 0;
-    for (std::size_t i = 0; i < hist.size(); ++i)
-    {
-        const std::uint64_t n = hist[i];
-        count += n;
-        sum += static_cast<long double>(n) * static_cast<long double>(i);
-    }
-    if (count == 0)
-    {
-        return 0.0;
-    }
-    return static_cast<double>(sum / static_cast<long double>(count));
-}
-
-double whitePatchMean(const std::vector<std::uint32_t> &hist)
-{
-    std::uint64_t count = 0;
-    for (std::uint32_t bin : hist)
-    {
-        count += bin;
-    }
-    if (count == 0)
-    {
-        return 0.0;
-    }
-    const std::uint64_t rank = ((count - 1U) * 99U) / 100U;
-    std::uint64_t acc = 0;
-    std::size_t pivot = hist.size() - 1U;
-    for (std::size_t i = 0; i < hist.size(); ++i)
-    {
-        acc += hist[i];
-        if (acc > rank)
-        {
-            pivot = i;
-            break;
-        }
-    }
-    long double sum = 0.0L;
-    std::uint64_t kept = 0;
-    for (std::size_t i = pivot; i < hist.size(); ++i)
-    {
-        const std::uint64_t n = hist[i];
-        kept += n;
-        sum += static_cast<long double>(n) * static_cast<long double>(i);
-    }
-    if (kept == 0)
-    {
-        return 0.0;
-    }
-    return static_cast<double>(sum / static_cast<long double>(kept));
-}
-
-double clampedRatio(double numerator, double denominator)
-{
-    if (!(numerator > 0.0) || !(denominator > 0.0))
-    {
-        return 1.0;
-    }
-    double gain = numerator / denominator;
-    if (gain < 0.1)
-    {
-        gain = 0.1;
-    }
-    if (gain > 16.0)
-    {
-        gain = 16.0;
-    }
-    return gain;
-}
-
-WbGains gainsFromMeans(double meanR, double meanG, double meanB)
-{
-    WbGains gains;
-    gains.r = clampedRatio(meanG, meanR);
-    gains.g = 1.0;
-    gains.b = clampedRatio(meanG, meanB);
-    return gains;
 }
 
 } // namespace
@@ -696,36 +513,12 @@ double srgbEncode(double linear)
     return 1.055 * std::pow(linear, 1.0 / 2.4) - 0.055;
 }
 
-WbGains computeWhiteBalance(const Params &p, const std::vector<std::uint16_t> &samples)
+namespace
 {
-    WbGains unit;
-    if (!inputOk(p, samples) || p.cfa == Cfa::Mono || p.wb == WhiteBalance::None)
-    {
-        return unit;
-    }
-    if (p.wb == WhiteBalance::Manual)
-    {
-        unit.r = p.wbGainR;
-        unit.b = p.wbGainB;
-        return unit;
-    }
-    const int white = effectiveWhiteLevel(p);
-    std::array<std::vector<std::uint32_t>, 3> hist;
-    accumulateHistograms(p, samples, white, hist);
-    const bool patch = p.wb == WhiteBalance::WhitePatch;
-    const double meanR = patch ? whitePatchMean(hist[0]) : histogramMean(hist[0]);
-    const double meanG = patch ? whitePatchMean(hist[1]) : histogramMean(hist[1]);
-    const double meanB = patch ? whitePatchMean(hist[2]) : histogramMean(hist[2]);
-    return gainsFromMeans(meanR, meanG, meanB);
-}
 
-ImageData renderPlainRawWithGains(const Params &p, const std::vector<std::uint16_t> &samples,
-                                  const WbGains &gains, int maxEdge)
+ImageData renderPrepared(const Params &p, std::vector<std::uint16_t> samples, const WbGains &gains,
+                         int maxEdge)
 {
-    if (!inputOk(p, samples))
-    {
-        return {};
-    }
     const int white = effectiveWhiteLevel(p);
     std::array<std::vector<std::uint16_t>, 4> luts;
     buildPositionLuts(p, gains, white, luts);
@@ -742,21 +535,47 @@ ImageData renderPlainRawWithGains(const Params &p, const std::vector<std::uint16
     std::uint8_t *dst = image.buffer->data();
     if (preview)
     {
-        renderPreview(p, samples, luts, encode.data(), image.width, image.height, dst);
+        detail::renderPreview(p, samples, luts, encode.data(), image.width, image.height, dst);
         return image;
     }
-    std::vector<std::uint16_t> lin;
-    lineariseFrame(samples, p.width, p.height, luts, lin);
+    lineariseInPlace(samples.data(), p.width, p.height, luts);
     if (p.cfa == Cfa::Mono)
     {
-        encodeMono(lin, encode.data(), dst);
+        encodeMono(samples.data(), p.width, p.height, encode.data(), dst);
         return image;
     }
     SiteKind kinds[4] = {siteKind(p.cfa, 0, 0), siteKind(p.cfa, 1, 0), siteKind(p.cfa, 0, 1),
                          siteKind(p.cfa, 1, 1)};
-    demosaicInteriorRows(lin.data(), p.width, p.height, kinds, encode.data(), dst);
-    demosaicBorder(lin.data(), p.width, p.height, kinds, encode.data(), dst);
+    demosaicInteriorRows(samples.data(), p.width, p.height, kinds, encode.data(), dst);
+    demosaicBorder(samples.data(), p.width, p.height, kinds, encode.data(), dst);
     return image;
+}
+
+} // namespace
+
+void setPlainRawRowsRunner(PlainRawRowsRunner runner) noexcept
+{
+    plainRawRowsSlot().store(runner, std::memory_order_release);
+}
+
+ImageData renderPlainRawWithGains(const Params &p, const std::vector<std::uint16_t> &samples,
+                                  const WbGains &gains, int maxEdge)
+{
+    if (!inputOk(p, samples))
+    {
+        return {};
+    }
+    return renderPrepared(p, std::vector<std::uint16_t>(samples), gains, maxEdge);
+}
+
+ImageData renderPlainRawOwned(const Params &p, std::vector<std::uint16_t> &&samples, int maxEdge)
+{
+    if (!inputOk(p, samples))
+    {
+        return {};
+    }
+    const WbGains gains = computeWhiteBalance(p, samples);
+    return renderPrepared(p, std::move(samples), gains, maxEdge);
 }
 
 ImageData renderPlainRaw(const Params &p, const std::vector<std::uint16_t> &samples, int maxEdge)
@@ -765,8 +584,7 @@ ImageData renderPlainRaw(const Params &p, const std::vector<std::uint16_t> &samp
     {
         return {};
     }
-    const WbGains gains = computeWhiteBalance(p, samples);
-    return renderPlainRawWithGains(p, samples, gains, maxEdge);
+    return renderPlainRawOwned(p, std::vector<std::uint16_t>(samples), maxEdge);
 }
 
 } // namespace mviewer::core::rawplain

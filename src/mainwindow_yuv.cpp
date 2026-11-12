@@ -209,7 +209,8 @@ QString MainWindow::yuvSampleText(const QString &path, int frameIndex, int x, in
 {
     const std::string utf8 = path.toUtf8().toStdString();
     if (mviewer::core::rawplain::isPlainRawPath(utf8))
-        return QString::fromStdString(mviewer::core::rawplain::plainRawSampleText(utf8, x, y));
+        return QString::fromStdString(mviewer::core::rawplain::plainRawSampleText(
+            utf8, x, y, mviewer::core::rawplain::SampleRead::CachedOrAsync));
     if (!mviewer::core::yuv::isYuvPath(utf8))
         return {};
     // One unpacked frame is cached, so moving the cursor does not re-read the file.

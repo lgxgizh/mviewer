@@ -4,6 +4,7 @@
 #include "core/image/rawplain/PlainRawFormat.h"
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 // ADR 033: unpacked samples -> RGB24 for display. Pipeline per sample:
@@ -46,10 +47,11 @@ double srgbEncode(double linear);
 
 // Renders samples (size width*height, p valid) to RGB24. maxEdge <= 0 or
 // max(width, height) <= maxEdge -> full resolution, bilinear demosaic.
-// Otherwise a fast preview: each output pixel takes the 2x2 CFA quad nearest
-// to its nearest-sampled source position (R, mean of the Gs, B; Mono: the
-// sample), output longest edge == maxEdge, aspect kept, each side >= 1.
-// Uses per-CFA-position lookup tables, no per-pixel virtual calls.
+// Otherwise a fast preview: each output pixel averages up to 4x4 CFA quads
+// (up to 8x8 samples) evenly spread over its source footprint, per channel
+// after the linear LUT (fewer quads when the footprint is smaller; Mono
+// averages the samples). Output longest edge == maxEdge, aspect kept, each
+// side >= 1. Uses per-CFA-position lookup tables, no per-pixel virtual calls.
 // Empty ImageData on invalid input.
 ImageData renderPlainRaw(const Params &p, const std::vector<std::uint16_t> &samples,
                          int maxEdge = 0);
@@ -57,5 +59,17 @@ ImageData renderPlainRaw(const Params &p, const std::vector<std::uint16_t> &samp
 // Same as renderPlainRaw with precomputed gains (tests, sample probe).
 ImageData renderPlainRawWithGains(const Params &p, const std::vector<std::uint16_t> &samples,
                                   const WbGains &gains, int maxEdge = 0);
+
+// Same pixels as renderPlainRaw. Takes ownership of samples and linearises
+// them in place, so a full render does not allocate a second frame.
+ImageData renderPlainRawOwned(const Params &p, std::vector<std::uint16_t> &&samples,
+                              int maxEdge = 0);
+
+// fn runs on row bands [y0, y1) that cover [0, rowCount) and has returned for
+// every band before the runner returns. nullptr (the default, and what
+// setPlainRawRowsRunner(nullptr) restores) calls fn(0, rowCount) on this thread.
+// The rawplain module stays std-only; the decoder installs a thread pool.
+using PlainRawRowsRunner = void (*)(int rowCount, const std::function<void(int, int)> &fn);
+void setPlainRawRowsRunner(PlainRawRowsRunner runner) noexcept;
 
 } // namespace mviewer::core::rawplain
