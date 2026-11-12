@@ -268,6 +268,42 @@ void averageFootprint(const Params &p, const std::vector<std::uint16_t> &samples
 namespace detail
 {
 
+bool previewDimensions(int w, int h, int maxEdge, int &outW, int &outH)
+{
+    outW = w;
+    outH = h;
+    if (maxEdge <= 0)
+    {
+        return false;
+    }
+    const int longest = (w >= h) ? w : h;
+    if (longest <= maxEdge)
+    {
+        return false;
+    }
+    if (w >= h)
+    {
+        outW = maxEdge;
+        outH = static_cast<int>(static_cast<std::int64_t>(h) * static_cast<std::int64_t>(maxEdge) /
+                                static_cast<std::int64_t>(w));
+    }
+    else
+    {
+        outH = maxEdge;
+        outW = static_cast<int>(static_cast<std::int64_t>(w) * static_cast<std::int64_t>(maxEdge) /
+                                static_cast<std::int64_t>(h));
+    }
+    if (outW < 1)
+    {
+        outW = 1;
+    }
+    if (outH < 1)
+    {
+        outH = 1;
+    }
+    return true;
+}
+
 void renderPreview(const Params &p, const std::vector<std::uint16_t> &samples,
                    const std::array<std::vector<std::uint16_t>, 4> &luts, const std::uint8_t *enc,
                    int outW, int outH, std::uint8_t *dst)

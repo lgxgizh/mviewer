@@ -390,42 +390,6 @@ void encodeMono(const std::uint16_t *lin, int w, int h, const std::uint8_t *enc,
     dispatchRows(h, [&](int y0, int y1) { encodeMonoBand(lin, w, y0, y1, enc, dst); });
 }
 
-bool previewDimensions(int w, int h, int maxEdge, int &outW, int &outH)
-{
-    outW = w;
-    outH = h;
-    if (maxEdge <= 0)
-    {
-        return false;
-    }
-    const int longest = (w >= h) ? w : h;
-    if (longest <= maxEdge)
-    {
-        return false;
-    }
-    if (w >= h)
-    {
-        outW = maxEdge;
-        outH = static_cast<int>(static_cast<std::int64_t>(h) * static_cast<std::int64_t>(maxEdge) /
-                                static_cast<std::int64_t>(w));
-    }
-    else
-    {
-        outH = maxEdge;
-        outW = static_cast<int>(static_cast<std::int64_t>(w) * static_cast<std::int64_t>(maxEdge) /
-                                static_cast<std::int64_t>(h));
-    }
-    if (outW < 1)
-    {
-        outW = 1;
-    }
-    if (outH < 1)
-    {
-        outH = 1;
-    }
-    return true;
-}
-
 ImageData allocateRgb(int w, int h)
 {
     ImageData image;
@@ -515,7 +479,7 @@ ImageData renderPrepared(const Params &p, std::vector<std::uint16_t> samples, co
     buildEncodeLut(p.srgbGamma, encode);
     int outW = 0;
     int outH = 0;
-    const bool preview = previewDimensions(p.width, p.height, maxEdge, outW, outH);
+    const bool preview = detail::previewDimensions(p.width, p.height, maxEdge, outW, outH);
     ImageData image = allocateRgb(preview ? outW : p.width, preview ? outH : p.height);
     if (image.isNull() || !image.buffer)
     {

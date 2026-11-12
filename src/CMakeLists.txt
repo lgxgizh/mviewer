@@ -71,6 +71,7 @@ add_library(mviewer_core SHARED
     core/image/rawplain/PlainRawWhiteBalance.cpp
     core/image/rawplain/PlainRawSample.cpp
     core/image/rawplain/PlainRawFile.cpp
+    core/image/rawplain/PlainRawStride.cpp
     core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
@@ -1423,6 +1424,12 @@ target_link_libraries(test_plainraw_file PRIVATE mviewer_core)
 target_compile_features(test_plainraw_file PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_file_tests COMMAND test_plainraw_file)
+
+add_executable(test_plainraw_stride core/test_plainraw_stride.cpp)
+target_link_libraries(test_plainraw_stride PRIVATE mviewer_core)
+target_compile_features(test_plainraw_stride PRIVATE cxx_std_20)
+target_include_directories(test_plainraw_stride PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME plainraw_stride_tests COMMAND test_plainraw_stride)
 
 add_executable(test_yuv_sequence core/test_yuv_sequence.cpp)
 target_link_libraries(test_yuv_sequence PRIVATE mviewer_core)
