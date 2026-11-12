@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.0.176] - 2026-11-12
+
+Headerless grayscale `.gray` / `.grey` viewing (ADR 034).
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.176**.
+
 ### Added
 
 - **Headerless grayscale `.gray` / `.grey` images** (ADR 034, any letter case):
