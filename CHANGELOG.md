@@ -2,6 +2,50 @@
 
 ## [Unreleased]
 
+## [1.0.177] - 2026-11-12
+
+Image pipeline quality and performance review (2026-11-12): sharper and
+more accurate display, YUV and RAW quality, and faster opening of large and
+mid-size images.
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.177**.
+
+### Changed
+
+- **Sharper viewer fit**: zoomed-out images are resampled to the exact
+  device-pixel size with the Sharp filter (2× box, then Catmull-Rom in linear
+  light) instead of a Qt bilinear blit. Compare full-frame fit uses the same
+  linear-light Sharp resample.
+- **16-bit images** are ordered-dithered to 8-bit for display, which removes
+  banding in smooth gradients.
+- **Grayscale** (mono, `.gray`, Qt Grayscale8) stays single-channel in memory
+  instead of being expanded to RGB.
+- **YUV**: bilinear chroma upsampling by default, box-averaged luma for
+  thumbnails and scaled views, and BT.2020 output is tagged with a Rec.2020
+  profile (SDR only). Channel-Y, the pixel inspector and YUV readouts follow
+  the source matrix (Rec.601 fallback).
+- **Camera RAW**: optional high-quality full decode (`raw/highQuality`, off by
+  default): AAHD demosaic, 16-bit output with dither, and highlight blending.
+- **Gallery thumbnails** honor the source ICC profile for EXIF previews, and
+  JPEG reduced-size decodes round sizes instead of truncating.
+
+### Performance
+
+- Large stills (up to 60 MP) no longer decode the full frame just to show the
+  image. The full frame loads only when analysis, the inspector, export, a
+  histogram or similar needs it.
+- Images above 4 MP (and 16-bit or RAW images above 1 MP) open from a
+  viewport-sized preview first, instead of waiting for a full decode.
+- The Sharp fit works on decoded pixels directly (no extra image copies) and
+  decodes at the exact display size (no 1.25× overscan).
+- Next/previous preloading warms only a display-sized raster by default
+  (full neighbor decode is opt-in via `viewer/preloadFullNeighbors`), sized
+  for the current window so switching images needs no second decode.
+- Plain `.raw` / `.gray` thumbnails and previews read only the rows they need
+  instead of the whole file.
+
 ## [1.0.176] - 2026-11-12
 
 Headerless grayscale `.gray` / `.grey` viewing (ADR 034).
