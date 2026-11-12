@@ -67,6 +67,9 @@ add_library(mviewer_core SHARED
     core/image/rawplain/PlainRawInference.cpp
     core/image/rawplain/PlainRawUnpack.cpp
     core/image/rawplain/PlainRawRender.cpp
+    core/image/rawplain/PlainRawPreview.cpp
+    core/image/rawplain/PlainRawWhiteBalance.cpp
+    core/image/rawplain/PlainRawSample.cpp
     core/image/rawplain/PlainRawFile.cpp
     core/image/FrameSequenceProbe.cpp
     core/image/FramePlaybackController.cpp

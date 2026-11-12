@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <vector>
 
 static int g_failures = 0;
@@ -26,6 +27,8 @@ using mviewer::core::rawplain::computeWhiteBalance;
 using mviewer::core::rawplain::Packing;
 using mviewer::core::rawplain::Params;
 using mviewer::core::rawplain::renderPlainRaw;
+using mviewer::core::rawplain::renderPlainRawOwned;
+using mviewer::core::rawplain::setPlainRawRowsRunner;
 using mviewer::core::rawplain::srgbEncode;
 using mviewer::core::rawplain::WbGains;
 using mviewer::core::rawplain::WhiteBalance;
@@ -414,6 +417,148 @@ void checkTiming()
     CHECK(image.buffer->size() == static_cast<std::size_t>(kW) * static_cast<std::size_t>(kH) * 3U);
 }
 
+bool nearGain(double got, double want)
+{
+    const double scale = std::fabs(want) > 1.0 ? std::fabs(want) : 1.0;
+    return std::fabs(got - want) <= scale * 0.01;
+}
+
+void checkPreviewAverage()
+{
+    constexpr int kW = 64;
+    constexpr int kH = 32;
+    Params p = makeParams(kW, kH, 8, Packing::Bits8, Cfa::RGGB);
+    auto samples = filled(kW, kH, 0);
+    for (int y = 0; y < kH; ++y)
+    {
+        for (int x = 0; x < kW; ++x)
+        {
+            const bool alt = (((x / 2) + (y / 2)) & 1) != 0;
+            const int red = alt ? 200 : 40;
+            const int green = alt ? 180 : 20;
+            const int blue = alt ? 100 : 60;
+            const CfaColor colour = cfaColorAt(Cfa::RGGB, x, y);
+            int value = green;
+            if (colour == CfaColor::Red)
+            {
+                value = red;
+            }
+            else if (colour == CfaColor::Blue)
+            {
+                value = blue;
+            }
+            const auto row = static_cast<std::size_t>(y) * static_cast<std::size_t>(kW);
+            samples[row + static_cast<std::size_t>(x)] = static_cast<std::uint16_t>(value);
+        }
+    }
+    const ImageData preview = renderPlainRaw(p, samples, 8);
+    CHECK(preview.width == 8);
+    CHECK(preview.height == 4);
+    CHECK(!preview.isNull());
+    if (preview.isNull())
+    {
+        return;
+    }
+    for (int y = 0; y < preview.height; ++y)
+    {
+        for (int x = 0; x < preview.width; ++x)
+        {
+            const std::uint8_t *px = pixelAt(preview, x, y);
+            CHECK(std::abs(static_cast<int>(px[0]) - 120) <= 2);
+            CHECK(std::abs(static_cast<int>(px[1]) - 100) <= 2);
+            CHECK(std::abs(static_cast<int>(px[2]) - 80) <= 2);
+            CHECK(px[0] != 40 && px[0] != 200);
+            CHECK(px[1] != 20 && px[1] != 180);
+            CHECK(px[2] != 60 && px[2] != 100);
+        }
+    }
+}
+
+void checkSubsampledWhiteBalance()
+{
+    constexpr int kW = 2448;
+    constexpr int kH = 2048;
+    Params smallP = makeParams(32, 24, 10, Packing::Lsb16, Cfa::RGGB);
+    smallP.wb = WhiteBalance::GrayWorld;
+    auto smallSamples = filled(32, 24, 0);
+    paintSites(smallSamples, 32, 24, Cfa::RGGB, 200, 400, 100);
+    const WbGains full = computeWhiteBalance(smallP, smallSamples);
+
+    Params largeP = makeParams(kW, kH, 10, Packing::Lsb16, Cfa::RGGB);
+    largeP.wb = WhiteBalance::GrayWorld;
+    auto largeSamples = filled(kW, kH, 0);
+    paintSites(largeSamples, kW, kH, Cfa::RGGB, 200, 400, 100);
+    const WbGains sub = computeWhiteBalance(largeP, largeSamples);
+
+    CHECK(std::fabs(full.r - 2.0) < 1e-6);
+    CHECK(std::fabs(full.b - 4.0) < 1e-6);
+    CHECK(nearGain(sub.r, full.r));
+    CHECK(nearGain(sub.g, full.g));
+    CHECK(nearGain(sub.b, full.b));
+}
+
+bool sameRgb(const ImageData &a, const ImageData &b)
+{
+    if (a.isNull() || b.isNull() || !a.buffer || !b.buffer)
+    {
+        return false;
+    }
+    if (a.width != b.width || a.height != b.height)
+    {
+        return false;
+    }
+    return *a.buffer == *b.buffer;
+}
+
+void threeBandRunner(int rowCount, const std::function<void(int, int)> &fn)
+{
+    constexpr int kBands = 3;
+    for (int band = 0; band < kBands; ++band)
+    {
+        const int y0 = rowCount * band / kBands;
+        const int y1 = rowCount * (band + 1) / kBands;
+        fn(y0, y1);
+    }
+}
+
+std::vector<std::uint16_t> rampFrame(int w, int h)
+{
+    std::vector<std::uint16_t> samples(static_cast<std::size_t>(w) * static_cast<std::size_t>(h));
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            const int value = (x * 3 + y * 5) & 255;
+            const auto row = static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
+            samples[row + static_cast<std::size_t>(x)] = static_cast<std::uint16_t>(value);
+        }
+    }
+    return samples;
+}
+
+void checkOwnedAndRowBands()
+{
+    Params p = makeParams(64, 32, 8, Packing::Bits8, Cfa::RGGB);
+    const auto samples = rampFrame(64, 32);
+    setPlainRawRowsRunner(nullptr);
+    const ImageData serial = renderPlainRaw(p, samples, 0);
+    const ImageData owned = renderPlainRawOwned(p, std::vector<std::uint16_t>(samples), 0);
+    CHECK(sameRgb(serial, owned));
+
+    setPlainRawRowsRunner(&threeBandRunner);
+    const ImageData banded = renderPlainRaw(p, samples, 0);
+    const ImageData bandedOwned = renderPlainRawOwned(p, std::vector<std::uint16_t>(samples), 0);
+    CHECK(sameRgb(serial, banded));
+    CHECK(sameRgb(serial, bandedOwned));
+
+    setPlainRawRowsRunner(nullptr);
+    Params mono = makeParams(64, 32, 8, Packing::Bits8, Cfa::Mono);
+    const ImageData monoSerial = renderPlainRaw(mono, samples, 0);
+    setPlainRawRowsRunner(&threeBandRunner);
+    CHECK(sameRgb(monoSerial, renderPlainRaw(mono, samples, 0)));
+    setPlainRawRowsRunner(nullptr);
+}
+
 } // namespace
 
 int main()
@@ -424,6 +569,9 @@ int main()
     checkWhiteBalance();
     checkDemosaic();
     checkPreviewAndInvalid();
+    checkPreviewAverage();
+    checkSubsampledWhiteBalance();
+    checkOwnedAndRowBands();
     checkTiming();
     if (g_failures != 0)
     {

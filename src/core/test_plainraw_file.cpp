@@ -8,12 +8,14 @@
 #include "core/image/decoder/PlainRawDecoder.h"
 #endif
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 static int g_failures = 0;
@@ -131,6 +133,96 @@ void testOverrideFollowsRename()
     CHECK(store.revision() == revision);
     CHECK(store.override(keyFrom).has_value());
     store.clearAll();
+}
+
+void waitUntilSampleIdle()
+{
+    using mviewer::core::rawplain::plainRawSampleFillIdle;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!plainRawSampleFillIdle())
+    {
+        if (std::chrono::steady_clock::now() >= deadline)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+}
+
+std::string rawRedText(int value)
+{
+    return "RAW R=" + std::to_string(value) + " (10-bit)";
+}
+
+void writeFlatRaw(const std::filesystem::path &path, std::uint16_t value)
+{
+    auto samples = patternSamples(64, 32);
+    samples[0] = value;
+    writeBytes(path, packLsb16(samples, 64, 128));
+}
+
+void testSampleMtime(const std::filesystem::path &dir)
+{
+    using mviewer::core::rawplain::plainRawSampleText;
+    const auto mtimeFile = dir / "mtime_64x32.raw";
+    writeFlatRaw(mtimeFile, 10);
+    const std::string path = mtimeFile.string();
+    const std::string before = plainRawSampleText(path, 0, 0);
+    CHECK(before == rawRedText(10));
+    const auto stamp = std::filesystem::last_write_time(mtimeFile);
+    writeFlatRaw(mtimeFile, 400);
+    std::filesystem::last_write_time(mtimeFile, stamp + std::chrono::seconds(2));
+    const std::string after = plainRawSampleText(path, 0, 0);
+    CHECK(after == rawRedText(400));
+}
+
+void testSampleAsync(const std::filesystem::path &dir)
+{
+    using mviewer::core::rawplain::plainRawSampleFillIdle;
+    using mviewer::core::rawplain::plainRawSampleText;
+    using mviewer::core::rawplain::SampleRead;
+    const auto asyncFile = dir / "async_64x32.raw";
+    writeFlatRaw(asyncFile, 7);
+    const std::string path = asyncFile.string();
+    CHECK(plainRawSampleText(path, 0, 0, SampleRead::CachedOrAsync).empty());
+    waitUntilSampleIdle();
+    CHECK(plainRawSampleFillIdle());
+    const std::string cached = plainRawSampleText(path, 0, 0, SampleRead::CachedOrAsync);
+    CHECK(cached == rawRedText(7));
+    CHECK(cached == plainRawSampleText(path, 0, 0));
+}
+
+void testSampleTwoFiles(const std::filesystem::path &dir)
+{
+    using mviewer::core::rawplain::plainRawSampleFillIdle;
+    using mviewer::core::rawplain::plainRawSampleText;
+    using mviewer::core::rawplain::SampleRead;
+    const auto fileA = dir / "alt_a_64x32.raw";
+    const auto fileB = dir / "alt_b_64x32.raw";
+    writeFlatRaw(fileA, 11);
+    writeFlatRaw(fileB, 22);
+    const std::string pathA = fileA.string();
+    const std::string pathB = fileB.string();
+    CHECK(plainRawSampleText(pathA, 0, 0, SampleRead::CachedOrAsync).empty());
+    waitUntilSampleIdle();
+    CHECK(plainRawSampleText(pathB, 0, 0, SampleRead::CachedOrAsync).empty());
+    waitUntilSampleIdle();
+    const std::string textA = plainRawSampleText(pathA, 0, 0, SampleRead::CachedOrAsync);
+    const std::string textB = plainRawSampleText(pathB, 0, 0, SampleRead::CachedOrAsync);
+    CHECK(textA == rawRedText(11));
+    CHECK(textB == rawRedText(22));
+    CHECK(plainRawSampleFillIdle());
+    CHECK(plainRawSampleText(pathA, 0, 0, SampleRead::CachedOrAsync) == textA);
+    CHECK(plainRawSampleText(pathB, 0, 0, SampleRead::CachedOrAsync) == textB);
+}
+
+void testSampleReadCache(const std::filesystem::path &dir)
+{
+    PlainRawParamStore::instance().clearAll();
+    testSampleMtime(dir);
+    testSampleAsync(dir);
+    testSampleTwoFiles(dir);
+    waitUntilSampleIdle();
 }
 
 } // namespace
@@ -413,6 +505,8 @@ int main()
             CHECK(contains(truncRes.error().message, "smaller than one frame"));
     }
 #endif
+
+    testSampleReadCache(dir);
 
     std::error_code ec;
     std::filesystem::remove_all(dir, ec);

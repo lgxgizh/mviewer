@@ -95,9 +95,26 @@ std::string plainRawCacheKeySuffix(const std::string &path);
 // Suffix empty -> key has no "|praw=" marker. Otherwise key ends with suffix.
 bool plainRawCacheKeyAgrees(const std::string &key, const std::string &suffix);
 
+// How plainRawSampleText obtains samples.
+// Blocking reads the payload on a cache miss (existing callers and tests).
+// CachedOrAsync returns cached text, or "" and starts one background fill.
+// A fill starts only when none is running. See plainRawSampleFillIdle.
+enum class SampleRead : std::uint8_t
+{
+    Blocking,
+    CachedOrAsync
+};
+
 // Stored sample under (x, y) in source coordinates, e.g. "RAW G=512 (10-bit)",
-// "" when not a known .raw or out of range. Keeps the last unpacked frame
-// (path + params + file size) so hovering does not re-read the file.
-std::string plainRawSampleText(const std::string &path, int x, int y);
+// "" when not a known .raw or out of range. Keeps up to four unpacked frames
+// (path + params + file size + mtime), most recently used first, so hovering
+// does not re-read the file. CachedOrAsync never reads the payload on the
+// calling thread: a miss returns "" after starting at most one background fill
+// (resolvePlainRawFile + readPlainRawSamples, then an LRU insert).
+std::string plainRawSampleText(const std::string &path, int x, int y,
+                               SampleRead mode = SampleRead::Blocking);
+
+// True when no background sample fill is running.
+bool plainRawSampleFillIdle();
 
 } // namespace mviewer::core::rawplain

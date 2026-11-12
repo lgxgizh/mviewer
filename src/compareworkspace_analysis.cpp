@@ -906,8 +906,9 @@ QString CompareWorkspace::formatPixelInfo(int cellIndex, const QString &cellName
     if (cellFrame && cellAdjust.rotation % 360 == 0 && !cellAdjust.flipH && !cellAdjust.flipV &&
         !cellAdjust.hasCrop)
     {
-        const std::string rawText =
-            mviewer::core::rawplain::plainRawSampleText(cellFrame->metadata().filePath, x, y);
+        const std::string rawText = mviewer::core::rawplain::plainRawSampleText(
+            cellFrame->metadata().filePath, x, y,
+            mviewer::core::rawplain::SampleRead::CachedOrAsync);
         if (!rawText.empty())
             info += QStringLiteral("  ") + QString::fromStdString(rawText);
     }

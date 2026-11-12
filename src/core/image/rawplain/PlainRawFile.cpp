@@ -131,72 +131,6 @@ PlainRawFileInfo unopenable()
     return info;
 }
 
-std::string sampleLine(const Params &p, const std::vector<std::uint16_t> &samples, int x, int y)
-{
-    if (x < 0 || y < 0 || x >= p.width || y >= p.height)
-        return {};
-    const int64_t idx =
-        static_cast<int64_t>(y) * static_cast<int64_t>(p.width) + static_cast<int64_t>(x);
-    if (idx < 0 || static_cast<std::uint64_t>(idx) >= static_cast<std::uint64_t>(samples.size()))
-        return {};
-    char channel = 'G';
-    if (p.cfa == Cfa::Mono)
-        channel = 'Y';
-    else
-    {
-        switch (cfaColorAt(p.cfa, x, y))
-        {
-        case CfaColor::Red:
-            channel = 'R';
-            break;
-        case CfaColor::Green:
-            channel = 'G';
-            break;
-        case CfaColor::Blue:
-            channel = 'B';
-            break;
-        }
-    }
-    const auto value = samples[static_cast<std::size_t>(idx)];
-    std::string text = "RAW ";
-    text.push_back(channel);
-    text.push_back('=');
-    text += std::to_string(static_cast<unsigned>(value));
-    text += " (";
-    text += std::to_string(p.bitDepth);
-    text += "-bit)";
-    return text;
-}
-
-struct SampleCache
-{
-    std::string key;
-    Params params;
-    std::vector<std::uint16_t> samples;
-};
-
-std::mutex &sampleMutex()
-{
-    static std::mutex mutex;
-    return mutex;
-}
-
-SampleCache &sampleCache()
-{
-    static SampleCache cache;
-    return cache;
-}
-
-std::string cacheIdentity(const std::string &path, const Params &p, int64_t fileSize)
-{
-    std::string key = plainRawParamKey(path);
-    key.push_back('|');
-    key += toString(p);
-    key.push_back('|');
-    key += std::to_string(fileSize);
-    return key;
-}
-
 } // namespace
 
 bool isPlainRawPath(const std::string &path)
@@ -522,7 +456,7 @@ ImageData decodePlainRawFile(const std::string &path, int maxEdge, PlainRawFileI
             setWhy(why, reason);
             return {};
         }
-        ImageData image = renderPlainRaw(info.resolved.params, samples, maxEdge);
+        ImageData image = renderPlainRawOwned(info.resolved.params, std::move(samples), maxEdge);
         if (image.isNull())
         {
             setWhy(why, "render failed");
@@ -603,40 +537,6 @@ bool plainRawCacheKeyAgrees(const std::string &key, const std::string &suffix)
     catch (...)
     {
         return false;
-    }
-}
-
-std::string plainRawSampleText(const std::string &path, int x, int y)
-{
-    try
-    {
-        if (!isPlainRawPath(path))
-            return {};
-        PlainRawFileInfo info = resolvePlainRawFile(path);
-        if (!info.resolved.known)
-            return {};
-        const std::string id = cacheIdentity(path, info.resolved.params, info.fileSize);
-        {
-            std::lock_guard<std::mutex> lock(sampleMutex());
-            SampleCache &cache = sampleCache();
-            if (cache.key == id)
-                return sampleLine(cache.params, cache.samples, x, y);
-        }
-        std::vector<std::uint16_t> samples;
-        if (!readPlainRawSamples(path, info, samples, nullptr))
-            return {};
-        const Params params = info.resolved.params;
-        std::string text = sampleLine(params, samples, x, y);
-        std::lock_guard<std::mutex> lock(sampleMutex());
-        SampleCache &cache = sampleCache();
-        cache.key = id;
-        cache.params = params;
-        cache.samples = std::move(samples);
-        return text;
-    }
-    catch (...)
-    {
-        return {};
     }
 }
 
