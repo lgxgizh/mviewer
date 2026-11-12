@@ -1,5 +1,7 @@
 #include "core/image/rawplain/PlainRawUnpack.h"
 
+#include <algorithm>
+#include <bit>
 #include <limits>
 
 namespace mviewer::core::rawplain
@@ -88,8 +90,7 @@ void unpackLsb16(const Params &p, const std::uint8_t *data, std::uint16_t *out)
         std::uint16_t *dst = out + static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
         for (int x = 0; x < w; ++x)
         {
-            dst[x] = static_cast<std::uint16_t>(
-                load16(row + static_cast<std::size_t>(x) * 2u, order) & m);
+            dst[x] = std::min(load16(row + static_cast<std::size_t>(x) * 2u, order), m);
         }
     }
 }
@@ -178,7 +179,31 @@ int sampleBits8(const std::uint8_t *row, int x)
 
 int sampleLsb16(const std::uint8_t *row, int x, ByteOrder order, std::uint16_t m)
 {
-    return static_cast<int>(load16(row + static_cast<std::size_t>(x) * 2u, order) & m);
+    const std::uint16_t value = load16(row + static_cast<std::size_t>(x) * 2u, order);
+    return static_cast<int>(std::min(value, m));
+}
+
+std::uint16_t maxLsb16Value(const Params &p, const std::uint8_t *data)
+{
+    const int w = p.width;
+    const int h = p.height;
+    const int64_t stride = effectiveRowStride(p);
+    const ByteOrder order = p.byteOrder;
+    std::uint16_t peak = 0;
+    for (int y = 0; y < h; ++y)
+    {
+        const std::uint8_t *row =
+            data + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
+        for (int x = 0; x < w; ++x)
+        {
+            const std::uint16_t value = load16(row + static_cast<std::size_t>(x) * 2u, order);
+            if (value > peak)
+            {
+                peak = value;
+            }
+        }
+    }
+    return peak;
 }
 
 int sampleMsb16(const std::uint8_t *row, int x, ByteOrder order, int shift, std::uint16_t m)
@@ -267,6 +292,23 @@ int sampleAt(const Params &p, const std::uint8_t *data, std::size_t size, int x,
         return sampleMipi12(row, x);
     }
     return -1;
+}
+
+int lsb16SignificantBits(const Params &p, const std::uint8_t *data, std::size_t size)
+{
+    try
+    {
+        if (p.packing != Packing::Lsb16 || data == nullptr || !bufferOk(p, size))
+        {
+            return p.bitDepth;
+        }
+        const unsigned peak = maxLsb16Value(p, data);
+        return static_cast<int>(std::bit_width(peak));
+    }
+    catch (...)
+    {
+        return p.bitDepth;
+    }
 }
 
 } // namespace mviewer::core::rawplain

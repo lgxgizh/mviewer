@@ -300,6 +300,46 @@ int main()
     CHECK(contains(info.resolved.why, "cannot open file"));
     CHECK(plainRawSampleText((dir / "missing.raw").string(), 0, 0).empty());
 
+    store.clearAll();
+    const auto depthFile = dir / "depth_64x32.raw";
+    std::vector<std::uint16_t> ramp(static_cast<std::size_t>(64 * 32));
+    const int rampLast = static_cast<int>(ramp.size()) - 1;
+    for (int i = 0; i <= rampLast; ++i)
+    {
+        const int value = static_cast<int>((static_cast<int64_t>(i) * 4000) / rampLast);
+        ramp[static_cast<std::size_t>(i)] = static_cast<std::uint16_t>(value);
+    }
+    writeBytes(depthFile, packLsb16(ramp, 64, 128));
+    const std::string depthPath = depthFile.string();
+    PlainRawFileInfo depthInfo;
+    ImageData depthImage = decodePlainRawFile(depthPath, 0, &depthInfo, &why);
+    CHECK(!depthImage.isNull());
+    CHECK(depthInfo.resolved.params.bitDepth == 12);
+    CHECK(!depthInfo.depthNote.empty());
+    CHECK(contains(depthInfo.depthNote, "read as"));
+    ImageMetadata depthMeta;
+    fillPlainRawMetadata(depthInfo, depthPath, depthMeta);
+    CHECK(depthMeta.bitDepth == 12);
+    CHECK(contains(depthMeta.colorSpace, depthInfo.depthNote));
+    CHECK(depthMeta.textKeys["MViewer.PlainRaw.Note"] == depthInfo.depthNote);
+
+    Params depthOver = sized(64, 32);
+    store.setOverride(plainRawParamKey(depthPath), depthOver);
+    depthInfo = resolvePlainRawFile(depthPath);
+    CHECK(depthInfo.fromOverride);
+    std::vector<std::uint16_t> clipped;
+    CHECK(readPlainRawSamples(depthPath, depthInfo, clipped, &why));
+    std::uint16_t peak = 0;
+    for (std::uint16_t sample : clipped)
+    {
+        if (sample > peak)
+            peak = sample;
+    }
+    CHECK(peak == 1023);
+    CHECK(depthInfo.resolved.params.bitDepth == 10);
+    CHECK(contains(depthInfo.depthNote, "clipped"));
+    store.clearAll();
+
 #ifndef PLAINRAW_NO_REGISTRY
     {
         // ADR 033: the default registry sends .raw to PlainRawDecoder, never LibRaw.
@@ -318,6 +358,20 @@ int main()
         CHECK(decoder.decodeScaled(nosizePath, 128).isNull());
         CHECK(mviewer::core::ImageFormats::isSupportedSuffix("raw"));
         CHECK(!mviewer::core::isRawExtension("raw"));
+
+        const auto nosizeRaw = dir / "nosize.raw";
+        writeBytes(nosizeRaw, std::vector<std::uint8_t>(100, 0));
+        const auto nosizeRes = DecoderRegistry::instance().decodeFullResult(nosizeRaw.string());
+        CHECK(!nosizeRes.isOk());
+        if (!nosizeRes.isOk())
+            CHECK(contains(nosizeRes.error().message, "RAW parameters"));
+
+        const auto trunc = dir / "trunc_64x32.raw";
+        writeBytes(trunc, std::vector<std::uint8_t>(10, 0));
+        const auto truncRes = DecoderRegistry::instance().decodeFullResult(trunc.string());
+        CHECK(!truncRes.isOk());
+        if (!truncRes.isOk())
+            CHECK(contains(truncRes.error().message, "smaller than one frame"));
     }
 #endif
 

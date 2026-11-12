@@ -26,6 +26,87 @@
 
 #include <string>
 
+namespace
+{
+
+void appendUniquePlainRaw(QStringList &paths, const QString &path)
+{
+    if (path.isEmpty() || paths.contains(path))
+        return;
+    if (!mviewer::core::rawplain::isPlainRawPath(path.toUtf8().toStdString()))
+        return;
+    paths.push_back(path);
+}
+
+void appendPanelPlainRaw(QStringList &paths, const ThumbnailPanel *panel)
+{
+    if (panel == nullptr)
+        return;
+    const QStringList listed = panel->pathList();
+    for (const QString &path : listed)
+        appendUniquePlainRaw(paths, path);
+}
+
+void invalidateThumbnails(const QString &path, ThumbnailPanel *primary, ThumbnailPanel *secondary,
+                          ThumbnailPanel *tertiary)
+{
+    const std::string utf8 = path.toUtf8().toStdString();
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+    ThumbnailProvider::invalidateSource(utf8);
+    for (ThumbnailPanel *panel : {primary, secondary, tertiary})
+    {
+        if (panel)
+            panel->invalidateSourceImage(path);
+    }
+}
+
+void reloadCompareIfShows(CompareWorkspace *view, const QStringList &paths)
+{
+    if (view == nullptr || !view->isVisible())
+        return;
+    const QStringList compared = view->comparedImages();
+    for (const QString &path : paths)
+    {
+        if (compared.contains(path))
+        {
+            view->setImages(compared);
+            return;
+        }
+    }
+}
+
+void refreshYuvParamSource(const QString &path, ThumbnailPanel *primary, ThumbnailPanel *secondary,
+                           ThumbnailPanel *tertiary, PreviewPanel *preview, MetadataPanel *metadata,
+                           ImageViewer *viewer, CompareWorkspace *compare)
+{
+    invalidateThumbnails(path, primary, secondary, tertiary);
+    if (preview)
+        preview->setImage(path);
+    if (metadata)
+        metadata->setImage(path);
+    if (viewer && !viewer->isHidden() && viewer->currentPath() == path)
+        viewer->refreshSource(path);
+    reloadCompareIfShows(compare, {path});
+}
+
+} // namespace
+
+void MainWindow::refreshPlainRawSources(const QStringList &paths)
+{
+    for (const QString &path : paths)
+    {
+        invalidateThumbnails(path, m_thumbnailPanel, m_secondaryThumbnailPanel,
+                             m_tertiaryThumbnailPanel);
+    }
+    if (m_previewPanel && paths.contains(m_previewPanel->requestedPath()))
+        m_previewPanel->setImage(m_previewPanel->requestedPath());
+    if (m_metadataPanel && paths.contains(currentImagePath()))
+        m_metadataPanel->setImage(currentImagePath());
+    if (m_imageViewer && m_imageViewer->isVisible() && paths.contains(m_imageViewer->currentPath()))
+        m_imageViewer->refreshSource(m_imageViewer->currentPath());
+    reloadCompareIfShows(m_compareView, paths);
+}
+
 void MainWindow::editYuvParams(const QString &path)
 {
     if (path.isEmpty())
@@ -39,20 +120,12 @@ void MainWindow::editYuvParams(const QString &path)
     const bool plainRaw = mviewer::core::rawplain::isPlainRawPath(utf8);
     if (!(plainRaw ? editPlainRawParamsForPath(parent, path) : editYuvParamsForPath(parent, path)))
         return;
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
-    ThumbnailProvider::invalidateSource(utf8);
-    for (ThumbnailPanel *panel :
-         {m_thumbnailPanel, m_secondaryThumbnailPanel, m_tertiaryThumbnailPanel})
-    {
-        if (panel)
-            panel->invalidateSourceImage(path);
-    }
-    if (m_previewPanel)
-        m_previewPanel->setImage(path);
-    if (m_metadataPanel)
-        m_metadataPanel->setImage(path);
-    if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == path)
-        m_imageViewer->refreshSource(path);
+    if (plainRaw)
+        refreshPlainRawSources({path});
+    else
+        refreshYuvParamSource(path, m_thumbnailPanel, m_secondaryThumbnailPanel,
+                              m_tertiaryThumbnailPanel, m_previewPanel, m_metadataPanel,
+                              m_imageViewer, m_compareView);
     if (statusBar())
         statusBar()->showMessage(
             (plainRaw ? tr("RAW parameters updated: %1") : tr("YUV parameters updated: %1"))
@@ -80,29 +153,47 @@ void MainWindow::onYuvExtensionMapChanged()
 
 void MainWindow::onPlainRawDefaultsChanged()
 {
-    // ADR 033: thumbnail and decode keys carry the effective parameters, so a
-    // relist re-renders every .raw file with the new defaults.
-    refreshActiveBrowse();
-    const QString current = m_imageViewer ? m_imageViewer->currentPath() : QString();
-    const std::string utf8 = current.toUtf8().toStdString();
-    if (!current.isEmpty() && mviewer::core::rawplain::isPlainRawPath(utf8))
+    // ADR 033: cached thumbnails and compare cells keep the old render until
+    // the source is invalidated and the open views are reloaded.
+    QStringList paths;
+    appendPanelPlainRaw(paths, m_thumbnailPanel);
+    appendPanelPlainRaw(paths, m_secondaryThumbnailPanel);
+    appendPanelPlainRaw(paths, m_tertiaryThumbnailPanel);
+    if (m_imageViewer)
+        appendUniquePlainRaw(paths, m_imageViewer->currentPath());
+    if (m_compareView)
     {
-        mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
-        if (!m_imageViewer->isHidden())
-            m_imageViewer->refreshSource(current);
+        const QStringList compared = m_compareView->comparedImages();
+        for (const QString &path : compared)
+            appendUniquePlainRaw(paths, path);
     }
+    refreshPlainRawSources(paths);
     if (statusBar())
         statusBar()->showMessage(tr("RAW default parameters updated"), 4000);
 }
 
 bool MainWindow::showYuvLoadHint(const QString &path)
 {
-    if (mviewer::core::rawplain::isPlainRawPath(path.toUtf8().toStdString()) && statusBar())
+    const std::string utf8 = path.toUtf8().toStdString();
+    if (mviewer::core::rawplain::isPlainRawPath(utf8) && statusBar())
     {
-        statusBar()->showMessage(
-            tr("Cannot show %1: set its size and storage with right-click > RAW Parameters...")
-                .arg(QFileInfo(path).fileName()),
-            8000);
+        const std::string why = mviewer::core::rawplain::resolvePlainRawFile(utf8).resolved.why;
+        const QString name = QFileInfo(path).fileName();
+        if (why.empty())
+        {
+            statusBar()->showMessage(
+                tr("Cannot show %1: set its size and storage with right-click > RAW Parameters...")
+                    .arg(name),
+                8000);
+        }
+        else
+        {
+            statusBar()->showMessage(
+                tr("Cannot show %1: %2. Set its size and storage with right-click > RAW "
+                   "Parameters...")
+                    .arg(name, QString::fromStdString(why)),
+                8000);
+        }
         return true;
     }
     if (!mviewer::core::yuv::isYuvPath(path.toUtf8().toStdString()) || !statusBar())

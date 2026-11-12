@@ -38,6 +38,12 @@ void testDefaultSuffix()
           "RAW suffix decision is case-insensitive");
     check(UsmCompareDialog::defaultSaveExtension(QStringLiteral("shot.nrw")) == rawExt,
           "RAW path uses the same default suffix");
+    check(UsmCompareDialog::defaultSaveExtension(QStringLiteral("raw")) == rawExt,
+          "plain .raw uses the camera RAW save suffix");
+    check(UsmCompareDialog::defaultSaveExtension(QStringLiteral("RAW")) == rawExt,
+          "plain .RAW uses the camera RAW save suffix");
+    check(UsmCompareDialog::defaultSaveExtension(QStringLiteral("raw")) != QLatin1String("raw"),
+          "plain .raw is not saved as raw");
     check(UsmCompareDialog::defaultSaveExtension(QStringLiteral("jpg")) == QLatin1String("jpg"),
           "JPEG keeps its suffix");
     check(UsmCompareDialog::defaultSaveExtension(QString()) == QLatin1String("png"),

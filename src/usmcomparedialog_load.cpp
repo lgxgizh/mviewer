@@ -3,6 +3,7 @@
 #include "core/image/Encoder.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/QtConvert.h"
+#include "core/image/rawplain/PlainRawFile.h"
 #include "display/DisplayColorContextProvider.h"
 
 #include <QApplication>
@@ -63,7 +64,9 @@ QString UsmCompareDialog::defaultSaveExtension(const QString &sourceSuffix)
     if (dot >= 0)
         ext = ext.mid(dot + 1);
     ext = ext.toLower();
-    if (mviewer::core::isRawExtension(ext.toStdString()))
+    const std::string extText = ext.toStdString();
+    const bool sensorDump = mviewer::core::rawplain::isPlainRawPath("x." + extText);
+    if (mviewer::core::isRawExtension(extText) || sensorDump)
         return Encoder::formatForExtension("tif") == "tiff" ? QStringLiteral("tif")
                                                             : QStringLiteral("png");
     return ext.isEmpty() ? QStringLiteral("png") : ext;

@@ -361,7 +361,72 @@ PlainRawFileInfo resolvePlainRawFile(const std::string &path)
     }
 }
 
-bool readPlainRawSamples(const std::string &path, const PlainRawFileInfo &info,
+namespace
+{
+
+int shiftBlackLevel(int black, int oldBits, int newBits)
+{
+    if (newBits <= oldBits)
+        return black;
+    const int sh = newBits - oldBits;
+    if (sh >= 31)
+        return 0;
+    const int64_t shifted = static_cast<int64_t>(black) << sh;
+    if (shifted > static_cast<int64_t>(std::numeric_limits<int>::max()))
+        return std::numeric_limits<int>::max();
+    return static_cast<int>(shifted);
+}
+
+int containerDepth(int detected)
+{
+    if (detected <= 12)
+        return 12;
+    if (detected <= 14)
+        return 14;
+    return 16;
+}
+
+std::string depthExceededNote(int oldBits, int newBits, bool clipped)
+{
+    std::string text = "samples exceed ";
+    text += std::to_string(oldBits);
+    text += "-bit; ";
+    if (clipped)
+    {
+        text += "values above white are clipped";
+        return text;
+    }
+    text += "read as ";
+    text += std::to_string(newBits);
+    text += "-bit";
+    return text;
+}
+
+void applyLsb16Depth(PlainRawFileInfo &info, const std::uint8_t *data, std::size_t size)
+{
+    info.depthNote.clear();
+    Params &params = info.resolved.params;
+    if (params.packing != Packing::Lsb16)
+        return;
+    const int detected = lsb16SignificantBits(params, data, size);
+    if (detected <= params.bitDepth)
+        return;
+    const int oldBits = params.bitDepth;
+    if (info.fromOverride)
+    {
+        info.depthNote = depthExceededNote(oldBits, oldBits, true);
+        return;
+    }
+    const int neu = containerDepth(detected);
+    params.blackLevel = shiftBlackLevel(params.blackLevel, oldBits, neu);
+    params.whiteLevel = 0;
+    params.bitDepth = neu;
+    info.depthNote = depthExceededNote(oldBits, neu, false);
+}
+
+} // namespace
+
+bool readPlainRawSamples(const std::string &path, PlainRawFileInfo &info,
                          std::vector<std::uint16_t> &samples, std::string *why)
 {
     try
@@ -386,6 +451,7 @@ bool readPlainRawSamples(const std::string &path, const PlainRawFileInfo &info,
             setWhy(why, "short read");
             return false;
         }
+        applyLsb16Depth(info, raw.data(), raw.size());
         if (!unpackPlainRaw(info.resolved.params, raw.data(), raw.size(), samples))
         {
             setWhy(why, "unpack failed");
@@ -409,16 +475,19 @@ ImageData decodePlainRawFile(const std::string &path, int maxEdge, PlainRawFileI
     try
     {
         PlainRawFileInfo info = resolvePlainRawFile(path);
-        if (infoOut != nullptr)
-            *infoOut = info;
         if (!info.resolved.known)
         {
+            if (infoOut != nullptr)
+                *infoOut = info;
             setWhy(why, info.resolved.why);
             return {};
         }
         std::vector<std::uint16_t> samples;
         std::string reason;
-        if (!readPlainRawSamples(path, info, samples, &reason))
+        const bool read = readPlainRawSamples(path, info, samples, &reason);
+        if (infoOut != nullptr)
+            *infoOut = info;
+        if (!read)
         {
             setWhy(why, reason);
             return {};
@@ -454,6 +523,13 @@ void fillPlainRawMetadata(const PlainRawFileInfo &info, const std::string &path,
         meta.channels = (p.cfa == Cfa::Mono) ? 1 : 3;
         meta.format = "RAW (plain)";
         meta.colorSpace = std::string(cfaLabel(p.cfa)) + " " + std::to_string(p.bitDepth) + "-bit";
+        if (!info.depthNote.empty())
+        {
+            meta.colorSpace += " (";
+            meta.colorSpace += info.depthNote;
+            meta.colorSpace += ")";
+            meta.textKeys["MViewer.PlainRaw.Note"] = info.depthNote;
+        }
         meta.frameCount = 1;
         meta.currentFrame = 0;
         meta.sequenceKind = "static";
@@ -506,7 +582,7 @@ std::string plainRawSampleText(const std::string &path, int x, int y)
     {
         if (!isPlainRawPath(path))
             return {};
-        const PlainRawFileInfo info = resolvePlainRawFile(path);
+        PlainRawFileInfo info = resolvePlainRawFile(path);
         if (!info.resolved.known)
             return {};
         const std::string id = cacheIdentity(path, info.resolved.params, info.fileSize);

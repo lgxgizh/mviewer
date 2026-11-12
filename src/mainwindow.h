@@ -421,6 +421,7 @@ class MainWindow : public QMainWindow
     bool showYuvLoadHint(const QString &path);
     void onYuvExtensionMapChanged();  // Preferences > YUV edited the suffix mapping
     void onPlainRawDefaultsChanged(); // Preferences > RAW edited the .raw defaults (ADR 033)
+    void refreshPlainRawSources(const QStringList &paths);
     static QString yuvSampleText(const QString &path, int frameIndex, int x, int y);
     void connectViewerPixelInfo();
     void toggleFocusBrowse();

@@ -6043,6 +6043,11 @@ Build: %2</source>
         <source>Cannot show %1: set its size and storage with right-click &gt; RAW Parameters...</source>
         <translation>无法显示 %1：请右键 &gt; RAW 参数... 设置尺寸和存储格式</translation>
     </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>Cannot show %1: %2. Set its size and storage with right-click &gt; RAW Parameters...</source>
+        <translation>无法显示 %1：%2。请右键 &gt; RAW 参数... 设置尺寸和存储格式</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>

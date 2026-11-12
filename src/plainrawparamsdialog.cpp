@@ -214,13 +214,19 @@ bool editPlainRawParamsForPath(QWidget *parent, const QString &path)
     namespace raw = mviewer::core::rawplain;
     const std::string utf8 = path.toUtf8().toStdString();
     const std::string key = raw::plainRawParamKey(utf8);
-    const raw::PlainRawFileInfo info = raw::resolvePlainRawFile(utf8);
+    raw::PlainRawFileInfo info = raw::resolvePlainRawFile(utf8);
     if (info.fileSize < 0)
     {
         QMessageBox::warning(
             parent, QCoreApplication::translate("PlainRawParamsDialog", "RAW Parameters"),
             QCoreApplication::translate("PlainRawParamsDialog", "Cannot open %1.").arg(path));
         return false;
+    }
+    const bool hasOverride = raw::PlainRawParamStore::instance().override(key).has_value();
+    if (!hasOverride && info.resolved.known)
+    {
+        std::vector<std::uint16_t> scratch;
+        raw::readPlainRawSamples(utf8, info, scratch, nullptr);
     }
     Params initial = info.resolved.params;
     if (initial.width == 0)
@@ -231,7 +237,6 @@ bool editPlainRawParamsForPath(QWidget *parent, const QString &path)
     {
         initial.height = 480;
     }
-    const bool hasOverride = raw::PlainRawParamStore::instance().override(key).has_value();
     const QString fileName = QFileInfo(path).fileName();
     PlainRawParamsDialog dialog(fileName.isEmpty() ? path : fileName, info.fileSize, initial,
                                 hasOverride, parent);

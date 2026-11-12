@@ -53,10 +53,11 @@ class PlainRawParamsDialog : public QDialog
     QDialogButtonBox *m_buttons = nullptr;
 };
 
-// Resolves the file (resolvePlainRawFile), pre-fills the dialog with the
-// effective params (width/height 0 -> 640x480), runs it. Accept -> reset ?
-// clearOverride : setOverride(plainRawParamKey(path), params). Returns true
-// when the store changed. Not openable -> QMessageBox::warning, false.
+// Resolves the file (resolvePlainRawFile). With no override and a known
+// frame, reads samples once so a wider Lsb16 depth is detected. Pre-fills
+// the dialog with the effective params (width/height 0 -> 640x480), runs it.
+// Accept -> reset ? clearOverride : setOverride. Returns true when the store
+// changed. Not openable -> QMessageBox::warning, false.
 bool editPlainRawParamsForPath(QWidget *parent, const QString &path);
 
 // One-line translated label for a packing, e.g. "16-bit container, LSB aligned".
