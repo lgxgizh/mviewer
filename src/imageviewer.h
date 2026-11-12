@@ -141,8 +141,7 @@ class ImageViewer : public QOpenGLWidget
     }
     // Full source size of the LOD raster or the loaded frame.
     QSize displaySize() const;
-    // UI thread. One full-frame load per image, and only when a consumer needs
-    // ImageFrame pixels. No-op if already issued, already loaded, or over 60 MP.
+    // One full-frame load per image, only when a consumer needs ImageFrame pixels.
     void ensureAnalysisLoad();
     // Committed ROI in image pixels (empty during a drag and after Esc), and
     // the widget rect drawSelection uses for the drag or that committed rect.
@@ -373,10 +372,7 @@ class ImageViewer : public QOpenGLWidget
     void emitZoom();
     void advanceViewportRevision();
     void beginImageGeneration();
-    // M47: true when the viewer has something to display/zoom (a valid full
-    // frame OR an active LOD/region raster). All zoom/pan/fit entry points use
-    // this instead of the bare m_frame check so large images remain fully
-    // interactive while their raster path is active.
+    // True when a full frame or an active LOD raster is on screen.
     bool hasDisplayImage() const;
     void issueAnalysisLoad(const QString &path, uint64_t generation);
     void fitToWidget();
@@ -473,8 +469,12 @@ class ImageViewer : public QOpenGLWidget
     struct DisplayRasterPreloadState
     {
         std::atomic<uint64_t> promotedGeneration{0};
-        // Display request serial this preload was promoted into (pan drops it).
-        std::atomic<uint64_t> displaySerial{0};
+        std::atomic<uint64_t> displaySerial{0}; // serial this preload was promoted into
+        int widgetW = 0;
+        int widgetH = 0;
+        double dpr = 1.0;
+        double lockedScale = 0.0; // >0: zoom-lock scale, else fit the neighbor
+        bool maximizeFit = false;
     };
     struct DisplayRasterPreloadResult
     {

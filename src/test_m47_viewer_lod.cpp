@@ -15,6 +15,7 @@
 //      frame through imageReady and does NOT use the raster display.
 //   V7 a feasible LOD still (24 MP JPEG) displays from the raster alone.
 //      imageReady arrives only after ensureAnalysisLoad().
+//   V8 a warmed large neighbor matches the fit-to-window device-pixel size.
 //   Policy (no fixtures): display-raster accept prefers coverage over a
 //      sharper miss, LOD smoothing is off at >= 1 device pixel per source
 //      pixel, and the ROI stats sentence keeps its English source.
@@ -33,7 +34,9 @@
 #include <QTemporaryDir>
 #include <QTimer>
 
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <functional>
@@ -41,6 +44,9 @@
 #include <thread>
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 // clang-format off
 #include <windows.h>
 #include <psapi.h>
@@ -503,6 +509,50 @@ int main(int argc, char **argv)
         pump(200);
         CHECK(viewer.frame() && viewer.frame()->width() == 6000,
               "V7: a second ensure does not drop the loaded frame");
+    }
+
+    // ── V8: neighbor warm matches the fit-to-window device size ────────────
+    {
+        MARK("V8 start");
+        ImageViewer viewer;
+        viewer.resize(1280, 800);
+        viewer.show();
+        pump(50);
+        bool display = false;
+        QObject::connect(&viewer, &ImageViewer::displayReady, &viewer,
+                         [&](const QSize &) { display = true; });
+        viewer.setBrowseSequence({highCompression});
+        viewer.setImage(highCompression);
+        CHECK(waitTrue([&] { return display && viewer.isLodDisplay(); }, 30000),
+              "V8: current image is on the LOD path");
+        const int widgetW = viewer.width();
+        const int widgetH = viewer.height();
+        const double dpr = std::max(1.0, viewer.devicePixelRatioF());
+        CHECK(widgetW > 0 && widgetH > 0, "V8: viewer has a widget size");
+        viewer.setBrowseSequence({highCompression, jpeg100});
+        CHECK(waitTrue([&] { return viewer.displayRasterWarmCount() >= 1; }, 30000),
+              "V8: neighbor display raster is warmed");
+        QImage warm;
+        QSize source;
+        QRect covered;
+        CHECK(viewer.takeWarmDisplayForCompare(jpeg100, &warm, &source, &covered),
+              "V8: warm raster is available");
+        CHECK(covered == QRect(0, 0, source.width(), source.height()),
+              "V8: warm covers the full source");
+        Viewport fitted;
+        fitted.screenW = widgetW;
+        fitted.screenH = widgetH;
+        fitted.fit(source.width(), source.height(), FitPolicy::Comfortable);
+        const double density = fitted.scale * dpr;
+        CHECK(density > 0.0 && density < 1.0, "V8: neighbor fit is zoomed out");
+        const double w = static_cast<double>(source.width()) * density;
+        const double h = static_cast<double>(source.height()) * density;
+        CHECK(std::max(w, h) <= 4096.0 && w * h <= 8.0 * 1000 * 1000.0,
+              "V8: device fit is inside the LOD caps");
+        const int tw = std::max(1, static_cast<int>(std::lround(w)));
+        const int th = std::max(1, static_cast<int>(std::lround(h)));
+        CHECK(warm.width() == tw && warm.height() == th,
+              "V8: warm raster is the exact device-pixel fit");
     }
 
     std::printf("=== M47 viewer LOD-first display tests: %s ===\n",
