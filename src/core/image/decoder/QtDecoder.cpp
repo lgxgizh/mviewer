@@ -35,32 +35,43 @@ QImage decodeTiffWicRaster(const std::string &path, const QRect &rawRect, const 
 namespace
 {
 
+void copyRasterRows(const QImage &img, ImageData &out, size_t rowBytes)
+{
+    if (!out.buffer || out.buffer->empty())
+        return;
+    const int h = img.height();
+    const qsizetype bytesPerLine = img.bytesPerLine();
+    if (bytesPerLine == static_cast<qsizetype>(rowBytes) && out.stride() == rowBytes)
+    {
+        std::memcpy(out.buffer->data(), img.constBits(), rowBytes * static_cast<size_t>(h));
+        return;
+    }
+    for (int y = 0; y < h; ++y)
+    {
+        const uchar *s = img.constScanLine(y);
+        uint8_t *d = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+        std::memcpy(d, s, rowBytes);
+    }
+}
+
 ImageData toImageData(const QImage &src)
 {
     if (src.isNull())
         return ImageData();
+    // 8-bit gray stays one sample per pixel. 16-bit (including Grayscale16)
+    // and every other format still expand through RGB888, as before.
+    if (src.format() == QImage::Format_Grayscale8)
+    {
+        ImageData out = makeImageData(src.width(), src.height(), PixelFormat::Grayscale8);
+        copyRasterRows(src, out, static_cast<size_t>(src.width()));
+        return out;
+    }
     const QImage img =
         (src.format() == QImage::Format_RGB888) ? src : src.convertToFormat(QImage::Format_RGB888);
     if (img.isNull())
         return ImageData();
     ImageData out = makeImageData(img.width(), img.height(), PixelFormat::RGB24);
-    const int w = img.width();
-    const int h = img.height();
-    const size_t rowBytes = static_cast<size_t>(w) * 3;
-    const qsizetype bytesPerLine = img.bytesPerLine();
-    if (bytesPerLine == static_cast<qsizetype>(rowBytes) && out.stride() == rowBytes)
-    {
-        std::memcpy(out.buffer->data(), img.constBits(), rowBytes * static_cast<size_t>(h));
-    }
-    else
-    {
-        for (int y = 0; y < h; ++y)
-        {
-            const uchar *s = img.constScanLine(y);
-            uint8_t *d = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-            std::memcpy(d, s, rowBytes);
-        }
-    }
+    copyRasterRows(img, out, static_cast<size_t>(img.width()) * 3U);
     return out;
 }
 

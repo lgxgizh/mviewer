@@ -294,14 +294,16 @@ void testPlainRawCapabilities(const std::string &scenePath, const std::string &u
 
 bool grayRowPixel(const ImageData &image, int x, int value)
 {
-    if (image.isNull() || image.format != PixelFormat::RGB24)
+    if (image.isNull() || image.format != PixelFormat::Grayscale8)
+        return false;
+    const std::size_t pixels =
+        static_cast<std::size_t>(image.width) * static_cast<std::size_t>(image.height);
+    if (!image.buffer || image.buffer->size() != pixels)
         return false;
     const ConstImageView view = image.constView();
     if (view.data == nullptr || x < 0 || x >= image.width || image.height < 1)
         return false;
-    const std::size_t at = static_cast<std::size_t>(x) * 3U;
-    const auto expect = static_cast<uint8_t>(value);
-    return view.data[at] == expect && view.data[at + 1] == expect && view.data[at + 2] == expect;
+    return view.data[static_cast<std::size_t>(x)] == static_cast<uint8_t>(value);
 }
 
 void testGrayDump(const std::filesystem::path &dir)
@@ -339,11 +341,19 @@ void testGrayDump(const std::filesystem::path &dir)
     std::string why;
     const ImageData image = decodePlainRawFile(grayPath, 0, nullptr, &why);
     CHECK(!image.isNull());
+    CHECK(image.format == PixelFormat::Grayscale8);
     CHECK(image.width == w && image.height == h);
+    CHECK(image.buffer &&
+          image.buffer->size() == static_cast<std::size_t>(w) * static_cast<std::size_t>(h));
     CHECK(grayRowPixel(image, 0, ramp[0]));
     CHECK(grayRowPixel(image, 1, ramp[1]));
     CHECK(grayRowPixel(image, 17, ramp[17]));
     CHECK(grayRowPixel(image, 63, ramp[63]));
+    const ImageData grayPreview = decodePlainRawFile(grayPath, 16, nullptr, &why);
+    CHECK(!grayPreview.isNull());
+    CHECK(grayPreview.format == PixelFormat::Grayscale8);
+    CHECK(grayPreview.width == 16 && grayPreview.height == 8);
+    CHECK(grayPreview.buffer && grayPreview.buffer->size() == static_cast<std::size_t>(16) * 8U);
 
     const unsigned first = ramp[0];
     const unsigned at17 = ramp[17];
