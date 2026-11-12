@@ -256,6 +256,35 @@ int sampleMipi12(const std::uint8_t *row, int x)
     return static_cast<int>((static_cast<unsigned>(b[1]) << 4) | (b[2] >> 4));
 }
 
+bool rowCoversSample(const Params &p, std::size_t rowBytes, int x)
+{
+    std::int64_t need = -1;
+    switch (p.packing)
+    {
+    case Packing::Bits8:
+        need = static_cast<std::int64_t>(x) + 1;
+        break;
+    case Packing::Lsb16:
+    case Packing::Msb16:
+        need = (static_cast<std::int64_t>(x) + 1) * 2;
+        break;
+    case Packing::Mipi10:
+        need = (static_cast<std::int64_t>(x / 4) + 1) * 5;
+        break;
+    case Packing::Mipi12:
+        need = (static_cast<std::int64_t>(x / 2) + 1) * 3;
+        break;
+    case Packing::Bits1:
+        need = static_cast<std::int64_t>(x / 8) + 1;
+        break;
+    }
+    if (need < 1)
+    {
+        return false;
+    }
+    return rowBytes >= static_cast<std::size_t>(need);
+}
+
 } // namespace
 
 bool unpackPlainRaw(const Params &p, const std::uint8_t *data, std::size_t size,
@@ -304,6 +333,34 @@ int sampleAt(const Params &p, const std::uint8_t *data, std::size_t size, int x,
     }
     const int64_t stride = effectiveRowStride(p);
     const std::uint8_t *row = data + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
+    switch (p.packing)
+    {
+    case Packing::Bits8:
+        return sampleBits8(row, x);
+    case Packing::Lsb16:
+        return sampleLsb16(row, x, p.byteOrder, maskOf(p.bitDepth));
+    case Packing::Msb16:
+        return sampleMsb16(row, x, p.byteOrder, 16 - p.bitDepth, maskOf(p.bitDepth));
+    case Packing::Mipi10:
+        return sampleMipi10(row, x);
+    case Packing::Mipi12:
+        return sampleMipi12(row, x);
+    case Packing::Bits1:
+        return sampleBits1(row, x);
+    }
+    return -1;
+}
+
+int samplePlainRawRow(const Params &p, const std::uint8_t *row, std::size_t rowBytes, int x)
+{
+    if (row == nullptr || x < 0 || x >= p.width || !packingSupportsBitDepth(p.packing, p.bitDepth))
+    {
+        return -1;
+    }
+    if (!rowCoversSample(p, rowBytes, x))
+    {
+        return -1;
+    }
     switch (p.packing)
     {
     case Packing::Bits8:

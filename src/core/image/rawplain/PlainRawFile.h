@@ -89,9 +89,13 @@ PlainRawFileInfo resolvePlainRawFile(const std::string &path);
 bool readPlainRawSamples(const std::string &path, PlainRawFileInfo &info,
                          std::vector<std::uint16_t> &samples, std::string *why = nullptr);
 
-// resolvePlainRawFile + readPlainRawSamples + renderPlainRaw(maxEdge).
-// *infoOut, when set, is the info after the sample read (detected depth).
-// Empty ImageData (why set) on failure.
+// resolvePlainRawFile, then renderPlainRaw(maxEdge). The full payload
+// (readPlainRawSamples, including Lsb16 depth detection) is used when
+// maxEdge <= 0, the frame already fits, either axis shrinks by less than 2,
+// or a 2x preview grid would be the whole frame. Otherwise a phase-preserving
+// subset of rows is read and box-averaged. *infoOut keeps the source width
+// and height. The subset path does not re-probe Lsb16 depth. Empty ImageData
+// (why set) on failure.
 ImageData decodePlainRawFile(const std::string &path, int maxEdge,
                              PlainRawFileInfo *infoOut = nullptr, std::string *why = nullptr);
 

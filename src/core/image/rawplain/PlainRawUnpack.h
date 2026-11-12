@@ -30,6 +30,11 @@ bool unpackPlainRaw(const Params &p, const std::uint8_t *data, std::size_t size,
 // One sample at (x, y) from the same bytes; -1 when out of range or too short.
 int sampleAt(const Params &p, const std::uint8_t *data, std::size_t size, int x, int y);
 
+// One sample at column x of a single packed row (no stride padding). `rowBytes`
+// must cover that sample. Same numeric result as sampleAt. -1 when x is out of
+// range, row is null, or the row is short. Never throws.
+int samplePlainRawRow(const Params &p, const std::uint8_t *row, std::size_t rowBytes, int x);
+
 // Largest stored container value's bit width for Packing::Lsb16 when data
 // passes the same size check as unpackPlainRaw (0 when every sample is 0).
 // Any other packing, a null pointer or a short buffer returns p.bitDepth.

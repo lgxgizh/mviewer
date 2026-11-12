@@ -2,6 +2,7 @@
 
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/rawplain/PlainRawRender.h"
+#include "core/image/rawplain/PlainRawStride.h"
 #include "core/image/rawplain/PlainRawUnpack.h"
 
 #include <cstdint>
@@ -532,8 +533,25 @@ ImageData decodePlainRawFile(const std::string &path, int maxEdge, PlainRawFileI
             setWhy(why, info.resolved.why);
             return {};
         }
-        std::vector<std::uint16_t> samples;
         std::string reason;
+        ImageData strided;
+        const StridePreviewStatus stride =
+            decodePlainRawStrided(path, info, maxEdge, strided, reason);
+        if (stride == StridePreviewStatus::Failed)
+        {
+            if (infoOut != nullptr)
+                *infoOut = info;
+            setWhy(why, reason);
+            return {};
+        }
+        if (stride == StridePreviewStatus::Ready)
+        {
+            if (infoOut != nullptr)
+                *infoOut = info;
+            setWhy(why, std::string());
+            return strided;
+        }
+        std::vector<std::uint16_t> samples;
         const bool read = readPlainRawSamples(path, info, samples, &reason);
         if (infoOut != nullptr)
             *infoOut = info;
