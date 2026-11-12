@@ -10,6 +10,7 @@
 #include "core/image/yuv/YuvFormat.h"
 #include "domain/Image.h"
 
+#include <cmath>
 #include <cstdint>
 #include <string_view>
 
@@ -26,8 +27,8 @@ inline uint8_t lumaMatrix8(int r, int g, int b, mviewer::core::yuv::Matrix matri
     else
     {
         const mviewer::core::yuv::LumaKrKb k = mviewer::core::yuv::lumaKrKb(matrix);
-        const int kr = static_cast<int>(k.kr * 65536.0 + 0.5);
-        const int kb = static_cast<int>(k.kb * 65536.0 + 0.5);
+        const int kr = static_cast<int>(std::lround(k.kr * 65536.0));
+        const int kb = static_cast<int>(std::lround(k.kb * 65536.0));
         const int kg = 65536 - kr - kb;
         y = (kr * r + kg * g + kb * b + 32768) >> 16;
     }

@@ -475,30 +475,30 @@ static void testChannelYMatrix()
     CHECK(mviewer::yuvMatrixFromTag("bt709") == Matrix::BT709, "bt709 tag parses");
     CHECK(mviewer::yuvMatrixFromTag("bt2020") == Matrix::BT2020, "bt2020 tag parses");
 
-    const auto redMissing =
+    ImageData redMissing =
         paint(PixelFormat::RGB24, 255, 0, 0, mviewer::yuvMatrixFromMetadata(missing));
     CHECK(px(redMissing.view(), 0, 0)[0] == 76, "missing metadata Channel-Y red is 76");
-    const auto greenGarbage =
+    ImageData greenGarbage =
         paint(PixelFormat::RGB24, 0, 255, 0, mviewer::yuvMatrixFromMetadata(garbage));
     CHECK(px(greenGarbage.view(), 0, 0)[0] == 150, "garbage metadata Channel-Y green is 150");
-    const auto blueWrong =
+    ImageData blueWrong =
         paint(PixelFormat::RGB24, 0, 0, 255, mviewer::yuvMatrixFromMetadata(wrong));
     CHECK(px(blueWrong.view(), 0, 0)[0] == 29, "wrong key Channel-Y blue is 29");
 
     ImageMetadata meta709;
     meta709.textKeys["MViewer.Yuv.Matrix"] = "bt709";
-    const auto red709 =
+    ImageData red709 =
         paint(PixelFormat::RGB24, 255, 0, 0, mviewer::yuvMatrixFromMetadata(meta709));
     const uint8_t *p709 = px(red709.view(), 1, 1);
     CHECK(p709[0] == 54 && p709[1] == 54 && p709[2] == 54, "bt709 Channel-Y red is 54");
-    const auto green709 = paint(PixelFormat::RGB24, 0, 255, 0, Matrix::BT709);
+    ImageData green709 = paint(PixelFormat::RGB24, 0, 255, 0, Matrix::BT709);
     CHECK(px(green709.view(), 0, 0)[0] == 182, "bt709 Channel-Y green is 182");
-    const auto blue709 = paint(PixelFormat::RGB24, 0, 0, 255, Matrix::BT709);
+    ImageData blue709 = paint(PixelFormat::RGB24, 0, 0, 255, Matrix::BT709);
     CHECK(px(blue709.view(), 0, 0)[0] == lumaMatrix8(0, 0, 255, Matrix::BT709),
           "bt709 Channel-Y blue uses the matrix");
     CHECK(px(blue709.view(), 0, 0)[0] != 29, "bt709 Channel-Y blue differs from Rec.601");
 
-    const auto rgba = paint(PixelFormat::RGBA32, 255, 0, 0, Matrix::BT709);
+    ImageData rgba = paint(PixelFormat::RGBA32, 255, 0, 0, Matrix::BT709);
     const uint8_t *a = px(rgba.view(), 0, 0);
     CHECK(a[0] == 54 && a[3] == 255, "RGBA32 bt709 Channel-Y red keeps alpha");
 
@@ -518,7 +518,7 @@ static void testChannelYMatrix()
 
     ImageMetadata meta2020;
     meta2020.textKeys["MViewer.Yuv.Matrix"] = "bt2020";
-    const auto red2020 =
+    ImageData red2020 =
         paint(PixelFormat::RGB24, 255, 0, 0, mviewer::yuvMatrixFromMetadata(meta2020));
     CHECK(px(red2020.view(), 0, 0)[0] == 67, "bt2020 Channel-Y red is 67");
 
