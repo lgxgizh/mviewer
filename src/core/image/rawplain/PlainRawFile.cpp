@@ -283,6 +283,33 @@ void PlainRawParamStore::clearOverride(const std::string &key)
     ++m_revision;
 }
 
+void PlainRawParamStore::moveOverride(const std::string &fromKey, const std::string &toKey)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (fromKey == toKey)
+        return;
+    const auto it = m_overrides.find(fromKey);
+    if (it == m_overrides.end())
+        return;
+    const Params value = it->second;
+    m_overrides[toKey] = value;
+    m_overrides.erase(fromKey);
+    ++m_revision;
+}
+
+void PlainRawParamStore::copyOverride(const std::string &fromKey, const std::string &toKey)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (fromKey == toKey)
+        return;
+    const auto it = m_overrides.find(fromKey);
+    if (it == m_overrides.end())
+        return;
+    const Params value = it->second;
+    m_overrides[toKey] = value;
+    ++m_revision;
+}
+
 void PlainRawParamStore::clearAll()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -315,6 +342,9 @@ Resolved resolveOverride(const Params &p, int64_t fileSize)
     r.params = p;
     r.check = checkFileSize(p, fileSize);
     r.expectedBytes = frameBytes(p);
+    r.extraBytes = 0;
+    if (r.check == SizeCheck::Larger && r.expectedBytes >= 0 && fileSize >= r.expectedBytes)
+        r.extraBytes = fileSize - r.expectedBytes;
     std::string reason;
     if (!isValid(p, &reason))
     {

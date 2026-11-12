@@ -1,8 +1,57 @@
 #include "FileCopyCommand.h"
 
+#include "core/image/rawplain/PlainRawFile.h"
+
 #include <filesystem>
 
 namespace fs = std::filesystem;
+
+namespace
+{
+
+bool copyPlainRawOverride(const std::string &sourcePath, const std::string &destinationPath)
+{
+    try
+    {
+        namespace raw = mviewer::core::rawplain;
+        if (!raw::isPlainRawPath(sourcePath) || !raw::isPlainRawPath(destinationPath))
+            return false;
+        raw::PlainRawParamStore::instance().copyOverride(raw::plainRawParamKey(sourcePath),
+                                                         raw::plainRawParamKey(destinationPath));
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+bool clearPlainRawOverride(const std::string &destinationPath)
+{
+    try
+    {
+        namespace raw = mviewer::core::rawplain;
+        if (!raw::isPlainRawPath(destinationPath))
+            return false;
+        raw::PlainRawParamStore::instance().clearOverride(raw::plainRawParamKey(destinationPath));
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+void rememberPlainRawCopy(std::vector<std::pair<std::string, std::string>> &copied,
+                          const fs::path &source, const fs::path &destination)
+{
+    const std::string sourcePath = mviewer::core::pathToUtf8(source);
+    const std::string destinationPath = mviewer::core::pathToUtf8(destination);
+    copied.emplace_back(sourcePath, destinationPath);
+    copyPlainRawOverride(sourcePath, destinationPath);
+}
+
+} // namespace
 
 FileCopyCommand::FileCopyCommand(std::vector<std::string> paths, std::string destDir,
                                  std::shared_ptr<mviewer::core::FileSystemAdapter> fileSystem)
@@ -103,8 +152,7 @@ void FileCopyCommand::execute()
             mviewer::core::copyFileAtomically(source, destination, m_fileSystem, observer);
         if (result.state == mviewer::core::FileTransferState::Succeeded)
         {
-            m_copied.emplace_back(mviewer::core::pathToUtf8(source),
-                                  mviewer::core::pathToUtf8(destination));
+            rememberPlainRawCopy(m_copied, source, destination);
             completedBytes += planSizes[index];
             continue;
         }
@@ -129,9 +177,15 @@ bool FileCopyCommand::removeCopiedFiles(const char *operation)
         const fs::path copied = mviewer::core::pathFromUtf8(it->second);
         std::error_code ec;
         if (!m_fileSystem->exists(copied, ec))
+        {
+            clearPlainRawOverride(it->second);
             continue;
+        }
         if (m_fileSystem->remove(copied, ec) && !ec)
+        {
+            clearPlainRawOverride(it->second);
             continue;
+        }
         remaining.push_back(*it);
         failure = ec ? ec.message() : "remove failed";
     }

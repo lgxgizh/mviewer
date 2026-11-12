@@ -84,7 +84,8 @@ int64_t frameBytes(const Params &p);
 // Lsb16/Msb16 -> 8..16.
 bool packingSupportsBitDepth(Packing packing, int bitDepth);
 
-// Width and height set and in [1, kMaxDimension], width*height <= kMaxPixels,
+// Width and height in [1, kMaxDimension] (why "zero size" when < 1,
+// "width or height above 65536" when larger), width*height <= kMaxPixels,
 // packing/bitDepth compatible, headerOffset >= 0, rowStride 0 or >=
 // minRowBytes, 0 <= blackLevel < effectiveWhiteLevel <= (1 << bitDepth) - 1,
 // gains finite and in range. *why gets a short English reason when false.
@@ -104,10 +105,15 @@ std::string toString(const Params &p);
 // nullopt. Does not call isValid().
 std::optional<Params> parseParams(std::string_view text);
 
+// Every valid "<W>x<H>" in the name, in order. Same token rules as
+// sizeFromFileName.
+std::vector<std::pair<int, int>> sizesFromFileName(std::string_view fileName);
+
 // First "<W>x<H>" in the name (case-insensitive 'x', also U+00D7 in UTF-8),
 // where W and H are 1..5 digit numbers not adjacent to other digits and both
 // in [16, kMaxDimension]. Equivalent to the regex
 // (?<![0-9])([0-9]{2,5})[xX\u00D7]([0-9]{2,5})(?![0-9]).
+// The first element of sizesFromFileName, or nullopt when there is none.
 std::optional<std::pair<int, int>> sizeFromFileName(std::string_view fileName);
 
 enum class SizeCheck : std::uint8_t
@@ -127,9 +133,17 @@ SizeCheck checkFileSize(const Params &p, int64_t fileSize);
 // rescaled by the bit-depth difference (shift) and whiteLevel reset to 0.
 std::vector<Params> guessFromFileSize(const Params &base, int64_t fileSize);
 
-// Effective params for one file from the global defaults: width/height from
-// the file name when the defaults have 0; then, if checkFileSize is not Exact
-// and guessFromFileSize has a candidate, the first candidate is used.
+// First common sensor size, in the fixed order in PlainRawInference.cpp
+// (640x480 through 8192x6144, one orientation), for which
+// guessFromFileSize(base with that width and height, fileSize) is non-empty.
+// Returns that first candidate. nullopt when none match.
+std::optional<Params> guessCommonSize(const Params &base, int64_t fileSize);
+
+// Effective params for one file from the global defaults. Width/height come
+// from the file name when the defaults have 0. Several WxH tokens: the first
+// whose params (defaults' packing) are SizeCheck::Exact, else the first
+// guessFromFileSize can match, else the first token. Then, if the size check
+// is not Exact and guessFromFileSize has a candidate, that candidate is used.
 struct Resolved
 {
     Params params;
@@ -138,7 +152,8 @@ struct Resolved
     bool guessed = false;      // packing/bitDepth came from guessFromFileSize
     SizeCheck check = SizeCheck::Invalid;
     int64_t expectedBytes = -1;
-    std::string why; // English reason when !known
+    int64_t extraBytes = 0; // file bytes after the frame when check == Larger
+    std::string why;        // English reason when !known
 };
 Resolved resolveForFile(const Params &defaults, std::string_view fileName, int64_t fileSize);
 

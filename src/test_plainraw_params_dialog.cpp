@@ -11,6 +11,7 @@
 #include <QCoreApplication>
 #include <QDoubleSpinBox>
 #include <QSettings>
+#include <QSpinBox>
 #include <QString>
 #include <QTimer>
 
@@ -158,6 +159,41 @@ void testDialog()
     PlainRawParamsDialog trailing(QStringLiteral("frame.raw"), exact + 100, initial, false);
     CHECK(trailing.canAccept());
     CHECK(trailing.summaryText().contains(QStringLiteral("100")));
+    CHECK(!trailing.summaryText().contains(QStringLiteral("edit it to confirm")));
+}
+
+void testUntrustedLarger()
+{
+    Params initial;
+    initial.width = 64;
+    initial.height = 32;
+    initial.bitDepth = 10;
+    initial.packing = Packing::Lsb16;
+    const int64_t exact = int64_t{64} * 32 * 2;
+
+    PlainRawParamsDialog exactFrame(QStringLiteral("frame.raw"), exact, initial, false);
+    exactFrame.setSizeTrusted(false);
+    CHECK(exactFrame.canAccept());
+
+    PlainRawParamsDialog larger(QStringLiteral("frame.raw"), exact + 50, initial, false);
+    larger.setSizeTrusted(false);
+    CHECK(!larger.canAccept());
+    CHECK(larger.summaryText().contains(QStringLiteral("edit it to confirm")));
+
+    auto *depth = larger.editor()->findChild<QComboBox *>(QStringLiteral("plainRawBitDepth"));
+    CHECK(depth != nullptr);
+    const int twelve = depth->findData(12);
+    CHECK(twelve >= 0);
+    depth->setCurrentIndex(twelve);
+    CHECK(larger.params().bitDepth == 12);
+    CHECK(!larger.canAccept());
+
+    auto *width = larger.editor()->findChild<QSpinBox *>(QStringLiteral("plainRawWidth"));
+    CHECK(width != nullptr);
+    width->setValue(48);
+    CHECK(larger.params().width == 48);
+    CHECK(larger.canAccept());
+    CHECK(!larger.summaryText().contains(QStringLiteral("edit it to confirm")));
 }
 
 void testMissingPath()
@@ -186,6 +222,7 @@ int main(int argc, char **argv)
     testEditor();
     testSettings();
     testDialog();
+    testUntrustedLarger();
     testMissingPath();
     QSettings().clear();
     if (g_failures == 0)

@@ -8611,5 +8611,10 @@ to:
         <source>Cannot open %1.</source>
         <translation>无法打开 %1。</translation>
     </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Check the size, or edit it to confirm.</source>
+        <translation>请检查尺寸，或修改尺寸以确认。</translation>
+    </message>
 </context>
 </TS>

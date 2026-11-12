@@ -23,6 +23,38 @@ using mviewer::core::rawplain::Packing;
 using mviewer::core::rawplain::Params;
 using mviewer::core::rawplain::SizeCheck;
 
+struct DialogSeed
+{
+    Params params;
+    bool sizeTrusted = true;
+};
+
+DialogSeed initialForDialog(const mviewer::core::rawplain::PlainRawFileInfo &info)
+{
+    DialogSeed seed;
+    seed.params = info.resolved.params;
+    if (seed.params.width != 0 && seed.params.height != 0)
+    {
+        return seed;
+    }
+    const auto guessed = mviewer::core::rawplain::guessCommonSize(seed.params, info.fileSize);
+    if (guessed.has_value())
+    {
+        seed.params = *guessed;
+        return seed;
+    }
+    if (seed.params.width == 0)
+    {
+        seed.params.width = 640;
+    }
+    if (seed.params.height == 0)
+    {
+        seed.params.height = 480;
+    }
+    seed.sizeTrusted = false;
+    return seed;
+}
+
 QString bytesText(int64_t value)
 {
     return QString::number(static_cast<qlonglong>(value));
@@ -81,6 +113,7 @@ PlainRawParamsDialog::PlainRawParamsDialog(const QString &fileName, int64_t file
     connect(useDefaultsButton, &QPushButton::clicked, this, &PlainRawParamsDialog::useDefaults);
     layout->addWidget(m_buttons);
 
+    connect(m_editor, &PlainRawParamsEditor::sizeEdited, this, [this]() { m_sizeEdited = true; });
     connect(m_editor, &PlainRawParamsEditor::paramsChanged, this,
             &PlainRawParamsDialog::updateSummary);
     connect(m_guessList, &QListWidget::itemDoubleClicked, this,
@@ -98,6 +131,17 @@ bool PlainRawParamsDialog::resetRequested() const
     return m_reset;
 }
 
+bool PlainRawParamsDialog::largerSizeConfirmed() const
+{
+    return m_sizeTrusted || m_sizeEdited;
+}
+
+void PlainRawParamsDialog::setSizeTrusted(bool trusted)
+{
+    m_sizeTrusted = trusted;
+    updateSummary();
+}
+
 bool PlainRawParamsDialog::canAccept() const
 {
     if (!m_editor->validationError().isEmpty())
@@ -105,7 +149,15 @@ bool PlainRawParamsDialog::canAccept() const
         return false;
     }
     const SizeCheck check = mviewer::core::rawplain::checkFileSize(m_editor->params(), m_fileSize);
-    return check == SizeCheck::Exact || check == SizeCheck::Larger;
+    if (check == SizeCheck::Exact)
+    {
+        return true;
+    }
+    if (check == SizeCheck::Larger)
+    {
+        return largerSizeConfirmed();
+    }
+    return false;
 }
 
 QString PlainRawParamsDialog::summaryText() const
@@ -135,13 +187,20 @@ QString PlainRawParamsDialog::summaryText() const
     if (check == SizeCheck::Larger)
     {
         const int64_t extra = m_fileSize - expected;
-        return tr("%1 x %2, %3: %4 bytes expected, the file has %5 bytes (%6 extra bytes ignored).")
-            .arg(current.width)
-            .arg(current.height)
-            .arg(storage)
-            .arg(expectedText)
-            .arg(bytesText(m_fileSize))
-            .arg(bytesText(extra));
+        QString text =
+            tr("%1 x %2, %3: %4 bytes expected, the file has %5 bytes (%6 extra bytes ignored).")
+                .arg(current.width)
+                .arg(current.height)
+                .arg(storage)
+                .arg(expectedText)
+                .arg(bytesText(m_fileSize))
+                .arg(bytesText(extra));
+        if (!largerSizeConfirmed())
+        {
+            text += QStringLiteral(" ");
+            text += tr("Check the size, or edit it to confirm.");
+        }
+        return text;
     }
     return tr("%1 x %2, %3: %4 bytes expected, the file has only %5 bytes. Pick a size below or "
               "fix width, height or storage.")
@@ -228,18 +287,11 @@ bool editPlainRawParamsForPath(QWidget *parent, const QString &path)
         std::vector<std::uint16_t> scratch;
         raw::readPlainRawSamples(utf8, info, scratch, nullptr);
     }
-    Params initial = info.resolved.params;
-    if (initial.width == 0)
-    {
-        initial.width = 640;
-    }
-    if (initial.height == 0)
-    {
-        initial.height = 480;
-    }
+    const DialogSeed seed = initialForDialog(info);
     const QString fileName = QFileInfo(path).fileName();
-    PlainRawParamsDialog dialog(fileName.isEmpty() ? path : fileName, info.fileSize, initial,
+    PlainRawParamsDialog dialog(fileName.isEmpty() ? path : fileName, info.fileSize, seed.params,
                                 hasOverride, parent);
+    dialog.setSizeTrusted(seed.sizeTrusted);
     if (dialog.exec() != QDialog::Accepted)
     {
         return false;

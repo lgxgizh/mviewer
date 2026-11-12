@@ -134,49 +134,207 @@ void consider(std::vector<Params> *out, const Params &cand, int64_t fileSize)
     }
 }
 
+constexpr const char *kUnknownSizeWhy =
+    "image size unknown: add WIDTHxHEIGHT to the file name or set it in RAW Parameters";
+
+constexpr std::pair<int, int> kCommonSizes[] = {
+    {640, 480},   {1280, 720},  {1280, 800},  {1280, 960},  {1920, 1080},
+    {1920, 1200}, {2048, 1536}, {2592, 1944}, {3264, 2448}, {3840, 2160},
+    {4000, 3000}, {4032, 3024}, {4096, 2160}, {4096, 3072}, {4608, 3456},
+    {5472, 3648}, {6000, 4000}, {8000, 6000}, {8192, 6144},
+};
+
+std::optional<std::pair<int, int>> sizeTokenAt(std::string_view fileName, std::size_t i)
+{
+    if (!isDigit(fileName[i]))
+    {
+        return std::nullopt;
+    }
+    if (i > 0 && isDigit(fileName[i - 1]))
+    {
+        return std::nullopt;
+    }
+    std::size_t afterW = 0;
+    const int w = parseRun(fileName, i, 5, &afterW);
+    if (w < 0)
+    {
+        return std::nullopt;
+    }
+    std::size_t afterSep = 0;
+    if (!sepAt(fileName, afterW, &afterSep))
+    {
+        return std::nullopt;
+    }
+    std::size_t afterH = 0;
+    const int h = parseRun(fileName, afterSep, 5, &afterH);
+    if (h < 0)
+    {
+        return std::nullopt;
+    }
+    if (afterH < fileName.size() && isDigit(fileName[afterH]))
+    {
+        return std::nullopt;
+    }
+    if (w < 16 || h < 16 || w > kMaxDimension || h > kMaxDimension)
+    {
+        return std::nullopt;
+    }
+    return std::pair<int, int>{w, h};
+}
+
+void stampCheck(Resolved &r, int64_t fileSize)
+{
+    r.check = checkFileSize(r.params, fileSize);
+    r.expectedBytes = frameBytes(r.params);
+    r.extraBytes = 0;
+    if (r.check == SizeCheck::Larger && r.expectedBytes >= 0 && fileSize >= r.expectedBytes)
+    {
+        r.extraBytes = fileSize - r.expectedBytes;
+    }
+}
+
+void markKnown(Resolved &r)
+{
+    r.known =
+        isValid(r.params, nullptr) && (r.check == SizeCheck::Exact || r.check == SizeCheck::Larger);
+    if (r.known)
+    {
+        r.why.clear();
+    }
+}
+
+Params withNamedSize(const Params &defaults, const std::pair<int, int> &sz)
+{
+    Params trial = defaults;
+    if (defaults.width == 0)
+    {
+        trial.width = sz.first;
+    }
+    if (defaults.height == 0)
+    {
+        trial.height = sz.second;
+    }
+    return trial;
+}
+
+std::pair<int, int> pickNamedSize(const Params &defaults,
+                                  const std::vector<std::pair<int, int>> &sizes, int64_t fileSize)
+{
+    for (const auto &sz : sizes)
+    {
+        if (checkFileSize(withNamedSize(defaults, sz), fileSize) == SizeCheck::Exact)
+        {
+            return sz;
+        }
+    }
+    for (const auto &sz : sizes)
+    {
+        if (!guessFromFileSize(withNamedSize(defaults, sz), fileSize).empty())
+        {
+            return sz;
+        }
+    }
+    return sizes.front();
+}
+
+void applyNamedSize(Resolved &r, const Params &defaults, std::string_view fileName,
+                    int64_t fileSize)
+{
+    if (defaults.width != 0 && defaults.height != 0)
+    {
+        return;
+    }
+    const auto sizes = sizesFromFileName(fileName);
+    if (sizes.empty())
+    {
+        return;
+    }
+    std::pair<int, int> sz = sizes.front();
+    if (sizes.size() > 1)
+    {
+        sz = pickNamedSize(defaults, sizes, fileSize);
+    }
+    r.params = withNamedSize(defaults, sz);
+    r.sizeFromName = true;
+}
+
+bool takeGuess(Resolved &r, int64_t fileSize)
+{
+    if (r.params.width <= 0 || r.params.height <= 0)
+    {
+        return false;
+    }
+    const auto guesses = guessFromFileSize(r.params, fileSize);
+    if (guesses.empty())
+    {
+        return false;
+    }
+    r.params = guesses.front();
+    r.guessed = true;
+    stampCheck(r, fileSize);
+    return true;
+}
+
+void explainRejected(Resolved &r, int64_t fileSize)
+{
+    if (r.known)
+    {
+        return;
+    }
+    if (r.check == SizeCheck::TooSmall)
+    {
+        r.why = "file is smaller than one frame (expected " + std::to_string(r.expectedBytes) +
+                " bytes, file has " + std::to_string(fileSize) + ")";
+        return;
+    }
+    std::string reason;
+    isValid(r.params, &reason);
+    r.why = reason;
+}
+
+void rejectInvalid(Resolved &r, const std::string &reason, int64_t fileSize)
+{
+    r.check = SizeCheck::Invalid;
+    r.expectedBytes = frameBytes(r.params);
+    r.extraBytes = 0;
+    if (r.params.width <= 0 || r.params.height <= 0)
+    {
+        r.why = kUnknownSizeWhy;
+    }
+    else
+    {
+        r.why = reason;
+    }
+    if (!takeGuess(r, fileSize))
+    {
+        return;
+    }
+    markKnown(r);
+}
+
 } // namespace
+
+std::vector<std::pair<int, int>> sizesFromFileName(std::string_view fileName)
+{
+    std::vector<std::pair<int, int>> sizes;
+    for (std::size_t i = 0; i < fileName.size(); ++i)
+    {
+        if (const auto token = sizeTokenAt(fileName, i))
+        {
+            sizes.push_back(*token);
+        }
+    }
+    return sizes;
+}
 
 std::optional<std::pair<int, int>> sizeFromFileName(std::string_view fileName)
 {
-    const std::size_t n = fileName.size();
-    for (std::size_t i = 0; i < n; ++i)
+    const auto sizes = sizesFromFileName(fileName);
+    if (sizes.empty())
     {
-        if (!isDigit(fileName[i]))
-        {
-            continue;
-        }
-        if (i > 0 && isDigit(fileName[i - 1]))
-        {
-            continue;
-        }
-        std::size_t afterW = 0;
-        const int w = parseRun(fileName, i, 5, &afterW);
-        if (w < 0)
-        {
-            continue;
-        }
-        std::size_t afterSep = 0;
-        if (!sepAt(fileName, afterW, &afterSep))
-        {
-            continue;
-        }
-        std::size_t afterH = 0;
-        const int h = parseRun(fileName, afterSep, 5, &afterH);
-        if (h < 0)
-        {
-            continue;
-        }
-        if (afterH < n && isDigit(fileName[afterH]))
-        {
-            continue;
-        }
-        if (w < 16 || h < 16 || w > kMaxDimension || h > kMaxDimension)
-        {
-            continue;
-        }
-        return std::pair<int, int>{w, h};
+        return std::nullopt;
     }
-    return std::nullopt;
+    return sizes.front();
 }
 
 SizeCheck checkFileSize(const Params &p, int64_t fileSize)
@@ -218,94 +376,40 @@ std::vector<Params> guessFromFileSize(const Params &base, int64_t fileSize)
     return out;
 }
 
+std::optional<Params> guessCommonSize(const Params &base, int64_t fileSize)
+{
+    for (const auto &sz : kCommonSizes)
+    {
+        Params trial = base;
+        trial.width = sz.first;
+        trial.height = sz.second;
+        const auto found = guessFromFileSize(trial, fileSize);
+        if (!found.empty())
+        {
+            return found.front();
+        }
+    }
+    return std::nullopt;
+}
+
 Resolved resolveForFile(const Params &defaults, std::string_view fileName, int64_t fileSize)
 {
     Resolved r;
     r.params = defaults;
-    const bool takeW = (defaults.width == 0);
-    const bool takeH = (defaults.height == 0);
-    if (takeW || takeH)
-    {
-        if (const auto sz = sizeFromFileName(fileName))
-        {
-            if (takeW)
-            {
-                r.params.width = sz->first;
-            }
-            if (takeH)
-            {
-                r.params.height = sz->second;
-            }
-            r.sizeFromName = true;
-        }
-    }
-
-    auto setWhyUnknown = [&]()
-    {
-        r.why = "image size unknown: add WIDTHxHEIGHT to the file name or set it in RAW Parameters";
-    };
-
+    applyNamedSize(r, defaults, fileName, fileSize);
     std::string reason;
     if (!isValid(r.params, &reason))
     {
-        r.check = SizeCheck::Invalid;
-        r.expectedBytes = frameBytes(r.params);
-        if (r.params.width <= 0 || r.params.height <= 0)
-        {
-            setWhyUnknown();
-        }
-        else
-        {
-            r.why = reason;
-        }
-        const auto guesses = guessFromFileSize(r.params, fileSize);
-        if (!guesses.empty() && r.params.width > 0 && r.params.height > 0)
-        {
-            r.params = guesses.front();
-            r.guessed = true;
-            r.check = checkFileSize(r.params, fileSize);
-            r.expectedBytes = frameBytes(r.params);
-            r.known = isValid(r.params, nullptr) &&
-                      (r.check == SizeCheck::Exact || r.check == SizeCheck::Larger);
-            if (r.known)
-            {
-                r.why.clear();
-            }
-        }
+        rejectInvalid(r, reason, fileSize);
         return r;
     }
-
-    r.check = checkFileSize(r.params, fileSize);
-    r.expectedBytes = frameBytes(r.params);
+    stampCheck(r, fileSize);
     if (r.check != SizeCheck::Exact)
     {
-        const auto guesses = guessFromFileSize(r.params, fileSize);
-        if (!guesses.empty())
-        {
-            r.params = guesses.front();
-            r.guessed = true;
-            r.check = checkFileSize(r.params, fileSize);
-            r.expectedBytes = frameBytes(r.params);
-        }
+        takeGuess(r, fileSize);
     }
-    r.known =
-        isValid(r.params, nullptr) && (r.check == SizeCheck::Exact || r.check == SizeCheck::Larger);
-    if (!r.known)
-    {
-        if (r.check == SizeCheck::TooSmall)
-        {
-            const int64_t n = r.expectedBytes;
-            const int64_t m = fileSize;
-            r.why = "file is smaller than one frame (expected " + std::to_string(n) +
-                    " bytes, file has " + std::to_string(m) + ")";
-        }
-        else
-        {
-            std::string w2;
-            isValid(r.params, &w2);
-            r.why = w2;
-        }
-    }
+    markKnown(r);
+    explainRejected(r, fileSize);
     return r;
 }
 

@@ -35,6 +35,12 @@ class PlainRawParamStore
     std::optional<Params> override(const std::string &key) const;
     void setOverride(const std::string &key, const Params &p); // bumps revision()
     void clearOverride(const std::string &key);                // bumps revision()
+    // Moves a present override fromKey -> toKey (overwrites toKey). Missing
+    // or equal keys: no-op, and revision() is not bumped.
+    void moveOverride(const std::string &fromKey, const std::string &toKey);
+    // Copies a present override onto toKey (overwrites toKey). Missing or
+    // equal keys: no-op. Bumps revision() when a copy is written.
+    void copyOverride(const std::string &fromKey, const std::string &toKey);
     void clearAll(); // defaults back to Params{}, no overrides; bumps revision()
     uint64_t revision() const;
 
