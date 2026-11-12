@@ -93,10 +93,9 @@ ThumbnailPanel::ContextMenuActions ThumbnailPanel::buildContextMenu(QMenu &menu,
     {
         // ADR 033/034: same signal as the YUV dialog; MainWindow routes by suffix.
         acts.yuvPaths = selPaths;
-        const bool gray = mviewer::core::rawplain::isGrayRawPath(
-            selPaths.front().toUtf8().toStdString());
-        acts.aYuvParams =
-            menu.addAction(gray ? tr("Gray Parameters...") : tr("RAW Parameters..."));
+        const bool gray =
+            mviewer::core::rawplain::isGrayRawPath(selPaths.front().toUtf8().toStdString());
+        acts.aYuvParams = menu.addAction(gray ? tr("Gray Parameters...") : tr("RAW Parameters..."));
     }
     acts.aAnalyze = menu.addAction(tr("Batch Analysis Export"));
     acts.aAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));

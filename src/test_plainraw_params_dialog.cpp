@@ -273,8 +273,7 @@ void testGrayEditor()
     if (packing != nullptr)
     {
         CHECK(packing->count() == 4);
-        const Packing expected[] = {Packing::Bits1, Packing::Bits8, Packing::Lsb16,
-                                    Packing::Msb16};
+        const Packing expected[] = {Packing::Bits1, Packing::Bits8, Packing::Lsb16, Packing::Msb16};
         for (int index = 0; index < 4; ++index)
         {
             CHECK(packing->itemData(index).toInt() == static_cast<int>(expected[index]));

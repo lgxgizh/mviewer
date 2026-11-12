@@ -13,8 +13,11 @@ namespace
 {
 
 const char *const kSettingsKey = "browse/hiddenFormatGroups";
+// Missing key counts as 1. Version 2 appends "gray" to a saved hidden list once.
+const char *const kVersionKey = "browse/hiddenFormatGroupsVersion";
+const int kHiddenGroupsVersion = 2;
 // Sentinel stored for "nothing hidden" so an empty choice is not mistaken for
-// "never configured" (which falls back to the RAW-hidden default).
+// "never configured" (which falls back to the RAW-and-Gray-hidden default).
 const char *const kNoneToken = "none";
 
 QStringList fixedExtensions(const QString &id)
@@ -46,6 +49,32 @@ bool isKnownGroup(const QString &id)
     return false;
 }
 
+QStringList knownGroupIds(const QStringList &ids)
+{
+    QStringList out;
+    for (const QString &id : ids)
+        if (isKnownGroup(id) && !out.contains(id))
+            out.append(id);
+    return out;
+}
+
+// Same bytes saveHiddenGroups writes: never an empty list, plus version 2.
+void storeHiddenGroups(QSettings &settings, const QStringList &clean)
+{
+    QStringList stored = clean;
+    if (stored.isEmpty())
+        stored.append(QLatin1String(kNoneToken));
+    settings.setValue(QLatin1String(kSettingsKey), stored);
+    settings.setValue(QLatin1String(kVersionKey), kHiddenGroupsVersion);
+}
+
+int hiddenGroupsVersion(const QSettings &settings)
+{
+    if (!settings.contains(QLatin1String(kVersionKey)))
+        return 1;
+    return settings.value(QLatin1String(kVersionKey)).toInt();
+}
+
 } // namespace
 
 const std::vector<Group> &groups()
@@ -60,6 +89,7 @@ const std::vector<Group> &groups()
         {"bmp", QT_TRANSLATE_NOOP("BrowseFormats", "BMP")},
         {"raw", QT_TRANSLATE_NOOP("BrowseFormats", "RAW")},
         {"sensorraw", QT_TRANSLATE_NOOP("BrowseFormats", "Sensor RAW (.raw)")},
+        {"gray", QT_TRANSLATE_NOOP("BrowseFormats", "Gray images (.gray/.grey)")},
         {"other", QT_TRANSLATE_NOOP("BrowseFormats", "Other formats")},
     };
     return kGroups;
@@ -106,8 +136,11 @@ QString groupForSuffix(const QString &suffixNoDot)
         return QStringLiteral("other");
     if (mviewer::core::isRawExtension(s.toStdString()))
         return QStringLiteral("raw");
-    // ADR 033 - plain .raw has its own group, visible by default; camera RAW group unchanged.
+    // ADR 034: .gray/.grey before the plain-dump test. isPlainRawPath is true
+    // for those too, so sensorraw stays plain .raw only (ADR 033).
     const std::string probe = ("x." + s).toUtf8().toStdString();
+    if (mviewer::core::rawplain::isGrayRawPath(probe))
+        return QStringLiteral("gray");
     if (mviewer::core::rawplain::isPlainRawPath(probe) &&
         !mviewer::core::rawplain::isGrayRawPath(probe))
         return QStringLiteral("sensorraw");
@@ -129,10 +162,11 @@ bool isPathHidden(const QString &path, const QStringList &hiddenGroups)
     return hiddenGroups.contains(groupForSuffix(QFileInfo(path).suffix()));
 }
 
-// No migration: a saved hidden list never contains "sensorraw", so it stays visible.
+// sensorraw needs no migration (a saved list never contained it, so it stays
+// visible). Gray is hidden by default and is migrated once (version 2).
 QStringList defaultHiddenGroups()
 {
-    return {QStringLiteral("raw")};
+    return {QStringLiteral("raw"), QStringLiteral("gray")};
 }
 
 QStringList loadHiddenGroups()
@@ -140,24 +174,19 @@ QStringList loadHiddenGroups()
     QSettings settings;
     if (!settings.contains(QLatin1String(kSettingsKey)))
         return defaultHiddenGroups();
-    QStringList out;
-    const QStringList stored = settings.value(QLatin1String(kSettingsKey)).toStringList();
-    for (const QString &id : stored)
-        if (isKnownGroup(id) && !out.contains(id))
-            out.append(id);
+    QStringList out = knownGroupIds(settings.value(QLatin1String(kSettingsKey)).toStringList());
+    if (hiddenGroupsVersion(settings) >= kHiddenGroupsVersion)
+        return out;
+    if (!out.contains(QStringLiteral("gray")))
+        out.append(QStringLiteral("gray"));
+    storeHiddenGroups(settings, out);
     return out;
 }
 
 void saveHiddenGroups(const QStringList &hiddenGroups)
 {
     QSettings settings;
-    QStringList clean;
-    for (const QString &id : hiddenGroups)
-        if (isKnownGroup(id) && !clean.contains(id))
-            clean.append(id);
-    if (clean.isEmpty())
-        clean.append(QLatin1String(kNoneToken));
-    settings.setValue(QLatin1String(kSettingsKey), clean);
+    storeHiddenGroups(settings, knownGroupIds(hiddenGroups));
 }
 
 } // namespace mviewer::browseformats

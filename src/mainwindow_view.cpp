@@ -469,9 +469,8 @@ void MainWindow::openPreferences()
                     onYuvExtensionMapChanged();
                 const auto &store = mviewer::core::rawplain::PlainRawParamStore::instance();
                 const bool rawChanged = !(store.defaults() == rawDefaultsBefore);
-                const bool grayChanged =
-                    !(store.defaults(mviewer::core::rawplain::DumpKind::Gray) ==
-                      grayDefaultsBefore);
+                const bool grayChanged = !(
+                    store.defaults(mviewer::core::rawplain::DumpKind::Gray) == grayDefaultsBefore);
                 if (rawChanged || grayChanged)
                     onPlainRawDefaultsChanged();
             });

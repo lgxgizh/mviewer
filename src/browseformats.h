@@ -2,9 +2,20 @@
 // Browse format visibility: which image format groups the gallery lists.
 //
 // Formats are grouped (JPEG / PNG / WebP / TIFF / HEIC / GIF / BMP / RAW /
-// Sensor RAW / Other) for the multi-select file type dropdown ("typeFilterCombo").
-// The hidden set is persisted in QSettings; RAW is hidden by default because RAW+JPEG
-// shoots otherwise show every frame twice.
+// Sensor RAW / Gray / Other) for the multi-select file type dropdown
+// ("typeFilterCombo"). The hidden set is persisted in QSettings
+// ("browse/hiddenFormatGroups"). The default is {"raw", "gray"}: RAW because
+// RAW+JPEG shoots otherwise show every frame twice, and Gray (headerless
+// .gray/.grey, ADR 034) until the user checks it.
+//
+// "browse/hiddenFormatGroupsVersion" (int, current 2) migrates existing users.
+// No groups key returns the default and writes nothing. When the groups key
+// exists and the version is < 2 (missing counts as 1), "gray" is appended if
+// absent, the list is written back like saveHiddenGroups (never empty: a
+// stored {"none"} means nothing was hidden, so it becomes {"gray"}), and the
+// version is set to 2. saveHiddenGroups() always writes version 2. Sensor RAW
+// needs no migration: a saved list never contained "sensorraw", so it stays
+// visible.
 // Hidden entries never enter a ThumbnailPanel's source list (filtered at the UI-thread insertion
 // points), so the progressive name-sorted scan fast path keeps working.
 
@@ -39,12 +50,14 @@ QStringList availableGroupIds();
 
 // Group id for a suffix without the dot (case-insensitive). Unknown -> "other".
 // RAW = camera RAW (LibRaw); plain .raw dumps are "sensorraw" (ADR 033).
+// Headerless .gray/.grey are "gray" (ADR 034), before the sensorraw test.
 QString groupForSuffix(const QString &suffixNoDot);
 
 // True when `path`'s extension belongs to one of `hiddenGroups`.
 bool isPathHidden(const QString &path, const QStringList &hiddenGroups);
 
-// Persisted hidden set (QSettings "browse/hiddenFormatGroups"); default {"raw"}.
+// Persisted hidden set (QSettings "browse/hiddenFormatGroups"); default {"raw", "gray"}.
+// Version key browse/hiddenFormatGroupsVersion (current 2): see the file comment.
 QStringList defaultHiddenGroups();
 QStringList loadHiddenGroups();
 void saveHiddenGroups(const QStringList &hiddenGroups);

@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Headerless grayscale `.gray` / `.grey` images** (ADR 034, any letter case):
+  8-bit (default, one byte per pixel), 16-bit container (LSB or MSB aligned,
+  8–16 significant bits, little/big endian) and 1-bit black/white (MSB first,
+  rows padded to whole bytes, 1 = white); header offset and row stride. The
+  size comes from `WxH` in the file name (the one matching the file size wins)
+  and is checked against the file size; otherwise the file shows a placeholder
+  until the size is set. Brightness gain 1× and sRGB gamma **off** by default
+  (gray files hold display values). Thumbnails, Details dimensions, compare,
+  the pixel readout (`GRAY=<value>`), and overrides following rename/move/copy
+  reuse the plain `.raw` path; never LibRaw; normal-view rotate is disabled.
+- **Tools → Preferences → Gray** holds separate defaults (`grayRaw/defaults`);
+  **right-click → Gray Parameters...** overrides one file for the session
+  ("Use defaults" clears it). Only gray settings are shown (no Bayer / WB).
+- Browse type filter: own group **Gray images (.gray/.grey)**
+  (灰度图 (.gray/.grey)), **unchecked by default**, also for existing saved
+  filter choices (one-time migration).
+
+### Changed
+
+- `.gray` is no longer a raw-YUV extension (the `gray → gray` default rule is
+  removed and `gray` / `grey` cannot be mapped to YUV); rename gray YUV
+  sequences to `.y` or `.yuv`.
+
 ## [1.0.175] - 2026-11-11
 
 Plain `.raw` follow-up: browse filter fix and the 2026-11-11 RAW review.

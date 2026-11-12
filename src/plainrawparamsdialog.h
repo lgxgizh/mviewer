@@ -20,11 +20,10 @@ class PlainRawParamsDialog : public QDialog
     Q_OBJECT
 
   public:
-    PlainRawParamsDialog(const QString &fileName, int64_t fileSize,
-                         const mviewer::core::rawplain::Params &initial, bool hasOverride,
-                         QWidget *parent = nullptr,
-                         mviewer::core::rawplain::DumpKind kind =
-                             mviewer::core::rawplain::DumpKind::Sensor);
+    PlainRawParamsDialog(
+        const QString &fileName, int64_t fileSize, const mviewer::core::rawplain::Params &initial,
+        bool hasOverride, QWidget *parent = nullptr,
+        mviewer::core::rawplain::DumpKind kind = mviewer::core::rawplain::DumpKind::Sensor);
 
     mviewer::core::rawplain::Params params() const;
     bool resetRequested() const;

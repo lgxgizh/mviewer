@@ -38,8 +38,7 @@ DialogSeed initialForDialog(const mviewer::core::rawplain::PlainRawFileInfo &inf
     {
         return seed;
     }
-    const auto guessed =
-        mviewer::core::rawplain::guessCommonSize(seed.params, info.fileSize, kind);
+    const auto guessed = mviewer::core::rawplain::guessCommonSize(seed.params, info.fileSize, kind);
     if (guessed.has_value())
     {
         seed.params = *guessed;
@@ -85,8 +84,8 @@ QString plainRawPackingLabel(Packing packing)
 }
 
 PlainRawParamsDialog::PlainRawParamsDialog(const QString &fileName, int64_t fileSize,
-                                           const Params &initial, bool hasOverride,
-                                           QWidget *parent, DumpKind kind)
+                                           const Params &initial, bool hasOverride, QWidget *parent,
+                                           DumpKind kind)
     : QDialog(parent), m_fileSize(fileSize), m_kind(kind)
 {
     if (kind == DumpKind::Gray)

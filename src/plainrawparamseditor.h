@@ -27,9 +27,9 @@ class PlainRawParamsEditor : public QWidget
         File      // width/height must be >= 1
     };
 
-    explicit PlainRawParamsEditor(Mode mode, QWidget *parent = nullptr,
-                                  mviewer::core::rawplain::DumpKind kind =
-                                      mviewer::core::rawplain::DumpKind::Sensor);
+    explicit PlainRawParamsEditor(
+        Mode mode, QWidget *parent = nullptr,
+        mviewer::core::rawplain::DumpKind kind = mviewer::core::rawplain::DumpKind::Sensor);
 
     void setParams(const mviewer::core::rawplain::Params &p);
     mviewer::core::rawplain::Params params() const;

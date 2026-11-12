@@ -422,21 +422,19 @@ QWidget *PreferencesDialog::buildGrayRawTab()
     // Gray Parameters... overrides them for one file in the current session.
     auto *page = new QWidget(this);
     auto *layout = new QVBoxLayout(page);
-    auto *intro = new QLabel(
-        tr("Defaults for headerless grayscale .gray / .grey files. "
-           "The size is read from the file name, e.g. scan_1024x768.gray, "
-           "and checked against the file size. Right-click a file > Gray Parameters... "
-           "to change one file for this session."),
-        page);
+    auto *intro =
+        new QLabel(tr("Defaults for headerless grayscale .gray / .grey files. "
+                      "The size is read from the file name, e.g. scan_1024x768.gray, "
+                      "and checked against the file size. Right-click a file > Gray Parameters... "
+                      "to change one file for this session."),
+                   page);
     intro->setWordWrap(true);
     layout->addWidget(intro);
-    m_grayRawDefaults =
-        new PlainRawParamsEditor(PlainRawParamsEditor::Mode::Defaults, page,
-                                 mviewer::core::rawplain::DumpKind::Gray);
+    m_grayRawDefaults = new PlainRawParamsEditor(PlainRawParamsEditor::Mode::Defaults, page,
+                                                 mviewer::core::rawplain::DumpKind::Gray);
     m_grayRawDefaults->setObjectName(QStringLiteral("preferencesGrayRawDefaults"));
-    m_grayRawDefaults->setParams(
-        mviewer::core::rawplain::PlainRawParamStore::instance().defaults(
-            mviewer::core::rawplain::DumpKind::Gray));
+    m_grayRawDefaults->setParams(mviewer::core::rawplain::PlainRawParamStore::instance().defaults(
+        mviewer::core::rawplain::DumpKind::Gray));
     layout->addWidget(m_grayRawDefaults);
     layout->addStretch(1);
     return page;
