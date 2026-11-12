@@ -7,8 +7,8 @@
 #include <utility>
 #include <vector>
 
-// ADR 033: parameters of a headerless sensor dump (.raw): Bayer or mono
-// samples, no container. Qt-free, never throws, no UB on any input.
+// ADR 033 / ADR 034: parameters of a headerless dump (.raw sensor or
+// .gray/.grey mono), no container. Qt-free, never throws, no UB on any input.
 
 namespace mviewer::core::rawplain
 {
@@ -22,7 +22,10 @@ enum class Packing : std::uint8_t
     Lsb16,  // 16-bit container, value in the low bits (default, ADR 033 1A)
     Msb16,  // 16-bit container, value in the high bits
     Mipi10, // MIPI CSI-2 RAW10: 4 samples in 5 bytes (bitDepth 10)
-    Mipi12  // MIPI CSI-2 RAW12: 2 samples in 3 bytes (bitDepth 12)
+    Mipi12, // MIPI CSI-2 RAW12: 2 samples in 3 bytes (bitDepth 12)
+    // 1 bit per sample, 8 samples per byte, MSB-first (the first pixel is bit 7
+    // of the first byte), each row padded to a whole byte; value 1 = white.
+    Bits1
 };
 
 enum class ByteOrder : std::uint8_t
@@ -70,6 +73,23 @@ struct Params
     bool operator==(const Params &) const = default;
 };
 
+// Sensor = .raw (ADR 033), Gray = .gray/.grey (ADR 034).
+enum class DumpKind : std::uint8_t
+{
+    Sensor,
+    Gray
+};
+
+// Defaults for a headerless .gray/.grey dump (ADR 034): width 0, height 0,
+// bitDepth 8, Packing::Bits8, Little, offset 0, stride 0, black 0, white 0,
+// Cfa::Mono, WhiteBalance::None, gains 1, gain 1, srgbGamma false (gray files
+// hold display codes).
+Params grayDefaultParams();
+
+// Gray -> cfa = Mono, wb = None, wbGainR = wbGainB = 1; other fields unchanged.
+// Sensor -> p unchanged.
+Params normalizedForKind(const Params &p, DumpKind kind);
+
 // Bytes holding one row of samples, without padding. -1 when width <= 0 or
 // the packing does not match bitDepth.
 int64_t minRowBytes(const Params &p);
@@ -81,7 +101,7 @@ int effectiveWhiteLevel(const Params &p);
 int64_t frameBytes(const Params &p);
 
 // Packing/bitDepth pairs: Bits8 -> 8; Mipi10 -> 10; Mipi12 -> 12;
-// Lsb16/Msb16 -> 8..16.
+// Lsb16/Msb16 -> 8..16; Bits1 -> 1.
 bool packingSupportsBitDepth(Packing packing, int bitDepth);
 
 // Width and height in [1, kMaxDimension] (why "zero size" when < 1,
@@ -96,7 +116,7 @@ bool isValidDefaults(const Params &p, std::string *why = nullptr);
 
 // Canonical text, e.g.
 // "w=4096;h=3072;bits=10;pack=lsb16;order=le;offset=0;stride=0;black=64;white=0;cfa=rggb;wb=gray;wbr=1;wbb=1;gain=1;gamma=1"
-// Tokens: pack bits8|lsb16|msb16|mipi10|mipi12, order le|be,
+// Tokens: pack bits8|lsb16|msb16|mipi10|mipi12|bits1, order le|be,
 // cfa rggb|bggr|grbg|gbrg|mono, wb none|gray|patch|manual. Doubles printed
 // with up to 4 decimals and no trailing zeros.
 std::string toString(const Params &p);
@@ -126,24 +146,30 @@ enum class SizeCheck : std::uint8_t
 SizeCheck checkFileSize(const Params &p, int64_t fileSize);
 
 // Variants of 'base' (same size, offset, black level, CFA, WB, gain) whose
-// frameBytes == fileSize exactly, rowStride forced to 0, in this order:
-// base itself; Lsb16 with base.bitDepth (or 10 when base is Bits8);
+// frameBytes == fileSize exactly, rowStride forced to 0. Sensor (default)
+// order: base itself; Lsb16 with base.bitDepth (or 10 when base is Bits8);
 // Mipi10/10; Mipi12/12; Bits8/8; Lsb16 with 12; Lsb16 with 16.
+// Gray order: base itself; Bits8/8; Lsb16/16; Bits1/1 (no MIPI).
 // Duplicates removed. When the packing/bitDepth changes, blackLevel is
 // rescaled by the bit-depth difference (shift) and whiteLevel reset to 0.
-std::vector<Params> guessFromFileSize(const Params &base, int64_t fileSize);
+std::vector<Params> guessFromFileSize(const Params &base, int64_t fileSize,
+                                      DumpKind kind = DumpKind::Sensor);
 
 // First common sensor size, in the fixed order in PlainRawInference.cpp
 // (640x480 through 8192x6144, one orientation), for which
-// guessFromFileSize(base with that width and height, fileSize) is non-empty.
-// Returns that first candidate. nullopt when none match.
-std::optional<Params> guessCommonSize(const Params &base, int64_t fileSize);
+// guessFromFileSize(base with that width and height, fileSize, kind) is
+// non-empty. Returns that first candidate. nullopt when none match. Gray uses
+// the Gray guess list.
+std::optional<Params> guessCommonSize(const Params &base, int64_t fileSize,
+                                      DumpKind kind = DumpKind::Sensor);
 
 // Effective params for one file from the global defaults. Width/height come
 // from the file name when the defaults have 0. Several WxH tokens: the first
 // whose params (defaults' packing) are SizeCheck::Exact, else the first
 // guessFromFileSize can match, else the first token. Then, if the size check
 // is not Exact and guessFromFileSize has a candidate, that candidate is used.
+// DumpKind::Gray uses the Gray guess list; every result is then passed through
+// normalizedForKind(..., Gray). The default kind keeps Sensor behaviour.
 struct Resolved
 {
     Params params;
@@ -155,6 +181,7 @@ struct Resolved
     int64_t extraBytes = 0; // file bytes after the frame when check == Larger
     std::string why;        // English reason when !known
 };
-Resolved resolveForFile(const Params &defaults, std::string_view fileName, int64_t fileSize);
+Resolved resolveForFile(const Params &defaults, std::string_view fileName, int64_t fileSize,
+                        DumpKind kind = DumpKind::Sensor);
 
 } // namespace mviewer::core::rawplain

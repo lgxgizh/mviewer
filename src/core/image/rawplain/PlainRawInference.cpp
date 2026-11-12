@@ -8,7 +8,8 @@
 #include <limits>
 #include <system_error>
 
-// ADR 033: file-name size inference, file-size checks and packing guesses.
+// ADR 033 / ADR 034: file-name size inference, file-size checks and packing
+// guesses (Sensor vs Gray dump kinds).
 
 namespace mviewer::core::rawplain
 {
@@ -134,6 +135,24 @@ void consider(std::vector<Params> *out, const Params &cand, int64_t fileSize)
     }
 }
 
+void considerSensorGuesses(std::vector<Params> *out, const Params &base, int64_t fileSize)
+{
+    const int lsbBits = (base.packing == Packing::Bits8) ? 10 : base.bitDepth;
+    consider(out, variantOf(base, Packing::Lsb16, lsbBits), fileSize);
+    consider(out, variantOf(base, Packing::Mipi10, 10), fileSize);
+    consider(out, variantOf(base, Packing::Mipi12, 12), fileSize);
+    consider(out, variantOf(base, Packing::Bits8, 8), fileSize);
+    consider(out, variantOf(base, Packing::Lsb16, 12), fileSize);
+    consider(out, variantOf(base, Packing::Lsb16, 16), fileSize);
+}
+
+void considerGrayGuesses(std::vector<Params> *out, const Params &base, int64_t fileSize)
+{
+    consider(out, variantOf(base, Packing::Bits8, 8), fileSize);
+    consider(out, variantOf(base, Packing::Lsb16, 16), fileSize);
+    consider(out, variantOf(base, Packing::Bits1, 1), fileSize);
+}
+
 constexpr const char *kUnknownSizeWhy =
     "image size unknown: add WIDTHxHEIGHT to the file name or set it in RAW Parameters";
 
@@ -218,7 +237,8 @@ Params withNamedSize(const Params &defaults, const std::pair<int, int> &sz)
 }
 
 std::pair<int, int> pickNamedSize(const Params &defaults,
-                                  const std::vector<std::pair<int, int>> &sizes, int64_t fileSize)
+                                  const std::vector<std::pair<int, int>> &sizes, int64_t fileSize,
+                                  DumpKind kind)
 {
     for (const auto &sz : sizes)
     {
@@ -229,7 +249,7 @@ std::pair<int, int> pickNamedSize(const Params &defaults,
     }
     for (const auto &sz : sizes)
     {
-        if (!guessFromFileSize(withNamedSize(defaults, sz), fileSize).empty())
+        if (!guessFromFileSize(withNamedSize(defaults, sz), fileSize, kind).empty())
         {
             return sz;
         }
@@ -238,7 +258,7 @@ std::pair<int, int> pickNamedSize(const Params &defaults,
 }
 
 void applyNamedSize(Resolved &r, const Params &defaults, std::string_view fileName,
-                    int64_t fileSize)
+                    int64_t fileSize, DumpKind kind)
 {
     if (defaults.width != 0 && defaults.height != 0)
     {
@@ -252,19 +272,19 @@ void applyNamedSize(Resolved &r, const Params &defaults, std::string_view fileNa
     std::pair<int, int> sz = sizes.front();
     if (sizes.size() > 1)
     {
-        sz = pickNamedSize(defaults, sizes, fileSize);
+        sz = pickNamedSize(defaults, sizes, fileSize, kind);
     }
     r.params = withNamedSize(defaults, sz);
     r.sizeFromName = true;
 }
 
-bool takeGuess(Resolved &r, int64_t fileSize)
+bool takeGuess(Resolved &r, int64_t fileSize, DumpKind kind)
 {
     if (r.params.width <= 0 || r.params.height <= 0)
     {
         return false;
     }
-    const auto guesses = guessFromFileSize(r.params, fileSize);
+    const auto guesses = guessFromFileSize(r.params, fileSize, kind);
     if (guesses.empty())
     {
         return false;
@@ -292,7 +312,7 @@ void explainRejected(Resolved &r, int64_t fileSize)
     r.why = reason;
 }
 
-void rejectInvalid(Resolved &r, const std::string &reason, int64_t fileSize)
+void rejectInvalid(Resolved &r, const std::string &reason, int64_t fileSize, DumpKind kind)
 {
     r.check = SizeCheck::Invalid;
     r.expectedBytes = frameBytes(r.params);
@@ -305,7 +325,7 @@ void rejectInvalid(Resolved &r, const std::string &reason, int64_t fileSize)
     {
         r.why = reason;
     }
-    if (!takeGuess(r, fileSize))
+    if (!takeGuess(r, fileSize, kind))
     {
         return;
     }
@@ -359,31 +379,32 @@ SizeCheck checkFileSize(const Params &p, int64_t fileSize)
     return SizeCheck::Larger;
 }
 
-std::vector<Params> guessFromFileSize(const Params &base, int64_t fileSize)
+std::vector<Params> guessFromFileSize(const Params &base, int64_t fileSize, DumpKind kind)
 {
     std::vector<Params> out;
     Params self = base;
     self.rowStride = 0;
     consider(&out, self, fileSize);
-
-    const int lsbBits = (base.packing == Packing::Bits8) ? 10 : base.bitDepth;
-    consider(&out, variantOf(base, Packing::Lsb16, lsbBits), fileSize);
-    consider(&out, variantOf(base, Packing::Mipi10, 10), fileSize);
-    consider(&out, variantOf(base, Packing::Mipi12, 12), fileSize);
-    consider(&out, variantOf(base, Packing::Bits8, 8), fileSize);
-    consider(&out, variantOf(base, Packing::Lsb16, 12), fileSize);
-    consider(&out, variantOf(base, Packing::Lsb16, 16), fileSize);
+    switch (kind)
+    {
+    case DumpKind::Gray:
+        considerGrayGuesses(&out, base, fileSize);
+        break;
+    case DumpKind::Sensor:
+        considerSensorGuesses(&out, base, fileSize);
+        break;
+    }
     return out;
 }
 
-std::optional<Params> guessCommonSize(const Params &base, int64_t fileSize)
+std::optional<Params> guessCommonSize(const Params &base, int64_t fileSize, DumpKind kind)
 {
     for (const auto &sz : kCommonSizes)
     {
         Params trial = base;
         trial.width = sz.first;
         trial.height = sz.second;
-        const auto found = guessFromFileSize(trial, fileSize);
+        const auto found = guessFromFileSize(trial, fileSize, kind);
         if (!found.empty())
         {
             return found.front();
@@ -392,24 +413,27 @@ std::optional<Params> guessCommonSize(const Params &base, int64_t fileSize)
     return std::nullopt;
 }
 
-Resolved resolveForFile(const Params &defaults, std::string_view fileName, int64_t fileSize)
+Resolved resolveForFile(const Params &defaults, std::string_view fileName, int64_t fileSize,
+                        DumpKind kind)
 {
     Resolved r;
     r.params = defaults;
-    applyNamedSize(r, defaults, fileName, fileSize);
+    applyNamedSize(r, defaults, fileName, fileSize, kind);
     std::string reason;
     if (!isValid(r.params, &reason))
     {
-        rejectInvalid(r, reason, fileSize);
+        rejectInvalid(r, reason, fileSize, kind);
+        r.params = normalizedForKind(r.params, kind);
         return r;
     }
     stampCheck(r, fileSize);
     if (r.check != SizeCheck::Exact)
     {
-        takeGuess(r, fileSize);
+        takeGuess(r, fileSize, kind);
     }
     markKnown(r);
     explainRejected(r, fileSize);
+    r.params = normalizedForKind(r.params, kind);
     return r;
 }
 

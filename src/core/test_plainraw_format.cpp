@@ -334,6 +334,128 @@ int main()
         CHECK(!guessCommonSize(base, 12345).has_value());
     }
 
+    {
+        Params p = sized(16, 2);
+        p.packing = Packing::Bits1;
+        p.bitDepth = 1;
+        std::string why;
+        CHECK(packingSupportsBitDepth(Packing::Bits1, 1));
+        CHECK(!packingSupportsBitDepth(Packing::Bits1, 8));
+        CHECK(!packingSupportsBitDepth(Packing::Bits8, 1));
+        CHECK(!packingSupportsBitDepth(Packing::Lsb16, 1));
+        CHECK(!packingSupportsBitDepth(Packing::Msb16, 1));
+        CHECK(!packingSupportsBitDepth(Packing::Mipi10, 1));
+        CHECK(!packingSupportsBitDepth(Packing::Mipi12, 1));
+        CHECK(isValid(p, &why));
+        CHECK(isValidDefaults(p, &why));
+        CHECK(effectiveWhiteLevel(p) == 1);
+        CHECK(minRowBytes(p) == 2);
+        p.width = 10;
+        CHECK(minRowBytes(p) == 2);
+        CHECK(isValid(p, &why));
+        Params defBits1;
+        defBits1.width = 0;
+        defBits1.height = 0;
+        defBits1.packing = Packing::Bits1;
+        defBits1.bitDepth = 1;
+        CHECK(isValidDefaults(defBits1, &why));
+        const std::string s = toString(p);
+        CHECK(s.find("pack=bits1") != std::string::npos);
+        CHECK(s.find("bits=1") != std::string::npos);
+        const auto back = parseParams(s);
+        CHECK(back.has_value());
+        CHECK(*back == p);
+        CHECK(toString(*back) == s);
+    }
+
+    {
+        const Params gray = grayDefaultParams();
+        CHECK(gray.width == 0 && gray.height == 0);
+        CHECK(gray.bitDepth == 8 && gray.packing == Packing::Bits8);
+        CHECK(gray.byteOrder == ByteOrder::Little);
+        CHECK(gray.headerOffset == 0 && gray.rowStride == 0);
+        CHECK(gray.blackLevel == 0 && gray.whiteLevel == 0);
+        CHECK(gray.cfa == Cfa::Mono);
+        CHECK(gray.wb == WhiteBalance::None);
+        CHECK(gray.wbGainR == 1.0 && gray.wbGainB == 1.0 && gray.gain == 1.0);
+        CHECK(!gray.srgbGamma);
+
+        Params p = sized(64, 48);
+        p.cfa = Cfa::RGGB;
+        p.wb = WhiteBalance::GrayWorld;
+        p.wbGainR = 2.0;
+        p.wbGainB = 3.0;
+        p.bitDepth = 10;
+        const Params forced = normalizedForKind(p, DumpKind::Gray);
+        CHECK(forced.cfa == Cfa::Mono);
+        CHECK(forced.wb == WhiteBalance::None);
+        CHECK(forced.wbGainR == 1.0 && forced.wbGainB == 1.0);
+        CHECK(forced.width == 64 && forced.height == 48 && forced.bitDepth == 10);
+        CHECK(normalizedForKind(p, DumpKind::Sensor) == p);
+    }
+
+    {
+        const Params def = grayDefaultParams();
+        const char *name = "scan_640x480.gray";
+        auto bits8 = resolveForFile(def, name, int64_t{640} * 480, DumpKind::Gray);
+        CHECK(bits8.sizeFromName);
+        CHECK(bits8.params.width == 640 && bits8.params.height == 480);
+        CHECK(bits8.params.packing == Packing::Bits8);
+        CHECK(bits8.params.bitDepth == 8);
+        CHECK(bits8.check == SizeCheck::Exact);
+        CHECK(bits8.known);
+        CHECK(!bits8.guessed);
+        CHECK(bits8.params.cfa == Cfa::Mono);
+        CHECK(bits8.params.wb == WhiteBalance::None);
+
+        auto lsb16 = resolveForFile(def, name, int64_t{640} * 480 * 2, DumpKind::Gray);
+        CHECK(lsb16.guessed);
+        CHECK(lsb16.known);
+        CHECK(lsb16.params.packing == Packing::Lsb16);
+        CHECK(lsb16.params.bitDepth == 16);
+        CHECK(lsb16.check == SizeCheck::Exact);
+        CHECK(lsb16.params.cfa == Cfa::Mono);
+        CHECK(lsb16.params.wb == WhiteBalance::None);
+
+        auto bits1 = resolveForFile(def, name, int64_t{80} * 480, DumpKind::Gray);
+        CHECK(bits1.guessed);
+        CHECK(bits1.known);
+        CHECK(bits1.params.packing == Packing::Bits1);
+        CHECK(bits1.params.bitDepth == 1);
+        CHECK(bits1.check == SizeCheck::Exact);
+        CHECK(bits1.params.cfa == Cfa::Mono);
+
+        auto mipiGray = resolveForFile(def, name, int64_t{640} * 480 * 5 / 4, DumpKind::Gray);
+        CHECK(mipiGray.params.packing != Packing::Mipi10);
+        CHECK(!mipiGray.known || mipiGray.params.packing != Packing::Mipi10);
+
+        auto sensorMipi = resolveForFile(Params{}, name, int64_t{640} * 480 * 5 / 4);
+        CHECK(sensorMipi.params.packing == Packing::Mipi10);
+
+        Params mixed = def;
+        mixed.cfa = Cfa::RGGB;
+        mixed.wb = WhiteBalance::GrayWorld;
+        mixed.wbGainR = 2.0;
+        mixed.wbGainB = 3.0;
+        auto forced = resolveForFile(mixed, name, int64_t{640} * 480, DumpKind::Gray);
+        CHECK(forced.params.cfa == Cfa::Mono);
+        CHECK(forced.params.wb == WhiteBalance::None);
+        CHECK(forced.params.wbGainR == 1.0 && forced.params.wbGainB == 1.0);
+
+        auto common = guessCommonSize(def, int64_t{640} * 480, DumpKind::Gray);
+        CHECK(common.has_value());
+        CHECK(common->width == 640 && common->height == 480);
+        CHECK(common->packing == Packing::Bits8);
+
+        Params named = def;
+        named.width = 640;
+        named.height = 480;
+        auto gMipi = guessFromFileSize(named, int64_t{640} * 480 * 5 / 4, DumpKind::Gray);
+        CHECK(gMipi.empty() || gMipi.front().packing != Packing::Mipi10);
+        auto gBits1 = guessFromFileSize(named, int64_t{80} * 480, DumpKind::Gray);
+        CHECK(!gBits1.empty() && gBits1.front().packing == Packing::Bits1);
+    }
+
     if (g_failures != 0)
     {
         std::printf("test_plainraw_format: %d failed\n", g_failures);
