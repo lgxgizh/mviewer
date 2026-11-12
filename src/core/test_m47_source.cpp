@@ -223,8 +223,10 @@ int main(int argc, char **argv)
             auto lodR = src->decodeLod(256);
             ImageData lod = lodR.pixels;
             CHECK(lodR.ok && !lod.isNull(), "T2: 100MP JPEG LOD(256) succeeds");
-            CHECK(lod.width == 256 && lod.height == 177,
-                  "T2: LOD output is 256x177 (aspect preserved)");
+            // 12000x8333, maxEdge 256: lround(8333*256/12000) = 178
+            // (integer truncation used to yield 177).
+            CHECK(lod.width == 256 && lod.height == 178,
+                  "T2: LOD output is 256x178 (aspect preserved)");
             CHECK(lodR.decodePath == SourceDecodePath::NativeLod,
                   "T2: classified NativeLod (no full raster)");
         }
