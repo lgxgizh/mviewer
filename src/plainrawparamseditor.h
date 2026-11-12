@@ -47,7 +47,7 @@ class PlainRawParamsEditor : public QWidget
     Mode m_mode;
     QSpinBox *m_width = nullptr;
     QSpinBox *m_height = nullptr;
-    QComboBox *m_bitDepth = nullptr;  // 8, 10, 12, 14, 16 (item data = bits)
+    QComboBox *m_bitDepth = nullptr;  // 8..16 (item data = bits)
     QComboBox *m_packing = nullptr;   // item data = static_cast<int>(Packing)
     QComboBox *m_byteOrder = nullptr; // item data = static_cast<int>(ByteOrder)
     QSpinBox *m_headerOffset = nullptr;

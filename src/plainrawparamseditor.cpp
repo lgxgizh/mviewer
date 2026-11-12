@@ -80,6 +80,22 @@ void selectData(QComboBox *box, int data)
     }
 }
 
+// Insert an unlisted depth so OK cannot silently keep the previous item.
+void selectBitDepth(QComboBox *box, int depth)
+{
+    int index = box->findData(depth);
+    if (index < 0)
+    {
+        box->addItem(QCoreApplication::translate("PlainRawParamsEditor", "%1 bit").arg(depth),
+                     depth);
+        index = box->findData(depth);
+    }
+    if (index >= 0)
+    {
+        box->setCurrentIndex(index);
+    }
+}
+
 int enumData(const QComboBox *box)
 {
     return box->currentData().toInt();
@@ -167,8 +183,7 @@ double presetGain(int index)
 
 void addBits(QComboBox *box)
 {
-    const int bits[] = {8, 10, 12, 14, 16};
-    for (int depth : bits)
+    for (int depth = 8; depth <= 16; ++depth)
     {
         box->addItem(QCoreApplication::translate("PlainRawParamsEditor", "%1 bit").arg(depth),
                      depth);
@@ -508,7 +523,7 @@ void PlainRawParamsEditor::setParams(const Params &p)
                        m_gain, m_gamma});
     setSpin(m_width, p.width);
     setSpin(m_height, p.height);
-    selectData(m_bitDepth, p.bitDepth);
+    selectBitDepth(m_bitDepth, p.bitDepth);
     selectData(m_packing, static_cast<int>(p.packing));
     selectData(m_byteOrder, static_cast<int>(p.byteOrder));
     setSpin64(m_headerOffset, p.headerOffset);

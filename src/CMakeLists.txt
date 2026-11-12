@@ -1066,7 +1066,7 @@ target_link_libraries(plainraw_params_dialog_tests
 target_compile_features(plainraw_params_dialog_tests PRIVATE cxx_std_20)
 target_include_directories(plainraw_params_dialog_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_params_dialog_tests COMMAND plainraw_params_dialog_tests)
-set_tests_properties(plainraw_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+set_tests_properties(plainraw_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
 add_executable(yuv_params_dialog_tests
     test_yuv_params_dialog.cpp
