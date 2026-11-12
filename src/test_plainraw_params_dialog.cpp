@@ -1,17 +1,32 @@
 // NOLINTBEGIN
+#include "application/Shutdown.h"
+#include "mainwindow.h"
 #include "plainrawparamsdialog.h"
 #include "plainrawparamseditor.h"
 #include "plainrawsettings.h"
+#include "runtime_storage.h"
+#include "thumbnailpanel_testaccess.h"
 
 #include "core/image/rawplain/PlainRawFile.h"
 #include "core/image/rawplain/PlainRawFormat.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDir>
 #include <QDoubleSpinBox>
+#include <QElapsedTimer>
+#include <QEventLoop>
+#include <QFile>
+#include <QImage>
+#include <QPixmap>
+#include <QPushButton>
 #include <QSettings>
 #include <QSpinBox>
+#include <QStandardPaths>
 #include <QString>
 #include <QTimer>
 
@@ -196,6 +211,220 @@ void testUntrustedLarger()
     CHECK(!larger.summaryText().contains(QStringLiteral("edit it to confirm")));
 }
 
+void testBitDepthRoundTrip()
+{
+    PlainRawParamsEditor editor(PlainRawParamsEditor::Mode::Defaults);
+    QComboBox *depth = combo(&editor, "plainRawBitDepth");
+    CHECK(depth != nullptr);
+    if (depth == nullptr)
+    {
+        return;
+    }
+    for (int bits = 8; bits <= 16; ++bits)
+    {
+        CHECK(depth->findData(bits) >= 0);
+    }
+
+    Params odd;
+    odd.packing = Packing::Lsb16;
+    odd.bitDepth = 11;
+    editor.setParams(odd);
+    CHECK(editor.params().bitDepth == 11);
+    CHECK(editor.params().packing == Packing::Lsb16);
+
+    odd.bitDepth = 13;
+    editor.setParams(odd);
+    CHECK(editor.params().bitDepth == 13);
+
+    odd.bitDepth = 17;
+    editor.setParams(odd);
+    CHECK(editor.params().bitDepth == 17);
+}
+
+void pumpEvents(int ms)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < ms)
+    {
+        QApplication::processEvents(QEventLoop::AllEvents, 10);
+    }
+}
+
+QAction *preferencesAction(MainWindow &window)
+{
+    const auto actions = window.findChildren<QAction *>();
+    for (QAction *action : actions)
+    {
+        if (action->text().contains(QStringLiteral("Preferences")))
+        {
+            return action;
+        }
+    }
+    return nullptr;
+}
+
+void clickModalOk()
+{
+    QWidget *modal = QApplication::activeModalWidget();
+    if (modal == nullptr)
+    {
+        return;
+    }
+    auto *buttons = modal->findChild<QDialogButtonBox *>();
+    QPushButton *ok = buttons == nullptr ? nullptr : buttons->button(QDialogButtonBox::Ok);
+    if (ok == nullptr)
+    {
+        modal->close();
+        return;
+    }
+    ok->click();
+}
+
+void chooseRawTwelveAndAccept()
+{
+    QWidget *modal = QApplication::activeModalWidget();
+    if (modal == nullptr)
+    {
+        return;
+    }
+    auto *editor =
+        modal->findChild<PlainRawParamsEditor *>(QStringLiteral("preferencesPlainRawDefaults"));
+    QComboBox *depth = nullptr;
+    if (editor != nullptr)
+    {
+        depth = editor->findChild<QComboBox *>(QStringLiteral("plainRawBitDepth"));
+    }
+    if (depth == nullptr)
+    {
+        modal->close();
+        return;
+    }
+    const int twelve = depth->findData(12);
+    if (twelve < 0)
+    {
+        modal->close();
+        return;
+    }
+    depth->setCurrentIndex(twelve);
+    clickModalOk();
+}
+
+void closeOpenDialogs()
+{
+    if (QWidget *modal = QApplication::activeModalWidget())
+    {
+        modal->close();
+    }
+    const auto widgets = QApplication::topLevelWidgets();
+    for (QWidget *widget : widgets)
+    {
+        auto *dialog = qobject_cast<QDialog *>(widget);
+        if (dialog != nullptr && dialog->isVisible())
+        {
+            dialog->close();
+        }
+    }
+}
+
+void onPreferencesPoll(QTimer *poll, void (*edit)())
+{
+    const int ticks = poll->property("ticks").toInt() + 1;
+    poll->setProperty("ticks", ticks);
+    if (ticks >= 120)
+    {
+        closeOpenDialogs();
+        poll->stop();
+        return;
+    }
+    QWidget *modal = QApplication::activeModalWidget();
+    if (modal == nullptr)
+    {
+        return;
+    }
+    if (!poll->property("edited").toBool())
+    {
+        poll->setProperty("edited", true);
+        edit();
+        return;
+    }
+    if (ticks >= 80)
+    {
+        modal->close();
+    }
+}
+
+void runPreferences(MainWindow &window, QAction *prefs, void (*edit)())
+{
+    auto *poll = new QTimer(&window);
+    poll->setInterval(30);
+    poll->setProperty("ticks", 0);
+    poll->setProperty("edited", false);
+    QObject::connect(poll, &QTimer::timeout, poll,
+                     [poll, edit]() { onPreferencesPoll(poll, edit); });
+    poll->start();
+    prefs->trigger();
+    poll->stop();
+}
+
+// Preferences > RAW is the public path into MainWindow::onPlainRawDefaultsChanged.
+void testDefaultsRefreshThumbnails()
+{
+    qputenv("MVIEWER_DISABLE_UPDATE_CHECK", "1");
+    qputenv("MVIEWER_DISABLE_RECOVERY_PROMPTS", "1");
+    mviewer::runtime::configureSettings();
+    QSettings().clear();
+    const QString config = mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
+    if (!config.isEmpty())
+    {
+        QFile::remove(QDir(config).filePath(QStringLiteral("recovery.json")));
+        QFile::remove(QDir(config).filePath(QStringLiteral("mviewer.json")));
+    }
+    mviewer::core::rawplain::PlainRawParamStore::instance().clearAll();
+
+    mviewer::application::ScopedProcessShutdown shutdown;
+    MainWindow window;
+    window.resize(1100, 750);
+    window.show();
+    pumpEvents(150);
+
+    QAction *prefs = preferencesAction(window);
+    CHECK(prefs != nullptr);
+    if (prefs == nullptr)
+    {
+        return;
+    }
+    runPreferences(window, prefs, clickModalOk);
+
+    ThumbnailPanel *panel = window.activeThumbnailPanel();
+    CHECK(panel != nullptr);
+    if (panel == nullptr)
+    {
+        return;
+    }
+    const QString path =
+        QDir(QDir::tempPath()).absoluteFilePath(QStringLiteral("mv_plain_sensor.raw"));
+    QImage image(16, 16, QImage::Format_RGB32);
+    image.fill(qRgb(12, 34, 56));
+    ThumbnailPanelTestAccess::seedDisplayThumb(*panel, path, QPixmap::fromImage(image));
+    const QPixmap seeded = panel->thumbReady(path);
+    CHECK(panel->pathList().contains(path));
+    CHECK(!seeded.isNull());
+    if (seeded.isNull() || !panel->pathList().contains(path))
+    {
+        return;
+    }
+    const qint64 seededKey = seeded.cacheKey();
+
+    runPreferences(window, prefs, chooseRawTwelveAndAccept);
+
+    CHECK(mviewer::core::rawplain::PlainRawParamStore::instance().defaults().bitDepth == 12);
+    CHECK(panel->pathList().contains(path));
+    const QPixmap after = panel->thumbReady(path);
+    CHECK(after.isNull() || after.cacheKey() != seededKey);
+    mviewer::core::rawplain::PlainRawParamStore::instance().clearAll();
+}
+
 void testMissingPath()
 {
     QTimer::singleShot(0,
@@ -216,6 +445,7 @@ void testMissingPath()
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName(QStringLiteral("mviewer-plainraw-dialog-test"));
     QCoreApplication::setApplicationName(QStringLiteral("mviewer-plainraw-dialog-test"));
     QSettings().clear();
@@ -223,7 +453,9 @@ int main(int argc, char **argv)
     testSettings();
     testDialog();
     testUntrustedLarger();
+    testBitDepthRoundTrip();
     testMissingPath();
+    testDefaultsRefreshThumbnails();
     QSettings().clear();
     if (g_failures == 0)
     {

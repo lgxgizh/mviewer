@@ -9,9 +9,9 @@
 
 // ADR 033: unpacked samples -> RGB24 for display. Pipeline per sample:
 // (s - black) / (white - black), clamp [0, 1], x white-balance gain of its CFA
-// colour, x digital gain, clamp [0, 1]; then bilinear demosaic of the linear
-// values (Mono: no demosaic, R = G = B); then sRGB OETF (when srgbGamma) and
-// rounding to 8 bits. Qt-free, never throws.
+// colour (gains are scaled so the smallest is 1), x digital gain, clamp [0, 1];
+// then bilinear demosaic of the linear values (Mono: no demosaic, R = G = B);
+// then sRGB OETF (when srgbGamma) and rounding to 8 bits. Qt-free, never throws.
 
 namespace mviewer::core::rawplain
 {
@@ -26,6 +26,9 @@ enum class CfaColor : std::uint8_t
 // Colour of the sample at (x, y); Mono -> Green.
 CfaColor cfaColorAt(Cfa cfa, int x, int y);
 
+// Per-channel multipliers. Every mode returns min(r, g, b) == 1, so a sample
+// at or above white stays 1 in every channel after the post-gain clamp and
+// clipped highlights stay neutral.
 struct WbGains
 {
     double r = 1.0;
@@ -33,12 +36,14 @@ struct WbGains
     double b = 1.0;
 };
 
-// Gains for p.wb on raw samples (size width*height, black subtracted inside):
-// None -> 1,1,1. Manual -> wbGainR, 1, wbGainB. GrayWorld -> mean(G)/mean(R),
-// 1, mean(G)/mean(B) over samples below 98% of white. WhitePatch -> same
-// ratios using, per channel, the mean of samples at or above that channel's
-// 99th percentile, excluding samples >= 98% of white. Mono -> 1,1,1. A zero
-// or missing channel -> gain 1. Automatic gains clamped to [0.1, 16].
+// Gains for p.wb on raw samples (size width*height, black subtracted inside).
+// None and Mono -> 1,1,1. Manual -> wbGainR, 1, wbGainB, each divided by
+// min(wbGainR, 1, wbGainB). GrayWorld -> mean(G)/mean(R), 1, mean(G)/mean(B)
+// over samples below 98% of white. WhitePatch -> the same ratios from, per
+// channel, the mean of samples at or above that channel's 99th percentile,
+// still excluding samples >= 98% of white. Automatic ratios are divided by
+// their minimum, then each gain is clamped to [1, 16]. A zero or missing
+// channel contributes ratio 1.
 WbGains computeWhiteBalance(const Params &p, const std::vector<std::uint16_t> &samples);
 
 // sRGB OETF on linear [0, 1] (IEC 61966-2-1): 12.92 x below 0.0031308, else

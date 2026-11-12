@@ -212,20 +212,52 @@ double whitePatchMean(const std::vector<std::uint32_t> &hist)
     return static_cast<double>(sum / static_cast<long double>(kept));
 }
 
-double clampedRatio(double numerator, double denominator)
+constexpr double kMaxAutoGain = 16.0;
+
+double channelRatio(double numerator, double denominator)
 {
     if (!(numerator > 0.0) || !(denominator > 0.0))
     {
         return 1.0;
     }
-    double gain = numerator / denominator;
-    if (gain < 0.1)
+    return numerator / denominator;
+}
+
+double smallestPositive(double first, double second, double third)
+{
+    double least = first;
+    if (second < least)
     {
-        gain = 0.1;
+        least = second;
     }
-    if (gain > 16.0)
+    if (third < least)
     {
-        gain = 16.0;
+        least = third;
+    }
+    if (!(least > 0.0))
+    {
+        return 1.0;
+    }
+    return least;
+}
+
+void divideByMinimum(WbGains &gains)
+{
+    const double least = smallestPositive(gains.r, gains.g, gains.b);
+    gains.r /= least;
+    gains.g /= least;
+    gains.b /= least;
+}
+
+double clampAutoGain(double gain)
+{
+    if (!(gain >= 1.0))
+    {
+        return 1.0;
+    }
+    if (gain > kMaxAutoGain)
+    {
+        return kMaxAutoGain;
     }
     return gain;
 }
@@ -233,9 +265,23 @@ double clampedRatio(double numerator, double denominator)
 WbGains gainsFromMeans(double meanR, double meanG, double meanB)
 {
     WbGains gains;
-    gains.r = clampedRatio(meanG, meanR);
+    gains.r = channelRatio(meanG, meanR);
     gains.g = 1.0;
-    gains.b = clampedRatio(meanG, meanB);
+    gains.b = channelRatio(meanG, meanB);
+    divideByMinimum(gains);
+    gains.r = clampAutoGain(gains.r);
+    gains.g = clampAutoGain(gains.g);
+    gains.b = clampAutoGain(gains.b);
+    return gains;
+}
+
+WbGains manualGains(const Params &p)
+{
+    WbGains gains;
+    gains.r = p.wbGainR;
+    gains.g = 1.0;
+    gains.b = p.wbGainB;
+    divideByMinimum(gains);
     return gains;
 }
 
@@ -250,9 +296,7 @@ WbGains computeWhiteBalance(const Params &p, const std::vector<std::uint16_t> &s
     }
     if (p.wb == WhiteBalance::Manual)
     {
-        unit.r = p.wbGainR;
-        unit.b = p.wbGainB;
-        return unit;
+        return manualGains(p);
     }
     const int white = effectiveWhiteLevel(p);
     std::array<std::vector<std::uint32_t>, 3> hist;

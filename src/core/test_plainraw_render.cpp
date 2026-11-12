@@ -202,6 +202,20 @@ void checkNeutral(const ImageData &image)
     }
 }
 
+double leastGain(const WbGains &gains)
+{
+    double least = gains.r;
+    if (gains.g < least)
+    {
+        least = gains.g;
+    }
+    if (gains.b < least)
+    {
+        least = gains.b;
+    }
+    return least;
+}
+
 void checkWhiteBalance()
 {
     const Cfa filters[4] = {Cfa::RGGB, Cfa::BGGR, Cfa::GRBG, Cfa::GBRG};
@@ -216,9 +230,9 @@ void checkWhiteBalance()
 
         p.wb = WhiteBalance::GrayWorld;
         WbGains gray = computeWhiteBalance(p, samples);
-        CHECK(std::fabs(gray.r - 2.0) < 1e-6);
-        CHECK(gray.g == 1.0);
-        CHECK(std::fabs(gray.b - 4.0) < 1e-6);
+        CHECK(std::fabs(leastGain(gray) - 1.0) < 1e-9);
+        CHECK(std::fabs(gray.r / gray.g - 2.0) < 1e-6);
+        CHECK(std::fabs(gray.b / gray.g - 4.0) < 1e-6);
 
         p.srgbGamma = true;
         checkNeutral(renderPlainRaw(p, samples, 0));
@@ -227,9 +241,9 @@ void checkWhiteBalance()
         p.wbGainR = 1.25;
         p.wbGainB = 3.5;
         WbGains manual = computeWhiteBalance(p, samples);
-        CHECK(manual.r == 1.25);
-        CHECK(manual.g == 1.0);
-        CHECK(manual.b == 3.5);
+        CHECK(std::fabs(leastGain(manual) - 1.0) < 1e-12);
+        CHECK(std::fabs(manual.r / manual.g - 1.25) < 1e-9);
+        CHECK(std::fabs(manual.b / manual.g - 3.5) < 1e-9);
     }
 
     Params patch = makeParams(100, 100, 10, Packing::Lsb16, Cfa::RGGB);
@@ -255,8 +269,9 @@ void checkWhiteBalance()
     }
     patch.wb = WhiteBalance::WhitePatch;
     WbGains bright = computeWhiteBalance(patch, scene);
-    CHECK(std::fabs(bright.r - (900.0 / 800.0)) < 1e-6);
-    CHECK(std::fabs(bright.b - (900.0 / 700.0)) < 1e-6);
+    CHECK(std::fabs(leastGain(bright) - 1.0) < 1e-9);
+    CHECK(std::fabs(bright.r / bright.g - (900.0 / 800.0)) < 1e-6);
+    CHECK(std::fabs(bright.b / bright.g - (900.0 / 700.0)) < 1e-6);
 
     Params clipped = makeParams(16, 16, 10, Packing::Lsb16, Cfa::RGGB);
     auto raw = filled(16, 16, 0);
@@ -267,8 +282,9 @@ void checkWhiteBalance()
     }
     clipped.wb = WhiteBalance::GrayWorld;
     WbGains ignored = computeWhiteBalance(clipped, raw);
-    CHECK(std::fabs(ignored.r - 2.0) < 1e-6);
-    CHECK(std::fabs(ignored.b - 4.0) < 1e-6);
+    CHECK(std::fabs(leastGain(ignored) - 1.0) < 1e-9);
+    CHECK(std::fabs(ignored.r / ignored.g - 2.0) < 1e-6);
+    CHECK(std::fabs(ignored.b / ignored.g - 4.0) < 1e-6);
 
     Params mono = makeParams(8, 8, 10, Packing::Lsb16, Cfa::Mono);
     mono.wb = WhiteBalance::GrayWorld;
@@ -286,8 +302,36 @@ void checkWhiteBalance()
     auto uneven = filled(8, 8, 0);
     paintSites(uneven, 8, 8, Cfa::RGGB, 10, 400, 100);
     WbGains clamped = computeWhiteBalance(extreme, uneven);
-    CHECK(std::fabs(clamped.r - 16.0) < 1e-9);
-    CHECK(std::fabs(clamped.b - 4.0) < 1e-6);
+    CHECK(std::fabs(leastGain(clamped) - 1.0) < 1e-9);
+    CHECK(std::fabs(clamped.r / clamped.g - 16.0) < 1e-6);
+    CHECK(std::fabs(clamped.b / clamped.g - 4.0) < 1e-6);
+}
+
+void checkClippedHighlights()
+{
+    Params warm = makeParams(32, 24, 10, Packing::Lsb16, Cfa::RGGB);
+    warm.wb = WhiteBalance::GrayWorld;
+    auto warmSamples = filled(32, 24, 0);
+    paintSites(warmSamples, 32, 24, Cfa::RGGB, 400, 200, 200);
+    const WbGains warmGains = computeWhiteBalance(warm, warmSamples);
+    CHECK(std::fabs(warmGains.r - 1.0) < 1e-6);
+    CHECK(std::fabs(warmGains.g - 2.0) < 1e-6);
+    CHECK(std::fabs(warmGains.b - 2.0) < 1e-6);
+
+    Params blown = makeParams(8, 8, 8, Packing::Bits8, Cfa::RGGB);
+    blown.wb = WhiteBalance::Manual;
+    blown.wbGainR = 0.5;
+    blown.wbGainB = 2.0;
+    const ImageData image = renderPlainRaw(blown, filled(8, 8, 255), 0);
+    CHECK(!image.isNull());
+    if (image.isNull())
+    {
+        return;
+    }
+    const std::uint8_t *px = pixelAt(image, 3, 3);
+    CHECK(px[0] == 255);
+    CHECK(px[1] == 255);
+    CHECK(px[2] == 255);
 }
 
 void expectColour(const ImageData &image, int r, int g, int b)
@@ -490,8 +534,9 @@ void checkSubsampledWhiteBalance()
     paintSites(largeSamples, kW, kH, Cfa::RGGB, 200, 400, 100);
     const WbGains sub = computeWhiteBalance(largeP, largeSamples);
 
-    CHECK(std::fabs(full.r - 2.0) < 1e-6);
-    CHECK(std::fabs(full.b - 4.0) < 1e-6);
+    CHECK(std::fabs(leastGain(full) - 1.0) < 1e-9);
+    CHECK(std::fabs(full.r / full.g - 2.0) < 1e-6);
+    CHECK(std::fabs(full.b / full.g - 4.0) < 1e-6);
     CHECK(nearGain(sub.r, full.r));
     CHECK(nearGain(sub.g, full.g));
     CHECK(nearGain(sub.b, full.b));
@@ -567,6 +612,7 @@ int main()
     checkSrgb();
     checkBlackGainGamma();
     checkWhiteBalance();
+    checkClippedHighlights();
     checkDemosaic();
     checkPreviewAndInvalid();
     checkPreviewAverage();
