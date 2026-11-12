@@ -1,6 +1,7 @@
 // M6 unit tests: ImageRepository (predictive preload, 1000-image load, frame extras).
 #include "core/cache/CacheManager.h"
 #include "core/image/DiskCache.h"
+#include "core/image/DitherQuantize.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
@@ -306,7 +307,13 @@ static void testRaw16SingleDecode()
 
     QImageReader reference(path);
     reference.setAutoTransform(true);
-    const QImage referenceImage = reference.read().convertToFormat(QImage::Format_RGB888);
+    const QImage referenceRaw = reference.read();
+    // Display 16->8 is ordered-dithered (P2-1); do not compare against Qt's
+    // undithered convertToFormat(RGB888).
+    QImage ditheredDisplay;
+    const bool haveDither = mviewer::core::ditherQImage16ToRgb888(referenceRaw, ditheredDisplay);
+    const QImage referenceImage =
+        haveDither ? ditheredDisplay : referenceRaw.convertToFormat(QImage::Format_RGB888);
     QImageReader rawReader(path);
     rawReader.setAutoTransform(false);
     const QImage rawImage = rawReader.read();
@@ -355,7 +362,7 @@ static void testRaw16SingleDecode()
         }
     }
     CHECK(samplesMatch, "raw16 matches the single 16-bit decode");
-    CHECK(displayMatch, "8-bit display matches auto-transformed QImageReader");
+    CHECK(displayMatch, "8-bit display matches dithered 16-bit decode");
 
     const auto again = ImageRepository::instance().load(path.toStdString());
     CHECK(QtDecoder::fullImageReadCount() == 1, "memory hit does not read 16-bit pixels again");

@@ -1,6 +1,7 @@
 #include "core/image/decoder/QtDecoder.h"
 #include "core/filesystem/Utf8Path.h"
 
+#include "core/image/DitherQuantize.h"
 #include "core/image/ExifOrientation.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/MetadataReader.h"
@@ -58,16 +59,27 @@ ImageData toImageData(const QImage &src)
 {
     if (src.isNull())
         return ImageData();
-    // 8-bit gray stays one sample per pixel. 16-bit (including Grayscale16)
-    // and every other format still expand through RGB888, as before.
+    // 8-bit gray stays one sample per pixel.
     if (src.format() == QImage::Format_Grayscale8)
     {
         ImageData out = makeImageData(src.width(), src.height(), PixelFormat::Grayscale8);
         copyRasterRows(src, out, static_cast<size_t>(src.width()));
         return out;
     }
+    // 16-bit display rasters are ordered-dithered to RGB888. A failed dither
+    // falls back to Qt's converter so a valid source still decodes. Other
+    // 8-bit sources keep the historical convertToFormat path (byte-identical).
+    QImage dithered;
+    const QImage::Format fmt = src.format();
+    const bool sixteen = fmt == QImage::Format_RGBX64 || fmt == QImage::Format_RGBA64 ||
+                         fmt == QImage::Format_Grayscale16;
+    if (sixteen)
+        mviewer::core::ditherQImage16ToRgb888(src, dithered);
+    const bool useDither = sixteen && !dithered.isNull();
     const QImage img =
-        (src.format() == QImage::Format_RGB888) ? src : src.convertToFormat(QImage::Format_RGB888);
+        useDither
+            ? dithered
+            : (fmt == QImage::Format_RGB888 ? src : src.convertToFormat(QImage::Format_RGB888));
     if (img.isNull())
         return ImageData();
     ImageData out = makeImageData(img.width(), img.height(), PixelFormat::RGB24);
