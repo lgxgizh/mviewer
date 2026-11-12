@@ -220,7 +220,7 @@ void testTypeHiddenHint(const QString &dir)
     EXPECT(waitUntil([&]() { return hintShown(left) && hintShown(right); }, 200),
            "RAW-only folder shows the hidden-by-type hint in both panes");
     EXPECT(mw.browseHiddenFormatGroups() ==
-               QStringList{QStringLiteral("raw"), QStringLiteral("gray")},
+               (QStringList{QStringLiteral("raw"), QStringLiteral("gray")}),
            "the hint does not change the saved type filter by itself");
     for (ThumbnailPanel *panel : {left, right})
     {
