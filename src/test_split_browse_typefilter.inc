@@ -52,7 +52,9 @@ void testFormatFilter(const QString &leftDir, const QString &rightDir)
     if (ids.contains(QStringLiteral("raw")))
     {
         leftCombo->setGroupVisible(QStringLiteral("raw"), true);
-        EXPECT(rightCombo->hiddenGroups().isEmpty(), "right combo follows the left one");
+        const QStringList afterShowRaw{QStringLiteral("gray")};
+        EXPECT(rightCombo->hiddenGroups() == afterShowRaw,
+               "right combo follows the left one (Gray stays hidden)");
         EXPECT(waitUntil(
                    [&]()
                    {
