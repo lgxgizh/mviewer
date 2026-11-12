@@ -13,6 +13,7 @@
 | [023](023-const-image-view.md) | Read-only pixels go through `ConstImageView` / `constView()` | Remove const `view()`; a const image no longer hands out a writable pointer |
 | [032](032-yuv-raw-source-decoder.md) | Raw YUV / Y4M viewing and per-plane compare, clean-room, one `YuvDecoder` entry in the default registry | A scoped exception to the post-M22 format freeze; BT.709 limited is the default when unknown |
 | [033](033-plain-raw-sensor-dump.md) | Headerless Bayer / mono `.raw` sensor dumps, clean-room, always plain (never LibRaw), one `PlainRawDecoder` entry | Second scoped format-freeze exception; 16-bit LSB container and 1x gain by default |
+| [034](034-headerless-gray-images.md) | Headerless single-channel `.gray` / `.grey` images (8-bit default, 16-bit, 1-bit) through the ADR 033 plain-dump path; `.gray` leaves the YUV extension rules | Third scoped format-freeze exception; gamma off and hidden in the browse filter by default |
 
 ### Layering and dependencies
 

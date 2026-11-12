@@ -290,6 +290,38 @@ int main()
         CHECK(lsb16SignificantBits(mipi, buf.data(), buf.size()) == mipi.bitDepth);
     }
 
+    {
+        Params p = makeP(16, 2, Packing::Bits1, 1);
+        std::vector<std::uint8_t> buf = {0b10100000, 0x01, 0xFF, 0x00};
+        std::vector<std::uint16_t> out;
+        CHECK(unpackPlainRaw(p, buf.data(), buf.size(), out));
+        CHECK(out.size() == 32);
+        const std::uint16_t row0[16] = {1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1};
+        const std::uint16_t row1[16] = {1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0};
+        for (int i = 0; i < 16; ++i)
+        {
+            CHECK(out[static_cast<std::size_t>(i)] == row0[i]);
+            CHECK(out[static_cast<std::size_t>(16 + i)] == row1[i]);
+        }
+        checkAllSamples(p, buf.data(), buf.size(), out);
+        CHECK(lsb16SignificantBits(p, buf.data(), buf.size()) == p.bitDepth);
+    }
+
+    {
+        Params p = makeP(10, 1, Packing::Bits1, 1);
+        CHECK(minRowBytes(p) == 2);
+        std::vector<std::uint8_t> buf = {0b10100000, 0x01};
+        std::vector<std::uint16_t> out;
+        CHECK(unpackPlainRaw(p, buf.data(), buf.size(), out));
+        CHECK(out.size() == 10);
+        const std::uint16_t expect[10] = {1, 0, 1, 0, 0, 0, 0, 0, 0, 0};
+        for (int i = 0; i < 10; ++i)
+        {
+            CHECK(out[static_cast<std::size_t>(i)] == expect[i]);
+        }
+        checkAllSamples(p, buf.data(), buf.size(), out);
+    }
+
     if (g_failures != 0)
     {
         std::printf("test_plainraw_unpack: %d failed\n", g_failures);

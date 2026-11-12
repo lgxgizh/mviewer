@@ -13,7 +13,8 @@ namespace mviewer::core::yuv
 {
 
 // Case-insensitive ".yuv" / ".y4m" or any extension in the YUV extension map
-// (YuvExtensionMap; user-editable in Preferences > YUV).
+// (YuvExtensionMap; user-editable in Preferences > YUV). `.gray` / `.grey` are
+// reserved for ADR 034 and are never YUV paths.
 bool isYuvPath(const std::string &path);
 
 // Key for YuvParamStore. Same normalization the repository uses for paths.

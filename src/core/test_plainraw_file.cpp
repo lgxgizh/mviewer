@@ -7,6 +7,7 @@
 #include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/PlainRawDecoder.h"
+#include "core/image/decoder/YuvDecoder.h"
 #endif
 
 #include <chrono>
@@ -290,6 +291,159 @@ void testPlainRawCapabilities(const std::string &scenePath, const std::string &u
     CHECK(lod.width == 16 && lod.height == 8);
 }
 #endif
+
+bool grayRowPixel(const ImageData &image, int x, int value)
+{
+    if (image.isNull() || image.format != PixelFormat::RGB24)
+        return false;
+    const ConstImageView view = image.constView();
+    if (view.data == nullptr || x < 0 || x >= image.width || image.height < 1)
+        return false;
+    const std::size_t at = static_cast<std::size_t>(x) * 3U;
+    const auto expect = static_cast<uint8_t>(value);
+    return view.data[at] == expect && view.data[at + 1] == expect && view.data[at + 2] == expect;
+}
+
+void testGrayDump(const std::filesystem::path &dir)
+{
+    using namespace mviewer::core::rawplain;
+    CHECK(isPlainRawPath("scan.gray") && isGrayRawPath("scan.gray"));
+    CHECK(isPlainRawPath("SCAN_64x32.GREY") && isGrayRawPath("SCAN_64x32.GREY"));
+    CHECK(isGrayRawPath("dir/SCAN_64x32.GREY"));
+    CHECK(!isGrayRawPath("scene.RAW"));
+    CHECK(!isGrayRawPath("photo.png"));
+    CHECK(dumpKindForPath("scan.GREY") == DumpKind::Gray);
+    CHECK(dumpKindForPath("scene.RAW") == DumpKind::Sensor);
+    CHECK(dumpKindForPath("photo.jpg") == DumpKind::Sensor);
+
+    auto &store = PlainRawParamStore::instance();
+    store.clearAll();
+    const int w = 64;
+    const int h = 32;
+    std::vector<std::uint8_t> ramp(static_cast<std::size_t>(w * h));
+    for (int i = 0; i < w * h; ++i)
+        ramp[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(i & 255);
+    const auto grayFile = dir / "scan_64x32.gray";
+    writeBytes(grayFile, ramp);
+    const std::string grayPath = grayFile.string();
+
+    PlainRawFileInfo info = resolvePlainRawFile(grayPath);
+    CHECK(info.resolved.known);
+    CHECK(info.resolved.params.packing == Packing::Bits8);
+    CHECK(info.resolved.params.bitDepth == 8);
+    CHECK(info.resolved.params.cfa == Cfa::Mono);
+    CHECK(info.resolved.params.wb == WhiteBalance::None);
+    CHECK(info.resolved.params.srgbGamma == false);
+    CHECK(info.resolved.params.width == w && info.resolved.params.height == h);
+
+    std::string why;
+    const ImageData image = decodePlainRawFile(grayPath, 0, nullptr, &why);
+    CHECK(!image.isNull());
+    CHECK(image.width == w && image.height == h);
+    CHECK(grayRowPixel(image, 0, ramp[0]));
+    CHECK(grayRowPixel(image, 1, ramp[1]));
+    CHECK(grayRowPixel(image, 17, ramp[17]));
+    CHECK(grayRowPixel(image, 63, ramp[63]));
+
+    const unsigned first = ramp[0];
+    const unsigned at17 = ramp[17];
+    const std::string sample = plainRawSampleText(grayPath, 0, 0);
+    CHECK(sample.rfind("GRAY=", 0) == 0);
+    CHECK(sample == "GRAY=" + std::to_string(first) + " (8-bit)");
+    CHECK(plainRawSampleText(grayPath, 17, 0) == "GRAY=" + std::to_string(at17) + " (8-bit)");
+
+    ImageMetadata meta;
+    fillPlainRawMetadata(info, grayPath, meta);
+    CHECK(meta.format == "Gray (headerless)");
+    CHECK(meta.colorSpace == "Gray 8-bit");
+    CHECK(meta.channels == 1);
+    CHECK(contains(plainRawCacheKeySuffix(grayPath), toString(store.defaults(DumpKind::Gray))));
+
+    // Name tokens need two digits and both sides >= 16, so 16x2 is not a size.
+    // 16x16 1-bit is 2 bytes/row * 16 rows = 32 bytes and is the packing guess.
+    const auto bitsFile = dir / "bw_16x16.gray";
+    writeBytes(bitsFile, std::vector<std::uint8_t>(32, 0xA5));
+    const PlainRawFileInfo bits = resolvePlainRawFile(bitsFile.string());
+    CHECK(bits.resolved.known);
+    CHECK(bits.resolved.guessed);
+    CHECK(bits.resolved.params.packing == Packing::Bits1);
+    CHECK(bits.resolved.params.bitDepth == 1);
+
+    const Params sensorBefore = store.defaults();
+    Params gray16 = grayDefaultParams();
+    gray16.bitDepth = 16;
+    gray16.packing = Packing::Lsb16;
+    gray16.cfa = Cfa::RGGB;
+    store.setDefaults(DumpKind::Gray, gray16);
+    CHECK(store.defaults() == sensorBefore);
+    CHECK(store.defaults(DumpKind::Gray).bitDepth == 16);
+    CHECK(store.defaults(DumpKind::Gray).packing == Packing::Lsb16);
+    CHECK(store.defaults(DumpKind::Gray).cfa == Cfa::Mono);
+    CHECK(store.defaults(DumpKind::Gray).srgbGamma == false);
+    store.clearAll();
+    CHECK(store.defaults(DumpKind::Gray) == grayDefaultParams());
+
+    Params forced;
+    forced.width = w;
+    forced.height = h;
+    forced.bitDepth = 8;
+    forced.packing = Packing::Bits8;
+    forced.cfa = Cfa::RGGB;
+    forced.wb = WhiteBalance::GrayWorld;
+    forced.wbGainR = 2.0;
+    forced.wbGainB = 0.5;
+    forced.srgbGamma = false;
+    store.setOverride(plainRawParamKey(grayPath), forced);
+    info = resolvePlainRawFile(grayPath);
+    CHECK(info.fromOverride && info.resolved.known);
+    CHECK(info.resolved.params.cfa == Cfa::Mono);
+    CHECK(info.resolved.params.wb == WhiteBalance::None);
+    CHECK(info.resolved.params.wbGainR == 1.0);
+    CHECK(info.resolved.params.wbGainB == 1.0);
+    CHECK(plainRawSampleText(grayPath, 0, 0).rfind("GRAY=", 0) == 0);
+    store.clearAll();
+
+    const std::string rawPath = "/tmp/mv-gray-reloc/a.raw";
+    const std::string grayMove = "/tmp/mv-gray-reloc/a.gray";
+    const std::string rawKey = plainRawParamKey(rawPath);
+    const std::string grayKey = plainRawParamKey(grayMove);
+    store.setOverride(rawKey, sized(8, 8));
+    mviewer::core::relocateFileMetadata(rawPath, grayMove);
+    CHECK(!store.override(rawKey).has_value());
+    CHECK(!store.override(grayKey).has_value());
+    const std::string fromGray = "/tmp/mv-gray-reloc/s.gray";
+    const std::string toGrey = "/tmp/mv-gray-reloc/s.grey";
+    store.setOverride(plainRawParamKey(fromGray), sized(8, 8));
+    mviewer::core::relocateFileMetadata(fromGray, toGrey);
+    CHECK(store.override(plainRawParamKey(toGrey)).has_value());
+    CHECK(!store.override(plainRawParamKey(fromGray)).has_value());
+    store.clearAll();
+
+#ifndef PLAINRAW_NO_REGISTRY
+    DecoderRegistry::instance().resetToDefaults();
+    YuvDecoder yuv;
+    CHECK(!yuv.canDecode(grayPath));
+    CHECK(!yuv.canDecode("SCAN_64x32.GREY"));
+    PlainRawDecoder decoder;
+    CHECK(decoder.canDecode(grayPath) && decoder.canDecode("SCAN_64x32.GREY"));
+    CHECK(decoder.canProbe(grayPath));
+    const auto exts = decoder.extensions();
+    CHECK(exts.size() == 3 && exts[0] == "raw" && exts[1] == "gray" && exts[2] == "grey");
+    ImageMetadata decodedMeta;
+    const ImageData decoded = DecoderRegistry::instance().decodeFull(grayPath, decodedMeta);
+    CHECK(!decoded.isNull());
+    CHECK(decoded.width == w && decoded.height == h);
+    CHECK(decodedMeta.format == "Gray (headerless)");
+    ImageMetadata probed;
+    CHECK(decoder.probeMetadata(grayPath, probed));
+    CHECK(probed.format == "Gray (headerless)");
+    ImageMetadata regionMeta;
+    const ImageData region = decoder.decodeRegion(grayPath, 0, 0, 8, 1, 8, 1, regionMeta);
+    CHECK(!region.isNull() && regionMeta.format == "Gray (headerless)");
+    CHECK(mviewer::core::ImageFormats::isSupportedSuffix("gray"));
+    CHECK(mviewer::core::ImageFormats::isSupportedSuffix("grey"));
+#endif
+}
 
 } // namespace
 
@@ -575,6 +729,7 @@ int main()
 #endif
 
     testSampleReadCache(dir);
+    testGrayDump(dir);
 
     std::error_code ec;
     std::filesystem::remove_all(dir, ec);

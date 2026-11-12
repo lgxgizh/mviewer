@@ -8,7 +8,7 @@
 #include <limits>
 #include <system_error>
 
-// ADR 033: canonical text form of plain .raw parameters.
+// ADR 033 / ADR 034: canonical text form of plain dump parameters.
 
 namespace mviewer::core::rawplain
 {
@@ -30,6 +30,8 @@ const char *packToken(Packing p)
         return "mipi10";
     case Packing::Mipi12:
         return "mipi12";
+    case Packing::Bits1:
+        return "bits1";
     }
     return "";
 }
@@ -59,6 +61,11 @@ bool parsePack(std::string_view t, Packing *out)
     if (t == "mipi12")
     {
         *out = Packing::Mipi12;
+        return true;
+    }
+    if (t == "bits1")
+    {
+        *out = Packing::Bits1;
         return true;
     }
     return false;

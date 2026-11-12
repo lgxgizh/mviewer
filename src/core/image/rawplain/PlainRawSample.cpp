@@ -71,7 +71,17 @@ char sampleChannel(const Params &p, int x, int y)
     return 'G';
 }
 
-std::string sampleLine(const Params &p, const std::vector<std::uint16_t> &samples, int x, int y)
+std::string sampleNumber(unsigned value, int bitDepth)
+{
+    std::string text = std::to_string(value);
+    text += " (";
+    text += std::to_string(bitDepth);
+    text += "-bit)";
+    return text;
+}
+
+std::string sampleLine(const Params &p, const std::vector<std::uint16_t> &samples, int x, int y,
+                       DumpKind kind)
 {
     if (x < 0 || y < 0 || x >= p.width || y >= p.height)
     {
@@ -83,14 +93,16 @@ std::string sampleLine(const Params &p, const std::vector<std::uint16_t> &sample
     {
         return {};
     }
-    const auto value = samples[static_cast<std::size_t>(idx)];
+    const unsigned value = samples[static_cast<std::size_t>(idx)];
+    const std::string number = sampleNumber(value, p.bitDepth);
+    if (kind == DumpKind::Gray)
+    {
+        return std::string("GRAY=") + number;
+    }
     std::string text = "RAW ";
     text.push_back(sampleChannel(p, x, y));
     text.push_back('=');
-    text += std::to_string(static_cast<unsigned>(value));
-    text += " (";
-    text += std::to_string(p.bitDepth);
-    text += "-bit)";
+    text += number;
     return text;
 }
 
@@ -143,7 +155,7 @@ void promoteEntry(std::vector<SampleEntry> &entries, std::size_t index)
 }
 
 // Caller holds sampleMutex().
-bool lookupSampleLocked(const std::string &id, int x, int y, std::string &text)
+bool lookupSampleLocked(const std::string &id, int x, int y, DumpKind kind, std::string &text)
 {
     auto &entries = sampleCache().entries;
     for (std::size_t i = 0; i < entries.size(); ++i)
@@ -153,7 +165,7 @@ bool lookupSampleLocked(const std::string &id, int x, int y, std::string &text)
             continue;
         }
         promoteEntry(entries, i);
-        text = sampleLine(entries.front().params, entries.front().samples, x, y);
+        text = sampleLine(entries.front().params, entries.front().samples, x, y, kind);
         return true;
     }
     return false;
@@ -233,14 +245,14 @@ void startSampleFill(const std::string &path)
 }
 
 std::string readAndStoreSample(const std::string &path, PlainRawFileInfo info,
-                               const std::string &id, int x, int y)
+                               const std::string &id, int x, int y, DumpKind kind)
 {
     std::vector<std::uint16_t> samples;
     if (!readPlainRawSamples(path, info, samples, nullptr))
     {
         return {};
     }
-    const std::string text = sampleLine(info.resolved.params, samples, x, y);
+    const std::string text = sampleLine(info.resolved.params, samples, x, y, kind);
     storeSample(id, info.resolved.params, std::move(samples));
     return text;
 }
@@ -260,12 +272,13 @@ std::string plainRawSampleText(const std::string &path, int x, int y, SampleRead
         {
             return {};
         }
+        const DumpKind kind = dumpKindForPath(path);
         const std::string id = cacheIdentity(path, info.resolved.params, info.fileSize);
         bool hit = false;
         std::string text;
         {
             std::lock_guard<std::mutex> lock(sampleMutex());
-            hit = lookupSampleLocked(id, x, y, text);
+            hit = lookupSampleLocked(id, x, y, kind, text);
         }
         if (hit)
         {
@@ -276,7 +289,7 @@ std::string plainRawSampleText(const std::string &path, int x, int y, SampleRead
             startSampleFill(path);
             return {};
         }
-        return readAndStoreSample(path, std::move(info), id, x, y);
+        return readAndStoreSample(path, std::move(info), id, x, y, kind);
     }
     catch (...)
     {

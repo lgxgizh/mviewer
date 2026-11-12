@@ -2,10 +2,11 @@
 
 // User-configurable "file extension -> pixel format" table for headerless raw
 // YUV files (ADR 032 follow-up). `.yuv` and `.y4m` are always recognised; the
-// table adds more extensions (.nv12, .p010, ...) and may give any extension,
+// table adds more extensions (.nv12, .p010, .y, ...) and may give any extension,
 // `.yuv` included, a pixel format used when the file name has no explicit
 // pix-fmt token. An empty pixFmt means "recognise the extension, infer the
-// format as usual".
+// format as usual". `gray` and `grey` are reserved for ADR 034 gray dumps and
+// are not YUV extensions.
 //
 // Priority when resolving a raw file: y4m header > saved per-file params >
 // pix-fmt token in the file name > extension mapping > folder-name hints >
@@ -35,7 +36,8 @@ struct ExtensionRule
 std::vector<ExtensionRule> defaultExtensionRules();
 
 // "NV12" / ".nv12" -> "nv12". Returns empty when the text is not a valid
-// extension (1-16 chars of [a-z0-9_]) or names y4m (always header-driven).
+// extension (1-16 chars of [a-z0-9_]), names y4m (always header-driven), or
+// names gray/grey (reserved for ADR 034 gray dumps; a user rule is dropped).
 std::string normalizeExtension(std::string_view text);
 
 // Replaces the table. Invalid rows (bad extension, unknown pix-fmt) are dropped;

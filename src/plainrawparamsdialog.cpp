@@ -76,6 +76,8 @@ QString plainRawPackingLabel(Packing packing)
         return QCoreApplication::translate("PlainRawParamsDialog", "MIPI RAW10 (packed)");
     case Packing::Mipi12:
         return QCoreApplication::translate("PlainRawParamsDialog", "MIPI RAW12 (packed)");
+    case Packing::Bits1:
+        return QCoreApplication::translate("PlainRawParamsDialog", "1-bit (8 pixels per byte)");
     }
     return {};
 }

@@ -76,6 +76,29 @@ void unpackBits8(const Params &p, const std::uint8_t *data, std::uint16_t *out)
     }
 }
 
+int sampleBits1(const std::uint8_t *row, int x)
+{
+    const int bit = 7 - (x % 8);
+    return (row[x / 8] >> bit) & 1;
+}
+
+void unpackBits1(const Params &p, const std::uint8_t *data, std::uint16_t *out)
+{
+    const int w = p.width;
+    const int h = p.height;
+    const int64_t stride = effectiveRowStride(p);
+    for (int y = 0; y < h; ++y)
+    {
+        const std::uint8_t *row =
+            data + static_cast<std::size_t>(y) * static_cast<std::size_t>(stride);
+        std::uint16_t *dst = out + static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
+        for (int x = 0; x < w; ++x)
+        {
+            dst[x] = static_cast<std::uint16_t>(sampleBits1(row, x));
+        }
+    }
+}
+
 void unpackLsb16(const Params &p, const std::uint8_t *data, std::uint16_t *out)
 {
     const int w = p.width;
@@ -262,6 +285,9 @@ bool unpackPlainRaw(const Params &p, const std::uint8_t *data, std::size_t size,
     case Packing::Mipi12:
         unpackMipi12(p, data, out.data());
         break;
+    case Packing::Bits1:
+        unpackBits1(p, data, out.data());
+        break;
     }
     return true;
 }
@@ -290,6 +316,8 @@ int sampleAt(const Params &p, const std::uint8_t *data, std::size_t size, int x,
         return sampleMipi10(row, x);
     case Packing::Mipi12:
         return sampleMipi12(row, x);
+    case Packing::Bits1:
+        return sampleBits1(row, x);
     }
     return -1;
 }

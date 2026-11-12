@@ -21,8 +21,9 @@ namespace mviewer::core::rawplain
 // 8 MSBs of samples 0..3, b4 holds their 2 LSBs (sample k in bits 2k..2k+1).
 // MIPI RAW12: b0, b1 hold the 8 MSBs of samples 0, 1; b2 low nibble = LSBs of
 // sample 0, high nibble = LSBs of sample 1. A partial last group (width not a
-// multiple of 4 / 2) is still read from its full group bytes. False (out
-// cleared) when params are invalid or data is too short.
+// multiple of 4 / 2) is still read from its full group bytes. Bits1: 8 samples
+// per byte, MSB-first (sample 0 is bit 7); each row is padded to a whole byte;
+// 1 is white. False (out cleared) when params are invalid or data is too short.
 bool unpackPlainRaw(const Params &p, const std::uint8_t *data, std::size_t size,
                     std::vector<std::uint16_t> &out);
 

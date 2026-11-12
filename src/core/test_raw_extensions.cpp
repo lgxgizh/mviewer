@@ -54,6 +54,16 @@ static void testCatalog()
     // ADR 033: .raw is a plain sensor dump, never a camera RAW for LibRaw.
     check(!mviewer::core::isRawExtension("raw") && !mviewer::core::isRawExtension("RAW"),
           ".raw is not a camera RAW extension");
+    // ADR 034: .gray / .grey are headerless grayscale, never LibRaw.
+    bool catalogHasGray = false;
+    for (const std::string_view ext : exts)
+    {
+        if (ext == "gray" || ext == "grey")
+            catalogHasGray = true;
+    }
+    check(!catalogHasGray, "camera RAW catalog has no gray or grey");
+    for (const char *ext : {"gray", "grey", "GRAY", "GREY"})
+        check(!mviewer::core::isRawExtension(ext), "gray/grey is not a camera RAW extension");
     check(!mviewer::core::suffixMatchesTypeFilter("raw", joined), ".raw is not a RAW filter hit");
     check(mviewer::core::suffixMatchesTypeFilter("srw", "raw"), "raw alias matches srw");
     check(mviewer::core::suffixMatchesTypeFilter("nrw", "raw"), "raw alias matches nrw");
@@ -94,6 +104,10 @@ static void testCallSitesAgree()
     }
     check(mviewer::core::isRawExtension("jpg") == false, "jpeg is not RAW");
     check(decoder.canDecode("folder/shot.jpg") == false, "RawDecoder rejects jpeg");
+    check(decoder.canDecode("folder/shot.gray") == false, "RawDecoder rejects .gray");
+    check(decoder.canDecode("folder/shot.grey") == false, "RawDecoder rejects .grey");
+    check(decoder.canDecode("folder/shot.GRAY") == false, "RawDecoder rejects .GRAY");
+    check(decoder.canDecode("folder/shot.GREY") == false, "RawDecoder rejects .GREY");
     check(mviewer::core::isRawPath("folder.cr2/shot.jpg") == false,
           "directory names do not make a jpeg RAW");
 }

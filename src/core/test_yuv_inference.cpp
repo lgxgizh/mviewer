@@ -60,7 +60,7 @@ static const Case kCases[] = {
     {"cam_1080p_full.yuv", "", 0, true, 1920, 1080, "yuv420p", M709, FULL},
     {"cam_1080p_pc_bt601.yuv", "", 0, true, 1920, 1080, "yuv420p", M601, FULL},
     {"p010_3840x2160.yuv", "", 0, true, 3840, 2160, "p010le", M709, LIM},
-    {"img.gray", "640x480", 0, true, 640, 480, "gray", M709, LIM},
+    {"img.y", "640x480", 0, true, 640, 480, "gray", M709, LIM},
     {"y_4k_444_12bit.yuv", "", 0, true, 3840, 2160, "yuv444p12le", M709, LIM},
     {"y_422.yuv", "", 0, false, 0, 0, "yuv422p", M709, LIM},
     {"unique.yuv", "", kNtsc420 * 3, true, 720, 480, "yuv420p", M709, LIM},

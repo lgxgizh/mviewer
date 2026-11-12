@@ -359,9 +359,27 @@ void testExtensionMap()
     CHECK(normalizeExtension(".NV12") == "nv12");
     CHECK(normalizeExtension("*.Raw_1") == "raw_1");
     CHECK(normalizeExtension("y4m").empty());
+    CHECK(normalizeExtension("gray").empty());
+    CHECK(normalizeExtension(".GRAY").empty());
+    CHECK(normalizeExtension("grey").empty());
+    CHECK(normalizeExtension("GREY").empty());
     CHECK(normalizeExtension("a.b").empty());
     CHECK(isYuvExtension("yuv") && isYuvExtension("y4m") && isYuvExtension("nv12"));
+    CHECK(isYuvExtension("y"));
+    CHECK(!isYuvExtension("gray"));
+    CHECK(!isYuvExtension("grey"));
     CHECK(!isYuvExtension("png"));
+    bool sawY = false;
+    bool sawReserved = false;
+    for (const ExtensionRule &rule : defaultExtensionRules())
+    {
+        if (rule.ext == "y" && rule.pixFmt == "gray")
+            sawY = true;
+        if (rule.ext == "gray" || rule.ext == "grey")
+            sawReserved = true;
+    }
+    CHECK(sawY);
+    CHECK(!sawReserved);
     CHECK(mappedPixFmt("i420") == std::optional<std::string>("yuv420p"));
     CHECK(!mappedPixFmt("yuv").has_value());
 
@@ -390,6 +408,22 @@ void testExtensionMap()
     setExtensionRules(defaultExtensionRules());
     CHECK(extensionRulesFingerprint() == before);
     CHECK(!isYuvExtension("cam"));
+
+    // ADR 034: a user rule for .gray / .grey is dropped; .y still maps to gray.
+    const auto blocked = setExtensionRules({{"gray", "gray"}, {"grey", "gray"}, {".y", "gray"}});
+    bool claimed = false;
+    bool sawLoadedY = false;
+    for (const ExtensionRule &rule : blocked)
+    {
+        if (rule.ext == "gray" || rule.ext == "grey")
+            claimed = true;
+        if (rule.ext == "y" && rule.pixFmt == "gray")
+            sawLoadedY = true;
+    }
+    CHECK(!claimed);
+    CHECK(sawLoadedY);
+    setExtensionRules(defaultExtensionRules());
+    CHECK(!isYuvExtension("gray") && isYuvExtension("y"));
 }
 
 } // namespace

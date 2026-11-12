@@ -73,6 +73,12 @@ static void testIsYuvPath()
     CHECK(isYuvPath("clip.YUV"));
     CHECK(isYuvPath("a/b.y4m"));
     CHECK(isYuvPath("A.Y4M"));
+    CHECK(isYuvPath("x.y"));
+    CHECK(isYuvPath("x.Y"));
+    CHECK(!isYuvPath("x.gray"));
+    CHECK(!isYuvPath("x.GRAY"));
+    CHECK(!isYuvPath("x.grey"));
+    CHECK(!isYuvPath("x.GREY"));
     CHECK(!isYuvPath("clip.yuv.bak"));
     CHECK(!isYuvPath("clip.png"));
     CHECK(!isYuvPath("yuv"));

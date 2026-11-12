@@ -8,7 +8,7 @@
 #include <limits>
 #include <system_error>
 
-// ADR 033: plain .raw size math and validation.
+// ADR 033 / ADR 034: plain dump size math and validation.
 
 namespace mviewer::core::rawplain
 {
@@ -113,6 +113,8 @@ int64_t minRowBytes(const Params &p)
         }
         return n;
     }
+    case Packing::Bits1:
+        return (w + 7) / 8;
     }
     return -1;
 }
@@ -172,6 +174,8 @@ bool packingSupportsBitDepth(Packing packing, int bitDepth)
     case Packing::Lsb16:
     case Packing::Msb16:
         return bitDepth >= 8 && bitDepth <= 16;
+    case Packing::Bits1:
+        return bitDepth == 1;
     }
     return false;
 }
@@ -252,6 +256,41 @@ bool isValid(const Params &p, std::string *why)
         return fail("too large");
     }
     return isValidDefaults(p, why);
+}
+
+Params grayDefaultParams()
+{
+    Params p;
+    p.width = 0;
+    p.height = 0;
+    p.bitDepth = 8;
+    p.packing = Packing::Bits8;
+    p.byteOrder = ByteOrder::Little;
+    p.headerOffset = 0;
+    p.rowStride = 0;
+    p.blackLevel = 0;
+    p.whiteLevel = 0;
+    p.cfa = Cfa::Mono;
+    p.wb = WhiteBalance::None;
+    p.wbGainR = 1.0;
+    p.wbGainB = 1.0;
+    p.gain = 1.0;
+    p.srgbGamma = false;
+    return p;
+}
+
+Params normalizedForKind(const Params &p, DumpKind kind)
+{
+    if (kind != DumpKind::Gray)
+    {
+        return p;
+    }
+    Params q = p;
+    q.cfa = Cfa::Mono;
+    q.wb = WhiteBalance::None;
+    q.wbGainR = 1.0;
+    q.wbGainB = 1.0;
+    return q;
 }
 
 } // namespace mviewer::core::rawplain

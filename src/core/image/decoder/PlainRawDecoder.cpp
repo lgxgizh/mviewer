@@ -229,7 +229,7 @@ bool PlainRawDecoder::canDecode(const std::string &path) const
 
 std::vector<std::string> PlainRawDecoder::extensions() const
 {
-    return {"raw"};
+    return {"raw", "gray", "grey"};
 }
 
 const char *PlainRawDecoder::name() const

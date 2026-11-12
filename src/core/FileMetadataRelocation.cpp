@@ -17,11 +17,21 @@ bool movePlainRawOverride(const std::string &oldPath, const std::string &newPath
     try
     {
         namespace raw = mviewer::core::rawplain;
+        // Same kind keeps the override; .raw <-> .gray drops it (the params
+        // do not carry over). A destination that is not a plain dump (e.g. a
+        // trash name) leaves the store alone, as before ADR 034.
         if (!raw::isPlainRawPath(oldPath) || !raw::isPlainRawPath(newPath))
             return false;
-        raw::PlainRawParamStore::instance().moveOverride(raw::plainRawParamKey(oldPath),
-                                                         raw::plainRawParamKey(newPath));
-        return true;
+        auto &store = raw::PlainRawParamStore::instance();
+        const std::string fromKey = raw::plainRawParamKey(oldPath);
+        if (raw::dumpKindForPath(oldPath) == raw::dumpKindForPath(newPath))
+        {
+            store.moveOverride(fromKey, raw::plainRawParamKey(newPath));
+            return true;
+        }
+        if (store.override(fromKey).has_value())
+            store.clearOverride(fromKey);
+        return false;
     }
     catch (...)
     {

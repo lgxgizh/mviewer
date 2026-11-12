@@ -107,7 +107,9 @@ QString groupForSuffix(const QString &suffixNoDot)
     if (mviewer::core::isRawExtension(s.toStdString()))
         return QStringLiteral("raw");
     // ADR 033 - plain .raw has its own group, visible by default; camera RAW group unchanged.
-    if (mviewer::core::rawplain::isPlainRawPath(("x." + s).toUtf8().toStdString()))
+    const std::string probe = ("x." + s).toUtf8().toStdString();
+    if (mviewer::core::rawplain::isPlainRawPath(probe) &&
+        !mviewer::core::rawplain::isGrayRawPath(probe))
         return QStringLiteral("sensorraw");
     for (const Group &g : groups())
     {

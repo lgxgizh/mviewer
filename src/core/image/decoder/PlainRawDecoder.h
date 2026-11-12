@@ -6,8 +6,9 @@
 #include <string>
 #include <vector>
 
-// ADR 033: headerless .raw sensor dumps. Returns no pixels when the
-// parameters cannot be resolved (thumbnail placeholder + dialog hint).
+// ADR 033 / ADR 034: headerless .raw sensor dumps and .gray/.grey grayscale.
+// Returns no pixels when the parameters cannot be resolved (thumbnail
+// placeholder + dialog hint).
 // Probe does not read samples. Native LOD and region are false; decodeRegion
 // still returns pixels (one cached full frame, then crop and nearest scale)
 // because SourceImage calls it whenever this interface is present.

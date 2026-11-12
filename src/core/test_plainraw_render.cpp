@@ -581,6 +581,25 @@ std::vector<std::uint16_t> rampFrame(int w, int h)
     return samples;
 }
 
+void checkBits1Mono()
+{
+    Params p = makeParams(8, 1, 1, Packing::Bits1, Cfa::Mono);
+    p.wb = WhiteBalance::None;
+    p.srgbGamma = false;
+    const std::vector<std::uint16_t> samples = {1, 0, 1, 0, 1, 0, 1, 0};
+    const ImageData image = renderPlainRaw(p, samples, 0);
+    CHECK(!image.isNull());
+    CHECK(image.width == 8 && image.height == 1);
+    for (int x = 0; x < 8; ++x)
+    {
+        const std::uint8_t *px = pixelAt(image, x, 0);
+        const std::uint8_t want = (x % 2 == 0) ? 255 : 0;
+        CHECK(px[0] == want);
+        CHECK(px[1] == want);
+        CHECK(px[2] == want);
+    }
+}
+
 void checkOwnedAndRowBands()
 {
     Params p = makeParams(64, 32, 8, Packing::Bits8, Cfa::RGGB);
@@ -618,6 +637,7 @@ int main()
     checkPreviewAverage();
     checkSubsampledWhiteBalance();
     checkOwnedAndRowBands();
+    checkBits1Mono();
     checkTiming();
     if (g_failures != 0)
     {
