@@ -131,6 +131,8 @@ int main(int argc, char *argv[])
     mviewer::ui::loadYuvParamSettings();
     // ADR 033: Preferences > RAW defaults for plain .raw sensor dumps.
     mviewer::ui::loadPlainRawDefaults();
+    // ADR 034: Preferences > Gray defaults for headerless .gray / .grey files.
+    mviewer::ui::loadGrayRawDefaults();
     // User-editable YUV extension -> pixel format mapping (Preferences > YUV).
     mviewer::ui::loadYuvExtensionMapSettings();
 

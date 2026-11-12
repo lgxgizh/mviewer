@@ -12,11 +12,11 @@
 //   TC-SB-09: Parallel column layout, sort independence and mode sync
 //   TC-SB-13: Compare uses the cross-pane union (1 left + 1 right)
 //   TC-SB-14: Right header matches the left; docked Compare button
-//   TC-SB-15: Multi-select file type filter, RAW hidden by default
+//   TC-SB-15: Multi-select file type filter, RAW and Gray hidden by default
 //   TC-SB-16: Type filter change keeps selection, current item and scroll
 //   TC-SB-17: Type-filtered-only folder shows a "hidden by type" hint + Show
 //   TC-SB-18: Every type group hides exactly its files
-//             (sensor RAW own group, visible by default)
+//             (sensor RAW visible; gray hidden by default, migrated once)
 
 #include "appstate.h"
 #include "browseformats.h"
@@ -34,6 +34,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QByteArray>
 #include <QComboBox>
 #include <QDir>
 #include <QFile>

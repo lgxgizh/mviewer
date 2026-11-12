@@ -292,6 +292,28 @@ void polishFormLayouts(QWidget *page)
     }
 }
 
+bool commitGrayRawDefaults(QWidget *parent, PlainRawParamsEditor *editor)
+{
+    if (editor == nullptr)
+    {
+        return true;
+    }
+    const QString problem = editor->validationError();
+    if (!problem.isEmpty())
+    {
+        QMessageBox::warning(parent, PreferencesDialog::tr("Gray defaults"), problem);
+        return false;
+    }
+    const auto params = editor->params();
+    const auto installed = mviewer::core::rawplain::PlainRawParamStore::instance().defaults(
+        mviewer::core::rawplain::DumpKind::Gray);
+    if (!(params == installed))
+    {
+        mviewer::ui::saveGrayRawDefaults(params);
+    }
+    return true;
+}
+
 } // namespace
 
 // F1 (M22) Preferences dialog.
@@ -329,6 +351,7 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
         {buildAnalysisTab(s), tr("Analyze"), "histogram", "preferencesPageAnalyze"},
         {buildYuvTab(), tr("YUV"), "filter", "preferencesPageYuv"},
         {buildPlainRawTab(), tr("RAW"), "filter", "preferencesPageRaw"},
+        {buildGrayRawTab(), tr("Gray"), "filter", "preferencesPageGray"},
     };
     for (const auto &page : kPages)
     {
@@ -393,6 +416,30 @@ QWidget *PreferencesDialog::buildPlainRawTab()
     return page;
 }
 
+QWidget *PreferencesDialog::buildGrayRawTab()
+{
+    // ADR 034: global defaults for headerless .gray / .grey files. Right-click >
+    // Gray Parameters... overrides them for one file in the current session.
+    auto *page = new QWidget(this);
+    auto *layout = new QVBoxLayout(page);
+    auto *intro =
+        new QLabel(tr("Defaults for headerless grayscale .gray / .grey files. "
+                      "The size is read from the file name, e.g. scan_1024x768.gray, "
+                      "and checked against the file size. Right-click a file > Gray Parameters... "
+                      "to change one file for this session."),
+                   page);
+    intro->setWordWrap(true);
+    layout->addWidget(intro);
+    m_grayRawDefaults = new PlainRawParamsEditor(PlainRawParamsEditor::Mode::Defaults, page,
+                                                 mviewer::core::rawplain::DumpKind::Gray);
+    m_grayRawDefaults->setObjectName(QStringLiteral("preferencesGrayRawDefaults"));
+    m_grayRawDefaults->setParams(mviewer::core::rawplain::PlainRawParamStore::instance().defaults(
+        mviewer::core::rawplain::DumpKind::Gray));
+    layout->addWidget(m_grayRawDefaults);
+    layout->addStretch(1);
+    return page;
+}
+
 void PreferencesDialog::accept()
 {
     if (m_plainRawDefaults)
@@ -407,6 +454,8 @@ void PreferencesDialog::accept()
         if (!(params == mviewer::core::rawplain::PlainRawParamStore::instance().defaults()))
             mviewer::ui::savePlainRawDefaults(params);
     }
+    if (!commitGrayRawDefaults(this, m_grayRawDefaults))
+        return;
     if (m_yuvExtensionMap)
     {
         const QString problem = m_yuvExtensionMap->validationError();

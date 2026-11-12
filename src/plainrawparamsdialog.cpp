@@ -19,6 +19,7 @@
 namespace
 {
 
+using mviewer::core::rawplain::DumpKind;
 using mviewer::core::rawplain::Packing;
 using mviewer::core::rawplain::Params;
 using mviewer::core::rawplain::SizeCheck;
@@ -29,7 +30,7 @@ struct DialogSeed
     bool sizeTrusted = true;
 };
 
-DialogSeed initialForDialog(const mviewer::core::rawplain::PlainRawFileInfo &info)
+DialogSeed initialForDialog(const mviewer::core::rawplain::PlainRawFileInfo &info, DumpKind kind)
 {
     DialogSeed seed;
     seed.params = info.resolved.params;
@@ -37,7 +38,7 @@ DialogSeed initialForDialog(const mviewer::core::rawplain::PlainRawFileInfo &inf
     {
         return seed;
     }
-    const auto guessed = mviewer::core::rawplain::guessCommonSize(seed.params, info.fileSize);
+    const auto guessed = mviewer::core::rawplain::guessCommonSize(seed.params, info.fileSize, kind);
     if (guessed.has_value())
     {
         seed.params = *guessed;
@@ -83,14 +84,27 @@ QString plainRawPackingLabel(Packing packing)
 }
 
 PlainRawParamsDialog::PlainRawParamsDialog(const QString &fileName, int64_t fileSize,
-                                           const Params &initial, bool hasOverride, QWidget *parent)
-    : QDialog(parent), m_fileSize(fileSize)
+                                           const Params &initial, bool hasOverride, QWidget *parent,
+                                           DumpKind kind)
+    : QDialog(parent), m_fileSize(fileSize), m_kind(kind)
 {
-    setWindowTitle(tr("RAW Parameters - %1").arg(fileName));
+    if (kind == DumpKind::Gray)
+    {
+        setWindowTitle(tr("Gray Parameters - %1").arg(fileName));
+    }
+    else
+    {
+        setWindowTitle(tr("RAW Parameters - %1").arg(fileName));
+    }
     auto *layout = new QVBoxLayout(this);
-    layout->addWidget(new QLabel(tr("Plain sensor dump: set how the bytes are stored."), this));
+    QString intro = tr("Plain sensor dump: set how the bytes are stored.");
+    if (kind == DumpKind::Gray)
+    {
+        intro = tr("Headerless grayscale: set how the bytes are stored.");
+    }
+    layout->addWidget(new QLabel(intro, this));
 
-    m_editor = new PlainRawParamsEditor(PlainRawParamsEditor::Mode::File, this);
+    m_editor = new PlainRawParamsEditor(PlainRawParamsEditor::Mode::File, this, kind);
     m_editor->setParams(initial);
     layout->addWidget(m_editor);
 
@@ -238,7 +252,7 @@ void PlainRawParamsDialog::updateSummary()
     m_summary->setText(summaryText());
     const Params current = m_editor->params();
     const std::vector<Params> found =
-        mviewer::core::rawplain::guessFromFileSize(current, m_fileSize);
+        mviewer::core::rawplain::guessFromFileSize(current, m_fileSize, m_kind);
     m_guesses.clear();
     m_guessList->clear();
     for (const Params &guess : found)
@@ -275,11 +289,16 @@ bool editPlainRawParamsForPath(QWidget *parent, const QString &path)
     namespace raw = mviewer::core::rawplain;
     const std::string utf8 = path.toUtf8().toStdString();
     const std::string key = raw::plainRawParamKey(utf8);
+    const raw::DumpKind kind = raw::dumpKindForPath(utf8);
     raw::PlainRawFileInfo info = raw::resolvePlainRawFile(utf8);
     if (info.fileSize < 0)
     {
+        const QString title =
+            kind == raw::DumpKind::Gray
+                ? QCoreApplication::translate("PlainRawParamsDialog", "Gray Parameters")
+                : QCoreApplication::translate("PlainRawParamsDialog", "RAW Parameters");
         QMessageBox::warning(
-            parent, QCoreApplication::translate("PlainRawParamsDialog", "RAW Parameters"),
+            parent, title,
             QCoreApplication::translate("PlainRawParamsDialog", "Cannot open %1.").arg(path));
         return false;
     }
@@ -289,10 +308,10 @@ bool editPlainRawParamsForPath(QWidget *parent, const QString &path)
         std::vector<std::uint16_t> scratch;
         raw::readPlainRawSamples(utf8, info, scratch, nullptr);
     }
-    const DialogSeed seed = initialForDialog(info);
+    const DialogSeed seed = initialForDialog(info, kind);
     const QString fileName = QFileInfo(path).fileName();
     PlainRawParamsDialog dialog(fileName.isEmpty() ? path : fileName, info.fileSize, seed.params,
-                                hasOverride, parent);
+                                hasOverride, parent, kind);
     dialog.setSizeTrusted(seed.sizeTrusted);
     if (dialog.exec() != QDialog::Accepted)
     {

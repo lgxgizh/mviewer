@@ -10,6 +10,8 @@
 #include <QHBoxLayout>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QStandardItem>
+#include <QStandardItemModel>
 #include <QVariant>
 #include <QWidget>
 
@@ -23,6 +25,7 @@ namespace
 
 using mviewer::core::rawplain::ByteOrder;
 using mviewer::core::rawplain::Cfa;
+using mviewer::core::rawplain::DumpKind;
 using mviewer::core::rawplain::Packing;
 using mviewer::core::rawplain::Params;
 using mviewer::core::rawplain::WhiteBalance;
@@ -181,8 +184,12 @@ double presetGain(int index)
     return presets[index];
 }
 
-void addBits(QComboBox *box)
+void addBits(QComboBox *box, bool gray)
 {
+    if (gray)
+    {
+        box->addItem(QCoreApplication::translate("PlainRawParamsEditor", "%1 bit").arg(1), 1);
+    }
     for (int depth = 8; depth <= 16; ++depth)
     {
         box->addItem(QCoreApplication::translate("PlainRawParamsEditor", "%1 bit").arg(depth),
@@ -190,14 +197,47 @@ void addBits(QComboBox *box)
     }
 }
 
-void addPacking(QComboBox *box)
+void appendPacking(QComboBox *box, Packing packing)
 {
-    const Packing packings[] = {Packing::Bits8, Packing::Lsb16, Packing::Msb16, Packing::Mipi10,
-                                Packing::Mipi12};
-    for (Packing packing : packings)
+    box->addItem(plainRawPackingLabel(packing), static_cast<int>(packing));
+}
+
+void addPacking(QComboBox *box, bool gray)
+{
+    if (gray)
     {
-        box->addItem(plainRawPackingLabel(packing), static_cast<int>(packing));
+        appendPacking(box, Packing::Bits1);
+        appendPacking(box, Packing::Bits8);
+        appendPacking(box, Packing::Lsb16);
+        appendPacking(box, Packing::Msb16);
+        return;
     }
+    appendPacking(box, Packing::Bits8);
+    appendPacking(box, Packing::Lsb16);
+    appendPacking(box, Packing::Msb16);
+    appendPacking(box, Packing::Mipi10);
+    appendPacking(box, Packing::Mipi12);
+}
+
+// "1 bit" stays in the combo but is selectable only while packing is Bits1.
+void setComboItemEnabled(QComboBox *box, int data, bool enabled)
+{
+    const int index = box->findData(data);
+    if (index < 0)
+    {
+        return;
+    }
+    auto *model = qobject_cast<QStandardItemModel *>(box->model());
+    if (model == nullptr)
+    {
+        return;
+    }
+    QStandardItem *item = model->item(index);
+    if (item == nullptr)
+    {
+        return;
+    }
+    item->setEnabled(enabled);
 }
 
 void addByteOrder(QComboBox *box)
@@ -282,7 +322,7 @@ struct LevelFields
     QCheckBox *gamma = nullptr;
 };
 
-SizeFields addSizeRows(QFormLayout *form, QWidget *parent, bool defaults)
+SizeFields addSizeRows(QFormLayout *form, QWidget *parent, bool defaults, bool gray)
 {
     SizeFields fields;
     const int sizeMin = defaults ? 0 : 1;
@@ -300,13 +340,13 @@ SizeFields addSizeRows(QFormLayout *form, QWidget *parent, bool defaults)
 
     fields.bitDepth = new QComboBox(parent);
     fields.bitDepth->setObjectName(QStringLiteral("plainRawBitDepth"));
-    addBits(fields.bitDepth);
+    addBits(fields.bitDepth, gray);
     form->addRow(QCoreApplication::translate("PlainRawParamsEditor", "Bit depth:"),
                  fields.bitDepth);
 
     fields.packing = new QComboBox(parent);
     fields.packing->setObjectName(QStringLiteral("plainRawPacking"));
-    addPacking(fields.packing);
+    addPacking(fields.packing, gray);
     form->addRow(QCoreApplication::translate("PlainRawParamsEditor", "Storage:"), fields.packing);
 
     fields.byteOrder = new QComboBox(parent);
@@ -387,20 +427,39 @@ LevelFields addLevelRows(QFormLayout *form, QWidget *parent)
     return fields;
 }
 
+void hideFormField(QFormLayout *form, QWidget *field)
+{
+    field->setVisible(false);
+    if (QWidget *label = form->labelForField(field))
+    {
+        label->setVisible(false);
+    }
+    form->setRowVisible(field, false);
+}
+
+void hideGrayColorRows(QFormLayout *form, const LevelFields &levels)
+{
+    hideFormField(form, levels.cfa);
+    hideFormField(form, levels.wb);
+    hideFormField(form, levels.wbR);
+    hideFormField(form, levels.wbB);
+}
+
 } // namespace
 
-PlainRawParamsEditor::PlainRawParamsEditor(Mode mode, QWidget *parent)
-    : QWidget(parent), m_mode(mode)
+PlainRawParamsEditor::PlainRawParamsEditor(Mode mode, QWidget *parent, DumpKind kind)
+    : QWidget(parent), m_mode(mode), m_kind(kind)
 {
     buildUi();
     wireSignals();
-    setParams(Params{});
+    setParams(m_kind == DumpKind::Gray ? mviewer::core::rawplain::grayDefaultParams() : Params{});
 }
 
 void PlainRawParamsEditor::buildUi()
 {
     auto *form = new QFormLayout(this);
-    const SizeFields sizes = addSizeRows(form, this, m_mode == Mode::Defaults);
+    const bool gray = m_kind == DumpKind::Gray;
+    const SizeFields sizes = addSizeRows(form, this, m_mode == Mode::Defaults, gray);
     m_width = sizes.width;
     m_height = sizes.height;
     m_bitDepth = sizes.bitDepth;
@@ -418,6 +477,10 @@ void PlainRawParamsEditor::buildUi()
     m_gainPreset = levels.gainPreset;
     m_gain = levels.gain;
     m_gamma = levels.gamma;
+    if (gray)
+    {
+        hideGrayColorRows(form, levels);
+    }
 }
 
 void PlainRawParamsEditor::wireSignals()
@@ -509,6 +572,18 @@ void PlainRawParamsEditor::onPackingChanged()
     {
         forcedBits = 12;
     }
+    else if (packing == Packing::Bits1)
+    {
+        forcedBits = 1;
+    }
+    if (m_kind == DumpKind::Gray)
+    {
+        setComboItemEnabled(m_bitDepth, 1, packing == Packing::Bits1);
+        if (forcedBits == 0 && enumData(m_bitDepth) == 1)
+        {
+            selectData(m_bitDepth, 8);
+        }
+    }
     m_bitDepth->setEnabled(forcedBits == 0);
     if (forcedBits != 0)
     {
@@ -559,7 +634,7 @@ Params PlainRawParamsEditor::params() const
     out.wbGainB = m_wbB->value();
     out.gain = m_gain->value();
     out.srgbGamma = m_gamma->isChecked();
-    return out;
+    return mviewer::core::rawplain::normalizedForKind(out, m_kind);
 }
 
 QString PlainRawParamsEditor::validationError() const
@@ -573,5 +648,10 @@ QString PlainRawParamsEditor::validationError() const
     {
         return {};
     }
-    return tr("These RAW parameters are not valid: %1").arg(QString::fromStdString(why));
+    const QString reason = QString::fromStdString(why);
+    if (m_kind == DumpKind::Gray)
+    {
+        return tr("These gray parameters are not valid: %1").arg(reason);
+    }
+    return tr("These RAW parameters are not valid: %1").arg(reason);
 }

@@ -81,10 +81,14 @@ void ImageViewer::cancelFullRawDecode()
 
 QAction *ImageViewer::addRawDecodeAction(QMenu &menu)
 {
-    if (mviewer::core::yuv::isYuvPath(m_currentPath.toUtf8().toStdString()))
+    const std::string path = m_currentPath.toUtf8().toStdString();
+    if (mviewer::core::yuv::isYuvPath(path))
         return menu.addAction(tr("YUV Parameters..."));
-    if (mviewer::core::rawplain::isPlainRawPath(m_currentPath.toUtf8().toStdString()))
-        return menu.addAction(tr("RAW Parameters..."));
+    if (mviewer::core::rawplain::isPlainRawPath(path))
+    {
+        const bool gray = mviewer::core::rawplain::isGrayRawPath(path);
+        return menu.addAction(gray ? tr("Gray Parameters...") : tr("RAW Parameters..."));
+    }
     return menu.addAction(m_fullRawLoading ? tr("Cancel Full RAW Decode") : tr("Decode Full RAW"));
 }
 

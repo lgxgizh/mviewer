@@ -4,6 +4,7 @@
 #include "plainrawparamsdialog.h"
 #include "plainrawparamseditor.h"
 #include "plainrawsettings.h"
+#include "preferencesdialog.h"
 #include "runtime_storage.h"
 #include "thumbnailpanel_testaccess.h"
 
@@ -32,6 +33,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <string>
 
 static int g_failures = 0;
 #define CHECK(cond)                                                                                \
@@ -49,6 +51,7 @@ namespace
 
 using mviewer::core::rawplain::ByteOrder;
 using mviewer::core::rawplain::Cfa;
+using mviewer::core::rawplain::DumpKind;
 using mviewer::core::rawplain::Packing;
 using mviewer::core::rawplain::Params;
 using mviewer::core::rawplain::WhiteBalance;
@@ -239,6 +242,153 @@ void testBitDepthRoundTrip()
     odd.bitDepth = 17;
     editor.setParams(odd);
     CHECK(editor.params().bitDepth == 17);
+}
+
+QWidget *namedWidget(QWidget *parent, const char *name)
+{
+    return parent->findChild<QWidget *>(QString::fromLatin1(name));
+}
+
+// ADR 034: Gray defaults editor hides Bayer / white balance and offers
+// Bits1, Bits8, Lsb16, Msb16. Constructor installs grayDefaultParams().
+void testGrayEditor()
+{
+    PlainRawParamsEditor editor(PlainRawParamsEditor::Mode::Defaults, nullptr, DumpKind::Gray);
+    editor.show();
+    const char *hiddenNames[] = {"plainRawCfa", "plainRawWb", "plainRawWbR", "plainRawWbB"};
+    for (const char *name : hiddenNames)
+    {
+        QWidget *widget = namedWidget(&editor, name);
+        CHECK(widget != nullptr);
+        if (widget == nullptr)
+        {
+            continue;
+        }
+        CHECK(!widget->isVisibleTo(&editor));
+        CHECK(widget->isHidden());
+    }
+
+    QComboBox *packing = combo(&editor, "plainRawPacking");
+    CHECK(packing != nullptr);
+    if (packing != nullptr)
+    {
+        CHECK(packing->count() == 4);
+        const Packing expected[] = {Packing::Bits1, Packing::Bits8, Packing::Lsb16, Packing::Msb16};
+        for (int index = 0; index < 4; ++index)
+        {
+            CHECK(packing->itemData(index).toInt() == static_cast<int>(expected[index]));
+        }
+    }
+
+    const Params got = editor.params();
+    CHECK(got == mviewer::core::rawplain::grayDefaultParams());
+    CHECK(got.bitDepth == 8);
+    CHECK(got.packing == Packing::Bits8);
+    CHECK(got.cfa == Cfa::Mono);
+    CHECK(got.wb == WhiteBalance::None);
+    CHECK(!got.srgbGamma);
+}
+
+void testGrayBits1Depth()
+{
+    PlainRawParamsEditor editor(PlainRawParamsEditor::Mode::Defaults, nullptr, DumpKind::Gray);
+    QComboBox *packing = combo(&editor, "plainRawPacking");
+    CHECK(packing != nullptr);
+    if (packing == nullptr)
+    {
+        return;
+    }
+    const int bits1 = packing->findData(static_cast<int>(Packing::Bits1));
+    CHECK(bits1 >= 0);
+    packing->setCurrentIndex(bits1);
+    CHECK(editor.params().bitDepth == 1);
+    CHECK(editor.params().packing == Packing::Bits1);
+
+    const int lsb16 = packing->findData(static_cast<int>(Packing::Lsb16));
+    CHECK(lsb16 >= 0);
+    packing->setCurrentIndex(lsb16);
+    CHECK(editor.params().packing == Packing::Lsb16);
+    CHECK(editor.params().bitDepth != 1);
+}
+
+void testGraySetParamsNormalizes()
+{
+    PlainRawParamsEditor editor(PlainRawParamsEditor::Mode::Defaults, nullptr, DumpKind::Gray);
+    Params incoming = mviewer::core::rawplain::grayDefaultParams();
+    incoming.cfa = Cfa::RGGB;
+    incoming.wb = WhiteBalance::GrayWorld;
+    editor.setParams(incoming);
+    CHECK(editor.params().cfa == Cfa::Mono);
+    CHECK(editor.params().wb == WhiteBalance::None);
+}
+
+void testSensorEditorPacking()
+{
+    PlainRawParamsEditor editor(PlainRawParamsEditor::Mode::Defaults);
+    editor.show();
+    QComboBox *packing = combo(&editor, "plainRawPacking");
+    CHECK(packing != nullptr);
+    if (packing != nullptr)
+    {
+        CHECK(packing->count() == 5);
+        CHECK(packing->findData(static_cast<int>(Packing::Bits1)) < 0);
+    }
+    QWidget *cfa = namedWidget(&editor, "plainRawCfa");
+    CHECK(cfa != nullptr);
+    if (cfa != nullptr)
+    {
+        CHECK(!cfa->isHidden());
+        CHECK(cfa->isVisibleTo(&editor));
+    }
+}
+
+void testGraySettings()
+{
+    namespace raw = mviewer::core::rawplain;
+    const QString grayKey = QString::fromLatin1(mviewer::ui::kGrayRawDefaultsSettingsKey);
+    const QString sensorKey = QString::fromLatin1(mviewer::ui::kPlainRawDefaultsSettingsKey);
+    QSettings().remove(grayKey);
+    QSettings().remove(sensorKey);
+    raw::PlainRawParamStore::instance().clearAll();
+
+    Params gray = raw::grayDefaultParams();
+    gray.packing = Packing::Lsb16;
+    gray.bitDepth = 12;
+    mviewer::ui::saveGrayRawDefaults(gray);
+
+    const Params normalized = raw::normalizedForKind(gray, DumpKind::Gray);
+    const QString stored = QSettings().value(grayKey).toString();
+    CHECK(stored == QString::fromStdString(raw::toString(normalized)));
+    CHECK(raw::PlainRawParamStore::instance().defaults(DumpKind::Gray).bitDepth == 12);
+    CHECK(raw::PlainRawParamStore::instance().defaults() == Params{});
+
+    QSettings().setValue(grayKey, QStringLiteral("garbage"));
+    CHECK(mviewer::ui::loadGrayRawDefaults() == raw::grayDefaultParams());
+
+    QSettings().remove(grayKey);
+    QSettings().remove(sensorKey);
+    raw::PlainRawParamStore::instance().clearAll();
+}
+
+void testGrayDialog()
+{
+    Params initial = mviewer::core::rawplain::grayDefaultParams();
+    initial.width = 64;
+    initial.height = 32;
+    PlainRawParamsDialog dialog(QStringLiteral("a_64x32.gray"), 2048, initial, false, nullptr,
+                                DumpKind::Gray);
+    CHECK(dialog.windowTitle().startsWith(QStringLiteral("Gray Parameters")));
+    CHECK(dialog.canAccept());
+}
+
+void testPreferencesGrayPage()
+{
+    PreferencesDialog dialog;
+    QWidget *page = dialog.findChild<QWidget *>(QStringLiteral("preferencesPageGray"));
+    CHECK(page != nullptr);
+    auto *editor =
+        dialog.findChild<PlainRawParamsEditor *>(QStringLiteral("preferencesGrayRawDefaults"));
+    CHECK(editor != nullptr);
 }
 
 void pumpEvents(int ms)
@@ -454,6 +604,13 @@ int main(int argc, char **argv)
     testDialog();
     testUntrustedLarger();
     testBitDepthRoundTrip();
+    testGrayEditor();
+    testGrayBits1Depth();
+    testGraySetParamsNormalizes();
+    testSensorEditorPacking();
+    testGraySettings();
+    testGrayDialog();
+    testPreferencesGrayPage();
     testMissingPath();
     testDefaultsRefreshThumbnails();
     QSettings().clear();

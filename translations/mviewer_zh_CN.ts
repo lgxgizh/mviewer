@@ -824,6 +824,11 @@
         <source>Other formats</source>
         <translation>其他格式</translation>
     </message>
+    <message>
+        <location filename="../src/browseformats.cpp" line="1"/>
+        <source>Gray images (.gray/.grey)</source>
+        <translation>灰度图 (.gray/.grey)</translation>
+    </message>
 </context>
 <context>
     <name>CompareRoi</name>
@@ -3966,6 +3971,11 @@ or double-click a thumbnail to view</source>
         <source>RAW Parameters...</source>
         <translation>RAW 参数...</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer_rawdecode.cpp" line="1"/>
+        <source>Gray Parameters...</source>
+        <translation>灰度参数...</translation>
+    </message>
 </context>
 <context>
     <name>Language</name>
@@ -6048,6 +6058,21 @@ Build: %2</source>
         <source>Cannot show %1: %2. Set its size and storage with right-click &gt; RAW Parameters...</source>
         <translation>无法显示 %1：%2。请右键 &gt; RAW 参数... 设置尺寸和存储格式</translation>
     </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>Gray parameters updated: %1</source>
+        <translation>灰度参数已更新：%1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>Cannot show %1: set its size and storage with right-click &gt; Gray Parameters...</source>
+        <translation>无法显示 %1：请右键 &gt; 灰度参数... 设置尺寸和存储格式</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_yuv.cpp" line="1"/>
+        <source>Cannot show %1: %2. Set its size and storage with right-click &gt; Gray Parameters...</source>
+        <translation>无法显示 %1：%2。请右键 &gt; 灰度参数... 设置尺寸和存储格式</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>
@@ -6986,6 +7011,21 @@ Build: %2</source>
         <source>RAW defaults</source>
         <translation>RAW 默认参数</translation>
     </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>Gray defaults</source>
+        <translation>灰度默认值</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>Defaults for headerless grayscale .gray / .grey files. The size is read from the file name, e.g. scan_1024x768.gray, and checked against the file size. Right-click a file &gt; Gray Parameters... to change one file for this session.</source>
+        <translation>无文件头灰度图（.gray / .grey）的默认参数。尺寸从文件名读取（例如 scan_1024x768.gray），并与文件大小核对。右键文件 &gt; 灰度参数... 可仅为本次会话修改单个文件。</translation>
+    </message>
+    <message>
+        <location filename="../src/preferencesdialog.cpp" line="1"/>
+        <source>Gray</source>
+        <translation>灰度图</translation>
+    </message>
 </context>
 <context>
     <name>PreviewPanel</name>
@@ -7733,6 +7773,11 @@ to:
         <location filename="../src/thumbnailpanel_contextmenu.cpp" line="1"/>
         <source>RAW Parameters...</source>
         <translation>RAW 参数...</translation>
+    </message>
+    <message>
+        <location filename="../src/thumbnailpanel_contextmenu.cpp" line="1"/>
+        <source>Gray Parameters...</source>
+        <translation>灰度参数...</translation>
     </message>
 </context>
 <context>
@@ -8533,6 +8578,11 @@ to:
         <source>sRGB gamma</source>
         <translation>sRGB gamma</translation>
     </message>
+    <message>
+        <location filename="../src/plainrawparamseditor.cpp" line="1"/>
+        <source>These gray parameters are not valid: %1</source>
+        <translation>这些灰度参数无效：%1</translation>
+    </message>
 </context>
 <context>
     <name>PlainRawParamsDialog</name>
@@ -8620,6 +8670,21 @@ to:
         <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
         <source>1-bit (8 pixels per byte)</source>
         <translation>1 位（每字节 8 像素）</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Headerless grayscale: set how the bytes are stored.</source>
+        <translation>无文件头灰度图：请设置字节的存储方式。</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Gray Parameters - %1</source>
+        <translation>灰度参数 - %1</translation>
+    </message>
+    <message>
+        <location filename="../src/plainrawparamsdialog.cpp" line="1"/>
+        <source>Gray Parameters</source>
+        <translation>灰度参数</translation>
     </message>
 </context>
 </TS>

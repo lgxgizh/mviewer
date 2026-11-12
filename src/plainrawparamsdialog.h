@@ -13,16 +13,17 @@ class QLabel;
 class QListWidget;
 class PlainRawParamsEditor;
 
-// ADR 033: per-file RAW Parameters dialog. OK applies a session-only
-// override for the file; "Use Defaults" drops the override.
+// ADR 033 / ADR 034: per-file RAW or Gray Parameters dialog. OK applies a
+// session-only override for the file; "Use Defaults" drops the override.
 class PlainRawParamsDialog : public QDialog
 {
     Q_OBJECT
 
   public:
-    PlainRawParamsDialog(const QString &fileName, int64_t fileSize,
-                         const mviewer::core::rawplain::Params &initial, bool hasOverride,
-                         QWidget *parent = nullptr);
+    PlainRawParamsDialog(
+        const QString &fileName, int64_t fileSize, const mviewer::core::rawplain::Params &initial,
+        bool hasOverride, QWidget *parent = nullptr,
+        mviewer::core::rawplain::DumpKind kind = mviewer::core::rawplain::DumpKind::Sensor);
 
     mviewer::core::rawplain::Params params() const;
     bool resetRequested() const;
@@ -33,8 +34,8 @@ class PlainRawParamsDialog : public QDialog
     // e.g. "4096x3072, 16-bit LSB container: 25165824 bytes expected, file has
     // 25165824 bytes (match)"; names the mismatch when the size differs.
     QString summaryText() const;
-    // Combinations from guessFromFileSize(params(), fileSize) that match the
-    // file size; double-clicking one applies it.
+    // Combinations from guessFromFileSize(params(), fileSize, kind) that match
+    // the file size; double-clicking one applies it.
     int guessCount() const;
     void applyGuess(int index);
     PlainRawParamsEditor *editor() const
@@ -50,6 +51,7 @@ class PlainRawParamsDialog : public QDialog
     bool largerSizeConfirmed() const;
 
     int64_t m_fileSize = 0;
+    mviewer::core::rawplain::DumpKind m_kind = mviewer::core::rawplain::DumpKind::Sensor;
     bool m_reset = false;
     bool m_sizeTrusted = true;
     bool m_sizeEdited = false;

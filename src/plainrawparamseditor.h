@@ -11,9 +11,11 @@ class QDoubleSpinBox;
 class QLabel;
 class QSpinBox;
 
-// ADR 033: editor for plain .raw sensor-dump parameters. Used by
-// Preferences > RAW (global defaults; width/height may be 0 = "from file
-// name") and by the per-file RAW Parameters dialog (size required).
+// ADR 033 / ADR 034: editor for plain sensor dumps (.raw) and headerless
+// grayscale (.gray / .grey). Preferences uses global defaults (width and
+// height may be 0 = "from file name"); the per-file dialog requires a size.
+// DumpKind::Gray hides Bayer / white balance and offers 1-bit, 8-bit and
+// 16-bit storage only.
 class PlainRawParamsEditor : public QWidget
 {
     Q_OBJECT
@@ -25,7 +27,9 @@ class PlainRawParamsEditor : public QWidget
         File      // width/height must be >= 1
     };
 
-    explicit PlainRawParamsEditor(Mode mode, QWidget *parent = nullptr);
+    explicit PlainRawParamsEditor(
+        Mode mode, QWidget *parent = nullptr,
+        mviewer::core::rawplain::DumpKind kind = mviewer::core::rawplain::DumpKind::Sensor);
 
     void setParams(const mviewer::core::rawplain::Params &p);
     mviewer::core::rawplain::Params params() const;
@@ -45,9 +49,10 @@ class PlainRawParamsEditor : public QWidget
     void onPackingChanged();
 
     Mode m_mode;
+    mviewer::core::rawplain::DumpKind m_kind = mviewer::core::rawplain::DumpKind::Sensor;
     QSpinBox *m_width = nullptr;
     QSpinBox *m_height = nullptr;
-    QComboBox *m_bitDepth = nullptr;  // 8..16 (item data = bits)
+    QComboBox *m_bitDepth = nullptr;  // 8..16, or 1 for Gray Bits1 (item data = bits)
     QComboBox *m_packing = nullptr;   // item data = static_cast<int>(Packing)
     QComboBox *m_byteOrder = nullptr; // item data = static_cast<int>(ByteOrder)
     QSpinBox *m_headerOffset = nullptr;
