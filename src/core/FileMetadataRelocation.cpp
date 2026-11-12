@@ -12,18 +12,20 @@ namespace mviewer::core
 namespace
 {
 
-void movePlainRawOverride(const std::string &oldPath, const std::string &newPath)
+bool movePlainRawOverride(const std::string &oldPath, const std::string &newPath)
 {
     try
     {
         namespace raw = mviewer::core::rawplain;
         if (!raw::isPlainRawPath(oldPath) || !raw::isPlainRawPath(newPath))
-            return;
+            return false;
         raw::PlainRawParamStore::instance().moveOverride(raw::plainRawParamKey(oldPath),
                                                          raw::plainRawParamKey(newPath));
+        return true;
     }
     catch (...)
     {
+        return false;
     }
 }
 

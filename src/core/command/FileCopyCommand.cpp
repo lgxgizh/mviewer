@@ -9,32 +9,36 @@ namespace fs = std::filesystem;
 namespace
 {
 
-void copyPlainRawOverride(const std::string &sourcePath, const std::string &destinationPath)
+bool copyPlainRawOverride(const std::string &sourcePath, const std::string &destinationPath)
 {
     try
     {
         namespace raw = mviewer::core::rawplain;
         if (!raw::isPlainRawPath(sourcePath) || !raw::isPlainRawPath(destinationPath))
-            return;
+            return false;
         raw::PlainRawParamStore::instance().copyOverride(raw::plainRawParamKey(sourcePath),
                                                          raw::plainRawParamKey(destinationPath));
+        return true;
     }
     catch (...)
     {
+        return false;
     }
 }
 
-void clearPlainRawOverride(const std::string &destinationPath)
+bool clearPlainRawOverride(const std::string &destinationPath)
 {
     try
     {
         namespace raw = mviewer::core::rawplain;
         if (!raw::isPlainRawPath(destinationPath))
-            return;
+            return false;
         raw::PlainRawParamStore::instance().clearOverride(raw::plainRawParamKey(destinationPath));
+        return true;
     }
     catch (...)
     {
+        return false;
     }
 }
 

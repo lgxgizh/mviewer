@@ -285,41 +285,29 @@ void PlainRawParamStore::clearOverride(const std::string &key)
 
 void PlainRawParamStore::moveOverride(const std::string &fromKey, const std::string &toKey)
 {
-    try
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (fromKey == toKey)
-            return;
-        const auto it = m_overrides.find(fromKey);
-        if (it == m_overrides.end())
-            return;
-        const Params value = it->second;
-        m_overrides[toKey] = value;
-        m_overrides.erase(fromKey);
-        ++m_revision;
-    }
-    catch (...)
-    {
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (fromKey == toKey)
+        return;
+    const auto it = m_overrides.find(fromKey);
+    if (it == m_overrides.end())
+        return;
+    const Params value = it->second;
+    m_overrides[toKey] = value;
+    m_overrides.erase(fromKey);
+    ++m_revision;
 }
 
 void PlainRawParamStore::copyOverride(const std::string &fromKey, const std::string &toKey)
 {
-    try
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (fromKey == toKey)
-            return;
-        const auto it = m_overrides.find(fromKey);
-        if (it == m_overrides.end())
-            return;
-        const Params value = it->second;
-        m_overrides[toKey] = value;
-        ++m_revision;
-    }
-    catch (...)
-    {
-    }
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (fromKey == toKey)
+        return;
+    const auto it = m_overrides.find(fromKey);
+    if (it == m_overrides.end())
+        return;
+    const Params value = it->second;
+    m_overrides[toKey] = value;
+    ++m_revision;
 }
 
 void PlainRawParamStore::clearAll()
