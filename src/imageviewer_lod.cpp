@@ -17,8 +17,8 @@
 
 #include <algorithm>
 #include <cmath>
-// Zoomed-in regions keep kRasterOverscan as a density margin. Zoomed-out fit
-// asks the decoder for that margin and Sharp resampleDisplay consumes it.
+// Zoomed-in regions keep kRasterOverscan as a density margin. Sharp-owned
+// zoomed-out fit requests the exact device-pixel edge (no overscan).
 constexpr qint64 kLodThresholdPixels = 16 * 1000 * 1000; // 16 MP fast path
 constexpr int kMaxLodEdge = 4096;
 constexpr double kMaxRasterPixels = 8.0 * 1000 * 1000;
@@ -485,9 +485,7 @@ void ImageViewer::requestDisplayRasterImpl()
             req.sharpFit = true;
             devicePixelsForSource(sw, sh, d, req.exactW, req.exactH);
             const int wantEdge = std::max(req.exactW, req.exactH);
-            const int edged =
-                static_cast<int>(std::ceil(static_cast<double>(wantEdge) * kRasterOverscan));
-            req.maxEdge = std::max(64, std::min(edged, kMaxLodEdge));
+            req.maxEdge = std::max(64, std::min(wantEdge, kMaxLodEdge));
         }
         else
         {
