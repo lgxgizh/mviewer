@@ -1,11 +1,11 @@
 #include "imageviewer.h"
+#include "imageviewer_displayfit.h"
 
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/image/SourceImage.h"
-#include "core/render/DisplayResample.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "display/DisplayColorContextProvider.h"
 
@@ -20,8 +20,6 @@
 // Zoomed-in regions keep kRasterOverscan as a density margin. Sharp-owned
 // zoomed-out fit requests the exact device-pixel edge (no overscan).
 constexpr qint64 kLodThresholdPixels = 16 * 1000 * 1000; // 16 MP fast path
-constexpr int kMaxLodEdge = 4096;
-constexpr double kMaxRasterPixels = 8.0 * 1000 * 1000;
 constexpr double kRasterOverscan = 1.25;
 constexpr qint64 kAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP analysis cap
 
@@ -83,58 +81,6 @@ bool fillRegionRasterRequest(RasterRequest &req, const QRect &visible, const QSi
     req.tw = std::max(1, static_cast<int>(tw));
     req.th = std::max(1, static_cast<int>(th));
     return true;
-}
-
-// Device px of a source rect at `density` (device px / source px), LOD-capped.
-void devicePixelsForSource(int sourceW, int sourceH, double density, int &tw, int &th)
-{
-    tw = 1;
-    th = 1;
-    if (sourceW <= 0 || sourceH <= 0 || !(density > 0.0) || !std::isfinite(density))
-        return;
-    double w = static_cast<double>(sourceW) * density;
-    double h = static_cast<double>(sourceH) * density;
-    const double edge = std::max(w, h);
-    if (edge > static_cast<double>(kMaxLodEdge))
-    {
-        const double scale = static_cast<double>(kMaxLodEdge) / edge;
-        w *= scale;
-        h *= scale;
-    }
-    if (w * h > kMaxRasterPixels)
-    {
-        const double scale = std::sqrt(kMaxRasterPixels / (w * h));
-        w *= scale;
-        h *= scale;
-    }
-    tw = std::max(1, static_cast<int>(std::lround(w)));
-    th = std::max(1, static_cast<int>(std::lround(h)));
-}
-
-// Color-manage first. Sharp's sRGB EOTF must see a display-referred raster.
-QImage sharpFitDisplayImage(const ImageData &pixels, const mviewer::domain::ImageMetadata &meta,
-                            const mviewer::core::DisplayColorContext &target, int tw, int th,
-                            const std::atomic<bool> *cancel)
-{
-    const ImageData display = mvcore::toDisplayImageData(pixels, meta, target);
-    if (display.isNull())
-        return QImage();
-    ImageData fitted = display;
-    if (tw >= 1 && th >= 1 && (display.width != tw || display.height != th))
-    {
-        thread_local mviewer::core::DisplayResampleScratch scratch;
-        mviewer::core::DisplayResampleRequest resample;
-        resample.source = {0, 0, display.width, display.height};
-        resample.targetWidth = tw;
-        resample.targetHeight = th;
-        resample.quality = mviewer::core::DisplayResampleQuality::Sharp;
-        fitted = mviewer::core::resampleDisplay(display, resample, &scratch, cancel);
-        if (fitted.isNull())
-            return QImage();
-    }
-    QImage out = mvcore::toQImage(fitted);
-    mvcore::tagDisplayQImage(out, meta, target);
-    return out;
 }
 
 } // namespace
@@ -473,7 +419,7 @@ void ImageViewer::requestDisplayRasterImpl()
         req.maxEdge = static_cast<int>(
             std::ceil(std::max(static_cast<double>(width()), static_cast<double>(height())) * dpr *
                       kRasterOverscan));
-        req.maxEdge = std::max(64, std::min(req.maxEdge, kMaxLodEdge));
+        req.maxEdge = std::max(kMinLodEdge, std::min(req.maxEdge, kMaxLodEdge));
     }
     else
     {
@@ -485,7 +431,7 @@ void ImageViewer::requestDisplayRasterImpl()
             req.sharpFit = true;
             devicePixelsForSource(sw, sh, d, req.exactW, req.exactH);
             const int wantEdge = std::max(req.exactW, req.exactH);
-            req.maxEdge = std::max(64, std::min(wantEdge, kMaxLodEdge));
+            req.maxEdge = std::max(kMinLodEdge, std::min(wantEdge, kMaxLodEdge));
         }
         else
         {

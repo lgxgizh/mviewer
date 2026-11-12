@@ -1,4 +1,5 @@
 #include "imageviewer.h"
+#include "imageviewer_displayfit.h"
 
 #include "core/image/QtConvert.h"
 #include "core/image/SourceImage.h"
@@ -16,6 +17,7 @@
 
 namespace
 {
+// Fallback LOD edge when the widget is unknown or the view is not zoomed out.
 constexpr int kDisplayWarmMaxEdge = 1024;
 constexpr qint64 kDisplayWarmMaxBytes = 64LL * 1024 * 1024;
 constexpr qint64 kDisplayWarmLodThresholdPixels = 16LL * 1000 * 1000;
@@ -31,8 +33,7 @@ void ImageViewer::setImage(const QString &path)
     }
     catch (...)
     {
-        // An unexpected error must never escape into the Qt event loop; the
-        // viewer stays in its current state and the host can retry.
+        // Keep a load error inside this function; the viewer stays as it is.
     }
 }
 
@@ -40,8 +41,7 @@ void ImageViewer::refreshSource(const QString &path)
 {
     if (path.isEmpty() || !browsePathEquals(path, m_currentPath))
         return;
-    // The source/cache invalidation is owned by the caller. Re-enter the
-    // normal cancellable load path while retaining the user's zoom/pan.
+    // Re-enter the cancellable load and keep the user's zoom and pan.
     m_preserveViewOnReload = true;
     setImage(path);
     m_preserveViewOnReload = false;
@@ -49,9 +49,7 @@ void ImageViewer::refreshSource(const QString &path)
 
 void ImageViewer::scheduleStandInExpiry(uint64_t gen)
 {
-    // The previous image is a different photo: never let it pose as the new
-    // one for longer than kStandInGraceMs. If neither the new image nor its
-    // thumbnail has arrived by then, fall back to the neutral loading state.
+    // Drop a cross-path stand-in that outlives kStandInGraceMs.
     QTimer::singleShot(kStandInGraceMs, this,
                        [this, gen]()
                        {
@@ -66,9 +64,7 @@ void ImageViewer::scheduleStandInExpiry(uint64_t gen)
 
 void ImageViewer::setImageImpl(const QString &path)
 {
-    // Pixel Inspector lifecycle: invalidate synchronously on every new load so
-    // the previous image's sample never lingers while the next decode runs —
-    // including for empty/failing requests that never deliver a frame.
+    // Drop the previous pixel sample before the next load, including failures.
     clearPixelInfo();
     resetSelectionForNewImage(path);
     const QString previousPath = m_currentPath;
@@ -77,9 +73,7 @@ void ImageViewer::setImageImpl(const QString &path)
     const bool keepProvisional = !path.isEmpty() && browsePathEquals(path, m_provisionalPath) &&
                                  !m_provisionalImage.isNull();
 
-    // Window-sized owned snapshot so the switch does not flash black. Retaining
-    // an owned window-sized copy avoids pinning the entire original photo buffer
-    // in memory during the transition.
+    // Window-sized snapshot so the switch does not flash black or pin the photo.
     if (!path.isEmpty() && !keepProvisional)
     {
         if (m_lodMode && !m_raster.image.isNull())
@@ -111,8 +105,7 @@ void ImageViewer::setImageImpl(const QString &path)
     m_currentPath = path;
     releaseColdMips(previousPath);
     m_currentIndex = indexInBrowseSequence(path);
-    // Drop the prior foreground decode, then promote a neighbor preload for this
-    // path. Every other preload is cancelled so superseded work does not run.
+    // Drop the prior decode and promote this path's neighbor preload.
     cancelCurrentLoad();
     auto matchingPreload = takeMatchingPreload(path);
     auto matchingDisplayPreload = takeMatchingDisplayRasterPreload(path);
@@ -132,10 +125,7 @@ void ImageViewer::setImageImpl(const QString &path)
     m_pendingView.reset();
     if (reloadView)
         m_pendingView = reloadView;
-    // M47: reset the LOD-first display state for the new request. Any
-    // in-flight raster worker is cancelled; its (bounded) completion is
-    // discarded by the generation guard. The matching preload (if any) is
-    // retained for the raster-path verdict's analysis load decision.
+    // Reset LOD state. A matching preload is kept for the analysis decision.
     cancelDisplayRequest();
     m_lodMode = false;
     m_largeSourcePending = false;
@@ -163,25 +153,16 @@ void ImageViewer::setImageImpl(const QString &path)
         update();
         return;
     }
-    // Close suppresses raster work so teardown cannot queue another decode.
-    // The same viewer is shown again after Esc, so the next image must load.
+    // Esc clears the closing flag so the next image can load.
     setProperty("mviewerClosing", false);
-    // The raster verdict owns the full-frame decision. Small sources and
-    // multi-frame containers still load for first paint; a single still under
-    // the analysis cap waits until a consumer calls ensureAnalysisLoad().
+    // The raster verdict owns the full-frame decision.
     startLodDisplay(path, gen);
 }
 
-// M47: issue the analysis-support full-frame load (promoting a matching
-// neighbor preload when one was retained). Runs on the UI thread from the
-// raster-path verdict; the load itself is async + cancellable + lifetime-safe
-// exactly as the pre-M47 foreground load was.
 void ImageViewer::issueAnalysisLoad(const QString &path, uint64_t generation)
 {
     auto onLoaded = makeImageLoadCallback(path, generation);
-    // Frame zero is an explicit request. Static-image preloads use the same
-    // frame-aware cache key, but a stale promoted legacy handle must never
-    // erase the requested frame identity.
+    // Frame 0 is explicit. Do not let a stale preload erase that frame id.
     m_pendingAnalysisPreload.reset();
     m_foregroundRequest = mviewer::application::ImageLoadingService::instance().loadFrameAsync(
         path.toUtf8().toStdString(), 0, std::move(onLoaded), ImageRepository::kDefaultLoadOptions,
@@ -191,12 +172,7 @@ void ImageViewer::issueAnalysisLoad(const QString &path, uint64_t generation)
 ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString &path,
                                                                   uint64_t generation)
 {
-    // M46 strict lifetime contract: the completion lambda captures NO raw
-    // `this` — only the QPointer guard (which is dereferenced exclusively on
-    // the UI thread inside queueLoadedImage/queueImageLoadFailure), the path,
-    // the generation and the shared lifetime token. The repository itself
-    // already refuses to invoke this callback once the token is dead, so a
-    // late completion is a no-op before any viewer-visible code runs.
+    // No raw this. A dead lifetime token never reaches viewer-visible code.
     auto guard = std::make_shared<QPointer<ImageViewer>>(this);
     return [path, generation, guard](const ImageLoadResult &result)
     {
@@ -224,22 +200,13 @@ void ImageViewer::queueImageLoadFailure(const QString &path, uint64_t generation
                                   viewer->m_hasHistogram = false;
                                   viewer->m_transitionImage = QImage();
                                   viewer->m_transitionSourceSize = QSize();
-                                  // M47: while the raster-path verdict for a
-                                  // large source is still pending, suppress the
-                                  // analysis-support full-frame failure (the
-                                  // 100 MP full decode fails fast, the LOD
-                                  // arrives later — the display owns the
-                                  // verdict).
+                                  // The raster path still owns a pending large-source verdict.
                                   if (viewer->m_largeSourcePending)
                                   {
                                       viewer->update();
                                       return;
                                   }
-                                  // M47: in LOD-first display the image IS on
-                                  // screen (the raster path); only the
-                                  // analysis-support full frame failed (e.g.
-                                  // > Qt's allocation limit). Do not clobber
-                                  // the successful display with a failure.
+                                  // Keep an on-screen LOD raster if the analysis frame failed.
                                   if (viewer->m_lodMode && !viewer->m_raster.image.isNull())
                                   {
                                       viewer->update();
@@ -283,8 +250,7 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     if (!m_frame || m_frame->pixels().isNull())
     {
         m_hasHistogram = false;
-        // M47: a failing analysis-support full frame must not clobber a
-        // successful LOD-first display (same guard as queueImageLoadFailure).
+        // A failed analysis frame must not replace an LOD raster.
         if (m_lodMode && !m_raster.image.isNull())
         {
             update();
@@ -306,9 +272,7 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     const QFileInfo info(path);
     m_currentIndex = indexInBrowseSequence(path);
     m_tiles = TileGrid(m_frame->width(), m_frame->height(), 256);
-    // M47: in LOD-first display the full frame is the analysis/Inspector
-    // source only — the display keeps the bounded raster (no re-fit that would
-    // drop the user's zoom, no UI-thread scaling of the full frame).
+    // LOD display keeps its raster; the full frame is analysis-only.
     if (m_lodMode)
     {
         preloadDisplayRasterNeighbors(path);
@@ -359,20 +323,14 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
 
 void ImageViewer::resetSelectionForNewImage(const QString &path)
 {
-    // A screen-space ROI only means the same image region on the next image
-    // when the zoom is locked (same scale, same centring). Otherwise the old
-    // rectangle would sit over unrelated pixels and the AnalysisPanel would
-    // keep reporting the previous image's region, so it is dropped here and an
-    // empty selection is published (panel falls back to whole-image stats).
+    // Keep a screen ROI across images only while zoom is locked. Otherwise
+    // drop it so the panel does not report the previous image's region.
     if (browsePathEquals(path, m_currentPath))
         return;
-    // Ask before clearing the drag: a committed ROI lives in m_selectionImage,
-    // and a drag still in progress lives in the widget points.
     const bool real = hasRealSelection();
     if (m_lockZoom && real)
     {
-        // Snapshot the box in screen space before the next image recenters.
-        // recommitLockedSelection() projects it back into the new image.
+        // Snapshot the screen box; recommitLockedSelection projects it back.
         if (!m_selectionImage.isEmpty())
         {
             int sx = 0;
@@ -426,9 +384,7 @@ void ImageViewer::applyPendingView()
 {
     if (!m_pendingView)
         return;
-    // A restored view transform is untrusted input (QSettings is user-editable):
-    // a zero, negative or NaN scale divides to a degenerate transform and paints
-    // nothing. Clamp to the range the interactive zoom path already enforces.
+    // Restored scale is untrusted. Clamp it to the interactive zoom range.
     constexpr double kMinRestoredScale = 0.05;
     constexpr double kMaxRestoredScale = 50.0;
     double restoredScale = m_pendingView->scale;
@@ -475,8 +431,7 @@ void ImageViewer::scheduleLoadedRefit(const QString &path, uint64_t generation,
 
 void ImageViewer::setViewTransform(const Viewport &v)
 {
-    // Store until the async load of the current image completes; the callback
-    // in setImage() applies it once screen geometry is known.
+    // Apply once the async load has screen geometry.
     m_pendingView = v;
 }
 
@@ -519,6 +474,12 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
             continue;
 
         auto state = std::make_shared<DisplayRasterPreloadState>();
+        state->widgetW = width();
+        state->widgetH = height();
+        state->dpr = std::max(1.0, devicePixelRatioF());
+        if (m_lockZoom && !m_fitMode && m_view.scale > 0.0)
+            state->lockedScale = m_view.scale;
+        state->maximizeFit = property("mviewerFullscreenRequested").toBool();
         auto guard = std::make_shared<QPointer<ImageViewer>>(this);
         const uint64_t browseGen = m_displayRasterBrowseGeneration;
         const auto target = m_displayColorTarget;
@@ -693,23 +654,50 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
         }
         result.sourceSize =
             QSize(result.source->metadata().width, result.source->metadata().height);
-        const qint64 pixels =
-            static_cast<qint64>(result.sourceSize.width()) * result.sourceSize.height();
+        const int sw = result.sourceSize.width();
+        const int sh = result.sourceSize.height();
+        const qint64 pixels = static_cast<qint64>(sw) * sh;
         if (pixels <= kDisplayWarmLodThresholdPixels)
         {
             queueDisplayRasterPreloadResult(guard, std::move(result));
             return;
         }
-        const auto raster = result.source->decodeLod(kDisplayWarmMaxEdge);
+        WarmDisplayLodRequest warmReq;
+        warmReq.sourceW = sw;
+        warmReq.sourceH = sh;
+        warmReq.fallbackEdge = kDisplayWarmMaxEdge;
+        if (state)
+        {
+            warmReq.widgetW = state->widgetW;
+            warmReq.widgetH = state->widgetH;
+            warmReq.dpr = state->dpr;
+            warmReq.lockedScale = state->lockedScale;
+            warmReq.maximizeFit = state->maximizeFit;
+        }
+        const WarmDisplayLodPlan plan = planWarmDisplayLod(warmReq);
+        const auto raster = result.source->decodeLod(plan.maxEdge);
         if (!raster.ok || raster.pixels.isNull())
         {
             result.failed = true;
             queueDisplayRasterPreloadResult(guard, std::move(result));
             return;
         }
-        result.sourceRect = QRect(0, 0, result.sourceSize.width(), result.sourceSize.height());
-        result.density = static_cast<double>(result.sourceSize.width()) / raster.pixels.width;
-        result.image = mvcore::toDisplayQImage(raster.pixels, raster.metadata, target);
+        if (plan.sharp)
+        {
+            result.image = sharpFitDisplayImage(raster.pixels, raster.metadata, target, plan.exactW,
+                                                plan.exactH, ctx.cancel.get());
+        }
+        else
+        {
+            result.image = mvcore::toDisplayQImage(raster.pixels, raster.metadata, target);
+        }
+        if (result.image.isNull() || result.image.width() <= 0)
+            result.failed = true;
+        else
+        {
+            result.sourceRect = QRect(0, 0, sw, sh);
+            result.density = static_cast<double>(sw) / result.image.width();
+        }
     }
     catch (...)
     {
@@ -756,8 +744,7 @@ void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult res
         m_promotedDisplayRasterPreload = DisplayRasterPreload{};
         if (result.failed || result.image.isNull())
         {
-            // The neighbor result is best effort. Re-enter the normal probe
-            // path if it was promoted before the worker discovered a failure.
+            // Best effort. Re-enter the probe path if promotion saw a failure.
             startLodDisplay(result.path, promotedGeneration);
             return;
         }
