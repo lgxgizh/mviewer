@@ -72,7 +72,8 @@ static void testQtDecoderPngPacking()
     CHECK(!decoded.isNull(), "grayscale PNG decodes");
     CHECK(decoded.format == PixelFormat::Grayscale8, "grayscale PNG is Grayscale8");
     CHECK(decoded.width == w && decoded.height == h, "grayscale PNG size");
-    CHECK(decoded.buffer && decoded.buffer->size() == static_cast<size_t>(w * h),
+    CHECK(decoded.buffer &&
+              decoded.buffer->size() == static_cast<size_t>(w) * static_cast<size_t>(h),
           "grayscale PNG buffer is w*h");
     CHECK(packedRowsMatch(decoded, gray, 1), "grayscale PNG samples match the 8-bit source");
 
@@ -100,7 +101,8 @@ static void testQtDecoderPngPacking()
     CHECK(!colour.isNull(), "RGB PNG decodes");
     CHECK(colour.format == PixelFormat::RGB24, "RGB PNG is RGB24");
     CHECK(colour.width == w && colour.height == h, "RGB PNG size");
-    CHECK(colour.buffer && colour.buffer->size() == static_cast<size_t>(w * h * 3),
+    CHECK(colour.buffer &&
+              colour.buffer->size() == static_cast<size_t>(w) * static_cast<size_t>(h) * 3u,
           "RGB PNG buffer is w*h*3");
     CHECK(packedRowsMatch(colour, rgb888, 3), "RGB PNG bytes match today's RGB888 conversion");
 }
