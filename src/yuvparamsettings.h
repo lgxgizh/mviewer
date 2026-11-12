@@ -1,8 +1,8 @@
 #pragma once
 
-#include "core/image/yuv/YuvFormat.h"
-
 #include "core/image/yuv/YuvExtensionMap.h"
+#include "core/image/yuv/YuvFormat.h"
+#include "core/image/yuv/YuvToRgb.h"
 
 #include <string>
 #include <vector>
@@ -26,6 +26,16 @@ void saveYuvParam(const std::string &key, const mviewer::core::yuv::Format &f);
 void clearYuvParam(const std::string &key);
 
 inline constexpr const char *kYuvExtensionMapSettingsKey = "yuv/extensionMap";
+
+inline constexpr const char *kYuvChromaUpsampleSettingsKey = "yuv/chromaUpsample";
+
+// Reads QSettings "yuv/chromaUpsample" ("bilinear" or "nearest"; anything else,
+// including a missing key, is bilinear) and installs it with
+// setDefaultChromaUpsample. Returns the installed value.
+mviewer::core::yuv::ChromaUpsample loadYuvChromaUpsampleSetting();
+
+// setDefaultChromaUpsample(up) and persist "bilinear" or "nearest".
+void saveYuvChromaUpsampleSetting(mviewer::core::yuv::ChromaUpsample up);
 
 // Reads QSettings kYuvExtensionMapSettingsKey (QStringList of "ext=pixfmt", pixfmt empty for
 // auto-detect) into the core extension map. A missing key keeps the built-in defaults; an

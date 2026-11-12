@@ -6,6 +6,36 @@
 #include <QString>
 #include <QStringList>
 
+namespace
+{
+
+using mviewer::core::yuv::ChromaUpsample;
+
+QString chromaUpsampleKey()
+{
+    return QString::fromLatin1(mviewer::ui::kYuvChromaUpsampleSettingsKey);
+}
+
+ChromaUpsample upsampleFromText(const QString &text)
+{
+    if (text == QLatin1String("nearest"))
+    {
+        return ChromaUpsample::Nearest;
+    }
+    return ChromaUpsample::Bilinear;
+}
+
+QString textFromUpsample(ChromaUpsample up)
+{
+    if (up == ChromaUpsample::Nearest)
+    {
+        return QStringLiteral("nearest");
+    }
+    return QStringLiteral("bilinear");
+}
+
+} // namespace
+
 namespace mviewer::ui
 {
 namespace
@@ -97,6 +127,22 @@ void clearYuvParam(const std::string &key)
     mviewer::core::yuv::YuvParamStore::instance().clear(key);
     const QString keyText = QString::fromStdString(key);
     writeLines(withoutKey(readLines(), keyText));
+}
+
+mviewer::core::yuv::ChromaUpsample loadYuvChromaUpsampleSetting()
+{
+    QSettings settings;
+    const QString text = settings.value(chromaUpsampleKey(), QStringLiteral("bilinear")).toString();
+    const ChromaUpsample up = upsampleFromText(text);
+    mviewer::core::yuv::setDefaultChromaUpsample(up);
+    return up;
+}
+
+void saveYuvChromaUpsampleSetting(mviewer::core::yuv::ChromaUpsample up)
+{
+    mviewer::core::yuv::setDefaultChromaUpsample(up);
+    QSettings settings;
+    settings.setValue(chromaUpsampleKey(), textFromUpsample(up));
 }
 
 std::vector<mviewer::core::yuv::ExtensionRule> loadYuvExtensionMapSettings()

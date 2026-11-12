@@ -8,6 +8,7 @@
 #include "core/image/ImageBuffer.h"
 #include "domain/Image.h"
 
+#include <QColorSpace>
 #include <QImage>
 
 namespace mvcore
@@ -30,6 +31,11 @@ inline QImage toQImageFast(const ImageData &src)
     const QImage ref = toQImageRef(src);
     return ref.isNull() ? toQImage(src) : ref;
 }
+
+// Source color space for display. A usable embedded ICC wins. Otherwise BT.2020
+// YUV metadata (colorSpace prefix "BT.2020" or MViewer.Yuv.Matrix "bt2020") is
+// Rec.2020. BT.601 / BT.709 without an ICC stay sRGB. SDR Y'CbCr only: no PQ/HLG.
+QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta);
 
 // Materialize a display-only sRGB copy from analysis-domain pixels. Embedded
 // ICC is applied to the copy; the source ImageData bytes are never modified.

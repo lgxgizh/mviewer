@@ -47,6 +47,8 @@ enum class Matrix : std::uint8_t
 {
     BT601,
     BT709,
+    // SDR Y'CbCr only: BT.2020 luma coefficients, quantized to 8-bit RGB.
+    // No PQ/HLG transfer and no HDR tone map.
     BT2020
 };
 

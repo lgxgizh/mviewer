@@ -80,7 +80,7 @@ FrameDecodeResult decodeYuvSequenceFrame(const std::string &path, int frameIndex
         const int edge = maxEdge > 0 ? maxEdge : 0;
         result.pixels = mviewer::core::yuv::readYuvFrameImage(
             opened.info, static_cast<int64_t>(frameIndex), opened.read, edge,
-            mviewer::core::yuv::ChromaUpsample::Nearest, &why);
+            mviewer::core::yuv::defaultChromaUpsample(), &why);
         if (result.pixels.isNull() && !why.empty())
         {
             result.error = why;

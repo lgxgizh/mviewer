@@ -75,7 +75,8 @@ YuvDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMeta
             const std::string message = why.empty() ? std::string("YUV frame read failed") : why;
             return Result::err(makeError(DecodeErrorCode::CorruptData, message, path));
         }
-        ImageData image = mviewer::core::yuv::renderYuvImage(planes, opened.info.format, 0);
+        ImageData image = mviewer::core::yuv::renderYuvImage(
+            planes, opened.info.format, 0, mviewer::core::yuv::defaultChromaUpsample());
         if (image.isNull())
         {
             return Result::err(
@@ -116,8 +117,8 @@ ImageData YuvDecoder::decodeScaled(const std::string &path, int maxEdge,
         if (!openKnown(path, opened))
             return ImageData{};
         // Samples the raw frame directly: no full-frame unpack for thumbnails.
-        ImageData image =
-            mviewer::core::yuv::readYuvFrameImage(opened.info, 0, opened.read, maxEdge);
+        ImageData image = mviewer::core::yuv::readYuvFrameImage(
+            opened.info, 0, opened.read, maxEdge, mviewer::core::yuv::defaultChromaUpsample());
         if (image.isNull())
             return ImageData{};
         mviewer::core::yuv::fillYuvMetadata(opened, path, 0, outMeta);

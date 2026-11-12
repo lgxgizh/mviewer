@@ -1,6 +1,7 @@
 // NOLINTBEGIN
 // Unit tests for YuvSource: parameter store, raw/y4m resolution, frame reads, RGB render.
 
+#include "core/image/yuv/YuvScaledRender.h"
 #include "core/image/yuv/YuvSource.h"
 
 #include <atomic>
@@ -360,6 +361,84 @@ void testRender()
     CHECK(empty.buffer == nullptr || empty.isNull());
 }
 
+bool nearMidGray(const ImageData &image)
+{
+    if (image.buffer == nullptr || image.buffer->empty())
+    {
+        return false;
+    }
+    for (uint8_t byte : *image.buffer)
+    {
+        const int v = byte;
+        if (v < 126 || v > 130)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool sameBytes(const ImageData &image, const std::vector<uint8_t> &rgb)
+{
+    return image.buffer != nullptr && *image.buffer == rgb;
+}
+
+void testScaledLumaBox()
+{
+    Format row = makeFmt("gray", 4, 1);
+    row.range = Range::Full;
+    YuvPlanes stripe = planesFilled(row, 0, 0, 0);
+    stripe.y = {0, 255, 0, 255};
+    const ImageData down =
+        scaled_detail::renderScaledPlanes(stripe, row, 2, 1, ChromaUpsample::Nearest);
+    CHECK(down.width == 2 && down.height == 1);
+    CHECK(nearMidGray(down));
+
+    Format wide = makeFmt("gray", 8, 2);
+    wide.range = Range::Full;
+    YuvPlanes grid = planesFilled(wide, 0, 0, 0);
+    for (int i = 0; i < 16; ++i)
+    {
+        grid.y[static_cast<size_t>(i)] = (i % 2) == 0 ? 0 : 255;
+    }
+    const ImageData thumb =
+        scaled_detail::renderScaledPlanes(grid, wide, 2, 2, ChromaUpsample::Bilinear);
+    CHECK(thumb.width == 2 && thumb.height == 2);
+    CHECK(nearMidGray(thumb));
+
+    const ImageData up =
+        scaled_detail::renderScaledPlanes(stripe, row, 8, 1, ChromaUpsample::Nearest);
+    CHECK(up.buffer && (*up.buffer)[0] == 0 && (*up.buffer)[6] == 255);
+
+    const auto layout = computeFrameLayout(row);
+    CHECK(layout.has_value());
+    YuvSourceInfo info;
+    info.known = true;
+    info.format = row;
+    info.frameBytes = layout ? layout->frameBytes : 0;
+    info.frameCount = 1;
+    const std::vector<uint8_t> file = {0, 255, 0, 255};
+    const ImageData raw = readYuvFrameImage(info, 0, readerFor(file), 2, ChromaUpsample::Nearest);
+    CHECK(raw.width == 2 && raw.height == 1);
+    CHECK(nearMidGray(raw));
+}
+
+void testScaledMatchesFull()
+{
+    Format f = makeFmt("yuv420p", 4, 2);
+    f.range = Range::Full;
+    f.siting = ChromaSiting::Left;
+    YuvPlanes pic = planesFilled(f, 128, 40, 80);
+    pic.y = {10, 20, 30, 40, 50, 60, 70, 80};
+    pic.u = {40, 200};
+    pic.v = {80, 160};
+    for (const ChromaUpsample up : {ChromaUpsample::Nearest, ChromaUpsample::Bilinear})
+    {
+        const ImageData scaled = scaled_detail::renderScaledPlanes(pic, f, 4, 2, up);
+        CHECK(sameBytes(scaled, toRgb24(pic, f, up)));
+    }
+}
+
 void testFuzz()
 {
     std::mt19937 rng(0x594u);
@@ -419,6 +498,8 @@ int main()
     testRaw();
     testY4m();
     testRender();
+    testScaledLumaBox();
+    testScaledMatchesFull();
     testFuzz();
     if (g_failures != 0)
     {

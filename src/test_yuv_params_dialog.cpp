@@ -11,6 +11,8 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDialogButtonBox>
+#include <QPushButton>
 #include <QSettings>
 #include <QStandardItemModel>
 #include <QStringList>
@@ -253,6 +255,67 @@ void testSettingsRoundTrip()
     mviewer::core::yuv::YuvParamStore::instance().clearAll();
 }
 
+QComboBox *chromaCombo(QWidget *root)
+{
+    const QList<QComboBox *> boxes = root->findChildren<QComboBox *>();
+    for (QComboBox *box : boxes)
+    {
+        if (box->findText(QStringLiteral("Bilinear")) >= 0)
+        {
+            return box;
+        }
+    }
+    return nullptr;
+}
+
+void testChromaUpsampleSetting()
+{
+    using mviewer::core::yuv::ChromaUpsample;
+    const QString key = QString::fromLatin1(mviewer::ui::kYuvChromaUpsampleSettingsKey);
+    QSettings().remove(key);
+    mviewer::core::yuv::setDefaultChromaUpsample(ChromaUpsample::Nearest);
+    check(mviewer::ui::loadYuvChromaUpsampleSetting() == ChromaUpsample::Bilinear,
+          "missing chroma key loads bilinear");
+    check(mviewer::core::yuv::defaultChromaUpsample() == ChromaUpsample::Bilinear,
+          "load installs bilinear");
+
+    QSettings().setValue(key, QStringLiteral("nearest"));
+    check(mviewer::ui::loadYuvChromaUpsampleSetting() == ChromaUpsample::Nearest,
+          "nearest setting loads");
+
+    YuvParamsDialog dialog(QStringLiteral("clip.yuv"), 240, makeFormat("yuv420p", 16, 10), {},
+                           false);
+    QComboBox *chroma = chromaCombo(&dialog);
+    check(chroma != nullptr && chroma->currentIndex() == 1, "dialog shows saved nearest");
+    if (!chroma)
+    {
+        QSettings().remove(key);
+        mviewer::core::yuv::setDefaultChromaUpsample(ChromaUpsample::Bilinear);
+        return;
+    }
+    chroma->setCurrentIndex(0);
+    check(mviewer::core::yuv::defaultChromaUpsample() == ChromaUpsample::Bilinear,
+          "combo change applies bilinear");
+    check(QSettings().value(key).toString() == QStringLiteral("bilinear"),
+          "combo change persists bilinear");
+
+    chroma->setCurrentIndex(1);
+    chroma->setCurrentIndex(0);
+    auto *buttons = dialog.findChild<QDialogButtonBox *>();
+    QPushButton *ok = buttons != nullptr ? buttons->button(QDialogButtonBox::Ok) : nullptr;
+    check(ok != nullptr, "dialog has OK");
+    if (ok != nullptr)
+    {
+        ok->click();
+    }
+    check(QSettings().value(key).toString() == QStringLiteral("bilinear"),
+          "accept persists bilinear");
+    check(mviewer::core::yuv::defaultChromaUpsample() == ChromaUpsample::Bilinear,
+          "accept installs bilinear");
+    QSettings().remove(key);
+    mviewer::core::yuv::setDefaultChromaUpsample(ChromaUpsample::Bilinear);
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -265,6 +328,7 @@ int main(int argc, char **argv)
     testSplitPixelFormatControls();
     testExtensionMapSettings();
     testSettingsRoundTrip();
+    testChromaUpsampleSetting();
     return g_failures == 0 ? 0 : 1;
 }
 // NOLINTEND

@@ -44,6 +44,8 @@ class YuvParamsDialog : public QDialog
     void updateSummary();
     void applySizePreset(int index);
     void forgetSaved();
+    void applyChromaUpsample();
+    void acceptWithChroma();
 
   private:
     void addFields(QFormLayout *form, const std::vector<std::pair<int, int>> &sizeCandidates,
@@ -57,6 +59,7 @@ class YuvParamsDialog : public QDialog
     QSpinBox *m_height = nullptr;
     YuvPixFmtPicker *m_picker = nullptr;
     QComboBox *m_matrix = nullptr;
+    QComboBox *m_chroma = nullptr;
     QComboBox *m_range = nullptr;
     QLabel *m_summary = nullptr;
     QDialogButtonBox *m_buttons = nullptr;
@@ -66,5 +69,7 @@ class YuvParamsDialog : public QDialog
 // y4m -> QMessageBox::information that Y4M files carry their parameters in the file header,
 // return false. Otherwise prefill: saved params when YuvParamStore has yuvParamKey(path), else
 // info.format (width/height 0 -> 352x288). Run the dialog; on accept: reset -> clearYuvParam,
-// else saveYuvParam(yuvParamKey(path), dlg.format()). Returns true when the store changed.
+// else saveYuvParam(yuvParamKey(path), dlg.format()). The chroma-upsampling combo
+// is a process-wide preference (QSettings "yuv/chromaUpsample"), not a Format
+// field. Returns true when the store changed.
 bool editYuvParamsForPath(QWidget *parent, const QString &path);

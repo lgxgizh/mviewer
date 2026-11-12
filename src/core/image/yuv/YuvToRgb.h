@@ -11,6 +11,8 @@
 // YUV -> 8-bit RGB conversion (ITU-R BT.601 / BT.709 / BT.2020 non-constant
 // luminance). Integer Q16 math on 12-bit normalized samples. The scalar row
 // converter is the bit-exact reference that any SIMD path must reproduce.
+// BT.2020 is SDR Y'CbCr only: those luma coefficients, quantized to 8-bit RGB,
+// with no PQ/HLG transfer and no HDR tone map.
 
 namespace mviewer::core::yuv
 {
@@ -34,6 +36,8 @@ struct YuvCoeffs
 
 // Full range scales by the source code range (8-bit white 255 -> 4080 in
 // 12-bit units, 10-bit 1023 -> 4092), so 'bitDepth' matters only for Full.
+// Matrix::BT2020 uses the BT.2020 Kr/Kb on that SDR Y'CbCr (no PQ/HLG, no HDR
+// tone map). The display path tags the resulting RGB as Rec.2020 separately.
 YuvCoeffs makeYuvCoeffs(Matrix m, Range r, int bitDepth = 8);
 
 // Normalizes a sample of 'bitDepth' bits (1..16) to 12 bits.
@@ -84,8 +88,17 @@ YuvRowsRunner yuvRowsRunner() noexcept;
 bool convertToRgb24(const YuvPlanes &p, const Format &f, ChromaUpsample up, uint8_t *dst,
                     size_t dstSize, size_t dstStride);
 
+// Process-wide chroma upsample for production decoders (FrameSequence,
+// YuvDecoder). Initial value is Bilinear. Thread-safe.
+// Independent of toRgb24's parameter default: toRgb24(planes, format) is always
+// Bilinear unless the caller passes an upsample, even after
+// setDefaultChromaUpsample(Nearest).
+ChromaUpsample defaultChromaUpsample() noexcept;
+void setDefaultChromaUpsample(ChromaUpsample up) noexcept;
+
 // Tightly packed width * height * 3 bytes, or empty on failure.
+// The upsample default is Bilinear and does not follow defaultChromaUpsample().
 std::vector<uint8_t> toRgb24(const YuvPlanes &p, const Format &f,
-                             ChromaUpsample up = ChromaUpsample::Nearest);
+                             ChromaUpsample up = ChromaUpsample::Bilinear);
 
 } // namespace mviewer::core::yuv

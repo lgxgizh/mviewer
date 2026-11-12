@@ -5,6 +5,7 @@
 #include "core/image/decoder/YuvDecoder.h"
 #include "core/image/yuv/Y4mHeader.h"
 #include "core/image/yuv/YuvFormat.h"
+#include "core/image/yuv/YuvToRgb.h"
 
 #ifndef YUV_DECODER_NO_REGISTRY
 #include "core/image/decoder/DecoderRegistry.h"
@@ -119,6 +120,8 @@ static void testClip4x2()
     CHECK(meta.height == 2);
     CHECK(meta.format == "YUV");
     CHECK(meta.colorSpace.find("709") != std::string::npos);
+    CHECK(meta.textKeys["MViewer.Yuv.Matrix"] == "bt709");
+    CHECK(meta.textKeys["MViewer.Yuv.Range"] == "limited");
     CHECK(meta.frameCount == 3);
     CHECK(meta.sequenceKind == "pages");
 }
@@ -220,6 +223,71 @@ static void testTruncatedAndMissing()
     CHECK(!threw);
 }
 
+static void testBt2020Metadata()
+{
+    const auto path = g_root / "bt2020_4x2.yuv";
+    writeBytes(path, yuv420Frame(4, 2));
+    const std::string keyPath = utf8(path);
+    Format format;
+    format.width = 4;
+    format.height = 2;
+    CHECK(applyPixFmtName("yuv420p", format));
+    format.matrix = mviewer::core::yuv::Matrix::BT2020;
+    format.range = mviewer::core::yuv::Range::Limited;
+    YuvParamStore::instance().set(YuvDecoder::paramKey(keyPath), format);
+
+    YuvDecoder decoder;
+    mviewer::domain::ImageMetadata meta;
+    CHECK(decoder.probeMetadata(keyPath, meta));
+    CHECK(meta.colorSpace.find("BT.2020") != std::string::npos);
+    CHECK(meta.textKeys["MViewer.Yuv.Matrix"] == "bt2020");
+    CHECK(meta.textKeys["MViewer.Yuv.Range"] == "limited");
+
+    format.matrix = mviewer::core::yuv::Matrix::BT709;
+    YuvParamStore::instance().set(YuvDecoder::paramKey(keyPath), format);
+    mviewer::domain::ImageMetadata meta709;
+    CHECK(decoder.probeMetadata(keyPath, meta709));
+    CHECK(meta709.colorSpace.find("BT.709") != std::string::npos);
+    CHECK(meta709.colorSpace.find("BT.2020") == std::string::npos);
+    CHECK(meta709.textKeys["MViewer.Yuv.Matrix"] == "bt709");
+    YuvParamStore::instance().clear(YuvDecoder::paramKey(keyPath));
+}
+
+static std::vector<std::uint8_t> chromaSplitFrame()
+{
+    std::vector<std::uint8_t> frame(12, 128);
+    frame[8] = 32;
+    frame[9] = 220;
+    return frame;
+}
+
+static void testChromaUpsampleDefault()
+{
+    const auto path = g_root / "split_4x2.yuv";
+    writeBytes(path, chromaSplitFrame());
+    const std::string keyPath = utf8(path);
+    Format format;
+    format.width = 4;
+    format.height = 2;
+    CHECK(applyPixFmtName("yuv420p", format));
+    YuvParamStore::instance().set(YuvDecoder::paramKey(keyPath), format);
+
+    using mviewer::core::yuv::ChromaUpsample;
+    using mviewer::core::yuv::setDefaultChromaUpsample;
+    YuvDecoder decoder;
+    setDefaultChromaUpsample(ChromaUpsample::Nearest);
+    const ImageData nearest = decoder.decodeFull(keyPath);
+    setDefaultChromaUpsample(ChromaUpsample::Bilinear);
+    const ImageData bilinear = decoder.decodeFull(keyPath);
+    CHECK(nearest.buffer && bilinear.buffer);
+    if (nearest.buffer && bilinear.buffer)
+    {
+        CHECK(*nearest.buffer != *bilinear.buffer);
+    }
+    YuvParamStore::instance().clear(YuvDecoder::paramKey(keyPath));
+    setDefaultChromaUpsample(ChromaUpsample::Bilinear);
+}
+
 #ifndef YUV_DECODER_NO_REGISTRY
 static void testRegistryOrder()
 {
@@ -270,6 +338,8 @@ int main()
     testUnknownThenSaved();
     testY4m();
     testTruncatedAndMissing();
+    testBt2020Metadata();
+    testChromaUpsampleDefault();
 #ifndef YUV_DECODER_NO_REGISTRY
     testRegistryOrder();
 #endif

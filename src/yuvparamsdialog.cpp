@@ -38,6 +38,13 @@ void selectMatrix(QComboBox *box, mviewer::core::yuv::Matrix matrix)
     }
 }
 
+void selectChromaUpsample(QComboBox *box)
+{
+    const auto up = mviewer::ui::loadYuvChromaUpsampleSetting();
+    const int index = up == mviewer::core::yuv::ChromaUpsample::Nearest ? 1 : 0;
+    box->setCurrentIndex(index);
+}
+
 } // namespace
 
 YuvParamsDialog::YuvParamsDialog(const QString &fileName, int64_t fileSize,
@@ -92,6 +99,12 @@ void YuvParamsDialog::addFields(QFormLayout *form,
     selectMatrix(m_matrix, m_initial.matrix);
     form->addRow(tr("Matrix:"), m_matrix);
 
+    m_chroma = new QComboBox(this);
+    m_chroma->addItem(tr("Bilinear"));
+    m_chroma->addItem(tr("Nearest (sample-accurate)"));
+    selectChromaUpsample(m_chroma);
+    form->addRow(tr("Chroma upsampling:"), m_chroma);
+
     m_range = new QComboBox(this);
     m_range->addItem(tr("Limited (TV)"));
     m_range->addItem(tr("Full (PC)"));
@@ -103,7 +116,7 @@ void YuvParamsDialog::addFields(QFormLayout *form,
     form->addRow(m_summary);
 
     m_buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-    connect(m_buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(m_buttons, &QDialogButtonBox::accepted, this, &YuvParamsDialog::acceptWithChroma);
     connect(m_buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
     if (hasSaved)
     {
@@ -124,6 +137,25 @@ void YuvParamsDialog::wireSignals()
     connect(m_picker, &YuvPixFmtPicker::changed, this, &YuvParamsDialog::updateSummary);
     connect(m_matrix, &QComboBox::currentIndexChanged, this, &YuvParamsDialog::updateSummary);
     connect(m_range, &QComboBox::currentIndexChanged, this, &YuvParamsDialog::updateSummary);
+    connect(m_chroma, &QComboBox::currentIndexChanged, this, &YuvParamsDialog::applyChromaUpsample);
+}
+
+void YuvParamsDialog::applyChromaUpsample()
+{
+    if (m_chroma == nullptr)
+    {
+        return;
+    }
+    using mviewer::core::yuv::ChromaUpsample;
+    const ChromaUpsample up =
+        m_chroma->currentIndex() == 1 ? ChromaUpsample::Nearest : ChromaUpsample::Bilinear;
+    mviewer::ui::saveYuvChromaUpsampleSetting(up);
+}
+
+void YuvParamsDialog::acceptWithChroma()
+{
+    applyChromaUpsample();
+    accept();
 }
 
 mviewer::core::yuv::Format YuvParamsDialog::format() const

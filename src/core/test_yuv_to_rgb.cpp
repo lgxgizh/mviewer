@@ -273,7 +273,10 @@ static void testEquivalence()
             p444.u[size_t(y * 8 + x)] = p420.u[size_t((y / 2) * 4 + x / 2)];
             p444.v[size_t(y * 8 + x)] = p420.v[size_t((y / 2) * 4 + x / 2)];
         }
-    CHECK(toRgb24(p444, fmt("yuv444p", 8, 6)) == toRgb24(p420, fmt("yuv420p", 8, 6)));
+    // 444 built by nearest replication must be compared with nearest, not the
+    // Bilinear function default.
+    CHECK(toRgb24(p444, fmt("yuv444p", 8, 6), ChromaUpsample::Nearest) ==
+          toRgb24(p420, fmt("yuv420p", 8, 6), ChromaUpsample::Nearest));
 }
 
 // ── Upsampling ──────────────────────────────────────────────────────────────
@@ -355,6 +358,58 @@ static void testRejects()
     CHECK(toRgb24(YuvPlanes{}, Format{}).empty());
 }
 
+static YuvPlanes boundary420()
+{
+    YuvPlanes p;
+    p.width = 4;
+    p.height = 2;
+    p.chromaWidth = 2;
+    p.chromaHeight = 1;
+    p.bitDepth = 8;
+    p.y.assign(8, 128);
+    p.u = {32, 220};
+    p.v = {128, 128};
+    return p;
+}
+
+static bool rgbDiffersAt(const std::vector<uint8_t> &a, const std::vector<uint8_t> &b, int px)
+{
+    const size_t i = static_cast<size_t>(px) * 3u;
+    if (a.size() < i + 3 || b.size() < i + 3)
+        return false;
+    return a[i] != b[i] || a[i + 1] != b[i + 1] || a[i + 2] != b[i + 2];
+}
+
+// Neighbouring 4:2:0 macropixels. Bilinear blends the interior edge; nearest
+// replicates the left chroma sample there.
+static void testChromaBoundary()
+{
+    Format f = fmt("yuv420p", 4, 2);
+    f.siting = ChromaSiting::Left;
+    const YuvPlanes p = boundary420();
+    const auto bilinear = toRgb24(p, f, ChromaUpsample::Bilinear);
+    const auto nearest = toRgb24(p, f, ChromaUpsample::Nearest);
+    CHECK(bilinear.size() == 24 && nearest.size() == 24);
+    CHECK(rgbDiffersAt(bilinear, nearest, 1));
+}
+
+// The function default stays Bilinear even when the process-wide default is
+// Nearest. Production decoders pass defaultChromaUpsample() themselves.
+static void testProcessDefault()
+{
+    CHECK(defaultChromaUpsample() == ChromaUpsample::Bilinear);
+    setDefaultChromaUpsample(ChromaUpsample::Nearest);
+    CHECK(defaultChromaUpsample() == ChromaUpsample::Nearest);
+    Format f = fmt("yuv420p", 4, 2);
+    f.siting = ChromaSiting::Left;
+    const YuvPlanes p = boundary420();
+    const auto omitted = toRgb24(p, f);
+    CHECK(omitted == toRgb24(p, f, ChromaUpsample::Bilinear));
+    CHECK(omitted != toRgb24(p, f, ChromaUpsample::Nearest));
+    setDefaultChromaUpsample(ChromaUpsample::Bilinear);
+    CHECK(defaultChromaUpsample() == ChromaUpsample::Bilinear);
+}
+
 static void testFuzz()
 {
     const char *names[] = {"yuv420p", "nv12", "yuyv422", "yuv444p10le", "gray", "p010le", "nv21"};
@@ -387,6 +442,8 @@ int main()
     testClampAndGray();
     testEquivalence();
     testBilinear();
+    testChromaBoundary();
+    testProcessDefault();
     testRejects();
     testFuzz();
     if (g_failures == 0)
