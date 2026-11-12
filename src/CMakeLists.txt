@@ -79,6 +79,7 @@ add_library(mviewer_core SHARED
     core/image/ImageFileReplace.cpp
     core/image/JpegExif.cpp
     core/image/QtConvert.cpp
+    core/image/DitherQuantize.cpp
     core/image/ImageStats.cpp
     core/image/UsmSharpen.cpp
     core/image/CellImageAdjust.cpp
@@ -1430,6 +1431,12 @@ target_link_libraries(test_plainraw_stride PRIVATE mviewer_core)
 target_compile_features(test_plainraw_stride PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_stride PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_stride_tests COMMAND test_plainraw_stride)
+
+add_executable(test_dither_quantize core/test_dither_quantize.cpp)
+target_link_libraries(test_dither_quantize PRIVATE mviewer_core Qt6::Gui)
+target_compile_features(test_dither_quantize PRIVATE cxx_std_20)
+target_include_directories(test_dither_quantize PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME dither_quantize_tests COMMAND test_dither_quantize)
 
 add_executable(test_yuv_sequence core/test_yuv_sequence.cpp)
 target_link_libraries(test_yuv_sequence PRIVATE mviewer_core)
