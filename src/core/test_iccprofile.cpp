@@ -380,6 +380,56 @@ int main()
         CHECK(info.copyright == "Copyright ACME", "a later in-range tag is still read");
     }
 
+    // 11) Unprofiled BT.2020 YUV is Rec.2020. BT.709 stays sRGB. A usable ICC wins.
+    {
+        mviewer::domain::ImageMetadata meta;
+        meta.colorSpace = "BT.2020 limited";
+        CHECK(mvcore::sourceColorSpace(meta) == QColorSpace(QColorSpace::Bt2020),
+              "colorSpace BT.2020 is Rec.2020");
+
+        meta.colorSpace.clear();
+        meta.textKeys["MViewer.Yuv.Matrix"] = "bt2020";
+        CHECK(mvcore::sourceColorSpace(meta) == QColorSpace(QColorSpace::Bt2020),
+              "Yuv.Matrix bt2020 is Rec.2020");
+
+        meta.colorSpace = "BT.709 limited";
+        meta.textKeys["MViewer.Yuv.Matrix"] = "bt709";
+        CHECK(mvcore::sourceColorSpace(meta) == QColorSpace::SRgb, "BT.709 is not Rec.2020");
+
+        meta.textKeys["MViewer.Yuv.Matrix"] = "bt2020";
+        CHECK(mvcore::sourceColorSpace(meta) == QColorSpace(QColorSpace::Bt2020),
+              "matrix bt2020 overrides a BT.709 label");
+
+        const QByteArray adobe = QColorSpace(QColorSpace::AdobeRgb).iccProfile();
+        const QByteArray encoded = adobe.toBase64();
+        meta.textKeys["MViewer.DisplayICC.Base64"] =
+            std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
+        const QColorSpace icc = QColorSpace::fromIccProfile(adobe);
+        CHECK(mvcore::sourceColorSpace(meta) == icc, "usable DisplayICC wins over BT.2020");
+        CHECK(mvcore::sourceColorSpace(meta) != QColorSpace(QColorSpace::Bt2020),
+              "DisplayICC is not replaced by Rec.2020");
+
+        meta.textKeys.erase("MViewer.DisplayICC.Base64");
+        meta.colorSpace = "BT.2020 limited";
+        meta.textKeys["MViewer.Yuv.Matrix"] = "bt2020";
+        ImageData pixels = makeImageData(1, 1, PixelFormat::RGB24);
+        (*pixels.buffer)[0] = 40;
+        (*pixels.buffer)[1] = 160;
+        (*pixels.buffer)[2] = 80;
+        QImage expected(1, 1, QImage::Format_RGB888);
+        expected.setPixelColor(0, 0, QColor(40, 160, 80));
+        expected.setColorSpace(QColorSpace(QColorSpace::Bt2020));
+        expected.convertToColorSpace(QColorSpace::SRgb);
+        const QImage shown = mvcore::toDisplayQImage(pixels, meta);
+        CHECK(shown.pixelColor(0, 0) == expected.pixelColor(0, 0),
+              "display path converts from Rec.2020");
+
+        meta.colorSpace = "BT.709 limited";
+        meta.textKeys["MViewer.Yuv.Matrix"] = "bt709";
+        const QImage bt709 = mvcore::toDisplayQImage(pixels, meta);
+        CHECK(bt709.pixelColor(0, 0) == QColor(40, 160, 80), "BT.709 display stays numeric sRGB");
+    }
+
     printf("\nIccProfile tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

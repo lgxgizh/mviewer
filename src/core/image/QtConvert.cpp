@@ -328,14 +328,31 @@ QColorSpace colorSpaceFromIcc(const std::vector<uint8_t> &profile)
     return res;
 }
 
-QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta)
+bool startsWith(const std::string &text, const char *prefix)
 {
-    const auto profileIt = meta.textKeys.find("MViewer.DisplayICC.Base64");
-    if (profileIt == meta.textKeys.end() || profileIt->second.empty())
-        return QColorSpace::SRgb;
+    const size_t n = std::strlen(prefix);
+    return text.size() >= n && text.compare(0, n, prefix) == 0;
+}
 
-    const std::string &base64Str = profileIt->second;
+bool yuvMatrixIs(const mviewer::domain::ImageMetadata &meta, const char *name)
+{
+    const auto it = meta.textKeys.find("MViewer.Yuv.Matrix");
+    return it != meta.textKeys.end() && it->second == name;
+}
 
+// No usable display ICC. BT.2020 Y'CbCr is SDR matrix-only and is tagged
+// Rec.2020. BT.601 and BT.709 without an ICC stay sRGB. No PQ/HLG.
+QColorSpace unprofiledSourceColorSpace(const mviewer::domain::ImageMetadata &meta)
+{
+    if (startsWith(meta.colorSpace, "BT.2020") || yuvMatrixIs(meta, "bt2020"))
+        return QColorSpace(QColorSpace::Bt2020);
+    return QColorSpace::SRgb;
+}
+
+// Parsed display ICC, or an invalid color space when the profile is unusable.
+// Invalid results are cached too, so the caller can fall through per metadata.
+QColorSpace colorSpaceFromDisplayIcc(const std::string &base64Str)
+{
     static std::mutex s_mutex;
     static std::array<ColorSpaceCacheEntry, 8> s_cache;
     static size_t s_nextIdx = 0;
@@ -351,8 +368,8 @@ QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta)
 
     const QByteArray encoded(base64Str.data(), static_cast<qsizetype>(base64Str.size()));
     const QByteArray profile = QByteArray::fromBase64(encoded);
-    const QColorSpace source = QColorSpace::fromIccProfile(profile);
-    const QColorSpace res = source.isValid() ? source : QColorSpace::SRgb;
+    const QColorSpace parsed = QColorSpace::fromIccProfile(profile);
+    const QColorSpace res = parsed.isValid() ? parsed : QColorSpace();
 
     {
         std::lock_guard<std::mutex> lock(s_mutex);
@@ -368,6 +385,18 @@ QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta)
 }
 
 } // namespace
+
+QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta)
+{
+    const auto profileIt = meta.textKeys.find("MViewer.DisplayICC.Base64");
+    if (profileIt != meta.textKeys.end() && !profileIt->second.empty())
+    {
+        const QColorSpace fromIcc = colorSpaceFromDisplayIcc(profileIt->second);
+        if (fromIcc.isValid())
+            return fromIcc;
+    }
+    return unprofiledSourceColorSpace(meta);
+}
 
 QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadata &meta)
 {

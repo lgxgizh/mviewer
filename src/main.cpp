@@ -129,6 +129,8 @@ int main(int argc, char *argv[])
 
     // ADR 032: per-file .yuv parameters saved by the YUV Parameters dialog.
     mviewer::ui::loadYuvParamSettings();
+    // Process-wide YUV chroma upsample ("yuv/chromaUpsample", default bilinear).
+    mviewer::ui::loadYuvChromaUpsampleSetting();
     // ADR 033: Preferences > RAW defaults for plain .raw sensor dumps.
     mviewer::ui::loadPlainRawDefaults();
     // ADR 034: Preferences > Gray defaults for headerless .gray / .grey files.

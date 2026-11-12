@@ -181,8 +181,84 @@ int clampIndex(int v, int size)
     return std::clamp(v, 0, size - 1);
 }
 
-// Nearest sampling of luma; chroma taps per mapChroma, mixed like the full-frame
-// planes path (same integer math, so the result is identical for both accessors).
+// One axis of an output pixel. count == 1 is a nearest sample (1:1 or upscale).
+// count > 1 is the source samples that cover the pixel (downscale).
+struct LumaCover
+{
+    int first = 0;
+    int count = 0;
+};
+
+LumaCover lumaCover(int outIndex, int outCount, int srcCount)
+{
+    LumaCover cover;
+    if (srcCount <= 0 || outCount <= 0)
+    {
+        return cover;
+    }
+    if (outCount >= srcCount)
+    {
+        const int at = sampleCoord(outIndex, outCount, srcCount);
+        cover.first = clampIndex(at, srcCount);
+        cover.count = 1;
+        return cover;
+    }
+    int begin = static_cast<int>((static_cast<int64_t>(outIndex) * srcCount) / outCount);
+    int end = static_cast<int>((static_cast<int64_t>(outIndex + 1) * srcCount) / outCount);
+    begin = clampIndex(begin, srcCount);
+    if (end <= begin)
+    {
+        end = begin + 1;
+    }
+    if (end > srcCount)
+    {
+        end = srcCount;
+    }
+    cover.first = begin;
+    cover.count = std::max(1, end - begin);
+    return cover;
+}
+
+template <typename Access, typename Row>
+int64_t sumLumaSpan(const Access &acc, const Row *row, int x0, int count)
+{
+    int64_t sum = 0;
+    for (int i = 0; i < count; ++i)
+    {
+        sum += acc.at(0, row, x0 + i);
+    }
+    return sum;
+}
+
+// Box-average (or single sample) of the luma rectangle, then 12-bit normalize.
+template <typename Access>
+void fillLuma12(const Access &acc, const std::vector<LumaCover> &covers, const LumaCover &rows,
+                int bitDepth, int16_t *y12)
+{
+    const int outW = static_cast<int>(covers.size());
+    const int ny = rows.count > 0 ? rows.count : 0;
+    std::vector<int64_t> sums(static_cast<size_t>(std::max(outW, 0)), 0);
+    for (int y = 0; y < ny; ++y)
+    {
+        const auto *row = acc.row(0, rows.first + y);
+        for (int ox = 0; ox < outW; ++ox)
+        {
+            const LumaCover &span = covers[static_cast<size_t>(ox)];
+            sums[static_cast<size_t>(ox)] += sumLumaSpan(acc, row, span.first, span.count);
+        }
+    }
+    for (int ox = 0; ox < outW; ++ox)
+    {
+        // int64: a 65536-wide frame scaled to one pixel is 2^32 samples.
+        const int64_t n = static_cast<int64_t>(covers[static_cast<size_t>(ox)].count) * int64_t{ny};
+        const int64_t sum = sums[static_cast<size_t>(ox)];
+        const int averaged = n > 0 ? static_cast<int>((sum + n / 2) / n) : 0;
+        y12[ox] = toTwelveBit(static_cast<uint16_t>(std::max(averaged, 0)), bitDepth);
+    }
+}
+
+// Luma is a box average when an axis shrinks and nearest otherwise. Chroma taps
+// follow mapChroma (same integer math for both accessors).
 template <typename Access>
 ImageData renderScaledT(const Access &acc, const Format &f, int outW, int outH, ChromaUpsample up)
 {
@@ -210,14 +286,14 @@ ImageData renderScaledT(const Access &acc, const Format &f, int outW, int outH, 
     const int cw = gray ? 0 : acc.width(1);
     const int ch = gray ? 0 : acc.height(1);
     // Column taps are the same for every output row.
-    std::vector<int> lumaX(static_cast<size_t>(outW));
+    std::vector<LumaCover> lumaX(static_cast<size_t>(outW));
     std::vector<ChromaTap> chromaX(static_cast<size_t>(gray ? 0 : outW));
     for (int ox = 0; ox < outW; ++ox)
     {
-        const int sx = sampleCoord(ox, outW, lw);
-        lumaX[static_cast<size_t>(ox)] = clampIndex(sx, lw);
+        lumaX[static_cast<size_t>(ox)] = lumaCover(ox, outW, lw);
         if (!gray)
         {
+            const int sx = sampleCoord(ox, outW, lw);
             ChromaTap t = mapChroma(sx, shiftX, cw, centerX, bilinear);
             t.i0 = clampIndex(t.i0, cw);
             t.i1 = clampIndex(t.i1, cw);
@@ -230,13 +306,10 @@ ImageData renderScaledT(const Access &acc, const Format &f, int outW, int outH, 
     const size_t stride = static_cast<size_t>(outW) * 3u;
     for (int oy = 0; oy < outH; ++oy)
     {
-        const int sy = sampleCoord(oy, outH, lh);
-        const auto *yRow = acc.row(0, clampIndex(sy, lh));
-        for (int ox = 0; ox < outW; ++ox)
-            y12[static_cast<size_t>(ox)] =
-                toTwelveBit(acc.at(0, yRow, lumaX[static_cast<size_t>(ox)]), f.bitDepth);
+        fillLuma12(acc, lumaX, lumaCover(oy, outH, lh), f.bitDepth, y12.data());
         if (!gray)
         {
+            const int sy = sampleCoord(oy, outH, lh);
             const ChromaTap ty = mapChroma(sy, shiftY, ch, centerY, bilinear);
             for (int plane = 1; plane <= 2; ++plane)
             {

@@ -8265,6 +8265,21 @@ to:
         <source>Pixel format</source>
         <translation>像素格式</translation>
     </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Chroma upsampling:</source>
+        <translation>色度上采样:</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Bilinear</source>
+        <translation>双线性</translation>
+    </message>
+    <message>
+        <location filename="../src/yuvparamsdialog.cpp" line="1"/>
+        <source>Nearest (sample-accurate)</source>
+        <translation>最近邻（样本精确）</translation>
+    </message>
 </context>
 <context>
     <name>YuvPixFmtPicker</name>

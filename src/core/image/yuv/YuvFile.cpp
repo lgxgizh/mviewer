@@ -281,6 +281,8 @@ void fillYuvMetadata(const OpenedYuvFile &f, const std::string &path, int frameI
     meta.channels = (f.info.format.subsampling == Subsampling::S400) ? 1 : 3;
     meta.format = f.info.isY4m ? "Y4M" : "YUV";
     meta.colorSpace = colorSpaceOf(f.info.format);
+    meta.textKeys["MViewer.Yuv.Matrix"] = std::string(matrixName(f.info.format.matrix));
+    meta.textKeys["MViewer.Yuv.Range"] = std::string(rangeName(f.info.format.range));
     meta.frameCount = clampFrameCount(f.info.frameCount);
     meta.currentFrame = frameIndex;
     meta.sequenceKind = (meta.frameCount > 1) ? "pages" : "static";

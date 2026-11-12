@@ -22,6 +22,7 @@ KrKb lumaWeights(Matrix m)
     case Matrix::BT601:
         return {0.299, 0.114};
     case Matrix::BT2020:
+        // SDR Y'CbCr only: BT.2020 Kr/Kb. No PQ/HLG transfer, no HDR tone map.
         return {0.2627, 0.0593};
     case Matrix::BT709:
     default:
@@ -241,6 +242,7 @@ void convertRows(const FrameJob &job, int y0, int y1)
 }
 
 std::atomic<YuvRowsRunner> g_rowsRunner{nullptr};
+std::atomic<std::uint8_t> g_defaultUpsample{static_cast<std::uint8_t>(ChromaUpsample::Bilinear)};
 
 // Frames below this many pixels convert on the calling thread.
 constexpr int64_t kParallelMinPixels = int64_t{1} << 20;
@@ -309,6 +311,17 @@ void setYuvRowsRunner(YuvRowsRunner runner) noexcept
 YuvRowsRunner yuvRowsRunner() noexcept
 {
     return g_rowsRunner.load(std::memory_order_acquire);
+}
+
+ChromaUpsample defaultChromaUpsample() noexcept
+{
+    const auto raw = g_defaultUpsample.load(std::memory_order_acquire);
+    return static_cast<ChromaUpsample>(raw);
+}
+
+void setDefaultChromaUpsample(ChromaUpsample up) noexcept
+{
+    g_defaultUpsample.store(static_cast<std::uint8_t>(up), std::memory_order_release);
 }
 
 bool convertToRgb24(const YuvPlanes &p, const Format &f, ChromaUpsample up, uint8_t *dst,

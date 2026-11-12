@@ -36,9 +36,10 @@ bool openYuvFile(const std::string &path, OpenedYuvFile &out);
 ReadAtFn openYuvReader(const std::string &path);
 
 // Fills source size, file size, names, bit depth, channels (1 gray else 3),
-// format "YUV"/"Y4M", color space such as "BT.709 limited", frameCount clamped
-// to [1, INT_MAX], currentFrame, sequenceKind ("pages" when frameCount > 1,
-// otherwise "static"), and animated = false.
+// format "YUV"/"Y4M", color space such as "BT.709 limited", text keys
+// MViewer.Yuv.Matrix (bt601/bt709/bt2020) and MViewer.Yuv.Range (limited/full),
+// frameCount clamped to [1, INT_MAX], currentFrame, sequenceKind ("pages" when
+// frameCount > 1, otherwise "static"), and animated = false.
 void fillYuvMetadata(const OpenedYuvFile &f, const std::string &path, int frameIndex,
                      mviewer::domain::ImageMetadata &meta);
 

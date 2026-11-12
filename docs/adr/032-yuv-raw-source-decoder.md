@@ -32,7 +32,9 @@ sizes), 64-bit frame sizes stored in `int`, and a y4m parser that ignores
 2. **Clean-room implementation.** All code is written from public
    specifications: ITU-R BT.601, BT.709 and BT.2020 (matrix coefficients and
    quantization ranges), the YUV4MPEG2 header format, and the common FFmpeg
-   pixel-format names. No YUView source (or any other GPL source) is copied,
+   pixel-format names. BT.2020 is SDR matrix-only (no PQ/HLG transfer and no HDR
+   tone map) and the display path tags those frames with Rec.2020 primaries.
+   No YUView source (or any other GPL source) is copied,
    transliterated or used as a template. MViewer's licence is unchanged.
 3. **Module layout.** The Qt-free YUV core lives in `src/core/image/yuv/`:
    - `YuvFormat` — format descriptor, plane geometry, overflow-checked byte

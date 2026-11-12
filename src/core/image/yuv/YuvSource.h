@@ -90,18 +90,21 @@ bool readYuvFrame(const YuvSourceInfo &info, int64_t index, const ReadAtFn &read
                   std::string *why = nullptr);
 
 // Reads frame 'index' and renders it: identical pixels to readYuvFrame followed by
-// renderYuvImage(planes, info.format, maxEdge, up), but when the frame is scaled
-// down only the sampled pixels are decoded from the raw bytes (no full unpack).
-// Empty ImageData (and *why when the read fails) on failure.
+// renderYuvImage(planes, info.format, maxEdge, up). When the frame is scaled down,
+// only samples that contribute are decoded (luma box on axes that shrink, nearest
+// luma otherwise, chroma per 'up'). Empty ImageData (and *why on read failure).
+// The upsample default is Bilinear and does not follow defaultChromaUpsample().
 ImageData readYuvFrameImage(const YuvSourceInfo &info, int64_t index, const ReadAtFn &read,
-                            int maxEdge, ChromaUpsample up = ChromaUpsample::Nearest,
+                            int maxEdge, ChromaUpsample up = ChromaUpsample::Bilinear,
                             std::string *why = nullptr);
 
 // Converts planes to an RGB24 ImageData. maxEdge > 0 and the longest edge larger
 // than maxEdge -> output scaled down (aspect kept, longest edge == maxEdge, each
-// dimension >= 1) by nearest sampling of the converted image (convert only the
-// source rows that are sampled). maxEdge <= 0 -> full size. Empty ImageData on failure.
+// dimension >= 1). Luma is a box average of the source samples covering each
+// output pixel on axes that shrink, and one nearest sample on a 1:1 or upscaled
+// axis. Chroma follows 'up'. maxEdge <= 0 -> full size. Empty on failure.
+// The upsample default is Bilinear and does not follow defaultChromaUpsample().
 ImageData renderYuvImage(const YuvPlanes &planes, const Format &f, int maxEdge = 0,
-                         ChromaUpsample up = ChromaUpsample::Nearest);
+                         ChromaUpsample up = ChromaUpsample::Bilinear);
 
 } // namespace mviewer::core::yuv

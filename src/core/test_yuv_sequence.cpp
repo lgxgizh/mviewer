@@ -5,6 +5,7 @@
 #include "core/image/yuv/Y4mHeader.h"
 #include "core/image/yuv/YuvFile.h"
 #include "core/image/yuv/YuvFormat.h"
+#include "core/image/yuv/YuvToRgb.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -190,6 +191,41 @@ static void testSequence()
     YuvParamStore::instance().clear(yuvParamKey(keyPath));
 }
 
+static std::vector<std::uint8_t> chromaSplitFrame()
+{
+    std::vector<std::uint8_t> frame(12, 128);
+    frame[8] = 32;
+    frame[9] = 220;
+    return frame;
+}
+
+static void testChromaUpsampleDefault()
+{
+    const auto path = g_root / "split_4x2.yuv";
+    writeBytes(path, chromaSplitFrame());
+    const std::string keyPath = utf8(path);
+    Format format;
+    format.width = 4;
+    format.height = 2;
+    CHECK(applyPixFmtName("yuv420p", format));
+    YuvParamStore::instance().set(yuvParamKey(keyPath), format);
+
+    using mviewer::core::yuv::ChromaUpsample;
+    using mviewer::core::yuv::setDefaultChromaUpsample;
+    setDefaultChromaUpsample(ChromaUpsample::Nearest);
+    const auto nearest = FrameSequenceReader::decodeFrame(keyPath, 0);
+    setDefaultChromaUpsample(ChromaUpsample::Bilinear);
+    const auto bilinear = FrameSequenceReader::decodeFrame(keyPath, 0);
+    CHECK(nearest.ok && bilinear.ok);
+    CHECK(nearest.pixels.buffer && bilinear.pixels.buffer);
+    if (nearest.pixels.buffer && bilinear.pixels.buffer)
+    {
+        CHECK(*nearest.pixels.buffer != *bilinear.pixels.buffer);
+    }
+    YuvParamStore::instance().clear(yuvParamKey(keyPath));
+    setDefaultChromaUpsample(ChromaUpsample::Bilinear);
+}
+
 static void testUnknown()
 {
     const auto path = g_root / "mystery.yuv";
@@ -237,6 +273,7 @@ int main()
     testIsYuvPath();
     testCacheKey();
     testSequence();
+    testChromaUpsampleDefault();
     testUnknown();
     testY4m();
 
