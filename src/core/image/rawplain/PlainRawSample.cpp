@@ -159,7 +159,7 @@ bool lookupSampleLocked(const std::string &id, int x, int y, std::string &text)
     return false;
 }
 
-void storeSample(std::string id, Params params, std::vector<std::uint16_t> samples)
+void storeSample(std::string id, const Params &params, std::vector<std::uint16_t> samples)
 {
     std::lock_guard<std::mutex> lock(sampleMutex());
     auto &entries = sampleCache().entries;
@@ -169,14 +169,14 @@ void storeSample(std::string id, Params params, std::vector<std::uint16_t> sampl
         {
             continue;
         }
-        entries[i].params = std::move(params);
+        entries[i].params = params;
         entries[i].samples = std::move(samples);
         promoteEntry(entries, i);
         return;
     }
     SampleEntry entry;
     entry.key = std::move(id);
-    entry.params = std::move(params);
+    entry.params = params;
     entry.samples = std::move(samples);
     entries.insert(entries.begin(), std::move(entry));
     if (entries.size() > kSampleCacheSlots)

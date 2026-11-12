@@ -99,7 +99,7 @@ bool plainRawCacheKeyAgrees(const std::string &key, const std::string &suffix);
 // Blocking reads the payload on a cache miss (existing callers and tests).
 // CachedOrAsync returns cached text, or "" and starts one background fill.
 // A fill starts only when none is running. See plainRawSampleFillIdle.
-enum class SampleRead
+enum class SampleRead : std::uint8_t
 {
     Blocking,
     CachedOrAsync
