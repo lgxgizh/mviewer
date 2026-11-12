@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <QMetaObject>
 #include <QPointer>
+#include <QSettings>
 #include <QTimer>
 
 #include <algorithm>
@@ -484,16 +485,25 @@ void ImageViewer::preloadNeighbors(const QString &path)
 {
     if (m_currentIndex < 0)
         return;
+    // Drop a previous full-frame neighbor preload (this setting, or an older
+    // build that always started one) before deciding whether to start another.
     cancelPreloads();
-    for (int delta = -1; delta <= 1; ++delta)
+    // "viewer/preloadFullNeighbors" (bool, default false) restores a full
+    // prev/next decode (preloadAsync / decodeFullResult). The default warms
+    // only the display raster; open, 1:1 analysis, and compare still
+    // full-decode on demand.
+    if (QSettings().value(QStringLiteral("viewer/preloadFullNeighbors"), false).toBool())
     {
-        const int i = m_currentIndex + delta;
-        if (i < 0 || i >= m_fileList.size() || browsePathEquals(m_fileList.at(i), path))
-            continue;
-        auto h = mviewer::application::ImageLoadingService::instance().preloadAsync(
-            m_fileList[i].toUtf8().toStdString(), m_lifetime);
-        if (h)
-            m_neighborPreloads.push_back({m_fileList[i], std::move(h)});
+        for (int delta = -1; delta <= 1; ++delta)
+        {
+            const int i = m_currentIndex + delta;
+            if (i < 0 || i >= m_fileList.size() || browsePathEquals(m_fileList.at(i), path))
+                continue;
+            auto h = mviewer::application::ImageLoadingService::instance().preloadAsync(
+                m_fileList[i].toUtf8().toStdString(), m_lifetime);
+            if (h)
+                m_neighborPreloads.push_back({m_fileList[i], std::move(h)});
+        }
     }
     // cancelDisplayRasterPreloads() does not touch m_neighborPreloads.
     preloadDisplayRasterNeighbors(path);

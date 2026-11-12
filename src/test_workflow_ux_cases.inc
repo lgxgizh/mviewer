@@ -4657,22 +4657,25 @@ void workflow6_metadata_dual_consumer(const QString &rootDir)
     dir.removeRecursively();
 }
 
-// ─── Workflow 7: rapid navigation cancels stale preloads, promotes the ──────
-// matching neighbor preload to a foreground decode
-// Regression for the M29 cancellable viewer loads. Uses the REAL ImageViewer +
-// TaskScheduler metrics, deterministic (no wall-clock-only waits): a
-// release-gated blocker occupies the single Background (MetadataPool) worker;
-// opening the middle image queues its two neighbor preloads behind the blocker.
-// Navigating to the LAST image consumes the queued p2 neighbor preload and
-// promotes it to the foreground decode — exactly one new DecodePool submission
-// (a single foreground escalation, not a re-queue) — while soft-cancelling the
-// stale pre_0 preload so its work never runs.
+// ─── Workflow 7: neighbor preload is display-raster only by default ─────────
+// P2-9. Opening a file still full-decodes that file on demand, but prev/next
+// must not submit ImageLoadingService::preloadAsync (Background / decodeFull)
+// unless QSettings "viewer/preloadFullNeighbors" is true. With the key on,
+// the M29 contract remains: a gated Background worker queues those preloads,
+// and navigating away cancels the stale one so it never warms FullImage.
+// Display-raster warmup stays on the Thumbnail pool and is not asserted here.
 void workflow7_stale_preload_cancellation(const QString &rootDir)
 {
-    std::cout << "── Workflow 7: stale preload cancellation + matching-neighbor promotion ──\n";
+    std::cout << "── Workflow 7: display-raster neighbor preload (full decode "
+                 "on demand) ──\n";
 
     auto &sched = TaskScheduler::instance();
     auto &repo = ImageRepository::instance();
+    const QString preloadKey = QStringLiteral("viewer/preloadFullNeighbors");
+    QSettings().remove(preloadKey);
+    QSettings().sync();
+    CHECK(!QSettings().value(preloadKey, false).toBool(),
+          "viewer/preloadFullNeighbors defaults to false");
 
     // Fresh folder: these paths have never been decoded anywhere in the suite.
     const QString dirPath = QDir(rootDir).filePath(QStringLiteral("wf_preload"));
@@ -4725,10 +4728,11 @@ void workflow7_stale_preload_cancellation(const QString &rootDir)
     CHECK(sched.metrics(TaskScheduler::PoolType::MetadataPool).active_tasks >= 1,
           "preload test: release-gated blocker occupies the Background worker");
 
-    // Open the middle image through the real viewer. Its foreground decode runs
-    // on DecodePool and delivers on the UI thread; the published Browse
-    // sequence drives the two neighbor preloads (pre_0, pre_2) at Background
-    // priority -> queued.
+    // Open the middle image. Its own full frame is an on-demand DecodePool
+    // load. With the setting absent, prev/next must not join the Background
+    // queue behind the blocker (no preloadAsync / decodeFullResult).
+    const auto bgBeforeOpen = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+    const uint64_t decodeBeforeOpen = sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
     viewer->setBrowseSequence({p0, p1, p2});
     viewer->setImage(p1);
     {
@@ -4740,33 +4744,29 @@ void workflow7_stale_preload_cancellation(const QString &rootDir)
     }
     CHECK(viewer->frame() && viewer->frame()->metadata().filePath == p1.toStdString(),
           "preload test: middle image displayed");
-
-    // The two neighbor preloads must be queued behind the blocker: pending stays
-    // >= 3 (blocker + pre_0 + pre_2) and neither has run yet (no cache warm).
+    CHECK(viewer->frame() && viewer->frame()->hasHistogram(),
+          "preload test: opened file still full-decodes on demand (histogram)");
     {
-        QElapsedTimer t;
-        t.start();
-        while (sched.metrics(TaskScheduler::PoolType::MetadataPool).pending < 3 &&
-               t.elapsed() < 5000)
-            pump(10);
-    }
-    const auto gated = sched.metrics(TaskScheduler::PoolType::MetadataPool);
-    CHECK(gated.pending >= 3, "preload test: both neighbor preloads are queued behind the blocker");
-    {
+        const auto bg = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+        CHECK(bg.submitted == bgBeforeOpen.submitted,
+              "default neighbor preload does not submit a full-frame Background preload");
+        CHECK(bg.pending == bgBeforeOpen.pending,
+              "default neighbor preload queues no full-frame Background work");
+        CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeBeforeOpen + 1,
+              "opening a file submits one on-demand Decode, not a neighbor preload");
         ImageData probe;
         CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage,
                                                   repo.makeKey(p0.toStdString()), probe),
-              "preload test: queued neighbor preloads have not run (cache not warmed)");
+              "default preload does not warm the previous file's FullImage");
+        CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage,
+                                                  repo.makeKey(p2.toStdString()), probe),
+              "default preload does not warm the next file's FullImage");
     }
 
-    // Rapid navigation: open the LAST image while Background is still gated.
-    // setImage must consume the queued p2 neighbor preload and promote it to
-    // the foreground decode (one DecodePool escalation), while soft-cancelling
-    // the stale pre_0 preload. Snapshot DecodePool submissions before the
-    // navigation so the promotion costs exactly one submission, measured
-    // deterministically (not by wall-clock timing).
-    const uint64_t decodeSubmittedBefore =
-        sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
+    // Next file is also an on-demand full decode. Neighbors stay off the
+    // Background pool, so the file we skipped never becomes a queued preload.
+    const auto bgBeforeNav = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+    const uint64_t decodeBeforeNav = sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
     viewer->setImage(p2);
     {
         QElapsedTimer t;
@@ -4777,33 +4777,124 @@ void workflow7_stale_preload_cancellation(const QString &rootDir)
     }
     CHECK(viewer->frame() && viewer->frame()->metadata().filePath == p2.toStdString(),
           "preload test: latest navigation target displayed");
-
-    // p2 was delivered through the normal foreground onLoaded path (the promoted
-    // preload is not a special display mode), so its frame must carry a
-    // histogram even though p2 arrived as a Background preload first.
     CHECK(viewer->frame() && viewer->frame()->hasHistogram(),
-          "preload test: promoted neighbor displays with a histogram (foreground contract)");
-    CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeSubmittedBefore + 1,
-          "preload test: matching-neighbor promotion causes exactly one DecodePool submission");
+          "preload test: navigated file full-decodes on demand (histogram)");
+    CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeBeforeNav + 1,
+          "preload test: navigation submits one on-demand Decode");
+    {
+        const auto bg = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+        CHECK(bg.submitted == bgBeforeNav.submitted,
+              "navigation does not submit a full-frame neighbor preload by default");
+        CHECK(bg.pending == bgBeforeNav.pending,
+              "navigation does not queue full-frame neighbor preload work by default");
+    }
 
-    // Release the gate and drain: pre_0 was ONLY ever a stale queued preload —
-    // if rapid navigation did not cancel it, its work would now warm the cache.
     gate.store(true, std::memory_order_release);
     CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
-          "preload test: Background drains after the gate release");
-
+          "preload test: Background drains after the default-path gate release");
     {
         ImageData probe;
         const bool staleCached = CacheManager::instance().getMemory(
             CacheLevel::FullImage, repo.makeKey(p0.toStdString()), probe);
+        CHECK(!staleCached, "default neighbor preload never warms a file that was not opened");
+    }
+
+    // Opt-in restores the old preloadAsync loop. A fresh trio keeps the cache
+    // cold. The same blocker pattern proves both neighbors queue, and that
+    // leaving one behind cancels it instead of letting it warm FullImage.
+    QSettings().setValue(preloadKey, true);
+    QSettings().sync();
+    const QString o0 = writePng(dir, QStringLiteral("opt_0.png"), QColor(180, 20, 20));
+    const QString o1 = writePng(dir, QStringLiteral("opt_1.png"), QColor(20, 180, 20));
+    const QString o2 = writePng(dir, QStringLiteral("opt_2.png"), QColor(20, 20, 180));
+    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
+          "preload test: Background idle before the opt-in gate");
+    std::atomic<bool> gateOpt{false};
+    auto blockerOpt =
+        sched.submit(TaskScheduler::Priority::Background,
+                     [&gateOpt](const TaskScheduler::TaskContext &)
+                     {
+                         while (!gateOpt.load(std::memory_order_acquire))
+                         {
+                             std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                         }
+                     });
+    CHECK(blockerOpt != nullptr, "preload test: opt-in blocker was accepted");
+    {
+        QElapsedTimer t;
+        t.start();
+        while (sched.metrics(TaskScheduler::PoolType::MetadataPool).active_tasks < 1 &&
+               t.elapsed() < 5000)
+            pump(10);
+    }
+    CHECK(sched.metrics(TaskScheduler::PoolType::MetadataPool).active_tasks >= 1,
+          "preload test: opt-in blocker occupies the Background worker");
+    const auto bgBeforeOpt = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+    viewer->setBrowseSequence({o0, o1, o2});
+    viewer->setImage(o1);
+    {
+        QElapsedTimer t;
+        t.start();
+        while ((!viewer->frame() || viewer->frame()->metadata().filePath != o1.toStdString()) &&
+               t.elapsed() < 5000)
+            pump(25);
+    }
+    {
+        QElapsedTimer t;
+        t.start();
+        while (sched.metrics(TaskScheduler::PoolType::MetadataPool).submitted <
+                   bgBeforeOpt.submitted + 2 &&
+               t.elapsed() < 5000)
+            pump(10);
+    }
+    CHECK(viewer->frame() && viewer->frame()->metadata().filePath == o1.toStdString(),
+          "preload test: opt-in middle image displayed");
+    {
+        const auto bg = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+        CHECK(bg.submitted == bgBeforeOpt.submitted + 2,
+              "viewer/preloadFullNeighbors queues a full preload for each neighbor");
+        CHECK(bg.pending == bgBeforeOpt.pending + 2,
+              "opt-in neighbor preloads stay queued behind the Background blocker");
+        ImageData probe;
+        CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage,
+                                                  repo.makeKey(o0.toStdString()), probe),
+              "opt-in queued preloads have not warmed FullImage yet");
+        CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage,
+                                                  repo.makeKey(o2.toStdString()), probe),
+              "opt-in next preload has not warmed FullImage yet");
+    }
+    const uint64_t decodeBeforeOpt = sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
+    viewer->setImage(o2);
+    {
+        QElapsedTimer t;
+        t.start();
+        while ((!viewer->frame() || viewer->frame()->metadata().filePath != o2.toStdString()) &&
+               t.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(viewer->frame() && viewer->frame()->metadata().filePath == o2.toStdString(),
+          "preload test: opt-in navigation target displayed");
+    CHECK(viewer->frame() && viewer->frame()->hasHistogram(),
+          "preload test: opt-in navigation still delivers a foreground histogram");
+    CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeBeforeOpt + 1,
+          "preload test: opt-in navigation still costs one Decode submission");
+    gateOpt.store(true, std::memory_order_release);
+    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
+          "preload test: Background drains after the opt-in gate release");
+    {
+        ImageData probe;
+        const bool staleCached = CacheManager::instance().getMemory(
+            CacheLevel::FullImage, repo.makeKey(o0.toStdString()), probe);
         CHECK(!staleCached,
-              "rapid navigation cancels stale neighbor preload work (never warms FullImage)");
+              "opt-in navigation cancels the stale neighbor preload (never warms FullImage)");
     }
     const auto m = sched.metrics(TaskScheduler::PoolType::MetadataPool);
     CHECK(m.pending == 0 && m.active_tasks == 0 && m.queue_depth == 0,
-          "preload test: Background scheduler converges after rapid navigation");
+          "preload test: Background scheduler converges after opt-in navigation");
     const auto g = sched.graphMetrics();
-    CHECK(g.handles == 0, "preload test: no live scheduler handles after rapid navigation");
+    CHECK(g.handles == 0, "preload test: no live scheduler handles after opt-in navigation");
+    QSettings().remove(preloadKey);
+    QSettings().sync();
 
     // Restore the default Background thread count and close.
     sched.setQueueMaxThreads(TaskScheduler::Priority::Background,
