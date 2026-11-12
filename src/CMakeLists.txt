@@ -1426,6 +1426,12 @@ target_compile_features(test_plainraw_file PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_file_tests COMMAND test_plainraw_file)
 
+add_executable(test_libraw_quality core/test_libraw_quality.cpp)
+target_link_libraries(test_libraw_quality PRIVATE mviewer_core Qt6::Core)
+target_compile_features(test_libraw_quality PRIVATE cxx_std_20)
+target_include_directories(test_libraw_quality PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME libraw_quality_tests COMMAND test_libraw_quality)
+
 add_executable(test_plainraw_stride core/test_plainraw_stride.cpp)
 target_link_libraries(test_plainraw_stride PRIVATE mviewer_core)
 target_compile_features(test_plainraw_stride PRIVATE cxx_std_20)

@@ -64,6 +64,25 @@ class RawDecoder : public IDecoder, public mviewer::core::ISourceImageCapabiliti
     bool canNativeRegion(const std::string &path) const override;
     // Linked LibRaw (LGPL-2.1 / CDDL-1.0). False in builds configured without it.
     static bool librawAvailable();
+
+    // QSettings bool, default false. No Preferences control. Half-size thumbs
+    // ignore it and stay on the linear 8-bit path.
+    static constexpr char kRawHighQualitySettingsKey[] = "raw/highQuality";
+
+    // Test hook, not a UI control. The LibRaw params demosaicWithLibraw() would
+    // apply for `halfSize` under the current QSettings value of
+    // kRawHighQualitySettingsKey. Does not open a file.
+    struct LibrawProcessParams
+    {
+        int halfSize = 0;
+        int userQual = 3;
+        int outputBps = 8;
+        int highlight = 0;
+        int noAutoBright = 1;
+        int useCameraWb = 1;
+    };
+    static LibrawProcessParams librawProcessParamsForTest(bool halfSize);
+
     ImageData decodeLod(const std::string &path, int maxEdge,
                         mviewer::domain::ImageMetadata &meta) const override;
 
