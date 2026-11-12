@@ -110,8 +110,87 @@ QRect clampWicClip(const QRect &rawRect, UINT fullWidth, UINT fullHeight)
     return QRect(x0, y0, x1 - x0, y1 - y0);
 }
 
+unsigned maskBitCount(const BYTE *mask, UINT size)
+{
+    unsigned bits = 0;
+    for (UINT i = 0; i < size; ++i)
+    {
+        unsigned char v = mask[i];
+        while (v != 0)
+        {
+            bits += v & 1u;
+            v = static_cast<unsigned char>(v >> 1u);
+        }
+    }
+    return bits;
+}
+
+// Widest channel in the pixel format, from the channel masks. 0 means the
+// query did not produce a usable answer (caller keeps undithered conversion).
+UINT widestChannelBits(IWICPixelFormatInfo *info)
+{
+    if (info == nullptr)
+        return 0;
+    UINT channels = 0;
+    UINT bitsPerPixel = 0;
+    if (FAILED(info->GetChannelCount(&channels)) || channels == 0)
+        return 0;
+    if (FAILED(info->GetBitsPerPixel(&bitsPerPixel)))
+        bitsPerPixel = 0;
+    if (channels > 16)
+        channels = 16;
+    unsigned widest = 0;
+    UINT measured = 0;
+    for (UINT c = 0; c < channels; ++c)
+    {
+        BYTE mask[8] = {};
+        UINT actual = 0;
+        if (FAILED(info->GetChannelMask(c, static_cast<UINT>(sizeof(mask)), mask, &actual)))
+            continue;
+        if (actual == 0 || actual > sizeof(mask))
+            continue;
+        const unsigned bits = maskBitCount(mask, actual);
+        ++measured;
+        if (bits > widest)
+            widest = bits;
+    }
+    if (measured > 0 && widest > 0)
+        return widest;
+    if (bitsPerPixel == 0)
+        return 0;
+    return bitsPerPixel / channels;
+}
+
+// Bits per channel of `source`, or 0 when the format cannot be queried.
+// A 0 result must not fail the decode; the converter stays undithered.
+UINT sourceBitsPerChannel(IWICImagingFactory *factory, IWICBitmapSource *source)
+{
+    if (factory == nullptr || source == nullptr)
+        return 0;
+    WICPixelFormatGUID pixelFormat{};
+    if (FAILED(source->GetPixelFormat(&pixelFormat)))
+        return 0;
+    ComPtr<IWICComponentInfo> component;
+    if (FAILED(factory->CreateComponentInfo(pixelFormat, &component)))
+        return 0;
+    ComPtr<IWICPixelFormatInfo> info;
+    if (FAILED(component.As(&info)) || !info)
+        return 0;
+    return widestChannelBits(info.Get());
+}
+
+bool initBgrConverter(WicTiffPipeline &wic, WICBitmapDitherType dither)
+{
+    if (FAILED(wic.factory->CreateFormatConverter(&wic.converter)))
+        return false;
+    return SUCCEEDED(wic.converter->Initialize(wic.scaler.Get(), GUID_WICPixelFormat24bppBGR,
+                                               dither, nullptr, 0.0, WICBitmapPaletteTypeCustom));
+}
+
 // Builds frame -> (clipper) -> Fant scaler -> 24bpp BGR converter. Nothing is
 // decoded yet; WIC pulls only the clipped, scaled raster on CopyPixels.
+// Sources with more than 8 bits per channel request error-diffusion dither.
+// 8-bit sources, and any failed format query, stay on WICBitmapDitherTypeNone.
 bool buildWicDisplaySource(WicTiffPipeline &wic, const QRect &clip, const QSize &target)
 {
     const QRect full(0, 0, static_cast<int>(wic.fullWidth), static_cast<int>(wic.fullHeight));
@@ -133,10 +212,18 @@ bool buildWicDisplaySource(WicTiffPipeline &wic, const QRect &clip, const QSize 
                                       static_cast<UINT>(target.height()),
                                       WICBitmapInterpolationModeFant)))
         return false;
-    return SUCCEEDED(wic.factory->CreateFormatConverter(&wic.converter)) &&
-           SUCCEEDED(wic.converter->Initialize(wic.scaler.Get(), GUID_WICPixelFormat24bppBGR,
-                                               WICBitmapDitherTypeNone, nullptr, 0.0,
-                                               WICBitmapPaletteTypeCustom));
+    UINT bitsPerChannel = sourceBitsPerChannel(wic.factory.Get(), wic.source.Get());
+    if (bitsPerChannel == 0 && wic.source.Get() != wic.frame.Get())
+        bitsPerChannel = sourceBitsPerChannel(wic.factory.Get(), wic.frame.Get());
+    const WICBitmapDitherType dither =
+        bitsPerChannel > 8 ? WICBitmapDitherTypeErrorDiffusion : WICBitmapDitherTypeNone;
+    if (initBgrConverter(wic, dither))
+        return true;
+    // Some WIC builds reject dither into a non-indexed destination. Retry
+    // undithered so a 16-bit frame still decodes.
+    if (dither == WICBitmapDitherTypeNone)
+        return false;
+    return initBgrConverter(wic, WICBitmapDitherTypeNone);
 }
 
 // Materializes the converter output as an RGB888 QImage (null on failure).
