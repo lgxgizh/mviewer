@@ -5023,9 +5023,9 @@ void workflow8_preview_scaled_load(const QString &rootDir)
 
 // ─── Workflow 9: Pixel Inspector lifecycle ─────────────────────────────────
 // Real ImageViewer + real pixelInfo signal over a real decoded ImageFrame.
-// QtDecoder normalizes a grayscale PNG to RGB24 (equal channels); moving the
-// mouse onto image pixel (3,4) must report valid=true with that exact gray
-// value. Every transition away from a live sample — setImage(), Leave, close —
+// QtDecoder keeps a grayscale PNG as Grayscale8 (samplePixel reports r=g=b);
+// moving the mouse onto image pixel (3,4) must report valid=true with that
+// exact gray value. Every transition away from a live sample — setImage(), Leave, close —
 // must synchronously invalidate the inspector (valid=false, x/y=-1): the
 // emission count must grow and the last sample must flip to invalid.
 void workflow9_pixel_inspector_lifecycle(const QString &rootDir)
@@ -5093,13 +5093,11 @@ void workflow9_pixel_inspector_lifecycle(const QString &rootDir)
           "pixel workflow: grayscale image decodes");
     CHECK(decodedFrame && decodedFrame->width() == 8 && decodedFrame->height() == 8,
           "pixel workflow: decoded frame keeps the 8x8 dimensions");
-    // QtDecoder converts the source to RGB888 and stores it as RGB24 ImageData
-    // (see toImageData in QtDecoder.cpp), so a grayscale PNG yields equal
-    // channels. Sample pixel (3,4) via samplePixel, which canonicalises the
-    // format and reports invalid on null/truncated buffers instead of reading
-    // out of bounds.
-    CHECK(decodedFrame && decodedFrame->pixels().format == PixelFormat::RGB24,
-          "pixel workflow: QtDecoder normalizes grayscale PNG to RGB24");
+    // QtDecoder keeps Format_Grayscale8 as PixelFormat::Grayscale8. samplePixel
+    // reports r=g=b and a=255. Sample (3,4) is invalid on a null/truncated
+    // buffer instead of reading out of bounds.
+    CHECK(decodedFrame && decodedFrame->pixels().format == PixelFormat::Grayscale8,
+          "pixel workflow: QtDecoder keeps grayscale PNG as Grayscale8");
     const PixelRGBA decodedSample =
         decodedFrame ? samplePixel(decodedFrame->pixels(), 3, 4) : PixelRGBA{};
     CHECK(decodedSample.valid, "pixel workflow: decoded sample at (3,4) is readable");
@@ -5130,7 +5128,7 @@ void workflow9_pixel_inspector_lifecycle(const QString &rootDir)
     CHECK(probe.r == expectedGray && probe.g == expectedGray && probe.b == expectedGray,
           "pixel workflow: pixelInfo channels match the decoded gray sample");
     CHECK(probe.a == 255 && probe.rawKind == 0,
-          "pixel workflow: RGB24 sample reports opaque alpha and 8-bit kind");
+          "pixel workflow: gray sample reports opaque alpha and 8-bit kind");
 
     // Switching images must synchronously invalidate the inspector: the new
     // load emits a cleared sample before the next decode runs, so a stale

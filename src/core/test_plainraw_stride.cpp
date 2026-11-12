@@ -265,7 +265,15 @@ void checkClose(const std::string &path, int maxEdge, int srcW, int srcH)
     CHECK(why.empty());
     CHECK(!got.isNull());
     CHECK(!ref.isNull());
-    CHECK(got.format == PixelFormat::RGB24);
+    const PixelFormat expect =
+        (info.resolved.params.cfa == Cfa::Mono) ? PixelFormat::Grayscale8 : PixelFormat::RGB24;
+    CHECK(got.format == expect);
+    CHECK(ref.format == expect);
+    if (expect == PixelFormat::Grayscale8)
+    {
+        const std::size_t n = static_cast<std::size_t>(outW) * static_cast<std::size_t>(outH);
+        CHECK(got.buffer && got.buffer->size() == n);
+    }
     CHECK(got.width == outW);
     CHECK(got.height == outH);
     CHECK(info.resolved.params.width == srcW);
@@ -343,6 +351,12 @@ void testGray(const std::filesystem::path &dir)
         writeOverride(dir / "scan_64x32.gray", tight, ramp(width, height, 16, 1, 255));
     checkClose(path, 16, width, height);
     checkIdentical(path, 0);
+    const ImageData fullGray = decodePlainRawFile(path, 0, nullptr, nullptr);
+    CHECK(fullGray.format == PixelFormat::Grayscale8);
+    CHECK(fullGray.width == width && fullGray.height == height);
+    const std::size_t fullBytes =
+        static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    CHECK(fullGray.buffer && fullGray.buffer->size() == fullBytes);
     std::string why;
     PlainRawFileInfo info;
     const ImageData preview = decodePlainRawFile(path, 16, &info, &why);

@@ -85,9 +85,10 @@ void paintSites(std::vector<std::uint16_t> &samples, int w, int h, Cfa cfa, int 
 
 const std::uint8_t *pixelAt(const ImageData &image, int x, int y)
 {
+    const std::size_t cpp = image.format == PixelFormat::Grayscale8 ? 1U : 3U;
     const std::size_t index = (static_cast<std::size_t>(y) * static_cast<std::size_t>(image.width) +
                                static_cast<std::size_t>(x)) *
-                              3U;
+                              cpp;
     return image.buffer->data() + index;
 }
 
@@ -152,13 +153,16 @@ void checkBlackGainGamma()
     auto frame = filled(4, 4, 16);
     auto image = renderPlainRaw(p, frame, 0);
     CHECK(!image.isNull());
+    CHECK(image.format == PixelFormat::Grayscale8);
+    CHECK(image.width == 4 && image.height == 4);
+    CHECK(image.buffer && image.buffer->size() == 16U);
     CHECK(pixelAt(image, 0, 0)[0] == 0);
 
     frame = filled(4, 4, 255);
     image = renderPlainRaw(p, frame, 0);
+    CHECK(image.format == PixelFormat::Grayscale8);
+    CHECK(image.buffer && image.buffer->size() == 16U);
     CHECK(pixelAt(image, 1, 1)[0] == 255);
-    CHECK(pixelAt(image, 1, 1)[1] == 255);
-    CHECK(pixelAt(image, 1, 1)[2] == 255);
 
     frame = filled(4, 4, 10);
     image = renderPlainRaw(p, frame, 0);
@@ -589,15 +593,65 @@ void checkBits1Mono()
     const std::vector<std::uint16_t> samples = {1, 0, 1, 0, 1, 0, 1, 0};
     const ImageData image = renderPlainRaw(p, samples, 0);
     CHECK(!image.isNull());
+    CHECK(image.format == PixelFormat::Grayscale8);
     CHECK(image.width == 8 && image.height == 1);
+    CHECK(image.buffer && image.buffer->size() == 8U);
     for (int x = 0; x < 8; ++x)
     {
-        const std::uint8_t *px = pixelAt(image, x, 0);
         const std::uint8_t want = (x % 2 == 0) ? 255 : 0;
-        CHECK(px[0] == want);
-        CHECK(px[1] == want);
-        CHECK(px[2] == want);
+        CHECK(pixelAt(image, x, 0)[0] == want);
     }
+}
+
+void checkMonoDisplayPacking()
+{
+    constexpr int kW = 8;
+    constexpr int kH = 4;
+    Params p = makeParams(kW, kH, 8, Packing::Bits8, Cfa::Mono);
+    std::vector<std::uint16_t> samples(static_cast<std::size_t>(kW * kH));
+    for (int i = 0; i < kW * kH; ++i)
+    {
+        samples[static_cast<std::size_t>(i)] = static_cast<std::uint16_t>(i * 7);
+    }
+    const ImageData image = renderPlainRaw(p, samples, 0);
+    CHECK(!image.isNull());
+    CHECK(image.format == PixelFormat::Grayscale8);
+    CHECK(image.width == kW && image.height == kH);
+    CHECK(image.buffer && image.buffer->size() == static_cast<std::size_t>(kW * kH));
+    for (int y = 0; y < kH; ++y)
+    {
+        for (int x = 0; x < kW; ++x)
+        {
+            const int sample = (y * kW + x) * 7;
+            CHECK(pixelAt(image, x, y)[0] == static_cast<std::uint8_t>(sample));
+        }
+    }
+
+    Params wide = makeParams(64, 32, 8, Packing::Bits8, Cfa::Mono);
+    const ImageData preview = renderPlainRaw(wide, filled(64, 32, 200), 16);
+    CHECK(!preview.isNull());
+    CHECK(preview.format == PixelFormat::Grayscale8);
+    CHECK(preview.width == 16 && preview.height == 8);
+    CHECK(preview.buffer && preview.buffer->size() == static_cast<std::size_t>(16 * 8));
+    for (std::uint8_t value : *preview.buffer)
+    {
+        CHECK(value == 200);
+    }
+
+    Params bayer = makeParams(4, 4, 8, Packing::Bits8, Cfa::RGGB);
+    auto colour = filled(4, 4, 0);
+    paintSites(colour, 4, 4, Cfa::RGGB, 40, 90, 20);
+    const ImageData rgb = renderPlainRaw(bayer, colour, 0);
+    CHECK(rgb.format == PixelFormat::RGB24);
+    CHECK(rgb.buffer && rgb.buffer->size() == static_cast<std::size_t>(4 * 4 * 3));
+    expectColour(rgb, 40, 90, 20);
+
+    const ImageData bayerPreview = renderPlainRaw(bayer, colour, 2);
+    CHECK(bayerPreview.format == PixelFormat::RGB24);
+    CHECK(bayerPreview.width == 2 && bayerPreview.height == 2);
+    CHECK(bayerPreview.buffer &&
+          bayerPreview.buffer->size() == static_cast<std::size_t>(2 * 2 * 3));
+    expectColour(bayerPreview, 40, 90, 20);
 }
 
 void checkOwnedAndRowBands()
@@ -638,6 +692,7 @@ int main()
     checkSubsampledWhiteBalance();
     checkOwnedAndRowBands();
     checkBits1Mono();
+    checkMonoDisplayPacking();
     checkTiming();
     if (g_failures != 0)
     {
