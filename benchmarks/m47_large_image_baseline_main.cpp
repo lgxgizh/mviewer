@@ -62,8 +62,10 @@
 #include <vector>
 
 #ifdef _WIN32
-#include <psapi.h>
+// clang-format off
 #include <windows.h>
+#include <psapi.h>
+// clang-format on
 #endif
 
 namespace
