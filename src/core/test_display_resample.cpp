@@ -1,8 +1,11 @@
+#include "core/image/QtConvert.h"
 #include "core/render/DisplayResample.h"
 #include "core/render/DisplayResampleDetail.h"
 #include "core/simd/CpuFeatures.h"
 
+#include <QColorSpace>
 #include <QCoreApplication>
+#include <QString>
 
 #include <algorithm>
 #include <atomic>
@@ -538,6 +541,29 @@ int main()
         char arg0[] = "test_display_resample";
         char *argv[] = {arg0, nullptr};
         QCoreApplication app(argc, argv);
+
+        // Sharp viewer fit: ImageData in, exact device size out. No QImage source.
+        ImageData src = solid(6, 4, 32, 64, 96);
+        mviewer::domain::ImageMetadata meta;
+        meta.textKeys["MViewer.Yuv.Matrix"] = "bt709";
+        const auto target = mviewer::core::DisplayColorContext::sRGB();
+        const ImageData display = mvcore::toDisplayImageData(src, meta, target);
+        expect(!display.isNull() && display.buffer == src.buffer,
+               "sharp fit color management shares the ImageData buffer");
+        DisplayResampleRequest request = fullRequest(display, 3, 2);
+        request.quality = DisplayResampleQuality::Sharp;
+        const ImageData fitted = mviewer::core::resampleDisplay(display, request);
+        expect(!fitted.isNull() && fitted.width == 3 && fitted.height == 2 &&
+                   fitted.format == PixelFormat::RGB24,
+               "sharp fit from ImageData is the exact target size");
+        QImage shown = mvcore::toQImage(fitted);
+        mvcore::tagDisplayQImage(shown, meta, target);
+        expect(!shown.isNull() && shown.width() == 3 && shown.height() == 2,
+               "sharp fit QImage keeps the exact target size");
+        expect(shown.text(QStringLiteral("MViewer.Yuv.Matrix")) == QStringLiteral("bt709"),
+               "sharp fit keeps the YUV matrix stamp");
+        expect(shown.colorSpace() == QColorSpace::SRgb, "sharp fit tags the display color space");
+
         std::atomic<int> covered{0};
         mviewer::core::resample_detail::parallelForRows(64, 1, nullptr,
                                                         [&](int y0, int y1)

@@ -440,6 +440,23 @@ QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadat
     return out;
 }
 
+void tagDisplayQImage(QImage &image, const mviewer::domain::ImageMetadata &meta,
+                      const mviewer::core::DisplayColorContext &target)
+{
+    if (image.isNull())
+        return;
+    if (target.colorManagementEnabled)
+    {
+        const QColorSpace source = sourceColorSpace(meta);
+        const QColorSpace destination = colorSpaceFromIcc(target.iccProfile);
+        // Pixels are already display-referred. Matching spaces keep the source
+        // tag. A real transform is tagged with the target, which is where
+        // toDisplayQImage leaves a successful conversion.
+        image.setColorSpace(source == destination ? source : destination);
+    }
+    stampDisplayYuvMatrix(image, meta);
+}
+
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta)
 {
     return toDisplayImageData(src, meta, mviewer::core::DisplayColorContext::sRGB());
