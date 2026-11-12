@@ -7,11 +7,13 @@
 #include <functional>
 #include <vector>
 
-// ADR 033: unpacked samples -> RGB24 for display. Pipeline per sample:
+// ADR 033: unpacked samples -> display raster. Pipeline per sample:
 // (s - black) / (white - black), clamp [0, 1], x white-balance gain of its CFA
 // colour (gains are scaled so the smallest is 1), x digital gain, clamp [0, 1];
-// then bilinear demosaic of the linear values (Mono: no demosaic, R = G = B);
-// then sRGB OETF (when srgbGamma) and rounding to 8 bits. Qt-free, never throws.
+// then bilinear demosaic of the linear values (Mono: no demosaic);
+// then sRGB OETF (when srgbGamma) and rounding to 8 bits. Colour CFA output
+// is RGB24. Mono output is Grayscale8, one byte holding the code a colour
+// path would have stored in R, G, and B. Qt-free, never throws.
 
 namespace mviewer::core::rawplain
 {
@@ -50,14 +52,15 @@ WbGains computeWhiteBalance(const Params &p, const std::vector<std::uint16_t> &s
 // 1.055 x^(1/2.4) - 0.055.
 double srgbEncode(double linear);
 
-// Renders samples (size width*height, p valid) to RGB24. maxEdge <= 0 or
-// max(width, height) <= maxEdge -> full resolution, bilinear demosaic.
-// Otherwise a fast preview: each output pixel averages up to 4x4 CFA quads
-// (up to 8x8 samples) evenly spread over its source footprint, per channel
-// after the linear LUT (fewer quads when the footprint is smaller; Mono
-// averages the samples). Output longest edge == maxEdge, aspect kept, each
-// side >= 1. Uses per-CFA-position lookup tables, no per-pixel virtual calls.
-// Empty ImageData on invalid input.
+// Renders samples (size width*height, p valid). Colour CFAs land in RGB24.
+// Mono lands in Grayscale8 (one byte, the 8-bit code R=G=B used to share).
+// maxEdge <= 0 or max(width, height) <= maxEdge -> full resolution, bilinear
+// demosaic (Mono copies the sample). Otherwise a fast preview: each output
+// pixel averages up to 4x4 CFA quads (up to 8x8 samples) evenly spread over
+// its source footprint, per channel after the linear LUT (fewer quads when
+// the footprint is smaller; Mono averages the samples). Output longest edge
+// == maxEdge, aspect kept, each side >= 1. Uses per-CFA-position lookup
+// tables, no per-pixel virtual calls. Empty ImageData on invalid input.
 ImageData renderPlainRaw(const Params &p, const std::vector<std::uint16_t> &samples,
                          int maxEdge = 0);
 

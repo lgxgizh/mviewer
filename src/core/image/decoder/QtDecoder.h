@@ -11,7 +11,9 @@
 // Qt-based decoder for raster formats supported by QImageReader
 // (JPEG/PNG/BMP/TIFF). This is the primary decoder; DecoderRegistry tries it
 // before the fallback. It respects EXIF orientation (auto-transform) and
-// outputs RGB24 ImageData, identical to the legacy Decoder output.
+// outputs RGB24 ImageData for colour rasters, identical to the legacy Decoder
+// output. Format_Grayscale8 stays PixelFormat::Grayscale8 (the 8-bit samples,
+// not expanded). 16-bit and every other QImage format still expand to RGB24.
 //
 // M47/M53: additionally implements the optional source-backed capability
 // interface (probe without pixel decode, native-LOD where the backend really

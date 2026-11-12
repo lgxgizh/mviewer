@@ -1,10 +1,14 @@
 #include "core/image/QtConvert.h"
+#include "core/image/decoder/QtDecoder.h"
 
 #include <QColor>
 #include <QCoreApplication>
+#include <QImageReader>
+#include <QTemporaryDir>
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <string>
 #include <vector>
 
 static int g_fail = 0;
@@ -16,6 +20,91 @@ static void CHECK(bool cond, const char *msg)
         std::fprintf(stderr, "FAIL: %s\n", msg);
         ++g_fail;
     }
+}
+
+static bool packedRowsMatch(const ImageData &image, const QImage &expected, int cpp)
+{
+    if (image.isNull() || !image.buffer || expected.isNull() || cpp < 1)
+        return false;
+    if (image.width != expected.width() || image.height != expected.height())
+        return false;
+    const size_t rowBytes = static_cast<size_t>(image.width) * static_cast<size_t>(cpp);
+    for (int y = 0; y < image.height; ++y)
+    {
+        const uint8_t *got =
+            image.buffer->data() + static_cast<size_t>(y) * static_cast<size_t>(image.stride());
+        const uchar *src = expected.constScanLine(y);
+        if (std::memcmp(got, src, rowBytes) != 0)
+            return false;
+    }
+    return true;
+}
+
+// 8-bit gray PNG stays Grayscale8. 8-bit RGB PNG stays RGB24 and matches the
+// RGB888 bytes QtDecoder used to copy after convertToFormat.
+static void testQtDecoderPngPacking()
+{
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "temp dir for png packing");
+    if (!dir.isValid())
+        return;
+
+    const int w = 5;
+    const int h = 3;
+    QImage gray(w, h, QImage::Format_Grayscale8);
+    for (int y = 0; y < h; ++y)
+    {
+        uchar *row = gray.scanLine(y);
+        for (int x = 0; x < w; ++x)
+            row[x] = static_cast<uchar>(10 * y + x + 3);
+    }
+    const QString grayPath = dir.filePath(QStringLiteral("gray8.png"));
+    CHECK(gray.save(grayPath, "PNG"), "write 8-bit grayscale PNG");
+
+    QtDecoder decoder;
+    mviewer::domain::ImageMetadata meta;
+    const std::string grayUtf8 = grayPath.toUtf8().toStdString();
+    const ImageData decoded = decoder.decodeFull(grayUtf8, meta);
+    QImageReader grayReader(grayPath);
+    grayReader.setAutoTransform(true);
+    const QImage grayLoaded = grayReader.read();
+    CHECK(grayLoaded.format() == QImage::Format_Grayscale8, "gray PNG reloads as Grayscale8");
+    CHECK(!decoded.isNull(), "grayscale PNG decodes");
+    CHECK(decoded.format == PixelFormat::Grayscale8, "grayscale PNG is Grayscale8");
+    CHECK(decoded.width == w && decoded.height == h, "grayscale PNG size");
+    CHECK(decoded.buffer &&
+              decoded.buffer->size() == static_cast<size_t>(w) * static_cast<size_t>(h),
+          "grayscale PNG buffer is w*h");
+    CHECK(packedRowsMatch(decoded, gray, 1), "grayscale PNG samples match the 8-bit source");
+
+    QImage rgb(w, h, QImage::Format_RGB888);
+    for (int y = 0; y < h; ++y)
+    {
+        uchar *row = rgb.scanLine(y);
+        for (int x = 0; x < w; ++x)
+        {
+            row[x * 3 + 0] = static_cast<uchar>(20 + x);
+            row[x * 3 + 1] = static_cast<uchar>(40 + y);
+            row[x * 3 + 2] = static_cast<uchar>(60 + x + y);
+        }
+    }
+    const QString rgbPath = dir.filePath(QStringLiteral("rgb8.png"));
+    CHECK(rgb.save(rgbPath, "PNG"), "write 8-bit RGB PNG");
+    const std::string rgbUtf8 = rgbPath.toUtf8().toStdString();
+    const ImageData colour = decoder.decodeFull(rgbUtf8, meta);
+    QImageReader rgbReader(rgbPath);
+    rgbReader.setAutoTransform(true);
+    const QImage rgbLoaded = rgbReader.read();
+    const QImage rgb888 = (rgbLoaded.format() == QImage::Format_RGB888)
+                              ? rgbLoaded
+                              : rgbLoaded.convertToFormat(QImage::Format_RGB888);
+    CHECK(!colour.isNull(), "RGB PNG decodes");
+    CHECK(colour.format == PixelFormat::RGB24, "RGB PNG is RGB24");
+    CHECK(colour.width == w && colour.height == h, "RGB PNG size");
+    CHECK(colour.buffer &&
+              colour.buffer->size() == static_cast<size_t>(w) * static_cast<size_t>(h) * 3u,
+          "RGB PNG buffer is w*h*3");
+    CHECK(packedRowsMatch(colour, rgb888, 3), "RGB PNG bytes match today's RGB888 conversion");
 }
 
 int main(int argc, char *argv[])
@@ -304,6 +393,8 @@ int main(int argc, char *argv[])
         QImage qr2 = mvcore::toQImage(dr);
         CHECK(qr == qr2, "RGB888 full QImage roundtrip parity");
     }
+
+    testQtDecoderPngPacking();
 
     std::fprintf(stderr, "%s: %d failures\n", g_fail == 0 ? "All tests passed" : "Tests failed",
                  g_fail);

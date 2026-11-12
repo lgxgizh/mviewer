@@ -308,17 +308,28 @@ void renderPreview(const Params &p, const std::vector<std::uint16_t> &samples,
                    const std::array<std::vector<std::uint16_t>, 4> &luts, const std::uint8_t *enc,
                    int outW, int outH, std::uint8_t *dst)
 {
+    // Branch on CFA. A thin colour frame still takes the mono averager, but
+    // its packed output stays RGB24. Only Mono is one byte per pixel.
+    const bool gray = p.cfa == Cfa::Mono;
+    const std::size_t cpp = gray ? 1U : 3U;
     for (int oy = 0; oy < outH; ++oy)
     {
         std::uint8_t *row =
-            dst + static_cast<std::size_t>(oy) * static_cast<std::size_t>(outW) * 3U;
+            dst + static_cast<std::size_t>(oy) * static_cast<std::size_t>(outW) * cpp;
         for (int ox = 0; ox < outW; ++ox)
         {
             std::uint16_t r = 0;
             std::uint16_t g = 0;
             std::uint16_t b = 0;
             averageFootprint(p, samples, luts, ox, oy, outW, outH, r, g, b);
-            storeEncoded(row + static_cast<std::size_t>(ox) * 3U, enc, r, g, b);
+            if (gray)
+            {
+                row[static_cast<std::size_t>(ox)] = enc[r];
+            }
+            else
+            {
+                storeEncoded(row + static_cast<std::size_t>(ox) * 3U, enc, r, g, b);
+            }
         }
     }
 }

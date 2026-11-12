@@ -369,14 +369,11 @@ void encodeMonoBand(const std::uint16_t *lin, int w, int y0, int y1, const std::
     for (int y = y0; y < y1; ++y)
     {
         const std::size_t row = static_cast<std::size_t>(y) * static_cast<std::size_t>(w);
-        std::uint8_t *out = dst + row * 3U;
+        std::uint8_t *out = dst + row;
+        const std::uint16_t *src = lin + row;
         for (int x = 0; x < w; ++x)
         {
-            const std::uint8_t v = enc[lin[row + static_cast<std::size_t>(x)]];
-            std::uint8_t *pixel = out + static_cast<std::size_t>(x) * 3U;
-            pixel[0] = v;
-            pixel[1] = v;
-            pixel[2] = v;
+            out[x] = enc[src[x]];
         }
     }
 }
@@ -480,7 +477,12 @@ ImageData renderPrepared(const Params &p, std::vector<std::uint16_t> samples, co
     int outW = 0;
     int outH = 0;
     const bool preview = detail::previewDimensions(p.width, p.height, maxEdge, outW, outH);
-    ImageData image = allocateRgb(preview ? outW : p.width, preview ? outH : p.height);
+    const int dw = preview ? outW : p.width;
+    const int dh = preview ? outH : p.height;
+    // Mono stays one byte per sample. Colour CFA, including a thin frame that
+    // shares the preview averager, stays RGB24.
+    ImageData image =
+        (p.cfa == Cfa::Mono) ? makeImageData(dw, dh, PixelFormat::Grayscale8) : allocateRgb(dw, dh);
     if (image.isNull() || !image.buffer)
     {
         return {};
