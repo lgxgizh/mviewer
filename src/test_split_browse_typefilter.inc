@@ -264,8 +264,7 @@ void testFormatFilterEveryGroup(const QString &dir)
            "groupForSuffix(\"jpg\") is jpeg");
     EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("tif")) == QStringLiteral("tiff"),
            "groupForSuffix(\"tif\") is tiff");
-    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("heif")) ==
-               QStringLiteral("heic"),
+    EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("heif")) == QStringLiteral("heic"),
            "groupForSuffix(\"heif\") is heic");
     EXPECT(mviewer::browseformats::groupForSuffix(QStringLiteral("dib")) == QStringLiteral("bmp"),
            "groupForSuffix(\"dib\") is bmp");
@@ -354,8 +353,7 @@ void testFormatFilterEveryGroup(const QString &dir)
                            return false;
                        for (const QString &suffix : kept)
                        {
-                           const bool hidden =
-                               mviewer::browseformats::groupForSuffix(suffix) == id;
+                           const bool hidden = mviewer::browseformats::groupForSuffix(suffix) == id;
                            if (listsSuffix(left, suffix) == hidden)
                                return false;
                        }
@@ -365,8 +363,8 @@ void testFormatFilterEveryGroup(const QString &dir)
                msg);
         if (id == QLatin1String("raw"))
         {
-            const bool yuvOk = !kept.contains(QStringLiteral("yuv")) ||
-                               listsSuffix(left, QStringLiteral("yuv"));
+            const bool yuvOk =
+                !kept.contains(QStringLiteral("yuv")) || listsSuffix(left, QStringLiteral("yuv"));
             EXPECT(!listsSuffix(left, QStringLiteral("dng")) &&
                        !listsSuffix(left, QStringLiteral("raw")) && yuvOk,
                    "hiding raw removes dng and raw; yuv stays if kept");
