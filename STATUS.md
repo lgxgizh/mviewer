@@ -1,12 +1,25 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-12 · Version: **1.0.176** · Release tag: **v1.0.176**
+> Snapshot: 2026-11-12 · Version: **1.0.177** · Release tag: **v1.0.177**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.177 — Image pipeline quality and performance (2026-11-12)
+
+- Pipeline review 2026-11-12 (all 13 findings) and performance review
+  (P1-1, P2-1, P2-2, P2-3, P2-5): linear-light Sharp fit to exact device
+  pixels in the viewer, 16-bit dither, single-channel grayscale, YUV bilinear
+  chroma / box luma / BT.2020 tag / source-matrix luma, optional LibRaw high
+  quality (`raw/highQuality`), ICC-correct EXIF thumbnails.
+- Faster opening: lazy full-frame analysis load (≤60 MP), viewport LOD for
+  images above 4 MP (16-bit/RAW above 1 MP), viewport-sized neighbor warm,
+  no Sharp overscan, strided `.raw` previews.
+- Still open: bounded PNG / non-WIC TIFF downsampled decode (perf review
+  P2-4), Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.176 — Headerless grayscale `.gray` / `.grey` (2026-11-12)
 
