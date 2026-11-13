@@ -3644,6 +3644,9 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
 void workflow13_compare_report_export_nonblocking(const QString &rootDir)
 {
     std::cout << "── Workflow 13: Compare report export responsiveness/cancel ──\n";
+    // Last workflow before teardown: flush every line so a crash report
+    // shows the exact step that was reached.
+    std::cout << std::unitbuf;
     const QString reportDirPath =
         QDir(rootDir).filePath(QStringLiteral("compare_report_nonblocking"));
     QDir reportDir(reportDirPath);
@@ -3896,6 +3899,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
             }
         }
         CHECK(cancelButton != nullptr, "report progress exposes the real Cancel button");
+        const QPointer<QDialog> compareDialogGuard(compareDialog);
         const TaskScheduler::TaskId blockerId = blocker.task ? blocker.task->id : 0;
         auto reportHandle = newestBackgroundTask(blockerId);
         CHECK(reportHandle != nullptr,
@@ -3953,11 +3957,13 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         const TaskScheduler::PoolType pools[] = {
             TaskScheduler::MetadataPool, TaskScheduler::DecodePool, TaskScheduler::ThumbnailPool,
             TaskScheduler::AnalysisPool, TaskScheduler::IOPool};
+        // Drain without pumping the event loop: handles are erased on the
+        // worker thread in onTaskComplete, so UI delivery is not needed.
+        // Pumping here (with the offscreen modal leftovers ADR-017 describes)
+        // crashed workflow_ux_tests on both Linux and MSVC.
+        std::cout << "report cancellation: settling scheduler pools" << std::endl;
         for (const TaskScheduler::PoolType pool : pools)
-        {
             sched.drain(pool, std::chrono::seconds(15));
-            pump(25);
-        }
         const auto graph = sched.graphMetrics();
         if (graph.handles != 0)
         {
@@ -3993,8 +3999,10 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
             std::cout << " graph.handles=" << graph.handles << "\n";
         }
         CHECK(graph.handles == 0, "report cancellation releases scheduler graph handles");
+        std::cout << std::flush;
 
-        compareDialog->close();
+        if (compareDialogGuard)
+            compareDialogGuard->close();
         w.close();
     }
 
