@@ -571,6 +571,11 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
     {
         m_transitionImage = QImage();
         m_transitionSourceSize = QSize();
+        // The LOD raster replaces the provisional thumbnail. Leaving it set
+        // kept isLoadingBusy() true and the busy ticker repainting forever.
+        m_provisionalPath.clear();
+        m_provisionalImage = QImage();
+        m_provisionalSourceSize = QSize();
         m_lodMode = true;
         m_loading = false; // the display is usable now
         // Fit the full source into the widget (the provisional/full-frame

@@ -26,7 +26,14 @@ bool ImageViewer::loadingIndicatorVisible() const
 
 void ImageViewer::drawLoadingBar(QPainter &painter)
 {
-    if (!isLoadingBusy())
+    // A landed LOD raster is the image. Full-frame isLoadingBusy() is unchanged:
+    // this is false whenever m_lodMode is off, including the tile path.
+    const auto lodSettled = [this]
+    {
+        return m_lodMode && !m_raster.image.isNull() && !m_loading && !m_largeSourcePending &&
+               !m_fullRawLoading;
+    };
+    if (!isLoadingBusy() || lodSettled())
     {
         m_busyClock.invalidate();
         if (m_busyTicker)
@@ -40,10 +47,10 @@ void ImageViewer::drawLoadingBar(QPainter &painter)
         m_busyTicker = new QTimer(this);
         m_busyTicker->setInterval(kFrameMs);
         connect(m_busyTicker, &QTimer::timeout, this,
-                [this]
+                [this, lodSettled]
                 {
                     // Stop as soon as the load settles; the next paint clears the bar.
-                    if (!isLoadingBusy())
+                    if (!isLoadingBusy() || lodSettled())
                         m_busyTicker->stop();
                     update();
                 });
