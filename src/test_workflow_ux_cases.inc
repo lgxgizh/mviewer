@@ -3644,6 +3644,9 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
 void workflow13_compare_report_export_nonblocking(const QString &rootDir)
 {
     std::cout << "── Workflow 13: Compare report export responsiveness/cancel ──\n";
+    // Last workflow before teardown: flush every line so a crash report
+    // shows the exact step that was reached.
+    std::cout << std::unitbuf;
     const QString reportDirPath =
         QDir(rootDir).filePath(QStringLiteral("compare_report_nonblocking"));
     QDir reportDir(reportDirPath);
@@ -3896,10 +3899,14 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
             }
         }
         CHECK(cancelButton != nullptr, "report progress exposes the real Cancel button");
+        const QPointer<QDialog> compareDialogGuard(compareDialog);
         const TaskScheduler::TaskId blockerId = blocker.task ? blocker.task->id : 0;
         auto reportHandle = newestBackgroundTask(blockerId);
         CHECK(reportHandle != nullptr,
               "report workflow identifies the queued MainWindow Background report task");
+        // Captured before either cancel path. The shared handle stays readable
+        // after the scheduler drops its map entry, and ids are never reused.
+        const TaskScheduler::TaskId reportId = reportHandle ? reportHandle->id : 0;
         if (progress)
         {
             // The offscreen Qt platform deadlocks when the private button
@@ -3923,6 +3930,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         const bool drained =
             sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15));
         CHECK(drained, "report cancellation drains the Background pool");
+        CHECK(sched.handle(reportId) == nullptr, "cancelled report task handle is released");
 
         CHECK(!QFileInfo::exists(outputPath),
               "cancelled Compare report does not publish the requested output file");
@@ -3937,13 +3945,64 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         CHECK(unexpected.isEmpty(),
               "cancelled Compare report leaves no report or .mviewer-tmp-* artifact");
         const auto finalMetrics = sched.metrics(TaskScheduler::PoolType::MetadataPool);
-        const auto graph = sched.graphMetrics();
         CHECK(finalMetrics.pending == 0 && finalMetrics.active_tasks == 0 &&
                   finalMetrics.queue_depth == 0,
               "report cancellation converges Background pending/active/queue metrics");
-        CHECK(graph.handles == 0, "report cancellation releases scheduler graph handles");
 
-        compareDialog->close();
+        // graphMetrics().handles counts every pool. Gallery thumbnails, the
+        // viewer's display-raster warm, and Compare decode/analysis can still
+        // be in flight after the Background drain on a slow CI host. Idle each
+        // pool, and let queued UI deliveries land, before treating a leftover
+        // handle as a cancelled-report leak.
+        const TaskScheduler::PoolType pools[] = {
+            TaskScheduler::MetadataPool, TaskScheduler::DecodePool, TaskScheduler::ThumbnailPool,
+            TaskScheduler::AnalysisPool, TaskScheduler::IOPool};
+        // Drain without pumping the event loop: handles are erased on the
+        // worker thread in onTaskComplete, so UI delivery is not needed.
+        // Pumping here (with the offscreen modal leftovers ADR-017 describes)
+        // crashed workflow_ux_tests on both Linux and MSVC.
+        std::cout << "report cancellation: settling scheduler pools" << std::endl;
+        for (const TaskScheduler::PoolType pool : pools)
+            sched.drain(pool, std::chrono::seconds(15));
+        const auto graph = sched.graphMetrics();
+        if (graph.handles != 0)
+        {
+            std::cout << "report cancellation scheduler residue:";
+            for (const TaskScheduler::PoolType pool : pools)
+            {
+                const auto poolMetrics = sched.metrics(pool);
+                const char *name = "Unknown";
+                switch (pool)
+                {
+                case TaskScheduler::MetadataPool:
+                    name = "Metadata";
+                    break;
+                case TaskScheduler::DecodePool:
+                    name = "Decode";
+                    break;
+                case TaskScheduler::ThumbnailPool:
+                    name = "Thumbnail";
+                    break;
+                case TaskScheduler::AnalysisPool:
+                    name = "Analysis";
+                    break;
+                case TaskScheduler::IOPool:
+                    name = "IO";
+                    break;
+                default:
+                    break;
+                }
+                std::cout << " " << name << " pending=" << poolMetrics.pending
+                          << " active_tasks=" << poolMetrics.active_tasks
+                          << " queue_depth=" << poolMetrics.queue_depth;
+            }
+            std::cout << " graph.handles=" << graph.handles << "\n";
+        }
+        CHECK(graph.handles == 0, "report cancellation releases scheduler graph handles");
+        std::cout << std::flush;
+
+        if (compareDialogGuard)
+            compareDialogGuard->close();
         w.close();
     }
 
