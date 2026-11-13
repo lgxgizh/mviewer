@@ -29,12 +29,12 @@ static int g_fail = 0;
     {                                                                                              \
         if (cond)                                                                                  \
         {                                                                                          \
-            std::printf("  PASS: %s\n", msg);                                                     \
+            std::printf("  PASS: %s\n", msg);                                                      \
             ++g_pass;                                                                              \
         }                                                                                          \
         else                                                                                       \
         {                                                                                          \
-            std::printf("  FAIL: %s\n", msg);                                                     \
+            std::printf("  FAIL: %s\n", msg);                                                      \
             ++g_fail;                                                                              \
         }                                                                                          \
     } while (false)
@@ -52,8 +52,9 @@ QByteArray makeJpegBytes(int w, int h)
     QImage image(w, h, QImage::Format_RGB888);
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x)
-            image.setPixel(x, y, qRgb((x * 255) / std::max(1, w - 1),
-                                      (y * 255) / std::max(1, h - 1), (x + y) & 0xff));
+            image.setPixel(x, y,
+                           qRgb((x * 255) / std::max(1, w - 1), (y * 255) / std::max(1, h - 1),
+                                (x + y) & 0xff));
     QByteArray encoded;
     QBuffer buffer(&encoded);
     buffer.open(QIODevice::WriteOnly);
@@ -63,8 +64,7 @@ QByteArray makeJpegBytes(int w, int h)
 }
 
 std::vector<uint8_t> makeLargeSyntheticRaw(const QByteArray &smallPreview,
-                                            const QByteArray &largePreview,
-                                            size_t fillerBytes)
+                                           const QByteArray &largePreview, size_t fillerBytes)
 {
     std::vector<uint8_t> raw;
     raw.reserve(4096 + static_cast<size_t>(smallPreview.size()) + fillerBytes +
@@ -82,8 +82,7 @@ void writeBytes(const QString &path, const std::vector<uint8_t> &bytes)
 {
     QFile file(path);
     file.open(QIODevice::WriteOnly);
-    file.write(reinterpret_cast<const char *>(bytes.data()),
-               static_cast<qint64>(bytes.size()));
+    file.write(reinterpret_cast<const char *>(bytes.data()), static_cast<qint64>(bytes.size()));
     file.close();
 }
 
@@ -143,8 +142,8 @@ int main(int argc, char **argv)
 
     // ── T3: remaining raster formats keep an honest bounded-display contract
     {
-        for (const char *name : {"large_tiff_16bit.tiff", "large_png_16mp.png",
-                                 "large_bmp_16mp.bmp"})
+        for (const char *name :
+             {"large_tiff_16bit.tiff", "large_png_16mp.png", "large_bmp_16mp.bmp"})
         {
             mviewer::core::SourceDecodeStats::instance().counters().reset();
             auto source = mviewer::core::SourceImage::open(fixture(name));
@@ -158,9 +157,12 @@ int main(int argc, char **argv)
             if (std::string(name).find("tiff") != std::string::npos)
                 CHECK(lod.decodePath == mviewer::core::SourceDecodePath::NativeLod,
                       "T3: 16-bit TIFF uses the native WIC bounded path");
+            else if (std::string(name).find("bmp") != std::string::npos)
+                CHECK(lod.decodePath == mviewer::core::SourceDecodePath::NativeLod,
+                      "T3: uncompressed BMP uses the bounded box LOD");
             else
                 CHECK(lod.decodePath == mviewer::core::SourceDecodePath::FullDecodeScaled,
-                      "T3: PNG/BMP remain honestly classified as scaled fallback");
+                      "T3: PNG remains honestly classified as scaled fallback");
         }
     }
 
@@ -170,8 +172,7 @@ int main(int argc, char **argv)
         // i18n-allow: non-ASCII name fixture (exercises Unicode handling)
         const QString unicodePath = dir.path() + "/大图 space 🚀.tiff";
         const QString sourcePath = QString::fromStdString(fixture("large_tiff_16bit.tiff"));
-        CHECK(QFile::copy(sourcePath, unicodePath),
-              "T4: Unicode large-source fixture copied");
+        CHECK(QFile::copy(sourcePath, unicodePath), "T4: Unicode large-source fixture copied");
         auto source = mviewer::core::SourceImage::open(unicodePath.toUtf8().toStdString());
         CHECK(source != nullptr, "T4: Unicode TIFF metadata probe succeeds");
         if (source)

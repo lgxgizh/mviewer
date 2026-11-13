@@ -31,6 +31,10 @@ namespace mviewer::core::detail
 // image off Windows or on any failure). fullSize receives the source size.
 QImage decodeTiffWicRaster(const std::string &path, const QRect &rawRect, const QSize &target,
                            QSize &fullSize);
+// Implemented in QtDecoder_bmp.cpp: bounded box-average BMP LOD (perf review
+// P2-4). Eligible: uncompressed 8/24/32 bpp. Null image means use Qt.
+bool bmpBoxLodEligible(const std::string &path, QSize *size);
+QImage decodeBmpBoxLod(const std::string &path, const QSize &target);
 } // namespace mviewer::core::detail
 
 namespace
@@ -107,6 +111,13 @@ bool isTiffPath(const std::string &path)
     const QString ext =
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     return ext == "tif" || ext == "tiff";
+}
+
+bool isBmpPath(const std::string &path)
+{
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
+    return ext == "bmp" || ext == "dib";
 }
 
 void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const QImage &img,
@@ -556,11 +567,13 @@ bool QtDecoder::canNativeLod(const std::string &path) const
 {
     // Evidence-based (M47/M53): JPEG uses the decoder's reduced DCT read. TIFF
     // uses the measured strip/clip adapter below; it never asks Qt to allocate
-    // the full raster. Other formats remain on the honest scaled fallback.
+    // the full raster. Eligible uncompressed BMP uses the bounded box LOD.
     const QString ext =
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     if (ext == "jpg" || ext == "jpeg")
         return true;
+    if (isBmpPath(path))
+        return mviewer::core::detail::bmpBoxLodEligible(path, nullptr);
     if (!isTiffPath(path))
         return false;
 #if !defined(Q_OS_WIN)
@@ -606,6 +619,26 @@ mviewer::core::SourceRegionBehavior QtDecoder::sourceRegionBehavior(const std::s
     // the FullDecodeCrop classification.
     return mviewer::core::SourceRegionBehavior::MayMaterializeFullRaster;
 }
+
+namespace
+{
+
+ImageData tryBmpBoxLod(const std::string &path, QImageReader &reader, const QSize &full,
+                       const QSize &target, mviewer::domain::ImageMetadata &outMeta)
+{
+    if (!isBmpPath(path))
+        return ImageData();
+    const QImage img = mviewer::core::detail::decodeBmpBoxLod(path, target);
+    if (img.isNull())
+        return ImageData();
+    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
+    fillMetadata(reader, sourceFormat, img, outMeta);
+    outMeta.width = full.width();
+    outMeta.height = full.height();
+    return toImageData(img);
+}
+
+} // namespace
 
 ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
                                mviewer::domain::ImageMetadata &outMeta) const
@@ -654,6 +687,9 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         // to at least 1. Truncating a very wide, short frame asks Qt for height 0.
         const QSize target(std::max(1, static_cast<int>(std::lround(full.width() * ratio))),
                            std::max(1, static_cast<int>(std::lround(full.height() * ratio))));
+        ImageData bmpLod = tryBmpBoxLod(path, reader, full, target, outMeta);
+        if (!bmpLod.isNull())
+            return bmpLod;
         reader.setScaledSize(target);
     }
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
