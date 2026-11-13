@@ -21,6 +21,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/QtDecoder.cpp
     core/image/decoder/QtDecoder_wic.cpp
     core/image/decoder/QtDecoder_bmp.cpp
+    core/image/decoder/QtDecoder_png.cpp
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
@@ -204,6 +205,20 @@ target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
 if(MVIEWER_HAS_LIBRAW)
     target_link_libraries(mviewer_core PRIVATE mviewer_libraw)
     target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_LIBRAW=1)
+endif()
+
+# Perf review P2-4: bounded PNG LOD through the libpng Qt already ships
+# (Qt6::BundledLibpng, static). Optional: distro Qt packages without it
+# (static-analysis jobs) keep the QImageReader path.
+find_package(Qt6BundledLibpng QUIET CONFIG PATHS "${Qt6_DIR}/.." NO_DEFAULT_PATH)
+find_path(MVIEWER_QTPNG_INCLUDE_DIR png.h PATHS "${Qt6_DIR}/../../../include/QtPng" NO_DEFAULT_PATH)
+if(TARGET Qt6::BundledLibpng AND MVIEWER_QTPNG_INCLUDE_DIR)
+    target_link_libraries(mviewer_core PRIVATE Qt6::BundledLibpng)
+    target_include_directories(mviewer_core PRIVATE "${MVIEWER_QTPNG_INCLUDE_DIR}")
+    target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_PNG_LOD=1)
+    message(STATUS "MViewer: bounded PNG LOD via Qt6::BundledLibpng")
+else()
+    message(STATUS "MViewer: Qt6::BundledLibpng not found; PNG LOD uses QImageReader")
 endif()
 
 target_compile_features(mviewer_core PUBLIC cxx_std_20)
@@ -2224,6 +2239,20 @@ target_compile_features(bmp_lod_tests PRIVATE cxx_std_20)
 target_include_directories(bmp_lod_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME bmp_lod_tests COMMAND bmp_lod_tests)
 set_tests_properties(bmp_lod_tests PROPERTIES TIMEOUT 120)
+
+add_executable(png_lod_tests
+    core/test_png_lod.cpp
+)
+target_link_libraries(png_lod_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(png_lod_tests PRIVATE cxx_std_20)
+target_include_directories(png_lod_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME png_lod_tests COMMAND png_lod_tests)
+set_tests_properties(png_lod_tests PROPERTIES TIMEOUT 120)
 
 # M53 Native Windows qualification: exercise the real Viewer and Compare UI
 # over the 100MP TIFF fixture, including zoom-region refresh and mode churn.

@@ -22,8 +22,8 @@
 //   * canProbe       — QImageReader::size() reads only the container header.
 //   * canNativeLod   — JPEG uses reduced DCT scaling; Windows TIFF uses the
 //                      measured WIC frame/clip/scale adapter; eligible uncompressed
-//                      BMP uses a bounded box-average LOD. Other formats are NOT
-//                      claimed without equivalent proof.
+//                      BMP and non-interlaced PNG use a bounded box-average LOD.
+//                      Other formats are NOT claimed without equivalent proof.
 //   * canNativeRegion— false: decodeRegion() uses the bounded WIC clip path
 //                      for TIFF and is classified BoundedRasterRegion by the
 //                      provider; Qt offers no true random-access tile claim.
@@ -58,6 +58,9 @@ class QtDecoder : public IDecoder,
     // Null unless `path` matches; a match is consumed.
     static std::shared_ptr<std::vector<uint16_t>> takePendingRaw16(const std::string &path,
                                                                    int &channels);
+
+    // True when eligible PNG files use the bundled libpng box LOD.
+    static bool hasBoundedPngLod();
 
     // ── M47 source-backed capabilities ───────────────────────────────────────
     bool canProbe(const std::string &path) const override;
