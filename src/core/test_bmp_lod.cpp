@@ -4,6 +4,7 @@
 
 #include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
+#include "core/image/decoder/QtDecoder.h"
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -274,20 +275,79 @@ static void testIndexed(const QString &dir)
 
 static void testTopDown(const QString &dir)
 {
-    // Qt's BMP handler reports a negative height for top-down files, so
-    // SourceImage::open rejects them; exercise the bounded decoder directly.
     const QString qpath = dir + "/topdown_640x480.bmp";
     CHECK(writeTopDownBmp(qpath, 640, 480), "c: top-down BMP written");
     const std::string path = qpath.toStdString();
+
+    auto src = mviewer::core::SourceImage::open(path);
+    CHECK(src != nullptr, "c: top-down BMP opens");
+    if (src)
+    {
+        CHECK(src->metadata().width == 640 && src->metadata().height == 480,
+              "c: top-down BMP probe reports 640x480");
+    }
+
+    const auto lod = decodeLod(path, 64);
+    CHECK(lod.ok && !lod.pixels.isNull(), "c: decodeLod(64) ok");
+    CHECK(lod.decodePath == mviewer::core::SourceDecodePath::NativeLod, "c: decodePath NativeLod");
+    CHECK(lod.pixels.width == 64 && lod.pixels.height == 48, "c: pixels 64x48");
+    CHECK(rgbNear(lod.pixels, 0, 0, 255, 0, 0, 2), "c: decodeLod top row red");
+    CHECK(rgbNear(lod.pixels, 0, 47, 0, 0, 255, 2), "c: decodeLod bottom row blue");
+
+    QtDecoder dec;
+    mviewer::domain::ImageMetadata meta;
+    ImageData full = dec.decodeFull(path, meta);
+    CHECK(full.width == 640 && full.height == 480 && rgbNear(full, 0, 0, 255, 0, 0, 2) &&
+              rgbNear(full, 0, 479, 0, 0, 255, 2),
+          "c: top-down BMP full decode is upright");
+
     QSize size;
     CHECK(mviewer::core::detail::bmpBoxLodEligible(path, &size), "c: top-down BMP eligible");
     CHECK(size == QSize(640, 480), "c: eligible size is 640x480");
-    const QImage lod = mviewer::core::detail::decodeBmpBoxLod(path, QSize(64, 48));
-    CHECK(!lod.isNull() && lod.size() == QSize(64, 48), "c: decodeBmpBoxLod 64x48");
-    if (lod.isNull())
-        return;
-    CHECK(lod.pixel(0, 0) == qRgb(255, 0, 0), "c: top row red");
-    CHECK(lod.pixel(0, 47) == qRgb(0, 0, 255), "c: bottom row blue");
+    const QImage box = mviewer::core::detail::decodeBmpBoxLod(path, QSize(64, 48));
+    CHECK(!box.isNull() && box.size() == QSize(64, 48), "c: decodeBmpBoxLod 64x48");
+    if (!box.isNull())
+    {
+        CHECK(box.pixel(0, 0) == qRgb(255, 0, 0), "c: top row red");
+        CHECK(box.pixel(0, 47) == qRgb(0, 0, 255), "c: bottom row blue");
+    }
+}
+
+static void testFallbackLabel(const QString &dir)
+{
+    {
+        const QString qpath = dir + "/small_100x80.bmp";
+        QImage img(100, 80, QImage::Format_RGB888);
+        img.fill(qRgb(40, 80, 120));
+        CHECK(saveBmp(img, qpath), "f: small BMP saved");
+        mviewer::core::SourceDecodeStats::instance().counters().reset();
+        const auto lod = decodeLod(qpath.toStdString(), 256);
+        CHECK(lod.ok && lod.decodePath == mviewer::core::SourceDecodePath::FullDecodeScaled,
+              "f: small BMP read by Qt is labelled FullDecodeScaled");
+        const auto &counters = mviewer::core::SourceDecodeStats::instance().counters();
+        CHECK(counters.fullDecodeScaled.load() == 1 && counters.nativeLod.load() == 0,
+              "f: small BMP fullDecodeScaled == 1 and nativeLod == 0");
+    }
+    {
+        const QString qpath = dir + "/small_100x80.png";
+        QImage img(100, 80, QImage::Format_RGB888);
+        img.fill(qRgb(40, 80, 120));
+        CHECK(img.save(qpath, "PNG"), "f: small PNG saved");
+        mviewer::core::SourceDecodeStats::instance().counters().reset();
+        const auto lod = decodeLod(qpath.toStdString(), 256);
+        CHECK(lod.ok && lod.decodePath == mviewer::core::SourceDecodePath::FullDecodeScaled,
+              "f: small PNG read by Qt is labelled FullDecodeScaled");
+    }
+    {
+        const QString qpath = dir + "/large_1000x800.bmp";
+        QImage img(1000, 800, QImage::Format_RGB888);
+        img.fill(qRgb(40, 80, 120));
+        CHECK(saveBmp(img, qpath), "f: large BMP saved");
+        mviewer::core::SourceDecodeStats::instance().counters().reset();
+        const auto lod = decodeLod(qpath.toStdString(), 100);
+        CHECK(lod.ok && lod.decodePath == mviewer::core::SourceDecodePath::NativeLod,
+              "f: large BMP stays NativeLod");
+    }
 }
 
 static void testOddSizes(const QString &dir)
@@ -394,6 +454,7 @@ int main(int argc, char **argv)
     testGradient(dir.path());
     testIndexed(dir.path());
     testTopDown(dir.path());
+    testFallbackLabel(dir.path());
     testOddSizes(dir.path());
     testTruncated(dir.path());
     testTiming(dir.path());

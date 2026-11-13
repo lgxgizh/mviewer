@@ -10,6 +10,8 @@
 
 #include <QColorSpace>
 #include <QImage>
+#include <QImageReader>
+#include <QSize>
 
 namespace mvcore
 {
@@ -68,5 +70,16 @@ ImageData fromQImage(const QImage &src);
 // QImage -> ImageData (preserve the Alpha channel: convert to RGBA32 / BGRA32 when Alpha is
 // present, equivalent to fromQImage when there is no Alpha)
 ImageData fromQImagePreservingAlpha(const QImage &src);
+
+// Qt 6.8's BMP handler reports a negative height for top-down BMPs while
+// read() returns the upright image. Use this instead of QImageReader::size()
+// for source geometry. An invalid size stays invalid.
+inline QSize readerRasterSize(QImageReader &reader)
+{
+    const QSize s = reader.size();
+    if (s.width() > 0 && s.height() < 0)
+        return QSize(s.width(), -s.height());
+    return s;
+}
 
 } // namespace mvcore

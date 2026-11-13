@@ -426,7 +426,7 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
     }
     else if (frameIndex == 0)
     {
-        selected.sourceSize = reader.size();
+        selected.sourceSize = mvcore::readerRasterSize(reader);
         const int before = reader.nextImageDelay();
         const int maxDim = std::max(selected.sourceSize.width(), selected.sourceSize.height());
         if (maxEdge > 0 && selected.sourceSize.isValid() && maxDim > maxEdge && maxDim > 0)
@@ -445,7 +445,7 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
     }
     else if (reader.jumpToImage(frameIndex))
     {
-        selected.sourceSize = reader.size();
+        selected.sourceSize = mvcore::readerRasterSize(reader);
         const int before = reader.nextImageDelay();
         const int maxDim = std::max(selected.sourceSize.width(), selected.sourceSize.height());
         if (maxEdge > 0 && selected.sourceSize.isValid() && maxDim > maxEdge && maxDim > 0)

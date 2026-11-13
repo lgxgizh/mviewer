@@ -5,6 +5,7 @@
 #include "core/image/ExifOrientation.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/MetadataReader.h"
+#include "core/image/QtConvert.h"
 #include "core/image/QtMetadataSemantics.h"
 
 #include <QColorSpace>
@@ -526,7 +527,7 @@ bool QtDecoder::probeMetadata(const std::string &path, mviewer::domain::ImageMet
 {
     QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
-    const QSize full = reader.size();
+    const QSize full = mvcore::readerRasterSize(reader);
     if (!full.isValid() || full.isEmpty())
         return false;
     const QFileInfo info(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
@@ -606,7 +607,8 @@ bool QtDecoder::canNativeLod(const std::string &path) const
 #else
     QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
-    return reader.size().isValid() && !transformSwapsDimensions(reader.transformation()) &&
+    return mvcore::readerRasterSize(reader).isValid() &&
+           !transformSwapsDimensions(reader.transformation()) &&
            reader.transformation() == QImageIOHandler::TransformationNone;
 #endif
 }
@@ -674,7 +676,7 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
 {
     QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
-    const QSize full = reader.size();
+    const QSize full = mvcore::readerRasterSize(reader);
     if (!full.isValid() || full.isEmpty())
         return ImageData();
     if (outMeta.filePath.empty())
@@ -721,6 +723,7 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
             return bounded;
         reader.setScaledSize(target);
     }
+    outMeta.lodFellBack = isBmpPath(path) || isPngPath(path) || isTiffPath(path);
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     const QImage img = reader.read();
     if (img.isNull())
@@ -744,7 +747,7 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
 {
     QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
-    const QSize full = reader.size();
+    const QSize full = mvcore::readerRasterSize(reader);
     if (!full.isValid() || full.isEmpty() || w <= 0 || h <= 0)
         return ImageData();
 

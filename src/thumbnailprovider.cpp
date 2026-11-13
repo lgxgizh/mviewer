@@ -72,7 +72,7 @@ SourceHeader readSourceHeader(const QString &sourcePath)
     SourceHeader out;
     QImageReader reader(sourcePath);
     reader.setAutoTransform(false);
-    out.raw = reader.size();
+    out.raw = mvcore::readerRasterSize(reader);
     out.orientation = mviewer::core::qtmetadata::orientationFromTransform(reader.transformation());
     return out;
 }

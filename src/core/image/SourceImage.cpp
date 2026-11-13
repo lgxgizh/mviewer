@@ -165,11 +165,17 @@ SourceImage::RasterResult SourceImage::decodeLod(int maxEdge)
         if (m_caps->canNativeLod(m_path))
         {
             r.pixels = m_caps->decodeLod(m_path, maxEdge, meta);
-            r.decodePath = SourceDecodePath::NativeLod;
-            m_lastPath = SourceDecodePath::NativeLod;
+            const bool fellBack = meta.lodFellBack;
+            meta.lodFellBack = false;
+            r.decodePath =
+                fellBack ? SourceDecodePath::FullDecodeScaled : SourceDecodePath::NativeLod;
+            m_lastPath = r.decodePath;
             if (!r.pixels.isNull())
             {
-                stats.nativeLod.fetch_add(1);
+                if (fellBack)
+                    stats.fullDecodeScaled.fetch_add(1);
+                else
+                    stats.nativeLod.fetch_add(1);
                 r.metadata = std::move(meta);
                 r.ok = true;
                 return r;
