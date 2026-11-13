@@ -39,6 +39,9 @@ QImage decodeBmpBoxLod(const std::string &path, const QSize &target);
 // P2-4). Null image means use the QImageReader path.
 bool pngBoxLodEligible(const std::string &path);
 QImage decodePngBoxLod(const std::string &path, const QSize &target);
+// QtDecoder_tiff.cpp: bounded uncompressed strip TIFF LOD where WIC is unavailable.
+bool tiffStripLodEligible(const std::string &path);
+QImage decodeTiffStripLod(const std::string &path, const QSize &target);
 } // namespace mviewer::core::detail
 
 namespace
@@ -587,7 +590,7 @@ bool QtDecoder::canNativeLod(const std::string &path) const
 {
     // Evidence-based (M47/M53): JPEG uses the decoder's reduced DCT read. TIFF
     // uses the measured strip/clip adapter below; it never asks Qt to allocate
-    // the full raster. Eligible BMP and PNG use the bounded box LOD.
+    // the full raster (off Windows: uncompressed strips). BMP/PNG: bounded box LOD.
     const QString ext =
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     if (ext == "jpg" || ext == "jpeg")
@@ -599,7 +602,7 @@ bool QtDecoder::canNativeLod(const std::string &path) const
     if (!isTiffPath(path))
         return false;
 #if !defined(Q_OS_WIN)
-    return false;
+    return mviewer::core::detail::tiffStripLodEligible(path);
 #else
     QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
@@ -653,6 +656,8 @@ ImageData tryBoundedLod(const std::string &path, QImageReader &reader, const QSi
         img = mviewer::core::detail::decodeBmpBoxLod(path, target);
     else if (isPngPath(path) && QtDecoder::hasBoundedPngLod())
         img = mviewer::core::detail::decodePngBoxLod(path, target);
+    else if (isTiffPath(path))
+        img = mviewer::core::detail::decodeTiffStripLod(path, target);
     if (img.isNull())
         return ImageData();
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);

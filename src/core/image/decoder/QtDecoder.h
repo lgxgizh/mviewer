@@ -20,8 +20,8 @@
 // provides it, bounded-memory region decode). Capability claims are
 // evidence-based:
 //   * canProbe       — QImageReader::size() reads only the container header.
-//   * canNativeLod   — JPEG uses reduced DCT scaling; Windows TIFF uses the
-//                      measured WIC frame/clip/scale adapter; eligible uncompressed
+//   * canNativeLod   — JPEG uses reduced DCT scaling; TIFF uses WIC on Windows
+//                      and uncompressed strips elsewhere; eligible uncompressed
 //                      BMP and non-interlaced PNG use a bounded box-average LOD.
 //                      Other formats are NOT claimed without equivalent proof.
 //   * canNativeRegion— false: decodeRegion() uses the bounded WIC clip path
