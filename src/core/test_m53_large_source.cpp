@@ -4,6 +4,7 @@
 
 #include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
+#include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/RawDecoder.h"
 
 #include <QBuffer>
@@ -160,9 +161,12 @@ int main(int argc, char **argv)
             else if (std::string(name).find("bmp") != std::string::npos)
                 CHECK(lod.decodePath == mviewer::core::SourceDecodePath::NativeLod,
                       "T3: uncompressed BMP uses the bounded box LOD");
+            else if (QtDecoder::hasBoundedPngLod())
+                CHECK(lod.decodePath == mviewer::core::SourceDecodePath::NativeLod,
+                      "T3: PNG uses the bounded libpng box LOD");
             else
                 CHECK(lod.decodePath == mviewer::core::SourceDecodePath::FullDecodeScaled,
-                      "T3: PNG remains honestly classified as scaled fallback");
+                      "T3: PNG without bundled libpng stays on the scaled fallback");
         }
     }
 

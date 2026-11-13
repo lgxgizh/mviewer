@@ -35,6 +35,10 @@ QImage decodeTiffWicRaster(const std::string &path, const QRect &rawRect, const 
 // P2-4). Eligible: uncompressed 8/24/32 bpp. Null image means use Qt.
 bool bmpBoxLodEligible(const std::string &path, QSize *size);
 QImage decodeBmpBoxLod(const std::string &path, const QSize &target);
+// Implemented in QtDecoder_png.cpp: bounded box-average PNG LOD (perf review
+// P2-4). Null image means use the QImageReader path.
+bool pngBoxLodEligible(const std::string &path);
+QImage decodePngBoxLod(const std::string &path, const QSize &target);
 } // namespace mviewer::core::detail
 
 namespace
@@ -118,6 +122,13 @@ bool isBmpPath(const std::string &path)
     const QString ext =
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     return ext == "bmp" || ext == "dib";
+}
+
+bool isPngPath(const std::string &path)
+{
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
+    return ext == "png";
 }
 
 void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const QImage &img,
@@ -563,17 +574,28 @@ bool QtDecoder::probeMetadata(const std::string &path, mviewer::domain::ImageMet
     return true;
 }
 
+bool QtDecoder::hasBoundedPngLod()
+{
+#if defined(MVIEWER_HAS_PNG_LOD)
+    return true;
+#else
+    return false;
+#endif
+}
+
 bool QtDecoder::canNativeLod(const std::string &path) const
 {
     // Evidence-based (M47/M53): JPEG uses the decoder's reduced DCT read. TIFF
     // uses the measured strip/clip adapter below; it never asks Qt to allocate
-    // the full raster. Eligible uncompressed BMP uses the bounded box LOD.
+    // the full raster. Eligible BMP and PNG use the bounded box LOD.
     const QString ext =
         QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     if (ext == "jpg" || ext == "jpeg")
         return true;
     if (isBmpPath(path))
         return mviewer::core::detail::bmpBoxLodEligible(path, nullptr);
+    if (isPngPath(path))
+        return QtDecoder::hasBoundedPngLod() && mviewer::core::detail::pngBoxLodEligible(path);
     if (!isTiffPath(path))
         return false;
 #if !defined(Q_OS_WIN)
@@ -623,12 +645,14 @@ mviewer::core::SourceRegionBehavior QtDecoder::sourceRegionBehavior(const std::s
 namespace
 {
 
-ImageData tryBmpBoxLod(const std::string &path, QImageReader &reader, const QSize &full,
-                       const QSize &target, mviewer::domain::ImageMetadata &outMeta)
+ImageData tryBoundedLod(const std::string &path, QImageReader &reader, const QSize &full,
+                        const QSize &target, mviewer::domain::ImageMetadata &outMeta)
 {
-    if (!isBmpPath(path))
-        return ImageData();
-    const QImage img = mviewer::core::detail::decodeBmpBoxLod(path, target);
+    QImage img;
+    if (isBmpPath(path))
+        img = mviewer::core::detail::decodeBmpBoxLod(path, target);
+    else if (isPngPath(path) && QtDecoder::hasBoundedPngLod())
+        img = mviewer::core::detail::decodePngBoxLod(path, target);
     if (img.isNull())
         return ImageData();
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
@@ -687,9 +711,9 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         // to at least 1. Truncating a very wide, short frame asks Qt for height 0.
         const QSize target(std::max(1, static_cast<int>(std::lround(full.width() * ratio))),
                            std::max(1, static_cast<int>(std::lround(full.height() * ratio))));
-        ImageData bmpLod = tryBmpBoxLod(path, reader, full, target, outMeta);
-        if (!bmpLod.isNull())
-            return bmpLod;
+        ImageData bounded = tryBoundedLod(path, reader, full, target, outMeta);
+        if (!bounded.isNull())
+            return bounded;
         reader.setScaledSize(target);
     }
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
