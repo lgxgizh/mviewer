@@ -181,7 +181,7 @@ bool openAndParse(const std::string &path, BmpInfo &info)
 
 bool loadPalette(const QByteArray &hdr, const BmpInfo &info, uint8_t pal[256][3])
 {
-    std::memset(pal, 0, 256 * 3);
+    std::memset(pal, 0, sizeof(uint8_t[256][3]));
     if (info.bpp != 8)
         return true;
     const int need = info.paletteOffset + info.paletteEntries * 4;
