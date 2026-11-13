@@ -10,6 +10,7 @@
 #include "core/image/ImageFormats.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageTransform.h"
+#include "core/image/QtConvert.h"
 #include "core/image/RawMetadata.h"
 
 #include <QFile>
@@ -411,8 +412,8 @@ std::string decodeFailureMessage(const std::string &inputPath)
         return fromPng;
 
     const QString path = QString::fromUtf8(inputPath.data(), static_cast<int>(inputPath.size()));
-    const QImageReader reader(path);
-    const QSize size = reader.size();
+    QImageReader reader(path);
+    const QSize size = mvcore::readerRasterSize(reader);
     if (!size.isValid() || size.width() <= 0 || size.height() <= 0)
         return "Unable to decode image";
     std::string tooBig = oversizedMessage(size.width(), size.height());

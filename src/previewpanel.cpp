@@ -301,7 +301,7 @@ PreviewDecodeResult loadPreviewPixels(const std::string &stdPath, int knownW, in
         {
             QImageReader reader(QString::fromStdString(stdPath));
             reader.setAutoTransform(true);
-            src = reader.size();
+            src = mvcore::readerRasterSize(reader);
             if (src.isValid())
             {
                 switch (reader.transformation())

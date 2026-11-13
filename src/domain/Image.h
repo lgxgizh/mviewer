@@ -67,6 +67,9 @@ struct ImageMetadata
     int loopCount = -1;
     bool animated = false;
     std::string sequenceKind = "static"; // "static", "animation", or "pages"
+    // Set by a backend whose claimed native LOD fell back to a full-raster
+    // QImageReader read (e.g. bounded BMP/PNG/TIFF decoder rejected the file).
+    bool lodFellBack = false;
 
     // M18: embedded text metadata (EXIF/XMP/IPTCCore keys the plugin exposes),
     // e.g. "Make", "Model", "DateTimeOriginal", "Software". Best-effort; the

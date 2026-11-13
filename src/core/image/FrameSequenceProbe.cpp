@@ -3,6 +3,7 @@
 // sizes. Internal to the core image layer (see FrameSequenceDetail.h).
 #include "core/async/CooperativeCancel.h"
 #include "core/image/FrameSequenceDetail.h"
+#include "core/image/QtConvert.h"
 #include "core/image/QtMetadataSemantics.h"
 
 #include <QImage>
@@ -134,7 +135,7 @@ QSize sizeWithOrientation(QImageReader &reader)
 {
     // size() is the stored size. read() with autoTransform displays the
     // transposed geometry, so a header-only answer has to swap too.
-    QSize size = reader.size();
+    QSize size = mvcore::readerRasterSize(reader);
     if (qtmetadata::transformSwapsDimensions(reader.transformation()))
         size.transpose();
     return size;

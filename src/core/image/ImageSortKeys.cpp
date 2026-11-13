@@ -1,6 +1,7 @@
 #include "core/image/ImageSortKeys.h"
 #include "core/filesystem/Utf8Path.h"
 
+#include "core/image/QtConvert.h"
 #include "core/image/RawMetadata.h"
 
 #include <QFileInfo>
@@ -44,7 +45,7 @@ std::vector<ImageSortKey> computeSortKeys(const std::vector<std::string> &paths,
     {
         QImageReader reader(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
         reader.setAutoTransform(true);
-        const QSize s = reader.size();
+        const QSize s = mvcore::readerRasterSize(reader);
         return static_cast<int64_t>(s.width()) * s.height();
     };
     const SortMetadataReader metas =

@@ -1,6 +1,7 @@
 #include "core/image/MetadataReader.h"
 #include "core/FileIdentity.h"
 #include "core/image/IccProfile.h"
+#include "core/image/QtConvert.h"
 #include "core/image/QtMetadataSemantics.h"
 
 #include <QBuffer>
@@ -36,7 +37,7 @@ void populateFileIdentity(mviewer::domain::ImageMetadata &meta, const std::strin
 void populateImageInfo(mviewer::domain::ImageMetadata &meta, QImageReader &reader,
                        const QFileInfo &fileInfo)
 {
-    const QSize s = reader.size();
+    const QSize s = mvcore::readerRasterSize(reader);
     meta.width = s.width();
     meta.height = s.height();
 
