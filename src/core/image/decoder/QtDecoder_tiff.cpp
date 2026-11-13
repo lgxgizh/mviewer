@@ -20,7 +20,7 @@ namespace
 
 constexpr uint32_t kMaxStrips = 65535;
 
-enum class AlphaMode
+enum class AlphaMode : uint8_t
 {
     None,
     Associated,
