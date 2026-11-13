@@ -1,12 +1,22 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-12 · Version: **1.0.177** · Release tag: **v1.0.177**
+> Snapshot: 2026-11-12 · Version: **1.0.178** · Release tag: **v1.0.178**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.178 — Browse freeze hotfix (2026-11-12)
+
+- Fixes the 1.0.177 freeze while browsing or switching folders: the first
+  viewport preview now releases the gallery thumbnail stand-in, so the
+  loading indicator stops repainting (PR #373, regression test V10).
+- Report-cancellation workflow test drains every scheduler pool before its
+  handle check (PR #372).
+- Still open: bounded PNG / BMP / non-WIC TIFF downsampled decode (perf
+  review P2-4), Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.177 — Image pipeline quality and performance (2026-11-12)
 
