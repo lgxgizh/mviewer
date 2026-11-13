@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [1.0.178] - 2026-11-12
+
+Hotfix for 1.0.177: the viewer could stop responding while browsing or after
+switching folders.
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.178**.
+
+### Fixed
+
+- **Browse / folder-switch freeze**: when an image above 4 MP opened from
+  its gallery thumbnail, the thumbnail stand-in was never released once the
+  viewport preview landed. The loading indicator then kept repainting the
+  viewer about 30 times a second, which could starve input until the window
+  stopped responding (common with 12 MP JPEGs since 1.0.177). The stand-in is
+  now released when the preview lands, and the loading indicator stops.
+- **Tests**: the report-cancellation workflow test now waits for every
+  scheduler pool before checking that no task handles remain, which removes
+  an intermittent CI failure.
+
 ## [1.0.177] - 2026-11-12
 
 Image pipeline quality and performance review (2026-11-12): sharper and
