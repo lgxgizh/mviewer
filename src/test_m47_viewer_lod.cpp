@@ -18,6 +18,7 @@
 //   V8 a warmed large neighbor matches the fit-to-window device-pixel size.
 //   V9 a 12 MP 16-bit TIFF (above the 4 MP fast path) displays from a
 //      viewport LOD. imageReady arrives only after ensureAnalysisLoad().
+//   V10 a 12.6 MP 8-bit JPEG with a provisional thumbnail releases it on the first LOD raster.
 //   Policy (no fixtures): display-raster accept prefers coverage over a
 //      sharper miss, LOD smoothing is off at >= 1 device pixel per source
 //      pixel, and the ROI stats sentence keeps its English source.
@@ -201,6 +202,39 @@ QString writeSmallJpeg(const QTemporaryDir &dir)
     img.fill(QColor(40, 80, 120));
     img.save(p, "JPEG", 90);
     return p;
+}
+
+// Gallery thumbnail then setImage is the browse order. The first LOD raster
+// must drop that stand-in so the loading bar does not tick forever.
+void runV10(const QTemporaryDir &tmp)
+{
+    MARK("V10 start");
+    const QString jpg = tmp.filePath(QStringLiteral("rgb8_12mp.jpg"));
+    QImage full(4096, 3072, QImage::Format_RGB32);
+    full.fill(QColor(40, 80, 120));
+    CHECK(full.save(jpg, "JPEG", 90), "V10: 12.6 MP 8-bit JPEG is written");
+
+    ImageViewer viewer;
+    viewer.resize(1280, 800);
+    viewer.show();
+    pump(50);
+    bool display = false;
+    QObject::connect(&viewer, &ImageViewer::displayReady, &viewer,
+                     [&](const QSize &) { display = true; });
+    viewer.setBrowseSequence({jpg});
+    QImage thumb(256, 192, QImage::Format_RGB32);
+    thumb.fill(QColor(40, 80, 120));
+    viewer.setProvisionalImage(jpg, thumb, QSize(4096, 3072));
+    CHECK(!viewer.provisionalImageForTest().isNull(), "V10: provisional thumbnail installed");
+    viewer.setImage(jpg);
+    CHECK(waitTrue([&] { return display && viewer.isLodDisplay(); }, 30000),
+          "V10: 12.6 MP 8-bit JPEG takes the LOD path");
+    pump(50);
+    CHECK(viewer.provisionalImageForTest().isNull(),
+          "V10: first LOD raster releases the provisional thumbnail");
+    pump(ImageViewer::kLoadingBarDelayMs + 250);
+    CHECK(!viewer.loadingIndicatorVisible(),
+          "V10: loading bar is not busy after the LOD raster lands");
 }
 
 } // namespace
@@ -593,6 +627,8 @@ int main(int argc, char **argv)
                        30000),
               "V9: ensureAnalysisLoad delivers the full frame via imageReady");
     }
+
+    runV10(tmp);
 
     std::printf("=== M47 viewer LOD-first display tests: %s ===\n",
                 g_failures == 0 ? "PASS" : "FAIL");
