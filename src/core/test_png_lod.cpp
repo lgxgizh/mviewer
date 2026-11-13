@@ -163,7 +163,7 @@ bool cornersWithin(const ImageData &got, const QImage &ref, int tol)
     const int w = got.width;
     const int h = got.height;
     const uint8_t *tl = rgb.constScanLine(0);
-    const uint8_t *br = rgb.constScanLine(h - 1) + (w - 1) * 3;
+    const uint8_t *br = rgb.constScanLine(h - 1) + static_cast<ptrdiff_t>(w - 1) * 3;
     return rgbNear(got, 0, 0, tl[0], tl[1], tl[2], tol) &&
            rgbNear(got, w - 1, h - 1, br[0], br[1], br[2], tol);
 }
