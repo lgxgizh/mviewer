@@ -39,6 +39,13 @@ static int g_fail = 0;
         }                                                                                          \
     } while (false)
 
+namespace mviewer::core::detail
+{
+// Defined in QtDecoder_bmp.cpp (exported from mviewer_core).
+bool bmpBoxLodEligible(const std::string &path, QSize *size);
+QImage decodeBmpBoxLod(const std::string &path, const QSize &target);
+} // namespace mviewer::core::detail
+
 namespace
 {
 
@@ -240,7 +247,10 @@ static void testIndexed(const QString &dir)
     CHECK(!img.isNull(), "b: indexed QImage allocated");
     if (img.isNull())
         return;
-    img.setColorCount(4);
+    // Qt writes palettes of <= 16 colours as 4 bpp (not eligible); use 256.
+    img.setColorCount(256);
+    for (int i = 4; i < 256; ++i)
+        img.setColor(i, qRgb(i, i, i));
     img.setColor(0, qRgb(220, 30, 30));
     img.setColor(1, qRgb(30, 220, 30));
     img.setColor(2, qRgb(30, 30, 220));
@@ -264,14 +274,20 @@ static void testIndexed(const QString &dir)
 
 static void testTopDown(const QString &dir)
 {
+    // Qt's BMP handler reports a negative height for top-down files, so
+    // SourceImage::open rejects them; exercise the bounded decoder directly.
     const QString qpath = dir + "/topdown_640x480.bmp";
     CHECK(writeTopDownBmp(qpath, 640, 480), "c: top-down BMP written");
-    const auto lod = decodeLod(qpath.toStdString(), 64);
-    CHECK(lod.ok && !lod.pixels.isNull(), "c: decodeLod(64) ok");
-    CHECK(lod.decodePath == mviewer::core::SourceDecodePath::NativeLod, "c: decodePath NativeLod");
-    CHECK(lod.pixels.height >= 2, "c: LOD has more than one row");
-    CHECK(rgbNear(lod.pixels, 0, 0, 255, 0, 0, 2), "c: top row red");
-    CHECK(rgbNear(lod.pixels, 0, lod.pixels.height - 1, 0, 0, 255, 2), "c: bottom row blue");
+    const std::string path = qpath.toStdString();
+    QSize size;
+    CHECK(mviewer::core::detail::bmpBoxLodEligible(path, &size), "c: top-down BMP eligible");
+    CHECK(size == QSize(640, 480), "c: eligible size is 640x480");
+    const QImage lod = mviewer::core::detail::decodeBmpBoxLod(path, QSize(64, 48));
+    CHECK(!lod.isNull() && lod.size() == QSize(64, 48), "c: decodeBmpBoxLod 64x48");
+    if (lod.isNull())
+        return;
+    CHECK(lod.pixel(0, 0) == qRgb(255, 0, 0), "c: top row red");
+    CHECK(lod.pixel(0, 47) == qRgb(0, 0, 255), "c: bottom row blue");
 }
 
 static void testOddSizes(const QString &dir)

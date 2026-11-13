@@ -198,22 +198,6 @@ bool loadPalette(const QByteArray &hdr, const BmpInfo &info, uint8_t pal[256][3]
     return true;
 }
 
-void sampleRgb(const uint8_t *row, int x, int bpp, const uint8_t pal[256][3], uint8_t rgb[3])
-{
-    if (bpp == 8)
-    {
-        const uint8_t idx = row[x];
-        rgb[0] = pal[idx][0];
-        rgb[1] = pal[idx][1];
-        rgb[2] = pal[idx][2];
-        return;
-    }
-    const int px = x * (bpp == 32 ? 4 : 3);
-    rgb[0] = row[px + 2];
-    rgb[1] = row[px + 1];
-    rgb[2] = row[px + 0];
-}
-
 void makeColMap(int w, int tw, std::vector<int> &colMap)
 {
     colMap.assign(static_cast<size_t>(w), 0);
@@ -227,29 +211,55 @@ void makeColMap(int w, int tw, std::vector<int> &colMap)
     }
 }
 
-void addSourceRow(const uint8_t *row, const BmpInfo &info, const std::vector<int> &colMap,
-                  const uint8_t pal[256][3], std::vector<uint64_t> &acc,
-                  std::vector<uint32_t> &count)
+void addIndexedRow(const uint8_t *row, int w, const std::vector<int> &colMap,
+                   const uint8_t pal[256][3], std::vector<uint64_t> &acc)
 {
-    uint8_t rgb[3];
-    for (int x = 0; x < info.width; ++x)
+    for (int x = 0; x < w; ++x)
     {
-        sampleRgb(row, x, info.bpp, pal, rgb);
-        const int ox = colMap[static_cast<size_t>(x)];
-        const size_t b = static_cast<size_t>(ox) * 3;
-        acc[b] += rgb[0];
-        acc[b + 1] += rgb[1];
-        acc[b + 2] += rgb[2];
-        count[static_cast<size_t>(ox)] += 1;
+        const uint8_t *c = pal[row[x]];
+        const size_t b = static_cast<size_t>(colMap[static_cast<size_t>(x)]) * 3;
+        acc[b] += c[0];
+        acc[b + 1] += c[1];
+        acc[b + 2] += c[2];
     }
 }
 
-void storeOutputRow(uint8_t *dst, int tw, const std::vector<uint64_t> &acc,
-                    const std::vector<uint32_t> &count)
+void addBgrRow(const uint8_t *row, int w, int step, const std::vector<int> &colMap,
+               std::vector<uint64_t> &acc)
+{
+    const uint8_t *p = row;
+    for (int x = 0; x < w; ++x, p += step)
+    {
+        const size_t b = static_cast<size_t>(colMap[static_cast<size_t>(x)]) * 3;
+        acc[b] += p[2];
+        acc[b + 1] += p[1];
+        acc[b + 2] += p[0];
+    }
+}
+
+void addSourceRow(const uint8_t *row, const BmpInfo &info, const std::vector<int> &colMap,
+                  const uint8_t pal[256][3], std::vector<uint64_t> &acc)
+{
+    // Specialized per depth: no per-pixel depth branch in the hot loop.
+    if (info.bpp == 8)
+        addIndexedRow(row, info.width, colMap, pal, acc);
+    else
+        addBgrRow(row, info.width, info.bpp == 32 ? 4 : 3, colMap, acc);
+}
+
+void makeColCount(const std::vector<int> &colMap, std::vector<uint32_t> &colCount)
+{
+    std::fill(colCount.begin(), colCount.end(), 0);
+    for (const int ox : colMap)
+        colCount[static_cast<size_t>(ox)] += 1;
+}
+
+void storeOutputRow(uint8_t *dst, int tw, uint32_t rows, const std::vector<uint64_t> &acc,
+                    const std::vector<uint32_t> &colCount)
 {
     for (int ox = 0; ox < tw; ++ox)
     {
-        const uint32_t n = count[static_cast<size_t>(ox)];
+        const uint64_t n = static_cast<uint64_t>(colCount[static_cast<size_t>(ox)]) * rows;
         const size_t b = static_cast<size_t>(ox) * 3;
         if (n == 0)
         {
@@ -267,28 +277,38 @@ bool readFileRow(QFile &f, const BmpInfo &info, int displayY, std::vector<uint8_
     const int fileRow = info.topDown ? displayY : (info.height - 1 - displayY);
     const qint64 pos = static_cast<qint64>(info.dataOffset) +
                        static_cast<qint64>(fileRow) * static_cast<qint64>(info.stride);
-    if (!f.seek(pos))
+    // Rows are visited in file order, so this seek only fires once.
+    if (f.pos() != pos && !f.seek(pos))
         return false;
     const qint64 n = f.read(reinterpret_cast<char *>(row.data()), static_cast<qint64>(info.stride));
     return n == static_cast<qint64>(info.stride);
 }
 
-bool decodeOutRow(QFile &f, const BmpInfo &info, int oy, int th, const std::vector<int> &colMap,
-                  const uint8_t pal[256][3], std::vector<uint8_t> &row, std::vector<uint64_t> &acc,
-                  std::vector<uint32_t> &count, uint8_t *dst)
+struct RowScratch
 {
-    const int tw = static_cast<int>(count.size());
-    std::fill(acc.begin(), acc.end(), 0);
-    std::fill(count.begin(), count.end(), 0);
+    std::vector<int> colMap;
+    std::vector<uint32_t> colCount;
+    std::vector<uint8_t> row;
+    std::vector<uint64_t> acc;
+};
+
+bool decodeOutRow(QFile &f, const BmpInfo &info, int oy, int th, const uint8_t pal[256][3],
+                  RowScratch &s, uint8_t *dst)
+{
+    const int tw = static_cast<int>(s.colCount.size());
+    std::fill(s.acc.begin(), s.acc.end(), 0);
     const int64_t y0 = static_cast<int64_t>(oy) * info.height / th;
     const int64_t y1 = std::max(y0 + 1, static_cast<int64_t>(oy + 1) * info.height / th);
-    for (int64_t y = y0; y < y1; ++y)
+    // Bottom-up files store the last display row first: walk y backwards so
+    // reads stay sequential.
+    for (int64_t i = 0; i < y1 - y0; ++i)
     {
-        if (!readFileRow(f, info, static_cast<int>(y), row))
+        const int64_t y = info.topDown ? y0 + i : y1 - 1 - i;
+        if (!readFileRow(f, info, static_cast<int>(y), s.row))
             return false;
-        addSourceRow(row.data(), info, colMap, pal, acc, count);
+        addSourceRow(s.row.data(), info, s.colMap, pal, s.acc);
     }
-    storeOutputRow(dst, tw, acc, count);
+    storeOutputRow(dst, tw, static_cast<uint32_t>(y1 - y0), s.acc, s.colCount);
     return true;
 }
 
@@ -303,21 +323,22 @@ QImage decodeFromFile(QFile &f, const QByteArray &hdr, const BmpInfo &info, cons
     uint8_t pal[256][3];
     if (!loadPalette(hdr, info, pal))
         return QImage();
-    std::vector<int> colMap;
-    makeColMap(info.width, tw, colMap);
-    std::vector<uint8_t> row(info.stride);
-    std::vector<uint64_t> acc(static_cast<size_t>(tw) * 3u);
-    std::vector<uint32_t> count(static_cast<size_t>(tw));
+    RowScratch s;
+    makeColMap(info.width, tw, s.colMap);
+    s.colCount.assign(static_cast<size_t>(tw), 0);
+    makeColCount(s.colMap, s.colCount);
+    s.row.assign(info.stride, 0);
+    s.acc.assign(static_cast<size_t>(tw) * 3u, 0);
     QImage out(tw, th, QImage::Format_RGB888);
     if (out.isNull())
         return QImage();
-    for (int oy = 0; oy < th; ++oy)
+    for (int i = 0; i < th; ++i)
     {
+        const int oy = info.topDown ? i : th - 1 - i;
         uchar *dst = out.scanLine(oy);
         if (dst == nullptr)
             return QImage();
-        if (!decodeOutRow(f, info, oy, th, colMap, pal, row, acc, count,
-                          reinterpret_cast<uint8_t *>(dst)))
+        if (!decodeOutRow(f, info, oy, th, pal, s, reinterpret_cast<uint8_t *>(dst)))
             return QImage();
     }
     return out;
