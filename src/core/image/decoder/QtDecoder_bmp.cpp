@@ -1,15 +1,16 @@
 // Bounded BMP display LOD (perf review P2-4). Qt's BMP plugin decodes the full
 // raster then smooth-scales it; this path streams rows and box-averages into the
 // target QImage so thumbnails, preview, and viewer LOD stay memory-bounded.
-#include "core/image/decoder/QtDecoder_bmp.h"
-
 #include <QByteArray>
 #include <QFile>
+#include <QImage>
+#include <QSize>
 #include <QString>
 
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <vector>
 
 namespace
@@ -343,6 +344,10 @@ QImage decodeBmpBoxLodUnchecked(const std::string &path, const QSize &target)
 
 namespace mviewer::core::detail
 {
+
+// Declared in QtDecoder.cpp next to the WIC adapter (core headers stay Qt-free).
+bool bmpBoxLodEligible(const std::string &path, QSize *size);
+QImage decodeBmpBoxLod(const std::string &path, const QSize &target);
 
 bool bmpBoxLodEligible(const std::string &path, QSize *size)
 {

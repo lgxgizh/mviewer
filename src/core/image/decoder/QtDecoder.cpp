@@ -1,6 +1,5 @@
 #include "core/image/decoder/QtDecoder.h"
 #include "core/filesystem/Utf8Path.h"
-#include "core/image/decoder/QtDecoder_bmp.h"
 
 #include "core/image/DitherQuantize.h"
 #include "core/image/ExifOrientation.h"
@@ -32,6 +31,10 @@ namespace mviewer::core::detail
 // image off Windows or on any failure). fullSize receives the source size.
 QImage decodeTiffWicRaster(const std::string &path, const QRect &rawRect, const QSize &target,
                            QSize &fullSize);
+// Implemented in QtDecoder_bmp.cpp: bounded box-average BMP LOD (perf review
+// P2-4). Eligible: uncompressed 8/24/32 bpp. Null image means use Qt.
+bool bmpBoxLodEligible(const std::string &path, QSize *size);
+QImage decodeBmpBoxLod(const std::string &path, const QSize &target);
 } // namespace mviewer::core::detail
 
 namespace
