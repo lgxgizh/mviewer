@@ -20,6 +20,7 @@ add_library(mviewer_core SHARED
     core/image/Decoder.cpp
     core/image/decoder/QtDecoder.cpp
     core/image/decoder/QtDecoder_wic.cpp
+    core/image/decoder/QtDecoder_bmp.cpp
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
@@ -2209,6 +2210,20 @@ target_include_directories(m53_large_source_tests PRIVATE ${CMAKE_CURRENT_SOURCE
 target_compile_definitions(m53_large_source_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m53_large_source_tests COMMAND m53_large_source_tests)
 set_tests_properties(m53_large_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
+add_executable(bmp_lod_tests
+    core/test_bmp_lod.cpp
+)
+target_link_libraries(bmp_lod_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(bmp_lod_tests PRIVATE cxx_std_20)
+target_include_directories(bmp_lod_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME bmp_lod_tests COMMAND bmp_lod_tests)
+set_tests_properties(bmp_lod_tests PROPERTIES TIMEOUT 120)
 
 # M53 Native Windows qualification: exercise the real Viewer and Compare UI
 # over the 100MP TIFF fixture, including zoom-region refresh and mode churn.

@@ -21,8 +21,9 @@
 // evidence-based:
 //   * canProbe       — QImageReader::size() reads only the container header.
 //   * canNativeLod   — JPEG uses reduced DCT scaling; Windows TIFF uses the
-//                      measured WIC frame/clip/scale adapter. Other formats
-//                      are NOT claimed without equivalent proof.
+//                      measured WIC frame/clip/scale adapter; eligible uncompressed
+//                      BMP uses a bounded box-average LOD. Other formats are NOT
+//                      claimed without equivalent proof.
 //   * canNativeRegion— false: decodeRegion() uses the bounded WIC clip path
 //                      for TIFF and is classified BoundedRasterRegion by the
 //                      provider; Qt offers no true random-access tile claim.
