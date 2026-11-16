@@ -135,8 +135,10 @@ bool nextMarker(const std::vector<uint8_t> &jpeg, size_t pos, Marker &marker)
 
 bool isExifApp1(const std::vector<uint8_t> &jpeg, const Marker &marker)
 {
+    static constexpr unsigned char kExifApp1[6] = {'E', 'x', 'i', 'f', 0, 0};
     return marker.code == 0xE1 && marker.payload &&
-           startsWith(jpeg, marker.content, marker.end, "Exif\0\0", 6);
+           startsWith(jpeg, marker.content, marker.end, reinterpret_cast<const char *>(kExifApp1),
+                      6);
 }
 
 bool isJfifApp0(const std::vector<uint8_t> &jpeg, const Marker &marker)

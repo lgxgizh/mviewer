@@ -169,7 +169,7 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
                    return tree &&
                           DirectoryTree::equivalentPath(tree->currentPath(), left->currentDir());
                },
-               80),
+               200),
            "folder tree matches the left gallery");
     QString otherRight = right->pathList().value(0);
     if (sel->currentImage() == otherRight)

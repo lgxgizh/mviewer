@@ -559,8 +559,9 @@ bool findJpegExif(FILE *f, uint64_t fileSize, int64_t &base, uint64_t &size)
         if (!fits(static_cast<uint64_t>(payloadPos), static_cast<uint64_t>(len - 2), fileSize))
             return false;
         char id[6] = {};
+        static constexpr unsigned char kExifApp1[6] = {'E', 'x', 'i', 'f', 0, 0};
         if (code == 0xE1 && len >= 16 && std::fread(id, 1, 6, f) == 6 &&
-            std::memcmp(id, "Exif\0\0", 6) == 0)
+            std::memcmp(id, kExifApp1, 6) == 0)
         {
             base = payloadPos + 6;
             size = static_cast<uint64_t>(len - 2 - 6);

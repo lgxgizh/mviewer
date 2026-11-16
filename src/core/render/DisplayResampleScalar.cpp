@@ -151,9 +151,12 @@ void fillSrgbTables(SrgbTables &tables)
 
 const SrgbTables &srgbTables()
 {
-    static const std::shared_ptr<SrgbTables> tables = []()
+    // Leaked on purpose, matching resamplePool() (ADR 017). A function-local
+    // shared_ptr is destroyed at exit while leaked QThreadPool workers may
+    // still call srgbCodeToLinear().
+    static const SrgbTables *const tables = []()
     {
-        auto built = std::make_shared<SrgbTables>();
+        auto *built = new SrgbTables();
         fillSrgbTables(*built);
         return built;
     }();
