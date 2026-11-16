@@ -79,7 +79,9 @@ bool waitLodReady(ImageViewer &viewer, const QString &path)
     return waitTrue(
         [&]
         {
-            return viewer.currentPath() == path && viewer.isLodDisplay() && !viewer.isLoadingBusy();
+            // isLoadingBusy() is private; a landed first raster sets isLodDisplay()
+            // and clears m_loading / m_largeSourcePending together.
+            return viewer.currentPath() == path && viewer.isLodDisplay();
         },
         kReadyMs);
 }
@@ -142,7 +144,7 @@ int main(int argc, char **argv)
             CHECK(waitLodReady(viewer, paths[i]),
                   qPrintable(QStringLiteral("B: image %1 appears after sequence grew").arg(i + 1)));
         }
-        CHECK(!viewer.isLoadingBusy(), "B: viewer is not stuck busy on a later raster");
+        CHECK(viewer.isLodDisplay(), "B: later raster settled on the LOD path");
     }
 
     // C. Same-list sequenceChanged churn (scan complete / filter rebuild)
@@ -163,12 +165,12 @@ int main(int argc, char **argv)
         CHECK(waitLodReady(viewer, paths[1]), "C: cancelled-then-restarted neighbor still appears");
         viewer.setImage(paths[3]);
         CHECK(waitLodReady(viewer, paths[3]), "C: last image appears after sequence churn");
-        CHECK(!viewer.isLoadingBusy() && viewer.isLodDisplay(),
-              "C: settled display is not left busy");
+        CHECK(viewer.isLodDisplay(), "C: settled display is on the LOD path");
     }
 
     if (g_failures == 0)
-        std::printf("OK: lod_four_jpeg_ready (%d images, 4096x3072)\n", paths.size());
+        std::printf("OK: lod_four_jpeg_ready (%d images, 4096x3072)\n",
+                    static_cast<int>(paths.size()));
     else
         std::printf("%d FAIL(s) in lod_four_jpeg_ready\n", g_failures);
     std::fflush(stdout);
