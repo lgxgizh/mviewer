@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+## [1.0.179] - 2026-11-16
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.179**.
+
+### Fixed
+
+- **Images stuck loading**: cancelled or completed neighbor preloads no longer
+  leave some above-LOD files blank after folder-sequence updates or rapid
+  image switches. Still-needed neighbor work is retained and a missing
+  current-image result is re-probed (PR #380).
+- **Top-down BMP**: normalize the signed header height so supported top-down
+  BMPs open through the public decoder; fallback decode labels stay accurate
+  (PR #378).
+- **Memory safety**: retain the sRGB lookup tables for worker-pool lifetime
+  during process shutdown, and use fixed-width six-byte EXIF signatures to
+  avoid the clang-cl ASan literal-pooling overflow (PR #379).
+
+### Performance
+
+- **Bounded downsampled decode** for supported BMP and non-interlaced PNG
+  images, plus strip-based TIFF LOD on the non-WIC path. Unsupported encodings
+  retain the existing decode fallback (PRs #375-#377).
+
+### Known issues
+
+- The separately reported >=10-second UI stall when entering a single-PNG
+  folder is still under investigation and is not claimed fixed in this
+  release. Representative Windows CI cases did not reproduce that stall.
+
 ## [1.0.178] - 2026-11-12
 
 Hotfix for 1.0.177: the viewer could stop responding while browsing or after
