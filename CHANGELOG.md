@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Preview dimensions**: a cached preview keeps the real post-orientation
+  source size. A warm preview no longer reports 0×0 after the background
+  decode finishes, and the scaled preview is not shown as the original size.
+
 ## [1.0.179] - 2026-11-16
 
 ### Release

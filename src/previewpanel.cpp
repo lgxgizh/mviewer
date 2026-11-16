@@ -6,11 +6,11 @@
 #include "core/image/FrameSequence.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
+#include "core/image/QtMetadataSemantics.h"
 
 #include <QApplication>
 #include <QFileInfo>
 #include <QImage>
-#include <QImageIOHandler>
 #include <QImageReader>
 #include <QMetaObject>
 #include <QPainter>
@@ -260,6 +260,34 @@ struct PreviewDecodeResult
     std::string cacheKey;
 };
 
+// QImageReader::size() is the stored raster, even with autoTransform. Swap
+// axes once. Decode metadata and caller sizes are already post-orientation.
+QSize headerOrientedSize(const std::string &stdPath)
+{
+    QImageReader reader(QString::fromStdString(stdPath));
+    reader.setAutoTransform(true);
+    const QSize stored = mvcore::readerRasterSize(reader);
+    if (!validSize(stored))
+        return {};
+    if (!mviewer::core::qtmetadata::transformSwapsDimensions(reader.transformation()))
+        return stored;
+    const QSize oriented = stored.transposed();
+    return validSize(oriented) ? oriented : QSize();
+}
+
+// Cache entries are scaled pixels only (metadata stays 0x0). QSize(0,0) is
+// valid in Qt, so a positive width AND height is the only source-size check.
+// Never report the scaled buffer as the original.
+QSize previewSourceSize(const mviewer::domain::ImageMetadata &meta, int knownW, int knownH,
+                        const std::string &stdPath)
+{
+    if (validSize(QSize(meta.width, meta.height)))
+        return QSize(meta.width, meta.height);
+    if (validSize(QSize(knownW, knownH)))
+        return QSize(knownW, knownH);
+    return headerOrientedSize(stdPath);
+}
+
 PreviewDecodeResult loadPreviewPixels(const std::string &stdPath, int knownW, int knownH,
                                       qint64 knownSize)
 {
@@ -273,7 +301,7 @@ PreviewDecodeResult loadPreviewPixels(const std::string &stdPath, int knownW, in
     ImageData img;
     if (mviewer::application::ImageLoadingService::instance().getPreviewCache(cacheKey, img))
     {
-        // Warm scaled preview — reuse it.
+        // Warm scaled preview — reuse it. Metadata is not stored with the pixels.
     }
     else if (mviewer::core::FrameSequenceReader::isSequencePath(stdPath))
     {
@@ -296,37 +324,18 @@ PreviewDecodeResult loadPreviewPixels(const std::string &stdPath, int knownW, in
     }
     if (!img.isNull())
     {
-        QSize src(meta.width, meta.height);
-        if (!src.isValid())
-        {
-            QImageReader reader(QString::fromStdString(stdPath));
-            reader.setAutoTransform(true);
-            src = mvcore::readerRasterSize(reader);
-            if (src.isValid())
-            {
-                switch (reader.transformation())
-                {
-                case QImageIOHandler::TransformationRotate90:
-                case QImageIOHandler::TransformationRotate270:
-                case QImageIOHandler::TransformationMirrorAndRotate90:
-                case QImageIOHandler::TransformationFlipAndRotate90:
-                    src = src.transposed();
-                    break;
-                default:
-                    break;
-                }
-            }
-        }
-        if (!src.isValid())
-        {
-            out.srcW = knownW > 0 ? knownW : img.width;
-            out.srcH = knownH > 0 ? knownH : img.height;
-        }
-        else
+        const QSize src = previewSourceSize(meta, knownW, knownH, stdPath);
+        if (validSize(src))
         {
             out.srcW = src.width();
             out.srcH = src.height();
             out.sourceKnown = true;
+        }
+        else
+        {
+            out.srcW = 0;
+            out.srcH = 0;
+            out.sourceKnown = false;
         }
     }
     if (out.fileSize == 0)
@@ -491,10 +500,11 @@ void PreviewPanel::presentWarmThumbnail(const QString &path, const QPixmap &warm
     m_preview = unpadSquareThumbnail(warmThumbnail, knownSourceSize);
     m_previewW = m_preview.width();
     m_previewH = m_preview.height();
-    m_imgW = knownSourceSize.width() > 0 ? knownSourceSize.width() : m_previewW;
-    m_imgH = knownSourceSize.height() > 0 ? knownSourceSize.height() : m_previewH;
+    // Both sides must be positive. A thumbnail edge is not a source dimension.
+    m_sourceDimensionsKnown = validSize(knownSourceSize);
+    m_imgW = m_sourceDimensionsKnown ? knownSourceSize.width() : 0;
+    m_imgH = m_sourceDimensionsKnown ? knownSourceSize.height() : 0;
     m_fileSize = knownFileSize >= 0 ? knownFileSize : 0;
-    m_sourceDimensionsKnown = knownSourceSize.width() > 0 && knownSourceSize.height() > 0;
     m_fileSizeKnown = knownFileSize >= 0;
     m_hasImage = true;
     if (m_sourceDimensionsKnown)
@@ -570,7 +580,9 @@ void PreviewPanel::deliverVisualPreview(const QImage &qimg, const QString &path,
         return;
     }
     stopIdentityGrace();
-    if (sourceKnown)
+    // sourceKnown with a 0 side is not a source size (QSize(0,0).isValid()).
+    const bool dimsKnown = sourceKnown && validSize(QSize(srcW, srcH));
+    if (dimsKnown)
         rememberSource(path, QSize(srcW, srcH), previewKey);
     const bool samePath = m_hasImage && m_presentedPath == path;
     // Already sharp (cache hit shown synchronously, or a same-path
@@ -583,16 +595,15 @@ void PreviewPanel::deliverVisualPreview(const QImage &qimg, const QString &path,
     m_presentedPath = path;
     m_quality = PresentationQuality::Preview;
     m_hasImage = true;
-    m_imgW = srcW;
-    m_imgH = srcH;
+    m_imgW = dimsKnown ? srcW : 0;
+    m_imgH = dimsKnown ? srcH : 0;
     m_previewW = m_preview.width();
     m_previewH = m_preview.height();
     m_fileSize = fileSize;
-    m_sourceDimensionsKnown = sourceKnown;
+    m_sourceDimensionsKnown = dimsKnown;
     m_fileSizeKnown = fileSizeKnown;
-    const bool exact = sourceKnown && srcW > 0 && srcH > 0;
-    applyFrameAspect(exact ? aspectOf(QSize(srcW, srcH)) : aspectOf(m_preview.size()), samePath,
-                     !exact);
+    applyFrameAspect(dimsKnown ? aspectOf(QSize(srcW, srcH)) : aspectOf(m_preview.size()), samePath,
+                     !dimsKnown);
     rebuild();
     update();
 }
@@ -704,8 +715,10 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
 
     // Single scaled decode on the Decode pool. M27: QPointer + generation guard.
     const uint64_t gen = m_requestGen;
-    const int knownW = knownSourceSize.width();
-    const int knownH = knownSourceSize.height();
+    // Argument, else a size this panel already learned. A cache hit has no
+    // metadata; passing only a default QSize() would drop that memory.
+    const int knownW = resolvedSource.width();
+    const int knownH = resolvedSource.height();
     const qint64 knownSize = knownFileSize;
     QPointer<PreviewPanel> guard(this);
     auto lifetime = m_lifetime;

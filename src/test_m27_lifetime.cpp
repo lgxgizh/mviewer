@@ -48,6 +48,8 @@
 void runM27PreviewFrameTests(int &pass, int &fail);
 // Identity switch / deferral / stats / registry / viewer stand-in (4g-4l).
 void runM27PreviewIdentityTests(int &pass, int &fail);
+// Cached preview keeps post-orientation source dimensions (hot and cold).
+void runM27PreviewSourceSizeTests(int &pass, int &fail);
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -621,6 +623,7 @@ int main(int argc, char **argv)
     testRejectionReachesTerminalState();
     runM27PreviewFrameTests(g_pass, g_fail);
     runM27PreviewIdentityTests(g_pass, g_fail);
+    runM27PreviewSourceSizeTests(g_pass, g_fail);
     testPreviewUILatency24MP();
     testViewerUILatency24MP();
 
