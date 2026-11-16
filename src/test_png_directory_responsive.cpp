@@ -65,6 +65,27 @@ constexpr int kGapBudgetMs = 1000;
 constexpr int kReadyBudgetMs = 30000;
 constexpr int kDrainSeconds = 10;
 
+// Wrap actual GUI event delivery, including QOpenGLWidget paint/upload and
+// queued decode completions. Slow-event timing is diagnostic, not a product patch.
+class TimedApplication : public QApplication
+{
+  public:
+    using QApplication::QApplication;
+    bool notify(QObject *receiver, QEvent *event) override
+    {
+        QElapsedTimer span;
+        span.start();
+        const int kind = static_cast<int>(event->type());
+        const QByteArray type(receiver ? receiver->metaObject()->className() : "null");
+        const bool result = QApplication::notify(receiver, event);
+        const qint64 elapsed = span.elapsed();
+        if (elapsed >= 100)
+            std::cout << "GUI_EVENT class=" << type.constData() << " type=" << kind
+                      << " elapsedMs=" << elapsed << '\n';
+        return result;
+    }
+};
+
 struct Results
 {
     int pass = 0;
@@ -397,6 +418,9 @@ void awaitReady(Heartbeat &hb, ThumbnailPanel &panel, PreviewPanel &preview, Ima
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
     state.waitMs = budget.elapsed();
+    // Readiness is not proof that the queued raster paint ran. Keep the GUI
+    // alive through paint + 48ms Sharp upgrade before switching away.
+    pump(250);
     sampleGallery(panel, dir, png, state);
     samplePreview(preview, png, state);
     sampleViewer(viewer, png, state);
@@ -604,7 +628,7 @@ int runWindow(const Fixtures &fixtures)
 
 int main(int argc, char **argv)
 {
-    QApplication app(argc, argv);
+    TimedApplication app(argc, argv);
     std::cout.setf(std::ios::unitbuf);
 
     // Joined after runWindow returns, while QApplication is still alive.
