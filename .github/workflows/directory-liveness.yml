@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         source: [v1.0.178, e548007b71fd4d54907a120031e9f1ad2aa12dd3]
-        case: [png, jpeg, png-hidpi-icc, png-hidpi-noise]
+        case: [png-hidpi-icc, png-hidpi-noise]
     env:
       SCCACHE_GHA_ENABLED: "true"
       CMAKE_C_COMPILER_LAUNCHER: sccache

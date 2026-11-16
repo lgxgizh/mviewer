@@ -502,6 +502,9 @@ void runPhase(Results &results, Heartbeat &hb, MainWindow &window, ThumbnailPane
     check(results, state.gapMs < kGapBudgetMs,
           phaseText(phase, "largest GUI heartbeat gap stays under 1000 ms"));
     check(results, viewer != nullptr && !viewer->isHidden(), "visible viewer is mandatory");
+    if (qEnvironmentVariableIntValue("MVIEWER_LARGE_VIEW") != 0)
+        check(results, viewer && viewer->width() >= 1920 && viewer->devicePixelRatioF() >= 2,
+              "large view must really request a 4096-edge first raster");
     if (viewer == nullptr)
     {
         std::cout << "  obstacle: no ImageViewer in QApplication::topLevelWidgets(). "
@@ -568,6 +571,8 @@ int runWindow(const Fixtures &fixtures)
     if (viewer != nullptr)
     {
         const bool large = qEnvironmentVariableIntValue("MVIEWER_LARGE_VIEW") != 0;
+        if (large)
+            viewer->setMinimumSize(1920, 1080); // Do not let show/fit clamp to CI's small screen.
         viewer->resize(large ? 1920 : 960, large ? 1080 : 540);
         viewer->show();
     }
