@@ -3365,3 +3365,12 @@ if(CLANG_FORMAT_EXE)
         COMMENT "Running clang-format on all source files"
         VERBATIM)
 endif()
+
+# Real MainWindow directory transitions at production scheduler concurrency.
+add_executable(png_directory_responsive_tests test_png_directory_responsive.cpp)
+target_link_libraries(png_directory_responsive_tests PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui)
+target_compile_features(png_directory_responsive_tests PRIVATE cxx_std_20)
+target_include_directories(png_directory_responsive_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(png_directory_responsive_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME png_directory_responsive_tests COMMAND png_directory_responsive_tests)
+set_tests_properties(png_directory_responsive_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)

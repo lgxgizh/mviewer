@@ -1,0 +1,83 @@
+name: Directory liveness diagnostic
+on:
+  workflow_dispatch:
+  push:
+    branches: [diagnostic/directory-liveness]
+permissions:
+  contents: read
+concurrency:
+  group: directory-liveness-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    name: Windows ${{ matrix.source }} ${{ matrix.case }}
+    runs-on: windows-2022
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [v1.0.178, e548007b71fd4d54907a120031e9f1ad2aa12dd3]
+        case: [png, jpeg]
+    env:
+      SCCACHE_GHA_ENABLED: "true"
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
+      MVIEWER_REQUIRE_LIBRAW: "ON"
+    steps:
+      - name: Checkout diagnostic harness
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          path: harness
+      - name: Checkout immutable application source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ matrix.source }}
+          path: app
+      - name: Overlay identical regression harness
+        shell: pwsh
+        run: |
+          Copy-Item harness/src/test_png_directory_responsive.cpp app/src/
+          @'
+          add_executable(directory_liveness_diagnostic test_png_directory_responsive.cpp)
+          target_link_libraries(directory_liveness_diagnostic PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui)
+          target_compile_features(directory_liveness_diagnostic PRIVATE cxx_std_20)
+          target_include_directories(directory_liveness_diagnostic PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+          target_compile_definitions(directory_liveness_diagnostic PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+          add_test(NAME directory_liveness_diagnostic COMMAND directory_liveness_diagnostic)
+          set_tests_properties(directory_liveness_diagnostic PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+          '@ | Add-Content app/src/CMakeLists.txt
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad
+      - name: Install Qt
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+      - name: Build diagnostic only
+        working-directory: app
+        run: |
+          cmake -S . -B build_diag -G Ninja -DCMAKE_BUILD_TYPE=Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build_diag --target directory_liveness_diagnostic -j 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: MainWindow directory switch and first raster
+        working-directory: app
+        env:
+          MVIEWER_DIRECTORY_CASE: ${{ matrix.case }}
+          QT_QPA_PLATFORM: windows
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR/bin;" + $env:PATH
+          ctest --test-dir build_diag -R '^directory_liveness_diagnostic$' -V --timeout 300 2>&1 | Tee-Object diagnostic.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload diagnostic output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: directory-${{ matrix.source }}-${{ matrix.case }}
+          path: |
+            app/diagnostic.log
+            app/build_diag/Testing/Temporary/LastTest.log
