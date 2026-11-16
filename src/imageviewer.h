@@ -49,15 +49,10 @@ namespace mviewer::core
 struct ImageFileRotateResult;
 }
 
-// Full-image zoomable viewer. Shown in its own window when the user
-// double-clicks a thumbnail (or single-clicks the bottom-left preview).
-// Supports wheel zoom, left-drag pan, brightness histogram overlay, and
-// a LRU cache of decoded pixmaps.
-//
-// Stage A (M13 / A-8.1): inherits QOpenGLWidget so a real GL context exists
-// for GpuTileUploader. When MVIEWER_GPU=1 and a context is current, tiles are
-// uploaded once and composited via QPainter::drawTexture; otherwise the CPU
-// QPainter path remains the verified default.
+struct ImageViewerPromotedRasterTestAccess;
+
+// Full-image zoomable viewer (wheel, pan, histogram). QOpenGLWidget so a GL
+// context exists for GpuTileUploader when MVIEWER_GPU=1; CPU painter otherwise.
 class ImageViewer : public QOpenGLWidget
 {
     Q_OBJECT
@@ -365,6 +360,8 @@ class ImageViewer : public QOpenGLWidget
     void dropEvent(QDropEvent *event) override;
 
   private:
+    friend struct ImageViewerPromotedRasterTestAccess;
+
     using ImageLoadResult = mviewer::application::ImageLoadingService::Result;
     using ImageLoadGuard = std::shared_ptr<QPointer<ImageViewer>>;
     using ImageLoadCallback = std::function<void(const ImageLoadResult &)>;
