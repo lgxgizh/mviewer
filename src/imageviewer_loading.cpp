@@ -697,27 +697,42 @@ void ImageViewer::queueDisplayRasterPreloadResult(
 
 void ImageViewer::applyPromotedDisplayRaster(DisplayRasterPreloadResult result, uint64_t gen)
 {
+    // Validate before touching the in-flight request. Resetting first lets an
+    // older promoted callback (B, or the first A of A-B-A) orphan the newer
+    // cancel handle, and a same-generation stale serial then probes again.
+    const uint64_t serial =
+        result.state ? result.state->displaySerial.load(std::memory_order_acquire) : 0;
+    const bool pathOk = browsePathEquals(result.path, m_currentPath);
+    const bool genOk = gen == m_requestGen;
+    const bool targetOk = result.target.cacheKey() == m_displayColorTarget.cacheKey();
+    if (!pathOk || !genOk || !targetOk)
+        return;
+
+    const bool serialOk = serial != 0 && serial == m_displayRequestSerial;
+    // startLodDisplay moves the preload into m_displayRequest, so an empty
+    // promoted slot is still the current request when its serial matches.
+    // Serial 0 was never stamped. Adopt it only when no other request owns
+    // the slot. Copying the live serial onto it would accept an old result.
+    const bool unpromotedCurrent = serial == 0 && !m_displayRequest;
+    if (!serialOk && !unpromotedCurrent)
+        return;
+
     m_displayRequest.reset();
     m_promotedDisplayRasterPreload = DisplayRasterPreload{};
-    const bool stale = !browsePathEquals(result.path, m_currentPath) || gen != m_requestGen ||
-                       result.target.cacheKey() != m_displayColorTarget.cacheKey();
-    if (stale || result.failed || result.image.isNull())
+    if (result.failed || result.image.isNull())
     {
-        if (browsePathEquals(result.path, m_currentPath) && gen == m_requestGen)
-            startLodDisplay(result.path, gen);
+        // #380: cancelled, already-delivered, or empty current preload.
+        startLodDisplay(result.path, gen);
         return;
     }
-    uint64_t serial =
-        result.state ? result.state->displaySerial.load(std::memory_order_acquire) : 0;
-    if (serial == 0)
-        serial = m_displayRequestSerial;
+
+    const uint64_t applySerial = serial != 0 ? serial : ++m_displayRequestSerial;
     applyDisplayRaster(result.path, gen, std::move(result.source), std::move(result.image),
                        result.sourceRect, result.sourceSize, result.density, result.target, false,
-                       serial);
-    // applyDisplayRaster may drop a late first raster (serial/target).
-    // Do not leave the viewer with no request and no image.
-    if (m_raster.image.isNull() && !m_displayRequest &&
-        browsePathEquals(result.path, m_currentPath) && gen == m_requestGen)
+                       applySerial);
+    // A current raster can still be dropped (full-raw guard). Re-probe instead
+    // of leaving the viewer pending with no image and no request (#380).
+    if (m_raster.image.isNull() && !m_displayRequest)
         startLodDisplay(result.path, gen);
 }
 

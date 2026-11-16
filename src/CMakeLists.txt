@@ -2525,6 +2525,25 @@ target_include_directories(lod_four_jpeg_ready_tests PRIVATE ${CMAKE_CURRENT_SOU
 add_test(NAME lod_four_jpeg_ready_tests COMMAND lod_four_jpeg_ready_tests)
 set_tests_properties(lod_four_jpeg_ready_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# Promoted display-raster callbacks must validate path, generation, target, and
+# serial before dropping the in-flight request (#380 recovery stays on the
+# current result only). Synchronous; no large fixtures.
+add_executable(promoted_raster_identity_tests
+    test_promoted_raster_identity.cpp
+)
+target_link_libraries(promoted_raster_identity_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(promoted_raster_identity_tests PRIVATE cxx_std_20)
+target_include_directories(promoted_raster_identity_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME promoted_raster_identity_tests COMMAND promoted_raster_identity_tests)
+set_tests_properties(promoted_raster_identity_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+
 # ─── M47 Phase 3: Compare source-backed display (UI level) ───────────────────
 # Infeasible sources (full RGB > the analysis limit) keep their pane via a
 # metadata-only placeholder and display through the source-backed LOD path;
