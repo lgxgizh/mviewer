@@ -457,59 +457,6 @@ void ImageViewer::preloadNeighbors(const QString &path)
     preloadDisplayRasterNeighbors(path);
 }
 
-void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
-{
-    if (m_currentIndex < 0 || path.isEmpty())
-        return;
-    cancelDisplayRasterPreloads();
-    for (int delta = -1; delta <= 1; ++delta)
-    {
-        const int i = m_currentIndex + delta;
-        if (i < 0 || i >= m_fileList.size() || browsePathEquals(m_fileList.at(i), path))
-            continue;
-        const QString neighbor = m_fileList[i];
-        if (std::any_of(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
-                        [&](const DisplayRasterWarm &w) { return w.path == neighbor; }))
-            continue;
-
-        auto state = std::make_shared<DisplayRasterPreloadState>();
-        state->widgetW = width();
-        state->widgetH = height();
-        state->dpr = std::max(1.0, devicePixelRatioF());
-        if (m_lockZoom && !m_fitMode && m_view.scale > 0.0)
-            state->lockedScale = m_view.scale;
-        state->maximizeFit = property("mviewerFullscreenRequested").toBool();
-        auto guard = std::make_shared<QPointer<ImageViewer>>(this);
-        const uint64_t browseGen = m_displayRasterBrowseGeneration;
-        const auto target = m_displayColorTarget;
-        auto handle = TaskScheduler::instance().submit(
-            TaskScheduler::Priority::Thumbnail,
-            [neighbor, browseGen, state, guard, target](const TaskScheduler::TaskContext &ctx)
-            {
-                try
-                {
-                    runDisplayRasterPreload(neighbor, browseGen, state, target, ctx, guard);
-                }
-                catch (...)
-                {
-                    if (!ctx.isCancelled())
-                    {
-                        DisplayRasterPreloadResult res;
-                        res.path = neighbor;
-                        res.browseGeneration = browseGen;
-                        res.state = state;
-                        res.target = target;
-                        res.failed = true;
-                        queueDisplayRasterPreloadResult(guard, std::move(res));
-                    }
-                }
-            },
-            {}, std::chrono::steady_clock::time_point::max(), [] {});
-        if (handle)
-            m_displayRasterPreloads.push_back({neighbor, std::move(state), std::move(handle)});
-    }
-}
-
 void ImageViewer::cancelCurrentLoad()
 {
     stopFullRawDecode(false);
@@ -551,7 +498,11 @@ ImageViewer::DisplayRasterPreload ImageViewer::takeMatchingDisplayRasterPreload(
     DisplayRasterPreload match;
     for (auto &preload : m_displayRasterPreloads)
     {
-        if (!match.handle && browsePathEquals(preload.path, path))
+        const bool usable =
+            !match.handle && browsePathEquals(preload.path, path) && preload.handle &&
+            !preload.handle->isCancelled() &&
+            !(preload.state && preload.state->delivered.load(std::memory_order_acquire));
+        if (usable)
             match = std::move(preload);
         else
             TaskScheduler::cancel(preload.handle);
@@ -637,7 +588,22 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
                                           const std::shared_ptr<QPointer<ImageViewer>> &guard)
 {
     if (ctx.isCancelled())
+    {
+        const uint64_t promoted =
+            state ? state->promotedGeneration.load(std::memory_order_acquire) : 0;
+        if (promoted == 0)
+            return;
+        // Already promoted into the current image: a silent cancel would leave
+        // startLodDisplay waiting on a handle that never delivers.
+        DisplayRasterPreloadResult cancelled;
+        cancelled.path = path;
+        cancelled.browseGeneration = browseGeneration;
+        cancelled.state = state;
+        cancelled.target = target;
+        cancelled.failed = true;
+        queueDisplayRasterPreloadResult(guard, std::move(cancelled));
         return;
+    }
     DisplayRasterPreloadResult result;
     result.path = path;
     result.browseGeneration = browseGeneration;
@@ -703,7 +669,14 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
         result.failed = true;
     }
     if (ctx.isCancelled())
-        return;
+    {
+        const uint64_t promoted =
+            state ? state->promotedGeneration.load(std::memory_order_acquire) : 0;
+        if (promoted == 0)
+            return;
+        if (!result.failed && result.image.isNull())
+            result.failed = true;
+    }
     queueDisplayRasterPreloadResult(guard, std::move(result));
 }
 
@@ -722,10 +695,37 @@ void ImageViewer::queueDisplayRasterPreloadResult(
         Qt::QueuedConnection);
 }
 
+void ImageViewer::applyPromotedDisplayRaster(DisplayRasterPreloadResult result, uint64_t gen)
+{
+    m_displayRequest.reset();
+    m_promotedDisplayRasterPreload = DisplayRasterPreload{};
+    const bool stale = !browsePathEquals(result.path, m_currentPath) || gen != m_requestGen ||
+                       result.target.cacheKey() != m_displayColorTarget.cacheKey();
+    if (stale || result.failed || result.image.isNull())
+    {
+        if (browsePathEquals(result.path, m_currentPath) && gen == m_requestGen)
+            startLodDisplay(result.path, gen);
+        return;
+    }
+    uint64_t serial =
+        result.state ? result.state->displaySerial.load(std::memory_order_acquire) : 0;
+    if (serial == 0)
+        serial = m_displayRequestSerial;
+    applyDisplayRaster(result.path, gen, std::move(result.source), std::move(result.image),
+                       result.sourceRect, result.sourceSize, result.density, result.target, false,
+                       serial);
+    // applyDisplayRaster may drop a late first raster (serial/target).
+    // Do not leave the viewer with no request and no image.
+    if (m_raster.image.isNull() && !m_displayRequest &&
+        browsePathEquals(result.path, m_currentPath) && gen == m_requestGen)
+        startLodDisplay(result.path, gen);
+}
+
 void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult result)
 {
     if (result.state)
     {
+        result.state->delivered.store(true, std::memory_order_release);
         m_displayRasterPreloads.erase(std::remove_if(m_displayRasterPreloads.begin(),
                                                      m_displayRasterPreloads.end(),
                                                      [&](const DisplayRasterPreload &preload)
@@ -734,23 +734,15 @@ void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult res
     }
     const uint64_t promotedGeneration =
         result.state ? result.state->promotedGeneration.load(std::memory_order_acquire) : 0;
-    if (promotedGeneration != 0)
+    const bool adopted = result.state && (promotedGeneration != 0 ||
+                                          m_promotedDisplayRasterPreload.state == result.state);
+    const bool waitingForThisPath = m_largeSourcePending &&
+                                    browsePathEquals(result.path, m_currentPath) && !m_lodMode &&
+                                    m_raster.image.isNull();
+    if (adopted || waitingForThisPath)
     {
-        if (!browsePathEquals(result.path, m_currentPath) || promotedGeneration != m_requestGen ||
-            result.target.cacheKey() != m_displayColorTarget.cacheKey())
-            return;
-        m_displayRequest.reset();
-        m_promotedDisplayRasterPreload = DisplayRasterPreload{};
-        if (result.failed || result.image.isNull())
-        {
-            // Best effort. Re-enter the probe path if promotion saw a failure.
-            startLodDisplay(result.path, promotedGeneration);
-            return;
-        }
-        const uint64_t serial = result.state->displaySerial.load(std::memory_order_acquire);
-        applyDisplayRaster(result.path, promotedGeneration, std::move(result.source),
-                           std::move(result.image), result.sourceRect, result.sourceSize,
-                           result.density, result.target, false, serial);
+        const uint64_t gen = promotedGeneration != 0 ? promotedGeneration : m_requestGen;
+        applyPromotedDisplayRaster(std::move(result), gen);
         return;
     }
 
