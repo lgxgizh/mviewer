@@ -2121,6 +2121,7 @@ add_executable(m27_lifetime_tests
     test_m27_lifetime.cpp
     test_m27_preview_frame.cpp
     test_m27_preview_identity.cpp
+    test_m27_preview_source_size.cpp
 )
 target_link_libraries(m27_lifetime_tests
     PRIVATE

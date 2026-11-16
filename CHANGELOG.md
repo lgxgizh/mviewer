@@ -9,6 +9,9 @@
   request, so the next navigation can still cancel it. A result that still
   belongs to the current image is shown, and a failed or empty one is
   re-probed.
+- **Preview dimensions**: a cached preview keeps the real post-orientation
+  source size. A warm preview no longer reports 0×0 after the background
+  decode finishes, and the scaled preview is not shown as the original size.
 
 ## [1.0.179] - 2026-11-16
 
