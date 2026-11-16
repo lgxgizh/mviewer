@@ -36,6 +36,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QPixmap>
@@ -139,6 +140,9 @@ const char *previewQualityName(PreviewPanel::PresentationQuality quality)
 // bounded libpng path; released 1.0.178 has no such path.
 bool writeGradientPng(const QString &path, int blueBias)
 {
+    const QString external = qEnvironmentVariable("MVIEWER_PNG_FIXTURE");
+    if (!kJpegCase && !external.isEmpty())
+        return QFile::copy(external, path);
     QImage image(kPngWidth, kPngHeight, QImage::Format_RGB888);
     if (image.isNull())
         return false;
@@ -256,6 +260,9 @@ struct PhaseState
 {
     qint64 callMs = -1;
     qint64 waitMs = -1;
+    qint64 firstViewerMs = -1;
+    qint64 firstThumbMs = -1;
+    qint64 firstPreviewMs = -1;
     int ticksBefore = 0;
     int ticksAfter = 0;
     qint64 gapMs = 0;
@@ -337,11 +344,10 @@ void samplePreview(PreviewPanel &preview, const QString &png, PhaseState &state)
     const bool requestedOk = samePath(state.previewRequested, png);
     const bool presentedOk = samePath(state.previewPresented, png);
     const bool pathOk = requestedOk && presentedOk;
-    const QSize want(kPngWidth, kPngHeight);
     state.previewReady = pathOk && state.previewHasImage &&
                          state.previewQuality == PreviewPanel::PresentationQuality::Preview &&
                          state.previewPx.width() > 0 && state.previewPx.height() > 0 &&
-                         !preview.currentPixmap().isNull() && state.previewSource == want;
+                         !preview.currentPixmap().isNull();
 }
 
 void sampleViewer(ImageViewer *viewer, const QString &png, PhaseState &state)
@@ -380,6 +386,12 @@ void awaitReady(Heartbeat &hb, ThumbnailPanel &panel, PreviewPanel &preview, Ima
         sampleGallery(panel, dir, png, state);
         samplePreview(preview, png, state);
         sampleViewer(viewer, png, state);
+        if (state.viewerReady && state.firstViewerMs < 0)
+            state.firstViewerMs = budget.elapsed();
+        if (state.thumbReady && state.firstThumbMs < 0)
+            state.firstThumbMs = budget.elapsed();
+        if (state.previewReady && state.firstPreviewMs < 0)
+            state.firstPreviewMs = budget.elapsed();
         if (contentReady(state) && hb.ticks > state.ticksBefore)
             break;
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -401,10 +413,12 @@ void printSize(const char *label, const QSize &size)
 
 void printPhase(const char *phase, const PhaseState &state)
 {
-    std::cout << "[phase " << phase << "] ready\n";
+    std::cout << "[phase " << phase << "] sampled\n";
     std::cout << "  openExternalTargets " << state.callMs << " ms (budget " << kSwitchBudgetMs
               << ")\n";
     std::cout << "  readiness wait " << state.waitMs << " ms (budget " << kReadyBudgetMs << ")\n";
+    std::cout << "  firstRasterMs=" << state.firstViewerMs << " allThumbsMs=" << state.firstThumbMs
+              << " previewPixelsMs=" << state.firstPreviewMs << '\n';
     std::cout << "  fullImageReadCount " << state.readsBefore << " -> " << state.readsAfter
               << " (decodeFull only; PNG LOD fallback and metadata 1x1 read are not counted)\n";
     std::cout << "  heartbeat ticks " << state.ticksBefore << " -> " << state.ticksAfter
@@ -452,11 +466,11 @@ void runPhase(Results &results, Heartbeat &hb, MainWindow &window, ThumbnailPane
     check(results, state.callMs < kSwitchBudgetMs,
           phaseText(phase, "openExternalTargets returns within 1000 ms"));
     check(results, state.dirReady,
-          phaseText(phase, "ThumbnailPanel currentDir and pathList show the one PNG"));
+          phaseText(phase, "ThumbnailPanel currentDir and pathList match fixture count"));
     check(results, state.thumbReady,
-          phaseText(phase, "ready thumbnail pixmap and known source size match the PNG"));
+          phaseText(phase, "all gallery thumbnails have pixels and selected source size matches"));
     check(results, state.previewReady,
-          phaseText(phase, "preview shows a decoded pixmap for this PNG"));
+          phaseText(phase, "preview shows decoded pixels for the requested image"));
     check(results, state.heartbeatMoved,
           phaseText(phase, "GUI heartbeat keeps firing during directory work"));
     check(results, state.gapMs < kGapBudgetMs,
@@ -477,7 +491,7 @@ void runPhase(Results &results, Heartbeat &hb, MainWindow &window, ThumbnailPane
     else
     {
         check(results, state.viewerReady,
-              phaseText(phase, "viewer current path and displayed raster match the PNG"));
+              phaseText(phase, "viewer current path and displayed raster match requested image"));
     }
 }
 
@@ -527,7 +541,8 @@ int runWindow(const Fixtures &fixtures)
     ImageViewer *viewer = findImageViewer();
     if (viewer != nullptr)
     {
-        viewer->resize(960, 540);
+        const bool large = qEnvironmentVariableIntValue("MVIEWER_LARGE_VIEW") != 0;
+        viewer->resize(large ? 1920 : 960, large ? 1080 : 540);
         viewer->show();
     }
     // Let ctor timers (disabled recovery / update check) settle outside the
@@ -546,7 +561,7 @@ int runWindow(const Fixtures &fixtures)
 
     std::cout << "fullImageReadCount before switches: " << QtDecoder::fullImageReadCount() << '\n';
     std::cout << "case=" << (kJpegCase ? "jpeg" : "png") << " expected_files=" << kFileCount
-              << '\n';
+              << " dpr=" << (viewer ? viewer->devicePixelRatioF() : 0) << '\n';
     if (viewer == nullptr)
     {
         std::cout << "obstacle: ImageViewer was not among top-level widgets after MainWindow "
