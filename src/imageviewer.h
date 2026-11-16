@@ -470,8 +470,8 @@ class ImageViewer : public QOpenGLWidget
     {
         std::atomic<uint64_t> promotedGeneration{0};
         std::atomic<uint64_t> displaySerial{0}; // serial this preload was promoted into
-        int widgetW = 0;
-        int widgetH = 0;
+        std::atomic<bool> delivered{false};
+        int widgetW = 0, widgetH = 0;
         double dpr = 1.0;
         double lockedScale = 0.0; // >0: zoom-lock scale, else fit the neighbor
         bool maximizeFit = false;
@@ -520,8 +520,8 @@ class ImageViewer : public QOpenGLWidget
     void storeWarmDisplayRaster(DisplayRasterPreloadResult result);
     void enforceDisplayRasterWarmBudget();
     void runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize);
-    // Full frame when one is loaded; otherwise the bounded display raster.
-    PixelRGBA sampleAnalysisPixel(int ix, int iy) const;
+    void applyPromotedDisplayRaster(DisplayRasterPreloadResult result, uint64_t gen);
+    PixelRGBA sampleAnalysisPixel(int ix, int iy) const; // frame, else LOD raster
     void scheduleRasterRoiStats(const QRect &selection);
     void drawDisplayRaster(QPainter &painter) const;
     // `covered` is the incoming source rect. Coverage uses the same margin as

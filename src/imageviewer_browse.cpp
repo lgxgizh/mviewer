@@ -3,11 +3,18 @@
 // for complexity-gate line headroom; behavior is unchanged.
 #include "imageviewer.h"
 
+#include "core/scheduler/TaskScheduler.h"
+
 #include <QApplication>
 #include <QFileInfo>
 #include <QMenu>
+#include <QPointer>
 #include <QScreen>
 #include <QTimer>
+
+#include <algorithm>
+#include <chrono>
+#include <memory>
 
 void ImageViewer::setBrowseSequence(const QStringList &paths)
 {
@@ -125,5 +132,83 @@ void ImageViewer::renameBrowsePaths(const QStringList &oldPaths, const QStringLi
                                 : QString();
         setWindowTitle(
             QString("%1%2 - MViewer").arg(QFileInfo(m_currentPath).fileName(), position));
+    }
+}
+
+void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
+{
+    if (m_currentIndex < 0 || path.isEmpty())
+        return;
+    std::vector<QString> needed;
+    for (int delta = -1; delta <= 1; ++delta)
+    {
+        const int i = m_currentIndex + delta;
+        if (i < 0 || i >= m_fileList.size() || browsePathEquals(m_fileList.at(i), path))
+            continue;
+        const QString neighbor = m_fileList[i];
+        if (std::any_of(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+                        [&](const DisplayRasterWarm &w) { return w.path == neighbor; }))
+            continue;
+        needed.push_back(neighbor);
+    }
+    // Keep in-flight work for neighbors that are still adjacent. A mid-scan
+    // sequenceChanged used to cancel them all, which can swallow a preload
+    // setImage is about to promote and leave only some files stuck busy.
+    std::vector<DisplayRasterPreload> kept;
+    for (auto &preload : m_displayRasterPreloads)
+    {
+        auto it = std::find_if(needed.begin(), needed.end(),
+                               [&](const QString &n) { return browsePathEquals(preload.path, n); });
+        const bool usable =
+            it != needed.end() && preload.handle && !preload.handle->isCancelled() &&
+            !(preload.state && preload.state->delivered.load(std::memory_order_acquire));
+        if (usable)
+        {
+            needed.erase(it);
+            kept.push_back(std::move(preload));
+        }
+        else
+            TaskScheduler::cancel(preload.handle);
+    }
+    m_displayRasterPreloads = std::move(kept);
+    for (const QString &neighbor : needed)
+    {
+        auto state = std::make_shared<DisplayRasterPreloadState>();
+        state->widgetW = width();
+        state->widgetH = height();
+        state->dpr = std::max(1.0, devicePixelRatioF());
+        if (m_lockZoom && !m_fitMode && m_view.scale > 0.0)
+            state->lockedScale = m_view.scale;
+        state->maximizeFit = property("mviewerFullscreenRequested").toBool();
+        auto guard = std::make_shared<QPointer<ImageViewer>>(this);
+        const uint64_t browseGen = m_displayRasterBrowseGeneration;
+        const auto target = m_displayColorTarget;
+        auto handle = TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Thumbnail,
+            [neighbor, browseGen, state, guard, target](const TaskScheduler::TaskContext &ctx)
+            {
+                try
+                {
+                    runDisplayRasterPreload(neighbor, browseGen, state, target, ctx, guard);
+                }
+                catch (...)
+                {
+                    const uint64_t promoted =
+                        state ? state->promotedGeneration.load(std::memory_order_acquire) : 0;
+                    if (!ctx.isCancelled() || promoted != 0)
+                    {
+                        DisplayRasterPreloadResult res;
+                        res.path = neighbor;
+                        res.browseGeneration = browseGen;
+                        res.state = state;
+                        res.target = target;
+                        res.failed = true;
+                        queueDisplayRasterPreloadResult(guard, std::move(res));
+                    }
+                }
+            },
+            {}, std::chrono::steady_clock::time_point::max(), [] {});
+        if (handle)
+            m_displayRasterPreloads.push_back({neighbor, std::move(state), std::move(handle)});
     }
 }
