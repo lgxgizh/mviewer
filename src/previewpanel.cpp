@@ -379,6 +379,7 @@ void PreviewPanel::clearPreview()
     m_fileSize = 0;
     m_sourceDimensionsKnown = false;
     m_fileSizeKnown = false;
+    m_previewSubmitFailed = false;
     resetStats();
     update();
 }
@@ -693,6 +694,7 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
     cancelPending();
     stopIdentityGrace();
     ++m_requestGen;
+    m_previewSubmitFailed = false;
     if (path.isEmpty())
     {
         // Clear synchronously when a folder changes. This prevents an old
@@ -713,31 +715,22 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
     if (!alreadySharp && !presentCachedPreview(path, resolvedSource, knownFileSize))
         presentFirstStage(path, warmThumbnail, resolvedSource, knownFileSize);
 
-    // Single scaled decode on the Decode pool. M27: QPointer + generation guard.
-    const uint64_t gen = m_requestGen;
     // Argument, else a size this panel already learned. A cache hit has no
     // metadata; passing only a default QSize() would drop that memory.
-    const int knownW = resolvedSource.width();
-    const int knownH = resolvedSource.height();
-    const qint64 knownSize = knownFileSize;
-    QPointer<PreviewPanel> guard(this);
-    auto lifetime = m_lifetime;
-    const std::string stdPath = path.toUtf8().toStdString();
-
-    auto handle = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Decode,
-        [stdPath, path, gen, guard, lifetime, knownW, knownH,
-         knownSize](const TaskScheduler::TaskContext &ctx)
-        {
-            decodePreviewWorker(stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize,
-                                ctx);
-        });
-    if (handle)
-        m_task = handle;
+    // A rejected submit retries on a delay; it does not sit on the placeholder.
+    m_submitRetriesLeft = kSubmitRetryCap;
+    m_submitRetryGen = m_requestGen;
+    m_submitKnownW = resolvedSource.width();
+    m_submitKnownH = resolvedSource.height();
+    m_submitKnownSize = knownFileSize;
+    submitCurrentPreview();
 }
 
 void PreviewPanel::cancelPending()
 {
+    // Drop a delayed retry before the task handle. A queued timeout must not
+    // submit for the generation this cancel just retired.
+    stopSubmitRetry();
     if (m_task)
         TaskScheduler::cancel(m_task);
     m_task.reset();

@@ -42,6 +42,12 @@ struct PreviewStats;
 // is held back for the same grace while the sharp preview is in flight, so a
 // fast decode lands as a single step instead of blurry -> sharp.
 //
+// Submit rejection: a Decode submit the scheduler refuses is retried
+// kSubmitRetryCap times, kSubmitRetryDelayMs apart, and only for the
+// generation that armed the timer. A path switch or destruction drops that
+// budget. When it is spent and no sharp preview is showing, the empty well
+// says it could not load. A preview already on screen is kept.
+//
 // The preview is served by a SINGLE scaled (<= kPreviewMaxEdge) decode on the
 // foreground Decode pool — never a full ImageRepository::loadAsync decode
 // (which duplicates ImageViewer work and retains a full QPixmap). The scaled
@@ -59,6 +65,11 @@ class PreviewPanel : public QWidget
     // Longest time a previous path's stage (or a tiny deferred thumbnail's
     // absence) may stand in before the new path's identity is shown.
     static constexpr int kIdentityGraceMs = 80;
+    // Extra Decode submits after the scheduler rejects the first one (paused
+    // pool or queue back-pressure). Each wait is non-zero so a full pool can
+    // drain; the count is finite so a lasting reject cannot poll forever.
+    static constexpr int kSubmitRetryDelayMs = 50;
+    static constexpr int kSubmitRetryCap = 3;
 
     explicit PreviewPanel(QWidget *parent = nullptr);
     ~PreviewPanel() override;
@@ -151,6 +162,22 @@ class PreviewPanel : public QWidget
     {
         return m_statsKnown;
     }
+    // Rejection recovery. Attempts count every Decode submit for this panel,
+    // including ones the scheduler refused. Pending means a delayed retry can
+    // still fire. The failure text is what paint draws on the empty well.
+    int previewSubmitAttemptsForTest() const
+    {
+        return m_submitAttempts;
+    }
+    bool previewSubmitFailedForTest() const
+    {
+        return m_previewSubmitFailed;
+    }
+    bool previewSubmitRetryPendingForTest() const;
+    QString previewSubmitFailureTextForTest() const
+    {
+        return submitFailureText();
+    }
 
     // Preview-cache key: ImageRepository::makeKey(path) plus the preview max
     // edge, so a scaled preview is never confused with a FullImage decode.
@@ -166,6 +193,12 @@ class PreviewPanel : public QWidget
   private:
     void cancelPending();
     void resetMatchingHandle(uint64_t gen);
+    void stopSubmitRetry();
+    void submitCurrentPreview();
+    void armSubmitRetryOrFail(uint64_t gen);
+    void onSubmitRetry();
+    void finishSubmitRejected(uint64_t gen);
+    QString submitFailureText() const;
     void rebuild();
     void clearPreview();
     void presentWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
@@ -210,6 +243,18 @@ class PreviewPanel : public QWidget
     // Cancellable scaled-preview task (foreground Decode pool). UI-thread-owned; the
     // worker only observes its TaskContext cancel flag.
     TaskScheduler::TaskHandle m_task;
+    // Child timer. Armed only while this generation still owes a delayed
+    // submit. stopSubmitRetry() clears both so a queued timeout cannot submit
+    // after a path switch or after the budget is spent.
+    QTimer *m_submitRetry = nullptr;
+    bool m_submitRetryArmed = false;
+    bool m_previewSubmitFailed = false;
+    int m_submitRetriesLeft = 0;
+    int m_submitAttempts = 0;
+    uint64_t m_submitRetryGen = 0;
+    int m_submitKnownW = 0;
+    int m_submitKnownH = 0;
+    qint64 m_submitKnownSize = -1;
     QPixmap m_preview; // decoded preview (max edge <= kPreviewMaxEdge)
     QPixmap m_scaled;  // m_preview center-cropped into the frame (device pixels)
     // Stable frame: source display aspect (w/h; 0 = none) and its fitted

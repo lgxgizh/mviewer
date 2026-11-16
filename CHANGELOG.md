@@ -7,6 +7,9 @@
 - **Preview dimensions**: a cached preview keeps the real post-orientation
   source size. A warm preview no longer reports 0×0 after the background
   decode finishes, and the scaled preview is not shown as the original size.
+- **Preview submit rejection**: a decode the scheduler refuses is retried a
+  few times and then shows "Unable to load preview" instead of an empty well
+  that never resolves. A preview already on screen stays up.
 
 ## [1.0.179] - 2026-11-16
 

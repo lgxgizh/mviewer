@@ -148,6 +148,18 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
         }
     }
 
+    // Rejected Decode budget spent, and nothing sharp to keep: say so in the
+    // well. A thumbnail or preview still owns this space.
+    const QString submitFailure = submitFailureText();
+    if (!submitFailure.isEmpty())
+    {
+        painter.setPen(text);
+        QFont failFont = painter.font();
+        failFont.setPointSize(9);
+        painter.setFont(failFont);
+        painter.drawText(imgArea, Qt::AlignCenter | Qt::TextWordWrap, submitFailure);
+    }
+
     const QRect txtArea(8, height() - kTextHeight - 4, width() - 16, kTextHeight);
     painter.setPen(text);
     QFont f = painter.font();
