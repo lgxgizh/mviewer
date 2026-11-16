@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         source: [v1.0.178, e548007b71fd4d54907a120031e9f1ad2aa12dd3]
-        case: [png-hidpi-icc, png-hidpi-noise]
+        case: [png-panels, jpeg-panels]
     env:
       SCCACHE_GHA_ENABLED: "true"
       CMAKE_C_COMPILER_LAUNCHER: sccache
@@ -73,6 +73,7 @@ jobs:
         working-directory: app
         env:
           MVIEWER_DIRECTORY_CASE: ${{ matrix.case }}
+          MVIEWER_OPEN_PANELS: ${{ contains(matrix.case, 'panels') && '1' || '0' }}
           QT_QPA_PLATFORM: windows
           QT_SCALE_FACTOR: ${{ contains(matrix.case, 'hidpi') && '2' || '1' }}
           MVIEWER_LARGE_VIEW: ${{ contains(matrix.case, 'hidpi') && '1' || '0' }}

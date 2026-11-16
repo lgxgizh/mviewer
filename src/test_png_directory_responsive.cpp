@@ -20,6 +20,7 @@
 // reads were skipped, and a positive delta does not by itself locate a stall.
 // NOLINTBEGIN(readability-magic-numbers)
 
+#include "analysispanel.h"
 #include "application/Shutdown.h"
 #include "core/image/decoder/QtDecoder.h"
 #include "core/render/DisplayResample.h"
@@ -56,7 +57,8 @@
 namespace
 {
 
-const bool kJpegCase = qEnvironmentVariable("MVIEWER_DIRECTORY_CASE") == QStringLiteral("jpeg");
+const bool kJpegCase =
+    qEnvironmentVariable("MVIEWER_DIRECTORY_CASE").startsWith(QStringLiteral("jpeg"));
 const int kPngWidth = kJpegCase ? 4096 : 3838;
 const int kPngHeight = kJpegCase ? 3072 : 2156;
 const int kFileCount = kJpegCase ? 4 : 1;
@@ -286,6 +288,7 @@ struct PhaseState
     qint64 firstViewerMs = -1;
     qint64 firstThumbMs = -1;
     qint64 firstPreviewMs = -1;
+    qint64 firstFrameMs = -1;
     int ticksBefore = 0;
     int ticksAfter = 0;
     qint64 gapMs = 0;
@@ -395,7 +398,8 @@ bool contentReady(const PhaseState &state)
 {
     if (!state.dirReady || !state.thumbReady || !state.previewReady)
         return false;
-    return state.viewerExpected && state.viewerReady;
+    const bool frameRequired = qEnvironmentVariableIntValue("MVIEWER_OPEN_PANELS") != 0;
+    return state.viewerExpected && state.viewerReady && (!frameRequired || state.frameValid);
 }
 
 void awaitReady(Heartbeat &hb, ThumbnailPanel &panel, PreviewPanel &preview, ImageViewer *viewer,
@@ -409,6 +413,8 @@ void awaitReady(Heartbeat &hb, ThumbnailPanel &panel, PreviewPanel &preview, Ima
         sampleGallery(panel, dir, png, state);
         samplePreview(preview, png, state);
         sampleViewer(viewer, png, state);
+        if (state.frameValid && state.firstFrameMs < 0)
+            state.firstFrameMs = budget.elapsed();
         if (state.viewerReady && state.firstViewerMs < 0)
             state.firstViewerMs = budget.elapsed();
         if (state.thumbReady && state.firstThumbMs < 0)
@@ -444,7 +450,8 @@ void printPhase(const char *phase, const PhaseState &state)
               << ")\n";
     std::cout << "  readiness wait " << state.waitMs << " ms (budget " << kReadyBudgetMs << ")\n";
     std::cout << "  firstRasterMs=" << state.firstViewerMs << " allThumbsMs=" << state.firstThumbMs
-              << " previewPixelsMs=" << state.firstPreviewMs << '\n';
+              << " previewPixelsMs=" << state.firstPreviewMs
+              << " fullFrameMs=" << state.firstFrameMs << '\n';
     std::cout << "  fullImageReadCount " << state.readsBefore << " -> " << state.readsAfter
               << " (decodeFull only; PNG LOD fallback and metadata 1x1 read are not counted)\n";
     std::cout << "  heartbeat ticks " << state.ticksBefore << " -> " << state.ticksAfter
@@ -505,6 +512,8 @@ void runPhase(Results &results, Heartbeat &hb, MainWindow &window, ThumbnailPane
     if (qEnvironmentVariableIntValue("MVIEWER_LARGE_VIEW") != 0)
         check(results, viewer && viewer->width() >= 1920 && viewer->devicePixelRatioF() >= 2,
               "large view must really request a 4096-edge first raster");
+    if (qEnvironmentVariableIntValue("MVIEWER_OPEN_PANELS") != 0)
+        check(results, state.frameValid, "visible analysis panel receives full frame");
     if (viewer == nullptr)
     {
         std::cout << "  obstacle: no ImageViewer in QApplication::topLevelWidgets(). "
@@ -575,6 +584,13 @@ int runWindow(const Fixtures &fixtures)
             viewer->setMinimumSize(1920, 1080); // Do not let show/fit clamp to CI's small screen.
         viewer->resize(large ? 1920 : 960, large ? 1080 : 540);
         viewer->show();
+    }
+    if (qEnvironmentVariableIntValue("MVIEWER_OPEN_PANELS") != 0)
+    {
+        auto *analysis = window.findChild<AnalysisPanel *>();
+        check(results, analysis != nullptr, "analysis panel exists for full-frame scenario");
+        if (analysis)
+            analysis->show();
     }
     // Let ctor timers (disabled recovery / update check) settle outside the
     // measured switches.
