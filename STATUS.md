@@ -1,12 +1,25 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-12 · Version: **1.0.178** · Release tag: **v1.0.178**
+> Snapshot: 2026-11-16 · Version: **1.0.179** · Release tag: **v1.0.179**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.179 — Bounded decodes and load readiness (2026-11-16)
+
+- Supported BMP/PNG and non-WIC strip TIFF have bounded downsampled decode
+  (PRs #375-#377); top-down BMP opening and fallback labels are corrected
+  (PR #378).
+- Some above-LOD images no longer stay blank after neighbor-preload cancellation
+  or folder-sequence churn (PR #380).
+- sRGB-table shutdown lifetime and fixed-width EXIF signature ASan findings
+  are corrected (PR #379).
+- Known issue: the separately reported >=10-second single-PNG folder UI stall
+  remains unresolved; this release does not claim to fix it.
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.178 — Browse freeze hotfix (2026-11-12)
 

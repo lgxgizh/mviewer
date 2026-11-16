@@ -4,10 +4,15 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.178**
+## Where we are now — **Beta / 1.0.179**
 
-MViewer remains in **Beta**; the current release is **`v1.0.178`**
-(2026-11-12, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+MViewer remains in **Beta**; the current release is **`v1.0.179`**
+(2026-11-16, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+This patch adds supported BMP/PNG and non-WIC strip TIFF bounded decodes,
+fixes top-down BMP opening and some never-ready neighbor-preload cases, and
+corrects two sanitizer findings. A separately reported >=10-second UI stall
+when entering a single-PNG folder remains unresolved and is not claimed fixed.
+
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
 signing certificate yet), a docs site, a frozen plugin ABI and final human
