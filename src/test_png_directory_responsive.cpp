@@ -43,6 +43,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QTimer>
 
 #include <chrono>
@@ -73,13 +74,14 @@ class TimedApplication : public QApplication
     using QApplication::QApplication;
     bool notify(QObject *receiver, QEvent *event) override
     {
+        const bool guiThread = QThread::currentThread() == thread();
         QElapsedTimer span;
         span.start();
         const int kind = static_cast<int>(event->type());
         const QByteArray type(receiver ? receiver->metaObject()->className() : "null");
         const bool result = QApplication::notify(receiver, event);
         const qint64 elapsed = span.elapsed();
-        if (elapsed >= 100)
+        if (guiThread && elapsed >= 100)
             std::cout << "GUI_EVENT class=" << type.constData() << " type=" << kind
                       << " elapsedMs=" << elapsed << '\n';
         return result;
