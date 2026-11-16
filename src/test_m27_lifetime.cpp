@@ -50,6 +50,8 @@ void runM27PreviewFrameTests(int &pass, int &fail);
 void runM27PreviewIdentityTests(int &pass, int &fail);
 // Cached preview keeps post-orientation source dimensions (hot and cold).
 void runM27PreviewSourceSizeTests(int &pass, int &fail);
+// Decode submit rejected by a paused pool: bounded retry or a visible failure.
+void runM27PreviewSubmitRejectTests(int &pass, int &fail);
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -624,6 +626,7 @@ int main(int argc, char **argv)
     runM27PreviewFrameTests(g_pass, g_fail);
     runM27PreviewIdentityTests(g_pass, g_fail);
     runM27PreviewSourceSizeTests(g_pass, g_fail);
+    runM27PreviewSubmitRejectTests(g_pass, g_fail);
     testPreviewUILatency24MP();
     testViewerUILatency24MP();
 

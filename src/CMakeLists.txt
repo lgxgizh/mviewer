@@ -314,6 +314,7 @@ add_library(mviewer_ui STATIC
     display/DisplayColorContextProvider.cpp
     previewpanel.cpp
     previewpanel_paint.cpp
+    previewpanel_submit.cpp
     thumbnailcache.cpp
     compareworkspace.cpp
     compareworkspace_display_planner.cpp
@@ -2122,6 +2123,7 @@ add_executable(m27_lifetime_tests
     test_m27_preview_frame.cpp
     test_m27_preview_identity.cpp
     test_m27_preview_source_size.cpp
+    test_m27_preview_submit_reject.cpp
 )
 target_link_libraries(m27_lifetime_tests
     PRIVATE
