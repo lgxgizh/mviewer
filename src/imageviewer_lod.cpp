@@ -308,13 +308,22 @@ void ImageViewer::startLodDisplay(const QString &path, uint64_t generation)
     {
         auto promoted = std::move(m_promotedDisplayRasterPreload);
         m_promotedDisplayRasterPreload = DisplayRasterPreload{};
-        if (promoted.state)
+        const bool usable =
+            promoted.handle && !promoted.handle->isCancelled() &&
+            !(promoted.state && promoted.state->delivered.load(std::memory_order_acquire));
+        if (usable)
         {
-            promoted.state->promotedGeneration.store(generation, std::memory_order_release);
-            promoted.state->displaySerial.store(m_displayRequestSerial, std::memory_order_release);
+            if (promoted.state)
+            {
+                promoted.state->promotedGeneration.store(generation, std::memory_order_release);
+                promoted.state->displaySerial.store(++m_displayRequestSerial,
+                                                    std::memory_order_release);
+            }
+            m_displayRequest = std::move(promoted.handle);
+            return;
         }
-        m_displayRequest = std::move(promoted.handle);
-        return;
+        // Cancelled or already delivered: fall through and issue a fresh probe
+        // so a swallowed preload cannot leave m_largeSourcePending stuck.
     }
     // The first raster request is issued immediately; the worker probes the
     // source, decides small-vs-large, and either returns the probe-only result
