@@ -130,8 +130,9 @@ jobs:
           # wall-clock UI-responsiveness check. crashhandler_tests raises a
           # deliberate SEH exception; ASan installs its own unhandled-exception
           # hook, so the product minidump handler never runs (the test stays in
-          # the PR Gate suite). bench_* budgets are meaningless under ASan.
-          $excludeRegex = "product_workflow_gate|product_browse_tests|crashhandler_tests|bench_"
+          # the PR Gate suite). bench / display_resample_bench budgets are
+          # meaningless under ASan.
+          $excludeRegex = "product_workflow_gate|product_browse_tests|crashhandler_tests|bench"
           ctest --output-on-failure -j4 --timeout 600 -E $excludeRegex
 
   # ---------------------------------------------------------------------------
@@ -217,12 +218,13 @@ jobs:
           # UBSan otherwise prints "runtime error" with no stack.
           export UBSAN_OPTIONS="print_stacktrace=1"
           cd build_asan_linux
-          # golden_image is a UI pixel diff; bench_* budgets are meaningless
-          # under instrumentation. crashhandler_tests is built on Linux but the
-          # deliberate crash is Windows SEH / minidump (and ASan intercepts it).
+          # golden_image is a UI pixel diff; bench / display_resample_bench
+          # budgets are meaningless under instrumentation. crashhandler_tests
+          # is built on Linux but the deliberate crash is Windows SEH / minidump
+          # (and ASan intercepts it).
           # The rest are PowerShell script gates (COMMAND powershell in
           # src/CMakeLists.txt); Linux runners have no powershell.
-          ctest --output-on-failure -j 4 --timeout 600 -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
+          ctest --output-on-failure -j 4 --timeout 600 -E "golden_image|bench|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
   # ---------------------------------------------------------------------------
   # fuzz-linux — libFuzzer + ASan/UBSan on the hand-written binary parsers
@@ -395,9 +397,9 @@ jobs:
           cd build_ubsan
           # Decode-suite tests run now that fixtures exist. product_workflow_gate
           # is a PowerShell script gate; product_browse_tests is a wall-clock
-          # UI-responsiveness check. bench_* budgets are meaningless under
-          # UBSan (bench_smoke alone was about a minute).
-          $excludeRegex = "product_workflow_gate|product_browse_tests|bench_"
+          # UI-responsiveness check. bench / display_resample_bench budgets
+          # are meaningless under UBSan (bench_smoke alone was about a minute).
+          $excludeRegex = "product_workflow_gate|product_browse_tests|bench"
           ctest --output-on-failure -j4 --timeout 600 -E $excludeRegex
 
       - name: Locate UBSan traps (diagnostic)
@@ -720,17 +722,20 @@ jobs:
           # crashhandler_tests launches a child that deliberately crashes.
           # Under OpenCppCoverage --cover_children that child cannot run, so
           # the test fails in ~30s. It stays in the normal (non-coverage) suite.
-          # bench_* perf budgets are meaningless under coverage instrumentation.
+          # bench / display_resample_bench perf budgets are meaningless under
+          # coverage instrumentation.
           # product_browse_tests / product_workflow_gate assert wall-clock UI
           # budgets that OpenCppCoverage --cover_children blows past
-          # (advisory Coverage). Same exclusion as ASan/UBSan.
+          # (advisory Coverage). m3acceptance_tests loadDirectoryAsync()
+          # "returns immediately" (1000 ms) ran 2034.9 ms under --cover_children.
+          # Same exclusion as ASan/UBSan.
           OpenCppCoverage.exe `
             --export_type cobertura:coverage.xml `
             --export_type html:coverage_html `
             --sources "$env:GITHUB_WORKSPACE\src" `
             --excluded_sources "$env:GITHUB_WORKSPACE\src\benchmark" `
             --cover_children `
-            -- ctest --output-on-failure -j2 --timeout 600 -E "crashhandler_tests|bench_|product_workflow_gate|product_browse_tests"
+            -- ctest --output-on-failure -j2 --timeout 600 -E "crashhandler_tests|bench|product_workflow_gate|product_browse_tests|m3acceptance_tests"
           if (-not (Test-Path coverage.xml)) { Write-Host "::warning:: coverage.xml not produced"; exit 1 }
 
       - name: Per-module coverage summary + dashboard

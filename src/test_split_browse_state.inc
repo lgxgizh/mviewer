@@ -163,13 +163,15 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
            "the active pane stays on the right");
 
     auto *tree = mw.findChild<DirectoryTree *>();
+    // This checks eventual highlight identity, not a 200 ms latency budget.
+    // Navigation is deferred behind gallery readiness and can use the 1500 ms
+    // fallback plus model retries. Use the harness's default bounded wait.
     EXPECT(waitUntil(
                [&]()
                {
                    return tree &&
                           DirectoryTree::equivalentPath(tree->currentPath(), left->currentDir());
-               },
-               80),
+               }),
            "folder tree matches the left gallery");
     QString otherRight = right->pathList().value(0);
     if (sel->currentImage() == otherRight)
