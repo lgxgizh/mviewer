@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Browse display cancellation**: a late promoted raster from an older image
+  or an older display serial no longer drops the current image's in-flight
+  request, so the next navigation can still cancel it. A result that still
+  belongs to the current image is shown, and a failed or empty one is
+  re-probed.
+
 ## [1.0.179] - 2026-11-16
 
 ### Release
