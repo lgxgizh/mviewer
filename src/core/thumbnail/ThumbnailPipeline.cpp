@@ -99,10 +99,9 @@ void ThumbnailPipeline::insertSourcesForConsumer(int cid, size_t index,
         slot.visibleBegin += added;
         slot.visibleEnd += added;
     }
-    else if (index < slot.visibleEnd)
-    {
-        slot.visibleEnd += added;
-    }
+    // Inserting within the visible range replaces trailing visible rows; it
+    // must not grow viewport demand to cover every progressive insertion.
+    // ThumbnailPanel publishes the authoritative range on its coalesced turn.
     if (cid == 0)
     {
         m_visibleBegin = slot.visibleBegin;
