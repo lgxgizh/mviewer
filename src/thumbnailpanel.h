@@ -16,6 +16,7 @@
 #include <QListView>
 #include <QMouseEvent>
 #include <QMutex>
+#include <QPair>
 #include <QPixmap>
 #include <QPointer>
 #include <QSet>
@@ -212,6 +213,12 @@ class ThumbnailPanel : public QListView
     // scan/dimension iteration. Empty in production; tests install it to prove
     // a superseded scan aborts after a bounded number of iterations.
     static void setScanIterationProbe(const std::function<void()> &probe);
+    // Test seam immediately after the generation check, before dir.exists().
+    static void setScanPreExistsProbe(const std::function<void()> &probe);
+    static uint64_t stdPathConversionCount();
+    static void resetStdPathConversionCount();
+    static uint64_t scanExistsCount();
+    static void resetScanExistsCount();
     // Test seam for the background latency probe. Empty in production. The
     // hook runs on the probe worker, never inside isHighLatencyBrowsePath().
     static void setHighLatencyProbeHook(const std::function<void()> &hook);
@@ -243,14 +250,15 @@ class ThumbnailPanel : public QListView
     void armScanWatchdog(int gen);
     void noteScanProgress(int gen);
     void startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
-                            SortMode sortMode, bool sortAscending, bool hasFilters,
+                            SortMode sortMode, bool sortAscending, bool progressive,
                             const std::shared_ptr<std::atomic<bool>> &alive,
                             const std::shared_ptr<std::atomic<uint64_t>> &genToken,
                             const std::shared_ptr<std::atomic<int>> &busyRefs,
                             const QPointer<ThumbnailPanel> &self);
     // M54: publish scan batches before the final sorted convergence pass.
     void applyScanBatch(int gen, const QList<Entry> &batch);
-    void insertProgressiveRows(const QList<Entry> &batch);
+    void insertProgressiveRows(const QList<Entry> &batch,
+                               QList<QPair<int, QStringList>> *stdRuns = nullptr);
     // M46: publish a completed scan's entries on the UI thread (extracted from
     // setDirectory's completion lambda); re-checks the generation.
     void applyScanResult(int gen, const QList<Entry> &entries, bool directoryReadable);

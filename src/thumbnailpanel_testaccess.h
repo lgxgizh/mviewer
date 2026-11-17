@@ -24,6 +24,11 @@ struct ThumbnailPanelTestAccess
         return panel.m_scanGenToken;
     }
 
+    static bool scanComplete(const ThumbnailPanel &panel)
+    {
+        return panel.m_scanComplete;
+    }
+
     static void seedDisplayThumb(ThumbnailPanel &panel, const QString &path, const QPixmap &pixmap);
 
     static int scaleCacheHits();

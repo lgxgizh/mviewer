@@ -327,7 +327,8 @@ void ThumbnailPanel::captureScrollAnchor(QString &anchorPath, int &anchorOffset)
 // list no longer jumps when the scan completes (directory order is not the
 // natural-name order). Sort fields that need metadata snapshots (camera,
 // lens, resolution) are not known yet and still append.
-void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch)
+void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch,
+                                           QList<QPair<int, QStringList>> *stdRuns)
 {
     QString anchorPath;
     int anchorOffset = 0;
@@ -380,6 +381,14 @@ void ThumbnailPanel::insertProgressiveRows(const QList<Entry> &batch)
                 ++run;
             if (!m_model->insertRows(row, run))
                 return;
+            if (stdRuns)
+            {
+                QStringList paths;
+                paths.reserve(run);
+                for (int i = 0; i < run; ++i)
+                    paths.append(sorted.at(k + i).path);
+                stdRuns->append(qMakePair(row, paths));
+            }
         }
         m_displayEntries.insert(row, entry);
         m_paths.insert(row, entry.path);
