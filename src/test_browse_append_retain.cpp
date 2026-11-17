@@ -106,7 +106,7 @@ void logStep(const char *step, const ImageViewer &viewer)
         step, static_cast<unsigned long long>(s.starts), static_cast<unsigned long long>(s.cancels),
         static_cast<unsigned long long>(s.evictions), static_cast<unsigned long long>(s.inFlight),
         viewer.displayRasterWarmCount(), viewer.isLodDisplay() ? 1 : 0, viewer.browseIndex(),
-        viewer.browseSequence().size());
+        static_cast<int>(viewer.browseSequence().size()));
     std::fflush(stdout);
 }
 
