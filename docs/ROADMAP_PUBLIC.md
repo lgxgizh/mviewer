@@ -4,14 +4,17 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.179**
+## Where we are now — **Beta / 1.0.180**
 
-MViewer remains in **Beta**; the current release is **`v1.0.179`**
-(2026-11-16, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch adds supported BMP/PNG and non-WIC strip TIFF bounded decodes,
-fixes top-down BMP opening and some never-ready neighbor-preload cases, and
-corrects two sanitizer findings. A separately reported >=10-second UI stall
-when entering a single-PNG folder remains unresolved and is not claimed fixed.
+MViewer remains in **Beta**; the current release is **`v1.0.180`**
+(2026-11-17, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+This patch tightens browse request ownership, cached preview source size,
+and preview submit recovery; Sharp-resamples the first zoomed-out LOD to the
+paint device-pixel dest; keeps still-needed preloads across append-only
+folder scans; and records display-LOD queue wait versus decode without
+changing scheduling. The reported >=10-second UI stall when entering a
+folder remains unresolved, is not claimed fixed, and has not been shown to
+be PNG-specific.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no

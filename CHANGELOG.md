@@ -2,31 +2,45 @@
 
 ## [Unreleased]
 
-### Performance
+## [1.0.180] - 2026-11-17
 
-- **Display LOD timing**: queue wait and decode duration are recorded for the
-  current image's display LOD and for neighbor display preloads, including
-  decode that continues after cancel. Scheduling is unchanged. This does not
-  measure or fix the reported multi-second folder stall.
-- **First zoomed-out LOD**: Sharp-resample to the same device-pixel dest
-  ImageViewer paint blits, avoiding a GUI-thread SmoothPixmapTransform of a
-  mismatched multi-megapixel raster.
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.180**.
 
 ### Fixed
 
-- **Browse scan append**: extending the open folder's sequence no longer cancels
-  still-needed neighbor display preloads or drops their warm rasters.
 - **Browse display cancellation**: a late promoted raster from an older image
   or an older display serial no longer drops the current image's in-flight
   request, so the next navigation can still cancel it. A result that still
   belongs to the current image is shown, and a failed or empty one is
-  re-probed.
+  re-probed (PR #382).
 - **Preview dimensions**: a cached preview keeps the real post-orientation
   source size. A warm preview no longer reports 0×0 after the background
-  decode finishes, and the scaled preview is not shown as the original size.
+  decode finishes, and the scaled preview is not shown as the original size
+  (PR #383).
 - **Preview submit rejection**: a decode the scheduler refuses is retried a
   few times and then shows "Unable to load preview" instead of an empty well
-  that never resolves. A preview already on screen stays up.
+  that never resolves. A preview already on screen stays up (PR #384).
+- **Browse scan append**: extending the open folder's sequence no longer
+  cancels still-needed neighbor display preloads or drops their warm rasters
+  (PR #386).
+
+### Performance
+
+- **First zoomed-out LOD**: Sharp-resample to the same device-pixel dest
+  ImageViewer paint blits, avoiding a GUI-thread SmoothPixmapTransform of a
+  mismatched multi-megapixel raster (PR #385).
+- **Display LOD timing**: queue wait and decode duration are recorded for the
+  current image's display LOD and for neighbor display preloads, including
+  decode that continues after cancel. Scheduling is unchanged (PR #387).
+
+### Known issues
+
+- The reported >=10-second UI stall when entering a folder remains unresolved
+  and is not claimed fixed in this release. It is a general stall; it has not
+  been shown to be PNG-specific. Representative CI cases did not reproduce a
+  stall of that length.
 
 ## [1.0.179] - 2026-11-16
 
