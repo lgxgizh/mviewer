@@ -56,7 +56,7 @@ jobs:
       - name: Actual Dr.Memory execution and report verification
         shell: pwsh
         timeout-minutes: 8
-        run: ./scripts/drmemory/run.ps1
+        run: ./scripts/drmemory/run.ps1 -EvidenceRoot "drmemory_out/Windows path with spaces"
       - name: Retain real output and reports even when unavailable
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

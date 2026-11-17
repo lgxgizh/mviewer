@@ -38,7 +38,7 @@ function Get-DrMemoryResult {
         $errorRecords = [regex]::Matches($text, '(?m)^Error #\d+:').Count
         [pscustomobject]@{
             path = $_.FullName
-            summaryComplete = ($text -match '(?m)^FINAL SUMMARY:' -and $summary.Success -and $counts.Count -ge 3)
+            summaryComplete = ($text -match '(?m)^FINAL SUMMARY:' -and $text -match '(?m)^Details:\s+\S' -and $summary.Success -and $counts.Count -ge 3)
             errorRecords = $errorRecords
             hasReportedErrors = ($errorRecords -gt 0 -or $positive.Count -gt 0)
             potentialFindings = ($text -match '(?m)^\s*[1-9]\d* potential (?:error|leak)')

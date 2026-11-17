@@ -13,7 +13,7 @@ $null = New-Item -ItemType Directory -Path $logs -Force
 $r = $null
 try {
     if (-not $ToolRoot) {
-        $ToolRoot = Join-Path ([IO.Path]::GetTempPath()) ('drmemory-tool-' + [guid]::NewGuid().ToString('N'))
+        $ToolRoot = Join-Path ([IO.Path]::GetTempPath()) ('drmemory tool ' + [guid]::NewGuid().ToString('N'))
         $null = New-Item -ItemType Directory -Path $ToolRoot -Force
         $archive = Join-Path $runRoot drmemory.zip
         Invoke-WebRequest -Uri 'https://github.com/DynamoRIO/drmemory/releases/download/release_2.6.0/DrMemory-Windows-2.6.0.zip' -OutFile $archive -TimeoutSec 120

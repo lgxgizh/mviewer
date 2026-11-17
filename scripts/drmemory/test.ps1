@@ -51,7 +51,9 @@ try {
     Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'no-report') 'empty target report never passes'
     Set-Content $report 'partial results'
     Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'incomplete-report') 'partial report never passes'
-    $zero = "FINAL SUMMARY:`nNO ERRORS FOUND:`n 0 unique, 0 total unaddressable access(es)`n 0 unique, 0 total uninitialized access(es)`n 0 unique, 0 total invalid heap argument(s)`n"
+    $zero = "FINAL SUMMARY:`nNO ERRORS FOUND:`n 0 unique, 0 total unaddressable access(es)`n 0 unique, 0 total uninitialized access(es)`n 0 unique, 0 total invalid heap argument(s)`nDetails: fixture/results.txt`n"
+    Set-Content $report ($zero -replace 'Details:[^\r\n]*','')
+    Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'incomplete-report') 'truncated final summary without report footer is not clean'
     Set-Content $report $zero
     Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'executed-clean') 'real final zero-count format recognized'
     Check ((Get-DrMemoryResult $logs core_tests.exe 2).state -eq 'target-or-tool-error') 'target failure cannot become clean'
