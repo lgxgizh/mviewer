@@ -121,9 +121,10 @@ void checkHelperCase(const char *label, int sourceW, int sourceH, int widgetW, i
 
 void testHelper()
 {
-    // Documented mismatch: devicePixelsForSource is 3648x2049; paint dest is 3648x2050.
+    // FP: Comfortable offsetX is just under 48, so imageRectToScreen width is 1825.
+    // devicePixelsForSource is 3648x2049; paint dest is 3650x2050.
     checkHelperCase("3838x2156 Comfortable DPR2", 3838, 2156, 1920, 1080, 2.0, false,
-                    QSize(3648, 2050));
+                    QSize(3650, 2050));
     {
         int tw = 0;
         int th = 0;
@@ -135,6 +136,7 @@ void testHelper()
         devicePixelsForSource(3838, 2156, density, tw, th);
         CHECK(tw == 3648 && th == 2049, "devicePixelsForSource stays 3648x2049 on this case");
         CHECK(th != 2050, "paint dest height is the floor-to-1025 path, not density lround");
+        CHECK(tw != 3650, "paint dest width is 3650 after floor(offsetX<48), not 3648");
     }
 
     checkHelperCase("4096x3072 Comfortable DPR2", 4096, 3072, 1920, 1080, 2.0, false);
