@@ -1,3 +1,4 @@
+#include <atomic>
 // M20 P0#3: shared private header for the ThumbnailPanel implementation,
 // which is split across several translation units by responsibility. Line counts
 // are physical lines and the budget is enforced by scripts/complexity_gate.ps1
@@ -158,14 +159,32 @@ inline bool isImageSuffix(const QString &suffix)
     return mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString());
 }
 
+inline std::atomic<uint64_t> &stdPathConversionCounter()
+{
+    static std::atomic<uint64_t> count{0};
+    return count;
+}
+
 inline std::vector<std::string> toStdPaths(const QStringList &in)
 {
+    stdPathConversionCounter().fetch_add(static_cast<uint64_t>(in.size()),
+                                         std::memory_order_relaxed);
     std::vector<std::string> out;
     out.reserve(static_cast<size_t>(in.size()));
     for (const QString &s : in)
         out.push_back(s.toUtf8().toStdString());
     return out;
 }
+
+void invokeScanPreExistsProbe();
+bool scanDirectoryMissing(const QString &path);
+bool scanStillCurrent(const std::shared_ptr<std::atomic<bool>> &alive,
+                      const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen);
+bool streamableBrowseSort(ThumbnailPanel::SortMode mode);
+bool hasMetadataBrowseFilter(const QString &filterText, bool recentFilter, const QString &camera,
+                             const QString &lens, int iso);
+bool entryMatchesTypeFilter(const QString &path, const QString &typeFilter);
+void publishIncrementalSources(int consumerId, const QList<QPair<int, QStringList>> &runs);
 
 void bindFileTransferObserver(ICommand *command,
                               const mviewer::core::FileSystemAdapter::TransferObserver &observer);

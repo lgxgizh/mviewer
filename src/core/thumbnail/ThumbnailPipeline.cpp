@@ -75,6 +75,43 @@ void ThumbnailPipeline::appendSourcesForConsumer(int cid, const std::vector<std:
         m_sources = slot.sources;
 }
 
+void ThumbnailPipeline::insertSourcesForConsumer(int cid, size_t index,
+                                                 const std::vector<std::string> &paths)
+{
+    if (paths.empty())
+        return;
+    std::lock_guard<std::mutex> lk(m_mtx);
+    ConsumerSlot &slot = m_consumers[cid];
+    if (index > slot.sources.size())
+        index = slot.sources.size();
+    const size_t added = paths.size();
+    slot.sources.insert(slot.sources.begin() + static_cast<std::ptrdiff_t>(index), paths.begin(),
+                        paths.end());
+    if (cid == 0)
+    {
+        if (index > m_sources.size())
+            index = m_sources.size();
+        m_sources.insert(m_sources.begin() + static_cast<std::ptrdiff_t>(index), paths.begin(),
+                         paths.end());
+    }
+    if (index < slot.visibleBegin)
+    {
+        slot.visibleBegin += added;
+        slot.visibleEnd += added;
+    }
+    else if (index < slot.visibleEnd)
+    {
+        slot.visibleEnd += added;
+    }
+    if (cid == 0)
+    {
+        m_visibleBegin = slot.visibleBegin;
+        m_visibleEnd = slot.visibleEnd;
+    }
+    dropFailedForPathsLocked(paths);
+    scheduleLocked(false);
+}
+
 void ThumbnailPipeline::erasePathKeys(std::unordered_set<std::string> &keys,
                                       const std::unordered_set<std::string> &listed)
 {

@@ -19,17 +19,22 @@
 namespace
 {
 
-// True when `incoming` keeps every current path, in order, and only adds a suffix.
-bool browseSequenceExtends(const QStringList &current, const QStringList &incoming)
+// True when `incoming` keeps every current path in the same relative order and
+// only inserts additional entries (suffix or middle). Reorder or removal is not
+// a growth, so neighbor preloads stay valid only for still-adjacent paths.
+bool browseSequenceGrowsByInsertion(const QStringList &current, const QStringList &incoming)
 {
     if (incoming.size() <= current.size())
         return false;
+    int j = 0;
     for (int i = 0; i < current.size(); ++i)
     {
-        if (current.at(i) == incoming.at(i))
-            continue;
-        if (!ImageViewer::browsePathEquals(current.at(i), incoming.at(i)))
+        while (j < incoming.size() && current.at(i) != incoming.at(j) &&
+               !ImageViewer::browsePathEquals(current.at(i), incoming.at(j)))
+            ++j;
+        if (j >= incoming.size())
             return false;
+        ++j;
     }
     return true;
 }
@@ -61,12 +66,12 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
 {
     if (paths != m_fileList)
     {
-        // Progressive scan batches are a suffix append. Keep the browse
-        // generation, in-flight neighbor preloads, and warm rasters so the
-        // preload pass below can retain still-adjacent work. Reorder, removal,
-        // filter shrink, and replacement still drop that presentation cache.
+        // Progressive scan batches may insert in the middle, not only a suffix.
+        // Keep the browse generation and still-needed preloads when existing
+        // paths keep their relative order. Reorder, removal, filter shrink,
+        // and replacement still drop that presentation cache.
         // The current image's display request is not cancelled on either path.
-        if (!browseSequenceExtends(m_fileList, paths))
+        if (!browseSequenceGrowsByInsertion(m_fileList, paths))
             invalidateDisplayRasterBrowse();
         m_fileIndex.invalidate();
     }

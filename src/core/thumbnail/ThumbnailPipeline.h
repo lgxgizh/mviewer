@@ -103,6 +103,10 @@ struct ThumbnailPipeline
     // Consumer-isolated methods (cid = 0 for primary, cid = 1 for secondary)
     void setSourcesForConsumer(int cid, const std::vector<std::string> &paths);
     void appendSourcesForConsumer(int cid, const std::vector<std::string> &paths);
+    // Insert paths at index (middle or suffix). Does not copy a caller-built
+    // full table or cancel still-listed work. Visible range shifts when the
+    // insert lands at or before the current window.
+    void insertSourcesForConsumer(int cid, size_t index, const std::vector<std::string> &paths);
 
     // Drops "path\x1f..." keys whose path is listed: one pass, not paths x keys.
     static void erasePathKeys(std::unordered_set<std::string> &keys,

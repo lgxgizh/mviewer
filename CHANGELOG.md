@@ -4,6 +4,15 @@
 
 ### Performance
 
+- **Browse scan publication**: progressive batches incrementally insert
+  pipeline sources, including middle insertions, instead of converting and
+  assigning the whole path table on every 128-file publish. Name, date, size,
+  and type sorts, including a suffix type filter, can stream the first screen
+  in final sort order. Auto-selection keeps the first published identity.
+  Sort-by-resolution, camera/lens, text, and metadata filters still wait for
+  a complete listing because the final order needs those facts. A superseded
+  scan checks its generation before `QDir::exists()`.
+
 - **Photo-switch paint**: reuse identity Sharp rasters without smooth resampling
   during the short transition, retain region geometry when panned, and limit
   loading animation paints to its thin bar when the fitted image leaves a safe

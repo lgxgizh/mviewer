@@ -24,6 +24,7 @@
 
 #include <QSet>
 #include <QThread>
+#include <algorithm>
 #include <functional>
 
 namespace
@@ -121,7 +122,7 @@ constexpr int kScanBatchEntries = 128;
 // finished walk; cursor release is owned by the single completion path.
 bool scanProgressiveDirectory(
     const QString &path, const std::shared_ptr<std::atomic<bool>> &alive,
-    const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen,
+    const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen, const QString &typeFilter,
     QList<ThumbnailPanel::Entry> &entries,
     const std::shared_ptr<const std::function<void()>> &probe,
     const std::function<void(const QList<ThumbnailPanel::Entry> &)> &publishBatch)
@@ -160,7 +161,8 @@ bool scanProgressiveDirectory(
         const ThumbnailPanel::Entry entry{fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
                                           fi.lastModified()};
         entries.append(entry);
-        batch.append(entry);
+        if (entryMatchesTypeFilter(entry.path, typeFilter))
+            batch.append(entry);
         const int batchLimit = (entries.size() == 1) ? 1
                                                      : (entries.size() <= kFirstScreenEntries
                                                             ? (kFirstScreenEntries - 1)
@@ -265,7 +267,9 @@ void ThumbnailPanel::setDirectory(const QString &path)
     ThumbnailCache::instance().clearSourceIdentityHints();
     m_scanComplete = false;
     m_galleryModelReadyEmitted = false;
-    m_scanProgressive = m_sortMode == SortName && m_sortAscending && !hasActiveBrowseFilter();
+    const bool heavyFilter = hasMetadataBrowseFilter(m_filterText, m_recentFilter, m_cameraFilter,
+                                                     m_lensFilter, m_isoFilter);
+    m_scanProgressive = streamableBrowseSort(m_sortMode) && !heavyFilter;
 
     // M23 P2 (first-screen): paint the (empty) directory shell immediately so a
     // 1000-image folder shows its grid in well under 1s, then scan the disk off
@@ -292,7 +296,6 @@ void ThumbnailPanel::setDirectory(const QString &path)
     const QString typeFilter = m_typeFilter;
     const SortMode sortMode = m_sortMode;
     const bool sortAscending = m_sortAscending;
-    const bool hasFilters = hasActiveBrowseFilter();
     auto alive = m_alive;
     auto genToken = m_scanGenToken;
     auto busyRefs = m_busyCursorRefs;
@@ -303,14 +306,14 @@ void ThumbnailPanel::setDirectory(const QString &path)
     // object is still alive. The busy cursor is restored unconditionally (it
     // is app-global and ref-counted) so a destroyed/superseded scan can never
     // leave the whole application with a stuck override cursor.
-    startDirectoryScan(path, gen, typeFilter, sortMode, sortAscending, hasFilters, alive, genToken,
-                       busyRefs, self);
+    startDirectoryScan(path, gen, typeFilter, sortMode, sortAscending, m_scanProgressive, alive,
+                       genToken, busyRefs, self);
     scheduleHighLatencyProbe(path, gen);
     armScanWatchdog(gen);
 }
 
 void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
-                                        SortMode sortMode, bool sortAscending, bool hasFilters,
+                                        SortMode sortMode, bool sortAscending, bool progressive,
                                         const std::shared_ptr<std::atomic<bool>> &alive,
                                         const std::shared_ptr<std::atomic<uint64_t>> &genToken,
                                         const std::shared_ptr<std::atomic<int>> &busyRefs,
@@ -321,7 +324,7 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
     (void)QtConcurrent::run(
         &m_scanPool,
         [self, alive, gen, genToken, busyRefs, cursorReleased, path, typeFilter, sortMode,
-         sortAscending, hasFilters]()
+         sortAscending, progressive]()
         {
             QList<Entry> entries;
             bool publish = false;
@@ -334,17 +337,28 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
                 }
                 else
                 {
-                    QDir dir(path);
                     const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
-                    if (!dir.exists())
+                    if (!scanStillCurrent(alive, genToken, gen))
+                    {
+                        publish = false;
+                    }
+                    else
+                    {
+                        invokeScanPreExistsProbe();
+                    }
+                    if (!scanStillCurrent(alive, genToken, gen))
+                    {
+                        publish = false;
+                    }
+                    else if (scanDirectoryMissing(path))
                     {
                         publish = true;
                         directoryReadable = false;
                     }
-                    else if (sortMode == SortName && sortAscending && !hasFilters)
+                    else if (progressive)
                     {
                         const bool aborted = scanProgressiveDirectory(
-                            path, alive, genToken, gen, entries, probe,
+                            path, alive, genToken, gen, typeFilter.toLower(), entries, probe,
                             [self, alive, gen](const QList<Entry> &batch)
                             {
                                 if (!qApp)
@@ -361,7 +375,8 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
                     }
                     else
                     {
-                        const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
+                        const QFileInfoList list =
+                            sortedEntries(QDir(path), sortMode, sortAscending);
                         const uint64_t generation = static_cast<uint64_t>(gen);
                         for (const QFileInfo &fi : list)
                         {
@@ -421,8 +436,20 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &scanned)
     if (!m_scanProgressive)
         return;
 
-    insertProgressiveRows(batch);
-    ThumbnailPipeline::instance().replaceSourcesForConsumer(m_consumerId, toStdPaths(m_paths));
+    QList<Entry> visible = batch;
+    if (!m_typeFilter.isEmpty())
+    {
+        const QString typeFilter = m_typeFilter.toLower();
+        visible.erase(std::remove_if(visible.begin(), visible.end(), [&](const Entry &e)
+                                     { return !entryMatchesTypeFilter(e.path, typeFilter); }),
+                      visible.end());
+    }
+    if (visible.isEmpty())
+        return;
+
+    QList<QPair<int, QStringList>> runs;
+    insertProgressiveRows(visible, &runs);
+    publishIncrementalSources(m_consumerId, runs);
     // Navigation reads this list. Publish it with the rows, not only when the
     // sorted rebuild lands at the end of the scan.
     emit sequenceChanged(m_currentDir, m_paths);
@@ -471,7 +498,17 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     // Progressive batches used replaceSources for convergence; completed scan
     // and subsequent filter rebuilds must use updateSources so in-flight
     // viewport decodes are retained across the rebuild.
-    const bool wasProgressive = m_scanProgressive && m_paths.size() == entries.size();
+    // Displayed rows can be a type-filtered subset and may have arrived in
+    // middle-insert order. Compare against the complete query, not raw size.
+    mviewer::ui::GalleryFilterSnapshot snapshot;
+    snapshot.query.type = m_typeFilter.toLower().toStdString();
+    snapshot.query.sort = static_cast<mviewer::core::BrowseSortField>(m_sortMode);
+    snapshot.query.ascending = m_sortAscending;
+    const QList<Entry> expected = mviewer::ui::evaluateGalleryFilter(m_allEntries, snapshot);
+    bool sameOrder = m_scanProgressive && expected.size() == m_paths.size();
+    for (int i = 0; sameOrder && i < expected.size(); ++i)
+        sameOrder = expected.at(i).path == m_paths.at(i);
+    const bool wasProgressive = sameOrder;
     m_scanProgressive = false;
     if (wasProgressive)
     {

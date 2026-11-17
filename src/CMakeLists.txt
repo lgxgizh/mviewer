@@ -298,6 +298,7 @@ add_library(mviewer_ui STATIC
     naturalnameorder.cpp
     thumbnailpanel_async.cpp
     thumbnailpanel_scan_guard.cpp
+    thumbnailpanel_scan_publish.cpp
     thumbnailpanel_selection.cpp
     thumbnailpanel_pipeline.cpp
     thumbnailpanel_filters.cpp
@@ -2544,6 +2545,24 @@ target_compile_features(lod_four_jpeg_ready_tests PRIVATE cxx_std_20)
 target_include_directories(lod_four_jpeg_ready_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME lod_four_jpeg_ready_tests COMMAND lod_four_jpeg_ready_tests)
 set_tests_properties(lod_four_jpeg_ready_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
+# Progressive scan publication: 1k/10k incremental conversions, middle inserts,
+# streamable type/date/size first-screen, generation check before dir.exists().
+add_executable(scan_publication_tests
+    test_scan_publication.cpp
+)
+target_link_libraries(scan_publication_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(scan_publication_tests PRIVATE cxx_std_20)
+target_include_directories(scan_publication_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/tests/support)
+add_test(NAME scan_publication_tests COMMAND scan_publication_tests)
+set_tests_properties(scan_publication_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
 # Name-sort scan batches (empty, 1, 16, 144) must keep a still-needed neighbor
 # preload and its warm raster. Shrink/removal still cancels or evicts that work.
