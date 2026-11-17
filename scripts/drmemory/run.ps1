@@ -24,7 +24,7 @@ try {
     $tool = Find-DrMemory -Root (Resolve-Path -LiteralPath $ToolRoot).Path -Target $targetPath
     $r = Invoke-DrMemoryProcess -Tool $tool -Target $targetPath -LogRoot $logs -EvidenceRoot $runRoot -TimeoutSeconds $TimeoutSeconds
 } catch {
-    $r = [pscustomobject]@{ state = 'infrastructure-error'; executed = $false; memoryVerdict = 'unknown'; launched = $false
+    $r = [pscustomobject]@{ state = 'infrastructure-error'; executed = $false; completed = $false; memoryVerdict = 'unknown'; launched = $false
         reports = @(); reason = $_.ToString() }
     [IO.File]::WriteAllText((Join-Path $runRoot infrastructure-error.txt), $_.ToString())
 }
@@ -38,7 +38,8 @@ $summary = @"
 ## Dr.Memory advisory: $($r.state)
 
 - Actual launcher started: **$($r.launched)**
-- Complete instrumented execution verified: **$($r.executed)**
+- Instrumented target evidence verified: **$($r.executed)**
+- Complete target summaries verified: **$($r.completed)**
 - Memory verdict: **$($r.memoryVerdict)**
 - Reason: $($r.reason)
 - Raw target reports, stdout/stderr and status.json are retained in the drmemory-evidence artifact.

@@ -61,5 +61,14 @@ try {
     Check ((Get-DrMemoryResult $logs core_tests.exe 86).state -eq 'executed-errors') 'real memory counts propagated'
     Set-Content $report "Error #1: UNADDRESSABLE ACCESS`npartial summary"
     Check ((Get-DrMemoryResult $logs core_tests.exe 86).state -eq 'executed-errors') 'memory finding retained even when summary incomplete'
+    $timeoutResult = Get-DrMemoryResult -LogRoot $logs -TargetName core_tests.exe -ExitCode -1 -TimedOut $true
+    Check ($timeoutResult.state -eq 'timeout' -and $timeoutResult.memoryVerdict -eq 'errors-observed' -and $timeoutResult.executed -and -not $timeoutResult.completed) 'timeout preserves observed findings without claiming completed run'
+    Set-Content $report $zero
+    $partialDir = Join-Path $logs 'DrMemory-core_tests.exe.456.000'
+    $null = New-Item -ItemType Directory -Path $partialDir
+    Set-Content (Join-Path $partialDir results.txt) 'partial child report'
+    Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'incomplete-report') 'one complete report cannot hide an incomplete child report'
+    Set-Content (Join-Path $partialDir results.txt) 'System call information is missing for this operating system: Restarting to trigger auto-generation of system call information.'
+    Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'executed-clean') 'bootstrap restart retained but not confused with final target report'
     Write-Host "Dr.Memory contracts: $script:checks passed"
 } finally { Remove-Item -LiteralPath $root -Recurse -Force }

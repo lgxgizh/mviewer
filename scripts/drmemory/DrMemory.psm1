@@ -29,28 +29,48 @@ function Get-DrMemoryResult {
           [string] $Output = '', [bool] $TimedOut = $false, [string] $LaunchError = '')
     $files = @(Get-ChildItem -LiteralPath $LogRoot -Recurse -File -Filter results.txt -ErrorAction SilentlyContinue |
         Where-Object { $_.Length -gt 0 -and $_.Directory.Name -like "DrMemory-$TargetName.*" })
-    $r = [ordered]@{ state = 'no-report'; executed = $false; memoryVerdict = 'unknown'; exitCode = $ExitCode
-        reports = @($files | ForEach-Object { $_.FullName }); reason = 'No nonempty target results.txt produced in the fresh invocation directory' }
-    if ($LaunchError) { $r.state = 'infrastructure-error'; $r.reason = $LaunchError }
-    elseif ($TimedOut) { $r.state = 'timeout'; $r.reason = 'Bounded instrumentation deadline exceeded; process tree terminated' }
-    elseif ($files.Count -gt 0) {
-        $text = ($files | ForEach-Object { [IO.File]::ReadAllText($_.FullName) }) -join "`n"
+    $details = @($files | ForEach-Object {
+        $text = [IO.File]::ReadAllText($_.FullName)
         $summary = [regex]::Match($text, '(?ms)^(?:NO )?ERRORS FOUND:\s*\r?\n(.*?)(?=^ERRORS IGNORED:|^Details:|\z)')
-        $counts = [regex]::Matches($summary.Groups[1].Value, '(?m)^\s*(\d+) unique,\s*(\d+) total[^\r\n]*')
-        $counts = @($counts | Where-Object { $_.Value -notmatch 'still-reachable' })
-        $errors = @($counts | Where-Object { [long]$_.Groups[1].Value -gt 0 -or [long]$_.Groups[2].Value -gt 0 })
-        $complete = $text -match '(?m)^FINAL SUMMARY:' -and $summary.Success -and $counts.Count -ge 3
-        if ($text -match '(?m)^Error #\d+' -or $errors.Count -gt 0) {
-            $r.state = 'executed-errors'; $r.executed = $true; $r.memoryVerdict = 'errors'; $r.reason = 'Real target report contains memory errors/leaks; no suppressions added'
-        } elseif ($complete -and $text -match '(?m)^\s*[1-9]\d* potential (?:error|leak)') {
-            $r.state = 'executed-potential'; $r.executed = $true; $r.reason = 'Potential/ignored findings need review; inspect the retained potential_errors.txt'
-        } elseif ($complete -and $ExitCode -eq 0) {
-            $r.state = 'executed-clean'; $r.executed = $true; $r.memoryVerdict = 'clean-reported-categories'; $r.reason = 'Complete target error summary has zero counts and launcher exited zero; inspect ignored/potential categories in raw report'
-        } elseif ($complete) {
-            $r.state = 'target-or-tool-error'; $r.executed = $true; $r.reason = 'Target report exists but nonzero exit prevents a clean result'
-        } else { $r.state = 'incomplete-report'; $r.reason = 'Target report lacks a complete error summary; not a clean execution verdict' }
-    } elseif ($Output -match '(?i)system call information is missing|unable to load client library|failed to start the target|unsupported operating system') {
-        $r.state = 'unsupported'; $r.reason = 'Tool output reports an instrumentation/OS loader incompatibility; no memory verdict'
+        $counts = @([regex]::Matches($summary.Groups[1].Value, '(?m)^\s*(\d+) unique,\s*(\d+) total[^\r\n]*') |
+            Where-Object { $_.Value -notmatch 'still-reachable' })
+        $positive = @($counts | Where-Object { [long]$_.Groups[1].Value -gt 0 -or [long]$_.Groups[2].Value -gt 0 })
+        $errorRecords = [regex]::Matches($text, '(?m)^Error #\d+:').Count
+        [pscustomobject]@{
+            path = $_.FullName
+            summaryComplete = ($text -match '(?m)^FINAL SUMMARY:' -and $summary.Success -and $counts.Count -ge 3)
+            errorRecords = $errorRecords
+            hasReportedErrors = ($errorRecords -gt 0 -or $positive.Count -gt 0)
+            potentialFindings = ($text -match '(?m)^\s*[1-9]\d* potential (?:error|leak)')
+            # 2.6.0 can generate syscall metadata then restart the target. Keep
+            # this report, but never use its header as completion evidence.
+            bootstrapRestart = ($text -match 'System call information is missing.*Restarting to trigger auto-generation')
+        }
+    })
+    $targets = @($details | Where-Object { -not $_.bootstrapRestart })
+    $errors = @($targets | Where-Object { $_.hasReportedErrors })
+    $potential = @($targets | Where-Object { $_.potentialFindings })
+    $complete = $targets.Count -gt 0 -and @($targets | Where-Object { -not $_.summaryComplete }).Count -eq 0
+    $instrumented = @($targets | Where-Object { $_.hasReportedErrors -or $_.summaryComplete }).Count -gt 0
+    $r = [ordered]@{ state = 'no-report'; executed = $instrumented; completed = $false
+        memoryVerdict = $(if ($errors.Count -gt 0) { 'errors-observed' } else { 'unknown' })
+        exitCode = $ExitCode; reports = @($files | ForEach-Object { $_.FullName }); reportDetails = $details
+        observedErrorRecords = ($details | Measure-Object -Property errorRecords -Sum).Sum
+        reason = 'No nonempty target results.txt produced in the fresh invocation directory' }
+    if ($LaunchError) { $r.state = 'infrastructure-error'; $r.reason = $LaunchError }
+    elseif ($TimedOut) { $r.state = 'timeout'; $r.reason = 'Bounded deadline exceeded; process tree terminated. Any observed findings remain in reportDetails/memoryVerdict; no complete-run verdict' }
+    elseif ($errors.Count -gt 0) {
+        $r.state = 'executed-errors'; $r.completed = $complete; $r.reason = 'Real target report contains memory errors/leaks; no suppressions added'
+    } elseif ($complete -and $potential.Count -gt 0) {
+        $r.state = 'executed-potential'; $r.completed = $true; $r.reason = 'Potential/ignored findings need review; inspect retained potential_errors.txt'
+    } elseif ($complete -and $ExitCode -eq 0) {
+        $r.state = 'executed-clean'; $r.completed = $true; $r.memoryVerdict = 'clean-reported-categories'; $r.reason = 'All target summaries complete, zero unsuppressed counts, launcher exit zero; default tool suppressions and reported categories still limit coverage'
+    } elseif ($complete) {
+        $r.state = 'target-or-tool-error'; $r.completed = $true; $r.reason = 'Target reports complete but nonzero exit prevents a clean result'
+    } elseif ($targets.Count -gt 0) {
+        $r.state = 'incomplete-report'; $r.reason = 'One or more target reports lack a complete summary; no clean execution verdict'
+    } elseif ($details.Count -gt 0 -or $Output -match '(?i)system call information is missing|unable to load client library|failed to start the target|unsupported operating system') {
+        $r.state = 'unsupported'; $r.reason = 'Only bootstrap/OS-loader incompatibility evidence exists; no completed memory verdict'
     } elseif ($ExitCode -ne 0) { $r.state = 'tool-error'; $r.reason = 'Launcher exited nonzero without a target report; inspect stdout/stderr' }
     return [pscustomobject]$r
 }
