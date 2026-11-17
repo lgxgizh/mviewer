@@ -162,7 +162,7 @@ void testInsertDemandBound()
             return ImageData{};
         });
     constexpr int cid = 999;
-    pipe.setPredictiveCountForConsumer(cid, 0);
+    pipe.setPredictiveCountForConsumer(cid, 1);
     std::vector<std::string> initial;
     std::vector<std::string> inserted;
     for (int i = 0; i < 64; ++i)
