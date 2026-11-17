@@ -8,6 +8,7 @@
 #include "core/render/Viewport.h"
 
 #include <QImage>
+#include <QRect>
 
 #include <algorithm>
 #include <atomic>
@@ -16,6 +17,8 @@
 inline constexpr int kMinLodEdge = 64;
 inline constexpr int kMaxLodEdge = 4096;
 inline constexpr double kMaxRasterPixels = 8.0 * 1000 * 1000;
+// Zoomed-in regions keep this density margin. Zoomed-out Sharp uses paint dest.
+inline constexpr double kRasterOverscan = 1.25;
 
 // Viewport LOD when a full frame is worth avoiding. 8-bit (unknown depth that
 // is not RAW counts as 8-bit) at or below 4 MP stays a full-frame fast path.
@@ -57,6 +60,128 @@ inline void devicePixelsForSource(int sourceW, int sourceH, double density, int 
     }
     tw = std::max(1, static_cast<int>(std::lround(w)));
     th = std::max(1, static_cast<int>(std::lround(h)));
+}
+
+// Same dpr treatment as ImageViewer::drawDisplayRaster.
+inline double paintDevicePixelRatio(double dpr)
+{
+    return (dpr > 1.0 && std::isfinite(dpr)) ? dpr : 1.0;
+}
+
+// Inputs for planPaintDisplayDest. haveView uses `view` as-is (current pan/zoom);
+// otherwise Comfortable/MaximizeClient fit, or a centered lockedScale.
+struct DisplayPaintDestRequest
+{
+    int sourceX = 0;
+    int sourceY = 0;
+    int sourceW = 0;
+    int sourceH = 0;
+    int widgetW = 0;
+    int widgetH = 0;
+    double dpr = 1.0;
+    bool maximizeFit = false;
+    double lockedScale = 0.0;
+    bool haveView = false;
+    Viewport view;
+};
+
+// Device-pixel dest drawDisplayRaster will blit: Viewport fit (or supplied view),
+// imageRectToScreen (snapScreenEdge floor), then lround(sw * dpr).
+struct DisplayPaintDest
+{
+    int width = 0;
+    int height = 0;
+    double scale = 0.0;
+    double density = 0.0;
+    bool valid = false;
+};
+
+inline DisplayPaintDest planPaintDisplayDest(const DisplayPaintDestRequest &request)
+{
+    DisplayPaintDest dest;
+    if (request.sourceW <= 0 || request.sourceH <= 0)
+        return dest;
+
+    Viewport view;
+    if (request.haveView)
+    {
+        view = request.view;
+    }
+    else
+    {
+        if (request.widgetW <= 0 || request.widgetH <= 0)
+            return dest;
+        view.screenW = request.widgetW;
+        view.screenH = request.widgetH;
+        if (request.lockedScale > 0.0 && std::isfinite(request.lockedScale))
+        {
+            view.scale = request.lockedScale;
+            view.offsetX = (static_cast<double>(view.screenW) -
+                            static_cast<double>(request.sourceW) * view.scale) /
+                           2.0;
+            view.offsetY = (static_cast<double>(view.screenH) -
+                            static_cast<double>(request.sourceH) * view.scale) /
+                           2.0;
+        }
+        else
+        {
+            const FitPolicy policy =
+                request.maximizeFit ? FitPolicy::MaximizeClient : FitPolicy::Comfortable;
+            view.fit(request.sourceW, request.sourceH, policy);
+        }
+    }
+
+    int sx = 0;
+    int sy = 0;
+    int sw = 0;
+    int sh = 0;
+    view.imageRectToScreen(request.sourceX, request.sourceY, request.sourceW, request.sourceH, sx,
+                           sy, sw, sh);
+    if (sw <= 0 || sh <= 0)
+        return dest;
+    const double ratio = paintDevicePixelRatio(request.dpr);
+    dest.width = std::max(1, static_cast<int>(std::lround(static_cast<double>(sw) * ratio)));
+    dest.height = std::max(1, static_cast<int>(std::lround(static_cast<double>(sh) * ratio)));
+    dest.scale = view.scale;
+    dest.density = dest.scale * ratio;
+    dest.valid = dest.width >= 1 && dest.height >= 1 && dest.scale > 0.0 &&
+                 std::isfinite(dest.scale) && std::isfinite(dest.density);
+    return dest;
+}
+
+inline DisplayPaintDest paintDestForView(const Viewport &view, const QRect &source, double dpr)
+{
+    DisplayPaintDestRequest destReq;
+    destReq.sourceX = source.x();
+    destReq.sourceY = source.y();
+    destReq.sourceW = source.width();
+    destReq.sourceH = source.height();
+    destReq.dpr = dpr;
+    destReq.haveView = true;
+    destReq.view = view;
+    return planPaintDisplayDest(destReq);
+}
+
+inline int fallbackLodMaxEdge(int widgetW, int widgetH, double dpr)
+{
+    const double ratio = paintDevicePixelRatio(dpr);
+    const int edge = static_cast<int>(
+        std::ceil(std::max(static_cast<double>(widgetW), static_cast<double>(widgetH)) * ratio *
+                  kRasterOverscan));
+    return std::max(kMinLodEdge, std::min(edge, kMaxLodEdge));
+}
+
+inline void applyZoomedOutSharpPlan(const DisplayPaintDestRequest &destReq, int &maxEdge,
+                                    bool &sharpFit, int &exactW, int &exactH)
+{
+    const DisplayPaintDest dest = planPaintDisplayDest(destReq);
+    if (!dest.valid || !(dest.density > 0.0) || !std::isfinite(dest.density) ||
+        !(dest.density < 1.0))
+        return;
+    sharpFit = true;
+    exactW = dest.width;
+    exactH = dest.height;
+    maxEdge = std::max(kMinLodEdge, std::min(std::max(dest.width, dest.height), kMaxLodEdge));
 }
 
 // Color-manage first. Sharp's sRGB EOTF must see a display-referred raster.
@@ -109,7 +234,7 @@ struct WarmDisplayLodPlan
     bool sharp = false;
 };
 
-// Zoomed-out fit matches the settled viewer path: exact device pixels, no overscan.
+// Zoomed-out fit matches the settled viewer path: exact paint dest, no overscan.
 // A missing widget, or density >= 1, stays a bounded LOD and does not invent a Sharp size.
 inline WarmDisplayLodPlan planWarmDisplayLod(const WarmDisplayLodRequest &request)
 {
@@ -119,34 +244,33 @@ inline WarmDisplayLodPlan planWarmDisplayLod(const WarmDisplayLodRequest &reques
         request.widgetH <= 0)
         return plan;
 
-    double scale = request.lockedScale;
-    if (!(scale > 0.0) || !std::isfinite(scale))
-    {
-        Viewport fitted;
-        fitted.screenW = request.widgetW;
-        fitted.screenH = request.widgetH;
-        FitPolicy policy = FitPolicy::Comfortable;
-        if (request.maximizeFit)
-            policy = FitPolicy::MaximizeClient;
-        fitted.fit(request.sourceW, request.sourceH, policy);
-        scale = fitted.scale;
-    }
+    DisplayPaintDestRequest destReq;
+    destReq.sourceW = request.sourceW;
+    destReq.sourceH = request.sourceH;
+    destReq.widgetW = request.widgetW;
+    destReq.widgetH = request.widgetH;
+    destReq.dpr = request.dpr;
+    destReq.maximizeFit = request.maximizeFit;
+    destReq.lockedScale = request.lockedScale;
+    const DisplayPaintDest dest = planPaintDisplayDest(destReq);
+    if (!dest.valid)
+        return plan;
 
-    const double ratio = std::isfinite(request.dpr) ? std::max(1.0, request.dpr) : 1.0;
-    const double density = scale * ratio;
+    const double density = dest.density;
     if (!(density > 0.0) || !std::isfinite(density) || !(density < 1.0))
     {
         if (std::isfinite(density) && density >= 1.0)
         {
             const int longEdge = std::max(request.widgetW, request.widgetH);
-            const double edge = static_cast<double>(longEdge) * ratio;
+            const double edge = static_cast<double>(longEdge) * paintDevicePixelRatio(request.dpr);
             const double capped = std::min(edge, static_cast<double>(kMaxLodEdge));
             plan.maxEdge = std::max(kMinLodEdge, static_cast<int>(std::ceil(capped)));
         }
         return plan;
     }
 
-    devicePixelsForSource(request.sourceW, request.sourceH, density, plan.exactW, plan.exactH);
+    plan.exactW = dest.width;
+    plan.exactH = dest.height;
     const int wantEdge = std::max(plan.exactW, plan.exactH);
     plan.maxEdge = std::max(kMinLodEdge, std::min(wantEdge, kMaxLodEdge));
     plan.sharp = plan.exactW >= 1 && plan.exactH >= 1;

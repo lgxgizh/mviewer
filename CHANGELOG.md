@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Performance
+
+- **First zoomed-out LOD**: Sharp-resample to the same device-pixel dest
+  ImageViewer paint blits, avoiding a GUI-thread SmoothPixmapTransform of a
+  mismatched multi-megapixel raster.
+
 ### Fixed
 
 - **Browse display cancellation**: a late promoted raster from an older image

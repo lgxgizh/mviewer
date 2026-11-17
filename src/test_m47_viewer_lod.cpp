@@ -563,7 +563,6 @@ int main(int argc, char **argv)
               "V8: current image is on the LOD path");
         const int widgetW = viewer.width();
         const int widgetH = viewer.height();
-        const double dpr = std::max(1.0, viewer.devicePixelRatioF());
         CHECK(widgetW > 0 && widgetH > 0, "V8: viewer has a widget size");
         viewer.setBrowseSequence({highCompression, jpeg100});
         CHECK(waitTrue([&] { return viewer.displayRasterWarmCount() >= 1; }, 30000),
@@ -579,16 +578,20 @@ int main(int argc, char **argv)
         fitted.screenW = widgetW;
         fitted.screenH = widgetH;
         fitted.fit(source.width(), source.height(), FitPolicy::Comfortable);
-        const double density = fitted.scale * dpr;
+        const double ratio = viewer.devicePixelRatioF() > 1.0 ? viewer.devicePixelRatioF() : 1.0;
+        const double density = fitted.scale * ratio;
         CHECK(density > 0.0 && density < 1.0, "V8: neighbor fit is zoomed out");
-        const double w = static_cast<double>(source.width()) * density;
-        const double h = static_cast<double>(source.height()) * density;
-        CHECK(std::max(w, h) <= 4096.0 && w * h <= 8.0 * 1000 * 1000.0,
-              "V8: device fit is inside the LOD caps");
-        const int tw = std::max(1, static_cast<int>(std::lround(w)));
-        const int th = std::max(1, static_cast<int>(std::lround(h)));
-        CHECK(warm.width() == tw && warm.height() == th,
-              "V8: warm raster is the exact device-pixel fit");
+        int sx = 0;
+        int sy = 0;
+        int sw = 0;
+        int sh = 0;
+        fitted.imageRectToScreen(0, 0, source.width(), source.height(), sx, sy, sw, sh);
+        const int tw = std::max(1, static_cast<int>(std::lround(static_cast<double>(sw) * ratio)));
+        const int th = std::max(1, static_cast<int>(std::lround(static_cast<double>(sh) * ratio)));
+        CHECK(std::max(tw, th) <= 4096 &&
+                  static_cast<double>(tw) * static_cast<double>(th) <= 8.0 * 1000 * 1000.0,
+              "V8: paint dest is inside the LOD caps");
+        CHECK(warm.width() == tw && warm.height() == th, "V8: warm raster is the exact paint dest");
     }
 
     // ── V9: 12 MP 16-bit still uses the viewport LOD, not a full frame ─────

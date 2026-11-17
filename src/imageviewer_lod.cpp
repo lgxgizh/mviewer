@@ -17,9 +17,6 @@
 
 #include <algorithm>
 #include <cmath>
-// Zoomed-in regions keep kRasterOverscan as a density margin. Sharp-owned
-// zoomed-out fit requests the exact device-pixel edge (no overscan).
-constexpr double kRasterOverscan = 1.25;
 constexpr qint64 kAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP analysis cap
 
 // Global: imageviewer.h forward-declares RasterRequest for runRasterWorker.
@@ -36,6 +33,13 @@ struct RasterRequest
     bool sharpFit = false;              // zoomed out: Sharp to exact device px
     int exactW = 0;
     int exactH = 0;
+    int widgetW = 0;
+    int widgetH = 0;
+    double dpr = 1.0;
+    bool maximizeFit = false;
+    double lockedScale = 0.0;
+    bool haveView = false;
+    Viewport view;
 };
 
 namespace
@@ -80,6 +84,68 @@ bool fillRegionRasterRequest(RasterRequest &req, const QRect &visible, const QSi
     req.tw = std::max(1, static_cast<int>(tw));
     req.th = std::max(1, static_cast<int>(th));
     return true;
+}
+
+void fillRasterView(RasterRequest &req, int widgetW, int widgetH, double dpr, bool maximizeFit,
+                    double lockedScale, bool haveView, const Viewport &view)
+{
+    req.widgetW = widgetW;
+    req.widgetH = widgetH;
+    req.dpr = dpr;
+    req.maximizeFit = maximizeFit;
+    req.lockedScale = lockedScale;
+    req.haveView = haveView;
+    req.view = view;
+}
+
+void applyFitSharpPlan(const RasterRequest &req, int sourceW, int sourceH, int &maxEdge,
+                       bool &sharpFit, int &exactW, int &exactH)
+{
+    DisplayPaintDestRequest destReq;
+    destReq.sourceW = sourceW;
+    destReq.sourceH = sourceH;
+    destReq.widgetW = req.widgetW;
+    destReq.widgetH = req.widgetH;
+    destReq.dpr = req.dpr;
+    destReq.maximizeFit = req.maximizeFit;
+    destReq.lockedScale = req.lockedScale;
+    destReq.haveView = req.haveView;
+    destReq.view = req.view;
+    applyZoomedOutSharpPlan(destReq, maxEdge, sharpFit, exactW, exactH);
+}
+
+void decodeRequestedRaster(const RasterRequest &req, mviewer::core::SourceImage &source,
+                           int maxEdge, const QSize &srcSize,
+                           mviewer::core::SourceImage::RasterResult &r, QRect &covered,
+                           double &density)
+{
+    if (req.fullLod)
+    {
+        r = source.decodeLod(maxEdge);
+        covered = QRect(0, 0, srcSize.width(), srcSize.height());
+        if (r.ok && !r.pixels.isNull())
+            density = static_cast<double>(srcSize.width()) / r.pixels.width;
+        return;
+    }
+    const int orientation = source.orientation();
+    const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
+        {req.rx, req.ry, req.rw, req.rh}, source.rawWidth(), source.rawHeight(), orientation);
+    r = source.decodeRegion(raw, req.tw, req.th);
+    const mviewer::core::SourceRect coveredD = mviewer::core::rawRectToOriented(
+        r.coveredRect, source.rawWidth(), source.rawHeight(), orientation);
+    covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
+    if (r.ok && !r.pixels.isNull() && r.pixels.width > 0 && covered.width() > 0)
+        density = static_cast<double>(covered.width()) / static_cast<double>(r.pixels.width);
+}
+
+void noteSharpDensity(const QImage &raster, const QRect &covered, const QSize &srcSize,
+                      double &density)
+{
+    if (raster.width() <= 0)
+        return;
+    const int coveredW = covered.width() > 0 ? covered.width() : srcSize.width();
+    if (coveredW > 0)
+        density = static_cast<double>(coveredW) / static_cast<double>(raster.width());
 }
 
 } // namespace
@@ -193,38 +259,20 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     }
     if (ctx.isCancelled())
         return; // superseded during the probe
+    int maxEdge = req.maxEdge;
+    int exactW = req.exactW;
+    int exactH = req.exactH;
+    bool sharpFit = req.sharpFit;
+    if (req.fullLod)
+        applyFitSharpPlan(req, srcSize.width(), srcSize.height(), maxEdge, sharpFit, exactW,
+                          exactH);
     mviewer::core::SourceImage::RasterResult r;
     QRect covered;
     double density = 1.0;
     bool decodeFailed = false;
     try
     {
-        if (req.fullLod)
-        {
-            r = source->decodeLod(req.maxEdge);
-            // LOD raster covers the full source in DISPLAYED coordinates.
-            covered = QRect(0, 0, srcSize.width(), srcSize.height());
-            if (r.ok && !r.pixels.isNull())
-                density = static_cast<double>(srcSize.width()) / r.pixels.width;
-        }
-        else
-        {
-            // Visible rect is displayed (oriented). decodeRegion takes raw
-            // pre-EXIF coordinates (M48 B1/B2).
-            const int orientation = source->orientation();
-            const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
-                {req.rx, req.ry, req.rw, req.rh}, source->rawWidth(), source->rawHeight(),
-                orientation);
-            r = source->decodeRegion(raw, req.tw, req.th);
-            // Report the covered area back in DISPLAYED coordinates for drawing.
-            const mviewer::core::SourceRect coveredD = mviewer::core::rawRectToOriented(
-                r.coveredRect, source->rawWidth(), source->rawHeight(), orientation);
-            covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
-            // Source px per output px in displayed space (orientations 5-8 swap axes).
-            if (r.ok && !r.pixels.isNull() && r.pixels.width > 0 && covered.width() > 0)
-                density =
-                    static_cast<double>(covered.width()) / static_cast<double>(r.pixels.width);
-        }
+        decodeRequestedRaster(req, *source, maxEdge, srcSize, r, covered, density);
     }
     catch (...)
     {
@@ -234,9 +282,9 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         return; // superseded during the decode
     decodeFailed = decodeFailed || !r.ok || r.pixels.isNull();
     QImage raster;
-    const bool sharp = !decodeFailed && req.sharpFit && req.exactW > 0 && req.exactH > 0;
+    const bool sharp = !decodeFailed && sharpFit && exactW > 0 && exactH > 0;
     if (sharp)
-        raster = sharpFitDisplayImage(r.pixels, r.metadata, req.target, req.exactW, req.exactH,
+        raster = sharpFitDisplayImage(r.pixels, r.metadata, req.target, exactW, exactH,
                                       ctx.cancel.get());
     else if (!decodeFailed)
         raster = mvcore::toDisplayQImage(r.pixels, r.metadata, req.target);
@@ -246,12 +294,8 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     {
         if (raster.isNull())
             decodeFailed = true;
-        else if (raster.width() > 0)
-        {
-            const int coveredW = covered.width() > 0 ? covered.width() : srcSize.width();
-            if (coveredW > 0)
-                density = static_cast<double>(coveredW) / static_cast<double>(raster.width());
-        }
+        else
+            noteSharpDensity(raster, covered, srcSize, density);
     }
     ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
                                       std::move(raster), covered, srcSize, density, req.target,
@@ -365,16 +409,16 @@ bool ImageViewer::displayNeedsUpgrade() const
     // a margin (so small pans do not re-request).
     if (!displayRasterCoversView(m_raster.sourceRect, QRect(vx, vy, vw, vh)))
         return true;
-    // Zoomed out: upgrade until the raster is the Sharp device-pixel size.
+    // Zoomed out: upgrade until the raster is the Sharp paint dest.
     // Zoomed in keeps the overscan margin and is not Sharp-resampled.
-    const double viewDensity = m_view.scale * std::max(1.0, devicePixelRatioF());
+    const double dpr = devicePixelRatioF();
+    const double viewDensity = m_view.scale * paintDevicePixelRatio(dpr);
     if (viewDensity < 1.0)
     {
-        int tw = 1;
-        int th = 1;
-        devicePixelsForSource(m_raster.sourceRect.width(), m_raster.sourceRect.height(),
-                              viewDensity, tw, th);
-        return m_raster.image.width() != tw || m_raster.image.height() != th;
+        const DisplayPaintDest dest = paintDestForView(m_view, m_raster.sourceRect, dpr);
+        if (!dest.valid)
+            return false;
+        return m_raster.image.width() != dest.width || m_raster.image.height() != dest.height;
     }
     const double rasterDensity = 1.0 / m_raster.density;
     return rasterDensity < viewDensity / kRasterOverscan;
@@ -418,29 +462,28 @@ void ImageViewer::requestDisplayRasterImpl()
     req.path = m_currentPath;
     req.generation = m_requestGen;
     req.target = m_displayColorTarget;
+    const double dpr = devicePixelRatioF();
+    const double lockedScale =
+        (m_lockZoom && !m_fitMode && m_view.scale > 0.0) ? m_view.scale : 0.0;
+    const bool maximizeFit = property("mviewerFullscreenRequested").toBool();
+    fillRasterView(req, width(), height(), dpr, maximizeFit, lockedScale, false, Viewport{});
 
     if (firstRequest || sw <= 0 || sh <= 0)
     {
-        // First display: request a viewport LOD sized for the widget (the
-        // source dims are not known on the UI thread yet; the worker probes).
-        const double dpr = std::max(1.0, devicePixelRatioF());
+        // Worker probes, then Sharp-plans. maxEdge is the unplanned fallback.
         req.fullLod = true;
-        req.maxEdge = static_cast<int>(
-            std::ceil(std::max(static_cast<double>(width()), static_cast<double>(height())) * dpr *
-                      kRasterOverscan));
-        req.maxEdge = std::max(kMinLodEdge, std::min(req.maxEdge, kMaxLodEdge));
+        req.maxEdge = fallbackLodMaxEdge(width(), height(), dpr);
     }
     else
     {
-        const double dpr = std::max(1.0, devicePixelRatioF());
-        const double d = m_view.scale * dpr;
+        fillRasterView(req, width(), height(), dpr, maximizeFit, lockedScale, true, m_view);
+        const double d = m_view.scale * paintDevicePixelRatio(dpr);
         if (d < 1.0)
         {
             req.fullLod = true;
-            req.sharpFit = true;
-            devicePixelsForSource(sw, sh, d, req.exactW, req.exactH);
-            const int wantEdge = std::max(req.exactW, req.exactH);
-            req.maxEdge = std::max(kMinLodEdge, std::min(wantEdge, kMaxLodEdge));
+            applyFitSharpPlan(req, sw, sh, req.maxEdge, req.sharpFit, req.exactW, req.exactH);
+            if (!req.sharpFit)
+                req.maxEdge = fallbackLodMaxEdge(width(), height(), dpr);
         }
         else
         {
@@ -703,15 +746,14 @@ bool ImageViewer::acceptDisplayRaster(const QImage &image, const QRect &covered,
     m_view.visibleImageRect(m_raster.sourceSize.width(), m_raster.sourceSize.height(), vx, vy, vw,
                             vh);
     const QRect visible(vx, vy, vw, vh);
-    const double viewDensity = m_view.scale * std::max(1.0, devicePixelRatioF());
-    // A Sharp raster at the exact device size replaces a finer provisional
+    const double dpr = devicePixelRatioF();
+    const double viewDensity = m_view.scale * paintDevicePixelRatio(dpr);
+    // A Sharp raster at the exact paint dest replaces a finer provisional
     // that QPainter would only downsample.
     if (viewDensity < 1.0 && displayRasterCoversView(covered, visible))
     {
-        int tw = 1;
-        int th = 1;
-        devicePixelsForSource(covered.width(), covered.height(), viewDensity, tw, th);
-        if (image.width() == tw && image.height() == th)
+        const DisplayPaintDest dest = paintDestForView(m_view, covered, dpr);
+        if (dest.valid && image.width() == dest.width && image.height() == dest.height)
             return true;
     }
     return shouldAcceptDisplayRaster(!m_raster.image.isNull(), m_raster.sourceRect,
