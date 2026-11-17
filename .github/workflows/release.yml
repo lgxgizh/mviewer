@@ -199,6 +199,8 @@ jobs:
   # ---------------------------------------------------------------------------
   dr-memory:
     name: Dr.Memory advisory (see execution verdict)
+    env:
+      MVIEWER_ALL_PDBS: 'ON'
     runs-on: windows-2022
     needs: [warm-cache]
     continue-on-error: true

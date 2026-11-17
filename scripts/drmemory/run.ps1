@@ -21,6 +21,8 @@ try {
         Remove-Item -LiteralPath $archive
     }
     $targetPath = (Resolve-Path -LiteralPath $Target).Path
+    $pdb = [IO.Path]::ChangeExtension($targetPath, '.pdb')
+    if (-not (Test-Path -LiteralPath $pdb -PathType Leaf)) { throw "Missing target linker PDB: $pdb. Build diagnostic target with MVIEWER_ALL_PDBS=ON" }
     $tool = Find-DrMemory -Root (Resolve-Path -LiteralPath $ToolRoot).Path -Target $targetPath
     $r = Invoke-DrMemoryProcess -Tool $tool -Target $targetPath -LogRoot $logs -EvidenceRoot $runRoot -TimeoutSeconds $TimeoutSeconds
 } catch {
@@ -28,6 +30,7 @@ try {
         reports = @(); reason = $_.ToString() }
     [IO.File]::WriteAllText((Join-Path $runRoot infrastructure-error.txt), $_.ToString())
 }
+if ($null -ne (Get-Variable pdb -ErrorAction SilentlyContinue)) { $r | Add-Member -NotePropertyName targetPdb -NotePropertyValue $pdb }
 $r | Add-Member -NotePropertyName toolVersion -NotePropertyValue '2.6.0'
 $r | Add-Member -NotePropertyName os -NotePropertyValue ([Runtime.InteropServices.RuntimeInformation]::OSDescription)
 $r | Add-Member -NotePropertyName runnerArchitecture -NotePropertyValue ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString())

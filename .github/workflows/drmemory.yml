@@ -31,6 +31,9 @@ jobs:
     timeout-minutes: 25
     env:
       MVIEWER_REQUIRE_LIBRAW: 'ON'
+      # Release normally writes linker PDBs only for shipping binaries.
+      # Dr.Memory also needs core_tests.pdb for actionable target frames.
+      MVIEWER_ALL_PDBS: 'ON'
       SCCACHE_GHA_ENABLED: 'true'
       CMAKE_C_COMPILER_LAUNCHER: sccache
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
