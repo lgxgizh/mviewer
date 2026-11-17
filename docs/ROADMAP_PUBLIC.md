@@ -4,17 +4,19 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.180**
+## Where we are now — **Beta / 1.0.181**
 
-MViewer remains in **Beta**; the current release is **`v1.0.180`**
+MViewer remains in **Beta**; the current release is **`v1.0.181`**
 (2026-11-17, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch tightens browse request ownership, cached preview source size,
-and preview submit recovery; Sharp-resamples the first zoomed-out LOD to the
-paint device-pixel dest; keeps still-needed preloads across append-only
-folder scans; and records display-LOD queue wait versus decode without
-changing scheduling. The reported >=10-second UI stall when entering a
-folder remains unresolved, is not claimed fixed, and has not been shown to
-be PNG-specific.
+This patch caches ICC contexts across resize, reduces transition/loading paint
+work, and incrementally publishes scan insertions. Name/Date/Size/Type sorting
+in either direction and suffix type filters stream sorted rows while retaining
+current/selected identities and needed preloads. Stale scans avoid obsolete
+exists probes; interior thumbnail insertions keep viewport demand bounded.
+Real concurrent DPR2 loading measurements were added without scheduler or worker
+changes. Resolution/metadata queries retain a full-query barrier; ICC misses,
+metadata fallback, Compare rebuilds and foreground yield retain documented
+costs. Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -69,7 +71,10 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.178** (current) | Hotfix: no more freeze while browsing or switching folders with images above 4 MP | 🔵 Beta |
+| **1.0.181** (current) | ICC/transition paint caching, incremental sorted scan publication, bounded thumbnails and concurrent-loading evidence | 🔵 Beta |
+| **1.0.180** | Browse request/preview reliability, device-pixel first LOD and retained append preloads | ✅ Previous patch |
+| **1.0.179** | Bounded image decode and load readiness | ✅ Previous patch |
+| **1.0.178** | Hotfix for browse/switch paths with images above 4 MP | ✅ Previous patch |
 | **1.0.177** | Image pipeline quality and speed: sharper linear-light fit to exact screen pixels, 16-bit dither, better YUV and optional high-quality RAW, faster opening of large and mid-size images (lazy full-frame load, viewport preview, display-sized neighbor preload) | ✅ Previous patch |
 | **1.0.176** | Headerless grayscale `.gray` / `.grey` viewing (ADR 034): 8-bit default, 16-bit and 1-bit, Preferences → Gray and a per-file Gray Parameters dialog, hidden-by-default browse group | ✅ Previous patch |
 | **1.0.175** | Plain `.raw` follow-up: own **Sensor RAW (.raw)** browse filter group (visible by default) and the RAW review fixes — bit-depth auto-detect instead of wrap, multi-size file names, override follows rename/copy, async pixel readout, faster thumbnails and renders, neutral clipped highlights | ✅ Previous patch |

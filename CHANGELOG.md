@@ -2,13 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.181] - 2026-11-17
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.181**.
+
 ### Performance
 
 - **Browse scan publication**: progressive batches incrementally insert
   pipeline sources, including middle insertions, instead of converting and
   assigning the whole path table on every 128-file publish. Name, date, size,
-  and type sorts, including a suffix type filter, can stream the first screen
-  in final sort order. Auto-selection keeps the first published identity.
+  and type sorts in either direction, including a suffix type filter, can
+  stream sorted rows before enumeration finishes. Current and selected image
+  identities survive later middle insertions; needed preloads are retained.
   Sort-by-resolution, camera/lens, text, and metadata filters still wait for
   a complete listing because the final order needs those facts. A superseded
   scan checks its generation before `QDir::exists()`.
@@ -27,6 +34,31 @@
   and the system display class key invalidate the cache. `WM_DISPLAYCHANGE`
   remains only a supplemental invalidation. Per-window generation state is
   dropped when the window is destroyed.
+
+### Fixed
+
+- **Bounded thumbnail demand**: inserting rows inside the visible interval no
+  longer expands its width by the inserted count. A four-row viewport with
+  one predictive row stays bounded after a 64-row middle insertion (PR #393).
+
+### Validation and remaining tradeoffs
+
+- **Concurrent loading evidence**: real Preview Decode, current first LOD and
+  four cold thumbnails are measured together at DPR2, separating queue wait,
+  foreground yield, decode and first paint. Scheduling, priorities, pools and
+  thread counts are unchanged (PR #391).
+- Windows offscreen CI measured 10k Name rows at first publication 2 ms /
+  total 646 ms with 20k path conversions, and a 5k-row suffix-filtered subset
+  at 13 / 518 ms with 10k conversions. These are synthetic samples, not a
+  universal latency guarantee or proof of physical-GPU smoothness.
+- Resolution and metadata-dependent query filters retain their full-query
+  barrier. A true ICC invalidation/cache miss can still synchronously read
+  the profile. Background metadata fallback can still decode a full image
+  (PNG sample 159 ms); Compare canvas rebuild and foreground yield retain
+  measured costs. PNG concurrent first LOD yielded about 179 ms and first
+  paint was about 451 ms in the offscreen sample. Display quality is preserved.
+- The previously reported long folder stall remains shelved, not claimed
+  fixed, and is not a release gate for this patch.
 
 ## [1.0.180] - 2026-11-17
 
