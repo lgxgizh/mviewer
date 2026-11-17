@@ -41,3 +41,18 @@ running one. `cancelTree`'s DFS also scanned the victim list with `std::find`
 - Drain wakes as soon as the pool is idle instead of on the next 5 ms tick.
   The timeout budget is still not spent twice.
 - `total_latency_ns` is queue wait. It is not an execution-time average.
+
+## 2026-11-17 concurrent display measurement clarification
+
+- The existing bounded foreground wait happens after a Thumbnail runnable has
+  started. `TaskContext::foregroundYieldNs` records that interval, written and
+  read only by its worker before invoking user work. It is not queue depth or
+  `PoolMetrics::total_latency_ns`, and changes no priority, width or 200ms bound.
+- The bounded (256-entry) display queue/decode recorder also samples Preview
+  workers. Its historical `queueWaitNs` remains enqueue-to-user-work entry and
+  therefore includes foreground yield; the separate field permits distinguishing
+  that wait without changing existing metrics/tests. Sample steady-clock start
+  timestamps allow relative overlap checks, not wall-clock diagnostics.
+- The CI scenario starts real Preview Decode before requesting current first
+  LOD and four cold ThumbnailProvider results at DPR2. Raster/offscreen paint
+  results are not physical GPU/driver upload measurements or an FPS guarantee.

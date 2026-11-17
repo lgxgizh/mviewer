@@ -3458,3 +3458,9 @@ if(CLANG_FORMAT_EXE)
         COMMENT "Running clang-format on all source files"
         VERBATIM)
 endif()
+
+# Real preview Decode + current LOD + visible thumbnails, large DPR2 paint costs.
+mviewer_add_test(concurrent_view_cost_tests
+    SRCS test_concurrent_view_cost.cpp
+    LIBS mviewer_ui
+    TIMEOUT 180 SERIAL)

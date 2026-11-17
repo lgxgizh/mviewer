@@ -29,7 +29,8 @@ void pushSample(QueueDecodeSample sample)
     gSamples.push_back(std::move(sample));
 }
 
-std::uint64_t beginSample(QueueDecodeRole role, const std::string &path, std::int64_t queueWaitNs)
+std::uint64_t beginSample(QueueDecodeRole role, const std::string &path, std::int64_t queueWaitNs,
+                          std::int64_t yieldNs)
 {
     std::lock_guard<std::mutex> lock(gMu);
     QueueDecodeSample sample;
@@ -37,6 +38,10 @@ std::uint64_t beginSample(QueueDecodeRole role, const std::string &path, std::in
     sample.path = path;
     sample.role = role;
     sample.queueWaitNs = queueWaitNs;
+    sample.foregroundYieldNs = yieldNs;
+    sample.startedNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                           std::chrono::steady_clock::now().time_since_epoch())
+                           .count();
     sample.started = true;
     const std::uint64_t id = sample.id;
     pushSample(std::move(sample));
@@ -131,7 +136,7 @@ QueueDecodeSpan::QueueDecodeSpan(QueueDecodeRole role, const QString &path,
     std::int64_t wait = 0;
     if (context.enqueuedAt.time_since_epoch().count() != 0)
         wait = elapsedNs(context.enqueuedAt, entered);
-    id = beginSample(role, path.toStdString(), wait);
+    id = beginSample(role, path.toStdString(), wait, context.foregroundYieldNs);
 }
 
 QueueDecodeSpan::~QueueDecodeSpan()
