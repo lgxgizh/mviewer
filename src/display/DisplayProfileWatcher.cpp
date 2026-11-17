@@ -6,9 +6,9 @@
 
 DisplayProfileWatcher::DisplayProfileWatcher(HKEY root, QString path, std::function<void()> changed,
                                              QObject *parent)
-    : QObject(parent), m_root(root), m_path(std::move(path)), m_changed(std::move(changed))
+    : QObject(parent), m_root(root), m_path(std::move(path)), m_changed(std::move(changed)),
+      m_event(CreateEventW(nullptr, TRUE, FALSE, nullptr))
 {
-    m_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (!m_event)
         return;
     m_notifier = new QWinEventNotifier(m_event, this);
