@@ -8,13 +8,10 @@
 #include "core/image/QtConvert.h"
 #include "core/image/SourceImage.h"
 #include "core/scheduler/TaskScheduler.h"
-#include "display/DisplayColorContextProvider.h"
 
 #include <QApplication>
 #include <QFileInfo>
-#include <QScreen>
 #include <QTimer>
-#include <QWindow>
 
 #include <algorithm>
 #include <cmath>
@@ -45,16 +42,6 @@ struct RasterRequest
 
 namespace
 {
-
-QWindow *hostWindowHandle(const QWidget *widget)
-{
-    if (!widget)
-        return nullptr;
-    if (QWindow *own = widget->windowHandle())
-        return own;
-    const QWidget *host = widget->window();
-    return host ? host->windowHandle() : nullptr;
-}
 
 // Zoomed in: visible source rect inflated by 1/8, at density `d`. False if empty.
 bool fillRegionRasterRequest(RasterRequest &req, const QRect &visible, const QSize &source,
@@ -165,22 +152,6 @@ void ImageViewer::presentLoadFailure()
     emit zoomChanged(-1); // status bar treats a negative percent as "no image"
     update();
     emit loadFailed(m_currentPath);
-}
-
-void ImageViewer::onDisplayScreenChanged()
-{
-    if (QWindow *handle = hostWindowHandle(this))
-        setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
-}
-
-void ImageViewer::bindDisplayColorScreen()
-{
-    QWindow *handle = hostWindowHandle(this);
-    if (!handle)
-        return;
-    connect(handle, &QWindow::screenChanged, this, &ImageViewer::onDisplayScreenChanged,
-            Qt::UniqueConnection);
-    setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
 }
 
 void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)

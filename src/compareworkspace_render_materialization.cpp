@@ -196,8 +196,12 @@ QWindow *compareHostWindow(const QWidget *widget)
 
 void CompareWorkspace::onDisplayScreenChanged()
 {
-    if (QWindow *handle = compareHostWindow(this))
-        setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+    QWindow *handle = compareHostWindow(this);
+    if (!handle)
+        return;
+    if (DisplayColorContextProvider::targetUnchanged(handle, m_displayColorTarget))
+        return;
+    setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
 }
 
 void CompareWorkspace::bindDisplayColorScreen()
@@ -207,6 +211,13 @@ void CompareWorkspace::bindDisplayColorScreen()
         return;
     connect(handle, &QWindow::screenChanged, this, &CompareWorkspace::onDisplayScreenChanged,
             Qt::UniqueConnection);
+    if (DisplayColorSpaceHub *hub = DisplayColorContextProvider::colorSpaceHub())
+    {
+        connect(hub, &DisplayColorSpaceHub::colorSpaceChanged, this,
+                &CompareWorkspace::onDisplayScreenChanged, Qt::UniqueConnection);
+    }
+    if (DisplayColorContextProvider::targetUnchanged(handle, m_displayColorTarget))
+        return;
     setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
 }
 
