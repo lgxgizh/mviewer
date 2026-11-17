@@ -1,5 +1,6 @@
 #include "imageviewer.h"
 #include "imageviewer_displayfit.h"
+#include "imageviewer_queuedecode.h"
 
 #include "core/image/QtConvert.h"
 #include "core/image/SourceImage.h"
@@ -591,6 +592,7 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
                                           const TaskScheduler::TaskContext &ctx,
                                           const std::shared_ptr<QPointer<ImageViewer>> &guard)
 {
+    QueueDecodeSpan preloadQueue(QueueDecodeRole::NeighborPreload, path, ctx);
     if (ctx.isCancelled())
     {
         const uint64_t promoted =
@@ -615,6 +617,7 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
     result.target = target;
     try
     {
+        preloadQueue.beginDecode();
         result.source = mviewer::core::SourceImage::open(path.toStdString());
         if (!result.source)
         {
@@ -644,7 +647,9 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
             warmReq.maximizeFit = state->maximizeFit;
         }
         const WarmDisplayLodPlan plan = planWarmDisplayLod(warmReq);
+        QueueDecodeSpan::closePhase();
         const auto raster = result.source->decodeLod(plan.maxEdge);
+        QueueDecodeSpan::closePhase();
         if (!raster.ok || raster.pixels.isNull())
         {
             result.failed = true;
@@ -687,6 +692,7 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
 void ImageViewer::queueDisplayRasterPreloadResult(
     const std::shared_ptr<QPointer<ImageViewer>> &guard, DisplayRasterPreloadResult result)
 {
+    QueueDecodeSpan::finishCurrent();
     if (!qApp)
         return;
     QMetaObject::invokeMethod(

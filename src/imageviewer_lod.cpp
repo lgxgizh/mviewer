@@ -1,5 +1,6 @@
 #include "imageviewer.h"
 #include "imageviewer_displayfit.h"
+#include "imageviewer_queuedecode.h"
 
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageBuffer.h"
@@ -212,12 +213,13 @@ void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContex
     update();
 }
 
-// Probe -> classify -> decodeLod/decodeRegion -> optional Sharp fit -> marshal.
 void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler::TaskContext &ctx,
                                   const std::shared_ptr<QPointer<ImageViewer>> &guard)
 {
+    QueueDecodeSpan lodQueue(QueueDecodeRole::CurrentDisplay, req.path, ctx);
     if (ctx.isCancelled())
         return; // superseded while queued
+    lodQueue.beginDecode();
     std::shared_ptr<mviewer::core::SourceImage> source;
     bool failed = false;
     try
@@ -269,7 +271,9 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     bool decodeFailed = false;
     try
     {
+        QueueDecodeSpan::closePhase();
         decodeRequestedRaster(req, *source, maxEdge, srcSize, r, covered, density);
+        QueueDecodeSpan::closePhase();
     }
     catch (...)
     {
@@ -307,6 +311,7 @@ void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewe
                                        const mviewer::core::DisplayColorContext &target,
                                        bool failed, uint64_t serial)
 {
+    QueueDecodeSpan::finishCurrent();
     if (!qApp)
         return; // app teardown
     QMetaObject::invokeMethod(

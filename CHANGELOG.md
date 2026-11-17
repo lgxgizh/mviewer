@@ -4,6 +4,10 @@
 
 ### Performance
 
+- **Display LOD timing**: queue wait and decode duration are recorded for the
+  current image's display LOD and for neighbor display preloads, including
+  decode that continues after cancel. Scheduling is unchanged. This does not
+  measure or fix the reported multi-second folder stall.
 - **First zoomed-out LOD**: Sharp-resample to the same device-pixel dest
   ImageViewer paint blits, avoiding a GUI-thread SmoothPixmapTransform of a
   mismatched multi-megapixel raster.
