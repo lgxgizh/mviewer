@@ -105,7 +105,7 @@ struct ThumbnailPipeline
     void appendSourcesForConsumer(int cid, const std::vector<std::string> &paths);
     // Insert paths at index (middle or suffix). Does not copy a caller-built
     // full table or cancel still-listed work. Visible range shifts when the
-    // insert lands at or before the current window.
+    // insert lands before the current window; inserts inside keep its width.
     void insertSourcesForConsumer(int cid, size_t index, const std::vector<std::string> &paths);
 
     // Drops "path\x1f..." keys whose path is listed: one pass, not paths x keys.

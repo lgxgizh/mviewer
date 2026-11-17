@@ -150,6 +150,40 @@ void measureDirectory(const QString &dir, int count, ThumbnailPanel::SortMode mo
     }
 }
 
+void testInsertDemandBound()
+{
+    auto &pipe = ThumbnailPipeline::instance();
+    pipe.clear();
+    const auto starts = std::make_shared<std::atomic<int>>(0);
+    pipe.setDecodeFn(
+        [starts](const std::string &, int)
+        {
+            starts->fetch_add(1);
+            return ImageData{};
+        });
+    constexpr int cid = 999;
+    pipe.setPredictiveCountForConsumer(cid, 0);
+    std::vector<std::string> initial;
+    std::vector<std::string> inserted;
+    for (int i = 0; i < 64; ++i)
+    {
+        initial.push_back("demand-old-" + std::to_string(i));
+        inserted.push_back("demand-new-" + std::to_string(i));
+    }
+    pipe.setSourcesForConsumer(cid, initial);
+    pipe.setVisibleRangeForConsumer(cid, 0, 4);
+    MVIEWER_CHECK(mviewer::test::waitFor([&] { return starts->load() >= 4; }, 5000),
+                  "initial bounded demand decodes");
+    pipe.insertSourcesForConsumer(cid, 2, inserted);
+    mviewer::test::pump(250);
+    std::printf("middleInsertDemand starts=%d visibleWidth=4 inserted=64\n", starts->load());
+    MVIEWER_CHECK(starts->load() <= 8,
+                  "middle insertion does not inflate viewport demand by inserted count");
+    pipe.removeConsumer(cid);
+    pipe.clear();
+    pipe.setDecodeFn([](const std::string &, int) { return ImageData{}; });
+}
+
 void testExistsGeneration(const QString &dir)
 {
     ThumbnailPanel panel;
@@ -248,6 +282,7 @@ int main(int argc, char **argv)
     measureDirectory(dir1k, 1000, ThumbnailPanel::SortSize, false, true, false);
     measureDirectory(dir1k, 1000, ThumbnailPanel::SortType, true, true, false);
 
+    testInsertDemandBound();
     testExistsGeneration(dir1k);
 
     QTemporaryDir images;
