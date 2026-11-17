@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Performance
+
+- **Display ICC resize path**: cache the monitor profile per screen so Browse
+  and Compare resizes reuse `DisplayColorContext` without a per-resize ICC
+  stat, read, or parse. A null window's sRGB fallback is not stored as the
+  monitor profile. Screen identity, screen add/remove, CMS toggles, and
+  Windows `RegNotifyChangeKeyValue` on the per-user ICM profile associations
+  and the system display class key invalidate the cache. `WM_DISPLAYCHANGE`
+  remains only a supplemental invalidation. Per-window generation state is
+  dropped when the window is destroyed.
+
 ## [1.0.180] - 2026-11-17
 
 ### Release

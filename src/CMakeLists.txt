@@ -278,6 +278,7 @@ add_library(mviewer_ui STATIC
     imageviewer_browse.cpp
     imageviewer_multiframe.cpp
     imageviewer_lod.cpp
+    imageviewer_displaycolor.cpp
     imageviewer_queuedecode.cpp
     imageviewer_paint.cpp
     imageviewer_rawdecode.cpp
@@ -313,6 +314,8 @@ add_library(mviewer_ui STATIC
     thumbnailpanel_contextmenu.cpp
     thumbnailprovider.cpp
     display/DisplayColorContextProvider.cpp
+    display/DisplayColorContextProvider_notify.cpp
+    display/DisplayProfileWatcher.cpp
     previewpanel.cpp
     previewpanel_paint.cpp
     previewpanel_submit.cpp
@@ -400,7 +403,7 @@ add_library(mviewer_ui STATIC
 # Native window chrome (DWM title bar, corners, Mica). Stubs elsewhere.
 if(WIN32)
     target_sources(mviewer_ui PRIVATE platform/WindowChrome_win.cpp)
-    target_link_libraries(mviewer_ui PUBLIC dwmapi)
+    target_link_libraries(mviewer_ui PUBLIC dwmapi advapi32)
 endif()
 
 target_link_libraries(mviewer_ui PUBLIC
@@ -2429,6 +2432,13 @@ target_include_directories(m59_color_managed_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_compile_definitions(m59_color_managed_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m59_color_managed_tests COMMAND m59_color_managed_tests)
 set_tests_properties(m59_color_managed_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# Display ICC cache: Browse/Compare resize must not re-read or re-parse the
+# monitor profile. Loader injection keeps the suite platform-independent.
+mviewer_add_test(display_color_context_cache_tests
+    SRCS test_display_color_context_cache.cpp
+    LIBS mviewer_ui
+    TIMEOUT 60 SERIAL)
 
 # ─── M60: linked ROI geometry + source RGB measurement contract ────────────
 add_executable(m60_linked_roi_tests
