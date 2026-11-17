@@ -1,4 +1,5 @@
 #include "previewpanel.h"
+#include "imageviewer_queuedecode.h"
 
 #include "SquareLetterbox.h"
 #include "Theme.h"
@@ -637,7 +638,10 @@ void PreviewPanel::decodePreviewWorker(
 {
     if (ctx.isCancelled())
         return;
+    QueueDecodeSpan timing(QueueDecodeRole::Preview, path, ctx);
+    timing.beginDecode();
     PreviewDecodeResult loaded = loadPreviewPixels(stdPath, knownW, knownH, knownSize);
+    QueueDecodeSpan::finishCurrent();
     if (ctx.isCancelled())
         return;
     QMetaObject::invokeMethod(

@@ -22,7 +22,8 @@
 enum class QueueDecodeRole
 {
     CurrentDisplay,
-    NeighborPreload
+    NeighborPreload,
+    Preview
 };
 
 struct QueueDecodeSample
@@ -33,6 +34,8 @@ struct QueueDecodeSample
     std::int64_t queueWaitNs = 0;
     std::int64_t decodeNs = 0;
     std::int64_t postCancelNs = 0;
+    std::int64_t foregroundYieldNs = 0;
+    std::int64_t startedNs = 0; // steady clock epoch, only for relative intervals
     bool started = false;
     bool finished = false;
     bool cancelled = false;

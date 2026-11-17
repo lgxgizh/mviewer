@@ -63,6 +63,9 @@ class TaskScheduler
         // executing it, so cancelTree can tell queued from running.
         std::chrono::steady_clock::time_point enqueuedAt{};
         bool started = false;
+        // Written/read only by this task's worker, before entering user work.
+        // Separates bounded foreground yielding from pool queue wait.
+        std::int64_t foregroundYieldNs = 0;
 
         void requestCancel()
         {

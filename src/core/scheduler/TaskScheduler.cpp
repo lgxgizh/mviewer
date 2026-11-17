@@ -84,7 +84,13 @@ class LambdaTask : public QRunnable
         try
         {
             if (m_ctx->priority == TaskScheduler::Priority::Thumbnail)
+            {
+                const auto beforeYield = std::chrono::steady_clock::now();
                 yieldToForeground(*m_ctx);
+                m_ctx->foregroundYieldNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                               std::chrono::steady_clock::now() - beforeYield)
+                                               .count();
+            }
             if (m_ctx->priority == TaskScheduler::Priority::Decode)
             {
                 const TaskScheduler::ForegroundWork foreground;
