@@ -79,11 +79,11 @@ bool matchesExpected(const ThumbnailPanel &panel, const QString &typeFilter,
 }
 
 void measureDirectory(const QString &dir, int count, ThumbnailPanel::SortMode mode, bool typed,
-                      bool expectProgressive)
+                      bool expectProgressive, bool ascending = true)
 {
     ThumbnailPanel panel;
     panel.resize(800, 600);
-    panel.setSort(mode, true);
+    panel.setSort(mode, ascending);
     if (typed)
         panel.setTypeFilter(QStringLiteral("png"));
     ThumbnailPanel::resetStdPathConversionCount();
@@ -103,12 +103,17 @@ void measureDirectory(const QString &dir, int count, ThumbnailPanel::SortMode mo
                              firstDuringScan = !ThumbnailPanelTestAccess::scanComplete(panel);
                              current = paths.front();
                              panel.setCurrentIndex(panel.model()->index(0, 0));
+                             panel.selectionModel()->select(panel.model()->index(0, 0),
+                                                            QItemSelectionModel::ClearAndSelect |
+                                                                QItemSelectionModel::Rows);
                          }
                          else if (!current.isEmpty())
                          {
                              const QString now = currentPanelPath(panel);
                              MVIEWER_CHECK(now == current,
                                            "current path identity survives middle insertions");
+                             MVIEWER_CHECK(panel.selectedPaths() == QStringList{current},
+                                           "selected path survives middle insertions");
                              const int row = panel.pathList().indexOf(current);
                              if (row > 0)
                                  ++rowShifts;
@@ -121,14 +126,16 @@ void measureDirectory(const QString &dir, int count, ThumbnailPanel::SortMode mo
     const auto conversions = ThumbnailPanel::stdPathConversionCount();
     const auto paths = panel.pathList();
     const int expectedCount = typed ? count / 2 : count;
-    std::printf("scan count=%d mode=%d typed=%d firstMs=%lld totalMs=%lld progressive=%d "
-                "conversions=%llu shifts=%d paths=%d\n",
-                count, static_cast<int>(mode), typed ? 1 : 0, static_cast<long long>(firstMs),
-                static_cast<long long>(elapsed), firstDuringScan ? 1 : 0,
-                static_cast<unsigned long long>(conversions), rowShifts, int(paths.size()));
+    std::printf(
+        "scan count=%d mode=%d typed=%d ascending=%d firstMs=%lld totalMs=%lld progressive=%d "
+        "conversions=%llu shifts=%d paths=%d\n",
+        count, static_cast<int>(mode), typed ? 1 : 0, ascending ? 1 : 0,
+        static_cast<long long>(firstMs), static_cast<long long>(elapsed), firstDuringScan ? 1 : 0,
+        static_cast<unsigned long long>(conversions), rowShifts, int(paths.size()));
     MVIEWER_CHECK(int(paths.size()) == expectedCount, "published membership matches filter");
-    MVIEWER_CHECK(matchesExpected(panel, typed ? QStringLiteral("png") : QString(), mode, true),
-                  "final displayed order matches the complete query");
+    MVIEWER_CHECK(
+        matchesExpected(panel, typed ? QStringLiteral("png") : QString(), mode, ascending),
+        "final displayed order matches the complete query");
     if (expectProgressive)
     {
         MVIEWER_CHECK(firstDuringScan,
@@ -235,6 +242,11 @@ int main(int argc, char **argv)
     measureDirectory(dirRes, kResCount, ThumbnailPanel::SortResolution, false, false);
     measureDirectory(dir10k, 10000, ThumbnailPanel::SortName, false, true);
     measureDirectory(dir10k, 10000, ThumbnailPanel::SortName, true, true);
+
+    measureDirectory(dir1k, 1000, ThumbnailPanel::SortName, false, true, false);
+    measureDirectory(dir1k, 1000, ThumbnailPanel::SortDate, false, true, false);
+    measureDirectory(dir1k, 1000, ThumbnailPanel::SortSize, false, true, false);
+    measureDirectory(dir1k, 1000, ThumbnailPanel::SortType, true, true, false);
 
     testExistsGeneration(dir1k);
 
