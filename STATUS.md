@@ -8,6 +8,15 @@
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
 
+## Unreleased CI tooling
+
+- Dr.Memory advisory validation distinguishes real complete zero-error target
+  reports from findings, unsupported infrastructure, timeout and no-report.
+  A real Windows run launched bin64/drmemory.exe and retained target reports,
+  but hit the 180s deadline with partial findings; this is not a clean memory
+  result. Its real process output/reports are retained; release publication stays
+  best-effort. Standalone tooling validation does not tag or publish releases.
+
 ## 1.0.181 — Browse publication and paint costs (2026-11-17)
 
 - Cached ICC contexts avoid per-resize profile I/O/parsing with screen/WCS/CMS
