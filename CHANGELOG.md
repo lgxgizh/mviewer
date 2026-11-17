@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### CI tooling
+
+- Dr.Memory uses native Windows paths, architecture-matched discovery and the
+  documented `-logdir` option. The bounded real invocation retains stdout,
+  stderr, raw reports and a structured verdict. Missing/incomplete reports,
+  tool/OS incompatibility, timeouts and findings are not reported as clean.
+  Release diagnostics remain best-effort; standalone PR/manual validation
+  visibly fails on unknown/error outcomes without publishing a release.
+
 ## [1.0.181] - 2026-11-17
 
 ### Release
