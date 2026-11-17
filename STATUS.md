@@ -1,12 +1,29 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-17 · Version: **1.0.180** · Release tag: **v1.0.180**
+> Snapshot: 2026-11-17 · Version: **1.0.181** · Release tag: **v1.0.181**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.181 — Browse publication and paint costs (2026-11-17)
+
+- Cached ICC contexts avoid per-resize profile I/O/parsing with screen/WCS/CMS
+  invalidation retained (PR #389). Sharp transition identity blits and safe
+  local loading-bar paints preserve display quality (PR #390).
+- Scan publication converts/inserts new runs, including middle insertions.
+  Name/Date/Size/Type ascending/descending and suffix type filters stream
+  sorted rows with current/selection identity and needed preloads retained.
+  Stale scans check generation before exists (PR #392).
+- Interior thumbnail insertion keeps viewport demand bounded (PR #393).
+- Real concurrent preview/current-LOD/thumbnail DPR2 measurements retain full
+  evidence; no scheduler, priority, pool or thread changes (PRs #391/#393).
+- Resolution/metadata-dependent queries retain full-query barriers. ICC misses,
+  Background metadata fallback, Compare rebuilds and foreground yield still
+  have costs; offscreen CI does not establish physical-GPU smoothness.
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.180 — Browse and preview reliability (2026-11-17)
 
