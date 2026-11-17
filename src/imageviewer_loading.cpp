@@ -474,7 +474,10 @@ void ImageViewer::cancelPreloads()
 void ImageViewer::cancelDisplayRasterPreloads()
 {
     for (auto &preload : m_displayRasterPreloads)
+    {
+        ++m_displayRasterRetain.cancels;
         TaskScheduler::cancel(preload.handle);
+    }
     m_displayRasterPreloads.clear();
 }
 
@@ -554,6 +557,7 @@ void ImageViewer::enforceDisplayRasterWarmBudget()
                              [](const DisplayRasterWarm &a, const DisplayRasterWarm &b)
                              { return a.lastUse < b.lastUse; });
         m_displayRasterWarmBytes = std::max<qint64>(0, m_displayRasterWarmBytes - oldest->bytes);
+        ++m_displayRasterRetain.evictions;
         m_displayRasterWarm.erase(oldest);
     }
 }
