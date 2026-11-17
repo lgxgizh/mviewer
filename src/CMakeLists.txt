@@ -2527,6 +2527,24 @@ target_include_directories(lod_four_jpeg_ready_tests PRIVATE ${CMAKE_CURRENT_SOU
 add_test(NAME lod_four_jpeg_ready_tests COMMAND lod_four_jpeg_ready_tests)
 set_tests_properties(lod_four_jpeg_ready_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# First zoomed-out LOD Sharp-resamples to ImageViewer paint dest (no GUI-thread
+# SmoothPixmapTransform of a mismatched multi-megapixel raster).
+add_executable(first_lod_sharp_tests
+    test_first_lod_sharp.cpp
+)
+target_link_libraries(first_lod_sharp_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(first_lod_sharp_tests PRIVATE cxx_std_20)
+target_include_directories(first_lod_sharp_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME first_lod_sharp_tests COMMAND first_lod_sharp_tests)
+set_tests_properties(first_lod_sharp_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # Promoted display-raster callbacks must validate path, generation, target, and
 # serial before dropping the in-flight request (#380 recovery stays on the
 # current result only). Synchronous; no large fixtures.
