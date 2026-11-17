@@ -2527,6 +2527,24 @@ target_include_directories(lod_four_jpeg_ready_tests PRIVATE ${CMAKE_CURRENT_SOU
 add_test(NAME lod_four_jpeg_ready_tests COMMAND lod_four_jpeg_ready_tests)
 set_tests_properties(lod_four_jpeg_ready_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# Name-sort scan batches (empty, 1, 16, 144) must keep a still-needed neighbor
+# preload and its warm raster. Shrink/removal still cancels or evicts that work.
+add_executable(browse_append_retain_tests
+    test_browse_append_retain.cpp
+)
+target_link_libraries(browse_append_retain_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(browse_append_retain_tests PRIVATE cxx_std_20)
+target_include_directories(browse_append_retain_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME browse_append_retain_tests COMMAND browse_append_retain_tests)
+set_tests_properties(browse_append_retain_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # First zoomed-out LOD Sharp-resamples to ImageViewer paint dest (no GUI-thread
 # SmoothPixmapTransform of a mismatched multi-megapixel raster).
 add_executable(first_lod_sharp_tests

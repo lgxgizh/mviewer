@@ -1,6 +1,6 @@
 // ImageViewer browse-sequence bookkeeping: the gallery order, window title
 // position and browse fullscreen entry. Split from imageviewer_loading.cpp
-// for complexity-gate line headroom; behavior is unchanged.
+// for complexity-gate line headroom. Append-only growth keeps neighbor preloads.
 #include "imageviewer.h"
 
 #include "core/scheduler/TaskScheduler.h"
@@ -16,14 +16,58 @@
 #include <chrono>
 #include <memory>
 
+namespace
+{
+
+// True when `incoming` keeps every current path, in order, and only adds a suffix.
+bool browseSequenceExtends(const QStringList &current, const QStringList &incoming)
+{
+    if (incoming.size() <= current.size())
+        return false;
+    for (int i = 0; i < current.size(); ++i)
+    {
+        if (current.at(i) == incoming.at(i))
+            continue;
+        if (!ImageViewer::browsePathEquals(current.at(i), incoming.at(i)))
+            return false;
+    }
+    return true;
+}
+
+} // namespace
+
+void ImageViewer::invalidateDisplayRasterBrowse()
+{
+    m_displayRasterRetain.evictions += static_cast<uint64_t>(m_displayRasterWarm.size());
+    ++m_displayRasterBrowseGeneration;
+    cancelDisplayRasterPreloads();
+    m_displayRasterWarm.clear();
+    m_displayRasterWarmBytes = 0;
+}
+
+ImageViewer::DisplayRasterRetainStats ImageViewer::displayRasterRetainStats() const
+{
+    DisplayRasterRetainStats stats = m_displayRasterRetain;
+    stats.inFlight = static_cast<uint64_t>(m_displayRasterPreloads.size());
+    return stats;
+}
+
+void ImageViewer::resetDisplayRasterRetainStats()
+{
+    m_displayRasterRetain = {};
+}
+
 void ImageViewer::setBrowseSequence(const QStringList &paths)
 {
     if (paths != m_fileList)
     {
-        ++m_displayRasterBrowseGeneration;
-        cancelDisplayRasterPreloads();
-        m_displayRasterWarm.clear();
-        m_displayRasterWarmBytes = 0;
+        // Progressive scan batches are a suffix append. Keep the browse
+        // generation, in-flight neighbor preloads, and warm rasters so the
+        // preload pass below can retain still-adjacent work. Reorder, removal,
+        // filter shrink, and replacement still drop that presentation cache.
+        // The current image's display request is not cancelled on either path.
+        if (!browseSequenceExtends(m_fileList, paths))
+            invalidateDisplayRasterBrowse();
         m_fileIndex.invalidate();
     }
     m_fileList = paths;
@@ -151,10 +195,7 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
             continue;
         needed.push_back(neighbor);
     }
-    // Keep in-flight work for neighbors that are still adjacent. A mid-scan
-    // sequenceChanged used to cancel them all, which can swallow a preload
-    // setImage is about to promote and leave only some files stuck busy.
-    std::vector<DisplayRasterPreload> kept;
+    std::vector<DisplayRasterPreload> kept; // still-adjacent in-flight preloads
     for (auto &preload : m_displayRasterPreloads)
     {
         auto it = std::find_if(needed.begin(), needed.end(),
@@ -168,7 +209,10 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
             kept.push_back(std::move(preload));
         }
         else
+        {
+            ++m_displayRasterRetain.cancels;
             TaskScheduler::cancel(preload.handle);
+        }
     }
     m_displayRasterPreloads = std::move(kept);
     for (const QString &neighbor : needed)
@@ -209,6 +253,9 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
             },
             {}, std::chrono::steady_clock::time_point::max(), [] {});
         if (handle)
+        {
             m_displayRasterPreloads.push_back({neighbor, std::move(state), std::move(handle)});
+            ++m_displayRasterRetain.starts;
+        }
     }
 }

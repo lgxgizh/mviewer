@@ -120,16 +120,13 @@ class ImageViewer : public QOpenGLWidget
     void resetSelectionForNewImage(const QString &path);
     void recommitLockedSelection();
 
-    // M47: true when the current image displays through the LOD/region raster
-    // path (large source; the full-resolution frame is then only the analysis
-    // source, never the display precondition).
+    // True when the on-screen image is a LOD/region raster.
     bool isLodDisplay() const
     {
         return m_lodMode && !m_raster.image.isNull();
     }
 
-    // M48: the LOD/region raster on screen (null when inactive). Sources above
-    // the analysis budget sample it for hover, ROI stats and color; m_frame wins.
+    // LOD/region raster on screen, or null. Analysis prefers m_frame.
     QImage displayRaster() const
     {
         return m_raster.image;
@@ -138,8 +135,7 @@ class ImageViewer : public QOpenGLWidget
     QSize displaySize() const;
     // One full-frame load per image, only when a consumer needs ImageFrame pixels.
     void ensureAnalysisLoad();
-    // Committed ROI in image pixels (empty during a drag and after Esc), and
-    // the widget rect drawSelection uses for the drag or that committed rect.
+    // Committed ROI in image pixels, and its widget rect.
     QRect committedSelectionForTest() const;
     QRect selectionScreenRectForTest() const;
     // True when the LOD raster is magnified to >= 1 device px per source px.
@@ -166,9 +162,15 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_displayRasterWarmHits;
     }
+    // Cumulative preload starts/cancels/warm evictions; inFlight is live.
+    struct DisplayRasterRetainStats
+    {
+        uint64_t starts = 0, cancels = 0, evictions = 0, inFlight = 0;
+    };
+    DisplayRasterRetainStats displayRasterRetainStats() const;
+    void resetDisplayRasterRetainStats();
 
-    // Compare handoff: copy-on-write QImage + geometry for a warm path.
-    // Returns false when no warm entry exists.
+    // Copy-on-write warm raster for Compare; false when that path is absent.
     bool takeWarmDisplayForCompare(const QString &path, QImage *image, QSize *sourceSize,
                                    QRect *sourceRect);
 
@@ -381,6 +383,7 @@ class ImageViewer : public QOpenGLWidget
     void preloadNeighbors(const QString &path);
     void preloadDisplayRasterNeighbors(const QString &path);
     void cancelDisplayRasterPreloads();
+    void invalidateDisplayRasterBrowse();
     void drawHistogram(QPainter &painter) const;
     void computeHistogram();
     // M29: cancel the outstanding foreground load and any neighbor preloads.
@@ -762,6 +765,7 @@ class ImageViewer : public QOpenGLWidget
     uint64_t m_displayRasterWarmClock = 0;
     uint64_t m_displayRasterWarmHits = 0;
     uint64_t m_displayRasterBrowseGeneration = 0;
+    DisplayRasterRetainStats m_displayRasterRetain;
     bool m_displayUpgradeScheduled = false;
 
     int m_histogram[256] = {0};

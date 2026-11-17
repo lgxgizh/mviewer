@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- **Browse scan append**: extending the open folder's sequence no longer cancels
+  still-needed neighbor display preloads or drops their warm rasters.
 - **Browse display cancellation**: a late promoted raster from an older image
   or an older display serial no longer drops the current image's in-flight
   request, so the next navigation can still cancel it. A result that still

@@ -192,10 +192,7 @@ void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContex
     // A target change invalidates presentation-only state. Source/analysis
     // state remains intact and queued results are rejected by cache identity.
     cancelDisplayRequest();
-    ++m_displayRasterBrowseGeneration;
-    cancelDisplayRasterPreloads();
-    m_displayRasterWarm.clear();
-    m_displayRasterWarmBytes = 0;
+    invalidateDisplayRasterBrowse();
     m_raster = DisplayRaster{};
     m_lodMode = false;
     m_displayDegraded = false;
