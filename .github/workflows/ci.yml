@@ -402,7 +402,7 @@ jobs:
           Write-Host "CTest parallelism: -j$testJobs (logical cores=$logicalCores)"
           # -LE nightly: bench_enforce and the soak/torture suites run in
           # nightly `quality` and in the release workflow (build.ps1 Test).
-          ctest --output-on-failure --output-junit test-results.xml "-j$testJobs" -LE nightly
+          ctest --output-on-failure --test-output-size-passed 32768 --output-junit test-results.xml "-j$testJobs" -LE nightly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload test report
