@@ -29,6 +29,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QOpenGLTextureBlitter>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QPointer>
 #include <QRect>
@@ -73,10 +74,21 @@ void ImageViewer::noteDisplayedFrameForPixelReadout()
 
 void ImageViewer::paintEvent(QPaintEvent *event)
 {
-    Q_UNUSED(event);
     QPainter painter(this);
     // Same backdrop as the compare panes (RawImageView): follows the theme
     // palette instead of a hardcoded black that clashed with light mode.
+    // A ticker-only dirty band must not execute image/tile composition. This
+    // fast path is allowed only when all image pixels lie below the band;
+    // zoom/pan/full-bleed views keep the ordinary complete paint path.
+    const QRect bar(0, 0, width(), 3);
+    if (event && bar.contains(event->region().boundingRect()) && loadingIndicatorVisible() &&
+        loadingAnimationDamage() == bar)
+    {
+        painter.setClipRect(bar); // GL paint engines need an explicit dirty clip.
+        painter.fillRect(bar, palette().color(QPalette::Dark));
+        drawLoadingBar(painter);
+        return;
+    }
     painter.fillRect(rect(), palette().color(QPalette::Dark));
 
     // M47: LOD-first display — a large source draws through the bounded
@@ -258,60 +270,6 @@ void ImageViewer::drawProvisional(QPainter &painter) const
                                    (visibleTarget.top() - sy) * scaleY,
                                    visibleTarget.width() * scaleX, visibleTarget.height() * scaleY);
         painter.drawImage(visibleTarget, m_provisionalImage, sourceSubRect);
-    }
-    painter.restore();
-}
-
-QImage ImageViewer::ownedTransitionSnapshot(const QImage &view) const
-{
-    if (view.isNull())
-        return {};
-    // toQImageFast() wraps the buffer's shared_ptr via QImageCleanupFunction.
-    // An owned window-sized copy is retained during transition so that
-    // large source buffers are not pinned in memory while the user flips photos.
-    int edge = width() > height() ? width() : height();
-    if (edge < 64)
-        edge = 64;
-    if (view.width() <= edge && view.height() <= edge)
-        return view.copy();
-    return view.scaled(edge, edge, Qt::KeepAspectRatio, Qt::FastTransformation);
-}
-
-void ImageViewer::drawTransition(QPainter &painter) const
-{
-    if (m_transitionImage.isNull())
-        return;
-    const int sourceW = m_transitionSourceSize.width() > 0 ? m_transitionSourceSize.width()
-                                                           : m_transitionImage.width();
-    const int sourceH = m_transitionSourceSize.height() > 0 ? m_transitionSourceSize.height()
-                                                            : m_transitionImage.height();
-    int sx = 0;
-    int sy = 0;
-    int sw = 0;
-    int sh = 0;
-    m_view.imageRectToScreen(0, 0, sourceW, sourceH, sx, sy, sw, sh);
-    if (sw <= 0 || sh <= 0)
-        return;
-    const QRect targetRect(sx, sy, sw, sh);
-    const QRect viewportRect(0, 0, m_view.screenW, m_view.screenH);
-    if (!targetRect.intersects(viewportRect))
-        return;
-
-    const QRect visibleTarget = targetRect.intersected(viewportRect);
-    painter.save();
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    if (visibleTarget == targetRect)
-    {
-        painter.drawImage(targetRect, m_transitionImage);
-    }
-    else
-    {
-        const double scaleX = static_cast<double>(m_transitionImage.width()) / sw;
-        const double scaleY = static_cast<double>(m_transitionImage.height()) / sh;
-        const QRectF sourceSubRect((visibleTarget.left() - sx) * scaleX,
-                                   (visibleTarget.top() - sy) * scaleY,
-                                   visibleTarget.width() * scaleX, visibleTarget.height() * scaleY);
-        painter.drawImage(visibleTarget, m_transitionImage, sourceSubRect);
     }
     painter.restore();
 }

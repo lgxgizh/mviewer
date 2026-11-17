@@ -4,6 +4,12 @@
 
 ### Performance
 
+- **Photo-switch paint**: reuse identity Sharp rasters without smooth resampling
+  during the short transition, retain region geometry when panned, and limit
+  loading animation paints to its thin bar when the fitted image leaves a safe
+  margin. Zoom/full-bleed views keep normal image painting; resize/DPR mismatches
+  still use smooth sampling and loading feedback keeps its delay/expiry.
+
 - **Display ICC resize path**: cache the monitor profile per screen so Browse
   and Compare resizes reuse `DisplayColorContext` without a per-resize ICC
   stat, read, or parse. A null window's sRGB fallback is not stored as the

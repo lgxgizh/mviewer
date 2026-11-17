@@ -281,6 +281,7 @@ add_library(mviewer_ui STATIC
     imageviewer_displaycolor.cpp
     imageviewer_queuedecode.cpp
     imageviewer_paint.cpp
+    imageviewer_transition.cpp
     imageviewer_rawdecode.cpp
     imageviewer_loadingbar.cpp
     imageviewer_region_tiles.cpp
@@ -2432,6 +2433,12 @@ target_include_directories(m59_color_managed_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_compile_definitions(m59_color_managed_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m59_color_managed_tests COMMAND m59_color_managed_tests)
 set_tests_properties(m59_color_managed_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# Transition sampling and animation damage use actual viewer draw/resize paths.
+mviewer_add_test(viewer_transition_paint_tests
+    SRCS test_viewer_transition_paint.cpp
+    LIBS mviewer_ui
+    TIMEOUT 60 SERIAL)
 
 # Display ICC cache: Browse/Compare resize must not re-read or re-parse the
 # monitor profile. Loader injection keeps the suite platform-independent.

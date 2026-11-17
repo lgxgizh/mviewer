@@ -19,6 +19,25 @@ bool ImageViewer::isLoadingBusy() const
     return m_loading || m_fullRawLoading || m_largeSourcePending || !m_provisionalImage.isNull();
 }
 
+QRect ImageViewer::loadingAnimationDamage() const
+{
+    const QRect band(0, 0, width(), kBarHeight);
+    QSize source;
+    if (hasDisplayImage())
+        source = displaySize();
+    else if (!m_provisionalImage.isNull())
+        source =
+            m_provisionalSourceSize.isEmpty() ? m_provisionalImage.size() : m_provisionalSourceSize;
+    else if (!m_transitionImage.isNull())
+        source = m_transitionSourceSize;
+    if (source.isEmpty())
+        return band;
+    int sx = 0, sy = 0, sw = 0, sh = 0;
+    m_view.imageRectToScreen(0, 0, source.width(), source.height(), sx, sy, sw, sh);
+    // Leave space for selection strokes and image-bound overlays as well.
+    return sy >= kBarHeight + 12 ? band : rect();
+}
+
 bool ImageViewer::loadingIndicatorVisible() const
 {
     return isLoadingBusy() && m_busyClock.isValid() && m_busyClock.elapsed() >= kLoadingBarDelayMs;
@@ -51,8 +70,13 @@ void ImageViewer::drawLoadingBar(QPainter &painter)
                 {
                     // Stop as soon as the load settles; the next paint clears the bar.
                     if (!isLoadingBusy() || lodSettled())
+                    {
                         m_busyTicker->stop();
-                    update();
+                        update(); // restore the image underneath the old bar
+                    }
+                    else if (loadingIndicatorVisible())
+                        update(loadingAnimationDamage());
+                    // Before the 150ms grace there is nothing to animate.
                 });
     }
     if (!m_busyTicker->isActive())
