@@ -201,6 +201,8 @@ class PaintProbe final : public ImageViewer
 void checkTickerDamage()
 {
     PaintProbe viewer;
+    MVIEWER_CHECK(viewer.updateBehavior() == QOpenGLWidget::PartialUpdate,
+                  "ticker-only paints preserve the OpenGL framebuffer");
     viewer.resize(800, 600);
     ImageViewerPromotedRasterTestAccess::configure(viewer);
     viewer.show();

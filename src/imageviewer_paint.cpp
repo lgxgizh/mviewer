@@ -77,7 +77,6 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     // Same backdrop as the compare panes (RawImageView): follows the theme
     // palette instead of a hardcoded black that clashed with light mode.
-    painter.fillRect(rect(), palette().color(QPalette::Dark));
     // A ticker-only dirty band must not execute image/tile composition. This
     // fast path is allowed only when all image pixels lie below the band;
     // zoom/pan/full-bleed views keep the ordinary complete paint path.
@@ -85,9 +84,12 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     if (event && bar.contains(event->region().boundingRect()) && loadingIndicatorVisible() &&
         loadingAnimationDamage() == bar)
     {
+        painter.setClipRect(bar); // GL paint engines need an explicit dirty clip.
+        painter.fillRect(bar, palette().color(QPalette::Dark));
         drawLoadingBar(painter);
         return;
     }
+    painter.fillRect(rect(), palette().color(QPalette::Dark));
 
     // M47: LOD-first display — a large source draws through the bounded
     // display raster (viewport LOD / visible region), never through a full

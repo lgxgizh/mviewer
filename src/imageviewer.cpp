@@ -51,8 +51,8 @@ ImageViewer::ImageViewer(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setAcceptDrops(true);
     setMinimumSize(200, 200);
-    // Stage A: QPainter over GL FBO for overlays (histogram / selection).
-    setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
+    // Preserve the GL FBO between ticker-only loading-band paints.
+    setUpdateBehavior(QOpenGLWidget::PartialUpdate);
     // Restore window geometry from the last session.
     QSettings settings;
     m_overlayMode =
