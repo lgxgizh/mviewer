@@ -1,12 +1,28 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-16 · Version: **1.0.179** · Release tag: **v1.0.179**
+> Snapshot: 2026-11-17 · Version: **1.0.180** · Release tag: **v1.0.180**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.180 — Browse and preview reliability (2026-11-17)
+
+- Promoted display rasters must match the current image and serial before
+  they can drop the in-flight request (PR #382).
+- Cached previews keep post-orientation source size (PR #383); a refused
+  preview submit is retried and then shows a visible failure (PR #384).
+- The first zoomed-out LOD is Sharp-resampled to the paint device-pixel dest
+  (PR #385). Append-only folder scans keep still-needed neighbor preloads and
+  warm rasters (PR #386).
+- Queue wait vs decode is recorded for the current display LOD and neighbor
+  preloads; scheduling is unchanged (PR #387).
+- Known issue: the reported >=10-second UI stall when entering a folder
+  remains unresolved. This release does not claim to fix it and does not
+  treat it as PNG-specific.
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.179 — Bounded decodes and load readiness (2026-11-16)
 
