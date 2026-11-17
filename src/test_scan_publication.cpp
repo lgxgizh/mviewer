@@ -45,9 +45,10 @@ bool writeEntries(const QString &dir, int count)
         ok = file.open(QIODevice::WriteOnly) && ok;
         const QByteArray payload(16 + (n % 17), 'x');
         ok = (file.write(payload) == payload.size()) && ok;
-        file.close();
         const QDateTime stamp = QDateTime::currentDateTime().addSecs(-n);
-        ok = file.setFileTime(stamp, QFileDevice::FileModificationTime) && ok;
+        file.setFileTime(stamp, QFileDevice::FileModificationTime);
+        file.close();
+        file.setFileTime(stamp, QFileDevice::FileModificationTime);
     }
     return ok;
 }
@@ -218,7 +219,20 @@ int main(int argc, char **argv)
     measureDirectory(dir1k, 1000, ThumbnailPanel::SortName, true, true);
     measureDirectory(dir1k, 1000, ThumbnailPanel::SortDate, false, true);
     measureDirectory(dir1k, 1000, ThumbnailPanel::SortSize, false, true);
-    measureDirectory(dir1k, 1000, ThumbnailPanel::SortResolution, false, false);
+    const QString dirRes = tmp.filePath(QStringLiteral("res"));
+    MVIEWER_CHECK(QDir().mkpath(dirRes), "resolution fixture directory");
+    bool resOk = true;
+    constexpr int kResCount = 64;
+    for (int i = 0; i < kResCount; ++i)
+    {
+        const QString path =
+            dirRes + "/res_" + QString::number(i, 10).rightJustified(3, QLatin1Char('0')) + ".jpg";
+        QImage img(8, 8, QImage::Format_RGB888);
+        img.fill(QColor(i, 40, 80));
+        resOk = img.save(path, "JPEG", 80) && resOk;
+    }
+    MVIEWER_CHECK(resOk, "resolution sort uses real tiny JPEGs, not dummy bytes");
+    measureDirectory(dirRes, kResCount, ThumbnailPanel::SortResolution, false, false);
     measureDirectory(dir10k, 10000, ThumbnailPanel::SortName, false, true);
     measureDirectory(dir10k, 10000, ThumbnailPanel::SortName, true, true);
 
