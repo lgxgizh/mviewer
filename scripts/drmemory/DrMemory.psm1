@@ -52,10 +52,12 @@ function Get-DrMemoryResult {
     $potential = @($targets | Where-Object { $_.potentialFindings })
     $complete = $targets.Count -gt 0 -and @($targets | Where-Object { -not $_.summaryComplete }).Count -eq 0
     $instrumented = @($targets | Where-Object { $_.hasReportedErrors -or $_.summaryComplete }).Count -gt 0
+    $errorRecordTotal = 0
+    foreach ($detail in $details) { $errorRecordTotal += $detail.errorRecords }
     $r = [ordered]@{ state = 'no-report'; executed = $instrumented; completed = $false
         memoryVerdict = $(if ($errors.Count -gt 0) { 'errors-observed' } else { 'unknown' })
         exitCode = $ExitCode; reports = @($files | ForEach-Object { $_.FullName }); reportDetails = $details
-        observedErrorRecords = ($details | Measure-Object -Property errorRecords -Sum).Sum
+        observedErrorRecords = $errorRecordTotal
         reason = 'No nonempty target results.txt produced in the fresh invocation directory' }
     if ($LaunchError) { $r.state = 'infrastructure-error'; $r.reason = $LaunchError }
     elseif ($TimedOut) { $r.state = 'timeout'; $r.reason = 'Bounded deadline exceeded; process tree terminated. Any observed findings remain in reportDetails/memoryVerdict; no complete-run verdict' }
