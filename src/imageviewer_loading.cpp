@@ -73,31 +73,7 @@ void ImageViewer::setImageImpl(const QString &path)
     const bool keepProvisional = !path.isEmpty() && browsePathEquals(path, m_provisionalPath) &&
                                  !m_provisionalImage.isNull();
 
-    // Window-sized snapshot so the switch does not flash black or pin the photo.
-    if (!path.isEmpty() && !keepProvisional)
-    {
-        if (m_lodMode && !m_raster.image.isNull())
-        {
-            m_transitionImage = m_raster.image;
-            m_transitionSourceSize = m_raster.sourceSize;
-        }
-        else if (m_frame && m_frame->isValid())
-        {
-            QImage img = mvcore::toQImageFast(m_frame->pixels());
-            m_transitionImage = ownedTransitionSnapshot(img);
-            m_transitionSourceSize = QSize(m_frame->width(), m_frame->height());
-        }
-        else if (!m_provisionalImage.isNull())
-        {
-            m_transitionImage = m_provisionalImage;
-            m_transitionSourceSize = m_provisionalSourceSize;
-        }
-    }
-    else
-    {
-        m_transitionImage = QImage();
-        m_transitionSourceSize = QSize();
-    }
+    prepareTransitionImage(path, keepProvisional);
 
     // Cross-path stand-in: the previous photo may bridge only a brief gap.
     const bool crossPathStandIn =

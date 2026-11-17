@@ -1,8 +1,6 @@
 #pragma once
-
-#include "browsepathindex.h"
-
 #include "application/ImageLoadingService.h"
+#include "browsepathindex.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/export/ExportJob.h"
@@ -15,7 +13,6 @@
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
 #include "gpu/GpuTileUploader.h"
-
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QImage>
@@ -378,6 +375,8 @@ class ImageViewer : public QOpenGLWidget
     // Terminal open failure: drop the warm thumbnail, retitle, and clear zoom.
     void presentLoadFailure();
     QImage ownedTransitionSnapshot(const QImage &view) const;
+    void prepareTransitionImage(const QString &path, bool keepProvisional);
+    QRect loadingAnimationDamage() const;
     void bindDisplayColorScreen();
     void onDisplayScreenChanged();
     void preloadNeighbors(const QString &path);
@@ -669,6 +668,7 @@ class ImageViewer : public QOpenGLWidget
     bool m_pixelGridEnabled = false;
     QImage m_transitionImage;
     QSize m_transitionSourceSize;
+    QRect m_transitionSourceRect;
     bool m_tileRepaintQueued = false;
     bool m_loading = false;
     bool m_fullRawLoading = false;
