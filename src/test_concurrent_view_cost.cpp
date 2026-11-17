@@ -131,6 +131,29 @@ void concurrent(const QString &path)
     preview.show();
     QApplication::processEvents();
     MVIEWER_CHECK(viewer.devicePixelRatioF() >= 1.99, "DPR2 measured, no silent DPR1 fallback");
+    auto &pipe = ThumbnailPipeline::instance();
+    constexpr int consumer = 8181;
+    auto thumbNs = std::make_shared<std::atomic<qint64>>(0);
+    auto thumbCount = std::make_shared<std::atomic<int>>(0);
+    pipe.setDecodeFn(
+        [thumbNs, thumbCount](const std::string &p, int edge)
+        {
+            QElapsedTimer t;
+            t.start();
+            auto image = ThumbnailProvider::produce(p, edge);
+            thumbNs->fetch_add(t.nsecsElapsed());
+            thumbCount->fetch_add(1);
+            return image;
+        });
+    std::vector<std::string> thumbPaths{path.toUtf8().toStdString()};
+    for (int n = 1; n < 4; ++n)
+    {
+        const QString copy = path + QString::number(n) + "." + QFileInfo(path).suffix();
+        MVIEWER_CHECK(QFile::copy(path, copy), "distinct cold thumbnail fixture");
+        thumbPaths.push_back(copy.toUtf8().toStdString());
+    }
+    pipe.setSourcesForConsumer(consumer, thumbPaths);
+
     QElapsedTimer first;
     first.start();
     qint64 firstPaintNs = -1;
@@ -163,28 +186,6 @@ void concurrent(const QString &path)
     }
     const bool sawPreview = activeAtSubmit;
     MVIEWER_CHECK(sawPreview && activeAtSubmit, "real preview decode active when LOD submitted");
-    auto &pipe = ThumbnailPipeline::instance();
-    constexpr int consumer = 8181;
-    auto thumbNs = std::make_shared<std::atomic<qint64>>(0);
-    auto thumbCount = std::make_shared<std::atomic<int>>(0);
-    pipe.setDecodeFn(
-        [thumbNs, thumbCount](const std::string &p, int edge)
-        {
-            QElapsedTimer t;
-            t.start();
-            auto image = ThumbnailProvider::produce(p, edge);
-            thumbNs->fetch_add(t.nsecsElapsed());
-            thumbCount->fetch_add(1);
-            return image;
-        });
-    std::vector<std::string> thumbPaths{path.toUtf8().toStdString()};
-    for (int n = 1; n < 4; ++n)
-    {
-        const QString copy = path + QString::number(n) + "." + QFileInfo(path).suffix();
-        MVIEWER_CHECK(QFile::copy(path, copy), "distinct cold thumbnail fixture");
-        thumbPaths.push_back(copy.toUtf8().toStdString());
-    }
-    pipe.setSourcesForConsumer(consumer, thumbPaths);
     pipe.setVisibleRangeForConsumer(consumer, 0, thumbPaths.size());
     const bool ready = mviewer::test::waitFor(
         [&]
