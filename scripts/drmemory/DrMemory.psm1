@@ -129,4 +129,46 @@ function Invoke-DrMemoryProcess {
     return $r
 }
 
-Export-ModuleMember -Function Get-PeMachine, Find-DrMemory, Get-DrMemoryResult, Invoke-DrMemoryProcess
+# Explicit package catalog. Ids are exact; callers cannot select "latest".
+# expectedSha256 is null only when no published digest was supplied for that
+# asset. A custom ToolRoot is not a catalog entry and must not be labeled here.
+function Get-DrMemoryPackageCatalog {
+    @(
+        [pscustomobject]@{
+            Id = '2.6.0'
+            Url = 'https://github.com/DynamoRIO/drmemory/releases/download/release_2.6.0/DrMemory-Windows-2.6.0.zip'
+            ExpectedSha256 = $null
+            ArchiveFolder = 'DrMemory-Windows-2.6.0'
+        }
+        [pscustomobject]@{
+            Id = '2.6.20434'
+            Url = 'https://github.com/DynamoRIO/drmemory/releases/download/cronbuild-2.6.20434/DrMemory-Windows-2.6.20434.zip'
+            ExpectedSha256 = 'ed9c0e3f1bdb7f8db1adc13531493fb1c451e15f375638592c01d8837825a73a'
+            ArchiveFolder = 'DrMemory-Windows-2.6.20434'
+        }
+    )
+}
+
+function Resolve-DrMemoryPackage([string] $Id) {
+    $hit = @(Get-DrMemoryPackageCatalog | Where-Object { $_.Id -eq $Id })
+    if ($hit.Count -ne 1) { throw "Unsupported Dr.Memory package id: '$Id'" }
+    return $hit[0]
+}
+
+function Test-DrMemoryPackageHash([string] $Path, [string] $ExpectedSha256) {
+    $got = (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($ExpectedSha256 -and $got -ne $ExpectedSha256.ToLowerInvariant()) {
+        throw "Dr.Memory package checksum mismatch: expected $ExpectedSha256 observed $got"
+    }
+    return $got
+}
+
+function Get-DrMemoryExpandedIdentity([string] $Root, [string] $ExpectedFolder) {
+    $dirs = @(Get-ChildItem -LiteralPath $Root -Directory -Filter $ExpectedFolder)
+    if ($dirs.Count -ne 1) {
+        throw "Package folder $ExpectedFolder was not found under $Root"
+    }
+    return [IO.Path]::GetFullPath($dirs[0].FullName)
+}
+
+Export-ModuleMember -Function Get-PeMachine, Find-DrMemory, Get-DrMemoryResult, Invoke-DrMemoryProcess, Get-DrMemoryPackageCatalog, Resolve-DrMemoryPackage, Test-DrMemoryPackageHash, Get-DrMemoryExpandedIdentity

@@ -1,7 +1,18 @@
 # Standalone tooling validation: never tags, packages or publishes releases.
+# Automatic Dr.Memory execution is disabled after bounded compatibility trials.
+# Deterministic runner contracts remain automatic; comparisons are manual opt-in.
 name: Dr.Memory tooling validation
 on:
   workflow_dispatch:
+    inputs:
+      compare_maintained_packages:
+        description: 'Also run 2.6.0 and cronbuild 2.6.20434 on test_result.exe'
+        type: boolean
+        default: false
+      compare_core_tests:
+        description: 'Also compare existing core_tests after the Result control'
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'scripts/drmemory/**'
@@ -25,7 +36,10 @@ jobs:
     # Optional diagnostic, intentionally not a required PR/release gate.
     # Unlike release's job-level best-effort, standalone validation is red on
     # unknown/errors: its successful execution must never imply memory clean.
-    name: Dr.Memory actual execution (advisory)
+    # Both published packages timed out on the same core_tests/PDB in run44344380527.
+    # Disabled is a skipped check, NOT a successful memory test. Manual comparison remains opt-in.
+    if: ${{ false }}
+    name: Dr.Memory DISABLED (not executed; no memory verdict)
     needs: contracts
     runs-on: windows-2022
     timeout-minutes: 25
@@ -62,5 +76,63 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: drmemory-evidence
+          path: drmemory_out/
+          if-no-files-found: error
+  package-comparison:
+    # Manual only. Same Release build and Qt/CRT as the default job, then the
+    # two catalog packages on the same existing binary/PDB. Core follow-up is
+    # a separate explicit manual opt-in. A red result stays red.
+    # The second package still runs when the first package step fails.
+    name: Dr.Memory package comparison (manual, scoped targets)
+    needs: contracts
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.compare_maintained_packages == 'true' }}
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      MVIEWER_REQUIRE_LIBRAW: 'ON'
+      MVIEWER_ALL_PDBS: 'ON'
+      SCCACHE_GHA_ENABLED: 'true'
+      CMAKE_C_COMPILER_LAUNCHER: sccache
+      CMAKE_CXX_COMPILER_LAUNCHER: sccache
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: third_party/LibRaw-*.tar.gz
+          key: libraw-${{ hashFiles('cmake/LibRaw.cmake') }}
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
+      - uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+      - uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+      - name: Build Release with linker PDBs
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
+      - name: Baseline Dr.Memory 2.6.0 on test_result
+        shell: pwsh
+        timeout-minutes: 8
+        run: ./scripts/drmemory/run.ps1 -Package 2.6.0 -Target build_msvc/bin/test_result.exe -TimeoutSeconds 180 -EvidenceRoot "drmemory_out/package 2.6.0"
+      - name: Latest Dr.Memory 2.6.20434 on the same test_result
+        if: always()
+        shell: pwsh
+        timeout-minutes: 8
+        run: ./scripts/drmemory/run.ps1 -Package 2.6.20434 -Target build_msvc/bin/test_result.exe -TimeoutSeconds 180 -EvidenceRoot "drmemory_out/package 2.6.20434"
+      - name: Baseline Dr.Memory 2.6.0 on existing core_tests
+        if: ${{ always() && github.event.inputs.compare_core_tests == 'true' }}
+        shell: pwsh
+        timeout-minutes: 8
+        run: ./scripts/drmemory/run.ps1 -Package 2.6.0 -Target build_msvc/bin/core_tests.exe -TimeoutSeconds 180 -EvidenceRoot "drmemory_out/core package 2.6.0"
+      - name: Latest Dr.Memory 2.6.20434 on the same core_tests
+        if: ${{ always() && github.event.inputs.compare_core_tests == 'true' }}
+        shell: pwsh
+        timeout-minutes: 8
+        run: ./scripts/drmemory/run.ps1 -Package 2.6.20434 -Target build_msvc/bin/core_tests.exe -TimeoutSeconds 180 -EvidenceRoot "drmemory_out/core package 2.6.20434"
+      - name: Retain both package reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: drmemory-package-comparison
           path: drmemory_out/
           if-no-files-found: error
