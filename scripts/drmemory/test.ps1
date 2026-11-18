@@ -72,5 +72,78 @@ try {
     Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'incomplete-report') 'one complete report cannot hide an incomplete child report'
     Set-Content (Join-Path $partialDir results.txt) 'System call information is missing for this operating system: Restarting to trigger auto-generation of system call information.'
     Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'executed-clean') 'bootstrap restart retained but not confused with final target report'
+    Check ($timeoutResult.memoryVerdict -ne 'clean-reported-categories' -and $timeoutResult.state -ne 'executed-clean') 'timed-out run is never memory clean'
+    $oldPkg = Resolve-DrMemoryPackage '2.6.0'
+    $newPkg = Resolve-DrMemoryPackage '2.6.20434'
+    Check ($oldPkg.Url -eq 'https://github.com/DynamoRIO/drmemory/releases/download/release_2.6.0/DrMemory-Windows-2.6.0.zip') '2.6.0 stays pinned to its release URL'
+    Check ($null -eq $oldPkg.ExpectedSha256) '2.6.0 has no invented checksum'
+    Check ($newPkg.Url -eq 'https://github.com/DynamoRIO/drmemory/releases/download/cronbuild-2.6.20434/DrMemory-Windows-2.6.20434.zip') '2.6.20434 stays pinned to the cronbuild zip'
+    Check ($newPkg.ExpectedSha256 -eq 'ed9c0e3f1bdb7f8db1adc13531493fb1c451e15f375638592c01d8837825a73a') '2.6.20434 checksum is the published zip digest'
+    Check (@(Get-DrMemoryPackageCatalog).Count -eq 2) 'catalog has only the two selected packages'
+    Throws { Resolve-DrMemoryPackage 'latest' } 'alias latest is rejected'
+    Throws { Resolve-DrMemoryPackage 'cronbuild' } 'alias cronbuild is rejected'
+    Throws { Resolve-DrMemoryPackage '2.6.99999' } 'unknown version is rejected'
+    Throws { Resolve-DrMemoryPackage '' } 'empty version is rejected'
+    $fixture = Join-Path $root 'fixture.bin'
+    [IO.File]::WriteAllBytes($fixture, [byte[]](1, 2, 3, 4))
+    $fixtureHash = (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash.ToLowerInvariant()
+    Check ((Test-DrMemoryPackageHash $fixture $fixtureHash) -eq $fixtureHash) 'matching checksum accepted'
+    Check ((Test-DrMemoryPackageHash $fixture $null) -eq $fixtureHash) 'missing expected checksum records the observed digest'
+    Throws { Test-DrMemoryPackageHash $fixture $newPkg.ExpectedSha256 } 'bytes that are not the pinned zip fail checksum'
+    $customRoot = Join-Path $root 'custom tool'
+    FakePE (Join-Path (Join-Path $customRoot 'bin64') 'drmemory.exe') 0x8664
+    Throws { Get-DrMemoryExpandedIdentity $customRoot 'DrMemory-Windows-2.6.20434' } 'bin64 alone is not a catalog package identity'
+    $expanded = Join-Path $root 'expanded'
+    $null = New-Item -ItemType Directory -Path (Join-Path (Join-Path $expanded 'DrMemory-Windows-2.6.20434') 'bin64') -Force
+    $identity = Get-DrMemoryExpandedIdentity $expanded 'DrMemory-Windows-2.6.20434'
+    Check ($identity -eq [IO.Path]::GetFullPath((Join-Path $expanded 'DrMemory-Windows-2.6.20434'))) 'catalog folder identity accepted'
+    $runner = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot 'run.ps1')
+    Check ($runner -match '\[string\]\s+\$Package\s+=\s+''2\.6\.0''') 'default package parameter remains 2.6.0'
+    Check ($runner -notmatch 'toolVersion -NotePropertyValue ''2\.6\.0''') 'runner does not stamp every result as 2.6.0'
+    $badRoot = Join-Path $root 'bad package'
+    # Start-Process joins ArgumentList into a command line; use the native list
+    # so script and evidence paths remain single arguments on Windows/Linux.
+    $badInfo = [Diagnostics.ProcessStartInfo]::new()
+    $badInfo.FileName = (Get-Process -Id $PID).Path
+    $badInfo.UseShellExecute = $false
+    foreach ($arg in @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'run.ps1'),
+                       '-Package', 'not-a-package', '-EvidenceRoot', $badRoot)) {
+        $badInfo.ArgumentList.Add($arg)
+    }
+    $badRun = [Diagnostics.Process]::new()
+    $badRun.StartInfo = $badInfo
+    try {
+        $null = $badRun.Start()
+        if (-not $badRun.WaitForExit(30000)) {
+            $badRun.Kill($true)
+            throw 'Unsupported-package contract child exceeded 30 seconds'
+        }
+        Check ($badRun.ExitCode -eq 1) 'unsupported package exits 1'
+    } finally { $badRun.Dispose() }
+    $badStatus = @(Get-ChildItem -LiteralPath $badRoot -Recurse -Filter status.json)
+    Check ($badStatus.Count -eq 1) 'unsupported package writes one status'
+    $bad = Get-Content -Raw -LiteralPath $badStatus[0].FullName | ConvertFrom-Json
+    Check ($bad.state -eq 'infrastructure-error' -and $bad.launched -eq $false -and $bad.executed -eq $false) 'unsupported package is infrastructure-error and not launched'
+    Check ($bad.memoryVerdict -eq 'unknown' -and $bad.toolVersion -eq 'unidentified') 'unsupported package is not a memory verdict or a fake version'
+    Check (@(Get-ChildItem -LiteralPath $badRoot -Recurse -Filter drmemory.exe -ErrorAction SilentlyContinue).Count -eq 0) 'unsupported package does not download a tool'
+    $workflow = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../.github/workflows/drmemory.yml')
+    Check ($workflow -match '(?m)^      - ''scripts/drmemory/\*\*''') 'pull request still watches the drmemory scripts'
+    Check ($workflow -match '(?m)^      - ''\.github/workflows/drmemory\.yml''') 'pull request still watches drmemory.yml'
+    Check ($workflow -match '(?m)^      - ''\.github/workflows/release\.yml''') 'pull request still watches release.yml'
+    Check ($workflow -match 'compare_maintained_packages:[\s\S]*?default:\s*false') 'comparison input defaults off'
+    Check ($workflow -match [regex]::Escape('run: ./scripts/drmemory/run.ps1 -EvidenceRoot "drmemory_out/Windows path with spaces"')) 'default execution command is unchanged'
+    $comparison = [regex]::Match($workflow, '(?ms)^  package-comparison:.*\z').Value
+    Check ($comparison.Length -gt 0) 'package comparison job exists'
+    Check ($comparison -match 'compare_maintained_packages == ''true''') 'comparison runs only when the input is true'
+    Check ($comparison -match [regex]::Escape('-Package 2.6.0 -Target')) 'comparison runs the pinned 2.6.0 package'
+    Check ($comparison -match [regex]::Escape('-Package 2.6.20434')) 'comparison runs the pinned 2.6.20434 package'
+    Check ($comparison -match [regex]::Escape('build_msvc/bin/test_result.exe')) 'comparison target is test_result'
+    Check ($comparison -match '(?m)^\s*if:\s*always\(\)\s*$') 'later package still runs after a failed baseline'
+    Check ($comparison -notmatch 'continue-on-error') 'comparison red is not turned into a pass'
+    Check ($comparison -notmatch 'test_filesystem') 'comparison does not use the filesystem suite'
+    Check ($comparison -notmatch 'core_tests') 'comparison does not use the composite benchmark'
+    $release = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../.github/workflows/release.yml')
+    Check ($release -match '(?m)^\s*run: \./scripts/drmemory/run\.ps1\s*$') 'release caller remains the default invocation'
+    Check ($release -notmatch 'run\.ps1[^\r\n]*-Package') 'release caller does not select a package'
     Write-Host "Dr.Memory contracts: $script:checks passed"
 } finally { Remove-Item -LiteralPath $root -Recurse -Force }
