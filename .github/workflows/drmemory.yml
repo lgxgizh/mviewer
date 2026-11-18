@@ -9,6 +9,10 @@ on:
         description: 'Also run 2.6.0 and cronbuild 2.6.20434 on test_result.exe'
         type: boolean
         default: false
+      compare_core_tests:
+        description: 'Also compare existing core_tests after the Result control'
+        type: boolean
+        default: false
   pull_request:
     paths:
       - 'scripts/drmemory/**'
@@ -73,9 +77,10 @@ jobs:
           if-no-files-found: error
   package-comparison:
     # Manual only. Same Release build and Qt/CRT as the default job, then the
-    # two catalog packages on one test_result.exe. A red result stays red.
+    # two catalog packages on the same existing binary/PDB. Core follow-up is
+    # a separate explicit manual opt-in. A red result stays red.
     # The second package still runs when the first package step fails.
-    name: Dr.Memory package comparison (manual, test_result only)
+    name: Dr.Memory package comparison (manual, scoped targets)
     needs: contracts
     if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.compare_maintained_packages == 'true' }}
     runs-on: windows-2022
@@ -111,6 +116,16 @@ jobs:
         shell: pwsh
         timeout-minutes: 8
         run: ./scripts/drmemory/run.ps1 -Package 2.6.20434 -Target build_msvc/bin/test_result.exe -TimeoutSeconds 180 -EvidenceRoot "drmemory_out/package 2.6.20434"
+      - name: Baseline Dr.Memory 2.6.0 on existing core_tests
+        if: ${{ always() && github.event.inputs.compare_core_tests == 'true' }}
+        shell: pwsh
+        timeout-minutes: 8
+        run: ./scripts/drmemory/run.ps1 -Package 2.6.0 -Target build_msvc/bin/core_tests.exe -TimeoutSeconds 180 -EvidenceRoot "drmemory_out/core package 2.6.0"
+      - name: Latest Dr.Memory 2.6.20434 on the same core_tests
+        if: ${{ always() && github.event.inputs.compare_core_tests == 'true' }}
+        shell: pwsh
+        timeout-minutes: 8
+        run: ./scripts/drmemory/run.ps1 -Package 2.6.20434 -Target build_msvc/bin/core_tests.exe -TimeoutSeconds 180 -EvidenceRoot "drmemory_out/core package 2.6.20434"
       - name: Retain both package reports
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

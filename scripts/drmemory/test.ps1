@@ -141,7 +141,11 @@ try {
     Check ($comparison -match '(?m)^\s*if:\s*always\(\)\s*$') 'later package still runs after a failed baseline'
     Check ($comparison -notmatch 'continue-on-error') 'comparison red is not turned into a pass'
     Check ($comparison -notmatch 'test_filesystem') 'comparison does not use the filesystem suite'
-    Check ($comparison -notmatch 'core_tests') 'comparison does not use the composite benchmark'
+    Check ($workflow -match 'compare_core_tests:[\s\S]*?default:\s*false') 'core comparison defaults off'
+    Check (([regex]::Matches($comparison, [regex]::Escape('-Target build_msvc/bin/test_result.exe'))).Count -eq 2) 'Result comparison still uses the same target twice'
+    Check (([regex]::Matches($comparison, [regex]::Escape('-Target build_msvc/bin/core_tests.exe'))).Count -eq 2) 'core comparison uses the same existing target twice'
+    $coreGuard = 'if: ${{ always() && github.event.inputs.compare_core_tests == ''true'' }}'
+    Check (([regex]::Matches($comparison, [regex]::Escape($coreGuard))).Count -eq 2) 'both core steps require explicit manual opt-in and survive earlier diagnostic failure'
     $release = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../.github/workflows/release.yml')
     Check ($release -match '(?m)^\s*run: \./scripts/drmemory/run\.ps1\s*$') 'release caller remains the default invocation'
     Check ($release -notmatch 'run\.ps1[^\r\n]*-Package') 'release caller does not select a package'
