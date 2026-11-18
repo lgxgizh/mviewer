@@ -1,6 +1,6 @@
 # Standalone tooling validation: never tags, packages or publishes releases.
-# compare_maintained_packages defaults off. The default job still runs
-# core_tests with package 2.6.0.
+# Automatic Dr.Memory execution is disabled after bounded compatibility trials.
+# Deterministic runner contracts remain automatic; comparisons are manual opt-in.
 name: Dr.Memory tooling validation
 on:
   workflow_dispatch:
@@ -36,7 +36,10 @@ jobs:
     # Optional diagnostic, intentionally not a required PR/release gate.
     # Unlike release's job-level best-effort, standalone validation is red on
     # unknown/errors: its successful execution must never imply memory clean.
-    name: Dr.Memory actual execution (advisory)
+    # Both published packages timed out on the same core_tests/PDB in run44344380527.
+    # Disabled is a skipped check, NOT a successful memory test. Manual comparison remains opt-in.
+    if: ${{ false }}
+    name: Dr.Memory DISABLED (not executed; no memory verdict)
     needs: contracts
     runs-on: windows-2022
     timeout-minutes: 25

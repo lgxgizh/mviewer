@@ -149,5 +149,11 @@ try {
     $release = Get-Content -Raw -LiteralPath (Join-Path $PSScriptRoot '../../.github/workflows/release.yml')
     Check ($release -match '(?m)^\s*run: \./scripts/drmemory/run\.ps1\s*$') 'release caller remains the default invocation'
     Check ($release -notmatch 'run\.ps1[^\r\n]*-Package') 'release caller does not select a package'
+    $actualJob = [regex]::Match($workflow, '(?ms)^  actual-execution:.*?(?=^  [a-z][a-z0-9-]*:|\z)').Value
+    Check ($actualJob -match '(?m)^    if: \$\{\{ false \}\}$') 'automatic diagnostic execution is explicitly disabled'
+    Check ($actualJob -match 'name: Dr\.Memory DISABLED') 'disabled diagnostic does not claim a memory pass'
+    $releaseJob = [regex]::Match($release, '(?ms)^  dr-memory:.*?(?=^  [a-z][a-z0-9-]*:|\z)').Value
+    Check ($releaseJob -match '(?m)^    if: \$\{\{ false \}\}$') 'release diagnostic execution is explicitly disabled'
+    Check ($releaseJob -match 'name: Dr\.Memory DISABLED') 'disabled release check does not claim a memory pass'
     Write-Host "Dr.Memory contracts: $script:checks passed"
 } finally { Remove-Item -LiteralPath $root -Recurse -Force }

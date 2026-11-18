@@ -10,12 +10,20 @@
 
 ## Unreleased CI tooling
 
-- Dr.Memory advisory validation distinguishes real complete zero-error target
-  reports from findings, unsupported infrastructure, timeout and no-report.
-  A real Windows run launched bin64/drmemory.exe and retained target reports,
-  but hit the 180s deadline with partial findings; this is not a clean memory
-  result. Its real process output/reports are retained; release publication stays
-  best-effort. Standalone tooling validation does not tag or publish releases.
+- Automatic Dr.Memory execution is **disabled** in PR and Release workflows;
+  the execution jobs are explicitly skipped, not green memory-test passes.
+  Runner contracts and explicitly requested manual comparisons remain available.
+- A bounded same-binary/PDB comparison of 2.6.0 and maintained 2.6.20434 on
+  Windows20348/Qt6.8.0 timed out at180s for both core_tests runs. Both retained
+  unknown-kernel/delete-classification warnings and incomplete findings; upgrading
+  alone did not qualify a reliable automated verdict. Raw869/748 records are
+  not confirmed bug counts or evidence of improvement. Result-only controls
+  completed but both retained the same24-byte potential loader leak; neither
+  qualifies Qt/JIT or product memory safety. No suppressions or app fixes added.
+- [Final comparison and reports](https://github.com/lgxgizh/mviewer/actions/runs/44344380527/artifacts/14447385083)
+  and the [original849-record evidence](https://github.com/lgxgizh/mviewer/actions/runs/44199714254/artifacts/14380787965)
+  remain tracked. Existing ASan/UBSan and ordinary test gates are unchanged.
+  No memory-clean verdict, version/tag change or release is implied.
 
 ## 1.0.181 — Browse publication and paint costs (2026-11-17)
 
