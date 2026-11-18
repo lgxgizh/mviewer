@@ -19,7 +19,7 @@ MViewer is **not a general-purpose image viewer** — it is a **visual analysis 
 - **Compare**: Multi-image (2–8) side-by-side with synchronized zoom/pan/selection, blink comparison, swipe/split/checkerboard modes, and difference maps (AVX2/SSSE3-accelerated)
 - **Linked ROI & Delta Analysis**: Canonical source-coordinate linked ROI across all comparison modes; multi-pane relative delta telemetry ($\Delta(B-A), \Delta(C-A), \Delta(D-A)$ for luminance $V$, RGB means, and $R/G, B/G$ ratios) with floating HUD and Excel/Python-ready TSV clipboard export; keyboard micro-stepping (`Alt+Arrow` for 1px, `Shift+Arrow` for 10px, `Ctrl+Alt+Arrow` for sizing)
 - **Pixel Inspector & Color Metrics**: Real-time pixel sampling supporting RGB, HSV, Lab (with CIE $\Delta E_{76}$ perceptual difference), YUV, YCbCr, XYZ, and HEX color spaces; configurable $N \times N$ statistical neighborhood; histogram shadow underexposure ($Y=0$) and highlight clipping ($Y=255$) detection
-- **Performance & SIMD**: Background async decode, 5-level cache, predictive preloading, CPU tile pipeline (100 MP visible-region decode), format-specialized vector traversal, capability-gated GPU tile upload, UI never blocks
+- **Performance & SIMD**: Background async decode, 5-level cache, predictive preloading, CPU tile pipeline (100 MP visible-region decode), format-specialized vector traversal, capability-gated GPU tile upload; responsiveness remains workload-dependent
 - **Plugin**: Extensible analyzer system via `AnalyzerRegistry` (PSNR, SSIM, MTF50, noise, entropy, dead-pixel, ColorChecker)
 - **Browse & Manage**: File-name search with recursive subfolder scan, live gallery filter; per-image Metadata panel (format, dimensions, bit depth, channels, color space, DPI, EXIF orientation, ICC profile, embedded EXIF/XMP text); Recently-viewed filter and folder Favorites; file actions — rename, move to recycle bin, copy/move to…, reveal in Explorer
 
@@ -96,7 +96,7 @@ fallback) → user/Program Files installs; point it at your install via
 The repository provides `build.ps1` as the single canonical build, deploy, and test entry point:
 
 ```powershell
-# Run full local verification: build + deploy + test suite (132 test suites)
+# Run full local verification: build + deploy + configured test suite
 powershell -ExecutionPolicy Bypass -File build.ps1 Test
 
 # Build Release binaries
@@ -159,7 +159,10 @@ mviewer/
 │   │   └── plugin/        # PluginLoader + PluginManager
 │   ├── domain/            # Pure business objects (Image, Histogram, Selection, CompareSession)
 │   ├── application/       # UseCases (OpenDirectory, Compare, Rename, Delete)
-│   └── ui/                # Qt Widgets (MainWindow, ImageViewer, CompareWorkspace, ...)
+│   ├── widgets/           # Reusable Qt widgets (histogram, overlays, raw view)
+│   ├── mainwindow.*       # Qt Widgets UI lives in src/
+│   ├── imageviewer.*
+│   └── compareworkspace.* # MainWindow, ImageViewer, CompareWorkspace
 ├── docs/
 │   ├── adr/               # Architecture Decision Records
 │   ├── rfc/               # Request For Comments (design proposals)
@@ -292,8 +295,8 @@ powershell -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Build
 
 `scripts/package_portable.ps1` uses Qt's official `windeployqt` to gather exactly the
 DLLs/plugins `MViewer.exe` imports, then bundles the matching MSVC C++ runtime
-so the archive runs on a clean Windows install. Prereqs: Qt 6.10.x
-(`msvc2022_64`), `windeployqt`, and `makensis` (NSIS) on `PATH`. The package
+so the archive runs on a clean Windows install. Prereqs: Qt 6.8.0
+(`msvc2022_64`; release CI installs 6.8.0 for `win64_msvc2022_64`), `windeployqt`, and `makensis` (NSIS) on `PATH`. The package
 version is read from `build_msvc/version_info.txt` (generated from the CMake
 `project(VERSION)` — the single version source).
 
@@ -301,7 +304,7 @@ The Release Candidate gate is explicit and hard-failing:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/run_release_checklist.ps1 `
-  -ReleaseCandidate -Version 1.0.13
+  -ReleaseCandidate -Version <version>
 ```
 
 It validates the exact portable/installer names, Qt SQL and platform plugins,
