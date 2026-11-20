@@ -502,8 +502,11 @@ void MainWindow::buildMetadataPanelUi()
     m_metadataPanel->setParent(this);
     m_metadataPanel->setWindowFlags(Qt::Tool | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint);
     m_metadataPanel->setAttribute(Qt::WA_ShowWithoutActivating, false);
-    m_metadataPanel->setFixedSize(300, 480);
-    m_metadataPanel->setWindowOpacity(0.92); // semi-transparent
+    // Resizable floating panel: metadata values (paths, colour spaces, camera
+    // notes) are long, and a fixed 300x480 box clipped them. The user can drag
+    // it wider; the minimum keeps the tree usable.
+    m_metadataPanel->setMinimumSize(340, 400);
+    m_metadataPanel->resize(480, 600);
     m_metadataPanel->hide();
 }
 

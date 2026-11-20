@@ -140,7 +140,7 @@ void MetadataPanel::requestMetadata()
                     guard->m_model->setImage(meta);
                     guard->m_model->setRaw(snapshot.raw);
                     guard->m_tree->expandAll();
-                    guard->m_tree->setColumnWidth(0, 130);
+                    guard->m_tree->setColumnWidth(0, 150);
                 },
                 Qt::QueuedConnection);
         });

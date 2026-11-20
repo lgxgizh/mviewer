@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Image Info overlay legibility** (View → Image &info, `I` / `M`): the
+  on-image metadata panel was a fixed 380 px box, so long values (full path,
+  colour space, file name) were clipped at the window edge, and its 92 %
+  translucent fill let the photo bleed through and muddy the text. The panel is
+  now sized from its content (300–520 px, capped by the viewer), wraps long
+  values instead of clipping them, keeps the whole box — title, rows,
+  histogram, hint — inside the viewer, and fills essentially opaque so the text
+  stays readable over any image. On a short viewer the histogram gives up its
+  height before the metadata is pushed off screen, and the "Press I / ESC to
+  close" hint no longer sits underneath the histogram.
+- **Floating Metadata panel**: the tool window was fixed at 300×480 and 92 %
+  opaque, clipping long metadata values. It is now a resizable panel
+  (480×600 default, 340×400 minimum) with a wider value column and a solid
+  fill.
+- **Item-view theme leak**: the theme stylesheet wrote its
+  `QTreeView:!focus::item:selected` / `:focus::item:selected:hover` rules with
+  the widget pseudo-state *before* the `::item` sub-control, which Qt also
+  matches against the view itself. The selection colour therefore repainted the
+  view's `Base` role, so alternating rows and the empty viewport came out
+  accent blue (the floating Metadata panel and the plugin list) and the folder
+  tree lost its sidebar fill. The pseudo-state now follows `::item`, restoring
+  the intended wells in both themes.
+- **Preview caption overflow**: the sidebar preview caption drew the full file
+  name and the sample-luminance line without eliding, so a long name ran past
+  the panel edge. Both are now elided to the panel width (middle elision keeps
+  the extension).
+
 ### CI tooling
 
 - Dr.Memory uses native Windows paths, architecture-matched discovery and the

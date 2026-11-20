@@ -790,12 +790,17 @@ QListWidget::item:selected {
     border-radius: 6px;
 }
 
-QTreeView:!focus::item:selected,
-QTableView:!focus::item:selected,
-QListView:!focus::item:selected,
-QTreeWidget:!focus::item:selected,
-QTableWidget:!focus::item:selected,
-QListWidget:!focus::item:selected,
+/* Item-view pseudo-states must follow the ::item sub-control. Written the other
+   way round (QTreeView:!focus::item:selected) Qt matches the rule against the
+   view widget too, so its background repaints the view's Base role with the
+   selection colour — alternating rows and the empty viewport then come out
+   accent blue instead of the theme wells below. */
+QTreeView::item:selected:!focus,
+QTableView::item:selected:!focus,
+QListView::item:selected:!focus,
+QTreeWidget::item:selected:!focus,
+QTableWidget::item:selected:!focus,
+QListWidget::item:selected:!focus,
 QTreeView::item:selected:!active,
 QTableView::item:selected:!active,
 QListView::item:selected:!active,
@@ -806,12 +811,12 @@ QListWidget::item:selected:!active {
     color: {{textPrimary}};
 }
 
-QTreeView:focus::item:selected:hover,
-QTableView:focus::item:selected:hover,
-QListView:focus::item:selected:hover,
-QTreeWidget:focus::item:selected:hover,
-QTableWidget:focus::item:selected:hover,
-QListWidget:focus::item:selected:hover {
+QTreeView::item:selected:focus:hover,
+QTableView::item:selected:focus:hover,
+QListView::item:selected:focus:hover,
+QTreeWidget::item:selected:focus:hover,
+QTableWidget::item:selected:focus:hover,
+QListWidget::item:selected:focus:hover {
     background: {{accentHover}};
     color: {{onAccent}};
 }
@@ -1021,7 +1026,7 @@ QSplitter#navigationPanel QTreeView::item:selected {
     border-radius: 6px;
 }
 
-QSplitter#navigationPanel QTreeView:!focus::item:selected,
+QSplitter#navigationPanel QTreeView::item:selected:!focus,
 QSplitter#navigationPanel QTreeView::item:selected:!active {
     background: {{bg3}};
     color: {{textPrimary}};

@@ -314,7 +314,8 @@ void MainWindow::positionMetadataPanel()
     if (!m_metadataPanel)
         return;
     const QPoint topRight = mapToGlobal(QPoint(width(), 0));
-    const int x = topRight.x() - m_metadataPanel->width() - 16;
+    // A main window narrower than the panel must not push it off-screen left.
+    const int x = qMax(0, topRight.x() - m_metadataPanel->width() - 16);
     const int y = topRight.y() + 80;
     m_metadataPanel->move(x, y);
 }

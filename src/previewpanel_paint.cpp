@@ -169,10 +169,14 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     const QString pathStr = m_presentedPath;
     const int slash = qMax(pathStr.lastIndexOf('/'), pathStr.lastIndexOf('\\'));
     const QString name = slash >= 0 ? pathStr.mid(slash + 1) : pathStr;
+    // Elide from the middle so the extension survives: a long file name must
+    // not run past the panel edge (the caption is the only identity shown).
+    const QString shownName =
+        painter.fontMetrics().elidedText(name, Qt::ElideMiddle, txtArea.width());
     // Fixed three-line layout: name / dimensions (or "—") + size / stats, so
     // late facts fill in place instead of shifting lines.
     const QString dash = QStringLiteral("\u2014");
-    QString identity = name + "\n";
+    QString identity = shownName + "\n";
     identity += m_sourceDimensionsKnown
                     ? QString::number(m_imgW) + QStringLiteral("\u00d7") + QString::number(m_imgH)
                     : dash;
@@ -189,5 +193,6 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
                            .arg(m_gMean)
                            .arg(m_bMean)
                      : tr("Sample luminance %1   RGB(%2,%3,%4)").arg(dash, dash, dash, dash);
-    painter.drawText(txtArea.adjusted(0, 36, 0, 0), Qt::AlignTop | Qt::AlignLeft, stats);
+    painter.drawText(txtArea.adjusted(0, 36, 0, 0), Qt::AlignTop | Qt::AlignLeft,
+                     painter.fontMetrics().elidedText(stats, Qt::ElideRight, txtArea.width()));
 }

@@ -16,6 +16,10 @@ class QHideEvent;
 /// camera, GPS, histogram). Toggled by 'I' key or click on image. Dismissed by
 /// ESC.
 ///
+/// The panel is sized from its content: the widest value sets the width (up to
+/// a readable measure) and longer values wrap, so no line is ever clipped by
+/// the box. `layout()` exposes the geometry so tests can assert that contract.
+///
 /// Usage:
 ///   overlay->showForImage(path);  // reads metadata and shows
 ///   overlay->toggle();            // show/hide
@@ -24,6 +28,17 @@ class MetadataOverlay : public QWidget
     Q_OBJECT
 
   public:
+    struct Layout
+    {
+        QRect box;
+        QRect title;
+        QString titleText;
+        QVector<QRect> lines;
+        QStringList texts; // wrapped text drawn at each `lines` rect
+        QRect histogram;   // empty when the histogram has no room / no data
+        QRect hint;
+    };
+
     explicit MetadataOverlay(QWidget *parent = nullptr);
 
     /// Record the current image. Hidden overlays do no metadata work.
@@ -43,6 +58,10 @@ class MetadataOverlay : public QWidget
     /// P0: Set a single histogram from an external source (ImageViewer).
     void setHistogram(const mviewer::core::Histogram &hist);
 
+    /// Geometry the next paint will use for a viewer of `viewerSize`.
+    /// The box stays inside the viewer and every line stays inside the box.
+    Layout layout(const QSize &viewerSize) const;
+
   signals:
     void visibilityChanged(bool visible);
 
@@ -60,7 +79,7 @@ class MetadataOverlay : public QWidget
     void appendExifInfo(const mviewer::domain::ImageMetadata &meta);
     void appendRawInfo(const mviewer::core::RawMetadata &raw);
     void appendLocationAndTimes(const mviewer::domain::ImageMetadata &meta);
-    void positionHistogram(const QRect &boxRect);
+    static QStringList wrapLine(const QFontMetrics &metrics, const QString &text, int width);
 
     QStringList m_lines;
     QString m_shortName;
@@ -71,7 +90,17 @@ class MetadataOverlay : public QWidget
     std::string m_consumerId;
 
     // Auto-hide delay constants
-    static constexpr int kInfoRectWidth = 380;
+    static constexpr int kMinInfoWidth = 300;
+    static constexpr int kMaxInfoWidth = 520;
+    static constexpr int kInfoMargin = 20;
+    static constexpr int kInfoPadding = 12;
+    static constexpr int kTitleGap = 4;
+    static constexpr int kHintGap = 6;
+    static constexpr int kHintHeight = 18;
     static constexpr int kFontSize = 12;
+    static constexpr int kTitleFontSize = 14;
+    static constexpr int kInfoAlpha = 250; // reads as opaque over any image
     static constexpr int kHistogramHeight = 120;
+    static constexpr int kMinHistogramHeight = 72;
+    static constexpr int kHistogramGap = 8;
 };

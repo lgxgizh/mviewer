@@ -11,6 +11,7 @@
 #include <QClipboard>
 #include <QDateTime>
 #include <QFileInfo>
+#include <QFontMetrics>
 #include <QHideEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
@@ -18,6 +19,7 @@
 #include <QPainterPath>
 #include <QPointer>
 #include <QResizeEvent>
+#include <QVector>
 
 #include <algorithm>
 #include <cmath>
@@ -33,9 +35,11 @@ MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
     setAutoFillBackground(false);
     setAttribute(Qt::WA_TranslucentBackground, true);
 
-    // P0: Embedded mini histogram (rendered as overlay child widget).
+    // P0: Embedded mini histogram (rendered as overlay child widget). Its
+    // height comes from layout(): a short viewer shrinks it before the metadata
+    // is pushed off the window, so the widget must not pin a fixed height.
     m_histogram = new HistogramWidget(this);
-    m_histogram->setFixedHeight(kHistogramHeight);
+    m_histogram->setMinimumHeight(kMinHistogramHeight);
     m_histogram->hide();
 }
 
@@ -129,19 +133,6 @@ void MetadataOverlay::setHistogram(const mviewer::core::Histogram &hist)
         update(); // trigger paintEvent to reposition
 }
 
-void MetadataOverlay::positionHistogram(const QRect &boxRect)
-{
-    if (!m_histogram || !m_histogram->isVisible())
-        return;
-    const int padding = 12;
-    const int lineH = fontMetrics().height() + 4;
-    const int bodyEnd = static_cast<int>(m_lines.size() + 1) * lineH + padding;
-    const int x = boxRect.x() + padding;
-    const int y = boxRect.y() + bodyEnd + 4;
-    const int w = boxRect.width() - padding * 2;
-    m_histogram->setGeometry(x, y, w, kHistogramHeight);
-}
-
 namespace
 {
 QString formatFileSize(qint64 bytes)
@@ -165,6 +156,149 @@ QString lookup(const std::map<std::string, std::string> &m, const char *key)
     return it != m.end() ? QString::fromStdString(it->second) : QString();
 }
 } // namespace
+
+// Greedy word wrap. A single word wider than the box (a long path, a colour
+// space name) is hard-broken so it can never push past the panel edge.
+QStringList MetadataOverlay::wrapLine(const QFontMetrics &metrics, const QString &text, int width)
+{
+    if (width <= 0 || metrics.horizontalAdvance(text) <= width)
+        return {text};
+
+    QStringList rows;
+    QString current;
+    const QStringList words = text.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    for (const QString &word : words)
+    {
+        if (metrics.horizontalAdvance(word) > width)
+        {
+            if (!current.isEmpty())
+            {
+                rows << current;
+                current.clear();
+            }
+            QString chunk = word;
+            while (metrics.horizontalAdvance(chunk) > width && chunk.size() > 1)
+            {
+                int cut = chunk.size() - 1;
+                while (cut > 1 && metrics.horizontalAdvance(chunk.left(cut)) > width)
+                    --cut;
+                rows << chunk.left(cut);
+                chunk = chunk.mid(cut);
+            }
+            current = chunk;
+            continue;
+        }
+        const QString candidate = current.isEmpty() ? word : current + QLatin1Char(' ') + word;
+        if (metrics.horizontalAdvance(candidate) > width)
+        {
+            rows << current;
+            current = word;
+        }
+        else
+        {
+            current = candidate;
+        }
+    }
+    if (!current.isEmpty())
+        rows << current;
+    return rows;
+}
+
+MetadataOverlay::Layout MetadataOverlay::layout(const QSize &viewerSize) const
+{
+    Layout out;
+    const int margin = kInfoMargin;
+    const int padding = kInfoPadding;
+    const int availableW = std::max(120, viewerSize.width() - margin * 2);
+    const int availableH = std::max(120, viewerSize.height() - margin * 2);
+
+    QFont bodyFont = font();
+    bodyFont.setPixelSize(kFontSize);
+    const QFontMetrics bodyMetrics(bodyFont);
+    QFont titleFont = font();
+    titleFont.setPixelSize(kTitleFontSize);
+    titleFont.setBold(true);
+    const QFontMetrics titleMetrics(titleFont);
+
+    const int lineH = bodyMetrics.height() + 4;
+    const int titleH = m_shortName.isEmpty() ? 0 : titleMetrics.height() + 2;
+
+    // The panel grows to its widest value, capped at a readable measure and at
+    // the viewer itself; anything longer wraps instead of being clipped.
+    int contentW = titleMetrics.horizontalAdvance(m_shortName);
+    for (const QString &line : m_lines)
+        contentW = std::max(contentW, bodyMetrics.horizontalAdvance(line));
+    const int maxTextW = std::min(kMaxInfoWidth, availableW) - padding * 2;
+    const int minTextW = kMinInfoWidth - padding * 2;
+    int textW = std::clamp(contentW, minTextW, std::max(1, maxTextW));
+
+    // Fit the panel to the wrapped result: wrapping at the widest measure can
+    // leave the box much wider than the text it actually holds. A narrower
+    // measure only re-wraps, never widens a row, so this converges.
+    QStringList wrapped;
+    for (int pass = 0; pass < 4; ++pass)
+    {
+        wrapped.clear();
+        for (const QString &line : m_lines)
+            wrapped += wrapLine(bodyMetrics, line, textW);
+        int usedW = titleMetrics.horizontalAdvance(m_shortName);
+        for (const QString &row : wrapped)
+            usedW = std::max(usedW, bodyMetrics.horizontalAdvance(row));
+        const int fitted = std::clamp(usedW, minTextW, std::max(1, maxTextW));
+        if (fitted == textW)
+            break;
+        textW = fitted;
+    }
+    const int boxW = textW + padding * 2;
+
+    const bool hasHist = m_histogram && m_histogram->isVisible();
+    int histH = hasHist ? kHistogramHeight : 0;
+    int boxH = padding + titleH + (titleH > 0 ? kTitleGap : 0) +
+               static_cast<int>(wrapped.size()) * lineH + padding + kHintGap + kHintHeight;
+    if (hasHist)
+        boxH += kHistogramGap + histH;
+
+    // A viewer too short for text + histogram: shrink the histogram first so
+    // the metadata itself is never pushed off the window.
+    if (boxH > availableH && hasHist)
+    {
+        const int withoutHist = boxH - (kHistogramGap + histH);
+        const int room = availableH - withoutHist - kHistogramGap;
+        histH = room >= kMinHistogramHeight ? std::min(histH, room) : 0;
+        boxH = withoutHist + (histH > 0 ? kHistogramGap + histH : 0);
+    }
+
+    const int x = std::max(margin, viewerSize.width() - boxW - margin);
+    int y = margin;
+    if (y + boxH > viewerSize.height() - margin)
+        y = std::max(margin, viewerSize.height() - boxH - margin);
+
+    out.box = QRect(x, y, boxW, boxH);
+    int cursor = y + padding;
+    if (titleH > 0)
+    {
+        out.title = QRect(x + padding, cursor, textW, titleH);
+        out.titleText = titleMetrics.elidedText(m_shortName, Qt::ElideMiddle, textW);
+        cursor += titleH + kTitleGap;
+    }
+    out.lines.clear();
+    out.lines.reserve(wrapped.size());
+    out.texts = wrapped;
+    for (int i = 0; i < wrapped.size(); ++i)
+    {
+        out.lines.append(QRect(x + padding, cursor, textW, lineH));
+        cursor += lineH;
+    }
+    if (histH > 0)
+    {
+        cursor += kHistogramGap;
+        out.histogram = QRect(x + padding, cursor, textW, histH);
+        cursor += histH;
+    }
+    cursor += kHintGap;
+    out.hint = QRect(x + padding, cursor, textW, kHintHeight);
+    return out;
+}
 
 void MetadataOverlay::requestMetadata()
 {
@@ -377,69 +511,63 @@ void MetadataOverlay::buildContent(
 
 void MetadataOverlay::paintEvent(QPaintEvent *)
 {
-    if (m_lines.isEmpty())
+    if (m_lines.isEmpty() && m_shortName.isEmpty())
         return;
+
+    const Layout lay = layout(QSize(width(), height()));
 
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
 
-    const int lineH = fontMetrics().height() + 4;
-    const int padding = 12;
-    const int boxW = kInfoRectWidth;
-    // P0: Reserve space for embedded histogram if it has data.
-    const int histExtra =
-        (m_histogram && m_histogram->isVisible()) ? kHistogramHeight + padding : 0;
-    const int boxH = static_cast<int>(m_lines.size() + 1) * lineH + padding * 2 + histExtra;
-
-    const int x = width() - boxW - 20;
-    const int y = 20;
-    QRect boxRect(x, y, boxW, boxH);
-
-    const int radius = mviewer::ui::metrics::kRadiusPanel;
     QColor fill(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Bg1));
-    fill.setAlpha(235);
+    fill.setAlpha(kInfoAlpha);
     QColor edge(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::Border));
     QColor ink(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextPrimary));
     QColor muted(mviewer::ui::Theme::themeColor(mviewer::ui::ThemeRole::TextSecondary));
 
     QPainterPath bgPath;
-    bgPath.addRoundedRect(QRectF(boxRect), radius, radius);
+    bgPath.addRoundedRect(QRectF(lay.box), mviewer::ui::metrics::kRadiusPanel,
+                          mviewer::ui::metrics::kRadiusPanel);
     p.fillPath(bgPath, fill);
 
     p.setPen(QPen(edge, 1));
     p.drawPath(bgPath);
 
     p.setPen(ink);
-    QFont hf = font();
-    hf.setPixelSize(kFontSize + 2);
-    hf.setBold(true);
-    p.setFont(hf);
-    p.drawText(QRect(x + padding, y + padding, boxW - padding * 2, lineH),
-               Qt::AlignLeft | Qt::AlignVCenter, m_shortName);
+    if (!lay.title.isEmpty())
+    {
+        QFont hf = font();
+        hf.setPixelSize(kTitleFontSize);
+        hf.setBold(true);
+        p.setFont(hf);
+        p.drawText(lay.title, Qt::AlignLeft | Qt::AlignVCenter, lay.titleText);
+    }
 
-    // Body lines
     QFont bf = font();
     bf.setPixelSize(kFontSize);
     p.setFont(bf);
     p.setPen(ink);
+    for (int i = 0; i < lay.texts.size() && i < lay.lines.size(); ++i)
+        p.drawText(lay.lines.at(i), Qt::AlignLeft | Qt::AlignVCenter, lay.texts.at(i));
 
-    for (int i = 0; i < m_lines.size(); ++i)
+    // P0: the histogram child is placed from the same layout as the text, so
+    // the hint line never lands on top of it.
+    if (m_histogram)
     {
-        p.drawText(QRect(x + padding, y + padding + (i + 1) * lineH, boxW - padding * 2, lineH),
-                   Qt::AlignLeft | Qt::AlignVCenter, m_lines.at(i));
+        if (lay.histogram.isEmpty())
+            m_histogram->hide();
+        else
+        {
+            m_histogram->show();
+            m_histogram->setGeometry(lay.histogram);
+        }
     }
 
-    // P0: Position histogram widget at the bottom of the info box.
-    if (m_histogram && m_histogram->isVisible())
-        positionHistogram(boxRect);
-
-    // Hint
     p.setPen(muted);
     QFont sf = font();
     sf.setPixelSize(10);
     p.setFont(sf);
-    p.drawText(QRect(x + padding, y + boxH - 16, boxW - padding * 2, 16),
-               Qt::AlignRight | Qt::AlignVCenter, tr("Press I / ESC to close"));
+    p.drawText(lay.hint, Qt::AlignRight | Qt::AlignVCenter, tr("Press I / ESC to close"));
 }
 
 void MetadataOverlay::mousePressEvent(QMouseEvent *event)

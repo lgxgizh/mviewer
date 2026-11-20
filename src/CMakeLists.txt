@@ -927,6 +927,26 @@ target_include_directories(browse_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME browse_acceptance_tests COMMAND browse_acceptance_tests)
 set_tests_properties(browse_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── Metadata overlay layout (View → Image &info, I / M): the on-image panel
+# sizes itself from its content and stays inside the viewer ───────────────────
+add_executable(metadata_overlay_tests
+    test_metadata_overlay.cpp
+)
+
+target_link_libraries(metadata_overlay_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(metadata_overlay_tests PRIVATE cxx_std_20)
+target_include_directories(metadata_overlay_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME metadata_overlay_tests COMMAND metadata_overlay_tests)
+set_tests_properties(metadata_overlay_tests PROPERTIES RUN_SERIAL TRUE)
+
 # Browse: paste clipboard into current folder + open-folder toolbar action
 add_executable(browse_paste_acceptance
     test_browse_paste.cpp
