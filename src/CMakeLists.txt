@@ -116,6 +116,7 @@ add_library(mviewer_core SHARED
     core/analysis/Ciede2000.cpp
     core/analysis/ColorChecker.cpp
     core/analysis/Fft2D.cpp
+    core/session/SessionPackage.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ExportReport_serialize.cpp
     core/analysis/ReportHtml.cpp
@@ -268,6 +269,7 @@ add_library(mviewer_ui STATIC
     mainwindow_session.cpp
     mainwindow_session_recovery.cpp
     mainwindow_session_notifications.cpp
+    mainwindow_sessionpackage.cpp
     mainwindow_export.cpp
     mainwindow_view.cpp
     mainwindow_keys.cpp
@@ -1602,6 +1604,13 @@ target_link_libraries(test_fft2d PRIVATE mviewer_core)
 target_compile_features(test_fft2d PRIVATE cxx_std_20)
 target_include_directories(test_fft2d PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME fft2d_tests COMMAND test_fft2d)
+
+# Report feature 11: portable session package.
+add_executable(test_session_package core/test_session_package.cpp)
+target_link_libraries(test_session_package PRIVATE mviewer_core)
+target_compile_features(test_session_package PRIVATE cxx_std_20)
+target_include_directories(test_session_package PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME session_package_tests COMMAND test_session_package)
 
 add_executable(test_yuv_sample core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)

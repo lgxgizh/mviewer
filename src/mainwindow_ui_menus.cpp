@@ -364,6 +364,13 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
             });
     m_actPluginSettings = new QAction(tr("&Plugin Manager..."), this);
     toolsMenu->addAction(m_actPluginSettings);
+    // Report feature 11: share a review as one file (session + referenced images).
+    auto *actExportSession = new QAction(tr("Export Session &Package..."), this);
+    auto *actImportSession = new QAction(tr("Import Session P&ackage..."), this);
+    toolsMenu->addAction(actExportSession);
+    toolsMenu->addAction(actImportSession);
+    connect(actExportSession, &QAction::triggered, this, [this]() { exportSessionPackage(); });
+    connect(actImportSession, &QAction::triggered, this, [this]() { importSessionPackage(); });
 
     QAction *actPrefs = new QAction(tr("Preferences(&O)..."), this);
     connect(actPrefs, &QAction::triggered, this, &MainWindow::openPreferences);

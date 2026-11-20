@@ -1,12 +1,18 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.190** · Release tag: **v1.0.190**
+> Snapshot: 2026-11-21 · Version: **1.0.191** · Release tag: **v1.0.191**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.191 — Portable session package (2026-11-21)
+
+- Tools → Export/Import Session Package: a store-only ZIP carrying the compare
+  session manifest plus the referenced images. Import extracts to a temp
+  directory and reopens the session, leaving the originals untouched.
 
 ## 1.0.190 — 2D FFT spectrum + CV box overlay (2026-11-21)
 

@@ -413,6 +413,9 @@ class MainWindow : public QMainWindow
     void applyPreferences(const QVariantMap &before);
     void applyColorManagementPreference();
     void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
+    // Report feature 11: portable session package (session + referenced images).
+    void exportSessionPackage();
+    void importSessionPackage();
     void openUsmCompare(const QString &path = {});
     // ADR 032 (mainwindow_yuv.cpp): raw .yuv parameter dialog and load-failure hint.
     void editYuvParams(const QString &path);

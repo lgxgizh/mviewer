@@ -6356,6 +6356,71 @@ Build: %2</source>
         <source>Cannot show %1: %2. Set its size and storage with right-click &gt; Gray Parameters...</source>
         <translation>无法显示 %1：%2。请右键 &gt; 灰度参数... 设置尺寸和存储格式</translation>
     </message>
+    <message>
+        <location filename="../src/mainwindow_ui_menus.cpp" line="1"/>
+        <source>Export Session &amp;Package...</source>
+        <translation>导出会话包(&amp;P)...</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_ui_menus.cpp" line="1"/>
+        <source>Import Session P&amp;ackage...</source>
+        <translation>导入会话包(&amp;A)...</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Session package: open a compare session first</source>
+        <translation>会话包：请先打开一个对比会话</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Export Session Package</source>
+        <translation>导出会话包</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>MViewer Session (*.mviewer-session)</source>
+        <translation>MViewer 会话 (*.mviewer-session)</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Session package: %1 (%2 files)</source>
+        <translation>会话包：%1（%2 个文件）</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Import Session Package</source>
+        <translation>导入会话包</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Could not write the package</source>
+        <translation>无法写入会话包</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Could not read the package</source>
+        <translation>无法读取会话包</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>No temporary folder available</source>
+        <translation>没有可用的临时目录</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Could not extract %1</source>
+        <translation>无法解出 %1</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>The package has no session manifest or no images</source>
+        <translation>会话包缺少会话清单或图像</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
+        <source>Session Package</source>
+        <translation>会话包</translation>
+    </message>
 </context>
 <context>
     <name>MetadataModel</name>

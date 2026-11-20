@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.0.191] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.191**.
+
+### Added
+
+- **Portable session package** (report feature 11, Tools → Export / Import
+  Session Package): a single `.mviewer-session` file carrying the compare
+  session manifest plus every referenced image, so a review can be handed to a
+  colleague without a shared drive. Import extracts to a temporary directory
+  and reopens the session from there — the original files are never touched.
+  The container is a store-only ZIP (no compression): the payload is already
+  encoded, so compression would cost CPU for almost no size, and a store-only
+  writer/reader stays small and auditable.
+
 ## [1.0.190] - 2026-11-21
 
 ### Release

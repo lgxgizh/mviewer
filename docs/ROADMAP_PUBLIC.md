@@ -4,13 +4,13 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.190**
+## Where we are now — **Beta / 1.0.191**
 
-MViewer remains in **Beta**; the current release is **`v1.0.190`**
+MViewer remains in **Beta**; the current release is **`v1.0.191`**
 (2026-11-21, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch adds a 2D FFT spectrum for aliasing / moire judgement and a CV box
-overlay for eyeballing detection output. Offscreen CI is regression evidence,
-not proof of universal smoothness.
+This patch adds a portable session package (session manifest + referenced
+images in one file) with export and import. Offscreen CI is regression
+evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -65,7 +65,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.190** (current) | 2D FFT spectrum + CV box overlay | 🔵 Beta |
+| **1.0.191** (current) | Portable session package (export/import) | 🔵 Beta |
+| **1.0.190** | 2D FFT spectrum + CV box overlay | ✅ Previous patch |
 | **1.0.189** | A/B blind test with MOS scoring + JSON export | ✅ Previous patch |
 | **1.0.188** | Live display adjust (`G`) + CIEDE2000 / ColorChecker | ✅ Previous patch |
 | **1.0.187** | HDR formats: OpenEXR + PFM (float decode, tone-mapped) | ✅ Previous patch |
