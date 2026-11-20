@@ -6,6 +6,9 @@
 #include <QSettings>
 #include <QTranslator>
 
+#include <QApplication>
+#include <QWidget>
+
 static void ensureLanguageResources()
 {
     Q_INIT_RESOURCE(mviewer);
@@ -108,6 +111,21 @@ void Language::apply(LanguageMode mode)
                               app->applicationDirPath() + QStringLiteral("/translations")))
         {
             app->installTranslator(&translator());
+        }
+    }
+
+    // Item 5: sub-panels (dialogs, docked pages) that built their strings once
+    // do not all override changeEvent. Installing the translator already
+    // delivers LanguageChange; re-sending it to every top-level widget is
+    // idempotent and covers the panels that only refresh on the event.
+    if (auto *guiApp = qobject_cast<QApplication *>(app))
+    {
+        QEvent languageChange(QEvent::LanguageChange);
+        const QWidgetList tops = guiApp->topLevelWidgets();
+        for (QWidget *widget : tops)
+        {
+            if (widget)
+                guiApp->sendEvent(widget, &languageChange);
         }
     }
 }

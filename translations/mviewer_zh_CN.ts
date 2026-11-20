@@ -1268,8 +1268,8 @@
     </message>
     <message>
         <location filename="../src/compareworkspace_shortcuts.h" line="120"/>
-        <source>Decrease overlay opacity by 5</source>
-        <translation>叠加透明度减 5</translation>
+        <source>Decrease overlay opacity by 5; with a multi-frame cell, step its frame back</source>
+        <translation>叠加透明度减 5；存在多帧单元时，改为向后切换帧</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_shortcuts.h" line="121"/>
@@ -1277,12 +1277,11 @@
         <translation>提高叠加透明度</translation>
     </message>
     <message>
-        <location filename="../src/compareworkspace_shortcuts.h" line="122"/>
-        <source>Increase overlay opacity by 5</source>
-        <translation>叠加透明度加 5</translation>
+        <location filename="../src/compareworkspace_shortcuts.h" line="121"/>
+        <source>Increase overlay opacity by 5; with a multi-frame cell, step its frame forward</source>
+        <translation>叠加透明度加 5；存在多帧单元时，改为向前切换帧</translation>
     </message>
-    <message>
-        <location filename="../src/compareworkspace_shortcuts.h" line="123"/>
+    <message>        <location filename="../src/compareworkspace_shortcuts.h" line="123"/>
         <source>Layout Presets</source>
         <translation>布局预设</translation>
     </message>

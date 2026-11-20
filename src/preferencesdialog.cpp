@@ -20,12 +20,15 @@
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QCursor>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScreen>
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
@@ -514,4 +517,20 @@ void PreferencesDialog::accept()
     DisplayColorContextProvider::setColorManagementEnabled(colorManagement);
     emit settingsChanged();
     QDialog::accept();
+}
+
+void PreferencesDialog::showEvent(QShowEvent *event)
+{
+    QDialog::showEvent(event);
+    // Item 5: on a small screen the 480x420 default (and the icon-over-label
+    // page bar) used to run past the work area. Fit the dialog to the screen
+    // and let the page bar wrap instead of clipping.
+    const QScreen *screen = QGuiApplication::screenAt(QCursor::pos());
+    if (!screen)
+        screen = this->screen();
+    if (!screen)
+        return;
+    const QRect avail = screen->availableGeometry();
+    if (avail.isValid() && !avail.isEmpty())
+        resize(std::min(width(), avail.width()), std::min(height(), avail.height()));
 }

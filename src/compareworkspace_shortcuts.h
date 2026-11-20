@@ -112,9 +112,13 @@ inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"]", QT_TRANSLATE_NOOP("CompareShortcuts", "Raise Diff Threshold"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Increase the difference threshold by 5")},
     {",", QT_TRANSLATE_NOOP("CompareShortcuts", "Lower Overlay Opacity"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Decrease overlay opacity by 5")},
+     QT_TRANSLATE_NOOP(
+         "CompareShortcuts",
+         "Decrease overlay opacity by 5; with a multi-frame cell, step its frame back")},
     {".", QT_TRANSLATE_NOOP("CompareShortcuts", "Raise Overlay Opacity"),
-     QT_TRANSLATE_NOOP("CompareShortcuts", "Increase overlay opacity by 5")},
+     QT_TRANSLATE_NOOP(
+         "CompareShortcuts",
+         "Increase overlay opacity by 5; with a multi-frame cell, step its frame forward")},
     {"Ctrl+2 / Ctrl+4 / Ctrl+8", QT_TRANSLATE_NOOP("CompareShortcuts", "Layout Presets"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Load 2/4/8-pane layout presets")},
     {"1 / 2 / 3 / 4 / 5 / 6 / 7 / 8", QT_TRANSLATE_NOOP("CompareShortcuts", "Temporary Image Swap"),

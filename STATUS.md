@@ -1,12 +1,21 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.192** · Release tag: **v1.0.192**
+> Snapshot: 2026-11-21 · Version: **1.0.193** · Release tag: **v1.0.193**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.193 — Shortcut help, preferences fit, language hot-switch (2026-11-21)
+
+- F1 cheat sheet and in-app guide document the review tools (`L`, `W`, `A`/`T`,
+  `G`) and the new context-menu entries; Compare's `,` / `.` documents the
+  frame-step behaviour.
+- Preferences fits itself to the available work area on show.
+- Switching language re-sends `LanguageChange` to every top-level widget so
+  sub-panels follow.
 
 ## 1.0.192 — Large-folder stall (item 3) (2026-11-21)
 

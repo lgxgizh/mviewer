@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [1.0.193] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.193**.
+
+### Fixed
+
+- **Shortcut help gaps** (item 5): the F1 cheat sheet and the in-app guide now
+  document every key added since the last pass — `L` line profile, `W` scopes,
+  `A`/`T` annotation, `G` display adjust, plus the context-menu entries for FFT
+  spectrum, CV boxes, color-checker ΔE00, A/B blind test and review-image
+  export. Compare's `,` / `.` row now says that they step frames when a
+  multi-frame cell is present (and keep the overlay-opacity meaning otherwise).
+- **Preferences on a small screen** (item 5): the dialog now fits itself to the
+  available work area on show instead of running past a small screen.
+- **Language hot-switch for sub-panels** (item 5): switching language re-sends
+  `LanguageChange` to every top-level widget, so dialogs and docked pages that
+  built their strings once pick up the new translator.
+
 ## [1.0.192] - 2026-11-21
 
 ### Release

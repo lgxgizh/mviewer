@@ -26,6 +26,10 @@ class PreferencesDialog : public QDialog
   signals:
     void settingsChanged();
 
+  protected:
+    // Item 5: a small screen must not clip the page bar or the page content.
+    void showEvent(QShowEvent *event) override;
+
   private slots:
     void accept() override;
 
