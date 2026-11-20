@@ -166,6 +166,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         painter.restore();
     }
     drawAnnotations(painter);
+    drawAnalysisOverlay(painter);
     drawFrameStatus(painter);
     drawLoadingBar(painter);
     if (hasDisplayImage())

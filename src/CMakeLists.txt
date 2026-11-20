@@ -115,6 +115,7 @@ add_library(mviewer_core SHARED
     core/analysis/PixelInspector_adjust.cpp
     core/analysis/Ciede2000.cpp
     core/analysis/ColorChecker.cpp
+    core/analysis/Fft2D.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ExportReport_serialize.cpp
     core/analysis/ReportHtml.cpp
@@ -283,6 +284,7 @@ add_library(mviewer_ui STATIC
     imageviewer_annotate.cpp
     imageviewer_adjust.cpp
     imageviewer_colorchecker.cpp
+    imageviewer_spectrum.cpp
     imageviewer_inspector.cpp
     imageviewer_state.cpp
     annotationstore.cpp
@@ -1593,6 +1595,13 @@ target_link_libraries(test_color_checker PRIVATE mviewer_core)
 target_compile_features(test_color_checker PRIVATE cxx_std_20)
 target_include_directories(test_color_checker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME color_checker_tests COMMAND test_color_checker)
+
+# Report feature 10: 2D FFT spectrum.
+add_executable(test_fft2d core/test_fft2d.cpp)
+target_link_libraries(test_fft2d PRIVATE mviewer_core)
+target_compile_features(test_fft2d PRIVATE cxx_std_20)
+target_include_directories(test_fft2d PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME fft2d_tests COMMAND test_fft2d)
 
 add_executable(test_yuv_sample core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)

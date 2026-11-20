@@ -6,6 +6,7 @@
 #include "core/image/QtConvert.h"
 #include "widgets/blindtestdialog.h"
 
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
 #include <QLineEdit>
@@ -38,7 +39,8 @@ bool ImageViewer::isAnnotateMode() const
 
 void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
                                           QAction *&exportReview, QAction *&colorChecker,
-                                          QAction *&blindTest, bool hasView)
+                                          QAction *&blindTest, QAction *&spectrum,
+                                          QAction *&cvBoxes, bool hasView)
 {
     annotate = menu.addAction(tr("Annotate (A)"));
     annotate->setCheckable(true);
@@ -52,11 +54,17 @@ void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QActi
     colorChecker->setEnabled(hasView);
     blindTest = menu.addAction(tr("A/B Blind Test…"));
     blindTest->setEnabled(hasView);
+    spectrum = menu.addAction(tr("FFT Spectrum"));
+    spectrum->setCheckable(true);
+    spectrum->setChecked(m_spectrumVisible);
+    spectrum->setEnabled(hasView);
+    cvBoxes = menu.addAction(tr("Load CV Boxes…"));
+    cvBoxes->setEnabled(hasView);
 }
 
 bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, QAction *textLabel,
                                             QAction *exportReview, QAction *colorChecker,
-                                            QAction *blindTest)
+                                            QAction *blindTest, QAction *spectrum, QAction *cvBoxes)
 {
     if (chosen == annotate)
     {
@@ -83,6 +91,19 @@ bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, 
         BlindTestDialog dialog(this);
         dialog.setSources(m_currentPath, m_currentPath);
         dialog.exec();
+        return true;
+    }
+    if (chosen == spectrum)
+    {
+        setSpectrumVisible(!m_spectrumVisible);
+        return true;
+    }
+    if (chosen == cvBoxes)
+    {
+        const QString path = QFileDialog::getOpenFileName(this, tr("Load CV Boxes"), QString(),
+                                                          tr("JSON (*.json);;All files (*)"));
+        if (!path.isEmpty())
+            loadCvBoxes(path);
         return true;
     }
     return false;

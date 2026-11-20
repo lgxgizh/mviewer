@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.0.190] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.190**.
+
+### Added
+
+- **2D FFT spectrum** (report feature 10, viewer context menu → "FFT
+  Spectrum"): a radix-2 row/column transform of the frame's luma, DC removed,
+  shown centred and log-scaled. Aliasing, moire and fixed-pattern noise show up
+  as isolated off-axis spikes; a helper (`hasOffAxisPeak`) exposes the same
+  tripwire programmatically.
+- **CV box overlay**: "Load CV Boxes…" reads `{"boxes": [[x, y, w, h, label],
+  …]}` in image coordinates and draws the boxes plus labels on the canvas, so a
+  detection run can be eyeballed against the image without a separate viewer.
+
 ## [1.0.189] - 2026-11-21
 
 ### Release

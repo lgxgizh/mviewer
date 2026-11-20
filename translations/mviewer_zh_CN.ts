@@ -4081,6 +4081,36 @@ or double-click a thumbnail to view</source>
         <translation>A/B 盲测…</translation>
     </message>
     <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>FFT Spectrum</source>
+        <translation>FFT 频谱</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Load CV Boxes…</source>
+        <translation>加载 CV 框…</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_spectrum.cpp" line="1"/>
+        <source>CV boxes: cannot read %1</source>
+        <translation>CV 框：无法读取 %1</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_spectrum.cpp" line="1"/>
+        <source>CV boxes: %1 loaded</source>
+        <translation>CV 框：已加载 %1 个</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_spectrum.cpp" line="1"/>
+        <source>JSON (*.json);;All files (*)</source>
+        <translation>JSON (*.json);;所有文件 (*)</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_spectrum.cpp" line="1"/>
+        <source>Load CV Boxes</source>
+        <translation>加载 CV 框</translation>
+    </message>
+    <message>
         <location filename="../src/imageviewer_colorchecker.cpp" line="1"/>
         <source>Color checker: no image is loaded</source>
         <translation>色卡测量：尚未加载图像</translation>

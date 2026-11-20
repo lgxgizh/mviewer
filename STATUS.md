@@ -1,12 +1,19 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.189** · Release tag: **v1.0.189**
+> Snapshot: 2026-11-21 · Version: **1.0.190** · Release tag: **v1.0.190**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.190 — 2D FFT spectrum + CV box overlay (2026-11-21)
+
+- Viewer context menu → "FFT Spectrum": radix-2 2D FFT of the frame luma, DC
+  removed, centred and log-scaled; `hasOffAxisPeak` exposes a moire tripwire.
+- "Load CV Boxes…" reads boxes from JSON in image coordinates and draws them on
+  the canvas.
 
 ## 1.0.189 — A/B blind test with MOS export (2026-11-21)
 

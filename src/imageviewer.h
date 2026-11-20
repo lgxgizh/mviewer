@@ -14,6 +14,7 @@
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
 #include "gpu/GpuTileUploader.h"
+#include "imageviewer_displayraster.h"
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QImage>
@@ -224,6 +225,10 @@ class ImageViewer : public QOpenGLWidget
     // Review display adjustment (exposure / gamma / auto-stretch / 3D LUT).
     mviewer::core::DisplayAdjust &displayAdjust();
     void measureColorChecker(); // 24-patch dE00 report from the current selection
+    // FFT spectrum panel + CV box overlay (report feature 10).
+    void setSpectrumVisible(bool visible);
+    void loadCvBoxes(const QString &path);
+    void drawAnalysisOverlay(QPainter &painter) const;
     void applyDisplayAdjust();
     void setAdjustPanelVisible(bool visible);
     bool isAdjustPanelVisible() const;
@@ -358,10 +363,11 @@ class ImageViewer : public QOpenGLWidget
     bool handleProfileScopeContextAction(QAction *chosen, QAction *profile, QAction *scopes);
     void addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
                                  QAction *&exportReview, QAction *&colorChecker,
-                                 QAction *&blindTest, bool hasView);
+                                 QAction *&blindTest, QAction *&spectrum, QAction *&cvBoxes,
+                                 bool hasView);
     bool handleReviewContextAction(QAction *chosen, QAction *annotate, QAction *textLabel,
-                                   QAction *exportReview, QAction *colorChecker,
-                                   QAction *blindTest);
+                                   QAction *exportReview, QAction *colorChecker, QAction *blindTest,
+                                   QAction *spectrum, QAction *cvBoxes);
     // Review-markup drag routing (0 press, 1 move, 2 release).
     void handleAnnotateMouseEvent(QMouseEvent *event, int phase);
     void drawAnnotations(QPainter &painter) const;
@@ -701,15 +707,6 @@ class ImageViewer : public QOpenGLWidget
         m_framePrefetchRequests;
     QTimer *m_playbackTimer = nullptr;
     QString m_frameStatusText;
-
-    // ── M47 LOD-first display state ──────────────────────────────────────────
-    struct DisplayRaster
-    {
-        QImage image;         // display raster (RGB), may be null
-        QRect sourceRect;     // source pixels covered by the raster
-        QSize sourceSize;     // full source dimensions
-        double density = 1.0; // source pixels per raster pixel
-    };
     bool m_lodMode = false; // current image displays via the raster path
     // True between startLodDisplay and the first raster-path verdict (probe
     // only / raster / probe failure). While set, the analysis-support full
@@ -777,6 +774,10 @@ class ImageViewer : public QOpenGLWidget
     QPoint m_annStart, m_annEnd;
     mviewer::ui::AnnotationStore m_annotations;
     mviewer::ui::DisplayAdjustPanel *m_adjustPanel = nullptr; // created on first use
+    bool m_spectrumVisible = false;
+    QWidget *m_spectrumPanel = nullptr;
+    QVector<QRectF> m_cvBoxes;
+    QStringList m_cvLabels;
     void syncAdjustPanel();
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.
@@ -787,7 +788,6 @@ class ImageViewer : public QOpenGLWidget
     int m_lastHoverX = -1;
     int m_lastHoverY = -1;
     const ImageFrame *m_pixelReadoutFrame = nullptr;
-
     // Auto-hide cursor in fullscreen after inactivity.
     QTimer *m_cursorHideTimer = nullptr;
     bool m_cursorHidden = false;
