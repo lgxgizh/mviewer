@@ -1,12 +1,24 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-20 · Version: **1.0.186** · Release tag: **v1.0.186**
+> Snapshot: 2026-11-21 · Version: **1.0.187** · Release tag: **v1.0.187**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.187 — HDR: OpenEXR and PFM (2026-11-21)
+
+- `HdrDecoder` is registered ahead of the Qt decoders and handles `.exr`
+  (uncompressed single-part scanline, HALF/FLOAT) and `.pfm` (`PF`/`Pf`).
+- Float working image is tone-mapped to 8-bit (Reinhard + gamma 2.2) so
+  highlights compress instead of clipping; metadata carries `format`,
+  `bitDepth`, `colorSpace = linear` and `MViewer.Hdr`.
+- Tiled / compressed / multi-part EXR is reported as unsupported instead of
+  being mis-decoded.
+- `hdr_decoder_tests` writes its own PFM and EXR fixtures and checks the
+  container parsing, the row order, the tone map and the extension contract.
 
 ## 1.0.186 — Review markup and review-image export (2026-11-20)
 

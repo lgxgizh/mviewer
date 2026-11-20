@@ -6,6 +6,7 @@
 #include <utility>
 
 #include "core/filesystem/Utf8Path.h"
+#include "core/image/decoder/HdrDecoder.h"
 #include "core/image/decoder/PlainRawDecoder.h"
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
@@ -53,6 +54,9 @@ void DecoderRegistry::resetToDefaults()
     defaults.push_back(std::make_shared<YuvDecoder>());
     // ADR 033: headerless .raw sensor dumps; no pixels when the size is unknown.
     defaults.push_back(std::make_shared<PlainRawDecoder>());
+    // Report feature 4: scene-referred linear HDR (OpenEXR / PFM). Tone-mapped
+    // to 8-bit on the way out; returns no pixels for unsupported variants.
+    defaults.push_back(std::make_shared<HdrDecoder>());
     defaults.push_back(std::make_shared<QtDecoder>());
     // The fallback must remain LAST so specific decoders get first pick.
     defaults.push_back(std::make_shared<QtFallbackDecoder>());

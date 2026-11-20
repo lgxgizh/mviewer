@@ -29,6 +29,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/YuvDecoder.cpp
     core/image/decoder/YuvParallelRows.cpp
     core/image/decoder/PlainRawDecoder.cpp
+    core/image/decoder/HdrDecoder.cpp
     core/image/decoder/RawDecoder_libraw.cpp
     core/image/decoder/RawDecodePolicy.cpp
     core/image/ImageObject.cpp
@@ -1537,6 +1538,13 @@ target_link_libraries(test_yuv_sequence PRIVATE mviewer_core)
 target_compile_features(test_yuv_sequence PRIVATE cxx_std_20)
 target_include_directories(test_yuv_sequence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_sequence_tests COMMAND test_yuv_sequence)
+
+# Report feature 4: HDR (OpenEXR / PFM) decode + tone map.
+add_executable(test_hdr_decoder core/test_hdr_decoder.cpp)
+target_link_libraries(test_hdr_decoder PRIVATE mviewer_core)
+target_compile_features(test_hdr_decoder PRIVATE cxx_std_20)
+target_include_directories(test_hdr_decoder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME hdr_decoder_tests COMMAND test_hdr_decoder)
 
 add_executable(test_yuv_sample core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)

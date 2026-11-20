@@ -298,13 +298,18 @@ static void testRegistryOrder()
     int yuv = -1;
     int qt = -1;
     int plainRaw = -1; // ADR 033
+    int hdr = -1;      // report feature 4: OpenEXR / PFM
     for (std::size_t i = 0; i < names.size(); ++i)
     {
         if (names[i] == "PlainRawDecoder")
         {
             plainRaw = static_cast<int>(i);
         }
-        if (names[i] == "RawDecoder")
+        else if (names[i] == "HdrDecoder")
+        {
+            hdr = static_cast<int>(i);
+        }
+        else if (names[i] == "RawDecoder")
         {
             raw = static_cast<int>(i);
         }
@@ -320,7 +325,8 @@ static void testRegistryOrder()
     CHECK(raw >= 0);
     CHECK(yuv == raw + 1);
     CHECK(plainRaw == yuv + 1);
-    CHECK(qt == plainRaw + 1);
+    CHECK(hdr == plainRaw + 1);
+    CHECK(qt == hdr + 1);
 }
 #endif
 

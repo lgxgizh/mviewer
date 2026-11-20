@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [1.0.187] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.187**.
+
+### Added
+
+- **HDR formats: OpenEXR and PFM** (report feature 4). Both are
+  scene-referred linear RGB in 16-bit half / 32-bit float. A new `HdrDecoder`
+  is registered ahead of the Qt decoders, so `.exr` and `.pfm` now open like any
+  other image (thumbnails, LOD preview, metadata, compare) instead of being
+  rejected as an unsupported format.
+- The decoder keeps a float working image internally and tone-maps it on the way
+  out (`linear → Reinhard → gamma 2.2`), so bright highlights compress instead
+  of clipping. Metadata records `format`, `bitDepth`, `colorSpace = linear`
+  and an `MViewer.Hdr` marker; the pixel inspector and metadata panel show it.
+- **Scope**: uncompressed single-part scanline EXR (HALF / FLOAT, any channel
+  order, all line orders) and PFM (`PF` / `Pf`). Tiled, multi-part, ZIP/ZIPS/
+  PIZ-compressed EXR is reported as unsupported rather than mis-decoded — that
+  is the honest limit of a clean-room reader.
+
 ## [1.0.186] - 2026-11-20
 
 ### Release
