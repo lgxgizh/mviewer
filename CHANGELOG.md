@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [1.0.192] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.192**.
+
+### Fixed
+
+- **Large-folder stall (≥10 s)**: the progressive scan published the whole
+  browse sequence on **every** 128-file batch, and every publication made the
+  consumers walk the whole growing list (sequence identity, list diff, viewer
+  browse sequence). That is O(N²) over the scan: a 100k-image folder stalled
+  the UI for tens of seconds. Publication is now coalesced to one event-loop
+  turn and at most once per 100 ms, so the total work is linear while the first
+  screen still appears mid-scan. Measured on the bundled test fixture: a
+  10,000-image folder now publishes 8 times instead of ~79 and scans in
+  ~0.8 s.
+
 ## [1.0.191] - 2026-11-21
 
 ### Release

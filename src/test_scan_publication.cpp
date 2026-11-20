@@ -150,6 +150,28 @@ void measureDirectory(const QString &dir, int count, ThumbnailPanel::SortMode mo
     }
 }
 
+void measureSequencePublishCoalescing(const QString &dir, int count)
+{
+    ThumbnailPanel panel;
+    panel.resize(800, 600);
+    int emissions = 0;
+    QElapsedTimer timer;
+    QObject::connect(&panel, &ThumbnailPanel::sequenceChanged, &panel,
+                     [&](const QString &, const QStringList &paths)
+                     {
+                         if (!paths.isEmpty())
+                             ++emissions;
+                     });
+    timer.start();
+    panel.setDirectory(dir);
+    MVIEWER_CHECK(waitComplete(panel), "coalescing scan completes");
+    std::printf("coalescing count=%d emissions=%d totalMs=%lld\n", count, emissions,
+                static_cast<long long>(timer.elapsed()));
+    // A per-batch publication would emit one per 128 files; the coalescing
+    // window must keep this far below the file count.
+    MVIEWER_CHECK(emissions * 64 < count, "progressive sequence publication is coalesced");
+}
+
 void testInsertDemandBound()
 {
     auto &pipe = ThumbnailPipeline::instance();
@@ -283,6 +305,7 @@ int main(int argc, char **argv)
     measureDirectory(dir1k, 1000, ThumbnailPanel::SortType, true, true, false);
 
     testInsertDemandBound();
+    measureSequencePublishCoalescing(dir10k, 10000);
     testExistsGeneration(dir1k);
 
     QTemporaryDir images;

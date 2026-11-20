@@ -1,12 +1,20 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.191** · Release tag: **v1.0.191**
+> Snapshot: 2026-11-21 · Version: **1.0.192** · Release tag: **v1.0.192**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.192 — Large-folder stall (item 3) (2026-11-21)
+
+- The progressive gallery scan published the whole browse sequence on every
+  128-file batch, and each publication made the consumers walk the whole
+  growing list — O(N²) over the scan. Publication is now coalesced to one
+  event-loop turn, at most once per 100 ms; the first screen still appears
+  mid-scan. 10,000 images: 8 publications instead of ~79, scan ~0.8 s.
 
 ## 1.0.191 — Portable session package (2026-11-21)
 

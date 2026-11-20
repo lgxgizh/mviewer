@@ -665,6 +665,12 @@ class ThumbnailPanel : public QListView
     bool m_scanProgressive = false;
     bool m_scanComplete = true;
     bool m_scanRangeUpdatePending = false;
+    // Item 3: coalesce the per-batch sequence publication. Emitting the whole
+    // growing list on every 128-file batch made the consumers' O(N) work
+    // quadratic over the scan (a 100k folder stalled for tens of seconds).
+    bool m_sequencePublishPending = false;
+    qint64 m_sequenceLastPublishMs = 0;
+    void scheduleSequencePublish();
     bool m_incrementalApply = false;
     bool m_directoryUnavailable = false;
     bool m_liveDirectoryMonitoring = false;

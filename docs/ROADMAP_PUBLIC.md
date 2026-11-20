@@ -4,13 +4,14 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.191**
+## Where we are now — **Beta / 1.0.192**
 
-MViewer remains in **Beta**; the current release is **`v1.0.191`**
+MViewer remains in **Beta**; the current release is **`v1.0.192`**
 (2026-11-21, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch adds a portable session package (session manifest + referenced
-images in one file) with export and import. Offscreen CI is regression
-evidence, not proof of universal smoothness.
+This patch removes the large-folder stall: the progressive scan no longer
+publishes the whole browse sequence on every batch, which made the total work
+quadratic. Offscreen CI is regression evidence, not proof of universal
+smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -65,7 +66,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.191** (current) | Portable session package (export/import) | 🔵 Beta |
+| **1.0.192** (current) | Large-folder stall fix (quadratic scan publication) | 🔵 Beta |
+| **1.0.191** | Portable session package (export/import) | ✅ Previous patch |
 | **1.0.190** | 2D FFT spectrum + CV box overlay | ✅ Previous patch |
 | **1.0.189** | A/B blind test with MOS scoring + JSON export | ✅ Previous patch |
 | **1.0.188** | Live display adjust (`G`) + CIEDE2000 / ColorChecker | ✅ Previous patch |

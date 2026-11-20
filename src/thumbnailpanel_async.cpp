@@ -22,6 +22,7 @@
 #include <windows.h>
 #endif
 
+#include <QDateTime>
 #include <QSet>
 #include <QThread>
 #include <algorithm>
@@ -414,6 +415,31 @@ void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QStr
         });
 }
 
+// Coalesced publication of the browse sequence. See the member comment: the
+// per-batch emission was quadratic over a large directory.
+void ThumbnailPanel::scheduleSequencePublish()
+{
+    constexpr qint64 kMinIntervalMs = 100;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 elapsed = now - m_sequenceLastPublishMs;
+    if (m_sequencePublishPending)
+        return;
+    if (elapsed >= kMinIntervalMs)
+    {
+        m_sequenceLastPublishMs = now;
+        emit sequenceChanged(m_currentDir, m_paths);
+        return;
+    }
+    m_sequencePublishPending = true;
+    QTimer::singleShot(static_cast<int>(kMinIntervalMs - elapsed), this,
+                       [this]()
+                       {
+                           m_sequencePublishPending = false;
+                           m_sequenceLastPublishMs = QDateTime::currentMSecsSinceEpoch();
+                           emit sequenceChanged(m_currentDir, m_paths);
+                       });
+}
+
 void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &scanned)
 {
     if (gen != m_dirGen || scanned.isEmpty())
@@ -451,8 +477,11 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &scanned)
     insertProgressiveRows(visible, &runs);
     publishIncrementalSources(m_consumerId, runs);
     // Navigation reads this list. Publish it with the rows, not only when the
-    // sorted rebuild lands at the end of the scan.
-    emit sequenceChanged(m_currentDir, m_paths);
+    // sorted rebuild lands at the end of the scan — but coalesced: one
+    // publication per event-loop turn, and never more often than every
+    // 100 ms, so the consumers' O(list) work stays linear over the scan
+    // instead of quadratic.
+    scheduleSequencePublish();
     // Drop the busy cursor with the first rows, not when the rest of the
     // directory finishes. releaseScanCursor is once-per-scan.
     releaseScanCursor(m_busyCursorRefs, m_scanCursorReleased);
