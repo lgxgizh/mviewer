@@ -72,6 +72,8 @@ void ImageViewer::setProfileMode(bool on)
     if (m_profileMode == on)
         return;
     m_profileMode = on;
+    if (on)
+        setAnnotateMode(false); // one drawing tool at a time
     if (!on)
     {
         m_profiling = false;

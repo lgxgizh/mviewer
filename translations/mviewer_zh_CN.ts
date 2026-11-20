@@ -3990,6 +3990,61 @@ or double-click a thumbnail to view</source>
         <source>Scopes (W)</source>
         <translation>示波器 (W)</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Annotate: drag a box, Shift+drag an arrow, right-click deletes</source>
+        <translation>批注：拖出方框，Shift+拖出箭头，右键删除</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Annotate off</source>
+        <translation>关闭批注</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Annotate (A)</source>
+        <translation>批注 (A)</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Add Text Label (T)</source>
+        <translation>添加文字标注 (T)</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Export Review Image…</source>
+        <translation>导出评审图…</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_annotate.cpp" line="1"/>
+        <source>Annotation</source>
+        <translation>批注</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_annotate.cpp" line="1"/>
+        <source>Label text</source>
+        <translation>标注文字</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_annotate.cpp" line="1"/>
+        <source>Nothing to export: no image is loaded</source>
+        <translation>没有可导出的内容：尚未加载图像</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_annotate.cpp" line="1"/>
+        <source>Could not write the review image</source>
+        <translation>无法写入评审图</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_annotate.cpp" line="1"/>
+        <source>Review image saved, but the annotation sidecar was not</source>
+        <translation>评审图已保存，但批注旁文件未写入</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_annotate.cpp" line="1"/>
+        <source>Review image: %1 (%2 annotations)</source>
+        <translation>评审图：%1（%2 条批注）</translation>
+    </message>
 </context>
 <context>
     <name>ScopeWidget</name>

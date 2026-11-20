@@ -470,21 +470,6 @@ bool ImageViewer::hasDisplayImage() const
     return (m_frame && m_frame->isValid()) || (m_lodMode && !m_raster.image.isNull());
 }
 
-int ImageViewer::displayRasterWarmCount() const
-{
-    return static_cast<int>(m_displayRasterWarm.size());
-}
-
-qint64 ImageViewer::displayRasterWarmBytes() const
-{
-    return m_displayRasterWarmBytes;
-}
-
-uint64_t ImageViewer::displayRasterWarmHits() const
-{
-    return m_displayRasterWarmHits;
-}
-
 QSize ImageViewer::displaySize() const
 {
     if (m_frame && m_frame->isValid())
@@ -626,10 +611,17 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
         emit requestDirForward();
         return;
     }
+    if (m_annotateMode && event->button() == Qt::RightButton && hasDisplayImage())
+    {
+        handleAnnotateMouseEvent(event, 0);
+        return;
+    }
     if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&
         hasDisplayImage())
     {
-        if (m_profileMode && event->button() == Qt::LeftButton)
+        if (m_annotateMode && event->button() == Qt::LeftButton)
+            handleAnnotateMouseEvent(event, 0);
+        else if (m_profileMode && event->button() == Qt::LeftButton)
             handleProfileMouseEvent(event, 0);
         else if (m_selectMode && event->button() == Qt::LeftButton)
         {
@@ -666,6 +658,8 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         m_selEnd = event->pos();
         update();
     }
+    else if (m_annotating)
+        handleAnnotateMouseEvent(event, 1);
     else if (m_profiling)
         handleProfileMouseEvent(event, 1);
     else if (m_dragging)
@@ -680,53 +674,14 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
     updatePixelSampleAt(event->pos());
 }
 
-void ImageViewer::updatePixelSampleAt(const QPoint &pos)
-{
-    // Pixel Inspector reads the full frame when one exists. Above the analysis
-    // budget the bounded display raster supplies hover, ROI, and color samples.
-    int ix = -1, iy = -1;
-    if (hasDisplayImage() && m_view.scale > 0.0)
-    {
-        m_view.screenW = width();
-        m_view.screenH = height();
-        ix = static_cast<int>(std::floor((pos.x() - m_view.offsetX) / m_view.scale));
-        iy = static_cast<int>(std::floor((pos.y() - m_view.offsetY) / m_view.scale));
-    }
-    if (ix == m_lastHoverX && iy == m_lastHoverY)
-        return;
-    m_lastHoverX = ix;
-    m_lastHoverY = iy;
-
-    const PixelRGBA px = sampleAnalysisPixel(ix, iy);
-    m_lastHoverPixel = px;
-    int r16 = 0, g16 = 0, b16 = 0, rawKind = 0;
-    if (m_frame && px.valid)
-    {
-        const auto &meta = m_frame->metadata();
-        if (meta.format == "RAW")
-            rawKind = 1;
-        else if (m_frame->hasRaw16())
-        {
-            uint16_t vr = 0, vg = 0, vb = 0;
-            if (m_frame->raw16At(ix, iy, vr, vg, vb))
-            {
-                r16 = vr;
-                g16 = vg;
-                b16 = vb;
-                rawKind = 2;
-            }
-        }
-    }
-    emit pixelInfo(ix, iy, px.r, px.g, px.b, px.valid ? px.a : 255, r16, g16, b16, rawKind,
-                   px.valid);
-}
-
 void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton)
     {
         if (m_selecting && event->button() == Qt::LeftButton)
             commitSelectionDrag();
+        else if (m_annotating && event->button() == Qt::LeftButton)
+            handleAnnotateMouseEvent(event, 2);
         else if (m_profiling && event->button() == Qt::LeftButton)
             handleProfileMouseEvent(event, 2);
         else

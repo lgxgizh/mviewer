@@ -300,6 +300,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                              aOvY, aOvV);
     QAction *aProfile = nullptr, *aScopes = nullptr;
     addProfileScopeContextActions(menu, aProfile, aScopes, hasDisplayImage());
+    QAction *aAnnotate = nullptr, *aTextLabel = nullptr, *aExportReview = nullptr;
+    addReviewContextActions(menu, aAnnotate, aTextLabel, aExportReview, hasDisplayImage());
 
     // A-7.3: "Analyze" submenu — list every registered analyzer for one-click run.
     QList<QAction *> analyzeActions;
@@ -321,6 +323,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         return;
     }
     if (handleProfileScopeContextAction(chosen, aProfile, aScopes))
+        return;
+    if (handleReviewContextAction(chosen, aAnnotate, aTextLabel, aExportReview))
         return;
     if (chosen == aUsmCompare)
     {
@@ -588,6 +592,20 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
             setScopesVisible(true);
         else
             cycleScopeMode();
+        return true;
+    }
+    // A draws review markup; T drops a text label at the cursor.
+    if (key == Qt::Key_A && modifiers == Qt::NoModifier)
+    {
+        setAnnotateMode(!m_annotateMode);
+        emit statusMessageRequested(
+            m_annotateMode ? tr("Annotate: drag a box, Shift+drag an arrow, right-click deletes")
+                           : tr("Annotate off"));
+        return true;
+    }
+    if (key == Qt::Key_T && modifiers == Qt::NoModifier)
+    {
+        addTextAnnotationAtCursor();
         return true;
     }
     if (key == Qt::Key_R && !modifiers)

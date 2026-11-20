@@ -1,12 +1,21 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-20 · Version: **1.0.185** · Release tag: **v1.0.185**
+> Snapshot: 2026-11-20 · Version: **1.0.186** · Release tag: **v1.0.186**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.186 — Review markup and review-image export (2026-11-20)
+
+- Viewer markup tool (`A`): drag a box, `Shift`+drag an arrow, `T` a text label,
+  right-click deletes. Markup lives in image coordinates and is persisted as
+  `<stem>.mviewer-annotations.json` next to the source.
+- `Export Review Image…` writes a `<stem>-review.png` with the markup burned in
+  at source resolution plus the JSON sidecar.
+- The markup and line-profile tools are mutually exclusive.
 
 ## 1.0.185 — Raw sequence playback and synchronized frame scrubbing (2026-11-20)
 

@@ -165,6 +165,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         painter.drawEllipse(b, 3, 3);
         painter.restore();
     }
+    drawAnnotations(painter);
     drawFrameStatus(painter);
     drawLoadingBar(painter);
     if (hasDisplayImage())

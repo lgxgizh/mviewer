@@ -275,6 +275,10 @@ add_library(mviewer_ui STATIC
     appstate.cpp
     imageviewer.cpp
     imageviewer_scope.cpp
+    imageviewer_annotate.cpp
+    imageviewer_inspector.cpp
+    imageviewer_state.cpp
+    annotationstore.cpp
     imageviewer_loading.cpp
     imageviewer_browse.cpp
     imageviewer_multiframe.cpp
@@ -967,6 +971,25 @@ target_compile_features(viewer_scope_tests PRIVATE cxx_std_20)
 target_include_directories(viewer_scope_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME viewer_scope_tests COMMAND viewer_scope_tests)
 set_tests_properties(viewer_scope_tests PROPERTIES RUN_SERIAL TRUE)
+
+# ─── Viewer review markup (A / T, export review image) ───────────────────────
+add_executable(viewer_annotate_tests
+    test_viewer_annotate.cpp
+)
+
+target_link_libraries(viewer_annotate_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(viewer_annotate_tests PRIVATE cxx_std_20)
+target_include_directories(viewer_annotate_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME viewer_annotate_tests COMMAND viewer_annotate_tests)
+set_tests_properties(viewer_annotate_tests PROPERTIES RUN_SERIAL TRUE)
 
 # Browse: paste clipboard into current folder + open-folder toolbar action
 add_executable(browse_paste_acceptance

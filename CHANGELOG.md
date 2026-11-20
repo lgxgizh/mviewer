@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.186] - 2026-11-20
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.186**.
+
+### Added
+
+- **Review markup and one-click review image** (viewer `A`, also in the context
+  menu): drag to draw a box, `Shift`+drag an arrow, `T` drops a text label at
+  the cursor, and right-click deletes the annotation under it. Markup is stored
+  in image coordinates and persisted next to the source as
+  `<stem>.mviewer-annotations.json`, so a review survives a restart and can be
+  shared without touching the original.
+- **Export Review Image…** burns the markup into a `<stem>-review.png` at source
+  resolution (arrowheads included) and writes the JSON sidecar, reporting the
+  path and annotation count. Annotate mode and the line-profile tool are now
+  mutually exclusive, so only one drawing tool is active at a time.
+
 ## [1.0.185] - 2026-11-20
 
 ### Release

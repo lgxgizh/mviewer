@@ -1,4 +1,5 @@
 #pragma once
+#include "annotationstore.h"
 #include "application/ImageLoadingService.h"
 #include "browsepathindex.h"
 #include "core/analysis/ImageOverlay.h"
@@ -156,42 +157,21 @@ class ImageViewer : public QOpenGLWidget
     }
     // Window-sized owned snapshot shown while the next frame decodes.
     // Empty when the viewer is not mid-switch.
-    QSize transitionSnapshotSize() const
-    {
-        return m_transitionImage.size();
-    }
+    QSize transitionSnapshotSize() const;
     void setViewTransform(const Viewport &v);
 
     // Returns the ImageFrame backing the current view (null if none loaded).
     // Lets the analysis panel route ROI analysis through the registry.
-    std::shared_ptr<ImageFrame> frame() const
-    {
-        return m_frame;
-    }
+    std::shared_ptr<ImageFrame> frame() const;
 
     // M57: explicit multi-frame/page presentation state. File navigation
     // remains owned by requestPrev/requestNext; these APIs only move within
     // the currently opened container.
-    int frameIndex() const
-    {
-        return m_frame ? m_frame->frameIndex() : m_frameIndex;
-    }
-    int frameCount() const
-    {
-        return std::max(1, m_sequence.frameCount);
-    }
-    bool isPlaying() const
-    {
-        return m_playback.playing();
-    }
-    bool isMultiFrame() const
-    {
-        return frameCount() > 1;
-    }
-    const mviewer::core::FrameSequenceInfo &sequenceInfo() const
-    {
-        return m_sequence;
-    }
+    int frameIndex() const;
+    int frameCount() const;
+    bool isPlaying() const;
+    bool isMultiFrame() const;
+    const mviewer::core::FrameSequenceInfo &sequenceInfo() const;
 
   signals:
     // Emitted on the UI thread once an async load (setImage) completes. Carries
@@ -237,6 +217,12 @@ class ImageViewer : public QOpenGLWidget
     bool isScopesVisible() const;
     void cycleScopeMode();
     int scopeMode() const;
+    // Review markup (A): rectangles / arrows / text burned into an exported
+    // review image and persisted next to the source.
+    void setAnnotateMode(bool on);
+    bool isAnnotateMode() const;
+    void addTextAnnotationAtCursor();
+    void exportAnnotatedImage();
     bool isFitMode() const;
     void setLockZoom(bool lock);
     bool isLockZoom() const;
@@ -367,6 +353,15 @@ class ImageViewer : public QOpenGLWidget
     void addProfileScopeContextActions(QMenu &menu, QAction *&profile, QAction *&scopes,
                                        bool hasView);
     bool handleProfileScopeContextAction(QAction *chosen, QAction *profile, QAction *scopes);
+    void addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
+                                 QAction *&exportReview, bool hasView);
+    bool handleReviewContextAction(QAction *chosen, QAction *annotate, QAction *textLabel,
+                                   QAction *exportReview);
+    // Review-markup drag routing (0 press, 1 move, 2 release).
+    void handleAnnotateMouseEvent(QMouseEvent *event, int phase);
+    void drawAnnotations(QPainter &painter) const;
+    // Point the markup store at the open path and load its sidecar once.
+    void ensureAnnotationsForCurrentPath();
     bool handlePlaybackContextAction(QAction *chosen, QAction *play, QAction *restart,
                                      QAction *prevFrame, QAction *nextFrame);
     // M29: cancel the outstanding foreground load and any neighbor preloads.
@@ -772,6 +767,12 @@ class ImageViewer : public QOpenGLWidget
     bool m_scopesVisible = false;
     int m_scopeMode = 0;
     mviewer::ui::ScopeWidget *m_scopeWidget = nullptr;
+    // Review markup state; the store reloads itself when the path changes.
+    bool m_annotateMode = false;
+    bool m_annotating = false;
+    bool m_annotateArrow = false;
+    QPoint m_annStart, m_annEnd;
+    mviewer::ui::AnnotationStore m_annotations;
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.
     QRect m_selectionImage;
