@@ -262,6 +262,20 @@ int main(int argc, char **argv)
     panel->selectPath(pathB);
     CHECK(waitFor([&] { return selection->currentImage() == pathB && rotateCw->isEnabled(); }),
           "SSOT current is B and rotate is enabled for B");
+    {
+        // Dimensions are probed after the scan; wait for them so the rotation
+        // assertion below measures the panel, not an unfinished probe.
+        CHECK(waitFor(
+                  [&]
+                  {
+                      const ThumbnailPanel::Entry *e = panel->entryForPath(pathA);
+                      return e && e->width == 8 && e->height == 4;
+                  }),
+              "gallery probed A at 8x4 before the rotation");
+        const ThumbnailPanel::Entry *entryB = panel->entryForPath(pathB);
+        CHECK(entryB && entryB->width == 6 && entryB->height == 10,
+              "gallery entry dims are 6x10 for B before the rotation");
+    }
 
     QTimer dismiss;
     dismiss.setInterval(20);
@@ -283,6 +297,22 @@ int main(int argc, char **argv)
     CHECK(!afterA.isNull() && afterA.width() == 8 && afterA.height() == 4, "stale A is untouched");
     CHECK(!afterB.isNull() && afterB.width() == 10 && afterB.height() == 6,
           "rotate action rewrote gallery current B (6x10 -> 10x6)");
+    {
+        // The card/footer read the scan-cached entry, so a rotation that swaps
+        // the axes must refresh it; otherwise the gallery keeps advertising the
+        // pre-rotation resolution next to a rotated thumbnail.
+        CHECK(waitFor(
+                  [&]
+                  {
+                      const ThumbnailPanel::Entry *e = panel->entryForPath(pathB);
+                      return e && e->width == 10 && e->height == 6;
+                  },
+                  3000),
+              "gallery entry dims follow the rotation (10x6)");
+        const ThumbnailPanel::Entry *entryA = panel->entryForPath(pathA);
+        CHECK(entryA && entryA->width == 8 && entryA->height == 4,
+              "untouched A keeps its 8x4 entry dims");
+    }
 
     {
         CompareWorkspace compare;

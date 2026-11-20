@@ -569,9 +569,22 @@ void MainWindow::refreshTransformedPaths(const QStringList &paths)
         if (m_tertiaryThumbnailPanel)
             m_tertiaryThumbnailPanel->invalidateSourceImage(path);
     }
+    // A 90/270 rotate swaps the axes, so the scan-cached width/height (card
+    // footer, Details column) must follow the rewritten file immediately.
+    m_thumbnailPanel->refreshEntryDimensions(paths);
+    if (m_secondaryThumbnailPanel)
+        m_secondaryThumbnailPanel->refreshEntryDimensions(paths);
+    if (m_tertiaryThumbnailPanel)
+        m_tertiaryThumbnailPanel->refreshEntryDimensions(paths);
     const QString current = currentImagePath();
     if (!current.isEmpty() && paths.contains(current))
+    {
         refreshOpenImage(m_imageViewer, m_previewPanel, m_metadataPanel, current);
+        // The on-image overlay keeps its own metadata snapshot keyed by path;
+        // re-show it so a swapped aspect reaches its "Resolution" line too.
+        if (m_metadataOverlay && m_metadataOverlay->isVisible())
+            m_metadataOverlay->showForImage(current);
+    }
     // Do not refresh() the panes. That calls setDirectory(), which clears the
     // gallery model and publishes an empty selection. The async rescan then
     // completes after applyTransformSelection and drops the batch multi-select.

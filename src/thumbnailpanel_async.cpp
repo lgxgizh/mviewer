@@ -771,6 +771,40 @@ void ThumbnailPanel::dimensionProbeTask(const QPointer<ThumbnailPanel> &self,
         });
 }
 
+void ThumbnailPanel::refreshEntryDimensions(const QStringList &paths)
+{
+    if (paths.isEmpty() || m_allEntries.isEmpty())
+        return;
+    // Probe only the named files: the full-directory probe is wasteful for the
+    // one or two entries a rotate/flip just rewrote.
+    QStringList probePaths;
+    probePaths.reserve(paths.size());
+    QVector<int> order;
+    order.reserve(paths.size());
+    for (const QString &path : paths)
+    {
+        const int row = m_sourceRowByPath.value(galleryPathKey(path), -1);
+        if (row < 0)
+            continue;
+        order.append(probePaths.size());
+        probePaths.append(m_allEntries.at(row).path);
+    }
+    if (order.isEmpty())
+        return;
+
+    const int gen = m_dirGen;
+    auto alive = m_alive;
+    auto genToken = m_scanGenToken;
+    const QPointer<ThumbnailPanel> self(this);
+    const bool resortWhenDone = (m_sortMode == SortResolution);
+    (void)QtConcurrent::run(&m_scanPool,
+                            [self, alive, gen, genToken, probePaths, order, resortWhenDone]()
+                            {
+                                ThumbnailPanel::dimensionProbeTask(
+                                    self, alive, gen, genToken, probePaths, order, resortWhenDone);
+                            });
+}
+
 void ThumbnailPanel::ensureDimensions()
 {
     if (m_dimsResolved || m_allEntries.isEmpty())

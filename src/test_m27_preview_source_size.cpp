@@ -6,7 +6,10 @@
 // visual delivery. Part of m27_lifetime_tests.
 
 #include "previewpanel.h"
+#include "thumbnailprovider.h"
 
+#include "core/image/Decoder.h"
+#include "core/image/ImageFileRotate.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QApplication>
@@ -265,6 +268,32 @@ void testExifOrientation(const QString &dir)
     testOriented(rot270, QSize(280, 800), "PASS EXIF 8 cold and hot agree on 280x800");
 }
 
+// Ctrl+R on a tagged JPEG rewrites only the EXIF orientation tag: the stored
+// raster keeps its axes and the displayed geometry swaps. The panel must report
+// the displayed size after the rewrite, not the size it cached before it.
+void testRotateRefreshesSourceSize(const QString &dir)
+{
+    printf("\n[preview source size: rotation swaps the reported source size]\n");
+    fflush(stdout);
+    const QString path = writeExifJpeg(dir + "/rotate_me.jpg", 640, 400, 1);
+    CHECK(!path.isEmpty(), "PASS rotate fixture written");
+
+    PreviewPanel panel;
+    show(panel, path, QSize());
+    CHECK(waitFor([&] { return workerSettled(panel, path); }, 20000),
+          "PASS before rotation settled");
+    expectSource(panel, QSize(640, 400), "PASS reports 640x400 before rotation");
+
+    const auto result = mviewer::core::rotateImageFile(path.toUtf8().toStdString(), 90);
+    CHECK(result.ok, "PASS rotateImageFile succeeds");
+    ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
+    panel.setImage(path);
+    CHECK(waitFor([&] { return panel.sourceImageSize() == QSize(400, 640); }, 20000),
+          "PASS the panel reports the swapped size after rotation");
+    CHECK(workerSettled(panel, path), "PASS re-settles after rotation");
+    expectSource(panel, QSize(400, 640), "PASS reports the swapped 400x640 after rotation");
+}
+
 } // namespace
 
 void runM27PreviewSourceSizeTests(int &pass, int &fail)
@@ -276,6 +305,7 @@ void runM27PreviewSourceSizeTests(int &pass, int &fail)
     const QString dir = fixtureDir();
     testPngHotColdAndAba(dir);
     testExifOrientation(dir);
+    testRotateRefreshesSourceSize(dir);
     sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15));
     pump(50);
     QDir(dir).removeRecursively();

@@ -376,6 +376,10 @@ class ThumbnailPanel : public QListView
     // Drop decoded thumbnails for one source path after an in-place file edit
     // (rotate/flip) and schedule a visible-range reload so the gallery updates.
     void invalidateSourceImage(const QString &path);
+    // Re-probe the stored dimensions of just these paths. A 90/270 rotate
+    // rewrites the file, so the scan-cached width/height no longer match the
+    // rotated thumbnail in the card footer / Details column.
+    void refreshEntryDimensions(const QStringList &paths);
     // UNC / mapped-drive / SMB-style paths where per-file RTT dominates browse.
     static bool isHighLatencyBrowsePath(const QString &path);
 

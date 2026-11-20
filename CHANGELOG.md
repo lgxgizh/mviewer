@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- **Resolution after rotate/flip**: a 90°/270° rotate swaps the axes, but the
+  gallery kept advertising the pre-rotation size — the card footer and Details
+  column still read `4096×3072` next to a rotated thumbnail. The panel now
+  re-probes the dimensions of just the rewritten files, and the on-image info
+  overlay re-reads its metadata so its `Resolution:` line follows too.
 - **Chinese metadata duplicates**: the Image Info overlay deduped repeated
   camera/lens fields by their rendered English prefix (`"Camera:"`), which never
   matches the translated label, so Chinese (and any non-English UI) showed the
