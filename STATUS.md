@@ -1,12 +1,34 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-20 · Version: **1.0.182** · Release tag: **v1.0.182**
+> Snapshot: 2026-11-20 · Version: **1.0.183** · Release tag: **v1.0.183**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.183 — Review-driven fixes (2026-11-20)
+
+- The gallery re-probes the dimensions of files rewritten by a rotate/flip, so
+  a 90°/270° rotation no longer leaves the card footer / Details column
+  advertising the pre-rotation resolution; the on-image info overlay re-reads
+  its metadata as well.
+- The Image Info overlay dedupes camera/lens by field identity instead of the
+  rendered English label, fixing duplicate lines in Chinese and any other
+  non-English UI.
+- The Windows crash filter formats its report paths in static storage instead
+  of 24 KB of locals on the faulting thread (a stack-overflow crash used to
+  double-fault and lose the dump).
+- The GitHub release link from the update response must now be a github.com
+  release-tag URL before it reaches the browser, and `checkGitHub` validates
+  the `owner/repo` argument.
+- Linux plugin loading uses `RTLD_NOW | RTLD_LOCAL`; the macOS "reveal" actions
+  use `open -R` instead of the non-existent `xdg-open`.
+- Compare mode keeps `Tab`/`Shift+Tab` for keyboard focus traversal, the
+  floating Metadata panel title/column-width behaviour is corrected, and a
+  `.yuv` / `.raw` parameter edit refreshes the gallery thumbnail.
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.182 — Image Info panel legibility (2026-11-20)
 

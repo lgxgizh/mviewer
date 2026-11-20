@@ -4,19 +4,17 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.182**
+## Where we are now — **Beta / 1.0.183**
 
-MViewer remains in **Beta**; the current release is **`v1.0.182`**
+MViewer remains in **Beta**; the current release is **`v1.0.183`**
 (2026-11-20, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch fixes the Image Info panel: the on-image metadata box now sizes
-itself from its content and wraps long values instead of clipping them, and
-its fill is opaque so the text stays readable over any photo. The floating
-Metadata panel is resizable and no longer clips long values. A theme fix stops
-item-view selection colours from repainting the view background, which had
-turned alternating rows accent blue in the Metadata panel and plugin list and
-dropped the folder tree's sidebar fill. The sidebar preview caption elides
-long file names. Offscreen CI is regression evidence, not proof of universal
-smoothness.
+This patch is a review-driven fixes release: a rotate/flip now refreshes the
+gallery resolution (card footer / Details column) and the on-image info
+overlay, the Image Info overlay no longer duplicates camera/lens in non-English
+UIs, the Windows crash filter no longer formats its report paths on the
+faulting stack, the update link is validated before it reaches the browser,
+and Linux plugin loading / macOS "reveal" are hardened. Offscreen CI is
+regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -71,7 +69,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.182** (current) | Image Info panel legibility: content-sized on-image metadata box with wrapping, opaque fill, resizable Metadata panel, item-view theme fix | 🔵 Beta |
+| **1.0.183** (current) | Review-driven fixes: rotate/flip resolution refresh, non-English metadata dedup, crash-filter stack safety, update-link validation, Linux/macOS hardening | 🔵 Beta |
+| **1.0.182** | Image Info panel legibility: content-sized on-image metadata box with wrapping, opaque fill, resizable Metadata panel, item-view theme fix | ✅ Previous patch |
 | **1.0.181** | ICC/transition paint caching, incremental sorted scan publication, bounded thumbnails and concurrent-loading evidence | ✅ Previous patch |
 | **1.0.180** | Browse request/preview reliability, device-pixel first LOD and retained append preloads | ✅ Previous patch |
 | **1.0.179** | Bounded image decode and load readiness | ✅ Previous patch |
