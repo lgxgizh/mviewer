@@ -10,6 +10,8 @@
 #include <utility>
 #include <vector>
 
+#include "core/image/DisplayAdjust.h"
+
 namespace mviewer::core
 {
 
@@ -29,6 +31,10 @@ struct DisplayColorContext
     // Incremented when the target/profile changes (for example a monitor
     // change).  It prevents a previous target's raster from being reused.
     uint64_t generation = 0;
+
+    // Report feature 5: review display adjustment (exposure / gamma /
+    // auto-stretch / 3D LUT). Presentation-only; part of the cache identity.
+    mviewer::core::DisplayAdjust adjust;
 
     static DisplayColorContext raw(uint64_t generation = 0)
     {
@@ -80,9 +86,11 @@ struct DisplayColorContext
     std::string cacheKey() const
     {
         if (!colorManagementEnabled)
-            return "raw@" + std::to_string(generation);
-        return fingerprint.empty() ? "srgb@" + std::to_string(generation)
-                                   : fingerprint + "@" + std::to_string(generation);
+            return "raw@" + std::to_string(generation) + "/" + std::to_string(adjust.fingerprint());
+        const std::string base = fingerprint.empty()
+                                     ? "srgb@" + std::to_string(generation)
+                                     : fingerprint + "@" + std::to_string(generation);
+        return base + "/" + std::to_string(adjust.fingerprint());
     }
 };
 

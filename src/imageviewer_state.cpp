@@ -3,6 +3,16 @@
 // their line budgets (ADR-014).
 #include "imageviewer.h"
 
+Viewport ImageViewer::viewTransform() const
+{
+    return m_view;
+}
+
+mviewer::OverlayMode ImageViewer::overlayMode() const
+{
+    return m_overlayMode;
+}
+
 int ImageViewer::frameIndex() const
 {
     return m_frame ? m_frame->frameIndex() : m_frameIndex;

@@ -475,8 +475,8 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
     if (!wantsManaged)
     {
         if (src.format == PixelFormat::RGB24 || src.format == PixelFormat::Grayscale8)
-            return src;
-        return fromQImage(toQImage(src));
+            return applyDisplayAdjust(src, target.adjust);
+        return applyDisplayAdjust(fromQImage(toQImage(src)), target.adjust);
     }
 
     const QColorSpace source = sourceColorSpace(meta);
@@ -484,11 +484,11 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
     if (source == destination)
     {
         if (src.format == PixelFormat::RGB24 || src.format == PixelFormat::Grayscale8)
-            return src;
-        return fromQImage(toQImage(src));
+            return applyDisplayAdjust(src, target.adjust);
+        return applyDisplayAdjust(fromQImage(toQImage(src)), target.adjust);
     }
 
-    return fromQImage(toDisplayQImage(src, meta, target));
+    return applyDisplayAdjust(fromQImage(toDisplayQImage(src, meta, target)), target.adjust);
 }
 
 static inline void copyFromQImage(ImageData &out, const QImage &src, size_t rowBytes)

@@ -36,7 +36,8 @@ bool ImageViewer::isAnnotateMode() const
 }
 
 void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
-                                          QAction *&exportReview, bool hasView)
+                                          QAction *&exportReview, QAction *&colorChecker,
+                                          bool hasView)
 {
     annotate = menu.addAction(tr("Annotate (A)"));
     annotate->setCheckable(true);
@@ -46,10 +47,12 @@ void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QActi
     textLabel->setEnabled(hasView);
     exportReview = menu.addAction(tr("Export Review Image…"));
     exportReview->setEnabled(hasView);
+    colorChecker = menu.addAction(tr("Color Checker dE00…"));
+    colorChecker->setEnabled(hasView);
 }
 
 bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, QAction *textLabel,
-                                            QAction *exportReview)
+                                            QAction *exportReview, QAction *colorChecker)
 {
     if (chosen == annotate)
     {
@@ -64,6 +67,11 @@ bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, 
     if (chosen == exportReview)
     {
         exportAnnotatedImage();
+        return true;
+    }
+    if (chosen == colorChecker)
+    {
+        measureColorChecker();
         return true;
     }
     return false;

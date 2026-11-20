@@ -51,7 +51,8 @@ struct ImageFileRotateResult;
 namespace mviewer::ui
 {
 class ScopeWidget;
-}
+class DisplayAdjustPanel;
+} // namespace mviewer::ui
 
 struct ImageViewerPromotedRasterTestAccess;
 
@@ -151,10 +152,7 @@ class ImageViewer : public QOpenGLWidget
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
     // restore the viewer's zoom level and pan position across sessions. Viewport
     // is domain-free (core/render), so it carries no Qt types.
-    Viewport viewTransform() const
-    {
-        return m_view;
-    }
+    Viewport viewTransform() const;
     // Window-sized owned snapshot shown while the next frame decodes.
     // Empty when the viewer is not mid-switch.
     QSize transitionSnapshotSize() const;
@@ -223,6 +221,14 @@ class ImageViewer : public QOpenGLWidget
     bool isAnnotateMode() const;
     void addTextAnnotationAtCursor();
     void exportAnnotatedImage();
+    // Review display adjustment (exposure / gamma / auto-stretch / 3D LUT).
+    mviewer::core::DisplayAdjust &displayAdjust();
+    void measureColorChecker(); // 24-patch dE00 report from the current selection
+    void applyDisplayAdjust();
+    void setAdjustPanelVisible(bool visible);
+    bool isAdjustPanelVisible() const;
+    void addAdjustContextAction(QMenu &menu, QAction *&adjust);
+    bool handleAdjustContextAction(QAction *chosen, QAction *adjust);
     bool isFitMode() const;
     void setLockZoom(bool lock);
     bool isLockZoom() const;
@@ -234,10 +240,7 @@ class ImageViewer : public QOpenGLWidget
     void setFrameIndex(int index);
     void setOverlayMode(mviewer::OverlayMode m); // F4 (M22): live zebra/false-color overlay
     void setZebraThreshold(int t); // F4 (M22): live zebra threshold (shared with prefs/dialog)
-    mviewer::OverlayMode overlayMode() const
-    {
-        return m_overlayMode;
-    }
+    mviewer::OverlayMode overlayMode() const;
     bool rotateCW();
     bool rotateCCW();
     bool rotateImage(int angle);
@@ -354,9 +357,9 @@ class ImageViewer : public QOpenGLWidget
                                        bool hasView);
     bool handleProfileScopeContextAction(QAction *chosen, QAction *profile, QAction *scopes);
     void addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
-                                 QAction *&exportReview, bool hasView);
+                                 QAction *&exportReview, QAction *&colorChecker, bool hasView);
     bool handleReviewContextAction(QAction *chosen, QAction *annotate, QAction *textLabel,
-                                   QAction *exportReview);
+                                   QAction *exportReview, QAction *colorChecker);
     // Review-markup drag routing (0 press, 1 move, 2 release).
     void handleAnnotateMouseEvent(QMouseEvent *event, int phase);
     void drawAnnotations(QPainter &painter) const;
@@ -768,11 +771,13 @@ class ImageViewer : public QOpenGLWidget
     int m_scopeMode = 0;
     mviewer::ui::ScopeWidget *m_scopeWidget = nullptr;
     // Review markup state; the store reloads itself when the path changes.
-    bool m_annotateMode = false;
-    bool m_annotating = false;
+    bool m_annotateMode = false, m_annotating = false;
     bool m_annotateArrow = false;
     QPoint m_annStart, m_annEnd;
     mviewer::ui::AnnotationStore m_annotations;
+    // Live review adjustment panel (created on first use).
+    mviewer::ui::DisplayAdjustPanel *m_adjustPanel = nullptr;
+    void syncAdjustPanel();
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.
     QRect m_selectionImage;

@@ -4,14 +4,14 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.187**
+## Where we are now — **Beta / 1.0.188**
 
-MViewer remains in **Beta**; the current release is **`v1.0.187`**
+MViewer remains in **Beta**; the current release is **`v1.0.188`**
 (2026-11-21, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch adds HDR formats — OpenEXR and PFM — decoded to a float working
-image and tone-mapped to 8-bit, so scene-referred linear captures open like any
-other image instead of being rejected. Offscreen CI is regression evidence, not
-proof of universal smoothness.
+This patch adds the live review adjustment (viewer `G`: exposure, gamma,
+auto-stretch, `.cube` 3D LUT) and CIEDE2000 with a 24-patch ColorChecker
+measurement. Offscreen CI is regression evidence, not proof of universal
+smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -66,7 +66,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.187** (current) | HDR formats: OpenEXR + PFM (float decode, tone-mapped) | 🔵 Beta |
+| **1.0.188** (current) | Live display adjust (`G`) + CIEDE2000 / ColorChecker | 🔵 Beta |
+| **1.0.187** | HDR formats: OpenEXR + PFM (float decode, tone-mapped) | ✅ Previous patch |
 | **1.0.186** | Review markup (`A`) + one-click review-image export | ✅ Previous patch |
 | **1.0.185** | Raw `.yuv` / `.y4m` sequence playback + synchronized Compare frame scrubbing | ✅ Previous patch |
 | **1.0.184** | Line profile (`L`) and video scopes (`W`): luma waveform, RGB parade, vectorscope | ✅ Previous patch |

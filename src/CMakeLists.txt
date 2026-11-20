@@ -32,6 +32,8 @@ add_library(mviewer_core SHARED
     core/image/decoder/HdrDecoder.cpp
     core/image/decoder/RawDecoder_libraw.cpp
     core/image/decoder/RawDecodePolicy.cpp
+    core/image/DisplayColorContext.h
+    core/image/DisplayAdjust.cpp
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
@@ -111,6 +113,8 @@ add_library(mviewer_core SHARED
     core/analysis/YuvMetrics.cpp
     core/analysis/PixelInspector.cpp
     core/analysis/PixelInspector_adjust.cpp
+    core/analysis/Ciede2000.cpp
+    core/analysis/ColorChecker.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ExportReport_serialize.cpp
     core/analysis/ReportHtml.cpp
@@ -277,6 +281,8 @@ add_library(mviewer_ui STATIC
     imageviewer.cpp
     imageviewer_scope.cpp
     imageviewer_annotate.cpp
+    imageviewer_adjust.cpp
+    imageviewer_colorchecker.cpp
     imageviewer_inspector.cpp
     imageviewer_state.cpp
     annotationstore.cpp
@@ -385,6 +391,7 @@ add_library(mviewer_ui STATIC
     widgets/rawimageview_surface.cpp
     widgets/histogramwidget.cpp
     widgets/scopewidget.cpp
+    widgets/displayadjustpanel.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
     cache_settings.cpp
@@ -992,6 +999,25 @@ target_include_directories(viewer_annotate_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 add_test(NAME viewer_annotate_tests COMMAND viewer_annotate_tests)
 set_tests_properties(viewer_annotate_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── Viewer display adjustment panel (G) ────────────────────────────────────
+add_executable(viewer_adjust_tests
+    test_viewer_adjust.cpp
+)
+
+target_link_libraries(viewer_adjust_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(viewer_adjust_tests PRIVATE cxx_std_20)
+target_include_directories(viewer_adjust_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME viewer_adjust_tests COMMAND viewer_adjust_tests)
+set_tests_properties(viewer_adjust_tests PROPERTIES RUN_SERIAL TRUE)
+
 # Browse: paste clipboard into current folder + open-folder toolbar action
 add_executable(browse_paste_acceptance
     test_browse_paste.cpp
@@ -1545,6 +1571,27 @@ target_link_libraries(test_hdr_decoder PRIVATE mviewer_core)
 target_compile_features(test_hdr_decoder PRIVATE cxx_std_20)
 target_include_directories(test_hdr_decoder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME hdr_decoder_tests COMMAND test_hdr_decoder)
+
+# Report feature 5: review display adjustment (exposure / gamma / auto-stretch / LUT).
+add_executable(test_display_adjust core/test_display_adjust.cpp)
+target_link_libraries(test_display_adjust PRIVATE mviewer_core)
+target_compile_features(test_display_adjust PRIVATE cxx_std_20)
+target_include_directories(test_display_adjust PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME display_adjust_tests COMMAND test_display_adjust)
+
+# Report feature 6: CIEDE2000 colour difference.
+add_executable(test_ciede2000 core/test_ciede2000.cpp)
+target_link_libraries(test_ciede2000 PRIVATE mviewer_core)
+target_compile_features(test_ciede2000 PRIVATE cxx_std_20)
+target_include_directories(test_ciede2000 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME ciede2000_tests COMMAND test_ciede2000)
+
+# Report feature 6: ColorChecker measurement on top of CIEDE2000.
+add_executable(test_color_checker core/test_color_checker.cpp)
+target_link_libraries(test_color_checker PRIVATE mviewer_core)
+target_compile_features(test_color_checker PRIVATE cxx_std_20)
+target_include_directories(test_color_checker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME color_checker_tests COMMAND test_color_checker)
 
 add_executable(test_yuv_sample core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)

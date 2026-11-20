@@ -1,12 +1,25 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.187** · Release tag: **v1.0.187**
+> Snapshot: 2026-11-21 · Version: **1.0.188** · Release tag: **v1.0.188**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.188 — Live display adjustment + CIEDE2000 / ColorChecker (2026-11-21)
+
+- Viewer `G`: exposure (±3 EV), gamma, Auto-Stretch and an Adobe `.cube` 3D
+  LUT (trilinear). Presentation-only; carried in the display colour context so
+  rasters and tiles re-materialize through the normal path.
+- CIEDE2000 ΔE00, verified against all 34 Sharma/Wu/Dalal (2005) reference
+  pairs.
+- "Color Checker dE00…" samples a 4×6 grid inside the current selection (or the
+  whole frame) and reports per-patch ΔE00 + mean/max against the 24-patch D65
+  reference.
+- Features 5 and 6 shipped together: both were completed in the same
+  verification window and share viewer/context-menu wiring.
 
 ## 1.0.187 — HDR: OpenEXR and PFM (2026-11-21)
 

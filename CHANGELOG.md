@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [1.0.188] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.188**.
+
+### Added
+
+- **Live display adjustment** (report feature 5, viewer `G`): exposure
+  (±3 EV), gamma, one-click Auto-Stretch, and an optional Adobe `.cube` 3D LUT
+  with trilinear sampling. The adjustment is presentation-only and rides in
+  the display colour context, so the raster and every tile are re-materialized
+  through the normal path (the adjustment fingerprint is part of the cache
+  key) — no second pipeline, no stale tiles.
+- **CIEDE2000 (ΔE00)** (report feature 6): the colour-difference metric that
+  actually tracks perception, replacing Euclidean distance in L*a*b* for
+  reproduction checks. Verified against all 34 Sharma/Wu/Dalal (2005)
+  reference pairs.
+- **ColorChecker measurement**: select the chart (or leave the selection empty
+  to use the whole frame) and "Color Checker dE00…" samples a 4×6 grid, then
+  reports per-patch ΔE00 plus mean/max against the published 24-patch D65
+  reference values.
+
+### Notes
+
+- This release bundles features 5 and 6: both were finished inside the same
+  verification window, and their viewer/context-menu wiring touches the same
+  files, so splitting them would have meant shipping a half-wired build.
+
 ## [1.0.187] - 2026-11-21
 
 ### Release

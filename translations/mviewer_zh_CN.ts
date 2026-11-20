@@ -4045,6 +4045,83 @@ or double-click a thumbnail to view</source>
         <source>Review image: %1 (%2 annotations)</source>
         <translation>评审图：%1（%2 条批注）</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Display Adjust (G)</source>
+        <translation>显示调整 (G)</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_adjust.cpp" line="1"/>
+        <source>Load 3D LUT</source>
+        <translation>加载 3D LUT</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_adjust.cpp" line="1"/>
+        <source>Cube LUT (*.cube);;All files (*)</source>
+        <translation>Cube LUT (*.cube);;所有文件 (*)</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_adjust.cpp" line="1"/>
+        <source>Could not load the 3D LUT</source>
+        <translation>无法加载 3D LUT</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_adjust.cpp" line="1"/>
+        <source>3D LUT: %1³</source>
+        <translation>3D LUT：%1³</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Color Checker dE00…</source>
+        <translation>24 色卡 ΔE00…</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_colorchecker.cpp" line="1"/>
+        <source>Color checker: no image is loaded</source>
+        <translation>色卡测量：尚未加载图像</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_colorchecker.cpp" line="1"/>
+        <source>Color checker: the rectangle is outside the image</source>
+        <translation>色卡测量：所选矩形在图像之外</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_colorchecker.cpp" line="1"/>
+        <source>Color checker: mean dE00 %1, max %2 (%3/24 patches)</source>
+        <translation>色卡测量：平均 ΔE00 %1，最大 %2（%3/24 个色块）</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_colorchecker.cpp" line="1"/>
+        <source>Color Checker dE00 (selection)</source>
+        <translation>24 色卡 ΔE00（当前选区）</translation>
+    </message>
+</context>
+<context>
+    <name>DisplayAdjustPanel</name>
+    <message>
+        <source>Display Adjust</source>
+        <translation>显示调整</translation>
+    </message>
+    <message>
+        <source>Exposure (EV)</source>
+        <translation>曝光 (EV)</translation>
+    </message>
+    <message>
+        <source>Gamma</source>
+        <translation>Gamma</translation>
+    </message>
+    <message>
+        <source>Auto-Stretch</source>
+        <translation>自动拉伸</translation>
+    </message>
+    <message>
+        <source>Load 3D LUT…</source>
+        <translation>加载 3D LUT…</translation>
+    </message>
+    <message>
+        <source>Reset</source>
+        <translation>重置</translation>
+    </message>
 </context>
 <context>
     <name>ScopeWidget</name>

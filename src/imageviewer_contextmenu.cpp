@@ -300,8 +300,12 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                              aOvY, aOvV);
     QAction *aProfile = nullptr, *aScopes = nullptr;
     addProfileScopeContextActions(menu, aProfile, aScopes, hasDisplayImage());
-    QAction *aAnnotate = nullptr, *aTextLabel = nullptr, *aExportReview = nullptr;
-    addReviewContextActions(menu, aAnnotate, aTextLabel, aExportReview, hasDisplayImage());
+    QAction *aAdjust = nullptr;
+    addAdjustContextAction(menu, aAdjust);
+    QAction *aAnnotate = nullptr, *aTextLabel = nullptr, *aExportReview = nullptr,
+            *aColorChecker = nullptr;
+    addReviewContextActions(menu, aAnnotate, aTextLabel, aExportReview, aColorChecker,
+                            hasDisplayImage());
 
     // A-7.3: "Analyze" submenu — list every registered analyzer for one-click run.
     QList<QAction *> analyzeActions;
@@ -324,7 +328,9 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     }
     if (handleProfileScopeContextAction(chosen, aProfile, aScopes))
         return;
-    if (handleReviewContextAction(chosen, aAnnotate, aTextLabel, aExportReview))
+    if (handleReviewContextAction(chosen, aAnnotate, aTextLabel, aExportReview, aColorChecker))
+        return;
+    if (handleAdjustContextAction(chosen, aAdjust))
         return;
     if (chosen == aUsmCompare)
     {
@@ -606,6 +612,12 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
     if (key == Qt::Key_T && modifiers == Qt::NoModifier)
     {
         addTextAnnotationAtCursor();
+        return true;
+    }
+    // G opens the live review adjustment panel (exposure / gamma / LUT).
+    if (key == Qt::Key_G && modifiers == Qt::NoModifier)
+    {
+        setAdjustPanelVisible(!isAdjustPanelVisible());
         return true;
     }
     if (key == Qt::Key_R && !modifiers)
