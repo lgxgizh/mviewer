@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-17 · Version: **1.0.181** · Release tag: **v1.0.181**
+> Snapshot: 2026-11-20 · Version: **1.0.182** · Release tag: **v1.0.182**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -8,14 +8,30 @@
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
 
-## Unreleased CI tooling
+## 1.0.182 — Image Info panel legibility (2026-11-20)
 
-- Dr.Memory advisory validation distinguishes real complete zero-error target
-  reports from findings, unsupported infrastructure, timeout and no-report.
-  A real Windows run launched bin64/drmemory.exe and retained target reports,
-  but hit the 180s deadline with partial findings; this is not a clean memory
-  result. Its real process output/reports are retained; release publication stays
-  best-effort. Standalone tooling validation does not tag or publish releases.
+- The on-image Image Info panel (View → Image &info, `I` / `M`) now sizes itself
+  from its content (300–520 px, capped by the viewer) and wraps long values
+  instead of clipping them; the previous fixed 380 px box cut off full paths,
+  colour-space names and long file names at the window edge.
+- The panel fill is essentially opaque, so the photo no longer bleeds through
+  and muddies the text; the histogram and the "Press I / ESC to close" hint
+  share one layout and no longer overlap, and on a short viewer the histogram
+  yields its height before the metadata is pushed off screen.
+- The floating Metadata panel is resizable (480×600, minimum 340×400), opaque,
+  and shows a wider value column instead of clipping long metadata values.
+- Theme fix: item-view selection rules no longer repaint the view's `Base` role.
+  Previously the selection colour turned alternating rows and the empty
+  viewport accent blue (floating Metadata panel, plugin list) and the folder
+  tree lost its sidebar fill.
+- The sidebar preview caption elides long file names and the sample-luminance
+  line instead of running past the panel edge.
+- CI tooling: Dr.Memory advisory validation distinguishes real complete
+  zero-error target reports from findings, unsupported infrastructure, timeout
+  and no-report. A real Windows run launched bin64/drmemory.exe and retained
+  target reports, but hit the 180 s deadline with partial findings; this is not
+  a clean memory result. Release publication stays best-effort.
+- Still open: Authenticode signing (no certificate) and the Qt 6.8.x upgrade.
 
 ## 1.0.181 — Browse publication and paint costs (2026-11-17)
 

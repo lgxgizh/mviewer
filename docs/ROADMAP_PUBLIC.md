@@ -4,19 +4,19 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.181**
+## Where we are now — **Beta / 1.0.182**
 
-MViewer remains in **Beta**; the current release is **`v1.0.181`**
-(2026-11-17, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch caches ICC contexts across resize, reduces transition/loading paint
-work, and incrementally publishes scan insertions. Name/Date/Size/Type sorting
-in either direction and suffix type filters stream sorted rows while retaining
-current/selected identities and needed preloads. Stale scans avoid obsolete
-exists probes; interior thumbnail insertions keep viewport demand bounded.
-Real concurrent DPR2 loading measurements were added without scheduler or worker
-changes. Resolution/metadata queries retain a full-query barrier; ICC misses,
-metadata fallback, Compare rebuilds and foreground yield retain documented
-costs. Offscreen CI is regression evidence, not proof of universal smoothness.
+MViewer remains in **Beta**; the current release is **`v1.0.182`**
+(2026-11-20, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+This patch fixes the Image Info panel: the on-image metadata box now sizes
+itself from its content and wraps long values instead of clipping them, and
+its fill is opaque so the text stays readable over any photo. The floating
+Metadata panel is resizable and no longer clips long values. A theme fix stops
+item-view selection colours from repainting the view background, which had
+turned alternating rows accent blue in the Metadata panel and plugin list and
+dropped the folder tree's sidebar fill. The sidebar preview caption elides
+long file names. Offscreen CI is regression evidence, not proof of universal
+smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -71,7 +71,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.181** (current) | ICC/transition paint caching, incremental sorted scan publication, bounded thumbnails and concurrent-loading evidence | 🔵 Beta |
+| **1.0.182** (current) | Image Info panel legibility: content-sized on-image metadata box with wrapping, opaque fill, resizable Metadata panel, item-view theme fix | 🔵 Beta |
+| **1.0.181** | ICC/transition paint caching, incremental sorted scan publication, bounded thumbnails and concurrent-loading evidence | ✅ Previous patch |
 | **1.0.180** | Browse request/preview reliability, device-pixel first LOD and retained append preloads | ✅ Previous patch |
 | **1.0.179** | Bounded image decode and load readiness | ✅ Previous patch |
 | **1.0.178** | Hotfix for browse/switch paths with images above 4 MP | ✅ Previous patch |
