@@ -4,6 +4,7 @@
 #include "application/ImageLoadingService.h"
 #include "core/image/Decoder.h"
 #include "core/image/QtConvert.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 #include "thumbnailcache.h"
 
 #include "core/image/ExifOrientation.h"
@@ -310,6 +311,12 @@ void ThumbnailProvider::invalidateSource(const std::string &path)
         memory.sizes.remove(qp);
     }
     ThumbnailCache::instance().invalidatePath(qp);
+    // The shared thumbnail pipeline keeps its own memory cache, attempted set
+    // and failed set keyed by path. Without this the panel re-requests the
+    // path, the pipeline answers from its stale entry (and never retries a path
+    // it marked failed), so a re-decodable source - e.g. a .yuv / .raw whose
+    // parameters were just corrected - keeps showing the old thumbnail.
+    ThumbnailPipeline::instance().invalidatePath(path);
     mviewer::application::ImageLoadingService::instance().invalidateSource(path);
 }
 

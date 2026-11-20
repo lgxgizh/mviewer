@@ -4,9 +4,12 @@
 #include "yuvparamsettings.h"
 #include "yuvpixfmtpicker.h"
 
+#include "core/image/ImageBuffer.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/yuv/YuvFormat.h"
 #include "core/image/yuv/YuvSource.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
+#include "thumbnailprovider.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -17,6 +20,7 @@
 #include <QStandardItemModel>
 #include <QStringList>
 
+#include <chrono>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -316,6 +320,33 @@ void testChromaUpsampleSetting()
     mviewer::core::yuv::setDefaultChromaUpsample(ChromaUpsample::Bilinear);
 }
 
+// Saving corrected parameters for a .yuv must drop the shared thumbnail
+// pipeline's cached entry: the panel re-requests the path immediately after the
+// dialog, and without this the pipeline answers from its stale thumbnail (and
+// never retries a path it had marked failed), so the gallery keeps the old
+// "could not parse" tile.
+void testParamsChangeInvalidatesThumbnailPipeline()
+{
+    ThumbnailPipeline &pipe = ThumbnailPipeline::instance();
+    const std::string path = "C:/media/clip.yuv";
+    const int size = 256;
+
+    pipe.setDecodeFn([&](const std::string &, int s) -> ImageData
+                     { return makeImageData(s, s, PixelFormat::RGB24); });
+    pipe.setThumbSize(size);
+    pipe.setSources({path});
+    pipe.setVisibleRange(0, 1);
+    TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::milliseconds(5000));
+    check(!pipe.findCached(path, size).isNull(), "pipeline caches the produced thumbnail");
+
+    ThumbnailProvider::invalidateSource(path);
+    check(pipe.findCached(path, size).isNull(),
+          "new parameters drop the pipeline's cached thumbnail");
+
+    pipe.setSources({});
+    pipe.restoreDefaultDecodeFn();
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -329,6 +360,7 @@ int main(int argc, char **argv)
     testExtensionMapSettings();
     testSettingsRoundTrip();
     testChromaUpsampleSetting();
+    testParamsChangeInvalidatesThumbnailPipeline();
     return g_failures == 0 ? 0 : 1;
 }
 // NOLINTEND

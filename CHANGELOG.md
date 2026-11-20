@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Thumbnail refresh after parameter changes**: correcting a `.yuv` / `.raw`
+  file's parameters (pixel format, bit depth, size) left the gallery thumbnail
+  at its previous state — the "could not parse" tile stayed put, or a stale
+  green-tinted render was shown. The shared thumbnail pipeline keeps its own
+  memory cache, attempted set and failed set keyed by path; `invalidateSource`
+  now clears those too, so the corrected file is decoded again immediately
+  instead of being answered from the stale entry (or never retried because the
+  path was still marked failed).
+
 ## [1.0.182] - 2026-11-20
 
 ### Release
