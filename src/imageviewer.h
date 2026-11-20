@@ -357,9 +357,11 @@ class ImageViewer : public QOpenGLWidget
                                        bool hasView);
     bool handleProfileScopeContextAction(QAction *chosen, QAction *profile, QAction *scopes);
     void addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
-                                 QAction *&exportReview, QAction *&colorChecker, bool hasView);
+                                 QAction *&exportReview, QAction *&colorChecker,
+                                 QAction *&blindTest, bool hasView);
     bool handleReviewContextAction(QAction *chosen, QAction *annotate, QAction *textLabel,
-                                   QAction *exportReview, QAction *colorChecker);
+                                   QAction *exportReview, QAction *colorChecker,
+                                   QAction *blindTest);
     // Review-markup drag routing (0 press, 1 move, 2 release).
     void handleAnnotateMouseEvent(QMouseEvent *event, int phase);
     void drawAnnotations(QPainter &painter) const;
@@ -771,12 +773,10 @@ class ImageViewer : public QOpenGLWidget
     int m_scopeMode = 0;
     mviewer::ui::ScopeWidget *m_scopeWidget = nullptr;
     // Review markup state; the store reloads itself when the path changes.
-    bool m_annotateMode = false, m_annotating = false;
-    bool m_annotateArrow = false;
+    bool m_annotateMode = false, m_annotating = false, m_annotateArrow = false;
     QPoint m_annStart, m_annEnd;
     mviewer::ui::AnnotationStore m_annotations;
-    // Live review adjustment panel (created on first use).
-    mviewer::ui::DisplayAdjustPanel *m_adjustPanel = nullptr;
+    mviewer::ui::DisplayAdjustPanel *m_adjustPanel = nullptr; // created on first use
     void syncAdjustPanel();
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.

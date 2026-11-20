@@ -4,14 +4,12 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.188**
+## Where we are now — **Beta / 1.0.189**
 
-MViewer remains in **Beta**; the current release is **`v1.0.188`**
+MViewer remains in **Beta**; the current release is **`v1.0.189`**
 (2026-11-21, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch adds the live review adjustment (viewer `G`: exposure, gamma,
-auto-stretch, `.cube` 3D LUT) and CIEDE2000 with a 24-patch ColorChecker
-measurement. Offscreen CI is regression evidence, not proof of universal
-smoothness.
+This patch adds a reproducible A/B blind test with MOS scoring and JSON export.
+Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -66,7 +64,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.188** (current) | Live display adjust (`G`) + CIEDE2000 / ColorChecker | 🔵 Beta |
+| **1.0.189** (current) | A/B blind test with MOS scoring + JSON export | 🔵 Beta |
+| **1.0.188** | Live display adjust (`G`) + CIEDE2000 / ColorChecker | ✅ Previous patch |
 | **1.0.187** | HDR formats: OpenEXR + PFM (float decode, tone-mapped) | ✅ Previous patch |
 | **1.0.186** | Review markup (`A`) + one-click review-image export | ✅ Previous patch |
 | **1.0.185** | Raw `.yuv` / `.y4m` sequence playback + synchronized Compare frame scrubbing | ✅ Previous patch |

@@ -303,8 +303,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aAdjust = nullptr;
     addAdjustContextAction(menu, aAdjust);
     QAction *aAnnotate = nullptr, *aTextLabel = nullptr, *aExportReview = nullptr,
-            *aColorChecker = nullptr;
-    addReviewContextActions(menu, aAnnotate, aTextLabel, aExportReview, aColorChecker,
+            *aColorChecker = nullptr, *aBlindTest = nullptr;
+    addReviewContextActions(menu, aAnnotate, aTextLabel, aExportReview, aColorChecker, aBlindTest,
                             hasDisplayImage());
 
     // A-7.3: "Analyze" submenu — list every registered analyzer for one-click run.
@@ -328,7 +328,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     }
     if (handleProfileScopeContextAction(chosen, aProfile, aScopes))
         return;
-    if (handleReviewContextAction(chosen, aAnnotate, aTextLabel, aExportReview, aColorChecker))
+    if (handleReviewContextAction(chosen, aAnnotate, aTextLabel, aExportReview, aColorChecker,
+                                  aBlindTest))
         return;
     if (handleAdjustContextAction(chosen, aAdjust))
         return;

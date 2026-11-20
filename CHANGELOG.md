@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [1.0.189] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.189**.
+
+### Added
+
+- **A/B blind test with MOS export** (report feature 8, viewer context menu →
+  "A/B Blind Test…"): pick two sources, the presentation order is shuffled from
+  a recorded seed, only one side is shown at a time with its identity hidden,
+  and each side gets a 1–5 MOS score. The identity is revealed only after both
+  scores are in, and the session (seed, per-side score, which side was A) is
+  exported as JSON so the test is reproducible.
+
+### Skipped in this round
+
+- **Feature 7 (HEIF / AVIF / JPEG XL)** needs third-party codec libraries and a
+  build-system change (vcpkg/CI, which AGENTS.md freezes). It is not silently
+  dropped — it is the next item and needs a deliberate dependency decision.
+
 ## [1.0.188] - 2026-11-21
 
 ### Release

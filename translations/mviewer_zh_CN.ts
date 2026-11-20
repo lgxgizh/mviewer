@@ -4076,6 +4076,11 @@ or double-click a thumbnail to view</source>
         <translation>24 色卡 ΔE00…</translation>
     </message>
     <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>A/B Blind Test…</source>
+        <translation>A/B 盲测…</translation>
+    </message>
+    <message>
         <location filename="../src/imageviewer_colorchecker.cpp" line="1"/>
         <source>Color checker: no image is loaded</source>
         <translation>色卡测量：尚未加载图像</translation>
@@ -4094,6 +4099,81 @@ or double-click a thumbnail to view</source>
         <location filename="../src/imageviewer_colorchecker.cpp" line="1"/>
         <source>Color Checker dE00 (selection)</source>
         <translation>24 色卡 ΔE00（当前选区）</translation>
+    </message>
+</context>
+<context>
+    <name>BlindTestDialog</name>
+    <message>
+        <source>A/B Blind Test</source>
+        <translation>A/B 盲测</translation>
+    </message>
+    <message>
+        <source>Source A</source>
+        <translation>源 A</translation>
+    </message>
+    <message>
+        <source>Source B</source>
+        <translation>源 B</translation>
+    </message>
+    <message>
+        <source>Browse A…</source>
+        <translation>浏览 A…</translation>
+    </message>
+    <message>
+        <source>Browse B…</source>
+        <translation>浏览 B…</translation>
+    </message>
+    <message>
+        <source>Choose two sources to begin</source>
+        <translation>先选择两个源图像</translation>
+    </message>
+    <message>
+        <source>Cannot read %1</source>
+        <translation>无法读取 %1</translation>
+    </message>
+    <message>
+        <source>Side %1 of 2 — identity hidden</source>
+        <translation>第 %1/2 侧 — 身份隐藏</translation>
+    </message>
+    <message>
+        <source>Revealed: %1</source>
+        <translation>已揭示：%1</translation>
+    </message>
+    <message>
+        <source>MOS (1-5)</source>
+        <translation>MOS (1-5)</translation>
+    </message>
+    <message>
+        <source>Show other side (Space)</source>
+        <translation>显示另一侧 (空格)</translation>
+    </message>
+    <message>
+        <source>Reveal &amp; Export</source>
+        <translation>揭示并导出</translation>
+    </message>
+    <message>
+        <source>Blind test result</source>
+        <translation>盲测结果</translation>
+    </message>
+    <message>
+        <source>A: %1 (MOS %2)   B: %3 (MOS %4)</source>
+        <translation>A：%1（MOS %2）  B：%3（MOS %4）</translation>
+    </message>
+    <message>
+        <source>Export blind test result</source>
+        <translation>导出盲测结果</translation>
+    </message>
+    <message>
+        <source>JSON (*.json)</source>
+        <translation>JSON (*.json)</translation>
+    </message>
+    <message>
+        <source>Blind test</source>
+        <translation>盲测</translation>
+    </message>
+    <message>
+        <source>Could not write %1</source>
+        <translation>无法写入 %1</translation>
     </message>
 </context>
 <context>

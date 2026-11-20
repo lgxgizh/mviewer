@@ -1,12 +1,18 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.188** · Release tag: **v1.0.188**
+> Snapshot: 2026-11-21 · Version: **1.0.189** · Release tag: **v1.0.189**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.189 — A/B blind test with MOS export (2026-11-21)
+
+- Viewer context menu → "A/B Blind Test…": shuffled presentation order from a
+  recorded seed, one side visible at a time, identity hidden until both 1–5 MOS
+  scores are in, then revealed and exported as JSON.
 
 ## 1.0.188 — Live display adjustment + CIEDE2000 / ColorChecker (2026-11-21)
 

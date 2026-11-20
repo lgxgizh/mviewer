@@ -392,6 +392,7 @@ add_library(mviewer_ui STATIC
     widgets/histogramwidget.cpp
     widgets/scopewidget.cpp
     widgets/displayadjustpanel.cpp
+    widgets/blindtestdialog.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
     cache_settings.cpp

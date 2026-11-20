@@ -4,6 +4,7 @@
 #include "imageviewer.h"
 
 #include "core/image/QtConvert.h"
+#include "widgets/blindtestdialog.h"
 
 #include <QFileInfo>
 #include <QInputDialog>
@@ -37,7 +38,7 @@ bool ImageViewer::isAnnotateMode() const
 
 void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QAction *&textLabel,
                                           QAction *&exportReview, QAction *&colorChecker,
-                                          bool hasView)
+                                          QAction *&blindTest, bool hasView)
 {
     annotate = menu.addAction(tr("Annotate (A)"));
     annotate->setCheckable(true);
@@ -49,10 +50,13 @@ void ImageViewer::addReviewContextActions(QMenu &menu, QAction *&annotate, QActi
     exportReview->setEnabled(hasView);
     colorChecker = menu.addAction(tr("Color Checker dE00…"));
     colorChecker->setEnabled(hasView);
+    blindTest = menu.addAction(tr("A/B Blind Test…"));
+    blindTest->setEnabled(hasView);
 }
 
 bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, QAction *textLabel,
-                                            QAction *exportReview, QAction *colorChecker)
+                                            QAction *exportReview, QAction *colorChecker,
+                                            QAction *blindTest)
 {
     if (chosen == annotate)
     {
@@ -72,6 +76,13 @@ bool ImageViewer::handleReviewContextAction(QAction *chosen, QAction *annotate, 
     if (chosen == colorChecker)
     {
         measureColorChecker();
+        return true;
+    }
+    if (chosen == blindTest)
+    {
+        BlindTestDialog dialog(this);
+        dialog.setSources(m_currentPath, m_currentPath);
+        dialog.exec();
         return true;
     }
     return false;
