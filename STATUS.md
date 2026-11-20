@@ -1,12 +1,23 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-20 · Version: **1.0.183** · Release tag: **v1.0.183**
+> Snapshot: 2026-11-20 · Version: **1.0.184** · Release tag: **v1.0.184**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.184 — Line profile and video scopes (2026-11-20)
+
+- The viewer gains an ISP/CV review readout pair: `L` arms a draggable line
+  profile (R/G/B/luma along the line, with sample count and mean luma) and `W`
+  opens a corner scope panel that cycles luma waveform → RGB parade →
+  vectorscope. Both are also in the viewer context menu.
+- The scopes read the frame already on screen (the LOD raster in LOD mode) and
+  never re-decode, so enabling them costs nothing until they are shown.
+- `viewer_scope_tests` covers the toggle, the mode cycle and the committed
+  profile line.
 
 ## 1.0.183 — Review-driven fixes (2026-11-20)
 

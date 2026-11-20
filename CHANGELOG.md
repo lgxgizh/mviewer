@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [1.0.184] - 2026-11-20
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.184**.
+
 ### Added
 
 - **Line profile and video scopes** (viewer `L` / `W`, also in the viewer

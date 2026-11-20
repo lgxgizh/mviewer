@@ -4,17 +4,15 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.183**
+## Where we are now — **Beta / 1.0.184**
 
-MViewer remains in **Beta**; the current release is **`v1.0.183`**
+MViewer remains in **Beta**; the current release is **`v1.0.184`**
 (2026-11-20, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch is a review-driven fixes release: a rotate/flip now refreshes the
-gallery resolution (card footer / Details column) and the on-image info
-overlay, the Image Info overlay no longer duplicates camera/lens in non-English
-UIs, the Windows crash filter no longer formats its report paths on the
-faulting stack, the update link is validated before it reaches the browser,
-and Linux plugin loading / macOS "reveal" are hardened. Offscreen CI is
-regression evidence, not proof of universal smoothness.
+This patch adds the ISP/CV review readouts: `L` draws a line profile (R/G/B/luma
+along a draggable line) and `W` opens a scope panel cycling luma waveform, RGB
+parade and vectorscope. Both read the frame already on screen and never
+re-decode. Offscreen CI is regression evidence, not proof of universal
+smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -69,7 +67,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.183** (current) | Review-driven fixes: rotate/flip resolution refresh, non-English metadata dedup, crash-filter stack safety, update-link validation, Linux/macOS hardening | 🔵 Beta |
+| **1.0.184** (current) | Line profile (`L`) and video scopes (`W`): luma waveform, RGB parade, vectorscope | 🔵 Beta |
+| **1.0.183** | Review-driven fixes: rotate/flip resolution refresh, non-English metadata dedup, crash-filter stack safety, update-link validation, Linux/macOS hardening | ✅ Previous patch |
 | **1.0.182** | Image Info panel legibility: content-sized on-image metadata box with wrapping, opaque fill, resizable Metadata panel, item-view theme fix | ✅ Previous patch |
 | **1.0.181** | ICC/transition paint caching, incremental sorted scan publication, bounded thumbnails and concurrent-loading evidence | ✅ Previous patch |
 | **1.0.180** | Browse request/preview reliability, device-pixel first LOD and retained append preloads | ✅ Previous patch |
