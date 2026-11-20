@@ -50,6 +50,13 @@
   now clears those too, so the corrected file is decoded again immediately
   instead of being answered from the stale entry (or never retried because the
   path was still marked failed).
+- **Stale preview pixels after an in-place rewrite**: the preview cache keys
+  its entries `<source key>#preview<edge>`, but invalidating a source only
+  erased the bare key. A source rewritten in place (a rotate that only swaps
+  the EXIF orientation, same size and same mtime tick) therefore kept serving
+  the previous pixels and their empty metadata, so the preview kept reporting
+  the old geometry. `CacheManager::invalidate` now erases the derived
+  `#preview…` keys as well.
 
 ## [1.0.182] - 2026-11-20
 

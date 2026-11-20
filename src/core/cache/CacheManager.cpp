@@ -405,6 +405,10 @@ void CacheManager::erase(const std::string &key)
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
     ImageCache::instance().remove(ImageCache::Preview, key);
+    // Preview entries are keyed "<source key>#preview<edge>"; a bare-key erase
+    // would leave the previous pixels (and their 0x0 metadata) in place when a
+    // source is rewritten in place without changing its identity key.
+    ImageCache::instance().removePrefix(ImageCache::Preview, key + "#preview");
     ImageCache::instance().remove(ImageCache::Viewer, key);
     {
         std::lock_guard<std::mutex> lock(m_metaMutex);
@@ -572,6 +576,10 @@ void CacheManager::invalidate(const std::string &key)
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
     ImageCache::instance().remove(ImageCache::Preview, key);
+    // Preview entries are keyed "<source key>#preview<edge>"; a bare-key erase
+    // would leave the previous pixels (and their 0x0 metadata) in place when a
+    // source is rewritten in place without changing its identity key.
+    ImageCache::instance().removePrefix(ImageCache::Preview, key + "#preview");
     ImageCache::instance().remove(ImageCache::Viewer, key);
     {
         std::lock_guard<std::mutex> lock(m_metaMutex);

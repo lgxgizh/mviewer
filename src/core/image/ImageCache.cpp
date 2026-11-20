@@ -109,6 +109,25 @@ void ImageCache::remove(Level level, const std::string &key)
     }
 }
 
+void ImageCache::removePrefix(Level level, const std::string &prefix)
+{
+    if (prefix.empty())
+        return;
+    Pool &pool = m_pools[level];
+    std::lock_guard<std::mutex> lock(pool.mtx);
+    for (auto it = pool.map.begin(); it != pool.map.end();)
+    {
+        if (it->first.compare(0, prefix.size(), prefix) != 0)
+        {
+            ++it;
+            continue;
+        }
+        pool.curBytes -= it->second.bytes;
+        pool.order.erase(it->second.orderIt);
+        it = pool.map.erase(it);
+    }
+}
+
 void ImageCache::clear()
 {
     for (int i = 0; i < LevelCount; ++i)

@@ -701,6 +701,29 @@ static void testDiskCacheLargeEntryThreshold()
     disk.clear();
 }
 
+// Preview entries are keyed "<source key>#preview<edge>". Invalidating a
+// source must take those derived keys with it, or a source rewritten in place
+// (same size and mtime tick) keeps serving the previous pixels and metadata.
+static void testPreviewDerivedKeyInvalidation()
+{
+    ImageCache &cache = ImageCache::instance();
+    cache.clear();
+    const ImageData px = makeImageData(4, 4, PixelFormat::RGB24);
+    cache.put(ImageCache::Preview, "album/photo.jpg|12|34", px);
+    cache.put(ImageCache::Preview, "album/photo.jpg|12|34#preview512", px);
+    cache.put(ImageCache::Preview, "album/other.jpg|9|9#preview512", px);
+    CHECK(cache.entryCount(ImageCache::Preview) == 3, "three preview entries stored");
+
+    CacheManager::instance().invalidate("album/photo.jpg|12|34");
+    ImageData out;
+    CHECK(!cache.get(ImageCache::Preview, "album/photo.jpg|12|34", out), "bare source key dropped");
+    CHECK(!cache.get(ImageCache::Preview, "album/photo.jpg|12|34#preview512", out),
+          "derived #preview key dropped with its source");
+    CHECK(cache.get(ImageCache::Preview, "album/other.jpg|9|9#preview512", out),
+          "an unrelated preview entry survives");
+    cache.clear();
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -719,6 +742,7 @@ int main(int argc, char **argv)
     testDiskCacheLruLowWater();
     testDiskCacheBoundsHardening();
     testDiskCacheLargeEntryThreshold();
+    testPreviewDerivedKeyInvalidation();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

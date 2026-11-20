@@ -42,6 +42,11 @@ class ImageCache
     // Delete a single entry (used when the repository is released or invalidated).
     void remove(Level level, const std::string &key);
 
+    // Delete every entry whose key starts with `prefix`. The preview cache keys
+    // its entries as "<source key>#preview<edge>", so invalidating a source must
+    // take those derived keys with it, not just the bare one.
+    void removePrefix(Level level, const std::string &prefix);
+
     void clear();
 
     // Set the capacity limit for a given level (bytes). CacheManager applies its CacheConfig after
