@@ -31,9 +31,12 @@ FrameSequenceInfo sequenceFromOpened(const mviewer::core::yuv::OpenedYuvFile &op
         return sequence;
     sequence.valid = true;
     sequence.countKnown = true;
-    sequence.animated = false;
     sequence.kind = FrameSequenceKind::Pages;
     sequence.frameCount = clampFrameCount(opened.info.frameCount);
+    // A multi-frame raw sequence is played frame by frame just like an
+    // animation: reviewing a YUV/Y4M capture is a time-ordered operation, and
+    // `,` / `.` step it either way.
+    sequence.animated = sequence.frameCount > 1;
     sequence.defaultFrame = 0;
     return sequence;
 }

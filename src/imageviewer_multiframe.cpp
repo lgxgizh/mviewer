@@ -53,6 +53,10 @@ void dropUnrequestedFullscreen(QWidget *widget)
 
 QString sequenceLabel(const mviewer::core::FrameSequenceInfo &sequence)
 {
+    // A playable sequence (animation or multi-frame raw capture) is reviewed
+    // frame by frame; "page" stays reserved for document-style containers.
+    if (sequence.animated)
+        return ImageViewer::tr("Frame");
     return sequence.kind == mviewer::core::FrameSequenceKind::Pages ? ImageViewer::tr("Page")
                                                                     : ImageViewer::tr("Frame");
 }

@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [1.0.185] - 2026-11-20
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.185**.
+
+### Added
+
+- **Sequence playback for raw captures**: a multi-frame `.yuv` / `.y4m` file is
+  now a playable sequence. Space plays/pauses it and `,` / `.` step frames, the
+  context menu offers Play/Pause/Restart, and the status pill reads
+  `Frame n/N · Playing` — previously a raw sequence was page-only, so the
+  transport controls stayed hidden. Multi-page TIFF documents keep their
+  page wording and behaviour.
+- **Synchronized frame scrubbing in Compare**: `,` / `.` step the frame index of
+  every multi-frame cell together, so two `.yuv` / `.y4m` captures stay on the
+  same frame while scrubbing. When no cell is multi-frame the keys keep their
+  previous job (overlay opacity step).
+
 ## [1.0.184] - 2026-11-20
 
 ### Release

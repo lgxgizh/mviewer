@@ -668,6 +668,45 @@ void CompareWorkspace::onFrameControlChanged(int oneBasedIndex)
     applySession(session);
 }
 
+bool CompareWorkspace::stepFrameSync(int delta)
+{
+    if (delta == 0)
+        return false;
+    const QStringList paths = comparedImages();
+    if (paths.isEmpty())
+        return false;
+    auto session = compareSession();
+    if (session.frameIndices.size() < static_cast<size_t>(paths.size()))
+        session.frameIndices.resize(static_cast<size_t>(paths.size()), 0);
+
+    bool changed = false;
+    for (int i = 0; i < paths.size(); ++i)
+    {
+        const ImageFrame *frame = m_engine.imageAt(i);
+        if (!frame)
+            continue;
+        const int count = frame->sequenceInfo().frameCount;
+        if (count <= 1)
+            continue;
+        const int target = std::clamp(frame->frameIndex() + delta, 0, count - 1);
+        if (target == frame->frameIndex())
+            continue;
+        session.frameIndices[static_cast<size_t>(i)] = target;
+        changed = true;
+    }
+    if (!changed)
+        return false;
+
+    QVector<int> frameIndices;
+    frameIndices.reserve(paths.size());
+    for (int i = 0; i < paths.size(); ++i)
+        frameIndices.append(i < static_cast<int>(session.frameIndices.size())
+                                ? std::max(0, session.frameIndices[static_cast<size_t>(i)])
+                                : 0);
+    setImages(paths, frameIndices);
+    applySession(session);
+}
+
 void CompareWorkspace::updateLayoutStatus()
 {
     if (!m_layoutStatusLabel)

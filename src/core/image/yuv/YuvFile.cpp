@@ -286,7 +286,9 @@ void fillYuvMetadata(const OpenedYuvFile &f, const std::string &path, int frameI
     meta.frameCount = clampFrameCount(f.info.frameCount);
     meta.currentFrame = frameIndex;
     meta.sequenceKind = (meta.frameCount > 1) ? "pages" : "static";
-    meta.animated = false;
+    // Playable like an animation: a raw multi-frame sequence is reviewed frame
+    // by frame, so the viewer's play/pause and , / . controls apply.
+    meta.animated = meta.frameCount > 1;
 }
 
 std::string yuvCacheKeySuffix(const std::string &path)

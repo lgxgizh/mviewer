@@ -139,7 +139,9 @@ static void testSequence()
     CHECK(probed.valid);
     CHECK(probed.kind == FrameSequenceKind::Pages);
     CHECK(probed.frameCount == 3);
-    CHECK(!probed.animated);
+    // A multi-frame raw sequence is playable frame by frame, so the viewer's
+    // play/pause and , / . controls apply to it.
+    CHECK(probed.animated);
 
     const auto mid = FrameSequenceReader::decodeFrame(keyPath, 1);
     CHECK(mid.ok);
@@ -158,6 +160,9 @@ static void testSequence()
     CHECK(px0.valid && px0.r == 0 && px0.g == 0 && px0.b == 0);
     CHECK(px2.valid && px2.r == 255 && px2.g == 255 && px2.b == 255);
     CHECK(px.r > px0.r && px.r < px2.r);
+    // Every decoded frame carries the same playable sequence contract, so the
+    // viewer can start playback without re-probing.
+    CHECK(mid.sequence.valid && mid.sequence.animated && mid.sequence.frameCount == 3);
 
     const auto oor = FrameSequenceReader::decode(keyPath, 3);
     CHECK(!oor.ok);

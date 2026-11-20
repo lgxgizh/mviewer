@@ -22,8 +22,22 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 
 bool CompareWorkspace::handleBasicCompareKey(QKeyEvent *event)
 {
-    return handleBasicCompareSpace(event) || handleBasicCompareEscape(event) ||
-           handleROIKeyboardNudge(event);
+    if (handleBasicCompareSpace(event) || handleBasicCompareEscape(event) ||
+        handleROIKeyboardNudge(event))
+        return true;
+    // , / . step every multi-frame cell together, so a .yuv / .y4m pair stays
+    // on the same frame index while scrubbing. Without a multi-frame cell the
+    // keys keep their original meaning (overlay opacity step).
+    if (event->isAutoRepeat())
+        return false;
+    if (event->modifiers() != Qt::NoModifier && event->modifiers() != Qt::KeypadModifier)
+        return false;
+    if (event->key() != Qt::Key_Comma && event->key() != Qt::Key_Period)
+        return false;
+    if (!stepFrameSync(event->key() == Qt::Key_Period ? 1 : -1))
+        return false;
+    event->accept();
+    return true;
 }
 
 bool CompareWorkspace::handleBasicCompareSpace(QKeyEvent *event)

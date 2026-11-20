@@ -41,12 +41,14 @@
 
 namespace
 {
-void addFrameContextActions(QMenu &menu, bool animated, bool playing, int frameIndex,
+void addFrameContextActions(QMenu &menu, bool multiFrame, bool playing, int frameIndex,
                             int frameCount, QAction *&play, QAction *&restart, QAction *&previous,
                             QAction *&next)
 {
-    if (animated)
+    if (multiFrame)
     {
+        // A playable sequence (animation, or a multi-frame .yuv / .y4m capture)
+        // gets the transport controls; the labels stay format-neutral.
         play = menu.addAction(playing ? QCoreApplication::translate("ImageViewer", "Pause")
                                       : QCoreApplication::translate("ImageViewer", "Play"));
         restart = menu.addAction(QCoreApplication::translate("ImageViewer", "Restart"));

@@ -545,12 +545,12 @@ class CompareWorkspace : public QWidget
     QPushButton *m_focusBtn = nullptr;   // lock/unlock reference
     QLabel *m_focusLabel = nullptr, *m_frameLabel = nullptr;
     QSpinBox *m_frameSpin = nullptr;
-    int m_focusIndex = -1, m_hoverIdx = -1;
-    int m_lastInspectX = -1, m_lastInspectY = -1;
+    int m_focusIndex = -1, m_hoverIdx = -1, m_lastInspectX = -1, m_lastInspectY = -1;
     void onCrosshairMoved(RawImageView *view, const QPointF &pos);
     void onFocusRequested(int cellIndex);
     void updateFrameControl();
     void onFrameControlChanged(int oneBasedIndex);
+    bool stepFrameSync(int delta);
     int diffBaseIndex() const;
 
     // Repaints every diff overlay after a user-visible compare state change.
