@@ -3970,6 +3970,53 @@ or double-click a thumbnail to view</source>
         <source>Gray Parameters...</source>
         <translation>灰度参数...</translation>
     </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Line profile: drag a line on the image</source>
+        <translation>行剖面：在图像上拖出一条线</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Line profile off</source>
+        <translation>关闭行剖面</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Line Profile (L)</source>
+        <translation>行剖面 (L)</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_contextmenu.cpp" line="1"/>
+        <source>Scopes (W)</source>
+        <translation>示波器 (W)</translation>
+    </message>
+</context>
+<context>
+    <name>ScopeWidget</name>
+    <message>
+        <source>Line Profile</source>
+        <translation>行剖面</translation>
+    </message>
+    <message>
+        <source>Luma Waveform</source>
+        <translation>亮度波形</translation>
+    </message>
+    <message>
+        <source>RGB Parade</source>
+        <translation>RGB 分量</translation>
+    </message>
+    <message>
+        <source>Vectorscope</source>
+        <translation>矢量示波器</translation>
+    </message>
+    <message>
+        <source>Drag a line on the image</source>
+        <translation>在图像上拖出一条线</translation>
+    </message>
+    <message>
+        <source>%1 samples · mean luma %2</source>
+        <translation>%1 个采样 · 平均亮度 %2</translation>
+    </message>
 </context>
 <context>
     <name>Language</name>

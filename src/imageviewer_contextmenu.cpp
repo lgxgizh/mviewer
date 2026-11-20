@@ -296,6 +296,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aOvR = nullptr, *aOvG = nullptr, *aOvB = nullptr, *aOvY = nullptr, *aOvV = nullptr;
     addOverlayContextActions(menu, m_overlayMode, aOvNone, aOvZebra, aOvFalse, aOvR, aOvG, aOvB,
                              aOvY, aOvV);
+    QAction *aProfile = nullptr, *aScopes = nullptr;
+    addProfileScopeContextActions(menu, aProfile, aScopes, hasDisplayImage());
 
     // A-7.3: "Analyze" submenu — list every registered analyzer for one-click run.
     QList<QAction *> analyzeActions;
@@ -316,6 +318,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         emit analysisRequested(chosen->data().toString());
         return;
     }
+    if (handleProfileScopeContextAction(chosen, aProfile, aScopes))
+        return;
     if (chosen == aUsmCompare)
     {
         ensureAnalysisLoad();
@@ -324,29 +328,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     }
     if (handleRawDecodeAction(chosen, aFullRaw))
         return;
-    if (chosen == aPlay)
-    {
-        if (isPlaying())
-            pause();
-        else
-            play();
+    if (handlePlaybackContextAction(chosen, aPlay, aRestart, aPrevFrame, aNextFrame))
         return;
-    }
-    if (chosen == aRestart)
-    {
-        restart();
-        return;
-    }
-    if (chosen == aPrevFrame)
-    {
-        previousFrame();
-        return;
-    }
-    if (chosen == aNextFrame)
-    {
-        nextFrame();
-        return;
-    }
     if (chosen == aLockZoom)
     {
         setLockZoom(!m_lockZoom);
@@ -360,6 +343,36 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         return;
     handleContextNavigationAction(chosen, aNext, aPrev, aOvNone, aOvZebra, aOvFalse, aOvR, aOvG,
                                   aOvB, aOvY, aFullscreen, aOvV);
+}
+
+bool ImageViewer::handlePlaybackContextAction(QAction *chosen, QAction *playAction,
+                                              QAction *restartAction, QAction *prevAction,
+                                              QAction *nextAction)
+{
+    if (chosen == playAction)
+    {
+        if (isPlaying())
+            pause();
+        else
+            play();
+        return true;
+    }
+    if (chosen == restartAction)
+    {
+        restart();
+        return true;
+    }
+    if (chosen == prevAction)
+    {
+        previousFrame();
+        return true;
+    }
+    if (chosen == nextAction)
+    {
+        nextFrame();
+        return true;
+    }
+    return false;
 }
 
 bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
@@ -559,6 +572,22 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
     }
     if (handleTransformKey(key, modifiers))
         return true;
+    // L draws a line profile; W opens the scopes and then cycles their mode.
+    if (key == Qt::Key_L && modifiers == Qt::NoModifier)
+    {
+        setProfileMode(!m_profileMode);
+        emit statusMessageRequested(m_profileMode ? tr("Line profile: drag a line on the image")
+                                                  : tr("Line profile off"));
+        return true;
+    }
+    if (key == Qt::Key_W && modifiers == Qt::NoModifier)
+    {
+        if (!m_scopesVisible)
+            setScopesVisible(true);
+        else
+            cycleScopeMode();
+        return true;
+    }
     if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
     else if (modifiers == Qt::ControlModifier && key == Qt::Key_U)

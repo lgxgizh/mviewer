@@ -274,6 +274,7 @@ add_library(mviewer_ui STATIC
     analyzermodel.cpp
     appstate.cpp
     imageviewer.cpp
+    imageviewer_scope.cpp
     imageviewer_loading.cpp
     imageviewer_browse.cpp
     imageviewer_multiframe.cpp
@@ -378,6 +379,7 @@ add_library(mviewer_ui STATIC
     widgets/ViewModeSegment.cpp
     widgets/rawimageview_surface.cpp
     widgets/histogramwidget.cpp
+    widgets/scopewidget.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
     cache_settings.cpp
@@ -946,6 +948,25 @@ target_compile_features(metadata_overlay_tests PRIVATE cxx_std_20)
 target_include_directories(metadata_overlay_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME metadata_overlay_tests COMMAND metadata_overlay_tests)
 set_tests_properties(metadata_overlay_tests PROPERTIES RUN_SERIAL TRUE)
+
+# ─── Viewer line-profile / video scopes (L / W) ──────────────────────────────
+add_executable(viewer_scope_tests
+    test_viewer_scope.cpp
+)
+
+target_link_libraries(viewer_scope_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(viewer_scope_tests PRIVATE cxx_std_20)
+target_include_directories(viewer_scope_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME viewer_scope_tests COMMAND viewer_scope_tests)
+set_tests_properties(viewer_scope_tests PROPERTIES RUN_SERIAL TRUE)
 
 # Browse: paste clipboard into current folder + open-folder toolbar action
 add_executable(browse_paste_acceptance

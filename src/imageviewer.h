@@ -16,6 +16,7 @@
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QLineF>
 #include <QOpenGLTextureBlitter>
 #include <QOpenGLWidget>
 #include <QPixmap>
@@ -46,6 +47,11 @@ namespace mviewer::core
 struct ImageFileRotateResult;
 }
 
+namespace mviewer::ui
+{
+class ScopeWidget;
+}
+
 struct ImageViewerPromotedRasterTestAccess;
 
 // Full-image zoomable viewer (wheel, pan, histogram). QOpenGLWidget so a GL
@@ -66,14 +72,8 @@ class ImageViewer : public QOpenGLWidget
     // Consume the Browse sequence published by ThumbnailPanel/ImageListModel.
     // The viewer never enumerates the filesystem to infer neighbors.
     void setBrowseSequence(const QStringList &paths);
-    QStringList browseSequence() const
-    {
-        return m_fileList;
-    }
-    int browseIndex() const
-    {
-        return m_currentIndex;
-    }
+    QStringList browseSequence() const;
+    int browseIndex() const;
     // Gallery rows and the open path can disagree on '/' vs '\\' (and, on
     // Windows, on case). Identity for the browse sequence uses one key.
     static bool browsePathEquals(const QString &left, const QString &right);
@@ -87,28 +87,19 @@ class ImageViewer : public QOpenGLWidget
     void setProvisionalImage(const QString &path, const QImage &image,
                              const QSize &sourceSize = QSize());
     // Test hook: provisional photo pixels, fitted to the source display aspect.
-    QImage provisionalImageForTest() const
-    {
-        return m_provisionalImage;
-    }
+    QImage provisionalImageForTest() const;
     // Widget rect of the provisional photo after setProvisionalImage().
     QRect provisionalScreenRect() const;
     void setImage(const QString &path);
     // Presentation target snapshot.  Source/analysis pixels remain unchanged;
     // changing this context invalidates only display rasters/tiles.
     void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
-    const mviewer::core::DisplayColorContext &displayColorContext() const
-    {
-        return m_displayColorTarget;
-    }
+    const mviewer::core::DisplayColorContext &displayColorContext() const;
     // M56: a filesystem overwrite invalidates the current source while a
     // rename only migrates its identity. Both preserve the browse sequence.
     void refreshSource(const QString &path);
     void renameBrowsePaths(const QStringList &oldPaths, const QStringList &newPaths);
-    QString currentPath() const
-    {
-        return m_currentPath;
-    }
+    QString currentPath() const;
     // M47: setImage body with a caller-side exception guard (an unexpected
     // error must never escape into the Qt event loop).
     void setImageImpl(const QString &path);
@@ -118,16 +109,10 @@ class ImageViewer : public QOpenGLWidget
     void recommitLockedSelection();
 
     // True when the on-screen image is a LOD/region raster.
-    bool isLodDisplay() const
-    {
-        return m_lodMode && !m_raster.image.isNull();
-    }
+    bool isLodDisplay() const;
 
     // LOD/region raster on screen, or null. Analysis prefers m_frame.
-    QImage displayRaster() const
-    {
-        return m_raster.image;
-    }
+    QImage displayRaster() const;
     // Full source size of the LOD raster or the loaded frame.
     QSize displaySize() const;
     // One full-frame load per image, only when a consumer needs ImageFrame pixels.
@@ -147,18 +132,9 @@ class ImageViewer : public QOpenGLWidget
     // One sentence for both the full-frame and LOD ROI stats deliveries.
     static QString roiStatsText(int x, int y, int w, int h, double lumMean, double vMean, int rMean,
                                 int gMean, int bMean);
-    int displayRasterWarmCount() const
-    {
-        return static_cast<int>(m_displayRasterWarm.size());
-    }
-    qint64 displayRasterWarmBytes() const
-    {
-        return m_displayRasterWarmBytes;
-    }
-    uint64_t displayRasterWarmHits() const
-    {
-        return m_displayRasterWarmHits;
-    }
+    int displayRasterWarmCount() const;
+    qint64 displayRasterWarmBytes() const;
+    uint64_t displayRasterWarmHits() const;
     // Cumulative preload starts/cancels/warm evictions; inFlight is live.
     struct DisplayRasterRetainStats
     {
@@ -249,25 +225,21 @@ class ImageViewer : public QOpenGLWidget
     void zoomActual();
     void requestFullRawDecode();
     void cancelFullRawDecode();
-    bool fullRawDecodeActive() const
-    {
-        return m_fullRawLoading;
-    }
+    bool fullRawDecodeActive() const;
     void zoomTo(double targetScale);
     void setPixelGridEnabled(bool on);
-    bool isPixelGridEnabled() const
-    {
-        return m_pixelGridEnabled;
-    }
-    bool isFitMode() const
-    {
-        return m_fitMode;
-    }
+    bool isPixelGridEnabled() const;
+    // Line profile (drag a line on the image) and video scopes (luma waveform /
+    // RGB parade / vectorscope) drawn in a corner panel.
+    void setProfileMode(bool on);
+    bool isProfileMode() const;
+    void setScopesVisible(bool visible);
+    bool isScopesVisible() const;
+    void cycleScopeMode();
+    int scopeMode() const;
+    bool isFitMode() const;
     void setLockZoom(bool lock);
-    bool isLockZoom() const
-    {
-        return m_lockZoom;
-    }
+    bool isLockZoom() const;
     void play();
     void pause();
     void restart();
@@ -385,6 +357,18 @@ class ImageViewer : public QOpenGLWidget
     void invalidateDisplayRasterBrowse();
     void drawHistogram(QPainter &painter) const;
     void computeHistogram();
+    // Push the on-screen frame and current mode into the scope panel.
+    void syncScopeWidget();
+    // Line-profile drag routing (0 press, 1 move, 2 release); defined in the
+    // scope TU so the mouse handlers stay out of the capped viewer TU.
+    void handleProfileMouseEvent(QMouseEvent *event, int phase);
+    // The two context-menu entries, added from their own TU to keep
+    // buildContextMenu inside the function-length cap.
+    void addProfileScopeContextActions(QMenu &menu, QAction *&profile, QAction *&scopes,
+                                       bool hasView);
+    bool handleProfileScopeContextAction(QAction *chosen, QAction *profile, QAction *scopes);
+    bool handlePlaybackContextAction(QAction *chosen, QAction *play, QAction *restart,
+                                     QAction *prevFrame, QAction *nextFrame);
     // M29: cancel the outstanding foreground load and any neighbor preloads.
     // Called at the start of setImage() and from closeEvent()/the destructor so
     // obsolete full-resolution work from a superseded navigation is dropped.
@@ -778,6 +762,16 @@ class ImageViewer : public QOpenGLWidget
 
     bool m_selecting = false;
     bool m_selectMode = false;
+    // Line-profile tool: drag a line, then read RGB/luma along it.
+    bool m_profileMode = false;
+    bool m_profiling = false;
+    QPoint m_profStart, m_profEnd;
+    bool m_profileLineActive = false;
+    QLineF m_profileLineImage;
+    // Video scopes: a corner panel with four switchable views.
+    bool m_scopesVisible = false;
+    int m_scopeMode = 0;
+    mviewer::ui::ScopeWidget *m_scopeWidget = nullptr;
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.
     QRect m_selectionImage;

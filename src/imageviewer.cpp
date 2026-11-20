@@ -470,6 +470,21 @@ bool ImageViewer::hasDisplayImage() const
     return (m_frame && m_frame->isValid()) || (m_lodMode && !m_raster.image.isNull());
 }
 
+int ImageViewer::displayRasterWarmCount() const
+{
+    return static_cast<int>(m_displayRasterWarm.size());
+}
+
+qint64 ImageViewer::displayRasterWarmBytes() const
+{
+    return m_displayRasterWarmBytes;
+}
+
+uint64_t ImageViewer::displayRasterWarmHits() const
+{
+    return m_displayRasterWarmHits;
+}
+
 QSize ImageViewer::displaySize() const
 {
     if (m_frame && m_frame->isValid())
@@ -550,24 +565,6 @@ void ImageViewer::setLockZoom(bool lock)
         2000);
 }
 
-void ImageViewer::computeHistogram()
-{
-    std::fill(std::begin(m_histogram), std::end(m_histogram), 0);
-
-    // Reuse the ImageFrame's cached luminance histogram (computed once on
-    // decode inside ImageRepository). No re-decode in the QWidget layer.
-    if (!m_frame || !m_frame->hasHistogram())
-    {
-        m_hasHistogram = false;
-        return;
-    }
-    const auto &hist = m_frame->histogram();
-    for (int i = 0; i < 256; ++i)
-        m_histogram[i] = static_cast<int>(
-            std::min<int64_t>(hist.luminance[i], static_cast<int64_t>(0x7FFFFFFF)));
-    m_hasHistogram = true;
-}
-
 void ImageViewer::wheelEvent(QWheelEvent *event)
 {
     if (!hasDisplayImage())
@@ -632,7 +629,9 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
     if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&
         hasDisplayImage())
     {
-        if (m_selectMode && event->button() == Qt::LeftButton)
+        if (m_profileMode && event->button() == Qt::LeftButton)
+            handleProfileMouseEvent(event, 0);
+        else if (m_selectMode && event->button() == Qt::LeftButton)
         {
             cancelRoiStats();
             m_selecting = true;
@@ -667,6 +666,8 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         m_selEnd = event->pos();
         update();
     }
+    else if (m_profiling)
+        handleProfileMouseEvent(event, 1);
     else if (m_dragging)
     {
         m_view.pan(event->pos().x() - m_lastMousePos.x(), event->pos().y() - m_lastMousePos.y());
@@ -726,6 +727,8 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
     {
         if (m_selecting && event->button() == Qt::LeftButton)
             commitSelectionDrag();
+        else if (m_profiling && event->button() == Qt::LeftButton)
+            handleProfileMouseEvent(event, 2);
         else
         {
             m_dragging = false;

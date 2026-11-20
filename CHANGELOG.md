@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Line profile and video scopes** (viewer `L` / `W`, also in the viewer
+  context menu): `L` arms a draggable line and the panel plots the R/G/B/luma
+  values along it (edge overshoot, ringing, skin-tone steps) with the sample
+  count and mean luma; `W` opens a corner scope panel and cycles luma waveform →
+  RGB parade → vectorscope. The scopes read the frame that is already on screen
+  and never re-decode.
+
 ## [1.0.183] - 2026-11-20
 
 ### Release
