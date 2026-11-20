@@ -628,6 +628,8 @@ void ImageViewer::revealInExplorer()
 #ifdef Q_OS_WIN
     QProcess::startDetached(QStringLiteral("explorer.exe"),
                             QStringList{QStringLiteral("/select,") + p});
+#elif defined(Q_OS_MACOS)
+    QProcess::startDetached(QStringLiteral("open"), QStringList{QStringLiteral("-R") + p});
 #else
     QProcess::startDetached(QStringLiteral("xdg-open"),
                             QStringList() << QFileInfo(m_currentPath).absolutePath());

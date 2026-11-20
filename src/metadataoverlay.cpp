@@ -94,6 +94,7 @@ void MetadataOverlay::hide()
     ++m_requestGeneration;
     QWidget::hide();
     m_lines.clear();
+    m_fields.clear();
     m_shortName.clear();
     if (m_histogram)
     {
@@ -156,6 +157,14 @@ QString lookup(const std::map<std::string, std::string> &m, const char *key)
     return it != m.end() ? QString::fromStdString(it->second) : QString();
 }
 } // namespace
+
+void MetadataOverlay::addField(const QString &key, const QString &line)
+{
+    if (key.isEmpty() || line.isEmpty() || m_fields.contains(key))
+        return;
+    m_fields << key;
+    m_lines << line;
+}
 
 // Greedy word wrap. A single word wider than the box (a long path, a colour
 // space name) is hard-broken so it can never push past the panel edge.
@@ -385,15 +394,15 @@ void MetadataOverlay::appendExifInfo(const mviewer::domain::ImageMetadata &meta)
     const auto make = lookup(meta.textKeys, "Make");
     const auto model = lookup(meta.textKeys, "Model");
     if (!make.isEmpty() || !model.isEmpty())
-        m_lines << tr("Camera: %1 %2").arg(make, model).trimmed();
+        addField(QStringLiteral("camera"), tr("Camera: %1 %2").arg(make, model).trimmed());
 
     const auto dateTime = lookup(meta.textKeys, "DateTimeOriginal");
     if (!dateTime.isEmpty())
-        m_lines << tr("Taken: %1").arg(dateTime);
+        addField(QStringLiteral("taken"), tr("Taken: %1").arg(dateTime));
 
     const auto iso = lookup(meta.textKeys, "ISOSpeedRatings");
     if (!iso.isEmpty())
-        m_lines << QString("ISO: %1").arg(iso);
+        addField(QStringLiteral("iso"), QString("ISO: %1").arg(iso));
 
     const auto exp = lookup(meta.textKeys, "ExposureTime");
     if (!exp.isEmpty())
@@ -410,7 +419,7 @@ void MetadataOverlay::appendExifInfo(const mviewer::domain::ImageMetadata &meta)
     const auto lensModel = lookup(meta.textKeys, "LensModel");
     const auto lensMake = lookup(meta.textKeys, "LensMake");
     if (!lensModel.isEmpty() || !lensMake.isEmpty())
-        m_lines << tr("Lens: %1 %2").arg(lensMake, lensModel).trimmed();
+        addField(QStringLiteral("lens"), tr("Lens: %1 %2").arg(lensMake, lensModel).trimmed());
 
     const auto sw = lookup(meta.textKeys, "Software");
     if (!sw.isEmpty())
@@ -420,32 +429,17 @@ void MetadataOverlay::appendExifInfo(const mviewer::domain::ImageMetadata &meta)
 void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
 {
     if (!raw.make.empty() || !raw.model.empty())
-    {
-        const bool hasCameraLine =
-            std::any_of(m_lines.cbegin(), m_lines.cend(),
-                        [](const QString &l) { return l.startsWith(QStringLiteral("Camera:")); });
-        if (!hasCameraLine)
-            m_lines << tr("Camera: %1 %2")
-                           .arg(QString::fromStdString(raw.make), QString::fromStdString(raw.model))
-                           .trimmed();
-    }
+        addField(QStringLiteral("camera"),
+                 tr("Camera: %1 %2")
+                     .arg(QString::fromStdString(raw.make), QString::fromStdString(raw.model))
+                     .trimmed());
     if (!raw.lens.empty() || !raw.lensMaker.empty())
-    {
-        const bool hasLensLine = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
-                                             { return l.startsWith(QStringLiteral("Lens:")); });
-        if (!hasLensLine)
-            m_lines << tr("Lens: %1 %2")
-                           .arg(QString::fromStdString(raw.lensMaker),
-                                QString::fromStdString(raw.lens))
-                           .trimmed();
-    }
+        addField(QStringLiteral("lens"),
+                 tr("Lens: %1 %2")
+                     .arg(QString::fromStdString(raw.lensMaker), QString::fromStdString(raw.lens))
+                     .trimmed());
     if (raw.iso > 0)
-    {
-        const bool hasIso = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
-                                        { return l.startsWith(QStringLiteral("ISO:")); });
-        if (!hasIso)
-            m_lines << QString("ISO: %1").arg(raw.iso);
-    }
+        addField(QStringLiteral("iso"), QString("ISO: %1").arg(raw.iso));
 }
 
 void MetadataOverlay::appendLocationAndTimes(const mviewer::domain::ImageMetadata &meta)
@@ -491,6 +485,7 @@ void MetadataOverlay::buildContent(
     const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
 {
     m_lines.clear();
+    m_fields.clear();
 
     const auto &meta = snapshot.metadata;
     m_shortName = QString::fromUtf8(meta.fileName.data(), static_cast<int>(meta.fileName.size()));

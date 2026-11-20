@@ -42,12 +42,7 @@ inline constexpr CompareShortcut kCompareShortcuts[] = {
     {"W", QT_TRANSLATE_NOOP("CompareShortcuts", "Swipe"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Swipe along a divider to compare")},
     {"O", QT_TRANSLATE_NOOP("CompareShortcuts", "Overlay"),
-     QT_TRANSLATE_NOOP("CompareShortcuts",
-                       "Semi-transparent overlay. Tab toggles it only when the compare canvas has "
-                       "focus")},
-    {"Tab", QT_TRANSLATE_NOOP("CompareShortcuts", "Overlay"),
-     QT_TRANSLATE_NOOP("CompareShortcuts",
-                       "Same as O when the compare canvas has focus; otherwise Tab moves focus")},
+     QT_TRANSLATE_NOOP("CompareShortcuts", "Semi-transparent overlay of the two images")},
     {"K", QT_TRANSLATE_NOOP("CompareShortcuts", "Checkerboard"),
      QT_TRANSLATE_NOOP("CompareShortcuts", "Checkerboard alternation between two images")},
     {"H", QT_TRANSLATE_NOOP("CompareShortcuts", "Highlight Diff"),

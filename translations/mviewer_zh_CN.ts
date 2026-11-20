@@ -964,14 +964,8 @@
     </message>
     <message>
         <location filename="../src/compareworkspace_shortcuts.h" line="45"/>
-        <source>Semi-transparent overlay. Tab toggles it only when the compare canvas has focus</source>
-        <translation>半透明叠加。仅当比较画布拥有焦点时，Tab 才切换此模式</translation>
-    </message>
-    <message>
-        <location filename="../src/compareworkspace_shortcuts.h" line="49"/>
-        <location filename="../src/test_language.cpp" line="87"/>
-        <source>Same as O when the compare canvas has focus; otherwise Tab moves focus</source>
-        <translation>比较画布拥有焦点时与 O 相同；否则 Tab 移动焦点</translation>
+        <source>Semi-transparent overlay of the two images</source>
+        <translation>两张图像的半透明叠加</translation>
     </message>
     <message>
         <location filename="../src/compareworkspace_shortcuts.h" line="51"/>
@@ -6540,8 +6534,8 @@ Build: %2</source>
     <name>MetadataPanel</name>
     <message>
         <location filename="../src/metadatapanel.cpp" line="31"/>
-        <source>Metadata (Metadata)</source>
-        <translation>元数据 (Metadata)</translation>
+        <source>Metadata</source>
+        <translation>元数据</translation>
     </message>
     <message>
         <location filename="../src/metadatapanel.cpp" line="40"/>

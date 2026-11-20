@@ -28,7 +28,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
                                mviewer::ui::metrics::kSpace8, mviewer::ui::metrics::kSpace8);
     layout->setSpacing(4);
 
-    layout->addWidget(new QLabel(tr("Metadata (Metadata)"), this));
+    layout->addWidget(new QLabel(tr("Metadata"), this));
 
     // "Copy All" button: dumps the full hierarchical model to the clipboard as
     // "Key: Value" lines — handy for sharing EXIF info or pasting into reports.
@@ -52,6 +52,8 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     m_tree->setUniformRowHeights(true);
     m_tree->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tree->header()->setStretchLastSection(true);
+    // Set once: re-applying this on every image discarded a user's resize.
+    m_tree->setColumnWidth(0, 150);
     m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_tree, &QTreeView::customContextMenuRequested, this,
             &MetadataPanel::onTreeContextMenu);
@@ -140,7 +142,6 @@ void MetadataPanel::requestMetadata()
                     guard->m_model->setImage(meta);
                     guard->m_model->setRaw(snapshot.raw);
                     guard->m_tree->expandAll();
-                    guard->m_tree->setColumnWidth(0, 150);
                 },
                 Qt::QueuedConnection);
         });

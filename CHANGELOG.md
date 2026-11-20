@@ -4,6 +4,33 @@
 
 ### Fixed
 
+- **Chinese metadata duplicates**: the Image Info overlay deduped repeated
+  camera/lens fields by their rendered English prefix (`"Camera:"`), which never
+  matches the translated label, so Chinese (and any non-English UI) showed the
+  camera and lens twice for RAW files. Fields are now deduped by identity, so
+  the label language no longer matters.
+- **Crash handler stack usage**: the Windows crash filter formatted three
+  4 KB report paths as locals on the faulting thread. A stack-overflow crash
+  would double-fault there and lose the dump; the buffers are now static.
+- **Update link validation**: the release link taken from the GitHub API
+  response is now required to be an `https://github.com/<owner>/<repo>/releases
+  /tag/<tag>` URL before it is handed to the browser (custom update endpoints
+  keep the previous generic HTTPS rule), and `checkGitHub` rejects a `repo`
+  argument that is not a plain `owner/repo` pair.
+- **Plugin loading on Linux**: `dlopen` now uses `RTLD_NOW | RTLD_LOCAL`, so a
+  broken plugin fails at load time instead of crashing later, and its symbols
+  no longer leak into the host's dynamic symbol table.
+- **macOS "reveal in file manager"**: the viewer context menu, the directory
+  tree and the gallery all shelled out to `xdg-open`, which does not exist on
+  macOS. They now use `open -R` there and keep `xdg-open` for Linux.
+- **Metadata panel polish**: the floating panel title was the redundant
+  "Metadata (Metadata)", and the field column width was re-applied on every
+  image change, discarding a user's resize. Both are fixed.
+- **Compare `Tab` key**: `CompareWorkspace` takes focus, so an unmodified `Tab`
+  toggled the overlay mode instead of moving keyboard focus. `Tab` / `Shift+Tab`
+  now always traverse focus (the overlay stays on `O`), and the shortcut table
+  no longer advertises a `Tab` binding. The Chinese overlay note was updated
+  with the shortcut table.
 - **Thumbnail refresh after parameter changes**: correcting a `.yuv` / `.raw`
   file's parameters (pixel format, bit depth, size) left the gallery thumbnail
   at its previous state — the "could not parse" tile stayed put, or a stale

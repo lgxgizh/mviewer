@@ -80,8 +80,14 @@ class MetadataOverlay : public QWidget
     void appendRawInfo(const mviewer::core::RawMetadata &raw);
     void appendLocationAndTimes(const mviewer::domain::ImageMetadata &meta);
     static QStringList wrapLine(const QFontMetrics &metrics, const QString &text, int width);
+    // Append `line` only the first time `key` is seen. EXIF and RAW metadata
+    // describe the same camera/lens/ISO fields; deduping on the rendered text
+    // would break the moment the label is translated, so the field identity is
+    // carried by `key` instead.
+    void addField(const QString &key, const QString &line);
 
     QStringList m_lines;
+    QStringList m_fields;
     QString m_shortName;
     HistogramWidget *m_histogram = nullptr;
     QString m_requestedPath;

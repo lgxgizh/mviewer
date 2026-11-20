@@ -34,7 +34,10 @@ void *loadPluginLibrary(const std::string &utf8Path, std::string &error)
         error = "LoadLibrary failed: " + std::to_string(GetLastError());
     return reinterpret_cast<void *>(module);
 #else
-    void *handle = dlopen(utf8Path.c_str(), RTLD_LAZY);
+    // RTLD_NOW: resolve every symbol up front so a broken plugin fails at load
+    // time instead of crashing later at a call site. RTLD_LOCAL: the plugin's
+    // symbols must not leak into the host's dynamic symbol table.
+    void *handle = dlopen(utf8Path.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!handle)
     {
         const char *reason = dlerror();

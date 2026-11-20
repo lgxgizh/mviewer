@@ -84,11 +84,9 @@ int main(int argc, char **argv)
     check(embedded.translate("ThumbnailPanel", "Thumbnail size reset (Ctrl+Alt+9)") ==
               QStringLiteral("已重置缩略图大小 (Ctrl+Alt+9)"),
           "qm translates thumbnail size reset");
-    check(embedded.translate(
-              "CompareShortcuts",
-              "Same as O when the compare canvas has focus; otherwise Tab moves focus") ==
-              QStringLiteral("比较画布拥有焦点时与 O 相同；否则 Tab 移动焦点"),
-          "qm translates compare canvas Tab note");
+    check(embedded.translate("CompareShortcuts", "Semi-transparent overlay of the two images") ==
+              QStringLiteral("两张图像的半透明叠加"),
+          "qm translates the compare overlay note");
     check(embedded.translate("BatchDialog", "Batch Rename") == QStringLiteral("批量重命名"),
           "qm translates the Batch Rename dialog title");
     check(embedded.translate("MainWindow", "Skip this version") == QStringLiteral("跳过此版本"),

@@ -692,6 +692,9 @@ void ThumbnailPanel::revealPath(const QString &path)
     // (busy Explorer / slow or network path) with the UI frozen for all of it.
 #ifdef Q_OS_WIN
     QProcess::startDetached("explorer.exe", QStringList{QStringLiteral("/select,") + native});
+#elif defined(Q_OS_MACOS)
+    // macOS has no xdg-open; `open` reveals the file in Finder.
+    QProcess::startDetached("open", QStringList{QStringLiteral("-R") + native});
 #else
     QProcess::startDetached("xdg-open", QStringList() << QFileInfo(path).absolutePath());
 #endif

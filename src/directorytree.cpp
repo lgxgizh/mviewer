@@ -255,6 +255,9 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
         QProcess::startDetached(
             QStringLiteral("explorer.exe"),
             QStringList{QStringLiteral("/select,") + QDir::toNativeSeparators(path)});
+#elif defined(Q_OS_MACOS)
+        QProcess::startDetached(QStringLiteral("open"),
+                                QStringList{QStringLiteral("-R") + QDir::toNativeSeparators(path)});
 #else
         QProcess::startDetached(QStringLiteral("xdg-open"),
                                 QStringList{QFileInfo(path).absolutePath()});

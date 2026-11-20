@@ -323,6 +323,38 @@ std::string validatedReleaseUrl(const std::string &candidate)
     return isValidHttpsUrl(candidate) ? candidate : std::string{};
 }
 
+// The canonical GitHub API endpoint is the one case where the release link is
+// remote content that is handed straight to the browser: the response body is
+// attacker-controllable if the API is proxied or the transport is tampered with,
+// so require the link to stay on github.com and point at a release tag.
+bool isCanonicalGitHubApiUrl(const std::string &url)
+{
+    constexpr std::string_view prefix = "https://api.github.com/repos/";
+    constexpr std::string_view suffix = "/releases/latest";
+    return url.starts_with(prefix) && url.ends_with(suffix) &&
+           url.size() > prefix.size() + suffix.size();
+}
+
+bool isGitHubReleaseUrl(const std::string &candidate)
+{
+    if (!isValidHttpsUrl(candidate))
+        return false;
+    const QUrl url(QString::fromStdString(candidate), QUrl::StrictMode);
+    if (url.host().compare(QStringLiteral("github.com"), Qt::CaseInsensitive) != 0)
+        return false;
+    const QStringList segments = url.path().split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    if (segments.size() != 5 || segments.at(2) != QLatin1String("releases") ||
+        segments.at(3) != QLatin1String("tag") || segments.at(4).isEmpty())
+        return false;
+    return isGitHubComponent(segments.at(0).toStdString()) &&
+           isGitHubComponent(segments.at(1).toStdString());
+}
+
+std::string validatedGitHubReleaseUrl(const std::string &candidate)
+{
+    return isGitHubReleaseUrl(candidate) ? candidate : std::string{};
+}
+
 } // namespace
 
 std::optional<int> compareReleaseVersions(const std::string &lhsTag, const std::string &rhsTag)
@@ -338,6 +370,19 @@ UpdateChecker::UpdateChecker(std::string currentVersion, FetchFn fetchFn)
 
 void UpdateChecker::checkGitHub(const std::string &repo, UpdateCallback cb)
 {
+    // owner/repo only: reject anything that would smuggle a different host,
+    // credentials or a path traversal into the API URL.
+    const size_t slash = repo.find('/');
+    if (slash == std::string::npos || repo.find('/', slash + 1) != std::string::npos ||
+        !isGitHubComponent(repo.substr(0, slash)) || !isGitHubComponent(repo.substr(slash + 1)))
+    {
+        UpdateInfo info;
+        info.currentVersion = m_currentVersion;
+        info.error = "UpdateChecker: repo must be <owner>/<repo>";
+        if (cb)
+            cb(info);
+        return;
+    }
     const std::string url = "https://api.github.com/repos/" + repo + "/releases/latest";
     checkUrl(url, std::move(cb));
 }
@@ -396,7 +441,12 @@ void UpdateChecker::checkUrl(const std::string &updateJsonUrl, UpdateCallback cb
         return;
     }
     info.hasUpdate = *versionOrder > 0;
-    info.releaseUrl = validatedReleaseUrl(payload->htmlUrl);
+    // A custom endpoint is operator-configured, so its html_url is honoured as
+    // long as it is HTTPS. The canonical GitHub API response is untrusted
+    // remote content: only a github.com release-tag link is accepted there.
+    info.releaseUrl = isCanonicalGitHubApiUrl(updateJsonUrl)
+                          ? validatedGitHubReleaseUrl(payload->htmlUrl)
+                          : validatedReleaseUrl(payload->htmlUrl);
     if (info.releaseUrl.empty())
         info.releaseUrl = deriveGitHubReleaseUrl(updateJsonUrl, payload->tagName);
 

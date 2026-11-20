@@ -264,7 +264,6 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
         modeName = compareModeStatus("W");
         break;
     case Qt::Key_O:
-    case Qt::Key_Tab:
         target = m_overlayChk;
         modeName = compareModeStatus("O");
         break;

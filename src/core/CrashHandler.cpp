@@ -53,8 +53,16 @@ std::string crashReportDirectory()
 // Qt, QString, QDir, and heap-owning formatting stay out of the crash path.
 constexpr size_t kCrashDirChars = 4096;
 constexpr size_t kCrashAppChars = 256;
+// The filter runs on the faulting thread with whatever stack is left, so the
+// report paths live in fixed static storage: three 8 KB locals would double
+// fault a stack-overflow crash and lose the dump. Reentrancy is already
+// excluded by g_crashInProgress.
+constexpr size_t kCrashPathChars = 4096;
 static wchar_t g_crashDir[kCrashDirChars] = {};
 static wchar_t g_crashAppName[kCrashAppChars] = {};
+static wchar_t g_crashBase[kCrashPathChars] = {};
+static wchar_t g_crashDmpPath[kCrashPathChars] = {};
+static wchar_t g_crashTxtPath[kCrashPathChars] = {};
 static LPTOP_LEVEL_EXCEPTION_FILTER g_previousFilter = nullptr;
 static volatile LONG g_crashInProgress = 0;
 static volatile LONG g_forceDumpFail = 0;
@@ -81,9 +89,9 @@ static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
 
     SYSTEMTIME now{};
     GetLocalTime(&now);
-    wchar_t base[4096]{};
+    wchar_t *base = g_crashBase;
     if (FAILED(StringCchPrintfW(
-            base, ARRAYSIZE(base), L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%lu", g_crashDir,
+            base, kCrashPathChars, L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%lu", g_crashDir,
             g_crashAppName, static_cast<unsigned>(now.wYear), static_cast<unsigned>(now.wMonth),
             static_cast<unsigned>(now.wDay), static_cast<unsigned>(now.wHour),
             static_cast<unsigned>(now.wMinute), static_cast<unsigned>(now.wSecond),
@@ -91,10 +99,10 @@ static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
             static_cast<unsigned long>(GetCurrentThreadId()))))
         return chainPreviousCrashFilter(ep);
 
-    wchar_t dmpPath[4096]{};
-    wchar_t txtPath[4096]{};
-    if (FAILED(StringCchPrintfW(dmpPath, ARRAYSIZE(dmpPath), L"%s.dmp", base)) ||
-        FAILED(StringCchPrintfW(txtPath, ARRAYSIZE(txtPath), L"%s.txt", base)))
+    wchar_t *dmpPath = g_crashDmpPath;
+    wchar_t *txtPath = g_crashTxtPath;
+    if (FAILED(StringCchPrintfW(dmpPath, kCrashPathChars, L"%s.dmp", base)) ||
+        FAILED(StringCchPrintfW(txtPath, kCrashPathChars, L"%s.txt", base)))
         return chainPreviousCrashFilter(ep);
 
     const HANDLE textFile = CreateFileW(txtPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
