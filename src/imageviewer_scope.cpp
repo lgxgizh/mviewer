@@ -230,9 +230,7 @@ void ImageViewer::syncScopeWidget()
     if (m_profileLineActive)
         m_scopeWidget->setProfileLine(m_profileLineImage);
 
-    // Bottom-left, clear of the frame-status pill and the RAW badge.
-    const int w = std::min(320, std::max(160, width() / 3));
-    const int h = std::min(220, std::max(120, height() / 3));
-    m_scopeWidget->setGeometry(12, height() - h - 12, w, h);
+    // Bottom-left slot, lifted clear of the frame pill by the shared layout.
+    layoutFloatingOverlays();
     m_scopeWidget->raise();
 }

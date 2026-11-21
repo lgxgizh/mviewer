@@ -4,6 +4,7 @@
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QLabel>
 #include <QPushButton>
 #include <QSlider>
 #include <QVBoxLayout>
@@ -39,7 +40,17 @@ double sliderToGamma(int value)
 DisplayAdjustPanel::DisplayAdjustPanel(QWidget *parent) : QWidget(parent)
 {
     setWindowTitle(tr("Display Adjust"));
+    // Styled as a canvas floating card (see the canvasFloatCard QSS rule).
+    setObjectName(QStringLiteral("canvasFloatCard"));
     auto *form = new QFormLayout(this);
+    form->setContentsMargins(10, 8, 10, 8);
+
+    // Right-aligned monospaced readout: dragging a slider used to show no
+    // numeric value at all.
+    m_readout = new QLabel(this);
+    m_readout->setObjectName(QStringLiteral("adjustReadout"));
+    m_readout->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    form->addRow(m_readout);
 
     m_exposure = new QSlider(Qt::Horizontal, this);
     m_exposure->setRange(0, kExposureSteps);
@@ -62,22 +73,45 @@ DisplayAdjustPanel::DisplayAdjustPanel(QWidget *parent) : QWidget(parent)
     form->addRow(QString(), buttons);
 
     connect(m_exposure, &QSlider::valueChanged, this,
-            [this](int v) { emit exposureChanged(sliderToExposure(v)); });
+            [this](int v)
+            {
+                updateReadout();
+                emit exposureChanged(sliderToExposure(v));
+            });
     connect(m_gamma, &QSlider::valueChanged, this,
-            [this](int v) { emit gammaChanged(sliderToGamma(v)); });
+            [this](int v)
+            {
+                updateReadout();
+                emit gammaChanged(sliderToGamma(v));
+            });
     connect(m_autoStretch, &QPushButton::toggled, this, &DisplayAdjustPanel::autoStretchToggled);
     connect(m_lut, &QPushButton::clicked, this, &DisplayAdjustPanel::loadLutRequested);
     connect(m_reset, &QPushButton::clicked, this, &DisplayAdjustPanel::resetRequested);
+    updateReadout();
+}
+
+void DisplayAdjustPanel::updateReadout()
+{
+    if (!m_readout)
+        return;
+    const double ev = sliderToExposure(m_exposure->value());
+    const double gamma = sliderToGamma(m_gamma->value());
+    m_readout->setText(QStringLiteral("%1%2 EV · γ %3")
+                           .arg(ev >= 0.0 ? QStringLiteral("+") : QString())
+                           .arg(ev, 0, 'f', 1)
+                           .arg(gamma, 0, 'f', 2));
 }
 
 void DisplayAdjustPanel::setExposure(double ev)
 {
     m_exposure->setValue(exposureToSlider(ev));
+    updateReadout();
 }
 
 void DisplayAdjustPanel::setGamma(double gamma)
 {
     m_gamma->setValue(gammaToSlider(gamma));
+    updateReadout();
 }
 
 void DisplayAdjustPanel::setAutoStretch(bool on)

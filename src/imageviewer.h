@@ -233,6 +233,7 @@ class ImageViewer : public QOpenGLWidget
     void applyDisplayAdjust();
     void setAdjustPanelVisible(bool visible);
     bool isAdjustPanelVisible() const;
+    void layoutFloatingOverlays(); // corner slots, re-run on every resize
     void addAdjustContextAction(QMenu &menu, QAction *&adjust);
     bool handleAdjustContextAction(QAction *chosen, QAction *adjust);
     bool isFitMode() const;
@@ -250,8 +251,7 @@ class ImageViewer : public QOpenGLWidget
     bool rotateCW();
     bool rotateCCW();
     bool rotateImage(int angle);
-    // Drop in-flight decodes/preloads that may still hold `path` so a
-    // same-path overwrite (rotate) can replace the file on Windows.
+    // Drop in-flight decodes/preloads holding `path` so a rotate can overwrite.
     void releaseSourceHandles(const QString &path);
     static QString rotateFailureUserMessage(const mviewer::core::ImageFileRotateResult &result);
     // UI-thread completion for an encode started on the scheduler.

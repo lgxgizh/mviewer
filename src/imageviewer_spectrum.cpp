@@ -81,6 +81,7 @@ void ImageViewer::setSpectrumVisible(bool visible)
     if (visible && !m_spectrumPanel)
     {
         m_spectrumPanel = new QWidget(this);
+        m_spectrumPanel->setObjectName(QStringLiteral("spectrumPanel"));
         auto *layout = new QVBoxLayout(m_spectrumPanel);
         layout->setContentsMargins(4, 4, 4, 4);
         auto *label = new QLabel(m_spectrumPanel);
@@ -94,8 +95,7 @@ void ImageViewer::setSpectrumVisible(bool visible)
         m_spectrumPanel->setVisible(visible);
         if (visible)
         {
-            const int edge = std::min(320, std::max(160, std::min(width(), height()) / 2));
-            m_spectrumPanel->setGeometry(width() - edge - 12, 12, edge, edge + 16);
+            layoutFloatingOverlays();
             m_spectrumPanel->raise();
             if (m_frame && m_frame->isValid())
             {

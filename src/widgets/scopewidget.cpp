@@ -16,6 +16,9 @@ namespace
 constexpr int kMaxWaveformRows = 240;
 constexpr int kMaxSamples = 256;
 constexpr int kScopeMargin = 6;
+// Bottom band reserved for the readout so it is never painted outside the
+// widget (and clipped) the way it used to be.
+constexpr double kReadoutBand = 20.0;
 
 QColor scopeInk()
 {
@@ -174,10 +177,15 @@ QVector<QPoint> ScopeWidget::sampleLinePoints(int maxSamples) const
 void ScopeWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
-    p.fillRect(rect(), QColor(0, 0, 0, 150));
+    p.setRenderHint(QPainter::Antialiasing, true);
+    // Card shell: rounded, mostly opaque, with a hairline so it separates from
+    // the canvas instead of floating as a bare plot.
+    p.setPen(QPen(QColor(255, 255, 255, 26), 1.0));
+    p.setBrush(QColor(24, 24, 28, 230));
+    p.drawRoundedRect(rect().adjusted(0.5, 0.5, -0.5, -0.5), 10, 10);
 
     const QRectF target(kScopeMargin, kScopeMargin, std::max(1.0, width() - kScopeMargin * 2.0),
-                        std::max(1.0, height() - kScopeMargin * 2.0));
+                        std::max(1.0, height() - kScopeMargin * 2.0 - kReadoutBand));
 
     switch (m_mode)
     {
@@ -242,7 +250,7 @@ void ScopeWidget::paintLineProfile(QPainter &p, const QRectF &target) const
     for (const QPoint &pt : points)
         sum += lumaOf(pixelAt(m_image, pt.x(), pt.y()));
     p.setPen(scopeInk());
-    p.drawText(target.left(), target.bottom() + 12,
+    p.drawText(target.left(), target.bottom() + 14,
                tr("%1 samples · mean luma %2").arg(points.size()).arg(sum / points.size()));
 }
 

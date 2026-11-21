@@ -29,6 +29,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QScreen>
+#include <QScrollArea>
 #include <QSettings>
 #include <QSlider>
 #include <QSpinBox>
@@ -324,7 +325,7 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
 {
     namespace m = mviewer::ui::metrics;
     setWindowTitle(tr("Preferences"));
-    resize(480, 420);
+    resize(600, 520);
     QSettings s;
 
     // Page switcher: icon-over-label toolbar buttons (macOS System Settings
@@ -359,7 +360,13 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     for (const auto &page : kPages)
     {
         polishFormLayouts(page.widget);
-        const int index = pages->addWidget(page.widget);
+        // Each page scrolls on its own: on a 1080p 125%/150% display the RAW or
+        // General page used to overflow the dialog and push the buttons away.
+        auto *pageScroll = new QScrollArea(pages);
+        pageScroll->setWidgetResizable(true);
+        pageScroll->setFrameShape(QFrame::NoFrame);
+        pageScroll->setWidget(page.widget);
+        const int index = pages->addWidget(pageScroll);
         auto *button = new QToolButton(pageBar);
         button->setObjectName(QLatin1String(page.objectName));
         button->setProperty("preferencesPage", true);

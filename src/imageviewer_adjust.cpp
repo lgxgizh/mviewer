@@ -112,9 +112,7 @@ void ImageViewer::setAdjustPanelVisible(bool visible)
         if (visible)
         {
             syncAdjustPanel();
-            const int w = 280;
-            const int h = 150;
-            m_adjustPanel->setGeometry(width() - w - 12, height() - h - 12, w, h);
+            layoutFloatingOverlays();
             m_adjustPanel->raise();
         }
     }

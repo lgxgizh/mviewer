@@ -716,6 +716,9 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
         advanceViewportRevision();
         emitZoom();
     }
+    // Floating overlays are positioned from the viewport, so they must follow
+    // every resize (including F11 fullscreen) or they keep stale coordinates.
+    layoutFloatingOverlays();
 }
 
 void ImageViewer::setSelectMode(bool on)

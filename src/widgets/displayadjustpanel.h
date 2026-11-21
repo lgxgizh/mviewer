@@ -4,6 +4,7 @@
 
 class QPushButton;
 class QSlider;
+class QLabel;
 
 namespace mviewer::ui
 {
@@ -32,11 +33,14 @@ class DisplayAdjustPanel : public QWidget
     void resetRequested();
 
   private:
+    void updateReadout();
+
     QSlider *m_exposure = nullptr;
     QSlider *m_gamma = nullptr;
     QPushButton *m_autoStretch = nullptr;
     QPushButton *m_lut = nullptr;
     QPushButton *m_reset = nullptr;
+    QLabel *m_readout = nullptr;
 };
 
 } // namespace mviewer::ui

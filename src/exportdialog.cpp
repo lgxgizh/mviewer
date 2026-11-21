@@ -26,6 +26,7 @@
 #include <QPointer>
 #include <QProgressDialog>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
@@ -59,15 +60,24 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     setWindowTitle(tr("Export Images"));
     resize(460, 520);
     auto *root = new QVBoxLayout(this);
-    buildOutputSection(root);
-    buildModeSection(root);
-    buildFormatSection(root);
-    buildResizeSection(root);
-    buildWatermarkSection(root);
-    buildCropSection(root);
-    buildMetadataSection(root);
-    buildRenameSection(root);
-    buildContactSection(root);
+    // The sections scroll; the button row stays pinned at the bottom so it is
+    // reachable on a 1080p 150% display instead of being pushed off screen.
+    auto *scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(true);
+    scroll->setFrameShape(QFrame::NoFrame);
+    auto *content = new QWidget(this);
+    auto *contentLayout = new QVBoxLayout(content);
+    buildOutputSection(contentLayout);
+    buildModeSection(contentLayout);
+    buildFormatSection(contentLayout);
+    buildResizeSection(contentLayout);
+    buildWatermarkSection(contentLayout);
+    buildCropSection(contentLayout);
+    buildMetadataSection(contentLayout);
+    buildRenameSection(contentLayout);
+    buildContactSection(contentLayout);
+    scroll->setWidget(content);
+    root->addWidget(scroll, 1);
     buildButtonSection(root);
 }
 void ExportDialog::buildOutputSection(QVBoxLayout *root)

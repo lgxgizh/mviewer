@@ -289,6 +289,7 @@ add_library(mviewer_ui STATIC
     imageviewer_colorchecker.cpp
     imageviewer_spectrum.cpp
     cvoverlay.cpp
+    imageviewer_overlays.cpp
     imageviewer_inspector.cpp
     imageviewer_state.cpp
     annotationstore.cpp
@@ -1659,6 +1660,21 @@ target_compile_features(python_script_runner_tests PRIVATE cxx_std_20)
 target_include_directories(python_script_runner_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME python_script_runner_tests COMMAND python_script_runner_tests)
 set_tests_properties(python_script_runner_tests PROPERTIES RUN_SERIAL TRUE)
+
+# Floating overlay corner slots (review: 4 overlay collisions + resize drift).
+add_executable(viewer_overlay_layout_tests ${CMAKE_SOURCE_DIR}/tests/test_viewer_overlays.cpp)
+target_link_libraries(viewer_overlay_layout_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(viewer_overlay_layout_tests PRIVATE cxx_std_20)
+target_include_directories(viewer_overlay_layout_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME viewer_overlay_layout_tests COMMAND viewer_overlay_layout_tests)
+set_tests_properties(viewer_overlay_layout_tests PROPERTIES RUN_SERIAL TRUE)
 
 # Item 4: non-Windows ICC (colord / colour directories on Linux).
 add_executable(linux_icc_tests ${CMAKE_SOURCE_DIR}/tests/test_linux_icc.cpp)

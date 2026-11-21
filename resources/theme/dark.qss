@@ -463,8 +463,11 @@ QLineEdit:focus,
 QComboBox:focus,
 QSpinBox:focus,
 QDoubleSpinBox:focus {
-    border: 1px solid {{accent}};
-    background: {{accentTint}};
+    /* Win11 Fluent: neutral surface, accent only as a 2px bottom bar. The old
+       full blue fill looked cheap and washed out the text. */
+    border: 1px solid {{border}};
+    border-bottom: 2px solid {{accent}};
+    background: {{bg2}};
 }
 
 QLineEdit:disabled,
@@ -549,12 +552,33 @@ QComboBox QAbstractItemView::item:selected {
     color: {{onAccent}};
 }
 
+/* Floating canvas card: the display-adjust panel and similar overlay cards.
+   The DWM rounded border is drawn by the OS, so the QSS border stays a 1px
+   hairline instead of a second rounded outline. */
+QWidget#canvasFloatCard {
+    background: {{bg1}};
+    border: 1px solid {{border}};
+    border-radius: 10px;
+}
+
+QWidget#canvasFloatCard QLabel#adjustReadout {
+    font-family: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+    font-feature-settings: "tnum" 1;
+    color: {{textPrimary}};
+}
+
+/* Popups and tooltips already get their rounding from DWM; a QSS border on top
+   of it produced a double rounded outline with a dark seam. */
+QComboBox QAbstractItemView,
+QToolTip {
+    border: 1px solid {{separator}};
+}
+
 QSlider::groove:horizontal {
     height: 4px;
     background: {{bg3}};
     border-radius: 2px;
 }
-
 QSlider::sub-page:horizontal {
     background: {{accent}};
     border-radius: 2px;
@@ -564,13 +588,16 @@ QSlider::handle:horizontal {
     width: 14px;
     height: 14px;
     margin: -5px 0;
-    background: {{textPrimary}};
-    border: none;
-    border-radius: 7px;
+    /* Accent-filled with a bg ring: a white handle vanished on the light
+       theme's groove and on hover. */
+    background: {{accent}};
+    border: 3px solid {{bg2}};
+    border-radius: 8px;
 }
 
 QSlider::handle:horizontal:hover {
-    background: {{onAccent}};
+    background: {{accentHover}};
+    border: 2px solid {{bg2}};
 }
 
 QSlider::groove:vertical {
@@ -588,9 +615,9 @@ QSlider::handle:vertical {
     height: 14px;
     width: 14px;
     margin: 0 -5px;
-    background: {{textPrimary}};
-    border: none;
-    border-radius: 7px;
+    background: {{accent}};
+    border: 3px solid {{bg2}};
+    border-radius: 8px;
 }
 
 QScrollBar:vertical {
@@ -1200,13 +1227,14 @@ QLabel#typeHiddenHintLabel {
     color: {{textPrimary}};
 }
 
-/* Dialog buttons (OK/Cancel, Rename/Close): macOS capsules. The accept
+/* Dialog buttons (OK/Cancel, Rename/Close). Win11 uses a small 6px corner;
+   the old search-pill radius made them read as macOS capsules. The accept
    button keeps the accent fill via primary=true. */
 QDialogButtonBox QPushButton,
 QDialogButtonBox QPushButton[primary="true"],
 QPushButton[dialogButton="true"],
 QPushButton[dialogButton="true"][primary="true"] {
-    border-radius: {{radiusSearch}}px;
+    border-radius: 6px;
     padding: {{space4}}px {{space16}}px;
     min-width: 48px;
 }

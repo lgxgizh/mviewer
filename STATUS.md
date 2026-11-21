@@ -1,12 +1,23 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.199** · Release tag: **v1.0.199**
+> Snapshot: 2026-11-22 · Version: **1.0.200** · Release tag: **v1.0.200**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.200 — UI 视觉与 Win11 质感（二轮复审 4 项视觉 P0） (2026-11-22)
+
+- `ImageViewer::layoutFloatingOverlays()` 四角槽位 + resize 重排：示波器不再
+  盖死帧胶囊，频谱/调整面板不再互相重叠或飞出屏幕；新增布局回归测试。
+- 示波器加圆角背板并预留底部读数区（剖面线统计原来被裁掉）。
+- 显示调整面板变 `canvasFloatCard` 卡片，加等宽 EV/Gamma 读数。
+- 浅色主题滑块手柄改强调色 + bg2 外环；聚焦输入框改 Fluent 底部强调条。
+- 对话框按钮圆角 6px；弹窗去掉与 DWM 叠加的第二层描边。
+- ExportDialog 内容区滚动、按钮栏固定；PreferencesDialog 每页滚动，默认
+  600×520。
 
 ## 1.0.199 — 新功能 P0 止血（二轮复审） (2026-11-22)
 
