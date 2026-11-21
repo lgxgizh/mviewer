@@ -30,6 +30,19 @@ class ImageLoadingFacade
         return ImageRepository::kDefaultLoadOptions;
     }
 
+    // Synchronous decode / workspace restore. Only for callers that already run
+    // off the UI thread; the interactive paths use the async variants above.
+    ImageLoadResult load(const std::string &path,
+                         const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions)
+    {
+        return ImageRepository::instance().load(path, options);
+    }
+
+    mviewer::domain::Workspace loadWorkspace(const std::string &rootPath)
+    {
+        return ImageRepository::instance().loadWorkspace(rootPath);
+    }
+
     // M46: `lifetime` is the consumer's AsyncLifetimeToken. The request layer
     // holds a weak_ptr; once the consumer invalidates/expires the token, any
     // late completion is suppressed BEFORE the client callback starts.

@@ -368,7 +368,7 @@ void MainWindow::openUsmCompare(const QString &path)
     auto loader = [](const std::string &path)
     {
         UsmLoadedSource loaded;
-        const auto res = ImageRepository::instance().load(path);
+        const auto res = mviewer::application::ImageLoadingService::instance().load(path);
         if (!res.success() || !res.frame || res.frame->pixels().isNull())
         {
             loaded.error = res.error.empty() ? std::string("decode failed") : res.error;

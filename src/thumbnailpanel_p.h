@@ -21,10 +21,12 @@
 #pragma once
 
 #include "thumbnailpanel.h"
+#include "thumbnailprovider.h"
 
 #include "gallery_filter_engine.h"
 #include "naturalnameorder.h"
 
+#include "application/ImageLoadingService.h"
 #include "core/analysis/ExportReport.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/command/CommandStack.h"
@@ -37,13 +39,11 @@
 #include "core/image/Decoder.h"
 #include "core/image/FrameSequence.h"
 #include "core/image/ImageFormats.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
 #include "core/image/RawMetadata.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "domain/Image.h"
-#include "thumbnailcache.h"
 
 #include <memory>
 #include <vector>

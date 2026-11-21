@@ -21,12 +21,12 @@
 
 #include "MViewerVersion.h" // M24 version SSOT (generated from CMake project VERSION)
 
+#include "application/ImageLoadingService.h"
 #include "appstate.h"
 #include "core/RecentStore.h"
 #include "core/SettingsIO.h"
 #include "core/analysis/ReportHtml.h"
 #include "core/analyzer/Analyzer.h"
-#include "core/cache/CacheManager.h"
 #include "core/command/CallbackCommand.h"
 #include "core/command/CompareCommand.h"
 #include "core/command/DeleteCommand.h"
@@ -36,7 +36,6 @@
 #include "core/export/ExportJob.h"
 #include "core/export/ExportManager.h"
 #include "core/image/ImageFormats.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
 #include "core/image/RawMetadata.h"

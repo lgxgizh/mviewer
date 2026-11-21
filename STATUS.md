@@ -1,12 +1,24 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.193** · Release tag: **v1.0.193**
+> Snapshot: 2026-11-21 · Version: **1.0.194** · Release tag: **v1.0.194**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.194 — Item 2 governance, part 1 (2026-11-21)
+
+- `scripts/architecture_gate.ps1` no longer exempts `*_p.h`. Removing the
+  blanket exemption surfaced 4 real layering edges, all fixed by routing through
+  `ImageLoadingService::load()/loadWorkspace()`, `MemoryTracker` and
+  `ThumbnailProvider`. Gate back to 0 violations.
+- CI gains an advisory ThreadSanitizer leg (Linux, core suites offscreen).
+- `CvOverlay` extracted from `ImageViewer` (first God Class extraction), with
+  its own test.
+- Not done and called out: the test migration out of `src/` (churn, no user
+  effect) and code signing (needs a certificate this repo does not have).
 
 ## 1.0.193 — Shortcut help, preferences fit, language hot-switch (2026-11-21)
 

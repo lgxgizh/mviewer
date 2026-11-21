@@ -29,6 +29,22 @@ class ImageLoadingService
         return mviewer::core::ImageLoadingFacade::defaultLoadOptions();
     }
 
+    // Synchronous decode for the rare UI paths that already own a worker and
+    // cannot be re-entrant (export source fetch, workspace restore). Everything
+    // that can be async must stay on loadAsyncCancellable/loadFrameAsync.
+    mviewer::core::ImageLoadResult
+    load(const std::string &path,
+         const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions)
+    {
+        return mviewer::core::ImageLoadingFacade::instance().load(path, options);
+    }
+
+    // Restore the workspace snapshot for a directory (session restore).
+    mviewer::domain::Workspace loadWorkspace(const std::string &rootPath)
+    {
+        return mviewer::core::ImageLoadingFacade::instance().loadWorkspace(rootPath);
+    }
+
     // M46: `lifetime` is the consumer's AsyncLifetimeToken (see
     // ImageLoadingFacade). Widgets create one token per QObject and invalidate
     // it in the destructor; expired tokens suppress late client deliveries.

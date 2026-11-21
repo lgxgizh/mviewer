@@ -117,55 +117,18 @@ void ImageViewer::setSpectrumVisible(bool visible)
 
 void ImageViewer::loadCvBoxes(const QString &path)
 {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly))
+    QString error;
+    if (!m_cvOverlay.loadFromJsonFile(path, &error))
     {
         emit statusMessageRequested(tr("CV boxes: cannot read %1").arg(QFileInfo(path).fileName()),
                                     4000);
         return;
     }
-    const QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-    file.close();
-    const QJsonArray boxes = doc.object().value(QStringLiteral("boxes")).toArray();
-    m_cvBoxes.clear();
-    m_cvLabels.clear();
-    m_cvBoxes.reserve(boxes.size());
-    m_cvLabels.reserve(boxes.size());
-    for (const QJsonValue &value : boxes)
-    {
-        const QJsonArray item = value.toArray();
-        if (item.size() < 4)
-            continue;
-        const QRectF rect(item.at(0).toDouble(), item.at(1).toDouble(), item.at(2).toDouble(),
-                          item.at(3).toDouble());
-        if (rect.width() <= 0 || rect.height() <= 0)
-            continue;
-        m_cvBoxes.append(rect);
-        m_cvLabels.append(item.size() >= 5 ? item.at(4).toString() : QString());
-    }
-    emit statusMessageRequested(tr("CV boxes: %1 loaded").arg(m_cvBoxes.size()), 4000);
+    emit statusMessageRequested(tr("CV boxes: %1 loaded").arg(m_cvOverlay.count()), 4000);
     update();
 }
 
 void ImageViewer::drawAnalysisOverlay(QPainter &painter) const
 {
-    if (m_cvBoxes.isEmpty() || m_view.scale <= 0.0)
-        return;
-    painter.save();
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    for (int i = 0; i < m_cvBoxes.size(); ++i)
-    {
-        const QRectF &box = m_cvBoxes.at(i);
-        const QPointF topLeft(box.x() * m_view.scale + m_view.offsetX,
-                              box.y() * m_view.scale + m_view.offsetY);
-        const QRectF screen(topLeft,
-                            QSizeF(box.width() * m_view.scale, box.height() * m_view.scale));
-        painter.setPen(QPen(QColor(0, 220, 120), 2));
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(screen);
-        const QString label = m_cvLabels.value(i);
-        if (!label.isEmpty())
-            painter.drawText(screen.topLeft() + QPointF(4, -4), label);
-    }
-    painter.restore();
+    m_cvOverlay.draw(painter, m_view);
 }

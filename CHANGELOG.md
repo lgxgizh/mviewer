@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [1.0.194] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.194**.
+
+### Changed
+
+- **Item 2 — governance, part 1**:
+  - **The `*_p.h` architecture exemption is gone.** A private header is still a
+    header, so a UI coordinator reaching Core singletons through one is a real
+    layering edge and is now reported. Removing the blanket exemption surfaced
+    four genuine violations (`mainwindow_p.h`, `thumbnailpanel_p.h`), all fixed:
+    the sync decode and workspace restore now go through
+    `ImageLoadingService::load()/loadWorkspace()` (new facade methods), the cache
+    hit-rate readout reads `MemoryTracker` instead of `CacheManager`, and the
+    thumbnail identity hints go through `ThumbnailProvider`. The gate is back to
+    0 violations and the regression test still asserts that.
+  - **CI matrix gains a ThreadSanitizer leg** (Linux, advisory): a
+    `-fsanitize=thread` build runs the Qt-free core suites offscreen. Advisory on
+    purpose — TSan is noisy inside Qt/third-party code, so it informs rather than
+    gates. Heavy analysis belongs on CI, not on a laptop.
+  - **God Class split, first extraction**: `CvOverlay` now owns the CV box list
+    and its drawing, instead of `ImageViewer` holding two containers plus the
+    paint loop. `cv_overlay_tests` covers the JSON sidecar contract.
+
+### Not in this release
+
+- **Test migration out of `src/`** and **code signing** are not done. The move is
+  pure churn with no user-visible effect, and signing needs a code-signing
+  certificate this repository does not have. Both are called out rather than
+  silently dropped.
+
 ## [1.0.193] - 2026-11-21
 
 ### Release

@@ -13,6 +13,7 @@
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
+#include "cvoverlay.h"
 #include "gpu/GpuTileUploader.h"
 #include "imageviewer_displayraster.h"
 #include <QByteArray>
@@ -776,8 +777,7 @@ class ImageViewer : public QOpenGLWidget
     mviewer::ui::DisplayAdjustPanel *m_adjustPanel = nullptr; // created on first use
     bool m_spectrumVisible = false;
     QWidget *m_spectrumPanel = nullptr;
-    QVector<QRectF> m_cvBoxes;
-    QStringList m_cvLabels;
+    mviewer::ui::CvOverlay m_cvOverlay;
     void syncAdjustPanel();
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.

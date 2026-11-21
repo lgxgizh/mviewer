@@ -300,6 +300,16 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
     return mvcore::fromQImage(fitted);
 }
 
+void ThumbnailProvider::hintSourceIdentity(const QString &path, qint64 mtimeMs, qint64 fileSize)
+{
+    ThumbnailCache::instance().hintSourceIdentity(path, mtimeMs, fileSize);
+}
+
+void ThumbnailProvider::clearSourceIdentityHints()
+{
+    ThumbnailCache::instance().clearSourceIdentityHints();
+}
+
 void ThumbnailProvider::invalidateSource(const std::string &path)
 {
     if (path.empty())

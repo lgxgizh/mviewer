@@ -858,7 +858,8 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
                 }
 
                 const QString &path = state->paths.at(i);
-                const auto loaded = ImageRepository::instance().load(path.toStdString());
+                const auto loaded =
+                    mviewer::application::ImageLoadingService::instance().load(path.toStdString());
                 // `loaded` and the analyzer are iteration-local. No vector of
                 // full-resolution frames is retained across the batch.
                 if (loaded.frame)

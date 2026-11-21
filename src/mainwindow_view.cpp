@@ -5,6 +5,7 @@
 
 #include "application/ExternalOpen.h"
 #include "core/analysis/ImageOverlay.h"
+#include "core/perf/MemoryTracker.h"
 
 #include <QSignalBlocker>
 
@@ -706,14 +707,14 @@ void MainWindow::updateCacheStat()
 {
     if (!m_lblCache)
         return;
-    auto &cm = CacheManager::instance();
+    // Read the cache counters through MemoryTracker (core/perf) rather than
+    // naming CacheManager from the UI layer — the architecture gate's R1 rule.
+    const mviewer::perf::MemorySnapshot snap = mviewer::perf::MemoryTracker::instance().sample();
     uint64_t hits = 0, misses = 0;
-    for (CacheLevel lvl :
-         {CacheLevel::Metadata, CacheLevel::Thumbnail, CacheLevel::Preview, CacheLevel::FullImage})
+    for (int i = 0; i < 4; ++i)
     {
-        const CacheLevelStats s = cm.levelStats(lvl);
-        hits += s.hits;
-        misses += s.misses;
+        hits += snap.cacheHits[i];
+        misses += snap.cacheMisses[i];
     }
     if (hits + misses == 0)
     {

@@ -265,7 +265,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_highLatencyDir = lexicalHighLatencyHint(path);
     m_scanStallAnnounced = false;
     m_scanCursorReleased = std::make_shared<std::atomic<bool>>(false);
-    ThumbnailCache::instance().clearSourceIdentityHints();
+    ThumbnailProvider::clearSourceIdentityHints();
     m_scanComplete = false;
     m_galleryModelReadyEmitted = false;
     const bool heavyFilter = hasMetadataBrowseFilter(m_filterText, m_recentFilter, m_cameraFilter,
@@ -456,7 +456,7 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &scanned)
     {
         const Entry &e = batch.at(i);
         m_sourceRowByPath.insert(galleryPathKey(e.path), sourceRow + i);
-        ThumbnailCache::instance().hintSourceIdentity(
+        ThumbnailProvider::hintSourceIdentity(
             e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
     }
     if (!m_scanProgressive)
@@ -522,7 +522,7 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries, bool 
     // Seed disk-cache identity from the scan so thumbnail get()/put() reuse
     // listing mtime/size instead of re-statting every source on network paths.
     for (const Entry &e : m_allEntries)
-        ThumbnailCache::instance().hintSourceIdentity(
+        ThumbnailProvider::hintSourceIdentity(
             e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
     // Progressive batches used replaceSources for convergence; completed scan
     // and subsequent filter rebuilds must use updateSources so in-flight

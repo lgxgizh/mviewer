@@ -33,6 +33,11 @@ class ThumbnailProvider
     // selection preview get the true frame on a folder's first visit.
     static QSize knownSourceSize(const QString &path);
     static void rememberSourceSize(const QString &path, const QSize &displaySize);
+    // Seed the disk-thumbnail cache with listing mtime/size so get()/put() skip
+    // a stat per source on slow (network) paths. UI code goes through here so it
+    // does not name ThumbnailCache directly.
+    static void hintSourceIdentity(const QString &path, qint64 mtimeMs, qint64 fileSize);
+    static void clearSourceIdentityHints();
 
     // Fit `q` into a transparent size×size image, centered with
     // KeepAspectRatio + SmoothTransformation. Null image if `q` is null.

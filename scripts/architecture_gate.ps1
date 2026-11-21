@@ -141,13 +141,15 @@ try {
         # they don't drown out real product-layer violations.
         if (Test-Harness $rel $f.Name) { continue }
         # Exempt design-allowed direct edges — these are NOT layering violations:
-        #  * Private implementation headers (`*_p.h`) are a class's internal pimpl;
-        #    a UI coordinator legitimately reaches Core singletons (Cache/Repository)
-        #    from there. It is an internal detail, not a public API leaking the layer.
         #  * Thumbnail infrastructure (thumbnailprovider/cache/pipeline) *is* the
         #    cache/thumbnail service and must reference ThumbnailCache directly; it is
         #    only mis-classified as `ui` because it lives in `src/` root.
-        if ($f.Name -match '_p\.h$' -or $rel -match '(?i)thumbnail(provider|cache|pipeline)') {
+        #
+        # Item 2: the blanket `*_p.h` exemption is gone. A private header is still a
+        # header, and a UI coordinator reaching Core singletons through one is a real
+        # layering edge that this gate should report. Verified at removal time: 0
+        # violations, so nothing was hiding behind it.
+        if ($rel -match '(?i)thumbnail(provider|cache|pipeline)') {
             continue
         }
         $layer = Get-Layer $rel
