@@ -55,11 +55,11 @@ int main(int argc, char **argv)
     DisplayColorContextProvider::resetForTest();
     const auto context = DisplayColorContextProvider::forWindow(nullptr);
     CHECK(context.hasProfile(), "the override profile reaches the display context");
-    const QByteArray loaded(context.iccProfile.empty()
-                                ? QByteArray()
-                                : QByteArray::fromRawData(
-                                    reinterpret_cast<const char *>(context.iccProfile.data()),
-                                    static_cast<int>(context.iccProfile.size())));
+    const QByteArray loaded(
+        context.iccProfile.empty()
+            ? QByteArray()
+            : QByteArray::fromRawData(reinterpret_cast<const char *>(context.iccProfile.data()),
+                                      static_cast<int>(context.iccProfile.size())));
     CHECK(loaded == fixture, "the profile bytes round-trip untouched");
 
     // With no override and no system color directory, the loader degrades to the

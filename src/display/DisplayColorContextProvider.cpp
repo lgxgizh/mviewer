@@ -179,8 +179,7 @@ std::vector<uint8_t> loadLinuxIccProfile(const QWindow *window)
         if (!candidate.exists())
             continue;
         const QFileInfoList entries =
-            candidate.entryInfoList(QStringList{ QStringLiteral("*.icc"),
-                                                 QStringLiteral("*.icm") },
+            candidate.entryInfoList(QStringList{QStringLiteral("*.icc"), QStringLiteral("*.icm")},
                                     QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
         for (const QFileInfo &info : entries)
         {
