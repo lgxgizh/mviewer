@@ -385,6 +385,8 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
                         : tr("Pasted %1 images into folder").arg(written.size()),
                     3000);
             }
+            // Item 5: reversibility is recorded by the panel on the shared
+            // command stack, so the existing Ctrl+Z undo covers the paste.
             event->accept();
             return true;
         }

@@ -34,6 +34,14 @@ class ICommand
     {
         return true;
     }
+
+    // Whether redo() can re-apply this command. Defaults to true; a command
+    // whose effect cannot be reconstructed (a paste, whose sources are not
+    // retained) opts out so the stack does not offer a no-op Redo.
+    virtual bool canRedo() const
+    {
+        return true;
+    }
     virtual std::vector<CommandShortcut> shortcuts() const
     {
         return {};

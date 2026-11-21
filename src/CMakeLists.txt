@@ -186,6 +186,7 @@ add_library(mviewer_core SHARED
     core/command/FileSystemAdapter.cpp
     core/command/ToggleHistogramCommand.cpp
     core/command/CallbackCommand.cpp
+    core/command/ClipboardPasteCommand.cpp
     core/benchmark/Benchmark.cpp
     core/perf/MemoryTracker.cpp
     core/trace/TraceSink.cpp
@@ -1631,6 +1632,13 @@ target_link_libraries(test_session_package PRIVATE mviewer_core)
 target_compile_features(test_session_package PRIVATE cxx_std_20)
 target_include_directories(test_session_package PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME session_package_tests COMMAND test_session_package)
+
+# Item 5: undo for a clipboard paste.
+add_executable(test_clipboard_paste_command core/test_clipboard_paste_command.cpp)
+target_link_libraries(test_clipboard_paste_command PRIVATE mviewer_core)
+target_compile_features(test_clipboard_paste_command PRIVATE cxx_std_20)
+target_include_directories(test_clipboard_paste_command PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME clipboard_paste_command_tests COMMAND test_clipboard_paste_command)
 
 add_executable(test_yuv_sample core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)

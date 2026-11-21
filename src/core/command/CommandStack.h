@@ -185,7 +185,11 @@ class CommandStack
             std::lock_guard<std::mutex> stateLock(m_mtx);
             m_lastError = error;
             if (error.empty())
-                m_redo.push_back(std::move(cmd));
+            {
+                if (cmd->canRedo())
+                    m_redo.push_back(std::move(cmd));
+                // else: undo-only command (e.g. a paste) — nothing to redo.
+            }
             else
                 m_undo.push_back(std::move(cmd));
             callback = m_onChange;

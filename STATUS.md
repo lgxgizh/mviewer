@@ -1,12 +1,19 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.194** · Release tag: **v1.0.194**
+> Snapshot: 2026-11-21 · Version: **1.0.195** · Release tag: **v1.0.195**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.195 — Undo for a gallery paste (item 5) (2026-11-21)
+
+- A gallery paste is recorded on the shared undo stack, so the existing Ctrl+Z
+  deletes the copies MViewer wrote. The command is undo-only (the sources are not
+  retained, so Redo would be a no-op) and is folder-scoped: a stale entry cannot
+  delete anything in a folder you navigated to later.
 
 ## 1.0.194 — Item 2 governance, part 1 (2026-11-21)
 

@@ -4,14 +4,13 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.194**
+## Where we are now — **Beta / 1.0.195**
 
-MViewer remains in **Beta**; the current release is **`v1.0.194`**
+MViewer remains in **Beta**; the current release is **`v1.0.195`**
 (2026-11-21, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch is engineering governance: the architecture gate no longer exempts
-private headers (four real layering edges found and fixed), CI gains an advisory
-ThreadSanitizer leg, and the first God Class extraction lands. Offscreen CI is
-regression evidence, not proof of universal smoothness.
+This patch makes a gallery paste reversible: the existing Ctrl+Z deletes the
+copies MViewer wrote. Offscreen CI is regression evidence, not proof of
+universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -66,7 +65,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.194** (current) | Governance: gate exemption removed, TSan leg, God Class extraction | 🔵 Beta |
+| **1.0.195** (current) | Undo for a gallery paste (Ctrl+Z deletes the copies) | 🔵 Beta |
+| **1.0.194** | Governance: gate exemption removed, TSan leg, extraction | ✅ Previous patch |
 | **1.0.193** | Shortcut help, preferences fit, language hot-switch | ✅ Previous patch |
 | **1.0.192** | Large-folder stall fix (quadratic scan publication) | ✅ Previous patch |
 | **1.0.191** | Portable session package (export/import) | ✅ Previous patch |

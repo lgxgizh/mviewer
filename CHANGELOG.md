@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.0.195] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.195**.
+
+### Added
+
+- **Undo for a gallery paste** (item 5). A paste into the open folder is now a
+  reversible command on the shared undo stack, so the existing **Ctrl+Z** deletes
+  exactly the copies MViewer wrote. Undo is intentionally destructive here and
+  the record carries the folder: a stale entry can never delete a file in a
+  folder you navigated to afterwards, and files outside that folder are never
+  touched. Because the paste sources are not retained, the command opts out of
+  Redo rather than offering a no-op.
+
 ## [1.0.194] - 2026-11-21
 
 ### Release

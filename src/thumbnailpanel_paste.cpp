@@ -1,6 +1,8 @@
 // Clipboard paste into the folder the gallery is showing.
 #include "thumbnailpanel_p.h"
 
+#include "core/command/ClipboardPasteCommand.h"
+
 #include <QDateTime>
 #include <QImage>
 #include <QUrl>
@@ -152,6 +154,19 @@ QStringList ThumbnailPanel::pasteClipboardIntoCurrentDirectory(QString *failure)
             delta.added.push_back(directoryEntryForPaste(path));
         applyDirectoryDelta(delta);
         selectPaths(written, written.last());
+    }
+
+    // Item 5: the paste is reversible. "Undo" deletes exactly the copies this
+    // paste created, so it is recorded on the shared command stack and the
+    // existing Ctrl+Z handles it.
+    if (m_cmdStack)
+    {
+        std::vector<std::string> created;
+        created.reserve(written.size());
+        for (const QString &path : written)
+            created.push_back(path.toUtf8().toStdString());
+        m_cmdStack->recordExecuted(std::make_unique<ClipboardPasteCommand>(
+            std::move(created), m_currentDir.toUtf8().toStdString()));
     }
     return written;
 }
