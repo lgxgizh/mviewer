@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+## [1.0.201] - 2026-11-22
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.201**.
+
+### Fixed — 底层并发与构建收口（二轮复审）
+
+- **`ThumbnailCache` ABBA 死锁**：`get()` / `put()` 持 `m_mutex` 调
+  `scheduleBootstrap()`，后者取 `m_bootstrapMutex` 并 `join()` 工作线程，而工作
+  线程又要先拿 `m_mutex` —— 互相等锁，且 `join()` 自己等自己。两个调用点都改为
+  在 `m_mutex` 临界区之外调度。
+- **`setDisplayColorContext()` 显存泄漏**：`m_gpu.clear()` 没有 GL 上下文，
+  `glDeleteTextures` 被跳过，句柄整个会话只增不减。现在按其他两处同样的写法
+  包上 `makeCurrent()` / `doneCurrent()`。
+- **关闭后迟到的 UI 回调会在工作线程上跑**：`Shutdown` 只是清空分发器，之后
+  `postToMainThread()` 的「无分发器就内联执行」回退会让工作线程直接执行 UI
+  闭包。新增 `shutdownMainThreadDispatcher()`：关闭后投递直接丢弃，`Shutdown`
+  改用它，并补了回归用例。
+- **Python 桥接不再冻结界面**：`run()` 是同步的，一个跑到超时的脚本会让整个
+  界面卡住。新增 `runAsync()`，工作放线程池、完成回调回投到 UI 线程，对话框改
+  用它并在运行中禁用 Run。
+
+### Changed
+
+- **`mviewer_core` 不再冗余链接 `Qt6::Widgets`**（`src/core` 0 处引用
+  Widgets）；`Qt6::Gui` / `Qt6::Core` 改为显式声明——它们的头文件一直是靠
+  Widgets 的传递包含才可见的。
+- **TSan 门禁转硬**：原先同时有 `continue-on-error`、`halt_on_error=0` 和
+  `|| true` 三重软化；现在 `halt_on_error=1`、无 `continue-on-error`、无
+  `|| true`，竞态会直接让该腿失败。
+
+### 未做（明确记录）
+
+- `tests/CMakeLists.txt` 拆分（`src/CMakeLists.txt` 仍 3.7k 行，但测试源文件
+  已全部在 `tests/`）；`TaskScheduler` / `DiskCache` / `PluginLoader` /
+  `Logger` 的遗留 P1；非泄漏单例与 ADR-017 的一致性；标注撤销与盲测交互。
+
 ## [1.0.200] - 2026-11-22
 
 ### Release

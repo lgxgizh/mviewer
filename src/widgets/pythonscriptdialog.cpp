@@ -115,16 +115,22 @@ void PythonScriptDialog::runScript()
 
     appendResult(tr("Running %1 on %2…")
                      .arg(QFileInfo(script).fileName(), QFileInfo(m_imagePath).fileName()));
-    QString error;
-    const auto result =
-        mviewer::application::PythonScriptRunner::instance().run(script, request, error);
-    if (!error.isEmpty())
-    {
-        appendResult(tr("Failed: %1").arg(error));
-        return;
-    }
-    appendResult(result.ok ? tr("ok: %1").arg(result.message)
-                           : tr("script reported failure: %1").arg(result.message));
-    for (const QString &box : result.boxes)
-        appendResult(tr("  box %1").arg(box));
+    m_run->setEnabled(false);
+    // Off the UI thread: a script that runs to its timeout must not freeze the
+    // whole interface (review: Python bridge blocked the main thread).
+    mviewer::application::PythonScriptRunner::instance().runAsync(
+        script, request, this,
+        [this](const mviewer::application::PythonScriptResult &result, const QString &error)
+        {
+            m_run->setEnabled(true);
+            if (!error.isEmpty())
+            {
+                appendResult(tr("Failed: %1").arg(error));
+                return;
+            }
+            appendResult(result.ok ? tr("ok: %1").arg(result.message)
+                                   : tr("script reported failure: %1").arg(result.message));
+            for (const QString &box : result.boxes)
+                appendResult(tr("  box %1").arg(box));
+        });
 }

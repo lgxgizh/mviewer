@@ -21,6 +21,15 @@ mvcore::MainThreadDispatch &dispatcherStorage()
     return *dispatch;
 }
 
+// Set once by shutdownMainThreadDispatcher(). After shutdown a late worker must
+// have its delivery DROPPED, not run inline on the worker thread: running a UI
+// callback off the UI thread is exactly what this dispatcher exists to prevent.
+bool &dispatcherClosed()
+{
+    static auto *closed = new bool(false);
+    return *closed;
+}
+
 } // namespace
 
 namespace mvcore
@@ -30,6 +39,13 @@ void setMainThreadDispatcher(MainThreadDispatch dispatch)
 {
     std::lock_guard<std::mutex> lock(dispatcherMutex());
     dispatcherStorage() = std::move(dispatch);
+}
+
+void shutdownMainThreadDispatcher()
+{
+    std::lock_guard<std::mutex> lock(dispatcherMutex());
+    dispatcherStorage() = nullptr;
+    dispatcherClosed() = true;
 }
 
 bool hasMainThreadDispatcher()
@@ -43,6 +59,8 @@ void postToMainThread(std::function<void()> fn)
     MainThreadDispatch dispatch;
     {
         std::lock_guard<std::mutex> lock(dispatcherMutex());
+        if (dispatcherClosed())
+            return;                     // shutting down: drop, never run a UI callback on a worker
         dispatch = dispatcherStorage(); // copy: the call must not hold the lock
     }
     if (dispatch)

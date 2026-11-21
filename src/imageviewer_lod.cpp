@@ -175,7 +175,14 @@ void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContex
     ++m_overlayGeneration;
     m_overlayRequests.reset(m_overlayGeneration);
     m_overlayCache.clear();
-    m_gpu.clear();
+    // Freeing GPU textures requires a current GL context; without makeCurrent()
+    // the delete calls were skipped and the handles leaked for the session.
+    if (context())
+    {
+        makeCurrent();
+        m_gpu.clear();
+        doneCurrent();
+    }
     // A profile change can race the first small-source verdict. Restarting the
     // display request keeps that verdict as the owner of the foreground load
     // instead of cancelling the only trigger before it reaches the UI thread.

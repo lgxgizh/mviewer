@@ -432,12 +432,15 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
         QMutexLocker lock(&m_mutex);
         if (m_pathInvalidations.contains(path))
             return false;
-        scheduleBootstrap();
         const QString dir = cacheDir();
         if (dir.isEmpty())
             return false;
         file = QDir(dir).filePath(key + kFileSuffix);
     }
+    // Outside m_mutex: scheduleBootstrap() takes m_bootstrapMutex and joins the
+    // worker, and the worker takes m_mutex. Calling it while holding m_mutex is
+    // an ABBA deadlock (get/put both used to do exactly that).
+    scheduleBootstrap();
 
     // M54: filesystem probes and PNG decoding are deliberately outside the
     // cache index mutex. One slow disk read must not serialize every worker.
@@ -503,7 +506,6 @@ void ThumbnailCache::put(const QString &path, int size, const QImage &img)
             ++m_pathInvalidations[path];
             m_pathInvalidations.remove(path);
         }
-        scheduleBootstrap();
         const QString dir = cacheDir();
         if (dir.isEmpty())
             return;
@@ -514,6 +516,8 @@ void ThumbnailCache::put(const QString &path, int size, const QImage &img)
             return;
         }
     }
+    // See get(): must not run under m_mutex (ABBA against the bootstrap worker).
+    scheduleBootstrap();
 
     // M54: PNG encode + QSaveFile commit run without holding the index mutex.
     // Persist BEFORE touching accounting: a failed write must leave any prior

@@ -1,12 +1,26 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.200** · Release tag: **v1.0.200**
+> Snapshot: 2026-11-22 · Version: **1.0.201** · Release tag: **v1.0.201**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.201 — 底层并发与构建收口（二轮复审） (2026-11-22)
+
+- `ThumbnailCache` ABBA 死锁：`get()`/`put()` 改为在 `m_mutex` 之外调度
+  bootstrap（原来持锁 join 工作线程，工作线程又要 m_mutex）。
+- `setDisplayColorContext()` 的 `m_gpu.clear()` 包上 GL 上下文，修掉纹理句柄
+  泄漏。
+- 新增 `shutdownMainThreadDispatcher()`：关闭后投递丢弃，迟到的 UI 回调不再
+  内联在工作线程上跑；补回归用例。
+- Python 桥接新增 `runAsync()`，脚本不再冻结界面。
+- `mviewer_core` 去掉冗余的 `Qt6::Widgets`，显式声明 `Qt6::Gui`/`Qt6::Core`。
+- TSan 门禁转硬：`halt_on_error=1`，去掉 `continue-on-error` 与 `|| true`。
+- 未做并记录：`tests/CMakeLists.txt` 拆分、若干遗留 P1、非泄漏单例一致性、
+  标注撤销与盲测交互。
 
 ## 1.0.200 — UI 视觉与 Win11 质感（二轮复审 4 项视觉 P0） (2026-11-22)
 

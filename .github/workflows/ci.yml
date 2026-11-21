@@ -322,21 +322,23 @@ jobs:
             -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
   # ---------------------------------------------------------------------------
-  # thread-sanitizer — item 2 governance. A TSan-instrumented Linux build runs
-  # the core (Qt-free) suites offscreen. Advisory on purpose: TSan reports are
-  # noisy on third-party/Qt internals, so this leg informs rather than gates.
-  # Heavy analysis belongs on CI, not on a laptop.
+  # thread-sanitizer — item 2 governance, now a real gate (review: it was
+  # softened three ways at once). A -fsanitize=thread Linux build runs the
+  # Qt-free core suites offscreen with halt_on_error=1, so a data race fails
+  # the leg instead of only appearing in the log. Heavy analysis belongs on CI,
+  # not on a laptop.
   # ---------------------------------------------------------------------------
   thread-sanitizer:
-    name: Thread sanitizer (Linux, advisory)
+    name: Thread sanitizer (Linux)
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    continue-on-error: true
     env:
       SCCACHE_GHA_ENABLED: "true"
       CMAKE_C_COMPILER_LAUNCHER: sccache
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
-      TSAN_OPTIONS: "halt_on_error=0 second_deadlock_stack=1 history_size=7"
+      # halt_on_error=1 makes the instrumented run abort on the first report, so
+      # the leg is a real gate rather than a log nobody reads.
+      TSAN_OPTIONS: "halt_on_error=1 second_deadlock_stack=1 history_size=7"
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -392,8 +394,7 @@ jobs:
           # Qt-free core suites only: the UI suites need a real event loop and
           # are far more prone to benign TSan reports inside Qt.
           ctest --output-on-failure -j 2 --timeout 900 \
-            -R "cache|thumbnail|yuv|metadata|scheduler|filesystem|command|session|fft|hdr|ciede|color" \
-            || true
+            -R "cache|thumbnail|yuv|metadata|scheduler|filesystem|command|session|fft|hdr|ciede|color"
 
   # ---------------------------------------------------------------------------
   # windows-build-and-test — MSVC + Qt 6.8.0, build + warnings gate + CTest

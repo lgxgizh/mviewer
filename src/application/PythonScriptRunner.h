@@ -17,6 +17,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 namespace mviewer::application
 {
 
@@ -41,8 +43,18 @@ class PythonScriptRunner
 
     /// Run `scriptPath` with `request`. Returns a result; `error` carries the
     /// transport-level failure (no interpreter, timeout, unreadable response).
+    /// Blocks the calling thread for up to `timeoutMs` — UI code must use
+    /// runAsync() instead.
     PythonScriptResult run(const QString &scriptPath, const QJsonObject &request, QString &error,
                            int timeoutMs = 30000);
+
+    /// Async variant: the work happens on a worker thread and `completion` is
+    /// delivered on `context`'s thread. Without this, a script that runs to its
+    /// timeout froze the whole interface.
+    using ScriptCompletion =
+        std::function<void(const PythonScriptResult &result, const QString &error)>;
+    void runAsync(const QString &scriptPath, const QJsonObject &request, QObject *context,
+                  ScriptCompletion completion, int timeoutMs = 30000);
 
     /// True when the path looks like a Python script we are willing to run.
     static bool isScriptPath(const QString &path);

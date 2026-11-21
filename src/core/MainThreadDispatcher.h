@@ -42,10 +42,16 @@ using MainThreadDispatch = std::function<void(std::function<void()>)>;
 // inline fallback.
 void setMainThreadDispatcher(MainThreadDispatch dispatch);
 
+// Clears the dispatcher AND closes delivery. Called at shutdown: from this
+// point postToMainThread() drops its closure instead of running it inline on
+// whatever worker thread is finishing late.
+void shutdownMainThreadDispatcher();
+
 bool hasMainThreadDispatcher();
 
-// Delivers `fn` on the main thread: through the installed dispatcher, or
-// inline on the calling thread when none is installed.
+// Delivers `fn` on the main thread: through the installed dispatcher, inline on
+// the calling thread when none is installed, or not at all once shutdown has
+// closed delivery.
 void postToMainThread(std::function<void()> fn);
 
 } // namespace mvcore

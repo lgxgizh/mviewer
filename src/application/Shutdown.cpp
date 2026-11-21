@@ -86,7 +86,10 @@ void shutdownProcessServices()
     if (QThreadPool *globalPool = QThreadPool::globalInstance())
         globalPool->waitForDone();
 
-    mvcore::setMainThreadDispatcher({});
+    // Close delivery rather than merely clearing it: a worker that finishes
+    // after this point must have its UI callback dropped, not run inline on the
+    // worker thread.
+    mvcore::shutdownMainThreadDispatcher();
     mviewer::core::shutdownFileLogger();
 
     drainPostedEvents();

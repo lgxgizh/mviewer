@@ -209,7 +209,9 @@ if(TARGET Qt6::lrelease)
 endif()
 # psapi: provides GetProcessMemoryInfo used by core/perf/MemoryTracker for the
 # OS working-set (RSS) sample. Windows-only; harmless on other platforms.
-target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
+# Gui/Core explicitly: src/core/.cpp bodies use QImage & friends, and pulling
+# them transitively through Qt6::Widgets was the only reason Widgets was linked.
+target_link_libraries(mviewer_core PRIVATE Qt6::Gui Qt6::Core Qt6::Sql
     $<$<PLATFORM_ID:Windows>:psapi;windowscodecs;ole32>)
 if(MVIEWER_HAS_LIBRAW)
     target_link_libraries(mviewer_core PRIVATE mviewer_libraw)
@@ -1644,6 +1646,13 @@ target_link_libraries(test_clipboard_paste_command PRIVATE mviewer_core)
 target_compile_features(test_clipboard_paste_command PRIVATE cxx_std_20)
 target_include_directories(test_clipboard_paste_command PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME clipboard_paste_command_tests COMMAND test_clipboard_paste_command)
+
+# Main-thread delivery: shutdown must drop, not inline, a late worker callback.
+add_executable(test_mainthread_dispatcher ${CMAKE_SOURCE_DIR}/tests/core/test_mainthread_dispatcher.cpp)
+target_link_libraries(test_mainthread_dispatcher PRIVATE mviewer_core)
+target_compile_features(test_mainthread_dispatcher PRIVATE cxx_std_20)
+target_include_directories(test_mainthread_dispatcher PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME mainthread_dispatcher_tests COMMAND test_mainthread_dispatcher)
 
 # Report feature 9: Python script bridge.
 add_executable(python_script_runner_tests ${CMAKE_SOURCE_DIR}/tests/test_python_script_runner.cpp)

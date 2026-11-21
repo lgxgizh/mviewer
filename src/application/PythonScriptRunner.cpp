@@ -10,6 +10,7 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QThread>
+#include <QThreadPool>
 #include <QTimer>
 
 #include <chrono>
@@ -177,6 +178,25 @@ PythonScriptResult PythonScriptRunner::run(const QString &scriptPath, const QJso
     if (!result.ok && result.message.isEmpty())
         result.message = QStringLiteral("the script reported failure");
     return result;
+}
+
+void PythonScriptRunner::runAsync(const QString &scriptPath, const QJsonObject &request,
+                                  QObject *context, ScriptCompletion completion, int timeoutMs)
+{
+    auto delivered = std::make_shared<ScriptCompletion>(std::move(completion));
+    QThreadPool::globalInstance()->start(
+        [scriptPath, request, context, delivered, timeoutMs]()
+        {
+            QString error;
+            const PythonScriptResult result =
+                PythonScriptRunner::instance().run(scriptPath, request, error, timeoutMs);
+            const QString errorCopy = error;
+            // Back on the context's (UI) thread: the dialog must not be touched
+            // from the worker.
+            QMetaObject::invokeMethod(
+                context, [delivered, result, errorCopy]() { (*delivered)(result, errorCopy); },
+                Qt::QueuedConnection);
+        });
 }
 
 } // namespace mviewer::application
