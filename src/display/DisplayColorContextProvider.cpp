@@ -1,7 +1,9 @@
 #include "display/DisplayColorContextProvider.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QScreen>
 #include <QSettings>
@@ -134,11 +136,70 @@ std::vector<uint8_t> loadWindowsIccProfile(const QWindow *window)
 }
 #endif
 
+#if defined(Q_OS_LINUX)
+// Linux has no per-window ICM API: the profile lives with colord (or in the
+// usual color directories). We look in the well-known locations and stop at the
+// first readable profile. $MVIEWER_ICC is an explicit override for a machine
+// whose profile lives somewhere else (or for a test).
+std::vector<uint8_t> loadLinuxIccProfile(const QWindow *window)
+{
+    Q_UNUSED(window);
+    const auto readBounded = [](const QString &path) -> std::vector<uint8_t>
+    {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly))
+            return {};
+        // ICC profiles are small; a bogus path must not become an unbounded
+        // allocation. Bound by the real size so a small profile stays small.
+        constexpr qint64 kMaxIccProfileBytes = 32LL * 1024 * 1024;
+        const QByteArray bytes = file.read(std::min<qint64>(file.size(), kMaxIccProfileBytes));
+        return {reinterpret_cast<const uint8_t *>(bytes.constData()),
+                reinterpret_cast<const uint8_t *>(bytes.constData()) + bytes.size()};
+    };
+
+    const QByteArray overridePath = qgetenv("MVIEWER_ICC");
+    if (!overridePath.isEmpty())
+    {
+        if (auto bytes = readBounded(QString::fromLocal8Bit(overridePath)); !bytes.empty())
+            return bytes;
+    }
+
+    const QByteArray xdgConfig = qgetenv("XDG_CONFIG_HOME");
+    const QByteArray home = qgetenv("HOME");
+    QStringList dirs;
+    if (!xdgConfig.isEmpty())
+        dirs << QString::fromLocal8Bit(xdgConfig) + QStringLiteral("/color/icc");
+    if (!home.isEmpty())
+        dirs << QString::fromLocal8Bit(home) + QStringLiteral("/.config/color/icc");
+    dirs << QStringLiteral("/usr/share/color/icc") << QStringLiteral("/var/lib/colord/icc");
+
+    for (const QString &dir : dirs)
+    {
+        QDir candidate(dir);
+        if (!candidate.exists())
+            continue;
+        const QFileInfoList entries =
+            candidate.entryInfoList(QStringList{ QStringLiteral("*.icc"),
+                                                 QStringLiteral("*.icm") },
+                                    QDir::Files | QDir::NoDotAndDotDot, QDir::Name);
+        for (const QFileInfo &info : entries)
+        {
+            if (auto bytes = readBounded(info.absoluteFilePath()); !bytes.empty())
+                return bytes;
+        }
+    }
+    return {};
+}
+#endif
+
 std::vector<uint8_t> loadPlatformMonitorProfile(const QWindow *window)
 {
 #if defined(Q_OS_WIN)
     return loadWindowsIccProfile(window);
+#elif defined(Q_OS_LINUX)
+    return loadLinuxIccProfile(window);
 #else
+    // macOS ColorSync is still the sRGB fallback.
     Q_UNUSED(window);
     return {};
 #endif

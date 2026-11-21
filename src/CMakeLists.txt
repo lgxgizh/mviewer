@@ -1658,6 +1658,21 @@ target_include_directories(python_script_runner_tests PRIVATE ${CMAKE_CURRENT_SO
 add_test(NAME python_script_runner_tests COMMAND python_script_runner_tests)
 set_tests_properties(python_script_runner_tests PROPERTIES RUN_SERIAL TRUE)
 
+# Item 4: non-Windows ICC (colord / colour directories on Linux).
+add_executable(linux_icc_tests test_linux_icc.cpp)
+target_link_libraries(linux_icc_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(linux_icc_tests PRIVATE cxx_std_20)
+target_include_directories(linux_icc_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME linux_icc_tests COMMAND linux_icc_tests)
+set_tests_properties(linux_icc_tests PROPERTIES RUN_SERIAL TRUE)
+
 add_executable(test_yuv_sample core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)
 target_compile_features(test_yuv_sample PRIVATE cxx_std_20)
