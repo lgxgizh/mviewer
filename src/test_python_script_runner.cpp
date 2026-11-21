@@ -64,9 +64,21 @@ int main(int argc, char **argv)
 
     auto &runner = PythonScriptRunner::instance();
     QString error;
-    const auto rejected =
-        runner.run(tmp.filePath(QStringLiteral("nope.txt")), QJsonObject(), error);
+    const QString notAScript = tmp.filePath(QStringLiteral("nope.txt"));
+    {
+        QFile f(notAScript);
+        f.open(QIODevice::WriteOnly);
+        f.write("x\n");
+    }
+    const auto rejected = runner.run(notAScript, QJsonObject(), error);
     CHECK(!rejected.ok && !error.isEmpty(), "a non-Python script is refused with a reason");
+
+    // The out-parameter is reset on entry, so a stale message from a previous
+    // attempt must not survive into the next one.
+    error = QStringLiteral("stale");
+    const auto refusedAgain = runner.run(notAScript, QJsonObject(), error);
+    CHECK(!refusedAgain.ok && error.contains(QStringLiteral("not a Python script")),
+          "the refusal reason replaces any stale text");
 
     const QString interpreter = runner.detectInterpreter();
     // The Windows Store "python3.exe" alias is a re-run stub, not an

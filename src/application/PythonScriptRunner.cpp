@@ -95,6 +95,10 @@ PythonScriptResult PythonScriptRunner::run(const QString &scriptPath, const QJso
                                            QString &error, int timeoutMs)
 {
     PythonScriptResult result;
+    // The out-parameter is reset on entry: callers legitimately reuse one
+    // variable across attempts, and a previous failure must not leak into a
+    // later success.
+    error.clear();
     if (!isScriptPath(scriptPath))
     {
         error = QStringLiteral("not a Python script: %1").arg(scriptPath);
