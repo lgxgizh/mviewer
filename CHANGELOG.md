@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [1.0.198] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MVIEWER VERSION)` / STATUS release tag → **1.0.198**.
+
+### Changed
+
+- **Item 2, part 2 — the test suite no longer lives in `src/`.** 247 test
+  sources (≈73k lines) moved to `tests/` (`tests/` and `tests/core/`), which
+  already held the fuzz, plugin, UI-fixture and vision suites. `src/` is now
+  product code only, so a reader can tell at a glance what is shipping. CMake
+  paths updated (including the generated per-module `foreach` loop); nothing
+  else about the suites changed.
+- **`srcRootFromThisFile()` is move-proof.** Eight core suites fell back to a
+  `__FILE__`-derived repository root when `MVIEWER_SOURCE_DIR` was not defined.
+  The old fallback matched `/src/core/<file>`, so it silently degraded to `"."`
+  once the file moved — which is exactly how CI caught it (3 failures in
+  `m3m4m5_tests`). The fallback now accepts both `src/` and `tests/` layouts,
+  and `test_m3m4m5` gets the `MVIEWER_SOURCE_DIR` define every other target
+  already had.
+
+### Added
+
+- **Authenticode signing is wired, opt-in** (item 2). `package_release.ps1`
+  signs `MViewer.exe`, `mviewer_core.dll` and the installer with SHA-256 plus a
+  timestamp when `MVIEWER_SIGN_CERT` / `MVIEWER_SIGN_PASSWORD` are present in
+  the environment; the certificate is base64 in a secret, so no key lives in the
+  repo. Without them the release is still produced and the packaging log states
+  the artifacts are unsigned. **This repository has no certificate, so the
+  current artifacts are unsigned** — that is a procurement step, not code.
+
 ## [1.0.197] - 2026-11-21
 
 ### Release

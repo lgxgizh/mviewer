@@ -26,11 +26,18 @@
 #ifndef MVIEWER_SOURCE_DIR
 static std::string srcRootFromThisFile()
 {
+    // Resolve the repository root from this file's own path, independent of
+    // whether the suite lives in src/ or tests/.
     std::string f = __FILE__;
-    auto p = f.find("/src/core/test_repository.cpp");
-    if (p == std::string::npos)
-        p = f.find("\\src\\core\\test_repository.cpp");
-    return p == std::string::npos ? "." : f.substr(0, p);
+    const char *markers[] = { "/src/core/", "\\src\\core\\", "/tests/core/", "\\tests\\core\\",
+                              "/src/", "\\src\\", "/tests/", "\\tests\\" };
+    for (const char *m : markers)
+    {
+        const auto p = f.find(m);
+        if (p != std::string::npos)
+            return f.substr(0, p);
+    }
+    return ".";
 }
 #define MVIEWER_SOURCE_DIR srcRootFromThisFile().c_str()
 #endif

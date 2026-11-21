@@ -543,11 +543,11 @@ if(WIN32 AND TARGET MViewer AND Qt6_FOUND)
 endif()
 
 add_executable(core_tests
-    core/test_compare.cpp
-    core/test_m10.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_compare.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m10.cpp
     # M10 suites (incremental isolation)
-    core/test_memorytracker.cpp
-    core/test_benchmark.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_memorytracker.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_benchmark.cpp
     core/perf/GpuTracker.cpp
     benchmark/corpus.cpp
     benchmark/scenarios.cpp
@@ -565,7 +565,7 @@ target_compile_features(core_tests PRIVATE cxx_std_20)
 target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(mviewer_unit_tests
-    core/test_core.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_core.cpp
 )
 
 target_link_libraries(mviewer_unit_tests
@@ -579,7 +579,7 @@ target_compile_features(mviewer_unit_tests PRIVATE cxx_std_20)
 target_include_directories(mviewer_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_appstate
-    test_appstate.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_appstate.cpp
     appstate.cpp
 )
 
@@ -594,8 +594,8 @@ target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # M19: UI models (Selection / Directory / ImageList / Workspace / Analyzer) headless unit test.
 add_executable(test_ui_models
-    test_ui_models.cpp
-    test_menu_ink.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_ui_models.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_menu_ink.cpp
     naturalnameorder.cpp
     runtime_storage.cpp
     selectionmodel.cpp
@@ -633,7 +633,7 @@ add_executable(benchmark
 # M16: GpuTileUploader bookkeeping (headless; GL upload is a no-op
 # offscreen and activates only on real hardware with MVIEWER_GPU=1).
 add_executable(test_gputile
-    core/test_gputile.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_gputile.cpp
     gpu/GpuTileUploader.cpp
 )
 target_link_libraries(test_gputile
@@ -658,7 +658,7 @@ target_compile_features(benchmark PRIVATE cxx_std_20)
 target_include_directories(benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_executable(test_m3m4m5
-    core/test_m3m4m5.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m3m4m5.cpp
 )
 
 target_link_libraries(test_m3m4m5
@@ -672,11 +672,13 @@ target_link_libraries(test_m3m4m5
 target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# The suite reads testdata/ via MVIEWER_SOURCE_DIR, like every other target.
+target_compile_definitions(test_m3m4m5 PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
 foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_presentation filesystem filesystem_retry eventbus render_pipeline display_resample tilecache jpeg_block_tiles region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode raw_extensions raw_display crashhandler pluginabi pluginexamples encoder imagetransform imagerotate imagerotate_io jpegexif rotatefiles filecopycommand differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine usm m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository result cpu_features)
     add_executable(test_${_t}
-        core/test_${_t}.cpp
+        ${CMAKE_SOURCE_DIR}/tests/core/test_${_t}.cpp
     )
     target_link_libraries(test_${_t}
         PRIVATE
@@ -689,9 +691,9 @@ foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_p
     target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endforeach()
-# Case-only rename and trash-directory fallback. Kept beside test_commandstack.cpp
+# Case-only rename and trash-directory fallback. Kept beside ${CMAKE_SOURCE_DIR}/tests/test_commandstack.cpp
 # so that file stays under the 800-line complexity cap.
-target_sources(test_commandstack PRIVATE core/test_commandstack_case.cpp)
+target_sources(test_commandstack PRIVATE ${CMAKE_SOURCE_DIR}/tests/core/test_commandstack_case.cpp)
 # The QPainter compositing half of the RenderCommand pipeline is a UI adapter
 # (ADR-016); the core render test exercises it without linking all of mviewer_ui.
 target_sources(test_render_pipeline PRIVATE rendercommandpainter.cpp)
@@ -762,7 +764,7 @@ set_tests_properties(build_test_exit_gate PROPERTIES
 
 # ─── M3 Phase-1 pipeline acceptance tests ───────────────────────────────
 add_executable(m3pipeline_tests
-    core/test_m3_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m3_pipeline.cpp
 )
 
 target_link_libraries(m3pipeline_tests
@@ -780,7 +782,7 @@ target_compile_definitions(m3pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_
 
 # ─── M9-1 Browse workflow acceptance tests ────────────────────────────────
 add_executable(product_browse_tests
-    core/test_product_browse.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_product_browse.cpp
 )
 
 target_link_libraries(product_browse_tests
@@ -797,7 +799,7 @@ target_compile_definitions(product_browse_tests PRIVATE MVIEWER_SOURCE_DIR="${CM
 
 # ─── M9-2 Compare workflow acceptance tests ───────────────────────────────
 add_executable(compare_workflow_tests
-    core/test_compare_workflow.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_compare_workflow.cpp
 )
 
 target_link_libraries(compare_workflow_tests
@@ -815,7 +817,7 @@ target_compile_definitions(compare_workflow_tests PRIVATE MVIEWER_SOURCE_DIR="${
 # ─── M9-3 Analysis workflow acceptance tests ─────────────────────────────
 # ─── P0 #③ / P1 core unit tests (histogram) ──────────────────────────────────
 add_executable(histogram_tests
-    core/test_histogram.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_histogram.cpp
 )
 target_link_libraries(histogram_tests
     PRIVATE
@@ -829,7 +831,7 @@ target_include_directories(histogram_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(histogram_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_executable(analysis_panel_tests
-    core/test_analysis_panel.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_analysis_panel.cpp
 )
 
 target_link_libraries(analysis_panel_tests
@@ -846,7 +848,7 @@ target_compile_definitions(analysis_panel_tests PRIVATE MVIEWER_SOURCE_DIR="${CM
 
 # ─── M15 P0#3 Analyzer Pipeline acceptance tests ──────────────────────────
 add_executable(analyzer_pipeline_tests
-    test_analyzer_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_analyzer_pipeline.cpp
 )
 
 target_link_libraries(analyzer_pipeline_tests
@@ -864,7 +866,7 @@ add_test(NAME analyzer_pipeline_tests COMMAND analyzer_pipeline_tests)
 
 # ─── M15 P0#1 Compare Workspace session round-trip ─────────────────────────
 add_executable(compare_session_tests
-    test_compare_session.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_session.cpp
 )
 
 target_link_libraries(compare_session_tests
@@ -886,7 +888,7 @@ add_test(NAME compare_session_tests COMMAND compare_session_tests)
 # Workflow 2: two-image Compare → mode switch/exclusivity → Esc exit → keep browsing (real key events)
 # Maps to the Browsing / Compare / View items of docs/beta_checklist.md.
 add_executable(workflow_ux_tests
-    test_workflow_ux.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_workflow_ux.cpp
 )
 
 target_link_libraries(workflow_ux_tests
@@ -911,7 +913,7 @@ set_tests_properties(workflow_ux_tests PROPERTIES RUN_SERIAL TRUE)
 # folder switches, widget-tree teardown during a large scan, view switch during
 # dimension resolve, out-of-order completion, and pool quiescence.
 add_executable(async_lifetime_tests
-    test_async_lifetime.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_async_lifetime.cpp
 )
 
 target_link_libraries(async_lifetime_tests
@@ -931,9 +933,9 @@ set_tests_properties(async_lifetime_tests PROPERTIES RUN_SERIAL TRUE)
 # ─── M24: Browse workflow acceptance (view modes / selection / filter / file
 # ops / degraded inputs / metadata overlay currency) ─────────────────────────
 add_executable(browse_acceptance_tests
-    test_browse_acceptance.cpp
-    test_browse_viewmode.cpp
-    test_browse_row_chrome.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_acceptance.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_viewmode.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_row_chrome.cpp
 )
 
 target_link_libraries(browse_acceptance_tests
@@ -953,7 +955,7 @@ set_tests_properties(browse_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 # ─── Metadata overlay layout (View → Image &info, I / M): the on-image panel
 # sizes itself from its content and stays inside the viewer ───────────────────
 add_executable(metadata_overlay_tests
-    test_metadata_overlay.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_metadata_overlay.cpp
 )
 
 target_link_libraries(metadata_overlay_tests
@@ -972,7 +974,7 @@ set_tests_properties(metadata_overlay_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ─── Viewer line-profile / video scopes (L / W) ──────────────────────────────
 add_executable(viewer_scope_tests
-    test_viewer_scope.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_viewer_scope.cpp
 )
 
 target_link_libraries(viewer_scope_tests
@@ -991,7 +993,7 @@ set_tests_properties(viewer_scope_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ─── Viewer review markup (A / T, export review image) ───────────────────────
 add_executable(viewer_annotate_tests
-    test_viewer_annotate.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_viewer_annotate.cpp
 )
 
 target_link_libraries(viewer_annotate_tests
@@ -1010,7 +1012,7 @@ set_tests_properties(viewer_annotate_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ─── Viewer display adjustment panel (G) ────────────────────────────────────
 add_executable(viewer_adjust_tests
-    test_viewer_adjust.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_viewer_adjust.cpp
 )
 
 target_link_libraries(viewer_adjust_tests
@@ -1029,7 +1031,7 @@ set_tests_properties(viewer_adjust_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ─── CV overlay (item 2 extraction) ──────────────────────────────────────────
 add_executable(cv_overlay_tests
-    test_cv_overlay.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_cv_overlay.cpp
 )
 
 target_link_libraries(cv_overlay_tests
@@ -1048,7 +1050,7 @@ set_tests_properties(cv_overlay_tests PROPERTIES RUN_SERIAL TRUE)
 
 # Browse: paste clipboard into current folder + open-folder toolbar action
 add_executable(browse_paste_acceptance
-    test_browse_paste.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_paste.cpp
 )
 
 target_link_libraries(browse_paste_acceptance
@@ -1067,7 +1069,7 @@ set_tests_properties(browse_paste_acceptance PROPERTIES RUN_SERIAL TRUE)
 
 # Browse: Ctrl+C puts the selected files on the clipboard for Explorer paste
 add_executable(browse_copy_files_tests
-    test_browse_copy_files.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_copy_files.cpp
 )
 
 target_link_libraries(browse_copy_files_tests
@@ -1086,7 +1088,7 @@ set_tests_properties(browse_copy_files_tests PROPERTIES RUN_SERIAL TRUE)
 
 # Split Browse View (RFC ADR-001/005/014/018)
 add_executable(split_browse_acceptance
-    test_split_browse_acceptance.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_split_browse_acceptance.cpp
 )
 target_link_libraries(split_browse_acceptance
     PRIVATE
@@ -1104,7 +1106,7 @@ set_tests_properties(split_browse_acceptance PROPERTIES RUN_SERIAL TRUE)
 
 # ─── M45: real MainWindow CommandStack callback + async file-op surface ─────
 add_executable(mainwindow_commandstack_acceptance
-    test_mainwindow_commandstack.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_mainwindow_commandstack.cpp
 )
 
 target_link_libraries(mainwindow_commandstack_acceptance
@@ -1123,7 +1125,7 @@ set_tests_properties(mainwindow_commandstack_acceptance PROPERTIES RUN_SERIAL TR
 
 # Fullscreen viewer "Analyze" must leave fullscreen and show the analysis panel.
 add_executable(fullscreen_analysis_tests
-    test_fullscreen_analysis.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_fullscreen_analysis.cpp
 )
 
 target_link_libraries(fullscreen_analysis_tests
@@ -1142,7 +1144,7 @@ set_tests_properties(fullscreen_analysis_tests PROPERTIES RUN_SERIAL TRUE TIMEOU
 
 # UI language: English source text, zh_CN translator and localized help pages.
 add_executable(language_tests
-    test_language.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_language.cpp
 )
 
 target_link_libraries(language_tests
@@ -1161,7 +1163,7 @@ set_tests_properties(language_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # Preferences autoCheckUpdates default and round-trip (startup silent update gate).
 add_executable(auto_check_updates_pref_tests
-    test_auto_check_updates_pref.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_auto_check_updates_pref.cpp
 )
 
 target_link_libraries(auto_check_updates_pref_tests
@@ -1180,7 +1182,7 @@ set_tests_properties(auto_check_updates_pref_tests PROPERTIES RUN_SERIAL TRUE TI
 
 # USM source ICC embed and RAW default save suffix.
 add_executable(usm_dialog_tests
-    test_usm_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_usm_dialog.cpp
 )
 target_link_libraries(usm_dialog_tests
     PRIVATE
@@ -1198,7 +1200,7 @@ set_tests_properties(usm_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 # ADR 032: YUV parameter dialog summary and QSettings persistence.
 # ADR 033: plain .raw parameters editor, dialog and Preferences persistence.
 add_executable(plainraw_params_dialog_tests
-    test_plainraw_params_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_plainraw_params_dialog.cpp
 )
 target_link_libraries(plainraw_params_dialog_tests
     PRIVATE
@@ -1214,7 +1216,7 @@ add_test(NAME plainraw_params_dialog_tests COMMAND plainraw_params_dialog_tests)
 set_tests_properties(plainraw_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
 add_executable(yuv_params_dialog_tests
-    test_yuv_params_dialog.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_yuv_params_dialog.cpp
 )
 target_link_libraries(yuv_params_dialog_tests
     PRIVATE
@@ -1231,13 +1233,13 @@ set_tests_properties(yuv_params_dialog_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 
 
 # ADR 032: two-file YUV PSNR / SSIM compare dialog (worker thread, cancel, report).
 mviewer_add_test(yuv_compare_dialog_tests
-    SRCS test_yuv_compare_dialog.cpp
+    SRCS ${CMAKE_SOURCE_DIR}/tests/test_yuv_compare_dialog.cpp
     LIBS mviewer_ui
     TIMEOUT 30 SERIAL)
 
 # Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
 add_executable(rotate_selection_tests
-    test_rotate_selection.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_rotate_selection.cpp
 )
 
 target_link_libraries(rotate_selection_tests
@@ -1257,7 +1259,7 @@ set_tests_properties(rotate_selection_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 2
 # ─── M24: Compare workflow acceptance (multi-image entry, mode-preserved
 # state, continuous pair navigation, degraded images) ────────────────────────
 add_executable(compare_acceptance_tests
-    test_compare_acceptance.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_acceptance.cpp
 )
 
 target_link_libraries(compare_acceptance_tests
@@ -1277,7 +1279,7 @@ set_tests_properties(compare_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 # "Fit window (F)" with Uniform Pixel Scale off: same-aspect, different-resolution panes scale
 # inversely to size.
 add_executable(compare_best_fit_tests
-    test_compare_best_fit.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_best_fit.cpp
 )
 
 target_link_libraries(compare_best_fit_tests
@@ -1297,7 +1299,7 @@ set_tests_properties(compare_best_fit_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 1
 # Three-pane compare: long unbreakable filenames must not squeeze the left
 # pane; every pane gets an equal column and its own fit-to-window scale.
 add_executable(compare_three_pane_fit_tests
-    test_compare_three_pane_fit.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_three_pane_fit.cpp
 )
 target_link_libraries(compare_three_pane_fit_tests
     PRIVATE
@@ -1316,7 +1318,7 @@ set_tests_properties(compare_three_pane_fit_tests PROPERTIES RUN_SERIAL TRUE TIM
 # currency per image, history/pin persistence) ───────────────────────────────
 # Compare diff cache: warm (cached) batches equal cold ones exactly.
 add_executable(compare_diff_cache_tests
-    test_compare_diff_cache.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_diff_cache.cpp
 )
 target_link_libraries(compare_diff_cache_tests
     PRIVATE
@@ -1331,7 +1333,7 @@ target_include_directories(compare_diff_cache_tests PRIVATE ${CMAKE_CURRENT_SOUR
 add_test(NAME compare_diff_cache_tests COMMAND compare_diff_cache_tests)
 
 add_executable(cell_image_adjust_tests
-    core/test_cell_image_adjust.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_cell_image_adjust.cpp
 )
 target_link_libraries(cell_image_adjust_tests
     PRIVATE
@@ -1347,7 +1349,7 @@ add_test(NAME cell_image_adjust_tests COMMAND cell_image_adjust_tests)
 set_tests_properties(cell_image_adjust_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
 add_executable(analyze_acceptance_tests
-    test_analyze_acceptance.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_analyze_acceptance.cpp
 )
 
 target_link_libraries(analyze_acceptance_tests
@@ -1366,7 +1368,7 @@ add_test(NAME analyze_acceptance_tests COMMAND analyze_acceptance_tests)
 # ─── M24: Export workflow acceptance (format fidelity, atomic writes,
 # cancellation, degraded output dirs) ────────────────────────────────────────
 add_executable(export_acceptance_tests
-    test_export_acceptance.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_export_acceptance.cpp
 )
 
 target_link_libraries(export_acceptance_tests
@@ -1383,7 +1385,7 @@ add_test(NAME export_acceptance_tests COMMAND export_acceptance_tests)
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests
-    core/test_export.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_export.cpp
 )
 
 target_link_libraries(export_tests
@@ -1400,7 +1402,7 @@ target_compile_definitions(export_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOUR
 
 # P4 — Batch export pipeline (resize / watermark / contact sheet / PDF / rename)
 add_executable(export_pipeline_tests
-    core/test_export_pipeline.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_export_pipeline.cpp
 )
 
 target_link_libraries(export_pipeline_tests
@@ -1417,7 +1419,7 @@ target_compile_definitions(export_pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${C
 
 # M21: unified ExportJob runner tests
 add_executable(export_job_tests
-    core/test_export_job.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_export_job.cpp
 )
 target_link_libraries(export_job_tests
     PRIVATE
@@ -1431,7 +1433,7 @@ target_include_directories(export_job_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M9-5 Workspace persistence acceptance tests ──────────────────────────
 add_executable(workspace_persist_tests
-    core/test_workspace_persist.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_workspace_persist.cpp
 )
 
 target_link_libraries(workspace_persist_tests
@@ -1448,7 +1450,7 @@ target_compile_definitions(workspace_persist_tests PRIVATE MVIEWER_SOURCE_DIR="$
 
 # ─── M15 Project (.mvproj) acceptance tests ──────────────────────────────
 add_executable(test_project
-    core/test_project.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_project.cpp
 )
 
 target_link_libraries(test_project
@@ -1467,7 +1469,7 @@ add_test(NAME project_tests COMMAND test_project)
 
 # ─── M15 Pixel Inspector Pro (color-space + kernel math) ───────────────────
 add_executable(test_pixelinspector
-    core/test_pixelinspector.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_pixelinspector.cpp
 )
 
 target_link_libraries(test_pixelinspector
@@ -1483,44 +1485,44 @@ target_include_directories(test_pixelinspector PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 add_test(NAME pixelinspector_tests COMMAND test_pixelinspector)
 
 # ─── YUV format geometry and pixel-format names ───────────────────────────────
-add_executable(test_yuv_format core/test_yuv_format.cpp)
+add_executable(test_yuv_format ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_format.cpp)
 target_link_libraries(test_yuv_format PRIVATE mviewer_core)
 target_compile_features(test_yuv_format PRIVATE cxx_std_20)
 target_include_directories(test_yuv_format PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_format_tests COMMAND test_yuv_format)
 
 # ─── YUV4MPEG2 header parsing ──────────────────────────────────────────────────
-add_executable(test_yuv_y4m core/test_yuv_y4m.cpp)
+add_executable(test_yuv_y4m ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_y4m.cpp)
 target_link_libraries(test_yuv_y4m PRIVATE mviewer_core)
 target_compile_features(test_yuv_y4m PRIVATE cxx_std_20)
 target_include_directories(test_yuv_y4m PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_y4m_tests COMMAND test_yuv_y4m)
 
-add_executable(test_yuv_inference core/test_yuv_inference.cpp)
+add_executable(test_yuv_inference ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_inference.cpp)
 target_link_libraries(test_yuv_inference PRIVATE mviewer_core)
 target_compile_features(test_yuv_inference PRIVATE cxx_std_20)
 target_include_directories(test_yuv_inference PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_inference_tests COMMAND test_yuv_inference)
 
-add_executable(test_yuv_layout_reference core/test_yuv_layout_reference.cpp)
+add_executable(test_yuv_layout_reference ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_layout_reference.cpp)
 target_link_libraries(test_yuv_layout_reference PRIVATE mviewer_core)
 target_compile_features(test_yuv_layout_reference PRIVATE cxx_std_20)
 target_include_directories(test_yuv_layout_reference PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_layout_reference_tests COMMAND test_yuv_layout_reference)
 
-add_executable(test_yuv_unpack core/test_yuv_unpack.cpp)
+add_executable(test_yuv_unpack ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_unpack.cpp)
 target_link_libraries(test_yuv_unpack PRIVATE mviewer_core)
 target_compile_features(test_yuv_unpack PRIVATE cxx_std_20)
 target_include_directories(test_yuv_unpack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_unpack_tests COMMAND test_yuv_unpack)
 
-add_executable(test_yuv_to_rgb core/test_yuv_to_rgb.cpp)
+add_executable(test_yuv_to_rgb ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_to_rgb.cpp)
 target_link_libraries(test_yuv_to_rgb PRIVATE mviewer_core)
 target_compile_features(test_yuv_to_rgb PRIVATE cxx_std_20)
 target_include_directories(test_yuv_to_rgb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_to_rgb_tests COMMAND test_yuv_to_rgb)
 
-add_executable(test_yuv_simd core/test_yuv_simd.cpp)
+add_executable(test_yuv_simd ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_simd.cpp)
 target_link_libraries(test_yuv_simd PRIVATE mviewer_core)
 target_compile_features(test_yuv_simd PRIVATE cxx_std_20)
 target_include_directories(test_yuv_simd PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -1532,118 +1534,118 @@ target_link_libraries(bench_yuv_to_rgb PRIVATE mviewer_core)
 target_compile_features(bench_yuv_to_rgb PRIVATE cxx_std_20)
 target_include_directories(bench_yuv_to_rgb PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(test_yuv_source core/test_yuv_source.cpp)
+add_executable(test_yuv_source ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_source.cpp)
 target_link_libraries(test_yuv_source PRIVATE mviewer_core)
 target_compile_features(test_yuv_source PRIVATE cxx_std_20)
 target_include_directories(test_yuv_source PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_source_tests COMMAND test_yuv_source)
 
-add_executable(test_yuv_decoder core/test_yuv_decoder.cpp)
+add_executable(test_yuv_decoder ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_decoder.cpp)
 target_link_libraries(test_yuv_decoder PRIVATE mviewer_core)
 target_compile_features(test_yuv_decoder PRIVATE cxx_std_20)
 target_include_directories(test_yuv_decoder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_decoder_tests COMMAND test_yuv_decoder)
 
 # ADR 033: plain .raw sensor dumps.
-add_executable(test_plainraw_format core/test_plainraw_format.cpp)
+add_executable(test_plainraw_format ${CMAKE_SOURCE_DIR}/tests/core/test_plainraw_format.cpp)
 target_link_libraries(test_plainraw_format PRIVATE mviewer_core)
 target_compile_features(test_plainraw_format PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_format PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_format_tests COMMAND test_plainraw_format)
 
-add_executable(test_plainraw_unpack core/test_plainraw_unpack.cpp)
+add_executable(test_plainraw_unpack ${CMAKE_SOURCE_DIR}/tests/core/test_plainraw_unpack.cpp)
 target_link_libraries(test_plainraw_unpack PRIVATE mviewer_core)
 target_compile_features(test_plainraw_unpack PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_unpack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_unpack_tests COMMAND test_plainraw_unpack)
 
-add_executable(test_plainraw_render core/test_plainraw_render.cpp)
+add_executable(test_plainraw_render ${CMAKE_SOURCE_DIR}/tests/core/test_plainraw_render.cpp)
 target_link_libraries(test_plainraw_render PRIVATE mviewer_core)
 target_compile_features(test_plainraw_render PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_render_tests COMMAND test_plainraw_render)
 
-add_executable(test_plainraw_file core/test_plainraw_file.cpp)
+add_executable(test_plainraw_file ${CMAKE_SOURCE_DIR}/tests/core/test_plainraw_file.cpp)
 target_link_libraries(test_plainraw_file PRIVATE mviewer_core)
 target_compile_features(test_plainraw_file PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_file PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_file_tests COMMAND test_plainraw_file)
 
-add_executable(test_libraw_quality core/test_libraw_quality.cpp)
+add_executable(test_libraw_quality ${CMAKE_SOURCE_DIR}/tests/core/test_libraw_quality.cpp)
 target_link_libraries(test_libraw_quality PRIVATE mviewer_core Qt6::Core)
 target_compile_features(test_libraw_quality PRIVATE cxx_std_20)
 target_include_directories(test_libraw_quality PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME libraw_quality_tests COMMAND test_libraw_quality)
 
-add_executable(test_plainraw_stride core/test_plainraw_stride.cpp)
+add_executable(test_plainraw_stride ${CMAKE_SOURCE_DIR}/tests/core/test_plainraw_stride.cpp)
 target_link_libraries(test_plainraw_stride PRIVATE mviewer_core)
 target_compile_features(test_plainraw_stride PRIVATE cxx_std_20)
 target_include_directories(test_plainraw_stride PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME plainraw_stride_tests COMMAND test_plainraw_stride)
 
-add_executable(test_dither_quantize core/test_dither_quantize.cpp)
+add_executable(test_dither_quantize ${CMAKE_SOURCE_DIR}/tests/core/test_dither_quantize.cpp)
 target_link_libraries(test_dither_quantize PRIVATE mviewer_core Qt6::Gui)
 target_compile_features(test_dither_quantize PRIVATE cxx_std_20)
 target_include_directories(test_dither_quantize PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME dither_quantize_tests COMMAND test_dither_quantize)
 
-add_executable(test_yuv_sequence core/test_yuv_sequence.cpp)
+add_executable(test_yuv_sequence ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_sequence.cpp)
 target_link_libraries(test_yuv_sequence PRIVATE mviewer_core)
 target_compile_features(test_yuv_sequence PRIVATE cxx_std_20)
 target_include_directories(test_yuv_sequence PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_sequence_tests COMMAND test_yuv_sequence)
 
 # Report feature 4: HDR (OpenEXR / PFM) decode + tone map.
-add_executable(test_hdr_decoder core/test_hdr_decoder.cpp)
+add_executable(test_hdr_decoder ${CMAKE_SOURCE_DIR}/tests/core/test_hdr_decoder.cpp)
 target_link_libraries(test_hdr_decoder PRIVATE mviewer_core)
 target_compile_features(test_hdr_decoder PRIVATE cxx_std_20)
 target_include_directories(test_hdr_decoder PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME hdr_decoder_tests COMMAND test_hdr_decoder)
 
 # Report feature 5: review display adjustment (exposure / gamma / auto-stretch / LUT).
-add_executable(test_display_adjust core/test_display_adjust.cpp)
+add_executable(test_display_adjust ${CMAKE_SOURCE_DIR}/tests/core/test_display_adjust.cpp)
 target_link_libraries(test_display_adjust PRIVATE mviewer_core)
 target_compile_features(test_display_adjust PRIVATE cxx_std_20)
 target_include_directories(test_display_adjust PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME display_adjust_tests COMMAND test_display_adjust)
 
 # Report feature 6: CIEDE2000 colour difference.
-add_executable(test_ciede2000 core/test_ciede2000.cpp)
+add_executable(test_ciede2000 ${CMAKE_SOURCE_DIR}/tests/core/test_ciede2000.cpp)
 target_link_libraries(test_ciede2000 PRIVATE mviewer_core)
 target_compile_features(test_ciede2000 PRIVATE cxx_std_20)
 target_include_directories(test_ciede2000 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME ciede2000_tests COMMAND test_ciede2000)
 
 # Report feature 6: ColorChecker measurement on top of CIEDE2000.
-add_executable(test_color_checker core/test_color_checker.cpp)
+add_executable(test_color_checker ${CMAKE_SOURCE_DIR}/tests/core/test_color_checker.cpp)
 target_link_libraries(test_color_checker PRIVATE mviewer_core)
 target_compile_features(test_color_checker PRIVATE cxx_std_20)
 target_include_directories(test_color_checker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME color_checker_tests COMMAND test_color_checker)
 
 # Report feature 10: 2D FFT spectrum.
-add_executable(test_fft2d core/test_fft2d.cpp)
+add_executable(test_fft2d ${CMAKE_SOURCE_DIR}/tests/core/test_fft2d.cpp)
 target_link_libraries(test_fft2d PRIVATE mviewer_core)
 target_compile_features(test_fft2d PRIVATE cxx_std_20)
 target_include_directories(test_fft2d PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME fft2d_tests COMMAND test_fft2d)
 
 # Report feature 11: portable session package.
-add_executable(test_session_package core/test_session_package.cpp)
+add_executable(test_session_package ${CMAKE_SOURCE_DIR}/tests/core/test_session_package.cpp)
 target_link_libraries(test_session_package PRIVATE mviewer_core)
 target_compile_features(test_session_package PRIVATE cxx_std_20)
 target_include_directories(test_session_package PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME session_package_tests COMMAND test_session_package)
 
 # Item 5: undo for a clipboard paste.
-add_executable(test_clipboard_paste_command core/test_clipboard_paste_command.cpp)
+add_executable(test_clipboard_paste_command ${CMAKE_SOURCE_DIR}/tests/core/test_clipboard_paste_command.cpp)
 target_link_libraries(test_clipboard_paste_command PRIVATE mviewer_core)
 target_compile_features(test_clipboard_paste_command PRIVATE cxx_std_20)
 target_include_directories(test_clipboard_paste_command PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME clipboard_paste_command_tests COMMAND test_clipboard_paste_command)
 
 # Report feature 9: Python script bridge.
-add_executable(python_script_runner_tests test_python_script_runner.cpp)
+add_executable(python_script_runner_tests ${CMAKE_SOURCE_DIR}/tests/test_python_script_runner.cpp)
 target_link_libraries(python_script_runner_tests
     PRIVATE
         Qt6::Widgets
@@ -1659,7 +1661,7 @@ add_test(NAME python_script_runner_tests COMMAND python_script_runner_tests)
 set_tests_properties(python_script_runner_tests PROPERTIES RUN_SERIAL TRUE)
 
 # Item 4: non-Windows ICC (colord / colour directories on Linux).
-add_executable(linux_icc_tests test_linux_icc.cpp)
+add_executable(linux_icc_tests ${CMAKE_SOURCE_DIR}/tests/test_linux_icc.cpp)
 target_link_libraries(linux_icc_tests
     PRIVATE
         Qt6::Widgets
@@ -1673,14 +1675,14 @@ target_include_directories(linux_icc_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME linux_icc_tests COMMAND linux_icc_tests)
 set_tests_properties(linux_icc_tests PROPERTIES RUN_SERIAL TRUE)
 
-add_executable(test_yuv_sample core/test_yuv_sample.cpp)
+add_executable(test_yuv_sample ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)
 target_compile_features(test_yuv_sample PRIVATE cxx_std_20)
 target_include_directories(test_yuv_sample PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME yuv_sample_tests COMMAND test_yuv_sample)
 
 # ADR 032: per-plane YUV PSNR / SSIM and sequence compare.
-add_executable(test_yuv_metrics core/test_yuv_metrics.cpp)
+add_executable(test_yuv_metrics ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_metrics.cpp)
 target_link_libraries(test_yuv_metrics PRIVATE mviewer_core)
 target_compile_features(test_yuv_metrics PRIVATE cxx_std_20)
 target_include_directories(test_yuv_metrics PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -1688,7 +1690,7 @@ add_test(NAME yuv_metrics_tests COMMAND test_yuv_metrics)
 
 # YUV fast paths (integer SSIM, raw thumbnails, threaded RGB, parallel compare,
 # y4m resolve cache) must match the reference results exactly.
-add_executable(test_yuv_fast_paths core/test_yuv_fast_paths.cpp)
+add_executable(test_yuv_fast_paths ${CMAKE_SOURCE_DIR}/tests/core/test_yuv_fast_paths.cpp)
 target_link_libraries(test_yuv_fast_paths PRIVATE mviewer_core)
 target_compile_features(test_yuv_fast_paths PRIVATE cxx_std_20)
 target_include_directories(test_yuv_fast_paths PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -1696,7 +1698,7 @@ add_test(NAME yuv_fast_paths_tests COMMAND test_yuv_fast_paths)
 
 # ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
 add_executable(test_qtconvert
-    core/test_qtconvert.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_qtconvert.cpp
 )
 
 target_link_libraries(test_qtconvert
@@ -1713,7 +1715,7 @@ add_test(NAME qtconvert_tests COMMAND test_qtconvert)
 
 # ─── M15 P0#4 Metadata Center (unified MetadataModel + QTreeView) ───────────
 add_executable(test_metadatamodel
-    test_metadatamodel.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_metadatamodel.cpp
 )
 
 target_link_libraries(test_metadatamodel
@@ -1733,7 +1735,7 @@ add_test(NAME metadatamodel_tests COMMAND test_metadatamodel)
 
 # ─── ICC profile parser regression (parseIccProfile robustness + BCD version) ──
 add_executable(test_iccprofile
-    core/test_iccprofile.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_iccprofile.cpp
 )
 
 target_link_libraries(test_iccprofile
@@ -1750,7 +1752,7 @@ add_test(NAME iccprofile_tests COMMAND test_iccprofile)
 # M36: display materialization contracts. Keeps analysis-domain bytes intact
 # while asserting the CPU/GPU tile and ICC presentation helpers agree.
 add_executable(test_m36_display
-    core/test_m36_display.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m36_display.cpp
 )
 target_link_libraries(test_m36_display PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core)
 target_compile_features(test_m36_display PRIVATE cxx_std_20)
@@ -1759,7 +1761,7 @@ add_test(NAME m36_display_tests COMMAND test_m36_display)
 
 # M36: real QListView Ctrl/Shift selection and SelectionModel integration.
 add_executable(m36_browse_tests
-    core/test_m36_browse.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m36_browse.cpp
 )
 target_link_libraries(m36_browse_tests PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui)
 target_compile_features(m36_browse_tests PRIVATE cxx_std_20)
@@ -1769,7 +1771,7 @@ set_tests_properties(m36_browse_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # ─── M15 Sprint 2-1 Search (global index + query engine) ─────────────────────
 add_executable(search_tests
-    test_search.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_search.cpp
 )
 
 target_link_libraries(search_tests
@@ -1787,7 +1789,7 @@ add_test(NAME search_tests COMMAND search_tests)
 
 # M25: offline update-checker reliability and endpoint policy regressions.
 add_executable(test_updatechecker
-    test_updatechecker.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_updatechecker.cpp
 )
 
 target_link_libraries(test_updatechecker PRIVATE mviewer_core)
@@ -1797,7 +1799,7 @@ add_test(NAME updatechecker_tests COMMAND test_updatechecker)
 
 # ─── M15 Sprint 2-2 Batch Workflow (batch processor + dialog) ────────────────
 add_executable(batch_tests
-    test_batch.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_batch.cpp
 )
 
 target_link_libraries(batch_tests
@@ -1816,7 +1818,7 @@ add_test(NAME batch_tests COMMAND batch_tests)
 
 # ─── M9-6 Polish (shortcuts route via Command) acceptance tests ──────────
 add_executable(shortcuts_tests
-    core/test_shortcuts.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_shortcuts.cpp
 )
 
 target_link_libraries(shortcuts_tests
@@ -2046,7 +2048,7 @@ target_include_directories(mviewer_demo_render PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 # M13 Phase 4 — real-image-dataset acceptance: open every testdata/ fixture
 # via the real Decoder; assert no crash + (decoded OR gracefully skipped).
 add_executable(test_assets_acceptance
-    core/test_assets_acceptance.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_assets_acceptance.cpp
 )
 
 target_link_libraries(test_assets_acceptance
@@ -2175,7 +2177,7 @@ add_test(NAME export_job_tests COMMAND export_job_tests)
 
 # P1-1 — RecentStore (recently-viewed list)
 add_executable(recentstore_tests
-    core/test_recentstore.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_recentstore.cpp
 )
 
 target_link_libraries(recentstore_tests
@@ -2193,7 +2195,7 @@ target_compile_definitions(recentstore_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE
 add_test(NAME recentstore_tests COMMAND recentstore_tests)
 
 add_executable(memory_budget_tests
-    core/test_memory_budget.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_memory_budget.cpp
 )
 
 target_link_libraries(memory_budget_tests
@@ -2210,7 +2212,7 @@ add_test(NAME memory_budget_tests COMMAND memory_budget_tests)
 
 # Audit #41 / #47 — preset paths and settings restore.
 add_executable(audit_persistence_tests
-    core/test_audit_persistence.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_audit_persistence.cpp
 )
 target_link_libraries(audit_persistence_tests
     PRIVATE
@@ -2224,7 +2226,7 @@ add_test(NAME audit_persistence_tests COMMAND audit_persistence_tests)
 # P2 — AnalyzerRegistry extensibility: a new analyzer is discoverable/runnable
 # without any MainWindow/UI change.
 add_executable(analyzer_registry_tests
-    core/test_register.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_register.cpp
 )
 
 target_link_libraries(analyzer_registry_tests
@@ -2254,7 +2256,7 @@ add_test(NAME rotatefiles_tests COMMAND test_rotatefiles)
 add_test(NAME filecopycommand_tests COMMAND test_filecopycommand)
 
 add_executable(test_fileop_targets
-    test_fileop_targets.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_fileop_targets.cpp
 )
 target_link_libraries(test_fileop_targets PRIVATE Qt6::Gui Qt6::Core)
 target_compile_features(test_fileop_targets PRIVATE cxx_std_20)
@@ -2262,7 +2264,7 @@ target_include_directories(test_fileop_targets PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 add_test(NAME fileop_targets_tests COMMAND test_fileop_targets)
 
 add_executable(test_split_transfer
-    test_split_transfer.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_split_transfer.cpp
 )
 target_link_libraries(test_split_transfer PRIVATE Qt6::Core)
 target_compile_features(test_split_transfer PRIVATE cxx_std_20)
@@ -2279,7 +2281,7 @@ add_test(NAME usm_tests COMMAND test_usm)
 # ─── M25: Browse pipeline convergence (UI level) — thumbnail cache identity,
 # pipeline size/generation semantics, panel size-switch and filter behaviors ─
 add_executable(browse_convergence_ui_tests
-    test_browse_convergence.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_convergence.cpp
 )
 
 target_link_libraries(browse_convergence_ui_tests
@@ -2302,7 +2304,7 @@ set_tests_properties(browse_convergence_ui_tests PROPERTIES RUN_SERIAL TRUE)
 # the work is in flight. Bounds and justifies the Qt-teardown workarounds the
 # acceptance/workflow suites use for process-level teardown.
 add_executable(teardown_stress_tests
-    test_teardown_stress.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_teardown_stress.cpp
 )
 
 target_link_libraries(teardown_stress_tests
@@ -2324,11 +2326,11 @@ set_tests_properties(teardown_stress_tests PROPERTIES RUN_SERIAL TRUE)
 # A->B->A newest-generation delivery, rejection terminal state, and the P9 24MP
 # UI completion-latency bounds. Heavy but bounded; runs serial.
 add_executable(m27_lifetime_tests
-    test_m27_lifetime.cpp
-    test_m27_preview_frame.cpp
-    test_m27_preview_identity.cpp
-    test_m27_preview_source_size.cpp
-    test_m27_preview_submit_reject.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m27_lifetime.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m27_preview_frame.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m27_preview_identity.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m27_preview_source_size.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m27_preview_submit_reject.cpp
 )
 target_link_libraries(m27_lifetime_tests
     PRIVATE
@@ -2348,7 +2350,7 @@ set_tests_properties(m27_lifetime_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 # Real MainWindow open -> browse -> viewer A/B/A -> compare diff -> destroy,
 # with per-round subsystem convergence and RSS/handle/thread leak checks.
 add_executable(m27_lifecycle_torture
-    test_m27_lifecycle.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m27_lifecycle.cpp
 )
 target_link_libraries(m27_lifecycle_torture
     PRIVATE
@@ -2368,7 +2370,7 @@ set_tests_properties(m27_lifecycle_torture PROPERTIES RUN_SERIAL TRUE TIMEOUT 18
 # Deterministic interleavings (decode-done vs cancel vs consumer-death) built
 # with latches + the repository delivery-gate hooks, never sleep-based timing.
 add_executable(m46_repository_tests
-    core/test_m46_repository.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m46_repository.cpp
 )
 target_link_libraries(m46_repository_tests
     PRIVATE
@@ -2384,7 +2386,7 @@ set_tests_properties(m46_repository_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300
 
 # ─── M46: ThumbnailPipeline mid-flight resize supersession (core) ───────────
 add_executable(m46_thumbnail_tests
-    core/test_m46_thumbnail.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m46_thumbnail.cpp
 )
 target_link_libraries(m46_thumbnail_tests
     PRIVATE
@@ -2402,7 +2404,7 @@ set_tests_properties(m46_thumbnail_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 # Capability contract (probe without decode, native-LOD, bounded region,
 # native-vs-fallback classification) over the deterministic large corpus.
 add_executable(m47_source_tests
-    core/test_m47_source.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m47_source.cpp
 )
 target_link_libraries(m47_source_tests
     PRIVATE
@@ -2421,7 +2423,7 @@ set_tests_properties(m47_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 # Tests-first characterization: this target freezes the large-source contract
 # established red on the M52 baseline and now runs as a release regression gate.
 add_executable(m53_large_source_tests
-    core/test_m53_large_source.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m53_large_source.cpp
 )
 target_link_libraries(m53_large_source_tests
     PRIVATE
@@ -2436,7 +2438,7 @@ add_test(NAME m53_large_source_tests COMMAND m53_large_source_tests)
 set_tests_properties(m53_large_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
 add_executable(bmp_lod_tests
-    core/test_bmp_lod.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_bmp_lod.cpp
 )
 target_link_libraries(bmp_lod_tests
     PRIVATE
@@ -2450,7 +2452,7 @@ add_test(NAME bmp_lod_tests COMMAND bmp_lod_tests)
 set_tests_properties(bmp_lod_tests PROPERTIES TIMEOUT 120)
 
 add_executable(png_lod_tests
-    core/test_png_lod.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_png_lod.cpp
 )
 target_link_libraries(png_lod_tests
     PRIVATE
@@ -2464,7 +2466,7 @@ add_test(NAME png_lod_tests COMMAND png_lod_tests)
 set_tests_properties(png_lod_tests PROPERTIES TIMEOUT 120)
 
 add_executable(tiff_lod_tests
-    core/test_tiff_lod.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_tiff_lod.cpp
 )
 target_link_libraries(tiff_lod_tests
     PRIVATE
@@ -2480,7 +2482,7 @@ set_tests_properties(tiff_lod_tests PROPERTIES TIMEOUT 120)
 # M53 Native Windows qualification: exercise the real Viewer and Compare UI
 # over the 100MP TIFF fixture, including zoom-region refresh and mode churn.
 add_executable(m53_large_source_ui_tests
-    test_m53_large_source_ui.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m53_large_source_ui.cpp
 )
 target_link_libraries(m53_large_source_ui_tests
     PRIVATE
@@ -2499,7 +2501,7 @@ set_tests_properties(m53_large_source_ui_tests PROPERTIES RUN_SERIAL TRUE TIMEOU
 # M53 release soak: repeat large-TIFF Viewer/Compare destruction and
 # latest-generation replacement to qualify long-session cleanup.
 add_executable(m53_large_source_soak
-    test_m53_large_source_soak.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m53_large_source_soak.cpp
 )
 target_link_libraries(m53_large_source_soak
     PRIVATE
@@ -2521,7 +2523,7 @@ set_tests_properties(m53_large_source_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 18
 # baseline/final documents; the target remains a release test-gate executable
 # so a future browse regression is visible in the normal local Test run.
 add_executable(m54_perceived_performance_tests
-    test_m54_perceived_performance.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m54_perceived_performance.cpp
 )
 target_link_libraries(m54_perceived_performance_tests
     PRIVATE
@@ -2541,7 +2543,7 @@ set_tests_properties(m54_perceived_performance_tests PROPERTIES RUN_SERIAL TRUE 
 # Drives a real ThumbnailPanel over a 420-image corpus and verifies the
 # QPixmap working set remains bounded while the viewport visits disjoint rows.
 add_executable(m55_interactive_tests
-    test_m55_interactive.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m55_interactive.cpp
 )
 target_link_libraries(m55_interactive_tests
     PRIVATE
@@ -2561,7 +2563,7 @@ set_tests_properties(m55_interactive_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60
 # hermetic and fast; native GUI typing/first-paint qualification is recorded as
 # MANUAL/BLOCKED in the Phase-0 evidence document.
 add_executable(m58_large_directory_query_tests
-    test_m58_large_directory_query.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m58_large_directory_query.cpp
 )
 target_link_libraries(m58_large_directory_query_tests PRIVATE mviewer_core Qt6::Core)
 target_compile_features(m58_large_directory_query_tests PRIVATE cxx_std_20)
@@ -2574,7 +2576,7 @@ set_tests_properties(m58_large_directory_query_tests PROPERTIES RUN_SERIAL TRUE 
 # probe/full/frame-sequence paths must agree on bits-per-channel, exact EXIF
 # orientation, canonical color-space labels, and embedded ICC bytes.
 add_executable(m59_phase0_metadata_tests
-    test_m59_phase0.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m59_phase0.cpp
 )
 target_link_libraries(m59_phase0_metadata_tests PRIVATE mviewer_core Qt6::Gui Qt6::Core)
 target_compile_features(m59_phase0_metadata_tests PRIVATE cxx_std_20)
@@ -2585,13 +2587,13 @@ set_tests_properties(m59_phase0_metadata_tests PROPERTIES RUN_SERIAL TRUE TIMEOU
 
 # ─── Big folders: hashed path lookups + progressive scan order ─────────────
 mviewer_add_test(big_folder_tests
-    SRCS test_big_folder.cpp
+    SRCS ${CMAKE_SOURCE_DIR}/tests/test_big_folder.cpp
     LIBS mviewer_ui
     TIMEOUT 180 SERIAL)
 
 # ─── M59 Browse regression: production evaluator + latest-wins panel ───────
 add_executable(m59_browse_regression_tests
-    test_m59_browse_regression.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m59_browse_regression.cpp
 )
 target_link_libraries(m59_browse_regression_tests
     PRIVATE
@@ -2608,7 +2610,7 @@ add_test(NAME m59_browse_regression_tests COMMAND m59_browse_regression_tests)
 set_tests_properties(m59_browse_regression_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
 add_executable(gallery_filter_engine_tests
-    test_gallery_filter_engine.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_gallery_filter_engine.cpp
 )
 target_link_libraries(gallery_filter_engine_tests
     PRIVATE
@@ -2625,7 +2627,7 @@ set_tests_properties(gallery_filter_engine_tests PROPERTIES TIMEOUT 60)
 
 # ─── M59 adversarial source/presentation color contract ─────────────────────
 add_executable(m59_color_managed_tests
-    test_m59_color_managed.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m59_color_managed.cpp
 )
 target_link_libraries(m59_color_managed_tests PRIVATE mviewer_core Qt6::Gui Qt6::Core)
 target_compile_features(m59_color_managed_tests PRIVATE cxx_std_20)
@@ -2636,20 +2638,20 @@ set_tests_properties(m59_color_managed_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 
 
 # Transition sampling and animation damage use actual viewer draw/resize paths.
 mviewer_add_test(viewer_transition_paint_tests
-    SRCS test_viewer_transition_paint.cpp
+    SRCS ${CMAKE_SOURCE_DIR}/tests/test_viewer_transition_paint.cpp
     LIBS mviewer_ui
     TIMEOUT 60 SERIAL)
 
 # Display ICC cache: Browse/Compare resize must not re-read or re-parse the
 # monitor profile. Loader injection keeps the suite platform-independent.
 mviewer_add_test(display_color_context_cache_tests
-    SRCS test_display_color_context_cache.cpp
+    SRCS ${CMAKE_SOURCE_DIR}/tests/test_display_color_context_cache.cpp
     LIBS mviewer_ui
     TIMEOUT 60 SERIAL)
 
 # ─── M60: linked ROI geometry + source RGB measurement contract ────────────
 add_executable(m60_linked_roi_tests
-    test_m60_linked_roi.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m60_linked_roi.cpp
 )
 target_link_libraries(m60_linked_roi_tests PRIVATE mviewer_core Qt6::Core)
 target_compile_features(m60_linked_roi_tests PRIVATE cxx_std_20)
@@ -2659,7 +2661,7 @@ set_tests_properties(m60_linked_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
 
 # M61: real Grid/Canvas right-drag, editable ROI, HUD and lifecycle gate.
 add_executable(m61_roi_workflow_tests
-    test_m61_roi_workflow.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m61_roi_workflow.cpp
 )
 target_link_libraries(m61_roi_workflow_tests
     PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui
@@ -2671,7 +2673,7 @@ set_tests_properties(m61_roi_workflow_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 9
 
 # M61 follow-up: Compare Ctrl+C copies the ROI statistics chips (WYSIWYG).
 add_executable(m61_roi_copy_tests
-    test_m61_roi_copy.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m61_roi_copy.cpp
 )
 target_link_libraries(m61_roi_copy_tests
     PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui
@@ -2682,7 +2684,7 @@ add_test(NAME m61_roi_copy_tests COMMAND m61_roi_copy_tests)
 set_tests_properties(m61_roi_copy_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
 add_executable(m61_roi_benchmark
-    test_m61_roi_benchmark.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m61_roi_benchmark.cpp
 )
 target_link_libraries(m61_roi_benchmark PRIVATE mviewer_core Qt6::Core)
 target_compile_features(m61_roi_benchmark PRIVATE cxx_std_20)
@@ -2693,7 +2695,7 @@ set_tests_properties(m61_roi_benchmark PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 # Standalone recorder for M55 10k/50k memory and navigation evidence. It is
 # intentionally not a gate because its numbers are machine-dependent.
 add_executable(m55_interactive_baseline
-    test_m55_interactive_baseline.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m55_interactive_baseline.cpp
 )
 target_link_libraries(m55_interactive_baseline
     PRIVATE
@@ -2711,7 +2713,7 @@ target_include_directories(m55_interactive_baseline PRIVATE ${CMAKE_CURRENT_SOUR
 # materialization for fit-to-window), with supersession/destroy safety and
 # idle convergence; the small-image fast path is preserved.
 add_executable(m47_viewer_lod_tests
-    test_m47_viewer_lod.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m47_viewer_lod.cpp
 )
 target_link_libraries(m47_viewer_lod_tests
     PRIVATE
@@ -2730,7 +2732,7 @@ set_tests_properties(m47_viewer_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600
 # Four 12.6 MP JPEGs: every later raster must appear after folder-sequence
 # growth, neighbor-preload cancel/restart, and rapid current-image changes.
 add_executable(lod_four_jpeg_ready_tests
-    test_lod_four_jpeg_ready.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_lod_four_jpeg_ready.cpp
 )
 target_link_libraries(lod_four_jpeg_ready_tests
     PRIVATE
@@ -2748,7 +2750,7 @@ set_tests_properties(lod_four_jpeg_ready_tests PROPERTIES RUN_SERIAL TRUE TIMEOU
 # Progressive scan publication: 1k/10k incremental conversions, middle inserts,
 # streamable type/date/size first-screen, generation check before dir.exists().
 add_executable(scan_publication_tests
-    test_scan_publication.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_scan_publication.cpp
 )
 target_link_libraries(scan_publication_tests
     PRIVATE
@@ -2766,7 +2768,7 @@ set_tests_properties(scan_publication_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 1
 # Name-sort scan batches (empty, 1, 16, 144) must keep a still-needed neighbor
 # preload and its warm raster. Shrink/removal still cancels or evicts that work.
 add_executable(browse_append_retain_tests
-    test_browse_append_retain.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_browse_append_retain.cpp
 )
 target_link_libraries(browse_append_retain_tests
     PRIVATE
@@ -2784,7 +2786,7 @@ set_tests_properties(browse_append_retain_tests PROPERTIES RUN_SERIAL TRUE TIMEO
 # First zoomed-out LOD Sharp-resamples to ImageViewer paint dest (no GUI-thread
 # SmoothPixmapTransform of a mismatched multi-megapixel raster).
 add_executable(first_lod_sharp_tests
-    test_first_lod_sharp.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_first_lod_sharp.cpp
 )
 target_link_libraries(first_lod_sharp_tests
     PRIVATE
@@ -2801,7 +2803,7 @@ set_tests_properties(first_lod_sharp_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 18
 
 # Queue wait vs decode for the current display LOD and neighbor display preloads.
 add_executable(queue_decode_timing_tests
-    test_queue_decode_timing.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_queue_decode_timing.cpp
 )
 target_link_libraries(queue_decode_timing_tests
     PRIVATE
@@ -2820,7 +2822,7 @@ set_tests_properties(queue_decode_timing_tests PROPERTIES RUN_SERIAL TRUE TIMEOU
 # serial before dropping the in-flight request (#380 recovery stays on the
 # current result only). Synchronous; no large fixtures.
 add_executable(promoted_raster_identity_tests
-    test_promoted_raster_identity.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_promoted_raster_identity.cpp
 )
 target_link_libraries(promoted_raster_identity_tests
     PRIVATE
@@ -2841,7 +2843,7 @@ set_tests_properties(promoted_raster_identity_tests PROPERTIES RUN_SERIAL TRUE T
 # failures vs skips are accounted separately; zoom re-materializes at a denser
 # edge; TIFF honesty and destroy safety are covered.
 add_executable(m47_compare_lod_tests
-    test_m47_compare_lod.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m47_compare_lod.cpp
 )
 target_link_libraries(m47_compare_lod_tests
     PRIVATE
@@ -2860,7 +2862,7 @@ set_tests_properties(m47_compare_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60
 # Compare pan: a region raster dragged past its margin must expose the
 # full-frame backdrop, never the pane background.
 add_executable(compare_pan_backdrop_tests
-    test_compare_pan_backdrop.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_pan_backdrop.cpp
 )
 target_link_libraries(compare_pan_backdrop_tests
     PRIVATE
@@ -2876,7 +2878,7 @@ add_test(NAME compare_pan_backdrop_tests COMMAND compare_pan_backdrop_tests)
 
 # Compare overlay toggles (sync crosshair, diff heatmap) clear on switch-off.
 add_executable(compare_overlay_toggle_tests
-    test_compare_overlay_toggles.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_overlay_toggles.cpp
 )
 target_link_libraries(compare_overlay_toggle_tests
     PRIVATE
@@ -2893,7 +2895,7 @@ add_test(NAME compare_overlay_toggle_tests COMMAND compare_overlay_toggle_tests)
 # Space shows the other pane's image exactly as that pane shows it, including
 # its independent Ctrl+wheel zoom and pan; release restores the held pane.
 add_executable(compare_space_local_zoom_tests
-    test_compare_space_local_zoom.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_space_local_zoom.cpp
 )
 target_link_libraries(compare_space_local_zoom_tests
     PRIVATE
@@ -2911,7 +2913,7 @@ set_tests_properties(compare_space_local_zoom_tests PROPERTIES RUN_SERIAL TRUE T
 # Space + ROI: the held pane shows the other image's ROI rectangle and chip at
 # that image's viewport; Ctrl+C while held copies what is on screen.
 add_executable(compare_space_roi_tests
-    test_compare_space_roi.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_space_roi.cpp
 )
 target_link_libraries(compare_space_roi_tests
     PRIVATE
@@ -2930,7 +2932,7 @@ set_tests_properties(compare_space_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 
 # wheel and pan; canvas pixel grid follows the held image; ROI histogram and
 # copy use each pane's selection when sizes differ.
 add_executable(compare_unlinked_hold_tests
-    test_compare_unlinked_hold.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_unlinked_hold.cpp
 )
 target_link_libraries(compare_unlinked_hold_tests
     PRIVATE
@@ -2949,16 +2951,16 @@ set_tests_properties(compare_unlinked_hold_tests PROPERTIES RUN_SERIAL TRUE TIME
 # planner owns no widget or decoder state, so this remains deterministic and
 # proves placeholder/Fit/zoom/pan/DPR/crop/rotation/supersession semantics.
 add_executable(compare_display_planner_tests
-    test_compare_display_planner.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_display_planner.cpp
 )
 add_executable(compare_temporary_tests
-    test_compare_temporary.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_temporary.cpp
 )
 target_compile_features(compare_temporary_tests PRIVATE cxx_std_20)
 target_include_directories(compare_temporary_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_temporary_tests COMMAND compare_temporary_tests)
 add_executable(compare_neighbor_paths_tests
-    test_compare_neighbor_paths.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_neighbor_paths.cpp
 )
 target_compile_features(compare_neighbor_paths_tests PRIVATE cxx_std_20)
 target_include_directories(compare_neighbor_paths_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
@@ -2978,7 +2980,7 @@ set_tests_properties(compare_display_planner_tests PROPERTIES RUN_SERIAL TRUE TI
 
 # Multi-LOD pyramid + display delivery/priority helpers (pure planning).
 add_executable(compare_display_pyramid_tests
-    test_compare_display_pyramid.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_display_pyramid.cpp
 )
 target_link_libraries(compare_display_pyramid_tests
     PRIVATE
@@ -2995,7 +2997,7 @@ set_tests_properties(compare_display_pyramid_tests PROPERTIES RUN_SERIAL TRUE TI
 
 # Soft/warm compare paint geometry: thumbs must not claim full sourceSize.
 add_executable(compare_warm_soft_geometry_tests
-    test_compare_warm_soft_geometry.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_warm_soft_geometry.cpp
 )
 target_link_libraries(compare_warm_soft_geometry_tests
     PRIVATE
@@ -3008,7 +3010,7 @@ add_test(NAME compare_warm_soft_geometry_tests COMMAND compare_warm_soft_geometr
 
 # Compare display batch carry-over + pixel-grid raster gate (stuck Loading race).
 add_executable(compare_display_pending_tests
-    test_compare_display_pending.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_display_pending.cpp
 )
 target_link_libraries(compare_display_pending_tests
     PRIVATE
@@ -3025,7 +3027,7 @@ add_test(NAME compare_display_pending_tests COMMAND compare_display_pending_test
 # Compare display state machine: table-driven transitions, #202 livelock and
 # lost-request regressions, seeded interleaving soak (no pane stays Loading).
 add_executable(compare_display_state_tests
-    test_compare_display_state.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_display_state.cpp
 )
 target_link_libraries(compare_display_state_tests
     PRIVATE
@@ -3041,7 +3043,7 @@ add_test(NAME compare_display_state_tests COMMAND compare_display_state_tests)
 
 # Compare soft reload at high zoom with two 4096x3072 JPEGs: no stuck Loading.
 add_executable(compare_stuck_loading_stress_tests
-    test_compare_stuck_loading_stress.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_stuck_loading_stress.cpp
 )
 target_link_libraries(compare_stuck_loading_stress_tests
     PRIVATE
@@ -3058,7 +3060,7 @@ set_tests_properties(compare_stuck_loading_stress_tests PROPERTIES RUN_SERIAL TR
 
 # Compare in-session decoded frame LRU pool (path+frameIndex).
 add_executable(compare_session_frame_pool_tests
-    test_compare_session_frame_pool.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_session_frame_pool.cpp
 )
 target_link_libraries(compare_session_frame_pool_tests
     PRIVATE
@@ -3075,7 +3077,7 @@ set_tests_properties(compare_session_frame_pool_tests PROPERTIES RUN_SERIAL TRUE
 
 # ADR-014 CompareWorkspace componentization tests (CompareSessionState & CompareRoiController)
 add_executable(compare_components_tests
-    test_compare_components.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_components.cpp
 )
 target_link_libraries(compare_components_tests
     PRIVATE
@@ -3091,7 +3093,7 @@ add_test(NAME compare_components_tests COMMAND compare_components_tests)
 set_tests_properties(compare_components_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 add_executable(compare_roi_stats_presenter_tests
-    test_compare_roi_stats_presenter.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_roi_stats_presenter.cpp
 )
 target_link_libraries(compare_roi_stats_presenter_tests
     PRIVATE
@@ -3108,7 +3110,7 @@ set_tests_properties(compare_roi_stats_presenter_tests PROPERTIES TIMEOUT 60)
 
 # ADR-014 CompareWorkspace componentization tests (CompareDiffRenderer)
 add_executable(compare_diff_renderer_tests
-    test_compare_diff_renderer.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_diff_renderer.cpp
 )
 target_link_libraries(compare_diff_renderer_tests
     PRIVATE
@@ -3125,7 +3127,7 @@ set_tests_properties(compare_diff_renderer_tests PROPERTIES RUN_SERIAL TRUE TIME
 
 # ADR-014 CompareWorkspace componentization tests (CompareDisplayManager)
 add_executable(compare_display_manager_tests
-    test_compare_display_manager.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_display_manager.cpp
 )
 target_link_libraries(compare_display_manager_tests
     PRIVATE
@@ -3146,7 +3148,7 @@ set_tests_properties(compare_display_manager_tests PROPERTIES RUN_SERIAL TRUE TI
 # never trigger implicit materialization; infeasible panes degrade to invalid /
 # non-comparable states instead.
 add_executable(m47_exact_source_tests
-    test_m47_exact_source.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m47_exact_source.cpp
 )
 target_link_libraries(m47_exact_source_tests
     PRIVATE
@@ -3168,7 +3170,7 @@ set_tests_properties(m47_exact_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 6
 # failed opens never touch the live session, newer opens supersede in-flight
 # ones, and destroy mid-restore is safe.
 add_executable(m47_restore_tests
-    test_m47_restore.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m47_restore.cpp
 )
 target_link_libraries(m47_restore_tests
     PRIVATE
@@ -3190,7 +3192,7 @@ set_tests_properties(m47_restore_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 # destroy mid-request on alternating rounds, per-round pool drain + bounded
 # RSS, zero full-decode fallbacks, and a converged scheduler dependency graph.
 add_executable(m47_large_soak
-    test_m47_large_soak.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m47_large_soak.cpp
 )
 target_link_libraries(m47_large_soak
     PRIVATE
@@ -3214,7 +3216,7 @@ set_tests_properties(m47_large_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 # completeness, and decoder exception terminal states. Cases are expected to
 # FAIL until the corresponding M48 Phase 1/2 fixes land.
 add_executable(m48_phase0_regressions
-    test_m48_phase0.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m48_phase0.cpp
 )
 target_link_libraries(m48_phase0_regressions
     PRIVATE
@@ -3234,7 +3236,7 @@ add_test(NAME m48_phase0_regressions COMMAND m48_phase0_regressions)
 set_tests_properties(m48_phase0_regressions PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
 add_executable(m48_phase0_failure_regressions
-    test_m48_phase0_failures.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m48_phase0_failures.cpp
 )
 target_link_libraries(m48_phase0_failure_regressions
     PRIVATE
@@ -3255,7 +3257,7 @@ set_tests_properties(m48_phase0_failure_regressions PROPERTIES RUN_SERIAL TRUE T
 # scan/dimension supersession bounds, busy-cursor ownership, and deterministic
 # viewer/compare destroy + A->B->A races.
 add_executable(m46_browse_tests
-    test_m46_browse.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m46_browse.cpp
 )
 target_link_libraries(m46_browse_tests
     PRIVATE
@@ -3274,7 +3276,7 @@ set_tests_properties(m46_browse_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 # First-open stall: GUI stays responsive when a directory probe blocks and
 # when every thumbnail decode fails.
 add_executable(first_open_stall_tests
-    test_first_open_stall.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_first_open_stall.cpp
 )
 target_link_libraries(first_open_stall_tests
     PRIVATE
@@ -3292,7 +3294,7 @@ set_tests_properties(first_open_stall_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 1
 
 # ─── M46: crash-safe persistence (atomic replace + fault injection) ─────────
 add_executable(m46_persistence_tests
-    core/test_m46_persistence.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m46_persistence.cpp
 )
 target_link_libraries(m46_persistence_tests
     PRIVATE
@@ -3373,7 +3375,7 @@ set_tests_properties(m51_rc_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
 # paths, active rating filtering, Back/Forward, path edit, and teardown while
 # background import work is owned by the scheduler.
 add_executable(m50_navigation_tests
-    test_m50_navigation.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m50_navigation.cpp
 )
 target_link_libraries(m50_navigation_tests
     PRIVATE
@@ -3391,7 +3393,7 @@ set_tests_properties(m50_navigation_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180
 # P0 product logic: single rating/flag pipeline re-evaluates gallery filters;
 # empty/new-image ROI reaches the AnalysisPanel.
 add_executable(p0_rating_roi_tests
-    test_p0_rating_roi.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_p0_rating_roi.cpp
 )
 target_link_libraries(p0_rating_roi_tests
     PRIVATE
@@ -3411,7 +3413,7 @@ set_tests_properties(p0_rating_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 # tests exercise debounce, bounded rescans, disappearance/recovery, selection
 # continuity, and model-identity preservation on the real Qt path.
 add_executable(m56_directory_snapshot_tests
-    core/test_m56_directory_snapshot.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m56_directory_snapshot.cpp
 )
 target_link_libraries(m56_directory_snapshot_tests
     PRIVATE
@@ -3423,7 +3425,7 @@ target_include_directories(m56_directory_snapshot_tests PRIVATE ${CMAKE_CURRENT_
 add_test(NAME m56_directory_snapshot_tests COMMAND m56_directory_snapshot_tests)
 
 add_executable(m56_directory_monitor_tests
-    test_m56_directory_monitor.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m56_directory_monitor.cpp
     directorymonitor.cpp
 )
 target_link_libraries(m56_directory_monitor_tests
@@ -3439,7 +3441,7 @@ add_test(NAME m56_directory_monitor_tests COMMAND m56_directory_monitor_tests)
 set_tests_properties(m56_directory_monitor_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
 add_executable(m56_live_gallery_tests
-    test_m56_live_gallery.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m56_live_gallery.cpp
 )
 target_link_libraries(m56_live_gallery_tests
     PRIVATE
@@ -3458,7 +3460,7 @@ add_test(NAME m56_live_gallery_tests COMMAND m56_live_gallery_tests)
 # records the direct Qt baseline, then verifies the frame-aware core reader,
 # repository cache identity, monotonic catch-up timeline, and persistence.
 add_executable(m57_multiframe_decoder_tests
-    test_m57_multiframe.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_m57_multiframe.cpp
 )
 target_link_libraries(m57_multiframe_decoder_tests
     PRIVATE
@@ -3486,7 +3488,7 @@ set_tests_properties(m56_live_directory_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 
 # M50: command-line path classification must keep Unix absolute paths openable
 # while preserving slash-prefixed Windows switches.
 add_executable(commandline_tests
-    test_commandline.cpp
+    ${CMAKE_SOURCE_DIR}/tests/test_commandline.cpp
 )
 target_link_libraries(commandline_tests PRIVATE Qt6::Core mviewer_application)
 target_compile_features(commandline_tests PRIVATE cxx_std_20)
@@ -3556,7 +3558,7 @@ set_tests_properties(product_workflow_gate PROPERTIES RUN_SERIAL TRUE)
 
 # ─── M10 Performance Engineering ─────────────────────────────────────────────
 # MemoryTracker + benchmark scenario structural tests are folded into core_tests
-# (via core/test_m10.cpp) — the known-good consolidated exe link environment.
+# (via ${CMAKE_SOURCE_DIR}/tests/core/test_m10.cpp) — the known-good consolidated exe link environment.
 #
 # mviewer_bench: standalone perf harness (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
 # CI only runs --smoke (proves it links + runs). The --enforce regression gate
@@ -3610,7 +3612,7 @@ add_test(NAME bench_enforce
 set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
 add_executable(audit_misc_tests
-    core/test_audit_misc.cpp
+    ${CMAKE_SOURCE_DIR}/tests/core/test_audit_misc.cpp
 )
 target_link_libraries(audit_misc_tests
     PRIVATE
@@ -3679,6 +3681,6 @@ endif()
 
 # Real preview Decode + current LOD + visible thumbnails, large DPR2 paint costs.
 mviewer_add_test(concurrent_view_cost_tests
-    SRCS test_concurrent_view_cost.cpp
+    SRCS ${CMAKE_SOURCE_DIR}/tests/test_concurrent_view_cost.cpp
     LIBS mviewer_ui
     TIMEOUT 180 SERIAL)

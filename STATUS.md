@@ -1,12 +1,34 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.197** · Release tag: **v1.0.197**
+> Snapshot: 2026-11-21 · Version: **1.0.198** · Release tag: **v1.0.198**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.198 — Item 2 governance, part 2 (2026-11-21)
+
+- 247 test sources (~73k lines) moved out of `src/` into `tests/`; `src/` is now
+  product code only. CMake paths updated, including the generated per-module
+  loop.
+- The `__FILE__`-derived repo-root fallback in eight core suites matched
+  `/src/core/`, so it silently degraded to `"."` after the move — CI caught it.
+  Now accepts both `src/` and `tests/`, and `test_m3m4m5` gets the
+  `MVIEWER_SOURCE_DIR` define every other target had.
+- Authenticode signing is wired and opt-in (secret-based PFX); this repo has no
+  certificate, so artifacts are unsigned until one is procured.
+- **Correction:** the v1.0.197 artifacts carried internal version 1.0.196 — the
+  `project(VERSION)` SSOT in the root `CMakeLists.txt` was not bumped for that
+  tag. Fixed here; `version_info.txt` now reads 1.0.198.
+
+## 1.0.197 — Linux monitor ICC (2026-11-21)
+
+- `loadLinuxIccProfile()` reads the display profile from `$MVIEWER_ICC`, then
+  `$XDG_CONFIG_HOME/color/icc`, `~/.config/color/icc`, `/usr/share/color/icc`
+  and `/var/lib/colord/icc`; unreadable means the sRGB fallback. macOS ColorSync
+  remains the fallback (no macOS runner here to verify it).
 
 ## 1.0.196 — Python script bridge (2026-11-21)
 

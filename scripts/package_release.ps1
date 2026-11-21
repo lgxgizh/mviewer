@@ -51,8 +51,59 @@ if ($Build) {
     if ($LASTEXITCODE -ne 0) { throw "Release build failed" }
 }
 
+# 1b) Authenticode signing (review item 2). Requires a code-signing certificate;
+# a repository without one still ships, and the gap is stated rather than hidden.
+# The certificate is supplied base64-encoded in $env:MVIEWER_SIGN_CERT with its
+# password in $env:MVIEWER_SIGN_PASSWORD, so no private key ever lives in the
+# repository or in the artifact.
+$signCertB64 = $env:MVIEWER_SIGN_CERT
+$signPassword = $env:MVIEWER_SIGN_PASSWORD
+$signServer = $env:MVIEWER_SIGN_TIMESTAMP
+if (-not $signServer) { $signServer = 'http://timestamp.digicert.com' }
+$script:signedAny = $false
+$script:signNote = 'unsigned (no MVIEWER_SIGN_CERT in the environment)'
+$script:signCertPath = $null
+
+function Get-SignTool {
+    $tool = Get-Command signtool -ErrorAction SilentlyContinue
+    if ($tool) { return $tool.Source }
+    foreach ($c in @(
+        'C:/Program Files (x86)/Windows Kits/10/bin/10.0.26100.0/x64/signtool.exe',
+        'C:/Program Files (x86)/Windows Kits/10/bin/10.0.22621.0/x64/signtool.exe',
+        'C:/Program Files (x86)/Windows Kits/10/bin/10.0.22000.0/x64/signtool.exe')) {
+        if (Test-Path $c) { return $c }
+    }
+    return $null
+}
+
+function Sign-Artifact([string]$Path) {
+    if ($script:signedAny -eq $false -and -not $script:signCertPath) {
+        if (-not $signCertB64 -or -not $signPassword) { return $false }
+        $tool = Get-SignTool
+        if (-not $tool) { Write-Host '=== signing: signtool.exe not found ==='; return $false }
+        $script:signCertPath = Join-Path $env:TEMP ('mviewer-sign-' + [guid]::NewGuid().ToString('N') + '.pfx')
+        [IO.File]::WriteAllBytes($script:signCertPath, [Convert]::FromBase64String($signCertB64))
+        $script:signTool = $tool
+    }
+    Write-Host "=== signing $Path ==="
+    & $script:signTool sign /fd SHA256 /tr $signServer /td SHA256 /f $script:signCertPath /p $signPassword $Path
+    if ($LASTEXITCODE -ne 0) { throw "signtool failed on $Path (exit $LASTEXITCODE)" }
+    $script:signedAny = $true
+    $script:signNote = 'signed with the MVIEWER_SIGN_CERT certificate'
+    return $true
+}
+
+if (-not $signCertB64 -or -not $signPassword) {
+    Write-Host '=== signing: SKIPPED (MVIEWER_SIGN_CERT / MVIEWER_SIGN_PASSWORD not set) ==='
+}
+
 # 2) Portable zip
 Write-Host "=== package_portable ==="
+# Sign the shipped binaries first so the zip and the installer both carry it.
+foreach ($target in @('build_msvc/bin/MViewer.exe', 'build_msvc/bin/mviewer_core.dll')) {
+    $full = Join-Path $root $target
+    if (Test-Path -LiteralPath $full) { [void](Sign-Artifact $full) }
+}
 & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/package_portable.ps1") `
     -Version $Version -OutDir $OutDir $(if ($QtDir) { @('-QtDir', $QtDir) } else { @() })
 if ($LASTEXITCODE -ne 0) { throw "portable packaging failed" }
@@ -76,6 +127,7 @@ if ($makensis) {
     if ($LASTEXITCODE -ne 0) { throw "NSIS build failed" }
     $setup = Join-Path $root (Join-Path $OutDir "MViewer-$Version-Setup.exe")
     if (Test-Path $setup) { Write-Host "=== installer: $setup ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB) ===" }
+    if (Test-Path $setup) { [void](Sign-Artifact $setup) }
 } else { throw "makensis not found -- Strict RC packaging requires the installer" }
 
 # 3b) Review P0-4: debug symbols as a separate asset. The Release build writes
@@ -104,3 +156,7 @@ Write-Host "=== strict release contract gate ==="
 if ($LASTEXITCODE -ne 0) { throw "strict release contract gate failed" }
 
 Write-Host "=== release packaging complete (version $Version) ==="
+Write-Host "=== signatures: $script:signNote ==="
+if ($script:signCertPath -and (Test-Path -LiteralPath $script:signCertPath)) {
+    Remove-Item -LiteralPath $script:signCertPath -Force
+}

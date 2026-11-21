@@ -288,6 +288,14 @@ jobs:
         run: choco install nsis --no-progress -y
 
       - name: Package and run Strict RC contract
+        env:
+          # Review item 2: Authenticode signing is wired but opt-in. Without
+          # these secrets the release is still produced and the packaging log
+          # says it is unsigned; with them, MViewer.exe / mviewer_core.dll and
+          # the installer are SHA-256 signed with a timestamp.
+          MVIEWER_SIGN_CERT: ${{ secrets.MVIEWER_SIGN_CERT }}
+          MVIEWER_SIGN_PASSWORD: ${{ secrets.MVIEWER_SIGN_PASSWORD }}
+          MVIEWER_SIGN_TIMESTAMP: ${{ vars.MVIEWER_SIGN_TIMESTAMP }}
         run: |
           $ver = "${{ github.ref_name }}".TrimStart('v')
           if (-not ("${{ github.ref }}" -like 'refs/tags/*')) {
