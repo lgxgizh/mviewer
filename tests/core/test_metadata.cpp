@@ -35,8 +35,8 @@ static std::string srcRootFromThisFile()
     // Resolve the repository root from this file's own path, independent of
     // whether the suite lives in src/ or tests/.
     std::string f = __FILE__;
-    const char *markers[] = { "/src/core/", "\\src\\core\\", "/tests/core/", "\\tests\\core\\",
-                              "/src/", "\\src\\", "/tests/", "\\tests\\" };
+    const char *markers[] = {"/src/core/", "\\src\\core\\", "/tests/core/", "\\tests\\core\\",
+                             "/src/",      "\\src\\",       "/tests/",      "\\tests\\"};
     for (const char *m : markers)
     {
         const auto p = f.find(m);

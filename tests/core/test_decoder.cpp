@@ -20,8 +20,8 @@ static std::string srcRootFromThisFile()
     // Resolve the repository root from this file's own path, independent of
     // whether the suite lives in src/ or tests/.
     std::string f = __FILE__;
-    const char *markers[] = { "/src/core/", "\\src\\core\\", "/tests/core/", "\\tests\\core\\",
-                              "/src/", "\\src\\", "/tests/", "\\tests\\" };
+    const char *markers[] = {"/src/core/", "\\src\\core\\", "/tests/core/", "\\tests\\core\\",
+                             "/src/",      "\\src\\",       "/tests/",      "\\tests\\"};
     for (const char *m : markers)
     {
         const auto p = f.find(m);
@@ -71,7 +71,8 @@ static void testBenchmarkSmokeDecode()
         if (!d.isNull())
             ++ok;
         auto res = reg.decodeFullResult(base + f);
-        CHECK(res.has_value() && !res.value().isNull(), "decodeFullResult succeeded on golden file");
+        CHECK(res.has_value() && !res.value().isNull(),
+              "decodeFullResult succeeded on golden file");
     }
     const auto t1 = std::chrono::steady_clock::now();
     const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -217,9 +218,11 @@ static void testDecodeFullResultDetailedErrors()
 
     // 4. Test Decoder static shim
     auto shimRes = Decoder::decodeFullResult(goldenJpg);
-    CHECK(shimRes.isOk() && !shimRes.value().isNull(), "Decoder::decodeFullResult static shim works");
+    CHECK(shimRes.isOk() && !shimRes.value().isNull(),
+          "Decoder::decodeFullResult static shim works");
     auto shimErr = Decoder::decodeFullResult(dummyUnsupported);
-    CHECK(!shimErr.isOk(), "Decoder::decodeFullResult static shim returns error for unsupported file");
+    CHECK(!shimErr.isOk(),
+          "Decoder::decodeFullResult static shim returns error for unsupported file");
 }
 
 int main(int argc, char **argv)

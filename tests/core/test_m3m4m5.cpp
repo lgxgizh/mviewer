@@ -32,8 +32,8 @@ static std::string srcRootFromThisFile()
     // Resolve the repository root from this file's own path, independent of
     // whether the suite lives in src/ or tests/.
     std::string f = __FILE__;
-    const char *markers[] = { "/src/core/", "\\src\\core\\", "/tests/core/", "\\tests\\core\\",
-                              "/src/", "\\src\\", "/tests/", "\\tests\\" };
+    const char *markers[] = {"/src/core/", "\\src\\core\\", "/tests/core/", "\\tests\\core\\",
+                             "/src/",      "\\src\\",       "/tests/",      "\\tests\\"};
     for (const char *m : markers)
     {
         const auto p = f.find(m);
@@ -692,8 +692,8 @@ static void testAnalyzerFormats()
     }
 
     // Analyzers on Grayscale8 (verify no OOB read or crash)
-    const char *analyzers[] = {"noise", "sharpness", "entropy", "brightness", "contrast",
-                               "deadpixel"};
+    const char *analyzers[] = {"noise",      "sharpness", "entropy",
+                               "brightness", "contrast",  "deadpixel"};
     for (const char *name : analyzers)
     {
         auto a = reg.create(name);
