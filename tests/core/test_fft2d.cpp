@@ -97,6 +97,24 @@ int main()
     const auto bad = computeFftMagnitude(std::vector<float>(3, 0.0f), 2, 2);
     CHECK(bad.magnitude.empty(), "a size mismatch is rejected");
 
+    // The spectrum is unshifted: DC lives in the four corners and the centre is
+    // ordinary mid-band signal. The tripwire must ignore the corner DC but react
+    // to a strong centre component (it used to mask the centre instead).
+    mviewer::core::Fft2DResult mid;
+    mid.width = 64;
+    mid.height = 64;
+    mid.magnitude.assign(64 * 64, 0.0f);
+    mid.magnitude[32 * 64 + 32] = 100.0f;
+    CHECK(hasOffAxisPeak(mid, 4.0), "a strong centre component trips the tripwire");
+
+    mviewer::core::Fft2DResult dc;
+    dc.width = 64;
+    dc.height = 64;
+    dc.magnitude.assign(64 * 64, 0.0f);
+    dc.magnitude[0] = 100.0f;
+    dc.magnitude[63 * 64 + 63] = 100.0f;
+    CHECK(!hasOffAxisPeak(dc, 4.0), "a lone DC corner does not trip the tripwire");
+
     printf("\n==== FFT2D test: %d passed, %d failed ====\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

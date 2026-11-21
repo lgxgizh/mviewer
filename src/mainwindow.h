@@ -18,6 +18,7 @@
 #include <QMap>
 #include <QPointer>
 #include <QStringList>
+#include <QTemporaryDir>
 #include <QVariantMap>
 
 #include <atomic>
@@ -556,6 +557,10 @@ class MainWindow : public QMainWindow
     std::shared_ptr<std::atomic<bool>> m_clipboardPasteAlive;
     uint64_t m_clipboardPasteGeneration = 0;
     QString m_clipboardPastePath;
+    // Review item: an imported session package is decoded asynchronously, so the
+    // directory it extracts into must outlive the import call. One at a time —
+    // openCompare() closes the previous host before a new session is created.
+    std::unique_ptr<QTemporaryDir> m_sessionTempDir;
     void positionMetadataPanel();
     // Zoom / fullscreen view commands (forwarded to the image viewer).
     QAction *m_actZoomIn = nullptr;

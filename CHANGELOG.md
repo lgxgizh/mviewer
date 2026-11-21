@@ -2,6 +2,48 @@
 
 ## [Unreleased]
 
+## [1.0.199] - 2026-11-22
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.199**.
+
+### Fixed — 新功能 P0 止血（二轮复审）
+
+- **会话包导入 Zip Slip**：条目名未校验就写盘，恶意包可用 `../`、绝对路径或盘符
+  写到临时目录之外。写端与读端现在都只接受 `session.json` 和
+  `images/<纯文件名>`，导入再对 `cleanPath` 做一次「必须仍在临时目录内」的复核。
+- **导入后临时目录立即被删**：`QTemporaryDir` 是局部对象，`openCompare()` 的异步
+  解码还没读完就被销毁。改由 `MainWindow` 持有一份，下一次导入或退出时回收。
+- **会话包改成 `.bin` 后缀**：导出丢掉真实扩展名，RAW/YUV 导入后必然解码失败。
+  现在保留原后缀；同时加了 128 MiB 单条目 / 256 MiB 整包上限。
+- **`Grayscale8` 开 Auto-Stretch 堆越界**：按 RGB24 逐像素读 3 字节，最多读到
+  缓冲区外 2 倍。现在按通道数分支，并且全程按 `stride` 行寻址。
+- **Adobe `.cube` 轴序颠倒**：规范是蓝最外、红最内（`(z*N+y)*N+x`），实现写反，
+  所有 Resolve/ISP 导出的 LUT 都会偏色。已修正，回归用例按规范顺序重写。
+- **`ScopeWidget` 像素读取类型错误**：`constScanLine(y)[x]` 返回 `uchar` 却被当
+  成 `QRgb`，R/G 恒为 0，波形、Parade、剖面线全在读错数据。已改为按 `QRgb*`
+  解引用。
+- **FFT 频谱图全黑**：`Format_Grayscale8` 上用 `setPixel(qRgb(v,0,0))`，颜色被
+  转换后整张图发黑；改为直接写字节。同时修正 `hasOffAxisPeak()`：频谱未移位，
+  DC 在四角而不是中心，旧写法屏蔽的是真实中频信号。
+- **`L` 键被吞**：`handleZoomKey()` 把裸 `L` 当成「锁定缩放」，`handleModeKey()`
+  里的剖面线分支永远不可达。裸 `L` 现在归剖面线，`Ctrl+L` 仍是锁定缩放。
+- **OpenEXR 解析**：`dataWindow` 未校验长度即读 16 字节；`chlist` 步长用了 18
+  字节（规范是 `pixelType4 + pLinear1 + reserved3 + xSampling4 + ySampling4` =
+  16），多吃掉第二个通道名；`offset + 8` 可能回绕成通过；PFM 灰度只写 R 通道
+  导致整张纯红。全部修正，并加了 16384 边长 / 64 MiB 像素的尺寸上限。
+- **粘贴撤销在中文路径下静默失效**：`ClipboardPasteCommand` 直接用窄 UTF-8 串
+  构造 `fs::path`，在中文目录上失败。改用 `pathFromUtf8()` / `pathToUtf8()`，
+  并补了中文路径回归用例。
+- **标注导出文字被裁没**：文字标注的矩形是 1×1 锚点，绘制时又按该矩形裁剪，
+  导出后完全看不见。锚点矩形现在按点绘制，不再裁剪。
+
+### 未做（明确记录）
+
+- 标注**撤销**、盲测默认分 / `Space` 绑定 / 切图重置盲态、Python 桥接异步化
+  与若干漏走 `tr()` 的文案，本轮未动，留待后续版本。
+
 ## [1.0.198] - 2026-11-21
 
 ### Release

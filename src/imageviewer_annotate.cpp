@@ -268,7 +268,15 @@ void ImageViewer::exportAnnotatedImage()
         {
             p.drawRect(a.rect);
             if (!a.text.isEmpty())
-                p.drawText(a.rect.adjusted(4, 4, 0, 0), Qt::TextSingleLine, a.text);
+            {
+                // A text annotation's rect is a 1x1 anchor point; drawing through
+                // that rect clipped the label to a single pixel, so exported
+                // text annotations were invisible.
+                if (a.rect.width() <= 1.0 && a.rect.height() <= 1.0)
+                    p.drawText(QPointF(a.rect.x(), a.rect.y()), a.text);
+                else
+                    p.drawText(a.rect.adjusted(4, 4, 0, 0), Qt::TextSingleLine, a.text);
+            }
         }
     }
     p.end();

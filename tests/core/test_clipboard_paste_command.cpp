@@ -2,6 +2,7 @@
 // paste created, and never touches anything outside that folder.
 #include "core/command/ClipboardPasteCommand.h"
 #include "core/command/CommandStack.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <cstdio>
 #include <filesystem>
@@ -32,16 +33,16 @@ int g_fail = 0;
         }                                                                                          \
     } while (false)
 
-void writeFile(const fs::path &path, char byte)
+void writeFile(const std::string &path, char byte)
 {
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    std::ofstream out(mviewer::core::pathFromUtf8(path), std::ios::binary | std::ios::trunc);
     out << byte;
 }
 
 bool exists(const std::string &path)
 {
     std::error_code ec;
-    return fs::exists(path, ec);
+    return fs::exists(mviewer::core::pathFromUtf8(path), ec);
 }
 } // namespace
 
@@ -55,9 +56,9 @@ int main()
     fs::create_directories(folder, ec);
     fs::create_directories(outside, ec);
 
-    const std::string a = (folder / "copy-a.png").string();
-    const std::string b = (folder / "copy-b.png").string();
-    const std::string foreign = (outside / "keep-me.png").string();
+    const std::string a = mviewer::core::pathToUtf8(folder / "copy-a.png");
+    const std::string b = mviewer::core::pathToUtf8(folder / "copy-b.png");
+    const std::string foreign = mviewer::core::pathToUtf8(outside / "keep-me.png");
     writeFile(a, 'a');
     writeFile(b, 'b');
     writeFile(foreign, 'f');
@@ -65,8 +66,8 @@ int main()
     CommandStack stack;
     CHECK(!stack.canUndo(), "a fresh stack has nothing to undo");
 
-    stack.recordExecuted(
-        std::make_unique<ClipboardPasteCommand>(std::vector<std::string>{a, b}, folder.string()));
+    stack.recordExecuted(std::make_unique<ClipboardPasteCommand>(
+        std::vector<std::string>{a, b}, mviewer::core::pathToUtf8(folder)));
     CHECK(stack.canUndo(), "a recorded paste can be undone");
     CHECK(stack.undoLabel() == "Paste into folder", "the undo label names the paste");
     CHECK(stack.undo(), "undo succeeds");
@@ -77,14 +78,26 @@ int main()
 
     // A history entry that points at another folder must never delete in the
     // folder the user is now looking at.
-    const std::string otherFolder = (root / "other").string();
+    const std::string otherFolder = mviewer::core::pathToUtf8(root / "other");
     fs::create_directories(otherFolder, ec);
-    const std::string stray = (fs::path(otherFolder) / "stray.png").string();
+    const std::string stray = otherFolder + "/stray.png";
     writeFile(stray, 's');
-    stack.recordExecuted(
-        std::make_unique<ClipboardPasteCommand>(std::vector<std::string>{stray}, folder.string()));
+    stack.recordExecuted(std::make_unique<ClipboardPasteCommand>(
+        std::vector<std::string>{stray}, mviewer::core::pathToUtf8(folder)));
     CHECK(stack.undo(), "undo succeeds for a stale entry");
     CHECK(exists(stray), "a copy recorded for another folder is left alone");
+
+    // A non-ASCII path: the command used to build fs::path from a narrow UTF-8
+    // string, which fails silently on a Chinese directory name.
+    const std::string wide = mviewer::core::pathToUtf8(root) + "/中文目录";
+    fs::create_directories(wide, ec);
+    const std::string wideA = wide + "/副本-a.png";
+    writeFile(wideA, 'w');
+    CommandStack wideStack;
+    wideStack.recordExecuted(
+        std::make_unique<ClipboardPasteCommand>(std::vector<std::string>{wideA}, wide));
+    CHECK(wideStack.undo(), "undo succeeds for a non-ASCII path");
+    CHECK(!exists(wideA), "undo deletes the copy in a non-ASCII folder");
 
     fs::remove_all(root, ec);
     printf("\n==== clipboard paste undo test: %d passed, %d failed ====\n", g_pass, g_fail);

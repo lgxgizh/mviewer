@@ -74,11 +74,12 @@ void sampleLut(const DisplayAdjust &adjust, int r, int g, int b, std::uint8_t ou
                     const int x = dx ? x1 : x0;
                     const int y = dy ? y1 : y0;
                     const int z = dz ? z1 : z0;
-                    // Adobe .cube order: red is the outer index, blue the inner.
-                    const size_t at = (static_cast<size_t>(x) * static_cast<size_t>(size) +
+                    // Adobe .cube order: blue is the outer index, red the inner
+                    // (the canonical 2x2x2 example walks r, then g, then b).
+                    const size_t at = (static_cast<size_t>(z) * static_cast<size_t>(size) +
                                        static_cast<size_t>(y)) *
                                           static_cast<size_t>(size) +
-                                      static_cast<size_t>(z);
+                                      static_cast<size_t>(x);
                     const double weight =
                         (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
                     value +=
@@ -179,7 +180,12 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
         return src;
 
     ImageData out = src;
-    const int count = src.width * src.height;
+    const int width = src.width;
+    const int height = src.height;
+    const bool grayscale = src.format == PixelFormat::Grayscale8;
+    const int channels = grayscale ? 1 : 3;
+    const size_t inStride = src.constView().stride();
+    const size_t outStride = out.constView().stride();
 
     double lo[3] = {0.0, 0.0, 0.0};
     double hi[3] = {255.0, 255.0, 255.0};
@@ -187,18 +193,22 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
     {
         int minV[3] = {255, 255, 255};
         int maxV[3] = {0, 0, 0};
-        const std::uint8_t *p = src.constView().data;
-        for (int i = 0; i < count; ++i)
+        for (int y = 0; y < height; ++y)
         {
-            const int c0 = p[i * 3u + 0];
-            const int c1 = p[i * 3u + 1];
-            const int c2 = p[i * 3u + 2];
-            minV[0] = std::min(minV[0], c0);
-            minV[1] = std::min(minV[1], c1);
-            minV[2] = std::min(minV[2], c2);
-            maxV[0] = std::max(maxV[0], c0);
-            maxV[1] = std::max(maxV[1], c1);
-            maxV[2] = std::max(maxV[2], c2);
+            const std::uint8_t *row = src.constView().data + static_cast<size_t>(y) * inStride;
+            for (int x = 0; x < width; ++x)
+            {
+                // A Grayscale8 buffer has ONE byte per pixel: indexing it as
+                // RGB24 reads up to 3x past the end of the allocation.
+                const std::uint8_t *px =
+                    row + static_cast<size_t>(x) * static_cast<size_t>(channels);
+                for (int c = 0; c < channels; ++c)
+                {
+                    const int v = px[c];
+                    minV[c] = std::min(minV[c], v);
+                    maxV[c] = std::max(maxV[c], v);
+                }
+            }
         }
         for (int c = 0; c < 3; ++c)
         {
@@ -210,39 +220,45 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
 
     const double exposure = std::pow(2.0, adjust.exposureEv);
     const double invGamma = adjust.gamma > 0.05 ? 1.0 / adjust.gamma : 1.0;
-    const bool grayscale = src.format == PixelFormat::Grayscale8;
     const std::uint8_t *in = src.constView().data;
     std::uint8_t *dst = out.mutableView().data;
-    for (int i = 0; i < count; ++i)
+    for (int y = 0; y < height; ++y)
     {
-        std::uint8_t rgb[3];
-        if (grayscale)
-            rgb[0] = rgb[1] = rgb[2] = in[i];
-        else
+        const std::uint8_t *inRow = in + static_cast<size_t>(y) * inStride;
+        std::uint8_t *outRow = dst + static_cast<size_t>(y) * outStride;
+        for (int x = 0; x < width; ++x)
         {
-            rgb[0] = in[i * 3u + 0];
-            rgb[1] = in[i * 3u + 1];
-            rgb[2] = in[i * 3u + 2];
-        }
-        if (adjust.lutSize > 0)
-        {
-            sampleLut(adjust, rgb[0], rgb[1], rgb[2], rgb);
+            const std::uint8_t *px = inRow + static_cast<size_t>(x) * static_cast<size_t>(channels);
+            std::uint8_t rgb[3];
             if (grayscale)
+                rgb[0] = rgb[1] = rgb[2] = px[0];
+            else
             {
-                dst[i] = rgb[0];
-                continue;
+                rgb[0] = px[0];
+                rgb[1] = px[1];
+                rgb[2] = px[2];
             }
-        }
-        for (int c = 0; c < (grayscale ? 1 : 3); ++c)
-        {
-            const double normalized = static_cast<double>(rgb[c]) / 255.0;
-            double v = normalized;
-            if (adjust.autoStretch)
-                v = (static_cast<double>(rgb[c]) - lo[c]) / (hi[c] - lo[c]);
-            v *= exposure;
-            v = std::pow(v < 0.0 ? 0.0 : v, invGamma);
-            dst[grayscale ? i : (i * 3u + static_cast<size_t>(c))] =
-                static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0, 1.0) * 255.0));
+            if (adjust.lutSize > 0)
+            {
+                sampleLut(adjust, rgb[0], rgb[1], rgb[2], rgb);
+                if (grayscale)
+                {
+                    outRow[x] = rgb[0];
+                    continue;
+                }
+            }
+            for (int c = 0; c < channels; ++c)
+            {
+                const double normalized = static_cast<double>(rgb[c]) / 255.0;
+                double v = normalized;
+                if (adjust.autoStretch)
+                    v = (static_cast<double>(rgb[c]) - lo[c]) / (hi[c] - lo[c]);
+                v *= exposure;
+                v = std::pow(v < 0.0 ? 0.0 : v, invGamma);
+                outRow[static_cast<size_t>(x) * static_cast<size_t>(channels) +
+                       static_cast<size_t>(c)] =
+                    static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0, 1.0) * 255.0));
+            }
         }
     }
     return out;

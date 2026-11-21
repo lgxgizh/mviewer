@@ -121,10 +121,15 @@ bool hasOffAxisPeak(const Fft2DResult &fft, double threshold)
 {
     if (fft.magnitude.empty() || !(threshold > 1.0))
         return false;
-    // Skip a small DC neighbourhood: the low-frequency roll-off is normal.
-    const int cx = fft.width / 2;
-    const int cy = fft.height / 2;
-    auto nearDc = [&](int x, int y) { return std::abs(x - cx) <= 1 && std::abs(y - cy) <= 1; };
+    // The FFT output is unshifted: DC sits in the four CORNERS, and the centre
+    // is mid-band energy. Masking the centre (as this used to) discarded real
+    // signal and left the DC term in the comparison.
+    auto nearDc = [w = fft.width, h = fft.height](int x, int y)
+    {
+        const int mx = std::min(x, w - x);
+        const int my = std::min(y, h - y);
+        return mx <= 1 && my <= 1;
+    };
     double sum = 0.0;
     int count = 0;
     float peak = 0.0f;

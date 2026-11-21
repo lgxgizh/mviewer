@@ -555,8 +555,9 @@ bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
     if ((mods & Qt::ControlModifier) &&
         (key == Qt::Key_F || (key >= Qt::Key_1 && key <= Qt::Key_6)))
         return false;
-    const bool lockZoom = ((mods & Qt::ControlModifier) && key == Qt::Key_L) ||
-                          (mods == Qt::NoModifier && key == Qt::Key_L);
+    // Ctrl+L locks zoom; a bare L is the line-profile tool (handleModeKey), so
+    // it must not be consumed here.
+    const bool lockZoom = (mods & Qt::ControlModifier) != 0 && key == Qt::Key_L;
     if (lockZoom)
     {
         setLockZoom(!m_lockZoom);

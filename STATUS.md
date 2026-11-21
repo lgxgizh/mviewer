@@ -1,12 +1,28 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.198** · Release tag: **v1.0.198**
+> Snapshot: 2026-11-22 · Version: **1.0.199** · Release tag: **v1.0.199**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.199 — 新功能 P0 止血（二轮复审） (2026-11-22)
+
+- 会话包：Zip Slip 双端拒绝（只允许 `session.json` 与 `images/<纯文件名>`）、
+  临时目录改由 MainWindow 持有、保留真实扩展名、加 128 MiB / 256 MiB 上限。
+- DisplayAdjust：`Grayscale8` 自动拉伸按 RGB24 读 3 字节导致越界，改为按通道数
+  分支并按 stride 行寻址；`.cube` 轴序改为规范顺序（蓝外红内）。
+- ScopeWidget 三处 `constScanLine` 按 `QRgb*` 解引用（原来 R/G 恒为 0）。
+- FFT 频谱图直接写 Grayscale8 字节（原来全黑）；`hasOffAxisPeak` 改为屏蔽四角
+  DC（原来错屏蔽中心）。
+- 裸 `L` 不再被 `handleZoomKey` 吞掉，剖面线工具恢复可用。
+- OpenEXR：`dataWindow` 长度校验、`chlist` 步长 18→16、`offset+8` 防回绕、
+  尺寸上限；PFM 灰度写入三个通道（原来纯红）。
+- `ClipboardPasteCommand` 走 `pathFromUtf8()`，中文路径下撤销恢复可用。
+- 标注文字按锚点绘制，不再被 1×1 矩形裁掉。
+- 未做并记录：标注撤销、盲测交互三处、Python 桥接异步化、部分 `tr()` 遗漏。
 
 ## 1.0.198 — Item 2 governance, part 2 (2026-11-21)
 

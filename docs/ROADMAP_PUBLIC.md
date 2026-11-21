@@ -4,14 +4,15 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.198**
+## Where we are now — **Beta / 1.0.199**
 
-MViewer remains in **Beta**; the current release is **`v1.0.198`**
-(2026-11-21, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch finishes the item-2 governance work: the whole test suite now lives
-under `tests/` so `src/` is product code only, and Authenticode signing is wired
-up for whoever holds the certificate. Offscreen CI is regression evidence, not
-proof of universal smoothness.
+MViewer remains in **Beta**; the current release is **`v1.0.199`**
+(2026-11-22, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+This patch is the P0 triage from the second review: session-package path
+traversal and its temporary-directory lifetime, a Grayscale8 out-of-bounds read,
+the inverted `.cube` axes, the scope widget's misread pixels, the all-black FFT
+spectrum, the swallowed `L` key and the OpenEXR/PFM parsing defects. Offscreen CI
+is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -66,7 +67,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.198** (current) | Tests moved to `tests/`; signing wired; version SSOT fixed | 🔵 Beta |
+| **1.0.199** (current) | 新功能 P0 止血（二轮复审 8 项） | 🔵 Beta |
+| **1.0.198** | Tests moved to `tests/`; signing wired; version SSOT fixed | ✅ Previous patch |
 | **1.0.197** | Linux monitor ICC (colour directories + `MVIEWER_ICC`) | ✅ Previous patch |
 | **1.0.196** | Python script bridge (subprocess, JSON protocol) | ✅ Previous patch |
 | **1.0.195** | Undo for a gallery paste (Ctrl+Z deletes the copies) | ✅ Previous patch |

@@ -93,10 +93,11 @@ int main()
     // ── .cube parsing and application ──────────────────────────────────────
     const fs::path cubePath = root / "swap.cube";
     std::string cube = "TITLE \"swap\"\nLUT_3D_SIZE 2\n";
-    // Blue varies fastest, then green, then red. Output = (b, g, r).
-    for (int r = 0; r < 2; ++r)
+    // Adobe .cube order: blue varies fastest, then green, then red (the
+    // canonical 2^3 example walks r, then g, then b). This LUT swaps R and B.
+    for (int b = 0; b < 2; ++b)
         for (int g = 0; g < 2; ++g)
-            for (int b = 0; b < 2; ++b)
+            for (int r = 0; r < 2; ++r)
             {
                 const double out[3] = {b * 1.0, g * 1.0, r * 1.0};
                 cube += std::to_string(out[0]) + " " + std::to_string(out[1]) + " " +
@@ -127,6 +128,19 @@ int main()
     DisplayAdjust rejected;
     CHECK(!DisplayAdjust::loadCube(badCube.string(), rejected, error) && !error.empty(),
           "a value count mismatch is rejected with a reason");
+
+    // A Grayscale8 buffer is one byte per pixel. Auto-stretch used to index it
+    // as RGB24 and read up to 3x past the end.
+    ImageData gray = makeImageData(4, 3, PixelFormat::Grayscale8);
+    for (int i = 0; i < 4 * 3; ++i)
+        gray.mutableView().data[i] = static_cast<std::uint8_t>(i * 20);
+    DisplayAdjust grayStretch;
+    grayStretch.autoStretch = true;
+    const ImageData grayOut = applyDisplayAdjust(gray, grayStretch);
+    CHECK(grayOut.format == PixelFormat::Grayscale8, "grayscale auto-stretch stays grayscale");
+    CHECK(grayOut.constView().data[0] == 0, "grayscale auto-stretch maps the minimum to 0");
+    CHECK(grayOut.constView().data[4 * 3 - 1] == 255,
+          "grayscale auto-stretch maps the maximum to 255");
 
     fs::remove_all(root, ec);
     printf("\n==== display adjust test: %d passed, %d failed ====\n", g_pass, g_fail);

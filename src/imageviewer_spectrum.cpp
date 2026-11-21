@@ -57,12 +57,16 @@ QImage spectrumImage(const mviewer::core::Fft2DResult &fft)
     // Shift DC to the centre for the usual "four corners" spectrum layout.
     for (int y = 0; y < h; ++y)
     {
+        // Format_Grayscale8 is one byte per pixel; QImage::setPixel() would
+        // reinterpret a QRgb through Qt's colour conversion and the image came
+        // out solid black.
+        std::uint8_t *row = out.scanLine(y);
         for (int x = 0; x < w; ++x)
         {
             const int sx = (x + w / 2) % w;
             const int sy = (y + h / 2) % h;
             const float v = logMag[static_cast<size_t>(sy) * w + sx];
-            out.setPixel(x, y, qRgb(static_cast<int>(v * scale), 0, 0));
+            row[x] = static_cast<std::uint8_t>(v * scale);
         }
     }
     return out.convertToFormat(QImage::Format_RGB32);

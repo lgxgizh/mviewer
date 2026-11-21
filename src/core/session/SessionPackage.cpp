@@ -52,6 +52,45 @@ bool readAt(std::istream &in, std::streamoff offset, std::vector<std::uint8_t> &
 constexpr std::uint32_t kLocalHeaderSignature = 0x04034b50u;
 constexpr std::uint32_t kCentralHeaderSignature = 0x02014b50u;
 constexpr std::uint32_t kEndOfCentralDirectorySignature = 0x06054b50u;
+
+// Hard bounds so a hostile package cannot turn an import into a memory
+// exhaustion. A review bundle is a handful of images, not a dataset.
+constexpr std::uint64_t kMaxEntryBytes = 128ull * 1024 * 1024;
+constexpr std::uint64_t kMaxTotalEntryBytes = 256ull * 1024 * 1024;
+
+/// A package entry may only be `session.json` or `images/<plain file name>`.
+/// Anything else — `..`, a backslash, a drive letter, an absolute path, a
+/// nested directory — is refused on both write and read, so an import can never
+/// resolve outside the directory it extracts into.
+bool isSafeEntryName(const std::string &name, std::string &why)
+{
+    if (name.empty())
+    {
+        why = "empty entry name";
+        return false;
+    }
+    if (name.find("..") != std::string::npos || name.find('\\') != std::string::npos ||
+        name.front() == '/' || (name.size() >= 2 && name[1] == ':'))
+    {
+        why = "unsafe entry name: " + name;
+        return false;
+    }
+    if (name == "session.json")
+        return true;
+    const std::string prefix = "images/";
+    if (name.compare(0, prefix.size(), prefix) != 0)
+    {
+        why = "entry outside session.json / images/: " + name;
+        return false;
+    }
+    const std::string rest = name.substr(prefix.size());
+    if (rest.empty() || rest.find('/') != std::string::npos)
+    {
+        why = "image entry is not a plain file name: " + name;
+        return false;
+    }
+    return true;
+}
 } // namespace
 
 std::uint32_t sessionPackageCrc32(const std::uint8_t *data, size_t size)
@@ -85,6 +124,17 @@ bool writeSessionPackage(const std::string &path, const std::vector<SessionPacka
         if (entry.name.empty())
         {
             error = "an entry has an empty name";
+            return false;
+        }
+        std::string why;
+        if (!isSafeEntryName(entry.name, why))
+        {
+            error = why;
+            return false;
+        }
+        if (entry.data.size() > kMaxEntryBytes)
+        {
+            error = "an entry exceeds the 128 MiB limit";
             return false;
         }
         const std::uint32_t crc = sessionPackageCrc32(entry.data.data(), entry.data.size());
@@ -211,6 +261,7 @@ std::vector<SessionPackageEntry> readSessionPackage(const std::string &path, std
     }
     const std::uint16_t count = u16At(eocd + 10);
     std::uint32_t centralOffset = u32At(eocd + 16);
+    std::uint64_t totalEntryBytes = 0;
 
     for (std::uint16_t i = 0; i < count; ++i)
     {
@@ -238,6 +289,23 @@ std::vector<SessionPackageEntry> readSessionPackage(const std::string &path, std
         }
         SessionPackageEntry entry;
         entry.name.assign(reinterpret_cast<const char *>(&bytes[centralOffset + 46]), nameLen);
+        std::string why;
+        if (!isSafeEntryName(entry.name, why))
+        {
+            error = why;
+            return entries;
+        }
+        if (size > kMaxEntryBytes)
+        {
+            error = "an entry exceeds the 128 MiB limit";
+            return entries;
+        }
+        totalEntryBytes += size;
+        if (totalEntryBytes > kMaxTotalEntryBytes)
+        {
+            error = "the package exceeds the 256 MiB unpacked limit";
+            return entries;
+        }
         if (localOffset + 30 > bytes.size() || u32At(localOffset) != kLocalHeaderSignature)
         {
             error = "corrupt local header";

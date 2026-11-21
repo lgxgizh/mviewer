@@ -115,8 +115,9 @@ std::string writeExr(const std::string &path, int width, int height,
     const auto channel = [&](const char *n)
     {
         putString(chlist, n);
-        putI32(chlist, 1); // 1 = HALF
-        putI32(chlist, 0); // pLinear
+        putI32(chlist, 1);   // 1 = HALF
+        chlist.push_back(0); // pLinear (1 byte)
+        chlist.push_back(0); // reserved[3]
         chlist.push_back(0);
         chlist.push_back(0);
         putI32(chlist, 1); // xSampling

@@ -17,6 +17,10 @@
 
 namespace
 {
+// Hard edges so a hostile header cannot ask for an unbounded allocation.
+constexpr int kMaxHdrEdge = 16384;
+constexpr std::uint64_t kMaxHdrPixels = 64ull * 1024 * 1024;
+
 bool hasExtension(const std::string &path, const char *ext)
 {
     const size_t len = std::strlen(ext);
@@ -208,16 +212,18 @@ bool parseExrHeader(const std::vector<std::uint8_t> &file, size_t &pos, ExrHeade
                     ++len;
                 if (len == 0)
                     break;
+                // channel struct after the name: pixelType(4) pLinear(1)
+                // reserved(3) xSampling(4) ySampling(4) = 16 bytes.
+                if (at + len + 1 + 16 > static_cast<size_t>(size))
+                    break;
                 ExrChannel c;
                 std::strncpy(c.name, cname, sizeof(c.name) - 1);
                 c.name[sizeof(c.name) - 1] = '\0';
                 at += len + 1;
-                if (at + 4 > static_cast<size_t>(size))
-                    break;
                 c.pixelType = readI32(value + at);
                 at += 4; // pixelType
-                at += 4; // pLinear
-                at += 2; // reserved
+                at += 1; // pLinear
+                at += 3; // reserved
                 at += 4; // xSampling
                 at += 4; // ySampling
                 out.channels.push_back(c);
@@ -225,6 +231,11 @@ bool parseExrHeader(const std::vector<std::uint8_t> &file, size_t &pos, ExrHeade
         }
         else if (name == "dataWindow")
         {
+            if (size < 16)
+            {
+                error = "invalid OpenEXR dataWindow";
+                return false;
+            }
             out.minX = readI32(value);
             out.minY = readI32(value + 4);
             out.maxX = readI32(value + 8);
@@ -239,6 +250,51 @@ bool parseExrHeader(const std::vector<std::uint8_t> &file, size_t &pos, ExrHeade
             out.lineOrder = value[0];
         }
         pos += static_cast<size_t>(size);
+    }
+    return true;
+}
+
+// Walk the scanline offset table, decode each stored block and scatter the RGB
+// channels into the row-major output. Split out of readExr() to keep both
+// bodies under the complexity cap.
+bool readExrScanlines(const std::vector<std::uint8_t> &file,
+                      const std::vector<std::uint64_t> &offsets,
+                      const std::vector<ExrChannel> &channels, size_t pixelsPerLine, int height,
+                      int lineOrder, int rIdx, int gIdx, int bIdx, std::vector<float> &line,
+                      std::vector<float> &rgb, std::string &error)
+{
+    for (int y = 0; y < height; ++y)
+    {
+        const std::uint64_t offset = offsets[static_cast<size_t>(y)];
+        // Subtract instead of add: offset comes from the file and offset + 8 can
+        // wrap around, which would turn the bounds check into a pass.
+        if (offset > file.size() || file.size() - static_cast<size_t>(offset) < 8)
+        {
+            error = "truncated OpenEXR scanline";
+            return false;
+        }
+        const std::uint8_t *block = &file[static_cast<size_t>(offset)];
+        const int32_t dataSize = readI32(block + 4);
+        const std::uint8_t *data = block + 8;
+        if (dataSize < 0 || 8 + static_cast<size_t>(dataSize) > file.size() - offset)
+        {
+            error = "invalid OpenEXR scanline size";
+            return false;
+        }
+        if (!decodeExrScanline(data, dataSize, channels, pixelsPerLine, line))
+        {
+            error = "truncated OpenEXR scanline data";
+            return false;
+        }
+        const int targetRow = (lineOrder == 2) ? (height - 1 - y) : y;
+        const size_t rowBase = static_cast<size_t>(targetRow) * pixelsPerLine * 3u;
+        for (size_t x = 0; x < pixelsPerLine; ++x)
+        {
+            const size_t src = x * channels.size();
+            rgb[rowBase + x * 3u + 0u] = line[src + static_cast<size_t>(rIdx)];
+            rgb[rowBase + x * 3u + 1u] = line[src + static_cast<size_t>(gIdx)];
+            rgb[rowBase + x * 3u + 2u] = line[src + static_cast<size_t>(bIdx)];
+        }
     }
     return true;
 }
@@ -308,6 +364,14 @@ bool HdrDecoder::readPfm(const std::string &path, std::vector<float> &rgb, int &
     }
     const bool littleEndian = scale < 0.0;
     const int channels = color ? 3 : 1;
+    if (width > kMaxHdrEdge || height > kMaxHdrEdge ||
+        static_cast<uint64_t>(width) * static_cast<uint64_t>(height) *
+                static_cast<uint64_t>(channels) >
+            kMaxHdrPixels)
+    {
+        error = "PFM image is too large";
+        return false;
+    }
     const size_t samples =
         static_cast<size_t>(width) * static_cast<size_t>(height) * static_cast<size_t>(channels);
     std::vector<std::uint8_t> raw(samples * sizeof(float));
@@ -329,8 +393,18 @@ bool HdrDecoder::readPfm(const std::string &path, std::vector<float> &rgb, int &
         const float value = readF32(be.data()) * scaleFactor;
         const size_t pixel = i / static_cast<size_t>(channels);
         const int channel = static_cast<int>(i % static_cast<size_t>(channels));
-        if (channel < 3)
+        if (channels == 1)
+        {
+            // A grayscale PFM ("Pf") must land in all three channels; writing
+            // only the first produced a solid red image.
+            rgb[pixel * 3u + 0] = value;
+            rgb[pixel * 3u + 1] = value;
+            rgb[pixel * 3u + 2] = value;
+        }
+        else if (channel < 3)
+        {
             rgb[pixel * 3u + static_cast<size_t>(channel)] = value;
+        }
     }
     // PFM rows run bottom-to-top.
     const size_t rowFloats = static_cast<size_t>(width) * 3u;
@@ -392,6 +466,12 @@ bool HdrDecoder::readExr(const std::string &path, std::vector<float> &rgb, int &
         error = "invalid OpenEXR data window";
         return false;
     }
+    if (width > kMaxHdrEdge || height > kMaxHdrEdge ||
+        static_cast<uint64_t>(width) * static_cast<uint64_t>(height) > kMaxHdrPixels)
+    {
+        error = "OpenEXR image is too large";
+        return false;
+    }
 
     const size_t scanLines = static_cast<size_t>(height);
     if (pos + scanLines * 8 > file.size())
@@ -423,40 +503,8 @@ bool HdrDecoder::readExr(const std::string &path, std::vector<float> &rgb, int &
     const size_t pixelsPerLine = static_cast<size_t>(width);
     std::vector<float> line(pixelsPerLine * channels.size());
     rgb.assign(pixelsPerLine * static_cast<size_t>(height) * 3u, 0.0f);
-    for (int y = 0; y < height; ++y)
-    {
-        const uint64_t offset = offsets[static_cast<size_t>(y)];
-        if (offset + 8 > file.size())
-        {
-            error = "truncated OpenEXR scanline";
-            return false;
-        }
-        const std::uint8_t *block = &file[static_cast<size_t>(offset)];
-        const int32_t blockY = readI32(block);
-        const int32_t dataSize = readI32(block + 4);
-        const std::uint8_t *data = block + 8;
-        if (dataSize < 0 || 8 + static_cast<size_t>(dataSize) > file.size() - offset)
-        {
-            error = "invalid OpenEXR scanline size";
-            return false;
-        }
-        if (!decodeExrScanline(data, dataSize, channels, pixelsPerLine, line))
-        {
-            error = "truncated OpenEXR scanline data";
-            return false;
-        }
-        const int targetRow = (lineOrder == 2) ? (height - 1 - y) : y;
-        const size_t rowBase = static_cast<size_t>(targetRow) * pixelsPerLine * 3u;
-        for (size_t x = 0; x < pixelsPerLine; ++x)
-        {
-            const size_t src = x * channels.size();
-            rgb[rowBase + x * 3u + 0u] = line[src + static_cast<size_t>(rIdx)];
-            rgb[rowBase + x * 3u + 1u] = line[src + static_cast<size_t>(gIdx)];
-            rgb[rowBase + x * 3u + 2u] = line[src + static_cast<size_t>(bIdx)];
-        }
-        (void)blockY;
-    }
-    return true;
+    return readExrScanlines(file, offsets, channels, pixelsPerLine, height, lineOrder, rIdx, gIdx,
+                            bIdx, line, rgb, error);
 }
 
 bool HdrDecoder::decodeFile(const std::string &path, std::vector<float> &rgb, int &width,

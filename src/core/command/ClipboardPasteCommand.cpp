@@ -1,5 +1,7 @@
 #include "core/command/ClipboardPasteCommand.h"
 
+#include "core/filesystem/Utf8Path.h"
+
 #include <filesystem>
 
 namespace
@@ -9,10 +11,10 @@ namespace fs = std::filesystem;
 std::string parentOf(const std::string &path)
 {
     std::error_code ec;
-    fs::path parent = fs::path(path).parent_path();
+    fs::path parent = fs::path(mviewer::core::pathFromUtf8(path)).parent_path();
     if (parent.empty())
         return {};
-    return parent.lexically_normal().string();
+    return mviewer::core::pathToUtf8(parent.lexically_normal());
 }
 
 bool isInside(const std::string &path, const std::string &directory)
@@ -20,7 +22,9 @@ bool isInside(const std::string &path, const std::string &directory)
     if (directory.empty())
         return false;
     const std::string parent = parentOf(path);
-    return !parent.empty() && parent == fs::path(directory).lexically_normal().string();
+    return !parent.empty() &&
+           parent == mviewer::core::pathToUtf8(
+                         fs::path(mviewer::core::pathFromUtf8(directory)).lexically_normal());
 }
 } // namespace
 
@@ -46,7 +50,9 @@ void ClipboardPasteCommand::undo()
     {
         if (!isInside(path, m_directory))
             continue; // never delete outside the folder the paste wrote into
+        // pathFromUtf8() is what makes this work on a Chinese / non-ASCII path:
+        // constructing fs::path from a narrow UTF-8 string silently fails there.
         std::error_code ec;
-        fs::remove(path, ec);
+        fs::remove(mviewer::core::pathFromUtf8(path), ec);
     }
 }

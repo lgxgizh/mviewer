@@ -65,8 +65,14 @@ void MainWindow::exportSessionPackage()
             continue;
         const QByteArray data = file.readAll();
         const QString source = images.at(i);
-        const QString stem = QFileInfo(source).completeBaseName();
-        const std::string name = "images/" + std::to_string(i) + "-" + stem.toStdString() + ".bin";
+        const QFileInfo sourceInfo(source);
+        // Keep the real extension: a .raw/.yuv/.jpg bundle must decode after
+        // import, and a flat .bin name breaks exactly that.
+        const std::string ext = sourceInfo.suffix().isEmpty()
+                                    ? std::string()
+                                    : "." + sourceInfo.suffix().toUtf8().toStdString();
+        const std::string name = "images/" + std::to_string(i) + "-" +
+                                 sourceInfo.completeBaseName().toUtf8().toStdString() + ext;
         entries.push_back({name, bytesOf(data)});
         files.append(QString::fromStdString(name));
     }
@@ -102,19 +108,46 @@ void MainWindow::importSessionPackage()
         return;
     }
 
-    QTemporaryDir tempDir(QDir::tempPath() + QStringLiteral("/mviewer-session-XXXXXX"));
+    m_sessionTempDir = std::make_unique<QTemporaryDir>(QDir::tempPath() +
+                                                       QStringLiteral("/mviewer-session-XXXXXX"));
+    QTemporaryDir &tempDir = *m_sessionTempDir;
     if (!tempDir.isValid())
     {
+        m_sessionTempDir.reset();
         QMessageBox::warning(this, tr("Session Package"), tr("No temporary folder available"));
         return;
     }
+    const QString tempRoot = QDir::cleanPath(tempDir.path());
 
     QString manifestJson;
     QStringList imagePaths;
+    qint64 totalBytes = 0;
     for (const auto &entry : entries)
     {
         const QString relative = QString::fromStdString(entry.name);
-        const QString target = tempDir.filePath(relative);
+        // The reader already rejects unsafe names; re-check before touching the
+        // filesystem so the extraction target is provably inside the temp dir.
+        if (relative != QLatin1String("session.json") &&
+            !relative.startsWith(QLatin1String("images/")))
+        {
+            QMessageBox::warning(this, tr("Session Package"),
+                                 tr("The package contains an unexpected file: %1").arg(relative));
+            return;
+        }
+        const QString target = QDir::cleanPath(tempDir.filePath(relative));
+        if (target != tempRoot && !target.startsWith(tempRoot + QLatin1Char('/')))
+        {
+            QMessageBox::warning(this, tr("Session Package"),
+                                 tr("The package contains an unsafe path: %1").arg(relative));
+            return;
+        }
+        totalBytes += static_cast<qint64>(entry.data.size());
+        if (totalBytes > 256LL * 1024 * 1024)
+        {
+            QMessageBox::warning(this, tr("Session Package"),
+                                 tr("The package is too large to import"));
+            return;
+        }
         if (relative.contains(QLatin1Char('/')))
             QDir().mkpath(QFileInfo(target).absolutePath());
         QFile out(target);

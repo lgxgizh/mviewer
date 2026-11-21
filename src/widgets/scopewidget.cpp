@@ -33,6 +33,14 @@ struct ColumnRange
     int hi = 0;
 };
 
+// QImage::constScanLine() hands back raw bytes, not pixels. Widening a uchar to
+// QRgb silently produces R=0, G=0 and the byte in the low 8 bits, which is how
+// the waveform / parade / line-profile used to read garbage.
+inline QRgb pixelAt(const QImage &img, int x, int y)
+{
+    return reinterpret_cast<const QRgb *>(img.constScanLine(y))[x];
+}
+
 // Per-column channel range over a bounded row sample. channel: 0=R 1=G 2=B 3=luma.
 QVector<ColumnRange> columnRanges(const QImage &img, int channel)
 {
@@ -46,7 +54,7 @@ QVector<ColumnRange> columnRanges(const QImage &img, int channel)
         ColumnRange range;
         for (int y = 0; y < rgb.height(); y += step)
         {
-            const QRgb px = rgb.constScanLine(y)[x];
+            const QRgb px = pixelAt(rgb, x, y);
             int v = 0;
             if (channel == 0)
                 v = qRed(px);
@@ -208,7 +216,7 @@ void ScopeWidget::paintLineProfile(QPainter &p, const QRectF &target) const
         poly.reserve(points.size());
         for (int i = 0; i < points.size(); ++i)
         {
-            const QRgb px = m_image.constScanLine(points.at(i).y())[points.at(i).x()];
+            const QRgb px = pixelAt(m_image, points.at(i).x(), points.at(i).y());
             int v = 0;
             if (c == 0)
                 v = qRed(px);
@@ -232,7 +240,7 @@ void ScopeWidget::paintLineProfile(QPainter &p, const QRectF &target) const
 
     int sum = 0;
     for (const QPoint &pt : points)
-        sum += lumaOf(m_image.constScanLine(pt.y())[pt.x()]);
+        sum += lumaOf(pixelAt(m_image, pt.x(), pt.y()));
     p.setPen(scopeInk());
     p.drawText(target.left(), target.bottom() + 12,
                tr("%1 samples · mean luma %2").arg(points.size()).arg(sum / points.size()));
