@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [1.0.196] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.196**.
+
+### Added
+
+- **Python script bridge** (report feature 9, Tools → "Run Python Script…").
+  A user-supplied `.py` runs as a **subprocess** on the current image — never
+  imported into MViewer — with a boring JSON protocol:
+  `<interpreter> <script> <request.json> <response.json>`, request
+  `{"image": "…", "args": {…}}`, response
+  `{"ok": true, "message": "…", "boxes": [[x, y, w, h, "label"], …]}`.
+  Guards: no shell, the environment is inherited unchanged, a 30 s hard timeout
+  that kills the child, interpreter lookup is `$MVIEWER_PYTHON` → `python3` →
+  `python` → `py`, and a non-`.py` file is refused before anything is spawned.
+  The dialog reports the transport error or the script's own stderr.
+
+### Notes
+
+- The bridge is deliberately a subprocess protocol, not an embedded
+  interpreter: an in-process Python runtime would put arbitrary code inside the
+  image-loading process, and no sandbox short of a separate process is
+  credible. Boxes come back as data — wiring them into the CV overlay is a
+  follow-up.
+
 ## [1.0.195] - 2026-11-21
 
 ### Release

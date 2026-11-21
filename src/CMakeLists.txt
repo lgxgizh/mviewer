@@ -399,6 +399,7 @@ add_library(mviewer_ui STATIC
     widgets/scopewidget.cpp
     widgets/displayadjustpanel.cpp
     widgets/blindtestdialog.cpp
+    widgets/pythonscriptdialog.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
     cache_settings.cpp
@@ -443,6 +444,7 @@ target_include_directories(mviewer_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library(mviewer_application STATIC
     application/ExternalOpen.cpp
+    application/PythonScriptRunner.cpp
     application/OpenDirectoryUseCase.cpp
     application/Shutdown.cpp
     application/Startup.cpp
@@ -1639,6 +1641,22 @@ target_link_libraries(test_clipboard_paste_command PRIVATE mviewer_core)
 target_compile_features(test_clipboard_paste_command PRIVATE cxx_std_20)
 target_include_directories(test_clipboard_paste_command PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME clipboard_paste_command_tests COMMAND test_clipboard_paste_command)
+
+# Report feature 9: Python script bridge.
+add_executable(python_script_runner_tests test_python_script_runner.cpp)
+target_link_libraries(python_script_runner_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_application
+        mviewer_ui
+)
+target_compile_features(python_script_runner_tests PRIVATE cxx_std_20)
+target_include_directories(python_script_runner_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME python_script_runner_tests COMMAND python_script_runner_tests)
+set_tests_properties(python_script_runner_tests PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(test_yuv_sample core/test_yuv_sample.cpp)
 target_link_libraries(test_yuv_sample PRIVATE mviewer_core)

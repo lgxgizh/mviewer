@@ -4206,6 +4206,73 @@ or double-click a thumbnail to view</source>
     </message>
 </context>
 <context>
+    <name>PythonScriptDialog</name>
+    <message>
+        <source>Run Python Script</source>
+        <translation>运行 Python 脚本</translation>
+    </message>
+    <message>
+        <source>Script</source>
+        <translation>脚本</translation>
+    </message>
+    <message>
+        <source>Image</source>
+        <translation>图像</translation>
+    </message>
+    <message>
+        <source>(no image)</source>
+        <translation>（无图像）</translation>
+    </message>
+    <message>
+        <source>Browse…</source>
+        <translation>浏览…</translation>
+    </message>
+    <message>
+        <source>Run</source>
+        <translation>运行</translation>
+    </message>
+    <message>
+        <source>Interpreter: %1</source>
+        <translation>解释器：%1</translation>
+    </message>
+    <message>
+        <source>not found — set MVIEWER_PYTHON</source>
+        <translation>未找到 — 请设置 MVIEWER_PYTHON</translation>
+    </message>
+    <message>
+        <source>Choose a Python script</source>
+        <translation>选择 Python 脚本</translation>
+    </message>
+    <message>
+        <source>Python (*.py);;All files (*)</source>
+        <translation>Python (*.py);;所有文件 (*)</translation>
+    </message>
+    <message>
+        <source>Choose a .py script first.</source>
+        <translation>请先选择 .py 脚本。</translation>
+    </message>
+    <message>
+        <source>Running %1 on %2…</source>
+        <translation>正在对 %2 运行 %1…</translation>
+    </message>
+    <message>
+        <source>Failed: %1</source>
+        <translation>失败：%1</translation>
+    </message>
+    <message>
+        <source>ok: %1</source>
+        <translation>成功：%1</translation>
+    </message>
+    <message>
+        <source>script reported failure: %1</source>
+        <translation>脚本报告失败：%1</translation>
+    </message>
+    <message>
+        <source>  box %1</source>
+        <translation>  框 %1</translation>
+    </message>
+</context>
+<context>
     <name>DisplayAdjustPanel</name>
     <message>
         <source>Display Adjust</source>
@@ -6369,6 +6436,11 @@ Build: %2</source>
         <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>
         <source>Session package: open a compare session first</source>
         <translation>会话包：请先打开一个对比会话</translation>
+    </message>
+    <message>
+        <location filename="../src/mainwindow_ui_menus.cpp" line="1"/>
+        <source>Run &amp;Python Script...</source>
+        <translation>运行 &amp;Python 脚本...</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_sessionpackage.cpp" line="1"/>

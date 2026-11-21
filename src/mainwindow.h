@@ -42,6 +42,7 @@ class WorkspaceModel;
 class AnalyzerModel;
 class BatchDialog;
 class PluginSettings;
+class PythonScriptDialog;
 class PreferencesDialog;
 class AnalysisOverlayDialog;
 class FormatFilterCombo;
@@ -416,6 +417,9 @@ class MainWindow : public QMainWindow
     // Report feature 11: portable session package (session + referenced images).
     void exportSessionPackage();
     void importSessionPackage();
+    // Report feature 9: run a user-supplied Python script on the current image.
+    void openPythonScript();
+    PythonScriptDialog *m_pythonScriptDialog = nullptr;
     void openUsmCompare(const QString &path = {});
     // ADR 032 (mainwindow_yuv.cpp): raw .yuv parameter dialog and load-failure hint.
     void editYuvParams(const QString &path);

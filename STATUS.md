@@ -1,12 +1,21 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-21 · Version: **1.0.195** · Release tag: **v1.0.195**
+> Snapshot: 2026-11-21 · Version: **1.0.196** · Release tag: **v1.0.196**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.196 — Python script bridge (2026-11-21)
+
+- Tools → "Run Python Script…": a user `.py` runs as a subprocess on the
+  current image via `<interpreter> <script> <request.json> <response.json>`.
+  No shell, unchanged environment, 30 s timeout that kills the child,
+  interpreter lookup `$MVIEWER_PYTHON` → `python3` → `python` → `py`.
+- Deliberately a subprocess protocol rather than an embedded interpreter: an
+  in-process runtime would put arbitrary code in the image-loading process.
 
 ## 1.0.195 — Undo for a gallery paste (item 5) (2026-11-21)
 

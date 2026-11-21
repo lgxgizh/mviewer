@@ -4,6 +4,7 @@
 #include "mainwindow_p.h"
 #include "runtime_storage.h"
 #include "shortcutdigits.h"
+#include "widgets/pythonscriptdialog.h"
 
 #include <QCursor>
 
@@ -681,6 +682,21 @@ QString MainWindow::shortcutsHelpHtml()
     // P1-8: a single, authoritative cheat sheet so users never have to guess.
     // The page lives in resources/help/ in every UI language.
     return mviewer::ui::Language::localizedHelpHtml(QStringLiteral("shortcuts"));
+}
+
+void MainWindow::openPythonScript()
+{
+    if (!m_pythonScriptDialog)
+    {
+        m_pythonScriptDialog = new PythonScriptDialog(this);
+        m_pythonScriptDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_pythonScriptDialog, &QDialog::destroyed, this,
+                [this]() { m_pythonScriptDialog = nullptr; });
+    }
+    m_pythonScriptDialog->setImagePath(currentImagePath());
+    m_pythonScriptDialog->show();
+    m_pythonScriptDialog->raise();
+    m_pythonScriptDialog->activateWindow();
 }
 
 void MainWindow::showShortcutsHelp()

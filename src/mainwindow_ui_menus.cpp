@@ -371,6 +371,10 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     toolsMenu->addAction(actImportSession);
     connect(actExportSession, &QAction::triggered, this, [this]() { exportSessionPackage(); });
     connect(actImportSession, &QAction::triggered, this, [this]() { importSessionPackage(); });
+    // Report feature 9: user-supplied algorithm scripts on the current image.
+    auto *actPythonScript = new QAction(tr("Run &Python Script..."), this);
+    toolsMenu->addAction(actPythonScript);
+    connect(actPythonScript, &QAction::triggered, this, [this]() { openPythonScript(); });
 
     QAction *actPrefs = new QAction(tr("Preferences(&O)..."), this);
     connect(actPrefs, &QAction::triggered, this, &MainWindow::openPreferences);
