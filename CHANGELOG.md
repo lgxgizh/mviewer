@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [1.0.197] - 2026-11-21
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.197**.
+
+### Fixed
+
+- **Linux now uses the monitor ICC profile** (item 4). Colour management was a
+  hard sRGB fallback on every non-Windows platform, so the viewer never applied
+  a display profile even when colord had one installed. The Linux loader looks
+  in `$XDG_CONFIG_HOME/color/icc`, `~/.config/color/icc`,
+  `/usr/share/color/icc` and `/var/lib/colord/icc`, and honours **`MVIEWER_ICC`**
+  as an explicit override for a machine whose profile lives elsewhere. Reads
+  are bounded by the real file size with a 32 MiB ceiling, matching the Windows
+  loader; with nothing readable it still degrades to sRGB instead of inventing a
+  profile.
+
+### Notes
+
+- **macOS ColorSync is still the sRGB fallback** — there is no macOS runner here
+  to verify it on, so it is called out rather than guessed at.
+
 ## [1.0.196] - 2026-11-21
 
 ### Release

@@ -4,13 +4,12 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.196**
+## Where we are now — **Beta / 1.0.197**
 
-MViewer remains in **Beta**; the current release is **`v1.0.196`**
+MViewer remains in **Beta**; the current release is **`v1.0.197`**
 (2026-11-21, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch adds a Python script bridge: a user script runs as a subprocess on
-the current image with a JSON request/response protocol, so algorithm
-prototypes can be tried without recompiling. Offscreen CI is regression
+This patch gives Linux the monitor ICC profile it was missing (colord / colour
+directories, with `MVIEWER_ICC` as an override). Offscreen CI is regression
 evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
@@ -66,7 +65,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.196** (current) | Python script bridge (subprocess, JSON protocol) | 🔵 Beta |
+| **1.0.197** (current) | Linux monitor ICC (colour directories + `MVIEWER_ICC`) | 🔵 Beta |
+| **1.0.196** | Python script bridge (subprocess, JSON protocol) | ✅ Previous patch |
 | **1.0.195** | Undo for a gallery paste (Ctrl+Z deletes the copies) | ✅ Previous patch |
 | **1.0.194** | Governance: gate exemption removed, TSan leg, extraction | ✅ Previous patch |
 | **1.0.193** | Shortcut help, preferences fit, language hot-switch | ✅ Previous patch |

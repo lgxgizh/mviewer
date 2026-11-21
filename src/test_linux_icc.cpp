@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QWindow>
 
 #include <cstdio>
 
@@ -53,7 +54,11 @@ int main(int argc, char **argv)
 
     qputenv("MVIEWER_ICC", profilePath.toUtf8());
     DisplayColorContextProvider::resetForTest();
-    const auto context = DisplayColorContextProvider::forWindow(nullptr);
+    // forWindow(nullptr) short-circuits to the sRGB fallback by design; the
+    // platform loader only runs for a real window.
+    QWindow window;
+    window.create();
+    const auto context = DisplayColorContextProvider::forWindow(&window);
     CHECK(context.hasProfile(), "the override profile reaches the display context");
     const QByteArray loaded(
         context.iccProfile.empty()
@@ -62,12 +67,14 @@ int main(int argc, char **argv)
                                       static_cast<int>(context.iccProfile.size())));
     CHECK(loaded == fixture, "the profile bytes round-trip untouched");
 
-    // With no override and no system color directory, the loader degrades to the
-    // sRGB fallback rather than inventing a profile.
-    qunsetenv("MVIEWER_ICC");
+    // A bogus override falls through to the colour directories; colour
+    // management itself stays on and no profile is fabricated.
+    qputenv("MVIEWER_ICC", tmp.filePath(QStringLiteral("absent.icc")).toUtf8());
     DisplayColorContextProvider::resetForTest();
-    const auto fallback = DisplayColorContextProvider::forWindow(nullptr);
-    CHECK(!fallback.hasProfile(), "no profile available means the sRGB fallback");
+    const auto fallback = DisplayColorContextProvider::forWindow(&window);
+    CHECK(fallback.colorManagementEnabled, "colour management stays enabled without a profile");
+    CHECK(fallback.iccProfile != context.iccProfile,
+          "a bogus override does not fabricate a profile");
 
     printf("\n==== linux icc test: %d passed, %d failed ====\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
