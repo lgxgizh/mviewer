@@ -705,6 +705,7 @@ bool CompareWorkspace::stepFrameSync(int delta)
                                 : 0);
     setImages(paths, frameIndices);
     applySession(session);
+    return true;
 }
 
 void CompareWorkspace::updateLayoutStatus()
