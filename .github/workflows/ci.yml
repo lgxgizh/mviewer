@@ -387,6 +387,10 @@ jobs:
         run: |
           python3 -m pip install --quiet --disable-pip-version-check Pillow
           python3 testdata/generate_fixtures.py --size 256x256
+          # The colour-managed and metadata suites read the larger fixtures;
+          # without them they fail with "fixture root missing", which under a
+          # hard gate would look like a race but is only a missing file.
+          python3 testdata/generate_large_fixtures.py --ensure
 
       - name: Test (core suites only)
         timeout-minutes: 45
