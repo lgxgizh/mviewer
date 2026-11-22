@@ -13,9 +13,10 @@
 - `lizard` 复杂度棘轮拆成独立的 required 任务 `complexity-ratchet`：它原来在
   `continue-on-error` 的 `build-health` 里，突破上限也不会拦住任何东西。
 - YUV 扩展名列右对齐。
-- TSan 腿（required）的边界写清楚了：Qt/glib 内部竞态与 `QPointer` 守卫竞态
-  按函数名进 `ci/tsan.supp`（后者带 TODO）；余下无符号帧的 QtGui 报告来自
-  构建真实控件的套件，腿收窄到严格 Qt-free 的核心套件。
+- TSan 腿：跑真报告（`halt_on_error=1`），但暂时仍是 advisory。转硬后它报出
+  `TaskScheduler.cpp:51` 与 `CompareWorkspace` 的 `QPointer` 守卫两处归因到
+  我们自己帧的竞态（都带 TODO(investigate)），修掉之前设为 required 只会得到
+  靠忽略列表维持的门禁。已知第三方竞态记录在 `ci/tsan.supp`。
 - 未做并附原因：`runtime_storage.h` 搬进 `core/` 被 R5 拒绝（core 头文件不得
   include Qt），已回退；`tests/CMakeLists.txt` 拆分本轮不做（测试目标与
   Format/clang-tidy/benchmark 段落交错，非连续区块）。
