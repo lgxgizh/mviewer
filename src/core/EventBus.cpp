@@ -7,6 +7,9 @@ EventBus &EventBus::instance()
     return scope(EventBusScope::Application);
 }
 
+// Lifetime policy (ADR-017): a static array that IS destroyed at exit. The
+// buses own no threads and no native handles (subscribers are raw pointers the
+// caller must unsubscribe), so there is nothing to leak.
 EventBus &EventBus::scope(EventBusScope s)
 {
     static EventBus buses[4];

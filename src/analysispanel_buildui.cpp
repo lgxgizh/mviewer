@@ -17,6 +17,7 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QTabWidget>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -91,16 +92,15 @@ void AnalysisPanel::buildHistorySection(QVBoxLayout &layout)
     connect(pinned, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem *) { onPinnedActivated(); });
 
-    auto *row = new QHBoxLayout;
-    auto *historyColumn = new QVBoxLayout;
-    historyColumn->addWidget(new QLabel(tr("History")));
-    historyColumn->addWidget(history);
-    auto *pinnedColumn = new QVBoxLayout;
-    pinnedColumn->addWidget(new QLabel(tr("Pin")));
-    pinnedColumn->addWidget(pinned);
-    row->addLayout(historyColumn, 1);
-    row->addLayout(pinnedColumn, 1);
-    layout.addLayout(row);
+    // History and Pinned share one tab strip instead of two side-by-side lists:
+    // at a 300px sidebar each column was too narrow to read a file name.
+    auto *lists = new QTabWidget;
+    lists->setObjectName(QStringLiteral("analysisHistoryTabs"));
+    history->setMaximumHeight(160);
+    lists->addTab(history, tr("History"));
+    pinned->setMaximumHeight(160);
+    lists->addTab(pinned, tr("Pinned"));
+    layout.addWidget(lists);
     connect(m_analyzerCombo, QOverload<int>::of(&QComboBox::activated), this,
             &AnalysisPanel::onAnalyzerSelected);
 }

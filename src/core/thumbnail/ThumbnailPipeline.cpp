@@ -309,6 +309,10 @@ void ThumbnailPipeline::clear()
     m_memCacheBytes = 0;
 }
 
+// Lifetime policy (ADR-017): a function-local static that IS destroyed at
+// exit. application::Shutdown stops the pipeline and clears its consumers
+// first, so the destructor has no in-flight work to join; keep that ordering if
+// this ever becomes a leaked `new`.
 ThumbnailPipeline &ThumbnailPipeline::instance()
 {
     static ThumbnailPipeline inst;

@@ -30,7 +30,7 @@ QColor itemTextColor(bool selected, const QPalette &palette);
 
 // Soft drop shadow for a card of cardSize. The returned pixmap is larger than
 // the card by shadowMargin() on each side and is cached per size and theme.
-QPixmap cardShadow(const QSize &cardSize, bool dark);
+QPixmap cardShadow(const QSize &cardSize, bool dark, int dpr = 1);
 int shadowMargin();
 void drawCardShadow(QPainter *painter, const QRect &card, bool dark);
 

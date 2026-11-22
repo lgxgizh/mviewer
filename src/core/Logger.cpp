@@ -18,6 +18,10 @@ namespace mviewer::core
 namespace
 {
 
+// Lifetime policy (ADR-017): deliberately LEAKED. The file logger can be
+// written from any thread while the process drains at exit, and the message
+// handler is uninstalled in shutdownFileLogger() before the file is closed.
+// Destroying these at static-destruction time would race that drain.
 QString g_logDir;
 QString g_logPath;
 QFile *g_logFile = nullptr;

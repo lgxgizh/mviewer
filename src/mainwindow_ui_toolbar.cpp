@@ -202,6 +202,23 @@ void detachFromLayout(QWidget *widget)
     }
 }
 
+void normaliseToolbarButtonHeights(QToolBar *bar)
+{
+    if (!bar)
+        return;
+    // The pill / segmented / compare controls are already kControlHeight; the
+    // plain icon actions QToolBar creates for us sized themselves to the icon
+    // (about 26px), so the strip mixed 34px and 26px buttons.
+    for (QToolButton *button : bar->findChildren<QToolButton *>())
+    {
+        if (button->property("pill").toBool() || button->property("segmented").toBool())
+            continue;
+        if (button->toolButtonStyle() != Qt::ToolButtonIconOnly)
+            continue;
+        button->setFixedHeight(mviewer::ui::metrics::kControlHeight);
+    }
+}
+
 } // namespace
 
 QWidget *MainWindow::makeBrowserLocation(QWidget *parent)
@@ -371,6 +388,7 @@ void MainWindow::attachUnifiedToolbarControls()
     auto *pin = new TrailingClusterPin(bar, cluster);
     cluster->show();
     pin->place();
+    normaliseToolbarButtonHeights(bar);
 }
 
 void MainWindow::syncViewModeSegmentToolTips()

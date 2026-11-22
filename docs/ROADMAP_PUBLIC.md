@@ -4,14 +4,16 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.204**
+## Where we are now — **Beta / 1.0.205**
 
-MViewer remains in **Beta**; the current release is **`v1.0.204`**
+MViewer remains in **Beta**; the current release is **`v1.0.205`**
 (2026-11-22, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch finishes the build-governance items: the `lizard` complexity ratchet
-is now a required job instead of living inside an advisory one, so a rise in
-high-complexity or over-long functions actually blocks a merge. Offscreen CI is
-regression evidence, not proof of universal smoothness.
+This patch is the last visual-polish round: one consistent toolbar button height,
+History/Pinned merged into a tab strip, HiDPI-correct thumbnail shadows, eased
+hover fades and proper key caps in the empty states. It also moves all 178 test
+targets out of `src/CMakeLists.txt` (3711 → 718 lines) into
+`tests/CMakeLists.txt`. Offscreen CI is regression evidence, not proof of
+universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -66,7 +68,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.204** (current) | 构建治理收尾（lizard 棘轮转硬） | 🔵 Beta |
+| **1.0.205** (current) | UI 收尾 + 测试目标搬进 `tests/` | 🔵 Beta |
+| **1.0.204** | 构建治理收尾（lizard 棘轮转硬） | ✅ Previous patch |
 | **1.0.203** | UI 质感 P1/P2（面包屑 / 卡片 / 侧栏 / Mica / 主按钮） | ✅ Previous patch |
 | **1.0.202** | 遗留 P0/P1 功能缺陷 | ✅ Previous patch |
 | **1.0.201** | 底层并发与构建收口（TSan 转硬） | ✅ Previous patch |

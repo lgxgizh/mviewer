@@ -21,20 +21,26 @@ struct ShadowEntry
     int w = 0;
     int h = 0;
     bool dark = false;
+    int dpr = 1;
     QPixmap pixmap;
 };
 
 std::vector<ShadowEntry> g_shadowCache;
 
 // A few stacked translucent rounded rects approximate a 3 px blur without a
-// per-pixel filter. Built once per size and theme.
-QPixmap renderShadow(const QSize &cardSize, bool dark)
+// per-pixel filter. Built once per size, theme and DPR; the whole rendering is
+// scaled by dpr so a 150%/200% display gets a crisp edge instead of a 1x
+// pixmap stretched over more physical pixels.
+QPixmap renderShadow(const QSize &cardSize, bool dark, int dpr)
 {
-    const QSize full = cardSize + QSize(kShadowMargin * 2, kShadowMargin * 2);
+    const qreal scale = qMax(1, dpr);
+    const QSize card(cardSize.width() * scale, cardSize.height() * scale);
+    const QSize full = card + QSize(kShadowMargin * 2 * scale, kShadowMargin * 2 * scale);
     QImage image(full, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
     QPainter p(&image);
     p.setRenderHint(QPainter::Antialiasing, true);
+    p.scale(scale, scale);
     p.setPen(Qt::NoPen);
     const int baseAlpha = dark ? 30 : 16;
     for (int i = kShadowMargin; i >= 1; --i)
@@ -45,7 +51,9 @@ QPixmap renderShadow(const QSize &cardSize, bool dark)
         p.drawRoundedRect(r, kCardRadius + i, kCardRadius + i);
     }
     p.end();
-    return QPixmap::fromImage(image);
+    QPixmap pixmap = QPixmap::fromImage(image);
+    pixmap.setDevicePixelRatio(scale);
+    return pixmap;
 }
 } // namespace
 
@@ -79,21 +87,22 @@ int shadowMargin()
     return kShadowMargin;
 }
 
-QPixmap cardShadow(const QSize &cardSize, bool dark)
+QPixmap cardShadow(const QSize &cardSize, bool dark, int dpr)
 {
     if (cardSize.isEmpty())
         return QPixmap();
     for (size_t i = 0; i < g_shadowCache.size(); ++i)
     {
         const ShadowEntry &e = g_shadowCache[i];
-        if (e.w == cardSize.width() && e.h == cardSize.height() && e.dark == dark)
+        if (e.w == cardSize.width() && e.h == cardSize.height() && e.dark == dark && e.dpr == dpr)
         {
             if (i != 0)
                 std::swap(g_shadowCache[i], g_shadowCache[0]);
             return g_shadowCache[0].pixmap;
         }
     }
-    ShadowEntry entry{cardSize.width(), cardSize.height(), dark, renderShadow(cardSize, dark)};
+    ShadowEntry entry{cardSize.width(), cardSize.height(), dark, dpr,
+                      renderShadow(cardSize, dark, dpr)};
     if (g_shadowCache.size() >= kMaxShadowCache)
         g_shadowCache.pop_back();
     g_shadowCache.insert(g_shadowCache.begin(), entry);
@@ -102,7 +111,9 @@ QPixmap cardShadow(const QSize &cardSize, bool dark)
 
 void drawCardShadow(QPainter *painter, const QRect &card, bool dark)
 {
-    const QPixmap shadow = cardShadow(card.size(), dark);
+    const int dpr =
+        painter && painter->device() ? qMax(1, qRound(painter->device()->devicePixelRatio())) : 1;
+    const QPixmap shadow = cardShadow(card.size(), dark, dpr);
     if (!shadow.isNull())
         painter->drawPixmap(card.x() - kShadowMargin, card.y() - kShadowMargin, shadow);
 }

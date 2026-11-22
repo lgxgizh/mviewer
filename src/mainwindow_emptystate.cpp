@@ -34,7 +34,12 @@ QString hintCardHtml(const QString &title, const QString &body)
 
 QString keyCap(const QString &key)
 {
-    return QStringLiteral("<span style='background-color:%1; color:%2;'>&nbsp;%3&nbsp;</span>")
+    // Key caps read as physical keys: a rounded chip, monospaced label, and
+    // padding instead of non-breaking spaces (which ignored the surrounding
+    // text metrics at 150% scaling).
+    return QStringLiteral("<span style='background-color:%1; color:%2; border-radius:4px; "
+                          "padding:1px 5px; font-family:&quot;JetBrains Mono&quot;,&quot;"
+                          "Consolas&quot;,monospace;'>%3</span>")
         .arg(Theme::themeColor(ThemeRole::Bg3), Theme::themeColor(ThemeRole::TextPrimary), key);
 }
 

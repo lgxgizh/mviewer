@@ -12,6 +12,15 @@ namespace
 {
 constexpr int kFrameMs = 16;
 const char *const kFadeObjectName = "mvHoverFade";
+
+// The fade tracks linear time; easing here makes it settle instead of
+// decelerating linearly (review: hover should feel like easeOutCubic).
+qreal easeOutCubic(qreal t)
+{
+    const qreal clamped = std::clamp(t, 0.0, 1.0);
+    const qreal inv = 1.0 - clamped;
+    return 1.0 - inv * inv * inv;
+}
 } // namespace
 
 HoverFade::HoverFade(QAbstractItemView *view) : QObject(view), m_view(view)
@@ -35,12 +44,11 @@ qreal HoverFade::progress(const QModelIndex &index) const
     if (!index.isValid())
         return 0.0;
     if (m_in.isValid() && index == QModelIndex(m_in))
-        return m_inProgress;
+        return easeOutCubic(m_inProgress);
     if (m_out.isValid() && index == QModelIndex(m_out))
-        return m_outProgress;
+        return easeOutCubic(m_outProgress);
     return 0.0;
 }
-
 bool HoverFade::eventFilter(QObject *watched, QEvent *event)
 {
     switch (event->type())

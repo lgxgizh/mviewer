@@ -229,6 +229,20 @@ ImageData unditheredImageDataFrom16(const libraw_processed_image_t &image)
 // is display-only and is dithered. A dither failure still returns pixels.
 ImageData imageDataFromLibraw16(const libraw_processed_image_t &image)
 {
+    // Dither straight from LibRaw's interleaved uint16 buffer. Going through an
+    // RGBX64 QImage first cost an extra 8-bytes-per-pixel full-image buffer on
+    // top of the source, the dither target and the final ImageData.
+    const int colors = image.colors < 1 ? 1 : static_cast<int>(image.colors);
+    QImage direct;
+    if (mviewer::core::ditherRows16ToRgb888(reinterpret_cast<const std::uint16_t *>(image.data),
+                                            static_cast<int>(image.width),
+                                            static_cast<int>(image.height), colors, direct))
+    {
+        ImageData out = imageDataFromRgb888(direct);
+        if (!out.isNull())
+            return out;
+    }
+
     const QImage sixteen = makeSixteenBitImage(image);
     if (!sixteen.isNull())
     {

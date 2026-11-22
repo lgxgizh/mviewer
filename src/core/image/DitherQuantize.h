@@ -28,4 +28,9 @@ std::uint8_t quantize16To8(std::uint16_t value, int x, int y) noexcept;
 // null, or the RGB888 buffer cannot be allocated. Never throws.
 bool ditherQImage16ToRgb888(const QImage &src, QImage &out);
 
+/// Same ordered dither, reading LibRaw's interleaved uint16 rows directly so a
+/// 16-bit decode does not materialise an 8-byte-per-pixel RGBX64 QImage first.
+/// `colors` is clamped to 1..4 (1 = grayscale).
+bool ditherRows16ToRgb888(const std::uint16_t *src, int width, int height, int colors, QImage &out);
+
 } // namespace mviewer::core

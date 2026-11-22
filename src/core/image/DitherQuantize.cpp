@@ -127,4 +127,57 @@ bool ditherQImage16ToRgb888(const QImage &src, QImage &out)
     }
 }
 
+bool ditherRows16ToRgb888(const std::uint16_t *src, int width, int height, int colors, QImage &out)
+{
+    try
+    {
+        if (src == nullptr || width <= 0 || height <= 0)
+            return false;
+        // width * colors must stay inside size_t and inside the caller's buffer.
+        constexpr int kMaxSide = 0x1fffffff;
+        if (width > kMaxSide || height > kMaxSide)
+            return false;
+        colors = std::max(1, std::min(colors, 4));
+
+        QImage rgb(width, height, QImage::Format_RGB888);
+        if (rgb.isNull() || rgb.bytesPerLine() < static_cast<qsizetype>(width) * 3)
+            return false;
+
+        const size_t rowStride = static_cast<size_t>(width) * static_cast<size_t>(colors);
+        for (int y = 0; y < height; ++y)
+        {
+            const std::uint16_t *row = src + static_cast<size_t>(y) * rowStride;
+            uchar *dst = rgb.scanLine(y);
+            if (row == nullptr || dst == nullptr)
+                return false;
+            if (colors == 1)
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    const std::uint8_t level = quantize16To8(row[x], x, y);
+                    dst[x * 3 + 0] = level;
+                    dst[x * 3 + 1] = level;
+                    dst[x * 3 + 2] = level;
+                }
+            }
+            else
+            {
+                for (int x = 0; x < width; ++x)
+                {
+                    const size_t i = static_cast<size_t>(x) * static_cast<size_t>(colors);
+                    dst[x * 3 + 0] = quantize16To8(row[i], x, y);
+                    dst[x * 3 + 1] = quantize16To8(row[i + 1], x, y);
+                    dst[x * 3 + 2] = quantize16To8(row[i + 2], x, y);
+                }
+            }
+        }
+        out.swap(rgb);
+        return true;
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
 } // namespace mviewer::core

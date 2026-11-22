@@ -2,6 +2,44 @@
 
 ## [Unreleased]
 
+## [1.0.205] - 2026-11-22
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.205**.
+
+### Changed
+
+- **顶栏按钮高度统一**：`QToolBar` 替我们创建的纯图标按钮按图标尺寸自适应
+  （约 26px），而 Compare 胶囊与视图分段是 `kControlHeight`（34px）——同一条
+  工具带上两种高度。现在纯图标按钮也统一到 `kControlHeight`。
+- **History 与 Pinned 合并为一个标签条**：原来两个列表并排，300px 侧栏里每列
+  都窄得读不全文件名；现在共用一个 `QTabWidget`。
+- **缩略图卡片阴影适配 HiDPI**：阴影 pixmap 原来按 1× 渲染再拉伸，150%/200%
+  缩放下发糊。现在按 `devicePixelRatio` 渲染并标注 DPR，缓存按 DPR 分开。
+- **悬停淡入改 `easeOutCubic`**：`HoverFade` 原来按线性时间推进，减速感很
+  生硬；现在进度做 easeOutCubic，快速到位、末端收稳。
+- **空状态按键帽**：改成圆角 chip + 内边距 + 等宽字体，不再靠 `&nbsp;` 撑宽
+  （那样在 150% 缩放下会忽略文字度量）。
+
+### Changed — 构建
+
+- **测试目标搬到 `tests/CMakeLists.txt`**：`src/CMakeLists.txt` 从 3711 行降到
+  718 行，178 个测试目标与全部 `add_test` 都搬到测试源码旁边。用
+  `include(${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt)` 引入（不是
+  `add_subdirectory`），所以 `CMAKE_CURRENT_SOURCE_DIR` 仍然指产品源码根，原有
+  的包含路径全部不用改；clang-tidy 开关与 Format target 留在 `src/`。
+
+### Fixed
+
+- **LibRaw 16-bit 解码少一份全图缓冲**：原来先物化一张 8 字节/像素的
+  `Format_RGBX64` QImage，再抖动到 RGB888，最后拷进 `ImageData`——同一时刻最多
+  4 份全图缓冲。新增 `ditherRows16ToRgb888()`，直接从 LibRaw 的 uint16 交错行
+  抖动，`RGBX64` 那一份被完全省掉（旧路径保留为回退）。
+- **四个单例补齐 ADR-017 生命周期声明**：`ImageRepository` / `ThumbnailPipeline`
+  / `EventBus` 是函数局部静态（退出时销毁），`Logger` 是刻意泄漏。按 ADR-017
+  第 5 条，每个 `instance()` / `scope()` 定义处现在写明了各自的政策与前提。
+
 ## [1.0.204] - 2026-11-22
 
 ### Release

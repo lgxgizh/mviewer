@@ -1,12 +1,26 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.204** · Release tag: **v1.0.204**
+> Snapshot: 2026-11-22 · Version: **1.0.205** · Release tag: **v1.0.205**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.205 — UI 收尾 + 测试目标搬迁 (2026-11-22)
+
+- 顶栏纯图标按钮统一到 kControlHeight（原来 26px 与 34px 混用）。
+- History 与 Pinned 合并为一个标签条。
+- 缩略图卡片阴影按 devicePixelRatio 渲染（修 150%/200% 发糊）。
+- 悬停淡入改 easeOutCubic。
+- 空状态按键帽改圆角 chip + 等宽字体。
+- 178 个测试目标搬到 `tests/CMakeLists.txt`；`src/CMakeLists.txt`
+  3711 → 718 行。
+- LibRaw 16-bit 新增 `ditherRows16ToRgb888()`，省掉 8 字节/像素的 RGBX64
+  中间缓冲（同屏最多 4 份全图缓冲 → 3 份）。
+- ImageRepository / ThumbnailPipeline / EventBus / Logger 按 ADR-017 第 5 条
+  补上生命周期政策声明。
 
 ## 1.0.204 — 构建治理收尾 (2026-11-22)
 
