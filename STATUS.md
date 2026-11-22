@@ -1,12 +1,19 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.205** · Release tag: **v1.0.205**
+> Snapshot: 2026-11-22 · Version: **1.0.206** · Release tag: **v1.0.206**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.206 — 顶栏收纳 + TSan 腿转 required (2026-11-22)
+
+- 低频动作收进顶栏末尾的 More 溢出菜单（原来 15+ 按钮挤在 52px 条带上）。
+- TSan 腿不再 `continue-on-error`；`ci/tsan.supp` 记录第三方竞态与一条带
+  TODO(investigate) 的压测回收误报。
+- 未做：路径框默认折叠（会藏起当前路径这个核心 affordance，属产品取舍）。
 
 ## 1.0.205 — UI 收尾 + 测试目标搬迁 (2026-11-22)
 

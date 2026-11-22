@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [1.0.206] - 2026-11-22
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.206**.
+
+### Changed
+
+- **顶栏收纳**：52px 的工具带上原来挤了 15+ 个按钮，把 360px 的路径框挤到失
+  读。现在低频动作（在资源管理器中打开、收藏、工作区、左转/右转、分栏、三
+  栏、USM、分析面板、全局搜索）收进末尾的 **More** 溢出菜单，条带上只留日常
+  驱动（后退/前进/向上、路径框、打开、刷新、视图分段、类型筛选、Compare、
+  搜索框）。收纳进菜单的动作补上了原本由 `addBrowserAction()` 设置的图标。
+- **`test_triple_browse`** 的"三栏按钮在顶栏上"断言改为"**从顶栏可达**"：直
+  接是 `QToolBar::action()`，或在 More 菜单里。
+
+### Changed — 门禁
+
+- **TSan 腿转成 required**（不再 `continue-on-error`），仍带 `halt_on_error=1`。
+  `ci/tsan.supp` 记录已知的第三方竞态（Qt 的 `qMkTime`、
+  `QArrayData::reallocateUnaligned`、`QThreadPoolPrivate::enqueueTask`，glib 的
+  `g_rw_lock_reader_lock`，Qt 的连接簿记），以及一条压测回收误报——churn 压测
+  以极快的节奏复用 `LambdaTask` 堆地址，TSan 把"另一个对象的构造写"和"这个对
+  象的 `run()` 读"算成竞态；该帧符号是裸 `run`，只能按这个键抑制，条目里带
+  `TODO(investigate)`。我们自己的 `CompareWorkspace::queueLoadRequests`
+  （`QPointer` 守卫）也一并列出并标注 TODO。
+
 ## [1.0.205] - 2026-11-22
 
 ### Release

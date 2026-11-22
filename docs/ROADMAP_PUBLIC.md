@@ -4,15 +4,13 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.205**
+## Where we are now — **Beta / 1.0.206**
 
-MViewer remains in **Beta**; the current release is **`v1.0.205`**
+MViewer remains in **Beta**; the current release is **`v1.0.206`**
 (2026-11-22, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch is the last visual-polish round: one consistent toolbar button height,
-History/Pinned merged into a tab strip, HiDPI-correct thumbnail shadows, eased
-hover fades and proper key caps in the empty states. It also moves all 178 test
-targets out of `src/CMakeLists.txt` (3711 → 718 lines) into
-`tests/CMakeLists.txt`. Offscreen CI is regression evidence, not proof of
+The 52px toolbar now keeps only the daily drivers and puts occasional actions in
+an overflow menu, and the Linux ThreadSanitizer leg is a required gate rather
+than an advisory one. Offscreen CI is regression evidence, not proof of
 universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
@@ -68,7 +66,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.205** (current) | UI 收尾 + 测试目标搬进 `tests/` | 🔵 Beta |
+| **1.0.206** (current) | 顶栏收纳 + TSan 腿转 required | 🔵 Beta |
+| **1.0.205** | UI 收尾 + 测试目标搬进 `tests/` | ✅ Previous patch |
 | **1.0.204** | 构建治理收尾（lizard 棘轮转硬） | ✅ Previous patch |
 | **1.0.203** | UI 质感 P1/P2（面包屑 / 卡片 / 侧栏 / Mica / 主按钮） | ✅ Previous patch |
 | **1.0.202** | 遗留 P0/P1 功能缺陷 | ✅ Previous patch |
