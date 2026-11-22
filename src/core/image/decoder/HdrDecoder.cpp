@@ -267,13 +267,15 @@ bool readExrScanlines(const std::vector<std::uint8_t> &file,
     {
         const std::uint64_t offset = offsets[static_cast<size_t>(y)];
         // Subtract instead of add: offset comes from the file and offset + 8 can
-        // wrap around, which would turn the bounds check into a pass.
-        if (offset > file.size() || file.size() - static_cast<size_t>(offset) < 8)
+        // wrap around, which would turn the bounds check into a pass. The >= is
+        // deliberate: it proves blockOffset < file.size() before the indexing.
+        const size_t blockOffset = static_cast<size_t>(offset);
+        if (blockOffset >= file.size() || file.size() - blockOffset < 8)
         {
             error = "truncated OpenEXR scanline";
             return false;
         }
-        const std::uint8_t *block = &file[static_cast<size_t>(offset)];
+        const std::uint8_t *block = &file[blockOffset];
         const int32_t dataSize = readI32(block + 4);
         const std::uint8_t *data = block + 8;
         if (dataSize < 0 || 8 + static_cast<size_t>(dataSize) > file.size() - offset)

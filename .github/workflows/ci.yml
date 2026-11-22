@@ -337,8 +337,10 @@ jobs:
       CMAKE_C_COMPILER_LAUNCHER: sccache
       CMAKE_CXX_COMPILER_LAUNCHER: sccache
       # halt_on_error=1 makes the instrumented run abort on the first report, so
-      # the leg is a real gate rather than a log nobody reads.
-      TSAN_OPTIONS: "halt_on_error=1 second_deadlock_stack=1 history_size=7"
+      # the leg is a real gate rather than a log nobody reads. The suppressions
+      # file covers races inside libc/Qt/glib that our concurrent probe path
+      # reaches (see ci/tsan.supp); our own races still fail the leg. It is set
+      # in the test step because $PWD must be the checkout root.
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -390,6 +392,7 @@ jobs:
         timeout-minutes: 45
         run: |
           export QT_QPA_PLATFORM=offscreen
+          export TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1 history_size=7 suppressions=$PWD/ci/tsan.supp"
           cd build_tsan
           # Qt-free core suites only: the UI suites need a real event loop and
           # are far more prone to benign TSan reports inside Qt.
