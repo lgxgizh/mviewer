@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <QSet>
 #include <QTableWidget>
+#include <QTableWidgetItem>
 #include <QVBoxLayout>
 
 namespace yuv = mviewer::core::yuv;
@@ -125,6 +126,9 @@ void YuvExtensionMapEditor::addRow(const QString &ext, const QString &pixFmt)
     const int row = m_table->rowCount();
     m_table->insertRow(row);
     m_table->setItem(row, 0, new QTableWidgetItem(ext));
+    // Numeric/short tokens read better flush right against the combo column.
+    if (QTableWidgetItem *item = m_table->item(row, 0))
+        item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
     m_table->setCellWidget(row, 1, makePixFmtCombo(m_table, pixFmt));
 }
 

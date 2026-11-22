@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [1.0.204] - 2026-11-22
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.204**.
+
+### Changed — 构建治理收尾
+
+- **`lizard` 复杂度棘轮转硬**：它原来挂在 `build-health` 这个
+  `continue-on-error: true` 的 advisory 任务里，`--max-ccn25 / --max-long-functions`
+  的突破因此永远不会拦住任何东西。现在拆出独立的 **required** 任务
+  `complexity-ratchet`，CCN>25 的函数数或超长函数数上升就会失败。
+- **YUV 扩展名表格**：扩展名列右对齐，与右侧像素格式下拉框的边界更整齐。
+
+### 未做（附原因，不是遗漏）
+
+- **`runtime_storage.h` 搬到 `core/` 被 R5 拒绝**：试过搬到
+  `src/core/runtime/`，架构门禁立刻报 2 条 R5（core 头文件不得 include Qt）。
+  它确实带 `QString`/`QStandardPaths`，所以按现行规则只能留在 UI 根。已回退，
+  两处改动都验证过再撤回的。
+- **`tests/CMakeLists.txt` 拆分**：`src/CMakeLists.txt` 3.7k 行里测试目标与
+  Format target、clang-tidy、benchmark 段落交错，不是连续区块；整体搬迁的
+  收益是结构性的，但风险是构建/发布链路。本轮不做，留待专门一次重构。
+
 ## [1.0.203] - 2026-11-22
 
 ### Release

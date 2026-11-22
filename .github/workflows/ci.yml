@@ -512,7 +512,9 @@ jobs:
 
       - name: Complexity (lizard reference count, ratchet)
         # The PowerShell gate's brace parser undercounts (review P2-9). lizard
-        # is the reference; the counts may only go down.
+        # is the reference; the counts may only go down. This step used to live
+        # in the advisory build-health job, so a ratchet breach never blocked
+        # anything — it now has its own required job.
         run: |
           python3 -m pip install --quiet --disable-pip-version-check lizard
           python3 scripts/complexity_lizard.py --summary "$GITHUB_STEP_SUMMARY" \
@@ -532,6 +534,22 @@ jobs:
           path: |
             docs/quality/dashboard.md
             build_health.json
+
+  # Required: the lizard ratchet. Split out of build-health so a rise in
+  # CCN>25 functions or over-long functions fails the PR gate.
+  complexity-ratchet:
+    name: Complexity ratchet (lizard, required)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Lizard ratchet
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check lizard
+          python3 scripts/complexity_lizard.py --summary "$GITHUB_STEP_SUMMARY" \
+            --max-ccn25 41 --max-long-functions 2
 
   # ---------------------------------------------------------------------------
   # adr-gate — M23: architectural PRs MUST add/update an ADR (REQUIRED).

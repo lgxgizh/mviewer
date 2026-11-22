@@ -1,12 +1,21 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.203** · Release tag: **v1.0.203**
+> Snapshot: 2026-11-22 · Version: **1.0.204** · Release tag: **v1.0.204**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.204 — 构建治理收尾 (2026-11-22)
+
+- `lizard` 复杂度棘轮拆成独立的 required 任务 `complexity-ratchet`：它原来在
+  `continue-on-error` 的 `build-health` 里，突破上限也不会拦住任何东西。
+- YUV 扩展名列右对齐。
+- 未做并附原因：`runtime_storage.h` 搬进 `core/` 被 R5 拒绝（core 头文件不得
+  include Qt），已回退；`tests/CMakeLists.txt` 拆分本轮不做（测试目标与
+  Format/clang-tidy/benchmark 段落交错，非连续区块）。
 
 ## 1.0.203 — UI 质感 P1/P2（二轮复审） (2026-11-22)
 
