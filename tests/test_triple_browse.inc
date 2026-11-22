@@ -38,8 +38,15 @@ void testTripleBrowse(const QString &leftDir, const QString &middleDir, const QS
     auto *doubleAction = mw.findChild<QAction *>(QStringLiteral("splitBrowseAction"));
     auto *tripleAction = mw.findChild<QAction *>(QStringLiteral("tripleBrowseAction"));
     auto *toolbar = mw.findChild<QToolBar *>(QStringLiteral("browserToolBar"));
-    EXPECT(tripleAction && toolbar && toolbar->actions().contains(tripleAction) &&
-               !tripleAction->icon().isNull(),
+    // The triple-browse action moved into the toolbar's overflow menu, so
+    // "on the toolbar" means "reachable from it".
+    auto *more =
+        toolbar ? toolbar->findChild<QToolButton *>(QStringLiteral("browserToolbarMore")) : nullptr;
+    const bool reachable =
+        tripleAction && toolbar &&
+        (toolbar->actions().contains(tripleAction) ||
+         (more && more->menu() && more->menu()->actions().contains(tripleAction)));
+    EXPECT(reachable && !tripleAction->icon().isNull(),
            "independent three-column toolbar button has icon");
     if (!left || !doubleAction || !tripleAction)
         return;
