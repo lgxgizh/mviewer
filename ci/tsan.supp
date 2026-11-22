@@ -25,4 +25,8 @@ race:qMkTime
 race:QArrayData::reallocateUnaligned
 race:g_rw_lock_reader_lock
 race:QObjectPrivate::ConnectionData::cleanOrphanedConnectionsImpl
+# Qt's thread pool deletes a dequeued QRunnable while the submitting thread is
+# still inside QThreadPoolPrivate::enqueueTask; only reachable from the
+# scheduler churn/torture stress tests.
+race:QThreadPoolPrivate::enqueueTask
 race:CompareWorkspace::queueLoadRequests

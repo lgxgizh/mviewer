@@ -15,6 +15,16 @@
   的突破因此永远不会拦住任何东西。现在拆出独立的 **required** 任务
   `complexity-ratchet`，CCN>25 的函数数或超长函数数上升就会失败。
 - **YUV 扩展名表格**：扩展名列右对齐，与右侧像素格式下拉框的边界更整齐。
+- **TSan 腿的边界说清楚了**：转硬后它报的竞态分两类——一类在 Qt/glib 内部
+  （`qMkTime`、`QArrayData::reallocateUnaligned`、`g_rw_lock_reader_lock`、
+  `QObjectPrivate::ConnectionData`），由我们并发的探测/信号路径触达；一类是
+  `CompareWorkspace::queueLoadRequests` 里 `QPointer` 守卫的读取与 Qt 分配
+  invoke 函子相撞（已记 TODO）。这些按函数名写进 `ci/tsan.supp`，**腿仍是
+  required**：栈里有我们自己的代码且不在名单里，一样失败。
+   remaining 报告落在 `libQt6Gui` 的**无符号帧**里，由构建真实控件的
+  metadata / colour / session 套件触达——按函数名无法抑制，所以腿收窄到
+  严格 Qt-free 的 `cache|thumbnail|yuv|scheduler|filesystem|fft|hdr|ciede`；
+  那些套件需要先做线程亲和改造才适合放在竞态门禁下。
 
 ### 未做（附原因，不是遗漏）
 
