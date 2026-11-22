@@ -172,6 +172,9 @@ void ImageViewer::handleAnnotateMouseEvent(QMouseEvent *event, int phase)
             const int hit = m_annotations.indexAt(imagePoint);
             if (hit >= 0)
             {
+                // Single-level undo for a mis-click (Ctrl+Shift+Z restores it).
+                m_lastRemoved = m_annotations.annotations().at(hit);
+                m_lastRemovedValid = true;
                 m_annotations.removeAt(hit);
                 m_annotations.save();
                 update();
@@ -298,6 +301,18 @@ void ImageViewer::exportAnnotatedImage()
     }
     emit statusMessageRequested(
         tr("Review image: %1 (%2 annotations)").arg(destination).arg(items.size()), 5000);
+}
+
+void ImageViewer::restoreRemovedAnnotation()
+{
+    if (!m_lastRemovedValid)
+        return;
+    ensureAnnotationsForCurrentPath();
+    m_annotations.add(m_lastRemoved);
+    m_annotations.save();
+    m_lastRemovedValid = false;
+    update();
+    emit statusMessageRequested(tr("Annotation restored"), 2500);
 }
 
 void ImageViewer::addTextAnnotationAtCursor()

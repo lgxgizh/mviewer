@@ -13,6 +13,7 @@
 #include <QMessageBox>
 #include <QPixmap>
 #include <QPushButton>
+#include <QShortcut>
 #include <QSlider>
 #include <QStackedWidget>
 #include <QVBoxLayout>
@@ -92,6 +93,10 @@ BlindTestDialog::BlindTestDialog(QWidget *parent) : QDialog(parent)
                     m_score[1] = v;
             });
 
+    // The button advertises Space, so Space must actually work.
+    auto *spaceShortcut = new QShortcut(QKeySequence(Qt::Key_Space), this);
+    connect(spaceShortcut, &QShortcut::activated, this, &BlindTestDialog::toggleSide);
+
     // A recorded seed keeps the ordering reproducible for the report.
     m_seed = static_cast<unsigned int>(std::chrono::steady_clock::now().time_since_epoch().count() &
                                        0xFFFFFFFFu);
@@ -111,8 +116,14 @@ void BlindTestDialog::applyRandomization()
     m_firstSide = coin(generator) == 0 ? 0 : 1; // 0 = A first, 1 = B first
     m_secondSide = 1 - m_firstSide;
     m_currentSide = 0;
-    m_score[0] = m_score[1] = 0;
-    m_mos->setValue(3);
+    // The slider's default IS the first side's score: leaving the scores at 0
+    // recorded "MOS 0" for a side the user never changed (setValue on an
+    // already-3 slider emits no signal).
+    m_score[0] = m_score[1] = m_mos->value();
+    m_mos->setValue(m_score[0]);
+    // Picking different sources starts a new blind run: the previous reveal
+    // must not carry over.
+    m_done = false;
 }
 
 void BlindTestDialog::refreshView()

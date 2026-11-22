@@ -48,7 +48,6 @@ void addFrameContextActions(QMenu &menu, bool multiFrame, bool playing, int fram
     if (multiFrame)
     {
         // A playable sequence (animation, or a multi-frame .yuv / .y4m capture)
-        // gets the transport controls; the labels stay format-neutral.
         play = menu.addAction(playing ? QCoreApplication::translate("ImageViewer", "Pause")
                                       : QCoreApplication::translate("ImageViewer", "Play"));
         restart = menu.addAction(QCoreApplication::translate("ImageViewer", "Restart"));
@@ -64,7 +63,6 @@ void addFrameContextActions(QMenu &menu, bool multiFrame, bool playing, int fram
     previous->setEnabled(frameIndex > 0);
     next->setEnabled(frameIndex + 1 < frameCount);
 }
-
 void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&none,
                               QAction *&zebra, QAction *&falseColor, QAction *&channelR,
                               QAction *&channelG, QAction *&channelB, QAction *&channelY,
@@ -90,7 +88,6 @@ void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&
     channelY->setChecked(mode == mviewer::OverlayMode::ChannelY);
     channelV->setChecked(mode == mviewer::OverlayMode::ChannelV);
 }
-
 void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode, bool hasDisplay,
                                     QAction *&zoomIn, QAction *&zoomOut, QAction *&zoomFit,
                                     QAction *&zoomActual, QAction *&lockZoomAction,
@@ -125,7 +122,6 @@ void addZoomAndSelectContextActions(QMenu &menu, bool lockZoom, bool selectMode,
     selectRegion->setChecked(selectMode);
     selectRegion->setEnabled(hasDisplay);
 }
-
 void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAction *&copyName,
                            QAction *&reveal, QMenu *&colorMenu, QAction *&copyHex,
                            QAction *&copyRgb, QAction *&copyFloat, QAction *&copyHsv,
@@ -149,7 +145,6 @@ void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAct
     copyHsv = colorMenu->addAction(
         QCoreApplication::translate("ImageViewer", "HSV Value HSV(h°, s%, v%)"));
 }
-
 QString copyPixelValue(const PixelRGBA &px, int format, int x = -1, int y = -1)
 {
     if (!px.valid && format != 4)
@@ -217,7 +212,6 @@ QString copyPixelValue(const PixelRGBA &px, int format, int x = -1, int y = -1)
         QApplication::clipboard()->setText(text);
     return text;
 }
-
 void populateAnalyzeSubmenu(QMenu &menu, bool canAnalyze, QList<QAction *> &analyzeActions)
 {
     QMenu *analyzeMenu = menu.addMenu(QCoreApplication::translate("ImageViewer", "Analyze"));
@@ -246,6 +240,14 @@ void populateAnalyzeSubmenu(QMenu &menu, bool canAnalyze, QList<QAction *> &anal
 }
 } // namespace
 
+bool isChannelOverlayKey(int key, Qt::KeyboardModifiers modifiers)
+{
+    return modifiers == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6;
+}
+bool isAnnotationRestoreKey(int key, Qt::KeyboardModifiers modifiers)
+{
+    return (modifiers & Qt::ControlModifier) && (modifiers & Qt::ShiftModifier) && key == Qt::Key_Z;
+}
 void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
@@ -265,7 +267,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aSaveAs = menu.addAction(tr("Save As..."));
     QAction *aUsmCompare = menu.addAction(tr("USM Sharpen Compare(&U)... (Ctrl+U)"));
     QAction *aFullRaw = addRawDecodeAction(menu);
-    QAction *aRotateCW = menu.addAction(tr("Rotate 90° Clockwise and Overwrite Original (Ctrl+R)"));
+    QAction *aRotateCW =
+        menu.addAction(tr("Rotate 90° Clockwise and Overwrite Original (Ctrl+R)"));
     QAction *aRotateCCW =
         menu.addAction(tr("Rotate 90° Counterclockwise and Overwrite Original (Ctrl+Shift+R)"));
     QAction *aFlipH = menu.addAction(tr("Flip Horizontal and Overwrite Original (Ctrl+Shift+H)"));
@@ -278,10 +281,11 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         for (QAction *a : {aRotateCW, aRotateCCW, aFlipH, aFlipV})
             a->setEnabled(false);
     const bool hasFrame = m_frame && m_frame->isValid();
+    const bool canEdit = hasPath && (hasFrame || hasDisplayImage());
     if (mCopyColor)
         mCopyColor->menuAction()->setEnabled(hasFrame || hasDisplayImage());
-    aSaveAs->setEnabled(hasPath && (hasFrame || hasDisplayImage()));
-    aUsmCompare->setEnabled(hasPath && (hasFrame || hasDisplayImage()));
+    aSaveAs->setEnabled(canEdit);
+    aUsmCompare->setEnabled(canEdit);
     QAction *aPlay = nullptr, *aRestart = nullptr, *aPrevFrame = nullptr, *aNextFrame = nullptr;
     if (isMultiFrame())
     {
@@ -319,8 +323,6 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     if (!chosen)
         return;
     // A-7.3: route analyzer selection through AnalysisPanel (unified entry).
-    // MainWindow shows the panel and runs the analyzer so results land in the
-    // Plugin tab — not a one-off QMessageBox.
     if (analyzeActions.contains(chosen))
     {
         ensureAnalysisLoad();
@@ -349,16 +351,17 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         setLockZoom(!m_lockZoom);
         return;
     }
-    if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV) ||
-        handleContextCopyAction(chosen, aCopy, aCopyPath, aReveal, aCopyHex, aCopyRgb, aCopyFloat,
-                                aCopyHsv, event, aCopyCoord, aCopyName) ||
-        handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
+    if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV))
+        return;
+    if (handleContextCopyAction(chosen, aCopy, aCopyPath, aReveal, aCopyHex, aCopyRgb, aCopyFloat,
+                                aCopyHsv, event, aCopyCoord, aCopyName))
+        return;
+    if (handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                  aSelectRegion))
         return;
     handleContextNavigationAction(chosen, aNext, aPrev, aOvNone, aOvZebra, aOvFalse, aOvR, aOvG,
                                   aOvB, aOvY, aFullscreen, aOvV);
 }
-
 bool ImageViewer::handlePlaybackContextAction(QAction *chosen, QAction *playAction,
                                               QAction *restartAction, QAction *prevAction,
                                               QAction *nextAction)
@@ -388,7 +391,6 @@ bool ImageViewer::handlePlaybackContextAction(QAction *chosen, QAction *playActi
     }
     return false;
 }
-
 bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
                                           QAction *reveal, QAction *copyHex, QAction *copyRgb,
                                           QAction *copyFloat, QAction *copyHsv,
@@ -448,7 +450,6 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
     }
     return false;
 }
-
 bool ImageViewer::handleContextTransformAction(QAction *chosen, QAction *rotateCWAct,
                                                QAction *rotateCCWAct, QAction *flipHAct,
                                                QAction *flipVAct)
@@ -463,7 +464,6 @@ bool ImageViewer::handleContextTransformAction(QAction *chosen, QAction *rotateC
         return flipVertical();
     return false;
 }
-
 bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
 {
     const bool ctrl = (modifiers == Qt::ControlModifier);
@@ -547,16 +547,14 @@ bool ImageViewer::handleNavigationKey(int key)
 bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
 {
     const auto mods = modifiers & ~Qt::KeyboardModifiers(Qt::KeypadModifier);
-    // Shift+0…6 are channel overlays (handleModeKey), not zoom.
+    // Shift+0… are channel overlays (handleModeKey), not zoom.
     if (mods == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6)
         return false;
-    // Ctrl+F focuses the address bar. Ctrl+1…6 are gallery view modes.
-    // Unmodified 1 is 100%, unmodified 2 is 200%. Ctrl+L still locks zoom.
+    // Ctrl+F focuses the address bar; Ctrl+1… are gallery view modes. Bare 1/2 zoom.
     if ((mods & Qt::ControlModifier) &&
         (key == Qt::Key_F || (key >= Qt::Key_1 && key <= Qt::Key_6)))
         return false;
-    // Ctrl+L locks zoom; a bare L is the line-profile tool (handleModeKey), so
-    // it must not be consumed here.
+    // Ctrl+L locks zoom; a bare L is the line-profile tool, so it must not be consumed here.
     const bool lockZoom = (mods & Qt::ControlModifier) != 0 && key == Qt::Key_L;
     if (lockZoom)
     {
@@ -580,13 +578,19 @@ bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
 
 bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
 {
-    if (modifiers == Qt::ShiftModifier && key >= Qt::Key_0 && key <= Qt::Key_6)
+    if (isChannelOverlayKey(key, modifiers))
     {
         setOverlayMode(mviewer::ui::channelOverlayForDigit(key - Qt::Key_0));
         return true;
     }
     if (handleTransformKey(key, modifiers))
         return true;
+    // Ctrl+Shift+Z puts back the annotation just removed by a right-click.
+    if (isAnnotationRestoreKey(key, modifiers))
+    {
+        restoreRemovedAnnotation();
+        return true;
+    }
     // L draws a line profile; W opens the scopes and then cycles their mode.
     if (key == Qt::Key_L && modifiers == Qt::NoModifier)
     {
@@ -668,13 +672,7 @@ bool ImageViewer::dismissOpenMetadata()
 
 bool ImageViewer::handleViewerEscape()
 {
-    // Slideshow is stopped earlier, while the key is still in MainWindow's
-    // filter. A real drag is next, then metadata the user opened. One Esc
-    // then returns to Browse. Leaving fullscreen alone stranded the window:
-    // showNormal() can move focus so the next Esc never reaches this viewer.
-    // setFullscreenRequested(false) restores the windowed frame and drops a
-    // stale WindowFullScreen bit before hide(), so the next F11 toggle does
-    // not restore the monitor frame.
+    // Slideshow is stopped earlier. A real drag is next, then metadata the user
     if (clearRealSelectionForEscape())
         return true;
     if (dismissOpenMetadata())

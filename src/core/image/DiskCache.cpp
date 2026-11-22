@@ -11,6 +11,8 @@
 #include <QFileInfo>
 #include <QMutex>
 #include <QSqlDatabase>
+
+#include <unordered_map>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
@@ -101,6 +103,26 @@ void touchBlob(const QSqlDatabase &db, const std::string &key)
     touch.addBindValue(QVariant::fromValue<qint64>(nowMs));
     touch.addBindValue(QString::fromStdString(key));
     touch.exec();
+}
+
+// A cache hit used to write a row on EVERY read. With WAL that is a writer
+// transaction per read hit: it serialises writers and costs an fsync for
+// information the evictor only needs to second granularity. Touch at most once
+// per key per interval, in thread-local state so the throttle itself adds no
+// shared lock in front of SQLite.
+void touchBlobThrottled(const QSqlDatabase &db, const std::string &key)
+{
+    constexpr qint64 kMinIntervalMs = 5000;
+    constexpr size_t kMaxTrackedKeys = 4096;
+    thread_local std::unordered_map<std::string, qint64> lastTouch;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const auto it = lastTouch.find(key);
+    if (it != lastTouch.end() && now - it->second < kMinIntervalMs)
+        return;
+    if (lastTouch.size() >= kMaxTrackedKeys)
+        lastTouch.clear();
+    lastTouch[key] = now;
+    touchBlob(db, key);
 }
 
 std::atomic_uint64_t g_connectionSerial{0};
@@ -416,7 +438,7 @@ bool DiskCache::get(const std::string &key, ImageData &out)
         return false;
     }
     std::memcpy(out.buffer->data(), blob.constData(), out.byteSize());
-    touchBlob(connectionForThread(), key);
+    touchBlobThrottled(connectionForThread(), key);
     return true;
 }
 

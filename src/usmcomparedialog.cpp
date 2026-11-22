@@ -194,7 +194,7 @@ QWidget *UsmCompareDialog::createBottomControls()
          tr("Landscape and architecture clarity"), tr("Strong edge enhancement"), tr("Custom")});
     m_comboPreset->setCurrentIndex(0);
 
-    auto *lblAmount = new QLabel(tr("Amount (Amount):"), controls);
+    auto *lblAmount = new QLabel(tr("Amount:"), controls);
     m_sliderAmount = new QSlider(Qt::Horizontal, controls);
     m_sliderAmount->setRange(0, 500);
     m_sliderAmount->setValue(150);
@@ -203,7 +203,7 @@ QWidget *UsmCompareDialog::createBottomControls()
     m_spinAmount->setValue(150);
     m_spinAmount->setSuffix(QStringLiteral("%"));
 
-    auto *lblRadius = new QLabel(tr("Radius (Radius):"), controls);
+    auto *lblRadius = new QLabel(tr("Radius:"), controls);
     m_sliderRadius = new QSlider(Qt::Horizontal, controls);
     m_sliderRadius->setRange(1, 200);
     m_sliderRadius->setValue(10);

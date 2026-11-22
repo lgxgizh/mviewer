@@ -46,6 +46,13 @@ PythonScriptDialog::PythonScriptDialog(QWidget *parent) : QDialog(parent)
 
     m_output = new QPlainTextEdit(this);
     m_output->setReadOnly(true);
+    {
+        // Script stdout/stderr and box coordinates line up in a mono face.
+        QFont mono = m_output->font();
+        mono.setFamilies({QStringLiteral("JetBrains Mono"), QStringLiteral("Cascadia Mono"),
+                          QStringLiteral("Consolas"), QStringLiteral("Courier New")});
+        m_output->setFont(mono);
+    }
     m_output->setPlaceholderText(QString::fromUtf8(kProtocol));
     layout->addWidget(m_output, 1);
 

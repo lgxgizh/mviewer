@@ -2,6 +2,43 @@
 
 ## [Unreleased]
 
+## [1.0.202] - 2026-11-22
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.202**.
+
+### Fixed — 遗留 P0/P1 功能缺陷（二轮复审）
+
+- **盲测默认分记 0**：`applyRandomization()` 把分数清 0 之后才 `setValue(3)`，而
+  slider 本来就在 3，不触发 `valueChanged` —— 于是第一侧即使用户没动过也记成
+  MOS 0。现在分数初始化为滑块当前值；同时换源会重置 `m_done`，上一轮的
+  "已揭晓"不再带进新的一轮。
+- **盲测 `Space` 未绑定**：按钮上写着 `(Space)` 但没接。补了 `QShortcut`。
+- **标注删除可撤销**：右键删除的批注现在可以用 `Ctrl+Shift+Z` 恢复
+  （`restoreRemovedAnnotation()`）。
+- **USM 对话框重复文案**：`Amount (Amount):` / `Radius (Radius):` 改为
+  `Amount:` / `Radius:`。
+- **插件调用缺异常隔离**：`createAnalyzer` 与 `probe->name()` 现在包在
+  `try/catch` 里，插件抛异常不会穿过 ABI 边界。
+- **WIC TIFF 二次解码**：1×1 探测在 Qt 的 TIFF handler 上仍可能分配整幅栅格，
+  现在按文件大小设限（> 8 MiB 只做格式推导深度，不读栅格）。
+- **`Logger` 重入死锁**：`messageHandler` 持锁写 `QFile`，Qt 在写盘中抛出的
+  警告会重入同一把非递归锁。改 `QRecursiveMutex`；并加 8 MiB 轮转（保留一代
+  `.prev`），日志不再无限增长。
+- **`TaskScheduler`**：`m_backpressure` 的无锁写改为持锁；背压判定移进
+  `enqueueTask()` 同一把锁内（原来"先探测再入队"存在 TOCTOU，限流形同虚
+  设）；`shutdown()` 补上 `m_deferred` 的清理（从未启动的任务持有的
+  `QRunnable` 原来会泄漏）。
+- **`DiskCache`**：每次读命中都同步写一行 `ts`。改为按 key 节流（5 秒），
+  状态放 thread_local，节流本身不引入新的共享锁。
+
+### Changed
+
+- 复杂度门禁回到 0 硬失败：`QtDecoder.cpp` / `TaskScheduler.cpp` /
+  `imageviewer_contextmenu.cpp` 收回上限内（拆出 `probeTiffMetadata`、
+  `wouldRejectBackpressureLocked`，并把长注释块收敛到要点）。
+
 ## [1.0.201] - 2026-11-22
 
 ### Release

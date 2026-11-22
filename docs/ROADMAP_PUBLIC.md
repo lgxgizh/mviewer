@@ -4,15 +4,16 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.201**
+## Where we are now — **Beta / 1.0.202**
 
-MViewer remains in **Beta**; the current release is **`v1.0.201`**
+MViewer remains in **Beta**; the current release is **`v1.0.202`**
 (2026-11-22, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-This patch closes the second review's concurrency and build-governance items: a
-real lock-order deadlock in the thumbnail cache, a GPU texture leak, UI callbacks
-that could run on a worker after shutdown, a Python bridge that froze the
-interface, and a thread-sanitizer leg that now actually gates. Offscreen CI is
-regression evidence, not proof of universal smoothness.
+This patch clears the remaining P0/P1 defects from the second review: the blind
+test's default score, its unbound `Space` key and stale reveal state, annotation
+undo, the plugin loader's missing exception isolation, the WIC TIFF double
+decode, a logger re-entrancy deadlock, the scheduler's TOCTOU back-pressure check
+and leaked deferred tasks, and a synchronous write on every disk-cache hit.
+Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -67,7 +68,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.201** (current) | 底层并发与构建收口（TSan 转硬） | 🔵 Beta |
+| **1.0.202** (current) | 遗留 P0/P1 功能缺陷（盲测/标注/插件/日志/调度器/磁盘缓存） | 🔵 Beta |
+| **1.0.201** | 底层并发与构建收口（TSan 转硬） | ✅ Previous patch |
 | **1.0.200** | UI 视觉与 Win11 质感（浮层槽位 / 卡片 / 滑块） | ✅ Previous patch |
 | **1.0.199** | 新功能 P0 止血（二轮复审 8 项） | ✅ Previous patch |
 | **1.0.198** | Tests moved to `tests/`; signing wired; version SSOT fixed | ✅ Previous patch |

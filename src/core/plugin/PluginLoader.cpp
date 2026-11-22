@@ -218,14 +218,32 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
         return result;
     }
 
-    const std::string id = probe->name();
+    std::string id;
+    try
+    {
+        id = probe->name();
+    }
+    catch (...) // a plugin exception must not cross the ABI boundary
+    {
+        result.error = "plugin analyzer threw while reporting its name";
+        s_lastError = result.error;
+        return result;
+    }
     probe.reset();
 
     AnalyzerRegistry::instance().registerAnalyzer(
         id,
         [module, createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
         {
-            Analyzer *created = createFn();
+            Analyzer *created = nullptr;
+            try
+            {
+                created = createFn();
+            }
+            catch (...)
+            {
+                return nullptr;
+            }
             if (!created)
                 return nullptr;
             return std::unique_ptr<Analyzer, AnalyzerDeleter>(

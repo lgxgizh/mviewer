@@ -157,7 +157,7 @@ void BreadcrumbBar::addOverflowButton(int firstVisible)
     }
     button->setMenu(menu);
     m_layout->addWidget(button);
-    auto *arrow = new QLabel(">", this);
+    auto *arrow = new QLabel(QStringLiteral("›"), this);
     arrow->setFixedWidth(kArrowSize);
     arrow->setAlignment(Qt::AlignCenter);
     m_layout->addWidget(arrow);
@@ -179,10 +179,18 @@ void BreadcrumbBar::addVisibleSegments(int firstVisible)
         m_layout->addWidget(button);
         if (i < m_segments.size() - 1)
         {
-            auto *arrow = new QLabel(">", this);
+            auto *arrow = new QLabel(QStringLiteral("›"), this);
             arrow->setFixedWidth(kArrowSize);
             arrow->setAlignment(Qt::AlignCenter);
             m_layout->addWidget(arrow);
+        }
+        else
+        {
+            // The current folder is the only segment that is not a link: show
+            // it as plain emphasized text rather than a raised button.
+            QFont font = button->font();
+            font.setBold(true);
+            button->setFont(font);
         }
     }
 }

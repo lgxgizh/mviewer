@@ -4021,6 +4021,11 @@ or double-click a thumbnail to view</source>
     </message>
     <message>
         <location filename="../src/imageviewer_annotate.cpp" line="1"/>
+        <source>Annotation restored</source>
+        <translation>已恢复批注</translation>
+    </message>
+    <message>
+        <location filename="../src/imageviewer_annotate.cpp" line="1"/>
         <source>Label text</source>
         <translation>标注文字</translation>
     </message>

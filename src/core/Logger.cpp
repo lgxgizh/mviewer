@@ -21,10 +21,25 @@ namespace
 QString g_logDir;
 QString g_logPath;
 QFile *g_logFile = nullptr;
-QMutex g_logMtx;
+// Recursive: messageHandler() writes through QFile, and a Qt warning raised
+// inside that write re-enters the handler. A plain QMutex deadlocked there.
+QRecursiveMutex g_logMtx;
 bool g_installed = false;
 bool g_handlerInstalled = false;
 QtMessageHandler g_previousHandler = nullptr;
+
+// Rotate before the log grows without bound (one previous generation kept).
+constexpr qint64 kMaxLogBytes = 8LL * 1024 * 1024;
+
+void rotateLogIfNeeded(const QString &path)
+{
+    QFileInfo info(path);
+    if (!info.exists() || info.size() <= kMaxLogBytes)
+        return;
+    const QString previous = path + QStringLiteral(".prev");
+    QFile::remove(previous);
+    QFile::rename(path, previous);
+}
 
 QString levelName(QtMsgType type)
 {
@@ -102,6 +117,7 @@ void installFileLogger(const std::string &appName)
 
     const QString date = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd"));
     g_logPath = g_logDir + QStringLiteral("/mviewer-") + date + QStringLiteral(".log");
+    rotateLogIfNeeded(g_logPath);
 
     g_logFile = new QFile(g_logPath);
     // Append mode so multiple launches on the same day share one file.

@@ -79,7 +79,9 @@ class ComparePaneHeader : public QWidget
         m_name->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
         QFont nameFont = m_name->font();
         nameFont.setBold(true);
-        nameFont.setPointSize(mviewer::ui::kFilenameOverlayPointSize);
+        // 15pt was oversized next to the pane badge and pushed long file names
+        // into ellipsising far too early.
+        nameFont.setPointSizeF(10.5);
         m_name->setFont(nameFont);
         m_name->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Ignored);
         m_name->setMinimumWidth(0);

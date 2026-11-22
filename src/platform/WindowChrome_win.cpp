@@ -43,6 +43,7 @@ constexpr DWORD kDwmColorDefault = 0xFFFFFFFF;
 constexpr int kCornerRound = 2;        // DWMWCP_ROUND
 constexpr int kCornerRoundSmall = 3;   // DWMWCP_ROUNDSMALL
 constexpr int kBackdropMainWindow = 2; // DWMSBT_MAINWINDOW (Mica)
+constexpr int kBackdropNone = 1;      // DWMSBT_NONE (solid)
 
 template <typename T> bool setAttribute(HWND hwnd, DWORD attribute, const T &value)
 {
@@ -134,6 +135,13 @@ void applyWindowChrome(QWidget *widget, bool forceFrameRefresh)
         // area (with a translucent Qt window) left text ghosted and glyphs
         // see-through on the transparent toolbar, sidebar and menu bar.
         setAttribute(hwnd, kDwmSystemBackdropType, kBackdropMainWindow);
+    }
+    else
+    {
+        // Write the backdrop back explicitly. Leaving the attribute untouched
+        // kept a stale Mica/Tabbed backdrop after Mica was turned off, so the
+        // window stayed translucent over an opaque palette.
+        setAttribute(hwnd, kDwmSystemBackdropType, kBackdropNone);
     }
     if (forceFrameRefresh)
     {

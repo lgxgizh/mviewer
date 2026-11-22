@@ -100,9 +100,6 @@ ImageData toImageData(const QImage &src)
 }
 
 // Map the QImageIOHandler transformation bitmask to the EXIF orientation 1-8
-// constant (the SINGLE authoritative Qt<->EXIF mapping; every consumer of the
-// orientation field depends on it — M48 B3 regression pins 4/5/7). Qt 6.10
-// encodes: Mirror=1, Flip=2, Rotate180=Mirror|Flip=3, Rotate90=4,
 // MirrorAndRotate90=5 (EXIF 7), FlipAndRotate90=6 (EXIF 5), Rotate270=7.
 int orientationFromTransform(QImageIOHandler::Transformations t)
 {
@@ -140,8 +137,6 @@ void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const
 
 #if defined(Q_OS_WIN)
 // Qt 6.8 qt_imageTransform: None is identity; Rotate270 is one 270° clockwise
-// turn (its bits also include Mirror|Flip, so it must not take the generic
-// path). Every other flag mirrors first (Mirror = horizontal, Flip = vertical)
 // and then rotates 90° clockwise when Rotate90 is set.
 static QImage applyQtTransformation(const QImage &img, QImageIOHandler::Transformations t)
 {
@@ -154,6 +149,28 @@ static QImage applyQtTransformation(const QImage &img, QImageIOHandler::Transfor
     if (t & QImageIOHandler::TransformationRotate90)
         out = out.transformed(QTransform().rotate(90), Qt::FastTransformation);
     return out;
+}
+
+// Recover source bit depth and ICC from a bounded Qt probe so the native TIFF
+// than risk an unbounded allocation.
+void probeTiffMetadata(const QString &filename, const QImage::Format metadataFormat,
+                       mviewer::domain::ImageMetadata &meta)
+{
+    if (metadataFormat != QImage::Format_Invalid)
+    {
+        const QImage probeFormat(1, 1, metadataFormat);
+        meta.channels = mviewer::core::qtmetadata::channelsForFormat(metadataFormat, probeFormat);
+        meta.bitDepth = mviewer::core::qtmetadata::bitsPerChannel(metadataFormat, meta.channels);
+    }
+    const qint64 sourceSize = QFileInfo(filename).size();
+    if (sourceSize < 0 || sourceSize > 8LL * 1024 * 1024)
+        return;
+    QImageReader profileReader(filename);
+    profileReader.setAutoTransform(true);
+    profileReader.setScaledSize(QSize(1, 1));
+    QImage tiny;
+    if (profileReader.read(&tiny))
+        mviewer::core::qtmetadata::applyColorMetadata(tiny, meta);
 }
 
 void populateWicTiffMetadata(const QString &filename, const std::string &path, const QImage &output,
@@ -171,22 +188,10 @@ void populateWicTiffMetadata(const QString &filename, const std::string &path, c
     meta.height = fullSize.height();
     meta.orientation = 1;
     meta.format = "TIFF";
-    // WIC intentionally materializes only an 8-bit display raster.  Recover
-    // source bit depth and ICC from a bounded Qt probe so the native TIFF LOD
-    // path has the same metadata contract as ordinary decoding.
-    QImageReader profileReader(filename);
-    profileReader.setAutoTransform(true);
-    profileReader.setScaledSize(QSize(1, 1));
-    const QImage::Format profileFormat =
-        mviewer::core::qtmetadata::readerImageFormat(profileReader);
-    QImage tiny;
-    if (profileReader.read(&tiny))
-        mviewer::core::qtmetadata::applyReaderRasterMetadata(profileFormat, tiny, meta);
+    probeTiffMetadata(filename, sourceFormat, meta);
 }
 
 // Qt's TIFF plugin reports ClipRect but still attempts to allocate the full
-// source raster before honoring it. The Windows Imaging Component adapter
-// (QtDecoder_wic.cpp) clips and scales before CopyPixels, so only the requested
 // display raster is materialized.
 QImage decodeTiffWic(const std::string &path, const QRect &rawRect, const QSize &target,
                      mviewer::domain::ImageMetadata &meta)
@@ -237,8 +242,6 @@ void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const
 }
 
 // F2 (M22): claim every format Qt can actually decode, derived from
-// QImageReader::supportedImageFormats(). This keeps WebP/GIF (and HEIF/AVIF when
-// the platform ships the plugins) first-class with full M6 metadata, without
 // touching the frozen DecoderRegistry. The historical 6 are guaranteed present.
 const std::vector<std::string> &supportedExts()
 {
@@ -547,10 +550,6 @@ bool QtDecoder::probeMetadata(const std::string &path, mviewer::domain::ImageMet
     meta.format = formatName(reader);
 
     // Header-only probe: never 1x1-decode (that still walks the full JPEG/PNG
-    // entropy stream — tens to hundreds of ms on large files). Channel/bit
-    // depth come from QImageReader::imageFormat when the plugin can answer
-    // without pixels. JPEG ICC is scraped from APP2 "ICC_PROFILE" markers;
-    // PNG/TIFF ICC and any missing raster fields are filled on the first
     // decodeLod/decodeFull via fillMetadata.
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
     if (sourceFormat != QImage::Format_Invalid)
@@ -768,10 +767,6 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
 #endif
 
     // The clip rect is in source (pre-transform) coordinates per Qt semantics.
-    // setScaledSize is applied before qt_imageTransform. Orientations 5-8 swap
-    // axes, so the pre-transform size is (targetH, targetW) and the oriented
-    // result is targetW x targetH. Handlers that ignore ScaledSize are scaled
-    // by QImageReader with the same size, still before the transform. The
     // Windows WIC TIFF path above is unchanged.
     const auto transform = reader.transformation();
     reader.setClipRect(QRect(x, y, w, h));

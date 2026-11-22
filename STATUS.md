@@ -1,12 +1,25 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.201** · Release tag: **v1.0.201**
+> Snapshot: 2026-11-22 · Version: **1.0.202** · Release tag: **v1.0.202**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.202 — 遗留 P0/P1 功能缺陷 (2026-11-22)
+
+- 盲测：默认分不再记 0（slider 的 3 就是第一侧分数）、`Space` 真的绑定、换源
+  重置揭晓态。
+- 标注删除可用 `Ctrl+Shift+Z` 撤销。
+- USM 对话框 `Amount (Amount):` / `Radius (Radius):` 重复文案清掉。
+- PluginLoader 的 `createAnalyzer` / `name()` 包异常隔离。
+- WIC TIFF 的 1×1 探测按文件大小设限，避免整幅栅格分配。
+- Logger 改递归锁（修重入死锁）+ 8 MiB 轮转。
+- TaskScheduler：`m_backpressure` 持锁写、背压判定进 `enqueueTask` 同一把锁、
+  `shutdown()` 清理 `m_deferred`。
+- DiskCache：读命中写 `ts` 改为按 key 节流（thread_local，无新共享锁）。
 
 ## 1.0.201 — 底层并发与构建收口（二轮复审） (2026-11-22)
 

@@ -73,21 +73,18 @@ class ImageViewer : public QOpenGLWidget
     explicit ImageViewer(QWidget *parent = nullptr);
     ~ImageViewer() override;
 
-    // Consume the Browse sequence published by ThumbnailPanel/ImageListModel.
-    // The viewer never enumerates the filesystem to infer neighbors.
+    // Consume the Browse sequence; the viewer never enumerates the filesystem.
     void setBrowseSequence(const QStringList &paths);
     QStringList browseSequence() const;
     int browseIndex() const;
-    // Gallery rows and the open path can disagree on '/' vs '\\' (and, on
-    // Windows, on case). Identity for the browse sequence uses one key.
+    // Gallery rows and the open path can disagree on separators and case.
     static bool browsePathEquals(const QString &left, const QString &right);
     int indexInBrowseSequence(const QString &path) const;
     // Open from Browse with the first native presentation already fullscreen.
     void prepareBrowseFullscreen(QScreen *targetScreen);
     void showBrowseFullscreen();
     void exitFullscreenForClose();
-    // Display-only warm thumbnail used while the full frame and first visible
-    // tiles arrive. It is never used as an analysis/ROI source.
+    // Display-only warm thumbnail; never used as an analysis/ROI source.
     void setProvisionalImage(const QString &path, const QImage &image,
                              const QSize &sourceSize = QSize());
     // Test hook: provisional photo pixels, fitted to the source display aspect.
@@ -95,8 +92,7 @@ class ImageViewer : public QOpenGLWidget
     // Widget rect of the provisional photo after setProvisionalImage().
     QRect provisionalScreenRect() const;
     void setImage(const QString &path);
-    // Presentation target snapshot.  Source/analysis pixels remain unchanged;
-    // changing this context invalidates only display rasters/tiles.
+    // Presentation target snapshot; invalidates only display rasters/tiles.
     void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
     const mviewer::core::DisplayColorContext &displayColorContext() const;
     // M56: a filesystem overwrite invalidates the current source while a
@@ -222,6 +218,8 @@ class ImageViewer : public QOpenGLWidget
     void setAnnotateMode(bool on);
     bool isAnnotateMode() const;
     void addTextAnnotationAtCursor();
+    // Restores the annotation removed by the last right-click delete (Ctrl+Shift+Z).
+    void restoreRemovedAnnotation();
     void exportAnnotatedImage();
     // Review display adjustment (exposure / gamma / auto-stretch / 3D LUT).
     mviewer::core::DisplayAdjust &displayAdjust();
@@ -774,6 +772,8 @@ class ImageViewer : public QOpenGLWidget
     bool m_annotateMode = false, m_annotating = false, m_annotateArrow = false;
     QPoint m_annStart, m_annEnd;
     mviewer::ui::AnnotationStore m_annotations;
+    bool m_lastRemovedValid = false;
+    mviewer::ui::Annotation m_lastRemoved;
     mviewer::ui::DisplayAdjustPanel *m_adjustPanel = nullptr; // created on first use
     bool m_spectrumVisible = false;
     QWidget *m_spectrumPanel = nullptr;

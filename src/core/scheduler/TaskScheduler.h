@@ -219,6 +219,8 @@ class TaskScheduler
     using BackPressureFn = std::function<void(PoolType)>;
     void setBackPressureHandler(BackPressureFn fn)
     {
+        // Same lock as the reader: an unguarded write here was a data race.
+        std::lock_guard<std::mutex> lock(m_graphMtx);
         m_backpressure = std::move(fn);
     }
 
@@ -299,7 +301,9 @@ class TaskScheduler
     // Caller holds m_graphMtx. Notifies m_drainCv if this pool is idle.
     void notifyDrainIfIdle(int idx);
     bool rejectBackpressure(Priority prio);
-    void enqueueTask(Priority prio, const std::shared_ptr<TaskContext> &ctx, QRunnable *runnable);
+    bool enqueueTask(Priority prio, const std::shared_ptr<TaskContext> &ctx, QRunnable *runnable);
+    // Caller holds m_graphMtx. Shared by the probe and the atomic enqueue path.
+    bool wouldRejectBackpressureLocked(int pIdx);
     // Returns false when the task was already finalized by cancelTree() (the
     // caller must then suppress the user done callback). executionFailed feeds
     // PoolMetrics::execution_failures.

@@ -46,27 +46,32 @@ void AnalysisPanel::buildUi()
 
 void AnalysisPanel::buildAnalyzerSection(QVBoxLayout &layout)
 {
+    // The selector gets its own row: at a 300px sidebar the old single row of
+    // five controls squeezed the combo box down to a few characters.
     auto *bar = new QHBoxLayout;
     bar->addWidget(new QLabel(tr("Analyzer:")));
     m_analyzerCombo = new QComboBox;
     fillAnalyzerCombo(QString());
     bar->addWidget(m_analyzerCombo, 1);
+    layout.addLayout(bar);
 
+    auto *actions = new QHBoxLayout;
+    actions->setSpacing(4);
     auto *runButton = new QPushButton(tr("Run"));
     runButton->setToolTip(tr("Run the selected analyzer on the current image"));
     connect(runButton, &QPushButton::clicked, this, &AnalysisPanel::reanalyze);
-    bar->addWidget(runButton);
+    actions->addWidget(runButton);
 
     m_exportButton = new QPushButton(tr("Export Report"));
     m_exportButton->setObjectName(QStringLiteral("analysisExportReportButton"));
     connect(m_exportButton, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
-    bar->addWidget(m_exportButton);
+    actions->addWidget(m_exportButton);
     m_pinBtn = new QPushButton(tr("Pin"));
     m_pinBtn->setCheckable(true);
     m_pinBtn->setToolTip(tr("Pin the current analysis result (kept in History, not discarded)"));
     connect(m_pinBtn, &QPushButton::clicked, this, &AnalysisPanel::onPinToggled);
-    bar->addWidget(m_pinBtn);
-    layout.addLayout(bar);
+    actions->addWidget(m_pinBtn);
+    layout.addLayout(actions);
 }
 
 void AnalysisPanel::buildHistorySection(QVBoxLayout &layout)

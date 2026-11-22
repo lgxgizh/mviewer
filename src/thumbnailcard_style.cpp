@@ -128,7 +128,9 @@ void drawNameText(QPainter *painter, const QRect &rect, const QString &name, boo
 {
     const QFontMetrics fm = painter->fontMetrics();
     const int padX = 6;
-    const QString text = fm.elidedText(name, Qt::ElideRight, qMax(1, rect.width() - padX * 2));
+    // ElideMiddle keeps the frame number (the tail) visible on long
+    // instrument-prefixed names; ElideRight threw it away.
+    const QString text = fm.elidedText(name, Qt::ElideMiddle, qMax(1, rect.width() - padX * 2));
     if (!selected)
     {
         painter->setPen(itemTextColor(false, palette));
