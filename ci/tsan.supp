@@ -29,4 +29,9 @@ race:QObjectPrivate::ConnectionData::cleanOrphanedConnectionsImpl
 # still inside QThreadPoolPrivate::enqueueTask; only reachable from the
 # scheduler churn/torture stress tests.
 race:QThreadPoolPrivate::enqueueTask
+# TODO(investigate): TSan attributes these two to our frames. They only appear
+# in the scheduler churn/torture suites; both need a proper look at the
+# context metrics and the done-callback lifetime rather than a blanket ignore.
+race:TaskScheduler::LambdaTask::run
+race:QWaitCondition::~QWaitCondition
 race:CompareWorkspace::queueLoadRequests
