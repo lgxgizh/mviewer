@@ -43,7 +43,7 @@ constexpr DWORD kDwmColorDefault = 0xFFFFFFFF;
 constexpr int kCornerRound = 2;        // DWMWCP_ROUND
 constexpr int kCornerRoundSmall = 3;   // DWMWCP_ROUNDSMALL
 constexpr int kBackdropMainWindow = 2; // DWMSBT_MAINWINDOW (Mica)
-constexpr int kBackdropNone = 1;      // DWMSBT_NONE (solid)
+constexpr int kBackdropNone = 1;       // DWMSBT_NONE (solid)
 
 template <typename T> bool setAttribute(HWND hwnd, DWORD attribute, const T &value)
 {

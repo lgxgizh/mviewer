@@ -75,6 +75,7 @@ BlindTestDialog::BlindTestDialog(QWidget *parent) : QDialog(parent)
     auto *actions = new QHBoxLayout();
     m_toggle = new QPushButton(tr("Show other side (Space)"), this);
     m_finish = new QPushButton(tr("Reveal && Export"), this);
+    m_finish->setProperty("primary", true);
     actions->addWidget(m_toggle);
     actions->addWidget(m_finish);
     layout->addLayout(actions);

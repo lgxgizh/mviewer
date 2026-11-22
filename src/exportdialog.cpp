@@ -303,6 +303,8 @@ void ExportDialog::buildButtonSection(QVBoxLayout *root)
     // ---- buttons ----
     auto *box = new QDialogButtonBox(this);
     m_exportBtn = box->addButton(tr("Export"), QDialogButtonBox::AcceptRole);
+    if (m_exportBtn)
+        m_exportBtn->setProperty("primary", true);
     box->addButton(QDialogButtonBox::Cancel);
     root->addWidget(box);
 

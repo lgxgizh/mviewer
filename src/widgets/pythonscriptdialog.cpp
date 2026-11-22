@@ -58,6 +58,7 @@ PythonScriptDialog::PythonScriptDialog(QWidget *parent) : QDialog(parent)
 
     auto *buttons = new QHBoxLayout();
     m_run = new QPushButton(tr("Run"), this);
+    m_run->setProperty("primary", true);
     buttons->addStretch(1);
     buttons->addWidget(m_run);
     layout->addLayout(buttons);

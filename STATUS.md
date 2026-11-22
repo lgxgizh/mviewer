@@ -1,12 +1,22 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.202** · Release tag: **v1.0.202**
+> Snapshot: 2026-11-22 · Version: **1.0.203** · Release tag: **v1.0.203**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.203 — UI 质感 P1/P2（二轮复审） (2026-11-22)
+
+- 面包屑分隔符 `>` → `›`，末级加粗。
+- ComparePaneHeader 文件名 15pt → 10.5pt。
+- 缩略图卡片改 `ElideMiddle`，长前缀文件名仍能看到尾部帧号。
+- 分析侧栏拆两行，300px 下不再把下拉框挤没。
+- Python 输出改等宽字体。
+- Mica 关闭后显式写回 `DWMSBT_NONE`（原来残留半透明）。
+- Python Run / 盲测 Reveal & Export / 导出 Export 补 `primary="true"`。
 
 ## 1.0.202 — 遗留 P0/P1 功能缺陷 (2026-11-22)
 

@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [1.0.203] - 2026-11-22
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.203**.
+
+### Changed — UI 质感 P1/P2（二轮复审）
+
+- **面包屑**：分隔符 `>` 换成 `›`，末级（当前文件夹）加粗——原来它也是个
+  可点按钮，视觉上和"链接"分不清。
+- **对比格标题**：`ComparePaneHeader` 的文件名字号 15pt → 10.5pt，长文件名
+  不再被过早省略。
+- **缩略图卡片**：文件名省略方式改 `ElideMiddle`，带仪器前缀的长名字仍能看到
+  尾部帧号（原来 `ElideRight` 正好把它省掉）。
+- **分析侧栏**：选择器独占一行，Run / Export Report / Pin 另起一行——300px
+  侧栏里原来 5 个控件挤在一行，下拉框只剩几个字符。
+- **Python 脚本输出**：等宽字体（JetBrains Mono → Consolas → Courier New），
+  stdout 与框坐标才对得齐。
+- **Mica 关闭后退回纯色**：`applyWindowChrome()` 原来只在开启时写
+  `DWMSBT_MAINWINDOW`，关闭后属性残留，窗口在不透明调色板上仍是半透明的。
+  现在显式写回 `DWMSBT_NONE`。
+- **新对话框主按钮**：Python 的 Run、盲测的 Reveal & Export、导出的 Export
+  补上 `primary="true`，拿到强调色填充（原来只有默认按钮样式）。
+
 ## [1.0.202] - 2026-11-22
 
 ### Release
