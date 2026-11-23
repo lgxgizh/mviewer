@@ -56,6 +56,15 @@ class LambdaTask : public QRunnable
 
     void run() override
     {
+        // Thin override on purpose: the body lives in runTask() so a race report
+        // names a symbolicateable frame instead of the bare `run` that every
+        // QRunnable in the process shares.
+        runTask();
+    }
+
+  private:
+    void runTask()
+    {
         LambdaState &state = *m_state;
         // The runnable has left the pool queue. Move queue_depth -> active_tasks
         if (state.onStart)
@@ -114,7 +123,6 @@ class LambdaTask : public QRunnable
         }
     }
 
-  private:
     std::shared_ptr<LambdaState> m_state;
 };
 

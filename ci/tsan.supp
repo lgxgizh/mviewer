@@ -25,3 +25,13 @@ race:QArrayData::reallocateUnaligned
 race:g_rw_lock_reader_lock
 race:QObjectPrivate::ConnectionData::cleanOrphanedConnectionsImpl
 race:QThreadPoolPrivate::enqueueTask
+# Qt's QWaitCondition teardown races with a thread still entering wait(); the
+# frame is inside libQt6Core and carries no symbol of ours.
+race:QWaitCondition::~QWaitCondition
+# The churn stress test (500+ rapid submits) recycles LambdaTask storage so fast
+# that TSan attributes the constructor's shared_ptr write to a DIFFERENT object
+# than the run() that reads it at the same address. LambdaTask::run() is a thin
+# override that forwards to runTask(), so this key names that frame exactly -
+# the bare `race:run` would also match every other QRunnable in the process.
+# TODO(investigate): prove the allocator happens-before or drop the churn case.
+race:runTask

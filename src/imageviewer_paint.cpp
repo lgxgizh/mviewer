@@ -516,7 +516,8 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
         if (rt.data.isNull())
             continue;
         const ConstImageView view = rt.data.constView();
-        m_gpu.ensure(rt.key, view.data, view.width, view.height, view.channelsPerPixel());
+        m_gpu.ensure(rt.key, view.data, view.width, view.height, view.channelsPerPixel(),
+                     view.version);
     }
     m_blitter.bind();
     for (const auto &rt : ready)

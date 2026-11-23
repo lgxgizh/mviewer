@@ -157,6 +157,12 @@ void GpuTileUploader::ensureBudgetLoaded()
 
 bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, int h, int channels)
 {
+    return ensure(key, pixels, w, h, channels, 0);
+}
+
+bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, int h, int channels,
+                             uint64_t contentVersion)
+{
     // Injected callbacks (unit tests) always run; real GL path only when
     // enabled() so the CPU compositor remains the verified default.
     const bool useInjected = static_cast<bool>(m_upload);
@@ -164,9 +170,20 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
         return false;
     ensureBudgetLoaded();
 
+    auto it = m_map.find(key);
+    if (it != m_map.end() && contentVersion != 0)
+    {
+        const Entry &e = it->second;
+        if (e.version == contentVersion && e.w == w && e.h == h && e.channels == channels)
+        {
+            // O(1) proof the pixels are unchanged: no pixel byte is read.
+            touch(key);
+            return e.handle != 0;
+        }
+    }
+
     const uint64_t fp = fingerprintPixels(pixels, w, h, channels);
     const size_t bytes = tileBytes(w, h, channels);
-    auto it = m_map.find(key);
     if (it != m_map.end())
     {
         const bool sameSize =
@@ -180,6 +197,7 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
         if (sameSize && pixels && doReplace(it->second.handle, pixels, w, h, channels))
         {
             it->second.fingerprint = fp;
+            it->second.version = contentVersion;
             ++m_replaces;
             touch(key);
             return true;
@@ -205,6 +223,7 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
     e.channels = channels;
     e.bytes = bytes;
     e.fingerprint = fp == 0 ? 1 : fp;
+    e.version = contentVersion;
     e.lruIt = std::prev(m_lru.end());
     m_bytes += e.bytes;
     m_map.emplace(key, e);

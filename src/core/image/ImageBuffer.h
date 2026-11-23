@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -18,12 +19,23 @@ enum class PixelFormat
     Grayscale8
 };
 
+// Monotonic content version. GpuTileUploader uses it to prove a tile's pixels
+// are unchanged since the last upload, so a frame that only moved the viewport
+// does not have to hash every pixel again.
+inline uint64_t nextContentVersion() noexcept
+{
+    static std::atomic<uint64_t> counter{1};
+    return counter.fetch_add(1, std::memory_order_relaxed);
+}
+
 struct ConstImageBuffer
 {
     const uint8_t *data = nullptr;
     int width = 0;
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
+    // 0 = unknown (the caller must fall back to a full fingerprint).
+    uint64_t version = 0;
 
     int channelsPerPixel() const noexcept
     {
@@ -69,10 +81,11 @@ struct ImageBuffer
     int width = 0;
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
+    uint64_t version = 0;
 
     operator ConstImageBuffer() const noexcept
     {
-        return ConstImageBuffer{data, width, height, format};
+        return ConstImageBuffer{data, width, height, format, version};
     }
 
     int channelsPerPixel() const noexcept
@@ -125,6 +138,9 @@ struct ImageData
     int width = 0;
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
+    // Assigned by makeImageData(); bumped by mutableView() because a mutable
+    // view is where the pixels may be rewritten.
+    uint64_t version = 0;
 
     bool isNull() const noexcept
     {
@@ -137,6 +153,7 @@ struct ImageData
         if (buffer && buffer.use_count() > 1)
         {
             buffer = std::make_shared<std::vector<uint8_t>>(*buffer);
+            version = nextContentVersion();
         }
     }
 
@@ -153,6 +170,7 @@ struct ImageData
         b.width = width;
         b.height = height;
         b.format = format;
+        b.version = version;
         return b;
     }
 
@@ -160,11 +178,15 @@ struct ImageData
     ImageBuffer mutableView()
     {
         makeUnique();
+        // The caller is about to write through this view, so the content version
+        // must change even when no detachment was needed.
+        version = nextContentVersion();
         ImageBuffer b;
         b.data = (buffer && !buffer->empty()) ? buffer->data() : nullptr;
         b.width = width;
         b.height = height;
         b.format = format;
+        b.version = version;
         return b;
     }
 
@@ -178,6 +200,7 @@ struct ImageData
         b.width = width;
         b.height = height;
         b.format = format;
+        b.version = version;
         return b;
     }
 
@@ -234,6 +257,7 @@ inline ImageData makeImageData(int w, int h, PixelFormat fmt)
     d.buffer = std::make_shared<std::vector<uint8_t>>(wh * uc);
     d.width = w;
     d.height = h;
+    d.version = nextContentVersion();
     return d;
 }
 

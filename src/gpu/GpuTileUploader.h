@@ -64,6 +64,14 @@ class GpuTileUploader
     // GPU tier is disabled or upload fails — caller must fall back to CPU.
     bool ensure(const TileKey &key, const uint8_t *pixels, int w, int h, int channels);
 
+    // Same, with the buffer's monotonic content version. When the key is already
+    // resident with the same geometry and the same non-zero version, the call is
+    // an O(1) cache hit: no pixel is read, so a viewport-only change costs
+    // nothing on the main thread. `contentVersion == 0` means "unknown" and
+    // falls back to the full fingerprint.
+    bool ensure(const TileKey &key, const uint8_t *pixels, int w, int h, int channels,
+                uint64_t contentVersion);
+
     // True if the tile currently has a resident GPU handle.
     bool isResident(const TileKey &key) const;
 
@@ -115,6 +123,7 @@ class GpuTileUploader
         int channels = 0;
         size_t bytes = 0;
         uint64_t fingerprint = 0;
+        uint64_t version = 0;
     };
 
     void touch(const TileKey &key);
