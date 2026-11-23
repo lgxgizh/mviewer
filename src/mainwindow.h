@@ -363,16 +363,12 @@ class MainWindow : public QMainWindow
     void zoomViewer(int op); // 0=in, 1=out, 2=fit, 3=actual, 4=50%, 5=200%, 6=400%, 7=800%
     void showZoomPresetMenu(const QPoint &globalPos);
 
-    // P0: product browse state — recent folders, favorites, in-session history,
-    // and cross-session restore.
+    // P0: product browse state — recent folders, in-session history, and
+    // cross-session restore.
     void pushHistory(const QString &path);
     void navigateHistory(int delta);
     void rebuildRecentMenu();
     void rebuildRecentFilesMenu();
-    void rebuildFavoritesMenu();
-    void rebuildFavoritesBar();
-    void addFavoriteCurrent();
-    void removeFavorite(const QString &dir = {});
     void restoreWindowSettings();
     void restoreNavigationSettings(const QSettings &settings);
     void restoreLastSession();
@@ -514,8 +510,6 @@ class MainWindow : public QMainWindow
     QAction *m_actCompare = nullptr;
     QAction *m_actToggleAnalysis = nullptr;
     QAction *m_actAbout = nullptr;
-    QAction *m_actAddFavorite = nullptr;
-    QAction *m_actRemoveFavorite = nullptr;
     QAction *m_actHistoryBack = nullptr;
     QAction *m_actHistoryForward = nullptr;
     QAction *m_actDirBack = nullptr;
@@ -577,7 +571,6 @@ class MainWindow : public QMainWindow
     QMenu *m_helpMenu = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr; // recent-files menu (opened images)
-    QMenu *m_favMenu = nullptr;
 
     // M15: crash recovery
     QTimer *m_autosaveTimer = nullptr;
@@ -676,9 +669,7 @@ class MainWindow : public QMainWindow
     int m_dirHistoryIndex = -1;
     SecondaryBrowseHistory m_secondaryBrowseHistory;
     SecondaryBrowseHistory m_tertiaryBrowseHistory;
-    // P0: Favorites bar widget in the left sidebar.
-    QListWidget *m_favoritesBar = nullptr;
-    // Persisted, cross-session app state (favorites + restore position).
+    // Persisted, cross-session app state (restore position).
     mviewer::core::RecentFiles m_recent;      // recent-folders LRU
     mviewer::core::RecentFiles m_recentFiles; // recent-files LRU (opened images)
     QStringList m_openOnLaunch;               // paths passed via command line

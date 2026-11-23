@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-22 · Version: **1.0.206** · Release tag: **v1.0.206**
+> Snapshot: 2026-11-23 · Version: **1.0.207** · Release tag: **v1.0.207**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -8,103 +8,136 @@
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
 
-## 1.0.206 — 顶栏收纳 + TSan 腿转 required (2026-11-22)
+## 1.0.207 — toolbar un-collapsed, favorites removed, changelog English (2026-11-23)
 
-- 低频动作收进顶栏末尾的 More 溢出菜单（原来 15+ 按钮挤在 52px 条带上）。
-- TSan 腿不再 `continue-on-error`；`ci/tsan.supp` 记录第三方竞态与一条带
-  TODO(investigate) 的压测回收误报。
-- 未做：路径框默认折叠（会藏起当前路径这个核心 affordance，属产品取舍）。
+- Browse toolbar: every action is back on the strip; the v1.0.206 "More"
+  overflow is gone.
+- Favorites removed end to end (action + Ctrl+D, File-menu submenu, sidebar
+  bar, AppState persistence, DirectoryModel API). Recent folders/files remain.
+- `CHANGELOG.md` 1.0.199 - 1.0.206 rewritten in English.
 
-## 1.0.205 — UI 收尾 + 测试目标搬迁 (2026-11-22)
+## 1.0.206 - toolbar decluttered; TSan leg required (2026-11-22)
 
-- 顶栏纯图标按钮统一到 kControlHeight（原来 26px 与 34px 混用）。
-- History 与 Pinned 合并为一个标签条。
-- 缩略图卡片阴影按 devicePixelRatio 渲染（修 150%/200% 发糊）。
-- 悬停淡入改 easeOutCubic。
-- 空状态按键帽改圆角 chip + 等宽字体。
-- 178 个测试目标搬到 `tests/CMakeLists.txt`；`src/CMakeLists.txt`
-  3711 → 718 行。
-- LibRaw 16-bit 新增 `ditherRows16ToRgb888()`，省掉 8 字节/像素的 RGBX64
-  中间缓冲（同屏最多 4 份全图缓冲 → 3 份）。
-- ImageRepository / ThumbnailPipeline / EventBus / Logger 按 ADR-017 第 5 条
-  补上生命周期政策声明。
+- Occasional actions moved into a More overflow menu at the end of the strip
+  (it used to hold 15+ buttons in 52px).
+- The TSan leg no longer sets `continue-on-error`; `ci/tsan.supp` records the
+  third-party races plus one stress-test recycling false positive marked
+  TODO(investigate).
+- Not done: collapsing the location box by default (it would hide the current
+  path, the core affordance - a product call).
 
-## 1.0.204 — 构建治理收尾 (2026-11-22)
+## 1.0.205 - UI finish + test target move (2026-11-22)
 
-- `lizard` 复杂度棘轮拆成独立的 required 任务 `complexity-ratchet`：它原来在
-  `continue-on-error` 的 `build-health` 里，突破上限也不会拦住任何东西。
-- YUV 扩展名列右对齐。
-- TSan 腿：跑真报告（`halt_on_error=1`），但暂时仍是 advisory。转硬后它报出
-  `TaskScheduler.cpp:51` 与 `CompareWorkspace` 的 `QPointer` 守卫两处归因到
-  我们自己帧的竞态（都带 TODO(investigate)），修掉之前设为 required 只会得到
-  靠忽略列表维持的门禁。已知第三方竞态记录在 `ci/tsan.supp`。
-- 未做并附原因：`runtime_storage.h` 搬进 `core/` 被 R5 拒绝（core 头文件不得
-  include Qt），已回退；`tests/CMakeLists.txt` 拆分本轮不做（测试目标与
-  Format/clang-tidy/benchmark 段落交错，非连续区块）。
+- Plain toolbar icon buttons unified to kControlHeight (they mixed 26px and
+  34px before).
+- History and Pinned merged into one tab strip.
+- Thumbnail card shadow rendered at devicePixelRatio (fixes 150%/200% softness).
+- Hover fade switched to easeOutCubic.
+- Empty-state key caps became rounded chips with a monospaced face.
+- 178 test targets moved to `tests/CMakeLists.txt`; `src/CMakeLists.txt`
+  3711 -> 718 lines.
+- LibRaw 16-bit gained `ditherRows16ToRgb888()`, dropping the 8-bytes-per-pixel
+  RGBX64 intermediate (at most 4 full-image buffers -> 3).
+- ImageRepository / ThumbnailPipeline / EventBus / Logger now state their
+  ADR-017 lifetime policy at the definition, per rule 5.
 
-## 1.0.203 — UI 质感 P1/P2（二轮复审） (2026-11-22)
+## 1.0.204 - build governance wrap-up (2026-11-22)
 
-- 面包屑分隔符 `>` → `›`，末级加粗。
-- ComparePaneHeader 文件名 15pt → 10.5pt。
-- 缩略图卡片改 `ElideMiddle`，长前缀文件名仍能看到尾部帧号。
-- 分析侧栏拆两行，300px 下不再把下拉框挤没。
-- Python 输出改等宽字体。
-- Mica 关闭后显式写回 `DWMSBT_NONE`（原来残留半透明）。
-- Python Run / 盲测 Reveal & Export / 导出 Export 补 `primary="true"`。
+- The `lizard` complexity ratchet became its own required job
+  `complexity-ratchet`: it used to live in `continue-on-error` `build-health`,
+  so breaching the limits never blocked anything.
+- YUV extension column right-aligned.
+- TSan leg: runs a real report (`halt_on_error=1`) but is still advisory. Once
+  hardened it reported two races attributed to our own frames
+  (`TaskScheduler.cpp:51` and the `CompareWorkspace` `QPointer` guard), both
+  marked TODO(investigate); until they are fixed, making it required would only
+  produce a gate held up by an ignore list. Known third-party races are listed in
+  `ci/tsan.supp`.
+- Not done, with reasons: moving `runtime_storage.h` into `core/` was rejected by
+  R5 (core headers must not include Qt) and reverted; the `tests/CMakeLists.txt`
+  split was not done that round (test targets interleaved with the Format /
+  clang-tidy / benchmark sections).
 
-## 1.0.202 — 遗留 P0/P1 功能缺陷 (2026-11-22)
+## 1.0.203 - UI finish and Win11 feel, second review (2026-11-22)
 
-- 盲测：默认分不再记 0（slider 的 3 就是第一侧分数）、`Space` 真的绑定、换源
-  重置揭晓态。
-- 标注删除可用 `Ctrl+Shift+Z` 撤销。
-- USM 对话框 `Amount (Amount):` / `Radius (Radius):` 重复文案清掉。
-- PluginLoader 的 `createAnalyzer` / `name()` 包异常隔离。
-- WIC TIFF 的 1×1 探测按文件大小设限，避免整幅栅格分配。
-- Logger 改递归锁（修重入死锁）+ 8 MiB 轮转。
-- TaskScheduler：`m_backpressure` 持锁写、背压判定进 `enqueueTask` 同一把锁、
-  `shutdown()` 清理 `m_deferred`。
-- DiskCache：读命中写 `ts` 改为按 key 节流（thread_local，无新共享锁）。
+- Breadcrumb separator `>` -> `›`, last segment bold.
+- ComparePaneHeader file name 15pt -> 10.5pt.
+- Thumbnail cards switched to `ElideMiddle`, so long prefixed names still show
+  the trailing frame number.
+- Analysis sidebar split into two rows; the combo box is no longer squeezed away
+  at 300px.
+- Python output uses a monospaced face.
+- Mica now writes `DWMSBT_NONE` back when disabled (it used to stay translucent).
+- Python Run / blind-test Reveal & Export / Export gained `primary="true"`.
 
-## 1.0.201 — 底层并发与构建收口（二轮复审） (2026-11-22)
+## 1.0.202 - remaining P0/P1 product defects (2026-11-22)
 
-- `ThumbnailCache` ABBA 死锁：`get()`/`put()` 改为在 `m_mutex` 之外调度
-  bootstrap（原来持锁 join 工作线程，工作线程又要 m_mutex）。
-- `setDisplayColorContext()` 的 `m_gpu.clear()` 包上 GL 上下文，修掉纹理句柄
-  泄漏。
-- 新增 `shutdownMainThreadDispatcher()`：关闭后投递丢弃，迟到的 UI 回调不再
-  内联在工作线程上跑；补回归用例。
-- Python 桥接新增 `runAsync()`，脚本不再冻结界面。
-- `mviewer_core` 去掉冗余的 `Qt6::Widgets`，显式声明 `Qt6::Gui`/`Qt6::Core`。
-- TSan 门禁转硬：`halt_on_error=1`，去掉 `continue-on-error` 与 `|| true`。
-- 未做并记录：`tests/CMakeLists.txt` 拆分、若干遗留 P1、非泄漏单例一致性、
-  标注撤销与盲测交互。
+- Blind test: the default score is no longer recorded as 0 (the slider's 3 IS
+  the first side's score), `Space` is actually bound, and switching sources
+  resets the reveal state.
+- Annotation deletion is undoable with `Ctrl+Shift+Z`.
+- USM dialog duplicate labels `Amount (Amount):` / `Radius (Radius):` removed.
+- PluginLoader's `createAnalyzer` / `name()` wrapped in exception isolation.
+- The WIC TIFF 1x1 probe is gated on file size to avoid a full-raster allocation.
+- Logger: recursive mutex (a Qt warning raised while the handler held the lock
+  used to re-enter the same non-recursive mutex) plus 8 MiB rotation.
+- TaskScheduler: `m_backpressure` written under the lock, the back-pressure
+  decision moved inside `enqueueTask()` under the same lock, and `shutdown()`
+  clears `m_deferred`.
+- DiskCache: the read-hit `ts` write is throttled per key (5 s), thread_local, so
+  the throttle adds no shared lock.
 
-## 1.0.200 — UI 视觉与 Win11 质感（二轮复审 4 项视觉 P0） (2026-11-22)
+## 1.0.201 - concurrency and build wrap-up, second review (2026-11-22)
 
-- `ImageViewer::layoutFloatingOverlays()` 四角槽位 + resize 重排：示波器不再
-  盖死帧胶囊，频谱/调整面板不再互相重叠或飞出屏幕；新增布局回归测试。
-- 示波器加圆角背板并预留底部读数区（剖面线统计原来被裁掉）。
-- 显示调整面板变 `canvasFloatCard` 卡片，加等宽 EV/Gamma 读数。
-- 浅色主题滑块手柄改强调色 + bg2 外环；聚焦输入框改 Fluent 底部强调条。
-- 对话框按钮圆角 6px；弹窗去掉与 DWM 叠加的第二层描边。
-- ExportDialog 内容区滚动、按钮栏固定；PreferencesDialog 每页滚动，默认
-  600×520。
+- `ThumbnailCache` ABBA deadlock: `get()`/`put()` schedule the bootstrap outside
+  `m_mutex` (they used to hold it while joining the worker that needs it).
+- `setDisplayColorContext()` wraps `m_gpu.clear()` in a GL context, fixing the
+  texture handle leak.
+- Added `shutdownMainThreadDispatcher()`: after shutdown a late closure is dropped
+  instead of running inline on a worker; regression test added.
+- The Python bridge gained `runAsync()`, so a script can no longer freeze the UI.
+- `mviewer_core` dropped the redundant `Qt6::Widgets` and declares
+  `Qt6::Gui`/`Qt6::Core` explicitly.
+- The TSan leg became hard: `halt_on_error=1`, `continue-on-error` and `|| true`
+  removed.
+- Not done, with reasons: the `tests/CMakeLists.txt` split, the leftover P1s
+  (TaskScheduler / DiskCache / PluginLoader / Logger), non-leaking singleton /
+  ADR-017 consistency, annotation undo and the blind-test interactions.
 
-## 1.0.199 — 新功能 P0 止血（二轮复审） (2026-11-22)
+## 1.0.200 - UI finish and Win11 feel, second review (2026-11-22)
 
-- 会话包：Zip Slip 双端拒绝（只允许 `session.json` 与 `images/<纯文件名>`）、
-  临时目录改由 MainWindow 持有、保留真实扩展名、加 128 MiB / 256 MiB 上限。
-- DisplayAdjust：`Grayscale8` 自动拉伸按 RGB24 读 3 字节导致越界，改为按通道数
-  分支并按 stride 行寻址；`.cube` 轴序改为规范顺序（蓝外红内）。
-- ScopeWidget 三处 `constScanLine` 按 `QRgb*` 解引用（原来 R/G 恒为 0）。
-- FFT 频谱图直接写 Grayscale8 字节（原来全黑）；`hasOffAxisPeak` 改为屏蔽四角
-  DC（原来错屏蔽中心）。
-- 裸 `L` 不再被 `handleZoomKey` 吞掉，剖面线工具恢复可用。
-- OpenEXR：`dataWindow` 长度校验、`chlist` 步长 18→16、`offset+8` 防回绕、
-  尺寸上限；PFM 灰度写入三个通道（原来纯红）。
-- `ClipboardPasteCommand` 走 `pathFromUtf8()`，中文路径下撤销恢复可用。
-- 标注文字按锚点绘制，不再被 1×1 矩形裁掉。
-- 未做并记录：标注撤销、盲测交互三处、Python 桥接异步化、部分 `tr()` 遗漏。
+- Added `ImageViewer::layoutFloatingOverlays()`: corner slots for the scope /
+  spectrum / adjustment panels, disjoint, clear of the canvas-drawn chips and
+  re-laid out on every resize; `viewer_overlay_layout_tests` added.
+- The scope widget got a rounded card shell and a reserved bottom readout band.
+- The display adjustment panel became a `canvasFloatCard` with a monospaced
+  EV/gamma readout.
+- Light-theme slider handles became accent-filled with a bg2 ring.
+- Focused inputs switched to the Win11 Fluent neutral surface + 2px accent bar.
+- Dialog buttons went to a 6px radius; popups lost the second outline stacked on
+  DWM's rounded corners.
+- ExportDialog scrolls its sections with the button row pinned; PreferencesDialog
+  scrolls per page and defaults to 600x520.
+
+## 1.0.199 - new-feature P0 triage, second review (2026-11-22)
+
+- Session package: Zip Slip rejected on both write and read (only
+  `session.json` and `images/<plain file name>`), the temp directory is owned by
+  MainWindow, the real extension is kept, 128 MiB / 256 MiB caps added.
+- DisplayAdjust: `Grayscale8` auto-stretch branches on channel count and uses
+  `stride`; the `.cube` axis order corrected to spec.
+- `ScopeWidget` dereferences `QRgb*` (R/G used to be 0).
+- The FFT spectrum writes Grayscale8 bytes directly, and `hasOffAxisPeak` masks
+  the four DC corners.
+- A bare `L` is no longer swallowed by `handleZoomKey`, so the line profile
+  works.
+- OpenEXR: `dataWindow` length check, `chlist` stride 18 -> 16, `offset + 8`
+  wrap-around guarded, size caps; grayscale PFM writes all three channels.
+- `ClipboardPasteCommand` goes through `pathFromUtf8()`, with a Chinese-path
+  regression case.
+- Annotation text draws from the anchor instead of being clipped by the 1x1 rect.
+- Not done and recorded: annotation undo, the blind-test default score / `Space` /
+  switch reset, the async Python bridge, and several missing `tr()` strings.
 
 ## 1.0.198 — Item 2 governance, part 2 (2026-11-21)
 

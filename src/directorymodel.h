@@ -25,10 +25,6 @@ class DirectoryModel : public QObject
     {
         return m_current;
     }
-    QStringList favorites() const
-    {
-        return m_favorites;
-    }
     QStringList recentFolders() const
     {
         return m_recent;
@@ -40,23 +36,16 @@ class DirectoryModel : public QObject
 
   public slots:
     void setCurrentDirectory(const QString &path);
-    void setFavorites(const QStringList &dirs);
     void setRecentFolders(const QStringList &dirs);
-    void addFavorite(const QString &dir);
-    void removeFavorite(const QString &dir);
-    // Slash-insensitive, and case-insensitive on Windows.
-    bool hasFavorite(const QString &dir) const;
     void addRecentFolder(const QString &dir);
     void removeRecentFolder(const QString &dir);
     void clear();
 
   signals:
     void currentDirectoryChanged(const QString &path);
-    void favoritesChanged(const QStringList &dirs);
     void recentFoldersChanged(const QStringList &dirs);
 
   private:
     QString m_current;
-    QStringList m_favorites;
     QStringList m_recent;
 };

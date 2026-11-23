@@ -4917,21 +4917,6 @@ or double-click a thumbnail to view</source>
         <translation>已清空最近文件记录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="440"/>
-        <source>No folder to add to favorites</source>
-        <translation>没有可收藏的目录</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="449"/>
-        <source>Added to favorites: %1</source>
-        <translation>已收藏: %1</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_navigation.cpp" line="463"/>
-        <source>Removed from favorites: %1</source>
-        <translation>已取消收藏: %1</translation>
-    </message>
-    <message>
         <location filename="../src/mainwindow_navigation.cpp" line="493"/>
         <source>All filters cleared</source>
         <translation>已清除所有筛选条件</translation>
@@ -5141,11 +5126,6 @@ or double-click a thumbnail to view</source>
         <translation>下一个目录</translation>
     </message>
     <message>
-        <location filename="../src/mainwindow_ui_toolbar.cpp" line="251"/>
-        <source>Favorite Current Directory</source>
-        <translation>收藏当前目录</translation>
-    </message>
-    <message>
         <location filename="../src/mainwindow_ui_toolbar.cpp" line="253"/>
         <source>Analysis panel</source>
         <translation>分析面板</translation>
@@ -5186,17 +5166,6 @@ or double-click a thumbnail to view</source>
         <location filename="../src/mainwindow_ui_retranslate.cpp" line="184"/>
         <source>Type or paste a directory path and press Enter to open it (shortcut: Ctrl+F / Alt+D to focus).</source>
         <translation>输入或粘贴目录路径并按回车打开（快捷键：Ctrl+F / Alt+D 聚焦）。</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="74"/>
-        <location filename="../src/mainwindow_ui_retranslate.cpp" line="189"/>
-        <source>Favorites — Right-click to remove, Ctrl+D to favorite the current folder</source>
-        <translation>收藏夹 — 右键移除，Ctrl+D 收藏当前文件夹</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_layout.cpp" line="85"/>
-        <source>Remove from Favorites</source>
-        <translation>移除收藏</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_layout.cpp" line="111"/>
@@ -5423,18 +5392,6 @@ or double-click a thumbnail to view</source>
         <location filename="../src/mainwindow_ui_menus.cpp" line="536"/>
         <source>Fa&amp;vorite Folders</source>
         <translation>收藏目录(&amp;V)</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_menus.cpp" line="45"/>
-        <location filename="../src/mainwindow_ui_menus.cpp" line="473"/>
-        <source>Add Current Folder to Favorites(&amp;D)</source>
-        <translation>收藏当前目录(&amp;D)</translation>
-    </message>
-    <message>
-        <location filename="../src/mainwindow_ui_menus.cpp" line="48"/>
-        <location filename="../src/mainwindow_ui_menus.cpp" line="474"/>
-        <source>Remove Current Folder from Favorites</source>
-        <translation>取消收藏当前目录</translation>
     </message>
     <message>
         <location filename="../src/mainwindow_ui_menus.cpp" line="58"/>

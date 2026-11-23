@@ -66,11 +66,6 @@ AppState AppState::load()
         return s; // corrupt => defaults (safe)
 
     const QJsonObject o = doc.object();
-    const QJsonArray favs = o.value("favorites").toArray();
-    for (const auto &v : favs)
-        if (v.isString())
-            s.favorites.append(v.toString());
-
     const QJsonArray recent = o.value("recentFolders").toArray();
     for (const auto &v : recent)
         if (v.isString())
@@ -139,11 +134,6 @@ bool AppState::save() const
         return false;
 
     QJsonObject o;
-    QJsonArray favs;
-    for (const auto &fav : favorites)
-        favs.append(fav);
-    o["favorites"] = favs;
-
     QJsonArray recent;
     for (const auto &r : recentFolders)
         recent.append(r);
@@ -208,34 +198,6 @@ bool AppState::save() const
     if (f.write(QJsonDocument(o).toJson(QJsonDocument::Indented)) < 0)
         return false;
     return f.commit();
-}
-
-void AppState::addFavorite(const QString &dir)
-{
-    const QString cleaned = canonicalPath(dir);
-    if (cleaned.isEmpty() || isFavorite(cleaned))
-        return;
-    favorites.append(cleaned);
-}
-
-bool AppState::removeFavorite(const QString &dir)
-{
-    const int before = favorites.size();
-    QStringList kept;
-    kept.reserve(favorites.size());
-    for (const QString &item : favorites)
-        if (!samePath(item, dir))
-            kept.append(item);
-    favorites = kept;
-    return favorites.size() != before;
-}
-
-bool AppState::isFavorite(const QString &dir) const
-{
-    for (const QString &item : favorites)
-        if (samePath(item, dir))
-            return true;
-    return false;
 }
 
 void AppState::addRecentFolder(const QString &dir)

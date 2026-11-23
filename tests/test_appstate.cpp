@@ -38,19 +38,14 @@ int main(int argc, char **argv)
     // ---- AppState round-trip ----
     {
         AppState a;
-        a.addFavorite("C:/imgs/a");
-        a.addFavorite("C:/imgs/b");
-        a.addFavorite("C:/imgs/a"); // dedupe
         a.lastDir = "C:/imgs/a";
         a.lastImage = "C:/imgs/a/001.jpg";
         a.lastThumbScroll = 432;
         a.secondaryDirHistory = {QStringLiteral("C:/left"), QStringLiteral("C:/right/sub")};
         a.secondaryDirHistoryIndex = 1;
-        CHECK(a.favorites.size() == 2, "favorites dedupe to 2");
         CHECK(a.save(), "AppState::save succeeds");
 
         AppState b = AppState::load();
-        CHECK(b.favorites.size() == 2, "favorites reload count == 2");
         CHECK(b.lastDir == "C:/imgs/a", "lastDir round-trips");
         CHECK(b.lastImage == "C:/imgs/a/001.jpg", "lastImage round-trips");
         CHECK(b.lastThumbScroll == 432, "lastThumbScroll round-trips");
@@ -58,12 +53,6 @@ int main(int argc, char **argv)
         CHECK(b.secondaryDirHistory.at(1) == QStringLiteral("C:/right/sub"),
               "secondary directory history keeps order");
         CHECK(b.secondaryDirHistoryIndex == 1, "secondary directory history index reloads");
-        CHECK(b.isFavorite("C:/imgs/b"), "isFavorite true after reload");
-        CHECK(b.isFavorite("C:\\imgs\\b"), "isFavorite matches the other slash style");
-        b.addFavorite("C:\\imgs\\b");
-        CHECK(b.favorites.size() == 2, "favorite add does not duplicate the other slash style");
-        CHECK(b.removeFavorite("C:/imgs/b"), "removeFavorite matches the other slash style");
-        CHECK(!b.isFavorite("C:\\imgs\\b"), "removed favorite stays removed");
         b.addRecentFolder("C:/recent");
         b.addRecentFolder("C:\\recent");
         CHECK(b.recentFolders.size() == 1, "recent folder ignores slash style");

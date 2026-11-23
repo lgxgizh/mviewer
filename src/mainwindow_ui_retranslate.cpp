@@ -184,9 +184,6 @@ void MainWindow::retranslateBrowseBar()
             tr("Type or paste a directory path and press Enter to open it (shortcut: "
                "Ctrl+F / Alt+D to focus)."));
     }
-    if (m_favoritesBar)
-        m_favoritesBar->setToolTip(
-            tr("Favorites — Right-click to remove, Ctrl+D to favorite the current folder"));
     retranslateSplitHeader();
 }
 

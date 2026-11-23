@@ -2,272 +2,348 @@
 
 ## [Unreleased]
 
+## [1.0.207] - 2026-11-23
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.207**.
+
+### Changed
+
+- **The browse toolbar no longer collapses.** v1.0.206 put occasional actions
+  behind a "More" overflow; that hid the very things the user reaches for, so
+  every action is back on the strip (open, refresh, open-in-file-manager,
+  analysis, search, workspace, rotate left/right, split, triple, USM) alongside
+  back/forward/up, the location box, the view-mode segment, the type filter,
+  Compare and the search field.
+- **The version history is English again.** The `CHANGELOG.md` entries written
+  during the last few releases had drifted into Chinese; 1.0.199 - 1.0.206 are
+  rewritten in English. The only CJK left in the file is quoted product strings
+  (the `灰度图` / `中文：传感器 RAW` labels and the `简体中文` language name).
+
+### Removed
+
+- **"Add Current Folder to Favorites" and the favorites feature.** The action
+  (and its `Ctrl+D`), the File-menu "Favorite Folders" submenu, the favorites bar
+  in the left sidebar, the `addFavoriteCurrent` / `removeFavorite` /
+  `rebuildFavoritesMenu` / `rebuildFavoritesBar` paths, `AppState`'s persisted
+  favorites, and `DirectoryModel`'s favorites API are gone. Recent-folders and
+  recent-files history are untouched.
+
 ## [1.0.206] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.206**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.206**.
 
 ### Changed
 
-- **顶栏收纳**：52px 的工具带上原来挤了 15+ 个按钮，把 360px 的路径框挤到失
-  读。现在低频动作（在资源管理器中打开、收藏、工作区、左转/右转、分栏、三
-  栏、USM、分析面板、全局搜索）收进末尾的 **More** 溢出菜单，条带上只留日常
-  驱动（后退/前进/向上、路径框、打开、刷新、视图分段、类型筛选、Compare、
-  搜索框）。收纳进菜单的动作补上了原本由 `addBrowserAction()` 设置的图标。
-- **`test_triple_browse`** 的"三栏按钮在顶栏上"断言改为"**从顶栏可达**"：直
-  接是 `QToolBar::action()`，或在 More 菜单里。
+- **Toolbar decluttered.** The 52px strip held 15+ buttons and squeezed the 360px
+  location box until it was unreadable. Occasional actions (open in file manager,
+  favorite, workspace, rotate left/right, split, triple, USM, analysis panel,
+  global search) now live behind a **More** overflow menu at the end of the strip;
+  the strip keeps the daily drivers (back/forward/up, location box, open, refresh,
+  view-mode segment, type filter, Compare, search field). Actions moved into the
+  menu gained the icon that `addBrowserAction()` used to assign.
+- **`test_triple_browse`**: the "triple button on the toolbar" assertion is now
+  "reachable from the toolbar" - either a direct `QToolBar::action()` or inside the
+  More menu.
 
-### Changed — 门禁
+### Changed - gating
 
-- **TSan 腿转成 required**（不再 `continue-on-error`），仍带 `halt_on_error=1`。
-  `ci/tsan.supp` 记录已知的第三方竞态（Qt 的 `qMkTime`、
-  `QArrayData::reallocateUnaligned`、`QThreadPoolPrivate::enqueueTask`，glib 的
-  `g_rw_lock_reader_lock`，Qt 的连接簿记），以及一条压测回收误报——churn 压测
-  以极快的节奏复用 `LambdaTask` 堆地址，TSan 把"另一个对象的构造写"和"这个对
-  象的 `run()` 读"算成竞态；该帧符号是裸 `run`，只能按这个键抑制，条目里带
-  `TODO(investigate)`。我们自己的 `CompareWorkspace::queueLoadRequests`
-  （`QPointer` 守卫）也一并列出并标注 TODO。
+- **The TSan leg is now required** (no more `continue-on-error`) and still runs
+  with `halt_on_error=1`. `ci/tsan.supp` records the known third-party races
+  (Qt's `qMkTime`, `QArrayData::reallocateUnaligned`,
+  `QThreadPoolPrivate::enqueueTask`, glib's `g_rw_lock_reader_lock`, Qt's
+  connection bookkeeping) plus one stress-test recycling false positive - the
+  churn stress test reuses `LambdaTask` heap addresses fast enough that TSan
+  attributes a constructor write and a later `run()` read of the SAME recycled
+  address to different objects; that frame's symbol is the bare `run`, so it is
+  the narrowest matching key available. Our own
+  `CompareWorkspace::queueLoadRequests` (the `QPointer` guard) is listed too and
+  marked TODO.
 
 ## [1.0.205] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.205**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.205**.
 
 ### Changed
 
-- **顶栏按钮高度统一**：`QToolBar` 替我们创建的纯图标按钮按图标尺寸自适应
-  （约 26px），而 Compare 胶囊与视图分段是 `kControlHeight`（34px）——同一条
-  工具带上两种高度。现在纯图标按钮也统一到 `kControlHeight`。
-- **History 与 Pinned 合并为一个标签条**：原来两个列表并排，300px 侧栏里每列
-  都窄得读不全文件名；现在共用一个 `QTabWidget`。
-- **缩略图卡片阴影适配 HiDPI**：阴影 pixmap 原来按 1× 渲染再拉伸，150%/200%
-  缩放下发糊。现在按 `devicePixelRatio` 渲染并标注 DPR，缓存按 DPR 分开。
-- **悬停淡入改 `easeOutCubic`**：`HoverFade` 原来按线性时间推进，减速感很
-  生硬；现在进度做 easeOutCubic，快速到位、末端收稳。
-- **空状态按键帽**：改成圆角 chip + 内边距 + 等宽字体，不再靠 `&nbsp;` 撑宽
-  （那样在 150% 缩放下会忽略文字度量）。
+- **Uniform toolbar button height.** The plain icon buttons `QToolBar` creates for
+  us sized themselves to the icon (about 26px) while the Compare pill and the view
+  segment were `kControlHeight` (34px) - two heights on one strip. Plain icon
+  buttons now use `kControlHeight` too.
+- **History and Pinned merged into one tab strip.** Two side-by-side lists each
+  got half of a 300px sidebar, too narrow to read a file name; they now share a
+  single `QTabWidget`.
+- **HiDPI thumbnail shadows.** The shadow pixmap was rendered at 1x and stretched,
+  so it went soft at 150%/200% scaling. It is now rendered at
+  `devicePixelRatio`, tagged with that DPR, and cached per DPR.
+- **Hover fade uses `easeOutCubic`.** `HoverFade` advanced on linear time, which
+  decelerated mechanically; the progress is now eased - fast in, gentle landing.
+- **Empty-state key caps** are a rounded chip with padding and a monospaced face
+  instead of non-breaking spaces, which ignored the surrounding text metrics at
+  150% scaling.
 
-### Changed — 构建
+### Changed - build
 
-- **测试目标搬到 `tests/CMakeLists.txt`**：`src/CMakeLists.txt` 从 3711 行降到
-  718 行，178 个测试目标与全部 `add_test` 都搬到测试源码旁边。用
-  `include(${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt)` 引入（不是
-  `add_subdirectory`），所以 `CMAKE_CURRENT_SOURCE_DIR` 仍然指产品源码根，原有
-  的包含路径全部不用改；clang-tidy 开关与 Format target 留在 `src/`。
+- **Test targets moved to `tests/CMakeLists.txt`.** `src/CMakeLists.txt` went from
+  3711 lines to 718; all 178 test targets and every `add_test` now sit beside the
+  test sources. It is pulled in with
+  `include(${CMAKE_SOURCE_DIR}/tests/CMakeLists.txt)` rather than
+  `add_subdirectory`, so `CMAKE_CURRENT_SOURCE_DIR` still means the product source
+  root and every existing include path keeps working. The clang-tidy switch and
+  the Format target stay in `src/`.
 
 ### Fixed
 
-- **LibRaw 16-bit 解码少一份全图缓冲**：原来先物化一张 8 字节/像素的
-  `Format_RGBX64` QImage，再抖动到 RGB888，最后拷进 `ImageData`——同一时刻最多
-  4 份全图缓冲。新增 `ditherRows16ToRgb888()`，直接从 LibRaw 的 uint16 交错行
-  抖动，`RGBX64` 那一份被完全省掉（旧路径保留为回退）。
-- **四个单例补齐 ADR-017 生命周期声明**：`ImageRepository` / `ThumbnailPipeline`
-  / `EventBus` 是函数局部静态（退出时销毁），`Logger` 是刻意泄漏。按 ADR-017
-  第 5 条，每个 `instance()` / `scope()` 定义处现在写明了各自的政策与前提。
+- **LibRaw 16-bit decode keeps one fewer full-image buffer.** It used to
+  materialise an 8-bytes-per-pixel `Format_RGBX64` QImage before dithering to
+  RGB888 and copying into `ImageData` - four full-image buffers live at once.
+  The new `ditherRows16ToRgb888()` dithers straight from LibRaw's interleaved
+  uint16 rows, so the `RGBX64` copy disappears entirely (the old QImage path
+  remains as a fallback).
+- **Four singletons now state their ADR-017 lifetime policy.** `ImageRepository`,
+  `ThumbnailPipeline` and `EventBus` are function-local statics that ARE destroyed
+  at exit; `Logger` is deliberately leaked. Per ADR-017 rule 5 each `instance()` /
+  `scope()` definition now documents its policy and its precondition.
 
 ## [1.0.204] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.204**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.204**.
 
-### Changed — 构建治理收尾
+### Changed - build governance
 
-- **`lizard` 复杂度棘轮转硬**：它原来挂在 `build-health` 这个
-  `continue-on-error: true` 的 advisory 任务里，`--max-ccn25 / --max-long-functions`
-  的突破因此永远不会拦住任何东西。现在拆出独立的 **required** 任务
-  `complexity-ratchet`，CCN>25 的函数数或超长函数数上升就会失败。
-- **YUV 扩展名表格**：扩展名列右对齐，与右侧像素格式下拉框的边界更整齐。
-- **TSan 腿：跑真报告，但暂时仍是 advisory**。转硬后它确实在干活——报出
-  `TaskScheduler.cpp:51`（`LambdaTask::run`）和 `CompareWorkspace` 的
-  `QPointer` 守卫两处**归因到我们自己帧**的竞态，另外几处落在 Qt/glib 内部
-  （`qMkTime`、`QArrayData::reallocateUnaligned`、`g_rw_lock_reader_lock`、
-  `QObjectPrivate::ConnectionData`、`QThreadPoolPrivate::enqueueTask`）。
-  已知项按函数名写进 `ci/tsan.supp`（我们自己的那两处带 TODO(investigate)），
-  腿仍在每个 PR 上以 `halt_on_error=1` 跑。**但在那两处被真正修掉之前，把它设
-  成 required 只会得到一个靠忽略列表维持的门禁**，所以先回到 advisory 并把原因
-  写在工作流里。metadata / colour / session 套件暂时排除（剩余报告是
-  `libQt6Gui` 的无符号帧，来自构建真实控件的测试）。
+- **The `lizard` complexity ratchet is now a hard gate.** It used to sit inside
+  `build-health`, which carries `continue-on-error: true`, so breaching
+  `--max-ccn25 / --max-long-functions` never blocked anything. It is now its own
+  **required** job, `complexity-ratchet`.
+- **YUV extension column** is right-aligned so the edge lines up with the pixel
+  format combo beside it.
+- **TSan leg**: it runs a real report (`halt_on_error=1`) but is advisory for now.
+  Once hardened it reported two races attributed to our own frames -
+  `TaskScheduler.cpp:51` (the `LambdaTask` constructor vs a `run()` read of
+  `m_done`, only in the 500-submit churn stress test, likely a TSan artifact on a
+  recycled address) and the `QPointer` guard in `CompareWorkspace` (Qt documents
+  QPointer as not thread-safe). Both are listed in `ci/tsan.supp` with
+  `TODO(investigate)`. The leg still runs on every PR. The metadata / colour /
+  session suites are excluded for now (the remaining reports are unsymbolicated
+  `libQt6Gui` frames from tests that build real widgets).
 
-### 未做（附原因，不是遗漏）
+### Not done, with reasons
 
-- **`runtime_storage.h` 搬到 `core/` 被 R5 拒绝**：试过搬到
-  `src/core/runtime/`，架构门禁立刻报 2 条 R5（core 头文件不得 include Qt）。
-  它确实带 `QString`/`QStandardPaths`，所以按现行规则只能留在 UI 根。已回退，
-  两处改动都验证过再撤回的。
-- **`tests/CMakeLists.txt` 拆分**：`src/CMakeLists.txt` 3.7k 行里测试目标与
-  Format target、clang-tidy、benchmark 段落交错，不是连续区块；整体搬迁的
-  收益是结构性的，但风险是构建/发布链路。本轮不做，留待专门一次重构。
+- **`runtime_storage.h` move into `core/` was rejected by R5.** Tried moving it to
+  `src/core/runtime/`; the architecture gate immediately flagged 2 R5 violations
+  (core headers must not include Qt). It really does use `QString` /
+  `QStandardPaths`, so under the current rules it can only stay at the UI root.
+  Reverted after verifying both ways.
+- **`tests/CMakeLists.txt` split** was not done at that point: the test targets
+  were interleaved with the Format target, the clang-tidy block and the benchmark
+  sections, so it was not a contiguous region.
 
 ## [1.0.203] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.203**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.203**.
 
-### Changed — UI 质感 P1/P2（二轮复审）
+### Changed - UI finish and Win11 feel (second review, 4 visual P0s)
 
-- **面包屑**：分隔符 `>` 换成 `›`，末级（当前文件夹）加粗——原来它也是个
-  可点按钮，视觉上和"链接"分不清。
-- **对比格标题**：`ComparePaneHeader` 的文件名字号 15pt → 10.5pt，长文件名
-  不再被过早省略。
-- **缩略图卡片**：文件名省略方式改 `ElideMiddle`，带仪器前缀的长名字仍能看到
-  尾部帧号（原来 `ElideRight` 正好把它省掉）。
-- **分析侧栏**：选择器独占一行，Run / Export Report / Pin 另起一行——300px
-  侧栏里原来 5 个控件挤在一行，下拉框只剩几个字符。
-- **Python 脚本输出**：等宽字体（JetBrains Mono → Consolas → Courier New），
-  stdout 与框坐标才对得齐。
-- **Mica 关闭后退回纯色**：`applyWindowChrome()` 原来只在开启时写
-  `DWMSBT_MAINWINDOW`，关闭后属性残留，窗口在不透明调色板上仍是半透明的。
-  现在显式写回 `DWMSBT_NONE`。
-- **新对话框主按钮**：Python 的 Run、盲测的 Reveal & Export、导出的 Export
-  补上 `primary="true`，拿到强调色填充（原来只有默认按钮样式）。
+- **Breadcrumb**: separator `>` became `›`, and the last segment (the current
+  folder) is bold - it used to be a clickable button too, so it read the same as
+  a link.
+- **Compare pane title**: `ComparePaneHeader` file-name point size 15pt -> 10.5pt,
+  so long names are no longer ellipsised away.
+- **Thumbnail cards**: name elision switched to `ElideMiddle`, so a long
+  instrument-prefixed name still shows its trailing frame number (`ElideRight`
+  dropped exactly that).
+- **Analysis sidebar**: the selector gets its own row and Run / Export Report /
+  Pin share another; five controls in one row at a 300px sidebar left the combo
+  box a few characters wide.
+- **Python script output** uses a monospaced face (JetBrains Mono -> Consolas ->
+  Courier New) so stdout and box coordinates line up.
+- **Mica is reset when turned off.** `applyWindowChrome()` only wrote
+  `DWMSBT_MAINWINDOW` when enabling, so the attribute lingered and the window
+  stayed translucent over an opaque palette. It now writes `DWMSBT_NONE` back.
+- **New dialog primary buttons**: Python's Run, blind test's Reveal & Export and
+  Export's Export gained `primary="true"` and the accent fill.
 
 ## [1.0.202] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.202**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.202**.
 
-### Fixed — 遗留 P0/P1 功能缺陷（二轮复审）
+### Fixed - remaining P0/P1 product defects (second review)
 
-- **盲测默认分记 0**：`applyRandomization()` 把分数清 0 之后才 `setValue(3)`，而
-  slider 本来就在 3，不触发 `valueChanged` —— 于是第一侧即使用户没动过也记成
-  MOS 0。现在分数初始化为滑块当前值；同时换源会重置 `m_done`，上一轮的
-  "已揭晓"不再带进新的一轮。
-- **盲测 `Space` 未绑定**：按钮上写着 `(Space)` 但没接。补了 `QShortcut`。
-- **标注删除可撤销**：右键删除的批注现在可以用 `Ctrl+Shift+Z` 恢复
-  （`restoreRemovedAnnotation()`）。
-- **USM 对话框重复文案**：`Amount (Amount):` / `Radius (Radius):` 改为
-  `Amount:` / `Radius:`。
-- **插件调用缺异常隔离**：`createAnalyzer` 与 `probe->name()` 现在包在
-  `try/catch` 里，插件抛异常不会穿过 ABI 边界。
-- **WIC TIFF 二次解码**：1×1 探测在 Qt 的 TIFF handler 上仍可能分配整幅栅格，
-  现在按文件大小设限（> 8 MiB 只做格式推导深度，不读栅格）。
-- **`Logger` 重入死锁**：`messageHandler` 持锁写 `QFile`，Qt 在写盘中抛出的
-  警告会重入同一把非递归锁。改 `QRecursiveMutex`；并加 8 MiB 轮转（保留一代
-  `.prev`），日志不再无限增长。
-- **`TaskScheduler`**：`m_backpressure` 的无锁写改为持锁；背压判定移进
-  `enqueueTask()` 同一把锁内（原来"先探测再入队"存在 TOCTOU，限流形同虚
-  设）；`shutdown()` 补上 `m_deferred` 的清理（从未启动的任务持有的
-  `QRunnable` 原来会泄漏）。
-- **`DiskCache`**：每次读命中都同步写一行 `ts`。改为按 key 节流（5 秒），
-  状态放 thread_local，节流本身不引入新的共享锁。
+- **Blind test recorded a default score of 0**: `applyRandomization()` zeroed the
+  scores and then called `setValue(3)` on a slider that was already at 3, which
+  emits nothing - so the first side scored MOS 0 even when the user never touched
+  it. Scores now initialise to the slider's current value; picking new sources also
+  resets `m_done`, so a previous reveal cannot leak into the next round.
+- **Blind test `Space` was unbound**: the button advertised `(Space)` but nothing
+  handled it. Added a `QShortcut`.
+- **Annotation deletion is undoable** (`Ctrl+Shift+Z`).
+- **USM dialog duplicate labels**: `Amount (Amount):` / `Radius (Radius):` became
+  `Amount:` / `Radius:`.
+- **PluginLoader** wraps `createAnalyzer` and `probe->name()` in try/catch so a
+  plugin exception cannot cross the ABI boundary.
+- **WIC TIFF double decode**: the 1x1 probe is now gated on file size (Qt's TIFF
+  handler can still allocate the whole source raster).
+- **Logger**: switched to a recursive mutex (a Qt warning raised while the handler
+  held the lock used to re-enter the same non-recursive mutex) and added 8 MiB
+  rotation.
+- **TaskScheduler**: `m_backpressure` is written under the lock; the back-pressure
+  decision moved inside `enqueueTask()` under the same lock (the old
+  probe-then-submit sequence was a TOCTOU and the limit was advisory at best);
+  `shutdown()` now clears `m_deferred` (a never-started task's `QRunnable` used to
+  leak).
+- **DiskCache**: a cache hit wrote a `ts` row every read. It is now throttled per
+  key (5 s), with the throttle state in thread_local so it adds no shared lock in
+  front of SQLite.
 
 ### Changed
 
-- 复杂度门禁回到 0 硬失败：`QtDecoder.cpp` / `TaskScheduler.cpp` /
-  `imageviewer_contextmenu.cpp` 收回上限内（拆出 `probeTiffMetadata`、
-  `wouldRejectBackpressureLocked`，并把长注释块收敛到要点）。
+- Complexity gate back to 0 hard failures: `QtDecoder.cpp` / `TaskScheduler.cpp` /
+  `imageviewer_contextmenu.cpp` came back under the caps (extracted
+  `probeTiffMetadata` and `wouldRejectBackpressureLocked`, and collapsed long
+  comment runs to their point).
 
 ## [1.0.201] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.201**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.201**.
 
-### Fixed — 底层并发与构建收口（二轮复审）
+### Fixed - concurrency and build wrap-up (second review)
 
-- **`ThumbnailCache` ABBA 死锁**：`get()` / `put()` 持 `m_mutex` 调
-  `scheduleBootstrap()`，后者取 `m_bootstrapMutex` 并 `join()` 工作线程，而工作
-  线程又要先拿 `m_mutex` —— 互相等锁，且 `join()` 自己等自己。两个调用点都改为
-  在 `m_mutex` 临界区之外调度。
-- **`setDisplayColorContext()` 显存泄漏**：`m_gpu.clear()` 没有 GL 上下文，
-  `glDeleteTextures` 被跳过，句柄整个会话只增不减。现在按其他两处同样的写法
-  包上 `makeCurrent()` / `doneCurrent()`。
-- **关闭后迟到的 UI 回调会在工作线程上跑**：`Shutdown` 只是清空分发器，之后
-  `postToMainThread()` 的「无分发器就内联执行」回退会让工作线程直接执行 UI
-  闭包。新增 `shutdownMainThreadDispatcher()`：关闭后投递直接丢弃，`Shutdown`
-  改用它，并补了回归用例。
-- **Python 桥接不再冻结界面**：`run()` 是同步的，一个跑到超时的脚本会让整个
-  界面卡住。新增 `runAsync()`，工作放线程池、完成回调回投到 UI 线程，对话框改
-  用它并在运行中禁用 Run。
+- **`ThumbnailCache` ABBA deadlock**: `get()` / `put()` called
+  `scheduleBootstrap()` while holding `m_mutex`, and that function takes
+  `m_bootstrapMutex` and `join()`s the worker, while the worker needs `m_mutex`
+  first - a mutual wait, and the `join()` was waiting on itself. Both call sites
+  now schedule outside the critical section.
+- **`setDisplayColorContext()` leaked GPU textures**: `m_gpu.clear()` ran with no
+  GL context, so `glDeleteTextures` was skipped and handles only grew for the
+  whole session. It is now wrapped in `makeCurrent()` / `doneCurrent()`, matching
+  the other two sites.
+- **Late UI callbacks could run on a worker after shutdown**: `Shutdown` only
+  cleared the dispatcher, after which `postToMainThread()`'s "run inline when no
+  dispatcher" fallback would execute a UI closure on whatever worker was finishing.
+  Added `shutdownMainThreadDispatcher()`: after shutdown, delivery is dropped;
+  `Shutdown` calls it, and a regression test pins the behaviour.
+- **The Python bridge no longer freezes the interface**: `run()` is synchronous, so
+  a script that ran to its timeout hung the whole UI. Added `runAsync()` - the work
+  goes to a thread pool and the completion is posted back to the UI thread; the
+  dialog uses it and disables Run while busy.
 
 ### Changed
 
-- **`mviewer_core` 不再冗余链接 `Qt6::Widgets`**（`src/core` 0 处引用
-  Widgets）；`Qt6::Gui` / `Qt6::Core` 改为显式声明——它们的头文件一直是靠
-  Widgets 的传递包含才可见的。
-- **TSan 门禁转硬**：原先同时有 `continue-on-error`、`halt_on_error=0` 和
-  `|| true` 三重软化；现在 `halt_on_error=1`、无 `continue-on-error`、无
-  `|| true`，竞态会直接让该腿失败。
+- **`mviewer_core` no longer links a redundant `Qt6::Widgets`** (`src/core` has 0
+  Widgets references); `Qt6::Gui` / `Qt6::Core` are now declared explicitly - their
+  headers had only been visible through Widgets' transitive includes.
+- **The TSan leg is now hard**: `halt_on_error=1`, with `continue-on-error` and the
+  `|| true` removed, so a data race fails the leg.
 
-### 未做（明确记录）
+### Not done, with reasons
 
-- `tests/CMakeLists.txt` 拆分（`src/CMakeLists.txt` 仍 3.7k 行，但测试源文件
-  已全部在 `tests/`）；`TaskScheduler` / `DiskCache` / `PluginLoader` /
-  `Logger` 的遗留 P1；非泄漏单例与 ADR-017 的一致性；标注撤销与盲测交互。
+- **`tests/CMakeLists.txt` split** and the leftover P1s (`TaskScheduler` /
+  `DiskCache` / `PluginLoader` / `Logger`), plus the non-leaking singleton /
+  ADR-017 consistency, annotation undo and the blind-test interactions.
 
 ## [1.0.200] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.200**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.200**.
 
-### Fixed — UI 视觉与 Win11 质感（二轮复审 4 项视觉 P0）
+### Fixed - UI finish and Win11 feel (second review, 4 visual P0s)
 
-- **画布浮层不再互相打架**：新增 `ImageViewer::layoutFloatingOverlays()`
-  四角槽位管理，示波器、FFT 频谱、显示调整三张卡片各归其位；`resizeEvent()`
-  末尾强制重排，缩放窗口或 `F11` 全屏后不再停在旧坐标或飞出屏幕。槽位为画布
-  上画出来的角标留了位置——示波器抬到帧状态胶囊之上，不再 100% 盖死它。
-  新增 `viewer_overlay_layout_tests` 断言各槽位互不重叠、都在视口内、且缩放后
-  跟随。
-- **示波器有了卡片外壳**：10px 圆角半透明背板 + 1px 微光描边，并预留底部读数
-  区——剖面线的统计文字原来画在控件外 6px 被裁掉。
-- **显示调整面板不再是裸浮**：`canvasFloatCard` 样式（圆角卡片、1px 细边），
-  顶部加右对齐等宽 `+0.4 EV · γ 1.20` 读数，拖滑块能看到具体数值。
-- **浅色主题滑块不再隐身**：手柄改为强调色实心圆 + `bg2` 外环（原来是纯白，
-  在浅色 groove 上和 hover 时都看不见）；垂直手柄同步。
-- **聚焦输入框不再整框变蓝**：改为 Win11 Fluent 的中性底 + 2px 底部强调条。
-- **对话框按钮不再像 macOS 胶囊**：圆角从搜索框尺寸收到 6px；弹窗/提示去掉了
-  与 DWM 圆角叠在一起的第二层描边。
-- **导出与偏好设置不再爆框**：`ExportDialog` 的 8 个分组包进无边框
-  `QScrollArea`，按钮栏固定在最下方；`PreferencesDialog` 每页各自滚动，默认
-  尺寸升到 `600×520`。
+- **The canvas overlays no longer collide.** Added
+  `ImageViewer::layoutFloatingOverlays()`: scope widget, FFT spectrum and display
+  adjustment each get their own corner slot, and the slots step aside for the
+  chips painted on the canvas - the scope widget is lifted clear of the
+  frame-status pill instead of covering it completely. `resizeEvent()` re-lays out
+  at the end, so resizing or F11 fullscreen no longer leaves panels at stale
+  coordinates or off screen. `viewer_overlay_layout_tests` asserts the slots are
+  disjoint, inside the viewport and follow a resize.
+- **The scope widget got a card shell**: 10px rounded, mostly opaque background
+  with a hairline, plus a reserved bottom readout band - the line-profile
+  statistics used to be painted outside the widget and clipped.
+- **The display adjustment panel is no longer bare-floating**: `canvasFloatCard`
+  styling (rounded card, 1px hairline) and a right-aligned monospaced
+  `+0.4 EV / gamma 1.20` readout, so dragging a slider shows the value.
+- **Light-theme sliders stopped vanishing**: the handle is now an accent-filled
+  disc with a `bg2` ring (it used to be near-white on a light groove and on
+  hover); the vertical handle matches.
+- **Focused inputs stopped going solid blue**: neutral surface plus a 2px accent
+  bottom bar, Win11 Fluent style.
+- **Dialog buttons stopped looking like macOS capsules**: corner radius 6px
+  instead of the search-pill radius; popups and tooltips lost the second outline
+  stacked on DWM's rounded corners.
+- **Export and Preferences stopped overflowing**: `ExportDialog`'s eight groups are
+  wrapped in a borderless `QScrollArea` with the button row pinned to the bottom;
+  `PreferencesDialog` scrolls per page and defaults to 600x520.
 
 ## [1.0.199] - 2026-11-22
 
 ### Release
 
-- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag → **1.0.199**.
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.199**.
 
-### Fixed — 新功能 P0 止血（二轮复审）
+### Fixed - new-feature P0 triage (second review)
 
-- **会话包导入 Zip Slip**：条目名未校验就写盘，恶意包可用 `../`、绝对路径或盘符
-  写到临时目录之外。写端与读端现在都只接受 `session.json` 和
-  `images/<纯文件名>`，导入再对 `cleanPath` 做一次「必须仍在临时目录内」的复核。
-- **导入后临时目录立即被删**：`QTemporaryDir` 是局部对象，`openCompare()` 的异步
-  解码还没读完就被销毁。改由 `MainWindow` 持有一份，下一次导入或退出时回收。
-- **会话包改成 `.bin` 后缀**：导出丢掉真实扩展名，RAW/YUV 导入后必然解码失败。
-  现在保留原后缀；同时加了 128 MiB 单条目 / 256 MiB 整包上限。
-- **`Grayscale8` 开 Auto-Stretch 堆越界**：按 RGB24 逐像素读 3 字节，最多读到
-  缓冲区外 2 倍。现在按通道数分支，并且全程按 `stride` 行寻址。
-- **Adobe `.cube` 轴序颠倒**：规范是蓝最外、红最内（`(z*N+y)*N+x`），实现写反，
-  所有 Resolve/ISP 导出的 LUT 都会偏色。已修正，回归用例按规范顺序重写。
-- **`ScopeWidget` 像素读取类型错误**：`constScanLine(y)[x]` 返回 `uchar` 却被当
-  成 `QRgb`，R/G 恒为 0，波形、Parade、剖面线全在读错数据。已改为按 `QRgb*`
-  解引用。
-- **FFT 频谱图全黑**：`Format_Grayscale8` 上用 `setPixel(qRgb(v,0,0))`，颜色被
-  转换后整张图发黑；改为直接写字节。同时修正 `hasOffAxisPeak()`：频谱未移位，
-  DC 在四角而不是中心，旧写法屏蔽的是真实中频信号。
-- **`L` 键被吞**：`handleZoomKey()` 把裸 `L` 当成「锁定缩放」，`handleModeKey()`
-  里的剖面线分支永远不可达。裸 `L` 现在归剖面线，`Ctrl+L` 仍是锁定缩放。
-- **OpenEXR 解析**：`dataWindow` 未校验长度即读 16 字节；`chlist` 步长用了 18
-  字节（规范是 `pixelType4 + pLinear1 + reserved3 + xSampling4 + ySampling4` =
-  16），多吃掉第二个通道名；`offset + 8` 可能回绕成通过；PFM 灰度只写 R 通道
-  导致整张纯红。全部修正，并加了 16384 边长 / 64 MiB 像素的尺寸上限。
-- **粘贴撤销在中文路径下静默失效**：`ClipboardPasteCommand` 直接用窄 UTF-8 串
-  构造 `fs::path`，在中文目录上失败。改用 `pathFromUtf8()` / `pathToUtf8()`，
-  并补了中文路径回归用例。
-- **标注导出文字被裁没**：文字标注的矩形是 1×1 锚点，绘制时又按该矩形裁剪，
-  导出后完全看不见。锚点矩形现在按点绘制，不再裁剪。
+- **Session package Zip Slip**: entry names were written to disk unchecked, so a
+  hostile bundle could use `..`, an absolute path or a drive letter to write
+  anywhere. Both the writer and the reader now accept only `session.json` and
+  `images/<plain file name>`, and the import re-checks that the cleaned target is
+  still inside the temp directory.
+- **The extracted directory was deleted immediately**: `QTemporaryDir` was a local,
+  so it was destroyed as soon as `openCompare()` returned and the asynchronous
+  decode was still reading. It is now owned by `MainWindow` and released on the
+  next import or at shutdown.
+- **The bundle renamed everything to `.bin`**: the export dropped the real
+  extension, so RAW/YUV could never decode after an import. The original suffix is
+  kept; a 128 MiB per-entry / 256 MiB whole-package cap was added.
+- **`Grayscale8` auto-stretch read out of bounds**: it indexed a one-byte-per-pixel
+  buffer as RGB24, reading up to 3x past the end. It now branches on the channel
+  count and addresses rows through `stride` everywhere.
+- **The Adobe `.cube` axes were inverted**: the spec is blue outermost, red
+  innermost (`(z*N+y)*N+x`); the implementation had it backwards, so every LUT
+  Resolve/ISP exports was shifted. Fixed, and the regression fixture was rewritten
+  in spec order (the old fixture and the old implementation were wrong together
+  and hid each other).
+- **`ScopeWidget` read the wrong pixel type**: `constScanLine(y)[x]` returns a
+  `uchar` that was treated as `QRgb`, so R and G were always 0 and the waveform,
+  parade and line profile were all reading garbage. Now dereferenced as `QRgb*`.
+- **The FFT spectrum was solid black**: `setPixel(qRgb(v,0,0))` on a
+  `Format_Grayscale8` image went through Qt's colour conversion and came out
+  black; bytes are written directly now. `hasOffAxisPeak()` was also fixed: the
+  spectrum is unshifted, so DC is in the four corners, and masking the centre
+  discarded real mid-band energy.
+- **The `L` key was swallowed**: `handleZoomKey()` consumed a bare `L` as a second
+  lock-zoom shortcut, leaving the line-profile branch unreachable. A bare `L` now
+  belongs to the line profile; `Ctrl+L` still locks zoom.
+- **OpenEXR parsing**: `dataWindow` read 16 bytes without checking the length; the
+  `chlist` stride was 18 bytes (the spec is `pixelType4 + pLinear1 + reserved3 +
+  xSampling4 + ySampling4` = 16) and ate the second channel name; `offset + 8`
+  could wrap into a passing bounds check; a grayscale PFM wrote only the R channel
+  and came out pure red. All fixed, plus 16384 edge / 64 MiB pixel caps.
+- **Paste undo failed silently on non-ASCII paths**: `ClipboardPasteCommand` built
+  `fs::path` from a narrow UTF-8 string, which fails on a Chinese directory name.
+  It now goes through `pathFromUtf8()` / `pathToUtf8()`, with a regression case.
+- **Annotation text was clipped away**: a text annotation's rect is a 1x1 anchor
+  and the paint clipped through that rect, so exported labels were invisible. The
+  anchor rect is now drawn as a point.
 
-### 未做（明确记录）
+### Not done, recorded explicitly
 
-- 标注**撤销**、盲测默认分 / `Space` 绑定 / 切图重置盲态、Python 桥接异步化
-  与若干漏走 `tr()` 的文案，本轮未动，留待后续版本。
+- Annotation **undo**, the blind-test default score / `Space` binding / switching
+  reset, the async Python bridge and several missing `tr()` strings were left for
+  later versions.
 
 ## [1.0.198] - 2026-11-21
 

@@ -59,15 +59,6 @@ void DirectoryModel::setCurrentDirectory(const QString &path)
     emit currentDirectoryChanged(m_current);
 }
 
-void DirectoryModel::setFavorites(const QStringList &dirs)
-{
-    const QStringList cleaned = uniqueFolders(dirs);
-    if (m_favorites == cleaned)
-        return;
-    m_favorites = cleaned;
-    emit favoritesChanged(m_favorites);
-}
-
 void DirectoryModel::setRecentFolders(const QStringList &dirs)
 {
     const QStringList cleaned = uniqueFolders(dirs);
@@ -75,37 +66,6 @@ void DirectoryModel::setRecentFolders(const QStringList &dirs)
         return;
     m_recent = cleaned;
     emit recentFoldersChanged(m_recent);
-}
-
-void DirectoryModel::addFavorite(const QString &dir)
-{
-    const QString cleaned = canonicalFolder(dir);
-    if (cleaned.isEmpty() || hasFavorite(cleaned))
-        return;
-    m_favorites.append(cleaned);
-    emit favoritesChanged(m_favorites);
-}
-
-void DirectoryModel::removeFavorite(const QString &dir)
-{
-    const int before = m_favorites.size();
-    QStringList kept;
-    kept.reserve(m_favorites.size());
-    for (const QString &item : m_favorites)
-        if (!sameFolder(item, dir))
-            kept.append(item);
-    if (kept.size() == before)
-        return;
-    m_favorites = kept;
-    emit favoritesChanged(m_favorites);
-}
-
-bool DirectoryModel::hasFavorite(const QString &dir) const
-{
-    for (const QString &item : m_favorites)
-        if (sameFolder(item, dir))
-            return true;
-    return false;
 }
 
 void DirectoryModel::addRecentFolder(const QString &dir)
@@ -144,15 +104,11 @@ void DirectoryModel::removeRecentFolder(const QString &dir)
 void DirectoryModel::clear()
 {
     const bool hadCurrent = !m_current.isEmpty();
-    const bool hadFav = !m_favorites.isEmpty();
     const bool hadRecent = !m_recent.isEmpty();
     m_current.clear();
-    m_favorites.clear();
     m_recent.clear();
     if (hadCurrent)
         emit currentDirectoryChanged(m_current);
-    if (hadFav)
-        emit favoritesChanged(m_favorites);
     if (hadRecent)
         emit recentFoldersChanged(m_recent);
 }

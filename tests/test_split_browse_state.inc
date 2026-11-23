@@ -192,14 +192,6 @@ void testSplitBrowseState(const QString &leftDir, const QString &rightDir, const
     mw.setActiveBrowsePane(SelectionModel::PaneSlot::Secondary);
     EXPECT(titleShowsFolder(title, rightName), "toolbar title returns to the right pane");
 
-    auto *fav = mw.findChild<QAction *>(QStringLiteral("addFavoriteAction"));
-    EXPECT(fav && fav->isEnabled(), "favorite can add the active folder");
-    if (fav)
-        fav->trigger();
-    EXPECT(mw.statusBar() && mw.statusBar()->currentMessage().contains(rightName) &&
-               !mw.statusBar()->currentMessage().contains(leftName),
-           "favorite adds the active right folder");
-
     auto *focusPath = mw.findChild<QAction *>(QStringLiteral("focusPathAction"));
     auto *leftPath = mw.findChild<QLineEdit *>(QStringLiteral("pathEdit"));
     EXPECT(focusPath && leftPath, "address bars and the Alt+D action exist");

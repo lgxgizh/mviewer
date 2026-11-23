@@ -4,14 +4,14 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.206**
+## Where we are now — **Beta / 1.0.207**
 
-MViewer remains in **Beta**; the current release is **`v1.0.206`**
-(2026-11-22, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-The 52px toolbar now keeps only the daily drivers and puts occasional actions in
-an overflow menu, and the Linux ThreadSanitizer leg is a required gate rather
-than an advisory one. Offscreen CI is regression evidence, not proof of
-universal smoothness.
+MViewer remains in **Beta**; the current release is **`v1.0.207`**
+(2026-11-23, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+The browse toolbar keeps every action on the strip again (the overflow menu is
+gone), the favorites feature is removed end to end, and the release history is
+English once more. Offscreen CI is regression evidence, not proof of universal
+smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -66,14 +66,15 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.206** (current) | 顶栏收纳 + TSan 腿转 required | 🔵 Beta |
-| **1.0.205** | UI 收尾 + 测试目标搬进 `tests/` | ✅ Previous patch |
-| **1.0.204** | 构建治理收尾（lizard 棘轮转硬） | ✅ Previous patch |
-| **1.0.203** | UI 质感 P1/P2（面包屑 / 卡片 / 侧栏 / Mica / 主按钮） | ✅ Previous patch |
-| **1.0.202** | 遗留 P0/P1 功能缺陷 | ✅ Previous patch |
-| **1.0.201** | 底层并发与构建收口（TSan 转硬） | ✅ Previous patch |
-| **1.0.200** | UI 视觉与 Win11 质感（浮层槽位 / 卡片 / 滑块） | ✅ Previous patch |
-| **1.0.199** | 新功能 P0 止血（二轮复审 8 项） | ✅ Previous patch |
+| **1.0.207** (current) | Toolbar un-collapsed; favorites removed; changelog English | 🔵 Beta |
+| **1.0.206** | Toolbar decluttered; TSan leg required | ✅ Previous patch |
+| **1.0.205** | UI finish; test targets moved into `tests/` | ✅ Previous patch |
+| **1.0.204** | Build governance wrap-up (`lizard` ratchet hardened) | ✅ Previous patch |
+| **1.0.203** | UI finish and Win11 feel (breadcrumb / cards / sidebar / Mica) | ✅ Previous patch |
+| **1.0.202** | Remaining P0/P1 product defects | ✅ Previous patch |
+| **1.0.201** | Concurrency and build wrap-up (TSan hardened) | ✅ Previous patch |
+| **1.0.200** | UI finish and Win11 feel (overlay slots / cards / sliders) | ✅ Previous patch |
+| **1.0.199** | New-feature P0 triage (8 items, second review) | ✅ Previous patch |
 | **1.0.198** | Tests moved to `tests/`; signing wired; version SSOT fixed | ✅ Previous patch |
 | **1.0.197** | Linux monitor ICC (colour directories + `MVIEWER_ICC`) | ✅ Previous patch |
 | **1.0.196** | Python script bridge (subprocess, JSON protocol) | ✅ Previous patch |

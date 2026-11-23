@@ -94,11 +94,6 @@ void MainWindow::updateNavigationActions()
         m_actRefresh->setEnabled(hasDirectory);
     if (m_actOpenCurrentFolder)
         m_actOpenCurrentFolder->setEnabled(hasActiveDirectory);
-    const bool isFavorite = m_directory && m_directory->hasFavorite(navDir);
-    if (m_actAddFavorite)
-        m_actAddFavorite->setEnabled(hasActiveDirectory && !isFavorite);
-    if (m_actRemoveFavorite)
-        m_actRemoveFavorite->setEnabled(hasActiveDirectory && isFavorite);
 }
 
 void MainWindow::navigatePage(int key)
@@ -415,67 +410,6 @@ void MainWindow::rebuildRecentFilesMenu()
     }
     if (m_recentFileMenu->isEmpty())
         m_recentFileMenu->addAction(tr("(None)"))->setEnabled(false);
-}
-
-void MainWindow::rebuildFavoritesMenu()
-{
-    if (!m_favMenu)
-        return;
-    m_favMenu->clear();
-    for (const auto &qs : m_appState.favorites)
-    {
-        auto *act = m_favMenu->addAction(QFileInfo(qs).fileName());
-        act->setToolTip(qs);
-        connect(act, &QAction::triggered, this, [this, qs]() { changeDirectory(qs); });
-    }
-    if (m_favMenu->isEmpty())
-        m_favMenu->addAction(tr("(None)"))->setEnabled(false);
-}
-
-void MainWindow::addFavoriteCurrent()
-{
-    const QString dir = activeBrowseDirectory();
-    if (dir.isEmpty())
-    {
-        statusBar()->showMessage(tr("No folder to add to favorites"), 3000);
-        return;
-    }
-    m_appState.addFavorite(dir);
-    m_directory->addFavorite(dir);
-    m_appState.save();
-    rebuildFavoritesMenu();
-    rebuildFavoritesBar();
-    updateSelectionActions();
-    statusBar()->showMessage(tr("Added to favorites: %1").arg(QFileInfo(dir).fileName()), 3000);
-}
-
-void MainWindow::removeFavorite(const QString &dir)
-{
-    const QString target = dir.isEmpty() ? activeBrowseDirectory() : dir;
-    if (target.isEmpty())
-        return;
-    m_appState.removeFavorite(target);
-    m_directory->removeFavorite(target);
-    m_appState.save();
-    rebuildFavoritesMenu();
-    rebuildFavoritesBar();
-    updateSelectionActions();
-    statusBar()->showMessage(tr("Removed from favorites: %1").arg(QFileInfo(target).fileName()),
-                             3000);
-}
-
-void MainWindow::rebuildFavoritesBar()
-{
-    if (!m_favoritesBar)
-        return;
-    m_favoritesBar->clear();
-    for (const auto &qs : m_appState.favorites)
-    {
-        auto *item = new QListWidgetItem(QFileInfo(qs).fileName());
-        item->setData(Qt::UserRole, qs);
-        item->setToolTip(qs);
-        m_favoritesBar->addItem(item);
-    }
 }
 
 void MainWindow::clearAllFilters()

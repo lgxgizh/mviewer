@@ -676,9 +676,7 @@ void MainWindow::connectSettingsSignals()
                                        .arg(QStringLiteral(MVIEWER_VERSION_STRING),
                                             QStringLiteral(MVIEWER_VERSION_FULL)));
             });
-    // P0: recent / favorites / history wiring.
-    connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);
-    connect(m_actRemoveFavorite, &QAction::triggered, this, [this]() { removeFavorite(); });
+    // P0: recent / history wiring.
     connect(m_actHistoryBack, &QAction::triggered, this, [this]() { navigateHistory(-1); });
     connect(m_actHistoryForward, &QAction::triggered, this, [this]() { navigateHistory(1); });
     connect(m_actDirBack, &QAction::triggered, this, &MainWindow::goDirBack);

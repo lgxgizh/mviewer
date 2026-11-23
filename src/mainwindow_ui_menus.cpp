@@ -38,17 +38,9 @@ void MainWindow::buildFileMenu(QMenuBar *menuBar)
     fileMenu->addAction(m_actOpenFile);
     fileMenu->addSeparator();
 
-    // P0: Recent folders (from core::RecentFiles LRU) + Favorites (pinned).
+    // P0: Recent folders (from core::RecentFiles LRU).
     m_recentMenu = fileMenu->addMenu(tr("&Recent Folders"));
     m_recentFileMenu = fileMenu->addMenu(tr("Recent &Files"));
-    m_favMenu = fileMenu->addMenu(tr("Fa&vorite Folders"));
-    m_actAddFavorite = new QAction(tr("Add Current Folder to Favorites(&D)"), this);
-    m_actAddFavorite->setObjectName("addFavoriteAction");
-    m_actAddFavorite->setShortcut(QKeySequence("Ctrl+D")); // Ctrl+D
-    m_actRemoveFavorite = new QAction(tr("Remove Current Folder from Favorites"), this);
-    m_actRemoveFavorite->setObjectName("removeFavoriteAction");
-    fileMenu->addAction(m_actAddFavorite);
-    fileMenu->addAction(m_actRemoveFavorite);
 
     fileMenu->addSeparator();
     fileMenu->addAction(m_actSaveWorkspace);
@@ -481,8 +473,6 @@ void MainWindow::retranslateUi()
         {m_actExportReport, QT_TR_NOOP("Export &Report...")},
         {m_actExportImages, QT_TR_NOOP("&Export Images...")},
         {m_actExit, QT_TR_NOOP("E&xit")},
-        {m_actAddFavorite, QT_TR_NOOP("Add Current Folder to Favorites(&D)")},
-        {m_actRemoveFavorite, QT_TR_NOOP("Remove Current Folder from Favorites")},
         {m_actUndo, QT_TR_NOOP("Undo(&U)")},
         {m_actRedo, QT_TR_NOOP("Redo(&R)")},
         {m_actRotateCW, QT_TR_NOOP("Rotate 90° Clockwise (&R)")},
@@ -544,7 +534,6 @@ void MainWindow::retranslateUi()
         {m_helpMenu, QT_TR_NOOP("&Help")},
         {m_recentMenu, QT_TR_NOOP("&Recent Folders")},
         {m_recentFileMenu, QT_TR_NOOP("Recent &Files")},
-        {m_favMenu, QT_TR_NOOP("Fa&vorite Folders")},
     };
     for (const auto &entry : menus)
     {

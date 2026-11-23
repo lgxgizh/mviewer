@@ -88,7 +88,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                                     m_appState.tertiaryDirHistoryIndex);
     m_secondaryBrowseHistory.restore(m_appState.secondaryDirHistory,
                                      m_appState.secondaryDirHistoryIndex);
-    m_directory->setFavorites(m_appState.favorites);
     m_hiddenFormatGroups = mviewer::browseformats::loadHiddenGroups();
     m_directory->setRecentFolders(m_appState.recentFolders);
     m_workspace->setAnalysisVisible(m_appState.analysisVisible);
@@ -118,8 +117,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     restoreWindowSettings();
 
     // P0: restore last folder + image + scroll position (deferred to event loop).
-    rebuildFavoritesMenu();
-    rebuildFavoritesBar();
     rebuildRecentFilesMenu();
     {
         QSettings settings;

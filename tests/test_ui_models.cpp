@@ -241,12 +241,6 @@ int main(int argc, char **argv)
     // ---- DirectoryModel ----
     {
         DirectoryModel dir;
-        dir.setFavorites({"/a", "/b"});
-        CHECK(dir.favorites().size() == 2, "DirectoryModel favorites set");
-        dir.addFavorite("/c");
-        CHECK(dir.favorites().size() == 3, "DirectoryModel addFavorite");
-        dir.removeFavorite("/a");
-        CHECK(dir.favorites().size() == 2, "DirectoryModel removeFavorite");
         dir.addRecentFolder("/r1");
         dir.addRecentFolder("/r2");
         CHECK(dir.recentFolders().size() == 2, "DirectoryModel recent size");
@@ -266,14 +260,6 @@ int main(int argc, char **argv)
         CHECK(recentChanges == 1, "DirectoryModel removeRecentFolder no-op does not emit signal");
         dir.setCurrentDirectory("/work");
         CHECK(dir.currentDirectory() == "/work", "DirectoryModel current");
-        dir.addFavorite(QStringLiteral("C:/photos"));
-        dir.addFavorite(QStringLiteral("C:\\photos"));
-        CHECK(dir.favorites().size() == 3, "DirectoryModel favorite ignores slashes");
-        CHECK(dir.hasFavorite(QStringLiteral("C:\\photos")),
-              "DirectoryModel hasFavorite matches the other slash");
-        dir.removeFavorite(QStringLiteral("C:/photos"));
-        CHECK(!dir.hasFavorite(QStringLiteral("C:\\photos")),
-              "DirectoryModel removeFavorite matches the other slash");
         int directoryChanges = 0;
         QObject::connect(&dir, &DirectoryModel::currentDirectoryChanged,
                          [&](const QString &) { ++directoryChanges; });

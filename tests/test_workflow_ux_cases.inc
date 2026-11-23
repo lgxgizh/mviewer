@@ -342,8 +342,6 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *dirForwardAction = w.findChild<QAction *>("directoryForwardAction");
     auto *dirUpAction = w.findChild<QAction *>("directoryUpAction");
     auto *refreshAction = w.findChild<QAction *>("refreshDirectoryAction");
-    auto *addFavoriteAction = w.findChild<QAction *>("addFavoriteAction");
-    auto *removeFavoriteAction = w.findChild<QAction *>("removeFavoriteAction");
     QAction *compareAction = nullptr;
     for (QAction *action : w.findChildren<QAction *>())
         if (action && action->text().startsWith(QStringLiteral("Compare Mode")))
@@ -462,9 +460,6 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "empty Browse disables directory history at both boundaries");
     CHECK(dirUpAction && !dirUpAction->isEnabled() && refreshAction && !refreshAction->isEnabled(),
           "empty Browse disables directory-only commands without an active folder");
-    CHECK(addFavoriteAction && !addFavoriteAction->isEnabled() && removeFavoriteAction &&
-              !removeFavoriteAction->isEnabled(),
-          "empty Browse disables favorite commands without an active folder");
     CHECK(compareAction && !compareAction->isEnabled(),
           "empty Browse disables Compare until at least two images are available");
     auto *compareButton = w.findChild<QToolButton *>(QStringLiteral("compareToolbarButton"));
@@ -869,21 +864,6 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "directory history enables Back after leaving the first folder");
     CHECK(dirUpAction && dirUpAction->isEnabled() && refreshAction && refreshAction->isEnabled(),
           "active Browse folder enables Up and Refresh");
-    CHECK(addFavoriteAction && addFavoriteAction->isEnabled() && removeFavoriteAction &&
-              !removeFavoriteAction->isEnabled(),
-          "unfavorited active folder enables Add Favorite only");
-    if (addFavoriteAction)
-        addFavoriteAction->trigger();
-    pump(20);
-    CHECK(addFavoriteAction && !addFavoriteAction->isEnabled() && removeFavoriteAction &&
-              removeFavoriteAction->isEnabled(),
-          "adding the active folder immediately swaps favorite command availability");
-    if (removeFavoriteAction)
-        removeFavoriteAction->trigger();
-    pump(20);
-    CHECK(addFavoriteAction && addFavoriteAction->isEnabled() && removeFavoriteAction &&
-              !removeFavoriteAction->isEnabled(),
-          "removing the active folder restores Add Favorite availability");
 
     const QString externalDir = QDir(QStringLiteral(MVIEWER_SOURCE_DIR))
                                     .filePath(QStringLiteral("testdata/golden/256x256"));

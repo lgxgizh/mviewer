@@ -59,43 +59,11 @@ void MainWindow::buildBrowserShell()
 
 QWidget *MainWindow::buildNavigationPanel()
 {
-    // ----- Left column: favorites + directory tree + preview -----
+    // ----- Left column: directory tree + preview -----
     auto *leftWidget = new QSplitter(Qt::Vertical, this);
     m_leftSplitter = leftWidget;
     m_navigationWidget = leftWidget;
     leftWidget->setObjectName("navigationPanel");
-
-    // P0: Favorites bar — quick-access pinned directories above the tree.
-    m_favoritesBar = new QListWidget(leftWidget);
-    m_favoritesBar->setMaximumHeight(100);
-    m_favoritesBar->hide();
-    m_favoritesBar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_favoritesBar->setToolTip(
-        tr("Favorites — Right-click to remove, Ctrl+D to favorite the current folder"));
-    connect(m_favoritesBar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item)
-            { changeDirectory(item->data(Qt::UserRole).toString()); });
-    m_favoritesBar->setContextMenuPolicy(Qt::CustomContextMenu);
-    connect(m_favoritesBar, &QListWidget::customContextMenuRequested, this,
-            [this](const QPoint &pos)
-            {
-                auto *item = m_favoritesBar->itemAt(pos);
-                if (!item)
-                    return;
-                QMenu menu;
-                QAction *act = menu.addAction(tr("Remove from Favorites"));
-                if (menu.exec(m_favoritesBar->mapToGlobal(pos)) == act)
-                    removeFavorite(item->data(Qt::UserRole).toString());
-            });
-    auto updateFavoritesVisibility = [this]()
-    {
-        if (m_favoritesBar)
-            m_favoritesBar->setVisible(m_favoritesBar->count() > 0);
-    };
-    connect(m_favoritesBar->model(), &QAbstractItemModel::rowsInserted, this,
-            [updateFavoritesVisibility]() { updateFavoritesVisibility(); });
-    connect(m_favoritesBar->model(), &QAbstractItemModel::rowsRemoved, this,
-            [updateFavoritesVisibility]() { updateFavoritesVisibility(); });
-    leftWidget->addWidget(m_favoritesBar);
 
     // The vertical splitter owns only complete sections. Section internals use
     // layouts so a persisted splitter state can never stretch the filter edit
@@ -151,26 +119,24 @@ QWidget *MainWindow::buildNavigationPanel()
     // splitter, producing a tiny folder tree and an oversized preview. Run once
     // after MainWindow's synchronous settings restore, then leave subsequent
     // user-adjusted proportions untouched.
-    QTimer::singleShot(
-        0, this,
-        [this]()
-        {
-            constexpr int currentLayoutVersion = 1;
-            QSettings settings;
-            if (settings.value("browserSidebarLayoutVersion", 0).toInt() >= currentLayoutVersion)
-            {
-                return;
-            }
+    QTimer::singleShot(0, this,
+                       [this]()
+                       {
+                           constexpr int currentLayoutVersion = 1;
+                           QSettings settings;
+                           if (settings.value("browserSidebarLayoutVersion", 0).toInt() >=
+                               currentLayoutVersion)
+                           {
+                               return;
+                           }
 
-            if (m_leftSplitter)
-            {
-                const bool showFavorites =
-                    m_favoritesBar && m_favoritesBar->count() > 0 && !m_favoritesBar->isHidden();
-                m_leftSplitter->setSizes({showFavorites ? 80 : 0, 390, 260});
-            }
-            settings.setValue("browserSidebarLayoutVersion", currentLayoutVersion);
-            settings.sync();
-        });
+                           if (m_leftSplitter)
+                           {
+                               m_leftSplitter->setSizes({390, 260});
+                           }
+                           settings.setValue("browserSidebarLayoutVersion", currentLayoutVersion);
+                           settings.sync();
+                       });
 
     return leftWidget;
 }

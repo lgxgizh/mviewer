@@ -258,53 +258,31 @@ QWidget *MainWindow::makeBrowserLocation(QWidget *parent)
 
 void MainWindow::addTrailingBrowserActions(QToolBar *bar)
 {
+    // Everything stays on the strip: collapsing occasional actions into an
+    // overflow menu hid the very things the user reaches for.
     addBrowserAction(bar, m_actOpenDir, "open", actTip(tr("Open Directory"), m_actOpenDir));
     addBrowserAction(bar, m_actRefresh, "refresh",
                      actTip(tr("Refresh directory and thumbnails"), m_actRefresh));
+    addBrowserAction(
+        bar, m_actOpenCurrentFolder, "browse",
+        actTip(tr("Open the current folder in the file manager"), m_actOpenCurrentFolder));
     addGap(bar);
-
-    // Everything below is occasional-use. It lives in an overflow menu so the
-    // 52px strip keeps the daily drivers instead of crowding the location box
-    // (review: the toolbar held 15+ buttons and squeezed the path field).
-    auto *more = new QToolButton(bar);
-    more->setObjectName(QStringLiteral("browserToolbarMore"));
-    more->setIcon(mviewer::ui::toolbarIcon("more"));
-    more->setToolTip(tr("More browser actions"));
-    more->setPopupMode(QToolButton::InstantPopup);
-    more->setProperty("pill", true);
-    more->setFocusPolicy(Qt::NoFocus);
-    auto *menu = new QMenu(more);
-    // addBrowserAction() normally assigns these; the overflow menu has to do it.
-    m_actOpenCurrentFolder->setIcon(mviewer::ui::toolbarIcon("browse"));
-    m_actAddFavorite->setIcon(mviewer::ui::toolbarIcon("favorite"));
-    m_actBrowseWorkspace->setIcon(mviewer::ui::toolbarIcon("browse_workspace"));
-    m_actToggleAnalysis->setIcon(mviewer::ui::toolbarIcon("analysis"));
-    m_actToggleSearch->setIcon(mviewer::ui::toolbarIcon("search"));
-    m_actRotateCCW->setIcon(mviewer::ui::toolbarIcon("rotate_ccw"));
-    m_actRotateCW->setIcon(mviewer::ui::toolbarIcon("rotate_cw"));
-    m_actSplitBrowse->setIcon(mviewer::ui::toolbarIcon("split_browse"));
-    m_actTripleBrowse->setIcon(mviewer::ui::toolbarIcon("triple_browse"));
+    addBrowserAction(bar, m_actToggleAnalysis, "analysis",
+                     actTip(tr("Analysis panel"), m_actToggleAnalysis));
+    addBrowserAction(bar, m_actToggleSearch, "search",
+                     actTip(tr("Global search"), m_actToggleSearch));
+    addBrowserAction(bar, m_actBrowseWorkspace, "browse_workspace", {});
+    addGap(bar);
+    addBrowserAction(bar, m_actRotateCCW, "rotate_ccw", {});
+    addBrowserAction(bar, m_actRotateCW, "rotate_cw", {});
+    addBrowserAction(bar, m_actSplitBrowse, "split_browse",
+                     actTip(tr("Split Browse View (Ctrl+Shift+S)"), m_actSplitBrowse));
+    addBrowserAction(bar, m_actTripleBrowse, "triple_browse", tr("Triple Browse View"));
     if (m_actUsmCompare)
-        m_actUsmCompare->setIcon(mviewer::ui::toolbarIcon("usm"));
-    menu->addAction(m_actOpenCurrentFolder);
-    menu->addAction(m_actAddFavorite);
-    menu->addAction(m_actBrowseWorkspace);
-    menu->addSeparator();
-    menu->addAction(m_actToggleAnalysis);
-    menu->addAction(m_actToggleSearch);
-    menu->addSeparator();
-    menu->addAction(m_actRotateCCW);
-    menu->addAction(m_actRotateCW);
-    menu->addSeparator();
-    menu->addAction(m_actSplitBrowse);
-    menu->addAction(m_actTripleBrowse);
-    if (m_actUsmCompare)
-    {
         m_actUsmCompare->setObjectName(QStringLiteral("usmCompareAction"));
-        menu->addAction(m_actUsmCompare);
-    }
-    more->setMenu(menu);
-    bar->addWidget(more);
+    addBrowserAction(
+        bar, m_actUsmCompare, "usm",
+        actTip(tr("USM sharpen before/after comparison and export (Ctrl+U)"), m_actUsmCompare));
 }
 
 void MainWindow::buildUnifiedToolbar()
