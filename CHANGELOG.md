@@ -18,8 +18,9 @@
   Compare and the search field.
 - **The version history is English again.** The `CHANGELOG.md` entries written
   during the last few releases had drifted into Chinese; 1.0.199 - 1.0.206 are
-  rewritten in English. The only CJK left in the file is quoted product strings
-  (the `灰度图` / `中文：传感器 RAW` labels and the `简体中文` language name).
+  rewritten in English. The only CJK left anywhere in the file is quoted product
+  strings (the grayscale label, the `Sensor RAW (.raw)` group caption and the
+  Simplified Chinese language endonym) - none of it is prose.
 
 ### Removed
 
