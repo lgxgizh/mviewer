@@ -2,6 +2,80 @@
 
 ## [Unreleased]
 
+## [1.0.208] - 2026-11-23
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.208**.
+
+### Fixed
+
+- **PR-01 Python script bridge lifetime.** `runAsync()` captured a raw
+  `QObject *context`; the user closing the dialog while a script ran left a
+  queued lambda holding a dangling pointer. It now captures a `QPointer`, checks
+  it on the worker and again inside the delivered lambda. The interpreter
+  preference (`m_interpreter`) is behind a mutex, so two concurrent `runAsync()`
+  calls no longer race on it. `PythonScriptResult::responsePath` is gone: it
+  named a file inside a `QTemporaryDir` that `run()` destroys on return, so it
+  always dangled. A regression test starts a 1-second script, destroys the
+  context after 200 ms, and asserts no completion is delivered.
+- **PR-02 TSan blind spots.** `CompareWorkspace::queueLoadRequests` guarded
+  itself with a `QPointer` read from the worker thread - Qt documents `QPointer`
+  as not thread-safe. It now uses the `AsyncLifetimeToken` the workspace already
+  owns; `~CompareWorkspace()` invalidates it, so a late delivery is a no-op
+  before any member is touched. `TaskScheduler::LambdaTask` no longer keeps the
+  callbacks as runnable members: the context and callables live in a
+  `shared_ptr<LambdaState>` held by both the runnable and the completion
+  callback, so the state outlives `run()`. `run()` forwards to `runTask()` so a
+  report names that frame rather than the bare `run` every `QRunnable` shares.
+  `ci/tsan.supp` is down to third-party entries plus the exact `race:runTask`
+  frame; the blanket `race:run` is gone.
+
+### Changed
+
+- **PR-03 GPU tile upload is O(1) on an unchanged frame.** `ImageData` (and its
+  views) carry a monotonic content `version` from `nextContentVersion()`;
+  `mutableView()` and copy-on-write detachment bump it. `GpuTileUploader::
+  ensure()` gained an overload taking that version: same key, same geometry and
+  the same non-zero version is a cache hit that reads no pixel byte, so panning
+  a 50 MP image no longer hashes gigabytes per second on the UI thread. The old
+  five-argument overload still fingerprints, so existing callers are untouched.
+  Documented in ADR 035.
+- **PR-04 DisplayAdjust is a lookup table.** 8-bit exposure / AutoStretch / gamma
+  collapse into three 256-entry tables built once per adjustment (768 `pow`
+  calls instead of 36 M for a 12 MP frame); the pixel loop is now a pure
+  `out = lut[c][in]`. The 3D `.cube` sampler is float tetrahedral interpolation
+  (4 corners, 3 lerps) instead of 8-corner double trilinear, which is both
+  faster and the interpolation a colourist expects. Exact vertex results are
+  unchanged.
+- **PR-06 LibRaw OpenMP demosaic.** `cmake/LibRaw.cmake` finds OpenMP and links
+  it into `mviewer_libraw`, so LibRaw's AHD/DHT demosaicers actually run in
+  parallel (`LIBRAW_USE_OPENMP` is defined by `libraw_types.h` on VS2010+; the
+  compiler switch is what the pragmas need). Opt out with
+  `-DMVIEWER_LIBRAW_OPENMP=OFF`.
+- **PR-07 USM vertical blur restructured.** The inner loop walked
+  `temp[sy][x][c]` for every `(x, c, k)`; it now accumulates whole contiguous
+  rows into an `int32` buffer per output row, so the access pattern is a flat
+  sequential stream the compiler can vectorise. `Fft2D` precomputes each stage's
+  twiddle table instead of a complex multiply per butterfly, which also stops
+  rounding error accumulating across a stage.
+- **PR-10 test build split.** `tests/CMakeLists.txt` (3000 lines) is now three
+  included files - `tests/core.cmake`, `tests/ui.cmake`, `tests/workflow.cmake`.
+
+### Not done, with reasons
+
+- **PR-07 Release LTO is off by default.** Enabling it breaks
+  `.\build.ps1 Test`: MSVC's `/LTCG` cannot link the test executables against
+  the LTO-built import library (`core_tests.exe` fails with `LNK2001` for every
+  `CompareEngine` / `SyncController` symbol). `-DMVIEWER_ENABLE_LTO=ON` is
+  available for a machine that only builds the shipping targets.
+- **PR-05 JPEG fast path** (libjpeg-turbo / WIC direct decode into `ImageData`)
+  and **PR-08 / PR-09** (the unified ImageViewer fragment shader and the
+  GPU-composited CompareWorkspace canvas) are not implemented; they change the
+  decoder and render pipelines end to end and need their own measurement pass.
+- **PR-10 thread-pool consolidation** (folding the scattered `QtConcurrent` /
+  `std::thread` users into `TaskScheduler`) is not done.
+
 ## [1.0.207] - 2026-11-23
 
 ### Release

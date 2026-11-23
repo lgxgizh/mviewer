@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-23 · Version: **1.0.207** · Release tag: **v1.0.207**
+> Snapshot: 2026-11-23 · Version: **1.0.208** · Release tag: **v1.0.208**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -8,7 +8,22 @@
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
 
-## 1.0.207 — toolbar un-collapsed, favorites removed, changelog English (2026-11-23)
+## 1.0.208 - P0 safety + P1 hot loops (2026-11-23)
+
+- PR-01 PythonScriptRunner: QPointer guard (no UAF on a dialog closed mid-run),
+  interpreter mutex, dangling `responsePath` removed, regression test added.
+- PR-02 `CompareWorkspace` uses its `AsyncLifetimeToken` instead of a cross-thread
+  `QPointer`; `TaskScheduler` task state moved into a `shared_ptr`; the blanket
+  `race:run` suppression replaced by the exact `race:runTask` frame.
+- PR-03 `ImageData` content version + `GpuTileUploader::ensure()` O(1) hit (ADR 035).
+- PR-04 DisplayAdjust 8-bit 1D LUT (768 pow instead of 36 M) + float tetrahedral
+  3D LUT.
+- PR-06 LibRaw OpenMP demosaic. PR-07 USM row accumulation + FFT stage twiddles.
+- PR-10 `tests/CMakeLists.txt` split into core / ui / workflow.
+- Not done: LTO (breaks the test links under /LTCG), PR-05 JPEG fast path,
+  PR-08/09 GPU shader pipeline, PR-10 thread-pool consolidation.
+
+## 1.0.207 - toolbar un-collapsed, favorites removed, changelog English (2026-11-23)
 
 - Browse toolbar: every action is back on the strip; the v1.0.206 "More"
   overflow is gone.

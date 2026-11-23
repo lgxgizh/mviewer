@@ -4,13 +4,16 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.207**
+## Where we are now — **Beta / 1.0.208**
 
-MViewer remains in **Beta**; the current release is **`v1.0.207`**
+MViewer remains in **Beta**; the current release is **`v1.0.208`**
 (2026-11-23, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-The browse toolbar keeps every action on the strip again (the overflow menu is
-gone), the favorites feature is removed end to end, and the release history is
-English once more. Offscreen CI is regression evidence, not proof of universal
+This patch closes the P0 safety items from the latest review - the Python script
+bridge can no longer touch a destroyed dialog, the compare loader uses its
+lifetime token instead of a cross-thread `QPointer`, and the ThreadSanitizer
+leg lost its blanket suppression - and then attacks the hot loops: the GPU tile
+upload is now an O(1) version hit, and 8-bit exposure / gamma collapsed into
+lookup tables. Offscreen CI is regression evidence, not proof of universal
 smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
@@ -66,7 +69,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.207** (current) | Toolbar un-collapsed; favorites removed; changelog English | 🔵 Beta |
+| **1.0.208** (current) | P0 safety + P1 hot loops (LUT, GPU tile version, OpenMP) | 🔵 Beta |
+| **1.0.207** | Toolbar un-collapsed; favorites removed; changelog English | ✅ Previous patch |
 | **1.0.206** | Toolbar decluttered; TSan leg required | ✅ Previous patch |
 | **1.0.205** | UI finish; test targets moved into `tests/` | ✅ Previous patch |
 | **1.0.204** | Build governance wrap-up (`lizard` ratchet hardened) | ✅ Previous patch |
