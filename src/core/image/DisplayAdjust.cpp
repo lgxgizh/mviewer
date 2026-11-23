@@ -56,10 +56,100 @@ float lutCorner(const DisplayAdjust &adjust, int size, int x, int y, int z, int 
     return static_cast<float>(adjust.lut[at * 3u + static_cast<size_t>(c)]);
 }
 
+/// The four corners of the cube sub-division (a tetrahedron) that contains the
+/// sample point, plus their barycentric weights. Picking the tetrahedron is a
+/// decision table on the three fractional parts; the path always walks each
+/// axis monotonically, so the weights are non-negative and sum to 1.
+struct Tetra
+{
+    int ax, ay, az;
+    int bx, by, bz;
+    int cx, cy, cz;
+    int dx, dy, dz;
+    float wa, wb, wc, wd;
+};
+
+Tetra pickTetrahedron(float tx, float ty, float tz, int x0, int y0, int z0, int x1, int y1,
+                      int z1)
+{
+    Tetra t{};
+    t.ax = t.bx = t.cx = t.dx = x0;
+    t.ay = t.by = t.cy = t.dy = y0;
+    t.az = t.bz = t.cz = t.dz = z0;
+    if (tx >= ty)
+    {
+        if (ty >= tz)
+        {
+            t.bx = x1;
+            t.cx = t.dx = x1;
+            t.cy = t.dy = y1;
+            t.dz = z1;
+            t.wa = 1.0f - tx;
+            t.wb = tx - ty;
+            t.wc = ty - tz;
+            t.wd = tz;
+        }
+        else if (tx >= tz)
+        {
+            t.bx = t.cx = t.dx = x1;
+            t.cz = t.dz = z1;
+            t.dy = y1;
+            t.wa = 1.0f - tx;
+            t.wb = tx - tz;
+            t.wc = tz;
+            t.wd = ty;
+        }
+        else
+        {
+            t.bz = t.cz = t.dz = z1;
+            t.cx = t.dx = x1;
+            t.dy = y1;
+            t.wa = 1.0f - tz;
+            t.wb = tz - tx;
+            t.wc = tx - ty;
+            t.wd = ty;
+        }
+    }
+    else
+    {
+        if (tx >= tz)
+        {
+            t.ay = t.by = t.cy = t.dy = y1;
+            t.cx = t.dx = x1;
+            t.dz = z1;
+            t.wa = 1.0f - ty;
+            t.wb = ty - tx;
+            t.wc = tx - tz;
+            t.wd = tz;
+        }
+        else if (ty >= tz)
+        {
+            t.ay = t.by = t.cy = t.dy = y1;
+            t.cz = t.dz = z1;
+            t.dx = x1;
+            t.wa = 1.0f - ty;
+            t.wb = ty - tz;
+            t.wc = tz;
+            t.wd = tx;
+        }
+        else
+        {
+            t.bz = t.cz = t.dz = z1;
+            t.cy = t.dy = y1;
+            t.dx = x1;
+            t.wa = 1.0f - tz;
+            t.wb = tz - ty;
+            t.wc = ty - tx;
+            t.wd = tx;
+        }
+    }
+    return t;
+}
+
 /// Tetrahedral sample of a blue-major .cube LUT.
 ///
 /// Four corners instead of eight: one subdivision of the cube is a tetrahedron
-/// that contains the sample point, and the weights are the barycentric
+/// that contains the sample point, and the weights are its barycentric
 /// coordinates. Trilinear reads 8 neighbours and does 7 lerps per channel; this
 /// reads 4 and does 3, and it is the interpolation a colourist expects (a
 /// trilinear blend of a swap LUT is exact, and so is this).
@@ -76,122 +166,19 @@ void sampleLut(const DisplayAdjust &adjust, int r, int g, int b, std::uint8_t ou
     const int x1 = std::min(x0 + 1, size - 1);
     const int y1 = std::min(y0 + 1, size - 1);
     const int z1 = std::min(z0 + 1, size - 1);
-    const float tx = fx - static_cast<float>(x0);
-    const float ty = fy - static_cast<float>(y0);
-    const float tz = fz - static_cast<float>(z0);
 
-    // The four corners of the containing tetrahedron, in the order that walks
-    // each axis monotonically, and their barycentric weights.
-    int ax = x0, ay = y0, az = z0;
-    int bx = x0, by = y0, bz = z0;
-    int cx = x0, cy = y0, cz = z0;
-    int dx = x0, dy = y0, dz = z0;
-    float wa = 0.0f, wb = 0.0f, wc = 0.0f, wd = 0.0f;
-    if (tx >= ty)
-    {
-        if (ty >= tz)
-        {
-            // (x0,y0,z0) (x1,y0,z0) (x1,y1,z0) (x1,y1,z1)
-            bx = x1;
-            cx = x1;
-            cy = y1;
-            dx = x1;
-            dy = y1;
-            dz = z1;
-            wa = 1.0f - tx;
-            wb = tx - ty;
-            wc = ty - tz;
-            wd = tz;
-        }
-        else if (tx >= tz)
-        {
-            // (x0,y0,z0) (x1,y0,z0) (x1,y0,z1) (x1,y1,z1)
-            bx = x1;
-            cx = x1;
-            cz = z1;
-            dx = x1;
-            dy = y1;
-            dz = z1;
-            wa = 1.0f - tx;
-            wb = tx - tz;
-            wc = tz;
-            wd = ty;
-        }
-        else
-        {
-            // (x0,y0,z0) (x0,y0,z1) (x1,y0,z1) (x1,y1,z1)
-            ay = y0;
-            bz = z1;
-            cx = x1;
-            cz = z1;
-            dx = x1;
-            dy = y1;
-            dz = z1;
-            wa = 1.0f - tz;
-            wb = tz - tx;
-            wc = tx - ty;
-            wd = ty;
-        }
-    }
-    else
-    {
-        if (tx >= tz)
-        {
-            // (x0,y0,z0) (x0,y1,z0) (x1,y1,z0) (x1,y1,z1)
-            ay = y1;
-            bx = x0;
-            by = y1;
-            cx = x1;
-            cy = y1;
-            dx = x1;
-            dy = y1;
-            dz = z1;
-            wa = 1.0f - ty;
-            wb = ty - tx;
-            wc = tx - tz;
-            wd = tz;
-        }
-        else if (ty >= tz)
-        {
-            // (x0,y0,z0) (x0,y1,z0) (x0,y1,z1) (x1,y1,z1)
-            ay = y1;
-            bx = x0;
-            by = y1;
-            cx = x0;
-            cy = y1;
-            cz = z1;
-            dx = x1;
-            dy = y1;
-            dz = z1;
-            wa = 1.0f - ty;
-            wb = ty - tz;
-            wc = tz;
-            wd = tx;
-        }
-        else
-        {
-            // (x0,y0,z0) (x0,y0,z1) (x0,y1,z1) (x1,y1,z1)
-            bz = z1;
-            cx = x0;
-            cy = y1;
-            cz = z1;
-            dx = x1;
-            dy = y1;
-            dz = z1;
-            wa = 1.0f - tz;
-            wb = tz - ty;
-            wc = ty - tx;
-            wd = tx;
-        }
-    }
-
+    const Tetra tetra = pickTetrahedron(fx - static_cast<float>(x0), fy - static_cast<float>(y0),
+                                        fz - static_cast<float>(z0), x0, y0, z0, x1, y1, z1);
     for (int c = 0; c < 3; ++c)
     {
-        const float value = wa * lutCorner(adjust, size, ax, ay, az, c) + wb * lutCorner(adjust, size, bx, by, bz, c) +
-                            wc * lutCorner(adjust, size, cx, cy, cz, c) + wd * lutCorner(adjust, size, dx, dy, dz, c);
+        const float value = tetra.wa * lutCorner(adjust, size, tetra.ax, tetra.ay, tetra.az, c) +
+                            tetra.wb * lutCorner(adjust, size, tetra.bx, tetra.by, tetra.bz, c) +
+                            tetra.wc * lutCorner(adjust, size, tetra.cx, tetra.cy, tetra.cz, c) +
+                            tetra.wd * lutCorner(adjust, size, tetra.dx, tetra.dy, tetra.dz, c);
         out[c] = static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0f, 255.0f)));
     }
 }
+
 } // namespace
 
 bool DisplayAdjust::identity() const

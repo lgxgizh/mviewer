@@ -122,6 +122,11 @@ bool blurVerticalAndCombine(const uint8_t *src, const uint8_t *temp, int w, int 
     int deltaLut[511];
     buildDeltaLut(amount, threshold, deltaLut);
 
+    // Row accumulation: for one output row, walk the kernel window and add
+    // whole contiguous rows into an int32 accumulator, instead of touching a
+    // strided temp element for every (x, c, k). The inner loop is then a flat
+    // sequential stream the compiler can vectorise.
+    std::vector<int> accRow(static_cast<size_t>(w) * static_cast<size_t>(colorChannels));
     for (int y = 0; y < h; ++y)
     {
         if ((y & 15) == 0 && cancelled && cancelled())
@@ -130,20 +135,24 @@ bool blurVerticalAndCombine(const uint8_t *src, const uint8_t *temp, int w, int 
             src + static_cast<size_t>(y) * static_cast<size_t>(w) * static_cast<size_t>(cpp);
         uint8_t *dstRow =
             dst + static_cast<size_t>(y) * static_cast<size_t>(w) * static_cast<size_t>(cpp);
+        std::fill(accRow.begin(), accRow.end(), 0);
+        for (int k = 0; k < kSize; ++k)
+        {
+            const int sy = std::clamp(y - radius + k, 0, h - 1);
+            const uint8_t *kRow = temp + static_cast<size_t>(sy) * tempRowStride;
+            const int weight = kernel[static_cast<size_t>(k)];
+            for (size_t i = 0; i < accRow.size(); ++i)
+                accRow[i] += static_cast<int>(kRow[i]) * weight;
+        }
         for (int x = 0; x < w; ++x)
         {
             const size_t px = static_cast<size_t>(x) * cpp;
             for (int c = 0; c < colorChannels; ++c)
             {
-                int acc = 0;
-                for (int k = 0; k < kSize; ++k)
-                {
-                    const int sy = std::clamp(y - radius + k, 0, h - 1);
-                    acc += temp[static_cast<size_t>(sy) * tempRowStride +
-                                static_cast<size_t>(x) * colorChannels + c] *
-                           kernel[k];
-                }
-                const int blurVal = (acc + 8192) >> 14;
+                const int blurVal = (accRow[static_cast<size_t>(x) * colorChannels +
+                                           static_cast<size_t>(c)] +
+                                    8192) >>
+                                   14;
                 const int origVal = srcRow[px + c];
                 const int diff = origVal - blurVal;
                 const int delta = deltaLut[std::clamp(diff, -255, 255) + 255];
