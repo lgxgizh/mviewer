@@ -72,5 +72,14 @@ try {
     Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'incomplete-report') 'one complete report cannot hide an incomplete child report'
     Set-Content (Join-Path $partialDir results.txt) 'System call information is missing for this operating system: Restarting to trigger auto-generation of system call information.'
     Check ((Get-DrMemoryResult $logs core_tests.exe 0).state -eq 'executed-clean') 'bootstrap restart retained but not confused with final target report'
+    $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+    $toolingWorkflow = [IO.File]::ReadAllText((Join-Path $repoRoot '.github/workflows/drmemory.yml'))
+    $releaseWorkflow = [IO.File]::ReadAllText((Join-Path $repoRoot '.github/workflows/release.yml'))
+    $toolingJob = [regex]::Match($toolingWorkflow, '(?ms)^  actual-execution:.*?(?=^  [a-z][a-z0-9-]*:|\z)').Value
+    $releaseJob = [regex]::Match($releaseWorkflow, '(?ms)^  dr-memory:.*?(?=^  [a-z][a-z0-9-]*:|\z)').Value
+    Check ($toolingJob -match '(?m)^    if: \$\{\{ false \}\}\r?$') 'automatic tooling Dr.Memory job explicitly disabled'
+    Check ($toolingJob -match '(?m)^    name: Dr\.Memory DISABLED \(not executed; no memory verdict\)\r?$') 'tooling skipped job explicitly states no execution or memory verdict'
+    Check ($releaseJob -match '(?m)^    if: \$\{\{ false \}\}\r?$') 'automatic Release Dr.Memory job explicitly disabled'
+    Check ($releaseJob -match '(?m)^    name: Dr\.Memory DISABLED \(not executed; no memory verdict\)\r?$') 'Release skipped job explicitly states no execution or memory verdict'
     Write-Host "Dr.Memory contracts: $script:checks passed"
 } finally { Remove-Item -LiteralPath $root -Recurse -Force }

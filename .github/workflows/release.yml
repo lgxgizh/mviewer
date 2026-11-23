@@ -7,9 +7,9 @@
 #   * performance-report — full benchmark sweep + dashboard (Decode / Thumbnail
 #     / Cache Hit / Compare / GPU Upload / Memory Peak project-specific gates)
 #   * ui-regression       — full Golden Image UI regression (screenshots vs ref)
-#   * dr-memory           — Windows memory-error check (best-effort signal)
+#   * dr-memory           — DISABLED/skipped; not executed, no memory verdict
 #   * warm-cache          — one MSVC Release compile into the sccache GHA cache;
-#                           the four Windows jobs below then mostly hit the
+#                           the enabled Windows jobs below mostly hit the
 #                           cache instead of each compiling the app from scratch
 #   * package             — portable zip + NSIS installer + symbols (PDB) zip
 #   * release             — published GitHub release with all artifacts
@@ -193,12 +193,13 @@ jobs:
           path: golden/difference/
 
   # ---------------------------------------------------------------------------
-  # dr-memory — Windows memory error check (best-effort signal)
-  # Best-effort: Dr.Memory may need suppression tuning; it must not block the
-  # release pipeline, but its report is uploaded for triage.
+  # dr-memory — DISABLED (not executed; no memory verdict)
+  # Bounded old/new comparison did not establish a reliable completed verdict;
+  # see STATUS.md and the retained evidence. Skipped is not memory-clean.
   # ---------------------------------------------------------------------------
   dr-memory:
-    name: Dr.Memory advisory (see execution verdict)
+    if: ${{ false }}
+    name: Dr.Memory DISABLED (not executed; no memory verdict)
     env:
       MVIEWER_ALL_PDBS: 'ON'
     runs-on: windows-2022
