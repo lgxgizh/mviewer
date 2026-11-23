@@ -1,12 +1,25 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-23 · Version: **1.0.209** · Release tag: **v1.0.209**
+> Snapshot: 2026-11-23 · Version: **1.0.210** · Release tag: **v1.0.210**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.210 - libjpeg-turbo JPEG fast path (2026-11-23)
+
+- New third-party dependency: libjpeg-turbo 3.1.0, fetched/built like LibRaw,
+  SHA256-pinned, static. Writes RGB24/Greyscale8 straight into ImageData with a
+  SIMD IDCT and native 1/2, 1/4, 1/8 scaling. ADR 036.
+- Measured B11 (3840x2160 JPEG, p50): 170 ms -> 104 ms (-39%), accurate SIMD IDCT.
+- `jpeg_turbo_tests` pins correctness against Qt's decode (mean abs diff 1.15,
+  threshold 2), the greyscale case, the scale-factor choice and the fallback
+  contract.
+- ICC-bearing and EXIF-rotated JPEGs keep Qt's decode.
+- `QtDecoder.cpp` split (complexity gate): metadata helpers moved to
+  `QtDecoder_meta.cpp` behind a Qt-free internal header.
 
 ## 1.0.209 - global thread pool consolidation (2026-11-23)
 

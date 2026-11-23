@@ -7,6 +7,8 @@
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
 #include "core/image/QtMetadataSemantics.h"
+#include "core/image/decoder/JpegTurbo.h"
+#include "core/image/decoder/QtDecoder_internal.h"
 
 #include <QColorSpace>
 #include <QFileInfo>
@@ -132,12 +134,16 @@ bool isPngPath(const std::string &path)
     return ext == "png";
 }
 
-void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const QImage &img,
-                  mviewer::domain::ImageMetadata &meta);
+bool isJpegPath(const std::string &path)
+{
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
+    return ext == "jpg" || ext == "jpeg" || ext == "jpe";
+}
 
-#if defined(Q_OS_WIN)
-// Qt 6.8 qt_imageTransform: None is identity; Rotate270 is one 270° clockwise
-// and then rotates 90° clockwise when Rotate90 is set.
+// Qt 6.8 qt_imageTransform: None is identity; Rotate270 is one 270-degree
+// clockwise rotation; the others mirror/flip first and then rotate 90 degrees
+// clockwise when Rotate90 is set.
 static QImage applyQtTransformation(const QImage &img, QImageIOHandler::Transformations t)
 {
     if (t == QImageIOHandler::TransformationNone)
@@ -151,8 +157,48 @@ static QImage applyQtTransformation(const QImage &img, QImageIOHandler::Transfor
     return out;
 }
 
+// Shared tail of the JPEG fast path (review P1-05): libjpeg-turbo decode, EXIF
+// transform, then the same metadata the Qt path reports. `maxEdge` uses the Qt
+// contract (the largest output that fits); `maxEdge <= 0` means full size.
+// Returns null when the fast path does not apply, so the caller falls back.
+ImageData jpegFastTail(const std::string &path, int maxEdge, QImageReader &reader,
+                       const QSize &full, QImage::Format sourceFormat,
+                       mviewer::domain::ImageMetadata &outMeta)
+{
+    const int sourceEdge = std::max(full.width(), full.height());
+    // `maxEdge <= 0` means full size; otherwise clamp to the source edge so a
+    // caller asking for more than the image gets the whole thing.
+    const int requestedEdge = maxEdge > 0 ? std::min(sourceEdge, maxEdge) : sourceEdge;
+    ImageData fast = mviewer::core::detail::decodeJpegTurbo(path, requestedEdge);
+    if (fast.isNull())
+        return {};
+    const auto transform = reader.transformation();
+    if (transform != QImageIOHandler::TransformationNone)
+    {
+        // The transform needs Qt's image operators, so this one case keeps the
+        // round trip. Rotated JPEGs are rare.
+        QImage view = mvcore::toQImageRef(fast);
+        if (view.isNull())
+            view = mvcore::toQImage(fast);
+        fast = toImageData(applyQtTransformation(view, transform));
+        if (fast.isNull())
+            return {};
+    }
+    const QImage probe(
+        1, 1, sourceFormat == QImage::Format_Invalid ? QImage::Format_RGB888 : sourceFormat);
+    mviewer::core::detail::decoderFillMetadata(reader, sourceFormat, probe, outMeta);
+    outMeta.width = full.width();
+    outMeta.height = full.height();
+    if (transformSwapsDimensions(transform))
+        std::swap(outMeta.width, outMeta.height);
+    outMeta.orientation = orientationFromTransform(transform);
+    outMeta.format = "JPEG";
+    return fast;
+}
+
+#if defined(Q_OS_WIN)
 // Recover source bit depth and ICC from a bounded Qt probe so the native TIFF
-// than risk an unbounded allocation.
+// LOD never has to materialize the whole raster.
 void probeTiffMetadata(const QString &filename, const QImage::Format metadataFormat,
                        mviewer::domain::ImageMetadata &meta)
 {
@@ -180,7 +226,7 @@ void populateWicTiffMetadata(const QString &filename, const std::string &path, c
     metadataReader.setAutoTransform(true);
     const QImage::Format sourceFormat =
         mviewer::core::qtmetadata::readerImageFormat(metadataReader);
-    fillMetadata(metadataReader, sourceFormat, output, meta);
+    mviewer::core::detail::decoderFillMetadata(metadataReader, sourceFormat, output, meta);
     if (meta.filePath.empty())
         meta.filePath = path;
     meta.fileSize = QFileInfo(filename).size();
@@ -208,38 +254,9 @@ QImage decodeTiffWic(const std::string &path, const QRect &rawRect, const QSize 
 
 // Container format: prefer the reader's reported format; fall back to the file
 // extension (QImageReader leaves format() empty for some formats, e.g. BMP).
-std::string formatName(const QImageReader &reader)
-{
-    const QByteArray fmt = reader.format();
-    if (!fmt.isEmpty())
-        return QString::fromLatin1(fmt).toUpper().toStdString();
-    const QString ext = QFileInfo(reader.fileName()).suffix().toLower();
-    if (ext == "jpg" || ext == "jpeg")
-        return "JPEG";
-    if (ext == "png")
-        return "PNG";
-    if (ext == "bmp")
-        return "BMP";
-    if (ext == "tif" || ext == "tiff")
-        return "TIFF";
-    if (!ext.isEmpty())
-        return ext.toUpper().toStdString();
-    return std::string();
-}
-
 // Populate the M6 metadata fields from a decoded QImage + its reader. Any
 // field that cannot be determined is left at its default. Never throws.
-void fillMetadata(const QImageReader &reader, QImage::Format sourceFormat, const QImage &img,
-                  mviewer::domain::ImageMetadata &meta)
-{
-    meta.width = img.width();
-    meta.height = img.height();
-
-    meta.orientation = orientationFromTransform(reader.transformation());
-    mviewer::core::qtmetadata::applyReaderRasterMetadata(sourceFormat, img, meta);
-
-    meta.format = formatName(reader);
-}
+// (Defined in QtDecoder_meta.cpp.)
 
 // F2 (M22): claim every format Qt can actually decode, derived from
 // touching the frozen DecoderRegistry. The historical 6 are guaranteed present.
@@ -456,6 +473,19 @@ QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetad
     if (!sixteen)
         reader.setAutoTransform(true);
     noteFullImageRead();
+    // Full-resolution JPEG fast path (review P1-05). Same contract as the LOD
+    // path: baseline 8-bit RGB / greyscale JPEGs only; a null return means Qt.
+    if (!sixteen && mviewer::core::detail::hasTurboJpeg() && isJpegPath(path))
+    {
+        const QSize full = mvcore::readerRasterSize(reader);
+        const ImageData fast = jpegFastTail(path, 0, reader, full, sourceFormat, outMeta);
+        if (!fast.isNull())
+        {
+            if (outMeta.filePath.empty())
+                outMeta.filePath = path;
+            return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(fast);
+        }
+    }
     QImage img = reader.read();
     if (img.isNull())
     {
@@ -489,7 +519,7 @@ QtDecoder::decodeFullResult(const std::string &path, mviewer::domain::ImageMetad
         publishRaw16(path, img, orientation);
         qt_imageTransform(img, reader.transformation());
     }
-    fillMetadata(reader, sourceFormat, img, outMeta);
+    mviewer::core::detail::decoderFillMetadata(reader, sourceFormat, img, outMeta);
     return mviewer::domain::Result<ImageData, mviewer::domain::DecodeError>::ok(toImageData(img));
 }
 
@@ -525,67 +555,6 @@ bool QtDecoder::canProbe(const std::string &path) const
 {
     return canDecode(path);
 }
-
-bool QtDecoder::probeMetadata(const std::string &path, mviewer::domain::ImageMetadata &meta) const
-{
-    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-    reader.setAutoTransform(true);
-    const QSize full = mvcore::readerRasterSize(reader);
-    if (!full.isValid() || full.isEmpty())
-        return false;
-    const QFileInfo info(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-    if (meta.filePath.empty())
-        meta.filePath = path;
-    meta.fileName = info.fileName().toUtf8().toStdString();
-    meta.fileSize = info.size();
-    meta.modifiedEpochSec = info.lastModified().toSecsSinceEpoch();
-    meta.width = full.width();
-    meta.height = full.height();
-    // Report the DISPLAYED geometry (EXIF applied), matching the decodeFull /
-    // decodeLod metadata semantics.
-    const auto t = reader.transformation();
-    if (transformSwapsDimensions(t))
-        std::swap(meta.width, meta.height);
-    meta.orientation = orientationFromTransform(t);
-    meta.format = formatName(reader);
-
-    // Header-only probe: never 1x1-decode (that still walks the full JPEG/PNG
-    // decodeLod/decodeFull via fillMetadata.
-    const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
-    if (sourceFormat != QImage::Format_Invalid)
-    {
-        const QImage probe(1, 1, sourceFormat);
-        meta.channels = mviewer::core::qtmetadata::channelsForFormat(sourceFormat, probe);
-        meta.bitDepth = mviewer::core::qtmetadata::bitsPerChannel(sourceFormat, meta.channels);
-    }
-    const QString ext = info.suffix().toLower();
-    if (ext == "jpg" || ext == "jpeg" || ext == "jpe")
-    {
-        const std::vector<uint8_t> icc = mviewer::core::MetadataReader::extractJpegIccProfile(path);
-        if (!icc.empty())
-        {
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-            const QByteArray bytes(reinterpret_cast<const char *>(icc.data()),
-                                   static_cast<qsizetype>(icc.size()));
-            mviewer::core::qtmetadata::applyIccProfileBytes(bytes, meta);
-        }
-        if (meta.channels == 0)
-            meta.channels = 3;
-        if (meta.bitDepth == 0)
-            meta.bitDepth = 8;
-    }
-    return true;
-}
-
-bool QtDecoder::hasBoundedPngLod()
-{
-#if defined(MVIEWER_HAS_PNG_LOD)
-    return true;
-#else
-    return false;
-#endif
-}
-
 bool QtDecoder::canNativeLod(const std::string &path) const
 {
     // Evidence-based (M47/M53): JPEG uses the decoder's reduced DCT read. TIFF
@@ -662,7 +631,7 @@ ImageData tryBoundedLod(const std::string &path, QImageReader &reader, const QSi
     if (img.isNull())
         return ImageData();
     const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
-    fillMetadata(reader, sourceFormat, img, outMeta);
+    mviewer::core::detail::decoderFillMetadata(reader, sourceFormat, img, outMeta);
     outMeta.width = full.width();
     outMeta.height = full.height();
     return toImageData(img);
@@ -710,6 +679,18 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
     }
 #endif
 
+    // JPEG fast path (review P1-05): libjpeg-turbo writes RGB24 / Greyscale8
+    // straight into ImageData with a SIMD IDCT and can emit 1/2, 1/4 and 1/8
+    // scale natively, so the LOD request costs no second rescale. Qt remains the
+    // fallback for CMYK/YCCK JPEGs, ICC-bearing files, and decode failures.
+    if (mviewer::core::detail::hasTurboJpeg() && isJpegPath(path))
+    {
+        const QImage::Format sourceFormat = mviewer::core::qtmetadata::readerImageFormat(reader);
+        const ImageData fast = jpegFastTail(path, maxEdge, reader, full, sourceFormat, outMeta);
+        if (!fast.isNull())
+            return fast;
+    }
+
     if (full.width() > maxEdge || full.height() > maxEdge)
     {
         const double ratio = static_cast<double>(maxEdge) / std::max(full.width(), full.height());
@@ -729,7 +710,7 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         return ImageData();
     const int sourceWidth = full.width();
     const int sourceHeight = full.height();
-    fillMetadata(reader, sourceFormat, img, outMeta);
+    mviewer::core::detail::decoderFillMetadata(reader, sourceFormat, img, outMeta);
     // QImageReader::read() returns the scaled image, so restore the source
     // dimensions for presentation metadata. EXIF auto-transform rotates the
     // displayed geometry and must be reflected in the reported aspect.
@@ -788,7 +769,7 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
     if (transformSwapsDimensions(transform))
         std::swap(meta.width, meta.height);
     meta.orientation = orientationFromTransform(transform);
-    meta.format = formatName(reader);
+    meta.format = mviewer::core::detail::decoderFormatName(reader);
     mviewer::core::qtmetadata::applyReaderRasterMetadata(sourceFormat, img, meta);
     return toImageData(img);
 }

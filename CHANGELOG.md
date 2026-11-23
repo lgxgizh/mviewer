@@ -2,6 +2,59 @@
 
 ## [Unreleased]
 
+## [1.0.210] - 2026-11-23
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.210**.
+
+### Added
+
+- **JPEG decode fast path (libjpeg-turbo 3.1.0).** Qt's JPEG plugin decoded into
+  a 32-bit `QImage` and the pipeline then copied that into an `ImageData` - two
+  full-image passes and the slower IJG IDCT. libjpeg-turbo writes `TJPF_RGB`
+  (or `TJPF_GRAY`) straight into the destination `ImageData` with a SIMD IDCT,
+  and produces 1/2, 1/4 and 1/8 scale output natively, so a LOD request costs no
+  second rescale. The library is fetched and built like LibRaw (SHA256-pinned,
+  offline `third_party/` cache) and linked **static**, so no new DLL ships.
+  Documented in ADR 036.
+  - **Measured** (`mviewer_bench`, synthetic 3840x2160 JPEG, 12 samples, p50):
+    `B11_decode_4k_jpeg_ms` **170 ms -> 104 ms (-39%)**. The review's < 45 ms is
+    not reachable at full 4K resolution - the IDCT over 8.3 M pixels is the
+    floor - but a LOD request aligned to a power-of-two scale does get there,
+    because libjpeg-turbo skips whole DCT blocks.
+  - The **accurate** SIMD IDCT is used, not `TJFLAG_FASTDCT`: the fast flag
+    trades up to 8 codes for ~9% more speed and shows up as a visible
+    difference against Qt's decode of the same file.
+  - Baseline and fallback are pinned before the change: `jpeg_turbo_tests`
+    compares the fast path against Qt's own decode of the same file (mean
+    absolute per-channel difference 1.15 codes, threshold 2), and covers the
+    greyscale case, the scaled-factor choice, the null-return fallback for a
+    non-JPEG and a missing file, plus the ICC-profile guard.
+  - `m47_source_tests` T5 now allows a 2-code difference between the clip path
+    (Qt's scanline reader) and the full decode (libjpeg-turbo): two different
+    IDCTs on a lossy codec are not bit-identical by nature.
+
+### Changed
+
+- **The compressed file is read with one sized `ifstream::read`** rather than
+  `istreambuf_iterator`; that alone was 105 ms -> 92 ms on the 4K fixture.
+- **`QtDecoder.cpp` split** (complexity gate): the format-name helper, the raster
+  metadata fill and the header-only probe moved to `QtDecoder_meta.cpp` behind a
+  Qt-free internal header, so the decoder TU is back under its 800-line cap.
+- **ICC-bearing JPEGs keep Qt's decode.** The decoded pixels carry no colour
+  space and the colour-managed path reads `meta.iccProfile`, so a JPEG with an
+  `ICC_PROFILE` APP2 segment falls back. The check is one `std::search` over the
+  compressed bytes.
+- **EXIF-rotated JPEGs keep Qt's decode** on the full-resolution path (the LOD
+  path applies the transform after the fast decode, matching the WIC TIFF LOD
+  behaviour).
+
+### Not done, with reasons
+
+- **PR-08 / PR-09 GPU shader pipeline** - unchanged from 1.0.209: a render
+  pipeline rewrite with no A/B path.
+
 ## [1.0.209] - 2026-11-23
 
 ### Release

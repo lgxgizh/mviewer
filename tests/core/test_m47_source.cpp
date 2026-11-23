@@ -312,6 +312,7 @@ int main(int argc, char **argv)
                 CHECK(ref.width == region.width && ref.height == region.height,
                       "T5: region dims match the reference crop");
                 bool identical = true;
+                int maxDelta = 0;
                 if (ref.width == region.width && ref.height == region.height)
                 {
                     for (int y = 0; y < region.height && identical; ++y)
@@ -322,14 +323,20 @@ int main(int argc, char **argv)
                             ref.buffer->data() + static_cast<size_t>(y) * ref.stride();
                         for (int x = 0; x < region.width; ++x)
                             for (int ch = 0; ch < 3; ++ch)
-                                if (a[x * 3 + ch] != b[x * 3 + ch])
-                                {
+                            {
+                                const int delta = std::abs(static_cast<int>(a[x * 3 + ch]) -
+                                                           static_cast<int>(b[x * 3 + ch]));
+                                maxDelta = std::max(maxDelta, delta);
+                                // Review P1-05: decodeFull now uses libjpeg-turbo while
+                                // the clip path still walks Qt's scanline reader, so the
+                                // two IDCTs differ by a code or two on a lossy codec.
+                                if (delta > 2)
                                     identical = false;
-                                    break;
-                                }
+                            }
                     }
                 }
-                CHECK(identical, "T5: clip-path region is pixel-identical to the full-decode crop");
+                CHECK(identical,
+                      "T5: clip-path region matches the full-decode crop within 2 codes");
             }
         }
     }
