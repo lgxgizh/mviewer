@@ -65,6 +65,25 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()
 
+# ── Release LTO (review P1-07): OFF by default ────────────────────────────────
+# Link-time optimisation is a real throughput win, but MSVC's /LTCG cannot link
+# the test executables against the LTO-built import library (core_tests.exe
+# fails with LNK2001 for every CompareEngine / SyncController symbol). Until the
+# test targets are given their own /LTCG or the engine moves out of the DLL
+# import lib, enabling it breaks `.\build.ps1 Test`. Opt in explicitly with
+# -DMVIEWER_ENABLE_LTO=ON on a machine that only builds the shipping targets.
+option(MVIEWER_ENABLE_LTO "Enable link-time optimisation for Release builds" OFF)
+if(MVIEWER_ENABLE_LTO AND CMAKE_BUILD_TYPE STREQUAL "Release")
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT _mviewer_ipo_supported OUTPUT _mviewer_ipo_output)
+    if(_mviewer_ipo_supported)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+        message(STATUS "LTO: Release link-time optimisation enabled")
+    else()
+        message(STATUS "LTO: not supported by this toolchain (${_mviewer_ipo_output})")
+    endif()
+endif()
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)

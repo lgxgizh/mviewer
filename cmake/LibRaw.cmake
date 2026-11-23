@@ -146,6 +146,30 @@ find_package(Threads)
 if(Threads_FOUND)
     target_link_libraries(mviewer_libraw PUBLIC Threads::Threads)
 endif()
+
+# OpenMP-parallel demosaic (review P1-06). LibRaw's demosaicers honour
+# LIBRAW_USE_OPENMP; without it the AHD/DHT paths are single-threaded and a
+# 24 MP CR2/ARW is the slowest thing in the browse flow. Opt out with
+# -DMVIEWER_LIBRAW_OPENMP=OFF (a machine without an OpenMP runtime, or one that
+# wants the CPU for TaskScheduler instead).
+option(MVIEWER_LIBRAW_OPENMP "Build LibRaw with OpenMP-parallel demosaic" ON)
+if(MVIEWER_LIBRAW_OPENMP)
+    find_package(OpenMP QUIET)
+    if(OpenMP_CXX_FOUND)
+        # LibRaw defines LIBRAW_USE_OPENMP itself for VS2010+ (libraw_types.h);
+        # defining it here as well is a C4005 macro-redefinition warning. What
+        # the pragmas need is the compiler switch, which linking the target
+        # provides (/openmp on MSVC, -fopenmp on GCC/Clang).
+        target_link_libraries(mviewer_libraw PUBLIC OpenMP::OpenMP_CXX)
+        set(MVIEWER_LIBRAW_OPENMP ON)
+        message(STATUS "LibRaw: OpenMP-parallel demosaic enabled")
+    else()
+        set(MVIEWER_LIBRAW_OPENMP OFF)
+        message(STATUS "LibRaw: no OpenMP runtime found; demosaic stays single-threaded")
+    endif()
+else()
+    set(MVIEWER_LIBRAW_OPENMP OFF)
+endif()
 if(NOT WIN32)
     target_link_libraries(mviewer_libraw PUBLIC m)
 endif()

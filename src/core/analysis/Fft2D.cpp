@@ -26,23 +26,29 @@ void fftRadix2(std::vector<Complex> &data, bool inverse)
         if (i < j)
             std::swap(data[i], data[j]);
     }
+    std::vector<Complex> twiddle;
     for (int length = 2; length <= n; length <<= 1)
     {
         const double angle =
             2.0 * 3.14159265358979323846 / static_cast<double>(length) * (inverse ? 1.0 : -1.0);
         const Complex wlen(std::cos(angle), std::sin(angle));
+        const int half = length / 2;
+        // Stage twiddles are precomputed once instead of being rebuilt by a
+        // complex multiply inside every butterfly: the inner loop becomes a
+        // table read, and the repeated w *= wlen can no longer accumulate
+        // rounding error across a stage.
+        twiddle.resize(half);
+        twiddle[0] = Complex(1.0, 0.0);
+        for (int k = 1; k < half; ++k)
+            twiddle[k] = twiddle[k - 1] * wlen;
         for (int i = 0; i < n; i += length)
-        {
-            Complex w(1.0, 0.0);
-            for (int k = 0; k < length / 2; ++k)
+            for (int k = 0; k < half; ++k)
             {
                 const Complex u = data[i + k];
-                const Complex v = data[i + k + length / 2] * w;
+                const Complex v = data[i + k + half] * twiddle[k];
                 data[i + k] = u + v;
-                data[i + k + length / 2] = u - v;
-                w *= wlen;
+                data[i + k + half] = u - v;
             }
-        }
     }
     if (inverse)
         for (Complex &c : data)
