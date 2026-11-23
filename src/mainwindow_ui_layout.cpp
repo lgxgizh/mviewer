@@ -108,7 +108,7 @@ QWidget *MainWindow::buildNavigationPanel()
     previewLayout->addWidget(previewCard, 1);
     leftWidget->addWidget(previewSection);
 
-    leftWidget->setStretchFactor(0, 0); // optional favorites
+    leftWidget->setStretchFactor(0, 0);
     leftWidget->setStretchFactor(1, 3); // folders section
     leftWidget->setStretchFactor(2, 2); // preview section
     leftWidget->setChildrenCollapsible(false);

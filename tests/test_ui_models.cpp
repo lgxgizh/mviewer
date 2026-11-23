@@ -87,7 +87,6 @@ static void checkToolbarIcons()
         "forward",
         "up",
         "refresh",
-        "favorite",
         "compare",
         "analysis",
         "histogram",

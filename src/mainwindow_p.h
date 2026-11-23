@@ -8,7 +8,7 @@
 //   mainwindow_ui_menus.cpp               menu bar construction                362
 //   mainwindow_ui_connections.cpp         signal wiring + slot bodies          689
 //   mainwindow_commands.cpp               command registration + key dispatch  619
-//   mainwindow_navigation.cpp             history / recent / favorites / nav   383
+//   mainwindow_navigation.cpp             history / recent / nav   383
 //   mainwindow_session.cpp                workspace / project save/open        628
 //   mainwindow_session_recovery.cpp       session restore / recovery / close   365
 //   mainwindow_session_notifications.cpp  update / crash notifications         113

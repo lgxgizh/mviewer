@@ -1,4 +1,4 @@
-// MainWindow navigation: history, recent items, favorites, breadcrumb (M20 P0#1).
+// MainWindow navigation: history, recent items, breadcrumb (M20 P0#1).
 #include "directorytree.h"
 #include "mainwindow_p.h"
 
@@ -71,7 +71,7 @@ void MainWindow::updateNavigationActions()
     const bool hasLeftDirectory = !currentDir().isEmpty();
     const bool hasActiveDirectory = !navDir.isEmpty();
     // Sidebar refresh stays available while either pane has a folder. Open
-    // and favorite follow the pane the toolbar is acting on.
+    // and back/forward follow the pane the toolbar is acting on.
     const bool hasDirectory = hasLeftDirectory || hasActiveDirectory;
     if (m_actHistoryBack)
         m_actHistoryBack->setEnabled(m_historyIndex > 0);

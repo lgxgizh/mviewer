@@ -7,7 +7,7 @@ namespace mviewer::core
 
 // Settings import/export helpers.
 //
-// Export dumps the entire QSettings tree (geometry, view modes, favorites,
+// Export dumps the entire QSettings tree (geometry, view modes, panel state,
 // recent dirs, etc.) into a portable JSON file. Import restores it.
 // Both functions are pure I/O — they do not touch the live UI; the caller
 // is responsible for reloading state after a successful import.

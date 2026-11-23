@@ -5,7 +5,7 @@
 #include <QStringList>
 
 // M19: single source of truth for the active directory and directory-level
-// product state (favorites / recent folders).
+// product state (recent folders).
 //
 // Before this class, the current directory was mirrored independently by
 // MainWindow::m_currentDir, DirectoryTree::m_currentPath and

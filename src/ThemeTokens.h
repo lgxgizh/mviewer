@@ -19,7 +19,7 @@ struct ThemeTokens
     QString bg1;     // window chrome (toolbar, menu, dialog)
     QString bg2;     // controls
     QString bg3;     // raised / pressed control
-    QString sidebar; // folder tree and favorites
+    QString sidebar; // folder tree and its panels
     QString border;  // visible edge (inputs)
     QString separator;
     QString hover;
