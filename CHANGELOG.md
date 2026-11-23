@@ -39,6 +39,11 @@
 
 - **The compressed file is read with one sized `ifstream::read`** rather than
   `istreambuf_iterator`; that alone was 105 ms -> 92 ms on the 4K fixture.
+- **The scale factor is chosen only when libjpeg-turbo's power-of-two output
+  lands within 1/8 of the request**; otherwise Qt does its exact rescale. That
+  keeps a zoom from ever landing on a coarser raster (`m47_compare_lod_tests`
+  C3) and the preview panel inside `kPreviewMaxEdge` (`m27_lifetime_tests`).
+  Full-resolution requests always take 1/1, so they are always fast.
 - **`QtDecoder.cpp` split** (complexity gate): the format-name helper, the raster
   metadata fill and the header-only probe moved to `QtDecoder_meta.cpp` behind a
   Qt-free internal header, so the decoder TU is back under its 800-line cap.
@@ -46,9 +51,10 @@
   space and the colour-managed path reads `meta.iccProfile`, so a JPEG with an
   `ICC_PROFILE` APP2 segment falls back. The check is one `std::search` over the
   compressed bytes.
-- **EXIF-rotated JPEGs keep Qt's decode** on the full-resolution path (the LOD
-  path applies the transform after the fast decode, matching the WIC TIFF LOD
-  behaviour).
+- **EXIF-rotated JPEGs keep Qt's decode on both paths.** libjpeg-turbo scales
+  the stored raster while Qt reports the displayed geometry, so a rotated source
+  would get its scale factor from the wrong axes; the m27 preview fixtures pin
+  the exact preview edge and caught it.
 
 ### Not done, with reasons
 

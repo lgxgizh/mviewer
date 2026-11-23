@@ -157,33 +157,27 @@ static QImage applyQtTransformation(const QImage &img, QImageIOHandler::Transfor
     return out;
 }
 
-// Shared tail of the JPEG fast path (review P1-05): libjpeg-turbo decode, EXIF
-// transform, then the same metadata the Qt path reports. `maxEdge` uses the Qt
-// contract (the largest output that fits); `maxEdge <= 0` means full size.
+// Shared tail of the JPEG fast path (review P1-05): libjpeg-turbo decode, then
+// the same metadata the Qt path reports. `maxEdge <= 0` means full size.
 // Returns null when the fast path does not apply, so the caller falls back.
 ImageData jpegFastTail(const std::string &path, int maxEdge, QImageReader &reader,
                        const QSize &full, QImage::Format sourceFormat,
                        mviewer::domain::ImageMetadata &outMeta)
 {
-    const int sourceEdge = std::max(full.width(), full.height());
-    // `maxEdge <= 0` means full size; otherwise clamp to the source edge so a
-    // caller asking for more than the image gets the whole thing.
-    const int requestedEdge = maxEdge > 0 ? std::min(sourceEdge, maxEdge) : sourceEdge;
-    ImageData fast = mviewer::core::detail::decodeJpegTurbo(path, requestedEdge);
-    if (fast.isNull())
-        return {};
+    // The helper decides its own scale factor from the STORED raster it reads
+    // out of the header: `full` is the DISPLAYED geometry (autoTransform may
+    // have swapped the axes), so it must not drive the scaling choice.
+    // An EXIF-rotated JPEG keeps Qt's decode. libjpeg-turbo scales the STORED
+    // raster while `full` is the DISPLAYED geometry, so a rotated source would
+    // get its scale factor from the wrong axes - and the transform itself needs
+    // Qt's image operators anyway. Falls back on the m27 preview fixtures,
+    // which pin the exact preview edge.
     const auto transform = reader.transformation();
     if (transform != QImageIOHandler::TransformationNone)
-    {
-        // The transform needs Qt's image operators, so this one case keeps the
-        // round trip. Rotated JPEGs are rare.
-        QImage view = mvcore::toQImageRef(fast);
-        if (view.isNull())
-            view = mvcore::toQImage(fast);
-        fast = toImageData(applyQtTransformation(view, transform));
-        if (fast.isNull())
-            return {};
-    }
+        return {};
+    ImageData fast = mviewer::core::detail::decodeJpegTurbo(path, maxEdge);
+    if (fast.isNull())
+        return {};
     const QImage probe(
         1, 1, sourceFormat == QImage::Format_Invalid ? QImage::Format_RGB888 : sourceFormat);
     mviewer::core::detail::decoderFillMetadata(reader, sourceFormat, probe, outMeta);

@@ -34,17 +34,16 @@ bool hasEmbeddedIccProfile(const std::vector<unsigned char> &jpeg)
 }
 } // namespace
 
-// The SMALLEST built-in factor whose output still COVERS `maxEdge`, accepted
-// only when it does not overshoot by more than 50%.
+// The built-in factor whose output edge is CLOSEST to `maxEdge`, accepted only
+// when it lands within 1/8 of the request.
 //
-// Two constraints meet here. The fast path may never hand the viewer a coarser
-// raster than it asked for - a zoom that re-materialized to a smaller image
-// would visibly degrade (`m47_compare_lod_tests` C3 caught that). But
-// libjpeg-turbo can only scale by powers of two, so for a small request on a
-// huge source even 1/8 lands far above the target; accepting that would change
-// the reported LOD geometry (`m47_source_tests` T2 expects an exact 256x178).
-// When neither constraint holds, `ok` is cleared and Qt performs its exact
-// rescale - the fast path simply does not apply to that request.
+// libjpeg-turbo scales by powers of two, so its output can only coincide with
+// an arbitrary request by luck. Accepting a wide miss either hands the viewer a
+// coarser raster than it asked for (a zoom that re-materialized smaller visibly
+// degrades - `m47_compare_lod_tests` C3) or a larger one than the caller's cap
+// allows (`PreviewPanel::kPreviewMaxEdge`, pinned by `m27_lifetime_tests`). When
+// no factor is close enough, `ok` is cleared and Qt performs its exact rescale,
+// so the fast path simply does not apply to that request.
 tjscalingfactor pickScaling(int srcW, int srcH, int maxEdge, bool &ok)
 {
     ok = true;
@@ -55,22 +54,23 @@ tjscalingfactor pickScaling(int srcW, int srcH, int maxEdge, bool &ok)
     if (list == nullptr || factors <= 0)
         return tjscalingfactor{1, 1};
     tjscalingfactor best = list[0];
-    long bestEdge = std::numeric_limits<long>::max();
+    long bestDelta = std::numeric_limits<long>::max();
     for (int i = 0; i < factors; ++i)
     {
         const int w = TJSCALED(srcW, list[i]);
         const int h = TJSCALED(srcH, list[i]);
         if (w <= 0 || h <= 0)
             continue;
-        const long edge = std::max(w, h);
-        if (edge >= maxEdge && edge < bestEdge)
+        const long delta =
+            std::labs(static_cast<long>(std::max(w, h)) - static_cast<long>(maxEdge));
+        if (delta < bestDelta)
         {
-            bestEdge = edge;
+            bestDelta = delta;
             best = list[i];
         }
     }
-    if (bestEdge == std::numeric_limits<long>::max() ||
-        bestEdge * 2 > static_cast<long>(maxEdge) * 3)
+    // Within 1/8 of the request (in either direction).
+    if (bestDelta * 8 > static_cast<long>(maxEdge))
         ok = false;
     return best;
 }
@@ -130,6 +130,11 @@ ImageData decodeJpegTurbo(const std::string &path, int maxEdge)
         return {};
     }
 
+    // Scale against the STORED raster: libjpeg-turbo scales the buffer it reads,
+    // before any EXIF rotation is applied.
+    const int sourceEdge = std::max(srcW, srcH);
+    const int requestedEdge = maxEdge > 0 ? std::min(sourceEdge, maxEdge) : sourceEdge;
+
     // Only the two colour spaces the pipeline can hand to the display path
     // directly. CMYK / YCCK and anything exotic stay on Qt, which converts them.
     int pixelFormat = TJPF_RGB;
@@ -147,7 +152,7 @@ ImageData decodeJpegTurbo(const std::string &path, int maxEdge)
     }
 
     bool scalingOk = true;
-    const tjscalingfactor factor = pickScaling(srcW, srcH, maxEdge, scalingOk);
+    const tjscalingfactor factor = pickScaling(srcW, srcH, requestedEdge, scalingOk);
     if (!scalingOk)
     {
         tjDestroy(handle);

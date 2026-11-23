@@ -43,18 +43,20 @@ Measured on this machine with `mviewer_bench` (synthetic 3840x2160 JPEG,
    read `meta.iccProfile`, so a JPEG containing an `ICC_PROFILE` APP2 segment
    falls back. The check is one `std::search` over the compressed bytes; a false
    positive only costs the fast path.
-5. **EXIF-rotated JPEGs keep Qt's decode** in `decodeFullResult` too. The LOD
-   path does apply the transform after the fast decode (rare enough that the
-   round trip is irrelevant), matching the WIC TIFF LOD behaviour.
-6. **Scaled decode picks the smallest built-in factor that still COVERS
-   `maxEdge`, accepted only when it does not overshoot by more than 50%.**
-   Two constraints meet here: the fast path must never hand the viewer a
-   coarser raster than it asked for (a zoom that re-materialized to a smaller
-   image visibly degrades - `m47_compare_lod_tests` C3 caught that), but
-   libjpeg-turbo can only scale by powers of two, so for a small request on a
-   huge source even 1/8 lands far above the target and would change the
-   reported LOD geometry (`m47_source_tests` T2 expects an exact 256x178).
-   When neither holds, Qt performs its exact rescale.
+5. **EXIF-rotated JPEGs keep Qt's decode on both paths.** libjpeg-turbo scales
+   the STORED raster while `QImageReader::size()` reports the DISPLAYED
+   geometry, so a rotated source would get its scale factor from the wrong axes;
+   the transform itself needs Qt's image operators anyway. The m27 preview
+   fixtures pin the exact preview edge, and they caught this.
+6. **Scaled decode picks the built-in factor whose output edge is CLOSEST to
+   `maxEdge`, accepted only within 1/8 of the request.** libjpeg-turbo scales by
+   powers of two, so it can coincide with an arbitrary request only by luck.
+   Accepting a wide miss either hands the viewer a coarser raster than it asked
+   for (a zoom that re-materialized smaller visibly degrades -
+   `m47_compare_lod_tests` C3) or a larger one than the caller's cap allows
+   (`PreviewPanel::kPreviewMaxEdge`, pinned by `m27_lifetime_tests`). When no
+   factor is close enough, Qt performs its exact rescale; full-resolution
+   requests always take 1/1 and are therefore always fast.
 7. **The compressed file is read with one sized `ifstream::read`**, not
    `istreambuf_iterator`.
 
