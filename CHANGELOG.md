@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [1.0.209] - 2026-11-23
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.209**.
+
+### Changed
+
+- **PR-10 concurrency consolidation.** The two fire-and-forget tasks that used
+  `QThreadPool::globalInstance()` - the Python script bridge's worker and the
+  internal-trash prune after a delete - now go through `TaskScheduler`'s
+  background pool. The global pool is unbounded and carries no metrics, so a
+  burst of file operations could spawn dozens of threads with nobody watching;
+  the scheduler's pool is bounded, instrumented and shares its budget with the
+  decode and thumbnail pools. `QtConcurrent::run` call sites are left alone:
+  they already use `QThreadPool`'s default pool with its own cap, and the
+  dedicated workers (`ThumbnailCache`'s bootstrap/invalidation threads,
+  `RawDecoder_libraw`'s session thread, `YuvMetrics`' frame pipeline) are
+  purpose-built pipelines rather than scattered pools.
+
+### Not done, with reasons
+
+- **PR-05 JPEG fast path.** The remaining win needs libjpeg-turbo (scaled IDCT)
+  or a new WIC JPEG entry point that writes straight into `ImageData`. Both
+  change the most common decode path in the product, so they need their own
+  measurement pass against `perf_baseline.json` rather than riding along with
+  unrelated work.
+- **PR-08 / PR-09 GPU shader pipeline.** The unified ImageViewer fragment
+  shader and the GPU-composited CompareWorkspace canvas are render-pipeline
+  rewrites; `MVIEWER_GPU=0` keeps the verified CPU path as the default, so
+  landing them blind would risk the compare canvas without a way to A/B it.
+
 ## [1.0.208] - 2026-11-23
 
 ### Release
