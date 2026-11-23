@@ -184,6 +184,13 @@ ScenarioResult scenarioRenderFps();
 // dashboard so drift is visible before it becomes a leak bug.
 ScenarioResult scenarioWorkflowSoak(const Corpus &corpus);
 
+// B20: compare-canvas composite frame cost (p50/p95/p99 ms). Proxies the CPU
+// QPainter work CompareWorkspace does on every split / swipe / overlay / diff
+// drag - the surface PR-09 would move into a fragment shader. Report-only
+// (machine dependent): it is the before/after number for that change, not a
+// gate.
+ScenarioResult scenarioCompareComposite();
+
 // SCALE: corpus scaling tiers (100 / 1000 / 5000 images). Decodes `tierN` images
 // (capped by corpus size) and reports decode throughput (fps) plus peak cache
 // memory and GPU dedicated memory. Report-only; surfaces memory/GPU/FPS at scale.

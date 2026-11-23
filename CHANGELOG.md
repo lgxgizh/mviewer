@@ -2,6 +2,37 @@
 
 ## [Unreleased]
 
+## [1.0.211] - 2026-11-24
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.211**.
+
+### Changed
+
+- **PR-08 (first half): an active overlay no longer drags the whole tile layer
+  back onto the CPU.** `drawGpuTiles()` / `drawCpuTiles()` used to require
+  `m_overlayMode == None`, so turning on FocusPeaking / FalseColor / Zebra made
+  every visible tile go through `QPainter`. The overlay derivation already
+  produces ordinary per-tile `ImageData` (`scheduleOverlayTiles` swaps it into
+  the ready tiles), so those tiles upload to the GPU exactly like the plain
+  ones; the gate was unnecessary.
+- **New report-only benchmark `B20` (`compare_composite_frame_ms`)** — the
+  baseline for PR-09: a two-pane split/overlay composite of two 4096x3072
+  sources at 1920x1080 costs **149 ms per frame** on this machine through the
+  CPU `QPainter` canvas that PR-09 would move into a fragment shader.
+
+### Not done, with reasons
+
+- **PR-08 (second half) / PR-09**: the remaining piece is replacing
+  `QOpenGLTextureBlitter` with a custom fragment shader (exposure / gamma / 3D
+  LUT / overlay) and the compare canvas with a `QOpenGLWidget` compositor.
+  Measured first: B20 says the compare composite is 149 ms of the 16 ms frame
+  budget, so the payoff is real, but the change touches the default render path
+  of every image and has no A/B switch - `MVIEWER_GPU=0` still exists, yet the
+  CPU fallback would then differ from the new shader by construction. It needs
+  its own round with golden-frame capture, not a ride-along.
+
 ## [1.0.210] - 2026-11-23
 
 ### Release

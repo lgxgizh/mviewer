@@ -353,6 +353,8 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     // B16: render throughput (fps), report-only (machine dependent).
     items.push_back({"B16", [&]() { return mviewer::bench::scenarioRenderFps(); }});
     items.push_back({"B17", [&]() { return mviewer::bench::scenarioWorkflowSoak(corpus); }});
+    // B20: compare-canvas composite frame cost, report-only (PR-09 baseline).
+    items.push_back({"B20", [&]() { return mviewer::bench::scenarioCompareComposite(); }});
     // B18/B19 length comes from scheduleE2eSwitch (skip / smoke / short / full).
     if (e2e.warm)
         items.push_back(

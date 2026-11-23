@@ -497,8 +497,11 @@ void drawPlacedCpuTile(QPainter &painter, const QImage &image,
 void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                                const Viewport &tileView)
 {
-    const bool useGpu =
-        GpuTileUploader::enabled() && m_blitterReady && m_overlayMode == mviewer::OverlayMode::None;
+    // Review P2-08: the overlay derivation produces ordinary per-tile ImageData,
+    // so there is no reason to drop the whole tile layer back to the CPU
+    // compositor when an overlay mode is active. The GL path uploads those
+    // derived tiles exactly like the plain ones.
+    const bool useGpu = GpuTileUploader::enabled() && m_blitterReady;
     if (!useGpu)
         return;
     const QRect viewportRect(0, 0, width(), height());
@@ -535,8 +538,7 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
 void ImageViewer::drawCpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                                const Viewport &tileView)
 {
-    const bool gpuActive =
-        GpuTileUploader::enabled() && m_blitterReady && m_overlayMode == mviewer::OverlayMode::None;
+    const bool gpuActive = GpuTileUploader::enabled() && m_blitterReady;
     for (const auto &rt : ready)
     {
         if (rt.data.isNull())

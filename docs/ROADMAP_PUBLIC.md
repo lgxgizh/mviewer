@@ -4,15 +4,16 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.210**
+## Where we are now — **Beta / 1.0.211**
 
-MViewer remains in **Beta**; the current release is **`v1.0.210`**
-(2026-11-23, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-JPEG now decodes through libjpeg-turbo straight into the pipeline buffer: the 4K
-JPEG benchmark went from 170 ms to 104 ms (-39%), with the correctness and
-fallback behaviour pinned by a dedicated test. The GPU shader pipeline
-(PR-08/09) is still open - it is a render-path rewrite with no A/B route.
-Offscreen CI is regression evidence, not proof of universal smoothness.
+MViewer remains in **Beta**; the current release is **`v1.0.211`**
+(2026-11-24, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+Turning on an analysis overlay no longer pushes the whole tile layer back onto
+the CPU compositor. The remaining review item is the GPU shader pipeline: the
+new B20 benchmark shows a two-pane compare composite costs 149 ms per frame on
+the CPU canvas, which is what that work has to beat - and it changes the default
+render path of every image, so it gets its own round. Offscreen CI is regression
+evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -67,7 +68,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.210** (current) | libjpeg-turbo JPEG decode fast path (-46% on 4K) | 🔵 Beta |
+| **1.0.211** (current) | Overlay keeps the GPU tile path; PR-09 baseline (B20) | 🔵 Beta |
+| **1.0.210** | libjpeg-turbo JPEG decode fast path (-39% on 4K) | ✅ Previous patch |
 | **1.0.209** | Global thread pool consolidated into TaskScheduler | ✅ Previous patch |
 | **1.0.208** | P0 safety + P1 hot loops (LUT, GPU tile version, OpenMP) | ✅ Previous patch |
 | **1.0.207** | Toolbar un-collapsed; favorites removed; changelog English | ✅ Previous patch |
