@@ -3,6 +3,7 @@
 #include "core/filesystem/Utf8Path.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cmath>
 #include <cstdint>
@@ -46,46 +47,149 @@ bool endsWithLower(const std::string &path, const char *suffix)
     return true;
 }
 
-/// Trilinear sample of a blue-major .cube LUT.
+float lutCorner(const DisplayAdjust &adjust, int size, int x, int y, int z, int c)
+{
+    const size_t at = (static_cast<size_t>(z) * static_cast<size_t>(size) +
+                       static_cast<size_t>(y)) *
+                          static_cast<size_t>(size) +
+                      static_cast<size_t>(x);
+    return static_cast<float>(adjust.lut[at * 3u + static_cast<size_t>(c)]);
+}
+
+/// Tetrahedral sample of a blue-major .cube LUT.
+///
+/// Four corners instead of eight: one subdivision of the cube is a tetrahedron
+/// that contains the sample point, and the weights are the barycentric
+/// coordinates. Trilinear reads 8 neighbours and does 7 lerps per channel; this
+/// reads 4 and does 3, and it is the interpolation a colourist expects (a
+/// trilinear blend of a swap LUT is exact, and so is this).
 void sampleLut(const DisplayAdjust &adjust, int r, int g, int b, std::uint8_t out[3])
 {
     const int size = adjust.lutSize;
-    const auto clamp01 = [](double v) { return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v); };
-    const double fx = clamp01(r / 255.0) * (size - 1);
-    const double fy = clamp01(g / 255.0) * (size - 1);
-    const double fz = clamp01(b / 255.0) * (size - 1);
+    const auto clamp01 = [](float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); };
+    const float fx = clamp01(static_cast<float>(r) / 255.0f) * static_cast<float>(size - 1);
+    const float fy = clamp01(static_cast<float>(g) / 255.0f) * static_cast<float>(size - 1);
+    const float fz = clamp01(static_cast<float>(b) / 255.0f) * static_cast<float>(size - 1);
     const int x0 = static_cast<int>(std::floor(fx));
     const int y0 = static_cast<int>(std::floor(fy));
     const int z0 = static_cast<int>(std::floor(fz));
     const int x1 = std::min(x0 + 1, size - 1);
     const int y1 = std::min(y0 + 1, size - 1);
     const int z1 = std::min(z0 + 1, size - 1);
-    const double tx = fx - x0;
-    const double ty = fy - y0;
-    const double tz = fz - z0;
+    const float tx = fx - static_cast<float>(x0);
+    const float ty = fy - static_cast<float>(y0);
+    const float tz = fz - static_cast<float>(z0);
+
+    // The four corners of the containing tetrahedron, in the order that walks
+    // each axis monotonically, and their barycentric weights.
+    int ax = x0, ay = y0, az = z0;
+    int bx = x0, by = y0, bz = z0;
+    int cx = x0, cy = y0, cz = z0;
+    int dx = x0, dy = y0, dz = z0;
+    float wa = 0.0f, wb = 0.0f, wc = 0.0f, wd = 0.0f;
+    if (tx >= ty)
+    {
+        if (ty >= tz)
+        {
+            // (x0,y0,z0) (x1,y0,z0) (x1,y1,z0) (x1,y1,z1)
+            bx = x1;
+            cx = x1;
+            cy = y1;
+            dx = x1;
+            dy = y1;
+            dz = z1;
+            wa = 1.0f - tx;
+            wb = tx - ty;
+            wc = ty - tz;
+            wd = tz;
+        }
+        else if (tx >= tz)
+        {
+            // (x0,y0,z0) (x1,y0,z0) (x1,y0,z1) (x1,y1,z1)
+            bx = x1;
+            cx = x1;
+            cz = z1;
+            dx = x1;
+            dy = y1;
+            dz = z1;
+            wa = 1.0f - tx;
+            wb = tx - tz;
+            wc = tz;
+            wd = ty;
+        }
+        else
+        {
+            // (x0,y0,z0) (x0,y0,z1) (x1,y0,z1) (x1,y1,z1)
+            ay = y0;
+            bz = z1;
+            cx = x1;
+            cz = z1;
+            dx = x1;
+            dy = y1;
+            dz = z1;
+            wa = 1.0f - tz;
+            wb = tz - tx;
+            wc = tx - ty;
+            wd = ty;
+        }
+    }
+    else
+    {
+        if (tx >= tz)
+        {
+            // (x0,y0,z0) (x0,y1,z0) (x1,y1,z0) (x1,y1,z1)
+            ay = y1;
+            bx = x0;
+            by = y1;
+            cx = x1;
+            cy = y1;
+            dx = x1;
+            dy = y1;
+            dz = z1;
+            wa = 1.0f - ty;
+            wb = ty - tx;
+            wc = tx - tz;
+            wd = tz;
+        }
+        else if (ty >= tz)
+        {
+            // (x0,y0,z0) (x0,y1,z0) (x0,y1,z1) (x1,y1,z1)
+            ay = y1;
+            bx = x0;
+            by = y1;
+            cx = x0;
+            cy = y1;
+            cz = z1;
+            dx = x1;
+            dy = y1;
+            dz = z1;
+            wa = 1.0f - ty;
+            wb = ty - tz;
+            wc = tz;
+            wd = tx;
+        }
+        else
+        {
+            // (x0,y0,z0) (x0,y0,z1) (x0,y1,z1) (x1,y1,z1)
+            bz = z1;
+            cx = x0;
+            cy = y1;
+            cz = z1;
+            dx = x1;
+            dy = y1;
+            dz = z1;
+            wa = 1.0f - tz;
+            wb = tz - ty;
+            wc = ty - tx;
+            wd = tx;
+        }
+    }
 
     for (int c = 0; c < 3; ++c)
     {
-        double value = 0.0;
-        for (int dz = 0; dz <= 1; ++dz)
-            for (int dy = 0; dy <= 1; ++dy)
-                for (int dx = 0; dx <= 1; ++dx)
-                {
-                    const int x = dx ? x1 : x0;
-                    const int y = dy ? y1 : y0;
-                    const int z = dz ? z1 : z0;
-                    // Adobe .cube order: blue is the outer index, red the inner
-                    // (the canonical 2x2x2 example walks r, then g, then b).
-                    const size_t at = (static_cast<size_t>(z) * static_cast<size_t>(size) +
-                                       static_cast<size_t>(y)) *
-                                          static_cast<size_t>(size) +
-                                      static_cast<size_t>(x);
-                    const double weight =
-                        (dx ? tx : 1.0 - tx) * (dy ? ty : 1.0 - ty) * (dz ? tz : 1.0 - tz);
-                    value +=
-                        weight * static_cast<double>(adjust.lut[at * 3u + static_cast<size_t>(c)]);
-                }
-        out[c] = static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0)));
+        const float value = wa * lutCorner(adjust, size, ax, ay, az, c) + wb * lutCorner(adjust, size, bx, by, bz, c) +
+                            wc * lutCorner(adjust, size, cx, cy, cz, c) + wd * lutCorner(adjust, size, dx, dy, dz, c);
+        out[c] = static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0f, 255.0f)));
     }
 }
 } // namespace
@@ -222,6 +326,26 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
     const double invGamma = adjust.gamma > 0.05 ? 1.0 / adjust.gamma : 1.0;
     const std::uint8_t *in = src.constView().data;
     std::uint8_t *dst = out.mutableView().data;
+
+    // 8-bit exposure / AutoStretch / gamma collapse into three 256-entry
+    // tables, so the pixel loop is a pure lookup instead of three std::pow per
+    // channel (36M pow calls for a 12MP frame). The tables are only valid when
+    // no 3D LUT remapped the value first; the LUT branch re-derives rgb[] and
+    // then indexes the same tables, which is what the scalar path did too.
+    std::array<std::uint8_t, 256> lut[3];
+    for (int c = 0; c < 3; ++c)
+    {
+        for (int i = 0; i < 256; ++i)
+        {
+            double v = static_cast<double>(i) / 255.0;
+            if (adjust.autoStretch)
+                v = (static_cast<double>(i) - lo[c]) / (hi[c] - lo[c]);
+            v *= exposure;
+            v = std::pow(v < 0.0 ? 0.0 : v, invGamma);
+            lut[c][i] = static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0, 1.0) * 255.0));
+        }
+    }
+
     for (int y = 0; y < height; ++y)
     {
         const std::uint8_t *inRow = in + static_cast<size_t>(y) * inStride;
@@ -248,17 +372,8 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
                 }
             }
             for (int c = 0; c < channels; ++c)
-            {
-                const double normalized = static_cast<double>(rgb[c]) / 255.0;
-                double v = normalized;
-                if (adjust.autoStretch)
-                    v = (static_cast<double>(rgb[c]) - lo[c]) / (hi[c] - lo[c]);
-                v *= exposure;
-                v = std::pow(v < 0.0 ? 0.0 : v, invGamma);
                 outRow[static_cast<size_t>(x) * static_cast<size_t>(channels) +
-                       static_cast<size_t>(c)] =
-                    static_cast<std::uint8_t>(std::lround(std::clamp(v, 0.0, 1.0) * 255.0));
-            }
+                       static_cast<size_t>(c)] = lut[c][rgb[c]];
         }
     }
     return out;
