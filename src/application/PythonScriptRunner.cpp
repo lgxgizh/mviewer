@@ -1,13 +1,15 @@
 #include "application/PythonScriptRunner.h"
 
+#include "core/scheduler/TaskScheduler.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QProcess>
 #include <QPointer>
+#include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QThread>
@@ -197,8 +199,11 @@ void PythonScriptRunner::runAsync(const QString &scriptPath, const QJsonObject &
     // dialog). A raw pointer captured in the queued lambda is then a
     // use-after-free, and QMetaObject::invokeMethod would still target it.
     const QPointer<QObject> guard(context);
-    QThreadPool::globalInstance()->start(
-        [scriptPath, request, guard, delivered, timeoutMs]()
+    // Routed through TaskScheduler rather than QThreadPool::globalInstance():
+    // one bounded, instrumented pool instead of an unbounded global one.
+    ::TaskScheduler::instance().submit(
+        ::TaskScheduler::Priority::Background,
+        [scriptPath, request, guard, delivered, timeoutMs](const ::TaskScheduler::TaskContext &)
         {
             if (guard.isNull())
                 return; // the context is gone; nobody is listening
@@ -211,7 +216,8 @@ void PythonScriptRunner::runAsync(const QString &scriptPath, const QJsonObject &
             // die between the check above and the queued delivery.
             QMetaObject::invokeMethod(
                 guard.data(),
-                [guard, delivered, result, errorCopy]() {
+                [guard, delivered, result, errorCopy]()
+                {
                     if (guard.isNull())
                         return;
                     (*delivered)(result, errorCopy);

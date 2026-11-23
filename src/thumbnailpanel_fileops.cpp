@@ -1,6 +1,7 @@
 // ThumbnailPanel file operations: rename, trash, copy/move, batch export, context menu (M20 P0#3).
 #include "thumbnailpanel_p.h"
 
+#include "core/scheduler/TaskScheduler.h"
 #include "fileop_targets.h"
 #include "fileopmessages.h"
 #include "runtime_storage.h"
@@ -133,7 +134,12 @@ void pruneInternalTrash(const QString &trashDir)
 
 void pruneInternalTrashInBackground(const QString &trashDir)
 {
-    QThreadPool::globalInstance()->start([trashDir]() { pruneInternalTrash(trashDir); });
+    // TaskScheduler's background pool, not QThreadPool::globalInstance(): the
+    // global pool is unbounded and uninstrumented, so a burst of file
+    // operations could spawn dozens of threads with nobody watching.
+    ::TaskScheduler::instance().submit(::TaskScheduler::Priority::Background,
+                                       [trashDir](const ::TaskScheduler::TaskContext &)
+                                       { pruneInternalTrash(trashDir); });
 }
 
 bool moveToSystemTrash(const std::string &source, std::string &pathInTrash)
