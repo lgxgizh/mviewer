@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QProcess>
+#include <QPointer>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QThread>
@@ -74,21 +75,30 @@ bool PythonScriptRunner::isScriptPath(const QString &path)
 
 QString PythonScriptRunner::detectInterpreter()
 {
-    if (!m_interpreter.isEmpty())
-        return m_interpreter;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_interpreter.isEmpty())
+            return m_interpreter;
+    }
     const QString configured = qEnvironmentVariable("MVIEWER_PYTHON");
-    m_interpreter = firstExecutable(
+    const QString found = firstExecutable(
         {configured, QStringLiteral("python3"), QStringLiteral("python"), QStringLiteral("py")});
+    std::lock_guard<std::mutex> lock(m_mutex);
+    // Another thread may have set it while we were probing; keep the first one.
+    if (m_interpreter.isEmpty())
+        m_interpreter = found;
     return m_interpreter;
 }
 
 QString PythonScriptRunner::interpreter() const
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     return m_interpreter;
 }
 
 void PythonScriptRunner::setInterpreter(const QString &path)
 {
+    std::lock_guard<std::mutex> lock(m_mutex);
     m_interpreter = path;
 }
 
@@ -173,7 +183,6 @@ PythonScriptResult PythonScriptRunner::run(const QString &scriptPath, const QJso
 
     result.ok = response.value(QStringLiteral("ok")).toBool(true);
     result.message = response.value(QStringLiteral("message")).toString();
-    result.responsePath = responsePath;
     result.boxes = parseBoxes(response);
     if (!result.ok && result.message.isEmpty())
         result.message = QStringLiteral("the script reported failure");
@@ -184,17 +193,29 @@ void PythonScriptRunner::runAsync(const QString &scriptPath, const QJsonObject &
                                   QObject *context, ScriptCompletion completion, int timeoutMs)
 {
     auto delivered = std::make_shared<ScriptCompletion>(std::move(completion));
+    // `context` can die while the script is running (the user closes the
+    // dialog). A raw pointer captured in the queued lambda is then a
+    // use-after-free, and QMetaObject::invokeMethod would still target it.
+    const QPointer<QObject> guard(context);
     QThreadPool::globalInstance()->start(
-        [scriptPath, request, context, delivered, timeoutMs]()
+        [scriptPath, request, guard, delivered, timeoutMs]()
         {
+            if (guard.isNull())
+                return; // the context is gone; nobody is listening
             QString error;
             const PythonScriptResult result =
                 PythonScriptRunner::instance().run(scriptPath, request, error, timeoutMs);
             const QString errorCopy = error;
             // Back on the context's (UI) thread: the dialog must not be touched
-            // from the worker.
+            // from the worker. Re-check inside the lambda too — the object can
+            // die between the check above and the queued delivery.
             QMetaObject::invokeMethod(
-                context, [delivered, result, errorCopy]() { (*delivered)(result, errorCopy); },
+                guard.data(),
+                [guard, delivered, result, errorCopy]() {
+                    if (guard.isNull())
+                        return;
+                    (*delivered)(result, errorCopy);
+                },
                 Qt::QueuedConnection);
         });
 }

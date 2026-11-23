@@ -15,29 +15,13 @@
 #   QObjectPrivate::ConnectionData::cleanOrphanedConnectionsImpl
 #                               - Qt's connection bookkeeping, reached from our
 #                                  signal emissions from worker threads.
-#   CompareWorkspace::queueLoadRequests
-#                               - the QPointer guard read in the queued load
-#                                  completion races with Qt allocating the
-#                                  invocation functor on the worker thread.
-#                                  TODO: replace the QPointer guard with an
-#                                  explicitly synchronised lifetime token.
+#   QThreadPoolPrivate::enqueueTask
+#                               - Qt's thread pool deletes a dequeued QRunnable
+#                                  while the submitting thread is still inside
+#                                  enqueueTask; only reachable from the
+#                                  scheduler churn/torture stress tests.
 race:qMkTime
 race:QArrayData::reallocateUnaligned
 race:g_rw_lock_reader_lock
 race:QObjectPrivate::ConnectionData::cleanOrphanedConnectionsImpl
-# Qt's thread pool deletes a dequeued QRunnable while the submitting thread is
-# still inside QThreadPoolPrivate::enqueueTask; only reachable from the
-# scheduler churn/torture stress tests.
 race:QThreadPoolPrivate::enqueueTask
-# TODO(investigate): TSan attributes these two to our frames. They only appear
-# in the scheduler churn/torture suites; both need a proper look at the
-# context metrics and the done-callback lifetime rather than a blanket ignore.
-race:TaskScheduler::LambdaTask::run
-race:QWaitCondition::~QWaitCondition
-# The churn stress test (500+ rapid submits) recycles LambdaTask storage fast
-# enough that TSan attributes a ctor write and a later run() read of the SAME
-# recycled address to different objects; the frame symbol is the bare `run`, so
-# this is the narrowest matching key available. TODO(investigate): prove the
-# allocator happens-before or remove the churn case from this leg.
-race:run
-race:CompareWorkspace::queueLoadRequests

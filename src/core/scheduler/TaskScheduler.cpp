@@ -33,67 +33,78 @@ void yieldToForeground(const TaskScheduler::TaskContext &ctx)
         { return g_foregroundDepth.load(std::memory_order_relaxed) == 0 || ctx.isCancelled(); });
 }
 
+// The task's state (context + callables) is kept in a shared object that both
+// the runnable and the completion callback hold. That makes the state's
+// destruction strictly happen-after run() has finished reading it, instead of
+// the runnable's own members being read while a recycled allocation is being
+// constructed at the same address (the churn stress test reuses them fast).
+struct LambdaState
+{
+    std::shared_ptr<TaskScheduler::TaskContext> ctx;
+    std::function<void(const TaskScheduler::TaskContext &)> work;
+    std::function<void()> done;
+    std::function<void()> onStart;
+};
+
 class LambdaTask : public QRunnable
 {
   public:
-    LambdaTask(std::shared_ptr<TaskScheduler::TaskContext> ctx,
-               std::function<void(const TaskScheduler::TaskContext &)> work,
-               std::function<void()> done, std::function<void()> onStart)
-        : m_ctx(std::move(ctx)), m_work(std::move(work)), m_done(std::move(done)),
-          m_onStart(std::move(onStart))
+    explicit LambdaTask(std::shared_ptr<LambdaState> state) : m_state(std::move(state))
     {
         setAutoDelete(true);
     }
 
     void run() override
     {
+        LambdaState &state = *m_state;
         // The runnable has left the pool queue. Move queue_depth -> active_tasks
-        if (m_onStart)
-            m_onStart();
+        if (state.onStart)
+            state.onStart();
 
+        auto &ctx = *state.ctx;
         // M26: every terminal path must finalize exactly once. A task whose
-        if (m_ctx->deadline != std::chrono::steady_clock::time_point::max() &&
-            std::chrono::steady_clock::now() > m_ctx->deadline)
+        if (ctx.deadline != std::chrono::steady_clock::time_point::max() &&
+            std::chrono::steady_clock::now() > ctx.deadline)
         {
-            m_ctx->deadline_exceeded.store(true, std::memory_order_relaxed);
-            m_ctx->reportProgress(0);
-            if (m_done)
-                m_done();
+            ctx.deadline_exceeded.store(true, std::memory_order_relaxed);
+            ctx.reportProgress(0);
+            if (state.done)
+                state.done();
             return;
         }
 
-        // Guard against cancellation only; invoke m_work unconditionally.
-        assert(m_work.target_type() != typeid(void));
+        // Guard against cancellation only; invoke work unconditionally.
+        assert(state.work.target_type() != typeid(void));
         // M27: user work is contained. A throwing task must never escape the
         try
         {
-            if (m_ctx->priority == TaskScheduler::Priority::Thumbnail)
+            if (ctx.priority == TaskScheduler::Priority::Thumbnail)
             {
                 const auto beforeYield = std::chrono::steady_clock::now();
-                yieldToForeground(*m_ctx);
-                m_ctx->foregroundYieldNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                               std::chrono::steady_clock::now() - beforeYield)
-                                               .count();
+                yieldToForeground(ctx);
+                ctx.foregroundYieldNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                            std::chrono::steady_clock::now() - beforeYield)
+                                            .count();
             }
-            if (m_ctx->priority == TaskScheduler::Priority::Decode)
+            if (ctx.priority == TaskScheduler::Priority::Decode)
             {
                 const TaskScheduler::ForegroundWork foreground;
-                if (!m_ctx->isCancelled())
-                    m_work(*m_ctx);
+                if (!ctx.isCancelled())
+                    state.work(ctx);
             }
-            else if (!m_ctx->isCancelled())
+            else if (!ctx.isCancelled())
             {
-                m_work(*m_ctx);
+                state.work(ctx);
             }
         }
         catch (...)
         {
-            m_ctx->execution_failed.store(true, std::memory_order_relaxed);
+            ctx.execution_failed.store(true, std::memory_order_relaxed);
         }
-        m_ctx->reportProgress(100);
+        ctx.reportProgress(100);
 
         // M26: the done callback runs on this worker thread by contract (see
-        auto done = std::move(m_done);
+        auto done = std::move(state.done);
         try
         {
             done();
@@ -104,10 +115,7 @@ class LambdaTask : public QRunnable
     }
 
   private:
-    std::shared_ptr<TaskScheduler::TaskContext> m_ctx;
-    std::function<void(const TaskScheduler::TaskContext &)> m_work;
-    std::function<void()> m_done;
-    std::function<void()> m_onStart;
+    std::shared_ptr<LambdaState> m_state;
 };
 
 } // namespace
@@ -221,23 +229,24 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
     ctx->priority = prio;
     ctx->pool = pool;
     const TaskId ctx_id = ctx->id;
-    auto *wrapped = new LambdaTask(
-        ctx,
-        [runnable](const TaskContext &)
-        {
-            auto *r = static_cast<QRunnable *>(runnable);
-            r->run();
-            // Preserve the QThreadPool::start ownership contract: auto-delete
-            if (r->autoDelete())
-                delete r;
-        },
-        [this, ctx, ctx_id, prio]()
-        {
-            onTaskComplete(ctx_id, prio, false,
-                           ctx->execution_failed.load(std::memory_order_relaxed));
-            // No user done callback exists for this legacy path.
-        },
-        [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); });
+    auto state = std::make_shared<LambdaState>();
+    state->ctx = ctx;
+    state->work = [runnable](const TaskContext &)
+    {
+        auto *r = static_cast<QRunnable *>(runnable);
+        r->run();
+        // Preserve the QThreadPool::start ownership contract: auto-delete
+        if (r->autoDelete())
+            delete r;
+    };
+    auto *wrapped = new LambdaTask(state);
+    state->done = [this, ctx, ctx_id, prio]()
+    {
+        onTaskComplete(ctx_id, prio, false,
+                       ctx->execution_failed.load(std::memory_order_relaxed));
+        // No user done callback exists for this legacy path.
+    };
+    state->onStart = [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); };
     std::lock_guard<std::mutex> lock(m_graphMtx);
     m_poolState[idx].metrics.submitted++;
     m_poolState[idx].metrics.pending++;
@@ -266,10 +275,12 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
     ctx->priority = prio;
 
     const TaskId ctx_id = ctx->id;
-    auto *runnable = new LambdaTask(
-        ctx, std::move(work),
-        [this, done = std::move(done), ctx, prio]()
-        {
+    auto state = std::make_shared<LambdaState>();
+    state->ctx = ctx;
+    state->work = std::move(work);
+    auto *runnable = new LambdaTask(state);
+    state->done = [this, done = std::move(done), ctx, prio]()
+    {
             // M27: cancelTree() erases the handle and finalizes the metrics
             const bool finalized = onTaskComplete(
                 ctx->id, prio, ctx->deadline_exceeded.load(std::memory_order_relaxed),
@@ -286,8 +297,8 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
                 std::lock_guard<std::mutex> lock(m_graphMtx);
                 m_poolState[static_cast<int>(prio)].metrics.callback_failures++;
             }
-        },
-        [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); });
+    };
+    state->onStart = [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); };
 
     if (!enqueueTask(prio, ctx, runnable))
         return nullptr;

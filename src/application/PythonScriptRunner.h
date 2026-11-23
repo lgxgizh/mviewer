@@ -18,6 +18,7 @@
 #include <QStringList>
 
 #include <functional>
+#include <mutex>
 
 namespace mviewer::application
 {
@@ -26,7 +27,9 @@ struct PythonScriptResult
 {
     bool ok = false;
     QString message;
-    QString responsePath;
+    // No responsePath: the response file lives in a QTemporaryDir that run()
+    // destroys on return, so handing out its path would dangle. The parsed
+    // fields below are all a caller can meaningfully use.
     QStringList boxes; // "x,y,w,h,label" strings, as reported by the script
 };
 
@@ -62,6 +65,9 @@ class PythonScriptRunner
   private:
     PythonScriptRunner() = default;
 
+    // The interpreter preference is process state: two concurrent runAsync()
+    // calls used to race on the cached m_interpreter.
+    mutable std::mutex m_mutex;
     QString m_interpreter;
 };
 

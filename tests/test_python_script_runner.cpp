@@ -7,11 +7,13 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QTimer>
 
 #include <iostream>
 
@@ -123,6 +125,29 @@ with open(sys.argv[2], "w") as fh:
     const auto failed = runner.run(failing, request, error);
     CHECK(!failed.ok && error.contains(QStringLiteral("boom")),
           "a non-zero exit reports the script's stderr");
+
+    // runAsync must not deliver into a context that died while the script was
+    // still running (a queued lambda holding a raw pointer is a UAF).
+    {
+        const QString sleeper = tmp.filePath(QStringLiteral("sleep.py"));
+        QFile sleepFile(sleeper);
+        CHECK(sleepFile.open(QIODevice::WriteOnly | QIODevice::Truncate), "sleep fixture written");
+        sleepFile.write("import time\ntime.sleep(1)\n");
+        sleepFile.close();
+
+        auto *context = new QObject(&app);
+        bool delivered = false;
+        mviewer::application::PythonScriptRunner::ScriptCompletion onDone =
+            [&delivered](const mviewer::application::PythonScriptResult &, const QString &) {
+                delivered = true;
+            };
+        runner.runAsync(sleeper, request, context, onDone, 10000);
+        QTimer::singleShot(200, context, [context]() { delete context; });
+        QEventLoop loop;
+        QTimer::singleShot(3000, &loop, [&loop]() { loop.quit(); });
+        loop.exec();
+        CHECK(!delivered, "a context destroyed while the script runs gets no completion");
+    }
 
     if (g_failures != 0)
     {

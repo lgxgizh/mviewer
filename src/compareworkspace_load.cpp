@@ -78,22 +78,24 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                                          const std::vector<std::string> &paths,
                                          const std::vector<int> &frameIndices)
 {
-    auto self = std::make_shared<QPointer<CompareWorkspace>>(this);
+    // The QPointer guard read a QPointer from the worker thread, which Qt
+    // documents as not thread-safe. The lifetime token is the documented gate
+    // instead: ~CompareWorkspace() invalidates it, so a late delivery becomes a
+    // no-op before any member is touched.
     auto lifetime = m_lifetime;
     const ImageLoadOptions opts{true, false, 256};
-    const auto finish = [self, batch]()
+    const auto finish = [lifetime, batch, this]()
     {
         if (!qApp)
             return;
         QMetaObject::invokeMethod(
             qApp,
-            [self, batch]()
+            [lifetime, batch, this]()
             {
-                CompareWorkspace *ws = self->data();
-                if (!ws || batch->generation != ws->m_loadGen)
+                if (!lifetime->isAlive() || batch->generation != m_loadGen)
                     return;
-                ws->finishLoad(*batch->frames, batch->failed->load(std::memory_order_relaxed),
-                               batch->infeasible->load(std::memory_order_relaxed));
+                finishLoad(*batch->frames, batch->failed->load(std::memory_order_relaxed),
+                           batch->infeasible->load(std::memory_order_relaxed));
             },
             Qt::QueuedConnection);
     };
