@@ -115,5 +115,22 @@ counters while holding `m_graphMtx`. It reserves an outer vector before those
 mutations. Never-started deferred runnables and the `TaskHandle`s taken out of
 the map are destroyed only after the lock is released, including on exception
 unwind. Queued and running runnables stay with `QThreadPool`. Running-cancel
-`active_tasks` and `pending` still drop before the worker returns; that
-accounting remains a separate change.
+`active_tasks` and `pending` were still dropped before the worker returned.
+That sentence records the ownership-only stage. The physical-terminal section
+below replaces it. The accounting change does not wait for arbitrary capture
+teardown and does not fix shutdown-timeout or process-owner lifetime.
+
+## 2026-11-24 physical queued and running cancellation
+
+Tree-cancel of a queued or running task requests cancel and sets
+`TaskContext::suppressUserDone` under `m_graphMtx`. The pool keeps the
+runnable. Dependency cleanup and `notifyDrainIfIdle` still run. Gauges do
+not move yet. `onTaskComplete` runs after user work returns and is the one
+terminal update: `cancelled++`, one physical gauge decrement, `pending--`,
+handle removal, dependency release, and `notifyDrainIfIdle`. It returns
+false, so user `done` does not run. This is not `QRunnable` destruction or
+OS-thread exit; captures may still run afterward, and `drain` still calls
+`QThreadPool::waitForDone`. `completed`, deadline, and failure counts stay
+on the non-suppress path. Soft `cancel(handle)` does not set the flag, so
+its user `done` still runs once. Deferred never-started victims stay the
+B02b one-shot terminal path. A repeated tree-cancel does not count again.

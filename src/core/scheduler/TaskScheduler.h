@@ -63,6 +63,11 @@ class TaskScheduler
         // executing it, so cancelTree can tell queued from running.
         std::chrono::steady_clock::time_point enqueuedAt{};
         bool started = false;
+        // Tree-cancel only. Written and read under m_graphMtx. The handle stays
+        // until onTaskComplete, which runs after user work returns. That hook
+        // suppresses user done and retires gauges. It is not QRunnable or
+        // thread destruction. Soft cancel(handle) does not set this.
+        bool suppressUserDone = false;
         // Written/read only by this task's worker, before entering user work.
         // Separates bounded foreground yielding from pool queue wait.
         std::int64_t foregroundYieldNs = 0;
@@ -119,18 +124,22 @@ class TaskScheduler
         // Tasks currently executing on a worker.
         size_t active_tasks{0};
         // Accepted tasks handed to a pool that have not started yet.
-        // Cancel-before-start decrements this, not active_tasks.
+        // noteTaskStarted moves one into active_tasks when the pool takes the
+        // runnable. Tree-cancel does not decrement this early.
         size_t queue_depth{0};
         // waiting = tasks submitted with dependencies that have not yet been
         // released to a pool (deferred). Tracked so cancelTree and the
         // lifecycle metrics match the real state without counting a waiting
         // task as either queued or active.
         size_t waiting{0};
-        // pending = tasks submitted but not yet observed complete. Incremented in
-        // submit() for EVERY accepted task (deferred or not); decremented exactly
-        // once on the terminal transition (onTaskComplete or cancelTree). Lets
-        // waitForPoolDrained() block until EVERY submitted task (including ones
-        // submitted concurrently with the drain) has finished, not just until the
+        // pending = tasks submitted but not yet observed complete. Incremented
+        // in submit() for EVERY accepted task (deferred or not). Decremented
+        // exactly once at the physical terminal hook: onTaskComplete after user
+        // work returns, or immediately for a never-started deferred cancelTree.
+        // The hook is not QRunnable destruction or OS-thread exit; capture
+        // teardown can still run afterward. waitForPoolDrained() then blocks
+        // until EVERY submitted task (including ones submitted concurrently
+        // with the drain) has finished, not just until the
         // pool is momentarily idle (which QThreadPool::waitForDone can miss
         // under a submitting producer on another thread -> use-after-free).
         size_t pending{0};

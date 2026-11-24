@@ -702,9 +702,23 @@ void testCancelTreeDeferredLockedDtor(QCoreApplication &app)
     CHECK(childCode == 0, "cancelTree deferred cleanup converges in a child");
 }
 
+void testCancelTreePhysicalAccounting(QCoreApplication &app)
+{
+    printf("\n[9e. cancelTree keeps queued/running gauges until the pool retires them]\n");
+    fflush(stdout);
+    const int running = runChild(app, "--child-canceltree-running-accounting");
+    printf("  running-accounting child exit code: %d\n", running);
+    CHECK(running == 0, "running tree-cancel stays active until the worker finishes");
+    const int queued = runChild(app, "--child-canceltree-queued-accounting");
+    printf("  queued-accounting child exit code: %d\n", queued);
+    CHECK(queued == 0, "queued tree-cancel stays queued until the pool takes it");
+}
+
 } // namespace
 
 int childCancelTreeDeferredLockedDtor();
+int childCancelTreeRunningAccounting();
+int childCancelTreeQueuedAccounting();
 
 int main(int argc, char **argv)
 {
@@ -729,6 +743,10 @@ int main(int argc, char **argv)
             return childShutdownDeferred();
         if (mode == "--child-canceltree-deferred")
             return childCancelTreeDeferredLockedDtor();
+        if (mode == "--child-canceltree-running-accounting")
+            return childCancelTreeRunningAccounting();
+        if (mode == "--child-canceltree-queued-accounting")
+            return childCancelTreeQueuedAccounting();
         fprintf(stderr, "unknown child mode: %s\n", mode.c_str());
         return 127;
     }
@@ -744,6 +762,7 @@ int main(int argc, char **argv)
     testThrowingWorkSubprocesses(app);
     testShutdownDeferredSubprocess(app);
     testCancelTreeDeferredLockedDtor(app);
+    testCancelTreePhysicalAccounting(app);
     testCancelTreeQueuedVictim();
     testCancelTreeRunningVictim();
     testCancelTreeWaitingVictim();
