@@ -236,8 +236,7 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
     auto *wrapped = new LambdaTask(state);
     state->done = [this, ctx, ctx_id, prio]()
     {
-        onTaskComplete(ctx_id, prio, false,
-                       ctx->execution_failed.load(std::memory_order_relaxed));
+        onTaskComplete(ctx_id, prio, false, ctx->execution_failed.load(std::memory_order_relaxed));
         // No user done callback exists for this legacy path.
     };
     state->onStart = [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); };
@@ -275,22 +274,22 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
     auto *runnable = new LambdaTask(state);
     state->done = [this, done = std::move(done), ctx, prio]()
     {
-            // M27: cancelTree() erases the handle and finalizes the metrics
-            const bool finalized = onTaskComplete(
-                ctx->id, prio, ctx->deadline_exceeded.load(std::memory_order_relaxed),
-                ctx->execution_failed.load(std::memory_order_relaxed));
-            if (!finalized)
-                return;
-            try
-            {
-                if (done)
-                    done();
-            }
-            catch (...)
-            {
-                std::lock_guard<std::mutex> lock(m_graphMtx);
-                m_poolState[static_cast<int>(prio)].metrics.callback_failures++;
-            }
+        // M27: cancelTree() erases the handle and finalizes the metrics
+        const bool finalized =
+            onTaskComplete(ctx->id, prio, ctx->deadline_exceeded.load(std::memory_order_relaxed),
+                           ctx->execution_failed.load(std::memory_order_relaxed));
+        if (!finalized)
+            return;
+        try
+        {
+            if (done)
+                done();
+        }
+        catch (...)
+        {
+            std::lock_guard<std::mutex> lock(m_graphMtx);
+            m_poolState[static_cast<int>(prio)].metrics.callback_failures++;
+        }
     };
     state->onStart = [this, ctx_id, prio]() { noteTaskStarted(ctx_id, prio); };
 
@@ -559,94 +558,116 @@ bool TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceed
 void TaskScheduler::cancelTree(TaskId rootId)
 {
     auto &sched = instance();
-    std::lock_guard<std::mutex> lock(sched.m_graphMtx);
+    // Owners live outside the lock, including when the locked section throws.
+    struct Retired
+    {
+        std::unique_ptr<QRunnable> runnable;
+        TaskHandle handle;
+    };
+    std::vector<Retired> retired;
+    {
+        std::lock_guard<std::mutex> lock(sched.m_graphMtx);
 
-    // M26: walk the REVERSE map —m_dependents[id] lists the tasks waiting on
-    std::vector<TaskId> stack;
-    std::vector<TaskId> victims;
-    std::unordered_set<TaskId> seen;
-    stack.push_back(rootId);
-    while (!stack.empty())
-    {
-        TaskId cur = stack.back();
-        stack.pop_back();
-        if (!seen.insert(cur).second)
-            continue;
-        victims.push_back(cur);
-        auto it = sched.m_dependents.find(cur);
-        if (it != sched.m_dependents.end())
+        // M26: walk the REVERSE map —m_dependents[id] lists the tasks waiting on
+        std::vector<TaskId> stack;
+        std::vector<TaskId> victims;
+        std::unordered_set<TaskId> seen;
+        stack.push_back(rootId);
+        while (!stack.empty())
         {
-            for (TaskId dependent : it->second)
-                stack.push_back(dependent);
-        }
-    }
-    for (TaskId vic : victims)
-    {
-        auto pit = sched.m_taskPriomap.find(vic);
-        Priority prio = (pit != sched.m_taskPriomap.end()) ? pit->second : Priority::Background;
-        const int pIdx = static_cast<int>(prio);
-        auto dit = sched.m_deferred.find(vic);
-        if (dit != sched.m_deferred.end())
-        {
-            // Waiting (deferred) task: never started, owned by m_deferred.
-            auto hit = sched.m_handles.find(vic);
-            if (hit != sched.m_handles.end())
-                hit->second->requestCancel(); // observers see isCancelled()
-            delete static_cast<QRunnable *>(dit->second.runnable);
-            sched.m_deferred.erase(dit);
-            sched.m_poolState[pIdx].metrics.cancelled++;
-            if (sched.m_poolState[pIdx].metrics.waiting > 0)
-                sched.m_poolState[pIdx].metrics.waiting--;
-            if (sched.m_poolState[pIdx].metrics.pending > 0)
-                sched.m_poolState[pIdx].metrics.pending--;
-            sched.m_handles.erase(vic);
-            sched.m_taskPriomap.erase(vic);
-            sched.notifyDrainIfIdle(pIdx);
-        }
-        else
-        {
-            // Live task. Queued (not started) holds queue_depth + pending.
-            auto hit = sched.m_handles.find(vic);
-            if (hit != sched.m_handles.end())
+            TaskId cur = stack.back();
+            stack.pop_back();
+            if (!seen.insert(cur).second)
+                continue;
+            victims.push_back(cur);
+            auto it = sched.m_dependents.find(cur);
+            if (it != sched.m_dependents.end())
             {
-                const bool started = hit->second && hit->second->started;
-                hit->second->requestCancel();
-                sched.m_handles.erase(hit);
-                sched.m_taskPriomap.erase(vic);
+                for (TaskId dependent : it->second)
+                    stack.push_back(dependent);
+            }
+        }
+        retired.reserve(victims.size());
+        for (TaskId vic : victims)
+        {
+            auto pit = sched.m_taskPriomap.find(vic);
+            Priority prio = (pit != sched.m_taskPriomap.end()) ? pit->second : Priority::Background;
+            const int pIdx = static_cast<int>(prio);
+            auto dit = sched.m_deferred.find(vic);
+            if (dit != sched.m_deferred.end())
+            {
+                Retired &item = retired.emplace_back();
+                item.runnable.reset(static_cast<QRunnable *>(dit->second.runnable));
+                dit->second.runnable = nullptr;
+                auto hit = sched.m_handles.find(vic);
+                if (hit != sched.m_handles.end() && hit->second)
+                {
+                    hit->second->requestCancel();
+                    item.handle = std::move(hit->second);
+                }
+                sched.m_handles.erase(vic);
+                sched.m_deferred.erase(dit);
                 sched.m_poolState[pIdx].metrics.cancelled++;
-                if (started)
-                {
-                    if (sched.m_poolState[pIdx].metrics.active_tasks > 0)
-                        sched.m_poolState[pIdx].metrics.active_tasks--;
-                }
-                else if (sched.m_poolState[pIdx].metrics.queue_depth > 0)
-                {
-                    sched.m_poolState[pIdx].metrics.queue_depth--;
-                }
+                if (sched.m_poolState[pIdx].metrics.waiting > 0)
+                    sched.m_poolState[pIdx].metrics.waiting--;
                 if (sched.m_poolState[pIdx].metrics.pending > 0)
                     sched.m_poolState[pIdx].metrics.pending--;
+                sched.m_taskPriomap.erase(vic);
                 sched.notifyDrainIfIdle(pIdx);
             }
-        }
-        // If the victim itself was waiting on prerequisites, drop it from
-        if (auto depIt = sched.m_depGraph.find(vic); depIt != sched.m_depGraph.end())
-        {
-            for (TaskId dep : depIt->second)
+            else
             {
-                auto &followers = sched.m_dependents[dep];
-                followers.erase(std::remove(followers.begin(), followers.end(), vic),
-                                followers.end());
-                if (followers.empty())
-                    sched.m_dependents.erase(dep);
+                // Live task. Queued (not started) holds queue_depth + pending.
+                auto hit = sched.m_handles.find(vic);
+                if (hit != sched.m_handles.end())
+                {
+                    const bool started = hit->second && hit->second->started;
+                    if (hit->second)
+                        hit->second->requestCancel();
+                    Retired &item = retired.emplace_back();
+                    item.handle = std::move(hit->second);
+                    sched.m_handles.erase(hit);
+                    sched.m_taskPriomap.erase(vic);
+                    sched.m_poolState[pIdx].metrics.cancelled++;
+                    if (started)
+                    {
+                        if (sched.m_poolState[pIdx].metrics.active_tasks > 0)
+                            sched.m_poolState[pIdx].metrics.active_tasks--;
+                    }
+                    else if (sched.m_poolState[pIdx].metrics.queue_depth > 0)
+                    {
+                        sched.m_poolState[pIdx].metrics.queue_depth--;
+                    }
+                    if (sched.m_poolState[pIdx].metrics.pending > 0)
+                        sched.m_poolState[pIdx].metrics.pending--;
+                    sched.notifyDrainIfIdle(pIdx);
+                }
+            }
+            // If the victim itself was waiting on prerequisites, drop it from
+            if (auto depIt = sched.m_depGraph.find(vic); depIt != sched.m_depGraph.end())
+            {
+                for (TaskId dep : depIt->second)
+                {
+                    auto &followers = sched.m_dependents[dep];
+                    followers.erase(std::remove(followers.begin(), followers.end(), vic),
+                                    followers.end());
+                    if (followers.empty())
+                        sched.m_dependents.erase(dep);
+                }
+            }
+            sched.m_depGraph.erase(vic);
+            sched.m_dependents.erase(vic);
+            // Remove this victim from every other task's dependents list so no
+            for (auto &[follower, deps] : sched.m_depGraph)
+            {
+                deps.erase(std::remove(deps.begin(), deps.end(), vic), deps.end());
             }
         }
-        sched.m_depGraph.erase(vic);
-        sched.m_dependents.erase(vic);
-        // Remove this victim from every other task's dependents list so no
-        for (auto &[follower, deps] : sched.m_depGraph)
-        {
-            deps.erase(std::remove(deps.begin(), deps.end(), vic), deps.end());
-        }
+    }
+    for (Retired &item : retired)
+    {
+        item.runnable.reset();
+        item.handle.reset();
     }
 }
 

@@ -693,7 +693,18 @@ void testShutdownDeferredSubprocess(QCoreApplication &app)
     CHECK(childCode == 0, "shutdown deferred cleanup converges in a child");
 }
 
+void testCancelTreeDeferredLockedDtor(QCoreApplication &app)
+{
+    printf("\n[9d. cancelTree drops deferred captures outside the lock]\n");
+    fflush(stdout);
+    const int childCode = runChild(app, "--child-canceltree-deferred");
+    printf("  cancelTree child exit code: %d\n", childCode);
+    CHECK(childCode == 0, "cancelTree deferred cleanup converges in a child");
+}
+
 } // namespace
+
+int childCancelTreeDeferredLockedDtor();
 
 int main(int argc, char **argv)
 {
@@ -716,6 +727,8 @@ int main(int argc, char **argv)
             return childEmptyWork();
         if (mode == "--child-shutdown-deferred")
             return childShutdownDeferred();
+        if (mode == "--child-canceltree-deferred")
+            return childCancelTreeDeferredLockedDtor();
         fprintf(stderr, "unknown child mode: %s\n", mode.c_str());
         return 127;
     }
@@ -730,6 +743,7 @@ int main(int argc, char **argv)
 
     testThrowingWorkSubprocesses(app);
     testShutdownDeferredSubprocess(app);
+    testCancelTreeDeferredLockedDtor(app);
     testCancelTreeQueuedVictim();
     testCancelTreeRunningVictim();
     testCancelTreeWaitingVictim();
