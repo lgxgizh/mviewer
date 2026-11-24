@@ -151,7 +151,15 @@ endif()
 add_library(mviewer_turbojpeg INTERFACE)
 add_dependencies(mviewer_turbojpeg mviewer_turbojpeg_build)
 target_include_directories(mviewer_turbojpeg INTERFACE "${_turbojpeg_prefix}/include")
-target_link_libraries(mviewer_turbojpeg INTERFACE "${_turbojpeg_lib}")
+if(MSVC)
+    # MSVC keeps the upstream target name (turbojpeg-static.lib).
+    target_link_libraries(mviewer_turbojpeg INTERFACE "${_turbojpeg_prefix}/lib/turbojpeg-static.lib")
+else()
+    # GCC/Clang install it as libturbojpeg.a (no "-static" suffix); resolving
+    # through -l keeps this immune to a future rename.
+    target_link_directories(mviewer_turbojpeg INTERFACE "${_turbojpeg_prefix}/lib")
+    target_link_libraries(mviewer_turbojpeg INTERFACE "turbojpeg")
+endif()
 target_compile_definitions(mviewer_turbojpeg INTERFACE MVIEWER_HAS_TURBOJPEG=1)
 target_compile_features(mviewer_turbojpeg INTERFACE cxx_std_17)
 
