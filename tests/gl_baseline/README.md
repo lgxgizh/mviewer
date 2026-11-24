@@ -41,9 +41,20 @@ Exit code is non-zero when any image differs by more than `--tolerance`
 
 ## Caveats
 
+- The mode's own divider (and the swipe drag handle) is painted after the GL
+  image, so a boundary pixel is a blend there too; the compositor leaves those to
+  the CPU paint step.
 - Captured with Mesa **llvmpipe** (software). A real GPU driver may rasterise
   antialiased edges one code differently; treat the default tolerance of 2 as
   the intended slack, not as an exact-match claim.
 - The baselines encode the current split geometry, overlay alpha, checker size
   and diff threshold. Changing any of those in the product changes the baseline
   too - re-capture rather than adjusting the comparator.
+
+## GPU compositing vs this baseline
+
+`MVIEWER_COMPARE_GL=1` routes the split / swipe / overlay composite through a
+fragment shader (`docs/adr/038`). Measured on Ubuntu 22.04 / Qt 6.8 / llvmpipe:
+**zero differing pixels** for all three modes at scale factors 1.0 and 2.0.
+Checkerboard is deliberately left on the CPU path (see ADR 038), so it matches by
+construction rather than by comparison.

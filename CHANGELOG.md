@@ -2,6 +2,39 @@
 
 ## [Unreleased]
 
+## [1.0.213] - 2026-11-24
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.213**.
+
+### Added
+
+- **PR-09: the compare canvas composites on the GPU.** The panes are still
+  rasterised by the same CPU calls (so their pixels cannot change); what moved is
+  "which pixels of A and B land where", now a fragment shader over two textures.
+  Split, swipe and overlay composite in one pass; the full-physical-resolution
+  `m_canvasBaseSurface` rebuild disappears for those modes. Opt-in with
+  **`MVIEWER_COMPARE_GL=1`**. Documented in ADR 038.
+- **`B20` (`compare_composite_frame_ms`)**, a report-only benchmark that measures
+  the two-pane split/overlay composite: **149 ms per frame** on the reference
+  machine. That is the number this work has to beat.
+
+### Verified on real hardware
+
+Captured against `tests/gl_baseline` (v1.0.212 CPU captures) with
+`MVIEWER_COMPARE_GL=1` on Ubuntu 22.04 / Qt 6.8 / Mesa llvmpipe:
+
+| mode | differing pixels (tolerance 2) |
+|---|---|
+| split x2 divider positions | **0** |
+| swipe x2 positions | **0** |
+| overlay | **0** |
+
+at scale factors 1.0 and 2.0. **Checkerboard stays on the CPU path**: QPainter
+anti-aliases its `QRegion` clip at every block edge (a boundary pixel blends both
+panes), which a hard shader switch cannot reproduce.
+
 ## [1.0.212] - 2026-11-24
 
 ### Release

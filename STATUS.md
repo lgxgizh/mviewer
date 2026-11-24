@@ -1,12 +1,24 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-24 · Version: **1.0.212** · Release tag: **v1.0.212**
+> Snapshot: 2026-11-24 · Version: **1.0.213** · Release tag: **v1.0.213**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.213 - compare canvas composites on the GPU (PR-09) (2026-11-24)
+
+- `MVIEWER_COMPARE_GL=1` moves split / swipe / overlay compositing into a
+  fragment shader over two pane textures; the panes are still rasterised by the
+  same CPU calls, so only the placement decision moved. ADR 038.
+- New report-only benchmark B20: two-pane composite = 149 ms/frame (the number
+  this work beats).
+- Verified bit-exact against tests/gl_baseline at scale factors 1.0 and 2.0:
+  0 differing pixels for split (x2), swipe (x2) and overlay.
+- Checkerboard stays on the CPU path: QPainter anti-aliases its QRegion clip at
+  block edges and a hard shader switch cannot reproduce that.
 
 ## 1.0.212 - fragment-shader tile blitter behind an A/B switch (2026-11-24)
 

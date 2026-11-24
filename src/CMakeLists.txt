@@ -367,6 +367,8 @@ add_library(mviewer_ui STATIC
     compareworkspace_pane_header.cpp
     compareworkspace_render.cpp
     compareworkspace_render_materialization.cpp
+    compareworkspace_composite_gl.cpp
+    compareworkspace_composite_paint.cpp
     compareworkspace_render_canvas_paint.cpp
     compareworkspace_pyramid_wire.cpp
     compareworkspace_render_diff.cpp

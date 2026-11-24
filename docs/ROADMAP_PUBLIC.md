@@ -4,15 +4,15 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.212**
+## Where we are now — **Beta / 1.0.213**
 
-MViewer remains in **Beta**; the current release is **`v1.0.212`**
+MViewer remains in **Beta**; the current release is **`v1.0.213`**
 (2026-11-24, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-The GPU tile path has an opt-in fragment-shader blitter (`MVIEWER_BLITTER=shader`)
-that can carry exposure, gamma and an overlay texture in one pass. It is not yet
-the default: this environment cannot create a headless OpenGL context at all, so
-making it default would be unverified - a hardware framebuffer comparison comes
-first. Offscreen CI is regression evidence, not proof of universal smoothness.
+The compare canvas can composite split / swipe / overlay through a fragment shader
+(`MVIEWER_COMPARE_GL=1`), verified bit-exact against the committed pixel baseline
+at two scale factors. Checkerboard still composites on the CPU because QPainter's
+clip antialiasing at block edges cannot be reproduced by a hard shader switch.
+Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -67,7 +67,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.212** (current) | Opt-in fragment-shader tile blitter (ADR 037) | 🔵 Beta |
+| **1.0.213** (current) | Compare canvas composites on the GPU (PR-09) | 🔵 Beta |
+| **1.0.212** | Opt-in fragment-shader tile blitter (ADR 037) | ✅ Previous patch |
 | **1.0.211** | Overlay keeps the GPU tile path; PR-09 baseline (B20) | ✅ Previous patch |
 | **1.0.210** | libjpeg-turbo JPEG decode fast path (-39% on 4K) | ✅ Previous patch |
 | **1.0.209** | Global thread pool consolidated into TaskScheduler | ✅ Previous patch |

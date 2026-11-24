@@ -51,6 +51,27 @@ void CompareWorkspace::paintCompareCanvas()
 
     const qreal dpr = cv->devicePixelRatioF();
     const QSize physical(qCeil(cv->width() * dpr), qCeil(cv->height() * dpr));
+
+    // Review P2-09: opt-in GPU compositing. The panes are rasterised by the very
+    // same CPU calls as below (so their pixels cannot change); only the step
+    // "which pixels of A and B land where" moves into a fragment shader.
+    if (mviewer::ui::CompareCompositeGL::requested())
+    {
+        const QImage gpu = compositeCanvasWithGl(r, physical, dpr);
+        if (!gpu.isNull())
+        {
+            QPainter p(cv);
+            p.drawImage(QPoint(0, 0), gpu);
+            // The mode's own divider / drag handle used to live inside the base
+            // surface; painted here it lands on the same pixels.
+            drawCanvasModeDivider(p, r);
+            drawCanvasPixelGrid(p);
+            drawCanvasROI(p);
+            drawCanvasInfoOverlays(p);
+            return;
+        }
+    }
+
     if (m_canvasBaseKey != key || m_canvasBaseSurface.isNull() ||
         m_canvasBaseSurface.size() != physical)
     {
