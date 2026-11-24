@@ -83,4 +83,27 @@ or deferred ownership, without a scheduling or backpressure policy change.
 The invoked M27 scheduler regression covers paused and queue-depth rejection,
 a throwing handler, and accepted execution/capture lifetime. CI must validate
 these cases; a source review is not a sanitizer result. Deferred shutdown
-cleanup and running-cancellation accounting remain separate review work.
+of never-started tasks is specified below. Running-cancellation accounting
+remains separate review work.
+
+## 2026-11-24 deferred shutdown ownership
+
+`shutdown` pauses every pool and cancels handles that stay published. Under
+`m_graphMtx` it reserves an outer vector, then moves each never-started
+`QRunnable` into a `unique_ptr` and moves that task's `TaskHandle` out. It
+closes pending, waiting, cancelled, and the priority map, neutralizes the
+`void*` slot, and clears the deferred and dependency maps. The runnable and
+the retained context are reset only after the lock is released. Completion
+and `releaseReadyTasks` are not used, so deferred work is not started.
+
+The drain budget is unchanged (`timeout / 5` per pool). `shutdown` returning
+does not mean a running worker has finished; a worker can still be in user
+code after its slice. Queued and running runnables stay with their pools.
+`DeferredEntry::runnable` stays `void*`. `cancelTree` still destroys a
+deferred runnable while holding `m_graphMtx`. Running-cancel `active_tasks`
+accounting and legacy `submit(void*)` backpressure are unchanged.
+
+The pool-state policy and snapshot accessor definitions live in
+`TaskScheduler_state.cpp`, keeping scheduler translation units below the
+existing 800-line cap. Their public signatures, locking and counter logic are
+unchanged; no complexity threshold or exception is added.

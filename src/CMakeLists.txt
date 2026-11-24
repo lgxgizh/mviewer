@@ -97,6 +97,7 @@ add_library(mviewer_core SHARED
     core/filesystem/AtomicFile.cpp
     core/filesystem/Utf8Path.cpp
     core/scheduler/TaskScheduler.cpp
+    core/scheduler/TaskScheduler_state.cpp
     core/compare/CompareEngine.cpp
     core/compare/SyncController.cpp
     core/compare/BlinkController.cpp

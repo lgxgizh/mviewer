@@ -32,9 +32,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -569,6 +571,128 @@ void testRejectedSubmitReleasesCapture()
     CHECK(allPoolsConverged(sched), "pools converge after rejection lifetime checks");
 }
 
+// Parent is a live running handle. A missing id would already look complete.
+struct ShutdownGate
+{
+    std::mutex mu;
+    std::condition_variable cv;
+    bool entered = false;
+    bool release = false;
+};
+
+struct ShutdownProbe
+{
+    std::shared_ptr<int> sentinel;
+    std::shared_ptr<std::atomic<int>> hits;
+    std::shared_ptr<ShutdownGate> gate;
+    ~ShutdownProbe()
+    {
+        if (hits)
+            hits->fetch_add(1, std::memory_order_relaxed);
+        if (gate)
+        {
+            std::lock_guard<std::mutex> lock(gate->mu);
+            gate->release = true;
+            gate->cv.notify_all();
+        }
+        (void)TaskScheduler::instance().graphMetrics();
+    }
+};
+
+int childShutdownDeferred()
+{
+    auto &sched = TaskScheduler::instance();
+    for (int p = 0; p < 5; ++p)
+        sched.setQueueMaxThreads(static_cast<Priority>(p), 1);
+
+    auto gate = std::make_shared<ShutdownGate>();
+    auto hits = std::make_shared<std::atomic<int>>(0);
+    auto blocker =
+        sched.submit(Priority::Background,
+                     [gate](const TaskContext &ctx)
+                     {
+                         {
+                             std::lock_guard<std::mutex> lock(gate->mu);
+                             gate->entered = true;
+                             gate->cv.notify_all();
+                         }
+                         std::unique_lock<std::mutex> lock(gate->mu);
+                         gate->cv.wait_for(lock, std::chrono::seconds(10),
+                                           [&] { return ctx.isCancelled() || gate->release; });
+                     });
+    if (!blocker)
+        return 2;
+    {
+        std::unique_lock<std::mutex> lock(gate->mu);
+        if (!gate->cv.wait_for(lock, std::chrono::seconds(10), [&] { return gate->entered; }))
+            return 3;
+    }
+
+    std::weak_ptr<int> weaks[10];
+    for (int p = 0; p < 5; ++p)
+    {
+        auto work = std::make_shared<ShutdownProbe>();
+        auto progress = std::make_shared<ShutdownProbe>();
+        work->sentinel = std::make_shared<int>(1);
+        progress->sentinel = std::make_shared<int>(1);
+        work->hits = hits;
+        progress->hits = hits;
+        work->gate = gate;
+        progress->gate = gate;
+        weaks[p] = work->sentinel;
+        weaks[5 + p] = progress->sentinel;
+        auto handle = sched.submit(
+            static_cast<Priority>(p), [work](const TaskContext &) { (void)work; }, {blocker->id},
+            std::chrono::steady_clock::time_point::max(), []() {},
+            [progress](int) { (void)progress; });
+        if (!handle)
+            return 4;
+    }
+    size_t waiting = 0;
+    for (int p = 0; p < 5; ++p)
+        waiting += sched.metrics(static_cast<PoolType>(p)).waiting;
+    if (waiting != 5 || sched.graphMetrics().deferred != 5)
+        return 4;
+
+    const auto budget = std::chrono::milliseconds(10000);
+    const auto t0 = std::chrono::steady_clock::now();
+    sched.shutdown(budget);
+    const auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0)
+            .count();
+    if (ms >= 15000)
+        return 5;
+    if (hits->load(std::memory_order_relaxed) != 10)
+        return 6;
+    for (const auto &weak : weaks)
+    {
+        if (!weak.expired())
+            return 7;
+    }
+    if (!allPoolsConverged(sched))
+        return 8;
+    const auto graph = sched.graphMetrics();
+    if (graph.handles != 0 || graph.deferred != 0 || graph.dep_graph_entries != 0 ||
+        graph.dependents_entries != 0)
+        return 10;
+    uint64_t cancelled = 0;
+    for (int p = 0; p < 5; ++p)
+        cancelled += sched.metrics(static_cast<PoolType>(p)).cancelled;
+    if (cancelled != 5)
+        return 9;
+    printf("  child: shutdown dropped deferred work and progress captures\n");
+    return 0;
+}
+
+void testShutdownDeferredSubprocess(QCoreApplication &app)
+{
+    printf("\n[9c. shutdown releases deferred captures outside the lock]\n");
+    fflush(stdout);
+    const int childCode = runChild(app, "--child-shutdown-deferred");
+    printf("  shutdown child exit code: %d\n", childCode);
+    CHECK(childCode == 0, "shutdown deferred cleanup converges in a child");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -590,6 +714,8 @@ int main(int argc, char **argv)
             return childDoneThrow();
         if (mode == "--child-empty-work")
             return childEmptyWork();
+        if (mode == "--child-shutdown-deferred")
+            return childShutdownDeferred();
         fprintf(stderr, "unknown child mode: %s\n", mode.c_str());
         return 127;
     }
@@ -603,6 +729,7 @@ int main(int argc, char **argv)
         sched.setQueueMaxThreads(static_cast<Priority>(p), 1);
 
     testThrowingWorkSubprocesses(app);
+    testShutdownDeferredSubprocess(app);
     testCancelTreeQueuedVictim();
     testCancelTreeRunningVictim();
     testCancelTreeWaitingVictim();
