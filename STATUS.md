@@ -8,6 +8,20 @@
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
 
+## Unreleased — Dr.Memory CI tooling
+
+- Automatic Dr.Memory execution in the tooling and Release workflows is
+  **disabled/skipped: not executed, no memory verdict**, not a memory pass.
+- The November 18 bounded comparison used the same `core_tests` binary/PDB on
+  Windows 20348 / Qt 6.8.0: both 2.6.0 and maintained 2.6.20434 timed out after
+  180 seconds, with 869 / 748 raw records. Unknown-kernel and delete-classification
+  warnings remain unresolved. These are not confirmed-bug counts or proof that
+  all findings are false positives; neither run establishes memory-clean.
+- [Comparison run and retained reports](https://github.com/lgxgizh/mviewer/actions/runs/44344380527).
+  Strict runner scripts remain available for manual use; `workflow_dispatch`
+  runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
+  signing/dependencies are unchanged.
+
 ## 1.0.213 - compare canvas composites on the GPU (PR-09) (2026-11-24)
 
 - `MVIEWER_COMPARE_GL=1` moves split / swipe / overlay compositing into a
@@ -1370,7 +1384,8 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
 - **CI**: `ci.yml` (PR gate: clang-format + cppcheck + clang-tidy +
   build/zero-warnings + CTest incl. `bench_enforce` + `golden_image`),
   `nightly.yml` (ASan/UBSan/clazy/benchmark regression/golden/Perfetto),
-  `release.yml` (perf report / UI regression / Dr.Memory / package / release).
+  `release.yml` (perf report / UI regression / package / release; Dr.Memory
+  execution disabled/skipped, no memory verdict).
 - **Packaging**: portable ZIP + NSIS installer; SHA256SUMS + auto release
   notes (`scripts/release_manifest.ps1`); both artifacts launch on a clean
   Windows (PATH stripped) — verified 2026-08-05.

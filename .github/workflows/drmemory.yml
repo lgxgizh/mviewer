@@ -22,10 +22,10 @@ jobs:
       - shell: pwsh
         run: ./scripts/drmemory/test.ps1
   actual-execution:
-    # Optional diagnostic, intentionally not a required PR/release gate.
-    # Unlike release's job-level best-effort, standalone validation is red on
-    # unknown/errors: its successful execution must never imply memory clean.
-    name: Dr.Memory actual execution (advisory)
+    # Disabled after the bounded old/new comparison failed to establish a
+    # reliable completed verdict; see STATUS.md. Skipped is not memory-clean.
+    if: ${{ false }}
+    name: Dr.Memory DISABLED (not executed; no memory verdict)
     needs: contracts
     runs-on: windows-2022
     timeout-minutes: 25
