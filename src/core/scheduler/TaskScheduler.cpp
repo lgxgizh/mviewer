@@ -274,11 +274,12 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
     auto *runnable = new LambdaTask(state);
     state->done = [this, done = std::move(done), ctx, prio]()
     {
-        // M27: cancelTree() erases the handle and finalizes the metrics
-        const bool finalized =
+        // Return value is invokeUserDone, not "metrics were finalized".
+        // false still retires a retained tree-cancel and then suppresses done.
+        const bool invokeUserDone =
             onTaskComplete(ctx->id, prio, ctx->deadline_exceeded.load(std::memory_order_relaxed),
                            ctx->execution_failed.load(std::memory_order_relaxed));
-        if (!finalized)
+        if (!invokeUserDone)
             return;
         try
         {
@@ -448,6 +449,7 @@ void TaskScheduler::noteTaskStarted(TaskId id, Priority prio)
     std::lock_guard<std::mutex> lock(m_graphMtx);
     auto it = m_handles.find(id);
     if (it == m_handles.end() || !it->second)
+        // Deferred cancelTree drops the handle. Queued tree-cancel keeps it.
         return; // cancelTree already finalized a task that had not started
     if (it->second->started)
         return;
@@ -526,33 +528,51 @@ bool TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceed
                                    bool executionFailed)
 {
     std::vector<ReadyLaunch> ready;
+    bool invokeUserDone = true;
     {
         std::lock_guard<std::mutex> lock(m_graphMtx);
-        // P2-4 fix: if cancelTree() already erased this handle and decremented
         auto it = m_handles.find(id);
         if (it == m_handles.end())
-            return false; // cancelTree() already finalized —caller suppresses done
+            return false; // already terminal (deferred cancel or prior completion)
+        const bool suppress = it->second && it->second->suppressUserDone;
+        const bool started = it->second && it->second->started;
         m_handles.erase(it);
         m_taskPriomap.erase(id);
         m_depGraph.erase(id);
         const int pIdx = static_cast<int>(prio);
-        m_poolState[pIdx].metrics.completed++;
-        if (deadlineExceeded)
-            m_poolState[pIdx].metrics.deadline_exceeded++;
-        if (executionFailed)
-            m_poolState[pIdx].metrics.execution_failures++;
-        // Terminal transition: exactly one decrement of each counter.
+        if (suppress)
+        {
+            m_poolState[pIdx].metrics.cancelled++;
+            if (started)
+            {
+                if (m_poolState[pIdx].metrics.active_tasks > 0)
+                    m_poolState[pIdx].metrics.active_tasks--;
+            }
+            else if (m_poolState[pIdx].metrics.queue_depth > 0)
+            {
+                m_poolState[pIdx].metrics.queue_depth--;
+            }
+            invokeUserDone = false;
+        }
+        else
+        {
+            m_poolState[pIdx].metrics.completed++;
+            if (deadlineExceeded)
+                m_poolState[pIdx].metrics.deadline_exceeded++;
+            if (executionFailed)
+                m_poolState[pIdx].metrics.execution_failures++;
+            if (m_poolState[pIdx].metrics.active_tasks > 0)
+                m_poolState[pIdx].metrics.active_tasks--;
+        }
         if (m_poolState[pIdx].metrics.pending > 0)
             m_poolState[pIdx].metrics.pending--;
-        if (m_poolState[pIdx].metrics.active_tasks > 0)
-            m_poolState[pIdx].metrics.active_tasks--;
         // Drop this task from the prerequisite edges of its dependents is not
         releaseReadyTasks(ready);
         for (const auto &item : ready)
             launchQueued(item);
         notifyDrainIfIdle(pIdx);
     }
-    return true;
+    return invokeUserDone;
 }
 
 void TaskScheduler::cancelTree(TaskId rootId)
@@ -617,29 +637,13 @@ void TaskScheduler::cancelTree(TaskId rootId)
             }
             else
             {
-                // Live task. Queued (not started) holds queue_depth + pending.
+                // Pool still owns the runnable. Gauges move in onTaskComplete
+                // after user work returns, not at QRunnable or thread death.
                 auto hit = sched.m_handles.find(vic);
-                if (hit != sched.m_handles.end())
+                if (hit != sched.m_handles.end() && hit->second)
                 {
-                    const bool started = hit->second && hit->second->started;
-                    if (hit->second)
-                        hit->second->requestCancel();
-                    Retired &item = retired.emplace_back();
-                    item.handle = std::move(hit->second);
-                    sched.m_handles.erase(hit);
-                    sched.m_taskPriomap.erase(vic);
-                    sched.m_poolState[pIdx].metrics.cancelled++;
-                    if (started)
-                    {
-                        if (sched.m_poolState[pIdx].metrics.active_tasks > 0)
-                            sched.m_poolState[pIdx].metrics.active_tasks--;
-                    }
-                    else if (sched.m_poolState[pIdx].metrics.queue_depth > 0)
-                    {
-                        sched.m_poolState[pIdx].metrics.queue_depth--;
-                    }
-                    if (sched.m_poolState[pIdx].metrics.pending > 0)
-                        sched.m_poolState[pIdx].metrics.pending--;
+                    hit->second->requestCancel();
+                    hit->second->suppressUserDone = true;
                     sched.notifyDrainIfIdle(pIdx);
                 }
             }
