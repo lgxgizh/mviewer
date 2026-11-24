@@ -4,6 +4,12 @@ Reference captures of what the **CPU QPainter** compare canvas paints today.
 They exist so a future GPU compositor (review P2-09) can be diffed against them
 pixel by pixel instead of being declared correct by inspection.
 
+The ImageViewer tile path was verified the same way first: rendering the same
+frame with `MVIEWER_GPU=1` and `MVIEWER_BLITTER=qt` versus
+`MVIEWER_BLITTER=shader` gives a maximum per-channel difference of **0**, for both
+a plain frame and a zebra overlay (`capture_viewer_gl.cpp`). That is what makes
+ADR 037's opt-in safe to keep.
+
 ## Contents
 
 | Path | Scale factor | Source |
