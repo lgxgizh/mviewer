@@ -66,3 +66,21 @@ include.
   only ever non-zero for buffers produced by `makeImageData()` / `mutableView()`.
 - `MVIEWER_GPU` stays opt-in; the CPU `QPainter` path is unchanged and remains
   the default, so the version plumbing is inert unless the GPU tier is enabled.
+
+## 2026-11-24 rejected-submission ownership
+
+A paused or saturated queue rejects a runnable before publishing it to a pool
+or the deferred graph. That rejection must release the runnable explicitly:
+`QThreadPool` cannot auto-delete an object it never received. Destruction stays
+outside `m_graphMtx`, before invoking the backpressure handler, so the rejection
+path does not run user cleanup while holding the graph lock.
+
+`submit` still holds its local `LambdaState` reference during that handler;
+the captured work is released when the remaining references leave scope, not
+necessarily at the runnable deletion. Accepted tasks retain pool auto-delete
+or deferred ownership, without a scheduling or backpressure policy change.
+
+The invoked M27 scheduler regression covers paused and queue-depth rejection,
+a throwing handler, and accepted execution/capture lifetime. CI must validate
+these cases; a source review is not a sanitizer result. Deferred shutdown
+cleanup and running-cancellation accounting remain separate review work.

@@ -936,6 +936,13 @@ target_compile_features(test_display_adjust PRIVATE cxx_std_20)
 target_include_directories(test_display_adjust PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME display_adjust_tests COMMAND test_display_adjust)
 
+# Review P1-05: libjpeg-turbo JPEG fast path - correctness against Qt's decoder.
+add_executable(test_jpeg_turbo ${CMAKE_SOURCE_DIR}/tests/core/test_jpeg_turbo.cpp)
+target_link_libraries(test_jpeg_turbo PRIVATE mviewer_core Qt6::Gui Qt6::Core)
+target_compile_features(test_jpeg_turbo PRIVATE cxx_std_20)
+target_include_directories(test_jpeg_turbo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME jpeg_turbo_tests COMMAND test_jpeg_turbo)
+
 # Report feature 6: CIEDE2000 colour difference.
 add_executable(test_ciede2000 ${CMAKE_SOURCE_DIR}/tests/core/test_ciede2000.cpp)
 target_link_libraries(test_ciede2000 PRIVATE mviewer_core)

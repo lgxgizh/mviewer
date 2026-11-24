@@ -5,6 +5,14 @@ add_test(NAME m3m4m5_tests     COMMAND test_m3m4m5)
 add_test(NAME unit_tests       COMMAND mviewer_unit_tests)
 add_test(NAME appstate_tests   COMMAND test_appstate)
 add_test(NAME ui_models_tests  COMMAND test_ui_models)
+
+# Review P2-08: the MVIEWER_BLITTER A/B switch. No GL context is created (this
+# suite runs headless); compile/link/draw parity needs real hardware.
+add_executable(blitshader_flag_tests ${CMAKE_SOURCE_DIR}/tests/test_blitshader_flag.cpp)
+target_link_libraries(blitshader_flag_tests PRIVATE mviewer_ui Qt6::Widgets Qt6::Gui Qt6::Core)
+target_compile_features(blitshader_flag_tests PRIVATE cxx_std_20)
+target_include_directories(blitshader_flag_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME blitshader_flag_tests COMMAND blitshader_flag_tests)
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)

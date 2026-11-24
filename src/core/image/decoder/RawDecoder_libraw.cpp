@@ -31,7 +31,7 @@
 
 namespace
 {
-ImageData scaleToEdge(ImageData image, int maxEdge)
+ImageData scaleToEdge(ImageData &&image, int maxEdge)
 {
     if (image.isNull() || maxEdge <= 0)
         return image;

@@ -2,6 +2,163 @@
 
 ## [Unreleased]
 
+## [1.0.213] - 2026-11-24
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.213**.
+
+### Added
+
+- **PR-09: the compare canvas composites on the GPU.** The panes are still
+  rasterised by the same CPU calls (so their pixels cannot change); what moved is
+  "which pixels of A and B land where", now a fragment shader over two textures.
+  Split, swipe and overlay composite in one pass; the full-physical-resolution
+  `m_canvasBaseSurface` rebuild disappears for those modes. Opt-in with
+  **`MVIEWER_COMPARE_GL=1`**. Documented in ADR 038.
+- **`B20` (`compare_composite_frame_ms`)**, a report-only benchmark that measures
+  the two-pane split/overlay composite: **149 ms per frame** on the reference
+  machine. That is the number this work has to beat.
+
+### Verified on real hardware
+
+Captured against `tests/gl_baseline` (v1.0.212 CPU captures) with
+`MVIEWER_COMPARE_GL=1` on Ubuntu 22.04 / Qt 6.8 / Mesa llvmpipe:
+
+| mode | differing pixels (tolerance 2) |
+|---|---|
+| split x2 divider positions | **0** |
+| swipe x2 positions | **0** |
+| overlay | **0** |
+
+at scale factors 1.0 and 2.0. **Checkerboard stays on the CPU path**: QPainter
+anti-aliases its `QRegion` clip at every block edge (a boundary pixel blends both
+panes), which a hard shader switch cannot reproduce.
+
+## [1.0.212] - 2026-11-24
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.212**.
+
+### Added
+
+- **PR-08 (second half), opt-in: a fragment-shader tile blitter.**
+  `gpu/ImageBlitterShader` replaces `QOpenGLTextureBlitter` when
+  **`MVIEWER_BLITTER=shader`** is set. The shader samples the tile texture,
+  applies exposure / inverse-gamma uniforms, and can alpha-blend a second
+  (overlay) texture in the same pass - the structure PR-08 asked for.
+  Qt's blitter stays the default; a compile or link failure falls back to it
+  silently. Documented in ADR 037.
+- **`blitshader_flag_tests`** pins the A/B switch contract (unset / `qt` keep
+  the default, `shader` selects the new path, case-insensitive, cached until
+  reset).
+
+### Not done, with reasons
+
+- **The shader path is not pixel-verified here.** `QOpenGLContext::create()`
+  faults under the offscreen platform in this environment - and therefore in
+  CI - so no headless test can execute it; a smoke test that attempted exactly
+  that was removed rather than left red. Comparing it against Qt's blitter needs
+  a framebuffer-capture harness on real hardware, which is why it is opt-in
+  instead of the default.
+- **Exposure / gamma are not fed to the shader yet**: they are already baked
+  into the uploaded pixels by `imageviewer_adjust.cpp`, so wiring them now would
+  double-apply. The uniforms are ready for the day the pipeline skips the CPU
+  bake.
+- **PR-09** unchanged: B20 says the compare composite costs 149 ms/frame, but
+  moving it to GL has the same verification gap.
+
+## [1.0.211] - 2026-11-24
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.211**.
+
+### Changed
+
+- **PR-08 (first half): an active overlay no longer drags the whole tile layer
+  back onto the CPU.** `drawGpuTiles()` / `drawCpuTiles()` used to require
+  `m_overlayMode == None`, so turning on FocusPeaking / FalseColor / Zebra made
+  every visible tile go through `QPainter`. The overlay derivation already
+  produces ordinary per-tile `ImageData` (`scheduleOverlayTiles` swaps it into
+  the ready tiles), so those tiles upload to the GPU exactly like the plain
+  ones; the gate was unnecessary.
+- **New report-only benchmark `B20` (`compare_composite_frame_ms`)** — the
+  baseline for PR-09: a two-pane split/overlay composite of two 4096x3072
+  sources at 1920x1080 costs **149 ms per frame** on this machine through the
+  CPU `QPainter` canvas that PR-09 would move into a fragment shader.
+
+### Not done, with reasons
+
+- **PR-08 (second half) / PR-09**: the remaining piece is replacing
+  `QOpenGLTextureBlitter` with a custom fragment shader (exposure / gamma / 3D
+  LUT / overlay) and the compare canvas with a `QOpenGLWidget` compositor.
+  Measured first: B20 says the compare composite is 149 ms of the 16 ms frame
+  budget, so the payoff is real, but the change touches the default render path
+  of every image and has no A/B switch - `MVIEWER_GPU=0` still exists, yet the
+  CPU fallback would then differ from the new shader by construction. It needs
+  its own round with golden-frame capture, not a ride-along.
+
+## [1.0.210] - 2026-11-23
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.210**.
+
+### Added
+
+- **JPEG decode fast path (libjpeg-turbo 3.1.0).** Qt's JPEG plugin decoded into
+  a 32-bit `QImage` and the pipeline then copied that into an `ImageData` - two
+  full-image passes and the slower IJG IDCT. libjpeg-turbo writes `TJPF_RGB`
+  (or `TJPF_GRAY`) straight into the destination `ImageData` with a SIMD IDCT,
+  and produces 1/2, 1/4 and 1/8 scale output natively, so a LOD request costs no
+  second rescale. The library is fetched and built like LibRaw (SHA256-pinned,
+  offline `third_party/` cache) and linked **static**, so no new DLL ships.
+  Documented in ADR 036.
+  - **Measured** (`mviewer_bench`, synthetic 3840x2160 JPEG, 12 samples, p50):
+    `B11_decode_4k_jpeg_ms` **170 ms -> 104 ms (-39%)**. The review's < 45 ms is
+    not reachable at full 4K resolution - the IDCT over 8.3 M pixels is the
+    floor - but a LOD request aligned to a power-of-two scale does get there,
+    because libjpeg-turbo skips whole DCT blocks.
+  - The **accurate** SIMD IDCT is used, not `TJFLAG_FASTDCT`: the fast flag
+    trades up to 8 codes for ~9% more speed and shows up as a visible
+    difference against Qt's decode of the same file.
+  - Baseline and fallback are pinned before the change: `jpeg_turbo_tests`
+    compares the fast path against Qt's own decode of the same file (mean
+    absolute per-channel difference 1.15 codes, threshold 2), and covers the
+    greyscale case, the scaled-factor choice, the null-return fallback for a
+    non-JPEG and a missing file, plus the ICC-profile guard.
+  - `m47_source_tests` T5 now allows a 2-code difference between the clip path
+    (Qt's scanline reader) and the full decode (libjpeg-turbo): two different
+    IDCTs on a lossy codec are not bit-identical by nature.
+
+### Changed
+
+- **The compressed file is read with one sized `ifstream::read`** rather than
+  `istreambuf_iterator`; that alone was 105 ms -> 92 ms on the 4K fixture.
+- **The scale factor is chosen only when libjpeg-turbo's power-of-two output
+  lands within 1/8 of the request**; otherwise Qt does its exact rescale. That
+  keeps a zoom from ever landing on a coarser raster (`m47_compare_lod_tests`
+  C3) and the preview panel inside `kPreviewMaxEdge` (`m27_lifetime_tests`).
+  Full-resolution requests always take 1/1, so they are always fast.
+- **`QtDecoder.cpp` split** (complexity gate): the format-name helper, the raster
+  metadata fill and the header-only probe moved to `QtDecoder_meta.cpp` behind a
+  Qt-free internal header, so the decoder TU is back under its 800-line cap.
+- **ICC-bearing JPEGs keep Qt's decode.** The decoded pixels carry no colour
+  space and the colour-managed path reads `meta.iccProfile`, so a JPEG with an
+  `ICC_PROFILE` APP2 segment falls back. The check is one `std::search` over the
+  compressed bytes.
+- **EXIF-rotated JPEGs keep Qt's decode on both paths.** libjpeg-turbo scales
+  the stored raster while Qt reports the displayed geometry, so a rotated source
+  would get its scale factor from the wrong axes; the m27 preview fixtures pin
+  the exact preview edge and caught it.
+
+### Not done, with reasons
+
+- **PR-08 / PR-09 GPU shader pipeline** - unchanged from 1.0.209: a render
+  pipeline rewrite with no A/B path.
+
 ## [1.0.209] - 2026-11-23
 
 ### Release

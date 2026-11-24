@@ -1,0 +1,255 @@
+#include "compareworkspace_composite_gl.h"
+
+#include <QOffscreenSurface>
+#include <QOpenGLBuffer>
+#include <QOpenGLContext>
+#include <QOpenGLFramebufferObject>
+#include <QOpenGLFunctions>
+#include <QOpenGLShaderProgram>
+#include <QOpenGLVertexArrayObject>
+#include <QSurfaceFormat>
+
+#include <algorithm>
+
+namespace mviewer::ui
+{
+namespace
+{
+int g_requested = -1;
+
+const char *const kVertexShader = R"(#version 330 core
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aUv;
+out vec2 vUv;
+void main()
+{
+    gl_Position = vec4(aPos, 0.0, 1.0);
+    vUv = aUv;
+}
+)";
+
+// The two pane rasters are already at the target resolution, so every branch is
+// a 1:1 texel read - no resampling, which is what keeps this bit-exact against
+// the QPainter composite.
+const char *const kFragmentShader = R"(#version 330 core
+in vec2 vUv;
+out vec4 outColor;
+uniform sampler2D uA;
+uniform sampler2D uB;
+uniform int uMode;        // 0 split/swipe, 1 overlay, 2 checkerboard
+uniform float uDivider;   // 0..1, fraction of the width showing pane A
+uniform float uAlpha;     // second-pane opacity
+uniform vec2 uChecker;    // block edge, in uv units
+void main()
+{
+    vec3 a = texture(uA, vUv).rgb;
+    vec3 b = texture(uB, vUv).rgb;
+    if (uMode == 1)
+    {
+        outColor = vec4(mix(a, b, clamp(uAlpha, 0.0, 1.0)), 1.0);
+        return;
+    }
+    if (uMode == 2)
+    {
+        vec2 cell = floor(vUv / max(uChecker, vec2(1e-6)));
+        bool useB = mod(cell.x + cell.y, 2.0) >= 0.5;
+        outColor = vec4(useB ? b : a, 1.0);
+        return;
+    }
+    outColor = vec4(vUv.x < uDivider ? a : b, 1.0);
+}
+)";
+} // namespace
+
+CompareCompositeGL::~CompareCompositeGL()
+{
+    destroy();
+}
+
+bool CompareCompositeGL::requested()
+{
+    if (g_requested < 0)
+    {
+        const QByteArray v = qgetenv("MVIEWER_COMPARE_GL");
+        const bool off = (v == "0" || v.compare("false", Qt::CaseInsensitive) == 0 ||
+                          v.compare("no", Qt::CaseInsensitive) == 0 ||
+                          v.compare("off", Qt::CaseInsensitive) == 0);
+        g_requested = off ? 0 : (!v.isEmpty() ? 1 : 0);
+    }
+    return g_requested != 0;
+}
+
+void CompareCompositeGL::resetRequestedCache()
+{
+    g_requested = -1;
+}
+
+bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
+{
+    if (m_ready)
+        return true;
+    QSurfaceFormat format;
+    format.setRenderableType(QSurfaceFormat::OpenGL);
+    format.setProfile(QSurfaceFormat::CoreProfile);
+    format.setVersion(3, 3);
+    m_context.setFormat(format);
+    if (shareContext != nullptr)
+        m_context.setShareContext(shareContext);
+    if (!m_context.create())
+        return false;
+    m_surface.setFormat(m_context.format());
+    m_surface.create();
+    if (!m_context.makeCurrent(&m_surface))
+        return false;
+
+    QOpenGLFunctions *gl = m_context.functions();
+    m_program = new QOpenGLShaderProgram(&m_context);
+    if (!m_program->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader) ||
+        !m_program->addShaderFromSourceCode(QOpenGLShader::Fragment, kFragmentShader) ||
+        !m_program->link())
+    {
+        destroy();
+        return false;
+    }
+    m_program->bind();
+    m_program->setUniformValue("uA", 0);
+    m_program->setUniformValue("uB", 1);
+    m_program->release();
+
+    m_vao = std::make_unique<QOpenGLVertexArrayObject>(&m_context);
+    if (!m_vao->create())
+    {
+        destroy();
+        return false;
+    }
+    m_vbo = std::make_unique<QOpenGLBuffer>(QOpenGLBuffer::VertexBuffer);
+    if (!m_vbo->create())
+    {
+        destroy();
+        return false;
+    }
+    m_vbo->setUsagePattern(QOpenGLBuffer::DynamicDraw);
+    m_vbo->bind();
+    m_vbo->allocate(16 * sizeof(float));
+    m_vbo->release();
+
+    gl->glGenTextures(2, m_textures);
+    for (unsigned int tex : m_textures)
+    {
+        gl->glBindTexture(GL_TEXTURE_2D, tex);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    }
+    m_ready = true;
+    return true;
+}
+
+void CompareCompositeGL::destroy()
+{
+    QOpenGLFunctions *gl = nullptr;
+    if (QOpenGLContext::currentContext() != nullptr)
+        gl = QOpenGLContext::currentContext()->functions();
+    else if (m_context.isValid())
+        gl = m_context.functions();
+
+    if (gl != nullptr && m_textures[0] != 0)
+        gl->glDeleteTextures(2, m_textures);
+    m_textures[0] = m_textures[1] = 0;
+
+    if (m_context.isValid() && QOpenGLContext::currentContext() == &m_context)
+        m_context.doneCurrent();
+    m_fbo.reset();
+    m_vbo.reset();
+    m_vao.reset();
+    delete m_program;
+    m_program = nullptr;
+    m_fboSize = QSize();
+    m_ready = false;
+}
+
+namespace
+{
+void upload(QOpenGLFunctions *gl, unsigned int tex, const QImage &img)
+{
+    gl->glBindTexture(GL_TEXTURE_2D, tex);
+    // Straight 8-bit RGB: the pane raster is fully opaque after the background
+    // fill, so this is a byte-exact copy - no premultiply round trip.
+    const QImage rgb = img.convertToFormat(QImage::Format_RGB888);
+    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, rgb.width(), rgb.height(), 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, rgb.constBits());
+}
+} // namespace
+
+QImage CompareCompositeGL::composite(CompareCompositeMode mode, const QImage &paneA,
+                                     const QImage &paneB, const QSize &size, int dividerX,
+                                     double alpha, int checkerSize)
+{
+    if (!m_ready || size.isEmpty())
+        return QImage();
+    QOpenGLFunctions *gl = m_context.functions();
+    if (!m_context.makeCurrent(&m_surface))
+        return QImage();
+
+    if (!m_fbo || m_fboSize != size)
+    {
+        m_fbo.reset(new QOpenGLFramebufferObject(size, GL_TEXTURE_2D));
+        m_fboSize = size;
+    }
+    if (!m_fbo->isValid())
+        return QImage();
+
+    upload(gl, m_textures[0], paneA);
+    upload(gl, m_textures[1], paneB);
+
+    m_fbo->bind();
+    gl->glViewport(0, 0, size.width(), size.height());
+    gl->glDisable(GL_BLEND);
+    gl->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    gl->glClear(GL_COLOR_BUFFER_BIT);
+
+    m_vao->bind();
+    m_vbo->bind();
+    const float verts[16] = {-1.0f, -1.0f, 0.0f, 1.0f, 1.0f,  -1.0f, 1.0f, 1.0f,
+                             -1.0f, 1.0f,  0.0f, 0.0f, 1.0f,  1.0f,  1.0f, 0.0f};
+    m_vbo->write(0, verts, sizeof(verts));
+
+    m_program->bind();
+    m_program->enableAttributeArray(0);
+    m_program->enableAttributeArray(1);
+    m_program->setAttributeBuffer(0, GL_FLOAT, 0, 2, 4 * sizeof(float));
+    m_program->setAttributeBuffer(1, GL_FLOAT, 2 * sizeof(float), 2, 4 * sizeof(float));
+    m_program->setUniformValue("uMode", mode == CompareCompositeMode::Overlay ? 1
+                            : mode == CompareCompositeMode::Checkerboard ? 2
+                                                                        : 0);
+    m_program->setUniformValue(
+        "uDivider", size.width() > 0 ? static_cast<float>(dividerX) / size.width() : 0.0f);
+    m_program->setUniformValue("uAlpha", static_cast<float>(alpha));
+    m_program->setUniformValue("uChecker",
+                               QSizeF(checkerSize > 0 ? static_cast<float>(checkerSize) / size.width()
+                                                     : 1.0f,
+                                      checkerSize > 0 ? static_cast<float>(checkerSize) / size.height()
+                                                     : 1.0f));
+
+    gl->glActiveTexture(GL_TEXTURE0);
+    gl->glBindTexture(GL_TEXTURE_2D, m_textures[0]);
+    gl->glActiveTexture(GL_TEXTURE1);
+    gl->glBindTexture(GL_TEXTURE_2D, m_textures[1]);
+    gl->glActiveTexture(GL_TEXTURE0);
+    gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    m_program->disableAttributeArray(0);
+    m_program->disableAttributeArray(1);
+    m_program->release();
+    m_vbo->release();
+    m_vao->release();
+
+    QImage out = m_fbo->toImage();
+    m_fbo->bindDefault();
+    m_context.doneCurrent();
+    return out.convertToFormat(QImage::Format_ARGB32_Premultiplied);
+}
+
+} // namespace mviewer::ui

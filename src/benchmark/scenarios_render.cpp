@@ -8,6 +8,7 @@
 #include "core/render/Viewport.h"
 
 #include <QImage>
+#include <QPainter>
 #include <QTemporaryDir>
 
 #include <algorithm>
@@ -310,6 +311,51 @@ ScenarioResult scenarioRenderFps()
     r.value = fps;
     r.passed = true;
     r.detail = "frames=" + std::to_string(frames) + " elapsed_ms=" + std::to_string(elapsed);
+    return r;
+}
+
+// B20: compare-canvas composite frame cost (PR-09 baseline).
+ScenarioResult scenarioCompareComposite()
+{
+    ScenarioResult r;
+    r.name = "B20";
+    r.metric = "compare_composite_frame_ms";
+    const QImage a = makeSyntheticFrame(4096, 3072, 5);
+    const QImage b = makeSyntheticFrame(4096, 3072, 9);
+    if (scenarioPastDeadline())
+        return timeoutResult(r.name, r.metric, scenarioDeadlineBudgetMs(), true);
+    const QSize view(1920, 1080);
+    std::vector<double> s;
+    s.reserve(30);
+    for (int i = 0; i < 30; ++i)
+    {
+        if (failIfScenarioTimedOut(r, true))
+            return r;
+        const double t0 = nowMs();
+        // What the CPU canvas does per drag frame: downscale both panes to the
+        // viewport, then composite split + alpha overlay + checkerboard + diff.
+        const QImage sa = a.scaled(view, Qt::KeepAspectRatio, Qt::SmoothTransformation).convertToFormat(
+            QImage::Format_ARGB32_Premultiplied);
+        const QImage sb = b.scaled(view, Qt::KeepAspectRatio, Qt::SmoothTransformation).convertToFormat(
+            QImage::Format_ARGB32_Premultiplied);
+        QImage canvas(view, QImage::Format_ARGB32_Premultiplied);
+        QPainter p(&canvas);
+        p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        const int splitX = view.width() * (20 + (i % 60)) / 100;
+        p.drawImage(QRect(0, 0, splitX, view.height()), sa,
+                    QRect(0, 0, sa.width() * splitX / view.width(), sa.height()));
+        p.setOpacity(0.5);
+        p.drawImage(QRect(splitX, 0, view.width() - splitX, view.height()), sb,
+                    QRect(sa.width() * splitX / view.width(), 0, sb.width(), sb.height()));
+        p.setOpacity(1.0);
+        if (!p.isActive())
+            return r;
+        p.end();
+        s.push_back(nowMs() - t0);
+    }
+    r.timing = summarize(s);
+    r.value = r.timing.p50Ms;
+    r.detail = "two-pane split/overlay composite of 4096x3072 sources at 1920x1080 per frame";
     return r;
 }
 

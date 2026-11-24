@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-23 · Version: **1.0.209** · Release tag: **v1.0.209**
+> Snapshot: 2026-11-24 · Version: **1.0.213** · Release tag: **v1.0.213**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,53 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.213 - compare canvas composites on the GPU (PR-09) (2026-11-24)
+
+- `MVIEWER_COMPARE_GL=1` moves split / swipe / overlay compositing into a
+  fragment shader over two pane textures; the panes are still rasterised by the
+  same CPU calls, so only the placement decision moved. ADR 038.
+- New report-only benchmark B20: two-pane composite = 149 ms/frame (the number
+  this work beats).
+- Verified bit-exact against tests/gl_baseline at scale factors 1.0 and 2.0:
+  0 differing pixels for split (x2), swipe (x2) and overlay.
+- Checkerboard stays on the CPU path: QPainter anti-aliases its QRegion clip at
+  block edges and a hard shader switch cannot reproduce that.
+
+## 1.0.212 - fragment-shader tile blitter behind an A/B switch (2026-11-24)
+
+- `gpu/ImageBlitterShader` + `MVIEWER_BLITTER=shader`: samples the tile, applies
+  exposure / inverse-gamma, alpha-blends an overlay texture (ADR 037). Qt's
+  blitter stays the default; a link failure falls back to it.
+- `blitshader_flag_tests` pins the switch contract.
+- Not done: the shader is not pixel-verified here - QOpenGLContext::create()
+  faults offscreen, so it needs a hardware framebuffer harness before it can be
+  made the default. Exposure/gamma are already baked CPU-side, so they are not
+  fed to the shader yet.
+
+## 1.0.211 - overlay stays on the GPU tile path; PR-09 baseline (2026-11-24)
+
+- `drawGpuTiles()` no longer requires `overlayMode == None`: the derived overlay
+  tiles are ordinary ImageData, so FocusPeaking / FalseColor / Zebra stop forcing
+  the whole visible tile layer through QPainter.
+- New report-only benchmark B20 (`compare_composite_frame_ms`): two-pane
+  split/overlay composite of 4096x3072 sources at 1920x1080 = 149 ms/frame on the
+  CPU canvas - the number PR-09 has to beat.
+- Not done: the fragment-shader blitter and the GL compare compositor. They
+  touch the default render path of every image and need their own round.
+
+## 1.0.210 - libjpeg-turbo JPEG fast path (2026-11-23)
+
+- New third-party dependency: libjpeg-turbo 3.1.0, fetched/built like LibRaw,
+  SHA256-pinned, static. Writes RGB24/Greyscale8 straight into ImageData with a
+  SIMD IDCT and native 1/2, 1/4, 1/8 scaling. ADR 036.
+- Measured B11 (3840x2160 JPEG, p50): 170 ms -> 104 ms (-39%), accurate SIMD IDCT.
+- `jpeg_turbo_tests` pins correctness against Qt's decode (mean abs diff 1.15,
+  threshold 2), the greyscale case, the scale-factor choice and the fallback
+  contract.
+- ICC-bearing and EXIF-rotated JPEGs keep Qt's decode.
+- `QtDecoder.cpp` split (complexity gate): metadata helpers moved to
+  `QtDecoder_meta.cpp` behind a Qt-free internal header.
 
 ## 1.0.209 - global thread pool consolidation (2026-11-23)
 

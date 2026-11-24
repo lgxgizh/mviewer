@@ -1,4 +1,5 @@
 include(${CMAKE_SOURCE_DIR}/cmake/LibRaw.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/LibJpegTurbo.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/MViewerTesting.cmake)
 
 # ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
@@ -23,6 +24,8 @@ add_library(mviewer_core SHARED
     core/image/decoder/QtDecoder_bmp.cpp
     core/image/decoder/QtDecoder_png.cpp
     core/image/decoder/QtDecoder_tiff.cpp
+    core/image/decoder/JpegTurbo.cpp
+    core/image/decoder/QtDecoder_meta.cpp
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
@@ -217,6 +220,11 @@ if(MVIEWER_HAS_LIBRAW)
     target_link_libraries(mviewer_core PRIVATE mviewer_libraw)
     target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_LIBRAW=1)
 endif()
+if(MVIEWER_HAS_TURBOJPEG)
+    target_link_libraries(mviewer_core PRIVATE mviewer_turbojpeg)
+    target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_TURBOJPEG=1)
+    message(STATUS "MViewer: JPEG fast path via libjpeg-turbo")
+endif()
 
 # Perf review P2-4: bounded PNG LOD through the libpng Qt already ships
 # (Qt6::BundledLibpng, static). Optional: distro Qt packages without it
@@ -359,6 +367,8 @@ add_library(mviewer_ui STATIC
     compareworkspace_pane_header.cpp
     compareworkspace_render.cpp
     compareworkspace_render_materialization.cpp
+    compareworkspace_composite_gl.cpp
+    compareworkspace_composite_paint.cpp
     compareworkspace_render_canvas_paint.cpp
     compareworkspace_pyramid_wire.cpp
     compareworkspace_render_diff.cpp
@@ -425,6 +435,7 @@ add_library(mviewer_ui STATIC
     ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
     analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
+    gpu/ImageBlitterShader.cpp
 )
 
 # Native window chrome (DWM title bar, corners, Mica). Stubs elsewhere.

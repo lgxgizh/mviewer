@@ -26,6 +26,7 @@
 #include "compare_roi_controller.h"
 #include "compare_session_state.h"
 #include "compareworkspace.h"
+#include "compareworkspace_composite_gl.h"
 #include "selectionmodel.h"
 #include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"

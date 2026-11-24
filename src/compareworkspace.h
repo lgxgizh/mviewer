@@ -53,21 +53,17 @@
 #include <string>
 #include <vector>
 
-class QDialog;
-class QJsonObject;
-class QStackedLayout;
-class QTableWidget;
-class HistogramWidget;
-class RawImageView;
-class QProgressBar;
-class SelectionModel;
-
+class QDialog; class QJsonObject;
+class QStackedLayout; class QTableWidget;
+class HistogramWidget; class RawImageView;
+class QProgressBar; class SelectionModel;
 namespace mviewer::ui
 {
 class CompareSessionState;
 class CompareRoiController;
 class CompareDiffRenderer;
 class CompareDisplayManager;
+class CompareCompositeGL;
 } // namespace mviewer::ui
 
 // CompareWorkspace: synchronized multi-image compare workspace
@@ -388,6 +384,8 @@ class CompareWorkspace : public QWidget
     bool isSplitOrSwipe() const;
     void updateCanvasModeVisibility();
     void paintCompareCanvas();
+    QImage compositeCanvasWithGl(const QRect &canvasRect, const QSize &physical, qreal dpr);
+    void drawCanvasModeDivider(QPainter &p, const QRect &canvasRect);
     QRect canvasRect() const;
     bool canvasEventFilter(QEvent *event);
     bool handleCanvasWheel(QEvent *event);
@@ -796,5 +794,6 @@ class CompareWorkspace : public QWidget
     std::unique_ptr<mviewer::ui::CompareSessionState> m_sessionState;
     std::unique_ptr<mviewer::ui::CompareRoiController> m_roiController;
     std::unique_ptr<mviewer::ui::CompareDiffRenderer> m_diffRenderer;
+    std::unique_ptr<mviewer::ui::CompareCompositeGL> m_compositeGl; // review P2-09, opt-in
     std::unique_ptr<mviewer::ui::CompareDisplayManager> m_displayManager;
 };

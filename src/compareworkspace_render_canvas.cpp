@@ -251,6 +251,39 @@ void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &clipRe
     p.restore();
 }
 
+void CompareWorkspace::drawCanvasModeDivider(QPainter &p, const QRect &r)
+{
+    // Review P2-09: the GL composite paints only the two pane rasters; the mode's
+    // own divider (and the swipe drag handle) are drawn here so they land on
+    // exactly the pixels the CPU base surface used to put them on.
+    if (!r.isValid())
+        return;
+    if (m_splitChk && m_splitChk->isChecked())
+    {
+        const int x = canvasPaneGeometry(1).toRect().left();
+        p.setPen(QPen(QColor(0, 0, 0, 110), 3));
+        p.drawLine(QPoint(x, r.top()), QPoint(x, r.bottom()));
+        p.setPen(QPen(QColor(255, 255, 255, 230), 1));
+        p.drawLine(QPoint(x, r.top()), QPoint(x, r.bottom()));
+        return;
+    }
+    if (m_swipeChk && m_swipeChk->isChecked())
+    {
+        const int divX = qBound(0, int(r.width() * m_splitPos), r.width());
+        p.setPen(QPen(QColor(0, 0, 0, 110), 3));
+        p.drawLine(QPoint(divX, 0), QPoint(divX, r.height()));
+        p.setPen(QPen(QColor(255, 255, 255, 230), 1));
+        p.drawLine(QPoint(divX, 0), QPoint(divX, r.height()));
+
+        const int centerY = r.height() / 2;
+        p.setPen(QPen(QColor(0, 0, 0, 120), 1.5));
+        p.setBrush(QColor(255, 255, 255, 240));
+        p.drawEllipse(QPoint(divX, centerY), 8, 8);
+        p.setPen(QPen(QColor(40, 40, 45), 1.5));
+        p.drawLine(QPoint(divX - 4, centerY), QPoint(divX + 4, centerY));
+    }
+}
+
 void CompareWorkspace::drawSplitCompare(QPainter &p)
 {
     const QRect r = canvasRect();

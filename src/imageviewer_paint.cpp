@@ -7,6 +7,7 @@
 #include "core/image/QtConvert.h"
 #include "core/render/TileSeam.h"
 #include "core/render/ZoomPercent.h"
+#include "gpu/ImageBlitterShader.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
 #include "imageviewer_tile_seam.h"
@@ -441,7 +442,8 @@ mviewer::core::TileScreenPlacement placedTile(const Viewport &tileView, const Ti
                                     decodedW, decodedH);
 }
 
-void blitPlacedTile(QOpenGLTextureBlitter &blitter, GpuTileUploader &gpu, uintptr_t handle,
+void blitPlacedTile(QOpenGLTextureBlitter &blitter, ImageBlitterShader *shader,
+                    GpuTileUploader &gpu, uintptr_t handle,
                     const mviewer::core::TileScreenPlacement &placed, const QRect &viewportRect)
 {
     if (!placed.valid || handle == 0)
@@ -449,9 +451,21 @@ void blitPlacedTile(QOpenGLTextureBlitter &blitter, GpuTileUploader &gpu, uintpt
     const bool magnified = placed.screenW > placed.contentW || placed.screenH > placed.contentH;
     gpu.setMagnifyNearest(handle, magnified);
     const QRect destination(placed.screenX, placed.screenY, placed.screenW, placed.screenH);
-    const QMatrix4x4 target = QOpenGLTextureBlitter::targetTransform(destination, viewportRect);
     const bool fullTexture = placed.contentX == 0 && placed.contentY == 0 &&
                              placed.contentW == placed.texW && placed.contentH == placed.texH;
+    if (shader != nullptr && shader->ready())
+    {
+        // Review P2-08: the shader path replaces Qt's copy-only blitter and can
+        // carry exposure / gamma / an overlay texture in the same pass.
+        const QRect content = fullTexture
+                                  ? QRect(0, 0, placed.texW, placed.texH)
+                                  : QRect(placed.contentX, placed.contentY, placed.contentW,
+                                          placed.contentH);
+        shader->blit(static_cast<unsigned int>(handle), destination, viewportRect, content,
+                     QSize(placed.texW, placed.texH));
+        return;
+    }
+    const QMatrix4x4 target = QOpenGLTextureBlitter::targetTransform(destination, viewportRect);
     if (fullTexture)
     {
         blitter.blit(static_cast<GLuint>(handle), target, QOpenGLTextureBlitter::OriginTopLeft);
@@ -497,8 +511,11 @@ void drawPlacedCpuTile(QPainter &painter, const QImage &image,
 void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                                const Viewport &tileView)
 {
-    const bool useGpu =
-        GpuTileUploader::enabled() && m_blitterReady && m_overlayMode == mviewer::OverlayMode::None;
+    // Review P2-08: the overlay derivation produces ordinary per-tile ImageData,
+    // so there is no reason to drop the whole tile layer back to the CPU
+    // compositor when an overlay mode is active. The GL path uploads those
+    // derived tiles exactly like the plain ones.
+    const bool useGpu = GpuTileUploader::enabled() && m_blitterReady;
     if (!useGpu)
         return;
     const QRect viewportRect(0, 0, width(), height());
@@ -526,7 +543,8 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
             continue;
         const auto handle = m_gpu.handle(rt.key);
         const auto placed = placedTile(tileView, m_tiles, rt, rt.data.width, rt.data.height);
-        blitPlacedTile(m_blitter, m_gpu, handle, placed, viewportRect);
+        blitPlacedTile(m_blitter, m_shaderReady ? m_shader : nullptr, m_gpu, handle, placed,
+                       viewportRect);
     }
     m_blitter.release();
     painter.endNativePainting();
@@ -535,8 +553,7 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
 void ImageViewer::drawCpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                                const Viewport &tileView)
 {
-    const bool gpuActive =
-        GpuTileUploader::enabled() && m_blitterReady && m_overlayMode == mviewer::OverlayMode::None;
+    const bool gpuActive = GpuTileUploader::enabled() && m_blitterReady;
     for (const auto &rt : ready)
     {
         if (rt.data.isNull())

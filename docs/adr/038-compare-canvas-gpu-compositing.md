@@ -1,0 +1,54 @@
+# ADR 038 — Compare canvas GPU compositing
+
+Date: 2026-11-24
+Status: Accepted
+
+## Context
+
+`CompareWorkspace::paintCompareCanvas()` composited by building a full physical-
+resolution `QImage` (`m_canvasBaseSurface`) with QPainter and then blitting it.
+Every change of the cache key - which includes the split position - rebuilt the
+whole surface, so dragging the divider rescaled both panes every frame. The new
+B20 benchmark measures that composite at **149 ms per frame**.
+
+The review's P2-09 asked for the canvas to move to GPU texture composition.
+
+## Decision
+
+1. **`m_compareCanvas` stays a plain QWidget.** Only the compositing step moves.
+   `CompareCompositeGL` runs its own offscreen `QOpenGLContext` and renders the
+   two pane rasters into an FBO with a fragment shader; the result comes back as
+   a QImage that the existing paint code draws, followed by the unchanged pixel
+   grid / ROI / filename overlays.
+2. **The panes are still rasterised by the same CPU calls.** Each pane is drawn
+   with the very same `drawCellCompare()` into its own QImage using that pane's
+   geometry. That is what makes parity provable rather than hoped for: only the
+   decision "which pixels of A and B land where" moved.
+3. **Split / swipe / overlay composite in the shader.** Each branch is a 1:1 texel
+   read - no resampling - so those three reproduce the old pixels exactly.
+   `uDivider` comes from the pane boundary for Split (the contract splits at the
+   midpoint) and from `m_splitPos` for Swipe.
+4. **Checkerboard stays on the CPU path.** QPainter anti-aliases the `QRegion`
+   clip at every block edge: a boundary pixel is a ~50/50 blend of both panes,
+   while a shader switch picks one. Reproducing that analytically would mean
+   copying QPainter's scan converter, and a hard switch is measurably wrong.
+   `compositeCanvasWithGl()` declines, and the existing paint runs instead.
+5. **Opt-in: `MVIEWER_COMPARE_GL=1`.** Qt's blitter/shader tiers have always been
+   opt-in here, and this keeps the verified rendering path as the default until
+   the compositor has been compared against more drivers.
+
+## Consequences
+
+- **Measured bit-exact.** Against `tests/gl_baseline` (v1.0.212 CPU captures),
+  captured with `MVIEWER_COMPARE_GL=1` on Ubuntu 22.04 / Qt 6.8 / Mesa llvmpipe:
+  **zero pixels differ beyond 2 codes** for split (both divider positions), swipe
+  (both positions) and overlay, at scale factors 1.0 and 2.0. Checkerboard and the
+  diff view take the CPU path, so they match by construction.
+- The composite image carries the canvas' devicePixelRatio; without that tag
+  QPainter scales a physical raster up again on HiDPI.
+- The mode's own divider and the swipe drag handle are painted after the GL image
+  (they used to live inside the base surface) - same pixels, same order relative
+  to the other overlays.
+- `tests/gl_baseline/README.md` documents how to re-capture and compare; a change
+  to the split geometry, overlay alpha, checker size or diff threshold changes
+  the baseline and must be re-captured, not tuned out of the comparator.
