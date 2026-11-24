@@ -1,12 +1,23 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-24 · Version: **1.0.211** · Release tag: **v1.0.211**
+> Snapshot: 2026-11-24 · Version: **1.0.212** · Release tag: **v1.0.212**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
 > Simplified Chinese UI. Release evidence (milestone review and qualification
 > reports, M24–M61) is indexed in [`docs/review/INDEX.md`](docs/review/INDEX.md);
 > the live gate is `.\build.ps1 Test` plus GitHub CI.
+
+## 1.0.212 - fragment-shader tile blitter behind an A/B switch (2026-11-24)
+
+- `gpu/ImageBlitterShader` + `MVIEWER_BLITTER=shader`: samples the tile, applies
+  exposure / inverse-gamma, alpha-blends an overlay texture (ADR 037). Qt's
+  blitter stays the default; a link failure falls back to it.
+- `blitshader_flag_tests` pins the switch contract.
+- Not done: the shader is not pixel-verified here - QOpenGLContext::create()
+  faults offscreen, so it needs a hardware framebuffer harness before it can be
+  made the default. Exposure/gamma are already baked CPU-side, so they are not
+  fed to the shader yet.
 
 ## 1.0.211 - overlay stays on the GPU tile path; PR-09 baseline (2026-11-24)
 

@@ -672,16 +672,16 @@ class ImageViewer : public QOpenGLWidget
     TaskScheduler::TaskHandle m_exportTask;
     std::shared_ptr<std::atomic<bool>> m_exportCancel;
 
-    // M16 / Stage A: GPU upload tier (opt-in, capability-gated). When enabled
-    // (real GL context + MVIEWER_GPU=1), decoded tiles are uploaded to
-    // GL textures once and composited via QOpenGLTextureBlitter; otherwise
-    // this stays idle and the CPU QPainter path is used. Bookkeeping is
-    // unit-tested headlessly; the actual GL upload runs only where a
-    // context exists.
+    // M16 / Stage A: GPU upload tier (opt-in, capability-gated). With a real GL
+    // context and MVIEWER_GPU=1 the tiles are uploaded once and composited via
+    // QOpenGLTextureBlitter, or the review P2-08 shader blitter when
+    // MVIEWER_BLITTER=shader (ADR 037); otherwise QPainter is used. Bookkeeping
+    // is unit-tested headlessly; the GL upload runs only where a context exists.
     GpuTileUploader m_gpu;
     QOpenGLTextureBlitter m_blitter;
     bool m_blitterReady = false;
-
+    class ImageBlitterShader *m_shader = nullptr; // opt-in, see ADR 037
+    bool m_shaderReady = false;
     bool m_dragging = false;
     QPoint m_lastMousePos;
 

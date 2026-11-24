@@ -8,6 +8,7 @@
 #include "core/image/DisplayMip.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
+#include "gpu/ImageBlitterShader.h"
 #include "core/render/RenderEngine.h"
 #include "core/render/ZoomPercent.h"
 #include "core/trace/Trace.h"
@@ -124,6 +125,13 @@ ImageViewer::~ImageViewer()
             m_blitter.destroy();
             m_blitterReady = false;
         }
+        if (m_shader != nullptr)
+        {
+            m_shader->destroy();
+            delete m_shader;
+            m_shader = nullptr;
+            m_shaderReady = false;
+        }
         doneCurrent();
     }
 }
@@ -198,6 +206,14 @@ void ImageViewer::initializeGL()
         gl->glClearColor(0.f, 0.f, 0.f, 1.f);
     }
     m_blitterReady = m_blitter.create();
+    // Review P2-08: opt-in shader path. Qt's blitter stays the default so the
+    // verified rendering is unchanged; the shader is selected explicitly and a
+    // failure to build it silently keeps the default.
+    if (ImageBlitterShader::requested())
+    {
+        m_shader = new ImageBlitterShader();
+        m_shaderReady = m_shader->create();
+    }
 }
 
 void ImageViewer::closeEvent(QCloseEvent *event)

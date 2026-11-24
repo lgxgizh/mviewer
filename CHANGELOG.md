@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [1.0.212] - 2026-11-24
+
+### Release
+
+- **Version bump**: `project(MVIEW VERSION)` / STATUS release tag -> **1.0.212**.
+
+### Added
+
+- **PR-08 (second half), opt-in: a fragment-shader tile blitter.**
+  `gpu/ImageBlitterShader` replaces `QOpenGLTextureBlitter` when
+  **`MVIEWER_BLITTER=shader`** is set. The shader samples the tile texture,
+  applies exposure / inverse-gamma uniforms, and can alpha-blend a second
+  (overlay) texture in the same pass - the structure PR-08 asked for.
+  Qt's blitter stays the default; a compile or link failure falls back to it
+  silently. Documented in ADR 037.
+- **`blitshader_flag_tests`** pins the A/B switch contract (unset / `qt` keep
+  the default, `shader` selects the new path, case-insensitive, cached until
+  reset).
+
+### Not done, with reasons
+
+- **The shader path is not pixel-verified here.** `QOpenGLContext::create()`
+  faults under the offscreen platform in this environment - and therefore in
+  CI - so no headless test can execute it; a smoke test that attempted exactly
+  that was removed rather than left red. Comparing it against Qt's blitter needs
+  a framebuffer-capture harness on real hardware, which is why it is opt-in
+  instead of the default.
+- **Exposure / gamma are not fed to the shader yet**: they are already baked
+  into the uploaded pixels by `imageviewer_adjust.cpp`, so wiring them now would
+  double-apply. The uniforms are ready for the day the pipeline skips the CPU
+  bake.
+- **PR-09** unchanged: B20 says the compare composite costs 149 ms/frame, but
+  moving it to GL has the same verification gap.
+
 ## [1.0.211] - 2026-11-24
 
 ### Release

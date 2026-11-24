@@ -433,6 +433,7 @@ add_library(mviewer_ui STATIC
     ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
     analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
+    gpu/ImageBlitterShader.cpp
 )
 
 # Native window chrome (DWM title bar, corners, Mica). Stubs elsewhere.
