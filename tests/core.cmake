@@ -18,6 +18,8 @@ foreach(_t decoder cache mipmap_pyramid repository scheduler metadata metadata_p
     target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endforeach()
+target_sources(test_m27_scheduler PRIVATE
+    ${CMAKE_SOURCE_DIR}/tests/core/test_m27_scheduler_canceltree.cpp)
 # Case-only rename and trash-directory fallback. Kept beside ${CMAKE_SOURCE_DIR}/tests/test_commandstack.cpp
 # so that file stays under the 800-line complexity cap.
 target_sources(test_commandstack PRIVATE ${CMAKE_SOURCE_DIR}/tests/core/test_commandstack_case.cpp)

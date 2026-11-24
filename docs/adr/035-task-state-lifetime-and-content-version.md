@@ -100,10 +100,20 @@ The drain budget is unchanged (`timeout / 5` per pool). `shutdown` returning
 does not mean a running worker has finished; a worker can still be in user
 code after its slice. Queued and running runnables stay with their pools.
 `DeferredEntry::runnable` stays `void*`. `cancelTree` still destroys a
-deferred runnable while holding `m_graphMtx`. Running-cancel `active_tasks`
+deferred runnable outside `m_graphMtx`. Running-cancel `active_tasks`
 accounting and legacy `submit(void*)` backpressure are unchanged.
 
 The pool-state policy and snapshot accessor definitions live in
 `TaskScheduler_state.cpp`, keeping scheduler translation units below the
 existing 800-line cap. Their public signatures, locking and counter logic are
 unchanged; no complexity threshold or exception is added.
+
+## 2026-11-24 cancelTree deferred retirement
+
+`cancelTree` still walks dependents and updates the existing cancellation
+counters while holding `m_graphMtx`. It reserves an outer vector before those
+mutations. Never-started deferred runnables and the `TaskHandle`s taken out of
+the map are destroyed only after the lock is released, including on exception
+unwind. Queued and running runnables stay with `QThreadPool`. Running-cancel
+`active_tasks` and `pending` still drop before the worker returns; that
+accounting remains a separate change.
