@@ -34,6 +34,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -474,6 +475,100 @@ void testBackpressureHandlerThrows()
     CHECK(allPoolsConverged(sched), "pools converge after rejected submit");
 }
 
+// P0-7. Pause, saturated queue, and a throwing handler must each destroy the
+// rejected capture once. An accepted task runs once and then drops its capture.
+// Does not call shutdown(); that pauses every pool for the rest of the process.
+void testRejectedSubmitReleasesCapture()
+{
+    printf("\n[9b. rejected submit destroys its capture once]\n");
+    fflush(stdout);
+    auto &sched = TaskScheduler::instance();
+    auto releaseBlocker = std::make_shared<std::atomic<bool>>(false);
+    const size_t savedDepth = sched.maxQueueDepth(PoolType::MetadataPool);
+    struct Restore
+    {
+        TaskScheduler &sched;
+        size_t depth;
+        std::shared_ptr<std::atomic<bool>> release;
+        ~Restore()
+        {
+            release->store(true, std::memory_order_release);
+            sched.resume(PoolType::MetadataPool);
+            sched.setBackPressureHandler({});
+            sched.setMaxQueueDepth(PoolType::MetadataPool, depth);
+            (void)sched.drain(PoolType::MetadataPool, kDrain);
+        }
+    } restore{sched, savedDepth, releaseBlocker};
+
+    sched.pause(PoolType::MetadataPool);
+    auto pausedLives = std::make_shared<int>(1);
+    std::weak_ptr<int> pausedWeak = pausedLives;
+    auto pausedRejected = sched.submit(Priority::Background,
+                                       [pausedLives](const TaskContext &) { (void)pausedLives; });
+    pausedLives.reset();
+    sched.resume(PoolType::MetadataPool);
+    CHECK(pausedRejected == nullptr, "paused Metadata pool rejects submit");
+    CHECK(pausedWeak.expired(), "paused rejection destroys the capture once");
+
+    sched.setMaxQueueDepth(PoolType::MetadataPool, 1);
+    auto blocker = sched.submit(Priority::Background,
+                                [releaseBlocker](const TaskContext &ctx)
+                                {
+                                    while (!releaseBlocker->load(std::memory_order_acquire) &&
+                                           !ctx.isCancelled())
+                                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                });
+    CHECK(blocker != nullptr, "queue-depth fixture task is accepted");
+    auto depthLives = std::make_shared<int>(1);
+    std::weak_ptr<int> depthWeak = depthLives;
+    auto depthRejected =
+        sched.submit(Priority::Background, [depthLives](const TaskContext &) { (void)depthLives; });
+    depthLives.reset();
+    CHECK(depthRejected == nullptr, "saturated Metadata queue rejects submit");
+    CHECK(depthWeak.expired(), "queue rejection destroys the capture once");
+    releaseBlocker->store(true, std::memory_order_release);
+    CHECK(sched.drain(PoolType::MetadataPool, kDrain), "queue-depth fixture drains");
+    sched.setMaxQueueDepth(PoolType::MetadataPool, savedDepth);
+
+    sched.setBackPressureHandler([](PoolType) { throw std::runtime_error("bp boom"); });
+    sched.pause(PoolType::MetadataPool);
+    auto throwLives = std::make_shared<int>(1);
+    std::weak_ptr<int> throwWeak = throwLives;
+    bool threw = false;
+    TaskScheduler::TaskHandle thrown = nullptr;
+    try
+    {
+        thrown = sched.submit(Priority::Background,
+                              [throwLives](const TaskContext &) { (void)throwLives; });
+    }
+    catch (...)
+    {
+        threw = true;
+    }
+    throwLives.reset();
+    sched.resume(PoolType::MetadataPool);
+    sched.setBackPressureHandler({});
+    CHECK(!threw, "throwing backpressure handler does not escape submit");
+    CHECK(thrown == nullptr, "throwing handler path rejects with nullptr");
+    CHECK(throwWeak.expired(), "throwing handler path destroys the capture once");
+
+    auto ran = std::make_shared<std::atomic<int>>(0);
+    auto kept = std::make_shared<int>(1);
+    std::weak_ptr<int> keptWeak = kept;
+    auto accepted = sched.submit(Priority::Background,
+                                 [ran, kept](const TaskContext &)
+                                 {
+                                     ran->fetch_add(1, std::memory_order_relaxed);
+                                     (void)kept;
+                                 });
+    CHECK(accepted != nullptr, "idle Metadata pool accepts submit");
+    CHECK(sched.drain(PoolType::MetadataPool, kDrain), "accepted task drains");
+    CHECK(ran->load(std::memory_order_relaxed) == 1, "accepted work ran once");
+    kept.reset();
+    CHECK(keptWeak.expired(), "accepted capture is destroyed once after run");
+    CHECK(allPoolsConverged(sched), "pools converge after rejection lifetime checks");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -515,6 +610,7 @@ int main(int argc, char **argv)
     testDependencyGraphChurn();
     testDrainWallClock();
     testBackpressureHandlerThrows();
+    testRejectedSubmitReleasesCapture();
     // Last: pre-fix the in-process throwing tasks abort the suite — that abort
     // IS the reproduction of "work throwing kills the process".
     testStormConvergence();

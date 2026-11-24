@@ -394,6 +394,10 @@ bool TaskScheduler::enqueueTask(Priority prio, const std::shared_ptr<TaskContext
     }
     if (rejected)
     {
+        // Never queued. Delete outside m_graphMtx and before the handler so a
+        // capture destructor can re-enter the scheduler. Success paths keep
+        // the runnable (pool autoDelete or m_deferred).
+        delete runnable;
         if (handler)
         {
             try
