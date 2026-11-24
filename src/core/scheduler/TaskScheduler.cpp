@@ -213,20 +213,6 @@ TaskScheduler::Priority TaskScheduler::toPriority(PoolType pool)
     return Priority::Background;
 }
 
-void TaskScheduler::setMaxQueueDepth(PoolType pool, size_t max)
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    m_poolState[idx].max_queue_depth = max;
-}
-
-size_t TaskScheduler::maxQueueDepth(PoolType pool) const
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    return m_poolState[idx].max_queue_depth;
-}
-
 void TaskScheduler::submit(PoolType pool, void *runnable)
 {
     // M26: the legacy QRunnable path gets the same lifecycle as every other
@@ -673,55 +659,6 @@ TaskScheduler::TaskHandle TaskScheduler::handle(TaskId id)
     return it->second;
 }
 
-TaskScheduler::PoolMetrics TaskScheduler::metrics(PoolType pool) const
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    return m_poolState[idx].metrics;
-}
-
-TaskScheduler::GraphMetrics TaskScheduler::graphMetrics() const
-{
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    GraphMetrics g;
-    g.handles = m_handles.size();
-    g.deferred = m_deferred.size();
-    g.dep_graph_entries = m_depGraph.size();
-    g.dependents_entries = m_dependents.size();
-    return g;
-}
-
-bool TaskScheduler::isSaturated(PoolType pool) const
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    const auto &m = m_poolState[idx].metrics;
-    if (m_poolState[idx].max_queue_depth == 0)
-        return false;
-    return (m.queue_depth + m.active_tasks) >= m_poolState[idx].max_queue_depth;
-}
-
-size_t TaskScheduler::queueDepth(PoolType pool) const
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    return m_poolState[idx].metrics.queue_depth;
-}
-
-void TaskScheduler::pause(PoolType pool)
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    m_poolState[idx].paused = true;
-}
-
-void TaskScheduler::resume(PoolType pool)
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    m_poolState[idx].paused = false;
-}
-
 bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeout)
 {
     // P0-2 fix: never call QThreadPool::waitForDone() while holding m_graphMtx.
@@ -751,26 +688,53 @@ bool TaskScheduler::drain(PoolType pool, std::chrono::milliseconds timeout)
 
 void TaskScheduler::shutdown(std::chrono::milliseconds timeout)
 {
-    // Pause all pools and request cancel on in-flight tasks so workers exit promptly
+    // Never-started tasks are not pool-owned. The outer vector owns the
+    // extracted runnable and context so an exception cannot destroy them
+    // while m_graphMtx is held. Destruction is explicit after the lock.
+    struct DroppedDeferred
+    {
+        std::unique_ptr<QRunnable> runnable;
+        TaskHandle handle;
+    };
+    std::vector<DroppedDeferred> dropped;
     {
         std::lock_guard<std::mutex> lock(m_graphMtx);
+        dropped.reserve(m_deferred.size());
         for (int i = 0; i < 5; ++i)
-        {
             m_poolState[i].paused = true;
-        }
         for (auto &pair : m_handles)
         {
             if (pair.second)
                 pair.second->requestCancel();
         }
-        // Deferred (never-started) tasks own a QRunnable that would otherwise
         for (auto &entry : m_deferred)
         {
-            delete entry.second.runnable;
+            dropped.emplace_back();
+            DroppedDeferred &item = dropped.back();
+            item.runnable.reset(static_cast<QRunnable *>(entry.second.runnable));
+            entry.second.runnable = nullptr;
+            if (auto hit = m_handles.find(entry.first); hit != m_handles.end())
+            {
+                item.handle = std::move(hit->second);
+                m_handles.erase(hit);
+            }
+            m_taskPriomap.erase(entry.first);
+            const int pIdx = static_cast<int>(entry.second.prio);
+            m_poolState[pIdx].metrics.cancelled++;
+            if (m_poolState[pIdx].metrics.waiting > 0)
+                m_poolState[pIdx].metrics.waiting--;
+            if (m_poolState[pIdx].metrics.pending > 0)
+                m_poolState[pIdx].metrics.pending--;
+            notifyDrainIfIdle(pIdx);
         }
         m_deferred.clear();
         m_depGraph.clear();
         m_dependents.clear();
+    }
+    for (DroppedDeferred &item : dropped)
+    {
+        item.runnable.reset();
+        item.handle.reset();
     }
     {
         std::lock_guard<std::mutex> lock(g_foregroundMtx);
@@ -781,11 +745,4 @@ void TaskScheduler::shutdown(std::chrono::milliseconds timeout)
     {
         waitForPoolDrained(i, timeout / 5);
     }
-}
-
-size_t TaskScheduler::activeTaskCount(PoolType pool) const
-{
-    auto idx = static_cast<int>(toPriority(pool));
-    std::lock_guard<std::mutex> lock(m_graphMtx);
-    return m_poolState[idx].metrics.active_tasks;
 }
