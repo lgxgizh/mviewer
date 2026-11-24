@@ -274,11 +274,12 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
     auto *runnable = new LambdaTask(state);
     state->done = [this, done = std::move(done), ctx, prio]()
     {
-        // M27: cancelTree() erases the handle and finalizes the metrics
-        const bool finalized =
+        // Return value is invokeUserDone, not "metrics were finalized".
+        // false still retires a retained tree-cancel and then suppresses done.
+        const bool invokeUserDone =
             onTaskComplete(ctx->id, prio, ctx->deadline_exceeded.load(std::memory_order_relaxed),
                            ctx->execution_failed.load(std::memory_order_relaxed));
-        if (!finalized)
+        if (!invokeUserDone)
             return;
         try
         {

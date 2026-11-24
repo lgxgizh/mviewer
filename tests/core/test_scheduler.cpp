@@ -107,21 +107,33 @@ static void testQueueDepthIsNotYetStarted()
     CHECK(queued != nullptr, "second task accepted onto the single worker");
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
     const auto mid = sched.metrics(TaskScheduler::MetadataPool);
-    CHECK(mid.active_tasks == 1, "only the running task counts as active");
-    CHECK(mid.queue_depth >= 1, "not-yet-started task counts as queue_depth");
+    CHECK(mid.active_tasks == 1 && mid.queue_depth == 1 && mid.pending == 2,
+          "one running task and one queued task stay physically accounted");
     CHECK(!secondRan.load(), "queued task has not started");
 
     TaskScheduler::cancelTree(queued->id);
     const auto cancelled = sched.metrics(TaskScheduler::MetadataPool);
-    CHECK(cancelled.queue_depth == 0, "cancel before start drops queue_depth");
-    CHECK(cancelled.active_tasks == 1, "cancel of a queued task leaves the runner active");
+    CHECK(cancelled.queue_depth == 1 && cancelled.pending == 2 && cancelled.active_tasks == 1,
+          "queued tree-cancel keeps queue, pending, and the runner");
+    CHECK(cancelled.cancelled == mid.cancelled,
+          "queued tree-cancel does not bump cancelled until the worker retires it");
     CHECK(!secondRan.load(), "cancelled queued task does not run");
+
+    TaskScheduler::cancelTree(queued->id);
+    const auto repeated = sched.metrics(TaskScheduler::MetadataPool);
+    CHECK(repeated.queue_depth == cancelled.queue_depth && repeated.pending == cancelled.pending &&
+              repeated.active_tasks == cancelled.active_tasks &&
+              repeated.cancelled == cancelled.cancelled,
+          "repeat tree-cancel adds no counters");
 
     release.store(true, std::memory_order_release);
     CHECK(sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)), "MetadataPool drains");
     const auto done = sched.metrics(TaskScheduler::MetadataPool);
     CHECK(done.pending == 0 && done.active_tasks == 0 && done.queue_depth == 0,
           "metrics converge after the runner finishes");
+    CHECK(done.cancelled == mid.cancelled + 1, "retirement counts the queued tree-cancel once");
+    CHECK(done.completed == mid.completed + 1, "only the blocker completes");
+    CHECK(!secondRan.load(), "queued user work stays unrun after drain");
 
     // One running + one queued fills a depth of 2; the next submit is rejected.
     release.store(false, std::memory_order_release);
