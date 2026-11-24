@@ -398,7 +398,6 @@ bool TaskScheduler::enqueueTask(Priority prio, const std::shared_ptr<TaskContext
         // capture destructor can re-enter the scheduler. Success paths keep
         // the runnable (pool autoDelete or m_deferred).
         delete runnable;
-        runnable = nullptr;
         if (handler)
         {
             try
