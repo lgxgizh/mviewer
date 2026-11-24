@@ -38,15 +38,16 @@ the 3D LUT and the overlay, so no frame ever needs the CPU compositor.
 
 ## Consequences
 
-- The shader path is **not pixel-verified here**. `QOpenGLContext::create()`
-  faults under the offscreen platform in this environment (and therefore in
-  CI), so no headless test can execute it; a smoke test that tried was removed.
-  What is pinned is the *switch contract* (`tests/test_blitshader_flag.cpp`):
-  unset or `qt` keeps the default, `shader` selects the new path, the value is
-  cached until reset.
-- Turning it on is a manual, hardware-level action. Comparing it against
-  Qt's blitter needs a framebuffer capture harness on real hardware - the same
-  "measure first" rule that governed PR-05, and the reason this is opt-in
-  rather than the default.
-- Because it is opt-in, a defect in the shader cannot reach a user who has not
-  asked for it, and `MVIEWER_GPU=0` still bypasses the whole tier.
+- The shader path was compared against `QOpenGLTextureBlitter` on real OpenGL
+  (Ubuntu 22.04 / Qt 6.8 / Mesa llvmpipe, core profile 4.5) with a framebuffer
+  round trip: same texture, same destination rect, same origin - **maximum
+  per-channel difference 0**. That check lives outside the repo on purpose (it
+  needs a window system); it is described in
+  `tests/gl_baseline/README.md` alongside the compare-canvas baselines.
+  Note that `QOpenGLTextureBlitter::blit()` reports "Unsupported texture target"
+  unless `bind()` has been called first; MViewer already binds before blitting.
+- Pixel parity has been established for the **copy-only** case. Exposure /
+  gamma are still baked CPU-side (decision 4), so there is nothing further to
+  compare until the pipeline stops baking them.
+- Turning it on remains a manual action; a defect cannot reach a user who has
+  not asked for it, and `MVIEWER_GPU=0` still bypasses the whole tier.
