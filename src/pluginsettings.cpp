@@ -98,6 +98,12 @@ void PluginSettings::setupUi()
     connect(m_trustBtn, &QPushButton::clicked, this, &PluginSettings::onTrustAndLoad);
     btnLayout->addWidget(m_trustBtn);
 
+    m_revokeBtn = new QPushButton(tr("Revoke Trust"), this);
+    m_revokeBtn->setToolTip(
+        tr("Forget the selected plugin hashes. They are not mapped on the next start."));
+    connect(m_revokeBtn, &QPushButton::clicked, this, &PluginSettings::onRevokeTrust);
+    btnLayout->addWidget(m_revokeBtn);
+
     m_toggleBtn = new QPushButton(tr("Enable / Disable"), this);
     connect(m_toggleBtn, &QPushButton::clicked, this, &PluginSettings::onTogglePlugin);
     btnLayout->addWidget(m_toggleBtn);
@@ -301,6 +307,42 @@ void PluginSettings::onTrustAndLoad()
         m_statusLabel->setText(m_statusLabel->text() + tr(" · %1 trusted and loaded").arg(loaded));
     if (loaded > 0)
         emit pluginsChanged();
+}
+
+void PluginSettings::onRevokeTrust()
+{
+    const QList<QListWidgetItem *> items = m_list->selectedItems();
+    if (items.isEmpty())
+        return;
+    QStringList removed;
+    for (QListWidgetItem *item : items)
+    {
+        const QString sha = item->data(kRoleSha).toString();
+        if (!sha.isEmpty())
+            removed.append(sha);
+    }
+    if (removed.isEmpty())
+    {
+        if (m_statusLabel)
+            m_statusLabel->setText(tr("Select a plugin with a recorded hash to revoke trust."));
+        return;
+    }
+
+    QSettings settings;
+    QStringList trusted = settings.value(QStringLiteral("plugins/trustedSha256")).toStringList();
+    const int before = trusted.size();
+    for (const QString &sha : removed)
+        trusted.removeAll(sha);
+    settings.setValue(QStringLiteral("plugins/trustedSha256"), trusted);
+
+    refreshList();
+    if (m_statusLabel)
+    {
+        m_statusLabel->setText(tr("%1 of %2 trusted hash(es) revoked. Already-mapped plugins stay "
+                                  "loaded until the next start.")
+                                   .arg(before - trusted.size())
+                                   .arg(before));
+    }
 }
 
 void PluginSettings::onTogglePlugin()

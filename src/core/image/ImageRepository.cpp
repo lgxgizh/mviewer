@@ -24,14 +24,15 @@
 #include <mutex>
 #include <thread>
 
-// Lifetime policy (ADR-017): a function-local static that IS destroyed at
-// exit. That is safe only because application::Shutdown drains the decode and
-// preload pools first; do not switch this to a leaked `new` without re-proving
-// teardown after QCoreApplication is gone.
+// Lifetime policy (ADR-017): intentionally leaked. There is no user-declared
+// destructor to lose, and application::Shutdown drains the decode and preload
+// pools first - while a worker still finishing at process teardown must not find
+// the object already destroyed. Ownership stays with Shutdown, destruction does
+// not.
 ImageRepository &ImageRepository::instance()
 {
-    static ImageRepository inst;
-    return inst;
+    static ImageRepository *inst = new ImageRepository();
+    return *inst;
 }
 
 void ImageRepository::setSyncLoadBudget(std::chrono::milliseconds budget)

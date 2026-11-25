@@ -64,6 +64,8 @@ class DirectoryMonitor : public QObject
     void scheduleReconcile(int delayMs);
     void startReconcile();
     void handleSnapshot(mviewer::core::DirectorySnapshot snapshot, uint64_t generation);
+    // Posted back to the owning thread; always releases m_scanInFlight.
+    void releaseScanLatch();
     void commitSnapshot(const mviewer::core::DirectorySnapshot &snapshot,
                         const mviewer::core::DirectoryDelta &delta);
     void ensureActivePathWatched();

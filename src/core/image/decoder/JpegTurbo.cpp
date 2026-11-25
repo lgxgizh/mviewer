@@ -1,6 +1,7 @@
 #include "core/image/decoder/JpegTurbo.h"
 
 #include "core/filesystem/Utf8Path.h"
+#include "core/image/DecoderLimits.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -102,7 +103,13 @@ ImageData decodeJpegTurbo(const std::string &path, int maxEdge)
     std::vector<unsigned char> jpeg;
     in.seekg(0, std::ios::end);
     const std::streampos end = in.tellg();
-    if (end <= 0 || end > std::numeric_limits<size_t>::max())
+    // A JPEG that decodes inside the shared sample budget is never hundreds of
+    // megabytes; the cap keeps a bogus header from driving a huge allocation and
+    // also keeps the byte count well inside unsigned long, which is 32-bit on
+    // Windows and is what libjpeg-turbo takes.
+    constexpr std::uint64_t kMaxJpegBytes = 256ull * 1024 * 1024;
+    if (end <= 0 || end > std::numeric_limits<size_t>::max() ||
+        static_cast<std::uint64_t>(end) > kMaxJpegBytes)
         return {};
     jpeg.resize(static_cast<size_t>(end));
     in.seekg(0, std::ios::beg);
@@ -125,6 +132,15 @@ ImageData decodeJpegTurbo(const std::string &path, int maxEdge)
     int srcW = 0, srcH = 0, subsample = 0, colorspace = 0;
     if (tjDecompressHeader3(handle, jpeg.data(), static_cast<unsigned long>(jpeg.size()), &srcW,
                             &srcH, &subsample, &colorspace) != 0)
+    {
+        tjDestroy(handle);
+        return {};
+    }
+
+    // Same raster budget as every other decoder.
+    if (srcW <= 0 || srcH <= 0 ||
+        static_cast<int64_t>(srcW) * static_cast<int64_t>(srcH) >
+            mviewer::core::kMaxImagePixels)
     {
         tjDestroy(handle);
         return {};

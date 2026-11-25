@@ -190,11 +190,25 @@ void DirectoryMonitor::startReconcile()
         &m_pool,
         [this, path, generation, alive, generationToken]
         {
+            // Both the stale-generation early return and a throwing scan used to
+            // leave m_scanInFlight set: no later reconcile would ever run again.
             if (!alive->load(std::memory_order_acquire) ||
                 generationToken->load(std::memory_order_acquire) != generation)
+            {
+                releaseScanLatch();
                 return;
-            auto snapshot =
-                mviewer::core::snapshotDirectory(path.toUtf8().toStdString(), generation);
+            }
+            mviewer::core::DirectorySnapshot snapshot;
+            try
+            {
+                snapshot =
+                    mviewer::core::snapshotDirectory(path.toUtf8().toStdString(), generation);
+            }
+            catch (...)
+            {
+                releaseScanLatch();
+                return;
+            }
             QMetaObject::invokeMethod(
                 this,
                 [this, alive, generation, generationToken, snapshot = std::move(snapshot)]() mutable
@@ -206,6 +220,12 @@ void DirectoryMonitor::startReconcile()
                 },
                 Qt::QueuedConnection);
         });
+}
+
+void DirectoryMonitor::releaseScanLatch()
+{
+    // The worker thread cannot touch the member directly; hop to the owner.
+    QMetaObject::invokeMethod(this, [this] { m_scanInFlight = false; }, Qt::QueuedConnection);
 }
 
 void DirectoryMonitor::handleSnapshot(mviewer::core::DirectorySnapshot snapshot,

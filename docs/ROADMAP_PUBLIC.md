@@ -4,16 +4,16 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.217**
+## Where we are now — **Beta / 1.0.218**
 
-MViewer remains in **Beta**; the current release is **`v1.0.217`**
+MViewer remains in **Beta**; the current release is **`v1.0.218`**
 (2026-11-26, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-Recent releases closed the review's deterministic P0s: display adjustment no
-longer compares a colour context against itself, batch cancel cannot deadlock,
-HDR tone mapping and the decoder input budgets are bounded, Python scripts run
-isolated, export commits are a single atomic replace, and moving between monitors
-no longer resets the adjustments. Offscreen CI is regression evidence, not proof
-of universal smoothness.
+Recent releases closed the review's deterministic P0s (display adjustment compared
+a colour context against itself, batch-cancel lost wakeup, HDR/decoder input
+budgets), stopped `ThumbnailPipeline` from submitting under its own mutex, fixed a
+directory-monitor latch that could wedge scans forever, and added a Revoke Trust
+path for plugins. Offscreen CI is regression evidence, not proof of universal
+smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -68,7 +68,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.217** (current) | Screen-change adjustments, package extraction checks | 🔵 Beta |
+| **1.0.218** (current) | Thumbnail scheduling, monitor latch, Revoke Trust | 🔵 Beta |
+| **1.0.217** | Screen-change adjustments, package extraction checks | ✅ Previous patch |
 | **1.0.216** | Python isolation, atomic export commit | ✅ Previous patch |
 | **1.0.215** | Review P0/P1 batch: display adjust, batch cancel, decoder budgets | ✅ Previous patch |
 | **1.0.214** | Partial review checkpoint | ✅ Previous patch |

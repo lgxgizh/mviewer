@@ -233,12 +233,29 @@ struct ThumbnailPipeline
     }
 
     void pruneCacheLocked();
+    void prunePathRevisionsLocked();
     void cacheLocked(const std::string &k, const std::string &path, const ImageData &data);
     bool visibleDemandSatisfiedLocked(const std::vector<std::string> &sources, size_t vb,
                                       size_t ve) const;
     void scheduleLocked(bool refillOnly);
+    // Reservations are made under m_mtx, then submitted after it is released: a
+    // worker that finishes immediately would otherwise block on the mutex while
+    // the whole scheduling pass still holds it.
+    struct EnqueueRequest
+    {
+        std::string path;
+        std::string k;
+        std::string ownerKey;
+        uint64_t owner = 0;
+        uint64_t slotGen = 0;
+        uint64_t pathRevision = 0;
+        int cid = 0;
+        TaskScheduler::Priority prio = TaskScheduler::Priority::Thumbnail;
+    };
     void enqueueLocked(const std::string &path, int cid, uint64_t slotGen,
-                       TaskScheduler::Priority prio, bool refillOnly);
+                       TaskScheduler::Priority prio, bool refillOnly,
+                       std::vector<EnqueueRequest> &out);
+    void submitEnqueueRequests(const std::vector<EnqueueRequest> &requests);
     // Called only while m_mtx is held.
     void dropEnqueueOwnerLocked(const std::string &k, uint64_t owner, const std::string &ownerKey);
     bool enqueueRequestStaleLocked(int cid, uint64_t slotGen, const std::string &path,

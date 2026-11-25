@@ -169,10 +169,34 @@ void ThumbnailPipeline::setVisibleRangeForConsumer(int cid, size_t begin, size_t
     scheduleLocked(false);
 }
 
+void ThumbnailPipeline::prunePathRevisionsLocked()
+{
+    // Every invalidatePath / enqueue touches a path, so the table grows with the
+    // total number of distinct files ever seen. Drop entries that nothing can
+    // still match against; a dropped path restarts at revision 0, and in-flight
+    // work that captured the old value simply fails the comparison.
+    constexpr size_t kCap = 4096;
+    if (m_pathRevisions.size() <= kCap)
+        return;
+    std::unordered_set<std::string> live;
+    for (const auto &kv : m_consumers)
+        live.insert(kv.second.sources.begin(), kv.second.sources.end());
+    for (const auto &kv : m_pending)
+        live.insert(kv.first.substr(0, kv.first.rfind('\x1f')));
+    for (auto it = m_pathRevisions.begin(); it != m_pathRevisions.end();)
+    {
+        if (live.count(it->first) != 0)
+            ++it;
+        else
+            it = m_pathRevisions.erase(it);
+    }
+}
+
 void ThumbnailPipeline::invalidatePath(const std::string &path)
 {
     std::lock_guard<std::mutex> lk(m_mtx);
     ++m_pathRevisions[path];
+    prunePathRevisionsLocked();
     const std::string prefix = path + "\x1f";
     for (auto it = m_memCache.begin(); it != m_memCache.end();)
     {
@@ -309,14 +333,15 @@ void ThumbnailPipeline::clear()
     m_memCacheBytes = 0;
 }
 
-// Lifetime policy (ADR-017): a function-local static that IS destroyed at
-// exit. application::Shutdown stops the pipeline and clears its consumers
-// first, so the destructor has no in-flight work to join; keep that ordering if
-// this ever becomes a leaked `new`.
+// Lifetime policy (ADR-017): intentionally leaked. application::Shutdown stops
+// the pipeline and clears its consumers first, so a normal quit never needs the
+// destructor - while a worker still finishing at process teardown must not find
+// the object already destroyed. Ownership stays with Shutdown, destruction does
+// not.
 ThumbnailPipeline &ThumbnailPipeline::instance()
 {
-    static ThumbnailPipeline inst;
-    return inst;
+    static ThumbnailPipeline *inst = new ThumbnailPipeline();
+    return *inst;
 }
 
 void ThumbnailPipeline::pruneCacheLocked()
@@ -377,8 +402,9 @@ void ThumbnailPipeline::scheduleLocked(bool refillOnly)
 {
     if (!m_decode)
         return;
+    std::vector<EnqueueRequest> requests;
 
-    auto scheduleForConsumer = [this, refillOnly](int cid, const ConsumerSlot &slot)
+    auto scheduleForConsumer = [this, refillOnly, &requests](int cid, const ConsumerSlot &slot)
     {
         const size_t n = slot.sources.size();
         const size_t vb = std::min(slot.visibleBegin, n);
@@ -397,7 +423,7 @@ void ThumbnailPipeline::scheduleLocked(bool refillOnly)
                 if (m_memCache.count(k) != 0 || m_failed.count(k) != 0 || m_pending.count(k) != 0)
                     continue;
                 enqueueLocked(slot.sources[i], cid, slot.gen, TaskScheduler::Priority::Thumbnail,
-                              refillOnly);
+                              refillOnly, requests);
                 if (m_pending.count(k) != 0)
                     ++inFlight;
             }
@@ -405,12 +431,12 @@ void ThumbnailPipeline::scheduleLocked(bool refillOnly)
         }
         for (size_t i = vb; i < ve; ++i)
             enqueueLocked(slot.sources[i], cid, slot.gen, TaskScheduler::Priority::Thumbnail,
-                          refillOnly);
+                          refillOnly, requests);
         const size_t pred = slot.predictive > 0 ? slot.predictive : m_predictive;
         const size_t pe = std::min(ve + pred, n);
         for (size_t i = ve; i < pe; ++i)
             enqueueLocked(slot.sources[i], cid, slot.gen, TaskScheduler::Priority::Thumbnail,
-                          refillOnly);
+                          refillOnly, requests);
     };
 
     if (m_consumers.empty())
@@ -422,6 +448,15 @@ void ThumbnailPipeline::scheduleLocked(bool refillOnly)
     {
         for (const auto &kv : m_consumers)
             scheduleForConsumer(kv.first, kv.second);
+    }
+
+    if (!requests.empty())
+    {
+        // Caller holds m_mtx; submit with it released so a fast worker can take
+        // it instead of blocking behind the rest of the scheduling pass.
+        m_mtx.unlock();
+        submitEnqueueRequests(requests);
+        m_mtx.lock();
     }
 }
 
@@ -439,7 +474,10 @@ bool ThumbnailPipeline::enqueueRequestStaleLocked(int cid, uint64_t slotGen,
                                                   bool cancelled)
 {
     auto it = m_consumers.find(cid);
+    // A non-default consumer that was removed must never see its in-flight work
+    // land, even when the slot generation happens to still match.
     return cancelled || m_pathRevisions[path] != pathRevision ||
+           (it == m_consumers.end() && cid != 0) ||
            (it != m_consumers.end() && it->second.gen != slotGen) ||
            (it == m_consumers.end() && cid == 0 && m_gen != slotGen);
 }
@@ -457,6 +495,8 @@ bool ThumbnailPipeline::publishEnqueueResultLocked(const std::string &k, const s
         return false;
     m_pending.erase(pit);
     auto it = m_consumers.find(cid);
+    if (it == m_consumers.end() && cid != 0)
+        return false; // consumer removed while the decode was running
     if (it != m_consumers.end() && it->second.gen != slotGen)
         return false;
     if (it == m_consumers.end() && cid == 0 && m_gen != slotGen)
@@ -485,7 +525,8 @@ bool ThumbnailPipeline::publishEnqueueResultLocked(const std::string &k, const s
 }
 
 void ThumbnailPipeline::enqueueLocked(const std::string &path, int cid, uint64_t slotGen,
-                                      TaskScheduler::Priority prio, bool refillOnly)
+                                      TaskScheduler::Priority prio, bool refillOnly,
+                                      std::vector<EnqueueRequest> &out)
 {
     const int size = thumbSize;
     const std::string k = key(path, size);
@@ -499,16 +540,49 @@ void ThumbnailPipeline::enqueueLocked(const std::string &path, int cid, uint64_t
     const uint64_t owner = ++m_nextOwner;
     const std::string ownerKey = handleKey(cid, k, slotGen, owner);
     m_pending[k] = PendingEntry{owner, ownerKey};
-    DecodeFn decode = m_decode;
-    ResultFn result = m_result;
     const uint64_t pathRevision = m_pathRevisions[path];
+    prunePathRevisionsLocked();
     m_attemptedKeys.insert(k);
 
-    auto handle = TaskScheduler::instance().submit(
-        prio,
-        [this, path, size, k, cid, slotGen, owner, ownerKey, decode, result,
-         pathRevision](const TaskScheduler::TaskContext &ctx)
+    EnqueueRequest request;
+    request.path = path;
+    request.k = k;
+    request.ownerKey = ownerKey;
+    request.owner = owner;
+    request.slotGen = slotGen;
+    request.pathRevision = pathRevision;
+    request.cid = cid;
+    request.prio = prio;
+    out.push_back(std::move(request));
+}
+
+void ThumbnailPipeline::submitEnqueueRequests(const std::vector<EnqueueRequest> &requests)
+{
+    for (const EnqueueRequest &request : requests)
+    {
+        const std::string &path = request.path;
+        const int size = thumbSize;
+        const std::string &k = request.k;
+        const int cid = request.cid;
+        const uint64_t slotGen = request.slotGen;
+        const uint64_t owner = request.owner;
+        const std::string &ownerKey = request.ownerKey;
+        const uint64_t pathRevision = request.pathRevision;
+        // The decode / result callbacks are read here, without the lock: whatever
+        // is current at submit time wins, which is the value a caller who just
+        // installed them expects.
+        DecodeFn decode;
+        ResultFn result;
         {
+            std::lock_guard<std::mutex> lk(m_mtx);
+            decode = m_decode;
+            result = m_result;
+        }
+        auto handle = TaskScheduler::instance().submit(
+            request.prio,
+            [this, path, size, k, cid, slotGen, owner, ownerKey, decode, result,
+             pathRevision](const TaskScheduler::TaskContext &ctx)
+            {
             {
                 std::lock_guard<std::mutex> lk(m_mtx);
                 if (enqueueRequestStaleLocked(cid, slotGen, path, pathRevision, ctx.isCancelled()))
@@ -557,17 +631,20 @@ void ThumbnailPipeline::enqueueLocked(const std::string &path, int cid, uint64_t
             for (const ResultFn &sub : subscribers)
                 deliverOne(sub);
         });
-
-    if (handle)
-    {
-        m_handles[ownerKey] = handle;
-    }
-    else
-    {
-        auto pendIt = m_pending.find(k);
-        if (pendIt != m_pending.end() && pendIt->second.owner == owner)
-            m_pending.erase(pendIt);
-        m_attemptedKeys.erase(k);
+        // Same ordering as before: the handle is registered after submission, so
+        // a task that already finished simply leaves an id cancel() will ignore.
+        {
+            std::lock_guard<std::mutex> lk(m_mtx);
+            if (handle)
+                m_handles[ownerKey] = handle;
+            else
+            {
+                auto pendIt = m_pending.find(k);
+                if (pendIt != m_pending.end() && pendIt->second.owner == owner)
+                    m_pending.erase(pendIt);
+                m_attemptedKeys.erase(k);
+            }
+        }
     }
 }
 
@@ -630,6 +707,16 @@ void ThumbnailPipeline::cancelHandlesForConsumerLocked(int cid)
         {
             ++it;
         }
+    }
+    // A pending entry records its consumer in ownerKey. Dropping the consumer
+    // while leaving those entries would run decodes whose result has nowhere to
+    // go, and keep scheduleLocked busy with dead work.
+    for (auto it = m_pending.begin(); it != m_pending.end();)
+    {
+        if (it->second.ownerKey.rfind(prefix, 0) == 0)
+            it = m_pending.erase(it);
+        else
+            ++it;
     }
 }
 

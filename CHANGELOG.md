@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+## [1.0.218] - 2026-11-26
+
+### Concurrency / exit (review batch 2)
+
+- **`ThumbnailPipeline` scheduling no longer submits under its own mutex.** The
+  whole pass reserved work with `m_mtx` held and only then submitted, so a worker
+  that finished immediately blocked on the mutex for the rest of the pass; the
+  decode/result callbacks are also read at submit time rather than captured from
+  an older value.
+- **`removeConsumer()` now clears that consumer's pending entries** (they were
+  left behind to run with nowhere to deliver), and a removed non-default
+  consumer's in-flight work is treated as stale instead of being delivered.
+- **`m_pathRevisions` is bounded** (4096 live entries); it previously grew with
+  every distinct file ever seen.
+- **`DirectoryMonitor::startReconcile()` could wedge.** Both the stale-generation
+  early return and a throwing scan left `m_scanInFlight` set, after which no scan
+  ever ran again. The latch is always released now.
+- **`ThumbnailPipeline` / `ImageRepository` are leaked singletons**: neither has a
+  user-declared destructor, and a worker still finishing during process teardown
+  must not find the instance already destroyed. Ownership stays with Shutdown.
+- **Export gets a cancel probe** around the long contact-sheet / PDF writer and a
+  re-check before committing, so a cancelled job does not publish output.
+
+### Hardening (review batch 3)
+
+- **`JpegTurbo` input budget**: compressed input capped at 256 MiB and the decoded
+  raster at the shared 268M-sample limit (which also keeps the byte count inside
+  Windows' 32-bit `unsigned long`).
+- **`Revoke Trust`** in the Plugin Manager removes recorded hashes from
+  `plugins/trustedSha256`, so a trusted plugin stops loading on the next start.
+
+### CI
+
+- Nightly fuzzing now also builds and runs `fuzz_session_package` and
+  `fuzz_hdr_decoder` (75 s each), not just the four older targets.
+
 ## [1.0.217] - 2026-11-26
 
 ### Fixed

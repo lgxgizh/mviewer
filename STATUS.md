@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.217** · Release tag: **v1.0.217**
+> Snapshot: 2026-11-26 · Version: **1.0.218** · Release tag: **v1.0.218**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,20 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.218 - thumbnail pipeline scheduling, monitor latch, plugin trust UI (2026-11-26)
+
+- `ThumbnailPipeline` submits outside its mutex; `removeConsumer()` clears that
+  consumer's pending entries and its in-flight work is treated as stale;
+  `m_pathRevisions` is bounded.
+- `DirectoryMonitor::startReconcile()` can no longer wedge `m_scanInFlight`.
+- `ThumbnailPipeline` / `ImageRepository` are leaked singletons (no destructor to
+  lose; a worker at teardown must not see a destroyed instance).
+- Export installs a cancel probe around the long writers and re-checks before
+  committing.
+- JpegTurbo: 256 MiB input cap + the shared 268M-sample raster budget.
+- Plugin Manager: "Revoke Trust" forgets recorded hashes.
+- Nightly fuzz runs `fuzz_session_package` and `fuzz_hdr_decoder` too.
 
 ## 1.0.217 - screen-change adjustments, package extraction checks (2026-11-26)
 

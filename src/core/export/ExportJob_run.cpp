@@ -41,6 +41,7 @@
 #include <unistd.h>
 #endif
 
+#include "core/async/CooperativeCancel.h"
 #include "core/export/ExportJobInternal.h"
 
 namespace fs = std::filesystem;
@@ -190,6 +191,11 @@ static ExportJobResult runContactOrPdf(const ExportJobConfig &cfg,
                                        const fs::path &outputDirectory, ProgressFn progress,
                                        ExportJobResult r)
 {
+    // Long, non-interruptible writers (contact sheet compositing, PDF encoding)
+    // run to completion once started; the probe lets any library that polls it
+    // abort early, and the re-check below stops us committing stale output.
+    const mviewer::core::ScopedCancelProbe probe(
+        [&cfg] { return cfg.cancel && cfg.cancel->load(std::memory_order_relaxed); });
     if (cfg.mode == Mode::ContactSheet || cfg.mode == Mode::Pdf)
     {
         // Contact/PDF materialize bounded scaled pages, never a vector of
@@ -267,6 +273,13 @@ static ExportJobResult runContactOrPdf(const ExportJobConfig &cfg,
             std::error_code cleanup;
             fs::remove(temporary, cleanup);
             r.message = "output generation failed";
+            return r;
+        }
+        if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
+        {
+            std::error_code cleanup;
+            fs::remove(temporary, cleanup);
+            r.message = "cancelled before commit";
             return r;
         }
         std::error_code commitError;

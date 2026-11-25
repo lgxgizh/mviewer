@@ -25,6 +25,7 @@ class PluginSettings : public QDialog
     void refreshList();
     void rescanPlugins();
     void onTrustAndLoad();
+    void onRevokeTrust();
     void onTogglePlugin();
     void onAddPluginPath();
     void onRemovePluginPath();
@@ -42,6 +43,7 @@ class PluginSettings : public QDialog
     QPushButton *m_browseBtn = nullptr;
     QPushButton *m_scanBtn = nullptr;
     QPushButton *m_trustBtn = nullptr;
+    QPushButton *m_revokeBtn = nullptr;
     QLineEdit *m_searchPath = nullptr;
     QLabel *m_statusLabel = nullptr;
     QStringList m_disabledPlugins;

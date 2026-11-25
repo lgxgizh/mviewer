@@ -277,7 +277,8 @@ jobs:
       - name: Build fuzz targets
         run: |
           cmake --build build_fuzz -j 4 --target \
-            fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference
+            fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference \
+            fuzz_session_package fuzz_hdr_decoder
 
       - name: Fuzz (75 s per target)
         run: |
@@ -286,7 +287,8 @@ jobs:
           export UBSAN_OPTIONS="print_stacktrace=1:halt_on_error=1"
           mkdir -p fuzz-artifacts
           status=0
-          for t in fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference; do
+          for t in fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference \
+                   fuzz_session_package fuzz_hdr_decoder; do
             mkdir -p "fuzz-work/$t"
             cp tests/fuzz/corpus/$t/* "fuzz-work/$t/"
             echo "::group::$t"
