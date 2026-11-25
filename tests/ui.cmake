@@ -35,6 +35,13 @@ target_link_libraries(viewer_gl_pixel_tests
     PRIVATE mviewer_ui Qt6::Widgets Qt6::Gui Qt6::OpenGL Qt6::Core)
 target_compile_features(viewer_gl_pixel_tests PRIVATE cxx_std_20)
 target_include_directories(viewer_gl_pixel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# B04b1 real-GL caller-state regression (same required xvfb gate, not CTest).
+add_executable(viewer_gl_state_tests
+    ${CMAKE_SOURCE_DIR}/tests/viewer_gl_state_tests.cpp)
+target_link_libraries(viewer_gl_state_tests
+    PRIVATE mviewer_ui Qt6::Widgets Qt6::Gui Qt6::OpenGL Qt6::Core)
+target_compile_features(viewer_gl_state_tests PRIVATE cxx_std_20)
+target_include_directories(viewer_gl_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)
