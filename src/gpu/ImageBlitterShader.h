@@ -14,6 +14,13 @@
 #include <QRect>
 #include <QSize>
 
+#include <memory>
+
+namespace mviewer::ui
+{
+class GlOwnerContext;
+}
+
 class QOpenGLShaderProgram;
 class QOpenGLVertexArrayObject;
 class QOpenGLBuffer;
@@ -31,6 +38,7 @@ class ImageBlitterShader
     /// caller then keeps using QOpenGLTextureBlitter.
     bool create();
     void destroy();
+    void forceCleanupBindFailureForTest(bool fail);
     bool ready() const
     {
         return m_ready;
@@ -53,6 +61,7 @@ class ImageBlitterShader
     void setOverlay(unsigned int texture, float alpha);
 
   private:
+    void releaseObjects(bool ownerCurrent);
     QOpenGLShaderProgram *m_program = nullptr;
     QOpenGLVertexArrayObject *m_vao = nullptr;
     QOpenGLBuffer *m_vbo = nullptr;
@@ -61,5 +70,5 @@ class ImageBlitterShader
     float m_exposure = 1.0f;
     float m_inverseGamma = 1.0f;
     bool m_ready = false;
-    bool m_ownObjects = false;
+    std::shared_ptr<mviewer::ui::GlOwnerContext> m_owner;
 };

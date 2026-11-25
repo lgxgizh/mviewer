@@ -15,9 +15,15 @@
 #include <cstdint>
 #include <functional>
 #include <list>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+namespace mviewer::ui
+{
+class GlOwnerContext;
+}
 
 // Uploads decoded tiles to GPU textures and tracks residency.
 // When no GL context is available (or MVIEWER_GPU is unset), ensure() is a
@@ -32,6 +38,10 @@ class GpuTileUploader
     using FreeFn = std::function<void(uintptr_t handle)>;
 
     GpuTileUploader() = default;
+    ~GpuTileUploader();
+    GpuTileUploader(const GpuTileUploader &) = delete;
+    GpuTileUploader &operator=(const GpuTileUploader &) = delete;
+    void forceCleanupBindFailureForTest(bool fail);
     explicit GpuTileUploader(UploadFn upload, FreeFn free = {})
         : m_upload(std::move(upload)), m_free(std::move(free))
     {
@@ -136,6 +146,8 @@ class GpuTileUploader
         uint64_t version = 0;
     };
 
+    bool prepareOwner();
+    void releaseEntries(bool ownerCurrent);
     void touch(const TileKey &key);
     void evictIfNeeded();
     void ensureBudgetLoaded();
@@ -154,4 +166,5 @@ class GpuTileUploader
     int m_replaces = 0;
     bool m_budgetLoaded = false;
     std::unordered_set<uintptr_t> m_grayExpanded;
+    std::shared_ptr<mviewer::ui::GlOwnerContext> m_owner;
 };

@@ -1,5 +1,6 @@
 #include "gpu/ImageBlitterShader.h"
 #include "gpu/BlitStateGuard.h"
+#include "gpu/GlOwnerContext.h"
 
 #include <QOpenGLBuffer>
 #include <QOpenGLContext>
@@ -75,6 +76,7 @@ void ImageBlitterShader::resetRequestedCache()
 
 bool ImageBlitterShader::create()
 {
+    destroy();
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
     if (ctx == nullptr || !ctx->isValid() || ctx->isOpenGLES())
         return false;
@@ -83,7 +85,9 @@ bool ImageBlitterShader::create()
     if (format.majorVersion() < 3 || (format.majorVersion() == 3 && format.minorVersion() < 3))
         return false;
     mviewer::ui::BlitStateGuard restore(ctx->extraFunctions());
-    m_program = new QOpenGLShaderProgram(ctx);
+    m_owner = std::make_shared<mviewer::ui::GlOwnerContext>(ctx, [this](bool current)
+                                                            { releaseObjects(current); });
+    m_program = new QOpenGLShaderProgram();
     if (!m_program->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader) ||
         !m_program->addShaderFromSourceCode(QOpenGLShader::Fragment, kFragmentShader))
     {
@@ -101,7 +105,6 @@ bool ImageBlitterShader::create()
     m_program->release();
 
     m_vao = new QOpenGLVertexArrayObject();
-    m_ownObjects = true;
     if (!m_vao->create())
     {
         destroy();
@@ -124,16 +127,33 @@ bool ImageBlitterShader::create()
 
 void ImageBlitterShader::destroy()
 {
-    if (m_ownObjects)
+    m_owner.reset();
+    m_ready = false;
+}
+
+void ImageBlitterShader::releaseObjects(bool ownerCurrent)
+{
+    if (ownerCurrent)
     {
         delete m_vbo;
-        m_vbo = nullptr;
         delete m_vao;
-        m_vao = nullptr;
+        delete m_program;
     }
-    delete m_program;
+    // If makeCurrent failed or the native context is gone, abandon wrappers
+    // instead of running GL destructors on a foreign/dead context. They have
+    // no QObject parent; the context reclaims the GPU allocation on teardown.
+    m_vbo = nullptr;
+    m_vao = nullptr;
     m_program = nullptr;
     m_ready = false;
+    m_overlayTexture = 0;
+    m_overlayAlpha = 0.0f;
+}
+
+void ImageBlitterShader::forceCleanupBindFailureForTest(bool fail)
+{
+    if (m_owner)
+        m_owner->forceBindFailureForTest(fail);
 }
 
 void ImageBlitterShader::setAdjust(float exposure, float inverseGamma)
@@ -154,7 +174,7 @@ void ImageBlitterShader::blit(unsigned int texture, const QRect &destination, co
     if (!m_ready || texture == 0 || destination.isEmpty() || viewport.isEmpty())
         return;
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
-    if (ctx == nullptr || !ctx->isValid())
+    if (ctx == nullptr || !ctx->isValid() || !m_owner || m_owner->context() != ctx)
         return;
     QOpenGLFunctions *gl = ctx->functions();
     if (gl == nullptr || m_program == nullptr || m_vao == nullptr || m_vbo == nullptr)

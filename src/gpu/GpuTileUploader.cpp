@@ -1,4 +1,5 @@
 #include "gpu/GpuTileUploader.h"
+#include "gpu/GlOwnerContext.h"
 
 #include <QByteArray>
 #include <QOpenGLContext>
@@ -278,7 +279,7 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
     // Injected callbacks (unit tests) always run; real GL path only when
     // enabled() so the CPU compositor remains the verified default.
     const bool useInjected = static_cast<bool>(m_upload);
-    if (!useInjected && !enabled())
+    if (!useInjected && !prepareOwner())
         return false;
     ensureBudgetLoaded();
 
@@ -357,23 +358,79 @@ void GpuTileUploader::pinVisible(const TileKey *keys, size_t count)
 
 bool GpuTileUploader::isResident(const TileKey &key) const
 {
+    if (!m_upload && (!m_owner || m_owner->context() != QOpenGLContext::currentContext()))
+        return false;
     return m_map.find(key) != m_map.end();
 }
 
 uintptr_t GpuTileUploader::handle(const TileKey &key) const
 {
+    if (!m_upload && (!m_owner || m_owner->context() != QOpenGLContext::currentContext()))
+        return 0;
     auto it = m_map.find(key);
     return it == m_map.end() ? 0 : it->second.handle;
 }
 
-void GpuTileUploader::clear()
+GpuTileUploader::~GpuTileUploader()
 {
-    for (auto &kv : m_map)
-        doFree(kv.second.handle);
+    if (m_upload)
+        clear();
+    m_owner.reset();
+}
+
+bool GpuTileUploader::prepareOwner()
+{
+    if (!enabled())
+        return false;
+    auto *ctx = QOpenGLContext::currentContext();
+    if (!m_owner || m_owner->context() != ctx)
+    {
+        m_owner.reset();
+        m_owner = std::make_shared<mviewer::ui::GlOwnerContext>(ctx, [this](bool current)
+                                                                { releaseEntries(current); });
+    }
+    return true;
+}
+
+void GpuTileUploader::releaseEntries(bool ownerCurrent)
+{
+    if (ownerCurrent)
+    {
+        auto *gl = QOpenGLContext::currentContext()->functions();
+        for (const auto &entry : m_map)
+        {
+            const GLuint handle = static_cast<GLuint>(entry.second.handle);
+            gl->glDeleteTextures(1, &handle);
+        }
+    }
     m_map.clear();
     m_lru.clear();
     m_pinned.clear();
+    m_grayExpanded.clear();
     m_bytes = 0;
+}
+
+void GpuTileUploader::clear()
+{
+    if (m_upload)
+    {
+        for (const auto &entry : m_map)
+            doFree(entry.second.handle);
+        releaseEntries(false);
+    }
+    else if (m_owner)
+    {
+        mviewer::ui::GlOwnerContext::Binding bound(*m_owner);
+        releaseEntries(bound.valid());
+    }
+    else
+        releaseEntries(false);
+}
+
+void GpuTileUploader::forceCleanupBindFailureForTest(bool fail)
+{
+    if (m_owner)
+        m_owner->forceBindFailureForTest(fail);
 }
 
 void GpuTileUploader::eraseEntry(std::unordered_map<TileKey, Entry, TileKeyHash>::iterator it)
@@ -565,7 +622,7 @@ void GpuTileUploader::setMagnifyNearest(uintptr_t handle, bool nearest)
     if (handle == 0 || m_upload)
         return;
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
-    if (!ctx || !ctx->isValid())
+    if (!ctx || !ctx->isValid() || !m_owner || m_owner->context() != ctx)
         return;
     QOpenGLFunctions *gl = ctx->functions();
     if (!gl)
@@ -590,7 +647,7 @@ void GpuTileUploader::doFree(uintptr_t handle)
         return;
     }
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
-    if (!ctx || !ctx->isValid())
+    if (!ctx || !ctx->isValid() || !m_owner || m_owner->context() != ctx)
         return;
     QOpenGLFunctions *gl = ctx->functions();
     if (!gl)

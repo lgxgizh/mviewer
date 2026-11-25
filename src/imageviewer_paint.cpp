@@ -539,17 +539,17 @@ void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::R
     ImageBlitterShader *shader =
         m_shaderReady && m_shader != nullptr && m_shader->ready() ? m_shader : nullptr;
     if (shader == nullptr)
-        m_blitter.bind();
+        m_blitter->bind();
     for (const auto &rt : ready)
     {
         if (rt.data.isNull())
             continue;
         const auto handle = m_gpu.handle(rt.key);
         const auto placed = placedTile(tileView, m_tiles, rt, rt.data.width, rt.data.height);
-        blitPlacedTile(m_blitter, shader, m_gpu, handle, placed, viewportRect);
+        blitPlacedTile(*m_blitter, shader, m_gpu, handle, placed, viewportRect);
     }
     if (shader == nullptr)
-        m_blitter.release();
+        m_blitter->release();
     painter.endNativePainting();
 }
 
