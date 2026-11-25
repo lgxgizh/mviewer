@@ -4,6 +4,7 @@
 #include "core/image/decoder/HdrDecoder.h"
 
 #include "core/filesystem/Utf8Path.h"
+#include "core/image/decoder/HdrDecoderInternal.h"
 
 #include <bit>
 #include <cmath>
@@ -12,7 +13,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -155,7 +158,6 @@ std::string writeExr(const std::string &path, int width, int height,
 
     // Channel order in the file is alphabetical: B, G, R.
     const size_t dataPerLine = static_cast<size_t>(width) * 3u * 2u; // HALF = 2 bytes
-    const size_t blockSize = static_cast<size_t>(sizeof(std::int32_t)) * 2u + dataPerLine;
     std::vector<std::uint8_t> body;
     std::vector<std::uint64_t> offsets;
     for (int y = 0; y < height; ++y)
@@ -197,6 +199,331 @@ std::string writeExr(const std::string &path, int width, int height,
               static_cast<std::streamsize>(body.size()));
     out.close();
     return {};
+}
+
+struct ExrFixture
+{
+    std::vector<std::uint8_t> bytes;
+    size_t offsetAt = 0;
+    size_t dataSizeAt = 0;
+};
+
+std::string channelName(int index)
+{
+    if (index == 0)
+        return "B";
+    if (index == 1)
+        return "G";
+    if (index == 2)
+        return "R";
+    std::string name = "c";
+    name.push_back(static_cast<char>('0' + (index / 10) % 10));
+    name.push_back(static_cast<char>('0' + index % 10));
+    return name;
+}
+
+void appendChannel(std::vector<std::uint8_t> &chlist, const std::string &name)
+{
+    putString(chlist, name.c_str());
+    putI32(chlist, 1);
+    chlist.insert(chlist.end(), {0, 0, 0, 0});
+    putI32(chlist, 1);
+    putI32(chlist, 1);
+}
+
+void appendAttr(std::vector<std::uint8_t> &head, const char *name, const char *type,
+                const std::vector<std::uint8_t> &value)
+{
+    putString(head, name);
+    putString(head, type);
+    putI32(head, static_cast<std::int32_t>(value.size()));
+    head.insert(head.end(), value.begin(), value.end());
+}
+
+ExrFixture makeExr(int minX, int minY, int maxX, int maxY, int channelCount, bool withPixels)
+{
+    ExrFixture out;
+    auto &bytes = out.bytes;
+    bytes.insert(bytes.end(), {0x76, 0x2f, 0x31, 0x01});
+    putU32(bytes, 2);
+    std::vector<std::uint8_t> chlist;
+    for (int i = 0; i < channelCount; ++i)
+        appendChannel(chlist, channelName(i));
+    chlist.push_back(0);
+    appendAttr(bytes, "channels", "chlist", chlist);
+    std::vector<std::uint8_t> box;
+    putI32(box, minX);
+    putI32(box, minY);
+    putI32(box, maxX);
+    putI32(box, maxY);
+    appendAttr(bytes, "dataWindow", "box2i", box);
+    appendAttr(bytes, "compression", "compression", {0});
+    appendAttr(bytes, "lineOrder", "lineOrder", {0});
+    bytes.push_back(0);
+
+    const std::int64_t spanW =
+        static_cast<std::int64_t>(maxX) - static_cast<std::int64_t>(minX) + 1;
+    const std::int64_t spanH =
+        static_cast<std::int64_t>(maxY) - static_cast<std::int64_t>(minY) + 1;
+    if (!withPixels || spanW <= 0 || spanH <= 0 || spanW > 8 || spanH > 8)
+        return out;
+    const auto width = static_cast<size_t>(spanW);
+    const auto height = static_cast<size_t>(spanH);
+    const auto dataPerLine = width * static_cast<size_t>(channelCount) * 2u;
+    const size_t headerEnd = bytes.size();
+    out.offsetAt = headerEnd;
+    const size_t table = height * 8u;
+    out.dataSizeAt = headerEnd + table + 4u;
+    std::vector<std::uint8_t> body;
+    for (size_t y = 0; y < height; ++y)
+    {
+        const auto at = headerEnd + table + body.size();
+        putU64(bytes, static_cast<std::uint64_t>(at));
+        putI32(body, static_cast<std::int32_t>(y));
+        putI32(body, static_cast<std::int32_t>(dataPerLine));
+        for (size_t x = 0; x < width; ++x)
+        {
+            for (int c = 0; c < channelCount; ++c)
+            {
+                const auto half = floatToHalf(c < 3 ? 0.18f : 0.0f);
+                body.push_back(static_cast<std::uint8_t>(half & 0xFF));
+                body.push_back(static_cast<std::uint8_t>((half >> 8) & 0xFF));
+            }
+        }
+    }
+    bytes.insert(bytes.end(), body.begin(), body.end());
+    return out;
+}
+
+bool writeBytes(const fs::path &path, const std::vector<std::uint8_t> &bytes)
+{
+    std::ofstream out(mviewer::core::pathFromUtf8(path.string()), std::ios::binary);
+    if (!out)
+        return false;
+    out.write(reinterpret_cast<const char *>(bytes.data()),
+              static_cast<std::streamsize>(bytes.size()));
+    return static_cast<bool>(out);
+}
+
+void patchU32(std::vector<std::uint8_t> &bytes, size_t at, std::uint32_t value)
+{
+    for (int i = 0; i < 4; ++i)
+        bytes.at(at + static_cast<size_t>(i)) =
+            static_cast<std::uint8_t>((value >> (8 * i)) & 0xFF);
+}
+
+void patchU64(std::vector<std::uint8_t> &bytes, size_t at, std::uint64_t value)
+{
+    for (int i = 0; i < 8; ++i)
+        bytes.at(at + static_cast<size_t>(i)) =
+            static_cast<std::uint8_t>((value >> (8 * i)) & 0xFF);
+}
+
+void expectNull(HdrDecoder &decoder, const fs::path &path, const char *msg)
+{
+    mviewer::domain::ImageMetadata meta;
+    const ImageData image = decoder.decodeFull(path.string(), meta);
+    CHECK(image.isNull(), msg);
+}
+
+bool sameTone(const ImageData &got, const std::vector<float> &linear, int width, int height)
+{
+    const ImageData want = HdrDecoder::toneMapToRgb24(linear, width, height, {});
+    if (got.isNull() || want.isNull() || got.width != width || got.height != height)
+        return false;
+    for (int y = 0; y < height; ++y)
+    {
+        for (int x = 0; x < width; ++x)
+        {
+            const PixelRGBA a = samplePixel(got, x, y);
+            const PixelRGBA b = samplePixel(want, x, y);
+            if (!a.valid || !b.valid || a.r != b.r || a.g != b.g || a.b != b.b)
+                return false;
+        }
+    }
+    return true;
+}
+
+std::vector<std::uint8_t> floatBytes(float value, bool littleEndian)
+{
+    std::vector<std::uint8_t> bytes;
+    putF32(bytes, value);
+    if (!littleEndian)
+    {
+        std::swap(bytes[0], bytes[3]);
+        std::swap(bytes[1], bytes[2]);
+    }
+    return bytes;
+}
+
+bool writeText(const fs::path &path, const std::string &text)
+{
+    std::ofstream out(mviewer::core::pathFromUtf8(path.string()), std::ios::binary);
+    if (!out)
+        return false;
+    out << text;
+    return static_cast<bool>(out);
+}
+
+void checkPfmValues(HdrDecoder &decoder, const fs::path &root)
+{
+    const auto grayPath = root / "gray-le.pfm";
+    std::vector<std::uint8_t> gray;
+    const auto bottom = floatBytes(0.0f, true);
+    const auto top = floatBytes(1.0f, true);
+    gray.insert(gray.end(), bottom.begin(), bottom.end());
+    gray.insert(gray.end(), top.begin(), top.end());
+    CHECK(writeText(grayPath, "Pf\n1 2\n-1.0\n"), "grayscale PFM header written");
+    {
+        std::ofstream out(mviewer::core::pathFromUtf8(grayPath.string()),
+                          std::ios::binary | std::ios::app);
+        out.write(reinterpret_cast<const char *>(gray.data()),
+                  static_cast<std::streamsize>(gray.size()));
+    }
+    mviewer::domain::ImageMetadata meta;
+    const ImageData grayImage = decoder.decodeFull(grayPath.string(), meta);
+    const std::vector<float> grayLinear = {1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f};
+    CHECK(sameTone(grayImage, grayLinear, 1, 2),
+          "little-endian grayscale PFM keeps R, G, and B and flips rows");
+
+    const auto rgbPath = root / "rgb-be.pfm";
+    CHECK(writeText(rgbPath, "PF\n1 1\n1.0\n"), "RGB PFM header written");
+    const float channels[3] = {0.0f, 0.5f, 1.0f};
+    {
+        std::ofstream out(mviewer::core::pathFromUtf8(rgbPath.string()),
+                          std::ios::binary | std::ios::app);
+        for (float value : channels)
+        {
+            const auto be = floatBytes(value, false);
+            out.write(reinterpret_cast<const char *>(be.data()), 4);
+        }
+    }
+    const ImageData rgbImage = decoder.decodeFull(rgbPath.string(), meta);
+    const std::vector<float> rgbLinear = {0.0f, 0.5f, 1.0f};
+    CHECK(sameTone(rgbImage, rgbLinear, 1, 1), "big-endian RGB PFM keeps each channel");
+
+    const auto scaledPath = root / "scaled-le.pfm";
+    CHECK(writeText(scaledPath, "Pf\n1 1\n-2.0\n"), "scaled PFM header written");
+    {
+        std::ofstream out(mviewer::core::pathFromUtf8(scaledPath.string()),
+                          std::ios::binary | std::ios::app);
+        const auto sample = floatBytes(0.25f, true);
+        out.write(reinterpret_cast<const char *>(sample.data()), 4);
+    }
+    const ImageData scaled = decoder.decodeFull(scaledPath.string(), meta);
+    const std::vector<float> scaledLinear = {0.5f, 0.5f, 0.5f};
+    CHECK(sameTone(scaled, scaledLinear, 1, 1), "negative PFM scale keeps magnitude and endian");
+}
+
+void checkPfmRejects(HdrDecoder &decoder, const fs::path &root)
+{
+    const char *scales[] = {"0", "-0", "nan", "inf", "-inf"};
+    for (const char *scale : scales)
+    {
+        const auto path = root / (std::string("bad-") + scale + ".pfm");
+        CHECK(writeText(path, std::string("PF\n1 1\n") + scale + "\n"),
+              "PFM scale fixture written");
+        expectNull(decoder, path, "non-finite or zero PFM scale is rejected");
+    }
+    const auto longPath = root / "long-line.pfm";
+    CHECK(
+        writeText(longPath, std::string("PF\n") +
+                                std::string(mviewer::core::hdr_detail::kMaxPfmHeaderLine + 1, '9') +
+                                "\n1.0\n"),
+        "overlong PFM header fixture written");
+    expectNull(decoder, longPath, "overlong PFM header line is rejected");
+
+    std::string cappedScale(mviewer::core::hdr_detail::kMaxPfmHeaderLine, ' ');
+    cappedScale[0] = '1';
+    cappedScale[1] = '.';
+    cappedScale[2] = '0';
+    const auto capPath = root / "scale-cap.pfm";
+    CHECK(writeText(capPath, std::string("PF\n1 1\n") + cappedScale + "\n"),
+          "exact PFM header cap fixture written");
+    {
+        std::ofstream out(mviewer::core::pathFromUtf8(capPath.string()),
+                          std::ios::binary | std::ios::app);
+        for (int i = 0; i < 3; ++i)
+        {
+            const auto sample = floatBytes(0.0f, false);
+            out.write(reinterpret_cast<const char *>(sample.data()), 4);
+        }
+    }
+    mviewer::domain::ImageMetadata meta;
+    const ImageData capped = decoder.decodeFull(capPath.string(), meta);
+    CHECK(!capped.isNull() && capped.width == 1 && capped.height == 1,
+          "a PFM header line at the cap is accepted");
+}
+
+void checkExrBounds(HdrDecoder &decoder, const fs::path &root)
+{
+    const auto control = makeExr(0, 0, 0, 0, 3, true);
+    const auto controlPath = root / "control.exr";
+    CHECK(writeBytes(controlPath, control.bytes), "control EXR written");
+    mviewer::domain::ImageMetadata meta;
+    const ImageData controlImage = decoder.decodeFull(controlPath.string(), meta);
+    CHECK(!controlImage.isNull() && controlImage.width == 1 && controlImage.height == 1,
+          "small uncompressed EXR still decodes");
+    const PixelRGBA px = samplePixel(controlImage, 0, 0);
+    CHECK(px.valid && px.r > 80 && px.r < 140 && px.r == px.g && px.g == px.b,
+          "EXR half samples stay neutral gray");
+
+    const auto wide = makeExr(-1, 4, 0, 4, 3, true);
+    const auto widePath = root / "negative-origin.exr";
+    CHECK(writeBytes(widePath, wide.bytes), "negative-origin EXR written");
+    const ImageData wideImage = decoder.decodeFull(widePath.string(), meta);
+    CHECK(!wideImage.isNull() && wideImage.width == 2 && wideImage.height == 1,
+          "dataWindow is widened before the span is accepted");
+
+    const auto overflow = makeExr(0, 0, (std::numeric_limits<std::int32_t>::max)(), 0, 3, false);
+    CHECK(writeBytes(root / "int-max-window.exr", overflow.bytes), "INT_MAX window written");
+    expectNull(decoder, root / "int-max-window.exr",
+               "INT_MAX dataWindow is rejected without int UB");
+
+    const auto underflow = makeExr((std::numeric_limits<std::int32_t>::min)(), 0, -1, 0, 3, false);
+    CHECK(writeBytes(root / "int-min-window.exr", underflow.bytes), "INT_MIN window written");
+    expectNull(decoder, root / "int-min-window.exr",
+               "INT_MIN dataWindow is rejected without int UB");
+
+    const int limit = static_cast<int>(mviewer::core::hdr_detail::kMaxExrChannels);
+    const auto atLimit = makeExr(0, 0, 0, 0, limit, true);
+    CHECK(writeBytes(root / "channels-64.exr", atLimit.bytes), "channel ceiling EXR written");
+    const ImageData limited = decoder.decodeFull((root / "channels-64.exr").string(), meta);
+    CHECK(!limited.isNull() && limited.width == 1, "channel ceiling still decodes a 1x1 RGB EXR");
+
+    const auto tooMany = makeExr(0, 0, 0, 0, limit + 1, false);
+    CHECK(writeBytes(root / "channels-65.exr", tooMany.bytes), "channel overflow EXR written");
+    expectNull(decoder, root / "channels-65.exr", "channel list above the ceiling is rejected");
+
+    auto hugeOffset = control;
+    patchU64(hugeOffset.bytes, hugeOffset.offsetAt, 0x100000008ull);
+    CHECK(writeBytes(root / "offset-u64.exr", hugeOffset.bytes), "high offset EXR written");
+    expectNull(decoder, root / "offset-u64.exr",
+               "64-bit scanline offset is rejected before size_t narrowing");
+
+    auto hugeSize = control;
+    patchU32(hugeSize.bytes, hugeSize.dataSizeAt, 0x7fffffffu);
+    CHECK(writeBytes(root / "datasize.exr", hugeSize.bytes), "huge dataSize EXR written");
+    expectNull(decoder, root / "datasize.exr", "scanline dataSize above the buffer is rejected");
+
+    auto truncated = control.bytes;
+    truncated.pop_back();
+    CHECK(writeBytes(root / "truncated.exr", truncated), "truncated EXR written");
+    expectNull(decoder, root / "truncated.exr", "truncated EXR is rejected");
+}
+
+void checkExrInputCap(HdrDecoder &decoder, const fs::path &root)
+{
+    const auto path = root / "oversize.exr";
+    {
+        std::ofstream file(mviewer::core::pathFromUtf8(path.string()), std::ios::binary);
+        file.put('x');
+    }
+    std::error_code ec;
+    fs::resize_file(path, mviewer::core::hdr_detail::kMaxExrInputBytes + 1, ec);
+    CHECK(!ec, "sparse oversized EXR fixture sized");
+    expectNull(decoder, path, "EXR above the input cap is rejected before the payload is read");
+    fs::remove(path, ec);
 }
 } // namespace
 
@@ -240,9 +567,11 @@ int main()
     const PixelRGBA mid = samplePixel(pfmImage, 1, ph - 1); // bottom row, x=1 -> 0.18
     CHECK(top.valid && mid.valid, "PFM samples are readable");
     // Reinhard(1.0) = 0.5 -> gamma 2.2 -> ~0.73 -> ~186
-    CHECK(top.r > 170, "a 1.0 linear value tone-maps to a bright pixel");
+    CHECK(top.r > 170 && top.r == top.g && top.g == top.b,
+          "a 1.0 linear value tone-maps to a bright neutral pixel");
     // Reinhard(0.18) = 0.1525 -> ~0.42 -> ~108
-    CHECK(mid.r > 80 && mid.r < 140, "a 0.18 linear value maps to mid-gray, not clipped");
+    CHECK(mid.r > 80 && mid.r < 140 && mid.r == mid.g && mid.g == mid.b,
+          "a 0.18 linear value maps to mid-gray on every channel");
 
     // PFM rows run bottom-to-top, so the bottom-left sample must be row 0, x=0.
     const PixelRGBA bottom = samplePixel(pfmImage, 0, ph - 1);
@@ -268,7 +597,8 @@ int main()
           "uncompressed EXR decodes to the stored size");
     CHECK(meta.format == "EXR", "EXR metadata records the format");
     const PixelRGBA exrPx = samplePixel(exrImage, 1, 1);
-    CHECK(exrPx.valid && exrPx.r > 80 && exrPx.r < 140, "EXR half samples tone-map to mid-gray");
+    CHECK(exrPx.valid && exrPx.r > 80 && exrPx.r < 140 && exrPx.r == exrPx.g && exrPx.g == exrPx.b,
+          "EXR half samples tone-map to mid-gray");
 
     // ── Tone map contract ──────────────────────────────────────────────────
     const std::vector<float> flat = {0.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f};
@@ -281,6 +611,11 @@ int main()
     CHECK(white.valid && white.r > 170, "1.0 linear maps to bright, not clipped to 255");
     CHECK(!decoder.canDecode((root / "nope.png").string()),
           "the decoder does not claim ordinary images");
+
+    checkPfmValues(decoder, root);
+    checkPfmRejects(decoder, root);
+    checkExrBounds(decoder, root);
+    checkExrInputCap(decoder, root);
 
     fs::remove_all(root, ec);
     printf("\n==== HDR decoder test: %d passed, %d failed ====\n", g_pass, g_fail);

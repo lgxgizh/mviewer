@@ -9,7 +9,7 @@
 option(MVIEWER_FUZZ "Build libFuzzer targets (clang -fsanitize=fuzzer)" OFF)
 
 set(MVIEWER_FUZZ_TARGETS fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference
-    fuzz_session_package)
+    fuzz_session_package fuzz_hdr_decoder)
 
 foreach(target IN LISTS MVIEWER_FUZZ_TARGETS)
     if(MVIEWER_FUZZ)
