@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-24 · Version: **1.0.213** · Release tag: **v1.0.213**
+> Snapshot: 2026-11-25 · Version: **1.0.214** · Release tag: **v1.0.214**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
