@@ -4,11 +4,26 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QSettings>
+#include <QSurfaceFormat>
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
+#include <vector>
+
+#ifndef GL_TEXTURE_SWIZZLE_R
+#define GL_TEXTURE_SWIZZLE_R 0x8E42
+#define GL_TEXTURE_SWIZZLE_G 0x8E43
+#define GL_TEXTURE_SWIZZLE_B 0x8E44
+#define GL_TEXTURE_SWIZZLE_A 0x8E45
+#endif
+#ifndef GL_RGB8
+#define GL_RGB8 0x8051
+#endif
+#ifndef GL_R8
+#define GL_R8 0x8229
+#endif
 
 // ─── capability probes ───────────────────────────────────────────────────────
 
@@ -70,6 +85,72 @@ int cachedGpuPolicy()
     gpuPolicySlot().store(resolved, std::memory_order_release);
     return resolved;
 }
+
+std::atomic<bool> &forceGrayExpandSlot()
+{
+    static std::atomic<bool> slot{false};
+    return slot;
+}
+
+bool textureSwizzleSupportedOn(QOpenGLContext *ctx)
+{
+    if (ctx == nullptr || !ctx->isValid())
+        return false;
+    const QSurfaceFormat fmt = ctx->format();
+    const int major = fmt.majorVersion();
+    const int minor = fmt.minorVersion();
+    if (major > 3 || (major == 3 && minor >= 3))
+        return true;
+    return ctx->hasExtension(QByteArrayLiteral("GL_ARB_texture_swizzle")) ||
+           ctx->hasExtension(QByteArrayLiteral("GL_EXT_texture_swizzle"));
+}
+
+struct UnpackAlignmentRestorer
+{
+    QOpenGLFunctions *gl = nullptr;
+    GLint previous = 4;
+
+    explicit UnpackAlignmentRestorer(QOpenGLFunctions *functions) : gl(functions)
+    {
+        gl->glGetIntegerv(GL_UNPACK_ALIGNMENT, &previous);
+        gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    }
+
+    ~UnpackAlignmentRestorer()
+    {
+        gl->glPixelStorei(GL_UNPACK_ALIGNMENT, previous);
+    }
+
+    UnpackAlignmentRestorer(const UnpackAlignmentRestorer &) = delete;
+    UnpackAlignmentRestorer &operator=(const UnpackAlignmentRestorer &) = delete;
+};
+
+void applyGraySwizzle(QOpenGLFunctions *gl)
+{
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_RED);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_RED);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_RED);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
+}
+
+std::vector<uint8_t> expandR8ToRgb(const uint8_t *pixels, int w, int h)
+{
+    const size_t n = static_cast<size_t>(w) * static_cast<size_t>(h);
+    std::vector<uint8_t> rgb(n * 3);
+    for (size_t i = 0; i < n; ++i)
+    {
+        const uint8_t g = pixels[i];
+        rgb[i * 3] = g;
+        rgb[i * 3 + 1] = g;
+        rgb[i * 3 + 2] = g;
+    }
+    return rgb;
+}
+
+bool shouldExpandGray(QOpenGLContext *ctx)
+{
+    return forceGrayExpandSlot().load(std::memory_order_acquire) || !textureSwizzleSupportedOn(ctx);
+}
 } // namespace
 
 bool GpuTileUploader::accelerationRequested()
@@ -81,6 +162,16 @@ void GpuTileUploader::resetEnabledCache()
 {
     const std::lock_guard<std::mutex> lock(gpuPolicyMutex());
     gpuPolicySlot().store(-1, std::memory_order_release);
+}
+
+bool GpuTileUploader::textureSwizzleSupported()
+{
+    return textureSwizzleSupportedOn(QOpenGLContext::currentContext());
+}
+
+void GpuTileUploader::setForceGrayExpandForTest(bool on)
+{
+    forceGrayExpandSlot().store(on, std::memory_order_release);
 }
 
 bool GpuTileUploader::enabled()
@@ -342,10 +433,24 @@ uintptr_t GpuTileUploader::doUpload(const TileKey &key, const uint8_t *pixels, i
 
     GLenum format = GL_RGBA;
     GLenum internal = GL_RGBA;
+    const uint8_t *src = pixels;
+    std::vector<uint8_t> expanded;
+    bool expandedToRgb = false;
     if (channels == 1)
     {
-        format = GL_RED;
-        internal = GL_R8;
+        if (shouldExpandGray(ctx))
+        {
+            expanded = expandR8ToRgb(pixels, w, h);
+            src = expanded.data();
+            format = GL_RGB;
+            internal = GL_RGB8;
+            expandedToRgb = true;
+        }
+        else
+        {
+            format = GL_RED;
+            internal = GL_R8;
+        }
     }
     else if (channels == 3)
     {
@@ -371,12 +476,20 @@ uintptr_t GpuTileUploader::doUpload(const TileKey &key, const uint8_t *pixels, i
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    // Tight packing for odd widths (common on edge tiles).
-    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    gl->glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internal), w, h, 0, format,
-                     GL_UNSIGNED_BYTE, pixels);
+    // Tight packing for odd widths (common on edge tiles). Restored on all
+    // exits, including a later TexImage failure.
+    {
+        UnpackAlignmentRestorer unpack(gl);
+        gl->glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internal), w, h, 0, format,
+                         GL_UNSIGNED_BYTE, src);
+    }
+    if (channels == 1 && !expandedToRgb)
+        applyGraySwizzle(gl);
     gl->glBindTexture(GL_TEXTURE_2D, 0);
-    return static_cast<uintptr_t>(tex);
+    const uintptr_t handle = static_cast<uintptr_t>(tex);
+    if (expandedToRgb)
+        m_grayExpanded.insert(handle);
+    return handle;
 }
 
 bool GpuTileUploader::doReplace(uintptr_t handle, const uint8_t *pixels, int w, int h, int channels)
@@ -395,15 +508,31 @@ bool GpuTileUploader::doReplace(uintptr_t handle, const uint8_t *pixels, int w, 
     if (!gl)
         return false;
     GLenum format = GL_RGBA;
+    const uint8_t *src = pixels;
+    std::vector<uint8_t> expanded;
+    const bool expandedToRgb = m_grayExpanded.find(handle) != m_grayExpanded.end();
     if (channels == 1)
-        format = GL_RED;
+    {
+        if (expandedToRgb)
+        {
+            expanded = expandR8ToRgb(pixels, w, h);
+            src = expanded.data();
+            format = GL_RGB;
+        }
+        else
+        {
+            format = GL_RED;
+        }
+    }
     else if (channels == 3)
         format = GL_RGB;
     else if (channels != 4)
         return false;
     gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(handle));
-    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, format, GL_UNSIGNED_BYTE, pixels);
+    {
+        UnpackAlignmentRestorer unpack(gl);
+        gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, format, GL_UNSIGNED_BYTE, src);
+    }
     gl->glBindTexture(GL_TEXTURE_2D, 0);
     return true;
 }
@@ -430,6 +559,7 @@ void GpuTileUploader::doFree(uintptr_t handle)
 {
     if (handle == 0)
         return;
+    m_grayExpanded.erase(handle);
     if (m_free)
     {
         m_free(handle);

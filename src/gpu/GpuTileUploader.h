@@ -59,6 +59,16 @@ class GpuTileUploader
     static bool accelerationRequested();
     static void resetEnabledCache();
 
+    // True when the current context has texture swizzle (OpenGL 3.3+ core, or
+    // GL_ARB/EXT_texture_swizzle). Ignores the test hook below. False if no
+    // context is current.
+    static bool textureSwizzleSupported();
+
+    // Test-only: subsequent R8 uploads expand to RGB instead of swizzling, so
+    // the fallback can be exercised on contexts that do support swizzle. Not a
+    // product flag. Existing textures are left unchanged.
+    static void setForceGrayExpandForTest(bool on);
+
     // Ensure the tile is resident on the GPU. Returns true if a handle is
     // available after the call (upload or cache hit). Returns false when the
     // GPU tier is disabled or upload fails — caller must fall back to CPU.
@@ -143,4 +153,5 @@ class GpuTileUploader
     int m_uploads = 0;
     int m_replaces = 0;
     bool m_budgetLoaded = false;
+    std::unordered_set<uintptr_t> m_grayExpanded;
 };

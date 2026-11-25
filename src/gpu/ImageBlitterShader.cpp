@@ -146,7 +146,12 @@ void ImageBlitterShader::blit(unsigned int texture, const QRect &destination, co
 {
     if (!m_ready || texture == 0 || destination.isEmpty() || viewport.isEmpty())
         return;
-    QOpenGLFunctions *gl = QOpenGLContext::currentContext()->functions();
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (ctx == nullptr || !ctx->isValid())
+        return;
+    QOpenGLFunctions *gl = ctx->functions();
+    if (gl == nullptr || m_program == nullptr || m_vao == nullptr || m_vbo == nullptr)
+        return;
     const float vw = viewport.width() > 0 ? static_cast<float>(viewport.width()) : 1.0f;
     const float vh = viewport.height() > 0 ? static_cast<float>(viewport.height()) : 1.0f;
     const float dx = static_cast<float>(destination.x()) / vw;
