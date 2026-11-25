@@ -147,17 +147,11 @@ fs::path uniqueTempPath(const fs::path &destination)
 bool commitTempFile(const fs::path &temporary, const fs::path &destination, std::error_code &error)
 {
 #ifdef _WIN32
-    const DWORD attributes = GetFileAttributesW(destination.c_str());
-    BOOL committed = FALSE;
-    if (attributes != INVALID_FILE_ATTRIBUTES)
-    {
-        committed =
-            ReplaceFileW(destination.c_str(), temporary.c_str(), nullptr, 0, nullptr, nullptr);
-    }
-    else
-    {
-        committed = MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_WRITE_THROUGH);
-    }
+    // One atomic replace, no GetFileAttributesW probe in between: the attribute
+    // check followed by a branch left a window where the destination could
+    // appear or vanish before the rename.
+    const BOOL committed = MoveFileExW(temporary.c_str(), destination.c_str(),
+                                       MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
     if (!committed)
     {
         error = std::error_code(static_cast<int>(GetLastError()), std::system_category());

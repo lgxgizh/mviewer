@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.215** · Release tag: **v1.0.215**
+> Snapshot: 2026-11-26 · Version: **1.0.216** · Release tag: **v1.0.216**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,15 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.216 - Python isolation and atomic export commit (2026-11-26)
+
+- `python -I` + a scrubbed `PYTHON*` environment; the script response read is
+  capped at 8 MiB.
+- Export commit is a single atomic `MoveFileExW` replace (no attributes probe
+  between check and rename).
+- `UpdateChecker` fails the request when it cannot enforce TLS 1.2+ or the
+  no-downgrade redirect policy.
 
 ## 1.0.215 - review P0/P1 batch (2026-11-26)
 

@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.0.216] - 2026-11-26
+
+### Security / robustness
+
+- **Python scripts now run isolated.** `python -I` plus a scrubbed `PYTHON*`
+  environment (no `PYTHONPATH`, `PYTHONHOME`, user site), so an ambient install
+  can no longer influence a script. The response read is capped at 8 MiB instead
+  of an unbounded `readAll()`.
+- **Export commit is one atomic replace.** Windows used to probe
+  `GetFileAttributesW` and then choose between `ReplaceFileW` and `MoveFileExW`,
+  leaving a window where the destination could change in between. It now always
+  calls `MoveFileExW(..., MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`.
+- **`UpdateChecker` checks its own TLS policy.** `WinHttpSetOption` return values
+  were ignored; a failure to enforce TLS 1.2+ or the no-downgrade redirect policy
+  now aborts the request instead of continuing with weaker settings.
+
 ## [1.0.215] - 2026-11-26
 
 ### Fixed — review P0/P1 batch

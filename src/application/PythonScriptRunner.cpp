@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QPointer>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QThread>
@@ -143,8 +144,17 @@ PythonScriptResult PythonScriptRunner::run(const QString &scriptPath, const QJso
 
     QProcess process;
     process.setProgram(interpreter);
-    process.setArguments({scriptPath, requestPath, responsePath});
+    // -I: isolated mode. The interpreter ignores PYTHON* environment variables,
+    // skips the user site-packages directory and drops the script's own folder
+    // from sys.path, so a script cannot silently pick up an ambient install.
+    process.setArguments({QStringLiteral("-I"), scriptPath, requestPath, responsePath});
     // A script must never inherit a shell or a modified environment silently.
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    for (const QString &key : {QStringLiteral("PYTHONPATH"), QStringLiteral("PYTHONHOME"),
+                               QStringLiteral("PYTHONSTARTUP"), QStringLiteral("PYTHONEXECUTABLE"),
+                               QStringLiteral("PYTHONNOUSERSITE"), QStringLiteral("PYTHONINSPECT")})
+        env.remove(key);
+    process.setProcessEnvironment(env);
     process.setProcessChannelMode(QProcess::SeparateChannels);
     process.start();
     if (!process.waitForStarted(timeoutMs))
@@ -173,6 +183,14 @@ PythonScriptResult PythonScriptRunner::run(const QString &scriptPath, const QJso
     if (!responseFile.open(QIODevice::ReadOnly))
     {
         error = QStringLiteral("the script did not write a response");
+        return result;
+    }
+    // An unbounded readAll() turns a script that prints forever into an
+    // unbounded allocation on the UI side.
+    const qint64 kMaxResponseBytes = 8 * 1024 * 1024;
+    if (responseFile.size() > kMaxResponseBytes)
+    {
+        error = QStringLiteral("the script response is larger than 8 MiB");
         return result;
     }
     const QJsonObject response = QJsonDocument::fromJson(responseFile.readAll()).object();
