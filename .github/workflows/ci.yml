@@ -375,6 +375,40 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      - name: Build bounded HDR EXR PFM sanitizer gate
+        timeout-minutes: 10
+        run: |
+          cmake -S tests/fuzz/hdr_decoder_ci -B hdr_fuzz_ci -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+          cmake --build hdr_fuzz_ci -j 2
+
+      - name: HDR EXR PFM ASan UBSan and real libFuzzer iterations (required)
+        timeout-minutes: 5
+        env:
+          ASAN_OPTIONS: "detect_leaks=1:halt_on_error=1"
+          UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1"
+        run: |
+          set -o pipefail
+          mkdir -p hdr-fuzz-evidence/crashes hdr-fuzz-evidence/corpus
+          cp tests/fuzz/corpus/fuzz_hdr_decoder/* hdr-fuzz-evidence/corpus/
+          python3 -c 'import pathlib; n=len(list(pathlib.Path("hdr-fuzz-evidence/corpus").iterdir())); assert n>=6, n'
+          ./hdr_fuzz_ci/hdr_decoder_sanitized 2>&1 | tee hdr-fuzz-evidence/unit.log
+          ./hdr_fuzz_ci/fuzz_hdr_decoder hdr-fuzz-evidence/corpus \
+            -runs=4000 -max_len=65536 -timeout=5 -rss_limit_mb=1024 \
+            -artifact_prefix=hdr-fuzz-evidence/crashes/ 2>&1 | tee hdr-fuzz-evidence/fuzz.log
+          # A successful compile or zero-iteration launch is not acceptance.
+          python3 -c 'import pathlib,re; assert re.search(r"#4000\s+DONE", pathlib.Path("hdr-fuzz-evidence/fuzz.log").read_text())'
+
+      - name: Upload HDR sanitizer/fuzz evidence and crash inputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: hdr-sanitizer-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
+          path: hdr-fuzz-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
   # ---------------------------------------------------------------------------
   # thread-sanitizer — item 2 governance, now a required gate. A
   # -fsanitize=thread Linux build runs the core-only (no QtGui/widgets) suites with
