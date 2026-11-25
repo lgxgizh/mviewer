@@ -73,3 +73,17 @@ existing `MVIEWER_GPU` / `gpuAcceleration` default, and it does not wire
 `ImageViewer` to `setAdjust` / `setOverlay` (ADR decision 4 still holds:
 exposure and gamma are still CPU-baked; feeding the uniforms from the viewer
 would double-apply). The shader still writes opaque `outColor` alpha.
+
+## B04b1 amendment — isolate shader binding and caller state
+
+Only the selected backend is bound in `drawGpuTiles`: Qt's blitter is no
+longer bound across shader draws. Shader create/blit restore the caller's
+program, VAO, array buffer, active texture, unit 0/1 texture bindings, and blend
+enable. The shader performs its own overlay mix and emits opaque output, so
+fixed-function blending is disabled during its draw without changing blend
+factors/equations. Uploader upload/replace/filter preserve the active unit's
+texture binding as well as the existing unpack-alignment contract.
+
+`viewer_gl_state_tests` is a required xvfb executable alongside the pixel gate.
+This slice does not solve owner-context teardown, repeated initializeGL, hard
+context loss, or cross-screen widget recreation; those remain B04b2.

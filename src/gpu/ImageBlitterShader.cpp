@@ -1,10 +1,12 @@
 #include "gpu/ImageBlitterShader.h"
+#include "gpu/BlitStateGuard.h"
 
 #include <QOpenGLBuffer>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QOpenGLShaderProgram>
 #include <QOpenGLVertexArrayObject>
+#include <QSurfaceFormat>
 
 #include <cmath>
 
@@ -74,8 +76,13 @@ void ImageBlitterShader::resetRequestedCache()
 bool ImageBlitterShader::create()
 {
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
-    if (ctx == nullptr)
+    if (ctx == nullptr || !ctx->isValid() || ctx->isOpenGLES())
         return false;
+    // Both the GLSL330 shader and state guard need desktop OpenGL3.3.
+    const QSurfaceFormat format = ctx->format();
+    if (format.majorVersion() < 3 || (format.majorVersion() == 3 && format.minorVersion() < 3))
+        return false;
+    mviewer::ui::BlitStateGuard restore(ctx->extraFunctions());
     m_program = new QOpenGLShaderProgram(ctx);
     if (!m_program->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader) ||
         !m_program->addShaderFromSourceCode(QOpenGLShader::Fragment, kFragmentShader))
@@ -152,6 +159,10 @@ void ImageBlitterShader::blit(unsigned int texture, const QRect &destination, co
     QOpenGLFunctions *gl = ctx->functions();
     if (gl == nullptr || m_program == nullptr || m_vao == nullptr || m_vbo == nullptr)
         return;
+    mviewer::ui::BlitStateGuard restore(ctx->extraFunctions());
+    // The shader mixes the overlay itself and emits opaque output. Fixed
+    // function blending must not depend on the caller's enable or factors.
+    gl->glDisable(GL_BLEND);
     const float vw = viewport.width() > 0 ? static_cast<float>(viewport.width()) : 1.0f;
     const float vh = viewport.height() > 0 ? static_cast<float>(viewport.height()) : 1.0f;
     const float dx = static_cast<float>(destination.x()) / vw;
@@ -200,12 +211,8 @@ void ImageBlitterShader::blit(unsigned int texture, const QRect &destination, co
         gl->glActiveTexture(GL_TEXTURE1);
         gl->glBindTexture(GL_TEXTURE_2D, m_overlayTexture);
         gl->glActiveTexture(GL_TEXTURE0);
-        gl->glEnable(GL_BLEND);
-        gl->glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
     gl->glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    if (m_overlayTexture != 0 && m_overlayAlpha > 0.0f)
-        gl->glDisable(GL_BLEND);
 
     m_program->disableAttributeArray(0);
     m_program->disableAttributeArray(1);

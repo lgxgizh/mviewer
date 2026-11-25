@@ -105,6 +105,27 @@ bool textureSwizzleSupportedOn(QOpenGLContext *ctx)
            ctx->hasExtension(QByteArrayLiteral("GL_EXT_texture_swizzle"));
 }
 
+class TextureBindingRestorer
+{
+  public:
+    explicit TextureBindingRestorer(QOpenGLFunctions *gl) : m_gl(gl)
+    {
+        m_gl->glGetIntegerv(GL_TEXTURE_BINDING_2D, &m_previous);
+    }
+
+    ~TextureBindingRestorer()
+    {
+        m_gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(m_previous));
+    }
+
+    TextureBindingRestorer(const TextureBindingRestorer &) = delete;
+    TextureBindingRestorer &operator=(const TextureBindingRestorer &) = delete;
+
+  private:
+    QOpenGLFunctions *m_gl;
+    GLint m_previous = 0;
+};
+
 struct UnpackAlignmentRestorer
 {
     QOpenGLFunctions *gl = nullptr;
@@ -471,6 +492,7 @@ uintptr_t GpuTileUploader::doUpload(const TileKey &key, const uint8_t *pixels, i
     gl->glGenTextures(1, &tex);
     if (tex == 0)
         return 0;
+    TextureBindingRestorer restore(gl);
     gl->glBindTexture(GL_TEXTURE_2D, tex);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -528,6 +550,7 @@ bool GpuTileUploader::doReplace(uintptr_t handle, const uint8_t *pixels, int w, 
         format = GL_RGB;
     else if (channels != 4)
         return false;
+    TextureBindingRestorer restore(gl);
     gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(handle));
     {
         UnpackAlignmentRestorer unpack(gl);
@@ -547,6 +570,7 @@ void GpuTileUploader::setMagnifyNearest(uintptr_t handle, bool nearest)
     QOpenGLFunctions *gl = ctx->functions();
     if (!gl)
         return;
+    TextureBindingRestorer restore(gl);
     gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(handle));
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, nearest ? GL_NEAREST : GL_LINEAR);
