@@ -1,6 +1,10 @@
 #include "core/session/SessionPackage.h"
 
 #include "core/filesystem/Utf8Path.h"
+#include "core/session/SessionPackageInternal.h"
+
+#include <QByteArray>
+#include <QString>
 
 #include <array>
 #include <cstdio>
@@ -11,6 +15,8 @@ namespace mviewer::core
 {
 namespace
 {
+using namespace session_detail;
+
 std::uint16_t le16(std::uint16_t v)
 {
     return v;
@@ -34,60 +40,85 @@ void append(std::vector<std::uint8_t> &out, std::uint32_t v)
 
 void appendBytes(std::vector<std::uint8_t> &out, const void *data, size_t size)
 {
+    if (size == 0)
+        return;
     const auto *bytes = static_cast<const std::uint8_t *>(data);
     out.insert(out.end(), bytes, bytes + size);
 }
 
-bool readAt(std::istream &in, std::streamoff offset, std::vector<std::uint8_t> &out, size_t size)
+bool reservedDevice(QString stem)
 {
-    in.clear();
-    in.seekg(offset);
-    out.resize(size);
-    if (size == 0)
-        return true;
-    in.read(reinterpret_cast<char *>(out.data()), static_cast<std::streamsize>(size));
-    return static_cast<size_t>(in.gcount()) == size;
+    stem = stem.section(QLatin1Char('.'), 0, 0).trimmed().toCaseFolded();
+    for (const auto *name : {"con", "prn", "aux", "nul", "conin$", "conout$", "clock$"})
+        if (stem == QLatin1String(name))
+            return true;
+    if (stem.size() != 4 ||
+        (!stem.startsWith(QLatin1String("com")) && !stem.startsWith(QLatin1String("lpt"))))
+        return false;
+    const auto digit = stem.at(3).unicode();
+    return (digit >= '1' && digit <= '9') || digit == 0x00b9 || digit == 0x00b2 || digit == 0x00b3;
 }
 
-constexpr std::uint32_t kLocalHeaderSignature = 0x04034b50u;
-constexpr std::uint32_t kCentralHeaderSignature = 0x02014b50u;
-constexpr std::uint32_t kEndOfCentralDirectorySignature = 0x06054b50u;
-
-// Hard bounds so a hostile package cannot turn an import into a memory
-// exhaustion. A review bundle is a handful of images, not a dataset.
-constexpr std::uint64_t kMaxEntryBytes = 128ull * 1024 * 1024;
-constexpr std::uint64_t kMaxTotalEntryBytes = 256ull * 1024 * 1024;
-
-/// A package entry may only be `session.json` or `images/<plain file name>`.
-/// Anything else — `..`, a backslash, a drive letter, an absolute path, a
-/// nested directory — is refused on both write and read, so an import can never
-/// resolve outside the directory it extracts into.
-bool isSafeEntryName(const std::string &name, std::string &why)
+bool entryKey(const std::string &name, std::string &key, std::string &error)
 {
-    if (name.empty())
+    if (name.empty() || name.size() > 65535)
+        return fail(error, "entry name is empty or exceeds classic ZIP limits");
+    const QString text = QString::fromUtf8(name.data(), static_cast<qsizetype>(name.size()));
+    if (text.toUtf8().toStdString() != name)
+        return fail(error, "entry name is not valid UTF-8");
+    for (const auto ch : text)
+        if (ch.category() == QChar::Other_Control || QStringLiteral("\\:*?\"<>|").contains(ch))
+            return fail(error, "entry name contains control or non-portable characters");
+    if (name != "session.json")
     {
-        why = "empty entry name";
-        return false;
+        if (!text.startsWith(QLatin1String("images/")))
+            return fail(error, "entry outside session.json / images/");
+        const QString leaf = text.mid(7);
+        if (leaf.isEmpty() || leaf.contains(QLatin1Char('/')) || leaf == QLatin1String(".") ||
+            leaf == QLatin1String("..") || leaf.endsWith(QLatin1Char('.')) ||
+            leaf.endsWith(QLatin1Char(' ')) || reservedDevice(leaf))
+            return fail(error, "image entry is not a portable plain file name");
     }
-    if (name.find("..") != std::string::npos || name.find('\\') != std::string::npos ||
-        name.front() == '/' || (name.size() >= 2 && name[1] == ':'))
-    {
-        why = "unsafe entry name: " + name;
+    // Qt uses simple folding. Uppercase expansion also conservatively catches
+    // sharp-s/SS and dotless-I/I portable filesystem collisions; keep names intact.
+    key = text.normalized(QString::NormalizationForm_C)
+              .toCaseFolded()
+              .toUpper()
+              .toCaseFolded()
+              .normalized(QString::NormalizationForm_C)
+              .toUtf8()
+              .toStdString();
+    return true;
+}
+
+bool uniqueEntry(const std::string &name, std::set<std::string> &names, std::string &error)
+{
+    std::string key;
+    if (!entryKey(name, key, error))
         return false;
-    }
-    if (name == "session.json")
-        return true;
-    const std::string prefix = "images/";
-    if (name.compare(0, prefix.size(), prefix) != 0)
+    if (!names.insert(key).second)
+        return fail(error, "duplicate or normalized/case-folded entry name");
+    return true;
+}
+
+bool validateWrite(const std::vector<SessionPackageEntry> &entries, std::string &error)
+{
+    if (entries.size() >= 65535)
+        return fail(error, "too many entries for a classic ZIP");
+    size_t payload = 0;
+    size_t archive = 22;
+    std::set<std::string> names;
+    for (const auto &entry : entries)
     {
-        why = "entry outside session.json / images/: " + name;
-        return false;
-    }
-    const std::string rest = name.substr(prefix.size());
-    if (rest.empty() || rest.find('/') != std::string::npos)
-    {
-        why = "image entry is not a plain file name: " + name;
-        return false;
+        if (!uniqueEntry(entry.name, names, error))
+            return false;
+        if (entry.data.size() > kEntryLimit || entry.data.size() > kPayloadLimit - payload)
+            return fail(error, "entry or aggregate payload exceeds the size limit");
+        payload += entry.data.size();
+        const size_t needed = 76 + 2 * entry.name.size() + entry.data.size();
+        if (needed > kPackageLimit - archive)
+            return fail(error, "package exceeds the bounded input limit");
+        archive += needed;
     }
     return true;
 }
@@ -95,19 +126,18 @@ bool isSafeEntryName(const std::string &name, std::string &why)
 
 std::uint32_t sessionPackageCrc32(const std::uint8_t *data, size_t size)
 {
-    static std::uint32_t table[256];
-    static bool ready = false;
-    if (!ready)
+    static constexpr auto table = []
     {
-        for (std::uint32_t i = 0; i < 256; ++i)
+        std::array<std::uint32_t, 256> result{};
+        for (std::uint32_t i = 0; i < result.size(); ++i)
         {
-            std::uint32_t c = i;
-            for (int k = 0; k < 8; ++k)
-                c = (c & 1u) ? (0xEDB88320u ^ (c >> 1)) : (c >> 1);
-            table[i] = c;
+            auto value = i;
+            for (int bit = 0; bit < 8; ++bit)
+                value = (value & 1u) ? (0xEDB88320u ^ (value >> 1)) : (value >> 1);
+            result[i] = value;
         }
-        ready = true;
-    }
+        return result;
+    }();
     std::uint32_t crc = 0xFFFFFFFFu;
     for (size_t i = 0; i < size; ++i)
         crc = table[(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
@@ -117,36 +147,23 @@ std::uint32_t sessionPackageCrc32(const std::uint8_t *data, size_t size)
 bool writeSessionPackage(const std::string &path, const std::vector<SessionPackageEntry> &entries,
                          std::string &error)
 {
+    error.clear();
+    if (!validateWrite(entries, error))
+        return false;
     std::vector<std::uint8_t> out;
     std::vector<std::array<std::uint32_t, 3>> central; // crc, size, local offset
     for (const SessionPackageEntry &entry : entries)
     {
-        if (entry.name.empty())
-        {
-            error = "an entry has an empty name";
-            return false;
-        }
-        std::string why;
-        if (!isSafeEntryName(entry.name, why))
-        {
-            error = why;
-            return false;
-        }
-        if (entry.data.size() > kMaxEntryBytes)
-        {
-            error = "an entry exceeds the 128 MiB limit";
-            return false;
-        }
         const std::uint32_t crc = sessionPackageCrc32(entry.data.data(), entry.data.size());
         const std::uint32_t size = static_cast<std::uint32_t>(entry.data.size());
         const std::uint32_t offset = static_cast<std::uint32_t>(out.size());
 
-        append(out, le32(kLocalHeaderSignature));
-        append(out, le16(20)); // version needed
-        append(out, le16(0));  // flags
-        append(out, le16(0));  // method: store
-        append(out, le16(0));  // mod time
-        append(out, le16(0));  // mod date
+        append(out, le32(kLocal));
+        append(out, le16(20));     // version needed
+        append(out, le16(0x0800)); // UTF-8 names
+        append(out, le16(0));      // method: store
+        append(out, le16(0));      // mod time
+        append(out, le16(0));      // mod date
         append(out, le32(crc));
         append(out, le32(size)); // compressed = stored size
         append(out, le32(size));
@@ -162,13 +179,13 @@ bool writeSessionPackage(const std::string &path, const std::vector<SessionPacka
     for (size_t i = 0; i < entries.size(); ++i)
     {
         const SessionPackageEntry &entry = entries[i];
-        append(out, le32(kCentralHeaderSignature));
-        append(out, le16(20)); // version made by
-        append(out, le16(20)); // version needed
-        append(out, le16(0));  // flags
-        append(out, le16(0));  // method
-        append(out, le16(0));  // mod time
-        append(out, le16(0));  // mod date
+        append(out, le32(kCentral));
+        append(out, le16(20));     // version made by
+        append(out, le16(20));     // version needed
+        append(out, le16(0x0800)); // UTF-8 names
+        append(out, le16(0));      // method
+        append(out, le16(0));      // mod time
+        append(out, le16(0));      // mod date
         append(out, le32(central[i][0]));
         append(out, le32(central[i][1]));
         append(out, le32(central[i][1]));
@@ -183,7 +200,7 @@ bool writeSessionPackage(const std::string &path, const std::vector<SessionPacka
     }
     const std::uint32_t centralSize = static_cast<std::uint32_t>(out.size()) - centralStart;
 
-    append(out, le32(kEndOfCentralDirectorySignature));
+    append(out, le32(kEnd));
     append(out, le16(0)); // disk
     append(out, le16(0)); // central directory disk
     append(out, le16(static_cast<std::uint16_t>(entries.size())));
@@ -211,122 +228,60 @@ bool writeSessionPackage(const std::string &path, const std::vector<SessionPacka
 
 std::vector<SessionPackageEntry> readSessionPackage(const std::string &path, std::string &error)
 {
-    std::vector<SessionPackageEntry> entries;
-    std::ifstream in(mviewer::core::pathFromUtf8(path), std::ios::binary);
+    error.clear();
+    std::ifstream in(pathFromUtf8(path), std::ios::binary | std::ios::ate);
     if (!in)
     {
         error = "cannot open package";
-        return entries;
+        return {};
     }
-    std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)),
-                                    std::istreambuf_iterator<char>());
-    if (bytes.size() < 22)
+    const auto length = in.tellg();
+    if (length < 0 || static_cast<std::uint64_t>(length) > kPackageLimit)
     {
-        error = "package is truncated";
-        return entries;
+        error = "package exceeds bounded input limit or is not seekable";
+        return {};
     }
-    const auto u32At = [&](size_t at) -> std::uint32_t
+    in.seekg(0);
+    std::vector<std::uint8_t> bytes;
+    if (!readSizedStream(in, static_cast<size_t>(length), bytes, error))
+        return {};
+    Directory dir;
+    if (!locateDirectory(bytes, dir, error))
+        return {};
+    std::vector<SessionPackageEntry> entries;
+    std::set<std::string> names;
+    std::map<size_t, size_t> spans;
+    size_t at = dir.start;
+    size_t total = 0;
+    for (size_t i = 0; i < dir.count; ++i)
     {
-        if (at + 4 > bytes.size())
-            return 0;
-        return static_cast<std::uint32_t>(bytes[at]) |
-               (static_cast<std::uint32_t>(bytes[at + 1]) << 8) |
-               (static_cast<std::uint32_t>(bytes[at + 2]) << 16) |
-               (static_cast<std::uint32_t>(bytes[at + 3]) << 24);
-    };
-    const auto u16At = [&](size_t at) -> std::uint16_t
-    {
-        if (at + 2 > bytes.size())
-            return 0;
-        return static_cast<std::uint16_t>(static_cast<std::uint16_t>(bytes[at]) |
-                                          (static_cast<std::uint16_t>(bytes[at + 1]) << 8));
-    };
-
-    // Locate the end-of-central-directory record from the tail.
-    size_t eocd = bytes.size() >= 22 ? bytes.size() - 22 : 0;
-    bool found = false;
-    for (size_t at = bytes.size() >= 22 ? bytes.size() - 22 : 0; at < bytes.size(); ++at)
-    {
-        if (u32At(at) == kEndOfCentralDirectorySignature)
+        Record record;
+        if (!readCentral(bytes, at, dir.end, record, error) ||
+            !uniqueEntry(record.name, names, error))
+            return {};
+        if (record.size > kEntryLimit || record.size > kPayloadLimit - total)
         {
-            eocd = at;
-            found = true;
-            break;
+            error = "entry or aggregate payload exceeds the size limit";
+            return {};
         }
+        size_t dataAt = 0;
+        if (!localPayload(bytes, record, dir.start, dataAt, error) ||
+            !registerSpan(spans, record.local, dataAt + record.size, error))
+            return {};
+        if (sessionPackageCrc32(bytes.data() + dataAt, record.size) != record.crc)
+        {
+            error = "crc mismatch for " + record.name;
+            return {};
+        }
+        entries.push_back(
+            {record.name, {bytes.data() + dataAt, bytes.data() + dataAt + record.size}});
+        total += record.size;
+        at = record.next;
     }
-    if (!found && u32At(eocd) != kEndOfCentralDirectorySignature)
+    if (at != dir.end)
     {
-        error = "not a session package (no end-of-central-directory)";
-        return entries;
-    }
-    const std::uint16_t count = u16At(eocd + 10);
-    std::uint32_t centralOffset = u32At(eocd + 16);
-    std::uint64_t totalEntryBytes = 0;
-
-    for (std::uint16_t i = 0; i < count; ++i)
-    {
-        if (centralOffset + 46 > bytes.size() || u32At(centralOffset) != kCentralHeaderSignature)
-        {
-            error = "corrupt central directory";
-            return entries;
-        }
-        const std::uint16_t method = u16At(centralOffset + 10);
-        const std::uint32_t crc = u32At(centralOffset + 16);
-        const std::uint32_t size = u32At(centralOffset + 24);
-        const std::uint16_t nameLen = u16At(centralOffset + 28);
-        const std::uint16_t extraLen = u16At(centralOffset + 30);
-        const std::uint16_t commentLen = u16At(centralOffset + 32);
-        const std::uint32_t localOffset = u32At(centralOffset + 42);
-        if (method != 0)
-        {
-            error = "compressed entries are not supported";
-            return entries;
-        }
-        if (centralOffset + 46 + nameLen > bytes.size())
-        {
-            error = "corrupt entry name";
-            return entries;
-        }
-        SessionPackageEntry entry;
-        entry.name.assign(reinterpret_cast<const char *>(&bytes[centralOffset + 46]), nameLen);
-        std::string why;
-        if (!isSafeEntryName(entry.name, why))
-        {
-            error = why;
-            return entries;
-        }
-        if (size > kMaxEntryBytes)
-        {
-            error = "an entry exceeds the 128 MiB limit";
-            return entries;
-        }
-        totalEntryBytes += size;
-        if (totalEntryBytes > kMaxTotalEntryBytes)
-        {
-            error = "the package exceeds the 256 MiB unpacked limit";
-            return entries;
-        }
-        if (localOffset + 30 > bytes.size() || u32At(localOffset) != kLocalHeaderSignature)
-        {
-            error = "corrupt local header";
-            return entries;
-        }
-        const std::uint16_t localNameLen = u16At(localOffset + 26);
-        const std::uint16_t localExtraLen = u16At(localOffset + 28);
-        const size_t dataAt = localOffset + 30 + localNameLen + localExtraLen;
-        if (dataAt + size > bytes.size())
-        {
-            error = "truncated entry data";
-            return entries;
-        }
-        entry.data.assign(bytes.begin() + dataAt, bytes.begin() + dataAt + size);
-        if (sessionPackageCrc32(entry.data.data(), entry.data.size()) != crc)
-        {
-            error = "crc mismatch for " + entry.name;
-            return entries;
-        }
-        entries.push_back(std::move(entry));
-        centralOffset += 46 + nameLen + extraLen + commentLen;
+        error = "central directory count/size mismatch";
+        return {};
     }
     return entries;
 }

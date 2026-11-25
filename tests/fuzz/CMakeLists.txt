@@ -8,7 +8,8 @@
 # link libFuzzer (-fsanitize=fuzzer) and are run with -max_total_time.
 option(MVIEWER_FUZZ "Build libFuzzer targets (clang -fsanitize=fuzzer)" OFF)
 
-set(MVIEWER_FUZZ_TARGETS fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference)
+set(MVIEWER_FUZZ_TARGETS fuzz_raw_metadata fuzz_exif_reader fuzz_y4m fuzz_yuv_inference
+    fuzz_session_package)
 
 foreach(target IN LISTS MVIEWER_FUZZ_TARGETS)
     if(MVIEWER_FUZZ)
