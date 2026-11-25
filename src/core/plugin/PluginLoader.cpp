@@ -1,7 +1,9 @@
 #include "core/plugin/PluginLoader.h"
 #include "core/filesystem/Utf8Path.h"
 #include "core/plugin/PluginABI.h"
+#include "core/plugin/PluginAbiCall.h"
 #include "core/plugin/PluginLibrary.h"
+#include "core/plugin/PluginPathPolicy.h"
 
 #include <QDebug>
 
@@ -23,30 +25,7 @@ std::string PluginLoader::lastError()
 
 std::vector<std::string> PluginLoader::scanDirectory(const std::string &dirPath)
 {
-    std::vector<std::string> candidates;
-    const std::filesystem::path dir = mviewer::core::pathFromUtf8(dirPath);
-    std::error_code ec;
-    if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
-        return candidates;
-
-#ifdef _WIN32
-    const std::string ext = ".dll";
-#else
-#ifdef __APPLE__
-    const std::string ext = ".dylib";
-#else
-    const std::string ext = ".so";
-#endif
-#endif
-
-    for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
-    {
-        std::error_code fileEc;
-        if (it->is_regular_file(fileEc) && !fileEc &&
-            mviewer::core::pathToUtf8(it->path().extension()) == ext)
-            candidates.push_back(mviewer::core::pathToUtf8(it->path()));
-    }
-    return candidates;
+    return mviewer::core::scanPluginCandidates(dirPath);
 }
 
 using CreateAnalyzerFn = Analyzer *(*)();
@@ -119,8 +98,10 @@ AnalyzerDeleter makeAnalyzerDeleter(const std::shared_ptr<PluginModulePin> &modu
     {
         if (!module || module->handle == nullptr || destroyFn == nullptr)
             return;
-        if (value)
-            destroyFn(value);
+        if (!value)
+            return;
+        std::string ignored;
+        mviewer::core::invokePluginVoid("destroyAnalyzer", ignored, [&] { destroyFn(value); });
     };
 }
 
@@ -131,7 +112,14 @@ bool pluginAbiAccepted(void *handle, const std::string &path, std::string &error
 
     if (abiFn)
     {
-        const PluginABI *pabi = abiFn();
+        bool abiOk = false;
+        const PluginABI *pabi = mviewer::core::invokePluginCallback("mviewer_plugin_abi", error,
+                                                                    abiOk, [&] { return abiFn(); });
+        if (!abiOk)
+        {
+            logRejectedPlugin(path, error);
+            return false;
+        }
         if (!pabi)
         {
             error = "plugin ABI descriptor is null";
@@ -154,8 +142,9 @@ bool pluginAbiAccepted(void *handle, const std::string &path, std::string &error
         return true;
     }
 
-    // Review P2-1: a module with no contract export at all is rejected; its
-    // DllMain already ran, but no plugin entry point is resolved or called.
+    // A module with no contract export is rejected. Mapping it already ran
+    // DllMain or .init_array; that is not a trust check. No later plugin entry
+    // point is resolved or called.
     if (!versionFn)
     {
         error = mviewer::core::kPluginMissingAbiError;
@@ -164,7 +153,15 @@ bool pluginAbiAccepted(void *handle, const std::string &path, std::string &error
     }
     // Legacy single-version export. Same gate on every platform; only the
     // version query itself is called before this decision.
-    if (versionFn() != MVIEWER_PLUGIN_API_VERSION)
+    bool versionOk = false;
+    const int version = mviewer::core::invokePluginCallback("mviewer_plugin_api_version", error,
+                                                            versionOk, [&] { return versionFn(); });
+    if (!versionOk)
+    {
+        logRejectedPlugin(path, error);
+        return false;
+    }
+    if (version != MVIEWER_PLUGIN_API_VERSION)
     {
         error = "plugin API version mismatch (legacy export)";
         logRejectedPlugin(path, error);
@@ -179,10 +176,27 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
 {
     PluginLoader::LoadedPlugin result;
     result.path = path;
-    // Use the plugin name or fallback to filename
+    // Use the plugin name or fallback to filename. A null pluginName is not
+    // a name; constructing a std::string from it would be undefined.
     if (nameFn)
     {
-        result.name = nameFn();
+        bool nameOk = false;
+        const char *raw = mviewer::core::invokePluginCallback("pluginName", result.error, nameOk,
+                                                              [&] { return nameFn(); });
+        if (!nameOk)
+        {
+            s_lastError = result.error;
+            closePluginHandle(handle);
+            return result;
+        }
+        if (!raw)
+        {
+            result.error = "pluginName returned null";
+            s_lastError = result.error;
+            closePluginHandle(handle);
+            return result;
+        }
+        result.name = raw;
     }
     else
     {
@@ -207,8 +221,18 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
     }
 
     // The probe used to read the analyzer id is destroyed through the plugin,
-    // not leaked and not deleted on the host heap.
-    std::unique_ptr<Analyzer, AnalyzerDeleter> probe(createFn(),
+    // not leaked and not deleted on the host heap. The catch stops a C++
+    // exception only. It is not a sandbox; the plugin runs in this process.
+    bool createOk = false;
+    Analyzer *created = mviewer::core::invokePluginCallback("createAnalyzer", result.error,
+                                                            createOk, [&] { return createFn(); });
+    if (!createOk)
+    {
+        s_lastError = result.error;
+        closePluginHandle(handle);
+        return result;
+    }
+    std::unique_ptr<Analyzer, AnalyzerDeleter> probe(created,
                                                      makeAnalyzerDeleter(module, destroyFn));
     if (!probe)
     {
@@ -218,15 +242,14 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
         return result;
     }
 
-    std::string id;
-    try
+    bool nameOk = false;
+    const std::string id = mviewer::core::invokePluginCallback(
+        "Analyzer::name", result.error, nameOk, [&] { return probe->name(); });
+    if (!nameOk)
     {
-        id = probe->name();
-    }
-    catch (...) // a plugin exception must not cross the ABI boundary
-    {
-        result.error = "plugin analyzer threw while reporting its name";
         s_lastError = result.error;
+        probe.reset();
+        closePluginHandle(handle);
         return result;
     }
     probe.reset();
@@ -235,16 +258,12 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
         id,
         [module, createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
         {
-            Analyzer *created = nullptr;
-            try
-            {
-                created = createFn();
-            }
-            catch (...)
-            {
-                return nullptr;
-            }
-            if (!created)
+            // C++ catch only. Not a sandbox: the plugin is in this process.
+            std::string ignored;
+            bool ok = false;
+            Analyzer *created = mviewer::core::invokePluginCallback("createAnalyzer", ignored, ok,
+                                                                    [&] { return createFn(); });
+            if (!ok || !created)
                 return nullptr;
             return std::unique_ptr<Analyzer, AnalyzerDeleter>(
                 created, makeAnalyzerDeleter(module, destroyFn));
@@ -269,6 +288,14 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
 {
     LoadedPlugin result;
     result.path = path;
+
+    const mviewer::core::PluginFileAssessment file = mviewer::core::assessPluginFile(path, {});
+    if (!file.regularFile)
+    {
+        result.error = file.error.empty() ? "plugin path is not a regular file" : file.error;
+        s_lastError = result.error;
+        return result;
+    }
 
     void *handle = nullptr;
     handle = mviewer::core::loadPluginLibrary(path, result.error);
@@ -300,17 +327,10 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
 
     return finishLoadedPlugin(path, handle, createFn, destroyFn, nameFn);
 }
-std::vector<PluginLoader::LoadedPlugin> PluginLoader::loadFromDirectory(const std::string &dirPath)
+std::vector<PluginLoader::LoadedPlugin> PluginLoader::loadFromDirectory(const std::string &)
 {
-    std::vector<LoadedPlugin> results;
-    auto candidates = scanDirectory(dirPath);
-    for (const auto &path : candidates)
-    {
-        results.push_back(loadPlugin(path));
-    }
-    if (results.empty())
-    {
-        std::cout << "[PluginLoader] No plugins found in " << dirPath << '\n';
-    }
-    return results;
+    // Directory discovery must not map unknown modules. loadPlugin is the
+    // explicit entry for one regular file the caller named.
+    s_lastError = "refusing to map untrusted modules from a directory";
+    return {};
 }

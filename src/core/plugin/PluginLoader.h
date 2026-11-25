@@ -19,13 +19,12 @@ class PluginLoader
         std::string error;
     };
 
-    // Load all plugins from a directory. Each plugin must export:
-    //   extern "C" Analyzer* createAnalyzer();
-    //   extern "C" void destroyAnalyzer(Analyzer*);
-    //   extern "C" const char* pluginName();
+    // Does not map modules. Unknown libraries are not executed by a directory
+    // scan. Call loadPlugin for one explicitly named regular file.
     static std::vector<LoadedPlugin> loadFromDirectory(const std::string &dirPath);
 
-    // Load a single plugin by path.
+    // Explicit load of one regular file. Symlinks and junctions are rejected
+    // before the module is mapped.
     static LoadedPlugin loadPlugin(const std::string &path);
 
     // Scan directory and return list of candidate plugin files.

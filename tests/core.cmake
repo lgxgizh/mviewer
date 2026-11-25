@@ -1339,6 +1339,18 @@ target_compile_features(test_plugin_audit PRIVATE cxx_std_20)
 target_include_directories(test_plugin_audit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 add_test(NAME plugin_audit_tests COMMAND test_plugin_audit)
 
+add_executable(test_plugin_trust
+    ${CMAKE_SOURCE_DIR}/tests/plugin/test_plugin_trust.cpp
+)
+target_link_libraries(test_plugin_trust
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(test_plugin_trust PRIVATE cxx_std_20)
+target_include_directories(test_plugin_trust PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+add_test(NAME plugin_trust_tests COMMAND test_plugin_trust)
+
 # ─── UI fixture regression ─────────────────────────────────────────────
 
 add_executable(ui_fixture

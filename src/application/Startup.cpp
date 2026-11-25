@@ -1,12 +1,16 @@
 #include "core/filesystem/Utf8Path.h"
 #include "core/plugin/PluginManager.h"
+#include "core/plugin/PluginPathPolicy.h"
 
 #include <QCoreApplication>
 #include <QDebug>
+#include <QSettings>
 #include <QString>
 
 #include <filesystem>
+#include <string>
 #include <system_error>
+#include <vector>
 
 namespace
 {
@@ -42,7 +46,28 @@ void doStartupPlugins()
 
     auto &mgr = PluginManager::instance();
     const std::string pluginPath = mviewer::core::pathToUtf8(pluginDir);
-    int count = mgr.loadDirectory(pluginPath);
+    std::string canonicalDir;
+    std::string dirError;
+    // A symlink or junction in place of plugins/ is not a real directory.
+    // Refuse it before any module is mapped.
+    if (!mviewer::core::assessPluginDirectory(pluginPath, canonicalDir, dirError))
+    {
+        qWarning().noquote() << "[Startup] Plugin directory unavailable:"
+                             << QString::fromStdString(pluginPath)
+                             << QString::fromStdString(dirError);
+        return;
+    }
+    // Startup is not consent. Only hashes already stored by Trust and load
+    // are mapped. A newly dropped library is not executed here.
+    // Built-in analyzers are registered in-process and do not use this path.
+    QSettings settings;
+    const QStringList trusted =
+        settings.value(QStringLiteral("plugins/trustedSha256")).toStringList();
+    std::vector<std::string> hashes;
+    hashes.reserve(static_cast<size_t>(trusted.size()));
+    for (const QString &item : trusted)
+        hashes.emplace_back(item.toUtf8().toStdString());
+    const int count = mgr.loadTrusted(pluginPath, hashes);
 
     if (count == 0)
     {
