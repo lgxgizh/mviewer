@@ -217,10 +217,14 @@ AnalyzerRegistry::instance().registerAnalyzer("my_analyzer", []() {
 
 ### Plugin Loading
 
-Load external analyzer plugins at runtime via `PluginManager`:
+Load one explicitly authorized plugin at runtime via `PluginManager`.
+Directory discovery does not map unknown modules. Startup maps a file under
+`<exe>/plugins` only when its SHA-256 is already in `plugins/trustedSha256`
+(recorded after Plugin Settings → Trust and load, whose dialog defaults to
+Cancel). Rescan does not map unknown modules:
 
 ```cpp
-PluginManager::instance().loadDirectory("<path-to-plugins>");
+PluginManager::instance().load("<path-to-one-plugin>");
 ```
 
 ---

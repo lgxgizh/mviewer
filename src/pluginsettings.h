@@ -6,6 +6,7 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QStringList>
 
 class QSettings;
 
@@ -16,12 +17,14 @@ class PluginSettings : public QDialog
     explicit PluginSettings(QWidget *parent = nullptr);
 
   signals:
-    // Emitted after a rescan / enable-toggle so AnalysisPanel can refreshAnalyzers().
+    // Emitted after Trust and load or an enable-toggle so AnalysisPanel can
+    // refreshAnalyzers(). Rescan does not emit this.
     void pluginsChanged();
 
   private slots:
     void refreshList();
     void rescanPlugins();
+    void onTrustAndLoad();
     void onTogglePlugin();
     void onAddPluginPath();
     void onRemovePluginPath();
@@ -38,7 +41,11 @@ class PluginSettings : public QDialog
     QPushButton *m_removeBtn = nullptr;
     QPushButton *m_browseBtn = nullptr;
     QPushButton *m_scanBtn = nullptr;
+    QPushButton *m_trustBtn = nullptr;
     QLineEdit *m_searchPath = nullptr;
     QLabel *m_statusLabel = nullptr;
     QStringList m_disabledPlugins;
+    // Parallel lists filled by Rescan. Paths and SHA-256 only. Rescan does not map.
+    QStringList m_discoveredPaths;
+    QStringList m_discoveredHashes;
 };

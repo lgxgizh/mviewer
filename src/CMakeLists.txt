@@ -157,6 +157,7 @@ add_library(mviewer_core SHARED
     core/plugin/PluginLibrary.cpp
     core/plugin/PluginLoader.cpp
     core/plugin/PluginManager.cpp
+    core/plugin/PluginPathPolicy.cpp
     core/export/IExporter.h
     core/export/ExporterRegistry.cpp
     core/import/ImporterRegistry.cpp

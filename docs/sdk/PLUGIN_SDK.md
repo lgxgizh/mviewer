@@ -163,13 +163,29 @@ the release pipeline (see M13.3).
 
 ## 6. Load by MViewer
 
-Drop the plugin next to the app (or in the configured plugin directory). At
-startup `PluginManager::loadDirectory()` scans, `dlopen`/`LoadLibrary`s each
-plugin, probes its `create*` exports to learn its kind, and self-registers the
-instance into the matching registry (`AnalyzerRegistry` / `DecoderRegistry` /
-`ExporterRegistry`). Analyzers appear in the Analysis panel; decoders are used
-by the image-opening path; exporters by the export path — all automatically, no
-code change in MViewer.
+Drop the plugin into a configured search directory (default `<exe>/plugins`).
+Startup does not map unknown files in that directory, and it is not a consent
+step. Plugin Settings → Rescan lists regular files and their SHA-256 and does
+not map them. Trust and load is a separate confirmation: it shows the selected
+path and SHA-256, warns that native code runs in this process, and defaults
+to Cancel. Only a confirmed successful load stores that hash in
+`plugins/trustedSha256`. The next startup maps a file only when its current
+bytes match a stored hash. `loadDirectory()` and
+`PluginLoader::loadFromDirectory()` do not open libraries.
+
+`PluginManager::load(path)` is the authorized entry for one regular file. It
+rejects a symlink or junction before `dlopen` / `LoadLibrary`. After a
+successful explicit load, the host reads `mviewer_plugin_abi()` (or the legacy
+version export). That ABI comparison is a contract check. The module's
+`DllMain` or `.init_array` has already run, so the check is not a trust or
+security boundary. A C++ `catch` around a later callback stops a C++ exception
+from leaving the plugin; it does not contain a native fault, and the plugin
+still runs in this process.
+
+A matching plugin probes its `create*` export and registers with
+`AnalyzerRegistry`, `DecoderRegistry`, `ExporterRegistry`, or
+`ImporterRegistry`. Built-in analyzers are compiled into the host and do not
+use this directory.
 
 The end-to-end contract for all three kinds is enforced by
 `ctest pluginexamples_tests` (build → load → self-register → use), the analyzer

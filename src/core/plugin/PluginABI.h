@@ -7,8 +7,10 @@
 //
 // Every MViewer plugin exports a descriptor via:
 //   extern "C" const PluginABI* mviewer_plugin_abi();
-// The host compares it against its own ABI before loading. Full contract and
-// bump policy live in docs/sdk/PLUGIN_ABI.md.
+// The host can read that descriptor only after the OS has mapped the module,
+// which already runs DllMain or .init_array. The comparison is a contract
+// check, not a trust check, and it is not a security boundary. Full contract
+// and bump policy live in docs/sdk/PLUGIN_ABI.md.
 //
 //   apiVersion  — the plugin *API contract* (Analyzer/Decoder/Exporter
 //                 interfaces, exported C symbols, capability flags). Bump on an

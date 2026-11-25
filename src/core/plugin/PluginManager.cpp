@@ -8,7 +8,9 @@
 #include "core/import/IImporter.h"
 #include "core/import/ImporterRegistry.h"
 #include "core/plugin/PluginABI.h"
+#include "core/plugin/PluginAbiCall.h"
 #include "core/plugin/PluginLibrary.h"
+#include "core/plugin/PluginPathPolicy.h"
 
 #include <QDebug>
 
@@ -16,6 +18,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <unordered_set>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -48,30 +51,7 @@ std::string PluginManager::lastError() const
 
 std::vector<std::string> PluginManager::scanDirectory(const std::string &dirPath)
 {
-    std::vector<std::string> candidates;
-    const std::filesystem::path dir = mviewer::core::pathFromUtf8(dirPath);
-    std::error_code ec;
-    if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
-        return candidates;
-
-#ifdef _WIN32
-    const std::string ext = ".dll";
-#else
-#ifdef __APPLE__
-    const std::string ext = ".dylib";
-#else
-    const std::string ext = ".so";
-#endif
-#endif
-
-    for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
-    {
-        std::error_code fileEc;
-        if (it->is_regular_file(fileEc) && !fileEc &&
-            mviewer::core::pathToUtf8(it->path().extension()) == ext)
-            candidates.push_back(mviewer::core::pathToUtf8(it->path()));
-    }
-    return candidates;
+    return mviewer::core::scanPluginCandidates(dirPath);
 }
 
 namespace
@@ -180,8 +160,10 @@ AnalyzerDeleter makeAnalyzerDeleter(const std::shared_ptr<PluginModulePin> &modu
         // runs inside the plugin while this instance exists.
         if (!module || module->handle == nullptr || destroy == nullptr)
             return;
-        if (value)
-            destroy(value);
+        if (!value)
+            return;
+        std::string ignored;
+        mviewer::core::invokePluginVoid("destroyAnalyzer", ignored, [&] { destroy(value); });
     };
 }
 
@@ -209,7 +191,11 @@ bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
 
     if (s.abi)
     {
-        const PluginABI *abi = s.abi();
+        bool abiOk = false;
+        const PluginABI *abi = mviewer::core::invokePluginCallback("mviewer_plugin_abi", error,
+                                                                   abiOk, [&] { return s.abi(); });
+        if (!abiOk)
+            return rejectAbiMismatch(path, plugin, error, error);
         if (!abi)
             return rejectAbiMismatch(path, plugin, "plugin ABI descriptor is null", error);
         if (!pluginABICompatible(hostPluginABI(), *abi))
@@ -229,10 +215,18 @@ bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
     {
         return rejectAbiMismatch(path, plugin, mviewer::core::kPluginMissingAbiError, error);
     }
-    else if (s.version() != MVIEWER_PLUGIN_API_VERSION)
+    else
     {
-        return rejectAbiMismatch(path, plugin, "plugin API version mismatch (legacy export)",
-                                 error);
+        bool versionOk = false;
+        const int version = mviewer::core::invokePluginCallback(
+            "mviewer_plugin_api_version", error, versionOk, [&] { return s.version(); });
+        if (!versionOk)
+            return rejectAbiMismatch(path, plugin, error, error);
+        if (version != MVIEWER_PLUGIN_API_VERSION)
+        {
+            return rejectAbiMismatch(path, plugin, "plugin API version mismatch (legacy export)",
+                                     error);
+        }
     }
 
     s.createAnalyzer = lookupSymbol<AnalyzerCreateFn>(plugin.handle, "createAnalyzer");
@@ -290,8 +284,16 @@ bool registerAnalyzerPlugin(const std::string &path, const std::string &displayN
     }
 
     // Probe is destroyed through the plugin deleter, same as later instances.
-    std::unique_ptr<Analyzer, AnalyzerDeleter> probe(create(),
-                                                     makeAnalyzerDeleter(module, destroy));
+    bool createOk = false;
+    Analyzer *created = mviewer::core::invokePluginCallback("createAnalyzer", error, createOk,
+                                                            [&] { return create(); });
+    if (!createOk)
+    {
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+    std::unique_ptr<Analyzer, AnalyzerDeleter> probe(created, makeAnalyzerDeleter(module, destroy));
     if (!probe)
     {
         error = "createAnalyzer returned null for " + path;
@@ -299,15 +301,28 @@ bool registerAnalyzerPlugin(const std::string &path, const std::string &displayN
         plugin.handle = nullptr;
         return false;
     }
-    const std::string id = probe->name();
+    bool nameOk = false;
+    const std::string id = mviewer::core::invokePluginCallback("Analyzer::name", error, nameOk,
+                                                               [&] { return probe->name(); });
+    if (!nameOk)
+    {
+        probe.reset();
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
     probe.reset();
 
     AnalyzerRegistry::instance().registerAnalyzer(
         id,
         [module, create, destroy]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
         {
-            Analyzer *analyzer = create();
-            if (!analyzer)
+            // Same C++ catch as the probe. Not a sandbox: the plugin is in-process.
+            std::string ignored;
+            bool ok = false;
+            Analyzer *analyzer = mviewer::core::invokePluginCallback("createAnalyzer", ignored, ok,
+                                                                     [&] { return create(); });
+            if (!ok || !analyzer)
                 return nullptr;
             return std::unique_ptr<Analyzer, AnalyzerDeleter>(analyzer,
                                                               makeAnalyzerDeleter(module, destroy));
@@ -338,22 +353,49 @@ bool registerSharedPlugin(const std::string &path, const std::string &displayNam
                           std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
                           std::string &error)
 {
-    Interface *object = create();
+    if (!create || !destroy)
+    {
+        error = std::string("destroy") + kind + " export not found for " + path;
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+    bool createOk = false;
+    Interface *object =
+        mviewer::core::invokePluginCallback(kind, error, createOk, [&] { return create(); });
+    if (!createOk)
+    {
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
     if (!object)
     {
         error = std::string("create") + kind + " returned null for " + path;
         closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
         return false;
     }
-    const std::string id = object->name();
-    std::shared_ptr<Interface> owned =
-        destroy ? std::shared_ptr<Interface>(object,
-                                             [destroy](Interface *value)
-                                             {
-                                                 if (value)
-                                                     destroy(value);
-                                             })
-                : std::shared_ptr<Interface>(object, [](Interface *value) { delete value; });
+    bool nameOk = false;
+    const std::string id =
+        mviewer::core::invokePluginCallback("name", error, nameOk, [&] { return object->name(); });
+    if (!nameOk)
+    {
+        std::string ignored;
+        mviewer::core::invokePluginVoid("destroy", ignored, [&] { destroy(object); });
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+    std::shared_ptr<Interface> owned(object,
+                                     [destroy](Interface *value)
+                                     {
+                                         if (!value)
+                                             return;
+                                         std::string ignored;
+                                         mviewer::core::invokePluginVoid("destroy", ignored,
+                                                                         [&] { destroy(value); });
+                                     });
     registerFn(owned);
     recordPlugin(path, displayName, plugin.handle, kind, id, slot, plugins);
     return true;
@@ -364,18 +406,48 @@ bool registerComparePlugin(const std::string &path, const std::string &displayNa
                            std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
                            std::string &error)
 {
-    auto *algorithm = plugin.symbols.createCompare();
+    if (!plugin.symbols.createCompare || !plugin.symbols.destroyCompare)
+    {
+        error = "destroyCompareAlgorithm export not found for " + path;
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+    bool createOk = false;
+    auto *algorithm = mviewer::core::invokePluginCallback(
+        "createCompareAlgorithm", error, createOk, [&] { return plugin.symbols.createCompare(); });
+    if (!createOk)
+    {
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
     if (!algorithm)
     {
         error = "createCompareAlgorithm returned null for " + path;
         closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
         return false;
     }
-    const std::string id = algorithm->name();
-    if (plugin.symbols.destroyCompare)
-        plugin.symbols.destroyCompare(algorithm);
-    else
-        delete algorithm;
+    bool nameOk = false;
+    const std::string id = mviewer::core::invokePluginCallback(
+        "ICompareAlgorithm::name", error, nameOk, [&] { return algorithm->name(); });
+    if (!nameOk)
+    {
+        std::string ignored;
+        mviewer::core::invokePluginVoid("destroyCompareAlgorithm", ignored,
+                                        [&] { plugin.symbols.destroyCompare(algorithm); });
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+    if (!mviewer::core::invokePluginVoid("destroyCompareAlgorithm", error,
+                                         [&] { plugin.symbols.destroyCompare(algorithm); }))
+    {
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
     recordPlugin(path, displayName, plugin.handle, "compareAlgorithm", id,
                  &PluginManager::PluginEntry::compareAlgorithmId, plugins);
     return true;
@@ -385,9 +457,27 @@ bool finishPluginLoad(const std::string &path, OpenPlugin &plugin,
                       std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
                       std::string &error)
 {
-    const std::string displayName =
-        plugin.symbols.name ? plugin.symbols.name()
-                            : mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(path).stem());
+    std::string displayName = mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(path).stem());
+    if (plugin.symbols.name)
+    {
+        bool nameOk = false;
+        const char *raw = mviewer::core::invokePluginCallback("pluginName", error, nameOk, [&]
+                                                              { return plugin.symbols.name(); });
+        if (!nameOk)
+        {
+            closePluginHandle(plugin.handle);
+            plugin.handle = nullptr;
+            return false;
+        }
+        if (!raw)
+        {
+            error = "pluginName returned null for " + path;
+            closePluginHandle(plugin.handle);
+            plugin.handle = nullptr;
+            return false;
+        }
+        displayName = raw;
+    }
     if (plugin.symbols.createAnalyzer)
         return registerAnalyzerPlugin(path, displayName, plugin, plugins, error);
     if (plugin.symbols.createDecoder)
@@ -413,6 +503,7 @@ bool finishPluginLoad(const std::string &path, OpenPlugin &plugin,
     error = "plugin exposes no supported create* export "
             "(analyzer/decoder/exporter/importer/compareAlgorithm)";
     closePluginHandle(plugin.handle);
+    plugin.handle = nullptr;
     return false;
 }
 } // namespace
@@ -420,6 +511,12 @@ bool finishPluginLoad(const std::string &path, OpenPlugin &plugin,
 bool PluginManager::load(const std::string &path)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
+    const mviewer::core::PluginFileAssessment file = mviewer::core::assessPluginFile(path, {});
+    if (!file.regularFile)
+    {
+        m_lastError = file.error.empty() ? "plugin path is not a regular file" : file.error;
+        return false;
+    }
     if (m_plugins.count(path))
     {
         m_lastError = "already loaded: " + path;
@@ -431,16 +528,82 @@ bool PluginManager::load(const std::string &path)
     return finishPluginLoad(path, plugin, m_plugins, m_lastError);
 }
 
-int PluginManager::loadDirectory(const std::string &dirPath)
+int PluginManager::loadDirectory(const std::string &)
 {
-    const auto candidates = scanDirectory(dirPath);
-    int count = 0;
-    for (const auto &path : candidates)
+    std::lock_guard<std::mutex> lock(m_mutex);
+    // Scanning must not map unknown modules. Startup uses loadTrusted for
+    // hashes already stored. A new file is mapped only by commitExplicitTrust.
+    m_lastError = "refusing to map untrusted modules from a directory";
+    return 0;
+}
+
+int PluginManager::loadTrusted(const std::string &dirPath,
+                               const std::vector<std::string> &trustedSha256Hex)
+{
+    std::unordered_set<std::string> trusted;
+    for (const std::string &hex : trustedSha256Hex)
     {
+        const std::string normalized = mviewer::core::normalizePluginSha256(hex);
+        if (mviewer::core::isPluginSha256Hex(normalized))
+            trusted.insert(normalized);
+    }
+
+    int count = 0;
+    for (const std::string &path : scanDirectory(dirPath))
+    {
+        std::string hashError;
+        const std::string hash = mviewer::core::pluginFileSha256(path, hashError);
+        if (!mviewer::core::isPluginSha256Hex(hash) || trusted.count(hash) == 0)
+            continue;
         if (load(path))
             ++count;
     }
     return count;
+}
+
+std::vector<ExplicitPluginTrustResult>
+PluginManager::commitExplicitTrust(const std::vector<ExplicitPluginTrust> &confirmed, bool accepted)
+{
+    std::vector<ExplicitPluginTrustResult> results;
+    results.reserve(confirmed.size());
+    for (const ExplicitPluginTrust &item : confirmed)
+    {
+        ExplicitPluginTrustResult result;
+        result.path = item.path;
+        // Cancel, discovery, and any caller that has not received a Yes.
+        if (!accepted)
+        {
+            results.push_back(result);
+            continue;
+        }
+        const std::string confirmedHash = mviewer::core::normalizePluginSha256(item.sha256Hex);
+        std::string hashError;
+        const std::string current = mviewer::core::pluginFileSha256(item.path, hashError);
+        // Already mapped: do not open the path again and do not bind a new hash
+        // to bytes that may have replaced the file.
+        if (!mviewer::core::isPluginSha256Hex(confirmedHash) || current != confirmedHash ||
+            isLoaded(item.path))
+        {
+            results.push_back(result);
+            continue;
+        }
+        if (!load(item.path))
+        {
+            results.push_back(result);
+            continue;
+        }
+        result.loaded = true;
+        const std::string after = mviewer::core::pluginFileSha256(item.path, hashError);
+        // Persist only the hash the caller confirmed. A mismatch means the
+        // bytes changed around the map. That race is not closed here.
+        if (after == confirmedHash)
+        {
+            result.persist = true;
+            result.sha256Hex = after;
+        }
+        results.push_back(result);
+    }
+    return results;
 }
 
 bool PluginManager::unload(const std::string &path)

@@ -145,6 +145,18 @@ set_target_properties(audit_no_abi PROPERTIES
     PREFIX ""
 )
 
+add_library(audit_boundary SHARED
+    ${CMAKE_SOURCE_DIR}/tests/plugin/AuditBoundaryPlugin.cpp
+)
+target_link_libraries(audit_boundary PRIVATE mviewer_core)
+target_compile_features(audit_boundary PRIVATE cxx_std_20)
+target_include_directories(audit_boundary PRIVATE ${CMAKE_SOURCE_DIR}/src)
+set_target_properties(audit_boundary PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    PREFIX ""
+)
+
 if(TARGET test_plugin_audit)
     add_dependencies(test_plugin_audit
         audit_analyzer
@@ -154,3 +166,8 @@ if(TARGET test_plugin_audit)
         example_importer)
 endif()
 
+if(TARGET test_plugin_trust)
+    add_dependencies(test_plugin_trust
+        audit_boundary
+        example_analyzer)
+endif()

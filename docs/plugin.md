@@ -290,10 +290,10 @@ kind-specific interface instance returned by `create*`.
 
 | Event | When | What happens |
 | ------- | ------ | --------------- |
-| `load(path)` | Startup (`startupPlugins`) or Plugin Settings "rescan" | Open the library, resolve symbols, run the ABI gate |
+| `load(path)` | Programmatic map of one regular file. The settings UI calls it only after Trust and load returns Yes | Reject a symlink or junction, then open the library. The ABI export is a contract check after the module is mapped, not a trust check |
 | Kind probe | Immediately after the gate | `create*` is called once, the instance's `name()` becomes the id, the probe instance is destroyed |
 | Registration | Probe succeeded | The factory is registered with the matching registry; the handle is kept in `PluginManager` |
-| `unload(path)` / `unloadAll()` | Plugin Settings / application exit | The factory is unregistered from its registry (no dangling entry into the plugin module); the library handle is deliberately **not** closed — unloading a Qt-linking DLL mid-process crashes on Windows |
+| `unload(path)` / `unloadAll()` | Plugin Settings / application exit | The factory is unregistered. The library stays mapped for the process lifetime (ADR 017): unloading a Qt-linking DLL mid-process crashes on Windows. Unload is not a security boundary |
 
 There is no plugin-side `initialize()` / `shutdown()` callback: an instance is
 created on demand through the plugin's `create*` export and destroyed through the
@@ -350,11 +350,13 @@ Plugins run in the same process as MViewer. This provides maximum performance bu
 
 ### Mitigations
 
-1. **Validation** — The frozen ABI descriptor and the exported entry points are verified before any instance is created (`pluginABICompatible()` plus the kind probe)
-2. **Build contract** — Plugin, host and `mviewer_core` must be built with the same compiler, Qt and `c++20` settings, and `mviewer_core` must stay a SHARED library so host and plugin share one vtable
-3. **Trust model** — Installing a plugin is equivalent to running code inside MViewer; there is no permission system. Only load plugins you trust.
+1. **Explicit trust before mapping** — Startup does not `dlopen` / `LoadLibrary` an unknown file. Rescan, startup, and adding a search path do not consent. Trust and load names each selected path and SHA-256, warns that native code runs in this process, and defaults to Cancel. Only Yes maps the file. The confirmed SHA-256 is stored in `plugins/trustedSha256` only after that load still sees the same bytes. A later startup maps a match and does not map a replaced file. An already loaded path is not given a new hash. A symlink, junction, or directory symlink is not a candidate. The hash does not close a TOCTOU swap between the read and `dlopen`, and it does not classify every Windows reparse point.
+2. **ABI contract, not a trust check** — `pluginABICompatible()` runs only after the OS has mapped the module (`DllMain` / `.init_array` already ran). It rejects a mismatched contract. It does not establish trust and it is not a security boundary.
+3. **C++ callback catch is not a sandbox** — `create*`, `destroy*`, `pluginName`, and `name()` are invoked through a C++ `try/catch` so a C++ exception does not escape into the host. That catch does not stop an access violation, `abort`, or any other native fault. The loaded plugin runs in this process.
+4. **Build contract** — Plugin, host and `mviewer_core` must be built with the same compiler, Qt and `c++20` settings, and `mviewer_core` must stay a SHARED library so host and plugin share one vtable.
+5. **Null exports** — A null ABI descriptor, a null `pluginName()`, or a null `create*` result is rejected. A `create*` without the matching `destroy*` is rejected before the factory is called. The host does not `delete` plugin memory.
 
-Plugin signing and permission-based approval are not implemented.
+Built-in analyzers (`Analyzer::registerBuiltins`) stay in-process and are not directory modules. `plugins/disabled` remains a display-name UI flag: it does not unload a plugin and it is not the trust list.
 
 ### Future: Out-of-Process (Optional)
 
@@ -377,13 +379,14 @@ listed in `src/pluginsettings.cpp`:
 
 | QSettings key | Type | Meaning |
 | --------------- | ------ | --------- |
-| `plugins/searchPaths` | `QStringList` | Directories scanned for plugin libraries; defaults to `<exe dir>/plugins` |
-| `plugins/disabled` | `QStringList` | Plugin display names (`pluginName()`) the user disabled; the plugin stays loaded and the UI marks it disabled |
+| `plugins/searchPaths` | `QStringList` | Directories Rescan may list. Adding a path does not map anything and is not consent |
+| `plugins/disabled` | `QStringList` | Plugin display names (`pluginName()`) the user disabled; the plugin stays loaded and the UI marks it disabled. Not a trust list |
+| `plugins/trustedSha256` | `QStringList` | Lowercase SHA-256 hex stored only after Trust and load maps those bytes. Startup maps a regular file under `<exe>/plugins` only when its current hash is in this list |
 
 ### UI Integration
 
 - The Plugin Settings dialog lists every loaded plugin with its kind (analyzer / decoder / exporter / importer) and path
-- The search-path list is editable; "rescan" loads newly dropped libraries without restarting the app
+- The search-path list is editable. "Rescan" lists regular files with their paths and SHA-256 and does not load them. "Trust and load..." confirms the selected files and defaults to Cancel. A file dropped afterwards is not mapped until a later confirmation
 - A plugin cannot ship its own settings widget: there is no host service API for that
 
 ---
