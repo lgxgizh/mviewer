@@ -13,6 +13,14 @@ target_link_libraries(blitshader_flag_tests PRIVATE mviewer_ui Qt6::Widgets Qt6:
 target_compile_features(blitshader_flag_tests PRIVATE cxx_std_20)
 target_include_directories(blitshader_flag_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME blitshader_flag_tests COMMAND blitshader_flag_tests)
+# P0-1 real GL stride check. Built with the UI tests, not registered with
+# CTest: Windows and the offscreen ctest step must not skip or fail it.
+add_executable(compare_gl_rgb_stride_tests
+    ${CMAKE_SOURCE_DIR}/tests/compare_gl_rgb_stride_tests.cpp)
+target_link_libraries(compare_gl_rgb_stride_tests
+    PRIVATE mviewer_ui Qt6::Widgets Qt6::Gui Qt6::OpenGL Qt6::Core)
+target_compile_features(compare_gl_rgb_stride_tests PRIVATE cxx_std_20)
+target_include_directories(compare_gl_rgb_stride_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)

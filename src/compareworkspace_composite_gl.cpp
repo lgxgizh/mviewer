@@ -1,4 +1,5 @@
 #include "compareworkspace_composite_gl.h"
+#include "compareworkspace_composite_gl_upload.h"
 
 #include <QOffscreenSurface>
 #include <QOpenGLBuffer>
@@ -169,19 +170,28 @@ void CompareCompositeGL::destroy()
     m_ready = false;
 }
 
-namespace
+bool uploadCompareRgb888(QOpenGLFunctions *gl, unsigned int tex, const QImage &image)
 {
-void upload(QOpenGLFunctions *gl, unsigned int tex, const QImage &img)
-{
+    if (gl == nullptr || image.isNull())
+        return false;
+    // A full copy normalizes even externally supplied RGB888 row strides to
+    // Qt-owned storage, whose scanlines are aligned to four bytes.
+    const QImage rgb = image.convertToFormat(QImage::Format_RGB888).copy();
+    if (rgb.isNull())
+        return false;
+    GLint previousAlignment = 4;
+    GLint previousRowLength = 0;
+    gl->glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
+    gl->glGetIntegerv(GL_UNPACK_ROW_LENGTH, &previousRowLength);
     gl->glBindTexture(GL_TEXTURE_2D, tex);
-    // Straight 8-bit RGB: the pane raster is fully opaque after the background
-    // fill, so this is a byte-exact copy - no premultiply round trip.
-    const QImage rgb = img.convertToFormat(QImage::Format_RGB888);
-    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    gl->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
     gl->glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, rgb.width(), rgb.height(), 0, GL_RGB,
                      GL_UNSIGNED_BYTE, rgb.constBits());
+    gl->glPixelStorei(GL_UNPACK_ROW_LENGTH, previousRowLength);
+    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
+    return true;
 }
-} // namespace
 
 QImage CompareCompositeGL::composite(CompareCompositeMode mode, const QImage &paneA,
                                      const QImage &paneB, const QSize &size, int dividerX,
@@ -201,8 +211,9 @@ QImage CompareCompositeGL::composite(CompareCompositeMode mode, const QImage &pa
     if (!m_fbo->isValid())
         return QImage();
 
-    upload(gl, m_textures[0], paneA);
-    upload(gl, m_textures[1], paneB);
+    if (!uploadCompareRgb888(gl, m_textures[0], paneA) ||
+        !uploadCompareRgb888(gl, m_textures[1], paneB))
+        return QImage();
 
     m_fbo->bind();
     gl->glViewport(0, 0, size.width(), size.height());
