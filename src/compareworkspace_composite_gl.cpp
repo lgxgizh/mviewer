@@ -1,6 +1,7 @@
 #include "compareworkspace_composite_gl.h"
 #include "compareworkspace_composite_gl_upload.h"
 
+#include <QObject>
 #include <QOffscreenSurface>
 #include <QOpenGLBuffer>
 #include <QOpenGLContext>
@@ -11,6 +12,7 @@
 #include <QSurfaceFormat>
 
 #include <algorithm>
+#include <optional>
 
 namespace mviewer::ui
 {
@@ -65,6 +67,10 @@ void main()
 CompareCompositeGL::~CompareCompositeGL()
 {
     destroy();
+    // m_fbo / m_vao / m_vbo are destroyed before m_context. Do not leave them
+    // owning GL objects, or their destructors run on the foreign current context.
+    if (hasGpuObjects())
+        abandonGpuObjects();
 }
 
 bool CompareCompositeGL::requested()
@@ -85,25 +91,108 @@ void CompareCompositeGL::resetRequestedCache()
     g_requested = -1;
 }
 
+namespace
+{
+
+class ContextRestorer
+{
+  public:
+    ContextRestorer(QOpenGLContext *context, QSurface *surface)
+        : m_previous(QOpenGLContext::currentContext()),
+          m_previousSurface(m_previous != nullptr ? m_previous->surface() : nullptr)
+    {
+        m_bound = context != nullptr && surface != nullptr && context->isValid() &&
+                  context->makeCurrent(surface);
+    }
+
+    ~ContextRestorer()
+    {
+        restore();
+    }
+
+    ContextRestorer(const ContextRestorer &) = delete;
+    ContextRestorer &operator=(const ContextRestorer &) = delete;
+
+    bool isBound() const
+    {
+        return m_bound;
+    }
+
+    void restore()
+    {
+        if (m_restored)
+            return;
+        m_restored = true;
+        if (m_previous != nullptr && m_previous->isValid() && m_previousSurface != nullptr &&
+            m_previous->makeCurrent(m_previousSurface))
+            return;
+        if (QOpenGLContext::currentContext() != nullptr)
+            QOpenGLContext::currentContext()->doneCurrent();
+    }
+
+  private:
+    QOpenGLContext *m_previous = nullptr;
+    QSurface *m_previousSurface = nullptr;
+    bool m_bound = false;
+    bool m_restored = false;
+};
+
+} // namespace
+
+bool CompareCompositeGL::hasGpuObjects() const
+{
+    return m_textures[0] != 0 || m_textures[1] != 0 || m_fbo || m_vbo || m_vao ||
+           m_program != nullptr;
+}
+
 bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
 {
     if (m_ready)
         return true;
-    QSurfaceFormat format;
-    format.setRenderableType(QSurfaceFormat::OpenGL);
-    format.setProfile(QSurfaceFormat::CoreProfile);
-    format.setVersion(3, 3);
-    m_context.setFormat(format);
-    if (shareContext != nullptr)
-        m_context.setShareContext(shareContext);
-    if (!m_context.create())
+    if (hasGpuObjects())
+        destroy();
+    if (hasGpuObjects())
+        destroy();
+    if (hasGpuObjects())
         return false;
-    m_surface.setFormat(m_context.format());
-    m_surface.create();
-    if (!m_context.makeCurrent(&m_surface))
+
+    if (!m_context.isValid())
+    {
+        QSurfaceFormat format;
+        format.setRenderableType(QSurfaceFormat::OpenGL);
+        format.setProfile(QSurfaceFormat::CoreProfile);
+        format.setVersion(3, 3);
+        m_context.setFormat(format);
+        if (shareContext != nullptr)
+            m_context.setShareContext(shareContext);
+        if (!m_context.create())
+            return false;
+        m_surface.setFormat(m_context.format());
+        m_surface.create();
+    }
+    if (!m_aboutToBeDestroyed)
+    {
+        m_aboutToBeDestroyed = QObject::connect(
+            &m_context, &QOpenGLContext::aboutToBeDestroyed, &m_context,
+            [this]()
+            {
+                m_inContextTeardown = true;
+                destroy();
+                m_inContextTeardown = false;
+            },
+            Qt::DirectConnection);
+    }
+
+    ContextRestorer bound(&m_context, &m_surface);
+    if (!bound.isBound())
         return false;
 
     QOpenGLFunctions *gl = m_context.functions();
+    if (gl == nullptr)
+    {
+        destroy();
+        return false;
+    }
     m_program = new QOpenGLShaderProgram(&m_context);
     if (!m_program->addShaderFromSourceCode(QOpenGLShader::Vertex, kVertexShader) ||
         !m_program->addShaderFromSourceCode(QOpenGLShader::Fragment, kFragmentShader) ||
@@ -147,27 +236,65 @@ bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
     return true;
 }
 
+void CompareCompositeGL::abandonGpuObjects()
+{
+    if (m_program != nullptr)
+    {
+        m_program->setParent(nullptr);
+        m_program = nullptr;
+    }
+    if (m_vao)
+        m_vao->setParent(nullptr);
+    (void)m_fbo.release();
+    (void)m_vbo.release();
+    (void)m_vao.release();
+    m_textures[0] = m_textures[1] = 0;
+}
+
 void CompareCompositeGL::destroy()
 {
-    QOpenGLFunctions *gl = nullptr;
-    if (QOpenGLContext::currentContext() != nullptr)
-        gl = QOpenGLContext::currentContext()->functions();
-    else if (m_context.isValid())
-        gl = m_context.functions();
+    if (m_destroying)
+        return;
+    m_destroying = true;
 
-    if (gl != nullptr && m_textures[0] != 0)
-        gl->glDeleteTextures(2, m_textures);
-    m_textures[0] = m_textures[1] = 0;
+    if (hasGpuObjects() && m_context.isValid())
+    {
+        const bool alreadyOwner =
+            QOpenGLContext::currentContext() == &m_context && m_context.surface() == &m_surface;
+        std::optional<ContextRestorer> bound;
+        bool ownerCurrent = alreadyOwner;
+        if (!alreadyOwner)
+        {
+            // aboutToBeDestroyed does not make the context current. The native
+            // context is still alive here; make it current, then restore the caller.
+            bound.emplace(&m_context, &m_surface);
+            ownerCurrent = bound->isBound();
+        }
+        if (ownerCurrent)
+        {
+            if (QOpenGLFunctions *gl = m_context.functions())
+            {
+                if (m_textures[0] != 0 || m_textures[1] != 0)
+                    gl->glDeleteTextures(2, m_textures);
+            }
+            m_textures[0] = m_textures[1] = 0;
+            m_fbo.reset();
+            m_vbo.reset();
+            m_vao.reset();
+            delete m_program;
+            m_program = nullptr;
+        }
+        else if (m_inContextTeardown)
+            abandonGpuObjects();
+        // If makeCurrent failed and the context is still valid, leave wrappers
+        // in place so a later destroy or ensureContext can retry.
+    }
+    else if (hasGpuObjects())
+        abandonGpuObjects();
 
-    if (m_context.isValid() && QOpenGLContext::currentContext() == &m_context)
-        m_context.doneCurrent();
-    m_fbo.reset();
-    m_vbo.reset();
-    m_vao.reset();
-    delete m_program;
-    m_program = nullptr;
     m_fboSize = QSize();
     m_ready = false;
+    m_destroying = false;
 }
 
 bool uploadCompareRgb888(QOpenGLFunctions *gl, unsigned int tex, const QImage &image)
@@ -199,8 +326,11 @@ QImage CompareCompositeGL::composite(CompareCompositeMode mode, const QImage &pa
 {
     if (!m_ready || size.isEmpty())
         return QImage();
+    ContextRestorer bound(&m_context, &m_surface);
+    if (!bound.isBound())
+        return QImage();
     QOpenGLFunctions *gl = m_context.functions();
-    if (!m_context.makeCurrent(&m_surface))
+    if (gl == nullptr)
         return QImage();
 
     if (!m_fbo || m_fboSize != size)
@@ -259,7 +389,6 @@ QImage CompareCompositeGL::composite(CompareCompositeMode mode, const QImage &pa
 
     QImage out = m_fbo->toImage();
     m_fbo->bindDefault();
-    m_context.doneCurrent();
     return out.convertToFormat(QImage::Format_ARGB32_Premultiplied);
 }
 

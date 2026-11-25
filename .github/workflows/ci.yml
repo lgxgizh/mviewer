@@ -323,13 +323,14 @@ jobs:
           ctest --output-on-failure -j 4 --timeout 600 -LE nightly \
             -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
 
-      - name: Compare GL RGB stride (xvfb Mesa, not ctest)
+      - name: Compare GL real-GL checks (xvfb Mesa, not ctest)
         timeout-minutes: 10
         run: |
           export QT_QPA_PLATFORM=xcb
           export LIBGL_ALWAYS_SOFTWARE=1
           set -o pipefail
           xvfb-run -a ./build_linux/bin/compare_gl_rgb_stride_tests | tee compare-gl-rgb-stride.log
+          xvfb-run -a ./build_linux/bin/compare_gl_context_lifetime_tests | tee compare-gl-context-lifetime.log
 
   # ---------------------------------------------------------------------------
   # thread-sanitizer — item 2 governance, now a required gate. A

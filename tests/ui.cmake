@@ -21,6 +21,13 @@ target_link_libraries(compare_gl_rgb_stride_tests
     PRIVATE mviewer_ui Qt6::Widgets Qt6::Gui Qt6::OpenGL Qt6::Core)
 target_compile_features(compare_gl_rgb_stride_tests PRIVATE cxx_std_20)
 target_include_directories(compare_gl_rgb_stride_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# P0-2 real GL context lifetime check. Same required xvfb step, not CTest.
+add_executable(compare_gl_context_lifetime_tests
+    ${CMAKE_SOURCE_DIR}/tests/compare_gl_context_lifetime_tests.cpp)
+target_link_libraries(compare_gl_context_lifetime_tests
+    PRIVATE mviewer_ui Qt6::Widgets Qt6::Gui Qt6::OpenGL Qt6::Core)
+target_compile_features(compare_gl_context_lifetime_tests PRIVATE cxx_std_20)
+target_include_directories(compare_gl_context_lifetime_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)

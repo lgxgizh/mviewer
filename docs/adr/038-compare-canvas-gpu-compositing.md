@@ -70,5 +70,38 @@ or skip. It checks both distinct panes at widths 5/6/7/8 over multiple rows,
 valid extra-padded external rows, opaque alpha, exact unpack-state restoration,
 null rejection and repeated target sizes. CI prints renderer/version and actual
 assertion totals. These are proposed checks, not measured results until CI runs.
-P0-2 owner-context teardown/caller restoration and full context-loss acceptance
-remain separate; `destroy()` is unchanged by this stride-only repair.
+
+## Owner-context teardown and caller restoration (review P0-2)
+
+`destroy()`, `ensureContext()`, and `composite()` must not use a foreign current
+context to issue `glDelete*` or to run `QOpenGLFramebufferObject` /
+`QOpenGLBuffer` / `QOpenGLVertexArrayObject` / `QOpenGLShaderProgram`
+destructors, and must restore the caller's current context and surface
+(including a null current context).
+
+A `ContextRestorer` records the previous context and surface, makes the owner
+`m_context` current on `m_surface`, and restores on every exit path (or calls
+`doneCurrent()` when the caller had no valid context). `destroy()` issues GL
+deletes only while `m_context` is current. If `makeCurrent` fails, wrappers stay
+in place for a later retry; if the context is already invalid, C++ wrappers are
+released without deletion rather than deleted against a foreign context.
+`QOpenGLContext::create()` cannot be called twice on the same object, so
+`destroy()` keeps a still-valid context and surface, sets `m_ready` false, and
+lets a later `ensureContext` skip `create()` and rebuild objects.
+The `aboutToBeDestroyed` slot uses a direct connection, makes `m_context`
+current on `m_surface`, deletes while the native context still exists, and
+restores the caller. If that fails, wrappers are detached and released with no
+GL destructor. `~CompareCompositeGL` does the same release so later member
+destructors cannot touch a foreign context. A hard GPU-loss injection seam is
+not added.
+
+The required `build-linux` job runs
+`QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a
+./build_linux/bin/compare_gl_context_lifetime_tests` in the same step as the
+P0-1 stride executable, after unchanged offscreen CTest. The lifetime executable
+is also built with the UI tests and is not globally registered with CTest;
+unavailable GL is a nonzero failure, never a CPU fallback or skip. It checks
+caller restore including a null current context, restore after composite success
+and pane-rejection failure, repeated `destroy()`, destroy-and-reuse still
+composites, destroy while a foreign context is current without corrupting that
+context or a second compositor, and `ensureContext` with a share context.
