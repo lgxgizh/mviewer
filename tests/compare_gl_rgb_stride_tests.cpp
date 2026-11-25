@@ -2,8 +2,10 @@
 #include "compareworkspace_composite_gl_upload.h"
 
 #include <QGuiApplication>
+#include <QOffscreenSurface>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
+#include <QSurfaceFormat>
 
 #include <cstdint>
 #include <cstdio>
@@ -117,27 +119,60 @@ void checkUnpackRestored(QOpenGLFunctions *gl)
     check(alignment == 8 && rowLength == 17, "null rejection preserves unpack state");
     gl->glDeleteTextures(1, &tex);
 }
+struct ScratchContext
+{
+    QOpenGLContext context;
+    QOffscreenSurface surface;
+
+    bool bind()
+    {
+        QSurfaceFormat format;
+        format.setRenderableType(QSurfaceFormat::OpenGL);
+        format.setProfile(QSurfaceFormat::CoreProfile);
+        format.setVersion(3, 3);
+        context.setFormat(format);
+        if (!context.create())
+            return false;
+        surface.setFormat(context.format());
+        surface.create();
+        return context.makeCurrent(&surface);
+    }
+
+    ~ScratchContext()
+    {
+        if (QOpenGLContext::currentContext() == &context)
+            context.doneCurrent();
+    }
+};
+
 } // namespace
 
 int main(int argc, char **argv)
 {
     QGuiApplication app(argc, argv);
     CompareCompositeGL comp;
-    if (!comp.ensureContext(nullptr) || QOpenGLContext::currentContext() == nullptr)
+    if (!comp.ensureContext(nullptr) || !comp.isReady())
     {
         std::fprintf(stderr, "GL context creation failed\n");
         return 1;
     }
-    QOpenGLFunctions *gl = QOpenGLContext::currentContext()->functions();
-    if (gl == nullptr)
+    if (QOpenGLContext::currentContext() != nullptr)
     {
-        std::fprintf(stderr, "GL functions unavailable\n");
+        std::fprintf(stderr, "ensureContext left a context current\n");
         return 1;
     }
+    ScratchContext probe;
+    if (!probe.bind() || probe.context.functions() == nullptr)
+    {
+        std::fprintf(stderr, "GL probe context failed\n");
+        return 1;
+    }
+    QOpenGLFunctions *gl = probe.context.functions();
     std::printf("GL_VENDOR=%s\n", reinterpret_cast<const char *>(gl->glGetString(GL_VENDOR)));
     std::printf("GL_RENDERER=%s\n", reinterpret_cast<const char *>(gl->glGetString(GL_RENDERER)));
     std::printf("GL_VERSION=%s\n", reinterpret_cast<const char *>(gl->glGetString(GL_VERSION)));
     checkUnpackRestored(gl);
+    probe.context.doneCurrent();
     check(comp.composite(CompareCompositeMode::Overlay, QImage(), QImage(), QSize(2, 2), 0, 0.0, 8)
               .isNull(),
           "composite rejects missing panes");

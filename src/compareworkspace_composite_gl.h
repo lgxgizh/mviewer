@@ -78,6 +78,12 @@ class CompareCompositeGL
     unsigned int m_textures[2] = {0, 0};
     QSize m_fboSize;
     bool m_ready = false;
+    bool m_destroying = false;
+    bool m_inContextTeardown = false;
+    QMetaObject::Connection m_aboutToBeDestroyed;
+
+    bool hasGpuObjects() const;
+    void abandonGpuObjects();
 };
 
 } // namespace mviewer::ui
