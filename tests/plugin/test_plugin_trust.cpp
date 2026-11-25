@@ -96,7 +96,12 @@ bool moduleMapped(const std::string &path)
 void setEnv(const char *key, const std::string &value)
 {
 #ifdef _WIN32
-    SetEnvironmentVariableA(key, value.c_str());
+    // UTF-16 process environment. audit_boundary reads it with
+    // GetEnvironmentVariableW. The A API is not UTF-8, and it does not refresh
+    // the CRT table that std::getenv consults inside the DLL.
+    const std::wstring name = mviewer::core::pathFromUtf8(key).wstring();
+    const std::wstring data = mviewer::core::pathFromUtf8(value).wstring();
+    SetEnvironmentVariableW(name.c_str(), data.c_str());
 #else
     setenv(key, value.c_str(), 1);
 #endif
