@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.216** · Release tag: **v1.0.216**
+> Snapshot: 2026-11-26 · Version: **1.0.217** · Release tag: **v1.0.217**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,13 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.217 - screen-change adjustments, package extraction checks (2026-11-26)
+
+- `onDisplayScreenChanged()` keeps `adjust` when it rebuilds the colour context,
+  so crossing a monitor boundary no longer resets exposure / gamma / auto-stretch.
+- Session-package extraction reports a failed folder creation and a short write
+  instead of leaving a truncated file behind.
 
 ## 1.0.216 - Python isolation and atomic export commit (2026-11-26)
 

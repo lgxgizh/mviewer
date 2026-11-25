@@ -201,7 +201,10 @@ void CompareWorkspace::onDisplayScreenChanged()
         return;
     if (DisplayColorContextProvider::targetUnchanged(handle, m_displayColorTarget))
         return;
-    setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+    // Keep the per-workspace adjustments when only the screen changed.
+    mviewer::core::DisplayColorContext next = DisplayColorContextProvider::forWindow(handle);
+    next.adjust = m_displayColorTarget.adjust;
+    setDisplayColorContext(next);
 }
 
 void CompareWorkspace::bindDisplayColorScreen()
@@ -218,7 +221,10 @@ void CompareWorkspace::bindDisplayColorScreen()
     }
     if (DisplayColorContextProvider::targetUnchanged(handle, m_displayColorTarget))
         return;
-    setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+    // Keep the per-workspace adjustments when only the screen changed.
+    mviewer::core::DisplayColorContext next = DisplayColorContextProvider::forWindow(handle);
+    next.adjust = m_displayColorTarget.adjust;
+    setDisplayColorContext(next);
 }
 
 void CompareWorkspace::resizeEvent(QResizeEvent *event)

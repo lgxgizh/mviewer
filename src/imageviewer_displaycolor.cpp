@@ -26,7 +26,12 @@ void ImageViewer::onDisplayScreenChanged()
         return;
     if (DisplayColorContextProvider::targetUnchanged(handle, m_displayColorTarget))
         return;
-    setDisplayColorContext(DisplayColorContextProvider::forWindow(handle));
+    // A screen change replaces the colour space, not the user's adjustments:
+    // rebuilding the context without adjust silently reset exposure / gamma /
+    // auto-stretch whenever the window crossed a monitor boundary.
+    mviewer::core::DisplayColorContext next = DisplayColorContextProvider::forWindow(handle);
+    next.adjust = m_displayColorTarget.adjust;
+    setDisplayColorContext(next);
 }
 
 void ImageViewer::bindDisplayColorScreen()

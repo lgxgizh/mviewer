@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [1.0.217] - 2026-11-26
+
+### Fixed
+
+- **Moving a window between monitors reset the display adjustments.**
+  `onDisplayScreenChanged()` rebuilt the colour context from the new screen but
+  dropped `adjust`, so exposure / gamma / auto-stretch silently returned to
+  defaults on every screen change (`ImageViewer` and `CompareWorkspace`).
+- **Session-package extraction ignored two failures.** A failed `mkpath` fell
+  through to a confusing open error, and a short `write()` left a truncated file
+  on disk with no warning. Both are reported now.
+
 ## [1.0.216] - 2026-11-26
 
 ### Security / robustness

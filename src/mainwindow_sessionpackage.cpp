@@ -148,8 +148,15 @@ void MainWindow::importSessionPackage()
                                  tr("The package is too large to import"));
             return;
         }
-        if (relative.contains(QLatin1Char('/')))
-            QDir().mkpath(QFileInfo(target).absolutePath());
+        // A silent mkpath failure surfaces as a confusing open error below, and a
+        // short write would leave a truncated image on disk with no warning.
+        if (relative.contains(QLatin1Char('/')) &&
+            !QDir().mkpath(QFileInfo(target).absolutePath()))
+        {
+            QMessageBox::warning(this, tr("Session Package"),
+                                 tr("Could not create the folder for %1").arg(relative));
+            return;
+        }
         QFile out(target);
         if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate))
         {
@@ -157,9 +164,16 @@ void MainWindow::importSessionPackage()
                                  tr("Could not extract %1").arg(relative));
             return;
         }
-        out.write(reinterpret_cast<const char *>(entry.data.data()),
-                  static_cast<qint64>(entry.data.size()));
+        const qint64 written =
+            out.write(reinterpret_cast<const char *>(entry.data.data()),
+                      static_cast<qint64>(entry.data.size()));
         out.close();
+        if (written != static_cast<qint64>(entry.data.size()))
+        {
+            QMessageBox::warning(this, tr("Session Package"),
+                                 tr("Could not fully write %1").arg(relative));
+            return;
+        }
         if (relative == QLatin1String("session.json"))
             manifestJson = QString::fromUtf8(reinterpret_cast<const char *>(entry.data.data()),
                                              static_cast<int>(entry.data.size()));
