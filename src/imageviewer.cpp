@@ -8,11 +8,12 @@
 #include "core/image/DisplayMip.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
-#include "gpu/ImageBlitterShader.h"
 #include "core/render/RenderEngine.h"
 #include "core/render/ZoomPercent.h"
 #include "core/trace/Trace.h"
+#include "gpu/GlOwnerContext.h"
 #include "gpu/GpuTileUploader.h"
+#include "gpu/ImageBlitterShader.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -114,26 +115,8 @@ ImageViewer::~ImageViewer()
     // never starts; an already-running decode finishes bounded and its
     // delivery is suppressed by the QPointer/lifetime guards).
     cancelDisplayRequest();
-    // Stage A: free GPU textures + blitter while the GL context is still current.
-    // Skip if the widget never created a context (never shown).
-    if (context())
-    {
-        makeCurrent();
-        m_gpu.clear();
-        if (m_blitterReady)
-        {
-            m_blitter.destroy();
-            m_blitterReady = false;
-        }
-        if (m_shader != nullptr)
-        {
-            m_shader->destroy();
-            delete m_shader;
-            m_shader = nullptr;
-            m_shaderReady = false;
-        }
-        doneCurrent();
-    }
+    // Owner cleanup restores the caller and runs before the widget base dies.
+    m_glOwner.reset();
 }
 
 void ImageViewer::toggleFullscreen()
@@ -192,28 +175,6 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
     advanceViewportRevision();
     emitZoom();
     update();
-}
-
-void ImageViewer::initializeGL()
-{
-    // Context is now current — capability probe can succeed when MVIEWER_GPU=1.
-    // Stage A composites uploaded textures via QOpenGLTextureBlitter (Qt 6 has
-    // no QPainter::drawTexture).
-    if (QOpenGLFunctions *gl = QOpenGLContext::currentContext()
-                                   ? QOpenGLContext::currentContext()->functions()
-                                   : nullptr)
-    {
-        gl->glClearColor(0.f, 0.f, 0.f, 1.f);
-    }
-    m_blitterReady = m_blitter.create();
-    // Review P2-08: opt-in shader path. Qt's blitter stays the default so the
-    // verified rendering is unchanged; the shader is selected explicitly and a
-    // failure to build it silently keeps the default.
-    if (ImageBlitterShader::requested())
-    {
-        m_shader = new ImageBlitterShader();
-        m_shaderReady = m_shader->create();
-    }
 }
 
 void ImageViewer::closeEvent(QCloseEvent *event)

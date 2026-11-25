@@ -437,6 +437,7 @@ add_library(mviewer_ui STATIC
     analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
     gpu/ImageBlitterShader.cpp
+    imageviewer_gl.cpp
 )
 
 # Native window chrome (DWM title bar, corners, Mica). Stubs elsewhere.

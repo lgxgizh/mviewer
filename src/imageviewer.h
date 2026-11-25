@@ -63,7 +63,6 @@ struct ImageViewerPromotedRasterTestAccess;
 class ImageViewer : public QOpenGLWidget
 {
     Q_OBJECT
-
   public:
     // True while the thin loading bar is drawn: a decode is in flight (or only
     // the provisional thumbnail is up) for longer than kLoadingBarDelayMs.
@@ -72,7 +71,6 @@ class ImageViewer : public QOpenGLWidget
 
     explicit ImageViewer(QWidget *parent = nullptr);
     ~ImageViewer() override;
-
     // Consume the Browse sequence; the viewer never enumerates the filesystem.
     void setBrowseSequence(const QStringList &paths);
     QStringList browseSequence() const;
@@ -409,6 +407,8 @@ class ImageViewer : public QOpenGLWidget
     bool handleRawDecodeAction(QAction *chosen, QAction *fullRaw);
     void applyPendingView();
     void clearLoadedGpu();
+    void releaseGlResources(bool ownerCurrent);
+    friend struct ViewerGlLifetimeProbe;
     // Drop lod≥1 mips for an image that is no longer the open viewer file.
     void releaseColdMips(const QString &previousPath);
     void applyLoadedFrame(const ImageLoadResult &result, int requestedFrame, uint64_t generation);
@@ -672,16 +672,16 @@ class ImageViewer : public QOpenGLWidget
     TaskScheduler::TaskHandle m_exportTask;
     std::shared_ptr<std::atomic<bool>> m_exportCancel;
 
-    // M16 / Stage A: GPU upload tier (opt-in, capability-gated). With a real GL
-    // context and MVIEWER_GPU=1 the tiles are uploaded once and composited via
+    // Context-owned GPU upload tier: cached textures are composited via
     // QOpenGLTextureBlitter, or the review P2-08 shader blitter when
     // MVIEWER_BLITTER=shader (ADR 037); otherwise QPainter is used. Bookkeeping
     // is unit-tested headlessly; the GL upload runs only where a context exists.
     GpuTileUploader m_gpu;
-    QOpenGLTextureBlitter m_blitter;
+    std::unique_ptr<QOpenGLTextureBlitter> m_blitter;
     bool m_blitterReady = false;
     class ImageBlitterShader *m_shader = nullptr; // opt-in, see ADR 037
     bool m_shaderReady = false;
+    std::shared_ptr<mviewer::ui::GlOwnerContext> m_glOwner;
     bool m_dragging = false;
     QPoint m_lastMousePos;
 

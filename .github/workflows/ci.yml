@@ -340,6 +340,7 @@ jobs:
           set -o pipefail
           xvfb-run -a ./build_linux/bin/viewer_gl_pixel_tests | tee viewer-gl-pixel.log
           xvfb-run -a ./build_linux/bin/viewer_gl_state_tests | tee viewer-gl-state.log
+          xvfb-run -a ./build_linux/bin/viewer_gl_lifetime_tests | tee viewer-gl-lifetime.log
 
   # ---------------------------------------------------------------------------
   # thread-sanitizer — item 2 governance, now a required gate. A

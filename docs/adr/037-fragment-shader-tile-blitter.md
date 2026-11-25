@@ -87,3 +87,32 @@ texture binding as well as the existing unpack-alignment contract.
 `viewer_gl_state_tests` is a required xvfb executable alongside the pixel gate.
 This slice does not solve owner-context teardown, repeated initializeGL, hard
 context loss, or cross-screen widget recreation; those remain B04b2.
+
+## B04b2 amendment — native owner lifetime and widget reinitialization
+
+A UI-thread `GlOwnerContext` owns an offscreen cleanup surface and a direct
+`aboutToBeDestroyed` connection. Resource cleanup binds the owner while its
+native context is alive and restores the caller context/surface (including a
+null caller). If activation is impossible, names/maps are invalidated without
+foreign-context GL deletion. Orphan Qt GL wrappers are deliberately abandoned
+rather than invoking GL destructors on a dead context; this can retain small
+CPU wrappers on the failure path, while native teardown reclaims GPU memory.
+
+Shader programs have no QObject parent; the owner callback is their single
+retirement path together with VAO/VBO. Repeated create retires old objects
+before replacement. Uploader map ownership follows the current native context;
+changing owners retires old entries before a new upload. Filter/free reject
+foreign-owner calls. Injected headless bookkeeping remains context-free.
+
+ImageViewer uses the same direct owner cleanup for Qt blitter, shader and
+uploader, and retires old resources before every initializeGL. Qt blitter is
+heap-owned so failed owner activation cannot force its GL destructor. Widget
+cleanup restores the caller rather than blindly calling doneCurrent. Header
+stays 800 lines; initialize/cleanup move to imageviewer_gl.cpp.
+
+The required xvfb lifetime executable tests foreign/null callers, context
+native destruction before wrappers, repeated destroy/reuse, explicit activation
+failure injection, and actual QOpenGLWidget top-level reparent/fullscreen/reinit.
+This is not evidence of a physical driver reset, multi-monitor hardware, or
+CompareCompositeGL's still-pending hard-loss seam (P0-2.3). Existing pixel/state
+and offscreen CTest gates remain unchanged. No flag-default/adjust/alpha changes.
