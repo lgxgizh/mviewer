@@ -151,6 +151,15 @@ add_library(audit_boundary SHARED
 target_link_libraries(audit_boundary PRIVATE mviewer_core)
 target_compile_features(audit_boundary PRIVATE cxx_std_20)
 target_include_directories(audit_boundary PRIVATE ${CMAKE_SOURCE_DIR}/src)
+# CMake's MSVC default /EHsc includes /EHc, so extern "C" createAnalyzer() is
+# implicit noexcept. The throw-create fixture then warns C4297, and MSVC does
+# not propagate that C++ exception to the host catch. /EHsc- is /EHs /EHc-:
+# synchronous C++ exceptions stay on, and this test DLL's extern "C" exports
+# may propagate them. Appended after /EHsc, it overrides only that nothrow bit.
+# Host translation units, other plugins, and the zero-warnings gate stay as they are.
+if(MSVC)
+    target_compile_options(audit_boundary PRIVATE /EHsc-)
+endif()
 set_target_properties(audit_boundary PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
