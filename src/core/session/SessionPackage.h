@@ -26,7 +26,12 @@ bool writeSessionPackage(const std::string &path, const std::vector<SessionPacka
                          std::string &error);
 
 /// Read a store-only ZIP written by writeSessionPackage(). Only stored
-/// (uncompressed) entries are accepted; anything else is reported as unsupported.
+/// (uncompressed), single-disk classic ZIP entries with UTF-8 names are
+/// accepted. Input is bounded to 272 MiB before allocation; payload remains 128
+/// MiB/entry, 256 MiB total. Names are portable flat names;
+/// normalized/case-folded duplicates, non-regular entries and overlapping local
+/// records are rejected. On any error, returns no partial entries. This API
+/// does not extract to the filesystem.
 std::vector<SessionPackageEntry> readSessionPackage(const std::string &path, std::string &error);
 
 /// CRC-32 (IEEE 802.3), the checksum ZIP uses.

@@ -284,7 +284,7 @@ jobs:
             libfontconfig1 libfreetype6 libdbus-1-3 libx11-6 xvfb xauth \
             libgl1-mesa-dri libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 \
             libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1 \
-            cmake ninja-build g++
+            cmake ninja-build g++ clang
 
       - name: Install Qt
         uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4
@@ -342,9 +342,42 @@ jobs:
           xvfb-run -a ./build_linux/bin/viewer_gl_state_tests | tee viewer-gl-state.log
           xvfb-run -a ./build_linux/bin/viewer_gl_lifetime_tests | tee viewer-gl-lifetime.log
 
+      - name: Build bounded Session ZIP sanitizer gate
+        timeout-minutes: 10
+        run: |
+          cmake -S tests/fuzz/session_package_ci -B session_fuzz_ci -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_PREFIX_PATH="${QT_ROOT_DIR}"
+          cmake --build session_fuzz_ci -j 2
+
+      - name: Session ZIP ASan UBSan and real libFuzzer iterations (required)
+        timeout-minutes: 5
+        env:
+          ASAN_OPTIONS: "detect_leaks=1:halt_on_error=1"
+          UBSAN_OPTIONS: "halt_on_error=1:print_stacktrace=1"
+        run: |
+          set -o pipefail
+          mkdir -p session-fuzz-evidence/crashes session-fuzz-evidence/corpus
+          cp tests/fuzz/corpus/fuzz_session_package/* session-fuzz-evidence/corpus/
+          ./session_fuzz_ci/session_package_sanitized 2>&1 | tee session-fuzz-evidence/unit.log
+          ./session_fuzz_ci/fuzz_session_package session-fuzz-evidence/corpus \
+            -runs=4000 -max_len=65536 -timeout=5 -rss_limit_mb=1024 \
+            -artifact_prefix=session-fuzz-evidence/crashes/ 2>&1 | tee session-fuzz-evidence/fuzz.log
+          # A successful compile or zero-iteration launch is not acceptance.
+          python3 -c 'import pathlib,re; assert re.search(r"#4000\s+DONE", pathlib.Path("session-fuzz-evidence/fuzz.log").read_text())'
+
+      - name: Upload Session ZIP sanitizer/fuzz evidence and crash inputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: session-zip-sanitizer-fuzz-${{ github.run_id }}-${{ github.run_attempt }}
+          path: session-fuzz-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
   # ---------------------------------------------------------------------------
   # thread-sanitizer — item 2 governance, now a required gate. A
-  # -fsanitize=thread Linux build runs the strictly Qt-free core suites with
+  # -fsanitize=thread Linux build runs the core-only (no QtGui/widgets) suites with
   # halt_on_error=1; ci/tsan.supp lists the third-party races (and the one
   # allocator-recycling report from the churn stress test) that are not ours.
   # Heavy analysis belongs on CI, not on a laptop.
@@ -419,13 +452,14 @@ jobs:
           export QT_QPA_PLATFORM=offscreen
           export TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1 history_size=7 suppressions=$PWD/ci/tsan.supp"
           cd build_tsan
-          # Strictly Qt-free core suites. The metadata / colour / session
-          # suites are excluded: their remaining reports are inside QtGui
+          # Core-only (no QtGui/widgets) suites. The metadata / colour / session
+          # widget suites are excluded: their remaining reports are inside QtGui
           # (QPaintDevice & friends) with no symbolicated frame, reached from
-          # tests that build real widgets, and they need thread-affinity work
+          # tests that build real widgets. session_package_tests is a QtCore-only
+          # file/CRC test and is deliberately included. Widget suites need thread-affinity work
           # of their own before they can sit under a race gate.
           ctest --output-on-failure -j 2 --timeout 900 \
-            -R "cache|thumbnail|yuv|scheduler|filesystem|fft|hdr|ciede"
+            -R "cache|thumbnail|yuv|scheduler|filesystem|fft|hdr|ciede|^session_package_tests$"
 
   # ---------------------------------------------------------------------------
   # windows-build-and-test — MSVC + Qt 6.8.0, build + warnings gate + CTest
