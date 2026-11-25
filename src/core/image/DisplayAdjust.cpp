@@ -270,7 +270,11 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
     if (src.format != PixelFormat::RGB24 && src.format != PixelFormat::Grayscale8)
         return src;
 
-    ImageData out = src;
+    // Every pixel is rewritten below, so build a fresh buffer instead of
+    // copying src (a needless full-frame memcpy on the 12 MP display path).
+    ImageData out = makeImageData(src.width, src.height, src.format);
+    if (out.isNull())
+        return src; // allocation failed: leave the frame untouched
     const int width = src.width;
     const int height = src.height;
     const bool grayscale = src.format == PixelFormat::Grayscale8;
@@ -354,7 +358,10 @@ ImageData applyDisplayAdjust(const ImageData &src, const DisplayAdjust &adjust)
                 sampleLut(adjust, rgb[0], rgb[1], rgb[2], rgb);
                 if (grayscale)
                 {
-                    outRow[x] = rgb[0];
+                    // Keep the exposure / gamma / auto-stretch 1D LUT in the chain
+                    // for grey images too - skipping it made grey and colour
+                    // semantics diverge once a 3D LUT was loaded.
+                    outRow[x] = lut[0][rgb[0]];
                     continue;
                 }
             }

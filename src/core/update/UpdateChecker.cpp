@@ -138,14 +138,24 @@ std::string httpGet(const std::string &url, std::string &error)
     }
 
     DWORD secure = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
-    WinHttpSetOption(session.get(), WINHTTP_OPTION_SECURE_PROTOCOLS, &secure, sizeof(secure));
+    // These options are the security policy of the request; ignoring a failure
+    // would silently downgrade TLS or allow an https->http redirect.
+    BOOL configured = WinHttpSetOption(session.get(), WINHTTP_OPTION_SECURE_PROTOCOLS, &secure,
+                                       sizeof(secure));
     // HTTPS only, and never follow an https→http downgrade. Cap the hop count.
     DWORD redirects = 5;
-    WinHttpSetOption(session.get(), WINHTTP_OPTION_MAX_HTTP_AUTOMATIC_REDIRECTS, &redirects,
-                     sizeof(redirects));
+    configured = configured &&
+                 WinHttpSetOption(session.get(), WINHTTP_OPTION_MAX_HTTP_AUTOMATIC_REDIRECTS,
+                                  &redirects, sizeof(redirects));
     DWORD redirectPolicy = WINHTTP_OPTION_REDIRECT_POLICY_DISALLOW_HTTPS_TO_HTTP;
-    WinHttpSetOption(session.get(), WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy,
-                     sizeof(redirectPolicy));
+    configured = configured &&
+                 WinHttpSetOption(session.get(), WINHTTP_OPTION_REDIRECT_POLICY, &redirectPolicy,
+                                  sizeof(redirectPolicy));
+    if (!configured)
+    {
+        error = "UpdateChecker: WinHttpSetOption failed";
+        return {};
+    }
     // resolve, connect, send, receive timeouts (ms)
     WinHttpSetTimeouts(session.get(), 5000, 5000, 10000, 15000);
 

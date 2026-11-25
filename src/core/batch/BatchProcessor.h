@@ -57,8 +57,13 @@ class BatchProcessor
     // the run stops.
     void requestCancel()
     {
-        m_cancelled.store(true);
-        // Wake up pause wait so cancellation can proceed
+        // Take the pause mutex while publishing the flag: waitWhilePaused()
+        // evaluates its predicate under that lock, so setting m_cancelled outside
+        // it can race ahead of the worker entering the wait and lose the notify.
+        {
+            std::lock_guard<std::mutex> lk(m_pauseMtx);
+            m_cancelled.store(true);
+        }
         m_pauseCv.notify_all();
     }
 

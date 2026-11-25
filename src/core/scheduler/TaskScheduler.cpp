@@ -228,7 +228,18 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
     state->work = [runnable](const TaskContext &)
     {
         auto *r = static_cast<QRunnable *>(runnable);
-        r->run();
+        try
+        {
+            r->run();
+        }
+        catch (...)
+        {
+            // run() may unwind through here; an autoDelete runnable would
+            // otherwise leak because the normal delete is never reached.
+            if (r->autoDelete())
+                delete r;
+            throw;
+        }
         // Preserve the QThreadPool::start ownership contract: auto-delete
         if (r->autoDelete())
             delete r;
@@ -423,12 +434,11 @@ void TaskScheduler::setPoolMaxThreads(PoolType pool, int n)
 
 bool depDone(const std::unordered_map<uint64_t, TaskScheduler::TaskHandle> &handles, uint64_t id)
 {
-    auto it = handles.find(id);
-    if (it == handles.end())
-        return true;
-    if (it->second->isCancelled())
-        return true;
-    return it->second->currentProgress() >= 100;
+    // Only a retired handle counts. Reporting progress==100 or being cancelled is
+    // not completion: both let a successor launch while the predecessor's
+    // work()/done() are still executing, which breaks the happens-before the
+    // dependency edge exists to guarantee.
+    return handles.find(id) == handles.end();
 }
 
 void TaskScheduler::launchQueued(const ReadyLaunch &item)
@@ -688,6 +698,7 @@ bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeou
 {
     // P0-2 fix: never call QThreadPool::waitForDone() while holding m_graphMtx.
     const auto deadline = std::chrono::steady_clock::now() + timeout;
+    bool drained = false;
     {
         std::unique_lock<std::mutex> lock(m_graphMtx);
         m_drainCv.wait_until(lock, deadline,
@@ -696,7 +707,14 @@ bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeou
                                  return m_poolState[idx].metrics.pending == 0 &&
                                         m_poolState[idx].metrics.active_tasks == 0;
                              });
+        // Re-read the predicate under the lock: a timed-out wait must NOT fall
+        // through to waitForDone(0), which reports success whenever the queue
+        // happens to be empty even though our own counters are not at zero.
+        drained = m_poolState[idx].metrics.pending == 0 &&
+                  m_poolState[idx].metrics.active_tasks == 0;
     }
+    if (!drained)
+        return false;
     // M27: pass only the REMAINING budget to waitForDone(). Previously the
     const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
         deadline - std::chrono::steady_clock::now());

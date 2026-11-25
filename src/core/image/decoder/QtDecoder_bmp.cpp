@@ -1,6 +1,8 @@
 // Bounded BMP display LOD (perf review P2-4). Qt's BMP plugin decodes the full
 // raster then smooth-scales it; this path streams rows and box-averages into the
 // target QImage so thumbnails, preview, and viewer LOD stay memory-bounded.
+#include "core/image/DecoderLimits.h"
+
 #include <QByteArray>
 #include <QFile>
 #include <QImage>
@@ -91,9 +93,13 @@ bool compressionOk(const QByteArray &hdr, uint32_t headerSize, uint16_t bpp, uin
 
 bool dimsOk(int32_t w, int64_t hAbs)
 {
-    if (w < 1 || w > 65535)
+    if (w < 1 || w > mviewer::core::kMaxImageDimension)
         return false;
-    return hAbs >= 1 && hAbs <= 65535;
+    if (hAbs < 1 || hAbs > mviewer::core::kMaxImageDimension)
+        return false;
+    // Same raster budget as PNG/TIFF: a DIB can declare an enormous bitmap for
+    // almost no bytes.
+    return static_cast<int64_t>(w) * hAbs <= mviewer::core::kMaxImagePixels;
 }
 
 bool pixelRangeOk(uint32_t dataOffset, uint64_t stride, int64_t hAbs, qint64 fileSize)

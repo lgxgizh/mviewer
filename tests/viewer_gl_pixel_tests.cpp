@@ -60,23 +60,6 @@ std::vector<std::uint8_t> grayRamp(int width, int height, int seed)
     return pixels;
 }
 
-std::vector<std::uint8_t> paddedGrayProbe(int width, int height, int rowLength, int alignment,
-                                          int seed)
-{
-    const int rowPixels = width > rowLength ? width : rowLength;
-    const std::size_t rowBytes = static_cast<std::size_t>(rowPixels);
-    const std::size_t align = alignment > 1 ? static_cast<std::size_t>(alignment) : 1;
-    const std::size_t stride = ((rowBytes + align - 1) / align) * align;
-    std::vector<std::uint8_t> pixels(stride * static_cast<std::size_t>(height), 0);
-    for (int y = 0; y < height; ++y)
-    {
-        for (std::size_t x = 0; x < stride; ++x)
-            pixels[static_cast<std::size_t>(y) * stride + x] =
-                static_cast<std::uint8_t>(16 + (seed + static_cast<int>(x) * 13 + y * 29) % 200);
-    }
-    return pixels;
-}
-
 struct ScopedUnpackReset
 {
     QOpenGLFunctions *gl = nullptr;
@@ -340,27 +323,34 @@ bool uploadAndRead(GpuTileUploader &uploader, ImageBlitterShader &shader, PixelF
     return true;
 }
 
-void checkUnpackRestored(QOpenGLFunctions *gl, GpuTileUploader &uploader)
+void checkUnpackRestored(QOpenGLFunctions *gl, GpuTileUploader &uploader, ImageBlitterShader &shader,
+                         PixelFbo &fbo)
 {
     {
         ScopedUnpackReset reset(gl);
+        // Plant a foreign unpack state. The uploader always uploads tightly
+        // packed rows, so a leftover GL_UNPACK_ROW_LENGTH must be ignored -
+        // honouring it would read past a tight buffer. Reading the pixels back
+        // is what makes this test meaningful; only checking ensure() succeed
+        // proved nothing about the bytes actually uploaded.
         gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 8);
         gl->glPixelStorei(GL_UNPACK_ROW_LENGTH, 17);
-        const auto gray = paddedGrayProbe(5, 3, 17, 8, 3);
+        const auto gray = grayRamp(5, 3, 3);
+        std::vector<std::uint8_t> got;
         const TileKey key = makeKey("unpack-r8");
-        check(uploader.ensure(key, gray.data(), 5, 3, 1), "odd-width R8 upload succeeds");
+        check(uploadAndRead(uploader, shader, fbo, key, gray.data(), 5, 3, 1, &got) &&
+                  rgbaMatches(got, expectedGrayRgb(gray), 0),
+              "odd-width R8 upload ignores a foreign GL_UNPACK_ROW_LENGTH");
         GLint alignment = 0;
         GLint rowLength = 0;
         gl->glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
         gl->glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
-        check(alignment == 8, "upload restores unpack alignment to 8");
-        check(rowLength == 17, "upload leaves unpack row length at 17");
-        const auto replaced = paddedGrayProbe(5, 3, 17, 8, 9);
-        check(uploader.ensure(key, replaced.data(), 5, 3, 1), "odd-width R8 replace succeeds");
-        gl->glGetIntegerv(GL_UNPACK_ALIGNMENT, &alignment);
-        gl->glGetIntegerv(GL_UNPACK_ROW_LENGTH, &rowLength);
-        check(alignment == 8, "replace restores unpack alignment to 8");
-        check(rowLength == 17, "replace leaves unpack row length at 17");
+        check(alignment == 8 && rowLength == 17, "upload restores the caller's unpack state");
+
+        const auto replaced = grayRamp(5, 3, 9);
+        check(uploadAndRead(uploader, shader, fbo, key, replaced.data(), 5, 3, 1, &got) &&
+                  rgbaMatches(got, expectedGrayRgb(replaced), 0),
+              "odd-width R8 replace still ignores a foreign row length");
     }
     GLint resetAlignment = 0;
     GLint resetRowLength = -1;
@@ -522,7 +512,7 @@ int main(int argc, char **argv)
     GpuTileUploader uploader;
     shader.setAdjust(1.0f, 1.0f);
     shader.setOverlay(0, 0.0f);
-    checkUnpackRestored(gl, uploader);
+    checkUnpackRestored(gl, uploader, shader, fbo);
     checkR8WidthsAndReplace(uploader, shader, fbo);
     checkExpandAndSwizzle(shader, fbo, uploader, swizzle);
     checkRgbRgbaAndAdjust(uploader, shader, fbo);

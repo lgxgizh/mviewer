@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -30,4 +31,6 @@ class ExporterRegistry
   private:
     ExporterRegistry() = default;
     std::vector<std::shared_ptr<IExporter>> m_exporters;
+    mutable std::mutex m_mutex; // register/unregister run on the UI thread while a
+                                // batch export walks the registry on a worker
 };

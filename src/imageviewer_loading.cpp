@@ -118,11 +118,7 @@ void ImageViewer::setImageImpl(const QString &path)
         m_provisionalSourceSize = QSize();
     }
     if (context())
-    {
-        makeCurrent();
         m_gpu.clear();
-        doneCurrent();
-    }
     if (path.isEmpty())
     {
         m_pendingAnalysisPreload.reset();
@@ -380,11 +376,8 @@ void ImageViewer::applyPendingView()
 
 void ImageViewer::clearLoadedGpu()
 {
-    if (!context())
-        return;
-    makeCurrent();
-    m_gpu.clear();
-    doneCurrent();
+    if (context())
+        m_gpu.clear(); // GlOwnerContext restores the caller's context
 }
 
 void ImageViewer::scheduleLoadedRefit(const QString &path, uint64_t generation,

@@ -4,15 +4,15 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.214**
+## Where we are now — **Beta / 1.0.215**
 
-MViewer remains in **Beta**; the current release is **`v1.0.214`**
-(2026-11-25, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
-The compare canvas can composite split / swipe / overlay through a fragment shader
-(`MVIEWER_COMPARE_GL=1`), verified bit-exact against the committed pixel baseline
-at two scale factors. Checkerboard still composites on the CPU because QPainter's
-clip antialiasing at block edges cannot be reproduced by a hard shader switch.
-Offscreen CI is regression evidence, not proof of universal smoothness.
+MViewer remains in **Beta**; the current release is **`v1.0.215`**
+(2026-11-26, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+Display adjustment now actually reaches the raster (it compared a colour context
+against itself and was silently dropped), batch cancel no longer deadlocks, HDR tone
+mapping and the decoder input budgets are bounded, and CI's `ci-gate` covers the
+sanitizer and complexity gates it claimed to. Offscreen CI is regression evidence,
+not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
 patch line; leaving Beta ("1.0 GA") still needs a code-signed installer (no
@@ -67,7 +67,9 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.213** (current) | Compare canvas composites on the GPU (PR-09) | 🔵 Beta |
+| **1.0.215** (current) | Review P0/P1 batch: display adjust, batch cancel, decoder budgets | 🔵 Beta |
+| **1.0.214** | Partial review checkpoint | ✅ Previous patch |
+| **1.0.213** | Compare canvas composites on the GPU (PR-09) | ✅ Previous patch |
 | **1.0.212** | Opt-in fragment-shader tile blitter (ADR 037) | ✅ Previous patch |
 | **1.0.211** | Overlay keeps the GPU tile path; PR-09 baseline (B20) | ✅ Previous patch |
 | **1.0.210** | libjpeg-turbo JPEG decode fast path (-39% on 4K) | ✅ Previous patch |

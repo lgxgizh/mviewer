@@ -517,7 +517,18 @@ ImageRepository::preloadAsync(const std::string &filePath,
             // at completion (the FullImage memory cache populated by load() is
             // the only observable effect).
             const mviewer::core::ScopedCancelProbe probe(staleRequestProbe(state));
-            Result res = loadFrame(filePath, 0, opts);
+            Result res;
+            try
+            {
+                res = loadFrame(filePath, 0, opts);
+            }
+            catch (...)
+            {
+                // A preload promoted to Foreground delivers through the same
+                // terminal callback as a normal load; letting this escape would
+                // leave that callback uninvoked and the consumer pending.
+                res.error = "unexpected image preload failure: " + filePath;
+            }
             {
                 std::lock_guard<std::mutex> lk(state->mtx);
                 if (state->cancelled.load(std::memory_order_acquire) ||
@@ -555,7 +566,17 @@ ImageRepository::preloadAsync(const std::string &filePath,
             if (!promoted || cancelled)
                 return;
             if (res.success() && res.frame)
-                res.frame->computeHistogram();
+            {
+                try
+                {
+                    res.frame->computeHistogram();
+                }
+                catch (...)
+                {
+                    // The image is delivered either way; a histogram failure
+                    // must not turn into a dropped callback.
+                }
+            }
             // Re-check cancellation: the histogram pass took time and the
             // request may have been cancelled since the terminal transition.
             if (state->cancelled.load(std::memory_order_acquire))

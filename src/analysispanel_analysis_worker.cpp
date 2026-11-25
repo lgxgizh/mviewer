@@ -154,9 +154,27 @@ TaskScheduler::TaskHandle AnalysisPanel::submitAnalysisJob(const AnalysisInput &
                                             {
                                                 if (ctx.isCancelled())
                                                     return; // superseded while queued
-                                                AnalysisResult r = runAnalysis(in, ctx);
+                                                AnalysisResult r;
+                                                try
+                                                {
+                                                    r = runAnalysis(in, ctx);
+                                                }
+                                                catch (...)
+                                                {
+                                                    // A materializing stage can throw bad_alloc on a
+                                                    // huge frame. The scheduler swallows exceptions, so
+                                                    // without this the delivery below never happens and
+                                                    // the panel stays Pending forever.
+                                                    r.generation = in.generation;
+                                                    r.frame = in.frame;
+                                                    r.path = in.path;
+                                                    r.id = in.id;
+                                                    r.materialize = in.materialize;
+                                                }
                                                 if (ctx.isCancelled())
                                                     return; // superseded during an expensive stage
+                                                if (!qApp)
+                                                    return; // shutting down: no one left to render into
                                                 QMetaObject::invokeMethod(
                                                     qApp,
                                                     [guard, r]()

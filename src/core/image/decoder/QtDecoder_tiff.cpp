@@ -3,6 +3,8 @@
 // before scaling. Baseline uncompressed, chunky, strip-organised TIFFs are
 // parsed here and streamed row by row into a box-averaged target QImage. Any
 // other layout (compressed, tiled, planar, rotated) stays on QImageReader.
+#include "core/image/DecoderLimits.h"
+
 #include <QByteArray>
 #include <QFile>
 #include <QImage>
@@ -175,6 +177,31 @@ bool applyTag(QFile &f, const unsigned char *e, bool be, TiffTags &t)
     }
 }
 
+// TIFF forbids a key tag appearing twice, but a malformed file can list 65535
+// copies of stripOffsets and make the reader walk a multi-GiB synthetic raster.
+bool duplicateKeyTag(const std::vector<uint32_t> &seen, uint32_t tag)
+{
+    switch (tag)
+    {
+    case 256:
+    case 257:
+    case 258:
+    case 259:
+    case 262:
+    case 273:
+    case 274:
+    case 277:
+    case 278:
+    case 279:
+    case 284:
+    case 338:
+    case 339:
+        return std::find(seen.begin(), seen.end(), tag) != seen.end();
+    default:
+        return false;
+    }
+}
+
 bool readTags(QFile &f, TiffTags &t, bool &be)
 {
     unsigned char hdr[8];
@@ -193,12 +220,20 @@ bool readTags(QFile &f, TiffTags &t, bool &be)
     if (!readAt(f, ifd, reinterpret_cast<char *>(cnt), 2))
         return false;
     const uint32_t n = rd16(cnt, be);
+    if (n > 4096)
+        return false;
     QByteArray entries(static_cast<qsizetype>(n) * 12, '\0');
     if (n == 0 || !readAt(f, static_cast<qint64>(ifd) + 2, entries.data(), entries.size()))
         return false;
     const auto *e = reinterpret_cast<const unsigned char *>(entries.constData());
+    std::vector<uint32_t> seen;
+    seen.reserve(n);
     for (uint32_t i = 0; i < n; ++i)
     {
+        const uint32_t tag = rd16(e + static_cast<size_t>(i) * 12, be);
+        if (duplicateKeyTag(seen, tag))
+            return false;
+        seen.push_back(tag);
         if (!applyTag(f, e + static_cast<size_t>(i) * 12, be, t))
             return false;
     }
@@ -211,7 +246,13 @@ bool layoutOk(const TiffTags &t)
         return false;
     if (t.orientation != 1 || !t.photometricSet)
         return false;
-    if (t.width < 1 || t.width > 65535 || t.height < 1 || t.height > 65535)
+    if (t.width < 1 || t.width > mviewer::core::kMaxImageDimension || t.height < 1 ||
+        t.height > mviewer::core::kMaxImageDimension)
+        return false;
+    // Same raster budget as every other decoder: a small file must not be able to
+    // ask for a multi-GiB decompress.
+    if (static_cast<int64_t>(t.width) * static_cast<int64_t>(t.height) >
+        mviewer::core::kMaxImagePixels)
         return false;
     if (t.bitsPerSample.size() != t.samples)
         return false;

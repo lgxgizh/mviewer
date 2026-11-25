@@ -716,12 +716,12 @@ class ImageViewer : public QOpenGLWidget
     // re-requesting upgrades until a new image (or a successful raster) resets
     // it — no infinite request loop, no permanently-stuck loading state.
     bool m_displayDegraded = false;
-    // True once the analysis-support full load was issued for the current
-    // image (at most one per image; the display never waits for it).
+    // True once the analysis-support full load was issued (at most one per image).
     bool m_analysisLoadIssued = false;
     std::shared_ptr<mviewer::core::SourceImage> m_sourceImage; // no pixels held
     mviewer::core::DisplayColorContext m_displayColorTarget =
         mviewer::core::DisplayColorContext::sRGB();
+    std::string m_appliedColorCacheKey; // panel edits the live target; compare this
     DisplayRaster m_raster;
     mutable QImage m_lodOverlayImage;
     mutable qint64 m_lodOverlayKey = -1;

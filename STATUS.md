@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-25 · Version: **1.0.214** · Release tag: **v1.0.214**
+> Snapshot: 2026-11-26 · Version: **1.0.215** · Release tag: **v1.0.215**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,36 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.215 - review P0/P1 batch (2026-11-26)
+
+- **Display adjustment was a complete no-op.** The panel mutated the live colour
+  context and `setDisplayColorContext()` compared it with itself, so exposure,
+  gamma and auto-stretch never reached any raster. Now compares against the key
+  actually applied.
+- Grey images skipped the exposure/gamma/auto-stretch tables when a 3D LUT was
+  loaded.
+- Batch cancel lost-wakeup deadlock fixed; `TaskScheduler::depDone()` no longer
+  treats "progress 100" / cancelled as finished.
+- `HdrDecoder::toneMapToRgb24` size check is 64-bit (was an int overflow).
+- Exit joins are bounded (global pool, directory monitor, thumbnail scan pools).
+- `ExporterRegistry` is locked; preload/analysis failure paths now deliver their
+  terminal callback instead of leaving consumers pending.
+- Decoder input budgets: shared 268M-sample cap for PNG/TIFF/BMP, TIFF IFD entry
+  and duplicate-key-tag limits, OpenEXR overlapping scanline rejection.
+- GPU: tile uploads neutralise `GL_UNPACK_ROW_LENGTH`; failed texture allocation
+  falls back to CPU instead of black tiles; grey expansion booked at 3 channels;
+  compare upload restores the caller's texture binding and drops a full-image
+  copy; `BlitStateGuard` tolerates null `extraFunctions()`.
+- CI: `ci-gate` now depends on `thread-sanitizer` and `complexity-ratchet`.
+- Known environment issue (pre-existing on v1.0.214, not introduced here):
+  `workflow_ux_tests` fails its fullscreen-workflow status-message assertion in
+  this workspace, standalone and in the full gate.
+
+## 1.0.214 - partial review checkpoint (2026-11-25)
+
+- Partial release: completed, CI-verified work only (44 verified + 1 source
+  no-change + 169 pending of the 214 acceptance criteria). No Dr.Memory verdict.
 
 ## 1.0.213 - compare canvas composites on the GPU (PR-09) (2026-11-24)
 

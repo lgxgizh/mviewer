@@ -2,6 +2,86 @@
 
 ## [Unreleased]
 
+## [1.0.215] - 2026-11-26
+
+### Fixed — review P0/P1 batch
+
+**Display adjustment did nothing at all.** The panel mutated the live display
+colour context in place and `setDisplayColorContext()` compared its argument
+against that same object, so the cache key always matched and the change was
+dropped before any raster or tile re-materialised. It now compares against the
+key of the context that was actually applied (`ImageViewer::applyDisplayAdjust`,
+`imageviewer_lod.cpp`).
+
+**Grey images lost exposure / gamma / auto-stretch once a 3D LUT was loaded.**
+The grayscale branch skipped the 1D tables that follow `sampleLut()`, so grey and
+colour rasters applied different adjustments (`core/image/DisplayAdjust.cpp`).
+
+**Batch cancel could deadlock.** `BatchProcessor::requestCancel()` published
+`m_cancelled` outside `m_pauseMtx`, then notified; a paused run could miss the
+wakeup because the worker had not yet entered the wait. The flag is now published
+under the lock.
+
+**Scheduler dependencies started too early.** `depDone()` treated "cancelled" and
+"progress >= 100" as finished, launching successors while the predecessor's
+`work()`/`done()` were still running. Only a retired handle counts.
+
+**HDR tone mapping could read out of bounds.** `toneMapToRgb24()` compared an
+`int` size, which overflowed on large rasters. Now 64-bit.
+
+**Exit could hang.** The global pool, directory monitor and thumbnail scan pools
+were joined without a timeout; they are bounded now, with a warning instead of an
+indefinite block.
+
+**A registry raced the batch worker.** `ExporterRegistry` had no lock while a
+batch export walked it on a worker thread and plugins registered on the UI thread.
+
+**Two dropped callbacks left consumers pending forever.** `preloadAsync()` did not
+guard `loadFrame()` / `computeHistogram()`, and the analysis worker let an
+allocation failure unwind into the scheduler (which swallows exceptions) with no
+delivery. Both now produce a result and deliver it, and the worker checks `qApp`.
+
+### Hardened — decoder input budgets
+
+New shared `core/image/DecoderLimits.h`: a 268M-sample raster budget that every
+decoder answers with. PNG, TIFF and BMP previously accepted dimensions whose
+decompressed size is tens of GiB for a tiny file. TIFF additionally caps IFD
+entries at 4096 and rejects repeated key tags (a table of 65535 duplicate
+`stripOffsets` meant multi-GiB reads). OpenEXR now rejects overlapping scanline
+blocks, which turned one 130 KiB file into thousands of redundant decompressions.
+
+### GPU
+
+- Tile uploads save, zero and restore `GL_UNPACK_ROW_LENGTH` /
+  `SKIP_PIXELS` / `SKIP_ROWS`. A row length left behind by another owner made the
+  driver read past a tightly packed tile buffer.
+- A failed `glTexImage2D` (out of memory) now deletes the texture and returns
+  failure, so the caller falls back to the CPU compositor instead of drawing a
+  black block.
+- Grey tiles expanded R8 -> RGB8 were booked as one channel; residency is now
+  charged 3x, so the cache stops over-committing.
+- `CompareCompositeGL` stops retrying an unusable GL context every frame, keeps
+  the caller's texture binding across uploads, and no longer makes a second
+  full-image copy per pane per frame.
+- `BlitStateGuard` tolerates a null `extraFunctions()`.
+- `ImageViewer` no longer calls `makeCurrent()/doneCurrent()` around
+  `GpuTileUploader::clear()`: that helper already binds through
+  `GlOwnerContext`, and the manual pair cleared whatever other OpenGL widget was
+  current.
+
+### Tests
+
+`viewer_gl_pixel_tests` planted a foreign `GL_UNPACK_ROW_LENGTH`, passed a padded
+buffer and only asserted that the upload returned true — the pixels were never
+read back, so the over-read this test claims to cover was unverified. It now
+uploads a tight ramp and compares the read-back pixels.
+
+### CI
+
+`ci-gate` now lists `thread-sanitizer` and `complexity-ratchet`; both were
+described as required gates but were missing from the aggregator's `needs`, so
+they were not part of branch protection.
+
 ## [1.0.214] - 2026-11-25
 
 ### Partial review release — completed, CI-verified work only

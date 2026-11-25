@@ -11,6 +11,10 @@ class BlitStateGuard
   public:
     explicit BlitStateGuard(QOpenGLExtraFunctions *gl) : m_gl(gl)
     {
+        // extraFunctions() can be null (a core-only context); there is nothing
+        // to preserve in that case, but callers must not dereference it.
+        if (m_gl == nullptr)
+            return;
         m_gl->glGetIntegerv(GL_CURRENT_PROGRAM, &m_program);
         m_gl->glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &m_vao);
         m_gl->glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &m_buffer);
@@ -25,6 +29,8 @@ class BlitStateGuard
 
     ~BlitStateGuard()
     {
+        if (m_gl == nullptr)
+            return;
         m_gl->glUseProgram(static_cast<GLuint>(m_program));
         m_gl->glBindVertexArray(static_cast<GLuint>(m_vao));
         m_gl->glBindBuffer(GL_ARRAY_BUFFER, static_cast<GLuint>(m_buffer));

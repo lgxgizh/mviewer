@@ -131,16 +131,31 @@ struct UnpackAlignmentRestorer
 {
     QOpenGLFunctions *gl = nullptr;
     GLint previous = 4;
+    GLint previousRowLength = 0;
+    GLint previousSkipPixels = 0;
+    GLint previousSkipRows = 0;
 
     explicit UnpackAlignmentRestorer(QOpenGLFunctions *functions) : gl(functions)
     {
+        // Tile uploads assume tightly packed rows. A non-zero row length left
+        // behind by another owner would make the driver read past a tight buffer,
+        // so zero it here and put everything back afterwards.
         gl->glGetIntegerv(GL_UNPACK_ALIGNMENT, &previous);
+        gl->glGetIntegerv(GL_UNPACK_ROW_LENGTH, &previousRowLength);
+        gl->glGetIntegerv(GL_UNPACK_SKIP_PIXELS, &previousSkipPixels);
+        gl->glGetIntegerv(GL_UNPACK_SKIP_ROWS, &previousSkipRows);
         gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        gl->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+        gl->glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+        gl->glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
     }
 
     ~UnpackAlignmentRestorer()
     {
         gl->glPixelStorei(GL_UNPACK_ALIGNMENT, previous);
+        gl->glPixelStorei(GL_UNPACK_ROW_LENGTH, previousRowLength);
+        gl->glPixelStorei(GL_UNPACK_SKIP_PIXELS, previousSkipPixels);
+        gl->glPixelStorei(GL_UNPACK_SKIP_ROWS, previousSkipRows);
     }
 
     UnpackAlignmentRestorer(const UnpackAlignmentRestorer &) = delete;
@@ -334,7 +349,9 @@ bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, i
     e.w = w;
     e.h = h;
     e.channels = channels;
-    e.bytes = bytes;
+    // An R8 tile expanded to RGB8 occupies three times the bytes; booking it as
+    // one channel under-reports residency by 3x and lets the cache over-commit.
+    e.bytes = m_grayExpanded.count(hnd) ? tileBytes(w, h, 3) : bytes;
     e.fingerprint = fp == 0 ? 1 : fp;
     e.version = contentVersion;
     e.lruIt = std::prev(m_lru.end());
@@ -561,6 +578,14 @@ uintptr_t GpuTileUploader::doUpload(const TileKey &key, const uint8_t *pixels, i
         UnpackAlignmentRestorer unpack(gl);
         gl->glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internal), w, h, 0, format,
                          GL_UNSIGNED_BYTE, src);
+    }
+    // A failed allocation (GL_OUT_OF_MEMORY) would otherwise leave a resident
+    // handle bound to an incomplete texture: the caller keeps drawing it as a
+    // black block instead of falling back to the CPU compositor.
+    if (gl->glGetError() != GL_NO_ERROR)
+    {
+        gl->glDeleteTextures(1, &tex);
+        return 0;
     }
     if (channels == 1 && !expandedToRgb)
         applyGraySwizzle(gl);

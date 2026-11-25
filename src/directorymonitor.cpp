@@ -68,8 +68,11 @@ DirectoryMonitor::~DirectoryMonitor()
     m_pool.clear();
     // Join while `this` is still a valid QObject: the snapshot worker posts
     // via QMetaObject::invokeMethod(this, ...). ~QThreadPool would wait after
-    // later members (and the QObject) are already gone.
-    m_pool.waitForDone();
+    // later members (and the QObject) are already gone. Bounded: the worker
+    // aborts on the generation bump above, so this only needs to cover one
+    // in-flight directory walk.
+    if (!m_pool.waitForDone(5000))
+        qWarning("MViewer: directory monitor pool still busy at destruction");
 }
 
 void DirectoryMonitor::setActiveDirectory(const QString &path)

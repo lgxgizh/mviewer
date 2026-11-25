@@ -120,7 +120,7 @@ class ContextRestorer
 
     void restore()
     {
-        if (m_restored)
+        if (m_restored || !m_bound)
             return;
         m_restored = true;
         if (m_previous != nullptr && m_previous->isValid() && m_previousSurface != nullptr &&
@@ -149,8 +149,10 @@ bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
 {
     if (m_ready)
         return true;
-    if (hasGpuObjects())
-        destroy();
+    // Circuit breaker: a driver without GL 3.3 Core (or with ES only) fails the
+    // shader link every frame otherwise - makeCurrent + recompile per paint.
+    if (m_initFailed)
+        return false;
     if (hasGpuObjects())
         destroy();
     if (hasGpuObjects())
@@ -166,7 +168,10 @@ bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
         if (shareContext != nullptr)
             m_context.setShareContext(shareContext);
         if (!m_context.create())
+        {
+            m_initFailed = true;
             return false;
+        }
         m_surface.setFormat(m_context.format());
         m_surface.create();
     }
@@ -185,12 +190,16 @@ bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
 
     ContextRestorer bound(&m_context, &m_surface);
     if (!bound.isBound())
+    {
+        m_initFailed = true;
         return false;
+    }
 
     QOpenGLFunctions *gl = m_context.functions();
     if (gl == nullptr)
     {
         destroy();
+        m_initFailed = true;
         return false;
     }
     m_program = new QOpenGLShaderProgram(&m_context);
@@ -199,6 +208,7 @@ bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
         !m_program->link())
     {
         destroy();
+        m_initFailed = true;
         return false;
     }
     m_program->bind();
@@ -210,12 +220,14 @@ bool CompareCompositeGL::ensureContext(QOpenGLContext *shareContext)
     if (!m_vao->create())
     {
         destroy();
+        m_initFailed = true;
         return false;
     }
     m_vbo = std::make_unique<QOpenGLBuffer>(QOpenGLBuffer::VertexBuffer);
     if (!m_vbo->create())
     {
         destroy();
+        m_initFailed = true;
         return false;
     }
     m_vbo->setUsagePattern(QOpenGLBuffer::DynamicDraw);
@@ -301,15 +313,20 @@ bool uploadCompareRgb888(QOpenGLFunctions *gl, unsigned int tex, const QImage &i
 {
     if (gl == nullptr || image.isNull())
         return false;
-    // A full copy normalizes even externally supplied RGB888 row strides to
-    // Qt-owned storage, whose scanlines are aligned to four bytes.
-    const QImage rgb = image.convertToFormat(QImage::Format_RGB888).copy();
+    // convertToFormat already hands back Qt-owned storage; the unconditional
+    // .copy() used to double that with a second full-image memcpy per pane per
+    // frame. Only an unpadded stride needs normalising for ALIGNMENT=4.
+    QImage rgb = image.convertToFormat(QImage::Format_RGB888);
     if (rgb.isNull())
         return false;
+    if (rgb.bytesPerLine() % 4 != 0)
+        rgb = rgb.copy();
     GLint previousAlignment = 4;
     GLint previousRowLength = 0;
+    GLint previousBinding = 0;
     gl->glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousAlignment);
     gl->glGetIntegerv(GL_UNPACK_ROW_LENGTH, &previousRowLength);
+    gl->glGetIntegerv(GL_TEXTURE_BINDING_2D, &previousBinding);
     gl->glBindTexture(GL_TEXTURE_2D, tex);
     gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
     gl->glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
@@ -317,6 +334,7 @@ bool uploadCompareRgb888(QOpenGLFunctions *gl, unsigned int tex, const QImage &i
                      GL_UNSIGNED_BYTE, rgb.constBits());
     gl->glPixelStorei(GL_UNPACK_ROW_LENGTH, previousRowLength);
     gl->glPixelStorei(GL_UNPACK_ALIGNMENT, previousAlignment);
+    gl->glBindTexture(GL_TEXTURE_2D, static_cast<GLuint>(previousBinding));
     return true;
 }
 

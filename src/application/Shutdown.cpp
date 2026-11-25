@@ -84,7 +84,12 @@ void shutdownProcessServices()
     TaskScheduler::instance().shutdown();
     mviewer::core::waitForDisplayResampleIdle();
     if (QThreadPool *globalPool = QThreadPool::globalInstance())
-        globalPool->waitForDone();
+    {
+        // Bounded, not infinite: a stuck task must not turn "quit" into a hang
+        // that only Task Manager can end.
+        if (!globalPool->waitForDone(15000))
+            qWarning("MViewer: global thread pool still busy after 15 s at shutdown");
+    }
 
     // Close delivery rather than merely clearing it: a worker that finishes
     // after this point must have its UI callback dropped, not run inline on the

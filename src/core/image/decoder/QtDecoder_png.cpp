@@ -2,6 +2,8 @@
 // raster, then scales it. This path streams libpng rows (the libpng Qt already
 // ships) and box-averages them into the target QImage. A null image means the
 // caller should fall back to QImageReader.
+#include "core/image/DecoderLimits.h"
+
 #include <QByteArray>
 #include <QColorSpace>
 #include <QFile>
@@ -257,9 +259,13 @@ QImage::Format pngOutFormat(int channels, int bitDepth, bool *alpha, bool *rgbx6
 
 bool podLayoutOk(const PngPod &pod)
 {
-    if (pod.width < 1 || pod.width > 65535)
+    if (pod.width < 1 || pod.width > mviewer::core::kMaxImageDimension)
         return false;
-    if (pod.height < 1 || pod.height > 65535)
+    if (pod.height < 1 || pod.height > mviewer::core::kMaxImageDimension)
+        return false;
+    // A 65535x65535 16-bit RGBA PNG decompresses to ~34 GiB; bound the raster.
+    if (static_cast<int64_t>(pod.width) * static_cast<int64_t>(pod.height) >
+        mviewer::core::kMaxImagePixels)
         return false;
     if (pod.bitDepth != 8 && pod.bitDepth != 16)
         return false;

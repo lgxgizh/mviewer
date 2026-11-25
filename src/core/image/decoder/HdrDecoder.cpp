@@ -266,8 +266,7 @@ bool readExrChannels(const std::uint8_t *value, size_t size, std::vector<ExrChan
             ++len;
         if (len == 0)
             break;
-        // channel struct after the name: pixelType(4) pLinear(1)
-        // reserved(3) xSampling(4) ySampling(4) = 16 bytes.
+        // channel struct after the name: pixelType, pLinear, reserved, xSampling, ySampling.
         if (at + len + 1 + 16 > size)
             break;
         if (channels.size() >= cap::kMaxExrChannels)
@@ -393,6 +392,8 @@ bool exrOutputBudget(const std::vector<std::uint8_t> &file,
         sampleBytes += channel.pixelType == 1 ? 2ull : 4ull;
     const std::uint64_t lineBytes = sampleBytes * pixelsPerLine;
     const std::uint64_t fileBytes = file.size();
+    std::vector<std::pair<std::uint64_t, std::uint64_t>> spans;
+    spans.reserve(offsets.size());
     for (const std::uint64_t offset : offsets)
     {
         if (offset > fileBytes || fileBytes - offset < 8)
@@ -405,6 +406,18 @@ bool exrOutputBudget(const std::vector<std::uint8_t> &file,
             static_cast<std::uint64_t>(dataSize) > fileBytes - offset - 8)
         {
             error = "invalid OpenEXR scanline size";
+            return false;
+        }
+        spans.emplace_back(offset, offset + 8 + static_cast<std::uint64_t>(dataSize));
+    }
+    // A malformed table can point every line at one shared block, turning the
+    // decode into offsets.size() redundant decompressions of the same bytes.
+    std::sort(spans.begin(), spans.end());
+    for (std::size_t i = 1; i < spans.size(); ++i)
+    {
+        if (spans[i].first < spans[i - 1].second)
+        {
+            error = "overlapping OpenEXR scanline";
             return false;
         }
     }
@@ -538,12 +551,13 @@ ImageData HdrDecoder::toneMapToRgb24(const std::vector<float> &rgb, int width, i
                                      const ToneMap &tone)
 {
     ImageData out = makeImageData(width, height, PixelFormat::RGB24);
-    if (out.isNull() || static_cast<int>(rgb.size()) < width * height * 3)
+    // 64-bit: width*height*3 overflowed int on large rasters (out-of-bounds read).
+    const uint64_t needed = static_cast<uint64_t>(width) * static_cast<uint64_t>(height) * 3u;
+    if (out.isNull() || rgb.size() < needed)
         return ImageData{};
     const ImageBuffer view = out.view();
     const double invGamma = 1.0 / (tone.gamma > 0.05 ? tone.gamma : 2.2);
-    const size_t count = static_cast<size_t>(width) * static_cast<size_t>(height) * 3u;
-    for (size_t i = 0; i < count; ++i)
+    for (size_t i = 0; i < needed; ++i)
     {
         const double linear = static_cast<double>(rgb[i]) * tone.exposure;
         const double mapped = linear / (1.0 + linear);
@@ -608,27 +622,23 @@ bool HdrDecoder::readPfm(const std::string &path, std::vector<float> &rgb, int &
 bool HdrDecoder::readExr(const std::string &path, std::vector<float> &rgb, int &width, int &height,
                          std::string &error) const
 {
+    const auto fail = [&error](const char *what)
+    {
+        error = what;
+        return false;
+    };
     std::ifstream in(mviewer::core::pathFromUtf8(path), std::ios::binary);
     if (!in)
-    {
-        error = "cannot open file";
-        return false;
-    }
+        return fail("cannot open file");
     std::vector<std::uint8_t> file;
     if (!readBoundedExr(in, file, error))
         return false;
     if (!exrMagic(file))
-    {
-        error = "not an OpenEXR file";
-        return false;
-    }
+        return fail("not an OpenEXR file");
     // Low byte is the version. Upper bytes are flags (tiled = 0x200).
     const uint32_t versionField = readU32(file.data() + 4);
     if (versionField & 0x200u)
-    {
-        error = "OpenEXR tiled files are not supported";
-        return false;
-    }
+        return fail("OpenEXR tiled files are not supported");
     size_t pos = 8;
     ExrHeader header;
     if (!parseExrHeader(file, pos, header, error))
@@ -638,33 +648,18 @@ bool HdrDecoder::readExr(const std::string &path, std::vector<float> &rgb, int &
     std::vector<ExrChannel> channels = std::move(header.channels);
 
     if (compression != 0)
-    {
-        error = "only uncompressed OpenEXR is supported";
-        return false;
-    }
+        return fail("only uncompressed OpenEXR is supported");
     if (!exrEdge(header.minX, header.maxX, width) || !exrEdge(header.minY, header.maxY, height) ||
         channels.empty())
-    {
-        error = "invalid OpenEXR data window";
-        return false;
-    }
+        return fail("invalid OpenEXR data window");
     if (static_cast<uint64_t>(width) * static_cast<uint64_t>(height) > cap::kMaxHdrPixels)
-    {
-        error = "OpenEXR image is too large";
-        return false;
-    }
+        return fail("OpenEXR image is too large");
     if (channels.size() > cap::kMaxExrChannels)
-    {
-        error = "OpenEXR has too many channels";
-        return false;
-    }
+        return fail("OpenEXR has too many channels");
 
     const size_t scanLines = static_cast<size_t>(height);
     if (pos > file.size() || (file.size() - pos) / 8 < scanLines)
-    {
-        error = "truncated OpenEXR offset table";
-        return false;
-    }
+        return fail("truncated OpenEXR offset table");
     std::vector<uint64_t> offsets(scanLines);
     for (size_t i = 0; i < scanLines; ++i)
         offsets[i] = readU64(&file[pos + i * 8]);
@@ -681,10 +676,7 @@ bool HdrDecoder::readExr(const std::string &path, std::vector<float> &rgb, int &
             bIdx = static_cast<int>(i);
     }
     if (rIdx < 0 || gIdx < 0 || bIdx < 0)
-    {
-        error = "OpenEXR has no RGB channels";
-        return false;
-    }
+        return fail("OpenEXR has no RGB channels");
 
     const size_t pixelsPerLine = static_cast<size_t>(width);
     if (!exrOutputBudget(file, offsets, channels, pixelsPerLine, error))

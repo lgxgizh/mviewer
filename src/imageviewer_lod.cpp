@@ -156,11 +156,13 @@ void ImageViewer::presentLoadFailure()
 
 void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)
 {
-    if (target.cacheKey() == m_displayColorTarget.cacheKey())
+    const std::string incomingKey = target.cacheKey();
+    if (incomingKey == m_appliedColorCacheKey)
         return;
 
     const bool wasLod = m_lodMode;
     m_displayColorTarget = target;
+    m_appliedColorCacheKey = incomingKey;
     // A target change invalidates presentation-only state. Source/analysis
     // state remains intact and queued results are rejected by cache identity.
     cancelDisplayRequest();
@@ -175,14 +177,11 @@ void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContex
     ++m_overlayGeneration;
     m_overlayRequests.reset(m_overlayGeneration);
     m_overlayCache.clear();
-    // Freeing GPU textures requires a current GL context; without makeCurrent()
-    // the delete calls were skipped and the handles leaked for the session.
+    // GpuTileUploader::clear() binds through GlOwnerContext, which restores the
+    // caller's own context afterwards; an explicit makeCurrent here would clear
+    // whatever other QOpenGLWidget was current.
     if (context())
-    {
-        makeCurrent();
         m_gpu.clear();
-        doneCurrent();
-    }
     // A profile change can race the first small-source verdict. Restarting the
     // display request keeps that verdict as the owner of the foreground load
     // instead of cancelling the only trigger before it reaches the UI thread.

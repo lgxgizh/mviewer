@@ -237,7 +237,11 @@ ThumbnailPanel::~ThumbnailPanel()
     // QDir sort (typically < 100 ms even for 10k-image folders). Join here,
     // while members are still alive; ~QThreadPool would wait too late.
     m_scanPool.clear();
-    m_scanPool.waitForDone();
+    // Bounded join: a scan still running aborts at its next m_alive check, so a
+    // few hundred milliseconds is enough; an unbounded wait would let one wedged
+    // directory sort keep the whole application from quitting.
+    if (!m_scanPool.waitForDone(5000))
+        qWarning("MViewer: thumbnail scan pool still busy at destruction");
     // M46: queued scans dropped by clear() never run their completion, so
     // their busy-cursor refs would leak. Drain them here; a scan that was
     // still RUNNING marshals its own restore later, which becomes a no-op
