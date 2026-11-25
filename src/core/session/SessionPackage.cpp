@@ -274,7 +274,7 @@ std::vector<SessionPackageEntry> readSessionPackage(const std::string &path, std
             return {};
         }
         entries.push_back(
-            {record.name, {bytes.begin() + dataAt, bytes.begin() + dataAt + record.size}});
+            {record.name, {bytes.data() + dataAt, bytes.data() + dataAt + record.size}});
         total += record.size;
         at = record.next;
     }

@@ -16,10 +16,10 @@ namespace mviewer::core::session_detail
 constexpr std::uint32_t kLocal = 0x04034b50u;
 constexpr std::uint32_t kCentral = 0x02014b50u;
 constexpr std::uint32_t kEnd = 0x06054b50u;
-constexpr size_t kEntryLimit = 128u * 1024 * 1024;
-constexpr size_t kPayloadLimit = 256u * 1024 * 1024;
+constexpr size_t kEntryLimit = size_t{128} * 1024 * 1024;
+constexpr size_t kPayloadLimit = size_t{256} * 1024 * 1024;
 // Bound metadata too; keep the existing 256 MiB aggregate payload allowance.
-constexpr size_t kPackageLimit = kPayloadLimit + 16u * 1024 * 1024;
+constexpr size_t kPackageLimit = kPayloadLimit + size_t{16} * 1024 * 1024;
 
 inline bool inside(size_t limit, size_t at, size_t size)
 {
