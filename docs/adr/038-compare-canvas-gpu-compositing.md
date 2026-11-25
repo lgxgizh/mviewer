@@ -52,3 +52,23 @@ The review's P2-09 asked for the canvas to move to GPU texture composition.
 - `tests/gl_baseline/README.md` documents how to re-capture and compare; a change
   to the split geometry, overlay alpha, checker size or diff threshold changes
   the baseline and must be re-captured, not tuned out of the comparator.
+
+## RGB888 row layout regression (review P0-1)
+
+`uploadCompareRgb888` makes a full RGB888 image copy to normalize external row
+strides to Qt-owned, four-byte aligned storage. Upload uses alignment 4 and row
+length 0, restoring both previous unpack values exactly; a null conversion/copy
+fails before changing GL state. This adds a correctness copy, not a performance
+claim. The compositor propagates upload rejection as a null result.
+
+The required `build-linux` job explicitly runs
+`QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a
+./build_linux/bin/compare_gl_rgb_stride_tests` after unchanged offscreen CTest.
+This dedicated real-GL executable is built with the UI tests, not globally
+registered with CTest; unavailable GL is a nonzero failure, never a CPU fallback
+or skip. It checks both distinct panes at widths 5/6/7/8 over multiple rows,
+valid extra-padded external rows, opaque alpha, exact unpack-state restoration,
+null rejection and repeated target sizes. CI prints renderer/version and actual
+assertion totals. These are proposed checks, not measured results until CI runs.
+P0-2 owner-context teardown/caller restoration and full context-loss acceptance
+remain separate; `destroy()` is unchanged by this stride-only repair.

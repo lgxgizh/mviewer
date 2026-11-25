@@ -281,7 +281,9 @@ jobs:
           printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev libxkbcommon-dev libegl1 \
-            libfontconfig1 libfreetype6 libdbus-1-3 libx11-6 \
+            libfontconfig1 libfreetype6 libdbus-1-3 libx11-6 xvfb xauth \
+            libgl1-mesa-dri libxkbcommon-x11-0 libxcb-cursor0 libxcb-xinerama0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xkb1 \
             cmake ninja-build g++
 
       - name: Install Qt
@@ -320,6 +322,14 @@ jobs:
           # PowerShell script gates (Linux runners have no powershell).
           ctest --output-on-failure -j 4 --timeout 600 -LE nightly \
             -E "golden_image|bench_|crashhandler_tests|version_consistency|build_test_exit_gate|architecture_gate_regression|adr_gate_regression|complexity_gate_regression|script_encoding_regression|release_version_tests|release_contract_tests|manual_acceptance_tests|product_workflow_gate"
+
+      - name: Compare GL RGB stride (xvfb Mesa, not ctest)
+        timeout-minutes: 10
+        run: |
+          export QT_QPA_PLATFORM=xcb
+          export LIBGL_ALWAYS_SOFTWARE=1
+          set -o pipefail
+          xvfb-run -a ./build_linux/bin/compare_gl_rgb_stride_tests | tee compare-gl-rgb-stride.log
 
   # ---------------------------------------------------------------------------
   # thread-sanitizer — item 2 governance, now a required gate. A
