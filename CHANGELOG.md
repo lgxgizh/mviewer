@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+## [1.0.214] - 2026-11-25
+
+### Partial review release — completed, CI-verified work only
+
+This checkpoint follows the explicit 95% usage release instruction. It does
+**not** claim all review findings are fixed: **44 verified + 1 source-no-change
++ 169 pending** out of 214 acceptance criteria. No B08 shutdown/monitor proposal
+is included.
+
+- Scheduler rejected/deferred task ownership and queued/running cancellation
+  accounting: [PR399](https://github.com/lgxgizh/mviewer/pull/399),
+  [PR400](https://github.com/lgxgizh/mviewer/pull/400),
+  [PR401](https://github.com/lgxgizh/mviewer/pull/401),
+  [PR402](https://github.com/lgxgizh/mviewer/pull/402). These are partial batch
+  results, not a proof of safe bounded shutdown.
+- Compare/Viewer GL pixel, unpack-state, caller-context and resource-lifetime
+  regressions: [PR403](https://github.com/lgxgizh/mviewer/pull/403),
+  [PR404](https://github.com/lgxgizh/mviewer/pull/404),
+  [PR405](https://github.com/lgxgizh/mviewer/pull/405),
+  [PR406](https://github.com/lgxgizh/mviewer/pull/406),
+  [PR407](https://github.com/lgxgizh/mviewer/pull/407). Mesa llvmpipe evidence is
+  not physical GPU-reset, multi-monitor, or universal smoothness certification.
+- Bounded Session ZIP validation/CRC and real sanitizer/libFuzzer gate:
+  [PR408](https://github.com/lgxgizh/mviewer/pull/408).
+- Bounded HDR EXR/PFM decoding and real sanitizer/libFuzzer gate:
+  [PR409](https://github.com/lgxgizh/mviewer/pull/409).
+- Explicit native-plugin discovery vs Trust-and-load confirmation, stored-hash
+  startup loading, nullable/exception ABI checks and Windows boundary tests:
+  [PR410](https://github.com/lgxgizh/mviewer/pull/410).
+
+### Evidence and known remaining work
+
+- PR410 required CI and postmerge CI passed all 12 jobs: Windows 252/252,
+  Linux 238/238, TSan 34/34; retained real-GL checks and Session/HDR sanitizer
+  tests plus actual `#4000 DONE` iterations.
+- Still open: P0-6 worker lifetime/bounded shutdown and B02/P0-5.4; P0-8.2
+  reparse/canonical-path coverage and hash-to-load TOCTOU; P1-13.3 destination
+  symlink race; Workspace JSON fuzzing and overall R-01; monitor repairs and
+  the other pending acceptance criteria. The >=10-second hang remains deferred.
+- Native plugins run in-process: **not a sandbox**; SHA-256 is **not a signature**.
+  The confirmation dialog itself has not been interactively exercised.
+- Dr.Memory remains disabled/skipped: not executed, no memory-clean verdict.
+
 ## [1.0.213] - 2026-11-24
 
 ### Release

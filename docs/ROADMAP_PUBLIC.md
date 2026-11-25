@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.213**
+## Where we are now — **Beta / 1.0.214**
 
-MViewer remains in **Beta**; the current release is **`v1.0.213`**
-(2026-11-24, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
+MViewer remains in **Beta**; the current release is **`v1.0.214`**
+(2026-11-25, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 The compare canvas can composite split / swipe / overlay through a fragment shader
 (`MVIEWER_COMPARE_GL=1`), verified bit-exact against the committed pixel baseline
 at two scale factors. Checkerboard still composites on the CPU because QPainter's
