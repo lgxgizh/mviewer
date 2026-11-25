@@ -332,6 +332,14 @@ jobs:
           xvfb-run -a ./build_linux/bin/compare_gl_rgb_stride_tests | tee compare-gl-rgb-stride.log
           xvfb-run -a ./build_linux/bin/compare_gl_context_lifetime_tests | tee compare-gl-context-lifetime.log
 
+      - name: Viewer GL real-GL pixel checks (xvfb Mesa, not ctest)
+        timeout-minutes: 10
+        run: |
+          export QT_QPA_PLATFORM=xcb
+          export LIBGL_ALWAYS_SOFTWARE=1
+          set -o pipefail
+          xvfb-run -a ./build_linux/bin/viewer_gl_pixel_tests | tee viewer-gl-pixel.log
+
   # ---------------------------------------------------------------------------
   # thread-sanitizer — item 2 governance, now a required gate. A
   # -fsanitize=thread Linux build runs the strictly Qt-free core suites with

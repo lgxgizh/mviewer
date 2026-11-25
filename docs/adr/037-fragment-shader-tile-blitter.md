@@ -51,3 +51,25 @@ the 3D LUT and the overlay, so no frame ever needs the CPU compositor.
   compare until the pipeline stops baking them.
 - Turning it on remains a manual action; a defect cannot reach a user who has
   not asked for it, and `MVIEWER_GPU=0` still bypasses the whole tier.
+
+## 2026-11-24 amendment — R8 swizzle, unpack restore, required pixel gate
+
+`GpuTileUploader` R8 tiles are now swizzled to `(R, R, R, 1)` so
+`ImageBlitterShader` (and `QOpenGLTextureBlitter`) sample equal RGB and opaque
+alpha. Contexts without texture swizzle expand R8 to RGB8 at upload time; a
+test-only hook forces that fallback on capable contexts. `GL_UNPACK_ALIGNMENT`
+is restored after upload and replace.
+
+A required Linux xvfb / xcb / Mesa job step runs `build_linux/bin/viewer_gl_pixel_tests`
+after the offscreen CTest job (not `add_test`, no CPU skip). It covers R8 RGB
+equality and alpha, odd widths, swizzle versus forced expand, RGB/RGBA
+non-regression, `setAdjust` versus a CPU model of the shader formula, overlay
+alpha mix, unpack restore, and a null-context `blit()` return. It does **not**
+cover checkerboard, DPR 2, flag lifecycle, ImageViewer context-loss / repeated
+`initializeGL`, or paint-path blitter cross-bind.
+
+`MVIEWER_BLITTER=shader` stays opt-in. This amendment does not change the
+existing `MVIEWER_GPU` / `gpuAcceleration` default, and it does not wire
+`ImageViewer` to `setAdjust` / `setOverlay` (ADR decision 4 still holds:
+exposure and gamma are still CPU-baked; feeding the uniforms from the viewer
+would double-apply). The shader still writes opaque `outColor` alpha.
