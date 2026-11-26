@@ -189,6 +189,10 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
     int deltaLut[511];
     buildDeltaLut(amount, threshold, deltaLut);
 
+    // The clamped source row for each tap depends only on y: compute it once per
+    // row instead of w*kSize times. (A general kernel cannot use a single running
+    // row accumulator - that identity holds only for uniform/box weights.)
+    std::vector<int> tapRows(static_cast<size_t>(kSize));
     for (int y = 0; y < h; ++y)
     {
         if ((y & 15) == 0 && cancelled && cancelled())
@@ -196,15 +200,17 @@ bool combineLumaSharpen(const uint8_t *src, const uint8_t *lumaSrc, const uint8_
         const size_t rowOffset = static_cast<size_t>(y) * static_cast<size_t>(w);
         const uint8_t *srcRow = src + rowOffset * cpp;
         uint8_t *dstRow = dst + rowOffset * cpp;
+        for (int k = 0; k < kSize; ++k)
+            tapRows[static_cast<size_t>(k)] = std::clamp(y - radius + k, 0, h - 1);
         for (int x = 0; x < w; ++x)
         {
             int acc = 0;
             for (int k = 0; k < kSize; ++k)
             {
-                const int sy = std::clamp(y - radius + k, 0, h - 1);
-                acc += lumaTemp[static_cast<size_t>(sy) * static_cast<size_t>(w) +
-                                static_cast<size_t>(x)] *
-                       kernel[k];
+                acc += lumaTemp[static_cast<size_t>(tapRows[static_cast<size_t>(k)]) *
+                                     static_cast<size_t>(w) +
+                                 static_cast<size_t>(x)] *
+                       kernel[static_cast<size_t>(k)];
             }
             const int blurLuma = (acc + 8192) >> 14;
             const int origLuma = lumaSrc[rowOffset + static_cast<size_t>(x)];

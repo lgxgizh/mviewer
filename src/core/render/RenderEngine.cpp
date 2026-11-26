@@ -139,58 +139,92 @@ static double lanczosKernel(double x)
     return 3.0 * std::sin(pix) * std::sin(pix / 3.0) / (pix * pix);
 }
 
-struct LanczosX
+// Lanczos-3 has support 3, so a faithful filter needs taps out to ±3 in SOURCE
+// space. Two things follow: at least 7 taps (not the 5 used before), and when
+// minifying by `ratio` the window must widen to 3*ratio or the resample both
+// aliases and loses contrast. The radius is capped because an extreme ratio would
+// otherwise ask for millions of taps per output pixel; such minification belongs
+// to the bounded box-average LOD path, not to a general resampler.
+constexpr int kMaxLanczosRadius = 8;
+
+struct LanczosAxis
 {
-    int sxx[5];
-    double wx[5];
+    int radius = 2;
+    std::vector<std::vector<int>> src;     // per destination index -> tap offsets
+    std::vector<std::vector<double>> weight; // per destination index -> tap weights
 };
+
+LanczosAxis buildLanczosAxis(int srcExtent, int dstExtent)
+{
+    const double ratio = static_cast<double>(srcExtent) / static_cast<double>(dstExtent);
+    const double sampleScale = std::max(1.0, ratio);
+    const int radius =
+        std::clamp(static_cast<int>(std::ceil(3.0 * sampleScale)), 2, kMaxLanczosRadius);
+    LanczosAxis axis;
+    axis.radius = radius;
+    const size_t taps = static_cast<size_t>(radius) * 2 + 1;
+    axis.src.assign(static_cast<size_t>(dstExtent), std::vector<int>(taps, 0));
+    axis.weight.assign(static_cast<size_t>(dstExtent), std::vector<double>(taps, 0.0));
+    for (int i = 0; i < dstExtent; ++i)
+    {
+        const double centre = (i + 0.5) * ratio - 0.5;
+        const int base = static_cast<int>(std::floor(centre));
+        for (int n = -radius; n <= radius; ++n)
+        {
+            const size_t idx = static_cast<size_t>(n + radius);
+            axis.src[static_cast<size_t>(i)][idx] = std::clamp(base + n, 0, srcExtent - 1);
+            axis.weight[static_cast<size_t>(i)][idx] =
+                lanczosKernel((centre - static_cast<double>(base + n)) / sampleScale);
+        }
+    }
+    return axis;
+}
 
 QImage lanczosQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
     const int sw = src.width(), sh = src.height();
     const int tw = target.width(), th = target.height();
+    if (sw <= 0 || sh <= 0 || tw <= 0 || th <= 0)
+        return QImage();
+
     const double rx = static_cast<double>(sw) / tw;
     const double ry = static_cast<double>(sh) / th;
+    const LanczosAxis xAxis = buildLanczosAxis(sw, tw);
 
-    std::vector<LanczosX> xTab(tw);
-    for (int x = 0; x < tw; ++x)
-    {
-        const double sx = (x + 0.5) * rx - 0.5;
-        const int x0 = static_cast<int>(std::floor(sx));
-        for (int n = -2; n <= 2; ++n)
-        {
-            xTab[x].sxx[n + 2] = std::max(0, std::min(sw - 1, x0 + n));
-            xTab[x].wx[n + 2] = lanczosKernel(sx - (x0 + n));
-        }
-    }
+    const double ySampleScale = std::max(1.0, ry);
+    const int yRadius =
+        std::clamp(static_cast<int>(std::ceil(3.0 * ySampleScale)), 2, kMaxLanczosRadius);
+    const size_t yTaps = static_cast<size_t>(yRadius) * 2 + 1;
+    std::vector<double> wy(yTaps);
+    std::vector<const QRgb *> slines(yTaps);
 
     for (int y = 0; y < th; ++y)
     {
         QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const double sy = (y + 0.5) * ry - 0.5;
         const int y0 = static_cast<int>(std::floor(sy));
-        double wy[5];
-        const QRgb *slines[5];
-        for (int m = -2; m <= 2; ++m)
+        for (int m = -yRadius; m <= yRadius; ++m)
         {
+            const size_t mi = static_cast<size_t>(m + yRadius);
             const int syy = std::max(0, std::min(sh - 1, y0 + m));
-            wy[m + 2] = lanczosKernel(sy - (y0 + m));
-            slines[m + 2] = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
+            wy[mi] = lanczosKernel((sy - static_cast<double>(y0 + m)) / ySampleScale);
+            slines[mi] = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
         }
 
         for (int x = 0; x < tw; ++x)
         {
-            const auto &xt = xTab[x];
+            const std::vector<int> &tapSrc = xAxis.src[static_cast<size_t>(x)];
+            const std::vector<double> &tapW = xAxis.weight[static_cast<size_t>(x)];
             double r = 0, g = 0, b = 0, wsum = 0;
-            for (int m = 0; m < 5; ++m)
+            for (size_t mi = 0; mi < yTaps; ++mi)
             {
-                const double wym = wy[m];
-                const QRgb *sline = slines[m];
-                for (int n = 0; n < 5; ++n)
+                const double wym = wy[mi];
+                const QRgb *sline = slines[mi];
+                for (size_t ni = 0; ni < tapSrc.size(); ++ni)
                 {
-                    const double w = xt.wx[n] * wym;
-                    const QRgb pix = sline[xt.sxx[n]];
+                    const double w = tapW[ni] * wym;
+                    const QRgb pix = sline[tapSrc[ni]];
                     r += w * qRed(pix);
                     g += w * qGreen(pix);
                     b += w * qBlue(pix);

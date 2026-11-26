@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.221** · Release tag: **v1.0.221**
+> Snapshot: 2026-11-26 · Version: **1.0.222** · Release tag: **v1.0.222**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,15 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.222 - Lanczos-3 resampling, USM tap hoist (2026-11-26)
+
+- `lanczosQ` used 5 taps of a kernel with support 3 and never widened its window
+  when minifying. It now uses the full ±3 support and scales it by the downsample
+  ratio (radius capped at 8). New tests pin the invariant that a constant field
+  resamples to itself at every ratio tested.
+- `combineLumaSharpen` computes its clamped tap rows once per row instead of once
+  per pixel per tap.
 
 ## 1.0.221 - render cache, HiDPI tile units, preload cancellation (2026-11-26)
 

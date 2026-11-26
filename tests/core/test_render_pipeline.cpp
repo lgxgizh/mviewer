@@ -241,6 +241,58 @@ static void testRenderEngineBoundsAndScaling()
     // Overlay difference alpha bounds fast paths
     ImageData ovZero = engine.overlayDifference(img100, img100, 0.0);
     CHECK(!ovZero.isNull() && ovZero.width == 100, "overlayDifference at alpha=0 succeeds");
+
+    // Lanczos: a constant field must resample to the same constant for any ratio
+    // (the kernel weights are normalized), and extreme ratios must stay in bounds.
+    for (int srcEdge : {1, 7, 64, 129})
+    {
+        ImageData flat = makeImageData(srcEdge, srcEdge, PixelFormat::RGB24);
+        const uint8_t r = 17, g = 34, b = 51;
+        for (int i = 0; i < srcEdge * srcEdge; ++i)
+        {
+            flat.buffer->data()[static_cast<size_t>(i) * 3 + 0] = r;
+            flat.buffer->data()[static_cast<size_t>(i) * 3 + 1] = g;
+            flat.buffer->data()[static_cast<size_t>(i) * 3 + 2] = b;
+        }
+        for (int dstEdge : {1, 3, srcEdge, srcEdge * 2, srcEdge * 5})
+        {
+            ImageData scaled = engine.scale(flat, {dstEdge, dstEdge}, RenderInterp::Lanczos);
+            bool ok = !scaled.isNull() && scaled.width == dstEdge && scaled.height == dstEdge;
+            if (ok)
+            {
+                const auto &v = scaled.constView();
+                for (int y = 0; ok && y < dstEdge; ++y)
+                    for (int x = 0; ok && x < dstEdge; ++x)
+                        ok = v.data[static_cast<size_t>(y) * v.stride() +
+                                   static_cast<size_t>(x) * 3 + 0] == r &&
+                             v.data[static_cast<size_t>(y) * v.stride() +
+                                    static_cast<size_t>(x) * 3 + 1] == g &&
+                             v.data[static_cast<size_t>(y) * v.stride() +
+                                    static_cast<size_t>(x) * 3 + 2] == b;
+            }
+            char label[96];
+            snprintf(label, sizeof(label),
+                     "lanczos keeps a constant field at %dx%d -> %dx%d", srcEdge, srcEdge,
+                     dstEdge, dstEdge);
+            CHECK(ok, label);
+        }
+    }
+
+    // Upscaling must not be the identity: a single bright pixel spreads energy.
+    ImageData impulse = makeImageData(8, 8, PixelFormat::RGB24);
+    for (size_t i = 0; i < impulse.buffer->size(); ++i)
+        impulse.buffer->data()[i] = 0;
+    impulse.buffer->data()[(3 * 8 + 3) * 3 + 0] = 200;
+    ImageData up = engine.scale(impulse, {32, 32}, RenderInterp::Lanczos);
+    long energy = 0;
+    if (!up.isNull())
+    {
+        const auto &v = up.constView();
+        const size_t samples = static_cast<size_t>(v.width) * v.height;
+        for (size_t i = 0; i < samples; ++i)
+            energy += v.data[i * 3];
+    }
+    CHECK(energy > 0, "lanczos upsample spreads an impulse instead of returning black");
 }
 
 static void testTileEdgeContinuity()

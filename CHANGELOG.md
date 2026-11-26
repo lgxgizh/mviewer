@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.0.222] - 2026-11-26
+
+### Algorithms
+
+- **Lanczos resampling is now an actual Lanczos-3.** It used 5 taps (a truncated
+  kernel, so even a 1:1 scale was slightly blurred) and never widened its window
+  when minifying, which aliases and loses contrast. It now uses the full ±3
+  support (7 taps) and scales the support by the downsample ratio, capped at a
+  radius of 8 so extreme ratios cannot ask for millions of taps per pixel (that
+  case belongs to the bounded box-average LOD path). Covered by new
+  `test_render_pipeline` checks: a constant field must resample to itself at every
+  ratio from 1x1 up to 5x, in both directions.
+- **`UsmSharpen`'s vertical pass hoists the clamped tap rows out of the pixel
+  loop** (`w*kSize` clamps become `h*kSize`). A plain running row accumulator was
+  deliberately not used: that identity only holds for uniform (box) weights, not
+  for a general sharpening kernel.
+
 ## [1.0.221] - 2026-11-26
 
 ### Rendering / colour
