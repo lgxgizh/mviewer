@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.230] - 2026-11-26
+
+### Refactor — God-class extraction, round 7
+
+- **`compareworkspace_interact.cpp` was at 948 lines** against the 1000-line
+  responsibility ceiling. The pixel-link mode (markers, crosshairs, numeric deltas,
+  dashed connectors) moves to its own `compareworkspace_pixellink.cpp`
+  (202 lines); interact drops to 760. Behaviour-preserving.
+
 ## [1.0.229] - 2026-11-26
 
 ### Refactor — God-class extraction, round 6

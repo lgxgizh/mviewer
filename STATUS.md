@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.229** · Release tag: **v1.0.229**
+> Snapshot: 2026-11-26 · Version: **1.0.230** · Release tag: **v1.0.230**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,13 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.230 - pixel-link mode gets its own TU (2026-11-26)
+
+- `compareworkspace_interact.cpp` was at 948 lines against the 1000-line
+  responsibility ceiling. The pixel-link mode (markers, crosshairs, numeric
+  deltas, dashed connectors) moves to `compareworkspace_pixellink.cpp`
+  (202 lines); interact drops to 760. Behaviour-preserving.
 
 ## 1.0.229 - ThumbnailTrash gets its own subsystem (2026-11-26)
 

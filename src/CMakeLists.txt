@@ -392,6 +392,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_adjust_export.cpp
     compareworkspace_help.cpp
     compareworkspace_interact.cpp
+    compareworkspace_pixellink.cpp
     compareworkspace_keyboard.cpp
     compareworkspace_snapshot.cpp
     compareworkspace_nav.cpp
