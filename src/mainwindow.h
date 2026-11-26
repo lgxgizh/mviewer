@@ -70,6 +70,11 @@ namespace mviewer::core
 class Histogram;
 }
 
+namespace mviewer::ui
+{
+class CompareAdjustController;
+}
+
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -363,6 +368,11 @@ class MainWindow : public QMainWindow
     void zoomViewer(int op); // 0=in, 1=out, 2=fit, 3=actual, 4=50%, 5=200%, 6=400%, 7=800%
     void showZoomPresetMenu(const QPoint &globalPos);
 
+    // Shared display adjustment (exposure / gamma / auto-stretch / 3D LUT) for the
+    // two compare panes, so a dark pair can be lifted together while comparing.
+    void toggleCompareAdjust();
+    void attachCompareAdjustController(QWidget *host, CompareWorkspace *view);
+
     // P0: product browse state — recent folders, in-session history, and
     // cross-session restore.
     void pushHistory(const QString &path);
@@ -497,6 +507,7 @@ class MainWindow : public QMainWindow
     PluginSettings *m_pluginSettings = nullptr;
     CompareWorkspace *m_compareView = nullptr;
     QPointer<QWidget> m_compareHost; // host is a QDialog; typed as QWidget for safe destroy
+    std::unique_ptr<mviewer::ui::CompareAdjustController> m_compareAdjust; // both panes, one adjust
 
     QAction *m_actOpenDir = nullptr;
     QAction *m_actOpenFile = nullptr;
@@ -508,6 +519,7 @@ class MainWindow : public QMainWindow
     QAction *m_actExportImages = nullptr;
     QAction *m_actExit = nullptr;
     QAction *m_actCompare = nullptr;
+    QAction *m_actCompareAdjust = nullptr; // G: shared adjust for the compare panes
     QAction *m_actToggleAnalysis = nullptr;
     QAction *m_actAbout = nullptr;
     QAction *m_actHistoryBack = nullptr;

@@ -884,6 +884,23 @@ target_include_directories(compare_space_roi_tests PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME compare_space_roi_tests COMMAND compare_space_roi_tests)
 set_tests_properties(compare_space_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
+# Shared adjust for both compare panes: it must drive the workspace colour context.
+add_executable(compare_adjust_tests
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_adjust.cpp
+)
+target_link_libraries(compare_adjust_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_adjust_tests PRIVATE cxx_std_20)
+target_include_directories(compare_adjust_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_adjust_tests COMMAND compare_adjust_tests)
+set_tests_properties(compare_adjust_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # Unlinked canvas ROI stays on the pane it was drawn on; grid Space ignores
 # wheel and pan; canvas pixel grid follows the held image; ROI histogram and
 # copy use each pane's selection when sizes differ.

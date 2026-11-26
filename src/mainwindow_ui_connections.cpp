@@ -459,6 +459,7 @@ void MainWindow::connectMenuSignals()
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
     connect(m_actCompare, &QAction::triggered, this,
             [this]() { m_thumbnailPanel ? m_thumbnailPanel->requestCompare() : openCompare(); });
+    connect(m_actCompareAdjust, &QAction::triggered, this, &MainWindow::toggleCompareAdjust);
 }
 
 void MainWindow::connectWorkspaceSignals()

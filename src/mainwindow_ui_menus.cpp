@@ -5,6 +5,7 @@
 #include "display/DisplayColorContextProvider.h"
 #include "fileopmessages.h"
 
+#include <QCoreApplication>
 #include <QMenuBar>
 
 #include <string>
@@ -178,6 +179,23 @@ QString actTip(const QString &label, const QAction *action)
 {
     return mviewer::ui::appendShortcutHint(label, mviewer::ui::actionShortcutHint(action));
 }
+
+// Built here rather than inline in buildViewMenu: this action's tooltip and state
+// are a fixed block, and keeping it out of that function keeps the menu builder
+// inside the responsibility-TU line budget.
+QAction *createCompareAdjustAction(QObject *parent)
+{
+    auto *action = new QAction(QCoreApplication::translate("MainWindow", "Compare &Adjust (G)"),
+                               parent);
+    action->setObjectName("compareAdjustAction");
+    action->setCheckable(true);
+    action->setShortcut(QKeySequence("G"));
+    // Meaningful only while a compare session is open; attach/detach flips this.
+    action->setEnabled(false);
+    action->setToolTip(QCoreApplication::translate(
+        "MainWindow", "Exposure / gamma / auto-stretch / 3D LUT applied to both compare panes"));
+    return action;
+}
 } // namespace
 
 void MainWindow::buildEditTransformActions(QMenu *editMenu)
@@ -224,8 +242,8 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actCompare->setObjectName("compareAction");
     m_actCompare->setShortcut(QKeySequence("P"));
     m_actCompare->setToolTip(tr("Select 2–8 images, then press P or C to open Compare"));
-    m_actToggleAnalysis = new QAction(tr("Analysis Panel(&H)"), this);
-    m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
+    m_actCompareAdjust = createCompareAdjustAction(this);
+    m_actToggleAnalysis = new QAction(tr("Analysis Panel(&H)"), this);    m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
     m_actToggleAnalysis->setCheckable(true);
     m_actToggleAnalysis->setChecked(false);
     m_actToggleAnalysis->setShortcut(QKeySequence(Qt::Key_F7));
@@ -261,6 +279,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     connect(m_actTripleBrowse, &QAction::toggled, this, &MainWindow::toggleTripleBrowse);
     viewMenu->addAction(m_actTripleBrowse);
     viewMenu->addAction(m_actCompare);
+    viewMenu->addAction(m_actCompareAdjust);
     viewMenu->addAction(m_actToggleAnalysis);
     m_actToggleSearch = new QAction(tr("Global &Search"), this);
     m_actToggleSearch->setObjectName("toggleSearchPanelAction");

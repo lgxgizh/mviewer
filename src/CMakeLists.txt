@@ -413,6 +413,7 @@ add_library(mviewer_ui STATIC
     widgets/histogramwidget.cpp
     widgets/scopewidget.cpp
     widgets/displayadjustpanel.cpp
+    widgets/compareadjustcontroller.cpp
     widgets/blindtestdialog.cpp
     widgets/pythonscriptdialog.cpp
     pluginsettings.cpp

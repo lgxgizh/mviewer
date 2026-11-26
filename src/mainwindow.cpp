@@ -590,6 +590,25 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     showCompareDialog(imgs, sessionJson);
 }
 
+void MainWindow::toggleCompareAdjust()
+{
+    if (m_compareAdjust)
+        m_compareAdjust->toggle();
+}
+
+void MainWindow::attachCompareAdjustController(QWidget *host, CompareWorkspace *view)
+{
+    if (!m_compareAdjust)
+        m_compareAdjust = std::make_unique<mviewer::ui::CompareAdjustController>(this);
+    m_compareAdjust->setAction(m_actCompareAdjust);
+    m_compareAdjust->attach(host, view);
+    if (m_actCompareAdjust)
+    {
+        m_actCompareAdjust->setChecked(false);
+        m_actCompareAdjust->setEnabled(view != nullptr && host != nullptr);
+    }
+}
+
 void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessionJson)
 {
     CompareWorkspace *view = nullptr;
@@ -597,15 +616,13 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
     m_compareHost = dlg;
     m_compareView = view;
     QPointer<CompareWorkspace> viewGuard(m_compareView);
-    // QWidget (not QDialog): QPointer<QDialog>::data() does a checked downcast
-    // that fails under GCC ASan while QDialog is mid-destroy. Timer lambda below
-    // still needs a live-guard for the post-show setImages shot.
+    // QWidget, not QDialog: QPointer<QDialog>::data() does a checked downcast that
+    // fails under GCC ASan while QDialog is mid-destroy.
     QPointer<QWidget> dialogGuard(dlg);
-    // P0: Inject SelectionModel so CompareWorkspace writes focus back to global SSOT.
-    // M28 P1-01: setImages() is async and is invoked once below (after the
-    // dialog is shown and laid out) — the old pre-show call decoded every
-    // image synchronously on the UI thread AND duplicated the load.
+    // P0: Compare writes focus back to the global SSOT. setImages() below is async
+    // and runs after show(), so no synchronous decode happens on the UI thread.
     m_compareView->setSelectionModel(m_selection);
+    attachCompareAdjustController(dlg, view);
     // A-4.5 / M19: continuous compare — seed the pool from ImageListModel.
     ensureImageList();
     if (m_imageList && !m_imageList->isEmpty())
@@ -630,6 +647,8 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                 // dialog's deferred deletion.
                 if (viewGuard)
                     QObject::disconnect(viewGuard.data(), nullptr, this, nullptr);
+                if (m_compareAdjust)
+                    m_compareAdjust->attach(nullptr, nullptr); // release the panel early
                 const QString current = currentImagePath();
                 if (!current.isEmpty())
                     statusBar()->showMessage(tr("Current: %1").arg(QFileInfo(current).fileName()),

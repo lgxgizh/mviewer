@@ -2,6 +2,30 @@
 
 ## [Unreleased]
 
+## [1.0.224] - 2026-11-26
+
+### Added
+
+- **Compare Adjust (View > Compare &Adjust, `G`).** Exposure, gamma,
+  auto-stretch and a 3D LUT can now be applied to *both* compare panes at once,
+  so two dark frames can be lifted together while split / swipe / overlay stays
+  in sync. The panel is bound to the workspace's own `DisplayColorContext`, so
+  it participates in the normal raster/tile invalidation path.
+- **`examples/python/`**: three ready-to-use script-bridge examples -
+  `hot_pixels.py` (isolated hot/dead pixels), `noise_estimate.py` (per-tile
+  Laplacian energy outliers) and `roi_metrics.py` (per-cell mean vs the frame
+  mean, i.e. a flat-field check) - plus `_imagedata.py`, a pure-stdlib PNG
+  reader, and a README covering the request/response protocol and the
+  consequences of the bridge running `python -I`.
+
+### Refactor
+
+- **`CompareAdjustController`**: the compare-adjust subsystem (panel, its anchor,
+  and the five signal handlers) moved out of MainWindow into a controller that
+  owns it. MainWindow now holds one `unique_ptr` instead of a panel pointer plus
+  inline wiring; this is the first "subsystem controller" extraction from the
+  God-class headers, done the same incremental way as `CvOverlay`.
+
 ## [1.0.223] - 2026-11-26
 
 ### Fixed — correctness / concurrency
