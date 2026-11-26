@@ -64,6 +64,7 @@ class CompareRoiController;
 class CompareDiffRenderer;
 class CompareDisplayManager;
 class CompareCompositeGL;
+class CompareAdjustedExportJob;
 } // namespace mviewer::ui
 
 // CompareWorkspace: synchronized multi-image compare workspace
@@ -709,10 +710,9 @@ class CompareWorkspace : public QWidget
     QSlider *m_usmThresholdSlider = nullptr;
     QLabel *m_usmAmountVal = nullptr, *m_usmRadiusVal = nullptr, *m_usmThresholdVal = nullptr;
     QPushButton *m_exportAdjustedBtn = nullptr;
-    uint64_t m_adjustExportGen = 0;
-    std::shared_ptr<std::atomic<bool>> m_adjustExportCancel;
-    mviewer::application::ImageLoadingService::AsyncRequestHandle m_adjustExportHandle;
-    TaskScheduler::TaskHandle m_adjustExportTask;
+    // The asynchronous part of "export this pane's tuning result" lives in its own
+    // job (cancel flag, decode handle, worker task, stale-completion generation).
+    std::unique_ptr<mviewer::ui::CompareAdjustedExportJob> m_adjustedExport;
     void onEditCellSelected(int cellIdx);
     void onAdjChanged();
     void onResetAdj();
@@ -727,8 +727,6 @@ class CompareWorkspace : public QWidget
     void exportCurrentCellAdjusted();
     void exportCellAdjusted(int idx);
     void cancelAdjustedExport();
-    void launchAdjustedExport(const std::string &sourcePath, int frameIndex, const QString &outPath,
-                              const mviewer::core::CellImageAdjust &adjust);
 
     // ── M16.4: quick PSNR/SSIM metrics ──
     QLabel *m_metricLabel = nullptr;

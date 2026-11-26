@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.0.226] - 2026-11-26
+
+### Refactor — God-class extraction, round 3
+
+- **`CompareAdjustedExportJob`** owns the asynchronous half of "export this pane's
+  tuning result": cancellation flag, full-resolution decode handle, worker task
+  and the generation counter that suppresses stale completions. The workspace
+  keeps the UI (button, cell context menu, save dialog, index/frame resolution)
+  and drops four members plus the launch method; `compareworkspace_adjust_export.cpp`
+  shrinks from 429 to ~230 lines.
+- All status reporting and task-handle writes happen on the owning thread again
+  (the job marshals them), so the move does not introduce cross-thread member
+  access.
+- New `compare_adjusted_export_tests` pins decode → adjust → encode at full
+  resolution, the success message and safe repeated `cancel()`.
+- `compareworkspace.h` is back under the ceiling with room (799).
+
 ## [1.0.225] - 2026-11-26
 
 ### Refactor — God-class extraction, round 2

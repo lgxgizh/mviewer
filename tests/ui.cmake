@@ -901,6 +901,23 @@ target_include_directories(compare_adjust_tests PRIVATE ${CMAKE_CURRENT_SOURCE_D
 add_test(NAME compare_adjust_tests COMMAND compare_adjust_tests)
 set_tests_properties(compare_adjust_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
+# Adjusted export job: decode -> adjust -> encode, status on the owning thread.
+add_executable(compare_adjusted_export_tests
+    ${CMAKE_SOURCE_DIR}/tests/test_compare_adjusted_export.cpp
+)
+target_link_libraries(compare_adjusted_export_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_adjusted_export_tests PRIVATE cxx_std_20)
+target_include_directories(compare_adjusted_export_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_adjusted_export_tests COMMAND compare_adjusted_export_tests)
+set_tests_properties(compare_adjusted_export_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
 # Unlinked canvas ROI stays on the pane it was drawn on; grid Space ignores
 # wheel and pan; canvas pixel grid follows the held image; ROI histogram and
 # copy use each pane's selection when sizes differ.

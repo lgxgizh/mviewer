@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.225** · Release tag: **v1.0.225**
+> Snapshot: 2026-11-26 · Version: **1.0.226** · Release tag: **v1.0.226**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,18 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.226 - adjusted export becomes a job; compareworkspace.h back under the cap (2026-11-26)
+
+- `CompareAdjustedExportJob` owns cancellation flag, full-resolution decode handle,
+  worker task and stale-completion generation for "export this pane's tuning
+  result". CompareWorkspace keeps the UI and index/frame resolution; its header
+  loses four members plus the launch method and is at 799 lines again.
+- Status reporting and task-handle writes stay on the owning thread (the job
+  marshals them), so the extraction adds no cross-thread member access.
+- New `compare_adjusted_export_tests` covers the file being written at full
+  resolution, the adjustment actually being applied, the success message and
+  repeated `cancel()`.
 
 ## 1.0.225 - one DisplayAdjustController for viewer and compare (2026-11-26)
 

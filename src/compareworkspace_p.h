@@ -27,6 +27,7 @@
 #include "compare_session_state.h"
 #include "compareworkspace.h"
 #include "compareworkspace_composite_gl.h"
+#include "compareworkspace_adjusted_export.h"
 #include "selectionmodel.h"
 #include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"

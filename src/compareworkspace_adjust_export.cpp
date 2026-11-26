@@ -1,10 +1,15 @@
-// Per-cell USM controls and full-resolution adjusted export.
+// Per-cell USM controls and full-resolution adjusted export (UI half).
+//
+// The asynchronous pipeline - decode at full resolution, adjust off-thread,
+// encode - lives in CompareAdjustedExportJob (compareworkspace_adjusted_export.*).
 #include "compareworkspace_p.h"
 
+#include "compareworkspace_adjusted_export.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageFrame.h"
 
 #include <QAction>
+#include <QDir>
 #include <QFileInfo>
 #include <QMenu>
 #include <QSettings>
@@ -15,83 +20,6 @@
 
 namespace
 {
-
-using ExportStatus = std::function<void(const QString &, int)>;
-using ExportTaskSink = std::function<void(TaskScheduler::TaskHandle)>;
-
-struct AdjustedExportRequest
-{
-    mviewer::core::CellImageAdjust adjust;
-    std::string outPath;
-    std::shared_ptr<std::atomic<bool>> cancel;
-    ExportStatus status;
-    ExportTaskSink storeTask;
-};
-
-bool exportCancelled(const std::shared_ptr<std::atomic<bool>> &cancel,
-                     const TaskScheduler::TaskContext *context)
-{
-    if (cancel && cancel->load(std::memory_order_relaxed))
-        return true;
-    return context && context->isCancelled();
-}
-
-void finishAdjustedExport(const ImageData &pixels, const AdjustedExportRequest &request,
-                          const TaskScheduler::TaskContext &context)
-{
-    const auto stopped = [&]() { return exportCancelled(request.cancel, &context); };
-    if (stopped())
-        return;
-    const ImageData out = mviewer::core::applyCellImageAdjust(pixels, request.adjust, stopped);
-    if (stopped())
-        return;
-    if (out.isNull())
-    {
-        if (request.status)
-            request.status(QStringLiteral("Export failed: adjustment processing failed"), 6000);
-        return;
-    }
-    const bool wrote = Encoder::encode(out, request.outPath);
-    if (stopped())
-        return;
-    if (!request.status)
-        return;
-    if (!wrote)
-    {
-        request.status(QStringLiteral("Export failed: cannot write file"), 6000);
-        return;
-    }
-    const QString name = QFileInfo(QString::fromUtf8(request.outPath.c_str())).fileName();
-    request.status(QStringLiteral("Tuning result exported: %1").arg(name), 5000);
-}
-
-void onAdjustedExportDecoded(const mviewer::application::ImageLoadingService::Result &res,
-                             const AdjustedExportRequest &request)
-{
-    if (exportCancelled(request.cancel, nullptr))
-        return;
-    if (!res.success() || !res.frame || res.frame->pixels().isNull())
-    {
-        if (request.status)
-            request.status(
-                QStringLiteral("Export failed: unable to decode the full-resolution image"), 6000);
-        return;
-    }
-    const ImageData pixels = res.frame->pixels();
-    TaskScheduler::TaskHandle task = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Analysis,
-        [pixels, request](const TaskScheduler::TaskContext &context)
-        { finishAdjustedExport(pixels, request, context); });
-    if (!task)
-    {
-        if (request.status)
-            request.status(QStringLiteral("Export failed: adjustment processing failed"), 6000);
-        return;
-    }
-    if (request.storeTask)
-        request.storeTask(std::move(task));
-}
-
 QString adjustedExportSuggestion(const QString &sourcePath)
 {
     const QString saved = QSettings().value(QStringLiteral("compare/adjustedExportDir")).toString();
@@ -351,79 +279,15 @@ void CompareWorkspace::exportCellAdjusted(int idx)
     else if (img)
         frameIndex = std::max(0, img->frameIndex());
     showCompareStatus(tr("Exporting tuning results…"), 5000);
-    cancelAdjustedExport();
-    launchAdjustedExport(sourcePath, frameIndex, outPath, toCellImageAdjust(adjust));
+    if (!m_adjustedExport)
+        m_adjustedExport = std::make_unique<mviewer::ui::CompareAdjustedExportJob>(
+            this, m_lifetime,
+            [this](const QString &text, int msec) { showCompareStatus(text, msec); });
+    m_adjustedExport->start(sourcePath, frameIndex, outPath, toCellImageAdjust(adjust));
 }
 
 void CompareWorkspace::cancelAdjustedExport()
 {
-    ++m_adjustExportGen;
-    if (m_adjustExportCancel)
-        m_adjustExportCancel->store(true, std::memory_order_relaxed);
-    if (m_adjustExportTask)
-        TaskScheduler::cancel(m_adjustExportTask);
-    m_adjustExportTask.reset();
-    if (m_adjustExportHandle)
-        mviewer::application::ImageLoadingService::instance().cancelAsync(m_adjustExportHandle);
-}
-
-void CompareWorkspace::launchAdjustedExport(const std::string &sourcePath, int frameIndex,
-                                            const QString &outPath,
-                                            const mviewer::core::CellImageAdjust &adjust)
-{
-    const uint64_t generation = m_adjustExportGen;
-    auto cancel = std::make_shared<std::atomic<bool>>(false);
-    m_adjustExportCancel = cancel;
-    const QPointer<CompareWorkspace> guard(this);
-    AdjustedExportRequest request;
-    request.adjust = adjust;
-    request.outPath = outPath.toUtf8().toStdString();
-    request.cancel = std::move(cancel);
-    request.status = [guard, generation](const QString &text, int msec)
-    {
-        if (!qApp)
-            return;
-        QMetaObject::invokeMethod(
-            qApp,
-            [guard, generation, text, msec]()
-            {
-                CompareWorkspace *workspace = guard.data();
-                if (!workspace || generation != workspace->m_adjustExportGen)
-                    return;
-                workspace->showCompareStatus(text, msec);
-            },
-            Qt::QueuedConnection);
-    };
-    request.storeTask = [guard, generation](TaskScheduler::TaskHandle task)
-    {
-        if (!qApp)
-        {
-            if (task)
-                TaskScheduler::cancel(task);
-            return;
-        }
-        QMetaObject::invokeMethod(
-            qApp,
-            [guard, generation, task]()
-            {
-                CompareWorkspace *workspace = guard.data();
-                TaskScheduler::TaskHandle handle = task;
-                if (!workspace || generation != workspace->m_adjustExportGen)
-                {
-                    if (handle)
-                        TaskScheduler::cancel(handle);
-                    return;
-                }
-                workspace->m_adjustExportTask = std::move(handle);
-            },
-            Qt::QueuedConnection);
-    };
-    const ImageLoadOptions opts{true, false, 256};
-    m_adjustExportHandle = mviewer::application::ImageLoadingService::instance().loadFrameAsync(
-        sourcePath, frameIndex,
-        [request](const mviewer::application::ImageLoadingService::Result &res)
-        { onAdjustedExportDecoded(res, request); }, opts, m_lifetime);
-    if (!m_adjustExportHandle && request.status)
-        request.status(QStringLiteral("Export failed: unable to decode the full-resolution image"),
-                       6000);
+    if (m_adjustedExport)
+        m_adjustedExport->cancel();
 }
