@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.228** · Release tag: **v1.0.228**
+> Snapshot: 2026-11-26 · Version: **1.0.229** · Release tag: **v1.0.229**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,12 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.229 - ThumbnailTrash gets its own subsystem (2026-11-26)
+
+- `ThumbnailTrash` owns the app-private fallback trash: directory, bounded prune
+  policy (30 days / 2 GiB) and the OS recycle-bin move. Extracted from
+  `thumbnailpanel_fileops.cpp` (734 -> 679 lines). Behaviour-preserving.
 
 ## 1.0.228 - ThumbnailPanel dimension probe gets its own TU (2026-11-26)
 

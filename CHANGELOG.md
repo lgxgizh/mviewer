@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [1.0.229] - 2026-11-26
+
+### Refactor — God-class extraction, round 6
+
+- **`ThumbnailTrash`** owns the app-private fallback trash: directory, the
+  bounded prune policy (30 days / 2 GiB) and the OS recycle-bin move. Extracted
+  from `thumbnailpanel_fileops.cpp`, which drops from 734 to 679 lines, so the
+  delete/trash flow and its storage policy now live in one named place.
+- No behaviour change: same constants, same background-pool pruning, same
+  `moveToTrash` attempt order.
+
 ## [1.0.228] - 2026-11-26
 
 ### Refactor — God-class extraction, round 5
