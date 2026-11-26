@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.231] - 2026-11-27
+
+### Refactor — God-class extraction, round 8
+
+- **`compareworkspace_analysis.cpp` was at 941 lines** against the 1000-line
+  responsibility ceiling. Histogram computation (title text, refresh scheduling,
+  batched background worker) moves to its own `compareworkspace_histogram.cpp`
+  (387 lines); analysis drops to 567. Behaviour-preserving.
+
 ## [1.0.230] - 2026-11-26
 
 ### Refactor — God-class extraction, round 7

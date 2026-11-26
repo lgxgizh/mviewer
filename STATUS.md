@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.230** · Release tag: **v1.0.230**
+> Snapshot: 2026-11-27 · Version: **1.0.231** · Release tag: **v1.0.231**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,13 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.231 - histogram computation gets its own TU (2026-11-27)
+
+- `compareworkspace_analysis.cpp` was at 941 lines against the 1000-line
+  responsibility ceiling. Histogram computation (title text, refresh scheduling,
+  batched background worker) moves to `compareworkspace_histogram.cpp`
+  (387 lines); analysis drops to 567. Behaviour-preserving.
 
 ## 1.0.230 - pixel-link mode gets its own TU (2026-11-26)
 
