@@ -49,6 +49,18 @@ void discoverDirectory(const QString &dir, QStringList &paths, QStringList &hash
     }
 }
 
+// Canonical form used as the identity of a disabled plugin. QSettings stores the
+// same value, so Startup compares like with like.
+QString canonicalPluginKey(const QString &path)
+{
+    const mviewer::core::PluginFileAssessment assessed =
+        mviewer::core::assessPluginFile(path.toUtf8().toStdString(), {});
+    if (assessed.regularFile && !assessed.canonicalUtf8.empty())
+        return QString::fromUtf8(assessed.canonicalUtf8.data(),
+                                 static_cast<int>(assessed.canonicalUtf8.size()));
+    return path;
+}
+
 bool userConfirmsPluginTrust(QWidget *parent, const std::vector<ExplicitPluginTrust> &items)
 {
     QMessageBox box(parent);
@@ -171,7 +183,8 @@ void PluginSettings::refreshList()
     for (const auto &p : plugins)
     {
         const QString pluginName = QString::fromStdString(p.name);
-        const bool disabled = m_disabledPlugins.contains(pluginName);
+        const bool disabled =
+            m_disabledPlugins.contains(canonicalPluginKey(QString::fromStdString(p.path)));
         QStringList caps;
         if (!p.analyzerId.empty())
             caps << tr("Analyzer");
@@ -206,10 +219,15 @@ void PluginSettings::refreshList()
         if (pm.isLoaded(path.toUtf8().toStdString()))
             continue;
         const QString sha = m_discoveredHashes.at(i);
-        auto *item =
-            new QListWidgetItem(foundIcon, tr("Not loaded — %1 — SHA-256 %2").arg(path, sha));
+        // A disabled plugin is deliberately not loaded, so it only appears here;
+        // without this row there would be no way to re-enable it from the UI.
+        const bool disabled = m_disabledPlugins.contains(canonicalPluginKey(path));
+        const QString label = disabled ? tr("[Disabled] Not loaded — %1").arg(path)
+                                       : tr("Not loaded — %1 — SHA-256 %2").arg(path, sha);
+        auto *item = new QListWidgetItem(disabled ? disabledIcon : foundIcon, label);
         item->setData(kRolePath, path);
         item->setData(kRoleSha, sha);
+        item->setData(kRoleName, QFileInfo(path).fileName());
         item->setToolTip(path);
         m_list->addItem(item);
         ++notLoaded;
@@ -350,14 +368,16 @@ void PluginSettings::onTogglePlugin()
     auto *item = m_list->currentItem();
     if (!item)
         return;
-    const QString name = item->data(kRoleName).toString();
-    if (name.isEmpty())
+    const QString path = item->data(kRolePath).toString();
+    if (path.isEmpty())
         return;
-
-    if (m_disabledPlugins.contains(name))
-        m_disabledPlugins.removeAll(name);
+    // Identity is the canonical file path, not the display name: a renamed or
+    // re-copied DLL must stay disabled across restarts.
+    const QString key = canonicalPluginKey(path);
+    if (m_disabledPlugins.contains(key))
+        m_disabledPlugins.removeAll(key);
     else
-        m_disabledPlugins.append(name);
+        m_disabledPlugins.append(key);
 
     saveSettings();
     refreshList();

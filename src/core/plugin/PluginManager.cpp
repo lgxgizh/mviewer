@@ -141,9 +141,22 @@ PluginHandle openPluginHandle(const std::string &path, std::string &error)
     return reinterpret_cast<PluginHandle>(mviewer::core::loadPluginLibrary(path, error));
 }
 
-std::shared_ptr<PluginModulePin> pinPluginModule(const std::string &path)
+std::shared_ptr<PluginModulePin> pinPluginModule(const std::string &path, void *loadedHandle)
 {
     auto pin = std::make_shared<PluginModulePin>();
+#ifdef _WIN32
+    // Prefer an address inside the already-mapped module: reopening by path is a
+    // second window in which the file could be swapped for something else.
+    if (loadedHandle != nullptr)
+    {
+        HMODULE mod = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                                reinterpret_cast<LPCWSTR>(loadedHandle), &mod))
+            return nullptr;
+        pin->handle = reinterpret_cast<PluginHandle>(mod);
+        return pin;
+    }
+#endif
     std::string ignored;
     pin->handle = openPluginHandle(path, ignored);
     if (!pin->handle)
@@ -177,12 +190,28 @@ bool rejectAbiMismatch(const std::string &path, OpenPlugin &plugin, const std::s
     return false;
 }
 
+bool inspectLoadedPlugin(const std::string &path, OpenPlugin &plugin, std::string &error);
+
 bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
 {
     plugin.handle = openPluginHandle(path, error);
     if (!plugin.handle)
         return false;
+    return inspectLoadedPlugin(path, plugin, error);
+}
 
+bool openPluginVerified(const std::string &path, const std::string &expectedSha256Hex,
+                        OpenPlugin &plugin, std::string &error)
+{
+    plugin.handle = reinterpret_cast<PluginHandle>(
+        mviewer::core::loadPluginLibraryVerified(path, expectedSha256Hex, error));
+    if (!plugin.handle)
+        return false;
+    return inspectLoadedPlugin(path, plugin, error);
+}
+
+bool inspectLoadedPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
+{
     auto &s = plugin.symbols;
     // Version gate first. No other plugin symbol is resolved or called until
     // the ABI (or the legacy version export) is accepted.
@@ -274,7 +303,7 @@ bool registerAnalyzerPlugin(const std::string &path, const std::string &displayN
         return false;
     }
 
-    const std::shared_ptr<PluginModulePin> module = pinPluginModule(path);
+    const std::shared_ptr<PluginModulePin> module = pinPluginModule(path, plugin.handle);
     if (!module)
     {
         error = "failed to pin plugin module for " + path;
@@ -508,6 +537,26 @@ bool finishPluginLoad(const std::string &path, OpenPlugin &plugin,
 }
 } // namespace
 
+bool PluginManager::loadVerified(const std::string &path, const std::string &sha256Hex)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    const mviewer::core::PluginFileAssessment file = mviewer::core::assessPluginFile(path, {});
+    if (!file.regularFile)
+    {
+        m_lastError = file.error.empty() ? "plugin path is not a regular file" : file.error;
+        return false;
+    }
+    if (m_plugins.count(path))
+    {
+        m_lastError = "already loaded: " + path;
+        return false;
+    }
+    OpenPlugin plugin;
+    if (!openPluginVerified(path, sha256Hex, plugin, m_lastError))
+        return false;
+    return finishPluginLoad(path, plugin, m_plugins, m_lastError);
+}
+
 bool PluginManager::load(const std::string &path)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
@@ -538,7 +587,8 @@ int PluginManager::loadDirectory(const std::string &)
 }
 
 int PluginManager::loadTrusted(const std::string &dirPath,
-                               const std::vector<std::string> &trustedSha256Hex)
+                               const std::vector<std::string> &trustedSha256Hex,
+                               const std::set<std::string> &disabledPaths)
 {
     std::unordered_set<std::string> trusted;
     for (const std::string &hex : trustedSha256Hex)
@@ -551,11 +601,19 @@ int PluginManager::loadTrusted(const std::string &dirPath,
     int count = 0;
     for (const std::string &path : scanDirectory(dirPath))
     {
+        if (!disabledPaths.empty())
+        {
+            const mviewer::core::PluginFileAssessment assessed =
+                mviewer::core::assessPluginFile(path, {});
+            if (assessed.regularFile && !assessed.canonicalUtf8.empty() &&
+                disabledPaths.count(assessed.canonicalUtf8) != 0)
+                continue; // disabled in the Plugin Manager: never hash or map it
+        }
         std::string hashError;
         const std::string hash = mviewer::core::pluginFileSha256(path, hashError);
         if (!mviewer::core::isPluginSha256Hex(hash) || trusted.count(hash) == 0)
             continue;
-        if (load(path))
+        if (loadVerified(path, hash))
             ++count;
     }
     return count;
@@ -587,15 +645,15 @@ PluginManager::commitExplicitTrust(const std::vector<ExplicitPluginTrust> &confi
             results.push_back(result);
             continue;
         }
-        if (!load(item.path))
+        if (!loadVerified(item.path, confirmedHash))
         {
             results.push_back(result);
             continue;
         }
         result.loaded = true;
         const std::string after = mviewer::core::pluginFileSha256(item.path, hashError);
-        // Persist only the hash the caller confirmed. A mismatch means the
-        // bytes changed around the map. That race is not closed here.
+        // The verified load already refused a file that changed between hash and
+        // map; this second read still guards the non-Windows fallback.
         if (after == confirmedHash)
         {
             result.persist = true;

@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.218** · Release tag: **v1.0.218**
+> Snapshot: 2026-11-26 · Version: **1.0.219** · Release tag: **v1.0.219**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,18 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.219 - plugin hash->map race closed, Disable actually disables (2026-11-26)
+
+- `loadPluginLibraryVerified()` hashes the file through a handle opened with
+  write/delete sharing denied and keeps it open across `LoadLibraryExW`; both
+  trust paths use it. The old sequence let the file be replaced between check and
+  map, and DllMain runs at map time.
+- `pinPluginModule()` takes an address inside the mapped module instead of
+  reopening the DLL by path on Windows.
+- `plugins/disabled` stores canonical paths; Startup normalizes them and
+  `loadTrusted` skips disabled files before hashing. Disabled plugins are listed
+  as `[Disabled] Not loaded` so they can be re-enabled.
 
 ## 1.0.218 - thumbnail pipeline scheduling, monitor latch, plugin trust UI (2026-11-26)
 

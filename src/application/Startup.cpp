@@ -8,6 +8,7 @@
 #include <QString>
 
 #include <filesystem>
+#include <set>
 #include <string>
 #include <system_error>
 #include <vector>
@@ -67,7 +68,20 @@ void doStartupPlugins()
     hashes.reserve(static_cast<size_t>(trusted.size()));
     for (const QString &item : trusted)
         hashes.emplace_back(item.toUtf8().toStdString());
-    const int count = mgr.loadTrusted(pluginPath, hashes);
+
+    // "Enable / Disable" stores canonical file paths; a disabled plugin must not
+    // even be hashed, let alone mapped.
+    std::set<std::string> disabled;
+    const QStringList disabledRaw = settings.value(QStringLiteral("plugins/disabled")).toStringList();
+    for (const QString &item : disabledRaw)
+    {
+        const mviewer::core::PluginFileAssessment assessed =
+            mviewer::core::assessPluginFile(item.toUtf8().toStdString(), {});
+        if (assessed.regularFile && !assessed.canonicalUtf8.empty())
+            disabled.insert(assessed.canonicalUtf8);
+    }
+
+    const int count = mgr.loadTrusted(pluginPath, hashes, disabled);
 
     if (count == 0)
     {

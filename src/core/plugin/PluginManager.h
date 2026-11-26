@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -73,16 +74,23 @@ class PluginManager
     };
 
     // Map one regular file the caller named. Symlinks and junctions are
-    // rejected before the module is mapped. This does not write QSettings and
-    // is not a consent prompt.
+    // rejected before the module is mapped. This does not write QSettings and    // is not a consent prompt.
     bool load(const std::string &path);
+
+    // Map only if the file's SHA-256 still matches at map time; the trust paths
+    // use this so the hash they vouched for is the code that gets DllMain.
+    bool loadVerified(const std::string &path, const std::string &sha256Hex);
 
     // Discovery does not map modules. Returns 0.
     int loadDirectory(const std::string &dirPath);
 
     // Map only direct regular files in dirPath whose lowercase SHA-256 hex is
     // listed. Other candidates are not opened. Hashing reads bytes only.
-    int loadTrusted(const std::string &dirPath, const std::vector<std::string> &trustedSha256Hex);
+    // `disabledPaths` (canonical, as produced by assessPluginFile) skips those
+    // files before they are hashed at all - that is what "Enable / Disable"
+    // in the Plugin Manager actually turns off.
+    int loadTrusted(const std::string &dirPath, const std::vector<std::string> &trustedSha256Hex,
+                    const std::set<std::string> &disabledPaths = {});
 
     // Map only when `accepted` is true. A false value loads nothing. An already
     // loaded path is not mapped again and is not given a new hash. The hash is

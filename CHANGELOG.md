@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [1.0.219] - 2026-11-26
+
+### Plugin trust chain (review batch 3)
+
+- **The hash->map race is closed on Windows.** `loadPluginLibraryVerified()`
+  opens the file read-only with write/delete sharing denied, hashes those exact
+  bytes, and keeps the handle open across `LoadLibraryExW`. Previously the file
+  could be replaced between the SHA-256 check and the map - and DllMain runs at
+  map time, so that window executed arbitrary code outside the trust decision.
+  Both trust paths (`loadTrusted` at startup and `commitExplicitTrust` in the
+  dialog) now use it.
+- **`pinPluginModule()` no longer reopens the DLL by path** on Windows: it takes
+  an address inside the already-mapped module with `GetModuleHandleExW`, which
+  removes a second swap window.
+- **`plugins/disabled` actually works.** It stores canonical file paths; Startup
+  normalizes them and `loadTrusted` skips disabled files before hashing, so a
+  disabled plugin is never mapped. The manager lists not-loaded plugins as
+  `[Disabled] Not loaded`, so they can be re-enabled instead of silently
+  disappearing.
+
+### Also
+
+- Export installs a cancel probe around long writers and re-checks before commit
+  (carried over from the previous batch's notes).
+
 ## [1.0.218] - 2026-11-26
 
 ### Concurrency / exit (review batch 2)

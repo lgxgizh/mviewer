@@ -82,9 +82,23 @@ void *reopenPlugin(const std::string &path)
     return mviewer::core::loadPluginLibrary(path, ignored);
 }
 
-std::shared_ptr<PluginModulePin> pinPluginModule(const std::string &path)
+std::shared_ptr<PluginModulePin> pinPluginModule(const std::string &path, void *loadedHandle)
 {
     auto pin = std::make_shared<PluginModulePin>();
+#ifdef _WIN32
+    // Prefer an address inside the already-mapped module: reopening by path is a
+    // second window in which the file could be swapped for something else.
+    if (loadedHandle != nullptr)
+    {
+        HMODULE mod = nullptr;
+        if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                                reinterpret_cast<LPCWSTR>(loadedHandle), &mod))
+            return nullptr;
+        pin->handle = reinterpret_cast<void *>(mod);
+        return pin;
+    }
+#endif
+    std::string ignored;
     pin->handle = reopenPlugin(path);
     if (!pin->handle)
         return nullptr;
@@ -211,7 +225,7 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
         return result;
     }
 
-    const std::shared_ptr<PluginModulePin> module = pinPluginModule(path);
+    const std::shared_ptr<PluginModulePin> module = pinPluginModule(path, handle);
     if (!module)
     {
         result.error = "failed to pin plugin module for " + path;
