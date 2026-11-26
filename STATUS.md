@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.227** · Release tag: **v1.0.227**
+> Snapshot: 2026-11-26 · Version: **1.0.228** · Release tag: **v1.0.228**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,13 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.228 - ThumbnailPanel dimension probe gets its own TU (2026-11-26)
+
+- `thumbnailpanel_async.cpp` was at 860 lines. The M46 cooperative dimension probe
+  (viewport-first order, thread-pool worker, batched publication,
+  `ensureDimensions`) moves to `thumbnailpanel_dimensions.cpp` (299 lines); async
+  drops to 578. Behaviour-preserving.
 
 ## 1.0.227 - ThumbnailPanel batch export gets its own responsibility TU (2026-11-26)
 

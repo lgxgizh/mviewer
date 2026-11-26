@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.228] - 2026-11-26
+
+### Refactor — God-class extraction, round 5
+
+- **`thumbnailpanel_async.cpp` was at 860 lines.** The M46 cooperative dimension
+  probe (viewport-first ordering, thread-pool worker, batched publication,
+  `ensureDimensions`) moves to its own `thumbnailpanel_dimensions.cpp`
+  (299 lines); async drops to 578. Behaviour-preserving - every method keeps its
+  declaration in `thumbnailpanel.h`.
+
 ## [1.0.227] - 2026-11-26
 
 ### Refactor — God-class extraction, round 4
