@@ -4,15 +4,14 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.226**
+## Where we are now — **Beta / 1.0.227**
 
-MViewer remains in **Beta**; the current release is **`v1.0.226`**
+MViewer remains in **Beta**; the current release is **`v1.0.227`**
 (2026-11-26, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 Recent releases added a shared exposure/gamma/LUT adjust for both compare panes,
-three ready-to-use Python analysis scripts, and three incremental subsystem
-extractions from the largest headers (`DisplayAdjustController`,
-`CompareAdjustedExportJob`), plus a divide-by-zero fix on flat channels and a
-repository-bound update link.
+three ready-to-use Python analysis scripts, and incremental subsystem extractions
+(`DisplayAdjustController`, `CompareAdjustedExportJob`, batch-export TU), plus a
+divide-by-zero fix on flat channels and a repository-bound update link.
 Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
@@ -68,7 +67,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.226** (current) | Adjusted export job; compareworkspace.h under cap | 🔵 Beta |
+| **1.0.227** (current) | Batch export gets its own TU | 🔵 Beta |
+| **1.0.226** | Adjusted export job; compareworkspace.h under cap | ✅ Previous patch |
 | **1.0.225** | One adjust controller for viewer + compare | ✅ Previous patch |
 | **1.0.224** | Compare Adjust, Python examples, controller extraction | ✅ Previous patch |
 | **1.0.223** | Flat-channel divide-by-zero, script-thread QPointer | ✅ Previous patch |

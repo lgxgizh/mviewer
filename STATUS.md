@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.226** · Release tag: **v1.0.226**
+> Snapshot: 2026-11-26 · Version: **1.0.227** · Release tag: **v1.0.227**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,15 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.227 - ThumbnailPanel batch export gets its own responsibility TU (2026-11-26)
+
+- `thumbnailpanel_fileops.cpp` had reached 948 lines against the 1000-line
+  responsibility ceiling. The batch analysis-export subsystem (~213 lines:
+  analyzer picker, background run, progress dialog, CSV/JSON writer) moves to
+  `thumbnailpanel_batch_export.cpp` (236 lines).
+- Behaviour-preserving: every moved method keeps its declaration in
+  `thumbnailpanel.h`; fileops drops to 735 lines.
 
 ## 1.0.226 - adjusted export becomes a job; compareworkspace.h back under the cap (2026-11-26)
 

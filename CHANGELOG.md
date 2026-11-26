@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [1.0.227] - 2026-11-26
+
+### Refactor — God-class extraction, round 4
+
+- **`thumbnailpanel_fileops.cpp` was at 948 lines against a 1000-line ceiling.**
+  The batch analysis-export subsystem (~213 lines: analyzer picker, background
+  run, progress dialog, CSV/JSON writer) moves to its own
+  `thumbnailpanel_batch_export.cpp`. Behaviour-preserving - every method keeps
+  its declaration in `thumbnailpanel.h` and nothing else changed.
+
 ## [1.0.226] - 2026-11-26
 
 ### Refactor — God-class extraction, round 3
