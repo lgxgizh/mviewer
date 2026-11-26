@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.232] - 2026-11-27
+
+### Refactor — God-class extraction, round 9
+
+- **`mainwindow_view.cpp` was at 878 lines.** Drag & drop (the three drag events,
+  `dropEvent`, external-open handling) moves to its own
+  `mainwindow_dragdrop.cpp` (135 lines); view drops to 754. Behaviour-preserving.
+- After this, no responsibility TU in `src/` is above 850 lines.
+
 ## [1.0.231] - 2026-11-27
 
 ### Refactor — God-class extraction, round 8

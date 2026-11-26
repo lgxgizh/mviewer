@@ -285,6 +285,7 @@ add_library(mviewer_ui STATIC
     mainwindow_sessionpackage.cpp
     mainwindow_export.cpp
     mainwindow_view.cpp
+    mainwindow_dragdrop.cpp
     mainwindow_keys.cpp
     mainwindow_viewer_fileops.cpp
     mainwindow_selection.cpp

@@ -4,15 +4,16 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.231**
+## Where we are now — **Beta / 1.0.232**
 
-MViewer remains in **Beta**; the current release is **`v1.0.231`**
+MViewer remains in **Beta**; the current release is **`v1.0.232`**
 (2026-11-27, see [`STATUS.md`](../STATUS.md) and [`CHANGELOG.md`](../CHANGELOG.md)).
 Recent releases added a shared exposure/gamma/LUT adjust for both compare panes,
 three ready-to-use Python analysis scripts, subsystem extractions
-(`DisplayAdjustController`, `CompareAdjustedExportJob`, `ThumbnailTrash`) and
-responsibility-TU splits (batch export, dimension probe, pixel-link, histogram),
-plus a divide-by-zero fix on flat channels and a repository-bound update link.
+(`DisplayAdjustController`, `CompareAdjustedExportJob`, `ThumbnailTrash`) and a
+series of responsibility-TU splits (batch export, dimension probe, pixel-link,
+histogram, drag & drop), plus a divide-by-zero fix on flat channels and a
+repository-bound update link.
 Offscreen CI is regression evidence, not proof of universal smoothness.
 
 The product loop below is built and verified. The `1.0.x` numbers are the Beta
@@ -68,7 +69,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.231** (current) | Histogram TU | 🔵 Beta |
+| **1.0.232** (current) | Drag & drop TU; no TU over 850 lines | 🔵 Beta |
+| **1.0.231** | Histogram TU | ✅ Previous patch |
 | **1.0.230** | Pixel-link TU | ✅ Previous patch |
 | **1.0.229** | ThumbnailTrash subsystem | ✅ Previous patch |
 | **1.0.228** | Dimension probe gets its own TU | ✅ Previous patch |

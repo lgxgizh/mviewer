@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-27 · Version: **1.0.231** · Release tag: **v1.0.231**
+> Snapshot: 2026-11-27 · Version: **1.0.232** · Release tag: **v1.0.232**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,13 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.232 - drag & drop gets its own TU (2026-11-27)
+
+- `mainwindow_view.cpp` was at 878 lines. Drag & drop (dragEnter/dragMove/
+  dragLeave/drop, external-open handling) moves to `mainwindow_dragdrop.cpp`
+  (135 lines); view drops to 754. Behaviour-preserving.
+- No responsibility TU in `src/` is above 850 lines afterwards.
 
 ## 1.0.231 - histogram computation gets its own TU (2026-11-27)
 
