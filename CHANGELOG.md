@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [1.0.220] - 2026-11-26
+
+### Security
+
+- **Command-line open rejects the device namespace.** `\\.\PhysicalDrive0` and
+  `\\?\` paths that are not a drive path are refused before anything is opened;
+  plain UNC shares stay allowed because browsing network folders is supported.
+  Covered by `test_commandline`.
+
 ## [1.0.219] - 2026-11-26
 
 ### Plugin trust chain (review batch 3)

@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.219** · Release tag: **v1.0.219**
+> Snapshot: 2026-11-26 · Version: **1.0.220** · Release tag: **v1.0.220**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,12 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.220 - command-line open rejects the device namespace (2026-11-26)
+
+- `\\.\` and non-drive `\\?\` targets are refused before anything is opened;
+  UNC shares stay allowed (network browsing is supported). Covered by
+  `test_commandline`.
 
 ## 1.0.219 - plugin hash->map race closed, Disable actually disables (2026-11-26)
 

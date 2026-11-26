@@ -79,6 +79,15 @@ int main(int argc, char **argv)
             root.filePath(QStringLiteral("missing.jpg")));
         check(!missingTarget.isValid() && !missingTarget.error.isEmpty(),
               "missing paths are rejected");
+#ifdef _WIN32
+        for (const QString &device :
+             {QStringLiteral(R"(\\.\PhysicalDrive0)"), QStringLiteral(R"(\\?\PhysicalDrive0)")})
+        {
+            const auto deviceTarget = mviewer::application::classifyExternalOpenTarget(device);
+            check(!deviceTarget.isValid() && !deviceTarget.error.isEmpty(),
+                  "device namespace targets are rejected");
+        }
+#endif
 
         const auto quotedPlan = mviewer::application::planExternalOpen(
             {QStringLiteral("\"") + image + QStringLiteral("\"")});
