@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-11-26 · Version: **1.0.224** · Release tag: **v1.0.224**
+> Snapshot: 2026-11-26 · Version: **1.0.225** · Release tag: **v1.0.225**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Current state summary: Beta, Windows x64 installer + portable zip, English and
@@ -21,6 +21,15 @@
   Strict runner scripts remain available for manual use; `workflow_dispatch`
   runs contracts only, not Dr.Memory. ASan/UBSan/TSan, ordinary tests, and release
   signing/dependencies are unchanged.
+
+## 1.0.225 - one DisplayAdjustController for viewer and compare (2026-11-26)
+
+- `DisplayAdjustController` replaces the compare-only controller and absorbs the
+  image viewer's adjust flow: panel, anchor, five signal handlers and LUT loader
+  are now one component instead of two near-identical copies.
+- `ImageViewer` no longer owns an adjust panel or `syncAdjustPanel()`; its public
+  surface forwards to the controller. Compare keeps the top-right anchor, the
+  viewer keeps `layoutFloatingOverlays()` placement.
 
 ## 1.0.224 - Compare Adjust, Python examples, first controller extraction (2026-11-26)
 

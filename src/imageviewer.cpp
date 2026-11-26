@@ -12,6 +12,7 @@
 #include "core/render/ZoomPercent.h"
 #include "core/trace/Trace.h"
 #include "gpu/GlOwnerContext.h"
+#include "widgets/displayadjustcontroller.h"
 #include "gpu/GpuTileUploader.h"
 #include "gpu/ImageBlitterShader.h"
 

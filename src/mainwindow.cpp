@@ -1,6 +1,7 @@
 #include "mainwindow_p.h"
 
 #include "ShortcutHelper.h"
+#include "core/image/DisplayAdjust.h"
 
 #include "core/image/decoder/RawDecodePlan.h"
 #include "naturalnameorder.h"
@@ -599,9 +600,19 @@ void MainWindow::toggleCompareAdjust()
 void MainWindow::attachCompareAdjustController(QWidget *host, CompareWorkspace *view)
 {
     if (!m_compareAdjust)
-        m_compareAdjust = std::make_unique<mviewer::ui::CompareAdjustController>(this);
+        m_compareAdjust = std::make_unique<mviewer::ui::DisplayAdjustController>(this);
     m_compareAdjust->setAction(m_actCompareAdjust);
-    m_compareAdjust->attach(host, view);
+    m_compareAdjust->attach(
+        host,
+        [view]() { return view ? view->displayColorContext().adjust : mviewer::core::DisplayAdjust{}; },
+        [view](const mviewer::core::DisplayAdjust &adjust)
+        {
+            if (!view)
+                return;
+            auto next = view->displayColorContext();
+            next.adjust = adjust;
+            view->setDisplayColorContext(next);
+        });
     if (m_actCompareAdjust)
     {
         m_actCompareAdjust->setChecked(false);
@@ -648,7 +659,7 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                 if (viewGuard)
                     QObject::disconnect(viewGuard.data(), nullptr, this, nullptr);
                 if (m_compareAdjust)
-                    m_compareAdjust->attach(nullptr, nullptr); // release the panel early
+                    m_compareAdjust->detach(); // release the panel early
                 const QString current = currentImagePath();
                 if (!current.isEmpty())
                     statusBar()->showMessage(tr("Current: %1").arg(QFileInfo(current).fileName()),

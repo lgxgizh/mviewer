@@ -2,7 +2,7 @@
 // the workspace's own colour context (which is what invalidates the rasters).
 #include "compareworkspace.h"
 #include "core/image/DisplayColorContext.h"
-#include "widgets/compareadjustcontroller.h"
+#include "widgets/displayadjustcontroller.h"
 
 #include <QApplication>
 #include <QImage>
@@ -53,8 +53,16 @@ int main(int argc, char **argv)
     const QString b = writePng(dir, "b.png", QColor(200, 210, 220));
     ws.setImages({a, b});
 
-    mviewer::ui::CompareAdjustController controller;
-    controller.attach(&ws, &ws);
+    mviewer::ui::DisplayAdjustController controller;
+    controller.attach(
+        &ws,
+        [&ws]() { return ws.displayColorContext().adjust; },
+        [&ws](const mviewer::core::DisplayAdjust &adjust)
+        {
+            auto next = ws.displayColorContext();
+            next.adjust = adjust;
+            ws.setDisplayColorContext(next);
+        });
 
     CHECK(!controller.isPanelVisible(), "the adjust panel starts hidden");
     controller.toggle();
@@ -81,7 +89,7 @@ int main(int argc, char **argv)
     CHECK(identity.exposureEv == 0.0 && identity.gamma == 1.0 && !identity.autoStretch,
           "reset restores an identity adjust");
 
-    controller.attach(nullptr, nullptr);
+    controller.detach();
     controller.setExposure(3.0);
     CHECK(ws.displayColorContext().adjust.exposureEv == 0.0,
           "after detach the controller cannot touch the workspace");

@@ -13,7 +13,7 @@
 
 #include "imageviewer.h"
 
-#include "widgets/displayadjustpanel.h"
+#include "widgets/displayadjustcontroller.h"
 #include "widgets/scopewidget.h"
 
 #include <algorithm>
@@ -52,13 +52,15 @@ void ImageViewer::layoutFloatingOverlays()
     }
 
     // ── Bottom-right: the display-adjustment card ───────────────────────────
-    if (m_adjustPanel && m_adjustPanel->isVisible())
+    if (QWidget *panel = m_adjust ? m_adjust->panelWidget() : nullptr)
     {
-        const int w = std::min(280, std::max(200, width() / 4));
-        const int h = std::min(240, std::max(140, height() / 3));
-        m_adjustPanel->setGeometry(width() - w - kMargin,
-                                   std::max(kMargin + kTopChipHeight, height() - h - kMargin), w,
-                                   h);
-        m_adjustPanel->raise();
+        if (panel->isVisible())
+        {
+            const int w = std::min(280, std::max(200, width() / 4));
+            const int h = std::min(240, std::max(140, height() / 3));
+            panel->setGeometry(width() - w - kMargin,
+                               std::max(kMargin + kTopChipHeight, height() - h - kMargin), w, h);
+            panel->raise();
+        }
     }
 }

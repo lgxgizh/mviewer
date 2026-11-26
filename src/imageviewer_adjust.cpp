@@ -1,11 +1,11 @@
 // Review display adjustment (report feature 5): exposure, gamma, auto-stretch
-// and a 3D LUT. The panel mutates a DisplayAdjust; pushing it into the display
-// colour context changes the cache key, so the raster and every tile are
-// re-materialized through the normal display path.
+// and a 3D LUT. The panel and its wiring live in DisplayAdjustController; the
+// viewer only keeps the public surface (toggle / is-visible) and forwards.
 #include "imageviewer.h"
 
 #include "core/image/DisplayAdjust.h"
 #include "core/image/DisplayColorContext.h"
+#include "widgets/displayadjustcontroller.h"
 #include "widgets/displayadjustpanel.h"
 
 #include <QFileDialog>
@@ -38,87 +38,50 @@ bool ImageViewer::handleAdjustContextAction(QAction *chosen, QAction *adjust)
 
 void ImageViewer::applyDisplayAdjust()
 {
-    setDisplayColorContext(m_displayColorTarget);
-}
-
-void ImageViewer::syncAdjustPanel()
-{
-    if (!m_adjustPanel)
-        return;
-    const mviewer::core::DisplayAdjust &adjust = m_displayColorTarget.adjust;
-    m_adjustPanel->setExposure(adjust.exposureEv);
-    m_adjustPanel->setGamma(adjust.gamma);
-    m_adjustPanel->setAutoStretch(adjust.autoStretch);
-    m_adjustPanel->setLutLabel(adjust.lutSize > 0 ? tr("3D LUT: %1³").arg(adjust.lutSize)
-                                                  : tr("Load 3D LUT…"));
-}
-
-void ImageViewer::setAdjustPanelVisible(bool visible)
-{
-    if (visible && !m_adjustPanel)
-    {
-        m_adjustPanel = new mviewer::ui::DisplayAdjustPanel(this);
-        connect(m_adjustPanel, &mviewer::ui::DisplayAdjustPanel::exposureChanged, this,
-                [this](double ev)
-                {
-                    m_displayColorTarget.adjust.exposureEv = ev;
-                    applyDisplayAdjust();
-                });
-        connect(m_adjustPanel, &mviewer::ui::DisplayAdjustPanel::gammaChanged, this,
-                [this](double g)
-                {
-                    m_displayColorTarget.adjust.gamma = g;
-                    applyDisplayAdjust();
-                });
-        connect(m_adjustPanel, &mviewer::ui::DisplayAdjustPanel::autoStretchToggled, this,
-                [this](bool on)
-                {
-                    m_displayColorTarget.adjust.autoStretch = on;
-                    applyDisplayAdjust();
-                });
-        connect(m_adjustPanel, &mviewer::ui::DisplayAdjustPanel::loadLutRequested, this,
-                [this]()
-                {
-                    const QString path = QFileDialog::getOpenFileName(
-                        this, tr("Load 3D LUT"), QString(), tr("Cube LUT (*.cube);;All files (*)"));
-                    if (path.isEmpty())
-                        return;
-                    std::string error;
-                    mviewer::core::DisplayAdjust candidate = m_displayColorTarget.adjust;
-                    if (!mviewer::core::DisplayAdjust::loadCube(path.toUtf8().toStdString(),
-                                                                candidate, error))
-                    {
-                        emit statusMessageRequested(tr("Could not load the 3D LUT") +
-                                                        QStringLiteral(": ") +
-                                                        QString::fromStdString(error),
-                                                    5000);
-                        return;
-                    }
-                    m_displayColorTarget.adjust = candidate;
-                    syncAdjustPanel();
-                    applyDisplayAdjust();
-                });
-        connect(m_adjustPanel, &mviewer::ui::DisplayAdjustPanel::resetRequested, this,
-                [this]()
-                {
-                    m_displayColorTarget.adjust = mviewer::core::DisplayAdjust{};
-                    syncAdjustPanel();
-                    applyDisplayAdjust();
-                });
-    }
-    if (m_adjustPanel)
-    {
-        m_adjustPanel->setVisible(visible);
-        if (visible)
-        {
-            syncAdjustPanel();
-            layoutFloatingOverlays();
-            m_adjustPanel->raise();
-        }
-    }
+    // The panel mutated the live target; re-publish it so the cache-key change is
+    // detected (see ImageViewer::setDisplayColorContext).
+    if (m_adjust)
+        m_adjust->applyCurrent();
+    else
+        setDisplayColorContext(m_displayColorTarget);
 }
 
 bool ImageViewer::isAdjustPanelVisible() const
 {
-    return m_adjustPanel && m_adjustPanel->isVisible();
+    return m_adjust && m_adjust->isPanelVisible();
+}
+
+void ImageViewer::setAdjustPanelVisible(bool visible)
+{
+    if (!m_adjust)
+    {
+        m_adjust = std::make_unique<mviewer::ui::DisplayAdjustController>(this);
+        m_adjust->setAutoAnchored(false); // layoutFloatingOverlays() owns placement
+        m_adjust->attach(
+            this,
+            [this]() { return m_displayColorTarget.adjust; },
+            [this](const mviewer::core::DisplayAdjust &adjust)
+            {
+                // Snapshot first: m_displayColorTarget is mutated by the panel's
+                // setExposure path above, and comparing it against itself would
+                // drop the change entirely.
+                auto next = m_displayColorTarget;
+                next.adjust = adjust;
+                setDisplayColorContext(next);
+            });
+    }
+    if (visible)
+    {
+        m_adjust->toggle();
+        if (isAdjustPanelVisible())
+        {
+            layoutFloatingOverlays();
+            if (auto *panel = m_adjust->panelWidget())
+                panel->raise();
+        }
+    }
+    else if (m_adjust->isPanelVisible())
+    {
+        m_adjust->toggle();
+    }
 }

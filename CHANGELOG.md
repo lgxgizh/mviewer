@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [1.0.225] - 2026-11-26
+
+### Refactor — God-class extraction, round 2
+
+- **`DisplayAdjustController`** replaces the compare-only `CompareAdjustController`
+  *and* absorbs the viewer's adjust flow. One component now owns the panel, its
+  anchor, the five signal handlers and the LUT loader; the image viewer and the
+  fullscreen compare host each hold one `unique_ptr`. The two hosts had
+  near-identical copies of all of that until now.
+- `ImageViewer` no longer owns an adjust panel or `syncAdjustPanel()`; the ~40
+  lines of panel/LUT wiring moved out, and the existing public surface
+  (`setAdjustPanelVisible`, `isAdjustPanelVisible`, `applyDisplayAdjust`,
+  `displayAdjust`) forwards to the controller so callers and tests are unchanged.
+- The viewer keeps its own bottom-right placement via `layoutFloatingOverlays()`
+  (`setAutoAnchored(false)`); the compare host uses the top-right anchor.
+
 ## [1.0.224] - 2026-11-26
 
 ### Added

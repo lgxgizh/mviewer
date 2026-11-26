@@ -54,6 +54,7 @@ namespace mviewer::ui
 {
 class ScopeWidget;
 class DisplayAdjustPanel;
+class DisplayAdjustController; // owns the adjust panel for this viewer
 } // namespace mviewer::ui
 
 struct ImageViewerPromotedRasterTestAccess;
@@ -774,11 +775,10 @@ class ImageViewer : public QOpenGLWidget
     mviewer::ui::AnnotationStore m_annotations;
     bool m_lastRemovedValid = false;
     mviewer::ui::Annotation m_lastRemoved;
-    mviewer::ui::DisplayAdjustPanel *m_adjustPanel = nullptr; // created on first use
+    std::unique_ptr<mviewer::ui::DisplayAdjustController> m_adjust; // lazy; owns the panel
     bool m_spectrumVisible = false;
     QWidget *m_spectrumPanel = nullptr;
     mviewer::ui::CvOverlay m_cvOverlay;
-    void syncAdjustPanel();
     QPoint m_selStart, m_selEnd;
     // Committed ROI in image pixels; pan and zoom redraw it through the view.
     QRect m_selectionImage;

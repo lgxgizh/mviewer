@@ -51,7 +51,7 @@
 #include "breadcrumbbar.h"
 #include "browseformats.h"
 #include "compareworkspace.h"
-#include "widgets/compareadjustcontroller.h"
+#include "widgets/displayadjustcontroller.h"
 #include "core/analyzer/AnalyzerPipeline.h"#include "core/compare/Histogram.h"
 #include "core/render/Viewport.h"
 #include "directorymodel.h"

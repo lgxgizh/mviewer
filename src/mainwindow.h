@@ -72,7 +72,7 @@ class Histogram;
 
 namespace mviewer::ui
 {
-class CompareAdjustController;
+class DisplayAdjustController;
 }
 
 class MainWindow : public QMainWindow
@@ -507,7 +507,7 @@ class MainWindow : public QMainWindow
     PluginSettings *m_pluginSettings = nullptr;
     CompareWorkspace *m_compareView = nullptr;
     QPointer<QWidget> m_compareHost; // host is a QDialog; typed as QWidget for safe destroy
-    std::unique_ptr<mviewer::ui::CompareAdjustController> m_compareAdjust; // both panes, one adjust
+    std::unique_ptr<mviewer::ui::DisplayAdjustController> m_compareAdjust; // both panes, one adjust
 
     QAction *m_actOpenDir = nullptr;
     QAction *m_actOpenFile = nullptr;
